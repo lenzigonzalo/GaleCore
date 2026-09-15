@@ -62,11 +62,20 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
     CapabilityDefinition(
         capability_id="compute.gamma_exposure",
         semantic_class=SemanticClass.COMPUTE,
-        description="Compute gamma exposure (GEX) for a symbol",
+        description="Compute gamma exposure (GEX) for a symbol (single expiration)",
         parameters=[
             CapabilityParameter(name="symbol", type="string", description="Underlying symbol"),
             CapabilityParameter(name="dte", type="number", required=False, description="Days to expiration filter"),
         ],
-        returns="Net GEX, call/put GEX, zero gamma level, walls",
+        returns="Net GEX, call/put GEX, zero gamma level, walls, strikes",
+    ),
+    CapabilityDefinition(
+        capability_id="compute.gex_analysis",
+        semantic_class=SemanticClass.COMPUTE,
+        description="Global GEX analysis across all expirations with macro regime context",
+        parameters=[
+            CapabilityParameter(name="symbol", type="string", description="Underlying symbol"),
+        ],
+        returns="Global GEX scope (net/call/put, walls, coverage), macro regime, config",
     ),
 ]

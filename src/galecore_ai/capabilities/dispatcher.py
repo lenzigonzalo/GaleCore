@@ -81,6 +81,12 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
         "param_key": "symbol",
         "source_param": "symbol",
     },
+    "compute.gex_analysis": {
+        "method": "GET",
+        "path": "/App/Gex/Analysis",
+        "param_key": "symbol",
+        "source_param": "symbol",
+    },
     "compute.iv_rank": {
         "method": "GET",
         "path": "/App.Analytics/IVRank",
