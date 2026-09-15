@@ -116,7 +116,8 @@ class TestCognitiveRuntimeSuccess:
             "regime": "positive_gamma",
             "observations": ["Net GEX positive — net_gex is 1500000.0"],
             "implications": ["Mean reversion expected around spot 450.5"],
-            "caveats": ["Based on current snapshot"],
+            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive at 1500000.0"}],
+            "limitations": ["Based on current snapshot"],
         })
 
         runtime = _build_runtime()
@@ -139,7 +140,10 @@ class TestCognitiveRuntimeSuccess:
 
     @pytest.mark.asyncio
     async def test_successful_run_with_defaults(self):
-        """FakeProvider auto-builds default GexInterpretation."""
+        """FakeProvider cannot auto-build GexInterpretation (enum regime + min_length constraints).
+
+        This tests the fail-closed path: MODEL_ERROR when no canned response is registered.
+        """
         runtime = _build_runtime()
         result = await runtime.execute(
             _request(),
@@ -147,10 +151,9 @@ class TestCognitiveRuntimeSuccess:
             facts=_facts(),
             output_schema=GexInterpretation,
         )
-        # Default GexInterpretation has empty observations — guardrails check
-        # facts_match_source may fail because default output won't reference facts.
-        # This tests the guardrail path.
-        assert result.status in (RunStatus.SUCCESS, RunStatus.VALIDATION_ERROR)
+        # GexInterpretation has GexRegime enum + min_length=1 on observations/evidence,
+        # so _build_default cannot construct a valid instance → MODEL_ERROR.
+        assert result.status in (RunStatus.MODEL_ERROR, RunStatus.VALIDATION_ERROR)
         assert result.trace is not None
 
 
@@ -208,7 +211,8 @@ class TestCognitiveRuntimeFailClosed:
             "regime": "positive_gamma",
             "observations": ["Target price 999.99"],
             "implications": [],
-            "caveats": [],
+            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive"}],
+            "limitations": ["Snapshot only"],
         })
         runtime = _build_runtime()
         result = await runtime.execute(
@@ -243,7 +247,8 @@ class TestCognitiveRuntimeGuardrails:
             "regime": "positive_gamma",
             "observations": ["Target price 475.0 based on analysis"],
             "implications": [],
-            "caveats": [],
+            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive"}],
+            "limitations": ["Snapshot only"],
         })
 
         runtime = _build_runtime()
@@ -266,7 +271,8 @@ class TestCognitiveRuntimeTrace:
             "regime": "positive_gamma",
             "observations": ["net_gex is positive"],
             "implications": ["spot stable"],
-            "caveats": ["snapshot only"],
+            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive"}],
+            "limitations": ["snapshot only"],
         })
 
         runtime = _build_runtime()
@@ -285,7 +291,8 @@ class TestCognitiveRuntimeTrace:
             "regime": "positive_gamma",
             "observations": ["net_gex is positive"],
             "implications": ["spot stable"],
-            "caveats": ["snapshot"],
+            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive"}],
+            "limitations": ["snapshot"],
         })
 
         runtime = _build_runtime()

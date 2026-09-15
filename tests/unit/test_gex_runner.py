@@ -125,7 +125,8 @@ class TestAnalyzeGexSuccess:
             "regime": "positive_gamma",
             "observations": ["net_gex is positive at 1500.0"],
             "implications": ["Mean reversion expected around spot 450.5"],
-            "caveats": ["Based on current snapshot"],
+            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive at 1500.0"}],
+            "limitations": ["Based on current snapshot"],
         })
 
         fixture = _load_fixture(fresh=True)

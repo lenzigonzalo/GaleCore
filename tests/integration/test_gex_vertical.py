@@ -70,7 +70,8 @@ class TestGexVerticalSuccess:
             "regime": "positive_gamma",
             "observations": ["net_gex is positive at 1500.0, dealers are long gamma"],
             "implications": ["Mean reversion expected around spot 450.5"],
-            "caveats": ["Based on current open interest snapshot"],
+            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive at 1500.0"}],
+            "limitations": ["Based on current open interest snapshot"],
         })
 
         fixture = _load_fixture()
@@ -146,7 +147,8 @@ class TestGexVerticalGuardrails:
             "regime": "positive_gamma",
             "observations": ["Target price 999.99 based on analysis"],
             "implications": [],
-            "caveats": [],
+            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive"}],
+            "limitations": ["Snapshot only"],
         })
 
         fixture = _load_fixture()
@@ -172,7 +174,8 @@ class TestGexVerticalTrace:
             "regime": "positive_gamma",
             "observations": ["net_gex is positive"],
             "implications": ["spot stable"],
-            "caveats": ["snapshot only"],
+            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive"}],
+            "limitations": ["snapshot only"],
         })
 
         fixture = _load_fixture()

@@ -49,21 +49,44 @@ class GexFacts(BaseModel):
     from_cache: bool | None = None
 
 
+# ── Model output contracts ───────────────────────────────────────────
+
+
+class GexRegime(str, Enum):
+    """Gamma exposure regime classification."""
+
+    POSITIVE_GAMMA = "positive_gamma"
+    NEGATIVE_GAMMA = "negative_gamma"
+    NEAR_ZERO = "near_zero"
+
+
+class EvidenceRef(BaseModel):
+    """A reference from interpretation to a specific fact.
+
+    Links a claim in the interpretation to the fact that supports it.
+    """
+
+    fact_path: str  # e.g. "facts.net_gex", "facts.spot"
+    claim: str  # e.g. "Net GEX is negative, indicating short gamma positioning"
+
+    model_config = {"extra": "forbid"}
+
+
 class GexInterpretation(BaseModel):
-    """Model-generated interpretation of GEX facts. No invented numbers."""
+    """Model-generated interpretation of GEX facts.
 
-    regime: str  # e.g. "positive_gamma", "negative_gamma", "near_zero"
-    observations: list[str] = Field(default_factory=list)
+    Structured for grounding validation:
+    - regime: enum-constrained classification
+    - observations: what the data shows (must reference facts)
+    - implications: expected market behavior given the regime
+    - evidence: explicit references linking claims to facts
+    - limitations: conditions, caveats, data quality notes
+    """
+
+    regime: GexRegime
+    observations: list[str] = Field(default_factory=list, min_length=1)
     implications: list[str] = Field(default_factory=list)
-    caveats: list[str] = Field(default_factory=list)
+    evidence: list[EvidenceRef] = Field(default_factory=list, min_length=1)
+    limitations: list[str] = Field(default_factory=list)
 
-
-class GexAnalysisResult(BaseModel):
-    """Complete GEX analysis: facts + interpretation."""
-
-    status: str = "SUCCESS"
-    symbol: str
-    analysis_type: str = "CURRENT_GEX"
-    facts: GexFacts
-    interpretation: GexInterpretation
-    evidence: list[dict] = Field(default_factory=list)
+    model_config = {"extra": "forbid"}

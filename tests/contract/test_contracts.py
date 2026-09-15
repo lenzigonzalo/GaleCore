@@ -17,7 +17,7 @@ from galecore_ai.contracts.envelopes import (
     TemporalContext,
 )
 from galecore_ai.contracts.gex_analysis import (
-    GexAnalysisResult,
+    EvidenceRef,
     GexFacts,
     GexInterpretation,
 )
@@ -122,36 +122,28 @@ class TestGexAnalysisContracts:
             regime="positive_gamma",
             observations=["Net GEX positive — dealer long gamma"],
             implications=["Expect mean reversion, reduced volatility"],
-            caveats=["Based on current open interest snapshot"],
+            evidence=[EvidenceRef(fact_path="facts.net_gex", claim="Net GEX is positive")],
+            limitations=["Based on current open interest snapshot"],
         )
         data = json.loads(interp.model_dump_json())
         restored = GexInterpretation.model_validate(data)
         assert restored.regime == "positive_gamma"
         assert len(restored.observations) == 1
-
-    def test_full_analysis_roundtrip(self):
-        analysis = GexAnalysisResult(
-            symbol="SPY",
-            facts=GexFacts(
-                symbol="SPY",
-                net_gex=1_500_000.0,
-                call_gex=2_000_000.0,
-                put_gex=-500_000.0,
-                spot=450.50,
-            ),
-            interpretation=GexInterpretation(
-                regime="positive_gamma",
-                observations=["Dealer long gamma"],
-                implications=["Mean reversion expected"],
-            ),
-            evidence=[{"type": "capability_call", "capability": "compute.gamma_exposure"}],
-        )
-        data = json.loads(analysis.model_dump_json())
-        restored = GexAnalysisResult.model_validate(data)
-        assert restored.status == "SUCCESS"
-        assert restored.facts.spot == 450.50
-        assert restored.interpretation.regime == "positive_gamma"
         assert len(restored.evidence) == 1
+        assert restored.evidence[0].fact_path == "facts.net_gex"
+
+    def test_interpretation_rejects_extra_fields(self):
+        """extra='forbid' must reject unknown fields."""
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GexInterpretation(
+                regime="positive_gamma",
+                observations=["test"],
+                evidence=[EvidenceRef(fact_path="facts.net_gex", claim="test")],
+                caveats=["old field name should fail"],
+            )
 
     def test_facts_and_interpretation_separate(self):
         """Facts are deterministic data. Interpretation is model output.

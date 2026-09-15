@@ -8,9 +8,9 @@ class TestGexInterpretationSkill:
         skill = build_gex_interpretation_skill()
         assert skill.skill_id == "gex_interpretation"
 
-    def test_requires_gamma_exposure(self):
+    def test_requires_gex_analysis(self):
         skill = build_gex_interpretation_skill()
-        assert "compute.gamma_exposure" in skill.required_capabilities
+        assert "compute.gex_analysis" in skill.required_capabilities
 
     def test_output_contract(self):
         skill = build_gex_interpretation_skill()
