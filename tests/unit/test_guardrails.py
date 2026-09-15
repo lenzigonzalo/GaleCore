@@ -53,7 +53,7 @@ class TestGuardrailRunner:
         )
         assert results[0].passed  # nothing to check
 
-    def test_unknown_guardrail_skipped(self):
+    def test_unknown_guardrail_fails_closed(self):
         runner = GuardrailRunner()
         results = runner.run_all(
             guardrail_ids=["nonexistent_guardrail"],
@@ -61,7 +61,8 @@ class TestGuardrailRunner:
             facts={},
         )
         assert len(results) == 1
-        assert results[0].passed  # skipped = pass
+        assert not results[0].passed  # fail-closed: unregistered = failure
+        assert "not registered" in results[0].message
 
     def test_multiple_guardrails(self):
         runner = GuardrailRunner()

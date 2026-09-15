@@ -187,6 +187,40 @@ class TestCognitiveRuntimePreflightFailures:
         assert "does not declare" in result.error_detail
 
 
+class TestCognitiveRuntimeFailClosed:
+    @pytest.mark.asyncio
+    async def test_empty_facts_returns_insufficient_data(self):
+        """Skill with required_capabilities must not reach model with empty facts."""
+        runtime = _build_runtime()
+        result = await runtime.execute(
+            _request(),
+            agent_definition=_agent(),
+            facts={},  # empty!
+            output_schema=GexInterpretation,
+        )
+        assert result.status == RunStatus.INSUFFICIENT_DATA
+        assert "facts are empty" in result.error_detail
+
+    @pytest.mark.asyncio
+    async def test_guardrail_failure_result_is_null(self):
+        """Guardrail failure must return result=None, not the rejected output."""
+        register_canned_response("GexInterpretation", {
+            "regime": "positive_gamma",
+            "observations": ["Target price 999.99"],
+            "implications": [],
+            "caveats": [],
+        })
+        runtime = _build_runtime()
+        result = await runtime.execute(
+            _request(),
+            agent_definition=_agent(),
+            facts=_facts(),
+            output_schema=GexInterpretation,
+        )
+        assert result.status == RunStatus.VALIDATION_ERROR
+        assert result.result is None
+
+
 class TestCognitiveRuntimeModelErrors:
     @pytest.mark.asyncio
     async def test_model_error_returns_model_error_status(self):
@@ -222,6 +256,7 @@ class TestCognitiveRuntimeGuardrails:
         assert result.status == RunStatus.VALIDATION_ERROR
         assert "Guardrail failure" in result.error_detail
         assert "no_invented_numbers" in result.error_detail
+        assert result.result is None  # fail-closed: rejected output never crosses boundary
 
 
 class TestCognitiveRuntimeTrace:

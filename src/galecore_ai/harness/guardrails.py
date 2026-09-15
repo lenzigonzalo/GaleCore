@@ -48,10 +48,11 @@ class GuardrailRunner:
         for gid in guardrail_ids:
             fn = self._guardrails.get(gid)
             if fn is None:
+                # Fail-closed: unregistered guardrail is a FAILURE, not a skip
                 results.append(GuardrailResult(
                     guardrail_id=gid,
-                    passed=True,
-                    message=f"Guardrail '{gid}' not registered — skipped",
+                    passed=False,
+                    message=f"Guardrail '{gid}' not registered — fail-closed",
                 ))
                 continue
             results.append(fn(raw_text, facts))

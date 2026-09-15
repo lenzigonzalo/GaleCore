@@ -121,6 +121,18 @@ class CognitiveRuntime:
         skill = self._skill_loader.get(skill_id)
         trace.skills_used = [skill_id]
 
+        # ── 1b. Facts gate — empty facts must not reach the model ─
+        if skill.required_capabilities and not facts:
+            trace.completed_at = _utcnow()
+            trace.latency_ms = int((time.monotonic() - t0) * 1000)
+            trace.error = "Fail-closed: skill requires capabilities but facts are empty"
+            return AgentRunResult(
+                run_id=request.run_id,
+                status=RunStatus.INSUFFICIENT_DATA,
+                error_detail=trace.error,
+                trace=trace,
+            )
+
         # ── 2. Context Assembly ───────────────────────────────────
         protocols = self._protocol_loader.get_for_trigger(skill_id)
         trace.protocols_used = [p.protocol_id for p in protocols]
@@ -199,12 +211,13 @@ class CognitiveRuntime:
             trace.completed_at = _utcnow()
             trace.latency_ms = int((time.monotonic() - t0) * 1000)
             trace.error = f"Guardrail failure: {detail}"
+            # Fail-closed: guardrail failure → result=null (rejected output never crosses boundary)
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.VALIDATION_ERROR,
                 error_detail=f"Guardrail failure: {detail}",
                 trace=trace,
-                result=model_result.value.model_dump() if model_result.value else None,
+                result=None,
             )
 
         # ── 5. Success ────────────────────────────────────────────
