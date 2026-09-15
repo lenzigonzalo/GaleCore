@@ -70,8 +70,8 @@ class TestDTOParsing:
         assert dto.macro_regime is not None
         assert dto.macro_regime.signal == "SELL"
         assert dto.macro_regime.passed_count == 4
-        assert dto.macro_regime.checks.vix_absolute is True
-        assert dto.macro_regime.checks.iv_momentum is False
+        assert dto.macro_regime.checks.vix_absolute.passed is True
+        assert dto.macro_regime.checks.iv_momentum.passed is False
 
     def test_parse_config(self):
         raw = _load_fixture()

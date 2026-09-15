@@ -68,6 +68,7 @@ class AppDependencies:
         self.gex_use_case = AnalyzeGexUseCase(
             runtime=self.runtime,
             dispatcher=self.dispatcher,
+            max_staleness_seconds=config.max_staleness_seconds,
         )
 
         # Agent definition

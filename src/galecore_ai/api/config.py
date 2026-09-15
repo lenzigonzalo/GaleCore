@@ -20,6 +20,9 @@ class AppConfig:
         self.anthropic_model: str = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
         self.local_validation: bool = os.environ.get("LOCAL_VALIDATION", "true").lower() == "true"
         self.provider_mode: str = os.environ.get("PROVIDER_MODE", "fake")
+        self.max_staleness_seconds: float = float(
+            os.environ.get("MAX_STALENESS_SECONDS", "300")
+        )
 
         # Enforce local-only restriction
         if self.local_validation:

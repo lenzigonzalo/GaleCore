@@ -2,6 +2,7 @@
 from GaleCore and orchestrates the cognitive pipeline."""
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -32,8 +33,11 @@ def _clean():
     clear_canned_responses()
 
 
-def _load_fixture(name: str = "gex_analysis_spy.json") -> dict:
-    return json.loads((FIXTURES_DIR / name).read_text())
+def _load_fixture(name: str = "gex_analysis_spy.json", *, fresh: bool = False) -> dict:
+    data = json.loads((FIXTURES_DIR / name).read_text())
+    if fresh:
+        data["timestamp"] = datetime.now(tz=UTC).isoformat()
+    return data
 
 
 def _make_registry() -> CapabilityRegistry:
@@ -124,7 +128,7 @@ class TestAnalyzeGexSuccess:
             "caveats": ["Based on current snapshot"],
         })
 
-        fixture = _load_fixture()
+        fixture = _load_fixture(fresh=True)
         use_case = _mock_use_case(fixture, allow_unknown_freshness=True)
 
         result = await use_case.run(symbol="SPY", agent_definition=_agent())

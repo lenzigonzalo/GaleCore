@@ -75,15 +75,41 @@ class GaleCoreGexPayload(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-class GaleCoreMacroRegimeCheck(BaseModel):
-    """Maps to GaleCore's MacroRegimeChecks."""
+class GaleCoreMacroCheckResult(BaseModel):
+    """Maps to a single macro regime check result from GaleCore.
 
-    vix_absolute: bool = Field(False, alias="vixAbsolute")
-    vix_term_structure: bool = Field(False, alias="vixTermStructure")
-    iv_rank: bool = Field(False, alias="ivRank")
-    iv_momentum: bool = Field(False, alias="ivMomentum")
-    gex_total: bool = Field(False, alias="gexTotal")
-    spot_vs_zgl: bool = Field(False, alias="spotVsZgl")
+    Each check has a `passed` boolean plus check-specific diagnostic fields
+    (value, threshold, min, max, etc.) that vary by check type.
+    """
+
+    passed: bool = False
+    model_config = {"extra": "allow"}
+
+
+class GaleCoreMacroRegimeCheck(BaseModel):
+    """Maps to GaleCore's MacroRegimeChecks.
+
+    Each check is an object with {passed, ...diagnostics}, not a simple boolean.
+    """
+
+    vix_absolute: GaleCoreMacroCheckResult = Field(
+        default_factory=GaleCoreMacroCheckResult, alias="vixAbsolute"
+    )
+    vix_term_structure: GaleCoreMacroCheckResult = Field(
+        default_factory=GaleCoreMacroCheckResult, alias="vixTermStructure"
+    )
+    iv_rank: GaleCoreMacroCheckResult = Field(
+        default_factory=GaleCoreMacroCheckResult, alias="ivRank"
+    )
+    iv_momentum: GaleCoreMacroCheckResult = Field(
+        default_factory=GaleCoreMacroCheckResult, alias="ivMomentum"
+    )
+    gex_total: GaleCoreMacroCheckResult = Field(
+        default_factory=GaleCoreMacroCheckResult, alias="gexTotal"
+    )
+    spot_vs_zgl: GaleCoreMacroCheckResult = Field(
+        default_factory=GaleCoreMacroCheckResult, alias="spotVsZgl"
+    )
 
     model_config = {"populate_by_name": True}
 
