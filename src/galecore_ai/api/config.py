@@ -18,6 +18,7 @@ class AppConfig:
         self.galecore_api_key: str | None = os.environ.get("GALECORE_API_KEY")
         self.anthropic_api_key: str | None = os.environ.get("ANTHROPIC_API_KEY")
         self.anthropic_model: str = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
+        self.anthropic_workspace_id: str | None = os.environ.get("ANTHROPIC_WORKSPACE_ID")
         self.local_validation: bool = os.environ.get("LOCAL_VALIDATION", "true").lower() == "true"
         self.provider_mode: str = os.environ.get("PROVIDER_MODE", "fake")
         self.max_staleness_seconds: float = float(

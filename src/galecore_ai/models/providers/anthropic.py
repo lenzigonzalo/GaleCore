@@ -30,6 +30,7 @@ class AnthropicProvider:
         model: str = "claude-sonnet-4-6",
         max_retries: int = 1,
         timeout: float = 60.0,
+        workspace_id: str | None = None,
     ) -> None:
         try:
             import anthropic
@@ -38,10 +39,15 @@ class AnthropicProvider:
                 "anthropic package required. Install with: pip install 'galecore-ai[anthropic]'"
             ) from exc
 
+        headers: dict[str, str] = {}
+        if workspace_id:
+            headers["anthropic-workspace-id"] = workspace_id
+
         self._client = anthropic.Anthropic(
             api_key=api_key,
             max_retries=max_retries,
             timeout=timeout,
+            default_headers=headers or None,
         )
         self._model = model
 

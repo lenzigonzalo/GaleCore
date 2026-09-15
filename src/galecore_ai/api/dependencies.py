@@ -91,6 +91,7 @@ class AppDependencies:
             return AnthropicProvider(
                 api_key=config.anthropic_api_key,
                 model=config.anthropic_model,
+                workspace_id=config.anthropic_workspace_id,
             )
 
         from galecore_ai.models.providers.fake import FakeProvider
