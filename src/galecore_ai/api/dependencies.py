@@ -6,6 +6,7 @@ import logging
 
 from galecore_ai.agents.trading_agent import build_trading_agent
 from galecore_ai.api.config import AppConfig
+from galecore_ai.application.analyze_gex import AnalyzeGexUseCase
 from galecore_ai.capabilities.contracts import KNOWN_CAPABILITIES
 from galecore_ai.capabilities.dispatcher import CapabilityDispatcher
 from galecore_ai.capabilities.registry import CapabilityRegistry
@@ -16,7 +17,6 @@ from galecore_ai.harness.runtime import CognitiveRuntime
 from galecore_ai.harness.skill_loader import SkillLoader
 from galecore_ai.models.gateway import ModelProvider
 from galecore_ai.protocols.facts_discipline import build_facts_discipline_protocol
-from galecore_ai.skills.gex_analysis.runner import GexAnalysisRunner
 from galecore_ai.skills.gex_analysis.skill import build_gex_interpretation_skill
 
 logger = logging.getLogger(__name__)
@@ -64,8 +64,8 @@ class AppDependencies:
             api_key=config.galecore_api_key,
         )
 
-        # Runner
-        self.gex_runner = GexAnalysisRunner(
+        # Use case
+        self.gex_use_case = AnalyzeGexUseCase(
             runtime=self.runtime,
             dispatcher=self.dispatcher,
         )

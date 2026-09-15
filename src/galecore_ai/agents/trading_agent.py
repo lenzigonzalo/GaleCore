@@ -35,6 +35,7 @@ def build_trading_agent(
         allowed_capabilities=[
             "market_data.quote",
             "compute.gamma_exposure",
+            "compute.gex_analysis",
         ],
         model_preferences=ModelPreferences(
             provider=provider,

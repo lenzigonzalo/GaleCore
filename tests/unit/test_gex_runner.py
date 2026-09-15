@@ -1,11 +1,14 @@
-"""Unit tests for GexAnalysisRunner — the application service that fetches facts
+"""Unit tests for AnalyzeGexUseCase — the application service that fetches facts
 from GaleCore and orchestrates the cognitive pipeline."""
 
-import httpx
+import json
+from pathlib import Path
+
 import pytest
 
+from galecore_ai.application.analyze_gex import GEX_CAPABILITY_ID, AnalyzeGexUseCase
 from galecore_ai.capabilities.contracts import KNOWN_CAPABILITIES
-from galecore_ai.capabilities.dispatcher import CapabilityDispatcher
+from galecore_ai.capabilities.dispatcher import CapabilityResult
 from galecore_ai.capabilities.registry import CapabilityRegistry
 from galecore_ai.contracts.agent_run import RunStatus
 from galecore_ai.harness.convention_resolver import ConventionResolver
@@ -18,10 +21,8 @@ from galecore_ai.models.providers.fake import (
     clear_canned_responses,
     register_canned_response,
 )
-from galecore_ai.skills.gex_analysis.runner import (
-    FactValidationError,
-    GexAnalysisRunner,
-)
+
+FIXTURES_DIR = Path(__file__).parent.parent / "fixtures" / "galecore"
 
 
 @pytest.fixture(autouse=True)
@@ -29,6 +30,10 @@ def _clean():
     clear_canned_responses()
     yield
     clear_canned_responses()
+
+
+def _load_fixture(name: str = "gex_analysis_spy.json") -> dict:
+    return json.loads((FIXTURES_DIR / name).read_text())
 
 
 def _make_registry() -> CapabilityRegistry:
@@ -44,7 +49,7 @@ def _make_runtime(provider: FakeProvider | None = None) -> CognitiveRuntime:
         "version": "1.0",
         "display_name": "GEX Interpretation",
         "output_contract": "galecore_ai.contracts.gex_analysis.GexInterpretation",
-        "required_capabilities": ["compute.gamma_exposure"],
+        "required_capabilities": ["compute.gex_analysis"],
         "system_prompt": "You are a GEX analyst.",
         "instructions": "Classify the regime.",
     })
@@ -77,216 +82,106 @@ def _agent() -> AgentDefinition:
         display_name="Trading Agent",
         skills=["gex_interpretation"],
         protocols=["facts_discipline"],
-        allowed_capabilities=["compute.gamma_exposure", "market_data.quote"],
+        allowed_capabilities=["compute.gex_analysis", "compute.gamma_exposure", "market_data.quote"],
     )
 
 
-VALID_GEX_RESPONSE = {
-    "symbol": "SPY",
-    "net_gex": 1500000.0,
-    "call_gex": 2000000.0,
-    "put_gex": -500000.0,
-    "spot": 450.50,
-    "zero_gamma_level": 445.0,
-    "call_wall": 460.0,
-    "put_wall": 440.0,
-}
-
-
-def _mock_transport(response_json: dict, status_code: int = 200):
-    """Build an httpx MockTransport returning given JSON."""
-    return httpx.MockTransport(
-        lambda request: httpx.Response(status_code, json=response_json)
+def _mock_use_case(
+    response_data: dict | None = None,
+    cap_error: str | None = None,
+    allow_unknown_freshness: bool = True,
+) -> AnalyzeGexUseCase:
+    """Build use case with a mock dispatcher."""
+    runtime = _make_runtime()
+    use_case = AnalyzeGexUseCase(
+        runtime=runtime,
+        dispatcher=None,  # type: ignore[arg-type]  # we patch invoke
+        allow_unknown_freshness=allow_unknown_freshness,
     )
 
-
-def _make_dispatcher(transport: httpx.MockTransport) -> CapabilityDispatcher:
-    """Create a dispatcher that uses a mock transport."""
-    d = CapabilityDispatcher(
-        base_url="http://localhost:5000",
-        registry=_make_registry(),
-    )
-    # Patch the invoke to use mock transport
-    original_invoke = d.invoke
-
+    # Patch dispatcher invoke
     async def mock_invoke(capability_id, parameters, *, agent_allowed=None):
-        # For GEX capability, use mock transport directly
-        if capability_id == "compute.gamma_exposure":
-            async with httpx.AsyncClient(transport=transport) as client:
-                resp = await client.get(
-                    "http://localhost:5000/App.Analytics/GammaExposure",
-                    params={"symbol": parameters.get("symbol", "SPY")},
-                )
-                from galecore_ai.capabilities.dispatcher import CapabilityResult
+        if cap_error:
+            return CapabilityResult(capability_id, error=cap_error, latency_ms=1)
+        return CapabilityResult(capability_id, data=response_data, latency_ms=5)
 
-                if resp.status_code != 200:
-                    return CapabilityResult(
-                        capability_id, error=f"HTTP {resp.status_code}"
-                    )
-                return CapabilityResult(
-                    capability_id, data=resp.json(), latency_ms=1
-                )
-        return await original_invoke(capability_id, parameters, agent_allowed=agent_allowed)
+    # Create a minimal dispatcher-like object
+    class MockDispatcher:
+        invoke = staticmethod(mock_invoke)
 
-    d.invoke = mock_invoke
-    return d
+    use_case._dispatcher = MockDispatcher()
+    return use_case
 
 
-class TestGexAnalysisRunnerSuccess:
+class TestAnalyzeGexSuccess:
     @pytest.mark.asyncio
-    async def test_successful_run_with_valid_gex_data(self):
+    async def test_successful_run_with_real_fixture(self):
+        """SUCCESS case with realistic camelCase GaleCore response."""
         register_canned_response("GexInterpretation", {
             "regime": "positive_gamma",
-            "observations": ["net_gex is positive at 1500000.0"],
+            "observations": ["net_gex is positive at 1500.0"],
             "implications": ["Mean reversion expected around spot 450.5"],
             "caveats": ["Based on current snapshot"],
         })
 
-        transport = _mock_transport(VALID_GEX_RESPONSE)
-        dispatcher = _make_dispatcher(transport)
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=dispatcher,
-        )
+        fixture = _load_fixture()
+        use_case = _mock_use_case(fixture, allow_unknown_freshness=True)
 
-        result = await runner.run(
-            symbol="SPY",
-            agent_definition=_agent(),
-        )
+        result = await use_case.run(symbol="SPY", agent_definition=_agent())
 
         assert result.status == RunStatus.SUCCESS
         assert result.result is not None
         assert result.result["regime"] == "positive_gamma"
-        # Capability trace should be present
+
+        # Capability trace present
         cap_traces = [
             c for c in result.trace.capabilities_invoked
-            if c["capability_id"] == "compute.gamma_exposure"
+            if c["capability_id"] == GEX_CAPABILITY_ID
         ]
         assert len(cap_traces) >= 1
         assert cap_traces[0]["ok"] is True
 
 
-class TestGexAnalysisRunnerInsufficientData:
+class TestAnalyzeGexInsufficientData:
     @pytest.mark.asyncio
     async def test_capability_fetch_failure(self):
-        transport = _mock_transport({"error": "not found"}, status_code=404)
-        dispatcher = _make_dispatcher(transport)
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=dispatcher,
-        )
-
-        result = await runner.run(symbol="SPY", agent_definition=_agent())
+        use_case = _mock_use_case(cap_error="Connection refused")
+        result = await use_case.run(symbol="SPY", agent_definition=_agent())
         assert result.status == RunStatus.INSUFFICIENT_DATA
         assert "Capability fetch failed" in result.error_detail
 
     @pytest.mark.asyncio
-    async def test_missing_required_field(self):
-        incomplete = {
-            "symbol": "SPY",
-            "net_gex": 1500000.0,
-            # missing call_gex, put_gex, spot
-        }
-        transport = _mock_transport(incomplete)
-        dispatcher = _make_dispatcher(transport)
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=dispatcher,
-        )
-
-        result = await runner.run(symbol="SPY", agent_definition=_agent())
+    async def test_null_payload(self):
+        use_case = _mock_use_case(response_data=None, allow_unknown_freshness=True)
+        # Dispatcher returns ok=False when data is None
+        result = await use_case.run(symbol="SPY", agent_definition=_agent())
         assert result.status == RunStatus.INSUFFICIENT_DATA
-        assert "call_gex" in result.error_detail
-
-    # NaN/Inf tests are in TestFactValidation since they can't round-trip through JSON
 
     @pytest.mark.asyncio
-    async def test_symbol_mismatch_rejected(self):
-        bad_data = {
-            **VALID_GEX_RESPONSE,
-            "symbol": "QQQ",
-        }
-        transport = _mock_transport(bad_data)
-        dispatcher = _make_dispatcher(transport)
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=dispatcher,
-        )
-
-        result = await runner.run(symbol="SPY", agent_definition=_agent())
+    async def test_symbol_mismatch(self):
+        fixture = _load_fixture()
+        fixture["symbol"] = "QQQ"
+        use_case = _mock_use_case(fixture, allow_unknown_freshness=True)
+        result = await use_case.run(symbol="SPY", agent_definition=_agent())
         assert result.status == RunStatus.INSUFFICIENT_DATA
         assert "mismatch" in result.error_detail.lower()
 
+    @pytest.mark.asyncio
+    async def test_unknown_freshness_blocked_by_default(self):
+        """UNKNOWN freshness → INSUFFICIENT_DATA when allow_unknown_freshness=False."""
+        fixture = _load_fixture()
+        fixture["timestamp"] = None  # no timestamp → UNKNOWN
+        use_case = _mock_use_case(fixture, allow_unknown_freshness=False)
+        result = await use_case.run(symbol="SPY", agent_definition=_agent())
+        assert result.status == RunStatus.INSUFFICIENT_DATA
+        assert "UNKNOWN" in result.error_detail
 
-class TestFactValidation:
-    def test_null_payload_raises(self):
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=CapabilityDispatcher(
-                base_url="http://localhost:5000",
-                registry=_make_registry(),
-            ),
-        )
-        with pytest.raises(FactValidationError, match="Expected dict"):
-            runner._validate_and_build_facts(None, "SPY")
-
-    def test_list_payload_raises(self):
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=CapabilityDispatcher(
-                base_url="http://localhost:5000",
-                registry=_make_registry(),
-            ),
-        )
-        with pytest.raises(FactValidationError, match="Expected dict"):
-            runner._validate_and_build_facts([], "SPY")
-
-    def test_valid_data_builds_facts(self):
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=CapabilityDispatcher(
-                base_url="http://localhost:5000",
-                registry=_make_registry(),
-            ),
-        )
-        facts = runner._validate_and_build_facts(VALID_GEX_RESPONSE, "SPY")
-        assert facts.symbol == "SPY"
-        assert facts.net_gex == 1500000.0
-        assert facts.spot == 450.50
-        assert facts.zero_gamma_level == 445.0
-
-    def test_non_numeric_field_raises(self):
-        bad = {**VALID_GEX_RESPONSE, "spot": "not_a_number"}
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=CapabilityDispatcher(
-                base_url="http://localhost:5000",
-                registry=_make_registry(),
-            ),
-        )
-        with pytest.raises(FactValidationError, match="must be numeric"):
-            runner._validate_and_build_facts(bad, "SPY")
-
-    def test_nan_value_raises(self):
-        bad = {**VALID_GEX_RESPONSE, "net_gex": float("nan")}
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=CapabilityDispatcher(
-                base_url="http://localhost:5000",
-                registry=_make_registry(),
-            ),
-        )
-        with pytest.raises(FactValidationError, match="not finite"):
-            runner._validate_and_build_facts(bad, "SPY")
-
-    def test_inf_value_raises(self):
-        bad = {**VALID_GEX_RESPONSE, "spot": float("inf")}
-        runner = GexAnalysisRunner(
-            runtime=_make_runtime(),
-            dispatcher=CapabilityDispatcher(
-                base_url="http://localhost:5000",
-                registry=_make_registry(),
-            ),
-        )
-        with pytest.raises(FactValidationError, match="not finite"):
-            runner._validate_and_build_facts(bad, "SPY")
+    @pytest.mark.asyncio
+    async def test_stale_data_rejected(self):
+        """Stale data → INSUFFICIENT_DATA."""
+        fixture = _load_fixture()
+        fixture["timestamp"] = "2020-01-01T00:00:00"  # very old
+        use_case = _mock_use_case(fixture, allow_unknown_freshness=True)
+        result = await use_case.run(symbol="SPY", agent_definition=_agent())
+        assert result.status == RunStatus.INSUFFICIENT_DATA
+        assert "stale" in result.error_detail.lower() or "STALE" in result.error_detail

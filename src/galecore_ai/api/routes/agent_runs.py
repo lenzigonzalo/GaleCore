@@ -41,7 +41,7 @@ async def run_gex_analysis(
     """
     deps = request.app.state.deps
 
-    result: AgentRunResult = await deps.gex_runner.run(
+    result: AgentRunResult = await deps.gex_use_case.run(
         symbol=body.symbol.upper(),
         agent_definition=deps.trading_agent,
     )
