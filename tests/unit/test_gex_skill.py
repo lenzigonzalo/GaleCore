@@ -1,0 +1,29 @@
+"""Unit tests for the GEX interpretation skill definition."""
+
+from galecore_ai.skills.gex_analysis.skill import build_gex_interpretation_skill
+
+
+class TestGexInterpretationSkill:
+    def test_skill_id(self):
+        skill = build_gex_interpretation_skill()
+        assert skill.skill_id == "gex_interpretation"
+
+    def test_requires_gamma_exposure(self):
+        skill = build_gex_interpretation_skill()
+        assert "compute.gamma_exposure" in skill.required_capabilities
+
+    def test_output_contract(self):
+        skill = build_gex_interpretation_skill()
+        assert "GexInterpretation" in skill.output_contract
+
+    def test_has_system_prompt(self):
+        skill = build_gex_interpretation_skill()
+        assert "NEVER invent" in skill.system_prompt
+        assert "regime" in skill.instructions
+
+    def test_has_examples(self):
+        skill = build_gex_interpretation_skill()
+        assert len(skill.examples) >= 1
+        ex = skill.examples[0]
+        assert "regime" in ex.expected_output
+        assert ex.expected_output["regime"] == "positive_gamma"
