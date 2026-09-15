@@ -92,8 +92,8 @@ class TestGexVerticalSuccess:
         # Trace assertions
         trace = data["trace"]
         assert trace["provider"] == "fake"
-        assert "gex_interpretation" in trace["skills_used"]
-        assert "facts_discipline" in trace["protocols_used"]
+        assert any(s["skill_id"] == "gex_interpretation" for s in trace["skills"])
+        assert any(p["protocol_id"] == "facts_discipline" for p in trace["protocols"])
         assert trace["latency_ms"] >= 0
         assert trace["started_at"] is not None
         assert trace["completed_at"] is not None
@@ -102,7 +102,7 @@ class TestGexVerticalSuccess:
         cap_invocations = trace["capabilities_invoked"]
         gex_cap = [c for c in cap_invocations if c["capability_id"] == GEX_CAPABILITY_ID]
         assert len(gex_cap) >= 1
-        assert gex_cap[0]["ok"] is True
+        assert gex_cap[0]["outcome"] == "ok"
 
 
 class TestGexVerticalInsufficientData:

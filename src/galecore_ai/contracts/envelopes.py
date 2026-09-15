@@ -8,9 +8,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from uuid import uuid4
 
 from pydantic import BaseModel, Field
+
+from galecore_ai.contracts.ids import new_id
 
 
 class ActorType(str, Enum):
@@ -33,10 +34,10 @@ class TemporalContext(BaseModel):
 
 class BaseEnvelope(BaseModel):
     contract_version: str = "1.0"
-    message_id: str = Field(default_factory=lambda: str(uuid4()))
-    correlation_id: str = Field(default_factory=lambda: str(uuid4()))
+    message_id: str = Field(default_factory=new_id)
+    correlation_id: str = Field(default_factory=new_id)
     causation_id: str | None = None
-    trace_id: str = Field(default_factory=lambda: str(uuid4()))
+    trace_id: str = Field(default_factory=new_id)
     actor: Actor
     temporal_context: TemporalContext
 

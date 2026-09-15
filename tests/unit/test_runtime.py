@@ -131,8 +131,8 @@ class TestCognitiveRuntimeSuccess:
         assert result.result is not None
         assert result.result["regime"] == "positive_gamma"
         assert result.trace.provider == "fake"
-        assert result.trace.skills_used == ["gex_interpretation"]
-        assert "facts_discipline" in result.trace.protocols_used
+        assert any(s.skill_id == "gex_interpretation" for s in result.trace.skills)
+        assert any(p.protocol_id == "facts_discipline" for p in result.trace.protocols)
         assert result.trace.latency_ms >= 0
         assert result.trace.started_at is not None
         assert result.trace.completed_at is not None
@@ -276,8 +276,8 @@ class TestCognitiveRuntimeTrace:
             facts=_facts(),
             output_schema=GexInterpretation,
         )
-        assert result.trace.agent_definition["agent_id"] == "TradingAgent"
-        assert result.trace.agent_definition["version"] == "1.0"
+        assert result.trace.agent_definition.agent_id == "TradingAgent"
+        assert result.trace.agent_definition.version == "1.0"
 
     @pytest.mark.asyncio
     async def test_trace_records_token_usage(self):

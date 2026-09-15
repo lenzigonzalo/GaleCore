@@ -1,7 +1,7 @@
 """AnalyzeGexUseCase — application service for the GEX analysis vertical.
 
-Orchestrates: fetch from GaleCore → parse DTO → validate → map to GexFacts
-→ CognitiveRuntime.execute → return result.
+Orchestrates: fetch from GaleCore -> parse DTO -> validate -> map to GexFacts
+-> CognitiveRuntime.execute -> return result.
 
 This is NOT a Skill. It is the application-level coordinator that:
 1. Invokes GaleCore capabilities via CapabilityDispatcher
@@ -25,7 +25,14 @@ from galecore_ai.capabilities.gex_mapper import (
     map_to_gex_facts,
     parse_gex_response,
 )
-from galecore_ai.contracts.agent_run import AgentRunRequest, AgentRunResult, RunStatus, TraceRecord
+from galecore_ai.contracts.agent_run import (
+    AgentRunRequest,
+    AgentRunResult,
+    CapabilityTrace,
+    FreshnessTrace,
+    RunStatus,
+    TraceRecord,
+)
 from galecore_ai.contracts.gex_analysis import FreshnessStatus, GexInterpretation
 from galecore_ai.harness.definitions import AgentDefinition
 from galecore_ai.harness.runtime import CognitiveRuntime
@@ -35,16 +42,19 @@ logger = logging.getLogger(__name__)
 # Capability ID for GEX analysis — maps to GET /App/Gex/Analysis
 GEX_CAPABILITY_ID = "compute.gex_analysis"
 
+# Logical endpoint for tracing (from _ROUTE_TABLE)
+_GEX_ENDPOINT = "/App/Gex/Analysis"
+
 
 class AnalyzeGexUseCase:
     """Fetches GEX data from GaleCore, validates, and runs cognitive interpretation.
 
     Fail-closed:
-    - Capability fetch failure → INSUFFICIENT_DATA, model not called
-    - DTO parse failure → INSUFFICIENT_DATA, model not called
-    - Invalid/missing facts → INSUFFICIENT_DATA, model not called
-    - Stale data → INSUFFICIENT_DATA, model not called
-    - Unknown freshness → INSUFFICIENT_DATA by default (configurable)
+    - Capability fetch failure -> INSUFFICIENT_DATA, model not called
+    - DTO parse failure -> INSUFFICIENT_DATA, model not called
+    - Invalid/missing facts -> INSUFFICIENT_DATA, model not called
+    - Stale data -> INSUFFICIENT_DATA, model not called
+    - Unknown freshness -> INSUFFICIENT_DATA by default (configurable)
     """
 
     def __init__(
@@ -74,7 +84,11 @@ class AnalyzeGexUseCase:
                 parameters={"symbol": symbol},
             )
 
-        trace = TraceRecord(started_at=datetime.now(tz=UTC))
+        now = datetime.now(tz=UTC)
+        trace = TraceRecord(
+            started_at=now,
+            request_timestamp=request.requested_at,
+        )
 
         # ── 1. Fetch GEX data from GaleCore ──────────────────────
         cap_result = await self._dispatcher.invoke(
@@ -83,16 +97,27 @@ class AnalyzeGexUseCase:
             agent_allowed=agent_definition.allowed_capabilities,
         )
 
-        trace.capabilities_invoked.append({
-            "capability_id": GEX_CAPABILITY_ID,
-            "ok": cap_result.ok,
-            "latency_ms": cap_result.latency_ms,
-            "error": cap_result.error,
-        })
+        response_received_at = datetime.now(tz=UTC)
+        cap_outcome = "ok" if cap_result.ok else "error"
+        cap_trace = CapabilityTrace(
+            capability_id=GEX_CAPABILITY_ID,
+            endpoint=_GEX_ENDPOINT,
+            transport="REST",
+            latency_ms=cap_result.latency_ms,
+            outcome=cap_outcome,
+            error=cap_result.error,
+            response_received_at=response_received_at,
+            # GaleCore does not provide these — leave as None
+            schema_version=None,
+            calculation_version=None,
+            methodology_version=None,
+        )
+        trace.capabilities_invoked.append(cap_trace)
 
         if not cap_result.ok:
             trace.completed_at = datetime.now(tz=UTC)
             trace.error = f"Capability fetch failed: {cap_result.error}"
+            trace.status = RunStatus.INSUFFICIENT_DATA.value
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.INSUFFICIENT_DATA,
@@ -106,6 +131,7 @@ class AnalyzeGexUseCase:
         except GexMappingError as exc:
             trace.completed_at = datetime.now(tz=UTC)
             trace.error = f"DTO parse failed: {exc}"
+            trace.status = RunStatus.INSUFFICIENT_DATA.value
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.INSUFFICIENT_DATA,
@@ -123,12 +149,25 @@ class AnalyzeGexUseCase:
         except GexMappingError as exc:
             trace.completed_at = datetime.now(tz=UTC)
             trace.error = f"Fact validation failed: {exc}"
+            trace.status = RunStatus.INSUFFICIENT_DATA.value
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.INSUFFICIENT_DATA,
                 error_detail=trace.error,
                 trace=trace,
             )
+
+        # ── 3b. Build freshness trace ────────────────────────────
+        freshness_age: float | None = None
+        if facts.market_data_as_of is not None:
+            freshness_age = (now - facts.market_data_as_of).total_seconds()
+
+        trace.freshness = FreshnessTrace(
+            market_data_as_of=facts.market_data_as_of,
+            response_received_at=response_received_at,
+            freshness_status=facts.freshness_status.value if facts.freshness_status else None,
+            freshness_age_seconds=freshness_age,
+        )
 
         # ── 4. Freshness gate ─────────────────────────────────────
         if facts.freshness_status == FreshnessStatus.STALE:
@@ -137,6 +176,7 @@ class AnalyzeGexUseCase:
                 f"Data is stale (freshness_status=STALE, "
                 f"market_data_as_of={facts.market_data_as_of})"
             )
+            trace.status = RunStatus.INSUFFICIENT_DATA.value
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.INSUFFICIENT_DATA,
@@ -150,6 +190,7 @@ class AnalyzeGexUseCase:
                 "Data freshness is UNKNOWN (GaleCore did not provide timestamp). "
                 "Fail-closed: model not called. Set allow_unknown_freshness=True to override."
             )
+            trace.status = RunStatus.INSUFFICIENT_DATA.value
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.INSUFFICIENT_DATA,
@@ -167,8 +208,12 @@ class AnalyzeGexUseCase:
             output_schema=GexInterpretation,
         )
 
-        # Merge capability trace
+        # Merge capability trace from this use case into the runtime trace
         for cap_entry in trace.capabilities_invoked:
             result.trace.capabilities_invoked.append(cap_entry)
+
+        # Merge freshness trace
+        if trace.freshness is not None:
+            result.trace.freshness = trace.freshness
 
         return result

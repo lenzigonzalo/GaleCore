@@ -73,6 +73,10 @@ class ConventionResolver:
         """Get all resolved convention values as a flat dict."""
         return {k: e.value for k, e in self.resolved.items()}
 
+    def all_sets(self) -> list[ConventionSet]:
+        """Return all loaded convention sets (for tracing)."""
+        return list(self._convention_sets)
+
     def clear(self) -> None:
         self._convention_sets.clear()
         self._resolved = None

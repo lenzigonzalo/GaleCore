@@ -21,9 +21,14 @@ from typing import TYPE_CHECKING
 
 from galecore_ai.capabilities.registry import CapabilityRegistry
 from galecore_ai.contracts.agent_run import (
+    AgentDefinitionTrace,
     AgentRunRequest,
     AgentRunResult,
+    ConventionTrace,
+    GuardrailTrace,
+    ProtocolTrace,
     RunStatus,
+    SkillTrace,
     TraceRecord,
 )
 from galecore_ai.harness.context_assembler import ContextAssembler
@@ -48,7 +53,7 @@ def _utcnow() -> datetime:
 class CognitiveRuntime:
     """Orchestrates a complete agent reasoning cycle.
 
-    Wires together: preflight → context → model → guardrails → trace.
+    Wires together: preflight -> context -> model -> guardrails -> trace.
     """
 
     def __init__(
@@ -91,11 +96,12 @@ class CognitiveRuntime:
         trace = TraceRecord(
             provider=self._provider.provider_name,
             model=self._provider.model_id,
-            agent_definition={
-                "agent_id": agent_definition.agent_id,
-                "version": agent_definition.version,
-            },
+            agent_definition=AgentDefinitionTrace(
+                agent_id=agent_definition.agent_id,
+                version=agent_definition.version,
+            ),
             started_at=started_at,
+            request_timestamp=request.requested_at,
         )
 
         # ── 1. Preflight ──────────────────────────────────────────
@@ -111,6 +117,7 @@ class CognitiveRuntime:
             trace.completed_at = _utcnow()
             trace.latency_ms = int((time.monotonic() - t0) * 1000)
             trace.error = f"Preflight failed: {'; '.join(preflight.errors)}"
+            trace.status = RunStatus.VALIDATION_ERROR.value
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.VALIDATION_ERROR,
@@ -119,13 +126,14 @@ class CognitiveRuntime:
             )
 
         skill = self._skill_loader.get(skill_id)
-        trace.skills_used = [skill_id]
+        trace.skills = [SkillTrace(skill_id=skill_id, version=skill.version)]
 
         # ── 1b. Facts gate — empty facts must not reach the model ─
         if skill.required_capabilities and not facts:
             trace.completed_at = _utcnow()
             trace.latency_ms = int((time.monotonic() - t0) * 1000)
             trace.error = "Fail-closed: skill requires capabilities but facts are empty"
+            trace.status = RunStatus.INSUFFICIENT_DATA.value
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.INSUFFICIENT_DATA,
@@ -135,7 +143,19 @@ class CognitiveRuntime:
 
         # ── 2. Context Assembly ───────────────────────────────────
         protocols = self._protocol_loader.get_for_trigger(skill_id)
-        trace.protocols_used = [p.protocol_id for p in protocols]
+        trace.protocols = [
+            ProtocolTrace(protocol_id=p.protocol_id, version=p.version)
+            for p in protocols
+        ]
+
+        # Build convention traces
+        for conv_set in self._conventions.all_sets():
+            trace.conventions.append(
+                ConventionTrace(
+                    convention_id=conv_set.convention_id,
+                    version=conv_set.version,
+                )
+            )
 
         # Collect guardrail IDs from active protocols
         guardrail_ids: list[str] = []
@@ -175,12 +195,16 @@ class CognitiveRuntime:
             trace.completed_at = _utcnow()
             trace.latency_ms = int((time.monotonic() - t0) * 1000)
             trace.error = f"Model error: {exc}"
+            trace.status = RunStatus.MODEL_ERROR.value
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.MODEL_ERROR,
                 error_detail=str(exc),
                 trace=trace,
             )
+
+        # Model was called successfully
+        trace.model_called = True
 
         # Record token usage
         trace.input_tokens = model_result.input_tokens
@@ -190,6 +214,7 @@ class CognitiveRuntime:
             trace.completed_at = _utcnow()
             trace.latency_ms = int((time.monotonic() - t0) * 1000)
             trace.error = model_result.error
+            trace.status = RunStatus.MODEL_ERROR.value
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.MODEL_ERROR,
@@ -205,13 +230,24 @@ class CognitiveRuntime:
             facts=facts,
         )
 
+        # Record guardrail traces
+        trace.guardrails_executed = [
+            GuardrailTrace(
+                guardrail_id=g.guardrail_id,
+                passed=g.passed,
+                message=g.message,
+            )
+            for g in guardrail_results
+        ]
+
         if not check_all_passed(guardrail_results):
             failed = [g for g in guardrail_results if not g.passed]
             detail = "; ".join(f"{g.guardrail_id}: {g.message}" for g in failed)
             trace.completed_at = _utcnow()
             trace.latency_ms = int((time.monotonic() - t0) * 1000)
             trace.error = f"Guardrail failure: {detail}"
-            # Fail-closed: guardrail failure → result=null (rejected output never crosses boundary)
+            trace.status = RunStatus.VALIDATION_ERROR.value
+            # Fail-closed: guardrail failure -> result=null (rejected output never crosses boundary)
             return AgentRunResult(
                 run_id=request.run_id,
                 status=RunStatus.VALIDATION_ERROR,
@@ -223,6 +259,7 @@ class CognitiveRuntime:
         # ── 5. Success ────────────────────────────────────────────
         trace.completed_at = _utcnow()
         trace.latency_ms = int((time.monotonic() - t0) * 1000)
+        trace.status = RunStatus.SUCCESS.value
 
         return AgentRunResult(
             run_id=request.run_id,

@@ -140,10 +140,10 @@ class TestAnalyzeGexSuccess:
         # Capability trace present
         cap_traces = [
             c for c in result.trace.capabilities_invoked
-            if c["capability_id"] == GEX_CAPABILITY_ID
+            if c.capability_id == GEX_CAPABILITY_ID
         ]
         assert len(cap_traces) >= 1
-        assert cap_traces[0]["ok"] is True
+        assert cap_traces[0].outcome == "ok"
 
 
 class TestAnalyzeGexInsufficientData:

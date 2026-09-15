@@ -2,7 +2,6 @@
 
 import json
 from datetime import UTC, datetime
-from uuid import uuid4
 
 from galecore_ai.contracts.agent_run import (
     AgentRunRequest,
@@ -22,6 +21,7 @@ from galecore_ai.contracts.gex_analysis import (
     GexFacts,
     GexInterpretation,
 )
+from galecore_ai.contracts.ids import new_id
 
 
 class TestEnvelopeContracts:
@@ -75,7 +75,7 @@ class TestAgentRunContracts:
 
     def test_result_success(self):
         result = AgentRunResult(
-            run_id=str(uuid4()),
+            run_id=new_id(),
             status=RunStatus.SUCCESS,
             result={"analysis": "done"},
         )
@@ -86,7 +86,7 @@ class TestAgentRunContracts:
 
     def test_result_error(self):
         result = AgentRunResult(
-            run_id=str(uuid4()),
+            run_id=new_id(),
             status=RunStatus.MODEL_ERROR,
             error_detail="Provider timeout after 30s",
         )
@@ -97,7 +97,7 @@ class TestAgentRunContracts:
         trace = TraceRecord()
         assert trace.trace_id is not None
         assert trace.provider is None
-        assert trace.skills_used == []
+        assert trace.skills == []
 
 
 class TestGexAnalysisContracts:
