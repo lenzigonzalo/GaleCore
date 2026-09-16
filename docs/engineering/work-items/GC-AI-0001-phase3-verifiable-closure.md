@@ -852,3 +852,16 @@ Commands after review-3 resolutions (2026-09-16, UTC ~19:55): gate PASS · ruff 
 3. **GaleCore development ApiKey → left as is.** Localhost-only development secret; the owner chose not to rotate it and not to redact review history.
 
 These decisions are the product owner's, recorded verbatim by the implementer. `closure_blocked` stays `true` until AC-09 (independent review approval) and the owner's final acceptance.
+
+### Independent review 4 (Codex, recheck, 2026-09-16) — `docs/engineering/reviews/GC-AI-0001-20260916T232610Z.md`
+
+**Verdict:** CHANGES_REQUESTED, converging: AC-01/02/04/05/08 PASS; B1/B3/M3 of review 3 recorded as OWNER DECISION; all other previous findings RESOLVED. New findings and resolution (commit `61c8243`):
+
+| # | Finding | Resolution |
+|---|---|---|
+| B-new | Spanish `tomar una posición larga/corta` pattern had no adversarial test | **Fixed, and the test found a real gap:** the accented conjugation "Tomá posición corta" was not matched. Pattern extended; 6 cases added (position/operation/price-target, EN+ES). 434 tests. |
+| B-new | Cognitive-evaluation doc claimed assets make the host "more likely" to avoid failures | **Fixed.** Replaced by an explicit no-effect-claim statement; simulated outputs draw no behavioural inference (owner condition for the AC-06 gap). |
+| M-new | AC-06 live status still BLOCKED | **Fixed.** Live section = ACCEPTED GAP; original analysis kept as history. |
+| m-new | 20 vs 21 negatives; 427 vs 428 tests | **Fixed** (21; 434 after the new cases). |
+
+Ready for recheck 5 (`/review-codex --recheck`).
