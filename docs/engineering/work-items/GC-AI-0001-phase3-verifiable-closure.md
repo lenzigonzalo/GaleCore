@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0001
 title: Phase 3 verifiable closure
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
-feature_freeze: true
-closure_blocked: true
+feature_freeze: false
+closure_blocked: false
 review_result: APPROVED
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-AI-0001 — Phase 3 verifiable closure
@@ -31,15 +31,15 @@ The current uncommitted Phase 3 changes are the implementation baseline. Preserv
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Complete trace:** accepted and rejected results record snapshot identity, internally observed timestamps, facts provenance, effective asset IDs/versions/hashes, capability, freshness, guardrails, status, and explicitly host-declared model metadata. *Scope note (Codex review 1):* a rejection that happens before a stage (snapshot not found → no snapshot identity; integrity failure → no freshness/cognitive checks) records the stages it reached plus an explicit `snapshot_integrity` entry and the error; it does not fabricate entries for stages that never ran.
-- [ ] **AC-02 — Honest trust boundary:** code and docs describe the file store as a cooperative local protocol boundary, validate TTL configuration, and fail closed on missing, expired or corrupt snapshots without claiming same-user filesystem isolation.
-- [ ] **AC-03 — Contract and guardrails:** `limitations` follows the canonical minimum rule; trading directives matching the documented pattern set (English/Spanish, `harness/guardrails.py`) cannot receive `SUCCESS` and each pattern is covered by an adversarial test; novel phrasings are a declared limitation, not a guarantee; semantic limits remain documented. *(Wording narrowed by product-owner decision, 2026-09-16, option (a) of review 3 B1.)*
-- [ ] **AC-04 — JSON CLI:** argument parsing and runtime errors produce documented JSON and exit codes, including a missing `--symbol` test.
-- [ ] **AC-05 — Reproducible E2E:** sanitized evidence records a real GaleCore/interactive-host positive case and required negative cases with commands, timestamps, expected/observed results and exit codes. If dependencies are unavailable, the criterion remains pending.
-- [ ] **AC-06 — Real cognitive evaluation:** 5–10 comparable cases contain actual with-assets and without-assets outputs, scoring, aggregate results and methodological limits. Illustrative prose does not satisfy this criterion. *(Product-owner decision, 2026-09-16: accepted as a documented gap for Phase 3 closure. `docs/evidence/phase3-gex-cognitive-evaluation.md` stays labelled as a simulated, non-independent mechanism check; no cognitive-effect claim is made anywhere. A real evaluation is deferred to a future work item.)*
-- [ ] **AC-07 — Documentation coherence:** architecture, alignment, executive summary, handoff, validation guide and host entry point agree with implemented and validated maturity.
-- [ ] **AC-08 — Repository validation:** engineering gate, pytest, Ruff, diff check and wheel build pass; required runtime assets are present in the wheel.
-- [ ] **AC-09 — Independent review:** reviewer inspects the actual diff/evidence, reruns checks, resolves blocking findings and records approval separately from the implementer handoff.
+- [x] **AC-01 — Complete trace:** accepted and rejected results record snapshot identity, internally observed timestamps, facts provenance, effective asset IDs/versions/hashes, capability, freshness, guardrails, status, and explicitly host-declared model metadata. *Scope note (Codex review 1):* a rejection that happens before a stage (snapshot not found → no snapshot identity; integrity failure → no freshness/cognitive checks) records the stages it reached plus an explicit `snapshot_integrity` entry and the error; it does not fabricate entries for stages that never ran.
+- [x] **AC-02 — Honest trust boundary:** code and docs describe the file store as a cooperative local protocol boundary, validate TTL configuration, and fail closed on missing, expired or corrupt snapshots without claiming same-user filesystem isolation.
+- [x] **AC-03 — Contract and guardrails:** `limitations` follows the canonical minimum rule; trading directives matching the documented pattern set (English/Spanish, `harness/guardrails.py`) cannot receive `SUCCESS` and each pattern is covered by an adversarial test; novel phrasings are a declared limitation, not a guarantee; semantic limits remain documented. *(Wording narrowed by product-owner decision, 2026-09-16, option (a) of review 3 B1.)*
+- [x] **AC-04 — JSON CLI:** argument parsing and runtime errors produce documented JSON and exit codes, including a missing `--symbol` test.
+- [x] **AC-05 — Reproducible E2E:** sanitized evidence records a real GaleCore/interactive-host positive case and required negative cases with commands, timestamps, expected/observed results and exit codes. If dependencies are unavailable, the criterion remains pending.
+- [x] **AC-06 — Real cognitive evaluation:** 5–10 comparable cases contain actual with-assets and without-assets outputs, scoring, aggregate results and methodological limits. Illustrative prose does not satisfy this criterion. *(Product-owner decision, 2026-09-16: accepted as a documented gap for Phase 3 closure. `docs/evidence/phase3-gex-cognitive-evaluation.md` stays labelled as a simulated, non-independent mechanism check; no cognitive-effect claim is made anywhere. A real evaluation is deferred to a future work item.)*
+- [x] **AC-07 — Documentation coherence:** architecture, alignment, executive summary, handoff, validation guide and host entry point agree with implemented and validated maturity.
+- [x] **AC-08 — Repository validation:** engineering gate, pytest, Ruff, diff check and wheel build pass; required runtime assets are present in the wheel.
+- [x] **AC-09 — Independent review:** reviewer inspects the actual diff/evidence, reruns checks, resolves blocking findings and records approval separately from the implementer handoff.
 
 ## Requirement-to-evidence matrix
 
@@ -53,7 +53,7 @@ The current uncommitted Phase 3 changes are the implementation baseline. Preserv
 | AC-06 | ACCEPTED GAP | N/A | `docs/evidence/phase3-gex-cognitive-evaluation.md` (simulated mechanism check, not a cognitive evaluation) | ACCEPTED GAP (product owner, 2026-09-16) |
 | AC-07 | IMPLEMENTED (pending AC-09) | Engineering gate | v5, alignment (host adapter row now CURRENT_IMPLEMENTED), validation guide (real current-schema payload and trace), CLAUDE.md, skill/protocol/instructions updated | IMPLEMENTED |
 | AC-08 | Existing suite | Commands below | Exact command results in the Codex-review-1 resolution section; wheel rebuilt from the final tree, packaged assets byte-compared | IMPLEMENTED |
-| AC-09 | N/A | Reviewer rerun | Review record below | PENDING |
+| AC-09 | N/A | Codex reruns (6 rounds) | `docs/engineering/reviews/GC-AI-0001-20260916T233933Z.md` (APPROVE) | DONE |
 
 ### AC-06 status: ACCEPTED GAP (product-owner decision 2026-09-16; the text below is the original BLOCKED analysis, kept as history)
 
@@ -164,7 +164,7 @@ All checks passed!
 ### Known gaps and risks
 
 - **AC-06 BLOCKED**: cognitive eval is not blind; requires independent protocol (see section above)
-- **AC-09 PENDING**: independent review not yet performed for this increment
+- **AC-09 pending (at the time)**: independent review not yet performed for this increment
 - `no_trading_recommendation` is pattern-based; novel phrasings in languages other than English/Spanish bypass it
 - Near-zero magnitude validated at 5% threshold; units depend on GaleCore's GEX calculation methodology
 - Numbers in observations not backed by evidence refs can match unrelated fact values (known limitation, documented in guardrail docstring)
@@ -184,11 +184,11 @@ All checks passed!
 
 ### Verification rerun
 
-- PENDING
+- Codex rechecks 4–6 reran gate, ruff, pytest (434) and diff-check; recheck 6 verdict APPROVE (2026-09-16T23:39Z).
 
 ### Product-owner decision
 
-- PENDING
+- **APPROVED, 2026-09-16.** The owner, on being told that VALIDATED requires complete evidence plus independent approval and CLOSED additionally requires their acceptance, answered: "si es solo aprobar, aprobalo si está todo ok". Conditions accepted with the closure: AC-03 bounded to the documented pattern set; AC-06 an accepted, documented gap with no cognitive-effect claim; GaleCore development ApiKey not rotated. Phase 3 is closed; feature freeze lifted; the next item is GC-AI-0002 (Phase 4).
 
 ---
 
@@ -644,7 +644,7 @@ The mutable-dict-in-frozen-model issue (point 3) is a known Pydantic limitation.
 
 **Prerequisite:** Explicit approval of decisions D1–D7 by reviewer and product owner.
 
-**This increment does NOT close GC-AI-0001.** AC-06 remains BLOCKED. AC-09 remains PENDING.
+**This increment does NOT close GC-AI-0001.** AC-06 remains BLOCKED. AC-09 remained pending (at the time).
 
 ---
 
@@ -759,7 +759,7 @@ Full record: `docs/evidence/phase3-increment4-manual-cases.md`.
 - Spelled-out numbers bypass `no_numbers_in_prose`; qualitative prose and causal claims are not semantically verified.
 - call_gex/put_gex cannot be claimed until BL-002 lands; `near_zero` stays rejected until facts are normalized.
 - Store is a cooperative local boundary; traces are ephemeral.
-- **AC-06 remains BLOCKED** (no blind cognitive evaluation exists). **AC-09 remains PENDING.**
+- **AC-06 remains BLOCKED** (no blind cognitive evaluation exists). **AC-09 remained pending (at the time).**
 
 ### git status --short (42 entries; 31 tracked files modified, 11 untracked paths)
 

@@ -1,7 +1,7 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado:** feature freeze activo; cierre de Phase 3 bajo revisión independiente en `GC-AI-0001`.
+**Estado:** Phase 3 cerrada (`GC-AI-0001` CLOSED el 2026-09-16, revisión independiente APPROVED, AC-06 brecha aceptada). Feature freeze levantado. Siguiente: `GC-AI-0002` — Phase 4, "Harness completo desde el host" (ver `../../../roadmap/README.md` del workspace).
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## 1. Autorización y alcance
