@@ -1,5 +1,7 @@
 # GaleCore — Sistema de trabajo (2 personas, poco tiempo, IA-first)
 
+> **Superado (2026-09-16):** la forma de trabajo del ecosistema vive en el workspace, `../../ENGINEERING.md` (github.com/lenzigonzalo/galecore-workspace). Este archivo se conserva por sus secciones específicas de GaleCore (fuentes de verdad de la plataforma §1, harness de research §3, agente pre-market §4, cadencia de paper §5). Si contradice a `ENGINEERING.md`, gana `ENGINEERING.md`.
+
 Cómo trabajamos para llegar a **paper corriendo y midiendo** sin vivir mirando el mercado.
 Documento vivo. Somos 2, con 8 hs de laburo ajeno: todo lo que se pueda delegar a IA/automatización, se delega.
 
