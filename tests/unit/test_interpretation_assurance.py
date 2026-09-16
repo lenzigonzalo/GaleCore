@@ -138,6 +138,12 @@ def test_descriptive_positioning_prose_accepted(text):
     "Go short here",
     "Sell puts while the wall holds",
     "Vender puts de SPY",
+    "Tomar una posición larga en SPY",
+    "Tomá posición corta hasta el vencimiento",
+    "Take a long position here",
+    "Ponerse largo en el put wall",
+    "Abrir una operación en SPY",
+    "Objetivo de precio en el call wall",
 ])
 def test_directive_near_instrument_still_rejected(text):
     assert_rejected(validate(output(implications=[text])), "no_trading_recommendation")

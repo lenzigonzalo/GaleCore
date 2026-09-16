@@ -49,13 +49,13 @@ The current uncommitted Phase 3 changes are the implementation baseline. Preserv
 | AC-02 | IMPLEMENTED (pending AC-09) | store tests + `TestConventionIntegrity` (missing/malformed/mutated `conventions_hash` fail closed) | Threat-model statement in docstring + docs; manual case E | DONE |
 | AC-03 | IMPLEMENTED (pending AC-09) | `test_interpretation_assurance.py` (77: omitted-field schema rejection, hold/accumulate directives EN+ES, near_zero fail-closed, closed metric/unit contract, no numbers in prose, evidence limits), guardrail tests EN+ES, golden cases 3/9–12 | Guardrail cases; manual cases A, C, D, F | DONE |
 | AC-04 | IMPLEMENTED (pending AC-09) | 8 CLI subprocess tests | CLI subprocess outputs | DONE |
-| AC-05 | IMPLEMENTED (pending AC-09) | `tools/e2e_interactive_cases.py` (reproducible runner) | `docs/evidence/increment4-e2e/` — 1 positive + 20 negatives on the current schema against live GaleCore, one JSON per case with exact stdin/stdout/exit code (2026-09-16). `phase3-gex-interactive-e2e.md` and `phase3-increment4-manual-cases.md` kept as history | IMPLEMENTED |
+| AC-05 | IMPLEMENTED (pending AC-09) | `tools/e2e_interactive_cases.py` (reproducible runner) | `docs/evidence/increment4-e2e/` — 1 positive + 21 negatives on the current schema against live GaleCore, one JSON per case with exact stdin/stdout/exit code (2026-09-16). `phase3-gex-interactive-e2e.md` and `phase3-increment4-manual-cases.md` kept as history | IMPLEMENTED |
 | AC-06 | ACCEPTED GAP | N/A | `docs/evidence/phase3-gex-cognitive-evaluation.md` (simulated mechanism check, not a cognitive evaluation) | ACCEPTED GAP (product owner, 2026-09-16) |
 | AC-07 | IMPLEMENTED (pending AC-09) | Engineering gate | v5, alignment (host adapter row now CURRENT_IMPLEMENTED), validation guide (real current-schema payload and trace), CLAUDE.md, skill/protocol/instructions updated | IMPLEMENTED |
 | AC-08 | Existing suite | Commands below | Exact command results in the Codex-review-1 resolution section; wheel rebuilt from the final tree, packaged assets byte-compared | IMPLEMENTED |
 | AC-09 | N/A | Reviewer rerun | Review record below | PENDING |
 
-### AC-06 status: BLOCKED
+### AC-06 status: ACCEPTED GAP (product-owner decision 2026-09-16; the text below is the original BLOCKED analysis, kept as history)
 
 The cognitive evaluation in `docs/evidence/phase3-gex-cognitive-evaluation.md` was produced by the same operator (Claude Code) for both with-assets and without-assets conditions, with full knowledge of the guardrails and asset contents. This is not a blind evaluation and the "without assets" outputs simulate failure modes rather than representing genuine model behavior without asset context.
 

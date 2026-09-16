@@ -118,6 +118,6 @@ python -B -m pytest -q -p no:cacheprovider
 python -B -m ruff check --no-cache .
 ```
 
-Resultado (Increment 4, 2026-09-16): **427 tests passing**, ruff clean, wheel builds con los 5 assets. La suite incluye regresiones adversariales, tests de snapshot store, tests de CLI subprocess, tests de trust boundary/provenance, integridad de convenciones y contrato de claims cuantitativos. (Registro histórico: 274 tests al cierre de Increment 3.)
+Resultado (Increment 4, 2026-09-16): **434 tests passing**, ruff clean, wheel builds con los 5 assets. La suite incluye regresiones adversariales, tests de snapshot store, tests de CLI subprocess, tests de trust boundary/provenance, integridad de convenciones y contrato de claims cuantitativos. (Registro histórico: 274 tests al cierre de Increment 3.)
 
 E2E interactivo reproducible (`tools/e2e_interactive_cases.py`) ejecutado el 2026-09-16 contra GaleCore en localhost:5000 con datos live de SPY: 1 caso positivo escrito por el host (Claude Code, HOST_DECLARED) y 21 negativos, todos con payload, stdout y exit code archivados en `docs/evidence/increment4-e2e/`. No se modificó GaleCore. (Histórico: 1 positivo + 13 negativos en `phase3-gex-interactive-e2e.md`, esquema anterior a Increment 4.)

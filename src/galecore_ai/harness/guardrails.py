@@ -172,7 +172,7 @@ _TRADING_REC_PATTERNS = [
         r"\b(?:consider(?:ar|amos|e|á)|recomend(?:ar|amos|o|á)|sugerimos|sugiero|sugerir|aconsej(?:ar|amos|o|á))\b"
         + _GAP + r"\b(?:comprar|vender|abrir|cerrar|entrar|salir|mantener|acumular|sumar|agregar|reducir)\b",
         r"\b(?:ponerse|ir)\s+(?:largo|corto)\b" + _NOT_DESCRIPTIVE_ES,
-        r"\b(?:tomar?\s+(?:una?\s+)?posici[oó]n\s+(?:larga|corta))\b",
+        r"\b(?:tom(?:ar|a|á|e|en|amos)\s+(?:una?\s+)?posici[oó]n\s+(?:larga|corta))\b",
         r"\b(?:abrir|cerrar|entrar|salir\s+de)\s+(?:una?\s+)?(?:operaci[oó]n|posici[oó]n|trade)\b",
         r"\bstop[- ]?loss\s+en\b",
         r"\btake[- ]?profit\s+en\b",

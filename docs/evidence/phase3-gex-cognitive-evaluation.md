@@ -130,7 +130,7 @@ Result: **ACCEPTED** (SUCCESS, all 4 guardrails passed)
 
 2. **Guardrails** (automated): catch 4 specific failure modes — invented numbers, invalid evidence refs, regime sign contradictions, and explicit trading recommendations. These fire on the output, not on whether the host read the assets.
 
-3. **Asset instructions** (cognitive): guide the host to produce output that passes the guardrails. Without the instructions, the host is more likely to produce output that includes invented numbers, trading recommendations, or ungrounded claims. But the instructions are advisory — the validator cannot verify the host read them.
+3. **Asset instructions** (cognitive): describe the output the guardrails accept. **This document makes no claim about their effect on any model's behaviour**: the "without assets" outputs here were written by the same operator to exercise the failure modes, so they say nothing about what a model would produce. The instructions are advisory — the validator cannot verify the host read them. Measuring their effect requires the independent evaluation deferred by the product owner (work item GC-AI-0001, AC-06 accepted gap).
 
 4. **Human review still required for:** causal claims ("market likely to sell off"), indirect trading suggestions, and semantic accuracy of observations.
 
