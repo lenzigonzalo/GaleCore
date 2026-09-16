@@ -1,11 +1,13 @@
 # P0-CONTRACTS — Fronteras contractuales ejecutables
 
-**Fuente de verdad:** Architecture Constitution v4 (`GaleCore-AI-arquitectura-v4.md`).
-**Prerrequisitos:** SESSION_HANDOFF.md, ARCHITECTURE-EXECUTIVE-SUMMARY.md.
-**Estado:** READY FOR FINAL REVIEW.
+**Fuente de verdad contractual:** este documento, bajo la arquitectura v5 (`GaleCore-AI-arquitectura-v5.md`).
+**Origen histórico:** Architecture Constitution v4.
+**Prerrequisitos:** `GaleCore-AI-arquitectura-v5.md`, `SESSION_HANDOFF.md`, `ARCHITECTURE-EXECUTIVE-SUMMARY.md`.
+**Estado:** contratos P0 preservados; revisión de alineación con v5 pendiente.
 **Alcance:** Documento de diseño contractual. Sin código de producción, sin migraciones, sin cambios en estrategias.
-**Propósito:** Convertir la arquitectura conceptual de v4 en fronteras contractuales ejecutables y versionadas
-antes de escribir código de runtime. Habilita el vertical slice determinístico PCS-SPY SHADOW.
+**Propósito:** Preservar las fronteras contractuales ejecutables y versionadas derivadas de v4.
+
+**Precedencia v5:** v5 reemplaza las definiciones de Host, Harness y Cognitive Runtime. El resto de P0 permanece vigente donde no exista contradicción. Ownership no prueba implementación ni validación; toda afirmación de estado debe usar maturity explícita.
 
 ---
 
@@ -15,7 +17,7 @@ antes de escribir código de runtime. Habilita el vertical slice determinístico
 
 | # | Decisión | Racional |
 |---|---|---|
-| P0-D1 | Término legacy "Harness" renombrado a **Quality Gates** | Evita colisión con el Harness de v4. "Harness" sin calificar refiere siempre al Harness cognitivo de v4 |
+| P0-D1 | Término legacy "Harness" renombrado a **Quality Gates** | Evita colisiones. Bajo v5, `Harness` debe calificarse como **Host Harness** o **GaleCore-AI Domain Harness** |
 | P0-D2 | Versionado de StrategySpec: **SemVer + content hash** | SemVer para comunicación humana; SHA-256 para inmutabilidad. Ambos obligatorios |
 | P0-D3 | Transporte de Cognitive API: **REST only** | Tareas async vía job endpoint (POST inicia, GET consulta). Sin gRPC/SSE/WS |
 | P0-D4 | Migración de RPF JSON: **después del Trading Runtime** | RPF permanece tal cual. StrategySpec v1 se usa primero para el NUEVO vertical slice PCS-SPY |
@@ -58,7 +60,7 @@ Las 48 decisiones cerradas de v4 §23 se preservan sin modificación. Ninguna se
 | Contexto | Término anterior | Término nuevo |
 |---|---|---|
 | `GaleCore-ways-of-working.md` | Harness (validación de 3 capas: research/backtest + tests de backend + ritual humano) | **Quality Gates** |
-| Architecture Constitution v4 | Harness (infraestructura cognitiva reusable dentro de GaleCore-AI) | **Harness** (sin calificar) |
+| Architecture Constitution v4 | Harness (infraestructura cognitiva reusable dentro de GaleCore-AI) | **GaleCore-AI Domain Harness** (assets, assurance y adapters) |
 
 A partir de este documento, "Harness" sin calificador siempre significa la infraestructura
 cognitiva de v4. El sistema legacy de validación de 3 capas se denomina "Quality Gates".
@@ -600,6 +602,8 @@ StrategyInstance    → estado operativo de runtime que referencia un StrategyVe
 
 ### 6.1 Frontera
 
+**Scope: autonomous service mode, DEFERRED.** REST-only (P0-D3), jobs, routing y límites de esta sección se conservan para el servicio autónomo opcional. No obligan al vertical interactivo de Phase 3 a ejecutar un modelo propio ni a usar HTTP. Su interfaz interna de assurance es independiente del transporte; CLI, MCP o HTTP son adapters separados.
+
 ```text
 GaleCore (caller) ───REST──→ GaleCore-AI (servicio cognitivo)
 GaleCore-AI       ───REST──→ GaleCore (acceso a capabilities)
@@ -1110,6 +1114,8 @@ EXTERNAL_ACTION  → idempotency REQUIRED + duplicate suppression REQUIRED
 
 ### 10.2 Schema de EvidenceRef
 
+Este contrato identifica evidencia durable. La clase GEX actual `{fact_path, claim}` es una **referencia local a facts** dentro de un análisis; no satisface este contrato ni demuestra persistencia. Conserva por compatibilidad el nombre Python `EvidenceRef`, pero su alcance debe documentarse como `GexFactReference`. La conexión futura debe incluir identidad del snapshot y no resolver contra datos live nuevos.
+
 ```json
 {
   "evidence_id": "<uuid>",
@@ -1378,7 +1384,7 @@ Cancelación:             soportada para async jobs; best-effort para órdenes d
 
 | Concern | Requisito P0-MINIMUM |
 |---|---|
-| Contratos | Todos los contratos definidos en este documento |
+| Contratos | Contratos aplicables al vertical operacional; no constituyen prerrequisitos de implementación del GEX interactivo |
 | Identidad | Tipo de actor (HUMAN/AGENT/SYSTEM) + user_id |
 | Permisos | Check de permisos por capability |
 | Scope de modo | Solo SHADOW. PAPER/LIVE deshabilitados |
@@ -1549,7 +1555,7 @@ Con P0-CONTRACTS aprobado:
 1. Implementar validadores de contratos (JSON Schema + .NET + Python)
 2. Construir vertical slice determinístico PCS-SPY SHADOW en GaleCore
 3. Verificar AI Removal Test end-to-end
-4. Construir Minimal Harness MVP sobre contratos estables de Cognitive API
+4. Cerrar el Domain Harness GEX interactivo según v5; Cognitive API queda diferida
 ```
 
 El vertical slice demuestra que la arquitectura funciona sin AI.

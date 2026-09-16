@@ -52,10 +52,6 @@ def validate_no_invented_numbers(
         except ValueError:
             continue
 
-        # Skip trivially common numbers (0, 1, 100)
-        if num in (0.0, 1.0, 100.0):
-            continue
-
         if not any(abs(num - known) <= tolerance for known in known_values):
             errors.append(
                 f"Number {num} in interpretation not found in known facts"

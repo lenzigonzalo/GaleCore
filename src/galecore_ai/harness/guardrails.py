@@ -8,6 +8,7 @@ Each guardrail is a callable: (raw_text, facts) → GuardrailResult.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 
 from pydantic import BaseModel
@@ -78,94 +79,54 @@ def _guardrail_no_invented_numbers(raw_text: str, facts: dict) -> GuardrailResul
 
 
 def _guardrail_facts_match_source(raw_text: str, facts: dict) -> GuardrailResult:
-    """Structural grounding check: output must reference facts.
+    """Require every evidence path to resolve; numeric claims match that scalar.
 
-    Two-layer check:
-    1. Structural: if the output is JSON with an "evidence" array containing
-       "fact_path" entries, validate they reference real fact keys.
-    2. Textual fallback: at least one fact key or known fact value must appear
-       in the output text. This is lenient — "Net GEX" matches "net_gex",
-       "spot" matches "spot", etc.
+    This does not prove the meaning of arbitrary prose or cover uncited claims.
+    There is deliberately no textual fallback for invalid structured evidence.
     """
     if not facts:
         return GuardrailResult(
             guardrail_id="facts_match_source",
-            passed=True,
-            message="No facts provided — nothing to check",
+            passed=False,
+            message="No facts provided — cannot ground output",
         )
-
-    # Layer 1: Structural evidence check via JSON
-    import json
 
     try:
         parsed = json.loads(raw_text)
-        if isinstance(parsed, dict) and "evidence" in parsed:
-            evidence_list = parsed["evidence"]
-            if isinstance(evidence_list, list) and len(evidence_list) > 0:
-                valid_paths = _build_valid_fact_paths(facts)
-                for ev in evidence_list:
-                    if isinstance(ev, dict):
-                        fp = ev.get("fact_path", "")
-                        # Normalize: strip "facts." prefix
-                        normalized = fp.replace("facts.", "") if fp.startswith("facts.") else fp
-                        if normalized in valid_paths:
-                            return GuardrailResult(
-                                guardrail_id="facts_match_source",
-                                passed=True,
-                                message=f"OK — evidence references valid fact: {fp}",
-                            )
-    except (json.JSONDecodeError, TypeError):
-        pass  # Not JSON or malformed — fall through to textual check
-
-    # Layer 2: Textual fallback — lenient matching
-    raw_lower = raw_text.lower()
-
-    # Check fact keys (with underscore-to-space normalization)
-    for key in facts:
-        key_lower = key.lower()
-        # Match exact key name or human-readable form
-        if key_lower in raw_lower or key_lower.replace("_", " ") in raw_lower:
-            return GuardrailResult(
-                guardrail_id="facts_match_source",
-                passed=True,
-                message="OK — output references fact data",
-            )
-
-    # Check if any significant fact value appears as text
-    for key, val in facts.items():
-        if isinstance(val, (int, float)) and val not in (0, 0.0, 1, 1.0):
-            val_str = str(val)
-            if val_str in raw_text:
-                return GuardrailResult(
-                    guardrail_id="facts_match_source",
-                    passed=True,
-                    message=f"OK — output contains fact value {val_str}",
-                )
+        evidence = parsed.get("evidence") if isinstance(parsed, dict) else None
+        if not isinstance(evidence, list) or not evidence:
+            raise ValueError("Non-empty structured evidence is required")
+        for ev in evidence:
+            if not isinstance(ev, dict):
+                raise TypeError("Evidence entries must be objects")
+            path = ev.get("fact_path")
+            claim = ev.get("claim")
+            if not isinstance(path, str) or not isinstance(claim, str) or not claim.strip():
+                raise ValueError("Evidence requires a fact_path and non-empty claim")
+            value = facts
+            for part in path.removeprefix("facts.").split("."):
+                if not isinstance(value, dict) or part not in value:
+                    raise ValueError(f"Unknown fact path: {path}")
+                value = value[part]
+            if value is None or isinstance(value, (dict, list)):
+                raise ValueError(f"Evidence must reference an available scalar fact: {path}")
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                check = validate_no_invented_numbers(claim, {float(value)}, tolerance=0.01)
+                if not check.valid:
+                    raise ValueError(f"Claim numbers do not match {path}: {'; '.join(check.errors)}")
+    except (ValueError, TypeError) as exc:
+        return GuardrailResult(
+            guardrail_id="facts_match_source", passed=False, message=str(exc),
+        )
 
     return GuardrailResult(
-        guardrail_id="facts_match_source",
-        passed=False,
-        message="Output does not appear to reference any provided facts",
+        guardrail_id="facts_match_source", passed=True, message="All evidence paths validated",
     )
-
-
-def _build_valid_fact_paths(facts: dict, prefix: str = "") -> set[str]:
-    """Build set of valid dot-notation paths from a facts dict."""
-    paths: set[str] = set()
-    for key, val in facts.items():
-        full = f"{prefix}{key}" if not prefix else f"{prefix}.{key}"
-        paths.add(full)
-        # Also add without prefix for flexibility
-        paths.add(key)
-        if isinstance(val, dict):
-            paths.update(_build_valid_fact_paths(val, full))
-    return paths
-
 
 def _extract_numbers_from_dict(d: dict, out: set[float]) -> None:
     """Recursively extract numeric values from a dict."""
     for v in d.values():
-        if isinstance(v, (int, float)) and v not in (None,):
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
             out.add(float(v))
         elif isinstance(v, dict):
             _extract_numbers_from_dict(v, out)

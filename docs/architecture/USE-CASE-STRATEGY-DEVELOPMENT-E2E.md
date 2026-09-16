@@ -1,7 +1,13 @@
 # Caso de uso E2E — Desarrollar una estrategia de opciones sobre SPY
 
-**Escenario:** experiencia final de GaleCore + GaleCore-AI + Work.  
-**Objetivo:** mostrar, con palabras simples, cómo una idea del usuario se transforma en una estrategia investigada, probada y operable de forma controlada.  
+> **Status under architecture v5:** `TARGET_APPROVED` as a long-term product direction and `DEFERRED` for implementation. This use case does not belong to Phase 3, does not define the current host adapter and cannot override `GaleCore-AI-arquitectura-v5.md` or `P0-CONTRACTS.md`.
+
+**Escenario:** experiencia final de GaleCore + GaleCore-AI + GaleCore Work.
+
+**Nombres:** ?Work? en este documento significa exclusivamente **GaleCore Work**, una experiencia propia futura del frontend. No significa ChatGPT Work ni afirma compatibilidad con ese host. El backend de sesiones de GaleCore Work y un runtime autónomo de modelos son responsabilidades separadas.
+
+**Objetivo:** mostrar, con palabras simples, cómo una idea del usuario se transforma en una estrategia investigada, probada y operable de forma controlada.
+
 **Alcance:** recorrido de producto completo. No implica que todas estas funciones estén implementadas hoy.
 **Naturaleza:** caso de uso y diseño conceptual; no autoriza implementación.
 
@@ -29,7 +35,7 @@ También contiene una condición que ningún sistema serio puede prometer:
 
 GaleCore no debería rechazar toda la idea ni fingir que puede cumplir esa garantía. Debe transformarla en una pregunta investigable:
 
-> ¿Podemos diseñar una estrategia de riesgo definido sobre SPY que, bajo supuestos realistas, muestre retornos moderados, pérdidas controladas y un comportamiento suficientemente estable en distintos períodos?
+> ¿Podemos diseñar una estrategia de riesgo definido sobre SPY que, bajo supuestos realistas, muestre retornos moderados, pérdidas controladas y un comportamiento suficientemente estable en distintos períodosí
 
 Ese cambio —de una promesa imposible a un objetivo medible— es el comienzo del trabajo.
 
@@ -280,13 +286,13 @@ Con Harness, preguntas fundamentales son obligatorias:
 - ¿Cómo se mediría?
 - ¿Qué podría invalidarlo?
 - ¿Se incluyeron costos y slippage?
-- ¿Hay suficientes operaciones?
+- ¿Hay suficientes operacionesí
 - ¿Funciona fuera del período usado para diseñarlo?
-- ¿Cómo se comporta en escenarios adversos?
+- ¿Cómo se comporta en escenarios adversosí
 
 ### Cómo selecciona el modelo
 
-El agente no debe tener un proveedor o modelo hardcodeado. El Harness utiliza tres piezas:
+El agente no debe tener un proveedor o modelo obligatorio. En el modo interactivo, el host determina su modelo. Sólo si una aplicación propia necesita ejecución autónoma se considerarán estas piezas, actualmente DEFERRED:
 
 ```text
 Model Gateway
@@ -345,7 +351,7 @@ Agent != repository
 Agent != server
 ```
 
-Un mismo Harness Runtime puede ejecutar distintas AgentDefinitions. En el futuro podrían existir `ResearchCritic` o `PortfolioAgent`, pero sólo si poseen responsabilidades realmente distintas. El MVP no necesita orquestación multi-agent.
+Un host compatible puede consumir distintas AgentDefinitions. En el futuro podrían existir `ResearchCritic` o `PortfolioAgent`, pero sólo si poseen responsabilidades realmente distintas. El MVP no necesita orquestación multi-agent.
 
 ---
 
@@ -534,7 +540,7 @@ Antes de comenzar una investigación nueva, el Harness pregunta:
 ¿Qué cálculos puede hacer?
 ¿Qué estudios ya existen?
 ¿Qué estrategias similares se probaron?
-¿Qué findings o preguntas quedaron abiertos?
+¿Qué findings o preguntas quedaron abiertosí
 ```
 
 ### Partes que intervienen
@@ -750,10 +756,10 @@ Puede abrir los detalles cuando quiera revisar metodología o resultados complet
 GaleCore-AI recibe resultados determinísticos y responde preguntas como:
 
 - ¿El supuesto edge aparece realmente?
-- ¿Sobrevive después de costos?
+- ¿Sobrevive después de costosí
 - ¿Es estable o depende de un período excepcional?
-- ¿Qué parámetros son robustos?
-- ¿Qué resultados contradicen la hipótesis?
+- ¿Qué parámetros son robustosí
+- ¿Qué resultados contradicen la hipótesisí
 - ¿El riesgo coincide con lo que pidió el usuario?
 
 La interpretación puede concluir:
@@ -1125,7 +1131,7 @@ Recomendación
 | Work | Espacio durable de trabajo | Guarda conversación, tareas, artifacts y decisiones | Continuidad y orden |
 | Work Runtime | Backend que sostiene Work | Mantiene sesiones, estados, archivos y aprobaciones | El trabajo sobrevive a reinicios de la IA |
 | GaleCore-AI | Servicio de inteligencia | Investiga, interpreta, diseña y recomienda | Razonamiento financiero |
-| Harness | Infraestructura interna de GaleCore-AI | Organiza contexto, skills, protocolos, capabilities y trazas | Consistencia y disciplina |
+| Domain Harness | Assets, assurance y adapters de GaleCore-AI | Organiza contexto, skills, protocolos, capabilities y trazas | Consistencia y disciplina |
 | TradingAgent | Actor cognitivo configurado | Conduce el desarrollo de la estrategia | Comportamiento especializado |
 | Skills | Conocimiento financiero | Enseñan opciones, riesgo, estadística y metodología | Expertise reusable |
 | Protocols | Pasos obligatorios | Exigen hipótesis, experimentos, robustez y evidencia | Evitan saltear buen proceso |

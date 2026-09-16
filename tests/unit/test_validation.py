@@ -40,11 +40,11 @@ class TestValidateNoInventedNumbers:
         assert not result.valid
         assert any("475" in e for e in result.errors)
 
-    def test_trivial_numbers_ignored(self):
+    def test_common_numbers_also_require_evidence(self):
         text = "The value went from 0 to 1 and rose 100 percent"
         known = {500.0}
         result = validate_no_invented_numbers(text, known)
-        assert result.valid
+        assert not result.valid
 
     def test_tolerance(self):
         text = "Net GEX is approximately 1500001"

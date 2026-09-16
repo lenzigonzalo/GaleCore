@@ -320,14 +320,7 @@ class TestGoldenValidationError:
         fixture = _base_fixture()
         data = _post_gex(_make_app(fixture))
 
-        # Either VALIDATION_ERROR from guardrails, or SUCCESS if textual fallback
-        # matches common words. The key assertion is that the evidence references
-        # an invalid fact_path, which the structural check should catch.
-        # However, the textual fallback may still pass if "positive" or other
-        # common fact keys appear in the output text.
-        # So we verify the guardrails were at least executed.
-        guardrails = data["trace"].get("guardrails_executed", [])
-        assert len(guardrails) >= 1
-        # The structural check should have failed (invalid fact_path),
-        # but textual fallback may rescue it. Verify guardrail ran.
-        assert any(g["guardrail_id"] == "facts_match_source" for g in guardrails)
+        assert data["status"] == "VALIDATION_ERROR"
+        assert data["result"] is None
+        checks = data["trace"]["guardrails_executed"]
+        assert any(c["guardrail_id"] == "facts_match_source" and not c["passed"] for c in checks)

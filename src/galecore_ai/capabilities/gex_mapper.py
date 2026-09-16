@@ -22,6 +22,7 @@ from pydantic import ValidationError
 
 from galecore_ai.capabilities.galecore_dtos import GaleCoreGexAnalysisResponse
 from galecore_ai.contracts.gex_analysis import FreshnessStatus, GexFacts
+from galecore_ai.harness.freshness import freshness_error
 
 
 class GexMappingError(Exception):
@@ -65,6 +66,9 @@ def map_to_gex_facts(
     Raises GexMappingError on validation failure.
     """
     now = datetime.now(tz=UTC)
+    policy_error = freshness_error(None, max_age_seconds=max_staleness_seconds, allow_unknown=True)
+    if policy_error:
+        raise GexMappingError(policy_error, field="freshness_policy")
 
     # Symbol check
     if dto.symbol.upper() != requested_symbol.upper():
@@ -104,6 +108,11 @@ def map_to_gex_facts(
         market_data_as_of = dto.timestamp
         if market_data_as_of.tzinfo is None:
             market_data_as_of = market_data_as_of.replace(tzinfo=UTC)
+        error = freshness_error(
+            market_data_as_of, max_age_seconds=max_staleness_seconds, now=now,
+        )
+        if error and error != "Data is stale":
+            raise GexMappingError(error, field="timestamp")
         age_seconds = (now - market_data_as_of).total_seconds()
         if age_seconds <= max_staleness_seconds:
             freshness_status = FreshnessStatus.VALID

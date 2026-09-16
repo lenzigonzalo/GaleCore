@@ -5,22 +5,22 @@ display_name: Trading Defaults
 entries:
   - key: gex_near_zero_threshold_pct
     value: 5.0
-    precedence: DOMAIN
+    precedence: domain
     description: >
       Percentage of total absolute GEX below which net_gex is considered "near zero".
       e.g. if |call_gex| + |put_gex| = 2.5M and net_gex = 100K, that's 4% -> near_zero.
 
   - key: timezone
     value: America/New_York
-    precedence: DOMAIN
+    precedence: domain
     description: All market times are Eastern Time
 
   - key: currency
     value: USD
-    precedence: DOMAIN
+    precedence: domain
     description: Default currency for all values
 
   - key: precision_decimal_places
     value: 2
-    precedence: METHODOLOGY
+    precedence: methodology
     description: Number of decimal places for price display

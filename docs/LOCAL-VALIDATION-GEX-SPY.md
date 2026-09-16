@@ -1,4 +1,8 @@
-# Local Validation: GEX-SPY Cognitive Vertical
+# Local Validation: GEX-SPY Autonomous Runtime Adapter
+
+> **Status under architecture v5:** This guide validates the existing FastAPI + `ModelProvider` + `CognitiveRuntime` path. That path is preserved as an optional autonomous runtime adapter and is currently frozen. It is useful implementation evidence, but it is not the current Phase 3 interactive-host Definition of Done.
+
+The interactive-host E2E guide must be defined only after the repository-alignment checkpoint and explicit approval of the host adapter. Do not use this document to infer that Phase 3 is complete.
 
 ## Prerequisites
 
@@ -166,7 +170,7 @@ Only localhost is allowed in local validation mode.
 | Evals | `pytest tests/evals/` | 10 golden cases, all three paths | 10 |
 | Local real | Start both services + curl | Real GaleCore + real/fake provider | — |
 
-## Three Paths (Phase 3 Definition of Done)
+## Three Paths Exercised by the Autonomous Adapter
 
 | Path | Status | Result | Model Called | Evidence |
 |------|--------|--------|-------------|----------|

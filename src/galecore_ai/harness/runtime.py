@@ -19,6 +19,7 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+from galecore_ai.application.validate_interpretation import validate_interpretation
 from galecore_ai.capabilities.registry import CapabilityRegistry
 from galecore_ai.contracts.agent_run import (
     AgentDefinitionTrace,
@@ -31,9 +32,10 @@ from galecore_ai.contracts.agent_run import (
     SkillTrace,
     TraceRecord,
 )
+from galecore_ai.harness.assets import definition_hash
 from galecore_ai.harness.context_assembler import ContextAssembler
 from galecore_ai.harness.convention_resolver import ConventionResolver
-from galecore_ai.harness.guardrails import GuardrailRunner, check_all_passed
+from galecore_ai.harness.guardrails import GuardrailRunner
 from galecore_ai.harness.preflight import run_preflight
 from galecore_ai.harness.protocol_loader import ProtocolLoader
 from galecore_ai.harness.skill_loader import SkillLoader
@@ -99,6 +101,7 @@ class CognitiveRuntime:
             agent_definition=AgentDefinitionTrace(
                 agent_id=agent_definition.agent_id,
                 version=agent_definition.version,
+                content_hash=definition_hash(agent_definition),
             ),
             started_at=started_at,
             request_timestamp=request.requested_at,
@@ -126,7 +129,9 @@ class CognitiveRuntime:
             )
 
         skill = self._skill_loader.get(skill_id)
-        trace.skills = [SkillTrace(skill_id=skill_id, version=skill.version)]
+        trace.skills = [SkillTrace(
+            skill_id=skill_id, version=skill.version, content_hash=definition_hash(skill),
+        )]
 
         # ── 1b. Facts gate — empty facts must not reach the model ─
         if skill.required_capabilities and not facts:
@@ -144,7 +149,9 @@ class CognitiveRuntime:
         # ── 2. Context Assembly ───────────────────────────────────
         protocols = self._protocol_loader.get_for_trigger(skill_id)
         trace.protocols = [
-            ProtocolTrace(protocol_id=p.protocol_id, version=p.version)
+            ProtocolTrace(
+                protocol_id=p.protocol_id, version=p.version, content_hash=definition_hash(p),
+            )
             for p in protocols
         ]
 
@@ -154,6 +161,7 @@ class CognitiveRuntime:
                 ConventionTrace(
                     convention_id=conv_set.convention_id,
                     version=conv_set.version,
+                    content_hash=definition_hash(conv_set),
                 )
             )
 
@@ -223,12 +231,14 @@ class CognitiveRuntime:
             )
 
         # ── 4. Guardrails ─────────────────────────────────────────
-        raw_text = model_result.raw_text or ""
-        guardrail_results = self._guardrails.run_all(
-            guardrail_ids=guardrail_ids,
-            raw_text=raw_text,
+        validation = validate_interpretation(
+            interpretation=model_result.value.model_dump(mode="json"),
             facts=facts,
+            output_schema=output_schema,
+            guardrail_ids=guardrail_ids,
+            guardrail_runner=self._guardrails,
         )
+        guardrail_results = validation.checks
 
         # Record guardrail traces
         trace.guardrails_executed = [
@@ -240,9 +250,8 @@ class CognitiveRuntime:
             for g in guardrail_results
         ]
 
-        if not check_all_passed(guardrail_results):
-            failed = [g for g in guardrail_results if not g.passed]
-            detail = "; ".join(f"{g.guardrail_id}: {g.message}" for g in failed)
+        if not validation.accepted:
+            detail = "; ".join(validation.errors)
             trace.completed_at = _utcnow()
             trace.latency_ms = int((time.monotonic() - t0) * 1000)
             trace.error = f"Guardrail failure: {detail}"
@@ -264,6 +273,6 @@ class CognitiveRuntime:
         return AgentRunResult(
             run_id=request.run_id,
             status=RunStatus.SUCCESS,
-            result=model_result.value.model_dump() if model_result.value else None,
+            result=validation.result,
             trace=trace,
         )

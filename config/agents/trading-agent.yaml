@@ -19,8 +19,6 @@ conventions:
 allowed_capabilities:
   - compute.gamma_exposure
   - compute.gex_analysis
-  - compute.iv_rank
-  - compute.implied_volatility
   - market_data.quote
 
 model_preferences:

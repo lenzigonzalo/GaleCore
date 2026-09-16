@@ -35,6 +35,7 @@ from galecore_ai.contracts.agent_run import (
 )
 from galecore_ai.contracts.gex_analysis import FreshnessStatus, GexInterpretation
 from galecore_ai.harness.definitions import AgentDefinition
+from galecore_ai.harness.freshness import freshness_error
 from galecore_ai.harness.runtime import CognitiveRuntime
 
 logger = logging.getLogger(__name__)
@@ -160,7 +161,7 @@ class AnalyzeGexUseCase:
         # ── 3b. Build freshness trace ────────────────────────────
         freshness_age: float | None = None
         if facts.market_data_as_of is not None:
-            freshness_age = (now - facts.market_data_as_of).total_seconds()
+            freshness_age = (response_received_at - facts.market_data_as_of).total_seconds()
 
         trace.freshness = FreshnessTrace(
             market_data_as_of=facts.market_data_as_of,
@@ -207,6 +208,25 @@ class AnalyzeGexUseCase:
             facts=facts_dict,
             output_schema=GexInterpretation,
         )
+
+        # Model execution can outlast the allowed data age. Recheck at acceptance.
+        accepted_at = datetime.now(tz=UTC)
+        if result.status == RunStatus.SUCCESS:
+            error = freshness_error(
+                facts.market_data_as_of, max_age_seconds=self._max_staleness,
+                now=accepted_at, allow_unknown=self._allow_unknown_freshness,
+            )
+            if error:
+                result.status = RunStatus.INSUFFICIENT_DATA
+                result.result = None
+                result.error_detail = error
+                result.trace.status = result.status.value
+                result.trace.error = error
+                trace.freshness.freshness_status = FreshnessStatus.STALE.value
+            if facts.market_data_as_of is not None:
+                trace.freshness.freshness_age_seconds = (
+                    accepted_at - facts.market_data_as_of
+                ).total_seconds()
 
         # Merge capability trace from this use case into the runtime trace
         for cap_entry in trace.capabilities_invoked:

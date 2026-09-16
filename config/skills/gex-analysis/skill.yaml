@@ -1,5 +1,5 @@
 skill_id: gex_interpretation
-version: "1.1.0"
+version: "1.2.0"
 display_name: GEX Interpretation
 description: >
   Interprets gamma exposure data to assess dealer positioning
@@ -40,8 +40,28 @@ instructions: |
   - |net_gex| is very small relative to |call_gex| + |put_gex| → near_zero
 
   Evidence format:
+    Every numeric value in a claim must match its cited scalar fact. Split claims across evidence entries when citing different values.
     Each evidence entry must have:
     - fact_path: dot-notation path like 'facts.net_gex', 'facts.spot', 'facts.call_wall'
     - claim: human-readable statement supported by that fact
 
   IMPORTANT: Do not provide any trading recommendations or actions.
+
+examples:
+- input_summary: SPY with positive net GEX, spot above zero-gamma level
+  expected_output:
+    regime: positive_gamma
+    observations:
+    - Net GEX is positive — dealers are long gamma
+    - Spot is above the zero-gamma level
+    implications:
+    - Dealers will sell into rallies and buy dips, dampening volatility
+    - Expect mean-reverting price action within the call wall / put wall range
+    evidence:
+    - fact_path: facts.net_gex
+      claim: Net GEX is positive at 1500.0
+    - fact_path: facts.spot
+      claim: Spot at 450.5 is above zero-gamma level
+    limitations:
+    - GEX is a snapshot based on current open interest and may shift with new flow
+    - Intraday dealer hedging dynamics depend on realized volume
