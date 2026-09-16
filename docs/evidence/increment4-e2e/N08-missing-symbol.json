@@ -1,0 +1,21 @@
+{
+  "case": "N08-missing-symbol",
+  "title": "prepare without --symbol",
+  "expected": "error JSON, exit 3",
+  "command": "python -B -m galecore_ai.adapters.cli prepare",
+  "stdin": null,
+  "exit_code": 3,
+  "stdout_json": {
+    "error": "Argument error: the following arguments are required: --symbol",
+    "timestamp": "2026-09-16T19:42:18.684109+00:00"
+  },
+  "stdout_raw": null,
+  "stderr": "",
+  "status": null,
+  "failed_guardrails": [],
+  "error": "Argument error: the following arguments are required: --symbol",
+  "note": "",
+  "observed_at": "2026-09-16T19:42:18.743544+00:00",
+  "verified": true,
+  "problems": []
+}

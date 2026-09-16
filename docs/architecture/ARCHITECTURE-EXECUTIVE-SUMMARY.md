@@ -2,7 +2,7 @@
 
 **Source of truth:** `GaleCore-AI-arquitectura-v5.md`
 
-**Status:** Phase 3 alignment corrections authorized and implemented; interactive E2E remains open
+**Status:** Phase 3 closure is blocked pending the independent review and evidence matrix in `GC-AI-0001`; a feature freeze is active.
 
 **Contract detail:** `P0-CONTRACTS.md` remains authoritative where it does not conflict with v5.
 

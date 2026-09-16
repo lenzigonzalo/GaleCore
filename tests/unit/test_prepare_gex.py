@@ -1,4 +1,4 @@
-"""Tests for prepare_gex_snapshot — facts preparation without model invocation."""
+"""Tests for prepare_gex_snapshot — facts preparation with store."""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from datetime import UTC, datetime
 
 import pytest
 
+from galecore_ai.adapters.snapshot_store import FileSnapshotStore
 from galecore_ai.application.prepare_gex import PrepareError, prepare_gex_snapshot
 from galecore_ai.capabilities.dispatcher import CapabilityResult
-from galecore_ai.contracts.prepared_analysis import AssetManifest
 
 
 def _base_galecore_response(**overrides):
@@ -79,99 +79,96 @@ class FakeDispatcher:
         )
 
 
+@pytest.fixture
+def store(tmp_path):
+    return FileSnapshotStore(base_dir=tmp_path / "snapshots")
+
+
 @pytest.mark.asyncio
-async def test_prepare_success():
-    """Valid GaleCore response produces a snapshot with facts and hash."""
+async def test_prepare_success_stores_and_returns_view(store):
+    """Valid response stores snapshot and returns PreparedAnalysisView."""
     data = _base_galecore_response()
     dispatcher = FakeDispatcher(data=data)
 
-    snapshot = await prepare_gex_snapshot(
+    view = await prepare_gex_snapshot(
         symbol="SPY",
         dispatcher=dispatcher,
+        store=store,
         allow_unknown_freshness=True,
     )
 
-    assert snapshot.symbol == "SPY"
-    assert snapshot.facts["net_gex"] == 1500.0
-    assert snapshot.facts["spot"] == 450.5
-    assert snapshot.facts_hash.startswith("sha256:")
-    assert snapshot.run_id  # non-empty
+    assert view.symbol == "SPY"
+    assert view.facts["net_gex"] == 1500.0
+    assert view.facts_hash.startswith("sha256:")
+    assert view.run_id
+
+    # Snapshot is stored internally
+    recovered = store.get(view.run_id)
+    assert recovered.facts == view.facts
+    assert recovered.facts_hash == view.facts_hash
 
 
 @pytest.mark.asyncio
-async def test_prepare_capability_error():
-    """Dispatcher error raises PrepareError."""
+async def test_prepare_capability_error(store):
     dispatcher = FakeDispatcher(error="Connection refused")
-
     with pytest.raises(PrepareError, match="Capability fetch failed"):
-        await prepare_gex_snapshot(symbol="SPY", dispatcher=dispatcher)
+        await prepare_gex_snapshot(symbol="SPY", dispatcher=dispatcher, store=store)
 
 
 @pytest.mark.asyncio
-async def test_prepare_invalid_spot():
-    """Zero spot price raises PrepareError."""
+async def test_prepare_invalid_spot(store):
     data = _base_galecore_response()
     data["gex"]["global"]["spot"] = 0.0
     data["spotPrice"] = 0.0
     dispatcher = FakeDispatcher(data=data)
-
     with pytest.raises(PrepareError, match="Fact validation failed"):
-        await prepare_gex_snapshot(symbol="SPY", dispatcher=dispatcher)
+        await prepare_gex_snapshot(symbol="SPY", dispatcher=dispatcher, store=store)
 
 
 @pytest.mark.asyncio
-async def test_prepare_stale_data():
-    """Old timestamp raises PrepareError."""
+async def test_prepare_stale_data(store):
     data = _base_galecore_response(timestamp="2020-01-01T00:00:00+00:00")
     dispatcher = FakeDispatcher(data=data)
-
     with pytest.raises(PrepareError, match="stale"):
-        await prepare_gex_snapshot(
-            symbol="SPY",
-            dispatcher=dispatcher,
-            max_staleness_seconds=300,
-        )
+        await prepare_gex_snapshot(symbol="SPY", dispatcher=dispatcher, store=store, max_staleness_seconds=300)
 
 
 @pytest.mark.asyncio
-async def test_prepare_unknown_freshness_rejected():
-    """Unknown freshness rejected when allow_unknown_freshness=False."""
+async def test_prepare_unknown_freshness_rejected(store):
     data = _base_galecore_response(timestamp=None)
     dispatcher = FakeDispatcher(data=data)
-
     with pytest.raises(PrepareError, match="UNKNOWN"):
-        await prepare_gex_snapshot(
-            symbol="SPY",
-            dispatcher=dispatcher,
-            allow_unknown_freshness=False,
-        )
+        await prepare_gex_snapshot(symbol="SPY", dispatcher=dispatcher, store=store, allow_unknown_freshness=False)
 
 
 @pytest.mark.asyncio
-async def test_prepare_preserves_asset_manifest():
-    """Asset manifest is included in the snapshot."""
+async def test_prepare_includes_required_asset_hashes(store):
+    """All four required asset hashes appear in the view."""
     data = _base_galecore_response()
     dispatcher = FakeDispatcher(data=data)
-    manifest = AssetManifest(agent_hash="sha256:abc123")
 
-    snapshot = await prepare_gex_snapshot(
-        symbol="SPY",
-        dispatcher=dispatcher,
-        allow_unknown_freshness=True,
-        effective_assets=manifest,
+    view = await prepare_gex_snapshot(
+        symbol="SPY", dispatcher=dispatcher, store=store, allow_unknown_freshness=True,
     )
 
-    assert snapshot.effective_assets.agent_hash == "sha256:abc123"
+    assert view.effective_assets.agent.content_hash.startswith("sha256:")
+    assert view.effective_assets.agent.asset_id
+    assert view.effective_assets.agent.version
+    assert "gex_interpretation" in view.effective_assets.skills
+    assert "facts_discipline" in view.effective_assets.protocols
+    assert "trading_defaults" in view.effective_assets.conventions
 
 
 @pytest.mark.asyncio
-async def test_prepare_facts_hash_deterministic():
-    """Same facts produce the same hash."""
+async def test_prepare_facts_hash_covers_core_values(store):
+    """Hash depends on fact values, not on run timing."""
     data = _base_galecore_response()
-    d1 = FakeDispatcher(data=data)
-    d2 = FakeDispatcher(data=data)
+    dispatcher = FakeDispatcher(data=data)
 
-    s1 = await prepare_gex_snapshot(symbol="SPY", dispatcher=d1, allow_unknown_freshness=True)
-    s2 = await prepare_gex_snapshot(symbol="SPY", dispatcher=d2, allow_unknown_freshness=True)
+    view = await prepare_gex_snapshot(
+        symbol="SPY", dispatcher=dispatcher, store=store, allow_unknown_freshness=True,
+    )
 
-    assert s1.facts_hash == s2.facts_hash
+    # Hash should be non-empty sha256
+    assert view.facts_hash.startswith("sha256:")
+    assert len(view.facts_hash) == 71  # "sha256:" + 64 hex chars

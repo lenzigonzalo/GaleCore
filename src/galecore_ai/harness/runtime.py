@@ -212,7 +212,7 @@ class CognitiveRuntime:
             )
 
         # Model was called successfully
-        trace.model_called = True
+        trace.validator_called_model = True
 
         # Record token usage
         trace.input_tokens = model_result.input_tokens

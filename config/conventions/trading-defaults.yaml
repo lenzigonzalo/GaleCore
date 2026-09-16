@@ -7,8 +7,11 @@ entries:
     value: 5.0
     precedence: domain
     description: >
-      Percentage of total absolute GEX below which net_gex is considered "near zero".
-      e.g. if |call_gex| + |put_gex| = 2.5M and net_gex = 100K, that's 4% -> near_zero.
+      Intended threshold (percent of total absolute GEX) below which net_gex would be
+      considered "near zero". NOT IN EFFECT: GaleCore publishes call_gex/put_gex and
+      net_gex in incompatible scales, so no near_zero validation runs and the regime is
+      always rejected. Preserved for when normalized facts exist; it does not enable
+      anything today.
 
   - key: timezone
     value: America/New_York

@@ -1,0 +1,21 @@
+{
+  "case": "N07-malformed-json",
+  "title": "stdin 'not json'",
+  "expected": "error JSON, exit 3",
+  "command": "echo '<stdin>' | python -B -m galecore_ai.adapters.cli accept",
+  "stdin": "not json",
+  "exit_code": 3,
+  "stdout_json": {
+    "error": "Invalid JSON input: Expecting value: line 1 column 1 (char 0)",
+    "timestamp": "2026-09-16T19:42:17.826592+00:00"
+  },
+  "stdout_raw": null,
+  "stderr": "",
+  "status": null,
+  "failed_guardrails": [],
+  "error": "Invalid JSON input: Expecting value: line 1 column 1 (char 0)",
+  "note": "",
+  "observed_at": "2026-09-16T19:42:17.892663+00:00",
+  "verified": true,
+  "problems": []
+}

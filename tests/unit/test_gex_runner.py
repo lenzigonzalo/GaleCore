@@ -123,9 +123,13 @@ class TestAnalyzeGexSuccess:
         """SUCCESS case with realistic camelCase GaleCore response."""
         register_canned_response("GexInterpretation", {
             "regime": "positive_gamma",
-            "observations": ["net_gex is positive at 1500.0"],
-            "implications": ["Mean reversion expected around spot 450.5"],
-            "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive at 1500.0"}],
+            "observations": ["net_gex is positive, dealers are long gamma"],
+            "implications": ["Mean reversion expected around spot"],
+            "quantitative_claims": [{"metric": "net_gex", "value": 1500.0, "unit": "billion_usd"}, {"metric": "spot", "value": 450.5, "unit": "usd"}],
+            "evidence": [
+                {"fact_path": "facts.net_gex", "claim": "Net GEX is positive"},
+                {"fact_path": "facts.spot", "claim": "Spot is the reference level"},
+            ],
             "limitations": ["Based on current snapshot"],
         })
 

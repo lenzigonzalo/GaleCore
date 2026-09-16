@@ -1,7 +1,7 @@
-"""Prepare GEX facts as an immutable snapshot for deferred acceptance.
+"""Prepare GEX facts as an internally-stored snapshot.
 
-Extracts the fetch-parse-map-freshness path from AnalyzeGexUseCase so that
-the same validated facts can be accepted later without repeating the query.
+Fetches from GaleCore, validates, requires all cognitive assets,
+stores the authoritative snapshot, and returns only the view for the host.
 
 Does not invoke a model. Does not require CognitiveRuntime.
 """
@@ -11,6 +11,8 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 
+from galecore_ai.adapters.asset_manifest import RequiredAssetError, load_required_assets
+from galecore_ai.adapters.snapshot_store import PreparedSnapshotStore
 from galecore_ai.capabilities.dispatcher import CapabilityDispatcher
 from galecore_ai.capabilities.gex_mapper import (
     GexMappingError,
@@ -20,9 +22,10 @@ from galecore_ai.capabilities.gex_mapper import (
 from galecore_ai.contracts.agent_run import CapabilityTrace
 from galecore_ai.contracts.gex_analysis import FreshnessStatus
 from galecore_ai.contracts.prepared_analysis import (
-    AssetManifest,
-    PreparedSnapshot,
+    PreparedAnalysisView,
+    StoredPreparedSnapshot,
     compute_facts_hash,
+    snapshot_to_view,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,15 +42,21 @@ async def prepare_gex_snapshot(
     *,
     symbol: str,
     dispatcher: CapabilityDispatcher,
+    store: PreparedSnapshotStore,
     max_staleness_seconds: float = 300.0,
     allow_unknown_freshness: bool = False,
-    effective_assets: AssetManifest | None = None,
-) -> PreparedSnapshot:
-    """Fetch GEX data from GaleCore and produce an immutable snapshot.
+) -> PreparedAnalysisView:
+    """Fetch GEX data, validate, store snapshot internally, return view.
 
     Raises PrepareError on capability failure, parse error, invalid facts,
-    or freshness rejection.
+    freshness rejection, or missing required assets.
     """
+    # ── 0. Load required assets once (fail-closed) ───────────────
+    try:
+        assets = load_required_assets()
+    except RequiredAssetError as exc:
+        raise PrepareError(f"Required asset missing: {exc}") from exc
+
     # ── 1. Fetch from GaleCore ───────────────────────────────────
     cap_result = await dispatcher.invoke(
         GEX_CAPABILITY_ID,
@@ -97,10 +106,10 @@ async def prepare_gex_snapshot(
             "Set allow_unknown_freshness=True to override."
         )
 
-    # ── 5. Build snapshot ────────────────────────────────────────
+    # ── 5. Build and store snapshot ──────────────────────────────
     facts_dict = facts.model_dump(mode="json", exclude_none=True)
 
-    return PreparedSnapshot(
+    snapshot = StoredPreparedSnapshot(
         symbol=symbol.upper(),
         facts=facts_dict,
         facts_hash=compute_facts_hash(facts_dict),
@@ -108,5 +117,12 @@ async def prepare_gex_snapshot(
         freshness_status=facts.freshness_status.value,
         freshness_max_age_seconds=max_staleness_seconds,
         capability_trace=cap_trace,
-        effective_assets=effective_assets or AssetManifest(),
+        effective_assets=assets.manifest,
+        resolved_conventions=assets.resolved_conventions,
+        conventions_hash=assets.conventions_hash,
     )
+
+    store.save(snapshot)
+
+    # ── 6. Return view only ──────────────────────────────────────
+    return snapshot_to_view(snapshot)

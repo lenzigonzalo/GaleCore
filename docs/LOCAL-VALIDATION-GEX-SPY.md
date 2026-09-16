@@ -55,7 +55,7 @@ $env:ANTHROPIC_API_KEY = "sk-ant-..."
 $env:ANTHROPIC_MODEL = "claude-sonnet-4-6"
 $env:LOCAL_VALIDATION = "true"
 $env:GALECORE_BASE_URL = "http://localhost:5000"
-$env:GALECORE_API_KEY = "dev-local-key"
+$env:GALECORE_API_KEY = "<your GaleCore ApiKey from user-secrets>"
 $env:MAX_STALENESS_SECONDS = "600"
 python -m uvicorn galecore_ai.api.app:create_app --factory --port 8100
 
@@ -68,6 +68,8 @@ Invoke-RestMethod -Uri http://localhost:8100/api/v1/agent-runs/gex-analysis `
 
 ## Expected Results
 
+> Illustrative shapes for the autonomous (FastAPI/CognitiveRuntime) path, which is frozen in Phase 3. Values are examples, not a captured run; the verified, reproducible evidence for the current contract is the interactive path in `docs/evidence/increment4-e2e/`. The output contract is the same `GexInterpretation` (Increment 4: `quantitative_claims` required, no digits in observations/implications, `near_zero` always rejected).
+
 ### SUCCESS case
 ```json
 {
@@ -75,26 +77,34 @@ Invoke-RestMethod -Uri http://localhost:8100/api/v1/agent-runs/gex-analysis `
   "status": "SUCCESS",
   "result": {
     "regime": "positive_gamma",
-    "observations": ["Net GEX is positive at 1500.0..."],
-    "implications": ["Mean reversion expected..."],
-    "evidence": [
-      {"fact_path": "facts.net_gex", "claim": "Net GEX is positive at 1500.0"}
+    "observations": ["Net GEX is positive: dealers are long gamma"],
+    "implications": ["Dealer hedging is expected to dampen moves while this regime persists"],
+    "quantitative_claims": [
+      {"metric": "net_gex", "value": 1500.0, "unit": "billion_usd"},
+      {"metric": "spot", "value": 450.5, "unit": "usd"}
     ],
-    "limitations": ["Based on current open interest snapshot..."]
+    "evidence": [
+      {"fact_path": "facts.net_gex", "claim": "Net GEX sign defines the regime"}
+    ],
+    "limitations": ["Based on current open interest snapshot"]
   },
   "error_detail": null,
   "trace": {
     "provider": "anthropic",
-    "model": "claude-sonnet-4-6",
-    "model_called": true,
-    "skills": [{"skill_id": "gex_interpretation", "version": "1.1.0"}],
-    "protocols": [{"protocol_id": "facts_discipline", "version": "1.0.0"}],
+    "model": "claude-opus-5",
+    "validator_called_model": true,
+    "skills": [{"skill_id": "gex_interpretation", "version": "1.3.0"}],
+    "protocols": [{"protocol_id": "facts_discipline", "version": "1.2.0"}],
     "capabilities_invoked": [
       {"capability_id": "compute.gex_analysis", "endpoint": "/App/Gex/Analysis", "outcome": "ok"}
     ],
     "guardrails_executed": [
       {"guardrail_id": "no_invented_numbers", "passed": true},
-      {"guardrail_id": "facts_match_source", "passed": true}
+      {"guardrail_id": "facts_match_source", "passed": true},
+      {"guardrail_id": "no_trading_recommendation", "passed": true},
+      {"guardrail_id": "no_numbers_in_prose", "passed": true},
+      {"guardrail_id": "gex_regime_sign", "passed": true},
+      {"guardrail_id": "quantitative_claims_valid", "passed": true}
     ],
     "freshness": {
       "freshness_status": "VALID",
@@ -115,7 +125,7 @@ Invoke-RestMethod -Uri http://localhost:8100/api/v1/agent-runs/gex-analysis `
   "result": null,
   "error_detail": "Capability fetch failed: HTTP error calling compute.gex_analysis: ...",
   "trace": {
-    "model_called": false,
+    "validator_called_model": false,
     "capabilities_invoked": [
       {"capability_id": "compute.gex_analysis", "outcome": "error"}
     ]
@@ -131,7 +141,7 @@ Invoke-RestMethod -Uri http://localhost:8100/api/v1/agent-runs/gex-analysis `
   "result": null,
   "error_detail": "Guardrail failure: no_invented_numbers: Number 999.99 ...",
   "trace": {
-    "model_called": true,
+    "validator_called_model": true,
     "guardrails_executed": [
       {"guardrail_id": "no_invented_numbers", "passed": false, "message": "..."}
     ]

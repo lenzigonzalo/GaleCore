@@ -1,8 +1,8 @@
 # GaleCore-AI — Session Handoff
 
-**Fecha:** 2026-09-15
-**Estado:** correcciones de alineación autorizadas e implementadas; Phase 3 abierta.
-**Fuente:** arquitectura v5; estado verificable en `PHASE3-ALIGNMENT.md`.
+**Fecha:** 2026-09-16
+**Estado:** feature freeze activo; cierre de Phase 3 bajo revisión independiente en `GC-AI-0001`.
+**Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## 1. Autorización y alcance
 
@@ -29,25 +29,32 @@ El caso Strategy Development es dirección futura diferida. `docs/LOCAL-VALIDATI
 - Factories de Agent/Skill/Protocol/Conventions cargan YAML canónico. Las definiciones efectivas tienen hashes en trace.
 - Tests adversariales de rechazos obligatorios. Consultar el alignment para los comandos de validación y límites.
 
-## 4. Próximo incremento
+## 4. Incremento completado (2026-09-16)
 
-1. Preparar facts por integración controlada y conservar el snapshot exacto con run_id, hash y tiempos.
-2. Conectar una ?nica entrada host-native a los assets canónicos y al schema de output.
-3. Añadir un adapter mínimo. Preferencia inicial: CLI JSON por stdin/stdout; es una propuesta, no una capability ya implementada.
-4. Validar la interpretación contra ese snapshot, revalidar freshness y producir trace de aceptación con provenance explícita.
-5. Presentar el payload aceptado sin añadir afirmaciones nuevas no verificadas.
-6. Ejecutar el E2E real con ?xito y fallas controladas; guardar evidencia local reproducible.
-7. Comparar una pequeña muestra de outputs reales con y sin assets para medir el aporte del Domain Harness.
+Todos los puntos del incremento anterior fueron implementados y verificados:
 
-No suponer que un hash autentica el origen ni verificar un snapshot repitiendo una consulta live. Metadata entregada por el host es HOST_DECLARED salvo verificación independiente. La función de aceptación actual no autentica facts ni registra toda la sesión del host.
+1. **Snapshot store interno**: `FileSnapshotStore` conserva el snapshot autoritative en `$TEMP/galecore-ai/snapshots/`. El host recibe solo `PreparedAnalysisView` (sin poder modificar facts ni hashes).
+2. **CLAUDE.md**: entrada host-native que referencia assets canónicos, schema de output y el flujo prepare/interpret/accept/present.
+3. **CLI JSON adapter**: `python -m galecore_ai.adapters.cli prepare|accept` con salida siempre JSON y exit codes determinísticos (0/1/2/3).
+4. **Accept con store**: recupera snapshot por run_id, revalida freshness con reloj interno, produce trace con provenance explícita (`HOST_DECLARED`, `validator_called_model=false`, `host_model_execution=HOST_DECLARED`).
+5. **E2E real**: histórico de este incremento, 1 positivo + 10 negativos con el esquema anterior. Vigente (Increment 4, 2026-09-16): 1 positivo escrito por el host + 21 negativos, reproducibles con `tools/e2e_interactive_cases.py`, en `docs/evidence/increment4-e2e/`.
+6. **Trust boundary**: el host no puede reemplazar el snapshot ni inyectar provenance mediante el contrato `accept`; `accepted_at` es interno. El store local en `$TEMP` es un MVP para un host cooperativo — un proceso con acceso al mismo usuario del OS puede modificar los archivos directamente. El hash detecta cambios accidentales pero no autentica origen. Una frontera más fuerte requiere proceso separado, principal diferente, o firma con clave inaccesible al host.
+7. **Trace completa**: la traza de aceptación registra run_id, facts_hash, conventions_hash, prepared_at, accepted_at (interno), facts_provenance (GALECORE_VERIFIED), asset IDs/versiones/hashes efectivos, capability trace, freshness (STALE/FUTURE/UNKNOWN/INVALID_POLICY según lo observado), `snapshot_lookup`/`snapshot_integrity` y los guardrails cognitivos. Un rechazo temprano registra las etapas alcanzadas, no inventa las que no corrieron.
+8. **Guardrails**: `no_invented_numbers`, `facts_match_source`, `no_trading_recommendation` (pattern-based, con limitaciones documentadas), `gex_regime_sign`. Limitaciones min_length=1 enforced por schema.
 
 ## 5. Pendientes y límites
 
-- El adapter interactivo y su guía E2E aún no existen.
-- La aceptación de texto libre no demuestra toda su semántica ni que cada observación está citada.
-- Near-zero tiene una intención YAML de 5% de la suma absoluta; la versión Python histórica usaba otra regla. Confirmar unidades y metodología antes de certificar esa magnitud; el check actual sólo impide contradicciones de signo en positive/negative_gamma.
-- La adquisición actual de GEX no informa versiones autoritativas de schema/calculation/methodology.
-- No se ha demostrado persistencia durable de traces.
-- Los tests con FakeProvider no prueban calidad del modelo ni cierran Phase 3.
+- Near-zero se rechaza siempre (Increment 4, D1): las escalas de call/put_gex y net_gex son incompatibles. El YAML queda como intención inerte.
+- La adquisición de GEX no informa versiones autoritativas de schema/calculation/methodology de GaleCore.
+- No se ha demostrado persistencia durable de traces (el store es efímero en `$TEMP`).
+- Claims en prosa no tienen prueba general de significado semántico.
+- `from_cache: false` no garantiza que el dato sea live (caching interno de GaleCore es opaco).
 
 Mantener secretos fuera de código, logs, fixtures, docs y traces. Una credencial expuesta en sesiones anteriores se considera comprometida: no recuperarla ni reutilizarla.
+
+## 6. Backlog persistente
+
+`PRODUCT-BACKLOG.md` conserva trabajo acordado posterior al incremento actual. En particular,
+`BL-001` define la dirección para bundles declarativos de Skills, lifecycle basado en evidencia,
+drafts, evals, revisión humana y experiencia de administración. No implementarlo durante el cierre
+de Phase 3; actualizar su estado cuando se cumpla el entry gate.

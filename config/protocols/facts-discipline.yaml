@@ -1,5 +1,5 @@
 protocol_id: facts_discipline
-version: "1.1.0"
+version: "1.2.0"
 display_name: Facts Discipline
 description: >
   Ensures the model reasons only from provided deterministic facts.
@@ -21,7 +21,11 @@ steps:
     required: true
 
   - step_id: cite_facts
-    description: Each observation must reference at least one fact value
+    description: Each qualitative claim must reference a fact path through evidence
+    required: true
+
+  - step_id: numbers_only_in_claims
+    description: Numbers appear only in quantitative_claims as {metric, value, unit}; prose stays qualitative
     required: true
 
   - step_id: state_caveats
@@ -31,3 +35,6 @@ steps:
 guardrails:
   - no_invented_numbers
   - facts_match_source
+  - no_trading_recommendation
+  - no_numbers_in_prose
+  - quantitative_claims_valid

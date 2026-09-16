@@ -1,13 +1,12 @@
-"""Golden case evals — 10 parametrized GEX scenarios covering all three paths.
+"""Golden case evals — 12 GEX scenarios covering all three paths.
 
 Tests the full vertical: GaleCore mock → DTO → GexFacts → CognitiveRuntime
 → FakeProvider → guardrails → AgentRunResult.
 
 Scenarios:
-  SUCCESS (5 cases):
+  SUCCESS (4 cases):
     1. Positive gamma — net_gex > 0, spot above zero-gamma
     2. Negative gamma — net_gex < 0, dealers short gamma
-    3. Near-zero gamma — |net_gex| tiny relative to call+put
     4. No zero-gamma level — optional field absent
     5. High coverage — all expirations, high coverage_pct
 
@@ -16,9 +15,13 @@ Scenarios:
     7. Spot is zero — invalid data, fail-closed
     8. Stale data — timestamp > max_staleness
 
-  VALIDATION_ERROR (2 cases):
+  VALIDATION_ERROR (5 cases):
+    3. Near-zero gamma — the host proposes near_zero; always rejected
+       (GaleCore call_gex/put_gex and net_gex use incompatible scales)
     9. Invented numbers — model output contains unknown numbers
-   10. Missing evidence — model output lacks evidence array
+   10. Ungrounded output — evidence path does not exist
+   11. Number in prose — a correct fact value written in an observation
+   12. Rescaled claim — net_gex 1500.0 claimed as 1.5
 """
 
 from __future__ import annotations
@@ -132,6 +135,27 @@ def _post_gex(app, symbol: str = "SPY") -> dict:
     return resp.json()
 
 
+def _valid_response(regime: str, net_gex: float, spot: float) -> dict:
+    return {
+        "regime": regime,
+        "observations": ["Dealer positioning is consistent with the regime"],
+        "implications": ["Price behavior consistent with regime"],
+        "quantitative_claims": [
+            {"metric": "net_gex", "value": net_gex, "unit": "billion_usd"},
+            {"metric": "spot", "value": spot, "unit": "usd"},
+        ],
+        "evidence": [
+            {"fact_path": "facts.net_gex", "claim": "Net GEX sign defines the regime"},
+            {"fact_path": "facts.spot", "claim": "Spot is the reference level"},
+        ],
+        "limitations": ["Point-in-time snapshot of open interest"],
+    }
+
+
+def _failed_guardrails(data: dict) -> set[str]:
+    return {g["guardrail_id"] for g in data["trace"].get("guardrails_executed", []) if not g["passed"]}
+
+
 # ── SUCCESS cases ─────────────────────────────────────────────────
 
 
@@ -139,14 +163,8 @@ class TestGoldenSuccess:
     """Cases 1-5: valid data → model called → guardrails pass → result non-null."""
 
     def _register_valid_response(self, regime: str, net_gex: float, spot: float):
-        """Register a canned response that references the given fact values."""
-        register_canned_response("GexInterpretation", {
-            "regime": regime,
-            "observations": [f"Net GEX is {net_gex}, spot at {spot}"],
-            "implications": ["Price behavior consistent with regime"],
-            "evidence": [{"fact_path": "facts.net_gex", "claim": f"Net GEX is {net_gex}"}],
-            "limitations": ["Point-in-time snapshot of open interest"],
-        })
+        """Register a canned response that claims the given fact values."""
+        register_canned_response("GexInterpretation", _valid_response(regime, net_gex, spot))
 
     def test_case_1_positive_gamma(self):
         """Positive gamma: net_gex > 0, spot above zero-gamma level."""
@@ -157,7 +175,8 @@ class TestGoldenSuccess:
         assert data["status"] == "SUCCESS"
         assert data["result"]["regime"] == "positive_gamma"
         assert data["result"]["evidence"][0]["fact_path"] == "facts.net_gex"
-        assert data["trace"]["model_called"] is True
+        assert data["result"]["quantitative_claims"][0] == {"metric": "net_gex", "value": 1500.0, "unit": "billion_usd"}
+        assert data["trace"]["validator_called_model"] is True
         assert data["error_detail"] is None
 
     def test_case_2_negative_gamma(self):
@@ -178,25 +197,7 @@ class TestGoldenSuccess:
 
         assert data["status"] == "SUCCESS"
         assert data["result"]["regime"] == "negative_gamma"
-        assert data["trace"]["model_called"] is True
-
-    def test_case_3_near_zero_gamma(self):
-        """Near-zero gamma: |net_gex| tiny relative to call+put totals."""
-        net_gex = 0.5
-        spot = 448.0
-        self._register_valid_response("near_zero", net_gex, spot)
-        fixture = _base_fixture(gex_overrides={
-            "spot": spot,
-            "netGex": net_gex,
-            "callGex": 1000000.0,
-            "putGex": -999999.5,
-        })
-        fixture["spotPrice"] = spot
-
-        data = _post_gex(_make_app(fixture))
-
-        assert data["status"] == "SUCCESS"
-        assert data["result"]["regime"] == "near_zero"
+        assert data["trace"]["validator_called_model"] is True
 
     def test_case_4_no_zero_gamma_level(self):
         """Optional field absent: zero_gamma_level is null."""
@@ -237,7 +238,7 @@ class TestGoldenInsufficientData:
 
         assert data["status"] == "INSUFFICIENT_DATA"
         assert data["result"] is None
-        assert data["trace"]["model_called"] is False
+        assert data["trace"]["validator_called_model"] is False
         assert "Capability fetch failed" in data["error_detail"]
 
     def test_case_7_spot_is_zero(self):
@@ -249,7 +250,7 @@ class TestGoldenInsufficientData:
 
         assert data["status"] == "INSUFFICIENT_DATA"
         assert data["result"] is None
-        assert data["trace"]["model_called"] is False
+        assert data["trace"]["validator_called_model"] is False
 
     def test_case_8_stale_data(self):
         """Timestamp is old → freshness check fails → INSUFFICIENT_DATA."""
@@ -276,14 +277,36 @@ class TestGoldenInsufficientData:
 
         assert data["status"] == "INSUFFICIENT_DATA"
         assert data["result"] is None
-        assert data["trace"]["model_called"] is False
+        assert data["trace"]["validator_called_model"] is False
 
 
 # ── VALIDATION_ERROR cases ───────────────────────────────────────
 
 
 class TestGoldenValidationError:
-    """Cases 9-10: model output fails guardrails → result=null."""
+    """Cases 3, 9-12: model output fails guardrails → result=null."""
+
+    def test_case_3_near_zero_always_rejected(self):
+        """The host proposes near_zero on data the old formula would have accepted
+        (|net_gex| tiny vs call+put). The scales are incompatible, so the
+        validator rejects it and the payload never crosses the boundary."""
+        net_gex = 0.5
+        spot = 448.0
+        register_canned_response("GexInterpretation", _valid_response("near_zero", net_gex, spot))
+        fixture = _base_fixture(gex_overrides={
+            "spot": spot,
+            "netGex": net_gex,
+            "callGex": 1000000.0,
+            "putGex": -999999.5,
+        })
+        fixture["spotPrice"] = spot
+
+        data = _post_gex(_make_app(fixture))
+
+        assert data["status"] == "VALIDATION_ERROR"
+        assert data["result"] is None
+        assert "gex_regime_sign" in _failed_guardrails(data)
+        assert "incompatible scales" in data["error_detail"]
 
     def test_case_9_invented_numbers(self):
         """Model output contains number not in facts → guardrail rejects."""
@@ -291,6 +314,7 @@ class TestGoldenValidationError:
             "regime": "positive_gamma",
             "observations": ["Price target 999.99 based on momentum"],
             "implications": ["Breakout to 1200.0 expected"],
+            "quantitative_claims": [{"metric": "net_gex", "value": 1500.0, "unit": "billion_usd"}],
             "evidence": [{"fact_path": "facts.net_gex", "claim": "Net GEX is positive"}],
             "limitations": ["Snapshot only"],
         })
@@ -300,12 +324,11 @@ class TestGoldenValidationError:
 
         assert data["status"] == "VALIDATION_ERROR"
         assert data["result"] is None
-        assert data["trace"]["model_called"] is True
+        assert data["trace"]["validator_called_model"] is True
         # Guardrail that caught it
-        guardrails = data["trace"].get("guardrails_executed", [])
-        failed = [g for g in guardrails if not g["passed"]]
-        assert len(failed) >= 1
-        assert any("no_invented_numbers" in g["guardrail_id"] for g in failed)
+        failed = _failed_guardrails(data)
+        assert "no_invented_numbers" in failed
+        assert "no_numbers_in_prose" in failed
 
     def test_case_10_ungrounded_output(self):
         """Model output references no facts → facts_match_source guardrail fails."""
@@ -313,6 +336,7 @@ class TestGoldenValidationError:
             "regime": "positive_gamma",
             "observations": ["The market looks bullish today"],
             "implications": ["Everything is going up"],
+            "quantitative_claims": [{"metric": "net_gex", "value": 1500.0, "unit": "billion_usd"}],
             "evidence": [{"fact_path": "facts.nonexistent_field", "claim": "Made up claim"}],
             "limitations": ["None"],
         })
@@ -322,5 +346,27 @@ class TestGoldenValidationError:
 
         assert data["status"] == "VALIDATION_ERROR"
         assert data["result"] is None
-        checks = data["trace"]["guardrails_executed"]
-        assert any(c["guardrail_id"] == "facts_match_source" and not c["passed"] for c in checks)
+        assert "facts_match_source" in _failed_guardrails(data)
+
+    def test_case_11_correct_number_in_prose_rejected(self):
+        """Even the true fact value is not allowed in prose: numbers go in claims."""
+        response = _valid_response("positive_gamma", 1500.0, 450.5)
+        response["observations"] = ["Net GEX is 1500.0, dealers are long gamma"]
+        register_canned_response("GexInterpretation", response)
+
+        data = _post_gex(_make_app(_base_fixture()))
+
+        assert data["status"] == "VALIDATION_ERROR"
+        assert data["result"] is None
+        assert _failed_guardrails(data) == {"no_numbers_in_prose"}
+
+    def test_case_12_rescaled_claim_rejected(self):
+        """net_gex=1500.0 claimed as 1.5: no silent normalization."""
+        register_canned_response("GexInterpretation", _valid_response("positive_gamma", 1.5, 450.5))
+
+        data = _post_gex(_make_app(_base_fixture()))
+
+        assert data["status"] == "VALIDATION_ERROR"
+        assert data["result"] is None
+        assert "quantitative_claims_valid" in _failed_guardrails(data)
+        assert "1.5 does not match fact 1500.0" in data["error_detail"]

@@ -17,9 +17,13 @@ from galecore_ai.contracts.envelopes import (
     TemporalContext,
 )
 from galecore_ai.contracts.gex_analysis import (
+    METRIC_REGISTRY,
     EvidenceRef,
     GexFacts,
     GexInterpretation,
+    GexMetric,
+    GexUnit,
+    QuantitativeClaim,
 )
 from galecore_ai.contracts.ids import new_id
 
@@ -122,6 +126,7 @@ class TestGexAnalysisContracts:
             regime="positive_gamma",
             observations=["Net GEX positive — dealer long gamma"],
             implications=["Expect mean reversion, reduced volatility"],
+            quantitative_claims=[QuantitativeClaim(metric="net_gex", value=1500.0, unit="billion_usd")],
             evidence=[EvidenceRef(fact_path="facts.net_gex", claim="Net GEX is positive")],
             limitations=["Based on current open interest snapshot"],
         )
@@ -131,6 +136,39 @@ class TestGexAnalysisContracts:
         assert len(restored.observations) == 1
         assert len(restored.evidence) == 1
         assert restored.evidence[0].fact_path == "facts.net_gex"
+        assert restored.quantitative_claims[0].metric == GexMetric.NET_GEX
+        assert restored.quantitative_claims[0].unit == GexUnit.BILLION_USD
+        assert data["quantitative_claims"][0] == {"metric": "net_gex", "value": 1500.0, "unit": "billion_usd"}
+
+    def test_quantitative_claim_is_closed(self):
+        """metric/unit are closed enums; fact_path is validator-owned, never host input."""
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            QuantitativeClaim(metric="call_gex", value=1.0, unit="usd")
+        with pytest.raises(ValidationError):
+            QuantitativeClaim(metric="net_gex", value=1.0, unit="million_usd")
+        with pytest.raises(ValidationError):
+            QuantitativeClaim.model_validate(
+                {"metric": "net_gex", "value": 1.0, "unit": "billion_usd", "fact_path": "facts.spot"},
+            )
+        for metric, spec in METRIC_REGISTRY.items():
+            assert spec.fact_path == f"facts.{metric.value}"
+        assert {m.value for m in GexMetric} == {"net_gex", "spot", "zero_gamma_level", "call_wall", "put_wall"}
+
+    def test_quantitative_claims_required(self):
+        import pytest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GexInterpretation(
+                regime="positive_gamma",
+                observations=["Net GEX positive"],
+                quantitative_claims=[],
+                evidence=[EvidenceRef(fact_path="facts.net_gex", claim="Net GEX is positive")],
+                limitations=["snapshot"],
+            )
 
     def test_interpretation_rejects_extra_fields(self):
         """extra='forbid' must reject unknown fields."""
@@ -141,6 +179,7 @@ class TestGexAnalysisContracts:
             GexInterpretation(
                 regime="positive_gamma",
                 observations=["test"],
+                quantitative_claims=[QuantitativeClaim(metric="net_gex", value=1500.0, unit="billion_usd")],
                 evidence=[EvidenceRef(fact_path="facts.net_gex", claim="test")],
                 caveats=["old field name should fail"],
             )

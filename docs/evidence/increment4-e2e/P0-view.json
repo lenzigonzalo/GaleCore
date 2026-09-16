@@ -1,0 +1,55 @@
+{
+  "run_id": "01a0abad-626d-7e01-b1c2-2c7fc000aede",
+  "symbol": "SPY",
+  "facts": {
+    "symbol": "SPY",
+    "net_gex": -1530.8,
+    "call_gex": 707598.8531,
+    "put_gex": -2238392.5174,
+    "spot": 750.43,
+    "zero_gamma_level": 765.84,
+    "call_wall": 770.0,
+    "put_wall": 750.0,
+    "expirations_included": 15,
+    "expirations_requested": 15,
+    "coverage_pct": 100.0,
+    "market_data_as_of": "2026-09-16T19:24:21.958749Z",
+    "freshness_status": "VALID",
+    "response_received_at": "2026-09-16T19:24:21.996671Z",
+    "from_cache": false
+  },
+  "facts_hash": "sha256:08970f5a2650c61a84fa2a92be49d185b28615496fc56401a4e61f66b70f1817",
+  "prepared_at": "2026-09-16T19:24:21.996671Z",
+  "market_data_as_of": "2026-09-16T19:24:21.958749Z",
+  "freshness_status": "VALID",
+  "freshness_max_age_seconds": 3600.0,
+  "effective_assets": {
+    "agent": {
+      "asset_id": "TradingAgent",
+      "version": "1.0.0",
+      "content_hash": "sha256:df497bd6596375901b8598f5eceff9a7028e3a3c189fe8f7f0b461d32e379bb5"
+    },
+    "skills": {
+      "gex_interpretation": {
+        "asset_id": "gex_interpretation",
+        "version": "1.3.0",
+        "content_hash": "sha256:3f937fd4e395be3b7efc3b565ba67be551c912c5caba53397a8eca8b28f11ad3"
+      }
+    },
+    "protocols": {
+      "facts_discipline": {
+        "asset_id": "facts_discipline",
+        "version": "1.2.0",
+        "content_hash": "sha256:d69cb5950c5f9dc72499e378278eecc94924034d2443283d448e69a5d16f3a8a"
+      }
+    },
+    "conventions": {
+      "trading_defaults": {
+        "asset_id": "trading_defaults",
+        "version": "1.0.0",
+        "content_hash": "sha256:46f9020771319f19d297f0306ebf16382792cefd2310b6b272f960172b78dab4"
+      }
+    }
+  },
+  "conventions_hash": "sha256:4213a153871c18d4cb1ec82020d1694dd0a0200e3ebecc7eb202bd789dd7a708"
+}

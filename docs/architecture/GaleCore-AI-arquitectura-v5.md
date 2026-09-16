@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-09-15
 
-**Estado:** correcciones e inicio de alineación autorizados por el usuario el 2026-09-15; Phase 3 permanece abierta
+**Estado:** cierre de Phase 3 bloqueado por revisión independiente. Ver `docs/engineering/ACTIVE_WORK_ITEM`; no iniciar nuevas features mientras el work item activo mantenga `feature_freeze: true`.
 
 **Reemplaza:** las definiciones de host, Harness y Cognitive Runtime de la arquitectura v4
 
@@ -779,6 +779,10 @@ GEX-SPY read-only con host interactivo, assets versionados, GaleCore real, assur
 
 Más Skills y workflows sólo después de evaluar GEX.
 
+El lifecycle futuro de bundles de Skills, creación desde evidencia, drafts, evals, revisión y
+publicación está capturado como `BL-001` en `PRODUCT-BACKLOG.md`. Su registro preserva la
+dirección; no autoriza implementarla antes de cumplir su entry gate.
+
 ### Phase 5 — Strategy Development
 
 Objectives, hypotheses, experiment design, backtests, StrategyProposal y revisión humana.
@@ -901,7 +905,10 @@ LOCAL FIRST → VALIDATE → REVIEW → EXPAND
 - Revalidar freshness al aceptar la salida; contemplar timestamps futuros y desfase tolerado del reloj.
 - Los YAML en `config/` son los assets canónicos ejecutables. Los factories Python son wrappers; `instructions.md` es documentación complementaria, no otra fuente de reglas.
 - Registrar hash del contenido efectivo de las definiciones, además de su versión. Ese registro no prueba por sí solo que un host externo las leyó o siguió.
-- El umbral near-zero difiere entre implementaciones históricas. Se preserva el YAML (5% de suma absoluta) como intención metodológica pendiente de verificar unidades; no se afirma que assurance valide esa magnitud.
+- `near_zero` no puede producir SUCCESS: GaleCore publica call_gex/put_gex y net_gex en escalas incompatibles, así que el validador lo rechaza fail-closed. El YAML (5% de suma absoluta) se preserva como intención futura; no habilita nada hoy.
+- Los números interpretativos viven únicamente en `quantitative_claims` (`metric`, `value`, `unit` con enums cerrados). El validador deriva el fact_path y la unidad desde `metric`; `value` debe ser exactamente el fact, sin normalizar. Observations e implications son prosa sin dígitos.
+- Las unidades son contrato técnico del validador, no conventions configurables. Incorporar metadata de unidades al contrato HTTP de GaleCore es trabajo futuro (backlog), no de este incremento.
+- Las convenciones se leen una sola vez; del mismo objeto salen el hash del asset, los valores resueltos y `conventions_hash`, que el snapshot exige y acceptance recomputa. Sin default, sin grace period.
 - El primer E2E debe usar un host, un snapshot y un resultado aceptado, más casos negativos estrictos. Después, una pequeña evaluación con outputs reales debe medir el aporte de los assets frente a una ejecución sin ellos.
 
 Ver `PHASE3-ALIGNMENT.md` para responsabilidades actuales, garantías implementadas y trabajo pendiente. La apertura de este incremento no declara cerrada Phase 3.

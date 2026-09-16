@@ -1,0 +1,133 @@
+{
+  "case": "N16-conventions-mutated",
+  "title": "resolved_conventions edited in the store after prepare",
+  "expected": "INTERNAL_ERROR (conventions_hash mismatch), no cognitive checks",
+  "command": "echo '<stdin>' | python -B -m galecore_ai.adapters.cli accept",
+  "stdin": {
+    "run_id": "01a0abad-626d-7e01-b1c2-2c7fc000aede",
+    "interpretation": {
+      "regime": "negative_gamma",
+      "observations": [
+        "Net GEX sign shows how dealers are positioned; their hedging shapes intraday moves"
+      ],
+      "implications": [
+        "Moves may be amplified rather than dampened while this regime persists"
+      ],
+      "quantitative_claims": [
+        {
+          "metric": "net_gex",
+          "value": -1530.8,
+          "unit": "billion_usd"
+        },
+        {
+          "metric": "spot",
+          "value": 750.43,
+          "unit": "usd"
+        }
+      ],
+      "evidence": [
+        {
+          "fact_path": "facts.net_gex",
+          "claim": "Net GEX sign defines the regime"
+        },
+        {
+          "fact_path": "facts.spot",
+          "claim": "Spot is the reference level"
+        }
+      ],
+      "limitations": [
+        "Point-in-time snapshot of open interest; intraday flow can change the picture"
+      ]
+    },
+    "host_provider": "claude-code",
+    "host_model": "claude-opus-5"
+  },
+  "exit_code": 1,
+  "stdout_json": {
+    "run_id": "01a0abad-626d-7e01-b1c2-2c7fc000aede",
+    "status": "INTERNAL_ERROR",
+    "result": null,
+    "trace": {
+      "trace_id": "01a0abbf-84ea-7852-b6e5-f207fc8b0b9b",
+      "correlation_id": null,
+      "request_timestamp": null,
+      "started_at": "2026-09-16T19:44:10.474362Z",
+      "completed_at": "2026-09-16T19:44:10.479456Z",
+      "latency_ms": null,
+      "facts_hash": "sha256:08970f5a2650c61a84fa2a92be49d185b28615496fc56401a4e61f66b70f1817",
+      "conventions_hash": "sha256:4213a153871c18d4cb1ec82020d1694dd0a0200e3ebecc7eb202bd789dd7a708",
+      "prepared_at": "2026-09-16T19:24:21.996671Z",
+      "accepted_at": null,
+      "facts_provenance": "GALECORE_VERIFIED",
+      "provider": "HOST_DECLARED:claude-code",
+      "model": "HOST_DECLARED:claude-opus-5",
+      "validator_called_model": false,
+      "host_model_execution": "HOST_DECLARED",
+      "input_tokens": null,
+      "output_tokens": null,
+      "agent_definition": {
+        "agent_id": "TradingAgent",
+        "version": "1.0.0",
+        "content_hash": "sha256:df497bd6596375901b8598f5eceff9a7028e3a3c189fe8f7f0b461d32e379bb5"
+      },
+      "skills": [
+        {
+          "skill_id": "gex_interpretation",
+          "version": "1.3.0",
+          "content_hash": "sha256:3f937fd4e395be3b7efc3b565ba67be551c912c5caba53397a8eca8b28f11ad3"
+        }
+      ],
+      "protocols": [
+        {
+          "protocol_id": "facts_discipline",
+          "version": "1.2.0",
+          "content_hash": "sha256:d69cb5950c5f9dc72499e378278eecc94924034d2443283d448e69a5d16f3a8a"
+        }
+      ],
+      "conventions": [
+        {
+          "convention_id": "trading_defaults",
+          "version": "1.0.0",
+          "content_hash": "sha256:46f9020771319f19d297f0306ebf16382792cefd2310b6b272f960172b78dab4"
+        }
+      ],
+      "capabilities_invoked": [
+        {
+          "capability_id": "compute.gex_analysis",
+          "semantic_class": null,
+          "endpoint": "/App/Gex/Analysis",
+          "transport": "REST",
+          "schema_version": null,
+          "calculation_version": null,
+          "methodology_version": null,
+          "latency_ms": 92453,
+          "outcome": "ok",
+          "error": null,
+          "response_received_at": "2026-09-16T19:24:21.996671Z"
+        }
+      ],
+      "freshness": null,
+      "guardrails_executed": [
+        {
+          "guardrail_id": "snapshot_integrity",
+          "passed": false,
+          "message": "Internal conventions_hash mismatch — resolved conventions changed after prepare"
+        }
+      ],
+      "status": "INTERNAL_ERROR",
+      "error": "Internal conventions_hash mismatch — resolved conventions changed after prepare"
+    },
+    "error_detail": "Internal conventions_hash mismatch — resolved conventions changed after prepare"
+  },
+  "stdout_raw": null,
+  "stderr": "",
+  "status": "INTERNAL_ERROR",
+  "failed_guardrails": [
+    "snapshot_integrity"
+  ],
+  "error": "Internal conventions_hash mismatch — resolved conventions changed after prepare",
+  "note": "store file edited then restored; cooperative boundary, hash detects the change",
+  "observed_at": "2026-09-16T19:44:10.547390+00:00",
+  "verified": true,
+  "problems": []
+}

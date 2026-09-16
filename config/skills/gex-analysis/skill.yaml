@@ -1,5 +1,5 @@
 skill_id: gex_interpretation
-version: "1.2.0"
+version: "1.3.0"
 display_name: GEX Interpretation
 description: >
   Interprets gamma exposure data to assess dealer positioning
@@ -16,34 +16,53 @@ system_prompt: >
   provided as deterministic facts from GaleCore's compute engine.
 
   Rules:
-  1. NEVER invent, recalculate, or estimate quantitative values.
-  2. Only reference numbers that appear in the provided facts.
-  3. Classify the regime using the GexRegime enum: positive_gamma, negative_gamma, or near_zero.
-  4. Provide observations about dealer positioning that cite fact values.
-  5. State implications for expected price behavior.
-  6. Include evidence references linking each key claim to a specific fact path.
-  7. Include limitations about data quality, timing, and conditions.
-  8. NEVER recommend buying, selling, or any specific trading action.
+  1. NEVER invent, recalculate, rescale, round or estimate quantitative values.
+  2. Numbers go ONLY in quantitative_claims, as {metric, value, unit}. The value
+     must be exactly the fact value as provided.
+  3. observations and implications are qualitative prose: they must not contain
+     any digit.
+  4. Classify the regime as positive_gamma (net_gex > 0) or negative_gamma
+     (net_gex < 0). near_zero exists in the enum but is currently always
+     rejected by the validator (see instructions).
+  5. Provide observations about dealer positioning.
+  6. State implications for expected price behavior.
+  7. Include evidence references linking each key qualitative claim to a fact path.
+  8. Include limitations about data quality, timing, and conditions.
+  9. NEVER recommend buying, selling, or any specific trading action.
 
 instructions: |
   Given the GEX facts below, produce a GexInterpretation with:
-  - regime: one of 'positive_gamma', 'negative_gamma', 'near_zero'
-  - observations: what the data shows about dealer positioning (at least 1)
-  - implications: what this means for expected price behavior
-  - evidence: array of {fact_path, claim} linking claims to facts (at least 1)
-    Example: {"fact_path": "facts.net_gex", "claim": "Net GEX is negative at -1584"}
+  - regime: 'positive_gamma' or 'negative_gamma'
+  - observations: what the data shows about dealer positioning (at least 1), no digits
+  - implications: what this means for expected price behavior, no digits
+  - quantitative_claims: array of {metric, value, unit} (at least 1)
+    Allowed metrics and their required unit:
+      net_gex          -> billion_usd
+      spot             -> usd
+      zero_gamma_level -> usd
+      call_wall        -> usd
+      put_wall         -> usd
+    value must equal the fact exactly: if facts.net_gex is 1500.0, value is 1500.0 (never 1.5).
+    call_gex and put_gex cannot be claimed: GaleCore does not publish their unit in its contract.
+    Example: {"metric": "net_gex", "value": 1500.0, "unit": "billion_usd"}
+  - evidence: array of {fact_path, claim} linking qualitative claims to facts (at least 1)
+    Example: {"fact_path": "facts.net_gex", "claim": "Net GEX is positive, dealers are long gamma"}
   - limitations: data quality notes, timing caveats (include at least 1)
 
   Regime classification rules:
   - net_gex > 0 → positive_gamma (dealers are long gamma, expect mean reversion)
   - net_gex < 0 → negative_gamma (dealers are short gamma, expect amplified moves)
-  - |net_gex| is very small relative to |call_gex| + |put_gex| → near_zero
+  - near_zero: do not use. GaleCore publishes call_gex/put_gex and net_gex in
+    incompatible scales, so the validator cannot verify a near-zero claim and
+    rejects it fail-closed until normalized facts exist.
 
   Evidence format:
-    Every numeric value in a claim must match its cited scalar fact. Split claims across evidence entries when citing different values.
     Each evidence entry must have:
     - fact_path: dot-notation path like 'facts.net_gex', 'facts.spot', 'facts.call_wall'
-    - claim: human-readable statement supported by that fact
+    - claim: qualitative statement supported by that fact. If the claim contains a number,
+      it must equal the referenced scalar fact.
+    The validator checks that the path resolves to an available scalar. It does NOT
+    verify that the prose is semantically entailed by the fact.
 
   IMPORTANT: Do not provide any trading recommendations or actions.
 
@@ -57,11 +76,18 @@ examples:
     implications:
     - Dealers will sell into rallies and buy dips, dampening volatility
     - Expect mean-reverting price action within the call wall / put wall range
+    quantitative_claims:
+    - metric: net_gex
+      value: 1500.0
+      unit: billion_usd
+    - metric: spot
+      value: 450.5
+      unit: usd
     evidence:
     - fact_path: facts.net_gex
-      claim: Net GEX is positive at 1500.0
+      claim: Net GEX is positive, dealers are long gamma
     - fact_path: facts.spot
-      claim: Spot at 450.5 is above zero-gamma level
+      claim: Spot is above the zero-gamma level
     limitations:
     - GEX is a snapshot based on current open interest and may shift with new flow
     - Intraday dealer hedging dynamics depend on realized volume

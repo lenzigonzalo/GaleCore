@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-09-15
 **Autorización:** el usuario pidió corregir los documentos y comenzar a corregir y encaminar la implementación después de la revisión arquitectónica.
-**Estado:** primer incremento implementado y validado localmente con tests. Phase 3 sigue abierta; no se ejecut? el E2E interactivo real.
+**Estado:** cierre en revisión mediante `GC-AI-0001`; tests locales passing no sustituyen la evidencia E2E, evaluación cognitiva ni revisión independiente pendientes.
 
 ## 1. Resultado
 
@@ -27,7 +27,7 @@ Se conserva el runtime autónomo, se extrae su aceptación post-model a una func
 | `tests/` | Regresiones, contratos y escenarios con mocks/FakeProvider | TEST_OR_EVAL | CURRENT_VALIDATED (suite local) | keep y ampliar por riesgos concretos |
 | `docs/architecture/` | Decisiones y estado | DOCUMENTATION | CURRENT_IMPLEMENTED | keep |
 | `docs/LOCAL-VALIDATION-GEX-SPY.md` | Guía del adapter autónomo | DOCUMENTATION | CURRENT_IMPLEMENTED | mantener claramente separada del futuro E2E interactivo |
-| Entrada host-native / adapter interactivo | Todavía no implementados | HOST_ADAPTER | PROPOSED | siguiente incremento |
+| `adapters/cli.py`, `adapters/snapshot_store.py`, `application/prepare_gex.py`, `application/accept_interpretation.py`, `CLAUDE.md` | Entrada host-native: prepare → interpretación externa → accept, con store local y trace | HOST_ADAPTER | CURRENT_IMPLEMENTED (E2E en `docs/evidence/increment4-e2e/`) | keep; cerrar sólo con AC-09 |
 
 Las rutas de código en esta tabla son relativas a `src/galecore_ai/`. Los `__init__.py` sólo empaquetan sus respectivos módulos. No se movieron carpetas.
 
@@ -39,7 +39,7 @@ FastAPI → AnalyzeGexUseCase
   → parse DTO → map GexFacts → freshness inicial
   → CognitiveRuntime
       → preflight → assets/context → ModelProvider
-      → validate_interpretation(payload que se devolver?)
+      → validate_interpretation(payload que se devolverá)
           → schema → todas las EvidenceRef locales → números → signo GEX
       → resultado + trace (hash de definiciones efectivas)
   → freshness al aceptar → resultado final
@@ -53,7 +53,9 @@ Implementado:
 - Cada claim numérico se valida contra el valor escalar de su referencia. Claims con varios valores deben dividirse en referencias separadas.
 - Los números 0, 1 y 100 también necesitan soporte; no hay excepción universal.
 - El payload aceptado se revalida con el schema; un raw_text diferente del provider no puede certificar otro objeto.
-- Positive/negative_gamma no puede contradecir el signo de net_gex.
+- Positive/negative_gamma no puede contradecir el signo de net_gex. `near_zero` se rechaza siempre (escalas incompatibles entre call/put_gex y net_gex).
+- Los números interpretativos van en `quantitative_claims` con `GexMetric`/`GexUnit` cerrados; el validador deriva el fact_path desde `metric` y exige igualdad exacta con el fact. Cualquier dígito en observations/implications rechaza el output.
+- `conventions_hash` liga los valores resueltos al snapshot; acceptance lo recomputa y no continúa con validación cognitiva si no coincide.
 - Un timestamp demasiado futuro se rechaza (tolerancia actual: cinco segundos); los datos que vencen durante la generación no producen SUCCESS.
 - Los hashes del trace representan las definiciones cargadas efectivamente, incluidos overrides explícitos del runtime.
 
@@ -61,13 +63,13 @@ Límites:
 
 - `validate_interpretation` devuelve aceptación, payload o null, checks y errores. No obtiene facts, no autentica su origen, no invoca un modelo y no persiste el trace. El runtime incorpora sus checks al TraceRecord existente.
 - El caller debe validar facts y freshness. La función interna no es todavía el servicio completo de sesión/snapshot del host interactivo.
-- Los claims en prosa no tienen una prueba general de significado. Tampoco se garantiza que cada observación libre está enlazada a evidencia; se requiere un contrato de afirmaciones más preciso o evaluación adicional.
-- La búsqueda de números en texto sigue siendo secundaria y tiene limitaciones de formatos/unidades; no certifica equivalencia semántica.
-- Near-zero no tiene validación de magnitud: YAML histórico define 5% de suma absoluta; el builder anterior usaba 10% del máximo absoluto. Se retiró esa duplicación y se preservó YAML; falta confirmar que las unidades de net/call/put sean comparables.
-- YAML y factories están verificados desde el checkout. Se configuró su inclusión en wheel; no se construyó el wheel porque hatchling no está instalado en el entorno.
+- Los claims en prosa no tienen una prueba general de significado. `EvidenceRef` valida que el path exista y sea escalar; no prueba entailment semántico de claims cualitativos ni de afirmaciones causales.
+- La detección de números en prosa es un regex determinístico (enteros, negativos, decimales, porcentajes, notación científica). Números escritos con palabras no se detectan.
+- Near-zero: la fórmula de magnitud se eliminó por ser dimensionalmente inválida (call/put_gex en millones, net_gex en billones). El regime se rechaza fail-closed; el YAML se preserva como intención hasta que existan facts normalizados o metadata de unidades en GaleCore.
+- YAML y factories están verificados desde el checkout y empaquetados en el wheel (`python -m build --wheel`, 5 assets byte-idénticos a `config/`, verificado 2026-09-16 en Increment 4).
 - El host externo aún no carga estos assets automáticamente. Un hash de definición no prueba obediencia del modelo.
 
-## 4. Próxima frontera y adapter
+## 4. Frontera y adapter (histórico: propuesta previa a Increment 3; hoy implementada como CLI JSON, ver §1)
 
 Propuesta concreta:
 
@@ -84,20 +86,22 @@ Conservar el snapshot original; no volver a consultar datos live para comparar v
 | Adapter | Ventaja para este vertical | Costo o límite | Decisión |
 |---|---|---|---|
 | Direct import Python | Ideal para tests y consumidores Python | No conecta por sí solo una sesión externa | Ya disponible para aceptación |
-| CLI JSON stdin/stdout | Sin servicio persistente; fácil de inspeccionar localmente | Requiere snapshot entre invocaciones y tratamiento explícito de errores | Primera opción propuesta |
+| CLI JSON stdin/stdout | Sin servicio persistente; fácil de inspeccionar localmente | Requiere snapshot entre invocaciones y tratamiento explícito de errores | **Implementada** (`adapters/cli.py`, store local) |
 | HTTP | Servicio compartido y acceso remoto | Proceso, lifecycle, auth y despliegue | Diferido |
 | MCP | Descubrimiento e invocación como tool | Integración y configuración adicional del host | Evaluar cuando haga falta |
 
 `python -c` crea un subprocess; no debe llamarse integración in-process.
 
-## 5. Plan de E2E y evaluación
+## 5. Plan de E2E y evaluación (histórico)
 
-Archivos propuestos para el siguiente incremento (aún no existentes):
+> Sección conservada como registro. Todos los archivos listados existen y están validados; el E2E vigente es `docs/evidence/increment4-e2e/`. La evaluación cognitiva (AC-06) sigue BLOCKED.
+
+Archivos propuestos en su momento para el siguiente incremento:
 
 - `application/prepare_gex.py`: preparación de facts reutilizando dispatcher y mapper.
 - `contracts/prepared_analysis.py`: snapshot identificado y contexto de aceptación.
 - `adapters/cli.py`: preparar y aceptar mediante JSON.
-- Una ?nica entrada host-native que referencie assets canónicos, sin duplicarlos.
+- Una única entrada host-native que referencie assets canónicos, sin duplicarlos.
 - `docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md`: comandos exactos después de implementar y verificar el adapter.
 
 Secuencia: host real → preparar SPY con GaleCore real → cargar assets → interpretación estructurada → aceptar contra snapshot → presentar artefacto aceptado. Evidencia mínima: inputs/snapshot, identificadores y hashes, timestamps, output, checks, trace y mecanismo de carga de assets. No afirmar provider/model/token usage como verificados si los declara el host.
@@ -114,6 +118,6 @@ python -B -m pytest -q -p no:cacheprovider
 python -B -m ruff check --no-cache .
 ```
 
-Resultado: **240 tests passing**. La suite incluye regresiones adversariales nuevas. Existe un warning de deprecación de Starlette/httpx ajeno a este incremento. No se hizo una llamada al modelo ni al GaleCore real para esta validación.
+Resultado (Increment 4, 2026-09-16): **427 tests passing**, ruff clean, wheel builds con los 5 assets. La suite incluye regresiones adversariales, tests de snapshot store, tests de CLI subprocess, tests de trust boundary/provenance, integridad de convenciones y contrato de claims cuantitativos. (Registro histórico: 274 tests al cierre de Increment 3.)
 
-Phase 3 permanece abierta hasta ejecutar el host interactivo real. No se modific? GaleCore ni se hizo commit.
+E2E interactivo reproducible (`tools/e2e_interactive_cases.py`) ejecutado el 2026-09-16 contra GaleCore en localhost:5000 con datos live de SPY: 1 caso positivo escrito por el host (Claude Code, HOST_DECLARED) y 21 negativos, todos con payload, stdout y exit code archivados en `docs/evidence/increment4-e2e/`. No se modificó GaleCore. (Histórico: 1 positivo + 13 negativos en `phase3-gex-interactive-e2e.md`, esquema anterior a Increment 4.)

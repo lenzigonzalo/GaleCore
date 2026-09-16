@@ -1,0 +1,1087 @@
+# GaleCore-AI — Product and Architecture Backlog
+
+Este documento conserva trabajo acordado que no pertenece al incremento actual. No reemplaza
+la arquitectura ni autoriza implementación anticipada.
+
+## Cómo gestionar este backlog
+
+Cada ítem usa:
+
+- **ID estable** para poder citarlo desde handoffs, commits y propuestas;
+- **estado**: `CAPTURED`, `READY_FOR_DESIGN`, `READY_FOR_IMPLEMENTATION`, `IN_PROGRESS`,
+  `VALIDATED` o `CANCELLED`;
+- **target** orientativo, sin convertirlo en una fecha comprometida;
+- **encaje con la implementación actual**: lectura no bloqueante de componentes reutilizables,
+  fundaciones nuevas justificadas, primer vertical, adopción/migración, compatibilidad e invariantes;
+- **entry gate** que indica cuándo corresponde comenzar;
+- **acceptance criteria** para evitar cerrar el ítem sólo porque existen archivos nuevos.
+
+Los handoffs deben mencionar los ítems que cambien de estado. Una conversación puede producir
+evidencia o una propuesta, pero no cambia silenciosamente una Skill publicada.
+
+El encaje no es un veto a ideas nuevas. Sirve para distinguir una evolución, una fundación nueva
+escalable, una dependencia y una tensión real con el plan. No se debe deformar una buena propuesta
+para reutilizar código existente, ni esconder una reescritura bajo lenguaje de evolución.
+
+---
+
+## BL-001 — Skill bundles, lifecycle y experiencia de evolución
+
+**Estado:** `CAPTURED`
+
+**Target:** Phase 4 — Broader read-only intelligence, después de cerrar y evaluar el vertical
+GEX de Phase 3.
+
+**Objetivo:** convertir Skills, Protocols, Conventions, ejemplos y evals en assets declarativos
+versionados que puedan crearse y evolucionar a partir de evidencia, con revisión humana y sin
+automodificación silenciosa.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_WITH_PREREQUISITE`.
+
+La base existente ya incluye assets YAML/Markdown canónicos, loaders, schemas Pydantic, hashes,
+wrappers Python, evals y packaging verificado. El primer incremento no crea un registry o CMS: usa
+`gex-analysis` y una segunda Skill read-only real sobre los loaders actuales para descubrir qué
+parte del bundle necesita generalizarse.
+
+El refactor admisible es eliminar una factory específica sólo después de que dos Skills diferentes
+usen el mismo camino declarativo. La ubicación `config/skills/`, los consumers actuales y los hashes
+de traces se preservan hasta demostrar una migración compatible.
+
+**Invariante anti-rewrite:** evolucionar el bundle desde los assets ejecutables actuales; no mover
+directorios ni reemplazar loaders antes del E2E y la evaluación exigidos por el entry gate.
+
+### Problema que resuelve
+
+La implementación actual tiene assets en `config/` y wrappers Python de compatibilidad. Sirve
+para el vertical GEX, pero todavía no define el producto completo para:
+
+- crear Skills sin escribir una clase Python por Skill;
+- separar metodología, metadata, contratos, ejemplos y evals;
+- descubrir Skills desde distintos hosts;
+- proponer mejoras a partir de interacciones y resultados;
+- comparar una versión candidata contra la versión publicada;
+- publicar, revertir y auditar cambios;
+- mostrar al usuario qué metodología produjo cada resultado.
+
+### Dirección de diseño a validar
+
+Durante Phase 3 se mantiene la ubicación actual. Después del gate, evaluar un bundle como:
+
+```text
+skills/
+└── gex-analysis/
+    ├── skill.yaml
+    ├── SKILL.md
+    ├── examples/
+    │   ├── positive-gamma.json
+    │   ├── negative-gamma.json
+    │   └── insufficient-data.json
+    ├── evals/
+    │   └── cases.yaml
+    ├── knowledge/
+    │   └── interpretation-notes.md
+    └── CHANGELOG.md
+```
+
+Responsabilidades propuestas:
+
+| Asset | Responsabilidad |
+|---|---|
+| `skill.yaml` | Identidad, versión, estado, triggers, capabilities, contracts, protocols, guardrails y referencias a archivos |
+| `SKILL.md` | Metodología e instrucciones canónicas para humanos y modelos |
+| `examples/` | Ejemplos estructurados y versionados para prompting, revisión y regresiones |
+| `evals/` | Casos y expectativas usados para medir calidad; no son instrucciones del modelo |
+| `knowledge/` | Conocimiento complementario opcional, con alcance y fuentes explícitas |
+| `CHANGELOG.md` | Cambios de metodología y razones de cada versión |
+| Python | Loaders, schemas, assurance y adapters; sólo lógica determinística que no debe depender del modelo |
+
+La decisión entre `config/skills/` y un directorio principal `skills/` queda diferida hasta
+validar el formato con más de una Skill. No mover el vertical GEX sólo por estética.
+
+### Lifecycle propuesto
+
+```text
+interacciones + evals + outcomes + correcciones humanas
+                         ↓
+                 findings estructurados
+                         ↓
+                SkillChangeProposal
+                         ↓
+                    DRAFT vNext
+                         ↓
+             evals + comparación con current
+                         ↓
+                   revisión humana
+                         ↓
+              PUBLISHED o REJECTED
+```
+
+Reglas:
+
+1. Las interacciones producen evidencia y propuestas; nunca modifican directamente una Skill
+   publicada.
+2. Una versión `DRAFT` no afecta ejecuciones normales.
+3. Toda publicación conserva autor, versión base, diff, evidencia, resultado de evals y decisión
+   humana.
+4. Los traces históricos continúan resolviendo la versión y el hash utilizados originalmente.
+5. Una versión anterior puede recuperarse sin reescribir evidencia histórica.
+6. Repetición no equivale automáticamente a calidad: crear una Skill requiere un caso reusable,
+   ownership claro y evaluación.
+
+### Formas de creación
+
+1. **Manual:** un experto solicita una Skill y revisa su draft.
+2. **Necesidad repetida:** varias sesiones muestran el mismo trabajo y generan una propuesta de
+   extracción.
+3. **Workflow exitoso:** una secuencia repetible y evaluada se propone como Skill o Workflow,
+   manteniendo separados ambos conceptos.
+4. **Mejora metodológica:** errores, correcciones humanas o outcomes generan una propuesta sobre
+   una Skill existente.
+
+### Objetos futuros a diseñar
+
+- `SkillBundleManifest`;
+- `SkillVersion` y estados `DRAFT | PUBLISHED | DEPRECATED | ARCHIVED`;
+- `SkillChangeProposal` o especialización de `MethodologyChangeProposal`;
+- `CognitiveFinding` con referencias a runs/evals/outcomes;
+- `SkillEvaluationResult`;
+- `SkillRegistry` de lectura;
+- proyección host-native generada desde el bundle canónico;
+- política de publicación, deprecación, rollback y compatibilidad.
+
+Estos nombres son propuestas, no contratos aprobados.
+
+### Experiencia de usuario buscada
+
+Para analizar:
+
+```text
+Analizá el contexto de opciones actual de SPY.
+
+Metodología utilizada
+✓ GEX Interpretation 1.3.0
+✓ IV Context 1.1.0
+✓ Facts Discipline 1.0.0
+
+Validación
+✓ Facts vigentes
+✓ Evidencia verificada
+✓ Sin números inventados
+```
+
+Para administrar inteligencia:
+
+```text
+Skills
+├── Published
+│   ├── GEX Interpretation 1.3.0
+│   └── IV Context 1.1.0
+├── Drafts
+│   └── Options Market Context 0.1.0
+└── Proposals
+    └── Clarificar interpretación de call wall
+```
+
+El usuario debería poder probar una Skill, ver metodología y evidencia, ejecutar evals, comparar
+versiones y proponer un cambio sin editar Python. La edición directa de archivos sigue disponible
+para desarrollo y revisión técnica.
+
+### Entry gate
+
+No iniciar este ítem hasta que:
+
+- Phase 3 tenga un E2E interactivo reproducible;
+- exista evidencia de que los assets GEX fueron realmente consumidos por el host;
+- se haya ejecutado una evaluación cognitiva con y sin assets;
+- se conozcan al menos una segunda Skill real y sus diferencias respecto de GEX;
+- se haya revisado qué partes del loader actual son reutilizables.
+
+### Acceptance criteria
+
+- [ ] Existe un formato de bundle aprobado y documentado.
+- [ ] Dos Skills reales diferentes se cargan sin factories Python específicas.
+- [ ] El bundle completo tiene identidad, versión y hash reproducible.
+- [ ] Los adapters host-native se generan o referencian el mismo source of truth.
+- [ ] Ejemplos y evals tienen contratos separados de las instrucciones.
+- [ ] Una interacción puede producir un finding y una propuesta, nunca una publicación automática.
+- [ ] Una versión draft puede evaluarse contra la publicada sobre los mismos casos.
+- [ ] La publicación requiere revisión humana y deja trazabilidad.
+- [ ] Se puede revertir a una versión anterior sin perder historia.
+- [ ] Los traces identifican la versión y el hash efectivos.
+- [ ] La interfaz muestra Skills publicadas, drafts, propuestas, calidad y evidencia.
+- [ ] La documentación explica límites: mejorar evals no demuestra rentabilidad financiera.
+
+### Riesgos a vigilar
+
+- proliferación de Skills demasiado específicas;
+- duplicación de conocimiento entre Skills;
+- optimización excesiva contra los evals conocidos;
+- promoción de preferencias de una sesión a metodología global;
+- diferencias entre el bundle canónico y las proyecciones de cada host;
+- confundir frecuencia de uso con validez metodológica;
+- introducir un CMS o plataforma de workflows antes de demostrar necesidad.
+
+### Próximo paso cuando se abra
+
+Realizar un design checkpoint usando `gex-analysis` y una segunda Skill read-only. Comparar dos
+alternativas: `SKILL.md` con frontmatter como fuente única, o `skill.yaml` que referencia
+`SKILL.md`. No implementar registry, UI ni proposals antes de elegir el bundle mínimo mediante
+esas dos Skills reales.
+
+---
+
+## BL-002 — Metadata de unidades/escala en el contrato GEX de GaleCore
+
+**Estado:** `CAPTURED`
+
+**Target:** después del cierre de GC-AI-0001; requiere un work item propio y un cambio en GaleCore.
+
+**Origen:** GC-AI-0001, Increment 4 (D2/D7). GaleCore publica `callGex`/`putGex` en millones de USD y
+`netGex` en billones (`NetGEX = (CallGEX + PutGEX) / 1000`), sin declararlo en el contrato HTTP.
+GaleCore-AI conoce esa relación por lectura del código fuente, no por contrato.
+
+**Objetivo:** que GaleCore-AI deje de depender de conocimiento derivado del código fuente de GaleCore
+para interpretar escalas, y que `near_zero` pueda validarse sobre facts normalizados.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_WITH_PREREQUISITE` por requerir un cambio contractual aditivo en
+GaleCore y un work item cross-repo posterior a GC-AI-0001.
+
+La respuesta GEX, el DTO `GaleCoreGexAnalysisResponse`, el mapper a `GexFacts`, el contrato cerrado
+de métricas/unidades y los tests adversariales ya aíslan el recorrido afectado. El primer incremento
+agrega metadata nullable/versionada al response sin cambiar los valores de `CallGEX`, `PutGEX` o
+`NetGEX`, y congela su consumo con contract tests. Después puede evaluarse la normalización interna.
+
+Los consumidores actuales de GaleCore continúan leyendo los mismos campos y GaleCore-AI mantiene
+`near_zero` fail-closed hasta que la metadata y la normalización estén verificadas.
+
+**Invariante anti-rewrite:** no modificar escalas publicadas ni recalcular GEX en GaleCore-AI; el
+cambio extiende el contrato y el mapper existentes.
+
+### Alcance propuesto (no implementar antes del entry gate)
+
+- Agregar metadata explícita de unidades/escala a `GexScope` en `GexAnalysisResponse` (campo nuevo,
+  nullable, backward-compatible; los valores actuales de `CallGEX`, `PutGEX` y `NetGEX` no cambian).
+- Leer esa metadata en el DTO de GaleCore-AI y usarla para habilitar `call_gex`/`put_gex` como
+  `GexMetric` con su unidad declarada.
+- Evaluar en un work item separado una normalización canónica de `GexFacts` (misma escala para los
+  tres campos) y, recién entonces, reactivar la validación de magnitud de `near_zero` con
+  `gex_near_zero_threshold_pct`.
+
+### Entry gate
+
+GC-AI-0001 en `VALIDATED` o `CLOSED`, y acuerdo del product owner para tocar GaleCore.
+
+### Acceptance criteria
+
+- El contrato HTTP de GaleCore declara la unidad de cada campo GEX; un test contractual en
+  GaleCore-AI falla si la metadata falta o contradice los valores.
+- Ningún factor de escala vive hardcodeado en el validador.
+- Los consumidores actuales de `NetGEX` (Monitor, RPF, front) no cambian de comportamiento.
+
+---
+
+## BL-003 — Onboarding de mercados, proveedores y conectores
+
+**Estado:** `CAPTURED`
+
+**Target:** después del cierre de GC-AI-0001 y antes de comprometer el primer mercado o proveedor
+adicional. La primera aplicación candidata es Argentina, sin asumir todavía fuente, broker ni
+instrumento.
+
+**Origen:** conversación de producto del 2026-09-16 sobre expansión a fuentes argentinas, agentes
+de desarrollo y evolución coordinada de GaleCore, GaleCore-AI y Monitor.
+
+**Relación con el roadmap:** habilitador transversal para Phase 4–7. No adelanta Strategy
+Development, autonomous runtime, PAPER ni LIVE.
+
+### Problema que resuelve
+
+La arquitectura asigna datos, cálculos, estado y ejecución a GaleCore, pero todavía no existe un
+playbook repetible para decidir qué cambia cuando se incorpora un proveedor, una fuente, un broker
+o un mercado con semántica nueva. Sin ese proceso, cada integración puede filtrar conceptos del
+vendor al dominio, duplicar cálculos en GaleCore-AI o exigir cambios innecesarios en todos los
+consumidores.
+
+### Objetivo
+
+Definir un workflow de ingeniería que convierta una solicitud como “agregar datos y trading local
+de Argentina” en una propuesta trazable de capacidades, contratos, adapters, calidad de datos,
+conocimiento cognitivo, UI, pruebas y rollout, preservando ownership y compatibilidad.
+
+El workflow podrá ser consumido en el futuro por un agente de desarrollo del ecosistema, pero no
+autoriza un agente autónomo que modifique o despliegue componentes sin revisión humana.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_WITH_PREREQUISITE`.
+
+Puntos de apoyo comprobados:
+
+- GaleCore ya separa proveedores bajo `DataFeed.Infrastructure/Providers/` y posee interfaces para
+  FRED y Tastytrade;
+- los casos de aplicación se invocan mediante MediatR y son consumidos desde REST, MCP y servicios
+  internos;
+- GaleCore-AI ya posee `CapabilityDefinition`, `CapabilityRegistry`, dispatcher, DTOs y mappings;
+- el Monitor consume APIs y streaming detrás de módulos propios, sin acceso directo al proveedor.
+
+Camino incremental:
+
+1. inventariar un caso read-only y el contrato actual que más se aproxima;
+2. incorporar un segundo adapter en paralelo detrás de ese caso, inicialmente para una fuente y un
+   tipo de instrumento;
+3. agregar selección/configuración de provider sin cambiar la respuesta existente;
+4. extender el contrato sólo cuando la nueva semántica no pueda representarse honestamente;
+5. actualizar GaleCore-AI y Monitor únicamente por esos campos o significados nuevos.
+
+El refactor admisible es local: extraer una interfaz neutral del caso concreto cuando el segundo
+provider demuestre la necesidad. Los handlers, tools y DTOs actuales que nombran Tastytrade/DXLink
+son deuda a aislar gradualmente, no motivo para reemplazar toda la capa de aplicación. Los
+consumidores existentes deben conservar respuesta y comportamiento durante la incorporación.
+
+**Invariante anti-rewrite:** no crear un framework universal de plugins ni migrar todos los
+providers antes de que el primer vertical adicional funcione con contract tests y fallback.
+
+### Dirección de diseño a validar
+
+```text
+solicitud de fuente / mercado / broker
+→ clasificación del cambio y ownership
+→ inventario de capabilities canónicas reutilizables
+→ gaps de contratos y semántica de mercado
+→ plan por repositorio y consumidor
+→ contract/data-quality tests
+→ vertical read-only
+→ evaluación de conocimiento/skills específicos
+→ SHADOW → PAPER → LIVE, sólo cuando corresponda
+```
+
+Principios propuestos:
+
+1. Un proveedor nuevo detrás de un contrato estable debería cambiar sólo GaleCore y sus tests.
+2. GaleCore-AI cambia únicamente cuando aparecen facts, mappings o semánticas cognitivas nuevas.
+3. Los identificadores, monedas, calendarios, sesiones, timestamps, provenance y quality flags son
+   parte del dominio canónico, no detalles implícitos del vendor.
+4. Credenciales, hard risk, estado operacional, autorización y ejecución permanecen en GaleCore.
+5. UI y hosts consumen capabilities canónicas; no integran directamente cada proveedor.
+6. El primer vertical de un mercado nuevo es read-only y acotado a una fuente, un tipo de
+   instrumento y un resultado verificable.
+
+### Alcance de diseño propuesto
+
+- plantilla de `EcosystemChangeProposal` o artefacto equivalente;
+- matriz de impacto por GaleCore, GaleCore-AI, Monitor/host y proveedor externo;
+- decisión adapter-only vs. cambio contractual versionado;
+- checklist de identidad de instrumento, exchange, moneda, zona horaria, calendario, sesión,
+  settlement, unidades, freshness, provenance y calidad;
+- estrategia de symbol mapping y aislamiento del vendor;
+- contract tests, replay y casos de degradación;
+- criterio para crear conocimiento, Skill, Workflow y evals específicos del mercado;
+- compatibilidad, migración, observabilidad y rollback;
+- gates separados para datos, research, SHADOW, PAPER y LIVE.
+
+### No objetivos
+
+- elegir ahora un proveedor o broker argentino;
+- implementar conectividad BYMA, CEDEARs, bonos o ejecución local;
+- crear un framework universal de plugins;
+- permitir que un agente publique contratos, active estrategias o despliegue integraciones sin
+  aprobación;
+- duplicar en GaleCore-AI cálculos que pertenecen a GaleCore.
+
+### Entry gate
+
+- GC-AI-0001 está `VALIDATED` o `CLOSED`;
+- existe una solicitud concreta de segundo proveedor o mercado;
+- están identificados al menos una fuente, un tipo de instrumento y un caso read-only;
+- el product owner autoriza un work item de diseño, sin autorizar por ello PAPER/LIVE;
+- se revisan las capabilities actuales antes de proponer abstracciones nuevas.
+
+### Acceptance criteria
+
+- [ ] Una solicitud concreta produce una clasificación de ownership y una matriz de impacto por
+      componente.
+- [ ] El diseño demuestra si puede reutilizar contratos existentes o justifica cambios aditivos o
+      versionados.
+- [ ] El adapter del proveedor no expone su modelo propietario como dominio canónico.
+- [ ] Se documentan identidad, moneda, calendario, sesión, timestamps, unidades, provenance,
+      freshness y quality flags aplicables.
+- [ ] Existen contract tests y casos reproducibles para datos stale, faltantes, duplicados,
+      inconsistentes y proveedor no disponible.
+- [ ] GaleCore puede operar y degradar de forma segura sin GaleCore-AI.
+- [ ] Toda actualización de GaleCore-AI se justifica por nueva semántica, no por el mero cambio de
+      proveedor, e incluye evals cuando corresponda.
+- [ ] El host y la UI distinguen mercado, moneda, fuente y calidad sin inferirlos desde texto libre.
+- [ ] El rollout read-only se valida antes de habilitar mutaciones o acciones externas.
+- [ ] Cualquier paso hacia SHADOW, PAPER o LIVE tiene work item, permisos, hard risk, aprobación y
+      evidencia independientes.
+
+### Preguntas abiertas
+
+- ¿Cuál será el primer caso concreto: acciones locales, CEDEARs, bonos, macro argentino u otro?
+- ¿La fuente inicial será sólo market data o también broker/execution?
+- ¿Qué modelo canónico de instrumento y calendario ya puede reutilizarse?
+- ¿El agente de desarrollo será una skill del host, un workflow de ingeniería o ambos?
+
+---
+
+## BL-004 — Historia point-in-time y datasets reproducibles de mercado
+
+**Estado:** `CAPTURED`
+
+**Target:** diseñar después del cierre de GC-AI-0001 y antes de usar backtests como evidencia para
+Strategy Development. La captura temprana puede abrirse como un incremento acotado cuando el
+product owner defina universo, frecuencia, coste y retención.
+
+**Origen:** conversación de producto del 2026-09-16 sobre ausencia de historia propia de opciones
+y GEX, uso futuro en backtesting y diferencia respecto de fuentes históricas externas como FRED.
+
+**Relación con el roadmap:** base de datos/evidencia para Phase 5 — Strategy Development. No
+autoriza todavía un motor general de backtesting ni cambia el alcance read-only de Phase 3.
+
+### Problema que resuelve
+
+El GEX actual es un cálculo point-in-time construido con spot, cadena de opciones, Greeks live, OI
+settled y reglas de cálculo. GaleCore conserva caches operacionales en memoria, pero no un historial
+durable de esos snapshots. Guardar únicamente el agregado de `net_gex` permitiría graficar una
+serie, pero no reproducir el cálculo, cambiar la metodología, auditar cobertura ni construir un
+backtest confiable.
+
+Las series macro externas tampoco son automáticamente point-in-time: algunos valores se revisan.
+Un backtest debe distinguir el dato conocido en la fecha evaluada de la revisión disponible hoy.
+
+### Objetivo
+
+Construir en GaleCore una base histórica versionada que permita reconstruir qué información estaba
+disponible en cada instante, recalcular derivados y generar datasets congelados y manifestados para
+backtests reproducibles, sin trasladar market data autoritativo a GaleCore-AI.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_WITH_PREREQUISITE`.
+
+Puntos de apoyo comprobados:
+
+- `GexAnalysisResponse` ya contiene timestamp, cobertura, vencimientos y detalle por strike;
+- `GexAnalysisHandler` produce un snapshot completo antes de colocarlo en su cache en memoria;
+- `GammaExposureHandler` ya reúne chain, Greeks y OI en un único recorrido;
+- `SkewSnapshotService` demuestra el patrón actual de captura periódica mediante
+  `BackgroundService`;
+- GaleCore ya cuenta con persistencia EF para metadata y estado operacional.
+
+Primer incremento compatible: agregar un sink de snapshots detrás del resultado GEX completo y
+capturar SPY con una cadencia acotada. Debe ser observacional, configurable y fail-open respecto de
+la consulta live: una falla de persistencia histórica no cambia ni bloquea la respuesta GEX actual.
+El endpoint, cálculo y cache existentes permanecen intactos.
+
+Ese primer incremento sólo crea historia del resultado. La recomputación completa exige después
+capturar inputs suficientes cerca de `GammaExposureHandler`; debe añadirse como evolución del sink,
+no reescribiendo el motor GEX. El `FileSnapshotStore` de GaleCore-AI no se reutiliza como data lake:
+es efímero, tiene TTL y cumple una frontera de assurance diferente.
+
+La migración debe ser aditiva: versionar nuevos snapshots y manifests sin reinterpretar archivos o
+resultados históricos. La selección de storage queda detrás de una interfaz hasta medir volumen y
+coste con el vertical real.
+
+**Invariante anti-rewrite:** persistir lo que el pipeline ya produce antes de introducir una
+plataforma general de eventos, series temporales o backtesting.
+
+### Dirección de diseño a validar
+
+```text
+proveedor
+→ captura raw inmutable
+→ normalización canónica point-in-time
+→ derivados versionados (GEX, IV, skew, features)
+→ DatasetManifest congelado
+→ backtest reproducible
+→ evidencia y métricas
+```
+
+Capas propuestas:
+
+1. **Raw:** payload o evento recibido, comprimido, con source y timestamps; permite reprocesar.
+2. **Normalized:** instrumentos, quotes, cadenas, OI, Greeks, spot y calendarios en contratos
+   canónicos.
+3. **Derived:** GEX por strike/vencimiento/agregado y otras métricas con versión de cálculo,
+   parámetros y hash de inputs.
+4. **Dataset:** selección inmutable de particiones, filtros y versiones usada por un experimento.
+
+Todo registro temporal debe distinguir, cuando aplique:
+
+- `effective_at`: cuándo representa el hecho en el mercado;
+- `observed_at`: cuándo lo publicó o entregó la fuente;
+- `ingested_at`: cuándo GaleCore lo recibió;
+- fuente, calidad, cobertura, sesión y versión del contrato/cálculo.
+
+Para opciones deben evaluarse como mínimo cadena e identidad contractual, expiración, strike,
+call/put, spot, quote, IV/Greeks, OI y su fecha efectiva, cobertura y campos derivados. El diseño
+debe evitar look-ahead, especialmente por el desfase de OI y por revisiones de datos macro.
+
+### Alcance inicial sugerido para decidir
+
+- un símbolo líquido, inicialmente SPY;
+- conjunto explícito de vencimientos y strikes;
+- snapshots en hitos de sesión o cadencia acotada, no tick history indiscriminado;
+- raw + normalized suficientes para recalcular GEX;
+- agregado GEX almacenado también para consulta rápida;
+- catálogo y manifest de datasets;
+- política explícita de retención, compresión, coste y licenciamiento.
+
+La tecnología de almacenamiento queda abierta. Una alternativa a evaluar es separar metadata y
+catálogo transaccional de archivos columnares particionados para los datos voluminosos; no se
+aprueba todavía PostgreSQL, object storage, Parquet ni un servicio concreto.
+
+### No objetivos
+
+- afirmar que el historial comienza antes de la primera captura real;
+- fabricar datos históricos de opciones o reconstruirlos con información futura;
+- conservar todos los ticks y símbolos sin justificar coste y uso;
+- tratar el valor agregado de GEX como sustituto de sus inputs;
+- almacenar market data autoritativo en GaleCore-AI;
+- considerar un backtest reproducible como prueba de rentabilidad futura.
+
+### Entry gate
+
+- GC-AI-0001 está `VALIDATED` o `CLOSED`;
+- se define el primer caso de backtest que consumirá la historia;
+- se acuerdan universo, frecuencia, campos mínimos, retención y presupuesto;
+- se verifican derechos de almacenamiento y reutilización del proveedor;
+- se documenta la semántica temporal de OI, Greeks, quotes y cualquier serie revisable.
+
+### Acceptance criteria
+
+- [ ] Un snapshot conserva inputs suficientes para recalcular la versión original y una versión
+      posterior de GEX sin consultar datos live.
+- [ ] Raw, normalized, derived y dataset manifest tienen identidad, schema version y hashes o
+      referencias de integridad reproducibles.
+- [ ] Effective, observed e ingested time se distinguen y se prueban con casos de desfase.
+- [ ] La cobertura y los datos faltantes se conservan; no se convierten silenciosamente en cero.
+- [ ] El cálculo derivado registra versión, parámetros y unidades.
+- [ ] Un dataset congelado puede reabrirse y producir los mismos inputs de backtest.
+- [ ] Las series macro revisables usan vintages point-in-time o declaran explícitamente la
+      limitación.
+- [ ] Existen políticas de retención, particionado, compresión, borrado y coste medible.
+- [ ] Se verifican licencias y restricciones de persistencia/redistribución del proveedor.
+- [ ] GaleCore-AI recibe facts/datasets por contratos y no se convierte en data lake.
+
+### Preguntas abiertas
+
+- ¿Qué decisión concreta queremos investigar primero con la historia de GEX?
+- ¿Qué frecuencia aporta señal: apertura/cierre, eventos, intervalos o combinación?
+- ¿Conviene almacenar todo el chain snapshot o una banda explícita con cobertura verificable?
+- ¿Qué historia puede comprarse/importarse para reducir el cold start sin mezclar metodologías?
+- ¿Qué storage y coste son aceptables para opciones?
+
+---
+
+## BL-005 — Dashboards declarativos y artifacts interactivos en vivo
+
+**Estado:** `CAPTURED`
+
+**Target:** después de estabilizar capabilities read-only y sus contratos. Puede explorarse en
+Phase 4 como experiencia de análisis; controles operacionales requieren gates posteriores.
+
+**Origen:** conversación de producto del 2026-09-16 sobre crear y modificar dashboards mediante
+lenguaje natural —por ejemplo agregar GEX, reorganizar paneles o cambiar estilos— manteniendo datos
+en tiempo real.
+
+**Relación con el roadmap:** experiencia transversal de host/Monitor. Complementa, pero no
+reemplaza, Skills, capabilities, assurance ni las fases de Strategy Development y ejecución.
+
+### Problema que resuelve
+
+El Monitor actual tiene pantallas y componentes codificados de forma fija. Crear cada combinación
+de seguimiento requiere desarrollo frontend, aunque muchos pedidos del usuario son composiciones
+seguras de widgets y fuentes ya existentes.
+
+Permitir que el modelo genere JavaScript o React arbitrario en producción mezclaría presentación,
+permisos y ejecución, dificultaría seguridad, compatibilidad y reproducción.
+
+### Objetivo
+
+Permitir que el usuario cree, modifique, guarde y comparta artifacts visuales en vivo mediante chat,
+voz o edición directa, usando una especificación declarativa validada y un registry de widgets y
+data bindings aprobados.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_INCREMENTAL` una vez estabilizadas las capabilities read-only.
+
+Puntos de apoyo comprobados:
+
+- Monitor ya tiene componentes reutilizables de GEX, posiciones, riesgo y estrategias;
+- Zustand separa stores de GEX, mercado, cuenta y configuración;
+- `useMarketSocket` centraliza la conexión live y expone suscripciones por símbolo/leg;
+- las pantallas actuales ya manejan estados de conexión, snapshots y fallback de datos.
+
+Primer incremento compatible: agregar una ruta experimental `Dashboard Lab` que renderice un
+`DashboardSpec` escrito manualmente con dos widgets existentes, por ejemplo GEX y riesgo de
+portfolio. Los widgets se adaptan mediante wrappers pequeños; las páginas fijas continúan siendo el
+camino productivo. Después de demostrar equivalencia, se agrega edición visual y recién luego
+patches conversacionales.
+
+El refactor admisible es extraer props o adapters de componentes hoy acoplados a una página/store.
+No se reemplazan en bloque `App`, navegación, Zustand ni SignalR. Las suscripciones de widgets deben
+reutilizar el socket central y reference counting/budgets, no abrir una conexión por widget. Los
+specs se versionan de forma aditiva y un fallo del dashboard no afecta las pantallas operacionales.
+
+**Invariante anti-rewrite:** el renderer compone componentes y data bindings existentes; no crea
+una segunda UI completa ni introduce código arbitrario generado por el modelo.
+
+### Dirección de diseño a validar
+
+```text
+“agregame GEX y riesgo de portfolio”
+→ DashboardIntent
+→ patch de DashboardSpec
+→ validación de schema, permisos y recursos
+→ preview + undo/redo
+→ renderer de widgets registrados
+→ bindings a REST/stream capabilities
+```
+
+Un `DashboardSpec` futuro podría describir:
+
+- layout responsive, tabs y grupos;
+- widget type y versión;
+- capability/data binding, símbolo, timeframe y refresh policy;
+- transformaciones presentacionales permitidas;
+- formato, color, tipografía y alertas visuales;
+- estado de filtros y vínculos entre widgets;
+- autor, versión, permisos, timestamps y provenance.
+
+El modelo propone operaciones declarativas como `add_widget`, `move_widget`, `bind_data` o
+`set_style`. No ejecuta código arbitrario ni obtiene más permisos que el usuario. Los datos live
+continúan llegando desde las capabilities y canales de streaming de GaleCore.
+
+### Alcance propuesto
+
+- schema versionado de dashboard/artifact;
+- registry de widgets compatibles y sus contratos de props/datos;
+- renderer determinístico;
+- edición conversacional y visual sobre el mismo spec;
+- preview, diff, undo/redo, historial y rollback;
+- persistencia por usuario/workspace, plantillas y sharing con permisos;
+- budgets de suscripciones, frecuencia y volumen;
+- estados loading/stale/disconnected/error visibles;
+- exportación/importación segura del spec;
+- separación entre widgets read-only y controles con side effects.
+
+### No objetivos
+
+- ejecutar HTML, JavaScript, SQL o React arbitrario generado por el modelo;
+- convertir el dashboard en fuente de verdad financiera;
+- ocultar timestamps, calidad, mercado, moneda o provenance por motivos visuales;
+- permitir que una personalización de UI evite approval, hard risk o autorización;
+- prometer inicialmente cualquier widget o composición imaginable.
+
+### Entry gate
+
+- las capabilities read-only que alimentarán el primer dashboard son estables y versionadas;
+- existe al menos un dashboard fijo real que pueda representarse como spec sin pérdida material;
+- se define el primer conjunto pequeño de widgets registrados;
+- están resueltos autenticación, autorización y límites de suscripción del streaming;
+- el product owner aprueba un prototipo separado de los controles PAPER/LIVE.
+
+### Acceptance criteria
+
+- [ ] El mismo `DashboardSpec` produce una vista equivalente después de guardar y recargar.
+- [ ] Una instrucción conversacional genera un patch visible y reversible, no código ejecutable.
+- [ ] Sólo pueden usarse widgets, data bindings y transformaciones registrados.
+- [ ] Cada widget live muestra estado de conexión, freshness, source y errores relevantes.
+- [ ] El sistema impone permisos y budgets de suscripción independientemente del modelo.
+- [ ] Cambios de estilo no alteran units, valores, provenance ni significado financiero.
+- [ ] Specs incompatibles se migran o rechazan explícitamente por versión.
+- [ ] Undo/redo, historial y rollback conservan autor y diff.
+- [ ] Un widget operacional conserva confirmación, idempotencia, autorización y hard risk de
+      GaleCore; el spec no puede relajarlos.
+- [ ] El dashboard degrada de forma comprensible cuando GaleCore o el streaming no están
+      disponibles.
+
+### Preguntas abiertas
+
+- ¿El artifact vive dentro de Monitor o en un workspace de host separado?
+- ¿Qué cinco widgets forman el primer registry útil?
+- ¿Los specs son personales, compartidos por equipo o ambos?
+- ¿Qué cambios se aplican inmediatamente y cuáles requieren preview/confirmación?
+- ¿Hasta dónde se permiten fórmulas visuales sin crear una segunda capa de cálculo financiero?
+
+---
+
+## BL-006 — Federación MCP, trust y routing de tools externas
+
+**Estado:** `CAPTURED`
+
+**Target:** design checkpoint después del cierre de GC-AI-0001, al validar el primer host que no
+pueda consumir directamente los assets y adapters locales o al incorporar el primer MCP externo.
+
+**Origen:** conversación de producto del 2026-09-16 sobre cómo conectar desde un host o ChatGPT
+Work a GaleCore y GaleCore-AI, y qué ocurre cuando se agrega un MCP que no pertenece a GaleCore.
+
+**Relación con la arquitectura:** desarrolla las decisiones abiertas de v5 sobre interfaz externa
+de assurance, provenance y packaging de Work. No cambia la regla de que MCP es transporte y no
+ownership, Skill, metodología ni garantía de confianza.
+
+### Problema que resuelve
+
+GaleCore ya proyecta algunas capabilities mediante un servidor MCP. GaleCore-AI dispone de un core
+de preparación y aceptación/assurance con adapter CLI, pero no de un servidor MCP. La arquitectura
+todavía no define si un host futuro se conecta a dos endpoints, si GaleCore-AI expone únicamente
+assurance, ni cómo se clasifican datos y acciones provenientes de servidores MCP externos.
+
+Sin una política explícita, un MCP externo podría confundirse con una fuente autoritativa de
+GaleCore, saltar contracts o risk gates, ampliar permisos del agente, introducir contenido no
+confiable o convertir a GaleCore-AI en un proxy general innecesario.
+
+### Objetivo
+
+Definir una federación de tools y resources donde el host pueda descubrir GaleCore, GaleCore-AI y
+MCPs externos, manteniendo identidad de origen, contracts, allowlists, provenance, permisos y
+límites de side effects en cada llamada.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_WITH_PREREQUISITE` por depender del host real y su mecanismo de
+autenticación/MCP.
+
+Puntos de apoyo comprobados:
+
+- GaleCore ya registra un servidor MCP HTTP y sus tools reutilizan los mismos handlers MediatR que
+  otros transportes;
+- GaleCore-AI separa los application services `prepare_gex_snapshot` y
+  `accept_gex_interpretation` del adapter CLI;
+- `CapabilityRegistry`, preflight y las clases semánticas ya ofrecen una base para allowlists;
+- trace, provenance y `EvidenceRef` ya existen para el vertical actual.
+
+Primer incremento compatible: mantener GaleCore MCP y CLI sin cambios, elegir un único host y
+envolver `prepare/accept` con un adapter MCP delgado sólo si ese host lo necesita. El E2E debe
+compararse con el CLI para probar que ambos transportes ejercitan los mismos services, validators y
+snapshots. La integración de un MCP externo comienza con una sola tool `PURE_QUERY` y provenance no
+autoritativo.
+
+El refactor admisible es extender metadata de capability/trace con server, tool y trust, además de
+configurar routing en el adapter del host. No se duplica el core, no se mueve el agent loop al MCP y
+no se convierte GaleCore-AI en gateway. Las descripciones actuales de tools GaleCore que mencionan
+DXLink/Tastytrade pueden aislarse gradualmente junto con BL-003 si aparece otro provider; BL-006 no
+las reescribe por anticipado.
+
+**Invariante anti-rewrite:** CLI, import Python, REST y MCP siguen siendo adapters reemplazables
+sobre los mismos application services y contracts.
+
+### Topología de referencia a validar
+
+```text
+                            ┌→ GaleCore MCP
+User → Host / Work → Router ├→ GaleCore-AI assurance MCP (opcional)
+                            └→ External MCPs permitidos
+```
+
+Responsabilidades propuestas:
+
+- **GaleCore MCP:** facts y cálculos autoritativos; estado y acciones sólo con autenticación,
+  autorización, idempotencia, revalidación, approval y hard risk según su clase.
+- **GaleCore-AI MCP opcional:** descubrir assets compatibles y exponer operaciones acotadas como
+  preparar un contexto y validar/aceptar un output. No ejecuta el modelo del host, no guarda
+  credenciales de broker y no reemplaza GaleCore.
+- **MCP externo:** aporta conocimiento, documentos, datos o tools de terceros dentro de un trust
+  explícito. No obtiene autoridad operacional por estar conectado.
+- **Host:** mantiene la conversación y selecciona tools dentro de las allowlists efectivas; no
+  convierte resultados externos en hechos verificados por sí solo.
+
+El patrón preferido a evaluar es conexión directa del host a cada servidor con contratos claros.
+GaleCore-AI no debe convertirse por defecto en gateway o proxy de todas las capabilities de
+GaleCore. Un gateway unificado sólo se justificaría por una necesidad concreta de despliegue,
+seguridad o compatibilidad del host.
+
+### Clasificación propuesta de MCPs externos
+
+1. **Knowledge/research:** noticias, papers, documentos o calendarios. Pueden alimentar una
+   interpretación con cita, origen y timestamp, pero su contenido es no confiable hasta aplicar la
+   política de evidencia correspondiente.
+2. **Market/financial data:** si el dato será autoritativo, reproducible o usado por riesgo y
+   ejecución, debe normalizarse o verificarse mediante una integración controlada de GaleCore. Una
+   lectura directa del host permanece externa/no verificada.
+3. **Compute:** puede producir evidencia auxiliar, pero no sustituye un cálculo canónico de
+   GaleCore sin contrato, versionado y validación.
+4. **State mutation/external action:** no puede saltar autorización. Trading, broker, órdenes,
+   posiciones y switches operacionales deben pasar por GaleCore. Otros side effects requieren una
+   policy explícita del host y aprobación proporcional al riesgo.
+
+Los nombres definitivos de niveles de trust quedan por diseñar. Hasta que exista verificación
+independiente, el output entregado por el host no debe etiquetarse `GALECORE_VERIFIED`.
+
+### Alcance propuesto
+
+- inventario y namespacing de servidores, tools y resources;
+- identidad de server/tool, versión de schema y origen por llamada;
+- allowlists por AgentDefinition, Skill, usuario, environment y clase de capability;
+- clasificación `PURE_QUERY | COMPUTE | STATE_MUTATION | EXTERNAL_ACTION` también para tools
+  externas;
+- autenticación y ownership de credenciales fuera del core de GaleCore-AI;
+- timeouts, retries, rate limits, budgets, cancelación e idempotencia;
+- provenance y EvidenceRef para resultados externos;
+- aislamiento de contenido no confiable y defensas contra instrucciones embebidas en tool output;
+- trace del routing, argumentos saneados, resultado, error y decisión de trust;
+- comparación E2E entre dual-MCP, adapter HTTP/CLI y un gateway sólo si un host lo requiere;
+- mecanismo concreto y soportado para ChatGPT Work antes de comprometer packaging.
+
+### No objetivos
+
+- registrar automáticamente cualquier MCP disponible en internet;
+- tratar la descripción de una tool como prueba de seguridad o calidad;
+- duplicar todas las tools de GaleCore dentro de GaleCore-AI;
+- permitir acceso del modelo a secretos o credenciales de broker;
+- marcar datos externos como `GALECORE_VERIFIED` sin verificación real;
+- habilitar mutaciones o acciones por el solo hecho de que un servidor MCP las exponga.
+
+### Entry gate
+
+- GC-AI-0001 está `VALIDATED` o `CLOSED`;
+- existe un host objetivo concreto y se conocen sus mecanismos reales de MCP/auth;
+- se elige un MCP externo o caso de assurance concreto para el vertical;
+- se documentan datos, permisos, credenciales y side effects requeridos;
+- el product owner aprueba un work item acotado, inicialmente read-only cuando sea posible.
+
+### Acceptance criteria
+
+- [ ] Cada tool invocada conserva server, tool, versión, clase de capability y provenance en el
+      trace.
+- [ ] Un resultado externo no puede convertirse silenciosamente en fact autoritativo de GaleCore.
+- [ ] Las allowlists se aplican fuera de la obediencia del modelo y el agente no puede ampliar sus
+      propias capabilities.
+- [ ] El output de una tool externa se trata como contenido no confiable y no puede modificar
+      instrucciones, permisos ni políticas.
+- [ ] Las credenciales pertenecen al host, GaleCore o al adapter autorizado; nunca al core
+      cognitivo ni al prompt.
+- [ ] `STATE_MUTATION` y `EXTERNAL_ACTION` conservan idempotencia, autorización, approval y
+      revalidación según su riesgo.
+- [ ] El MCP opcional de GaleCore-AI, si se implementa, envuelve los mismos application services y
+      validators usados por CLI/import, sin crear otro core.
+- [ ] El host puede reemplazarse sin reescribir contracts, assets o assurance.
+- [ ] Existe un E2E reproducible del vertical elegido con casos de timeout, schema inválido,
+      provenance insuficiente, tool no permitida y contenido adversarial.
+- [ ] La integración con Work se declara implementada sólo después de probar el mecanismo real
+      soportado por ese host.
+
+### Preguntas abiertas
+
+- ¿El primer MCP de GaleCore-AI debe exponer sólo `prepare/accept` o también assets como resources?
+- ¿El host objetivo admite múltiples servidores MCP con autenticación independiente?
+- ¿Qué fuentes externas pueden ser evidencia auxiliar y cuáles deben incorporarse a GaleCore?
+- ¿Hace falta un gateway/BFF para Work o alcanza una conexión dual?
+- ¿Cómo se revocan, versionan y auditan permisos de tools externas?
+
+---
+
+## BL-007 — Portfolio de estrategias, adecuación contextual y asignación adaptativa
+
+**Estado:** `CAPTURED`
+
+**Target:** diseño durante Phase 5 — Strategy Development; ranking read-only y SHADOW antes de
+Phase 6. Activación automática, PAPER y LIVE requieren gates posteriores independientes.
+
+**Origen:** conversación de producto del 2026-09-16 sobre cómo validar edge, administrar múltiples
+estrategias y utilizar o activar las que mejor correspondan al contexto macro, financiero, de
+noticias, eventos, expectativas, valuación y portfolio.
+
+**Relación con el roadmap:** extiende Strategy Quality y Portfolio Fit desde una estrategia aislada
+hacia un portfolio de estrategias. Se apoya en Phase 5 para evidencia/StrategyProposal, Phase 6 para
+propuestas controladas y Phase 7 para PAPER/LIVE. No convierte un análisis narrativo en autorización.
+
+### Problema que resuelve
+
+Una estrategia puede tener evidencia de edge y aun así no ser adecuada para el contexto actual o
+para un portfolio que ya concentra riesgos similares. Con varias estrategias aparecen decisiones
+diferentes: cuáles están desplegadas, cuáles son elegibles, cuáles pueden abrir riesgo nuevo, qué
+capital/risk budget recibe cada una y cómo se gestionan posiciones existentes cuando cambia el
+contexto.
+
+Un único agente que produzca un régimen general y encienda estrategias directamente sería difícil
+de auditar, propenso a churn y contrario a la separación entre interpretación, policy,
+autorización y ejecución.
+
+### Objetivo
+
+Construir un control plane de portfolio de estrategias que combine evidencia histórica y reciente,
+contexto multidimensional, adecuación por estrategia, correlación y riesgo de portfolio para
+producir decisiones reproducibles de elegibilidad y asignación, inicialmente como recomendación y
+después bajo políticas de automatización explícitamente aprobadas.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_NEW_FOUNDATION` con prerrequisitos explícitos.
+
+Puntos de apoyo comprobados:
+
+- `StrategySpec` ya define reglas, gates, límites y modos elegibles de forma inmutable/versionada;
+- `StrategyDeployment` y `StrategyInstance` separan contrato, despliegue y estado operativo;
+- `MetricResolver` y `GenericGateEvaluator` resuelven métricas y producen `NO_TRADE` de forma
+  determinística;
+- `ShadowRiskValidator`, switches, evaluation logs y operational events proporcionan límites y
+  trazabilidad iniciales;
+- GaleCore-AI ya separa Strategy Quality de Portfolio Fit en el caso de uso E2E.
+
+La fundación nueva necesaria es el nivel portfolio: contexto versionado, evaluación comparable de
+adecuación, correlación entre estrategias, risk budgets y un plan de asignación. No existe hoy un
+allocator ni un contrato de context/fitness. Además, el runtime conserva múltiples instancias en su
+store pero su acceso `ActiveInstance()` selecciona una sola; multi-strategy real debe validarse en
+SHADOW antes de cualquier automatización.
+
+Primer incremento compatible:
+
+1. dos `StrategySpec` SHADOW versionadas, sin ejecución simultánea automática;
+2. un `MarketContextSnapshot` pequeño con facts determinísticos ya disponibles;
+3. una matriz read-only que muestre hard eligibility, context fit, evidencia y riesgo compartido;
+4. una recomendación explicada de `preferir | mantener | no habilitar`, sin cambiar switches;
+5. comparación retrospectiva y registro de decisiones antes de introducir allocation o activation.
+
+Después puede agregarse un orchestrator determinístico en GaleCore que evalúe varias instancias y
+produzca un `AllocationPlan`; GaleCore-AI aporta assessments y explicaciones estructuradas. Los
+nombres de contratos son propuestas hasta el design checkpoint.
+
+**Invariante anti-rewrite:** extender StrategySpec/Deployment/Instance y los evaluators actuales;
+no reemplazar cada estrategia por un agente ni crear un segundo trading runtime en GaleCore-AI.
+
+### Modelo estructural a validar
+
+```text
+Datos y eventos
+→ Context specialists / workflows
+→ MarketContextSnapshot multidimensional
+→ Strategy eligibility (hard gates, GaleCore)
+→ StrategyFitnessAssessment (contexto + evidencia, GaleCore-AI)
+→ Portfolio optimizer/policy (GaleCore)
+→ AllocationPlan / StrategyActivationProposal
+→ approval o policy preaprobada
+→ revalidación GaleCore
+→ StrategyInstances
+```
+
+No usar un único label `bullish | neutral | bearish` como verdad universal. El contexto debería
+preservar dimensiones independientes, por ejemplo crecimiento, inflación, liquidez, volatilidad,
+correlación, crédito, valuación, positioning y riesgo de eventos, cada una con horizonte,
+freshness, confidence y evidencia.
+
+Especialistas futuros pueden cubrir macro, noticias/eventos, macro-finance, valuación,
+microestructura, volatilidad y portfolio. Pueden ser Skills/Workflows ejecutados por un mismo host o
+AgentDefinitions separadas sólo cuando la responsabilidad y los evals realmente lo justifiquen.
+
+### Objetos conceptuales propuestos
+
+- `MarketContextSnapshot`: facts e interpretaciones contextuales versionadas por horizonte;
+- `StrategyEdgeEvidence`: evidencia a favor/en contra, estabilidad y límites del supuesto edge;
+- `StrategyApplicabilityProfile`: condiciones donde la estrategia pretende funcionar o abstenerse;
+- `StrategyFitnessAssessment`: adecuación contextual explicada, con incertidumbre y evidencia;
+- `EligibilityResult`: resultado determinístico de data quality, gates, permisos y readiness;
+- `AllocationPlan`: risk budget/capital propuesto por estrategia y restricciones de portfolio;
+- `StrategyActivationProposal`: cambio operativo propuesto, todavía no autorizado;
+- `StrategyPortfolioState`: deployments, instances, allocations, posiciones y decisiones vigentes.
+
+Estos objetos no deben colapsarse en un score opaco. Hard eligibility, estimación de edge,
+portfolio fit, asignación y autorización son decisiones distintas.
+
+### Validación de edge
+
+El edge no es un booleano permanente. Su evidencia debe contemplar, según la estrategia:
+
+- hipótesis económica y mecanismo plausible;
+- dataset point-in-time y prevención de leakage/look-ahead;
+- costos, slippage, liquidez y capacidad;
+- separación train/validation/out-of-sample y walk-forward;
+- sensibilidad a parámetros y estabilidad por subperiodos/regímenes;
+- benchmarks y costo de oportunidad;
+- correlación y marginal contribution to risk frente al portfolio;
+- SHADOW/PAPER y divergencia entre comportamiento esperado y observado;
+- decay, drift y criterios explícitos de suspensión/revisión.
+
+La selección entre muchas estrategias también debe evaluarse fuera de muestra: optimizar el selector
+contra los mismos datos de las estrategias produciría meta-overfitting.
+
+### Niveles de automatización
+
+1. **Advisory:** matriz y recomendación; el humano cambia estado/asignación.
+2. **Supervised:** el sistema crea propuestas; el humano aprueba cada cambio.
+3. **Policy automation:** una policy previamente aprobada permite cambios dentro de límites,
+   cooldowns y modos definidos; GaleCore revalida y registra.
+4. **LIVE autonomy:** diferida hasta P-LIVE, seguridad, reconciliación y evidencia suficiente.
+
+Desplegada, habilitada, autorizada para riesgo nuevo y actualmente con posiciones son propiedades
+distintas. Pausar nuevas entradas no debe abandonar la gestión de posiciones existentes.
+
+### Ownership propuesto
+
+| Componente | Responsabilidad |
+|---|---|
+| GaleCore | Facts, métricas, hard gates, estado de instances, portfolio risk, allocator/policy, autorización y ejecución |
+| GaleCore-AI | Metodologías de research, context synthesis, edge assessment, fitness explanation, assurance y evals |
+| Host | Orquestar specialists/workflows, mantener la sesión y presentar propuestas |
+| Interfaz | Matriz de estrategias, contexto, evidencia, allocations, approvals, overrides y audit trail |
+
+### Experiencia de interfaz buscada
+
+Una vista `Strategy Portfolio` debería mostrar por estrategia:
+
+- versión, modo, deployment e instance state;
+- evidence/readiness y salud del edge;
+- hard eligibility y motivos de bloqueo;
+- context fit por horizonte, con confidence y evidence;
+- exposición/correlación/marginal risk;
+- allocation vigente y propuesta;
+- posiciones abiertas y semántica de pausa;
+- última decisión, policy, actor y trace.
+
+El usuario debe poder simular “qué cambiaría si…” antes de aplicar una propuesta, comparar contra
+mantener la asignación actual y ver por qué una estrategia fue preferida, limitada o excluida.
+
+### No objetivos
+
+- prometer o certificar rentabilidad futura;
+- permitir que un LLM cambie switches, allocation o órdenes directamente;
+- depender de un único score macro universal;
+- activar/desactivar estrategias en cada cambio menor de contexto;
+- optimizar sólo por retorno histórico ignorando riesgo, correlación, costes y estabilidad;
+- modificar `StrategySpec` desplegadas en lugar de crear versiones nuevas;
+- habilitar PAPER/LIVE como parte del primer vertical.
+
+### Entry gate
+
+- GC-AI-0001 está `VALIDATED` o `CLOSED`;
+- existe historia/dataset suficiente para el primer análisis, vinculada a BL-004;
+- al menos dos estrategias reales tienen StrategySpec y evidencia comparable;
+- cada estrategia funciona de forma segura e independiente en SHADOW;
+- se define semántica de deployment, enabled, accepting-new-risk, paused y position-management;
+- se acuerdan objetivo del selector, benchmark, frecuencia de decisión, cooldown y límites;
+- el product owner aprueba primero un work item read-only/advisory.
+
+### Acceptance criteria
+
+- [ ] Strategy Quality, context fit, portfolio fit, hard eligibility, allocation y autorización se
+      representan como decisiones separadas y trazables.
+- [ ] Cada assessment contextual conserva horizonte, timestamp, provenance, evidence y confidence.
+- [ ] Un selector baseline determinístico puede compararse contra la recomendación cognitiva.
+- [ ] El sistema incluye un benchmark de “mantener asignación actual” y penaliza turnover/churn.
+- [ ] La evaluación del selector usa periodos no utilizados para ajustar las estrategias ni el
+      selector.
+- [ ] Missing/stale/conflicting data produce abstención o degradación explícita, no una selección
+      aparentemente segura.
+- [ ] El portfolio allocator respeta límites duros aunque todos los assessments favorezcan una
+      estrategia.
+- [ ] Pausar nuevas entradas preserva la gestión segura de posiciones ya abiertas.
+- [ ] Todo cambio operativo genera una propuesta versionada, revalidación y audit trail; LIVE exige
+      los controles P-LIVE.
+- [ ] El primer E2E usa dos estrategias SHADOW y no requiere reemplazar el runtime existente.
+
+### Preguntas abiertas
+
+- ¿Context fit debe vivir dentro de StrategySpec, en un perfil separado o dividido entre hard gates
+  y evidencia adaptable?
+- ¿Qué objetivo optimiza el allocator: retorno ajustado por riesgo, drawdown, utilidad, estabilidad
+  o una combinación declarada?
+- ¿Con qué frecuencia puede cambiar allocation y qué cooldown evita churn?
+- ¿Qué fuentes de noticias/eventos son evidencia y cuáles pueden convertirse en facts de GaleCore?
+- ¿Qué decisions requieren aprobación por cambio y cuáles podrían quedar dentro de una policy
+  preaprobada en SHADOW/PAPER?

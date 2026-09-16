@@ -89,10 +89,23 @@ class TraceRecord(BaseModel):
     completed_at: datetime | None = None
     latency_ms: int | None = None
 
+    # Acceptance provenance — set by validator, never by host
+    facts_hash: str | None = None  # VALIDATOR_OBSERVED
+    conventions_hash: str | None = None  # VALIDATOR_OBSERVED
+    prepared_at: datetime | None = None  # VALIDATOR_OBSERVED
+    accepted_at: datetime | None = None  # VALIDATOR_OBSERVED (internal clock)
+    facts_provenance: str | None = None  # e.g. GALECORE_VERIFIED
+
     # Provider
     provider: str | None = None
     model: str | None = None
-    model_called: bool = False
+    # Explicit separation of model execution claims (F-05):
+    # - validator_called_model: did the *validator* invoke a model API? Always false
+    #   in the interactive host path (the host generates the interpretation externally).
+    # - host_model_execution: what the host *claims* about its model use. The validator
+    #   cannot verify this — it is HOST_DECLARED provenance.
+    validator_called_model: bool = False
+    host_model_execution: str = "HOST_DECLARED"
     input_tokens: int | None = None
     output_tokens: int | None = None
 

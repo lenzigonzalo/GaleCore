@@ -1,63 +1,139 @@
-"""Accept a host-generated interpretation against a prepared snapshot.
+"""Accept a host-generated interpretation against an internally-stored snapshot.
 
-Validates freshness, integrity, and assurance without repeating the original
-query or invoking a model. Provenance of host-declared metadata is recorded
-but not independently verified.
+The host sends run_id + interpretation + metadata. The validator recovers
+the authoritative snapshot from its own store and uses internal time.
+
+Provenance:
+  - facts: GALECORE_VERIFIED (obtained by controlled integration)
+  - checks: VALIDATOR_OBSERVED
+  - provider/model: HOST_DECLARED
+  - model execution: HOST_DECLARED (validator cannot verify the host called a model)
 """
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from galecore_ai.adapters.snapshot_store import PreparedSnapshotStore, SnapshotNotFoundError
 from galecore_ai.application.validate_interpretation import validate_interpretation
 from galecore_ai.contracts.agent_run import (
+    AgentDefinitionTrace,
     AgentRunResult,
+    ConventionTrace,
     FreshnessTrace,
     GuardrailTrace,
+    ProtocolTrace,
     RunStatus,
+    SkillTrace,
     TraceRecord,
 )
 from galecore_ai.contracts.gex_analysis import GexInterpretation
 from galecore_ai.contracts.prepared_analysis import (
     AcceptanceRequest,
-    PreparedSnapshot,
+    Provenance,
+    StoredPreparedSnapshot,
+    compute_conventions_hash,
     compute_facts_hash,
 )
 from galecore_ai.harness.freshness import freshness_error
 from galecore_ai.harness.guardrails import GuardrailRunner
 
 
+def _populate_trace_assets(trace: TraceRecord, snapshot: StoredPreparedSnapshot) -> None:
+    """Fill trace with asset identity from the internally-stored snapshot."""
+    m = snapshot.effective_assets
+    trace.agent_definition = AgentDefinitionTrace(
+        agent_id=m.agent.asset_id,
+        version=m.agent.version,
+        content_hash=m.agent.content_hash,
+    )
+    trace.skills = [
+        SkillTrace(skill_id=e.asset_id, version=e.version, content_hash=e.content_hash)
+        for e in m.skills.values()
+    ]
+    trace.protocols = [
+        ProtocolTrace(protocol_id=e.asset_id, version=e.version, content_hash=e.content_hash)
+        for e in m.protocols.values()
+    ]
+    trace.conventions = [
+        ConventionTrace(convention_id=e.asset_id, version=e.version, content_hash=e.content_hash)
+        for e in m.conventions.values()
+    ]
+
+
+class _MalformedFacts(ValueError):
+    """The hashed facts carry a value the validator cannot interpret."""
+
+
+def _hashed_market_ts(facts: dict) -> datetime | None:
+    """market_data_as_of as stored inside the hashed facts (ISO string or absent).
+
+    Raises _MalformedFacts instead of a bare ValueError so acceptance records a
+    failed snapshot_integrity entry rather than crashing.
+    """
+    raw = facts.get("market_data_as_of")
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        return raw
+    try:
+        ts = datetime.fromisoformat(str(raw))
+    except (TypeError, ValueError) as exc:
+        raise _MalformedFacts(f"facts.market_data_as_of is not an ISO timestamp: {raw!r}") from exc
+    return ts if ts.tzinfo is not None else ts.replace(tzinfo=UTC)
+
+
+def _freshness_status(error: str | None, stored: str) -> str:
+    """Trace the observed freshness outcome, not a blanket STALE."""
+    if error is None:
+        return stored
+    if "UNKNOWN" in error:
+        return "UNKNOWN"
+    if "future" in error:
+        return "FUTURE"
+    if "policy" in error or "timezone" in error:
+        return "INVALID_POLICY"
+    return "STALE"
+
+
 def accept_gex_interpretation(
     *,
-    snapshot: PreparedSnapshot,
+    store: PreparedSnapshotStore,
     request: AcceptanceRequest,
     guardrail_ids: list[str] | None = None,
     guardrail_runner: GuardrailRunner | None = None,
     allow_unknown_freshness: bool = False,
 ) -> AgentRunResult:
-    """Validate a host interpretation against the original snapshot.
+    """Validate a host interpretation against the internally-stored snapshot.
 
     Steps:
-      1. Verify run_id matches
-      2. Verify facts_hash integrity
-      3. Re-check freshness at acceptance time
+      1. Recover snapshot from store by run_id (fail-closed if missing/expired)
+      2. Verify facts_hash and conventions_hash integrity
+      3. Re-check freshness at acceptance time (internal clock)
       4. Run validate_interpretation (schema + guardrails + sign)
-      5. Return accepted result + trace
+      5. Return accepted result + trace with provenance
     """
-    now = request.accepted_at or datetime.now(UTC)
+    now = datetime.now(UTC)
     trace = TraceRecord(started_at=now)
-    trace.capabilities_invoked.append(snapshot.capability_trace)
 
     # Host metadata is HOST_DECLARED — recorded, not verified
-    trace.provider = f"HOST_DECLARED:{request.host_provider}" if request.host_provider else None
-    trace.model = f"HOST_DECLARED:{request.host_model}" if request.host_model else None
-    trace.model_called = True  # the host called a model, not us
+    trace.provider = f"{Provenance.HOST_DECLARED.value}:{request.host_provider}" if request.host_provider else None
+    trace.model = f"{Provenance.HOST_DECLARED.value}:{request.host_model}" if request.host_model else None
+    # Validator never calls a model in the interactive host path
+    trace.validator_called_model = False
+    # Host claims about model use are unverifiable — recorded as HOST_DECLARED
+    trace.host_model_execution = "HOST_DECLARED"
 
-    # ── 1. Run ID match ──────────────────────────────────────────
-    if request.run_id != snapshot.run_id:
-        trace.error = f"run_id mismatch: request={request.run_id}, snapshot={snapshot.run_id}"
+    # ── 1. Recover snapshot from store ───────────────────────────
+    try:
+        snapshot = store.get(request.run_id)
+    except SnapshotNotFoundError as exc:
+        trace.guardrails_executed.append(GuardrailTrace(
+            guardrail_id="snapshot_lookup", passed=False, message=str(exc),
+        ))
+        trace.error = f"Snapshot not found or expired: {exc}"
         trace.status = RunStatus.VALIDATION_ERROR.value
-        trace.completed_at = now
+        trace.completed_at = datetime.now(UTC)
         return AgentRunResult(
             run_id=request.run_id,
             status=RunStatus.VALIDATION_ERROR,
@@ -65,20 +141,51 @@ def accept_gex_interpretation(
             trace=trace,
         )
 
-    # ── 2. Facts integrity ───────────────────────────────────────
-    current_hash = compute_facts_hash(snapshot.facts)
-    if current_hash != snapshot.facts_hash:
-        trace.error = "Snapshot facts_hash mismatch — facts may have been tampered"
-        trace.status = RunStatus.VALIDATION_ERROR.value
-        trace.completed_at = now
+    # Populate trace from internal snapshot (never from host data)
+    trace.facts_hash = snapshot.facts_hash
+    trace.conventions_hash = snapshot.conventions_hash
+    trace.prepared_at = snapshot.prepared_at
+    trace.facts_provenance = Provenance.GALECORE_VERIFIED.value
+    trace.capabilities_invoked.append(snapshot.capability_trace)
+    _populate_trace_assets(trace, snapshot)
+
+    # ── 2. Snapshot integrity (facts and conventions) ────────────
+    # Both hashes are recomputed from the stored content. A mismatch means
+    # the store changed between prepare and accept; no cognitive validation
+    # runs on a snapshot whose integrity is not established.
+    # The freshness timestamp used for acceptance must be the one inside the
+    # hashed facts: the outer snapshot field is convenience metadata and is
+    # not covered by facts_hash, so it is only trusted if it equals the hashed one.
+    integrity_error: str | None = None
+    if compute_facts_hash(snapshot.facts) != snapshot.facts_hash:
+        integrity_error = "Internal facts_hash mismatch — store may be corrupted"
+    elif compute_conventions_hash(snapshot.resolved_conventions) != snapshot.conventions_hash:
+        integrity_error = "Internal conventions_hash mismatch — resolved conventions changed after prepare"
+    else:
+        try:
+            if _hashed_market_ts(snapshot.facts) != snapshot.market_data_as_of:
+                integrity_error = (
+                    "Internal market_data_as_of mismatch — snapshot metadata disagrees with the hashed facts"
+                )
+        except _MalformedFacts as exc:
+            integrity_error = f"Internal facts malformed — {exc}"
+    trace.guardrails_executed.append(GuardrailTrace(
+        guardrail_id="snapshot_integrity",
+        passed=integrity_error is None,
+        message=integrity_error or "facts_hash and conventions_hash recomputed and match",
+    ))
+    if integrity_error:
+        trace.error = integrity_error
+        trace.status = RunStatus.INTERNAL_ERROR.value
+        trace.completed_at = datetime.now(UTC)
         return AgentRunResult(
             run_id=request.run_id,
-            status=RunStatus.VALIDATION_ERROR,
+            status=RunStatus.INTERNAL_ERROR,
             error_detail=trace.error,
             trace=trace,
         )
 
-    # ── 3. Freshness re-check at acceptance time ─────────────────
+    # ── 3. Freshness re-check at acceptance time (internal clock) ─
     market_ts = snapshot.market_data_as_of
     error = freshness_error(
         market_ts,
@@ -92,14 +199,14 @@ def accept_gex_interpretation(
 
     trace.freshness = FreshnessTrace(
         market_data_as_of=market_ts,
-        freshness_status="STALE" if error else snapshot.freshness_status,
+        freshness_status=_freshness_status(error, snapshot.freshness_status),
         freshness_age_seconds=freshness_age,
     )
 
     if error:
         trace.error = f"Freshness at acceptance: {error}"
         trace.status = RunStatus.INSUFFICIENT_DATA.value
-        trace.completed_at = now
+        trace.completed_at = datetime.now(UTC)
         return AgentRunResult(
             run_id=request.run_id,
             status=RunStatus.INSUFFICIENT_DATA,
@@ -109,6 +216,7 @@ def accept_gex_interpretation(
 
     # ── 4. Validate interpretation ───────────────────────────────
     ids = guardrail_ids or ["no_invented_numbers", "facts_match_source"]
+
     validation = validate_interpretation(
         interpretation=request.interpretation,
         facts=snapshot.facts,
@@ -117,20 +225,20 @@ def accept_gex_interpretation(
         guardrail_runner=guardrail_runner,
     )
 
-    trace.guardrails_executed = [
+    trace.guardrails_executed.extend(
         GuardrailTrace(
             guardrail_id=c.guardrail_id,
             passed=c.passed,
             message=c.message,
         )
         for c in validation.checks
-    ]
+    )
 
     if not validation.accepted:
         detail = "; ".join(validation.errors)
         trace.error = f"Guardrail failure: {detail}"
         trace.status = RunStatus.VALIDATION_ERROR.value
-        trace.completed_at = now
+        trace.completed_at = datetime.now(UTC)
         return AgentRunResult(
             run_id=request.run_id,
             status=RunStatus.VALIDATION_ERROR,
@@ -139,8 +247,10 @@ def accept_gex_interpretation(
         )
 
     # ── 5. Accepted ──────────────────────────────────────────────
+    accepted_now = datetime.now(UTC)
     trace.status = RunStatus.SUCCESS.value
-    trace.completed_at = now
+    trace.completed_at = accepted_now
+    trace.accepted_at = accepted_now
 
     return AgentRunResult(
         run_id=request.run_id,

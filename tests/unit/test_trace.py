@@ -54,7 +54,8 @@ class TestTraceRecordDefaults:
         assert trace.latency_ms is None
         assert trace.provider is None
         assert trace.model is None
-        assert trace.model_called is False
+        assert trace.validator_called_model is False
+        assert trace.host_model_execution == "HOST_DECLARED"
         assert trace.input_tokens is None
         assert trace.output_tokens is None
         assert trace.agent_definition is None
@@ -67,9 +68,10 @@ class TestTraceRecordDefaults:
         assert trace.status is None
         assert trace.error is None
 
-    def test_model_called_false_by_default(self):
+    def test_validator_called_model_false_by_default(self):
         trace = TraceRecord()
-        assert trace.model_called is False
+        assert trace.validator_called_model is False
+        assert trace.host_model_execution == "HOST_DECLARED"
 
 
 class TestTraceTimestamps:
@@ -182,7 +184,7 @@ class TestTraceRecordSerialization:
         trace = TraceRecord(
             provider="anthropic",
             model="claude-sonnet-4-20250514",
-            model_called=True,
+            validator_called_model=True,
             started_at=now,
             completed_at=now,
             request_timestamp=now,
@@ -212,7 +214,7 @@ class TestTraceRecordSerialization:
         )
         data = trace.model_dump()
         restored = TraceRecord.model_validate(data)
-        assert restored.model_called is True
+        assert restored.validator_called_model is True
         assert restored.agent_definition.agent_id == "TradingAgent"
         assert len(restored.skills) == 1
         assert len(restored.guardrails_executed) == 1
