@@ -865,3 +865,7 @@ These decisions are the product owner's, recorded verbatim by the implementer. `
 | m-new | 20 vs 21 negatives; 427 vs 428 tests | **Fixed** (21; 434 after the new cases). |
 
 Ready for recheck 5 (`/review-codex --recheck`).
+
+### Independent review 5 (Codex, recheck, 2026-09-16) — `docs/engineering/reviews/GC-AI-0001-20260916T233541Z.md`
+
+**Verdict:** CHANGES_REQUESTED on one item: AC-01/02/03/04/05/08 PASS, AC-06 ACCEPTED GAP, all prior findings RESOLVED or OWNER DECISION. The single NEW finding — `PHASE3-ALIGNMENT.md` still saying AC-06 "sigue BLOCKED" — is fixed in this commit (current-tense status = ACCEPTED GAP). Ready for recheck 6.

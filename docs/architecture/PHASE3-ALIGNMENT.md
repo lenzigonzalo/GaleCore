@@ -94,7 +94,7 @@ Conservar el snapshot original; no volver a consultar datos live para comparar v
 
 ## 5. Plan de E2E y evaluación (histórico)
 
-> Sección conservada como registro. Todos los archivos listados existen y están validados; el E2E vigente es `docs/evidence/increment4-e2e/`. La evaluación cognitiva (AC-06) sigue BLOCKED.
+> Sección conservada como registro. Todos los archivos listados existen y están validados; el E2E vigente es `docs/evidence/increment4-e2e/`. La evaluación cognitiva independiente (AC-06) es una brecha aceptada por el product owner el 2026-09-16 (ACCEPTED GAP), diferida a un work item futuro; ningún documento afirma efecto cognitivo de los assets.
 
 Archivos propuestos en su momento para el siguiente incremento:
 
