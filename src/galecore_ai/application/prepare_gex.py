@@ -25,6 +25,7 @@ from galecore_ai.contracts.prepared_analysis import (
     PreparedAnalysisView,
     StoredPreparedSnapshot,
     compute_facts_hash,
+    seal_snapshot,
     snapshot_to_view,
 )
 
@@ -122,6 +123,7 @@ async def prepare_gex_snapshot(
         conventions_hash=assets.conventions_hash,
     )
 
+    snapshot = seal_snapshot(snapshot)
     store.save(snapshot)
 
     # ── 6. Return view only ──────────────────────────────────────

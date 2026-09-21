@@ -33,15 +33,23 @@ from pydantic import BaseModel, Field, ValidationError
 from galecore_ai.contracts.gex_analysis import (
     METRIC_REGISTRY,
     GexInterpretation,
+    GexRegime,
     QuantitativeClaim,
+)
+from galecore_ai.contracts.regime_analysis import (
+    REGIME_METRIC_REGISTRY,
+    RegimeInterpretation,
+    RegimeQuantitativeClaim,
+    TailPricing,
 )
 from galecore_ai.harness.guardrails import GuardrailResult, GuardrailRunner, check_all_passed
 
-# Checks that need the parsed GexInterpretation, not raw text. They are run
+# Checks that need the parsed interpretation, not raw text. They are run
 # here and must not be looked up in the raw-text GuardrailRunner.
-_STRUCTURAL_GEX_CHECKS = ("gex_regime_sign", "quantitative_claims_valid")
+_STRUCTURAL_GEX_CHECKS = ("gex_regime_sign", "quantitative_claims_valid", "tail_pricing_level")
 
-# Required for every GexInterpretation regardless of what the protocol lists.
+# Required for every GexInterpretation / RegimeInterpretation regardless of
+# what the protocol lists.
 _REQUIRED_GEX_TEXT_CHECKS = (
     "no_invented_numbers",
     "facts_match_source",
@@ -76,8 +84,9 @@ def validate_interpretation(
         return InterpretationValidation(accepted=False, errors=[str(exc)])
 
     ids = list(dict.fromkeys(guardrail_ids))
-    if isinstance(value, GexInterpretation):
-        # Required GEX checks cannot be disabled by an omitted protocol entry,
+    structured = isinstance(value, (GexInterpretation, RegimeInterpretation))
+    if structured:
+        # Required checks cannot be disabled by an omitted protocol entry,
         # and structural checks always run here on the parsed model.
         ids = [gid for gid in [*ids, *_REQUIRED_GEX_TEXT_CHECKS] if gid not in _STRUCTURAL_GEX_CHECKS]
         ids = list(dict.fromkeys(ids))
@@ -88,8 +97,18 @@ def validate_interpretation(
         guardrail_ids=ids, raw_text=value.model_dump_json(), facts=facts,
     )
     if isinstance(value, GexInterpretation):
-        checks.append(_check_regime_sign(value, facts))
-        checks.extend(_check_quantitative_claims(value, facts))
+        checks.append(_check_regime_sign(value.regime, facts))
+        checks.extend(
+            _validate_single_claim(c, facts, i, METRIC_REGISTRY)
+            for i, c in enumerate(value.quantitative_claims)
+        )
+    elif isinstance(value, RegimeInterpretation):
+        checks.append(_check_regime_sign(value.gamma_regime, facts))
+        checks.append(_check_tail_pricing(value.tail_pricing, facts))
+        checks.extend(
+            _validate_single_claim(c, facts, i, REGIME_METRIC_REGISTRY)
+            for i, c in enumerate(value.quantitative_claims)
+        )
 
     accepted = check_all_passed(checks)
     return InterpretationValidation(
@@ -101,10 +120,10 @@ def validate_interpretation(
 
 
 def _check_regime_sign(
-    value: GexInterpretation,
+    regime: GexRegime,
     facts: dict,
 ) -> GuardrailResult:
-    """Validate regime classification against facts.
+    """Validate gamma regime classification against facts.
 
     - positive_gamma: net_gex > 0
     - negative_gamma: net_gex < 0
@@ -121,17 +140,17 @@ def _check_regime_sign(
     elif not math.isfinite(net):
         valid = False
         msg = "net_gex is not finite"
-    elif value.regime.value == "near_zero":
+    elif regime.value == "near_zero":
         valid = False
         msg = (
             "near_zero validation unavailable: GaleCore call_gex/put_gex and "
             "net_gex use incompatible scales (millions vs billions); "
             "fail-closed until normalized facts are available"
         )
-    elif value.regime.value == "positive_gamma" and net <= 0:
+    elif regime.value == "positive_gamma" and net <= 0:
         valid = False
         msg = f"positive_gamma requires net_gex > 0, got {net}"
-    elif value.regime.value == "negative_gamma" and net >= 0:
+    elif regime.value == "negative_gamma" and net >= 0:
         valid = False
         msg = f"negative_gamma requires net_gex < 0, got {net}"
 
@@ -142,36 +161,50 @@ def _check_regime_sign(
     )
 
 
-def _check_quantitative_claims(
-    value: GexInterpretation,
-    facts: dict,
-) -> list[GuardrailResult]:
-    """Validate each QuantitativeClaim against the authoritative facts.
+def _check_tail_pricing(tail_pricing: TailPricing, facts: dict) -> GuardrailResult:
+    """tail_pricing must agree with GaleCore's own level semaphore.
 
-    For each claim:
-      1. Look up the metric in METRIC_REGISTRY → get expected fact_path and unit
-      2. Resolve fact_path in facts → must be a finite scalar
-      3. Require claim.value to equal the fact value
-      4. Verify claim.unit matches expected unit
+    ``calm`` iff facts.put_skew_level_ok is true; ``elevated`` iff false. The
+    flag and its threshold are GaleCore's; a missing or non-boolean flag fails
+    closed.
     """
-    results: list[GuardrailResult] = []
-
-    for i, claim in enumerate(value.quantitative_claims):
-        result = _validate_single_claim(claim, facts, i)
-        results.append(result)
-
-    return results
+    flag = facts.get("put_skew_level_ok")
+    if not isinstance(flag, bool):
+        return GuardrailResult(
+            guardrail_id="tail_pricing_level", passed=False,
+            message="put_skew_level_ok missing or not boolean",
+        )
+    expected = TailPricing.CALM if flag else TailPricing.ELEVATED
+    if tail_pricing != expected:
+        return GuardrailResult(
+            guardrail_id="tail_pricing_level", passed=False,
+            message=(
+                f"tail_pricing '{tail_pricing.value}' contradicts put_skew_level_ok={flag} "
+                f"(expected '{expected.value}')"
+            ),
+        )
+    return GuardrailResult(
+        guardrail_id="tail_pricing_level", passed=True,
+        message="tail_pricing agrees with GaleCore's put_skew_level_ok",
+    )
 
 
 def _validate_single_claim(
-    claim: QuantitativeClaim,
+    claim: QuantitativeClaim | RegimeQuantitativeClaim,
     facts: dict,
     index: int,
+    registry: dict,
 ) -> GuardrailResult:
-    """Validate a single QuantitativeClaim."""
+    """Validate a single quantitative claim against the authoritative facts.
+
+      1. Look up the metric in the skill's registry -> expected fact_path and unit
+      2. Resolve fact_path in facts -> must be a finite scalar
+      3. Require claim.value to equal the fact value
+      4. Verify claim.unit matches expected unit
+    """
     gid = "quantitative_claims_valid"
 
-    spec = METRIC_REGISTRY.get(claim.metric)
+    spec = registry.get(claim.metric)
     if spec is None:
         # Should not happen with enum validation, but fail-closed
         return GuardrailResult(

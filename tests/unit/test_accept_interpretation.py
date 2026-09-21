@@ -17,6 +17,7 @@ from galecore_ai.contracts.prepared_analysis import (
     StoredPreparedSnapshot,
     compute_conventions_hash,
     compute_facts_hash,
+    seal_snapshot,
 )
 
 CONVENTIONS = {"gex_near_zero_threshold_pct": 5.0, "timezone": "America/New_York"}
@@ -50,7 +51,7 @@ def _make_snapshot(
         "freshness_status": "VALID",
         "market_data_as_of": market_data_as_of.isoformat(),
     }
-    return StoredPreparedSnapshot(
+    return seal_snapshot(StoredPreparedSnapshot(
         symbol="SPY",
         facts=facts,
         facts_hash=compute_facts_hash(facts),
@@ -65,7 +66,7 @@ def _make_snapshot(
         effective_assets=_test_manifest(),
         resolved_conventions=CONVENTIONS,
         conventions_hash=compute_conventions_hash(CONVENTIONS),
-    )
+    ))
 
 
 def _valid_interpretation(net_gex: float = 1500.0, spot: float = 450.5) -> dict:

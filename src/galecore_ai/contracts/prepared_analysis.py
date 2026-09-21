@@ -7,8 +7,13 @@ AcceptanceRequest: what the host sends back (run_id + interpretation + metadata)
 The host never receives or returns the authoritative snapshot.
 A facts_hash detects content changes but does not authenticate origin.
 A conventions_hash binds the convention values resolved at prepare time to the
-snapshot, so a mutation between prepare and accept is detected. Neither hash
-authenticates origin.
+snapshot, so a mutation between prepare and accept is detected.
+A snapshot_hash binds every acceptance-critical field of the snapshot — run_id,
+symbol, skill_id, facts_hash, conventions_hash, freshness metadata, effective
+assets and the capabilities invoked — so editing any of them in the store (e.g.
+switching skill_id to a laxer contract, or widening the freshness window) is
+detected before any cognitive validation runs. None of the hashes authenticates
+origin.
 """
 
 from __future__ import annotations
@@ -77,13 +82,19 @@ class StoredPreparedSnapshot(BaseModel):
 
     run_id: str = Field(default_factory=new_id)
     symbol: str
+    # Skill the facts were prepared for; selects the output contract at accept
+    # time. Defaults to the GEX skill so snapshots written before Phase 4 load.
+    skill_id: str = "gex_interpretation"
     facts: dict
     facts_hash: str
     prepared_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     market_data_as_of: datetime | None = None
     freshness_status: str
     freshness_max_age_seconds: float
+    # Primary capability (GEX). Multi-source skills also list every fetch in
+    # capability_traces; single-source snapshots leave it empty.
     capability_trace: CapabilityTrace
+    capability_traces: list[CapabilityTrace] = Field(default_factory=list)
     effective_assets: AssetManifest
     # Convention values resolved at prepare time from the same YAML read that
     # produced effective_assets.conventions. Stored so accept_interpretation
@@ -92,6 +103,11 @@ class StoredPreparedSnapshot(BaseModel):
     # sha256 of the canonical serialization of resolved_conventions. Required:
     # a snapshot without it is invalid, there is no default and no grace period.
     conventions_hash: str
+    # sha256 over the acceptance-critical metadata (see snapshot_identity()).
+    # Set by seal_snapshot() at prepare time and recomputed at accept time. A
+    # snapshot without it (or with a stale one) fails snapshot_integrity; it is
+    # never filled in on load, otherwise a tampered file would re-seal itself.
+    snapshot_hash: str | None = None
 
     @field_validator("symbol")
     @classmethod
@@ -100,12 +116,31 @@ class StoredPreparedSnapshot(BaseModel):
             raise ValueError("Symbol must be non-empty")
         return v.upper()
 
-    @field_validator("facts_hash", "conventions_hash")
+    @field_validator("facts_hash", "conventions_hash", "snapshot_hash")
     @classmethod
-    def _valid_hash_format(cls, v: str) -> str:
-        if not _HASH_RE.match(v):
+    def _valid_hash_format(cls, v: str | None) -> str | None:
+        if v is not None and not _HASH_RE.match(v):
             raise ValueError(f"Invalid hash format: {v}")
         return v
+
+    def snapshot_identity(self) -> dict:
+        """The acceptance-critical metadata covered by snapshot_hash."""
+        return {
+            "run_id": self.run_id,
+            "symbol": self.symbol,
+            "skill_id": self.skill_id,
+            "facts_hash": self.facts_hash,
+            "conventions_hash": self.conventions_hash,
+            "prepared_at": self.prepared_at.isoformat(),
+            "market_data_as_of": self.market_data_as_of.isoformat() if self.market_data_as_of else None,
+            "freshness_status": self.freshness_status,
+            "freshness_max_age_seconds": self.freshness_max_age_seconds,
+            "effective_assets": self.effective_assets.model_dump(mode="json"),
+            "capabilities": [
+                {"capability_id": t.capability_id, "endpoint": t.endpoint, "outcome": t.outcome}
+                for t in (self.capability_traces or [self.capability_trace])
+            ],
+        }
 
     @field_validator("freshness_max_age_seconds")
     @classmethod
@@ -129,6 +164,7 @@ class PreparedAnalysisView(BaseModel):
 
     run_id: str
     symbol: str
+    skill_id: str = "gex_interpretation"
     facts: dict
     facts_hash: str
     prepared_at: datetime
@@ -175,11 +211,22 @@ def compute_conventions_hash(resolved_conventions: dict[str, float | int | str |
     return _canonical_sha256(resolved_conventions)
 
 
+def compute_snapshot_hash(snapshot: StoredPreparedSnapshot) -> str:
+    """Deterministic hash of the acceptance-critical snapshot metadata."""
+    return _canonical_sha256(snapshot.snapshot_identity())
+
+
+def seal_snapshot(snapshot: StoredPreparedSnapshot) -> StoredPreparedSnapshot:
+    """Return the snapshot with snapshot_hash bound to its current metadata."""
+    return snapshot.model_copy(update={"snapshot_hash": compute_snapshot_hash(snapshot)})
+
+
 def snapshot_to_view(snapshot: StoredPreparedSnapshot) -> PreparedAnalysisView:
     """Project an internal snapshot to the host-facing view."""
     return PreparedAnalysisView(
         run_id=snapshot.run_id,
         symbol=snapshot.symbol,
+        skill_id=snapshot.skill_id,
         facts=snapshot.facts,
         facts_hash=snapshot.facts_hash,
         prepared_at=snapshot.prepared_at,

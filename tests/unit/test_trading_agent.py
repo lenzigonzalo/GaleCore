@@ -7,8 +7,10 @@ class TestBuildTradingAgent:
     def test_default_agent(self):
         agent = build_trading_agent()
         assert agent.agent_id == "TradingAgent"
-        assert agent.version == "1.0.0"
+        assert agent.version == "1.1.0"
         assert "gex_interpretation" in agent.skills
+        assert "regime_interpretation" in agent.skills
+        assert {"compute.put_skew", "market_data.trade"} <= set(agent.allowed_capabilities)
         assert "facts_discipline" in agent.protocols
         assert "trading_defaults" in agent.conventions
         assert agent.model_preferences.provider == "fake"

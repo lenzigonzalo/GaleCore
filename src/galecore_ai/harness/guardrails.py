@@ -82,7 +82,9 @@ def _guardrail_no_invented_numbers(raw_text: str, facts: dict) -> GuardrailResul
     known_values: set[float] = set()
     _extract_numbers_from_dict(facts, known_values)
 
-    result = validate_no_invented_numbers(raw_text, known_values, tolerance=0.01)
+    # Exact equality: facts and interpretation both arrive as JSON floats, so a
+    # near value (17.715 for 17.71) is an invented number, not a rounding artefact.
+    result = validate_no_invented_numbers(raw_text, known_values, tolerance=0.0)
     return GuardrailResult(
         guardrail_id="no_invented_numbers",
         passed=result.valid,
@@ -123,7 +125,7 @@ def _guardrail_facts_match_source(raw_text: str, facts: dict) -> GuardrailResult
             if value is None or isinstance(value, (dict, list)):
                 raise ValueError(f"Evidence must reference an available scalar fact: {path}")
             if isinstance(value, (int, float)) and not isinstance(value, bool):
-                check = validate_no_invented_numbers(claim, {float(value)}, tolerance=0.01)
+                check = validate_no_invented_numbers(claim, {float(value)}, tolerance=0.0)
                 if not check.valid:
                     raise ValueError(f"Claim numbers do not match {path}: {'; '.join(check.errors)}")
     except (ValueError, TypeError) as exc:
@@ -139,14 +141,14 @@ def _guardrail_facts_match_source(raw_text: str, facts: dict) -> GuardrailResult
 # Deterministic pattern-match for common trading recommendations.
 # Each prose field is scanned on its own (never the serialized JSON), and a
 # directive verb must sit within a few words of an instrument/position noun
-# in the same sentence. "short gamma", "long gamma", "short vol" and similar
-# descriptions of dealer positioning are explicitly not directives.
+# in the same sentence. "short gamma", "short-gamma", "long gamma", "short vol"
+# and similar descriptions of dealer positioning are explicitly not directives.
 # Limitations: novel phrasings, euphemisms, or languages other than
 # English/Spanish will bypass this check. It is a bounded, documented
 # pattern set, not a universal guarantee and not semantic analysis.
 _GAP = r"(?:[^.;:!?\n]{0,60}?)"  # a few words, no sentence boundary
-_NOT_DESCRIPTIVE_EN = r"(?!\s+(?:gamma|vol|volatility|convexity|dated|the\s+dollar|end))"
-_NOT_DESCRIPTIVE_ES = r"(?!\s+(?:gamma|vol|volatilidad|convexidad))"
+_NOT_DESCRIPTIVE_EN = r"(?![\s-]+(?:gamma|vol|volatility|convexity|dated|the\s+dollar|end))"
+_NOT_DESCRIPTIVE_ES = r"(?![\s-]+(?:gamma|vol|volatilidad|convexidad))"
 _INSTR_EN = r"\b(?:shares?|options?|puts?|calls?|contracts?|stock|positions?|exposure|SPY)\b"
 _INSTR_ES = r"\b(?:acciones|opciones|puts?|calls?|contratos?|posicion(?:es)?|exposici[oó]n|SPY)\b"
 
@@ -165,6 +167,8 @@ _TRADING_REC_PATTERNS = [
         r"\btake[- ]?profit\s+at\b",
         r"\bprice\s+target\s+(?:of|at|is)\b",
         r"\brisk[/-]reward\s+(?:ratio|of)\b",
+        r"\b(?:bullish|bearish)\s+(?:position|stance|bet|exposure|trade)s?\b",
+        r"\b(?:position|stance)s?\s+(?:in|on)\s+SPY\b" + _GAP + r"\b(?:warranted|advisable|appropriate|recommended|justified)\b",
         # ── Spanish ──────────────────────────────────────────────
         r"\b(?:comprar|vender|compra|vende|comprá|vendé|adquir(?:ir|í|a)|manten(?:er|é|ga)|acumul(?:ar|á|e)|"
         r"sum(?:ar|á)|agreg(?:ar|á)|aument(?:ar|á)|reduc(?:ir|í)|conviene|convendría|favorec(?:er|é))\b"
@@ -177,6 +181,8 @@ _TRADING_REC_PATTERNS = [
         r"\bstop[- ]?loss\s+en\b",
         r"\btake[- ]?profit\s+en\b",
         r"\bobjetivo\s+de\s+precio\b",
+        r"\bposici[oó]n(?:es)?\s+(?:alcista|bajista)s?\b",
+        r"\b(?:apuesta|exposici[oó]n)\s+(?:alcista|bajista)\b",
     ]
 ]
 

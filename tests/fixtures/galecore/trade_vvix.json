@@ -1,0 +1,24 @@
+{
+  "type": "FEED_DATA",
+  "channel": 3,
+  "data": [
+    {
+      "eventType": "Trade",
+      "eventSymbol": "VVIX",
+      "eventTime": 0,
+      "time": 1789589701142,
+      "timeNanoPart": 0,
+      "sequence": 3196,
+      "exchangeCode": "",
+      "price": 95.41,
+      "change": 0.5,
+      "size": "NaN",
+      "dayId": 20712,
+      "dayVolume": "NaN",
+      "dayTurnover": "NaN",
+      "tickDirection": "ZERO_UP",
+      "extendedTradingHours": false,
+      "timeStamp": "2026-09-16T20:15:01.142"
+    }
+  ]
+}

@@ -1,19 +1,19 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado:** Phase 3 cerrada (`GC-AI-0001` CLOSED el 2026-09-16, revisión independiente APPROVED, AC-06 brecha aceptada). Feature freeze levantado. Siguiente: `GC-AI-0002` — Phase 4, "Harness completo desde el host" (ver `../../../roadmap/README.md` del workspace).
+**Estado:** Phase 3 cerrada (`GC-AI-0001` CLOSED el 2026-09-16, revisión independiente APPROVED, AC-06 brecha aceptada). Phase 4 en curso: `GC-AI-0002` — "Harness completo desde el host con registro evaluable" — implementado y verificado E2E en local el 2026-09-16 (rama `feature/gc-ai-0002`); pendientes: revisión independiente (AC-11, Codex ronda 1 CHANGES_REQUESTED, BLOCKERs corregidos, recheck después del próximo día de mercado), serie de 3 días reales (AC-08), review humana real (AC-04) y evidencia E2E/manual completa (AC-06/AC-07, ver F-8). Ver `PHASE4-ALIGNMENT.md` y `../../../roadmap/README.md`.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## 1. Autorización y alcance
 
 Después de la revisión del repositorio, el usuario pidió corregir la documentación y empezar a corregir y encaminar lo implementado. Esa autorización reemplaza la pausa read-only del handoff anterior para este alcance. No reintroducir esa pausa como requisito de aprobación ya satisfecho.
 
-El vertical sigue siendo “Analizá el GEX actual de SPY”, read-only. No implementar Strategy Development, ActionProposal, SHADOW/PAPER/LIVE, scheduling, nuevos providers o una plataforma general de agentes. No modificar GaleCore ni hacer commit sin una instrucción correspondiente.
+Los verticales son “Analizá el GEX actual de SPY” (Phase 3) y “Analizá el régimen de hoy de SPY y guardalo” (Phase 4), ambos read-only. No implementar Strategy Development, ActionProposal, SHADOW/PAPER/LIVE, scheduling, nuevos providers o una plataforma general de agentes. No modificar GaleCore ni hacer commit sin una instrucción correspondiente.
 
 ## 2. Lectura y precedencia
 
 1. `GaleCore-AI-arquitectura-v5.md`.
-2. `PHASE3-ALIGNMENT.md`.
+2. `PHASE3-ALIGNMENT.md` y `PHASE4-ALIGNMENT.md`.
 3. `P0-CONTRACTS.md`, donde no contradiga v5.
 4. `ARCHITECTURE-EXECUTIVE-SUMMARY.md`.
 5. Código y tests de los archivos enumerados en el alignment.

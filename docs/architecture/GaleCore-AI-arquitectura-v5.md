@@ -675,13 +675,16 @@ No deben eliminarse. Quedan clasificados como autonomous runtime / adapter futur
 
 ### 13.4 Gaps reales
 
-- no existe un `CLAUDE.md` dentro de `GaleCore-AI`;
-- no existe todavía un adapter de host aprobado;
+Estado al redactar v5; el estado vigente se lee en `PHASE3-ALIGNMENT.md` (Phase 3, cerrada el
+2026-09-16 con `GC-AI-0001`) y `PHASE4-ALIGNMENT.md` (Phase 4, `GC-AI-0002`, en curso):
+
+- ~~no existe un `CLAUDE.md` dentro de `GaleCore-AI`~~ (Phase 3);
+- ~~no existe todavía un adapter de host aprobado~~ (Phase 3: CLI `prepare`/`accept`);
 - los assets internos no son necesariamente host-native;
-- existe `application.validate_interpretation` independiente del modelo; falta el flujo interactivo con snapshot y provenance;
-- el flujo con host interactivo y resultado `SUCCESS` no está demostrado;
+- ~~falta el flujo interactivo con snapshot y provenance~~ (Phase 3; Phase 4 lo extiende a un skill multi-fuente);
+- ~~el flujo con host interactivo y resultado `SUCCESS` no está demostrado~~ (evidencia E2E en `docs/evidence/`);
 - el mecanismo concreto para Work no está validado;
-- producir trace no equivale a persistirlo durablemente.
+- producir trace no equivale a persistirlo durablemente — en curso (`GC-AI-0002`, Phase 4: registro evaluable por día y símbolo, sin base de datos; pendiente de revisión independiente).
 
 ---
 
@@ -777,7 +780,9 @@ GEX-SPY read-only con host interactivo, assets versionados, GaleCore real, assur
 
 ### Phase 4 — Broader read-only intelligence
 
-Más Skills y workflows sólo después de evaluar GEX.
+Más Skills y workflows sólo después de evaluar GEX. Primer incremento (`GC-AI-0002`, 2026-09-16):
+harness completo desde el host — skill de régimen diario (GEX + put skew + VIX/VVIX) con registro
+evaluable en `GaleCore/research/regime/` y consulta posterior. Ver `PHASE4-ALIGNMENT.md`.
 
 El lifecycle futuro de bundles de Skills, creación desde evidencia, drafts, evals, revisión y
 publicación está capturado como `BL-001` en `PRODUCT-BACKLOG.md`. Su registro preserva la

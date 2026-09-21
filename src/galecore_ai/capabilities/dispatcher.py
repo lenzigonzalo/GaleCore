@@ -9,6 +9,8 @@ Endpoint mapping (from GaleCore controllers):
   compute.iv_rank           → GET /App.Analytics/IVRank?symbol={symbol}
   compute.implied_volatility → GET /App.Analytics/ImpliedVolatility?symbol={symbol}
   market_data.option_chains → GET /Data/Tastytrade/OptionChains?symbol={symbol}
+  market_data.trade         → GET /Data/Tastytrade/MarketData/Trade?symbol={symbol}
+  compute.put_skew          → GET /App.Analytics/PutSkew?symbol={symbol}
 """
 
 from __future__ import annotations
@@ -96,6 +98,18 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
     "compute.implied_volatility": {
         "method": "GET",
         "path": "/App.Analytics/ImpliedVolatility",
+        "param_key": "symbol",
+        "source_param": "symbol",
+    },
+    "compute.put_skew": {
+        "method": "GET",
+        "path": "/App.Analytics/PutSkew",
+        "param_key": "symbol",
+        "source_param": "symbol",
+    },
+    "market_data.trade": {
+        "method": "GET",
+        "path": "/Data/Tastytrade/MarketData/Trade",
         "param_key": "symbol",
         "source_param": "symbol",
     },

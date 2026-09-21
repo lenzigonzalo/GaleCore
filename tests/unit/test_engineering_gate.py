@@ -3,7 +3,9 @@ from pathlib import Path
 from tools.engineering_gate import evaluate_repository
 
 
-def _write_work_item(root: Path, *, status: str, blocked: bool, checked: bool = False) -> None:
+def _write_work_item(
+    root: Path, *, status: str, blocked: bool, checked: bool = False, title: str = "Test"
+) -> None:
     engineering = root / "docs" / "engineering"
     items = engineering / "work-items"
     items.mkdir(parents=True)
@@ -13,7 +15,7 @@ def _write_work_item(root: Path, *, status: str, blocked: bool, checked: bool = 
     (items / "item.md").write_text(
         f"""---
 id: TEST-001
-title: Test
+title: {title}
 status: {status}
 implementer: claude-code
 reviewer: codex
@@ -51,6 +53,31 @@ def test_blocked_item_rejects_phase_closure_claim(tmp_path):
     architecture = tmp_path / "docs" / "architecture"
     architecture.mkdir()
     (architecture / "SESSION_HANDOFF.md").write_text("Phase 3 cerrada", encoding="utf-8")
+
+    result = evaluate_repository(tmp_path)
+
+    assert not result.passed
+    assert any("closure claim conflicts" in error for error in result.errors)
+
+
+def test_blocked_item_ignores_closure_claim_of_an_earlier_phase(tmp_path):
+    _write_work_item(tmp_path, status="IN_PROGRESS", blocked=True, title="Phase 4 — harness")
+    architecture = tmp_path / "docs" / "architecture"
+    architecture.mkdir()
+    (architecture / "SESSION_HANDOFF.md").write_text(
+        "Phase 3 cerrada. Phase 4 en curso.", encoding="utf-8"
+    )
+
+    result = evaluate_repository(tmp_path)
+
+    assert result.passed, "\n".join(result.errors)
+
+
+def test_blocked_item_rejects_closure_claim_of_its_own_phase(tmp_path):
+    _write_work_item(tmp_path, status="IN_PROGRESS", blocked=True, title="Phase 4 — harness")
+    architecture = tmp_path / "docs" / "architecture"
+    architecture.mkdir()
+    (architecture / "SESSION_HANDOFF.md").write_text("Phase 4 closed", encoding="utf-8")
 
     result = evaluate_repository(tmp_path)
 

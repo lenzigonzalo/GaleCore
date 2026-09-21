@@ -1,0 +1,86 @@
+{
+  "case": "P2-record-outcome",
+  "title": "later facts attached to the recorded entry (T+seconds; mechanics only)",
+  "expected": "exit 0, RECORDED, entry_ids=[run_id]",
+  "command": "python -B -m galecore_ai.adapters.cli record outcome --symbol SPY --date 2026-09-21 --run-id 01a0c4a2-4541-7cb3-ab06-259d006f2758",
+  "stdin": null,
+  "exit_code": 0,
+  "stdout_json": {
+    "status": "RECORDED",
+    "kind": "outcome",
+    "path": "<tmp>\\gc-ai-0002-e2e-wa5ifdh7\\SPY\\2026-09-21.md",
+    "entry_ids": [
+      "01a0c4a2-4541-7cb3-ab06-259d006f2758"
+    ],
+    "observed_facts": {
+      "symbol": "SPY",
+      "net_gex": 728.4,
+      "call_gex": 1894284.2668,
+      "put_gex": -1165872.7464,
+      "spot": 770.4,
+      "zero_gamma_level": 762.7,
+      "call_wall": 772.0,
+      "put_wall": 745.0,
+      "coverage_pct": 100.0,
+      "put_skew_ratio": 1.0789,
+      "atm_iv": 0.1395,
+      "put_wing_iv": 0.1505,
+      "put_skew_dte": 60,
+      "put_skew_expiration": "2026-11-20",
+      "put_skew_level_ok": true,
+      "put_skew_level_threshold": 1.3,
+      "vix": 14.91,
+      "vvix": 86.47,
+      "market_data_as_of": "2026-09-21T15:42:43.978623Z",
+      "freshness_status": "UNKNOWN",
+      "sources": {
+        "gex": {
+          "capability_id": "compute.gex_analysis",
+          "endpoint": "/App/Gex/Analysis",
+          "provenance": "GALECORE_VERIFIED",
+          "market_data_as_of": "2026-09-21T15:42:43.978623Z",
+          "freshness_basis": "galecore_timestamp",
+          "freshness_status": "VALID",
+          "response_received_at": "2026-09-21T15:46:30.266442Z"
+        },
+        "put_skew": {
+          "capability_id": "compute.put_skew",
+          "endpoint": "/App.Analytics/PutSkew",
+          "provenance": "GALECORE_VERIFIED",
+          "freshness_basis": "none",
+          "freshness_status": "UNKNOWN",
+          "response_received_at": "2026-09-21T15:46:30.266442Z"
+        },
+        "vix": {
+          "capability_id": "market_data.trade",
+          "endpoint": "/Data/Tastytrade/MarketData/Trade",
+          "provenance": "GALECORE_VERIFIED",
+          "market_data_as_of": "2026-09-21T15:46:16.326000Z",
+          "freshness_basis": "galecore_timestamp",
+          "freshness_status": "VALID",
+          "response_received_at": "2026-09-21T15:46:30.266442Z"
+        },
+        "vvix": {
+          "capability_id": "market_data.trade",
+          "endpoint": "/Data/Tastytrade/MarketData/Trade",
+          "provenance": "GALECORE_VERIFIED",
+          "market_data_as_of": "2026-09-21T15:46:16.465000Z",
+          "freshness_basis": "galecore_timestamp",
+          "freshness_status": "VALID",
+          "response_received_at": "2026-09-21T15:46:30.266442Z"
+        }
+      }
+    },
+    "observed_at": "2026-09-21T15:46:30.367781+00:00"
+  },
+  "stdout_raw": null,
+  "stderr": "",
+  "status": "RECORDED",
+  "failed_guardrails": [],
+  "error": null,
+  "record": null,
+  "note": "Outcome fetched seconds after acceptance: proves the append path, not a market outcome.",
+  "observed_at": "2026-09-21T15:46:30.438302+00:00",
+  "verified": true,
+  "problems": []
+}

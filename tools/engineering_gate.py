@@ -23,7 +23,19 @@ CANONICAL_STATUS_DOCS = (
     "docs/architecture/SESSION_HANDOFF.md",
     "docs/architecture/ARCHITECTURE-EXECUTIVE-SUMMARY.md",
 )
-CLOSURE_CLAIM = re.compile(r"phase\s+3\s+(?:cerrada|closed)", re.IGNORECASE)
+PHASE_IN_TITLE = re.compile(r"phase\s+(\d+)", re.IGNORECASE)
+
+
+def _closure_claim(title: str) -> re.Pattern[str]:
+    """Closure-claim pattern for the phase named in the active item's title.
+
+    A closed earlier phase (e.g. "Phase 3 cerrada" once GC-AI-0001 is CLOSED) is a legitimate
+    statement; only claims about the phase the active item is still working on conflict with
+    ``closure_blocked``. A title without a phase number keeps matching any phase.
+    """
+    match = PHASE_IN_TITLE.search(title)
+    phase = re.escape(match.group(1)) if match else r"\d+"
+    return re.compile(rf"phase\s+{phase}\s+(?:cerrada|closed)", re.IGNORECASE)
 
 
 @dataclass
@@ -112,9 +124,10 @@ def evaluate_repository(root: Path) -> GateResult:
 
     closure_blocked = _is_true(metadata.get("closure_blocked"))
     if closure_blocked:
+        closure_claim = _closure_claim(metadata.get("title", ""))
         for relative in CANONICAL_STATUS_DOCS:
             path = root / relative
-            if path.is_file() and CLOSURE_CLAIM.search(path.read_text(encoding="utf-8")):
+            if path.is_file() and closure_claim.search(path.read_text(encoding="utf-8")):
                 result.errors.append(f"closure claim conflicts with closure_blocked=true: {relative}")
 
     if status in FINAL_STATES:

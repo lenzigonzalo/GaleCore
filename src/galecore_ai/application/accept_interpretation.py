@@ -34,9 +34,18 @@ from galecore_ai.contracts.prepared_analysis import (
     StoredPreparedSnapshot,
     compute_conventions_hash,
     compute_facts_hash,
+    compute_snapshot_hash,
 )
+from galecore_ai.contracts.regime_analysis import REGIME_SKILL_ID, RegimeInterpretation
 from galecore_ai.harness.freshness import freshness_error
 from galecore_ai.harness.guardrails import GuardrailRunner
+
+# Output contract per prepared skill. A snapshot prepared for an unknown skill
+# cannot be accepted: there is no schema to validate against.
+_OUTPUT_SCHEMAS: dict[str, type] = {
+    "gex_interpretation": GexInterpretation,
+    REGIME_SKILL_ID: RegimeInterpretation,
+}
 
 
 def _populate_trace_assets(trace: TraceRecord, snapshot: StoredPreparedSnapshot) -> None:
@@ -96,7 +105,7 @@ def _freshness_status(error: str | None, stored: str) -> str:
     return "STALE"
 
 
-def accept_gex_interpretation(
+def accept_interpretation(
     *,
     store: PreparedSnapshotStore,
     request: AcceptanceRequest,
@@ -105,6 +114,8 @@ def accept_gex_interpretation(
     allow_unknown_freshness: bool = False,
 ) -> AgentRunResult:
     """Validate a host interpretation against the internally-stored snapshot.
+
+    The snapshot's ``skill_id`` selects the output contract (GEX or regime).
 
     Steps:
       1. Recover snapshot from store by run_id (fail-closed if missing/expired)
@@ -146,7 +157,7 @@ def accept_gex_interpretation(
     trace.conventions_hash = snapshot.conventions_hash
     trace.prepared_at = snapshot.prepared_at
     trace.facts_provenance = Provenance.GALECORE_VERIFIED.value
-    trace.capabilities_invoked.append(snapshot.capability_trace)
+    trace.capabilities_invoked.extend(snapshot.capability_traces or [snapshot.capability_trace])
     _populate_trace_assets(trace, snapshot)
 
     # ── 2. Snapshot integrity (facts and conventions) ────────────
@@ -156,6 +167,9 @@ def accept_gex_interpretation(
     # The freshness timestamp used for acceptance must be the one inside the
     # hashed facts: the outer snapshot field is convenience metadata and is
     # not covered by facts_hash, so it is only trusted if it equals the hashed one.
+    # snapshot_hash covers the acceptance-critical metadata (skill_id, freshness
+    # window, assets, capabilities...): an edited store file cannot pick a laxer
+    # contract or a wider freshness window than the one prepare sealed.
     integrity_error: str | None = None
     if compute_facts_hash(snapshot.facts) != snapshot.facts_hash:
         integrity_error = "Internal facts_hash mismatch — store may be corrupted"
@@ -169,13 +183,36 @@ def accept_gex_interpretation(
                 )
         except _MalformedFacts as exc:
             integrity_error = f"Internal facts malformed — {exc}"
+    if integrity_error is None:
+        if snapshot.snapshot_hash is None:
+            integrity_error = "Internal snapshot_hash missing — snapshot was not sealed at prepare time"
+        elif compute_snapshot_hash(snapshot) != snapshot.snapshot_hash:
+            integrity_error = "Internal snapshot_hash mismatch — acceptance metadata changed after prepare"
+        elif snapshot.skill_id not in snapshot.effective_assets.skills:
+            integrity_error = (
+                f"Internal skill mismatch — skill_id {snapshot.skill_id!r} is not among the loaded skills "
+                f"{sorted(snapshot.effective_assets.skills)}"
+            )
     trace.guardrails_executed.append(GuardrailTrace(
         guardrail_id="snapshot_integrity",
         passed=integrity_error is None,
-        message=integrity_error or "facts_hash and conventions_hash recomputed and match",
+        message=integrity_error or "snapshot_hash, facts_hash and conventions_hash recomputed and match",
     ))
     if integrity_error:
         trace.error = integrity_error
+        trace.status = RunStatus.INTERNAL_ERROR.value
+        trace.completed_at = datetime.now(UTC)
+        return AgentRunResult(
+            run_id=request.run_id,
+            status=RunStatus.INTERNAL_ERROR,
+            error_detail=trace.error,
+            trace=trace,
+        )
+
+    # Output contract is chosen only after the snapshot metadata is proven intact.
+    output_schema = _OUTPUT_SCHEMAS.get(snapshot.skill_id)
+    if output_schema is None:
+        trace.error = f"No output contract for skill {snapshot.skill_id!r}"
         trace.status = RunStatus.INTERNAL_ERROR.value
         trace.completed_at = datetime.now(UTC)
         return AgentRunResult(
@@ -220,7 +257,7 @@ def accept_gex_interpretation(
     validation = validate_interpretation(
         interpretation=request.interpretation,
         facts=snapshot.facts,
-        output_schema=GexInterpretation,
+        output_schema=output_schema,
         guardrail_ids=ids,
         guardrail_runner=guardrail_runner,
     )
@@ -258,3 +295,7 @@ def accept_gex_interpretation(
         result=validation.result,
         trace=trace,
     )
+
+
+# Historical name of the GEX entry point; the skill is now read from the snapshot.
+accept_gex_interpretation = accept_interpretation

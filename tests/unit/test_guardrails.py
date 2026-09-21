@@ -155,6 +155,9 @@ class TestNoTradingRecommendation:
         "Spot is below the zero-gamma level",
         "Point-in-time snapshot based on current open interest",
         "Dealer hedging activity may amplify price moves",
+        # hyphenated positioning is descriptive too (GC-AI-0002 E2E false positive)
+        "The market sits on the short-gamma side of the flip point, between the put wall and the call wall",
+        "Los dealers terminaron por ir corto-gamma entre el muro de puts y el de calls",
     ])
     def test_analytical_observation_accepted(self, text):
         runner = GuardrailRunner()

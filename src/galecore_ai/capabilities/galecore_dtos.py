@@ -143,3 +143,60 @@ class GaleCoreGexAnalysisResponse(BaseModel):
     gex: GaleCoreGexPayload = Field(default_factory=GaleCoreGexPayload)
 
     model_config = {"populate_by_name": True}
+
+
+# ── GET /App.Analytics/PutSkew → PutSkewResponse ─────────────────
+
+
+class GaleCorePutSkewResponse(BaseModel):
+    """Maps to GaleCore's PutSkewResponse (DataFeed.Application.App.PutSkew).
+
+    GaleCore computes the snapshot on request and publishes no as-of timestamp;
+    ``roc5d`` and ``percentile252d`` are null until GaleCore persists IV history.
+    """
+
+    symbol: str = ""
+    spot: float = 0.0
+    dte: int = 0
+    expiration: str = ""
+    target_delta: float = Field(0.0, alias="targetDelta")
+    atm_strike: float = Field(0.0, alias="atmStrike")
+    atm_iv: float = Field(0.0, alias="atmIV")
+    put_25_delta_strike: float = Field(0.0, alias="put25DeltaStrike")
+    put_25_delta_actual_delta: float = Field(0.0, alias="put25DeltaActualDelta")
+    put_25_delta_iv: float = Field(0.0, alias="put25DeltaIV")
+    put_skew_25d: float | None = Field(None, alias="putSkew25d")
+    level_ok: bool | None = Field(None, alias="levelOk")
+    level_threshold: float = Field(0.0, alias="levelThreshold")
+    roc5d: float | None = None
+    percentile252d: float | None = None
+    note: str | None = None
+
+    model_config = {"populate_by_name": True}
+
+
+# ── GET /Data/Tastytrade/MarketData/Trade → MarketDataTradeResponse ──
+
+
+class GaleCoreTradeEvent(BaseModel):
+    """One dxFeed Trade event as relayed by GaleCore.
+
+    Only the fields the regime skill needs are typed; GaleCore serializes
+    absent numerics as the string "NaN", so unrelated fields are left open.
+    """
+
+    event_symbol: str = Field("", alias="eventSymbol")
+    time: int = 0  # epoch milliseconds of the print
+    price: float = 0.0
+
+    model_config = {"populate_by_name": True, "extra": "allow"}
+
+
+class GaleCoreTradeResponse(BaseModel):
+    """Maps to GaleCore's MarketDataTradeResponse."""
+
+    type: str = ""
+    channel: int = 0
+    data: list[GaleCoreTradeEvent] = Field(default_factory=list)
+
+    model_config = {"populate_by_name": True}

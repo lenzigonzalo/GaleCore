@@ -1,14 +1,15 @@
 agent_id: TradingAgent
-version: "1.0.0"
+version: "1.1.0"
 display_name: Trading Agent
 description: >
   Cognitive agent for options trading analysis.
   Interprets market microstructure data (GEX, IV, skew)
   and produces structured analytical output.
-  Phase 3: read-only analysis only. No trade execution.
+  Read-only analysis only (Phases 3–4). No trade execution.
 
 skills:
   - gex_interpretation
+  - regime_interpretation
 
 protocols:
   - facts_discipline
@@ -19,7 +20,9 @@ conventions:
 allowed_capabilities:
   - compute.gamma_exposure
   - compute.gex_analysis
+  - compute.put_skew
   - market_data.quote
+  - market_data.trade
 
 model_preferences:
   provider: fake

@@ -20,47 +20,51 @@ Host         = environment that runs the model (Claude Code, Codex, etc.)
 
 The host executes the model. GaleCore-AI teaches it how to work and verifies the output.
 
-## Current vertical: GEX-SPY analysis
+## Verticals
 
-The only active use case is: **"Analizá el GEX actual de SPY."**
+Two read-only use cases run from this host through the same CLI adapter:
 
-### How to execute
+| Prompt | Skill | Flow |
+|---|---|---|
+| "Analizá el GEX actual de SPY." | `gex_interpretation` (Phase 3, closed) | prepare → interpret → accept → present |
+| "Analizá el régimen de hoy de SPY y guardalo." | `regime_interpretation` (Phase 4, `GC-AI-0002`) | prepare → interpret → accept **--record** → later `record outcome` / `record review` → `query` |
 
-**Step 1 — Prepare** (requires GaleCore running on localhost:5000):
-
-```bash
-GALECORE_BASE_URL=http://localhost:5000 \
-GALECORE_API_KEY=<your GaleCore ApiKey from user-secrets> \
-ALLOW_UNKNOWN_FRESHNESS=true \
-MAX_STALENESS_SECONDS=600 \
-python -B -m galecore_ai.adapters.cli prepare --symbol SPY
-```
-
-This outputs a `PreparedAnalysisView` JSON with `run_id`, `facts`, and asset hashes. The authoritative snapshot is stored internally.
-
-**Step 2 — Interpret** (you are the host):
-
-Read the facts from the prepare output. Produce a `GexInterpretation` JSON following these rules:
-
-- **regime**: `positive_gamma` if net_gex > 0, `negative_gamma` if net_gex < 0. Do not use `near_zero`: the validator always rejects it because GaleCore publishes call_gex/put_gex and net_gex in incompatible scales.
-- **observations**: qualitative prose about dealer positioning (at least 1). **No digits** — any number in prose is rejected.
-- **implications**: qualitative prose about expected market behavior. **No digits.**
-- **quantitative_claims**: where interpretive numbers go (at least 1). Each is `{"metric", "value", "unit"}` with `metric` in `net_gex | spot | zero_gamma_level | call_wall | put_wall`, `unit` = `billion_usd` for net_gex and `usd` for the rest, and `value` exactly equal to the fact (1500.0 stays 1500.0, never 1.5). call_gex/put_gex cannot be claimed.
-- **evidence**: array of `{fact_path, claim}` linking qualitative claims to facts (at least 1). Paths like `facts.net_gex`, `facts.spot`. The validator checks the path resolves; it does not prove the prose is entailed.
-- **limitations**: data quality notes, timing caveats (at least 1). Digits are allowed here only if they match a fact value; prefer prose.
-- **NEVER** invent, rescale or round numbers
-- **NEVER** recommend trading actions
-- **NEVER** add facts or calculations not provided by GaleCore
-
-**Step 3 — Accept**:
+Common environment (GaleCore on `localhost:5000`; the ApiKey comes from GaleCore's user-secrets and is never written anywhere):
 
 ```bash
-echo '{"run_id": "<run_id from prepare>", "interpretation": <your JSON>, "host_provider": "claude-code", "host_model": "claude-opus-5"}' | python -B -m galecore_ai.adapters.cli accept
+export GALECORE_BASE_URL=http://localhost:5000
+export GALECORE_API_KEY=<GaleCore ApiKey>
+export ALLOW_UNKNOWN_FRESHNESS=true   # PutSkew has no GaleCore timestamp; the regime snapshot is UNKNOWN at best
+export MAX_STALENESS_SECONDS=36000    # daily regime records: after the cash session only (16:30–20:00 ET), owner decision F-2; use 600 for intraday GEX
+export GALECORE_TIMEOUT_SECONDS=300   # a cold GEX computation can exceed 120 s
 ```
 
-Exit code 0 = SUCCESS. Non-zero = rejected (result is null).
+Exit codes: `0` SUCCESS · `1` prepare/record/internal failure · `2` INSUFFICIENT_DATA · `3` VALIDATION_ERROR (also argument errors and `query` with an `INTEGRITY_FAILED` record). All output is JSON.
 
-**Step 4 — Present**: Show the user exactly the accepted payload. Do not reformulate or add new claims after acceptance.
+## Vertical 1: GEX-SPY analysis
+
+Full guide with payload rules: `docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md`.
+
+```bash
+python -B -m galecore_ai.adapters.cli prepare --symbol SPY                          # PreparedAnalysisView: run_id, facts, asset hashes; snapshot stored internally
+echo '{"run_id": "<run_id>", "interpretation": <GexInterpretation JSON>, "host_provider": "claude-code", "host_model": "claude-opus-5"}'   | python -B -m galecore_ai.adapters.cli accept                                    # exit 0 = SUCCESS; non-zero = rejected (result null)
+```
+
+`GexInterpretation` in one line: `regime` = `positive_gamma` (net_gex > 0) or `negative_gamma` (net_gex < 0), never `near_zero` (always rejected: call/put GEX and net GEX use incompatible scales); `observations`/`implications` without digits; numbers only in `quantitative_claims` (`net_gex→billion_usd`; `spot`, `zero_gamma_level`, `call_wall`, `put_wall→usd`; value exactly equal to the fact); `evidence` paths must resolve (entailment is not checked); at least one limitation. Never invent, rescale or round numbers; never recommend trading actions; never add facts GaleCore did not provide. Present exactly the accepted payload; do not reformulate.
+
+## Vertical 2: daily regime with an evaluable record
+
+Full guide with payload rules and the record format: `docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md`.
+
+```bash
+python -B -m galecore_ai.adapters.cli prepare --symbol SPY --skill regime          # GEX + 25Δ put skew + VIX/VVIX; any missing/stale source fails closed
+echo '{"run_id": "<run_id>", "interpretation": <RegimeInterpretation JSON>, "host_provider": "claude-code", "host_model": "claude-opus-5"}'   | python -B -m galecore_ai.adapters.cli accept --record --prompt "Analizá el régimen de hoy de SPY y guardalo"   # record written only on SUCCESS
+python -B -m galecore_ai.adapters.cli record outcome --symbol SPY --date <YYYY-MM-DD> [--run-id <run_id>]      # later: facts now, GALECORE_VERIFIED
+python -B -m galecore_ai.adapters.cli record review  --symbol SPY --date <YYYY-MM-DD> --run-id <run_id> --verdict agree|partial|disagree --comment "..."
+python -B -m galecore_ai.adapters.cli query --symbol SPY --since <YYYY-MM-DD> [--until <YYYY-MM-DD>]           # no model call; INTEGRITY_FAILED is reported, never skipped
+```
+
+`RegimeInterpretation` in one line: `gamma_regime` by the sign of `net_gex`; `tail_pricing` = `calm`/`elevated` exactly as `facts.put_skew_level_ok`; prose without digits; numbers only in `quantitative_claims` with the fact's exact value and its unit (`billion_usd`, `usd`, `ratio`, `iv_decimal`, `index_points`); `evidence` paths must resolve; at least one limitation. Records: `GaleCore/research/regime/<SYMBOL>/<YYYY-MM-DD>.md` (America/New_York date, `GALECORE_RECORDS_DIR` overrides), one file per day (YAML frontmatter = the record), entries appended, acceptance-time content covered by `entry_hash`. Never compare with earlier sessions from memory — only through `query`, stated in limitations. Present the accepted payload and the record path; do not reformulate.
 
 ### What the assets prove and what they don't
 
@@ -75,12 +79,13 @@ Exit code 0 = SUCCESS. Non-zero = rejected (result is null).
 |---|---|---|
 | TradingAgent | `config/agents/trading-agent.yaml` | Agent definition: mission, capabilities, restrictions |
 | GEX Skill | `config/skills/gex-analysis/skill.yaml` | Instructions, output contract, examples |
+| Regime Skill | `config/skills/regime-analysis/skill.yaml` | Daily regime: GEX + put skew + VIX/VVIX, output contract, examples |
 | Facts Discipline | `config/protocols/facts-discipline.yaml` | Guardrails: no invented numbers, facts match source, no trading recommendation, no numbers in prose, quantitative claims valid |
 | Trading Defaults | `config/conventions/trading-defaults.yaml` | Near-zero threshold, timezone, currency |
 
 ## Constraints
 
-- Phase 3 is read-only. No trading actions, no strategy development.
+- Phases 3–4 are read-only. No trading actions, no strategy development.
 - No secrets in code, logs, fixtures, or traces.
 - Do not modify GaleCore.
 - Do not expand the autonomous runtime (FastAPI/CognitiveRuntime — frozen).
@@ -90,4 +95,5 @@ Exit code 0 = SUCCESS. Non-zero = rejected (result is null).
 
 - Architecture: `docs/architecture/GaleCore-AI-arquitectura-v5.md`
 - Contracts: `docs/architecture/P0-CONTRACTS.md`
-- Validation guide: `docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md`
+- Validation guides: `docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md` (GEX), `docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md` (regime + record)
+- Phase 4 alignment: `docs/architecture/PHASE4-ALIGNMENT.md`

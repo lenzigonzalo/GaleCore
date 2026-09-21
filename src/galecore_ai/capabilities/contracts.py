@@ -78,4 +78,22 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         ],
         returns="Global GEX scope (net/call/put, walls, coverage), macro regime, config",
     ),
+    CapabilityDefinition(
+        capability_id="compute.put_skew",
+        semantic_class=SemanticClass.COMPUTE,
+        description="25-delta put skew snapshot (iv_put_25delta / iv_atm) for a symbol",
+        parameters=[
+            CapabilityParameter(name="symbol", type="string", description="Underlying symbol"),
+        ],
+        returns="Spot, ATM IV, 25-delta put IV, putSkew25d ratio, GaleCore level semaphore",
+    ),
+    CapabilityDefinition(
+        capability_id="market_data.trade",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Last trade print for a symbol or index (e.g. VIX, VVIX)",
+        parameters=[
+            CapabilityParameter(name="symbol", type="string", description="Symbol or index"),
+        ],
+        returns="Trade events with price and epoch-millisecond time",
+    ),
 ]

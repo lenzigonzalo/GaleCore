@@ -1,0 +1,98 @@
+{
+  "run_id": "01a0c4a2-4541-7cb3-ab06-259d006f2758",
+  "symbol": "SPY",
+  "skill_id": "regime_interpretation",
+  "facts": {
+    "symbol": "SPY",
+    "net_gex": 728.4,
+    "call_gex": 1894284.2668,
+    "put_gex": -1165872.7464,
+    "spot": 770.4,
+    "zero_gamma_level": 762.7,
+    "call_wall": 772.0,
+    "put_wall": 745.0,
+    "coverage_pct": 100.0,
+    "put_skew_ratio": 1.0829,
+    "atm_iv": 0.1387,
+    "put_wing_iv": 0.1502,
+    "put_skew_dte": 60,
+    "put_skew_expiration": "2026-11-20",
+    "put_skew_level_ok": true,
+    "put_skew_level_threshold": 1.3,
+    "vix": 14.88,
+    "vvix": 86.36,
+    "market_data_as_of": "2026-09-21T15:41:01.228000Z",
+    "freshness_status": "UNKNOWN",
+    "sources": {
+      "gex": {
+        "capability_id": "compute.gex_analysis",
+        "endpoint": "/App/Gex/Analysis",
+        "provenance": "GALECORE_VERIFIED",
+        "market_data_as_of": "2026-09-21T15:42:43.978623Z",
+        "freshness_basis": "galecore_timestamp",
+        "freshness_status": "VALID",
+        "response_received_at": "2026-09-21T15:42:44.028193Z"
+      },
+      "put_skew": {
+        "capability_id": "compute.put_skew",
+        "endpoint": "/App.Analytics/PutSkew",
+        "provenance": "GALECORE_VERIFIED",
+        "freshness_basis": "none",
+        "freshness_status": "UNKNOWN",
+        "response_received_at": "2026-09-21T15:42:44.028193Z"
+      },
+      "vix": {
+        "capability_id": "market_data.trade",
+        "endpoint": "/Data/Tastytrade/MarketData/Trade",
+        "provenance": "GALECORE_VERIFIED",
+        "market_data_as_of": "2026-09-21T15:41:01.228000Z",
+        "freshness_basis": "galecore_timestamp",
+        "freshness_status": "VALID",
+        "response_received_at": "2026-09-21T15:42:44.028193Z"
+      },
+      "vvix": {
+        "capability_id": "market_data.trade",
+        "endpoint": "/Data/Tastytrade/MarketData/Trade",
+        "provenance": "GALECORE_VERIFIED",
+        "market_data_as_of": "2026-09-21T15:41:01.423000Z",
+        "freshness_basis": "galecore_timestamp",
+        "freshness_status": "VALID",
+        "response_received_at": "2026-09-21T15:42:44.028193Z"
+      }
+    }
+  },
+  "facts_hash": "sha256:67eeed633b36e2ae1c5341a561e5522aebb48cda91c96f08d61c82dd6664d1d6",
+  "prepared_at": "2026-09-21T15:42:44.033138Z",
+  "market_data_as_of": "2026-09-21T15:41:01.228000Z",
+  "freshness_status": "UNKNOWN",
+  "freshness_max_age_seconds": 36000.0,
+  "effective_assets": {
+    "agent": {
+      "asset_id": "TradingAgent",
+      "version": "1.1.0",
+      "content_hash": "sha256:02c1268fe83422734e0afa6c36be2fc5f93db520137edd4a31cb7075514cf57b"
+    },
+    "skills": {
+      "regime_interpretation": {
+        "asset_id": "regime_interpretation",
+        "version": "1.1.0",
+        "content_hash": "sha256:c58972b66a14f7ca54b1a2a699f077fceec63ecbb24bb325c1facac9cf641ba5"
+      }
+    },
+    "protocols": {
+      "facts_discipline": {
+        "asset_id": "facts_discipline",
+        "version": "1.2.0",
+        "content_hash": "sha256:d69cb5950c5f9dc72499e378278eecc94924034d2443283d448e69a5d16f3a8a"
+      }
+    },
+    "conventions": {
+      "trading_defaults": {
+        "asset_id": "trading_defaults",
+        "version": "1.0.0",
+        "content_hash": "sha256:46f9020771319f19d297f0306ebf16382792cefd2310b6b272f960172b78dab4"
+      }
+    }
+  },
+  "conventions_hash": "sha256:4213a153871c18d4cb1ec82020d1694dd0a0200e3ebecc7eb202bd789dd7a708"
+}
