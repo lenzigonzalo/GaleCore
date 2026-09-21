@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registros de régimen — visor local</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --ink: #1d1f22; --muted: #6b6f76; --line: #e3e1da;
+    --accent: #2f5d8a; --ok: #2e7d4f; --ok-bg: #e6f3ea; --warn: #9a6400; --warn-bg: #fbf1d8;
+    --bad: #b3261e; --bad-bg: #fbe7e5; --note: #6b4e9e; --note-bg: #efe9f8; --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { background: var(--panel); border-bottom: 1px solid var(--line); padding: 14px 24px; }
+  header h1 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+  header .meta { color: var(--muted); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 4px 18px; }
+  header .meta code { font-family: var(--mono); font-size: 12px; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  .toolbar label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 3px; }
+  .toolbar input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; min-width: 150px; }
+  .toolbar button { font: inherit; padding: 7px 14px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+  .toolbar button:hover { filter: brightness(1.08); }
+  .toolbar .symbols { font-size: 12px; color: var(--muted); }
+  .toolbar .symbols button { background: none; color: var(--accent); border: 1px solid var(--line); padding: 2px 8px; margin-left: 4px; }
+  main { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 0; min-height: calc(100vh - 130px); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  aside { border-right: 1px solid var(--line); background: var(--panel); padding: 12px; }
+  .day { display: block; width: 100%; text-align: left; font: inherit; background: none; border: 1px solid transparent; border-radius: 8px; padding: 10px 12px; cursor: pointer; margin-bottom: 6px; }
+  .day:hover { background: var(--bg); }
+  .day.active { border-color: var(--accent); background: #eef3f8; }
+  .day .d { font-weight: 600; font-family: var(--mono); font-size: 13px; }
+  .day .s { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  section.detail { padding: 18px 24px 40px; min-width: 0; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: .02em; padding: 2px 8px; border-radius: 999px; border: 1px solid transparent; white-space: nowrap; }
+  .badge.ok { color: var(--ok); background: var(--ok-bg); }
+  .badge.warn { color: var(--warn); background: var(--warn-bg); }
+  .badge.bad { color: var(--bad); background: var(--bad-bg); }
+  .badge.note { color: var(--note); background: var(--note-bg); }
+  .badge.neutral { color: var(--muted); background: #eeece6; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; }
+  .card h2 { margin: 0 0 10px; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .card h3 { margin: 12px 0 6px; font-size: 13px; }
+  .card.annotation { border-color: #cdbde8; background: var(--note-bg); }
+  .card.annotation h2 { color: var(--note); }
+  .card.bad { border-color: #e7b3af; background: var(--bad-bg); }
+  .card.bad h2 { color: var(--bad); }
+  .card.empty { color: var(--muted); }
+  .title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .title h2 { margin: 0; font-size: 20px; text-transform: none; letter-spacing: 0; color: var(--ink); }
+  .kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; font-size: 13px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; min-width: 0; }
+  .kv dd code { white-space: nowrap; }
+  code, .mono { font-family: var(--mono); font-size: 12.5px; }
+  .hash { word-break: break-all; white-space: normal !important; color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  td.num { font-family: var(--mono); text-align: right; white-space: nowrap; }
+  th.num { text-align: right; }
+  ul { margin: 4px 0 0; padding-left: 20px; }
+  li { margin: 2px 0; }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+  .stack { display: grid; gap: 12px; }
+  .scroll { overflow-x: auto; }
+  td.mono, td code { white-space: nowrap; }
+  @media (max-width: 1000px) { .two { grid-template-columns: 1fr; } }
+  .regime { font-size: 15px; font-weight: 600; }
+  .pass { color: var(--ok); } .fail { color: var(--bad); font-weight: 600; }
+  .delta-pos { color: var(--ok); } .delta-neg { color: var(--bad); }
+  .hint { color: var(--muted); font-size: 12.5px; }
+  .error { color: var(--bad); }
+  .src { font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Registros de régimen — visor local (solo lectura)</h1>
+  <div class="meta">
+    <span>Directorio leído: <code id="dir">…</code></span>
+    <span>Consulta: <code id="queried">—</code></span>
+    <span>Todo lo mostrado es un registro histórico leído vía <code>query</code>; no son datos actuales.</span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <label>Símbolo <input id="symbol" placeholder="SPY" autocapitalize="characters"></label>
+  <label>Desde (inclusive) <input id="since" type="date"></label>
+  <label>Hasta (inclusive, opcional) <input id="until" type="date"></label>
+  <button id="go">Consultar</button>
+  <span class="symbols" id="symbols"></span>
+</div>
+
+<main>
+  <aside id="list"><div class="hint">Sin consulta todavía.</div></aside>
+  <section class="detail" id="detail"><div class="card empty">Elegí un símbolo y un rango y consultá.</div></section>
+</main>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const fmtNum = (v) => (typeof v === "number" ? String(v) : (v === null || v === undefined ? "—" : esc(v)));
+  const badge = (cls, text) => `<span class="badge ${cls}">${esc(text)}</span>`;
+  let view = null;
+
+  function isoDate(d) { return d.toISOString().slice(0, 10); }
+
+  function showError(title, err, status) {
+    $("queried").textContent = (err && err.at ? err.at + " (UTC)" : "—") + (status ? ` · HTTP ${status}` : "");
+    if (err && err.records_dir) $("dir").textContent = err.records_dir;
+    $("list").innerHTML = "";
+    $("detail").innerHTML = `<div class="card bad"><h2>${esc(title)}</h2><span class="error">${esc(err && err.error ? err.error : "sin detalle")}</span></div>`;
+  }
+
+  async function loadMeta() {
+    const r = await fetch("/api/meta");
+    const m = await r.json();
+    if (!r.ok) {
+      $("symbols").textContent = "Directorio de registros no disponible.";
+      showError("Directorio de registros no disponible", m, r.status);
+      return;
+    }
+    $("dir").textContent = m.records_dir;
+    const syms = m.symbols || [];
+    $("symbols").innerHTML = syms.length
+      ? "En el directorio: " + syms.map((s) => `<button type="button" data-sym="${esc(s)}">${esc(s)}</button>`).join("")
+      : "El directorio no tiene carpetas de símbolo.";
+    $("symbols").querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { $("symbol").value = b.dataset.sym; query(); }));
+    if (!$("symbol").value && syms.length) $("symbol").value = syms[0];
+  }
+
+  async function query() {
+    const symbol = $("symbol").value.trim().toUpperCase();
+    const since = $("since").value, until = $("until").value;
+    const qs = new URLSearchParams({ symbol, since });
+    if (until) qs.set("until", until);
+    $("list").innerHTML = '<div class="hint">Consultando…</div>';
+    $("detail").innerHTML = "";
+    let r, data;
+    try {
+      r = await fetch("/api/records?" + qs.toString());
+      data = await r.json();
+    } catch (e) {
+      $("list").innerHTML = ""; $("detail").innerHTML = `<div class="card bad"><h2>Error</h2>No se pudo consultar el adapter local (${esc(e.message)}). ¿Está corriendo <code>python -B -m galecore_ai.adapters.regime_viewer</code>?</div>`;
+      return;
+    }
+    if (!data || !Array.isArray(data.records)) {
+      showError(r.status === 400 ? "Parámetros inválidos" : r.status === 500 ? "Directorio de registros no disponible" : `Respuesta inesperada`, data, r.status);
+      return;
+    }
+    view = data;
+    $("queried").textContent = data.queried_at + " (UTC)";
+    $("dir").textContent = data.records_dir;
+    renderList();
+  }
+
+  function renderList() {
+    const recs = view.records;
+    if (!recs.length) {
+      $("list").innerHTML = '<div class="hint">Sin registros.</div>';
+      $("detail").innerHTML = `<div class="card empty"><h2>Sin registros</h2>No hay registros de <b>${esc(view.symbol)}</b> entre <code>${esc(view.since)}</code> y <code>${esc(view.until || "hoy")}</code> en <code>${esc(view.records_dir)}</code>.</div>`;
+      return;
+    }
+    const failedNote = (view.integrity_failed.length
+      ? `<div class="hint" style="margin-bottom:8px">${badge("bad", "INTEGRIDAD FALLIDA")} ${view.integrity_failed.length} día(s) rechazado(s) por <code>query</code> (exit 3).</div>` : "")
+      + ((view.read_inconsistent || []).length
+      ? `<div class="hint" style="margin-bottom:8px">${badge("bad", "LECTURA INCONSISTENTE")} ${view.read_inconsistent.length} día(s) cambiaron mientras se leían; reintentá la consulta.</div>` : "");
+    $("list").innerHTML = failedNote + [...recs].reverse().map((rec, idx) => {
+      const i = recs.length - 1 - idx;
+      let tags;
+      if (rec.status === "READ_INCONSISTENT") tags = badge("bad", "LECTURA INCONSISTENTE");
+      else if (rec.status !== "OK") tags = badge("bad", "INTEGRIDAD FALLIDA");
+      else tags = rec.entries.map((e) => [
+        e.states.outcome_pending ? badge("warn", "outcome pendiente") : badge("ok", `${e.outcomes.length} outcome`),
+        e.states.review_pending ? badge("warn", "review pendiente") : badge("ok", "review " + e.human_reviews[e.human_reviews.length - 1].verdict),
+        e.annotation ? badge("note", "histórico observado") : "",
+      ].join(" ")).join("<br>");
+      const n = rec.status === "OK" ? `${rec.entries.length} entrada${rec.entries.length === 1 ? "" : "s"}` : "";
+      return `<button class="day" data-i="${i}"><div class="d">${esc(rec.date)} <span class="hint">${n}</span></div><div class="s">${tags}</div></button>`;
+    }).join("");
+    $("list").querySelectorAll(".day").forEach((b) => b.addEventListener("click", () => select(+b.dataset.i)));
+    select(recs.length - 1);
+  }
+
+  function select(i) {
+    $("list").querySelectorAll(".day").forEach((b) => b.classList.toggle("active", +b.dataset.i === i));
+    const rec = view.records[i];
+    if (rec.status === "READ_INCONSISTENT") {
+      $("detail").innerHTML = `
+        <div class="title"><h2>${esc(rec.date)} · ${esc(view.symbol)}</h2>${badge("bad", "LECTURA INCONSISTENTE")}</div>
+        <div class="card bad"><h2>El registro cambió mientras se leía</h2>
+          <p>Lo que <code>query</code> devolvió y la lectura de detalle no coinciden después de varios reintentos; no se muestra ninguna de las dos versiones. Volvé a consultar.</p>
+          <dl class="kv"><dt>Archivo</dt><dd><code>${esc(rec.path)}</code></dd><dt>Problemas</dt><dd><ul>${rec.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></dd></dl>
+        </div>`;
+      return;
+    }
+    if (rec.status !== "OK") {
+      $("detail").innerHTML = `
+        <div class="title"><h2>${esc(rec.date)} · ${esc(view.symbol)}</h2>${badge("bad", "INTEGRIDAD FALLIDA")}</div>
+        <div class="card bad"><h2>query rechazó este archivo</h2>
+          <p>El contenido no se muestra porque las verificaciones de integridad de <code>query</code> fallaron. Nada de lo que hay en el archivo puede tomarse como registro válido.</p>
+          <dl class="kv"><dt>Archivo</dt><dd><code>${esc(rec.path)}</code></dd><dt>Problemas</dt><dd><ul>${rec.problems.map((p) => `<li>${esc(p)}</li>`).join("")}</ul></dd></dl>
+        </div>`;
+      return;
+    }
+    $("detail").innerHTML = rec.entries.map((e) => renderEntry(rec, e)).join('<hr style="border:0;border-top:1px dashed var(--line);margin:24px 0">');
+  }
+
+  function renderEntry(rec, e) {
+    const p = e.accepted_payload, f = e.facts, snap = e.snapshot || {}, sources = f.sources || {};
+    const lastReview = e.human_reviews[e.human_reviews.length - 1];
+    const head = `
+      <div class="title"><h2>${esc(rec.date)} · ${esc(view.symbol)}</h2>
+        ${badge("ok", "integridad OK")}
+        ${e.states.outcome_pending ? badge("warn", "outcome pendiente") : badge("ok", `${e.outcomes.length} outcome${e.outcomes.length === 1 ? "" : "s"}`)}
+        ${e.states.review_pending ? badge("warn", "review pendiente") : badge("ok", "review: " + lastReview.verdict)}
+        ${e.annotation ? badge("note", e.annotation.kind.replace("_", " ")) : ""}
+      </div>`;
+
+    const annotation = e.annotation ? `
+      <div class="card annotation"><h2>Anotación del owner (no forma parte del registro)</h2>
+        <b>${esc(e.annotation.label)}</b><p style="margin:6px 0">${esc(e.annotation.note)}</p>
+        <div class="src">Fuente: ${esc(e.annotation.source)} · decidido ${esc(e.annotation.decided_on)} · ligada a <code>${esc(e.annotation.entry_hash)}</code></div>
+      </div>` : "";
+
+    const when = `
+      <div class="card"><h2>Cuándo y con qué datos</h2>
+        <div class="stack">
+          <dl class="kv">
+            <dt>Prompt</dt><dd>${esc(e.prompt)}</dd>
+            <dt>Snapshot preparado</dt><dd><code>${esc(snap.prepared_at)}</code></dd>
+            <dt>Datos de mercado (más antiguo)</dt><dd><code>${esc(snap.market_data_as_of || "—")}</code> · frescura <b>${esc(snap.freshness_status)}</b></dd>
+            <dt>Interpretación aceptada</dt><dd><code>${esc(e.accepted_at)}</code></dd>
+            <dt>Registro escrito</dt><dd><code>${esc(e.recorded_at)}</code></dd>
+            <dt>run_id</dt><dd><code>${esc(e.run_id)}</code></dd>
+          </dl>
+          <div class="scroll">
+            <table><thead><tr><th>Fuente</th><th>Capability</th><th>Frescura</th><th>Dato al</th><th>Recibido</th></tr></thead><tbody>
+            ${Object.entries(sources).map(([k, s]) => `<tr><td><b>${esc(k)}</b></td><td class="mono">${esc(s.capability_id)}<br><span class="hint">${esc(s.endpoint)}</span></td><td>${badge(s.freshness_status === "VALID" ? "ok" : "warn", s.freshness_status)}<br><span class="hint">${esc(s.freshness_basis)}</span></td><td class="mono">${esc(s.market_data_as_of || "—")}</td><td class="mono">${esc(s.response_received_at || "—")}</td></tr>`).join("")}
+            </tbody></table>
+            <div class="hint" style="margin-top:6px">Timestamps tal como quedaron en el registro (UTC). Procedencia de los facts: <b>${esc(e.trace ? e.trace.facts_provenance : "—")}</b>.</div>
+          </div>
+        </div>
+      </div>`;
+
+    const claims = (e.claims || []).map((c) => `<tr><td>${esc(c.metric)}</td><td class="num">${fmtNum(c.value)}</td><td>${esc(c.unit)}</td><td class="num">${fmtNum(c.fact_value)}</td><td>${c.matches ? '<span class="pass">igual</span>' : '<span class="fail">difiere</span>'}</td></tr>`).join("");
+    const evidence = (e.evidence || []).map((ev) => `<tr><td>${esc(ev.claim)}</td><td class="mono">${esc(ev.fact_path)}</td><td class="num">${fmtNum(ev.fact_value)}</td></tr>`).join("");
+    const interp = `
+      <div class="card"><h2>Interpretación aceptada</h2>
+        <div class="regime">Régimen gamma: ${esc(p.gamma_regime)} · Tail pricing: ${esc(p.tail_pricing)}</div>
+        <div class="two">
+          <div><h3>Observaciones</h3><ul>${(p.observations || []).map((o) => `<li>${esc(o)}</li>`).join("")}</ul></div>
+          <div><h3>Implicancias</h3><ul>${(p.implications || []).map((o) => `<li>${esc(o)}</li>`).join("")}</ul></div>
+        </div>
+        <h3>Limitaciones declaradas</h3><ul>${(p.limitations || []).map((o) => `<li>${esc(o)}</li>`).join("")}</ul>
+        <div class="two" style="margin-top:12px">
+          <div><h3>Claims cuantitativos (validados exactos contra facts)</h3>
+            <table><thead><tr><th>Métrica</th><th class="num">Claim</th><th>Unidad</th><th class="num">Fact</th><th></th></tr></thead><tbody>${claims}</tbody></table></div>
+          <div><h3>Evidencia (claim → path del fact)</h3>
+            <table><thead><tr><th>Claim</th><th>Path</th><th class="num">Valor</th></tr></thead><tbody>${evidence}</tbody></table></div>
+        </div>
+      </div>`;
+
+    let outcome;
+    if (e.states.outcome_pending) {
+      outcome = `<div class="card"><h2>Qué pasó después</h2>${badge("warn", "outcome pendiente")} <span class="hint">Todavía no se registró un outcome para esta entrada (<code>record outcome</code> no se ejecutó). No hay nada que comparar.</span></div>`;
+    } else {
+      outcome = `<div class="card"><h2>Qué pasó después — interpretación vs. outcome</h2>` + (e.comparisons || []).map((c, k) => {
+        const o = e.outcomes[k];
+        return `<h3>Outcome ${k + 1} · observado <code>${esc(c.observed_at)}</code> · procedencia ${esc(o.facts_provenance)}</h3>
+          <table><thead><tr><th>Métrica</th><th class="num">Al aceptar</th><th class="num">Observado</th><th class="num">Δ</th></tr></thead><tbody>
+          ${c.rows.map((r) => `<tr><td>${esc(r.metric)}</td><td class="num">${fmtNum(r.before)}</td><td class="num">${fmtNum(r.after)}</td><td class="num ${r.delta > 0 ? "delta-pos" : r.delta < 0 ? "delta-neg" : ""}">${r.delta === null ? "—" : (r.delta > 0 ? "+" : "") + r.delta}</td></tr>`).join("")}
+          </tbody></table>
+          <div class="hint">facts_hash del outcome: <code class="hash">${esc(o.facts_hash)}</code></div>`;
+      }).join("") + `</div>`;
+    }
+
+    const review = e.states.review_pending
+      ? `<div class="card"><h2>Review humano</h2>${badge("warn", "review pendiente")} <span class="hint">El owner no registró un veredicto para esta entrada (<code>record review</code>).</span></div>`
+      : `<div class="card"><h2>Review humano</h2>${e.human_reviews.map((r) => `<div style="margin-bottom:8px">${badge(r.verdict === "agree" ? "ok" : r.verdict === "disagree" ? "bad" : "warn", r.verdict)} <code>${esc(r.reviewed_at)}</code><p style="margin:4px 0">${esc(r.comment)}</p></div>`).join("")}</div>`;
+
+    const factsRows = Object.entries(f).filter(([k]) => k !== "sources").map(([k, v]) => `<tr><td>${esc(k)}</td><td class="num">${typeof v === "object" ? esc(JSON.stringify(v)) : fmtNum(v)}</td></tr>`).join("");
+    const assets = e.effective_assets || {};
+    const assetRows = [["agent", assets.agent]].concat(
+      ...["skills", "protocols", "conventions"].map((g) => Object.entries(assets[g] || {}).map(([k, v]) => [g + "/" + k, v]))
+    ).filter(([, v]) => v).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v.version)}</td><td class="hash mono">${esc(v.content_hash)}</td></tr>`).join("");
+    const guardrails = ((e.trace && e.trace.guardrails) || []).map((g) => `<tr><td>${esc(g.guardrail_id)}</td><td class="${g.passed ? "pass" : "fail"}">${g.passed ? "pass" : "FAIL"}</td><td class="hint">${esc(g.message)}</td></tr>`).join("");
+    const assurance = `
+      <div class="card"><h2>Facts y assurance</h2>
+        <div class="two">
+          <div><h3>Facts (GaleCore)</h3><table><tbody>${factsRows}</tbody></table></div>
+          <div>
+            <h3>Guardrails en la aceptación</h3><table><tbody>${guardrails}</tbody></table>
+            <h3>Host (declarado, no verificado)</h3><dl class="kv"><dt>Proveedor / modelo</dt><dd>${esc(e.host.provider)} / ${esc(e.host.model)} <span class="hint">(${esc(e.host.provenance)})</span></dd></dl>
+            <h3>Activos cognitivos efectivos</h3><table><thead><tr><th>Activo</th><th>Versión</th><th>Hash</th></tr></thead><tbody>${assetRows}</tbody></table>
+            <h3>Hashes del registro</h3>
+            <dl class="kv"><dt>facts_hash</dt><dd class="hash mono">${esc(e.facts_hash)}</dd><dt>entry_hash</dt><dd class="hash mono">${esc(e.entry_hash)}</dd><dt>conventions_hash</dt><dd class="hash mono">${esc(snap.conventions_hash)}</dd><dt>Archivo</dt><dd class="hash mono">${esc(rec.path)}</dd></dl>
+          </div>
+        </div>
+      </div>`;
+
+    return head + annotation + when + interp + outcome + review + assurance;
+  }
+
+  $("go").addEventListener("click", query);
+  ["symbol", "since", "until"].forEach((id) => $(id).addEventListener("keydown", (ev) => { if (ev.key === "Enter") query(); }));
+  const d = new Date(); d.setUTCDate(d.getUTCDate() - 60);
+  $("since").value = isoDate(d);
+  loadMeta().then(() => { if ($("symbol").value) query(); }).catch((e) => {
+    $("detail").innerHTML = `<div class="card bad"><h2>Error</h2>No se pudo leer <code>/api/meta</code>: ${esc(e.message)}</div>`;
+  });
+})();
+</script>
+</body>
+</html>

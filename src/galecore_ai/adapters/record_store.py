@@ -108,6 +108,12 @@ class FileRecordStore:
             raise RecordStoreError("Path traversal detected")
         return path
 
+    def symbols(self) -> list[str]:
+        """Symbol folders present in the store (sorted). Read-only; no file is opened."""
+        if not self._base_dir.is_dir():
+            return []
+        return sorted(p.name for p in self._base_dir.iterdir() if p.is_dir() and _SYMBOL_RE.match(p.name))
+
     def dates(self, symbol: str) -> list[str]:
         symbol = symbol.upper()
         if not _SYMBOL_RE.match(symbol):

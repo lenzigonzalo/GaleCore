@@ -1,0 +1,11 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "http://127.0.0.1:8765/api/records?symbol=..&since=2026-09-01"
+  },
+  "http_status": 400,
+  "body": {
+    "error": "Invalid symbol for record path: '..'",
+    "at": "2026-09-21T17:08:37.348936+00:00"
+  }
+}
