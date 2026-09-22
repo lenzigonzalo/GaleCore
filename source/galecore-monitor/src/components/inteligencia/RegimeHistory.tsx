@@ -4,7 +4,7 @@ import { Badge, Mono, OK, WARN, BAD, NOTE, SANS } from './ui';
 
 interface Props {
   data: RegimeRecordsResponse | null;
-  selected: { date: string; runId: string } | null;
+  selected: { symbol: string; date: string; runId: string } | null;
   onSelect: (date: string, runId: string) => void;
   onSelectFailed: (date: string) => void;
 }
@@ -38,7 +38,7 @@ export function RegimeHistory({ data, selected, onSelect, onSelectFailed }: Prop
       )}
       {rows.map((rec) => {
         if (rec.status !== 'OK') {
-          const active = selected?.date === rec.date && selected?.runId === '';
+          const active = selected?.symbol === data.symbol && selected?.date === rec.date && selected?.runId === '';
           return (
             <button key={rec.date} className="card-interactive" onClick={() => onSelectFailed(rec.date)} style={rowStyle(active)}>
               <Mono>{rec.date}</Mono>
@@ -49,7 +49,7 @@ export function RegimeHistory({ data, selected, onSelect, onSelectFailed }: Prop
           );
         }
         return rec.entries.map((e, i) => {
-          const active = selected?.date === rec.date && selected?.runId === e.run_id;
+          const active = selected?.symbol === data.symbol && selected?.date === rec.date && selected?.runId === e.run_id;
           return (
             <button key={e.run_id} className="card-interactive" onClick={() => onSelect(rec.date, e.run_id)} style={rowStyle(active)}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>

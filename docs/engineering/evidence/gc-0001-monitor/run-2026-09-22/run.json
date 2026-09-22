@@ -1,0 +1,84 @@
+{
+  "started_at": "2026-09-22T00:31:45.295355+00:00",
+  "adapter_port": 64780,
+  "steps": [
+    {
+      "step": "synthetic_days",
+      "pending": "2026-09-20",
+      "with_outcome": "2026-09-19",
+      "integrity_failed": "2026-09-21"
+    },
+    {
+      "step": "tabs",
+      "tabs": [
+        "MAIN",
+        "MONITOR",
+        "GEX",
+        "RPF",
+        "INTELIGENCIA",
+        "MI CUENTA"
+      ],
+      "has_inteligencia": true
+    },
+    {
+      "step": "hoy",
+      "text": "HOY | TEST · 2026-09-21 (America/New_York) | INTEGRIDAD FALLIDA | entry 01a0c686-9195-7382-b6bf-4fed49bd7fb7: entry_hash mismatch | markdown body disagrees with the frontmatter record"
+    },
+    {
+      "step": "historial",
+      "rows": 3
+    },
+    {
+      "step": "review_wrong_token",
+      "alert": "missing or wrong X-Review-Token (HTTP 401)",
+      "is_401": true
+    },
+    {
+      "step": "review_ok",
+      "status": "Review partial de TEST 2026-09-20 guardado en <tmp>\\records\\TEST\\2026-09-20.md",
+      "review_shown": true
+    },
+    {
+      "step": "review_after_reload",
+      "review_shown": true
+    },
+    {
+      "step": "outcome",
+      "legend": true,
+      "comparison_table": true
+    },
+    {
+      "step": "integrity_failed",
+      "card": true,
+      "content_hidden": true
+    },
+    {
+      "step": "pageerrors",
+      "errors": []
+    },
+    {
+      "step": "cli_reads_review_back",
+      "exit_code": 3,
+      "reviews": [
+        [
+          "2026-09-19",
+          [
+            "SYNTHETIC review written by tools/viewer_test_records.py; not an owner verdict."
+          ]
+        ],
+        [
+          "2026-09-20",
+          [
+            "E2E SYNTHETIC review desde el monitor; no es un veredicto real"
+          ]
+        ],
+        [
+          "2026-09-21",
+          []
+        ]
+      ]
+    }
+  ],
+  "ok": true,
+  "finished_at": "2026-09-22T00:32:40.102389+00:00"
+}

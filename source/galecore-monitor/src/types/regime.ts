@@ -192,6 +192,9 @@ export interface RegimeReviewRequest {
 
 export interface RegimeReviewResponse {
   recorded: { run_id: string; path: string; verdict: ReviewVerdict };
+  /** El día releído por `query` después de escribir; null si la relectura falló (ver reread_error). */
   record: RegimeRecord | null;
+  /** Presente cuando el review SÍ quedó guardado pero la relectura falló: no reintentar el envío. */
+  reread_error?: string | null;
   queried_at: string;
 }

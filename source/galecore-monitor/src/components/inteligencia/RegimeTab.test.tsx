@@ -117,6 +117,15 @@ test('estados del registro: pendientes, outcome comparado sin calificación, int
   expect(screen.getAllByText('Outcome pendiente').length).toBeGreaterThan(0);
   expect(screen.getByText(/No hay nada que comparar/)).toBeInTheDocument();
 
+  // Detalle: claims vs facts, evidencia, guardrails, timestamps por fuente y hashes vienen del registro.
+  expect(screen.getByText('igual')).toBeInTheDocument();
+  expect(screen.getByText('facts.net_gex')).toBeInTheDocument();
+  expect(screen.getByText('snapshot_integrity')).toBeInTheDocument();
+  expect(screen.getAllByText('2026-09-18T20:00:00Z').length).toBeGreaterThan(0);
+  expect(screen.getByText('compute.gex_analysis')).toBeInTheDocument();
+  expect(screen.getAllByText('sha256:e').length).toBeGreaterThan(0);
+  expect(screen.getByText('2026-09-18T20:59:00Z')).toBeInTheDocument();
+
   // Día con outcome y review: tabla Δ (dato, no veredicto) y review mostrado.
   fireEvent.click(screen.getByText('run-2'));
   expect(await screen.findByText('+2.47')).toBeInTheDocument();
@@ -146,7 +155,7 @@ test('el review se manda con el token al run_id elegido y la pantalla muestra el
   await waitFor(() => expect(mocked.postRegimeReview).toHaveBeenCalledWith(
     { symbol: 'TEST', date: '2026-09-19', run_id: 'run-1', verdict: 'agree', comment: 'ok con lo que había' }, 'tok-123',
   ));
-  await waitFor(() => expect(screen.getByText(/Review agree guardado/)).toBeInTheDocument());
+  await waitFor(() => expect(screen.getByText(/Review agree de TEST 2026-09-19 guardado/)).toBeInTheDocument());
   expect(screen.getByText('ok con lo que había')).toBeInTheDocument();
   expect(screen.getByText('Review: agree')).toBeInTheDocument();
   expect(sessionStorage.getItem(api.REVIEW_TOKEN_STORAGE_KEY)).toBe('tok-123');
@@ -165,6 +174,19 @@ test('un 401 del adapter se muestra y no cambia el registro', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('missing or wrong X-Review-Token (HTTP 401)');
   expect(screen.getAllByText('Review pendiente').length).toBeGreaterThan(0);
   expect(sessionStorage.getItem(api.REVIEW_TOKEN_STORAGE_KEY)).toBeNull(); // el token malo no se recuerda
+});
+
+test('un 201 con reread_error dice que el review quedó guardado y que no hay que reenviar', async () => {
+  const day = { date: '2026-09-19', status: 'OK' as const, path: 'p', entries: [entry()] };
+  mocked.fetchRegimeRecords.mockResolvedValue(records([day]));
+  mocked.postRegimeReview.mockResolvedValue({ recorded: { run_id: 'run-1', path: 'p', verdict: 'agree' }, record: null, reread_error: 'review saved, but re-reading the day failed: x', queried_at: 'q' });
+  render(<RegimeTab />);
+  await screen.findByText('Dejar mi review');
+  fireEvent.click(screen.getByText('Agree'));
+  fireEvent.change(screen.getByLabelText('Comentario del review'), { target: { value: 'x' } });
+  fireEvent.change(screen.getByLabelText('Token de review'), { target: { value: 'tok' } });
+  fireEvent.click(screen.getByText('Guardar review'));
+  expect(await screen.findByRole('alert')).toHaveTextContent('No lo vuelvas a enviar');
 });
 
 test('un 201 cuya relectura no trae el review no se anuncia como guardado', async () => {
@@ -198,4 +220,54 @@ test('la anotación F-7 se muestra aparte del registro', async () => {
   expect(screen.getByText('Observed history — does not count toward AC-08')).toBeInTheDocument();
   expect(screen.getByText('histórico observado')).toBeInTheDocument();
   expect(screen.getByText('Integridad OK')).toBeInTheDocument();
+});
+
+test('una respuesta tardía de un símbolo anterior no pisa al símbolo actual', async () => {
+  const twoSymbols = { ...meta, symbols: ['TEST', 'QQQ'] };
+  mocked.fetchRegimeMeta.mockResolvedValue(twoSymbols);
+  let releaseTest: (v: RegimeRecordsResponse) => void = () => {};
+  const slowTest = new Promise<RegimeRecordsResponse>((resolve) => { releaseTest = resolve; });
+  mocked.fetchRegimeRecords.mockImplementation((symbol) => (symbol === 'TEST'
+    ? slowTest
+    : Promise.resolve({ ...records([{ date: '2026-09-19', status: 'OK', path: 'q', entries: [entry({ run_id: 'qqq-run' })] }]), symbol: 'QQQ' })));
+  mocked.fetchRegimeToday.mockImplementation((symbol) => Promise.resolve({ ...noToday, symbol }));
+
+  render(<RegimeTab />);
+  await waitFor(() => expect(mocked.fetchRegimeRecords).toHaveBeenCalledWith('TEST', '2026-07-23'));
+  fireEvent.change(screen.getByDisplayValue('TEST'), { target: { value: 'QQQ' } });
+  await screen.findAllByText('qqq-run');
+  // Ahora llega la respuesta vieja de TEST: no debe reemplazar lo que se ve.
+  releaseTest({ ...records([{ date: '2026-09-19', status: 'OK', path: 't', entries: [entry({ run_id: 'test-run' })] }]), symbol: 'TEST' });
+  await new Promise((r) => setTimeout(r, 30));
+  expect(screen.getAllByText('qqq-run').length).toBeGreaterThan(0);
+  expect(screen.queryByText('test-run')).not.toBeInTheDocument();
+  expect(screen.getByDisplayValue('QQQ')).toBeInTheDocument();
+});
+
+test('la relectura de un review llegada tras cambiar de símbolo no toca el símbolo actual', async () => {
+  const twoSymbols = { ...meta, symbols: ['TEST', 'QQQ'] };
+  mocked.fetchRegimeMeta.mockResolvedValue(twoSymbols);
+  const testDay = { date: '2026-09-19', status: 'OK' as const, path: 't', entries: [entry({ run_id: 'test-run' })] };
+  const qqqDay = { date: '2026-09-19', status: 'OK' as const, path: 'q', entries: [entry({ run_id: 'qqq-run' })] };
+  mocked.fetchRegimeRecords.mockImplementation((symbol) => Promise.resolve({ ...records([symbol === 'TEST' ? testDay : qqqDay]), symbol }));
+  mocked.fetchRegimeToday.mockImplementation((symbol) => Promise.resolve({ ...noToday, symbol }));
+  let releaseReview: (v: any) => void = () => {};
+  mocked.postRegimeReview.mockImplementation(() => new Promise((resolve) => { releaseReview = resolve; }));
+
+  render(<RegimeTab />);
+  await screen.findAllByText('test-run');
+  fireEvent.click(screen.getByText('Agree'));
+  fireEvent.change(screen.getByLabelText('Comentario del review'), { target: { value: 'ok' } });
+  fireEvent.change(screen.getByLabelText('Token de review'), { target: { value: 'tok' } });
+  fireEvent.click(screen.getByText('Guardar review'));
+  await waitFor(() => expect(mocked.postRegimeReview).toHaveBeenCalled());
+  fireEvent.change(screen.getByDisplayValue('TEST'), { target: { value: 'QQQ' } });
+  await screen.findAllByText('qqq-run');
+  // La relectura de TEST llega ahora: QQQ 2026-09-19 no debe convertirse en el registro de TEST.
+  releaseReview({ recorded: { run_id: 'test-run', path: 't', verdict: 'agree' },
+    record: { ...testDay, entries: [entry({ run_id: 'test-run', human_reviews: [{ reviewed_at: 'x', verdict: 'agree', comment: 'ok' }], states: { outcome_pending: true, review_pending: false } })] },
+    queried_at: 'q' });
+  await new Promise((r) => setTimeout(r, 30));
+  expect(screen.getAllByText('qqq-run').length).toBeGreaterThan(0);
+  expect(screen.queryByText('test-run')).not.toBeInTheDocument();
 });

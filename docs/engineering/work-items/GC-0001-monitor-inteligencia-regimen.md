@@ -42,7 +42,8 @@ outcomes y guarda su review humano, con el mismo diseño y navegación del table
   `RegimeDetail` (+ `RegimeFailedDetail`), `ReviewForm`, `ui.tsx` (piezas con el tema del tablero).
 - `src/api/regime.ts` (cliente axios propio, sin el interceptor de auth de la API), `src/types/regime.ts`.
 - `.env.development`: `REACT_APP_REGIME_ADAPTER_URL=http://127.0.0.1:8765`.
-- `src/components/inteligencia/RegimeTab.test.tsx` (10 tests, adapter mockeado).
+- `src/components/inteligencia/RegimeTab.test.tsx` (13 tests, adapter mockeado).
+- `docs/engineering/evidence/gc-0001-monitor/`: procedimiento Playwright reproducible + corrida guardada.
 
 ## Criterios de aceptación
 
@@ -70,15 +71,15 @@ outcomes y guarda su review humano, con el mismo diseño y navegación del table
 
 | Criterio | Implementación | Verificación automática | Artefacto reproducible | Estado |
 |---|---|---|---|---|
-| AC-01 | `TabNav.tsx` (+`'inteligencia'`), `App.tsx`, `pages/Inteligencia.tsx`, `inteligencia/ui.tsx` | `tsc --noEmit` | Captura en navegador (sesión) | IMPLEMENTADO (pendiente AC-09) |
-| AC-02 | `RegimeToday.tsx` ← `/api/today` | `RegimeTab.test.tsx`: "hoy sin análisis…" | GC-AI-0004 `today-TEST-no-record.json`; navegador con dir real: hoy 21/09 con outcome y review | IMPLEMENTADO (pendiente AC-09) |
-| AC-03 | `RegimeHistory.tsx` ← `/api/records` (200/409/422 aceptados) | test "estados del registro…" | navegador: 3 días sintéticos (pendiente, con outcome, integridad fallida) | IMPLEMENTADO (pendiente AC-09) |
-| AC-04 | `RegimeDetail.tsx` | test "estados del registro…" (claims, evidencia, guardrails presentes) | navegador, registro real 17/09 y 21/09 | IMPLEMENTADO (pendiente AC-09) |
-| AC-05 | `RegimeDetail.tsx` (tabla Δ + leyenda) | test "estados…": `+2.47`, leyenda | navegador, día sintético con outcome | IMPLEMENTADO (pendiente AC-09) |
-| AC-06 | `ReviewForm.tsx`, `RegimeTab.submitReview` (token recordado solo tras un 201; "guardado" solo si la relectura trae el review), `api/regime.postRegimeReview` | tests "el review se manda…", "un 401…" (token no recordado), "un 201 cuya relectura no trae el review…", "reviews deshabilitados…" | navegador: 401 con token malo, 201 con token correcto, review releído; `cli query` lo lee (GC-AI-0004 `cli-query-reads-review-back.json`) | IMPLEMENTADO (pendiente AC-09) |
-| AC-07 | `RegimeTab.tsx` (`NoticePanel`, título según `classifyRegimeError`; adapter sin `/api/today` avisado), `RegimeFailedDetail`, anotación en `RegimeDetail` | tests "sin adapter…", "un adapter sin /api/today…", "un error del adapter (500)…", "la anotación F-7…" | navegador: adapter apagado; día 2026-09-20 fallido; 17/09 real con F-7 | IMPLEMENTADO (pendiente AC-09) |
-| AC-08 | — | `npx tsc --noEmit` exit 0; `react-scripts test`: 10 passed | comandos abajo | IMPLEMENTADO |
-| AC-09 | — | — | review interno R1: APPROVE con MINORs → corregidos (abajo); Codex pendiente | PARCIAL |
+| AC-01 | `TabNav.tsx` (+`'inteligencia'`), `App.tsx`, `pages/Inteligencia.tsx`, `inteligencia/ui.tsx` | `tsc --noEmit`; `e2e_regime_monitor.py` paso `tabs` | `evidence/gc-0001-monitor/run-2026-09-22/run.json` + `01-regimen.png` | IMPLEMENTADO (pendiente AC-09) |
+| AC-02 | `RegimeToday.tsx` ← `/api/today` | `RegimeTab.test.tsx`: "hoy sin análisis…"; e2e paso `hoy` | GC-AI-0004 `today-QQQ-no-record.json` (NO_RECORD) y `real-dir-readonly-check.json` (`/api/today` real: 21/09 OK, outcome y review presentes); `run.json` paso `hoy` | IMPLEMENTADO (pendiente AC-09) |
+| AC-03 | `RegimeHistory.tsx` ← `/api/records` (200/409/422 aceptados); `RegimeTab.load` con número de generación (una respuesta tardía de otra consulta se descarta; símbolo y resultados se comprometen juntos) | tests "estados del registro…", "una respuesta tardía de un símbolo anterior no pisa al símbolo actual" | `run.json` pasos `synthetic_days`, `historial` (3 filas) | IMPLEMENTADO (pendiente AC-09) |
+| AC-04 | `RegimeDetail.tsx` | test "estados del registro…" asegura claims (`igual`), evidencia (`facts.net_gex`), guardrails (`snapshot_integrity`), timestamps por fuente y del snapshot, capability y `entry_hash` | `02-detalle-pendiente.png`; lectura real: `real-dir-readonly-check.json` | IMPLEMENTADO (pendiente AC-09) |
+| AC-05 | `RegimeDetail.tsx` (tabla Δ + leyenda) | test "estados…": `+2.47`, leyenda; e2e paso `outcome` (leyenda + tabla) | `run.json`, `04-outcome.png` | IMPLEMENTADO (pendiente AC-09) |
+| AC-06 | `ReviewForm.tsx`, `RegimeTab.submitReview` (token recordado solo tras un 201; "guardado" solo si la relectura trae el review; `reread_error` → "quedó guardado, no reenviar"; la relectura solo reemplaza el registro si la pantalla sigue en ese símbolo), `api/regime.postRegimeReview` | tests "el review se manda…", "un 401…", "un 201 con reread_error…", "un 201 cuya relectura no trae el review…", "la relectura de un review llegada tras cambiar de símbolo…", "reviews deshabilitados…" | `run.json` pasos `review_wrong_token` (401), `review_ok` (201), `review_after_reload`, `cli_reads_review_back`; `03-review-guardado.png` | IMPLEMENTADO (pendiente AC-09) |
+| AC-07 | `RegimeTab.tsx` (`NoticePanel`, título según `classifyRegimeError`; adapter sin `/api/today` avisado), `RegimeFailedDetail`, anotación en `RegimeDetail` | tests "sin adapter…", "un adapter sin /api/today…", "un error del adapter (500)…", "la anotación F-7…"; e2e paso `integrity_failed` (tarjeta, contenido oculto) | `run.json`, `05-integridad-fallida.png`; anotación F-7 real vista en sesión sobre el dir real (no versionada) | IMPLEMENTADO (pendiente AC-09) |
+| AC-08 | — | `npx tsc --noEmit` exit 0; `react-scripts test`: 13 passed; `e2e_regime_monitor.py` → `ok: true`, sin `pageerror` | `evidence/gc-0001-monitor/run-2026-09-22/` (procedimiento + `run.json` + capturas) | IMPLEMENTADO |
+| AC-09 | — | — | review interno R1: APPROVE con MINORs → corregidos; Codex C1 (`reviews/GC-0001-20260922T001238Z.md`): CHANGES_REQUESTED → corregidos (abajo); recheck pendiente | PARCIAL |
 
 ## Validación requerida
 
@@ -123,7 +124,8 @@ $env:CI = "true"; npx react-scripts test --watchAll=false --testMatch '**/src/**
 ```
 npx tsc --noEmit -p tsconfig.json                                → exit 0
 CI=true npx react-scripts test --watchAll=false --testMatch '**/src/**/*.test.tsx' --testPathIgnorePatterns node_modules App.test
-                                                                → Tests: 10 passed, 10 total
+                                                                → Tests: 13 passed, 13 total
+python -B docs/engineering/evidence/gc-0001-monitor/e2e_regime_monitor.py <GaleCore-AI GC-AI-0004> → ok = True (run-2026-09-22)
 PORT=3039 REACT_APP_REGIME_ADAPTER_URL=http://127.0.0.1:8767 react-scripts start → Compiled successfully!
 ```
 
@@ -163,7 +165,21 @@ consistentes con los modelos Python; `tsc` limpio; 7 tests en verde.
 | R1-m3 | MINOR | "Guardado" aunque la relectura no trajera el review | éxito solo si la relectura `OK` contiene el review del `run_id`; si no, alerta; test |
 | R1-m4 | MINOR | Token guardado antes del POST (un 401 lo dejaba recordado) | se guarda tras el 201 y se borra en 401; test |
 
-## Review independiente
+## Review independiente 1 (Codex, `--commit 0bb228b`, esfuerzo alto, 2026-09-22T00:12Z) — `docs/engineering/reviews/GC-0001-20260922T001238Z.md`
+
+**Veredicto:** CHANGES_REQUESTED. Codex no pudo ejecutar `node` en su sandbox (`EPERM lstat C:\Users\<user>`,
+ambiental): `tsc` y Jest quedaron sin reproducir por él; sí revisó los 14 archivos del commit. El
+implementer los volvió a correr tras las correcciones (abajo).
+
+| # | Sev | Hallazgo | Resolución |
+|---|---|---|---|
+| C1-M1 | MAJOR | `load()` no distinguía consultas en vuelo: una respuesta lenta de SPY podía pisar un QQQ ya mostrado, con detalle y formulario etiquetados QQQ | **Corregido.** Número de generación por consulta; respuestas de consultas viejas se descartan; símbolo y resultados se comprometen juntos; la selección lleva símbolo. Test "una respuesta tardía de un símbolo anterior no pisa al símbolo actual" |
+| C1-M2 | MAJOR | La relectura del review reemplazaba el registro solo por fecha: tras cambiar de símbolo, la relectura de SPY podía pisar QQQ de la misma fecha | **Corregido.** Reemplazo solo si `records.symbol === body.symbol` (ídem "Hoy"); mensaje de éxito nombra símbolo y fecha. Test "la relectura de un review llegada tras cambiar de símbolo no toca el símbolo actual" |
+| C1-M3 | MAJOR | AC-08 sin evidencia de navegador retenida ni procedimiento reproducible | **Corregido.** `docs/engineering/evidence/gc-0001-monitor/e2e_regime_monitor.py` + `run-2026-09-22/` (`run.json` sanitizado y capturas); lectura del dir real con hashes en GC-AI-0004 `real-dir-readonly-check.json` |
+| C1-m1 | MINOR | Artefacto `today-TEST-no-record.json` contenía `INTEGRITY_FAILED` | **Corregido en GC-AI-0004** (`today-QQQ-no-record.json` asertado + `today-TEST.json`); matriz actualizada |
+| C1-m2 | MINOR | AC-04 citaba aserciones que el test no hacía | **Corregido.** El test asegura claims, evidencia, guardrails, timestamps, capability y hash |
+
+## Review independiente — recheck
 
 **Reviewer:** PENDING
 **Resultado:** PENDING
