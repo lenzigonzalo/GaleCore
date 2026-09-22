@@ -1282,6 +1282,14 @@ sí contempla es acotada: la prosa interpretativa embebida en los JSON de reglas
 - Corrección puntual detectada: `PutSkewCalculator.LevelThreshold = 1.30` es una `const` de C#
   mientras `max_dte` es configuración JSON; dos parámetros del mismo análisis con residencia
   distinta y sin razón visible.
+- **Restricción medida el 2026-09-22 al versionar los registros:** `research/regime/` es la ruta
+  fija desde la que el loop lee y escribe (default de `GALECORE_RECORDS_DIR`), y a la vez está
+  dentro del árbol de un repo de código. Trackearla en una rama propia hace que los archivos
+  desaparezcan del disco al cambiar de rama, y el loop del día siguiente escribe sobre un
+  directorio vacío. Un directorio de datos vivos no puede depender de en qué rama está parado el
+  repo: el ADR debe decidir dónde vive un store de datos generados, no sólo dónde viven los
+  documentos. (Sin efecto sobre la integridad: verificado que la conversión de finales de línea
+  no rompe el `entry_hash`, que se calcula sobre el YAML parseado y no sobre los bytes.)
 
 ### Entry gate
 
