@@ -37,7 +37,8 @@ Environment: `ALLOW_UNKNOWN_FRESHNESS=true`, `GALECORE_TIMEOUT_SECONDS=300`,
 | 4 | 20:44:33 (`queried_at`) | `query --symbol SPY --since 2026-09-14` | 0 | 3 records (2026-09-17 flagged history, 2026-09-21 day 1, 2026-09-22 day 2 of the series), `integrity_failed: []` | `day3-step4-query.json` |
 | 5 | 21:15:25 (`observed_at`; issued 21:14:02, GEX computation ~83 s) | `record outcome --symbol SPY --date 2026-09-22 --run-id 01a0cadb-…` (~31 min after acceptance) | 0 | `RECORDED`, `entry_ids: [01a0cadb-…]`, observed facts `GALECORE_VERIFIED`: net_gex 581.8, spot 773.12, walls and zero-gamma unchanged, skew 1.0740, indices still the settlement prints | `day3-step5-record-outcome.json` |
 | 6 | 21:15:57 (`queried_at`) | `query --symbol SPY --since 2026-09-14` | 0 | 3 records, `integrity_failed: []`; the 2026-09-22 entry now carries 1 outcome, 0 reviews (owner's `record review` pending, F-6) | `day3-step6-query-after-outcome.json` |
-| 7-8 | — | `record review` (owner's verdict) then the final `query` | — | PENDING: the owner supplies the verdict and comment (F-6) | — |
+| 7 | 21:46:22 (`reviewed_at`) | `record review --symbol SPY --date 2026-09-22 --run-id 01a0cadb-… --verdict partial --comment "…"` — **owner's verdict** (F-6). Provenance of the words differs from day 1: the host drafted the comment after reading GaleCore's own wall research, the owner read it and adopted it verbatim; it was not written by the owner from scratch | 0 | `RECORDED`, verdict `partial` | `day3-step7-record-review-owner.json` |
+| 8 | 21:46:38 (`queried_at`) | `query --symbol SPY --since 2026-09-14` (final) | 0 | 3 records, `integrity_failed: []`; 2026-09-22 entry: 1 outcome, 1 human review (`partial`) | `day3-step8-query-final.json` |
 
 ## What this evidences and what it does not
 
@@ -49,6 +50,15 @@ Environment: `ALLOW_UNKNOWN_FRESHNESS=true`, `GALECORE_TIMEOUT_SECONDS=300`,
 - **Timestamp note:** `day2-step5`/`day2-step7` stdout show `observed_at`/`reviewed_at` ~50 ms after
   the values persisted in the record (the CLI printed a second `now()`); fixed after internal review 2
   (the CLI now passes its timestamp to the writer). The artifacts are kept as produced.
+- **First `partial` of the series, and what triggered it.** The accepted interpretation treats the
+  call/put walls as hedging references whose levels would change dealer behaviour. GaleCore's own
+  rules file and `research/got/` §61.4 record the opposite, measured: the wall is an argmax over a
+  single strike that never holds more than 19 % of its side's |GEX|, can beat the runner-up by 2 %,
+  jumps intraday (QQQ 750 → 710 in 48 min), and over 926 observations of SPY/QQQ/IWM 2013-2025 its
+  edge behaves like any other strike of the same delta (+0.010, CI [-0.019, +0.040]). All eight
+  checks passed the interpretation: the numbers were exact and no trading action was recommended.
+  This is a concrete instance of the declared gap — **entailment is not checked** — and of the human
+  review being the only mechanism that catches it. The owner's `partial` records it.
 - **Day 3 (2026-09-22) is day 2 of the AC-08 series.** The outcome taken ~31 min after
   acceptance moved only GEX-derived facts (net_gex 595.5 → 581.8, spot 773.26 → 773.12) while
   the walls, the zero-gamma level and the settlement prints of the indices were unchanged: the
