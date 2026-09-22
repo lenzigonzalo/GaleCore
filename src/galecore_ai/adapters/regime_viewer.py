@@ -4,9 +4,20 @@
 
 Serves one static page and two JSON endpoints on the loopback interface only:
 
-    GET /                 the page (``regime_viewer_static/index.html``)
-    GET /api/meta         records dir, symbols present, annotation source
-    GET /api/records?symbol=SPY&since=YYYY-MM-DD[&until=YYYY-MM-DD]
+    GET  /                 the page (``regime_viewer_static/index.html``)
+    GET  /api/meta         records dir, symbols present, today's trading date, annotation source
+    GET  /api/records?symbol=SPY&since=YYYY-MM-DD[&until=YYYY-MM-DD]
+    GET  /api/today?symbol=SPY          today's record (calendar date in the convention timezone) or NO_RECORD
+    POST /api/reviews      {symbol, date, run_id, verdict, comment} -> record_review (GC-AI-0004)
+
+The GaleCore monitor (a browser app on another local port) may call the JSON
+endpoints: CORS is granted only to the origins in ``REGIME_VIEWER_ALLOWED_ORIGINS``
+(default: the monitor's dev origin), never ``*``. The single write endpoint is
+protected by three independent checks — loopback ``Host``, an allowed ``Origin``
+and a shared secret in ``X-Review-Token`` (``REGIME_REVIEW_TOKEN``, or generated
+and printed at start) — so neither a page on another origin nor a request without
+the token can append a review. It appends through ``record_review`` with the same
+checks as ``cli record review``; it never touches the hashed part of an entry.
 
 What it reuses and what it adds. The list of records and every ``OK`` /
 ``INTEGRITY_FAILED`` verdict come from ``query_records`` — the same function
@@ -32,31 +43,45 @@ appended yet, ``review_pending`` = no human review yet. Owner annotations
 (``config/viewer/record-annotations.yaml``) are bound to an ``entry_hash`` and
 carry their source; an entry whose hash does not match gets no annotation.
 
-Never writes, never calls GaleCore, never reads an API key.
+Never calls GaleCore, never reads an API key. The only write is the review append.
 """
 
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
+import os
+import re
+import secrets
 import sys
+import threading
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+from zoneinfo import ZoneInfo
 
 import yaml
 from pydantic import BaseModel, ValidationError
 
+from galecore_ai.adapters.asset_manifest import RequiredAssetError, load_required_assets
 from galecore_ai.adapters.record_store import (
     FileRecordStore,
     RecordIntegrityError,
     RecordStoreError,
     default_records_dir,
 )
-from galecore_ai.application.record_regime import RecordError, query_records
-from galecore_ai.contracts.regime_record import RegimeRecordEntry
+from galecore_ai.application.record_regime import (
+    RecordError,
+    query_records,
+    record_date_for,
+    record_review,
+)
+from galecore_ai.contracts.regime_analysis import REGIME_SKILL_ID
+from galecore_ai.contracts.regime_record import RegimeRecordEntry, ReviewVerdict
 from galecore_ai.harness.assets import asset_root
 
 ANNOTATIONS_REL_PATH = "viewer/record-annotations.yaml"
@@ -64,7 +89,17 @@ STATIC_DIR = Path(__file__).resolve().parent / "regime_viewer_static"
 LOOPBACK = "127.0.0.1"
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 DEFAULT_PORT = 8765
+ALLOWED_ORIGINS_ENV = "REGIME_VIEWER_ALLOWED_ORIGINS"
+DEFAULT_ALLOWED_ORIGINS = ("http://localhost:3039", "http://127.0.0.1:3039")  # galecore-monitor dev server
+REVIEW_TOKEN_ENV = "REGIME_REVIEW_TOKEN"
+REVIEW_TOKEN_HEADER = "X-Review-Token"
+MAX_REVIEW_BODY_BYTES = 16 * 1024
+REQUEST_TIMEOUT_SECONDS = 10
+# One writer at a time in this process: record_review is load → append → save on one file, and
+# ThreadingHTTPServer runs each request on its own thread.
+_WRITE_LOCK = threading.Lock()
 _DATE_ARG = "YYYY-MM-DD"
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")  # fromisoformat also accepts 20260919 and week dates
 READ_ATTEMPTS = 3
 # Facts compared side by side between acceptance and each later outcome (all GaleCore-verified).
 COMPARED_METRICS = ("spot", "net_gex", "zero_gamma_level", "call_wall", "put_wall", "vix", "vvix",
@@ -73,6 +108,59 @@ COMPARED_METRICS = ("spot", "net_gex", "zero_gamma_level", "call_wall", "put_wal
 
 class ViewerArgumentError(Exception):
     """A request parameter is invalid (HTTP 400)."""
+
+
+class ReviewRejected(Exception):
+    """A review request was refused; ``status`` is the HTTP status to answer."""
+
+    def __init__(self, status: HTTPStatus, message: str) -> None:
+        super().__init__(message)
+        self.status = status
+
+
+@dataclass(frozen=True)
+class ViewerConfig:
+    """What the server allows besides plain local reads."""
+
+    timezone: str
+    allowed_origins: frozenset[str] = field(default_factory=frozenset)
+    review_token: str | None = None  # None = the write endpoint is disabled
+
+    @property
+    def reviews_enabled(self) -> bool:
+        return bool(self.review_token)
+
+
+def convention_timezone() -> str:
+    """The record-date timezone, from the same convention asset ``accept --record`` uses."""
+    try:
+        bundle = load_required_assets((REGIME_SKILL_ID,))
+    except RequiredAssetError as exc:
+        raise RecordStoreError(f"cannot load the convention timezone: {exc}") from exc
+    timezone = str(bundle.resolved_conventions["timezone"])
+    try:
+        ZoneInfo(timezone)
+    except (KeyError, ValueError) as exc:
+        raise RecordStoreError(f"convention timezone {timezone!r} is unknown") from exc
+    return timezone
+
+
+def allowed_origins_from_env() -> frozenset[str]:
+    raw = os.environ.get(ALLOWED_ORIGINS_ENV)
+    values = [v.strip() for v in raw.split(",")] if raw else list(DEFAULT_ALLOWED_ORIGINS)
+    return frozenset(v.rstrip("/") for v in values if v)
+
+
+class ReviewRequest(BaseModel):
+    """Body of ``POST /api/reviews``; the same arguments ``cli record review`` takes."""
+
+    model_config = {"extra": "forbid"}
+
+    symbol: str
+    date: str
+    run_id: str
+    verdict: ReviewVerdict
+    comment: str
 
 
 class RecordAnnotation(BaseModel):
@@ -258,17 +346,86 @@ def _enrich(records: list[dict], *, store: FileRecordStore, symbol: str,
     return retry
 
 
-def build_meta(store: FileRecordStore, annotations: list[RecordAnnotation] | None = None) -> dict:
+def build_meta(store: FileRecordStore, annotations: list[RecordAnnotation] | None = None,
+               config: ViewerConfig | None = None) -> dict:
     require_records_dir(store)
     annotations = annotations if annotations is not None else load_annotations()
-    return {
+    meta = {
         "records_dir": str(store.base_dir),
         "symbols": store.symbols(),
         "annotations_file": str(asset_root() / ANNOTATIONS_REL_PATH),
         "annotation_count": len(annotations),
-        "read_only": True,
+        "read_only": not (config and config.reviews_enabled),
+        "reviews_enabled": bool(config and config.reviews_enabled),
         "served_at": datetime.now(UTC).isoformat(),
     }
+    if config is not None:
+        meta["timezone"] = config.timezone
+        meta["today"] = record_date_for(datetime.now(UTC), config.timezone)
+    return meta
+
+
+def build_today(*, store: FileRecordStore, symbol: str, timezone: str,
+                annotations: list[RecordAnnotation] | None = None) -> dict:
+    """Today's trading date in the convention timezone and its record, or ``NO_RECORD``."""
+    today = record_date_for(datetime.now(UTC), timezone)
+    day = date.fromisoformat(today)
+    view = build_view(store=store, symbol=symbol, since=day, until=day, annotations=annotations)
+    record = view["records"][0] if view["records"] else None
+    return {
+        "date": today,
+        "timezone": timezone,
+        "symbol": view["symbol"],
+        "status": record["status"] if record else "NO_RECORD",
+        "record": record,
+        "records_dir": view["records_dir"],
+        "queried_at": view["queried_at"],
+    }
+
+
+def _review_status(exc: RecordError) -> HTTPStatus:
+    """HTTP status for a refused review, by the cause ``record_review`` attached — not by its text."""
+    cause = exc.__cause__
+    if isinstance(cause, RecordIntegrityError):
+        return HTTPStatus.UNPROCESSABLE_ENTITY  # the day is one query rejects
+    if isinstance(cause, OSError):
+        return HTTPStatus.SERVICE_UNAVAILABLE  # the write itself failed (lock, permissions)
+    if isinstance(cause, RecordStoreError):
+        return HTTPStatus.BAD_REQUEST
+    return HTTPStatus.NOT_FOUND  # no record for the day / run_id not found
+
+
+def submit_review(*, store: FileRecordStore, request: ReviewRequest,
+                  annotations: list[RecordAnnotation] | None = None) -> dict:
+    """Append the human verdict through ``record_review`` and return the day re-read via ``query``.
+
+    Argument checks happen before any file is touched; the write and its re-read run under the
+    process-wide write lock so two reviews on the same day cannot lose each other.
+    """
+    if not request.comment.strip():
+        raise ReviewRejected(HTTPStatus.BAD_REQUEST, "a non-empty comment is required")
+    if not _DATE_RE.match(request.date):
+        raise ReviewRejected(HTTPStatus.BAD_REQUEST, f"date must be {_DATE_ARG}")
+    try:
+        day = date.fromisoformat(request.date)
+    except ValueError as exc:
+        raise ReviewRejected(HTTPStatus.BAD_REQUEST, f"date must be {_DATE_ARG}") from exc
+    symbol = request.symbol.strip().upper()
+    try:
+        store.path_for(symbol, day.isoformat())  # the store's own symbol/date rules, before touching files
+    except RecordStoreError as exc:
+        raise ReviewRejected(HTTPStatus.BAD_REQUEST, str(exc)) from exc
+    require_records_dir(store)
+    with _WRITE_LOCK:
+        try:
+            run_id, path = record_review(store=store, symbol=symbol, day=day.isoformat(),
+                                         run_id=request.run_id, verdict=request.verdict,
+                                         comment=request.comment)
+        except RecordError as exc:
+            raise ReviewRejected(_review_status(exc), str(exc)) from exc
+        view = build_view(store=store, symbol=symbol, since=day, until=day, annotations=annotations)
+    return {"recorded": {"run_id": run_id, "path": path, "verdict": request.verdict.value},
+            "record": view["records"][0] if view["records"] else None, "queried_at": view["queried_at"]}
 
 
 # ── HTTP ─────────────────────────────────────────────────────────
@@ -278,14 +435,31 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def make_handler(store: FileRecordStore, annotations: list[RecordAnnotation]) -> type[BaseHTTPRequestHandler]:
+def make_handler(store: FileRecordStore, annotations: list[RecordAnnotation],
+                 config: ViewerConfig | None = None) -> type[BaseHTTPRequestHandler]:
     page = (STATIC_DIR / "index.html").read_bytes()
+    config = config or ViewerConfig(timezone="UTC")
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "galecore-ai-regime-viewer"
+        timeout = REQUEST_TIMEOUT_SECONDS  # a client that under-sends its Content-Length cannot pin a thread
 
         def log_message(self, fmt: str, *args) -> None:  # quiet; loopback only
             sys.stderr.write(f"{self.address_string()} - {fmt % args}\n")
+
+        def _allowed_origin(self) -> str | None:
+            origin = (self.headers.get("Origin") or "").rstrip("/")
+            return origin if origin and origin in config.allowed_origins else None
+
+        def _loopback_host(self) -> bool:
+            host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
+            return host in _LOOPBACK_HOSTS
+
+        def _cors_headers(self) -> None:
+            origin = self._allowed_origin()
+            if origin:
+                self.send_header("Access-Control-Allow-Origin", origin)
+                self.send_header("Vary", "Origin")
 
         def _send(self, status: HTTPStatus, body: bytes, content_type: str) -> None:
             self.send_response(status)
@@ -293,6 +467,7 @@ def make_handler(store: FileRecordStore, annotations: list[RecordAnnotation]) ->
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
+            self._cors_headers()
             self.end_headers()
             self.wfile.write(body)
 
@@ -301,8 +476,7 @@ def make_handler(store: FileRecordStore, annotations: list[RecordAnnotation]) ->
                        "application/json; charset=utf-8")
 
         def do_GET(self) -> None:
-            host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
-            if host not in _LOOPBACK_HOSTS:
+            if not self._loopback_host():
                 self._json(HTTPStatus.FORBIDDEN, {"error": "loopback only", "at": _now()})
                 return
             url = urlsplit(self.path)
@@ -311,7 +485,10 @@ def make_handler(store: FileRecordStore, annotations: list[RecordAnnotation]) ->
                 if url.path == "/":
                     self._send(HTTPStatus.OK, page, "text/html; charset=utf-8")
                 elif url.path == "/api/meta":
-                    self._json(HTTPStatus.OK, build_meta(store, annotations))
+                    self._json(HTTPStatus.OK, build_meta(store, annotations, config))
+                elif url.path == "/api/today":
+                    self._json(HTTPStatus.OK, build_today(store=store, symbol=params.get("symbol", ""),
+                                                          timezone=config.timezone, annotations=annotations))
                 elif url.path == "/api/records":
                     since = _parse_date(params.get("since"), name="since")
                     if since is None:
@@ -334,14 +511,73 @@ def make_handler(store: FileRecordStore, annotations: list[RecordAnnotation]) ->
                            {"error": f"record store unavailable: {exc}", "records_dir": str(store.base_dir),
                             "at": _now()})
 
+        def do_OPTIONS(self) -> None:
+            # CORS preflight for the monitor only; any other OPTIONS is refused like every non-GET.
+            origin = self._allowed_origin()
+            if not self._loopback_host() or not origin or not self.headers.get("Access-Control-Request-Method"):
+                self._reject()
+                return
+            self.send_response(HTTPStatus.NO_CONTENT)
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", f"Content-Type, {REVIEW_TOKEN_HEADER}")
+            self.send_header("Access-Control-Max-Age", "600")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def do_POST(self) -> None:
+            url = urlsplit(self.path)
+            try:
+                if not self._loopback_host():
+                    raise ReviewRejected(HTTPStatus.FORBIDDEN, "loopback only")
+                if url.path != "/api/reviews":
+                    raise ReviewRejected(HTTPStatus.NOT_FOUND, "not found")
+                if not config.reviews_enabled:
+                    raise ReviewRejected(HTTPStatus.FORBIDDEN, "reviews are disabled on this server")
+                if not self._allowed_origin():
+                    raise ReviewRejected(HTTPStatus.FORBIDDEN, "origin not allowed")
+                token = self.headers.get(REVIEW_TOKEN_HEADER) or ""
+                if not hmac.compare_digest(token.encode(), (config.review_token or "").encode()):
+                    raise ReviewRejected(HTTPStatus.UNAUTHORIZED, f"missing or wrong {REVIEW_TOKEN_HEADER}")
+                media_type = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+                if media_type != "application/json":
+                    raise ReviewRejected(HTTPStatus.UNSUPPORTED_MEDIA_TYPE, "Content-Type must be application/json")
+                try:
+                    length = int(self.headers.get("Content-Length") or "0")
+                except ValueError as exc:
+                    raise ReviewRejected(HTTPStatus.BAD_REQUEST, "invalid Content-Length") from exc
+                if length <= 0 or length > MAX_REVIEW_BODY_BYTES:
+                    raise ReviewRejected(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, "body missing or too large")
+                try:
+                    raw = self.rfile.read(length)
+                except (TimeoutError, OSError) as exc:
+                    raise ReviewRejected(HTTPStatus.REQUEST_TIMEOUT, "request body not received in time") from exc
+                if len(raw) != length:
+                    raise ReviewRejected(HTTPStatus.BAD_REQUEST, "request body shorter than Content-Length")
+                try:
+                    request = ReviewRequest.model_validate(json.loads(raw.decode("utf-8")))
+                except (ValueError, ValidationError) as exc:
+                    raise ReviewRejected(HTTPStatus.BAD_REQUEST, f"invalid review request: {exc}") from exc
+                result = submit_review(store=store, request=request, annotations=annotations)
+            except ReviewRejected as exc:
+                self._json(exc.status, {"error": str(exc), "at": _now()})
+                return
+            except (RecordStoreError, OSError) as exc:
+                self._json(HTTPStatus.INTERNAL_SERVER_ERROR,
+                           {"error": f"record store unavailable: {exc}", "records_dir": str(store.base_dir),
+                            "at": _now()})
+                return
+            self._json(HTTPStatus.CREATED, result)  # outside the try: a write that succeeded is never reported as failed
+
         def _reject(self) -> None:
             self.send_response(HTTPStatus.METHOD_NOT_ALLOWED)
-            self.send_header("Allow", "GET")
+            self.send_header("Allow", "GET, POST, OPTIONS")
             self.send_header("Content-Length", "0")
             self.end_headers()
 
         def __getattr__(self, name: str):
-            # http.server dispatches on ``do_<METHOD>``: every method but GET is refused with 405
+            # http.server dispatches on ``do_<METHOD>``: every other method is refused with 405
             # (the default would be 501 for TRACE, CONNECT or anything unusual).
             if name.startswith("do_"):
                 return self._reject
@@ -351,15 +587,21 @@ def make_handler(store: FileRecordStore, annotations: list[RecordAnnotation]) ->
 
 
 def serve(store: FileRecordStore, *, port: int = DEFAULT_PORT,
-          annotations: list[RecordAnnotation] | None = None) -> ThreadingHTTPServer:
+          annotations: list[RecordAnnotation] | None = None,
+          config: ViewerConfig | None = None) -> ThreadingHTTPServer:
     """Bind the loopback interface only; the caller runs ``serve_forever``."""
-    handler = make_handler(store, annotations if annotations is not None else load_annotations())
+    handler = make_handler(store, annotations if annotations is not None else load_annotations(), config)
     return ThreadingHTTPServer((LOOPBACK, port), handler)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Local read-only viewer for regime records (loopback only)")
+    parser = argparse.ArgumentParser(description="Local viewer/review adapter for regime records (loopback only)")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("--no-reviews", action="store_true",
+                        help="serve reads only; POST /api/reviews answers 403")
+    parser.add_argument("--allow-origin", action="append", metavar="ORIGIN",
+                        help=f"browser origin allowed to call the API (repeatable; default: {ALLOWED_ORIGINS_ENV} "
+                             f"or {', '.join(DEFAULT_ALLOWED_ORIGINS)})")
     args = parser.parse_args(argv)
     try:
         records_dir = default_records_dir()
@@ -367,14 +609,29 @@ def main(argv: list[str] | None = None) -> int:
             raise RecordStoreError(f"records directory does not exist: {records_dir} (not created; check GALECORE_RECORDS_DIR)")
         store = FileRecordStore(records_dir)
         annotations = load_annotations()
+        timezone = convention_timezone()
     except (RecordStoreError, OSError) as exc:
         print(f"Record store unavailable: {exc}", file=sys.stderr)
         return 1
-    server = serve(store, port=args.port, annotations=annotations)
+    origins = frozenset(o.rstrip("/") for o in args.allow_origin) if args.allow_origin else allowed_origins_from_env()
+    token = None
+    generated = False
+    if not args.no_reviews:
+        token = os.environ.get(REVIEW_TOKEN_ENV) or secrets.token_urlsafe(24)
+        generated = not os.environ.get(REVIEW_TOKEN_ENV)
+    config = ViewerConfig(timezone=timezone, allowed_origins=origins, review_token=token)
+    server = serve(store, port=args.port, annotations=annotations, config=config)
     host, bound_port = server.server_address[:2]
-    print(f"Regime record viewer (read-only) on http://{host}:{bound_port}/")
-    print(f"Records dir: {store.base_dir}  (symbols: {', '.join(store.symbols()) or 'none'})")
-    print("Ctrl+C to stop.")
+    print(f"Regime record viewer on http://{host}:{bound_port}/  (records dir: {store.base_dir}; "
+          f"symbols: {', '.join(store.symbols()) or 'none'}; record dates in {timezone})", flush=True)
+    print(f"Browser origins allowed: {', '.join(sorted(origins)) or 'none'}", flush=True)
+    if token:
+        shown = token if generated else "<from environment>"
+        print(f"Reviews: ENABLED. {REVIEW_TOKEN_HEADER}: {shown}"
+              + ("  (generated for this run; paste it in the monitor's review form)" if generated else ""), flush=True)
+    else:
+        print("Reviews: disabled (--no-reviews)", flush=True)
+    print("Ctrl+C to stop.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

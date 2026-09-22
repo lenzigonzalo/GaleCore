@@ -1,0 +1,16 @@
+{
+  "request": {
+    "method": "OPTIONS",
+    "path": "/api/reviews",
+    "headers": {
+      "Origin": "http://evil.example",
+      "Access-Control-Request-Method": "POST"
+    },
+    "body": null
+  },
+  "http_status": 405,
+  "response_headers": {
+    "Allow": "GET, POST, OPTIONS"
+  },
+  "body": null
+}

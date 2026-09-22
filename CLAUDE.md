@@ -96,5 +96,5 @@ python -B -m galecore_ai.adapters.cli query --symbol SPY --since <YYYY-MM-DD> [-
 - Architecture: `docs/architecture/GaleCore-AI-arquitectura-v5.md`
 - Contracts: `docs/architecture/P0-CONTRACTS.md`
 - Validation guides: `docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md` (GEX), `docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md` (regime + record)
-- Record viewer (read-only, loopback, reuses `query`): `docs/LOCAL-REGIME-VIEWER.md` — `python -B -m galecore_ai.adapters.regime_viewer`
+- Record viewer + review adapter for the monitor (loopback, reuses `query`/`record_review`): `docs/LOCAL-REGIME-VIEWER.md` — `python -B -m galecore_ai.adapters.regime_viewer`
 - Phase 4 alignment: `docs/architecture/PHASE4-ALIGNMENT.md`

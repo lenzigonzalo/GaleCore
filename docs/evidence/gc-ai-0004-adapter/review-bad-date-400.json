@@ -1,0 +1,28 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/reviews",
+    "headers": {
+      "Origin": "http://localhost:3039",
+      "X-Review-Token": "<token>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "symbol": "TEST",
+      "date": "20260919",
+      "run_id": "01a0c66e-6fae-75e0-b9eb-2f93557c0f47",
+      "verdict": "partial",
+      "comment": "SYNTHETIC evidence review from GC-AI-0004; not an owner verdict"
+    }
+  },
+  "http_status": 400,
+  "response_headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "http://localhost:3039",
+    "Vary": "Origin"
+  },
+  "body": {
+    "error": "date must be YYYY-MM-DD",
+    "at": "2026-09-22T00:05:21.823871+00:00"
+  }
+}

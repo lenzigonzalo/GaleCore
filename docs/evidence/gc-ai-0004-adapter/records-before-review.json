@@ -1,0 +1,339 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/records?symbol=TEST&since=2026-09-20&until=2026-09-20",
+    "headers": {},
+    "body": null
+  },
+  "http_status": 200,
+  "response_headers": {
+    "Content-Type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "symbol": "TEST",
+    "since": "2026-09-20",
+    "until": "2026-09-20",
+    "records_dir": "<tmp>\\records",
+    "count": 1,
+    "integrity_failed": [],
+    "read_inconsistent": [],
+    "records": [
+      {
+        "date": "2026-09-20",
+        "status": "OK",
+        "path": "<tmp>\\records\\TEST\\2026-09-20.md",
+        "entries": [
+          {
+            "run_id": "01a0c66e-6fae-75e0-b9eb-2f93557c0f47",
+            "prompt": "SYNTHETIC TEST RECORD (tools/viewer_test_records.py) — not a real analysis",
+            "accepted_at": "2026-09-22T00:05:21.466143+00:00",
+            "facts_hash": "sha256:9921fd15d606982f66a1fda3fe63bc84327c48871c5208e670c710e4dabf23a8",
+            "facts": {
+              "atm_iv": 0.1435,
+              "call_gex": 2000000.0,
+              "call_wall": 760.0,
+              "coverage_pct": 97.5,
+              "freshness_status": "VALID",
+              "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+              "net_gex": -1473.4,
+              "put_gex": -500000.0,
+              "put_skew_dte": 30,
+              "put_skew_expiration": "2026-10-16",
+              "put_skew_level_ok": true,
+              "put_skew_level_threshold": 1.3,
+              "put_skew_ratio": 1.1951,
+              "put_wall": 740.0,
+              "put_wing_iv": 0.1715,
+              "sources": {
+                "gex": {
+                  "capability_id": "x",
+                  "endpoint": "/x",
+                  "freshness_basis": "galecore_timestamp",
+                  "freshness_status": "VALID",
+                  "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+                  "provenance": "GALECORE_VERIFIED",
+                  "response_received_at": "2026-09-22T00:05:21.452825+00:00"
+                },
+                "put_skew": {
+                  "capability_id": "x",
+                  "endpoint": "/x",
+                  "freshness_basis": "galecore_timestamp",
+                  "freshness_status": "VALID",
+                  "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+                  "provenance": "GALECORE_VERIFIED",
+                  "response_received_at": "2026-09-22T00:05:21.452825+00:00"
+                },
+                "vix": {
+                  "capability_id": "x",
+                  "endpoint": "/x",
+                  "freshness_basis": "galecore_timestamp",
+                  "freshness_status": "VALID",
+                  "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+                  "provenance": "GALECORE_VERIFIED",
+                  "response_received_at": "2026-09-22T00:05:21.452825+00:00"
+                },
+                "vvix": {
+                  "capability_id": "x",
+                  "endpoint": "/x",
+                  "freshness_basis": "galecore_timestamp",
+                  "freshness_status": "VALID",
+                  "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+                  "provenance": "GALECORE_VERIFIED",
+                  "response_received_at": "2026-09-22T00:05:21.452825+00:00"
+                }
+              },
+              "spot": 757.43,
+              "symbol": "TEST",
+              "vix": 17.71,
+              "vvix": 95.41,
+              "zero_gamma_level": 745.0
+            },
+            "host": {
+              "provider": "test-fixture",
+              "model": "none",
+              "provenance": "HOST_DECLARED"
+            },
+            "accepted_payload": {
+              "evidence": [
+                {
+                  "claim": "Net GEX is negative",
+                  "fact_path": "facts.net_gex"
+                },
+                {
+                  "claim": "Skew semaphore is calm",
+                  "fact_path": "facts.put_skew_level_ok"
+                }
+              ],
+              "gamma_regime": "negative_gamma",
+              "implications": [
+                "Moves may be amplified while protection stays cheap"
+              ],
+              "limitations": [
+                "Skew carries no GaleCore timestamp"
+              ],
+              "observations": [
+                "Dealers are short gamma and the skew sits in the calm zone"
+              ],
+              "quantitative_claims": [
+                {
+                  "metric": "net_gex",
+                  "unit": "billion_usd",
+                  "value": -1473.4
+                },
+                {
+                  "metric": "put_skew_ratio",
+                  "unit": "ratio",
+                  "value": 1.1951
+                },
+                {
+                  "metric": "vix",
+                  "unit": "index_points",
+                  "value": 17.71
+                }
+              ],
+              "tail_pricing": "calm"
+            },
+            "outcomes": [],
+            "human_reviews": [],
+            "recorded_at": "2026-09-22T00:05:21.466143+00:00",
+            "snapshot": {
+              "run_id": "01a0c66e-6fae-75e0-b9eb-2f93557c0f47",
+              "prepared_at": "2026-09-20T21:00:00Z",
+              "facts_hash": "sha256:9921fd15d606982f66a1fda3fe63bc84327c48871c5208e670c710e4dabf23a8",
+              "conventions_hash": "sha256:338cf48efbcb3027a74297e93f546c599c74eb03562976630fa76446aa4cd233",
+              "market_data_as_of": "2026-09-22T00:05:21.452825Z",
+              "freshness_status": "VALID"
+            },
+            "effective_assets": {
+              "agent": {
+                "asset_id": "TradingAgent",
+                "version": "1.1.0",
+                "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+              },
+              "skills": {
+                "regime_interpretation": {
+                  "asset_id": "regime_interpretation",
+                  "version": "1.0.0",
+                  "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                }
+              },
+              "protocols": {
+                "facts_discipline": {
+                  "asset_id": "facts_discipline",
+                  "version": "1.2.0",
+                  "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                }
+              },
+              "conventions": {
+                "trading_defaults": {
+                  "asset_id": "trading_defaults",
+                  "version": "1.0.0",
+                  "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                }
+              }
+            },
+            "trace": {
+              "trace_id": "01a0c66e-6fb7-7722-ac7e-04dfdcc93203",
+              "accepted_at": "2026-09-22T00:05:21.466143Z",
+              "facts_provenance": "GALECORE_VERIFIED",
+              "guardrails": [
+                {
+                  "guardrail_id": "snapshot_integrity",
+                  "passed": true,
+                  "message": "snapshot_hash, facts_hash and conventions_hash recomputed and match"
+                },
+                {
+                  "guardrail_id": "no_invented_numbers",
+                  "passed": true,
+                  "message": "OK"
+                },
+                {
+                  "guardrail_id": "facts_match_source",
+                  "passed": true,
+                  "message": "All evidence paths validated"
+                },
+                {
+                  "guardrail_id": "no_trading_recommendation",
+                  "passed": true,
+                  "message": "No explicit trading recommendations detected (pattern-based; novel phrasings may bypass)"
+                },
+                {
+                  "guardrail_id": "no_numbers_in_prose",
+                  "passed": true,
+                  "message": "No numbers in observations/implications (pattern-based; spelled-out numbers may bypass)"
+                },
+                {
+                  "guardrail_id": "gex_regime_sign",
+                  "passed": true,
+                  "message": "Regime sign validated"
+                },
+                {
+                  "guardrail_id": "tail_pricing_level",
+                  "passed": true,
+                  "message": "tail_pricing agrees with GaleCore's put_skew_level_ok"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[0]: metric 'net_gex' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[1]: metric 'put_skew_ratio' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[2]: metric 'vix' validated"
+                }
+              ],
+              "capabilities": [
+                {
+                  "capability_id": "compute.gex_analysis",
+                  "semantic_class": null,
+                  "endpoint": "/App/Gex/Analysis",
+                  "transport": "REST",
+                  "schema_version": null,
+                  "calculation_version": null,
+                  "methodology_version": null,
+                  "latency_ms": 3,
+                  "outcome": "ok",
+                  "error": null,
+                  "response_received_at": null
+                },
+                {
+                  "capability_id": "compute.put_skew",
+                  "semantic_class": null,
+                  "endpoint": "/App.Analytics/PutSkew",
+                  "transport": "REST",
+                  "schema_version": null,
+                  "calculation_version": null,
+                  "methodology_version": null,
+                  "latency_ms": 3,
+                  "outcome": "ok",
+                  "error": null,
+                  "response_received_at": null
+                },
+                {
+                  "capability_id": "market_data.trade",
+                  "semantic_class": null,
+                  "endpoint": "/Data/Tastytrade/MarketData/Trade",
+                  "transport": "REST",
+                  "schema_version": null,
+                  "calculation_version": null,
+                  "methodology_version": null,
+                  "latency_ms": 3,
+                  "outcome": "ok",
+                  "error": null,
+                  "response_received_at": null
+                },
+                {
+                  "capability_id": "market_data.trade",
+                  "semantic_class": null,
+                  "endpoint": "/Data/Tastytrade/MarketData/Trade",
+                  "transport": "REST",
+                  "schema_version": null,
+                  "calculation_version": null,
+                  "methodology_version": null,
+                  "latency_ms": 3,
+                  "outcome": "ok",
+                  "error": null,
+                  "response_received_at": null
+                }
+              ]
+            },
+            "entry_hash": "sha256:4182ae6fa3c015d6b8d18f8654cadd42c79860e80d24bbcdaca5bd076c7d8b88",
+            "request": {
+              "prompt": "SYNTHETIC TEST RECORD (tools/viewer_test_records.py) — not a real analysis",
+              "symbol": "TEST",
+              "skill_id": "regime_interpretation"
+            },
+            "claims": [
+              {
+                "metric": "net_gex",
+                "value": -1473.4,
+                "unit": "billion_usd",
+                "fact_value": -1473.4,
+                "matches": true
+              },
+              {
+                "metric": "put_skew_ratio",
+                "value": 1.1951,
+                "unit": "ratio",
+                "fact_value": 1.1951,
+                "matches": true
+              },
+              {
+                "metric": "vix",
+                "value": 17.71,
+                "unit": "index_points",
+                "fact_value": 17.71,
+                "matches": true
+              }
+            ],
+            "evidence": [
+              {
+                "claim": "Net GEX is negative",
+                "fact_path": "facts.net_gex",
+                "fact_value": -1473.4
+              },
+              {
+                "claim": "Skew semaphore is calm",
+                "fact_path": "facts.put_skew_level_ok",
+                "fact_value": true
+              }
+            ],
+            "comparisons": [],
+            "states": {
+              "outcome_pending": true,
+              "review_pending": true
+            },
+            "annotation": null
+          }
+        ]
+      }
+    ],
+    "queried_at": "2026-09-22T00:05:21.998508+00:00"
+  }
+}
