@@ -1243,3 +1243,164 @@ y evidencia históricas recuperables; ninguna skill, agente o tarea concede auto
 - ¿Qué revisión concreta justifica primero fuentes de empresas, macro, noticias y calendario?
 - ¿Qué tareas necesitan recurrencia, qué aprobación las habilita y cuándo se justifica un runtime
   propio frente a la capacidad del host?
+
+---
+
+## BL-009 — Taxonomía de conocimiento entre GaleCore y GaleCore-AI, y skill de ruteo
+
+**Estado:** `CAPTURED`
+
+**Target:** después de cerrar GC-AI-0002; primero un ADR de taxonomía, después la skill.
+
+**Origen:** conversación con el owner del 2026-09-22, a partir del `partial` de ese día. Al
+investigar cómo se calcula el GEX aparecieron cuatro lugares con conocimiento del dominio y
+ninguno alcanzable por el host: los campos en prosa `_note` / `_por_que_existe` /
+`_lo_que_la_banda_no_dice` dentro de `galecore_rules_gex.json`, `GaleCore/research/got/`,
+`GaleCore/decisiones/` y la propia skill. La duda del owner fue si, con el host pasando por
+GaleCore-AI, ese material debería migrar acá.
+
+**Objetivo:** una taxonomía explícita de qué tipo de conocimiento vive en cada repo, con una skill
+que la aplique al crear cada artefacto nuevo, para no seguir decidiéndolo caso por caso mientras
+los dos repos coexisten.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_WITH_PREREQUISITE`. No toca código: es un ADR más una skill de proceso
+en el tooling del workspace. La convención de `GaleCore/decisiones/README.md` (plataforma →
+GaleCore, proceso → workspace, IA → `GaleCore-AI/docs/decisions/`) y la de `research/` como
+antesala de la plataforma ya existen; la taxonomía las recoge en vez de reemplazarlas.
+
+**Invariante anti-rewrite:** no mover `research/` ni los ADRs existentes de repo. La migración que
+sí contempla es acotada: la prosa interpretativa embebida en los JSON de reglas.
+
+### Alcance propuesto (no implementar antes del entry gate)
+
+- ADR de taxonomía con los cuatro tipos distinguidos por consumidor: parámetro ejecutable,
+  medición empírica, decisión, instrucción al modelo.
+- Criterio de residencia y su fundamento, incluida la razón por la que `research/` no migra.
+- Skill de ruteo que, ante un artefacto nuevo, indique destino y formato citando el ADR.
+- Corrección puntual detectada: `PutSkewCalculator.LevelThreshold = 1.30` es una `const` de C#
+  mientras `max_dte` es configuración JSON; dos parámetros del mismo análisis con residencia
+  distinta y sin razón visible.
+
+### Entry gate
+
+GC-AI-0002 en `VALIDATED` o `CLOSED`, y el ADR de taxonomía aprobado por el owner.
+
+### Acceptance criteria
+
+- El ADR decide la residencia de los cuatro tipos y queda citado desde ambos repos.
+- La skill produce destino y formato para un artefacto nuevo, y falla explícitamente cuando el
+  caso no encaja en la taxonomía en vez de elegir por defecto.
+- Ningún criterio de residencia queda sólo en esta conversación o en un handoff.
+
+---
+
+## BL-010 — Procedencia de hechos como asset versionado
+
+**Estado:** `CAPTURED`
+
+**Target:** primer incremento después de GC-AI-0002; depende del ADR de BL-009.
+
+**Origen:** el `partial` del 2026-09-22. La interpretación aceptada trató los call/put walls como
+referencias de cobertura; la investigación propia de GaleCore tiene medido lo contrario (argmax
+sobre un solo strike, nunca más del 19 % del GEX absoluto de su lado, saltos intradía, y sin
+diferencia frente a cualquier strike del mismo delta sobre 926 observaciones 2013-2025). Los ocho
+checks la dejaron pasar correctamente: los números eran exactos y no había recomendación de
+trading. Lo que falta no es un guardrail, es que el host tenga a la vista qué está medido sobre
+cada hecho.
+
+**Objetivo:** que cada familia de hechos llegue al host con su procedencia declarada, versionada y
+hasheada junto al resto de los assets efectivos.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_WITH_PREREQUISITE`. Reutiliza el cargador de assets, el hasheo y el
+`effective_assets` del snapshot; agrega una clase de asset, no un mecanismo nuevo.
+
+**Invariante anti-rewrite:** el asset **cita, no copia**. La medición sigue viviendo donde se
+produjo; el asset lleva la afirmación, sus límites y un puntero verificable. Dos copias de una
+medición son peor que una sola mal ubicada.
+
+### Alcance propuesto (no implementar antes del entry gate)
+
+- `config/facts/<familia>.yaml` por familia de hechos (gex, put_skew, vix/vvix): cómo se calcula,
+  qué asume, qué corte usa, qué está medido sobre el hecho y con qué resultado, y qué no puede
+  afirmarse a partir de él.
+- Supuestos que hoy no están declarados en ningún lado que el host lea: el signo del GEX asume
+  dealer largo calls y corto puts; el OI viene del candle del cierre anterior; los griegos y la IV
+  son del proveedor (DXLink), no calculados por GaleCore; el skew se mide sobre la expiración de
+  mayor DTE del rango, no sobre el frente.
+- Check de integridad: la ejecución falla si un puntero de procedencia no resuelve.
+- Regla 11 en la skill de régimen: no afirmar sobre un hecho algo que su procedencia declara no
+  soportado. No es automatizable como guardrail; es criterio de review.
+
+### Entry gate
+
+GC-AI-0002 cerrado y el ADR de BL-009 aprobado (define dónde vive la medición citada).
+
+### Acceptance criteria
+
+- El `prepare` expone la procedencia de cada familia de hechos y su hash entra en
+  `effective_assets`.
+- Un puntero roto falla cerrado, como el resto de la verificación de assets.
+- Una interpretación que contradiga una limitación declarada es un hallazgo de review con cita,
+  no una discusión de criterio.
+- La prosa migrada desde los JSON de reglas deja un puntero en origen; no quedan dos versiones.
+
+---
+
+## BL-011 — Recetas de corte versionadas para los hechos de mercado
+
+**Estado:** `CAPTURED`
+
+**Target:** Phase 5/6. **La decisión de cuáles son las recetas conviene tomarla antes**, porque
+determina si los registros ya escritos siguen siendo comparables.
+
+**Origen:** conversación del 2026-09-22. El owner planteó que un host con contexto de lo que se
+está trabajando debería pedir el corte de datos adecuado — GEX corto para una estrategia 0DTE,
+30-45 días para swing, agregado completo para un panorama macro — en vez de recibir siempre el
+mismo corte fijo.
+
+**Objetivo:** que el corte de datos sea parte del contrato y del registro, elegido entre recetas
+nombradas y versionadas, sin perder comparabilidad entre registros.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_WITH_PREREQUISITE`. La cañería ya existe y está sin usar:
+`GammaExposureRequest` acepta `MaxDTE`, `TargetDte`, `AllExpirations`, `IncludeZeroDte` e
+`IncludeByExpiry`, y el desglose por vencimiento ya llega y se parsea en
+`GaleCoreGexExpiryScope` (`byExpiry[]`), pero `by_expiry` no se usa en ningún lado de `src/`: el
+mapper de régimen toma sólo el agregado y lo descarta. Hoy el corte está congelado en la skill
+(agregado 0-60 DTE más skew sobre la expiración de mayor DTE del rango).
+
+**Invariante anti-rewrite:** recetas acotadas y versionadas, no parámetros libres. Si el host elige
+parámetros arbitrarios, dos registros del mismo análisis dejan de ser comparables y se pierde la
+premisa del registro evaluable. La comparabilidad pasa a ser verificable: dos registros son
+comparables si y sólo si comparten receta y versión.
+
+### Alcance propuesto (no implementar antes del entry gate)
+
+- Recetas nombradas, cada una un asset con su hash y su procedencia propia: p. ej. `gex_0dte`
+  (0-1 DTE), `gex_swing` (target 30-45), `gex_macro` (agregado más `byExpiry`).
+- Los límites medidos no son los mismos por receta: el hallazgo del wall vale para todas, pero el
+  OI atrasado un día pesa mucho más en 0DTE que a 45 días. La procedencia (BL-010) es por receta.
+- La receta elegida y su justificación entran en el registro.
+- Paso previo de adecuación del pedido: su salida correcta es una pregunta o una negativa
+  explícita, nunca un ajuste silencioso de parámetros.
+
+### No objetivos de esta captura
+
+- Permitir parámetros libres elegidos por el modelo.
+- Cambiar el corte de la serie AC-08 en curso: cambiarlo antes de cerrarla la invalida.
+
+### Entry gate
+
+GC-AI-0002 cerrado, BL-010 implementado (una receta sin procedencia propia no aporta) y decisión
+del owner sobre el conjunto inicial de recetas.
+
+### Acceptance criteria
+
+- El registro declara receta y versión; `query` permite distinguir registros comparables.
+- Un pedido cuyo corte no corresponde al contexto produce pregunta o negativa registrada.
+- Las recetas son un conjunto cerrado y versionado; agregar una es un cambio de asset revisado.
