@@ -78,14 +78,14 @@ write to any other page or process.
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 | `build_today` (date via `record_date_for` with the convention timezone from `convention_timezone()`), `GET /api/today`; `build_meta` adds `today`/`timezone`/`reviews_enabled` | `TestTodayAndMeta` (4 tests) | `docs/evidence/gc-ai-0004-adapter/today-TEST-no-record.json`, `meta.json` | IMPLEMENTED (pending AC-07) |
-| AC-02 | `submit_review` → `record_review` → `build_view` of the day; `ReviewRequest` (extra=forbid, `ReviewVerdict`) | `TestReviewEndpoint::test_review_is_appended_through_record_review_and_reread` (entry_hash unchanged, CLI path reads it back) | `records-before-review.json` + `review-ok-201.json` (same `entry_hash`, reviews 0 → 1), `cli-query-reads-review-back.json` | IMPLEMENTED (pending AC-07) |
+| AC-01 | `build_today` (date via `record_date_for` with the convention timezone from `convention_timezone()`), `GET /api/today`; `build_meta` adds `today`/`timezone`/`reviews_enabled` | `TestTodayAndMeta` (4 tests) | `docs/evidence/gc-ai-0004-adapter/today-QQQ-no-record.json` (asserted `NO_RECORD`), `today-TEST.json`, `meta.json` | IMPLEMENTED (pending AC-07) |
+| AC-02 | `submit_review` → `record_review` → `build_view` of the day (a re-read failure after the save is still 201 with `record: null` + `reread_error`, never an error status that invites a retry); `ReviewRequest` (extra=forbid, `ReviewVerdict`) | `TestReviewEndpoint::test_review_is_appended_through_record_review_and_reread` (entry_hash unchanged, CLI path reads it back), `test_reread_failure_after_save_is_still_201_and_not_retried_into_a_duplicate` | `records-before-review.json` + `review-ok-201.json` (same `entry_hash`, reviews 0 → 1), `cli-query-reads-review-back.json` | IMPLEMENTED (pending AC-07) |
 | AC-03 | `do_POST`: loopback Host, `reviews_enabled`, allowed Origin, `hmac.compare_digest` token, JSON media type, size ≤ 16 KiB, `Handler.timeout`, schema; `submit_review` validates date/symbol with the store's rules before any file; `_review_status` maps by exception cause → 400/401/403/404/408/413/415/422/503; `_WRITE_LOCK` serializes writes | `test_review_requires_token_origin_and_loopback_host`, `test_review_rejects_bad_requests_without_writing`, `test_review_on_tampered_record_is_refused`, `test_oversized_or_empty_body_is_refused`, `test_invalid_symbol_or_date_is_400_before_any_file_is_touched`, `test_concurrent_reviews_on_the_same_day_all_land`, `test_write_failure_is_503_not_422`, `test_under_sent_body_is_408_and_nothing_is_written`, `test_no_reviews_flag_disables_the_write`, `TestHttpAdapter::test_unknown_paths_and_writes_are_rejected` | `review-wrong-token-401.json` (`<wrong-token>`), `review-other-origin-403.json`, `review-bad-verdict-400.json`, `review-bad-date-400.json`, `review-unknown-run-404.json`, `review-tampered-day-422.json` — all regenerable with `tools/capture_viewer_evidence.py` | IMPLEMENTED (pending AC-07) |
 | AC-04 | `_cors_headers` (echo + `Vary: Origin`), `do_OPTIONS` preflight only for an allowed origin, `allowed_origins_from_env` | `TestCors` (3 tests) | `preflight-allowed-origin-204.json`, `preflight-other-origin-405.json`, `meta.json` (CORS header) | IMPLEMENTED (pending AC-07) |
-| AC-05 | Read paths untouched; `make_handler` defaults to `ViewerConfig(timezone="UTC")` without reviews | all 30 GC-AI-0003 tests still pass; 18 new → 48 in `test_regime_viewer.py`; standalone page served | full suite 646 passed | IMPLEMENTED (pending AC-07) |
-| AC-06 | — | gate PASS; ruff clean; `git diff --check` clean; pytest 646 passed, 1 skipped (pre-existing); wheel PASS | commands below | IMPLEMENTED |
-| AC-07 | — | — | internal review R1: CHANGES_REQUESTED → fixed (below); `/review-codex` pending | PARTIAL |
-| AC-08 | — | Read of the real directory with this code: `cli query --symbol SPY --since 2026-09-01` → 2 records OK (2026-09-17, 2026-09-21 with 1 outcome + review `agree` written by the owner), `integrity_failed: []`; `record_store.py`/`regime_record.py` unchanged in the GC-AI-0002 tree | monitor browser run on the real dir (`--no-reviews`) | VERIFIED READ-ONLY against the current GC-AI-0002 tree; formal rebase/merge before closing PENDING |
+| AC-05 | Read paths untouched; `make_handler` defaults to `ViewerConfig(timezone="UTC")` without reviews | all 30 GC-AI-0003 tests still pass; 19 new → 49 in `test_regime_viewer.py`; standalone page served | full suite 647 passed | IMPLEMENTED (pending AC-07) |
+| AC-06 | — | gate PASS; ruff clean; `git diff --check` clean; pytest 647 passed, 1 skipped (pre-existing); wheel PASS | commands below | IMPLEMENTED |
+| AC-07 | — | — | internal review R1: CHANGES_REQUESTED → fixed; Codex C1 (`reviews/GC-AI-0004-20260922T001230Z.md`): CHANGES_REQUESTED → fixed (below); `--recheck` pending | PARTIAL |
+| AC-08 | — | Read of the real directory with this code: `cli query --symbol SPY --since 2026-09-01` → 2 records OK (2026-09-17, 2026-09-21 with 1 outcome + review `agree` written by the owner), `integrity_failed: []`; `record_store.py`/`regime_record.py` unchanged in the GC-AI-0002 tree | `real-dir-readonly-check.json` (full sha256 before/after, identical; query summary; `/api/today`), monitor browser run on the real dir (`--no-reviews`) | VERIFIED READ-ONLY against the current GC-AI-0002 tree; formal rebase/merge before closing PENDING |
 
 ## Required validation
 
@@ -124,13 +124,13 @@ python tools/verify_wheel_assets.py
 - Not changed: `query` output, record format, `cli.py`, `record_regime.py`, the standalone page,
   `ACTIVE_WORK_ITEM`, GaleCore.
 
-### Commands and exact results (2026-09-22 ~00:20 UTC, after internal review R1, `PYTHONPATH=src`)
+### Commands and exact results (2026-09-22 ~01:10 UTC, after reviews R1 and C1, `PYTHONPATH=src`)
 
 ```
 python tools/engineering_gate.py            → Engineering gate: GC-AI-0002 / IN_PROGRESS / PASS (gate evaluates the active item, GC-AI-0002, by owner instruction)
 python -m ruff check --no-cache .           → All checks passed!
 git diff --check                            → clean
-python -B -m pytest -q -p no:cacheprovider  → 646 passed, 1 skipped, 1 warning
+python -B -m pytest -q -p no:cacheprovider  → 647 passed, 1 skipped, 1 warning
 python tools/verify_wheel_assets.py         → RESULT: PASS
 sha256 GaleCore/research/regime/SPY/*.md before/after serving the real dir → 57a48542…, 20b9c3b7… (identical)
 ```
@@ -169,7 +169,18 @@ diff-check, wheel PASS).
 | R1-m8 | MINOR | Evidence: wrong token sanitized like the right one; no before-state; not regenerable | `tools/capture_viewer_evidence.py`; `<wrong-token>`; `records-before-review.json` |
 | R1-n1 | NOTE | stale "GET only" sentence, `--allow-origin` undocumented, "trading date" wording, `/api/today` always 200 | guide and docstring updated |
 
-## Independent review
+## Independent review 1 (Codex, `--commit 0b9b089`, effort high, 2026-09-22T00:12Z) — `docs/engineering/reviews/GC-AI-0004-20260922T001230Z.md`
+
+**Verdict:** CHANGES_REQUESTED. Codex reproduced gate PASS, ruff, 646 passed, diff-check; regenerated the
+evidence in a temp dir (statuses matched, hashes recomputed); wheel not buildable in its sandbox (no
+network for `hatchling`) — built by the implementer, PASS.
+
+| # | Sev | Finding | Resolution |
+|---|---|---|---|
+| C1-M1 | MAJOR | A failure while re-reading the day after a successful save returned 500 → a client retry appended the review twice | **Fixed.** The re-read is outside the write's error path: 201 with `record: null` and `reread_error`; the monitor tells the operator not to resend. `test_reread_failure_after_save_is_still_201_and_not_retried_into_a_duplicate` (exactly one review on disk) |
+| C1-m1 | MINOR | `today-TEST-no-record.json` actually held `INTEGRITY_FAILED` (synthetic days are relative to the run date) | **Fixed.** `today-QQQ-no-record.json` (symbol without records, asserted `NO_RECORD` by the tool) + `today-TEST.json` named honestly; README corrected |
+
+## Independent review — recheck
 
 **Reviewer:** PENDING
 **Review result:** PENDING

@@ -70,7 +70,8 @@ def main() -> int:
               "comment": "SYNTHETIC evidence review from GC-AI-0004; not an owner verdict"}
     cases = [
         ("meta.json", "/api/meta", "GET", {"Origin": ORIGIN}, None),
-        ("today-TEST-no-record.json", "/api/today?symbol=TEST", "GET", None, None),
+        ("today-QQQ-no-record.json", "/api/today?symbol=QQQ", "GET", None, None),  # no QQQ folder → NO_RECORD
+        ("today-TEST.json", "/api/today?symbol=TEST", "GET", None, None),  # depends on the run date: the synthetic days are relative to today
         ("preflight-allowed-origin-204.json", "/api/reviews", "OPTIONS", {"Origin": ORIGIN, "Access-Control-Request-Method": "POST"}, None),
         ("preflight-other-origin-405.json", "/api/reviews", "OPTIONS", {"Origin": "http://evil.example", "Access-Control-Request-Method": "POST"}, None),
         ("review-wrong-token-401.json", "/api/reviews", "POST", {**h, "X-Review-Token": "wrong"}, review),
@@ -92,6 +93,8 @@ def main() -> int:
                  for k, v in (headers or {}).items()}
         doc = {"request": {"method": method, "path": path, "headers": shown, "body": body},
                "http_status": st, "response_headers": keep, "body": json.loads(text) if text else None}
+        if name == "today-QQQ-no-record.json":
+            assert doc["body"]["status"] == "NO_RECORD", doc["body"]
         txt = san(json.dumps(doc, indent=2, ensure_ascii=False)) + "\n"
         assert TOKEN not in txt and os.environ.get("USERNAME", "\0") not in txt, name
         (out / name).write_text(txt, encoding="utf-8", newline="\n")

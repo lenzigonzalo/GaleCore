@@ -423,9 +423,18 @@ def submit_review(*, store: FileRecordStore, request: ReviewRequest,
                                          comment=request.comment)
         except RecordError as exc:
             raise ReviewRejected(_review_status(exc), str(exc)) from exc
-        view = build_view(store=store, symbol=symbol, since=day, until=day, annotations=annotations)
+        # From here on the review IS on disk. A failure while re-reading must not turn into an error
+        # status: the client would retry and append the review twice. It is reported next to the
+        # acknowledgement instead, with no record.
+        try:
+            view = build_view(store=store, symbol=symbol, since=day, until=day, annotations=annotations)
+        except (RecordStoreError, RecordError, OSError) as exc:
+            return {"recorded": {"run_id": run_id, "path": path, "verdict": request.verdict.value},
+                    "record": None, "reread_error": f"review saved, but re-reading the day failed: {exc}",
+                    "queried_at": datetime.now(UTC).isoformat()}
     return {"recorded": {"run_id": run_id, "path": path, "verdict": request.verdict.value},
-            "record": view["records"][0] if view["records"] else None, "queried_at": view["queried_at"]}
+            "record": view["records"][0] if view["records"] else None, "reread_error": None,
+            "queried_at": view["queried_at"]}
 
 
 # ── HTTP ─────────────────────────────────────────────────────────

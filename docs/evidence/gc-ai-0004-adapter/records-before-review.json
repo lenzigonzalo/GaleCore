@@ -24,17 +24,17 @@
         "path": "<tmp>\\records\\TEST\\2026-09-20.md",
         "entries": [
           {
-            "run_id": "01a0c66e-6fae-75e0-b9eb-2f93557c0f47",
+            "run_id": "01a0c67c-b860-7910-8f42-a094b436da3c",
             "prompt": "SYNTHETIC TEST RECORD (tools/viewer_test_records.py) — not a real analysis",
-            "accepted_at": "2026-09-22T00:05:21.466143+00:00",
-            "facts_hash": "sha256:9921fd15d606982f66a1fda3fe63bc84327c48871c5208e670c710e4dabf23a8",
+            "accepted_at": "2026-09-22T00:20:57.578234+00:00",
+            "facts_hash": "sha256:6342ab37919fa0e523d0fa2a473adff344d24c1c1765b53ff1ac0bfca71d89d1",
             "facts": {
               "atm_iv": 0.1435,
               "call_gex": 2000000.0,
               "call_wall": 760.0,
               "coverage_pct": 97.5,
               "freshness_status": "VALID",
-              "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+              "market_data_as_of": "2026-09-22T00:20:57.567712+00:00",
               "net_gex": -1473.4,
               "put_gex": -500000.0,
               "put_skew_dte": 30,
@@ -50,36 +50,36 @@
                   "endpoint": "/x",
                   "freshness_basis": "galecore_timestamp",
                   "freshness_status": "VALID",
-                  "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+                  "market_data_as_of": "2026-09-22T00:20:57.567712+00:00",
                   "provenance": "GALECORE_VERIFIED",
-                  "response_received_at": "2026-09-22T00:05:21.452825+00:00"
+                  "response_received_at": "2026-09-22T00:20:57.567712+00:00"
                 },
                 "put_skew": {
                   "capability_id": "x",
                   "endpoint": "/x",
                   "freshness_basis": "galecore_timestamp",
                   "freshness_status": "VALID",
-                  "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+                  "market_data_as_of": "2026-09-22T00:20:57.567712+00:00",
                   "provenance": "GALECORE_VERIFIED",
-                  "response_received_at": "2026-09-22T00:05:21.452825+00:00"
+                  "response_received_at": "2026-09-22T00:20:57.567712+00:00"
                 },
                 "vix": {
                   "capability_id": "x",
                   "endpoint": "/x",
                   "freshness_basis": "galecore_timestamp",
                   "freshness_status": "VALID",
-                  "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+                  "market_data_as_of": "2026-09-22T00:20:57.567712+00:00",
                   "provenance": "GALECORE_VERIFIED",
-                  "response_received_at": "2026-09-22T00:05:21.452825+00:00"
+                  "response_received_at": "2026-09-22T00:20:57.567712+00:00"
                 },
                 "vvix": {
                   "capability_id": "x",
                   "endpoint": "/x",
                   "freshness_basis": "galecore_timestamp",
                   "freshness_status": "VALID",
-                  "market_data_as_of": "2026-09-22T00:05:21.452825+00:00",
+                  "market_data_as_of": "2026-09-22T00:20:57.567712+00:00",
                   "provenance": "GALECORE_VERIFIED",
-                  "response_received_at": "2026-09-22T00:05:21.452825+00:00"
+                  "response_received_at": "2026-09-22T00:20:57.567712+00:00"
                 }
               },
               "spot": 757.43,
@@ -135,13 +135,13 @@
             },
             "outcomes": [],
             "human_reviews": [],
-            "recorded_at": "2026-09-22T00:05:21.466143+00:00",
+            "recorded_at": "2026-09-22T00:20:57.578234+00:00",
             "snapshot": {
-              "run_id": "01a0c66e-6fae-75e0-b9eb-2f93557c0f47",
+              "run_id": "01a0c67c-b860-7910-8f42-a094b436da3c",
               "prepared_at": "2026-09-20T21:00:00Z",
-              "facts_hash": "sha256:9921fd15d606982f66a1fda3fe63bc84327c48871c5208e670c710e4dabf23a8",
+              "facts_hash": "sha256:6342ab37919fa0e523d0fa2a473adff344d24c1c1765b53ff1ac0bfca71d89d1",
               "conventions_hash": "sha256:338cf48efbcb3027a74297e93f546c599c74eb03562976630fa76446aa4cd233",
-              "market_data_as_of": "2026-09-22T00:05:21.452825Z",
+              "market_data_as_of": "2026-09-22T00:20:57.567712Z",
               "freshness_status": "VALID"
             },
             "effective_assets": {
@@ -173,8 +173,8 @@
               }
             },
             "trace": {
-              "trace_id": "01a0c66e-6fb7-7722-ac7e-04dfdcc93203",
-              "accepted_at": "2026-09-22T00:05:21.466143Z",
+              "trace_id": "01a0c67c-b868-74f2-91cb-a66a0a9dbc7b",
+              "accepted_at": "2026-09-22T00:20:57.578234Z",
               "facts_provenance": "GALECORE_VERIFIED",
               "guardrails": [
                 {
@@ -283,7 +283,7 @@
                 }
               ]
             },
-            "entry_hash": "sha256:4182ae6fa3c015d6b8d18f8654cadd42c79860e80d24bbcdaca5bd076c7d8b88",
+            "entry_hash": "sha256:f1a58f7258551b5cae62bc17ad4ed038f78e3075bf7ac58eb88850e135f88d00",
             "request": {
               "prompt": "SYNTHETIC TEST RECORD (tools/viewer_test_records.py) — not a real analysis",
               "symbol": "TEST",
@@ -334,6 +334,6 @@
         ]
       }
     ],
-    "queried_at": "2026-09-22T00:05:21.998508+00:00"
+    "queried_at": "2026-09-22T00:20:58.058854+00:00"
   }
 }

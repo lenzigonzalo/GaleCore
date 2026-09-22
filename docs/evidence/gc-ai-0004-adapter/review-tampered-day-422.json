@@ -22,7 +22,7 @@
     "Vary": "Origin"
   },
   "body": {
-    "error": "Record cannot be trusted; not modifying: <tmp>\\records\\TEST\\2026-09-21.md: entry 01a0c66e-6fdb-7371-8ad6-b622ae942815: entry_hash mismatch; markdown body disagrees with the frontmatter record",
-    "at": "2026-09-22T00:05:21.913816+00:00"
+    "error": "Record cannot be trusted; not modifying: <tmp>\\records\\TEST\\2026-09-21.md: entry 01a0c67c-b891-7fa0-a63e-ad050fb67aae: entry_hash mismatch; markdown body disagrees with the frontmatter record",
+    "at": "2026-09-22T00:20:57.988555+00:00"
   }
 }

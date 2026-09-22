@@ -10,7 +10,7 @@
     "body": {
       "symbol": "TEST",
       "date": "2026-09-20",
-      "run_id": "01a0c66e-6fae-75e0-b9eb-2f93557c0f47",
+      "run_id": "01a0c67c-b860-7910-8f42-a094b436da3c",
       "verdict": "maybe",
       "comment": "SYNTHETIC evidence review from GC-AI-0004; not an owner verdict"
     }
@@ -23,6 +23,6 @@
   },
   "body": {
     "error": "invalid review request: 1 validation error for ReviewRequest\nverdict\n  Input should be 'agree', 'partial' or 'disagree' [type=enum, input_value='maybe', input_type=str]\n    For further information visit https://errors.pydantic.dev/2.13/v/enum",
-    "at": "2026-09-22T00:05:21.813600+00:00"
+    "at": "2026-09-22T00:20:57.904561+00:00"
   }
 }

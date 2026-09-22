@@ -547,6 +547,24 @@ class TestReviewEndpoint:
         reviews = records.load("SPY", day).entries[0].human_reviews
         assert sorted(r.comment for r in reviews) == sorted(f"concurrent {i}" for i in range(6))
 
+    def test_reread_failure_after_save_is_still_201_and_not_retried_into_a_duplicate(self, review_server, snapshots, records, monkeypatch):
+        entry, day, _ = _record(snapshots, records)
+        real_dates = records.dates
+        calls = {"n": 0}
+
+        def dates_after_save(symbol):
+            calls["n"] += 1
+            raise OSError("listing failed after the write")
+
+        monkeypatch.setattr(records, "dates", dates_after_save)  # build_view → query_records → store.dates
+        status, _, body = _call(review_server, "/api/reviews", method="POST", headers=_review_headers(),
+                                body=self._body(day, entry.entry_id))
+        out = json.loads(body)
+        assert status == 201 and out["record"] is None and "re-reading the day failed" in out["reread_error"]
+        assert out["recorded"]["run_id"] == entry.entry_id
+        monkeypatch.setattr(records, "dates", real_dates)
+        assert len(records.load("SPY", day).entries[0].human_reviews) == 1  # saved exactly once
+
     def test_write_failure_is_503_not_422(self, review_server, snapshots, records, monkeypatch):
         entry, day, _ = _record(snapshots, records)
 
