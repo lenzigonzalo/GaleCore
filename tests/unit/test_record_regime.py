@@ -206,6 +206,20 @@ class TestOutcomeAndReview:
         assert e.human_reviews[0].verdict == ReviewVerdict.DISAGREE
         assert e.accepted_payload == result.result and e.entry_hash == entry.entry_hash
 
+    async def test_caller_timestamps_are_persisted_verbatim(self, snapshot_store, records):
+        # The CLI echoes the timestamp it passes in; it must be the one written to the record.
+        snapshot, _, entry, _ = _record(snapshot_store, records)
+        day = record_date_for(snapshot.prepared_at, "America/New_York")
+        observed_at = datetime(2026, 9, 21, 22, 15, 20, 396829, tzinfo=UTC)
+        reviewed_at = datetime(2026, 9, 21, 22, 44, 32, 599576, tzinfo=UTC)
+        record_outcome(store=records, symbol="SPY", day=day, fetched=await _fetched(),
+                       observed_at=observed_at)
+        record_review(store=records, symbol="SPY", day=day, run_id=entry.entry_id,
+                      verdict=ReviewVerdict.AGREE, comment="ok", reviewed_at=reviewed_at)
+        e = records.load("SPY", day).entries[0]
+        assert e.outcomes[0].observed_at == observed_at
+        assert e.human_reviews[0].reviewed_at == reviewed_at
+
     def test_review_requires_comment(self, snapshot_store, records):
         snapshot, _, entry, _ = _record(snapshot_store, records)
         day = record_date_for(snapshot.prepared_at, "America/New_York")

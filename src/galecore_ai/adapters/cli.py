@@ -243,10 +243,11 @@ async def _cmd_record_outcome(args: argparse.Namespace) -> None:
     except PrepareError as exc:
         _error_out(f"Outcome fetch failed: {exc}", exit_code=_EXIT_PREPARE_FAILED)
         return
+    observed_at = datetime.now(UTC)
     try:
         entry_ids, path = record_outcome(
             store=record_store, symbol=args.symbol, day=args.date, fetched=fetched,
-            run_id=args.run_id,
+            run_id=args.run_id, observed_at=observed_at,
         )
     except RecordError as exc:
         _error_out(str(exc), exit_code=_EXIT_RECORD_FAILED)
@@ -254,24 +255,25 @@ async def _cmd_record_outcome(args: argparse.Namespace) -> None:
     _json_out({
         "status": "RECORDED", "kind": "outcome", "path": path, "entry_ids": entry_ids,
         "observed_facts": fetched.facts.model_dump(mode="json", exclude_none=True),
-        "observed_at": datetime.now(UTC).isoformat(),
+        "observed_at": observed_at.isoformat(),
     })
 
 
 async def _cmd_record_review(args: argparse.Namespace) -> None:
     _parse_date(args.date, flag="--date")
     record_store = _build_record_store()
+    reviewed_at = datetime.now(UTC)
     try:
         entry_id, path = record_review(
             store=record_store, symbol=args.symbol, day=args.date, run_id=args.run_id,
-            verdict=ReviewVerdict(args.verdict), comment=args.comment,
+            verdict=ReviewVerdict(args.verdict), comment=args.comment, reviewed_at=reviewed_at,
         )
     except RecordError as exc:
         _error_out(str(exc), exit_code=_EXIT_RECORD_FAILED)
         return
     _json_out({
         "status": "RECORDED", "kind": "review", "path": path, "entry_id": entry_id,
-        "verdict": args.verdict, "reviewed_at": datetime.now(UTC).isoformat(),
+        "verdict": args.verdict, "reviewed_at": reviewed_at.isoformat(),
     })
 
 

@@ -1085,3 +1085,161 @@ mantener la asignación actual y ver por qué una estrategia fue preferida, limi
 - ¿Qué fuentes de noticias/eventos son evidencia y cuáles pueden convertirse en facts de GaleCore?
 - ¿Qué decisions requieren aprobación por cambio y cuáles podrían quedar dentro de una policy
   preaprobada en SHADOW/PAPER?
+
+---
+
+## BL-008 — Gestión integral del portfolio y espacio financiero personal y compartido
+
+**Estado:** `CAPTURED`
+
+**Clasificación del feedback:** `BACKLOG_CANDIDATE`; requiere decisiones de producto y arquitectura
+antes de implementar identidad, colaboración y ejecución programada.
+
+**Target:** capacidad transversal de producto. Primer candidato: revisión patrimonial read-only
+desde un host validado, como ampliación futura de inteligencia de consulta. Orden respecto de
+SHADOW pendiente de decisión del owner; este registro no cambia la secuencia vigente.
+
+**Origen:** conversación con el owner del 2026-09-22. Se busca gestionar el conjunto del portfolio,
+comprender posiciones y sus fundamentos, investigar empresas y contexto macro, y desarrollar
+métodos propios. Dos usuarios iniciales —el owner y su padre— necesitan espacios separados y la
+posibilidad de compartir métodos e investigaciones explícitamente. Los importes y tenencias
+personales no se registran como configuración del producto ni como fixtures del backlog.
+
+### Problema y objetivo
+
+El recorrido actual de régimen → investigación de estrategias → SHADOW no define por sí solo la
+gestión del patrimonio: posiciones manuales, efectivo, renta fija, aportes, objetivos, monedas y
+tesis de inversión. BL-007 administra un portfolio de estrategias; no sustituye esa visión integral.
+La visión de WS-0001 deja el alcance multiusuario pendiente de definición.
+
+Permitir que cada usuario trabaje con GaleCore-AI y un host compatible sobre su portfolio completo:
+entender qué tiene y por qué, identificar exposiciones compartidas, investigar alternativas,
+conservar decisiones y revisar resultados. Poder crear, evaluar y reutilizar métodos personales,
+compartir versiones y coordinar trabajo recurrente con permisos y evidencia trazables.
+
+El objetivo económico es personal y revisable, no una promesa de rentabilidad del producto ni una
+cuota mensual que obligue a asumir riesgo. Aportes, retiros, resultados realizados/no realizados,
+costos y efectos de moneda deben distinguirse mediante cálculos autoritativos.
+
+### Alcance propuesto y ownership
+
+| Parte | Responsabilidad propuesta |
+|---|---|
+| GaleCore | Integraciones, normalización de instrumentos y monedas, posiciones, flujos, valuación, exposición y resultados; preferencias financieras durables según v5 §3.11; credenciales, autorización y controles operacionales |
+| GaleCore-AI | Métodos de revisión patrimonial, análisis fundamental y macro, tesis, escenarios, propuestas, skills y workflows versionados, evidencia y evaluación de outputs |
+| Host / experiencia de trabajo | Conversaciones, proyectos, selección y coordinación de agentes, presentación, revisión y ejecución de tareas dentro de los permisos efectivos |
+| Identidad y colaboración | Fundación transversal por diseñar: propietarios, membresías, ámbito de datos/assets, aislamiento, permisos y revocación; ubicación técnica de cada estado a resolver explícitamente |
+
+Capacidades buscadas:
+
+- Consolidar cuentas y activos, incluido efectivo o reservas declaradas fuera de brokers, con
+  cobertura y procedencia explícitas. Una cartera parcial no se presenta como patrimonio completo.
+- Registrar objetivos, horizontes, liquidez, aportes previstos, restricciones y fundamentos de
+  posiciones. Distinguir razones declaradas por el usuario de hipótesis sugeridas por el modelo.
+- Relacionar investigación de empresas, macro, noticias y calendario con posiciones y decisiones;
+  conservar fuentes, fechas, supuestos e invalidaciones. Contexto favorable no equivale a edge.
+- Crear y probar skills personales mediante BL-001; compartir una versión o derivar una variante
+  sin cambiar silenciosamente métodos ajenos. Compartir metodología no comparte cuentas ni datos.
+- Mantener proyectos, investigaciones, registros y permisos por usuario o espacio compartido.
+- Definir agentes y tareas recurrentes con propietario, objetivo, contexto, capabilities,
+  versiones efectivas, horario/zona, presupuesto, destino, fallos y cancelación observables.
+  Evaluar primero capacidades del host; un runtime propio necesita justificación separada.
+
+### Encaje con la implementación actual
+
+**Clasificación:** `ALIGNED_NEW_FOUNDATION`, con prerrequisitos de datos, identidad y host.
+
+Evidencia de código inspeccionada al capturar:
+
+- `config/skills/regime-analysis/skill.yaml` declara metodología, versión, capabilities y contrato
+  de output: aporta un patrón de asset, no una skill patrimonial ya implementada.
+- `src/galecore_ai/application/record_regime.py` conserva facts, identidad de snapshot y assets
+  efectivos; `record_accepted` restringe explícitamente la persistencia a `REGIME_SKILL_ID`.
+  Es una base conceptual de trazabilidad, no un registro genérico ni multiusuario demostrado.
+
+Primer vertical propuesto: un usuario obtiene una revisión de cartera read-only desde un host,
+basada en un snapshot consolidado por GaleCore, registra tesis y preguntas pendientes y recupera
+la revisión en otra sesión. Puede empezar con cobertura parcial declarada y crecer hacia varias
+cuentas; la consolidación multicuenta debe probarse antes de afirmarla como capacidad completa.
+
+La extensión necesita contratos propios de portfolio y revisión, y una decisión sobre persistencia
+e identidad. Evaluar qué partes del almacenamiento actual son reutilizables; no ensanchar el
+contrato de régimen ni asignar registros históricos a usuarios por inferencia. Cualquier migración
+debe preservar lectura, hashes y versiones existentes, con asignación de propietario explícita.
+
+La experiencia compartida y la recurrencia se prueban en incrementos posteriores acotados. No se
+exige construir toda la plataforma para entregar la primera revisión, pero tampoco se declara
+aislamiento por disponer solamente de carpetas separadas o instrucciones al modelo.
+
+**Invariantes:** cálculos y controles en GaleCore; permisos impuestos fuera del modelo; versiones
+y evidencia históricas recuperables; ninguna skill, agente o tarea concede autoridad operacional.
+
+### Relación con el plan y backlog
+
+- **BL-001:** lifecycle de skills; este ítem agrega contexto personal, variantes y colaboración,
+  sin duplicar el sistema de publicación y evals ni omitir sus gates.
+- **BL-003 / BL-006:** proveedores y federación MCP. IBKR, IOL y A3 son candidatos, no integraciones
+  comprometidas. Determinar por caso si basta un adapter GaleCore o hacen falta contratos,
+  mappings, conocimiento y UI nuevos. Datos autoritativos y acciones conservan sus fronteras.
+- **BL-004:** historia y datos disponibles en cada momento cuando el análisis los requiera.
+- **BL-005:** vistas personales y compartidas sobre un modelo común de identidad y permisos.
+- **BL-007:** usa contexto patrimonial para portfolio fit; su selector mantiene sus propios gates.
+- **v5 §§3, 7 y 11:** preserva ownership y hosts intercambiables; propone explicitar la misión
+  patrimonial y concretar coordinación/recurrencia sin convertir GaleCore-AI en un host obligatorio.
+- **WS-0001 / roadmap:** al aprobar el diseño, alinear VISION y PROJECT y decidir la ubicación de
+  este recorrido en la única secuencia vigente. Consulta patrimonial no requiere por naturaleza
+  PAPER/LIVE ni dos estrategias SHADOW, pero adelantarla requiere una decisión explícita de orden.
+
+### Entry gate
+
+- El owner autoriza un incremento acotado y su lugar en la secuencia; GC-AI-0002 conserva su alcance.
+- Se define el primer usuario, conjunto de cuentas/activos, moneda de referencia, objetivo de
+  revisión y cobertura mínima, sin incorporar datos privados al código o documentación pública.
+- Se inspeccionan capacidades reales de balances, posiciones, flujos y valuación; faltantes se
+  convierten en dependencias GaleCore explícitas, no en cálculos improvisados del modelo.
+- Se elige un host y se valida su acceso a assets, datos, contexto y resultados persistidos.
+- Se acuerdan identidad, autorización y almacenamiento para el incremento; compartir exige
+  demostrar aislamiento, acceso y revocación antes de usar información privada de otro usuario.
+- Cada incremento selecciona criterios de abajo y sus dependencias; no se declara completado el
+  alcance integral a partir de una primera revisión individual.
+
+### Acceptance criteria
+
+- [ ] Una revisión multicuenta identifica cobertura, posiciones, efectivo, moneda, fecha y fuente;
+      exposiciones equivalentes entre instrumentos/cuentas se relacionan sin doble conteo.
+- [ ] Los resultados distinguen aportes, retiros, rendimiento, costos y moneda, o explicitan qué
+      métrica no puede calcularse con la historia disponible.
+- [ ] El usuario recupera en otra sesión objetivos, fundamentos, análisis y decisiones originales,
+      con datos y versiones; lo desconocido no se completa con razones inventadas.
+- [ ] Un análisis de empresa y uno macro relacionan evidencia con la cartera, conservan supuestos
+      y límites y producen preguntas o propuestas revisables, sin autorizar operaciones.
+- [ ] Dos usuarios usan una skill compartida sobre sus cuentas; una variante personal no altera
+      la del otro y la adopción de una actualización queda registrada.
+- [ ] Consultas, búsquedas de memoria, registros y tareas rechazan acceso cruzado no autorizado;
+      compartir/revocar un asset no expone datos privados ni hereda permisos de broker.
+- [ ] Una tarea programada deja resultado o fallo observable, propietario, permisos, versiones y
+      evidencia; puede cancelarse y no ejecutarse con permisos revocados. El recorrido interactivo
+      permanece utilizable sin habilitar trabajo autónomo.
+- [ ] La revisión se compara con el proceso manual o host directo: cobertura, omisiones, tiempo y
+      utilidad observada. La evaluación no confunde calidad técnica con rentabilidad.
+- [ ] Los registros de régimen anteriores siguen legibles y verificables; cualquier migración
+      queda documentada y no reescribe evidencia histórica.
+
+### No objetivos de esta captura
+
+- Cambiar prioridades, abrir otro work item o ampliar el contrato de GC-AI-0002.
+- Implementar de una vez todos los brokers, mercados, agentes, un SaaS o un host propio.
+- Ejecutar trading desde un MCP externo eludiendo GaleCore ni habilitar PAPER/LIVE o asignación
+  automática por disponer de tareas programadas.
+- Convertir datos privados, preferencias u objetivos de un usuario en metodología global.
+
+### Decisiones abiertas
+
+- ¿Qué capacidades patrimoniales deben preceder o seguir al próximo incremento SHADOW?
+- ¿Cómo se separan identidad, cuentas, espacios compartidos y propiedad de investigaciones?
+- ¿Qué estado durable pertenece a GaleCore y qué persistencia requieren los assets/proyectos?
+- ¿Qué host se valida primero y qué contrato permitirá trasladar contexto entre hosts?
+- ¿Cómo se comparten versiones, se derivan variantes y se revoca acceso sin filtrar información?
+- ¿Qué revisión concreta justifica primero fuentes de empresas, macro, noticias y calendario?
+- ¿Qué tareas necesitan recurrencia, qué aprobación las habilita y cuándo se justifica un runtime
+  propio frente a la capacidad del host?

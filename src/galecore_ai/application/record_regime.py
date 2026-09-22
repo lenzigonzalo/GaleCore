@@ -155,8 +155,11 @@ def record_outcome(
     day: str,
     fetched: RegimeFetch,
     run_id: str | None = None,
+    observed_at: datetime | None = None,
 ) -> tuple[list[str], str]:
     """Append a later observation (facts fetched now) to the day's entries.
+
+    ``observed_at`` lets the caller echo exactly the persisted timestamp; default: now.
 
     Fail-closed like prepare: a STALE source is rejected, not recorded with a label.
     UNKNOWN (PutSkew has no timestamp) is accepted and stays visible per source.
@@ -167,7 +170,7 @@ def record_outcome(
         raise RecordError(f"Outcome facts are stale for source(s) {stale}; nothing recorded")
     facts = fetched.facts.model_dump(mode="json", exclude_none=True)
     outcome = RecordOutcome(
-        observed_at=datetime.now(UTC),
+        observed_at=observed_at or datetime.now(UTC),
         facts=facts,
         facts_hash=compute_facts_hash(facts),
         facts_provenance=Provenance.GALECORE_VERIFIED.value,
@@ -191,14 +194,15 @@ def record_review(
     run_id: str,
     verdict: ReviewVerdict,
     comment: str,
+    reviewed_at: datetime | None = None,
 ) -> tuple[str, str]:
-    """Append the human's verdict to one entry."""
+    """Append the human's verdict to one entry (``reviewed_at`` defaults to now)."""
     if not comment.strip():
         raise RecordError("A non-empty comment is required for a review")
     document = _load_for_update(store, symbol, day)
     entry = _select_entries(document, run_id)[0]
     entry.human_reviews.append(
-        HumanReview(reviewed_at=datetime.now(UTC), verdict=verdict, comment=comment.strip())
+        HumanReview(reviewed_at=reviewed_at or datetime.now(UTC), verdict=verdict, comment=comment.strip())
     )
     try:
         path = store.save(document)

@@ -1,0 +1,68 @@
+{
+  "status": "RECORDED",
+  "kind": "outcome",
+  "path": "<workspace>\\GaleCore\\research\\regime\\SPY\\2026-09-21.md",
+  "entry_ids": [
+    "01a0c5eb-541e-7303-814f-f1a53376e442"
+  ],
+  "observed_facts": {
+    "symbol": "SPY",
+    "net_gex": 658.5,
+    "call_gex": 1614205.7523,
+    "put_gex": -955749.8239,
+    "spot": 773.54,
+    "zero_gamma_level": 762.25,
+    "call_wall": 774.0,
+    "put_wall": 745.0,
+    "coverage_pct": 100.0,
+    "put_skew_ratio": 1.0742,
+    "atm_iv": 0.1375,
+    "put_wing_iv": 0.1477,
+    "put_skew_dte": 60,
+    "put_skew_expiration": "2026-11-20",
+    "put_skew_level_ok": true,
+    "put_skew_level_threshold": 1.3,
+    "vix": 14.87,
+    "vvix": 85.77,
+    "market_data_as_of": "2026-09-21T20:15:01.164000Z",
+    "freshness_status": "UNKNOWN",
+    "sources": {
+      "gex": {
+        "capability_id": "compute.gex_analysis",
+        "endpoint": "/App/Gex/Analysis",
+        "provenance": "GALECORE_VERIFIED",
+        "market_data_as_of": "2026-09-21T22:15:20.336245Z",
+        "freshness_basis": "galecore_timestamp",
+        "freshness_status": "VALID",
+        "response_received_at": "2026-09-21T22:15:20.365309Z"
+      },
+      "put_skew": {
+        "capability_id": "compute.put_skew",
+        "endpoint": "/App.Analytics/PutSkew",
+        "provenance": "GALECORE_VERIFIED",
+        "freshness_basis": "none",
+        "freshness_status": "UNKNOWN",
+        "response_received_at": "2026-09-21T22:15:20.365309Z"
+      },
+      "vix": {
+        "capability_id": "market_data.trade",
+        "endpoint": "/Data/Tastytrade/MarketData/Trade",
+        "provenance": "GALECORE_VERIFIED",
+        "market_data_as_of": "2026-09-21T20:15:01.320000Z",
+        "freshness_basis": "galecore_timestamp",
+        "freshness_status": "VALID",
+        "response_received_at": "2026-09-21T22:15:20.365309Z"
+      },
+      "vvix": {
+        "capability_id": "market_data.trade",
+        "endpoint": "/Data/Tastytrade/MarketData/Trade",
+        "provenance": "GALECORE_VERIFIED",
+        "market_data_as_of": "2026-09-21T20:15:01.164000Z",
+        "freshness_basis": "galecore_timestamp",
+        "freshness_status": "VALID",
+        "response_received_at": "2026-09-21T22:15:20.365309Z"
+      }
+    }
+  },
+  "observed_at": "2026-09-21T22:15:20.447218+00:00"
+}

@@ -1,0 +1,50 @@
+{
+  "gamma_regime": "positive_gamma",
+  "tail_pricing": "calm",
+  "observations": [
+    "Net gamma exposure is positive at the close: dealers are long gamma and hedge against the direction of price moves",
+    "Spot closed just above the zero-gamma level, so the market sits on the long-gamma side of the flip point but only marginally, with the boundary immediately underneath",
+    "The call wall sits above spot and the put wall directly below it: the reference levels bracket the close in an unusually narrow band rather than framing a wide range",
+    "Gamma coverage of the chain is complete, so the exposure figures are not the product of a partial book",
+    "The twenty-five delta put skew is inside GaleCore's calm zone, well under the threshold, and the wing premium over the at-the-money is modest",
+    "The volatility index settled in the low teens and the vol-of-vol index is subdued, consistent with an options market that is not pricing an imminent shock"
+  ],
+  "implications": [
+    "With dealers long gamma, hedging flows should dampen moves and favour mean reversion, so realized volatility is expected to stay contained while the regime holds",
+    "Because the flip point is barely below spot, the long-gamma character of hedging flows is fragile: a small downward move would place the market on the other side of it, where the same flows would amplify rather than dampen",
+    "With both walls adjacent to spot, the nearest hedging reference on either side is close, so the levels at which dealer flow would be expected to change character are not far away in either direction",
+    "A calm skew alongside positive gamma is a coherent combination: the options market is not paying up for protection while hedging flows are counter-cyclical"
+  ],
+  "quantitative_claims": [
+    {"metric": "net_gex", "value": 595.5, "unit": "billion_usd"},
+    {"metric": "spot", "value": 773.26, "unit": "usd"},
+    {"metric": "zero_gamma_level", "value": 773.07, "unit": "usd"},
+    {"metric": "call_wall", "value": 774.0, "unit": "usd"},
+    {"metric": "put_wall", "value": 773.0, "unit": "usd"},
+    {"metric": "put_skew_ratio", "value": 1.0743, "unit": "ratio"},
+    {"metric": "atm_iv", "value": 0.134, "unit": "iv_decimal"},
+    {"metric": "put_wing_iv", "value": 0.1439, "unit": "iv_decimal"},
+    {"metric": "vix", "value": 14.21, "unit": "index_points"},
+    {"metric": "vvix", "value": 83.17, "unit": "index_points"}
+  ],
+  "evidence": [
+    {"fact_path": "facts.net_gex", "claim": "Net GEX is positive, dealers are long gamma"},
+    {"fact_path": "facts.zero_gamma_level", "claim": "Spot is above the zero-gamma level, but only marginally"},
+    {"fact_path": "facts.call_wall", "claim": "The call wall sits above spot"},
+    {"fact_path": "facts.put_wall", "claim": "The put wall sits directly below spot"},
+    {"fact_path": "facts.coverage_pct", "claim": "Gamma coverage of the chain is complete"},
+    {"fact_path": "facts.put_skew_level_ok", "claim": "The skew level semaphore is in the calm zone"},
+    {"fact_path": "facts.put_skew_level_threshold", "claim": "The skew ratio is well under the threshold that would flag it"},
+    {"fact_path": "facts.vix", "claim": "The volatility index is subdued"},
+    {"fact_path": "facts.vvix", "claim": "The vol-of-vol index is subdued"}
+  ],
+  "limitations": [
+    "Post-session read: GEX is computed at request time after the close, while the volatility and vol-of-vol indices are their afternoon settlement prints",
+    "The skew snapshot carries no GaleCore timestamp, so snapshot freshness is UNKNOWN; it reflects the moment of the request",
+    "The skew is read from an expiration roughly two months out, not from the front of the curve, so it describes the term where GaleCore measures it and not the immediate tail",
+    "GEX reflects current open interest and coverage and will shift with the next session's flow",
+    "The gamma regime is a sign classification only; the magnitude relative to total exposure is not validated, and proximity of spot to the flip point is a level reading, not a probability",
+    "No comparison with earlier sessions is made here; such comparisons are only valid through the query step",
+    "Qualitative statements are not checked for entailment by the validator; only paths, numbers and directives are"
+  ]
+}

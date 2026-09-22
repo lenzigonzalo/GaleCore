@@ -1,7 +1,7 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado:** Phase 3 cerrada (`GC-AI-0001` CLOSED el 2026-09-16, revisión independiente APPROVED, AC-06 brecha aceptada). Phase 4 en curso: `GC-AI-0002` — "Harness completo desde el host con registro evaluable" — implementado y verificado E2E en local el 2026-09-16 (rama `feature/gc-ai-0002`); pendientes: revisión independiente (AC-11, Codex ronda 1 CHANGES_REQUESTED, BLOCKERs corregidos, recheck después del próximo día de mercado), serie de 3 días reales (AC-08), review humana real (AC-04) y evidencia E2E/manual completa (AC-06/AC-07, ver F-8). Ver `PHASE4-ALIGNMENT.md` y `../../../roadmap/README.md`.
+**Estado (2026-09-21):** Phase 3 cerrada (`GC-AI-0001` CLOSED el 2026-09-16). Phase 4 en curso: `GC-AI-0002` — "Harness completo desde el host con registro evaluable" — implementado, con el loop diario completo evidenciado en real el 2026-09-21 (registro, outcome, review del owner, query), E2E regenerada, revisión interna 2 y Codex recheck 2 APPROVE del incremento. Pendiente: serie de 3 días (AC-08, 1/3: 2026-09-22 y 2026-09-23 después del cierre) y cierre por el owner. Ver `PHASE4-ALIGNMENT.md` y el work item.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## 1. Autorización y alcance
