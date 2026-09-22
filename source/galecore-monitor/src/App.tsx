@@ -11,6 +11,7 @@ import { MyAccount } from './pages/MyAccount';
 import { Monitor } from './pages/Monitor';
 import { Rpf } from './pages/Rpf';
 import { Gex } from './pages/Gex';
+import { Inteligencia } from './pages/Inteligencia';
 import { useMarketSocket, ConnectionStatus } from './socket/useMarketSocket';
 import { useAppConfigStore } from './store/useAppConfigStore';
 import { useAccountStore } from './store/useAccountStore';
@@ -93,6 +94,8 @@ function Dashboard({ onLogout }: DashboardProps) {
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}
           {tab === 'gex' && <Gex subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
+          {/* Inteligencia se monta al entrar: lee el adapter local de GaleCore-AI, no la API. */}
+          {tab === 'inteligencia' && <Inteligencia />}
         </main>
       </div>
     </div>
