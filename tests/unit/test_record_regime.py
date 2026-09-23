@@ -324,19 +324,18 @@ class TestRecordsDir:
         monkeypatch.setenv("GALECORE_RECORDS_DIR", str(tmp_path / "r"))
         assert default_records_dir() == (tmp_path / "r").resolve()
 
-    def test_default_points_at_sibling_galecore_research(self, monkeypatch):
+    def test_default_is_regime_inside_the_knowledge_base(self, monkeypatch, tmp_path):
+        # GC-AI-0005: records left GaleCore/research/ for the knowledge base, outside every checkout.
         monkeypatch.delenv("GALECORE_RECORDS_DIR", raising=False)
-        sibling = Path(default_records_dir.__globals__["__file__"]).resolve().parents[3].parent / "GaleCore" / "research"
-        if not sibling.is_dir():
-            pytest.skip("no sibling GaleCore checkout on this machine")
-        path = default_records_dir()
-        assert path.name == "regime" and path.parent.name == "research"
+        monkeypatch.setenv("GALECORE_KNOWLEDGE_DIR", str(tmp_path))
+        assert default_records_dir() == (tmp_path / "regime").resolve()
 
-    def test_without_sibling_and_without_env_fails_closed(self, monkeypatch, tmp_path):
+    def test_without_knowledge_base_and_without_env_fails_closed(self, monkeypatch, tmp_path):
         monkeypatch.delenv("GALECORE_RECORDS_DIR", raising=False)
-        monkeypatch.setattr(Path, "is_dir", lambda self: False)
+        monkeypatch.setenv("GALECORE_KNOWLEDGE_DIR", str(tmp_path / "missing"))
         with pytest.raises(RecordStoreError, match="GALECORE_RECORDS_DIR"):
             default_records_dir()
+        assert not (tmp_path / "missing").exists()
 
 
 class TestDocumentSchema:

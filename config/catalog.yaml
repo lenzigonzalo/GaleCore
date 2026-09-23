@@ -1,0 +1,79 @@
+# What the host can ask GaleCore-AI for. `python -B -m galecore_ai.adapters.cli catalog` prints
+# this with the version and hash of each skill as loaded. Start here, not from a table in prose.
+#
+# Adding a capability: add an entry here and its skill asset under skills/. Anything the entry's
+# flow needs that does not exist yet (a prepare function, a validator, a store, a command) is code;
+# the entry names the commands, so what was declared and what was programmed stays visible.
+catalog_version: "1"
+entries:
+  - id: gex_interpretation
+    kind: interpretation
+    serves: Interpretar la exposición gamma (GEX) actual de un símbolo con datos de GaleCore.
+    example_requests:
+      - Analizá el GEX actual de SPY.
+    skill: skills/gex-analysis/skill.yaml
+    output_contract: galecore_ai.contracts.gex_analysis.GexInterpretation
+    galecore_capabilities: [compute.gex_analysis]
+    prepare_skill: gex
+    flow:
+      - prepare --symbol <SYMBOL> --skill gex
+      - accept < {run_id, interpretation, host_provider, host_model}
+    stored_as: none
+    controls:
+      - Numbers only in quantitative_claims, each equal to a GaleCore fact with its unit
+      - No digits in observations or implications
+      - Regime by the sign of net_gex; near_zero always rejected
+      - Evidence paths resolve (entailment is not checked)
+      - No explicit trading recommendation (pattern-based, D-6)
+      - Snapshot integrity and freshness, fail-closed
+    guide: docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md
+
+  - id: regime_interpretation
+    kind: interpretation
+    serves: Registrar el régimen diario de un símbolo (GEX, skew 25Δ, VIX/VVIX) y evaluarlo después.
+    example_requests:
+      - Analizá el régimen de hoy de SPY y guardalo.
+      - ¿Qué dijimos del régimen la semana pasada y qué pasó?
+    skill: skills/regime-analysis/skill.yaml
+    output_contract: galecore_ai.contracts.regime_analysis.RegimeInterpretation
+    galecore_capabilities: [compute.gex_analysis, compute.put_skew, market_data.trade]
+    prepare_skill: regime
+    flow:
+      - prepare --symbol <SYMBOL> --skill regime
+      - accept --record --prompt "<pedido del usuario>" < {run_id, interpretation, host_provider, host_model}
+      - record outcome --symbol <SYMBOL> --date <YYYY-MM-DD> [--run-id <run_id>]
+      - record review --symbol <SYMBOL> --date <YYYY-MM-DD> --run-id <run_id> --verdict <v> --comment "<owner>"
+      - query --symbol <SYMBOL> --since <YYYY-MM-DD>
+    stored_as: regime
+    controls:
+      - The GEX controls, plus tail_pricing equal to GaleCore's put_skew_level_ok
+      - Record entry hashed at acceptance; outcomes and reviews appended, never rewritten
+      - The review verdict is the owner's (F-6)
+      - Daily records only after the cash session (F-2)
+    guide: docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md
+
+  - id: research
+    kind: investigation
+    serves: >-
+      Investigar una idea con los antecedentes disponibles (registros, investigaciones previas,
+      archivos locales), producir una hipótesis y un plan de prueba con fuentes y limitaciones,
+      conservarlos y retomarlos en otra sesión.
+    example_requests:
+      - Investigá si el 0DTE vencido distorsiona el GEX post-cierre y cómo lo probaríamos.
+      - Retomá la investigación sobre el GEX post-cierre.
+    skill: skills/research/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: []
+    flow:
+      - kb search --text "<términos>" [--kind research|regime] [--status open]
+      - kb show <ref>
+      - research save --slug <slug> --prompt "<pedido del usuario>" < {content, host_provider, host_model}
+      - research revise --id <id> --reason continuation|correction|result --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - Every antecedent and source resolves to an intact knowledge item or an existing workspace file
+      - Every antecedent says how it affects the hypothesis or the plan
+      - A statement marked as fact cites at least one source
+      - Open or test_planned work lists its next steps; a test plan needs its hypothesis
+      - Revisions are append-only and hashed; a changed earlier revision is INTEGRITY_FAILED
+      - Not checked - whether the reasoning is right, or whether a fact's source supports it

@@ -1,7 +1,7 @@
 """File store for evaluable records: one Markdown file per symbol and trading day.
 
-Layout (``GALECORE_RECORDS_DIR``, default ``../GaleCore/research/regime`` next to
-this checkout):
+Layout (``GALECORE_RECORDS_DIR``, default ``regime/`` inside the knowledge base,
+see ``knowledge_base.knowledge_dir``):
 
     <records_dir>/<SYMBOL>/<YYYY-MM-DD>.md
 
@@ -24,9 +24,10 @@ import os
 import re
 from pathlib import Path
 
-import yaml
 from pydantic import ValidationError
 
+from galecore_ai.adapters import frontmatter
+from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, knowledge_dir
 from galecore_ai.contracts.prepared_analysis import compute_facts_hash
 from galecore_ai.contracts.regime_record import (
     RegimeRecordDocument,
@@ -37,9 +38,6 @@ from galecore_ai.contracts.regime_record import (
 # A symbol needs at least one letter or digit: "." and ".." are directories.
 _SYMBOL_RE = re.compile(r"^(?=.*[A-Z0-9])[A-Z0-9.\-]{1,12}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-# Frontmatter: from the first line to the first "---" line at column 0. PyYAML
-# never emits "---" at column 0 inside a scalar (continuation lines are indented).
-_FRONTMATTER_RE = re.compile(r"\A---\n(.*?)\n---\n", re.DOTALL)
 RECORDS_DIR_ENV = "GALECORE_RECORDS_DIR"
 
 
@@ -57,18 +55,14 @@ class RecordIntegrityError(Exception):
 
 
 def default_records_dir() -> Path:
-    """``GALECORE_RECORDS_DIR`` or the sibling GaleCore checkout's research folder."""
+    """``GALECORE_RECORDS_DIR`` or ``regime/`` inside the knowledge base (GC-AI-0005)."""
     configured = os.environ.get(RECORDS_DIR_ENV)
     if configured:
         return Path(configured).expanduser().resolve()
-    repo_root = Path(__file__).resolve().parents[3]
-    sibling = repo_root.parent / "GaleCore" / "research"
-    if not sibling.is_dir():
-        raise RecordStoreError(
-            f"Cannot locate GaleCore/research next to this checkout ({sibling}); "
-            f"set {RECORDS_DIR_ENV}"
-        )
-    return (sibling / "regime").resolve()
+    try:
+        return (knowledge_dir() / "regime").resolve()
+    except KnowledgeBaseError as exc:
+        raise RecordStoreError(f"{exc}; or set {RECORDS_DIR_ENV}") from exc
 
 
 def verify_entry(entry: RegimeRecordEntry) -> list[str]:
@@ -161,14 +155,7 @@ class FileRecordStore:
         # the file: prose that happens to contain "---" or YAML syntax cannot brick the day.
         if parse_document(text, path) != document:
             raise RecordStoreError("Rendered record does not round-trip; refusing to write")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".md.tmp")
-        try:
-            tmp.write_text(text, encoding="utf-8", newline="\n")
-            tmp.replace(path)
-        except OSError:
-            tmp.unlink(missing_ok=True)
-            raise
+        frontmatter.atomic_write(path, text)
         return path
 
 
@@ -177,15 +164,10 @@ class FileRecordStore:
 
 def parse_document(text: str, path: Path) -> RegimeRecordDocument:
     """The authoritative document: the YAML frontmatter."""
-    match = _FRONTMATTER_RE.match(text)
-    if match is None:
-        raise RecordIntegrityError(path, ["frontmatter missing or malformed"])
     try:
-        data = yaml.safe_load(match.group(1))
-    except yaml.YAMLError as exc:
-        raise RecordIntegrityError(path, [f"frontmatter YAML invalid: {exc}"]) from exc
-    if not isinstance(data, dict):
-        raise RecordIntegrityError(path, ["frontmatter is not a mapping"])
+        data = frontmatter.read_frontmatter(text)
+    except frontmatter.FrontmatterError as exc:
+        raise RecordIntegrityError(path, [str(exc)]) from exc
     try:
         return RegimeRecordDocument.model_validate(data)
     except ValidationError as exc:
@@ -196,15 +178,8 @@ def parse_document(text: str, path: Path) -> RegimeRecordDocument:
 
 
 def render_frontmatter(document: RegimeRecordDocument) -> str:
-    """YAML frontmatter that round-trips exactly through parse_document.
-
-    Timestamps are ISO strings (PyYAML quotes them so they stay strings), floats
-    keep their repr, unicode is kept as is, and long strings are never folded
-    so no line can start at column 0 inside a scalar.
-    """
-    data = document.model_dump(mode="json")
-    body = yaml.safe_dump(data, allow_unicode=True, sort_keys=True, width=10**9, default_flow_style=False)
-    return "---\n" + body + "---\n"
+    """YAML frontmatter that round-trips exactly through parse_document."""
+    return frontmatter.render_frontmatter(document.model_dump(mode="json"))
 
 
 def render_markdown(document: RegimeRecordDocument) -> str:

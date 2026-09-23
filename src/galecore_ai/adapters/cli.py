@@ -7,6 +7,11 @@ Usage:
     python -m galecore_ai.adapters.cli record review --symbol SPY --date YYYY-MM-DD --run-id ID \\
         --verdict agree|partial|disagree --comment "..."
     python -m galecore_ai.adapters.cli query --symbol SPY --since YYYY-MM-DD [--until YYYY-MM-DD]
+    python -m galecore_ai.adapters.cli catalog
+    python -m galecore_ai.adapters.cli kb search [--text "..."] [--kind research|regime] [--status S] [--symbol SPY]
+    python -m galecore_ai.adapters.cli kb show <ref>
+    python -m galecore_ai.adapters.cli research save --slug SLUG --prompt "..." < request.json
+    python -m galecore_ai.adapters.cli research revise --id ID --reason R --note "..." --prompt "..." < request.json
 
 Exit codes:
     0  SUCCESS
@@ -28,13 +33,23 @@ import os
 import sys
 from datetime import UTC, date, datetime
 
+from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, knowledge_dir
 from galecore_ai.adapters.record_store import (
     FileRecordStore,
     RecordStoreError,
     default_records_dir,
 )
+from galecore_ai.adapters.research_store import FileResearchStore
 from galecore_ai.adapters.snapshot_store import FileSnapshotStore, SnapshotNotFoundError
 from galecore_ai.application.accept_interpretation import accept_interpretation
+from galecore_ai.application.knowledge import (
+    KnowledgeBase,
+    KnowledgeError,
+    revise_research,
+    save_research,
+)
+from galecore_ai.application.knowledge import search as kb_search
+from galecore_ai.application.knowledge import show as kb_show
 from galecore_ai.application.prepare_gex import PrepareError, prepare_gex_snapshot
 from galecore_ai.application.prepare_regime import fetch_regime_facts, prepare_regime_snapshot
 from galecore_ai.application.record_regime import (
@@ -49,7 +64,9 @@ from galecore_ai.capabilities.dispatcher import CapabilityDispatcher
 from galecore_ai.capabilities.registry import CapabilityRegistry
 from galecore_ai.contracts.agent_run import RunStatus
 from galecore_ai.contracts.prepared_analysis import AcceptanceRequest
-from galecore_ai.contracts.regime_record import ReviewVerdict
+from galecore_ai.contracts.regime_record import RecordHost, ReviewVerdict
+from galecore_ai.contracts.research import ResearchContent, ResearchStatus, RevisionReason
+from galecore_ai.harness.catalog import CatalogError, describe, load_catalog
 
 logger = logging.getLogger(__name__)
 
@@ -302,6 +319,101 @@ async def _cmd_query(args: argparse.Namespace) -> None:
     )
 
 
+def _build_knowledge_base() -> KnowledgeBase:
+    try:
+        base = knowledge_dir()
+        return KnowledgeBase(base=base, records=FileRecordStore(default_records_dir()),
+                             research=FileResearchStore(base))
+    except (KnowledgeBaseError, RecordStoreError, OSError) as exc:
+        _error_out(f"Knowledge base unavailable: {exc}", exit_code=_EXIT_RECORD_FAILED)
+        raise AssertionError("unreachable") from exc
+
+
+def _read_research_request() -> tuple[ResearchContent, RecordHost]:
+    try:
+        payload = json.loads(sys.stdin.read())
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable") from exc
+    if not isinstance(payload, dict) or "content" not in payload:
+        _error_out("Input must be a JSON object with a 'content' key", exit_code=_EXIT_VALIDATION_ERROR)
+    try:
+        content = ResearchContent.model_validate(payload["content"])
+    except ValueError as exc:
+        _error_out(f"Invalid research content: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable") from exc
+    host = RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model"))
+    return content, host
+
+
+def _knowledge_error_out(exc: KnowledgeError) -> None:
+    _json_out({"status": "REJECTED", "error": str(exc), "problems": exc.problems,
+               "timestamp": datetime.now(UTC).isoformat()}, exit_code=_EXIT_VALIDATION_ERROR)
+
+
+async def _cmd_catalog(args: argparse.Namespace) -> None:
+    try:
+        catalog = load_catalog()
+    except CatalogError as exc:
+        _error_out(str(exc), exit_code=_EXIT_INTERNAL_ERROR)
+        return
+    try:
+        kb_status = {"path": str(knowledge_dir()), "available": True}
+    except KnowledgeBaseError as exc:
+        kb_status = {"available": False, "error": str(exc)}
+    entries = describe(catalog)
+    _json_out(
+        {"catalog_version": catalog.catalog_version, "knowledge_base": kb_status, "entries": entries},
+        exit_code=_EXIT_SUCCESS if all(e["available"] for e in entries) else _EXIT_INTERNAL_ERROR,
+    )
+
+
+async def _cmd_kb_search(args: argparse.Namespace) -> None:
+    kb = _build_knowledge_base()
+    result = kb_search(kb, text=args.text or "", kind=args.kind, status=args.status, symbol=args.symbol)
+    result["knowledge_base"] = str(kb.base)
+    result["searched_at"] = datetime.now(UTC).isoformat()
+    _json_out(result, exit_code=_EXIT_VALIDATION_ERROR if result["integrity_failed"] else _EXIT_SUCCESS)
+
+
+async def _cmd_kb_show(args: argparse.Namespace) -> None:
+    kb = _build_knowledge_base()
+    try:
+        _json_out(kb_show(kb, args.ref))
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+
+
+async def _cmd_research_save(args: argparse.Namespace) -> None:
+    kb = _build_knowledge_base()
+    content, host = _read_research_request()
+    try:
+        document, path = save_research(kb=kb, slug=args.slug, prompt=args.prompt, host=host, content=content)
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+        return
+    rev = document.current
+    _json_out({"status": "RECORDED", "ref": f"research:{document.id}", "path": str(path),
+               "revision": rev.revision, "content_hash": rev.content_hash,
+               "resolved_refs": [r.model_dump(mode="json") for r in rev.resolved_refs]})
+
+
+async def _cmd_research_revise(args: argparse.Namespace) -> None:
+    kb = _build_knowledge_base()
+    content, host = _read_research_request()
+    try:
+        document, path = revise_research(kb=kb, research_id=args.id, reason=RevisionReason(args.reason),
+                                         note=args.note, prompt=args.prompt, host=host, content=content)
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+        return
+    rev = document.current
+    _json_out({"status": "RECORDED", "ref": f"research:{document.id}", "path": str(path),
+               "revision": rev.revision, "reason": rev.reason.value, "content_hash": rev.content_hash,
+               "previous_revisions": len(document.revisions) - 1,
+               "resolved_refs": [r.model_dump(mode="json") for r in rev.resolved_refs]})
+
+
 def main() -> None:
     parser = _JsonArgumentParser(
         prog="galecore-ai-cli",
@@ -337,6 +449,30 @@ def main() -> None:
     p_query.add_argument("--since", required=True, help="YYYY-MM-DD inclusive")
     p_query.add_argument("--until", help="YYYY-MM-DD inclusive")
 
+    sub.add_parser("catalog", help="What the host can ask for: capabilities, skills, flows, controls")
+
+    p_kb = sub.add_parser("kb", help="Search and read the knowledge base (no model call)")
+    kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)
+    p_search = kb_sub.add_parser("search", help="Items matching the terms, best first")
+    p_search.add_argument("--text", help="Terms to look for (empty lists everything)")
+    p_search.add_argument("--kind", choices=["research", "regime"])
+    p_search.add_argument("--status", choices=[s.value for s in ResearchStatus])
+    p_search.add_argument("--symbol")
+    p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
+    p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id> or file:<path>")
+
+    p_research = sub.add_parser("research", help="Save or continue an investigation (content on stdin)")
+    res_sub = p_research.add_subparsers(dest="research_command", required=True)
+    p_save = res_sub.add_parser("save", help="Start a new investigation")
+    p_save.add_argument("--slug", required=True, help="Short name; the id is <date>-<slug>")
+    p_save.add_argument("--prompt", required=True, help="What the user asked")
+    p_revise = res_sub.add_parser("revise", help="Append a revision; earlier ones stay readable")
+    p_revise.add_argument("--id", required=True)
+    p_revise.add_argument("--reason", required=True,
+                          choices=[r.value for r in RevisionReason if r != RevisionReason.INITIAL])
+    p_revise.add_argument("--note", required=True, help="What this revision changes")
+    p_revise.add_argument("--prompt", required=True, help="What the user asked")
+
     args = parser.parse_args()
 
     try:
@@ -350,6 +486,16 @@ def main() -> None:
             asyncio.run(_cmd_record_review(args))
         elif args.command == "query":
             asyncio.run(_cmd_query(args))
+        elif args.command == "catalog":
+            asyncio.run(_cmd_catalog(args))
+        elif args.command == "kb" and args.kb_command == "search":
+            asyncio.run(_cmd_kb_search(args))
+        elif args.command == "kb" and args.kb_command == "show":
+            asyncio.run(_cmd_kb_show(args))
+        elif args.command == "research" and args.research_command == "save":
+            asyncio.run(_cmd_research_save(args))
+        elif args.command == "research" and args.research_command == "revise":
+            asyncio.run(_cmd_research_revise(args))
     except SystemExit:
         raise
     except (OSError, ValueError, RuntimeError) as exc:

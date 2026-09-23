@@ -21,6 +21,7 @@ from galecore_ai.contracts.prepared_analysis import (
     compute_conventions_hash,
 )
 from galecore_ai.harness.assets import asset_root, definition_hash, load_asset
+from galecore_ai.harness.catalog import CatalogError, skill_paths
 from galecore_ai.harness.definitions import (
     AgentDefinition,
     ConventionSet,
@@ -35,10 +36,6 @@ class RequiredAssetError(Exception):
 
 # Required assets; skills are selected per vertical from _KNOWN_SKILLS
 _REQUIRED_AGENT = "agents/trading-agent.yaml"
-_KNOWN_SKILLS = {
-    "gex_interpretation": "skills/gex-analysis/skill.yaml",
-    "regime_interpretation": "skills/regime-analysis/skill.yaml",
-}
 DEFAULT_SKILL_IDS: tuple[str, ...] = ("gex_interpretation",)
 _REQUIRED_PROTOCOLS = {"facts_discipline": "protocols/facts-discipline.yaml"}
 _REQUIRED_CONVENTIONS = {"trading_defaults": "conventions/trading-defaults.yaml"}
@@ -75,7 +72,11 @@ def load_required_assets(
     Raises RequiredAssetError if any asset is missing, unreadable, or invalid,
     or if a requested skill is not a known canonical asset.
     """
-    unknown = [s for s in skill_ids if s not in _KNOWN_SKILLS]
+    try:
+        known_skills = skill_paths()
+    except CatalogError as exc:
+        raise RequiredAssetError(f"Catalog unavailable: {exc}") from exc
+    unknown = [s for s in skill_ids if s not in known_skills]
     if unknown or not skill_ids:
         raise RequiredAssetError(f"Unknown or empty skill selection: {list(skill_ids)}")
     agent = _load(_REQUIRED_AGENT, AgentDefinition, "agent")
@@ -85,7 +86,7 @@ def load_required_assets(
 
     skill_entries: dict[str, AssetEntry] = {}
     for skill_id in skill_ids:
-        skill = _load(_KNOWN_SKILLS[skill_id], SkillDefinition, f"skill {skill_id}")
+        skill = _load(known_skills[skill_id], SkillDefinition, f"skill {skill_id}")
         if skill.skill_id != skill_id:
             raise RequiredAssetError(
                 f"Skill asset {skill_id} declares skill_id {skill.skill_id!r}"
