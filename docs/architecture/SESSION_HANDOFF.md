@@ -1,19 +1,29 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado (2026-09-23):** Phase 3 cerrada (`GC-AI-0001` CLOSED el 2026-09-16). Phase 4: `GC-AI-0002` — "Harness completo desde el host con registro evaluable" — con **todos los criterios evidenciados**: serie AC-08 en 3/3 (21, 22 y 23 de septiembre, reviews del owner `agree`/`partial`/`agree`), revisión interna 3 APPROVE y Codex recheck 3 APPROVE (`GC-AI-0002-20260923T213537Z.md`). **Solo falta la decisión del owner** (`VALIDATED`/`CLOSED`); APPROVE no cierra. Ver "Próxima sesión" más abajo, `PHASE4-ALIGNMENT.md` y el work item.
+**Estado (2026-09-23):** plan único en `roadmap/README.md`. Activo: GC-AI-0005 (Paso 1, base mínima de conocimiento). GC-AI-0002/0003/0004 y GC-0001 con APPROVE, esperando la decisión del owner (tabla abajo). APPROVE no cierra.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
-## Próxima sesión — después del 2026-09-23
+## Próxima sesión — punto de entrada
 
-**Serie AC-08 completa y revisada.** `GC-AI-0002` no tiene criterios abiertos; lo único pendiente
-es la **decisión del owner** sobre el cierre (`VALIDATED`/`CLOSED`). Si la toma, el implementer la
-transcribe al work item y, recién entonces, crea el tag `phase4-closed` (política de tags de
-`ENGINEERING.md`). Después, según `roadmap/REALINEACION-2026-09-21.md`: paso 2 (consolidar
-estado) → paso 3 (SHADOW). El rebase de GC-AI-0003/0004 ya está hecho (ver abajo).
+**Qué seguir:** el plan único es [`roadmap/README.md`](../../../roadmap/README.md) (objetivo, pasos,
+backlog). El trabajo activo es el **Paso 1 — base mínima probada con trabajo real**, work item
+[GC-AI-0005](../engineering/work-items/GC-AI-0005-base-minima-conocimiento.md)
+(`ACTIVE_WORK_ITEM`). La realineación del 21/09 está archivada y no se sigue; SHADOW no es el próximo
+frente (es el Paso 3 del plan).
 
-**No cambiar el corte de datos** de la skill de régimen sin pasar por `BL-011`: los registros de la
-serie son comparables entre sí porque comparten corte.
+### Cierres pendientes del owner
+
+Ninguno bloquea técnicamente el Paso 1: GC-AI-0005 parte de `feature/GC-AI-0004` (que ya contiene
+0002 y 0003) y cambia la ubicación del store de registros que estos items leen; si se cierran antes,
+el cambio de ubicación queda en GC-AI-0005 con su propia verificación.
+
+| Item | Entregado | Review independiente (alcance) | Después del review | Pendiente real | Limitaciones aceptadas / decisión del owner |
+|---|---|---|---|---|---|
+| **GC-AI-0002** | Régimen diario con registro evaluable: prepare → accept+record → outcome → review → query; serie AC-08 3/3 (21-23/09) | Codex recheck 3 APPROVE, `ce6645a..f5e9747` (`GC-AI-0002-20260923T213537Z.md`); interno 3 APPROVE | Solo handoff (`7661f84`, docs) | Ninguno técnico | Aceptadas antes: D-6 (guardia de recomendaciones por patrones), F-7 (17/09 como historia), entailment no chequeado. Conocidas: GEX `BL-002`/`BL-011`. **Decide el owner:** cierre; F-9 (rotar la ApiKey dev) |
+| **GC-AI-0003** | Visor HTML read-only de registros (página independiente, loopback) | Codex recheck APPROVE sobre el checkpoint `7ad598b` (`GC-AI-0003-20260921T171056Z.md`) | Rebase a `7adb741` (mismo patch); `diff --check` marca una línea en blanco al final de su work item, preexistente | Ninguno técnico | La página queda preservada, no se amplía. **Decide el owner:** cierre |
+| **GC-AI-0004** | Adapter del monitor: hoy, historial, detalle, review protegido (token + origen + loopback) | Codex recheck C2 APPROVE, `0b9b089..b7f76b9` (`GC-AI-0004-20260923T000602Z.md`) | `297da6f` (registro del review, docs); rebase a `c69f64b` sobre `02a3df3`: 648 tests, lee los 4 registros reales | AC-08 (integración con el GC-AI-0002 final): hecha por el rebase, sin nuevo review (patches idénticos) | Declarado: Codex no reprodujo wheel ni corrida en navegador (las hizo el implementer). **Decide el owner:** aceptar la integración por rebase sin re-review y cerrar |
+| **GC-0001** (GaleCore) | Pestaña Inteligencia → Régimen en `galecore-monitor` | Codex recheck APPROVE, `0bb228b..d05a87c` (`GC-0001-20260923T000849Z.md`) | **`9a1ca24`: 3 MINORs corregidos después del recheck, sin review independiente** | Login real con la API .NET **no probado** (sesión simulada); tests ejecutados sólo por el implementer (jest); utilidad frente a `query` + YAML **no medida** | **Decide el owner:** cerrar aceptando esas tres limitaciones, o pedir antes una corrida con login real (recomendado: es la única verificación de uso real que falta) |
 
 ### Jornada 3 (2026-09-23), lo que pasó
 
