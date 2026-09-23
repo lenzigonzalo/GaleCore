@@ -7,7 +7,7 @@ reviewer: codex
 approver: user
 feature_freeze: false
 closure_blocked: true
-review_result: PENDING
+review_result: APPROVED
 approval_result: PENDING
 ---
 
@@ -78,13 +78,13 @@ write to any other page or process.
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 | `build_today` (date via `record_date_for` with the convention timezone from `convention_timezone()`), `GET /api/today`; `build_meta` adds `today`/`timezone`/`reviews_enabled` | `TestTodayAndMeta` (4 tests) | `docs/evidence/gc-ai-0004-adapter/today-QQQ-no-record.json` (asserted `NO_RECORD`), `today-TEST.json`, `meta.json` | IMPLEMENTED (pending AC-07) |
-| AC-02 | `submit_review` → `record_review` → `build_view` of the day (a re-read failure after the save is still 201 with `record: null` + `reread_error`, never an error status that invites a retry); `ReviewRequest` (extra=forbid, `ReviewVerdict`) | `TestReviewEndpoint::test_review_is_appended_through_record_review_and_reread` (entry_hash unchanged, CLI path reads it back), `test_reread_failure_after_save_is_still_201_and_not_retried_into_a_duplicate` | `records-before-review.json` + `review-ok-201.json` (same `entry_hash`, reviews 0 → 1), `cli-query-reads-review-back.json` | IMPLEMENTED (pending AC-07) |
-| AC-03 | `do_POST`: loopback Host, `reviews_enabled`, allowed Origin, `hmac.compare_digest` token, JSON media type, size ≤ 16 KiB, `Handler.timeout`, schema; `submit_review` validates date/symbol with the store's rules before any file; `_review_status` maps by exception cause → 400/401/403/404/408/413/415/422/503; `_WRITE_LOCK` serializes writes | `test_review_requires_token_origin_and_loopback_host`, `test_review_rejects_bad_requests_without_writing`, `test_review_on_tampered_record_is_refused`, `test_oversized_or_empty_body_is_refused`, `test_invalid_symbol_or_date_is_400_before_any_file_is_touched`, `test_concurrent_reviews_on_the_same_day_all_land`, `test_write_failure_is_503_not_422`, `test_under_sent_body_is_408_and_nothing_is_written`, `test_no_reviews_flag_disables_the_write`, `TestHttpAdapter::test_unknown_paths_and_writes_are_rejected` | `review-wrong-token-401.json` (`<wrong-token>`), `review-other-origin-403.json`, `review-bad-verdict-400.json`, `review-bad-date-400.json`, `review-unknown-run-404.json`, `review-tampered-day-422.json` — all regenerable with `tools/capture_viewer_evidence.py` | IMPLEMENTED (pending AC-07) |
-| AC-04 | `_cors_headers` (echo + `Vary: Origin`), `do_OPTIONS` preflight only for an allowed origin, `allowed_origins_from_env` | `TestCors` (3 tests) | `preflight-allowed-origin-204.json`, `preflight-other-origin-405.json`, `meta.json` (CORS header) | IMPLEMENTED (pending AC-07) |
-| AC-05 | Read paths untouched; `make_handler` defaults to `ViewerConfig(timezone="UTC")` without reviews | all 30 GC-AI-0003 tests still pass; 19 new → 49 in `test_regime_viewer.py`; standalone page served | full suite 647 passed | IMPLEMENTED (pending AC-07) |
+| AC-01 | `build_today` (date via `record_date_for` with the convention timezone from `convention_timezone()`), `GET /api/today`; `build_meta` adds `today`/`timezone`/`reviews_enabled` | `TestTodayAndMeta` (4 tests) | `docs/evidence/gc-ai-0004-adapter/today-QQQ-no-record.json` (asserted `NO_RECORD`), `today-TEST.json`, `meta.json` | IMPLEMENTED (AC-07 APPROVED) |
+| AC-02 | `submit_review` → `record_review` → `build_view` of the day (a re-read failure after the save is still 201 with `record: null` + `reread_error`, never an error status that invites a retry); `ReviewRequest` (extra=forbid, `ReviewVerdict`) | `TestReviewEndpoint::test_review_is_appended_through_record_review_and_reread` (entry_hash unchanged, CLI path reads it back), `test_reread_failure_after_save_is_still_201_and_not_retried_into_a_duplicate` | `records-before-review.json` + `review-ok-201.json` (same `entry_hash`, reviews 0 → 1), `cli-query-reads-review-back.json` | IMPLEMENTED (AC-07 APPROVED) |
+| AC-03 | `do_POST`: loopback Host, `reviews_enabled`, allowed Origin, `hmac.compare_digest` token, JSON media type, size ≤ 16 KiB, `Handler.timeout`, schema; `submit_review` validates date/symbol with the store's rules before any file; `_review_status` maps by exception cause → 400/401/403/404/408/413/415/422/503; `_WRITE_LOCK` serializes writes | `test_review_requires_token_origin_and_loopback_host`, `test_review_rejects_bad_requests_without_writing`, `test_review_on_tampered_record_is_refused`, `test_oversized_or_empty_body_is_refused`, `test_invalid_symbol_or_date_is_400_before_any_file_is_touched`, `test_concurrent_reviews_on_the_same_day_all_land`, `test_write_failure_is_503_not_422`, `test_under_sent_body_is_408_and_nothing_is_written`, `test_no_reviews_flag_disables_the_write`, `TestHttpAdapter::test_unknown_paths_and_writes_are_rejected` | `review-wrong-token-401.json` (`<wrong-token>`), `review-other-origin-403.json`, `review-bad-verdict-400.json`, `review-bad-date-400.json`, `review-unknown-run-404.json`, `review-tampered-day-422.json` — all regenerable with `tools/capture_viewer_evidence.py` | IMPLEMENTED (AC-07 APPROVED) |
+| AC-04 | `_cors_headers` (echo + `Vary: Origin`), `do_OPTIONS` preflight only for an allowed origin, `allowed_origins_from_env` | `TestCors` (3 tests) | `preflight-allowed-origin-204.json`, `preflight-other-origin-405.json`, `meta.json` (CORS header) | IMPLEMENTED (AC-07 APPROVED) |
+| AC-05 | Read paths untouched; `make_handler` defaults to `ViewerConfig(timezone="UTC")` without reviews | all 30 GC-AI-0003 tests still pass; 19 new → 49 in `test_regime_viewer.py`; standalone page served | full suite 647 passed | IMPLEMENTED (AC-07 APPROVED) |
 | AC-06 | — | gate PASS; ruff clean; `git diff --check` clean; pytest 647 passed, 1 skipped (pre-existing); wheel PASS | commands below | IMPLEMENTED |
-| AC-07 | — | — | internal review R1: CHANGES_REQUESTED → fixed; Codex C1 (`reviews/GC-AI-0004-20260922T001230Z.md`): CHANGES_REQUESTED → fixed (below); `--recheck` pending | PARTIAL |
+| AC-07 | — | — | internal review R1: CHANGES_REQUESTED → fixed; Codex C1 (`reviews/GC-AI-0004-20260922T001230Z.md`): CHANGES_REQUESTED → fixed; Codex recheck C2 (`reviews/GC-AI-0004-20260923T000602Z.md`): **APPROVE**, both findings RESOLVED, no new findings | IMPLEMENTED (APPROVE is an input; closure = owner) |
 | AC-08 | — | Read of the real directory with this code: `cli query --symbol SPY --since 2026-09-01` → 2 records OK (2026-09-17, 2026-09-21 with 1 outcome + review `agree` written by the owner), `integrity_failed: []`; `record_store.py`/`regime_record.py` unchanged in the GC-AI-0002 tree | `real-dir-readonly-check.json` (full sha256 before/after, identical; query summary; `/api/today`), monitor browser run on the real dir (`--no-reviews`) | VERIFIED READ-ONLY against the current GC-AI-0002 tree; formal rebase/merge before closing PENDING |
 
 ## Required validation
@@ -180,8 +180,22 @@ network for `hatchling`) — built by the implementer, PASS.
 | C1-M1 | MAJOR | A failure while re-reading the day after a successful save returned 500 → a client retry appended the review twice | **Fixed.** The re-read is outside the write's error path: 201 with `record: null` and `reread_error`; the monitor tells the operator not to resend. `test_reread_failure_after_save_is_still_201_and_not_retried_into_a_duplicate` (exactly one review on disk) |
 | C1-m1 | MINOR | `today-TEST-no-record.json` actually held `INTEGRITY_FAILED` (synthetic days are relative to the run date) | **Fixed.** `today-QQQ-no-record.json` (symbol without records, asserted `NO_RECORD` by the tool) + `today-TEST.json` named honestly; README corrected |
 
-## Independent review — recheck
+## Independent review 2 (Codex, `--recheck`, effort medium, 2026-09-23T00:06Z) — `docs/engineering/reviews/GC-AI-0004-20260923T000602Z.md`
 
-**Reviewer:** PENDING
-**Review result:** PENDING
-**Reviewed revision/worktree:** PENDING
+**Scope:** `0b9b089..b7f76b9` (20 changed files) against review C1. **Verdict: APPROVE** — C1-M1 and
+C1-m1 RESOLVED, no new findings. Codex reran the four required checks (gate PASS, ruff, 647 passed /
+1 skipped, diff-check) and regenerated the 15 synthetic artifacts (capture and CLI exit 0).
+
+Declared limitations: the wheel build, the monitor browser run, the historical real-directory capture
+and the final GC-AI-0002 integration were not reproduced by Codex (wheel and browser run were done by
+the implementer and are recorded above; AC-08 integration stays deferred by owner decision).
+
+Run without a rebase onto the current `feature/gc-ai-0002` by owner decision relayed on 2026-09-22:
+zero file overlap between the branches, so the reviewed content would not change; rebasing now would
+be redone after the AC-08 series closes and would invalidate this review's declared SHA range.
+
+### Product-owner decision
+
+- PENDING. `status`, `closure_blocked` and `approval_result` unchanged; `review_result: APPROVED`
+  only transcribes the reviewer's verdict. AC-08 (integration with the final GC-AI-0002 tree) stays
+  open, to be done once after that series closes.
