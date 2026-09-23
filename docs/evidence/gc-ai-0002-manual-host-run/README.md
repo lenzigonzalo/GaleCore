@@ -39,6 +39,16 @@ Environment: `ALLOW_UNKNOWN_FRESHNESS=true`, `GALECORE_TIMEOUT_SECONDS=300`,
 | 6 | 21:15:57 (`queried_at`) | `query --symbol SPY --since 2026-09-14` | 0 | 3 records, `integrity_failed: []`; the 2026-09-22 entry now carries 1 outcome, 0 reviews (owner's `record review` pending, F-6) | `day3-step6-query-after-outcome.json` |
 | 7 | 21:46:22 (`reviewed_at`) | `record review --symbol SPY --date 2026-09-22 --run-id 01a0cadb-… --verdict partial --comment "…"` — **owner's verdict** (F-6). Provenance of the words differs from day 1: the host drafted the comment after reading GaleCore's own wall research, the owner read it and adopted it verbatim; it was not written by the owner from scratch | 0 | `RECORDED`, verdict `partial` | `day3-step7-record-review-owner.json` |
 | 8 | 21:46:38 (`queried_at`) | `query --symbol SPY --since 2026-09-14` (final) | 0 | 3 records, `integrity_failed: []`; 2026-09-22 entry: 1 outcome, 1 human review (`partial`) | `day3-step8-query-final.json` |
+| **Day 4 — 2026-09-23 (Wed), post-session, day 3 of the AC-08 series** | | | | | |
+| 1 | 20:32:45 (`prepared_at`; issued 20:31:07, GEX computation ~97 s) | `prepare --symbol SPY --skill regime` (`MAX_STALENESS_SECONDS=36000`) | 0 | run_id `01a0cff8-81cb-77c3-881c-e68245f2d94d`; gex VALID (20:32 UTC), vix/vvix VALID (settlement prints 20:15 UTC), put_skew UNKNOWN; facts: net_gex −822.1, spot 767.73, zero-gamma 771.08, call wall 772.0, put wall 767.0, coverage 100 %, skew 1.0948 (ok), VIX 15.18, VVIX 88.6 | `day4-step1-prepare.json` |
+| 2 | — | Host writes `RegimeInterpretation` from those facts only (skill rule 10) | — | negative_gamma / calm; the walls are described as the largest single-strike gamma on each side, with no behavioural role claimed (the point of the owner's `partial` on 2026-09-22) | `day4-step2-host-interpretation.json` |
+| 3 | 20:33:12 (`accepted_at`) | `accept --record --prompt "Analizá el régimen de hoy de SPY y guardalo"` | 0 | `SUCCESS`; all 8 checks passed; `record: RECORDED` → `GaleCore/research/regime/SPY/2026-09-23.md`, entry_hash `sha256:08fd95db…` | `day4-step3-accept-request.json`, `day4-step3-accept-record.json` |
+| 4 | 20:33:19 (`queried_at`) | `query --symbol SPY --since 2026-09-14` | 0 | 4 records (17 flagged history; 21, 22, 23 = the series), `integrity_failed: []` | `day4-step4-query.json` |
+| 5 | 20:40:23 (`observed_at`) | `record outcome --symbol SPY --date 2026-09-23 --run-id 01a0cff8-…` — **~7 min after acceptance, by owner instruction** (runbook says ≥ 30 min) | 0 | `RECORDED`; GaleCore served the **cached** GEX of 20:32:44 (`cacheSeconds: 600`), so GEX facts equal the prepared ones; only the skew IVs moved | `day4-step5-record-outcome.json` |
+| 5b | 21:04:09 (`observed_at`; issued 21:04:01) | `record outcome …` again, ~31 min after acceptance, to keep the day comparable with the others (outcomes are appended) | 0 | `RECORDED`; GEX from a cache entry computed at 20:56:05 (net_gex −822.5, spot 767.72, walls and zero-gamma unchanged), skew 1.0952, indices still the settlement prints | `day4-step5b-record-outcome-31min.json` |
+| 6 | 20:40:36 (`queried_at`) | `query --symbol SPY --since 2026-09-14` (after the first outcome) | 0 | 4 records, `integrity_failed: []`; 2026-09-23 entry: 1 outcome, 0 reviews | `day4-step6-query-after-outcome.json` |
+| 7 | 21:24:15 (`reviewed_at`) | `record review --symbol SPY --date 2026-09-23 --run-id 01a0cff8-… --verdict agree --comment "Está ok"` — **owner's verdict and words**, written by the owner in the session and passed verbatim (F-6) | 0 | `RECORDED`, verdict `agree` | `day4-step7-record-review-owner.json` |
+| 8 | 21:24:26 (`queried_at`) | `query --symbol SPY --since 2026-09-14` (final) | 0 | 4 records, `integrity_failed: []`; 2026-09-23 entry: 2 outcomes, 1 human review (`agree`) | `day4-step8-query-final.json` |
 
 ## What this evidences and what it does not
 
@@ -63,6 +73,18 @@ Environment: `ALLOW_UNKNOWN_FRESHNESS=true`, `GALECORE_TIMEOUT_SECONDS=300`,
   acceptance moved only GEX-derived facts (net_gex 595.5 → 581.8, spot 773.26 → 773.12) while
   the walls, the zero-gamma level and the settlement prints of the indices were unchanged: the
   outcome step records later facts, it does not score the interpretation.
+- **Day 4 (2026-09-23) is day 3 of the AC-08 series**, which is complete: 21, 22 and 23 of
+  September, three consecutive trading days, each with outcome and owner review (`agree`,
+  `partial`, `agree`). Deviations of this day, disclosed: (a) the first outcome was taken ~7 min
+  after acceptance by owner instruction and hit GaleCore's 600 s GEX cache, so it observed no new
+  GEX; a second outcome at ~31 min was appended, and it also came from a cache entry (computed at
+  20:56 by an unrelated read of the same endpoint) — the outcome step can observe a cached
+  computation, which the record shows through `sources.gex.market_data_as_of`; (b) the host
+  declared `host_model: claude-opus-5-5` (the model that ran this day) where days 21/22 declared
+  `claude-opus-5`; the field is `HOST_DECLARED` and not validated. (c) The owner questioned the
+  magnitude of net_gex against Unusual Whales; the investigation (GaleCore scale is 100× the
+  per-1 % convention; the expired same-day 0DTE contributes −435.7 of −822.5 in a post-session
+  read) is routed to `BL-002` and `BL-011` and does not change the series' cut.
 - **Full loop evidenced on 2026-09-21:** prepare → interpret → accept+record → later outcome →
   owner's `record review` (verdict `agree`, comment verbatim) → `query` reads all of it back.
 - **Operator choice disclosed:** attempt 3 used the 24 h staleness cap to admit the previous
