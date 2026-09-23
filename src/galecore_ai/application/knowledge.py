@@ -279,15 +279,19 @@ def _regime_items(kb: KnowledgeBase, failed: list[dict], symbol: str | None) -> 
     return items
 
 
+UNFINISHED = {ResearchStatus.OPEN.value, ResearchStatus.TEST_PLANNED.value}
+
+
 def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status: str | None = None,
            symbol: str | None = None) -> dict:
     """Items whose text contains the query terms, best match first. Broken items are reported, never skipped."""
     terms = [t for t in text.lower().split() if t]
     failed: list[dict] = []
     candidates: list[tuple[dict, str]] = []
+    wanted = UNFINISHED if status == "unfinished" else {status}
     if kind in (None, "research"):
         candidates += [(s, t) for s, t, _ in _research_items(kb, failed)
-                       if status is None or s["status"] == status]
+                       if status is None or s["status"] in wanted]
     if kind in (None, "regime") and status is None:
         candidates += _regime_items(kb, failed, symbol)
     results = []

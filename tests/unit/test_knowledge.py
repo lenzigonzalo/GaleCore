@@ -242,6 +242,8 @@ class TestSearchAndShow:
         save(kb)
         assert search(kb, status="open")["count"] == 0
         assert search(kb, status="test_planned")["count"] == 1
+        # a fresh session looking for pending work must find test_planned too (found in the real demo)
+        assert search(kb, status="unfinished")["count"] == 1
 
     def test_show_gives_pending_work_and_backlinks(self, kb):
         first, _ = save(kb)
@@ -281,6 +283,19 @@ class TestCli:
         code, revised = self._run("research", "revise", "--id", saved["ref"].split(":", 1)[1], "--reason",
                                   "continuation", "--note", "sigue", "--prompt", "Retomá", stdin=request, env=env)
         assert code == 0 and revised["revision"] == 2 and revised["previous_revisions"] == 1
+
+    def test_stdin_is_read_as_utf8_whatever_the_console_code_page(self, kb):
+        import os
+        env = {k: v for k, v in os.environ.items() if k not in ("PYTHONUTF8", "PYTHONIOENCODING")}
+        env[KNOWLEDGE_DIR_ENV] = str(kb.base)
+        payload = {"content": content(title="Régimen: ¿qué pasó?").model_dump(mode="json")}
+        result = subprocess.run([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "research", "save",
+                                 "--slug", "utf8", "--prompt", "p"], input=json.dumps(payload,
+                                ensure_ascii=False).encode("utf-8"), capture_output=True, timeout=60, check=False,
+                                env=env)
+        assert result.returncode == 0, result.stdout
+        stored = kb.research.load("2026-09-23-utf8") or kb.research.load(json.loads(result.stdout)["ref"][9:])
+        assert stored.current.content.title == "Régimen: ¿qué pasó?"
 
     def test_rejection_is_json_with_problems(self, kb):
         bad = content().model_dump(mode="json")

@@ -89,6 +89,15 @@ _STATUS_EXIT_MAP = {
 _SKILLS = {"gex": prepare_gex_snapshot, "regime": prepare_regime_snapshot}
 
 
+def _read_stdin() -> str:
+    """stdin as UTF-8 regardless of the console code page (Windows defaults to cp1252).
+
+    Hosts pipe UTF-8; decoding it with the locale turned accents into mojibake that was
+    then hashed and stored (GC-AI-0005, revision 1 of the first real investigation).
+    """
+    return sys.stdin.buffer.read().decode("utf-8")
+
+
 def _json_out(data: dict, *, exit_code: int = 0) -> None:
     """Print JSON to stdout and exit."""
     print(json.dumps(data, indent=2, default=str))
@@ -180,7 +189,7 @@ async def _cmd_accept(args: argparse.Namespace) -> None:
                    exit_code=_EXIT_VALIDATION_ERROR)
 
     try:
-        raw = sys.stdin.read()
+        raw = _read_stdin()
     except (OSError, UnicodeDecodeError) as exc:
         _error_out(f"Failed to read stdin: {exc}")
         return  # unreachable but satisfies type checker
@@ -331,7 +340,7 @@ def _build_knowledge_base() -> KnowledgeBase:
 
 def _read_research_request() -> tuple[ResearchContent, RecordHost]:
     try:
-        payload = json.loads(sys.stdin.read())
+        payload = json.loads(_read_stdin())
     except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
         _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
         raise AssertionError("unreachable") from exc
@@ -456,7 +465,8 @@ def main() -> None:
     p_search = kb_sub.add_parser("search", help="Items matching the terms, best first")
     p_search.add_argument("--text", help="Terms to look for (empty lists everything)")
     p_search.add_argument("--kind", choices=["research", "regime"])
-    p_search.add_argument("--status", choices=[s.value for s in ResearchStatus])
+    p_search.add_argument("--status", choices=["unfinished", *[s.value for s in ResearchStatus]],
+                          help="unfinished = open or test_planned")
     p_search.add_argument("--symbol")
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
     p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id> or file:<path>")

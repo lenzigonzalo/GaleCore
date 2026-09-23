@@ -65,7 +65,7 @@ entries:
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: []
     flow:
-      - kb search --text "<términos>" [--kind research|regime] [--status open]
+      - kb search --text "<términos>" [--kind research|regime] [--status unfinished]
       - kb show <ref>
       - research save --slug <slug> --prompt "<pedido del usuario>" < {content, host_provider, host_model}
       - research revise --id <id> --reason continuation|correction|result --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}

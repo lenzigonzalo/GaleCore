@@ -24,7 +24,7 @@ The host executes the model. GaleCore-AI teaches it how to work and verifies the
 
 ```bash
 python -B -m galecore_ai.adapters.cli catalog      # what can be asked: capability, skill (version+hash), contract, flow, controls
-python -B -m galecore_ai.adapters.cli kb search --text "<terms>" [--kind research|regime] [--status open]
+python -B -m galecore_ai.adapters.cli kb search --text "<terms>" [--kind research|regime] [--status unfinished]
 python -B -m galecore_ai.adapters.cli kb show <ref>   # regime:SPY/2026-09-23 · research:<id> · file:<path from the workspace root>
 ```
 
@@ -80,7 +80,7 @@ python -B -m galecore_ai.adapters.cli query --symbol SPY --since <YYYY-MM-DD> [-
 No GaleCore needed. Method: `config/skills/research/skill.yaml`.
 
 ```bash
-python -B -m galecore_ai.adapters.cli kb search --text "<idea>"          # antecedents; --status open finds unfinished work
+python -B -m galecore_ai.adapters.cli kb search --text "<idea>"          # antecedents; --status unfinished = open or test_planned
 echo '{"content": <ResearchContent JSON>, "host_provider": "claude-code", "host_model": "<model>"}' | python -B -m galecore_ai.adapters.cli research save --slug <slug> --prompt "<user request>"
 python -B -m galecore_ai.adapters.cli kb show research:<id>                 # pending next steps, missing, history, cited_by
 echo '{...}' | python -B -m galecore_ai.adapters.cli research revise --id <id> --reason continuation|correction|result --note "<what changes>" --prompt "<user request>"
