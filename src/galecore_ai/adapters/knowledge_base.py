@@ -86,12 +86,12 @@ def parse_ref(text: str) -> Ref:
             f"Malformed reference {text!r}: expected regime:<SYMBOL>/<YYYY-MM-DD>, research:<id> or file:<path>"
         )
     if kind == "regime":
-        m = _REGIME_KEY_RE.match(key)
+        m = _REGIME_KEY_RE.fullmatch(key)
         if not m:
             raise KnowledgeBaseError(f"Malformed regime reference {text!r}: expected regime:<SYMBOL>/<YYYY-MM-DD>")
         return Ref("regime", f"{m['symbol'].upper()}/{m['date']}")
     if kind == "research":
-        if not RESEARCH_ID_RE.match(key):
+        if not RESEARCH_ID_RE.fullmatch(key):
             raise KnowledgeBaseError(f"Malformed research reference {text!r}: expected research:<YYYY-MM-DD-slug>")
         return Ref("research", key)
     posix = PurePosixPath(key.replace("\\", "/"))

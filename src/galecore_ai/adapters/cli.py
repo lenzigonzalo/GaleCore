@@ -95,7 +95,7 @@ def _read_stdin() -> str:
     Hosts pipe UTF-8; decoding it with the locale turned accents into mojibake that was
     then hashed and stored (GC-AI-0005, revision 1 of the first real investigation).
     """
-    return sys.stdin.buffer.read().decode("utf-8")
+    return sys.stdin.buffer.read().decode("utf-8-sig")
 
 
 def _json_out(data: dict, *, exit_code: int = 0) -> None:

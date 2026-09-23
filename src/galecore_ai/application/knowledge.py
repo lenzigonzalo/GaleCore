@@ -84,6 +84,9 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
         raise KnowledgeError(str(exc)) from exc
     if ref.kind == "regime":
         symbol, day = ref.key.split("/")
+        if kb.records.base_dir != (kb.base / "regime").resolve():
+            raise KnowledgeError(f"{ref}: regime records are not in the knowledge base "
+                                 f"(GALECORE_RECORDS_DIR points elsewhere); cannot cite them")
         try:
             if kb.records.load(symbol, day) is None:
                 raise KnowledgeError(f"{ref}: no such regime record")
@@ -99,6 +102,9 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
         path = kb.research.path_for(ref.key)
     else:
         path = ref_path(ref, kb.base)
+        if path.is_relative_to(kb.base.resolve()):
+            # Knowledge items are cited by kind so their integrity (and self-citation) is checked.
+            raise KnowledgeError(f"{ref}: points inside the knowledge base; cite it as regime: or research:")
         if not path.is_relative_to(kb.workspace.resolve()) or not path.is_file():
             raise KnowledgeError(f"{ref}: no such file inside the workspace")
     return ResolvedRef(ref=str(ref), path=_display_path(path, kb), content_hash=_sha256_file(path))
@@ -227,6 +233,10 @@ def _cited_refs(document: ResearchDocument) -> set[str]:
 
 def _research_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, str, ResearchDocument]]:
     items = []
+    for name in kb.research.unrecognised_files():
+        failed.append({"ref": f"file:{_display_path(kb.research.knowledge_base / 'research' / name, kb)}",
+                       "status": "UNRECOGNISED_NAME",
+                       "problems": [f"{name} is not named <YYYY-MM-DD-slug>.md; it is not read as research"]})
     for rid in kb.research.ids():
         try:
             doc = kb.research.load(rid)

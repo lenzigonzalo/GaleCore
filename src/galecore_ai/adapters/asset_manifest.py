@@ -34,7 +34,7 @@ class RequiredAssetError(Exception):
     """A required cognitive asset is missing or invalid."""
 
 
-# Required assets; skills are selected per vertical from _KNOWN_SKILLS
+# Required assets; skills are selected per vertical from the catalog (harness/catalog.py)
 _REQUIRED_AGENT = "agents/trading-agent.yaml"
 DEFAULT_SKILL_IDS: tuple[str, ...] = ("gex_interpretation",)
 _REQUIRED_PROTOCOLS = {"facts_discipline": "protocols/facts-discipline.yaml"}

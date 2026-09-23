@@ -48,6 +48,8 @@ export MAX_STALENESS_SECONDS=36000    # daily regime records: after the cash ses
 export GALECORE_TIMEOUT_SECONDS=300   # a cold GEX computation can exceed 120 s
 ```
 
+stdin is read as UTF-8 (a BOM is accepted) whatever the console code page.
+
 Exit codes: `0` SUCCESS · `1` prepare/record/internal failure · `2` INSUFFICIENT_DATA · `3` VALIDATION_ERROR (also argument errors and `query` with an `INTEGRITY_FAILED` record). All output is JSON.
 
 ## Vertical 1: GEX-SPY analysis

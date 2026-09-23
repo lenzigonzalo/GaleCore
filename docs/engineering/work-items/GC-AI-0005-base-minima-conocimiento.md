@@ -1,7 +1,7 @@
 ---
 id: GC-AI-0005
 title: Base mínima probada con trabajo real — catálogo, base de conocimiento e investigación retomable
-status: IN_PROGRESS
+status: READY_FOR_REVIEW
 implementer: claude-code
 reviewer: codex
 approver: user
@@ -108,7 +108,7 @@ python tools/verify_wheel_assets.py
 
 ## Implementer handoff
 
-**State:** IMPLEMENTED — pendiente de review (AC-10).
+**State:** READY_FOR_REVIEW — review interno R1 hecho (abajo); falta Codex (AC-10).
 
 ### Qué se declaró y qué se programó (AC-08)
 
@@ -158,3 +158,23 @@ python -B -m pytest -q -p no:cacheprovider → 689 passed, 1 warning in 121.45s
   correcto ni que la fuente sostenga el hecho.
 - `--status open` vs `unfinished`: el cambio de la skill a 1.1.0 queda en las revisiones futuras; las
   revisiones 1 y 2 registran la 1.0.0 que las produjo.
+
+## Internal review R1 (agente `reviewer`, 2026-09-23 ~23:40 UTC, rango `d6a35d8..HEAD` + workspace `2678e06`, knowledge, GaleCore `6e13394`) — CHANGES_REQUESTED → corregido
+
+Reprodujo gate PASS, ruff, 689 passed, `diff --check`, wheel PASS, `guard_git` 51 passed; `query` sin
+variables sobre `knowledge/regime`: 4 registros, `integrity_failed: []`; sha256 de los registros
+migrados igual a los blobs de `6e13394^`. Sondas sobre una copia en el scratchpad, sin tocar el repo.
+
+| # | Sev. | Hallazgo | Disposición |
+|---|---|---|---|
+| R1-M1 | MAJOR | Un `file:` que apunta dentro de `knowledge/` saltea autocita e integridad (aceptó autocitarse y citar un registro adulterado) | **Corregido:** `resolve_ref` rechaza `file:` dentro de la base ("cite it as regime: or research:"); tests para registro y autocita |
+| R1-m1 | MINOR | Detección de adulteración declarada de más: truncar revisiones o reescribir una recalculando su hash no se detecta | **Corregido en la redacción** (store, catálogo, `knowledge/README.md`): se detecta lo que rompe un hash o el cuerpo; lo demás lo muestra el git de `knowledge/` |
+| R1-m2 | MINOR | Ids con salto de línea final pasaban `$` | **Corregido:** `fullmatch`; test en `path_for` |
+| R1-m3 | MINOR | Con `GALECORE_RECORDS_DIR` fuera de la base, rutas absolutas en el frontmatter y links al lugar equivocado | **Corregido:** citar `regime:` exige los registros dentro de la base; si no, rechazo explícito; test |
+| R1-m4 | MINOR | Archivos mal nombrados en `research/` se omitían en silencio | **Corregido:** `search` los reporta como `UNRECOGNISED_NAME`; test |
+| R1-m5 | MINOR | stdin: BOM rechazado; `CLAUDE.md` no dice UTF-8; sin test de `accept` no-ASCII | **Corregido:** `utf-8-sig`, línea en `CLAUDE.md`, test de `_read_stdin` con BOM y acentos (compartido por `accept` y `research`) |
+| R1-m6 | MINOR | Comentario viejo en `asset_manifest.py` | **Corregido** |
+| R1-m7 | MINOR | Test de la raíz del workspace que no podía fallar | **Reemplazado** por un test determinístico de `_workspace_root` (checkout, worktree, fuera) |
+| R1-m8 | MINOR | `status` seguía en IN_PROGRESS | **Corregido:** READY_FOR_REVIEW |
+| R1-m9 | MINOR | Prompt de la sesión 2 parafraseado | **Corregido:** `docs/evidence/gc-ai-0005/s2-prompt.md` con el texto literal |
+| R1-m10 | MINOR | `guard_git` rechazó commits a `knowledge/` desde Git Bash (la sesión 2 terminó usando PowerShell; el hook corrió igual) | **Registrado:** los commits del implementer a `knowledge/` desde Bash con `git -C "<ruta con />"` pasaron; la transcripción de la sesión 2 no guarda los comandos rechazados, así que la causa no está verificada. Sin efecto de seguridad (el destino no tiene gate y el push está bloqueado); se investiga si vuelve a pasar |

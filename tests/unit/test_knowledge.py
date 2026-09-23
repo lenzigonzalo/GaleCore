@@ -102,14 +102,15 @@ class TestLocation:
         monkeypatch.setenv("GALECORE_RECORDS_DIR", str(tmp_path / "elsewhere"))
         assert default_records_dir() == (tmp_path / "elsewhere").resolve()
 
-    def test_found_from_the_workspace_root_when_env_is_unset(self, monkeypatch):
-        monkeypatch.delenv(KNOWLEDGE_DIR_ENV, raising=False)
-        try:
-            path = knowledge_dir()
-        except KnowledgeBaseError as exc:
-            assert "knowledge" in str(exc)  # workspace found, base not created on this machine
-        else:
-            assert path.name == "knowledge" and (path.parent / "ENGINEERING.md").is_file()
+    def test_workspace_root_is_found_from_a_checkout_or_a_worktree(self, tmp_path):
+        from galecore_ai.adapters.knowledge_base import _workspace_root
+        (tmp_path / "ENGINEERING.md").write_text("x", encoding="utf-8")
+        (tmp_path / "GaleCore-AI" / "src").mkdir(parents=True)
+        deep = tmp_path / ".worktrees" / "galecore-ai" / "GC-AI-9999" / "src" / "galecore_ai"
+        deep.mkdir(parents=True)
+        assert _workspace_root(tmp_path / "GaleCore-AI" / "src") == tmp_path
+        assert _workspace_root(deep) == tmp_path
+        assert _workspace_root(tmp_path.parent) is None
 
 
 class TestRefs:
@@ -181,6 +182,28 @@ class TestSave:
                                              "bearing": "Da el agregado que se descompone"}])
         assert document.current.resolved_refs[0].ref == regime_record
 
+    def test_file_ref_into_the_knowledge_base_is_refused(self, kb, regime_record):
+        # Review R1 MAJOR: file: paths skipped the self-citation and integrity checks.
+        day = regime_record.rsplit("/", 1)[1]
+        with pytest.raises(KnowledgeError, match="cite it as regime: or research:"):
+            save(kb, antecedents=[{"ref": f"file:knowledge/regime/SPY/{day}.md", "summary": "s", "bearing": "b"}])
+        first, _ = save(kb)
+        with pytest.raises(KnowledgeError, match="cite it as regime: or research:"):
+            revise_research(kb=kb, research_id=first.id, reason=RevisionReason.CONTINUATION, note="n",
+                            prompt="p", host=HOST,
+                            content=content(statements=[{"kind": "fact", "text": "t",
+                                                         "sources": [f"file:knowledge/research/{first.id}.md"]}]))
+
+    def test_regime_refs_need_the_records_inside_the_knowledge_base(self, kb, tmp_path):
+        moved = KnowledgeBase(base=kb.base, records=FileRecordStore(tmp_path / "elsewhere"), research=kb.research)
+        with pytest.raises(KnowledgeError, match="not in the knowledge base"):
+            save(moved, antecedents=[{"ref": "regime:SPY/2026-09-20", "summary": "s", "bearing": "b"}])
+
+    def test_id_with_trailing_newline_is_not_a_path(self, kb):
+        from galecore_ai.adapters.research_store import ResearchStoreError
+        with pytest.raises(ResearchStoreError):
+            kb.research.path_for("2026-09-23-abc\n")
+
     def test_same_id_twice_is_refused(self, kb):
         save(kb)
         with pytest.raises(KnowledgeError, match="already exists"):
@@ -237,6 +260,12 @@ class TestSearchAndShow:
         assert found["results"][0]["next_steps"] == ["Archivar byExpiry en cada corrida post-cierre"]
         regimes = search(kb, text="gamma", kind="regime")
         assert [r["ref"] for r in regimes["results"]] == [regime_record]
+
+    def test_misnamed_file_is_reported_not_skipped(self, kb):
+        save(kb)
+        (kb.base / "research" / "Notas sueltas.md").write_text("x", encoding="utf-8")
+        failed = search(kb)["integrity_failed"]
+        assert [f["status"] for f in failed] == ["UNRECOGNISED_NAME"]
 
     def test_status_filter(self, kb):
         save(kb)
@@ -296,6 +325,14 @@ class TestCli:
         assert result.returncode == 0, result.stdout
         stored = kb.research.load("2026-09-23-utf8") or kb.research.load(json.loads(result.stdout)["ref"][9:])
         assert stored.current.content.title == "Régimen: ¿qué pasó?"
+
+    def test_stdin_bom_and_accents_are_accepted(self, monkeypatch):
+        import io
+
+        from galecore_ai.adapters import cli
+        raw = '﻿{"t": "Régimen ¿ñ?"}'.encode()
+        monkeypatch.setattr(sys, "stdin", io.TextIOWrapper(io.BytesIO(raw), encoding="cp1252"))
+        assert json.loads(cli._read_stdin()) == {"t": "Régimen ¿ñ?"}
 
     def test_rejection_is_json_with_problems(self, kb):
         bad = content().model_dump(mode="json")

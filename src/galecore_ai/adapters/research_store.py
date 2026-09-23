@@ -7,7 +7,11 @@ the record. Links in the body are relative, so they resolve in any Markdown
 reader.
 
 Revisions are append-only: ``append`` re-reads the file, requires every stored
-revision to be intact and unchanged, and only then adds the new one.
+revision to be intact, and only then adds the new one. What the per-revision hashes
+detect: an edit that leaves a revision inconsistent with its hash, or the body out
+of step with the frontmatter. What they do not detect: removing trailing revisions
+or rewriting one and recomputing its hash; the git history of the knowledge base is
+the witness for that.
 """
 
 from __future__ import annotations
@@ -68,14 +72,20 @@ class FileResearchStore:
         return self._kb
 
     def path_for(self, research_id: str) -> Path:
-        if not RESEARCH_ID_RE.match(research_id):
+        if not RESEARCH_ID_RE.fullmatch(research_id):
             raise ResearchStoreError(f"Invalid research id: {research_id!r} (expected YYYY-MM-DD-slug)")
         return self._dir / f"{research_id}.md"
 
     def ids(self) -> list[str]:
         if not self._dir.is_dir():
             return []
-        return sorted(p.stem for p in self._dir.glob("*.md") if RESEARCH_ID_RE.match(p.stem))
+        return sorted(p.stem for p in self._dir.glob("*.md") if RESEARCH_ID_RE.fullmatch(p.stem))
+
+    def unrecognised_files(self) -> list[str]:
+        """Markdown files in research/ whose name is not a research id (reported, never read)."""
+        if not self._dir.is_dir():
+            return []
+        return sorted(p.name for p in self._dir.glob("*.md") if not RESEARCH_ID_RE.fullmatch(p.stem))
 
     # ── read ──────────────────────────────────────────────────────
 

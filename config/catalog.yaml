@@ -75,5 +75,6 @@ entries:
       - Every antecedent says how it affects the hypothesis or the plan
       - A statement marked as fact cites at least one source
       - Open or test_planned work lists its next steps; a test plan needs its hypothesis
-      - Revisions are append-only and hashed; a changed earlier revision is INTEGRITY_FAILED
+      - "Revisions are append-only and hashed; an edit that breaks a revision's hash is INTEGRITY_FAILED (removing or consistently rewriting revisions shows only in the knowledge base's git history)"
+      - "Knowledge items are cited as regime or research refs; a file ref into the knowledge base is refused"
       - Not checked - whether the reasoning is right, or whether a fact's source supports it
