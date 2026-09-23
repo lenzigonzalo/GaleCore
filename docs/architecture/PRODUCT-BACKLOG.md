@@ -1434,7 +1434,7 @@ del owner sobre el conjunto inicial de recetas.
 
 **Addendum 2026-09-23 — review del owner, jornada 3 de AC-08:** el corte fijo actual **incluye el
 0DTE del mismo día en una lectura post-cierre**, cuando esos contratos ya vencieron y su gamma a
-DTE 0 está degenerada. Medido en `/App/Gex/Analysis` de SPY a las 20:56 UTC: el vencimiento
+DTE 0 está degenerada. Observado (no archivado) en `/App/Gex/Analysis` de SPY a las 20:56 UTC: el vencimiento
 2026-09-23 aporta −435.7 de un agregado de −822.5 (53 %); sin él, ≈ −386.8. Afecta igual a los
 registros del 21 y 22 (mismo corte), así que la serie es consistente entre sí pero comparte el
 sesgo. Consecuencia para el alcance: toda receta declara qué hace con el vencimiento del día según

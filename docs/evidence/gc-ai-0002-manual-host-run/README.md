@@ -1,9 +1,12 @@
 # Manual host run — daily regime loop (GC-AI-0002, AC-06 / AC-08)
 
-**Host:** Claude Code session (Opus 5), acting as the interactive host described in `CLAUDE.md`.
+**Host:** Claude Code session (Opus 5 through 2026-09-22, Opus 5.5 on 2026-09-23), acting as the
+interactive host described in `CLAUDE.md`.
 **GaleCore:** live, `http://localhost:5000`. **Records dir:** the real one,
 `GaleCore/research/regime/` (default). **No runner involved:** every command below was issued by
-the host one at a time; the only hand-written artifact is `step2-host-interpretation.json`.
+the host one at a time; the only hand-written artifacts are the per-day host interpretations
+(`step2-host-interpretation.json`, `dayN-step2-host-interpretation.json`) and the accept requests
+that wrap them.
 All files here are sanitized copies of the exact stdout (absolute paths → `<repo>`/`<home>`;
 no API key anywhere).
 
@@ -45,8 +48,8 @@ Environment: `ALLOW_UNKNOWN_FRESHNESS=true`, `GALECORE_TIMEOUT_SECONDS=300`,
 | 3 | 20:33:12 (`accepted_at`) | `accept --record --prompt "Analizá el régimen de hoy de SPY y guardalo"` | 0 | `SUCCESS`; all 8 checks passed; `record: RECORDED` → `GaleCore/research/regime/SPY/2026-09-23.md`, entry_hash `sha256:08fd95db…` | `day4-step3-accept-request.json`, `day4-step3-accept-record.json` |
 | 4 | 20:33:19 (`queried_at`) | `query --symbol SPY --since 2026-09-14` | 0 | 4 records (17 flagged history; 21, 22, 23 = the series), `integrity_failed: []` | `day4-step4-query.json` |
 | 5 | 20:40:23 (`observed_at`) | `record outcome --symbol SPY --date 2026-09-23 --run-id 01a0cff8-…` — **~7 min after acceptance, by owner instruction** (runbook says ≥ 30 min) | 0 | `RECORDED`; GaleCore served the **cached** GEX of 20:32:44 (`cacheSeconds: 600`), so GEX facts equal the prepared ones; only the skew IVs moved | `day4-step5-record-outcome.json` |
-| 5b | 21:04:09 (`observed_at`; issued 21:04:01) | `record outcome …` again, ~31 min after acceptance, to keep the day comparable with the others (outcomes are appended) | 0 | `RECORDED`; GEX from a cache entry computed at 20:56:05 (net_gex −822.5, spot 767.72, walls and zero-gamma unchanged), skew 1.0952, indices still the settlement prints | `day4-step5b-record-outcome-31min.json` |
 | 6 | 20:40:36 (`queried_at`) | `query --symbol SPY --since 2026-09-14` (after the first outcome) | 0 | 4 records, `integrity_failed: []`; 2026-09-23 entry: 1 outcome, 0 reviews | `day4-step6-query-after-outcome.json` |
+| 5b | 21:04:09 (`observed_at`; issued 21:04:01) | `record outcome …` again, ~31 min after acceptance, to keep the day comparable with the others (outcomes are appended) | 0 | `RECORDED`; GEX from a cache entry computed at 20:56:05 by the host's own investigation read (net_gex −822.5, spot 767.72, walls and zero-gamma unchanged), skew 1.0952, indices still the settlement prints | `day4-step5b-record-outcome-31min.json` |
 | 7 | 21:24:15 (`reviewed_at`) | `record review --symbol SPY --date 2026-09-23 --run-id 01a0cff8-… --verdict agree --comment "Está ok"` — **owner's verdict and words**, written by the owner in the session and passed verbatim (F-6) | 0 | `RECORDED`, verdict `agree` | `day4-step7-record-review-owner.json` |
 | 8 | 21:24:26 (`queried_at`) | `query --symbol SPY --since 2026-09-14` (final) | 0 | 4 records, `integrity_failed: []`; 2026-09-23 entry: 2 outcomes, 1 human review (`agree`) | `day4-step8-query-final.json` |
 
@@ -77,14 +80,20 @@ Environment: `ALLOW_UNKNOWN_FRESHNESS=true`, `GALECORE_TIMEOUT_SECONDS=300`,
   September, three consecutive trading days, each with outcome and owner review (`agree`,
   `partial`, `agree`). Deviations of this day, disclosed: (a) the first outcome was taken ~7 min
   after acceptance by owner instruction and hit GaleCore's 600 s GEX cache, so it observed no new
-  GEX; a second outcome at ~31 min was appended, and it also came from a cache entry (computed at
-  20:56 by an unrelated read of the same endpoint) — the outcome step can observe a cached
-  computation, which the record shows through `sources.gex.market_data_as_of`; (b) the host
+  GEX; a second outcome at ~31 min was appended, and it also came from a cache entry, computed at
+  20:56 by the host's own read of the same endpoint while investigating the owner's question in
+  (c) — the outcome step can observe a cached computation, which the record shows through
+  `sources.gex.market_data_as_of`; (b) the host
   declared `host_model: claude-opus-5-5` (the model that ran this day) where days 21/22 declared
   `claude-opus-5`; the field is `HOST_DECLARED` and not validated. (c) The owner questioned the
   magnitude of net_gex against Unusual Whales; the investigation (GaleCore scale is 100× the
   per-1 % convention; the expired same-day 0DTE contributes −435.7 of −822.5 in a post-session
-  read) is routed to `BL-002` and `BL-011` and does not change the series' cut.
+  read) is routed to `BL-002` and `BL-011` and does not change the series' cut. The per-expiry
+  breakdown was **observed, not archived**: it was read from `/App/Gex/Analysis` at 20:56 UTC and
+  printed in the session; the aggregate (−822.5) is the one archived in `day4-step5b`. (d) The
+  accepted prose says "a move *back* above the flip point", which presupposes an earlier state
+  not among the day's facts. It is not an explicit comparison and the validator cannot catch it
+  (entailment is not checked, F-3); the record is hash-bound and stays as accepted.
 - **Full loop evidenced on 2026-09-21:** prepare → interpret → accept+record → later outcome →
   owner's `record review` (verdict `agree`, comment verbatim) → `query` reads all of it back.
 - **Operator choice disclosed:** attempt 3 used the 24 h staleness cap to admit the previous
