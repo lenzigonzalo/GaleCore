@@ -20,14 +20,23 @@ Host         = environment that runs the model (Claude Code, Codex, etc.)
 
 The host executes the model. GaleCore-AI teaches it how to work and verifies the output.
 
-## Verticals
+## Start here: the catalog and the knowledge base
 
-Two read-only use cases run from this host through the same CLI adapter:
+```bash
+python -B -m galecore_ai.adapters.cli catalog      # what can be asked: capability, skill (version+hash), contract, flow, controls
+python -B -m galecore_ai.adapters.cli kb search --text "<terms>" [--kind research|regime] [--status open]
+python -B -m galecore_ai.adapters.cli kb show <ref>   # regime:SPY/2026-09-23 · research:<id> · file:<path from the workspace root>
+```
 
-| Prompt | Skill | Flow |
-|---|---|---|
-| "Analizá el GEX actual de SPY." | `gex_interpretation` (Phase 3, closed) | prepare → interpret → accept → present |
-| "Analizá el régimen de hoy de SPY y guardalo." | `regime_interpretation` (Phase 4, `GC-AI-0002`) | prepare → interpret → accept **--record** → later `record outcome` / `record review` → `query` |
+Pick the capability for the user's request from `catalog` (no routing table here), follow its `flow`,
+and read its `skill` asset for the method. Before new work, **retrieve**: `kb search` for antecedents
+and unfinished investigations. The knowledge base is `<workspace>/knowledge/` (outside every code
+checkout, its own data-only git; `GALECORE_KNOWLEDGE_DIR` overrides; never created implicitly). After
+a session that wrote to it, commit it: `git -C <workspace>/knowledge add -A`, then
+`git -C <workspace>/knowledge commit -m "..."` (local only, never pushed).
+
+Current capabilities: `gex_interpretation` (read-only GEX), `regime_interpretation` (daily regime
+with an evaluable record) and `research` (resumable investigation, below).
 
 Common environment (GaleCore on `localhost:5000`; the ApiKey comes from GaleCore's user-secrets and is never written anywhere):
 
@@ -64,7 +73,25 @@ python -B -m galecore_ai.adapters.cli record review  --symbol SPY --date <YYYY-M
 python -B -m galecore_ai.adapters.cli query --symbol SPY --since <YYYY-MM-DD> [--until <YYYY-MM-DD>]           # no model call; INTEGRITY_FAILED is reported, never skipped
 ```
 
-`RegimeInterpretation` in one line: `gamma_regime` by the sign of `net_gex`; `tail_pricing` = `calm`/`elevated` exactly as `facts.put_skew_level_ok`; prose without digits; numbers only in `quantitative_claims` with the fact's exact value and its unit (`billion_usd`, `usd`, `ratio`, `iv_decimal`, `index_points`); `evidence` paths must resolve; at least one limitation. Records: `GaleCore/research/regime/<SYMBOL>/<YYYY-MM-DD>.md` (America/New_York date, `GALECORE_RECORDS_DIR` overrides), one file per day (YAML frontmatter = the record), entries appended, acceptance-time content covered by `entry_hash`. Never compare with earlier sessions from memory — only through `query`, stated in limitations. Present the accepted payload and the record path; do not reformulate.
+`RegimeInterpretation` in one line: `gamma_regime` by the sign of `net_gex`; `tail_pricing` = `calm`/`elevated` exactly as `facts.put_skew_level_ok`; prose without digits; numbers only in `quantitative_claims` with the fact's exact value and its unit (`billion_usd`, `usd`, `ratio`, `iv_decimal`, `index_points`); `evidence` paths must resolve; at least one limitation. Records: `<workspace>/knowledge/regime/<SYMBOL>/<YYYY-MM-DD>.md` (America/New_York date; moved from `GaleCore/research/regime/` by GC-AI-0005; `GALECORE_RECORDS_DIR` overrides), one file per day (YAML frontmatter = the record), entries appended, acceptance-time content covered by `entry_hash`. Never compare with earlier sessions from memory — only through `query`, stated in limitations. Present the accepted payload and the record path; do not reformulate.
+
+## Capability 3: resumable investigation (`research`, GC-AI-0005)
+
+No GaleCore needed. Method: `config/skills/research/skill.yaml`.
+
+```bash
+python -B -m galecore_ai.adapters.cli kb search --text "<idea>"          # antecedents; --status open finds unfinished work
+echo '{"content": <ResearchContent JSON>, "host_provider": "claude-code", "host_model": "<model>"}' | python -B -m galecore_ai.adapters.cli research save --slug <slug> --prompt "<user request>"
+python -B -m galecore_ai.adapters.cli kb show research:<id>                 # pending next steps, missing, history, cited_by
+echo '{...}' | python -B -m galecore_ai.adapters.cli research revise --id <id> --reason continuation|correction|result --note "<what changes>" --prompt "<user request>"
+```
+
+`ResearchContent` in one line: `title`, `question`, `status` (open | test_planned | concluded | abandoned);
+`antecedents` `{ref, summary, bearing}` — each ref must resolve and `bearing` says how it changes the
+hypothesis or plan; `statements` `{kind: fact|interpretation|hypothesis|decision, text, sources}` — a fact
+cites a source; `hypothesis`; `test_plan` `{step, data_needed, supports_if, weakens_if}`; `missing`;
+`next_steps` (required while open or test_planned); at least one limitation. Revisions are append-only
+and hashed. Storing does not validate the reasoning; it is not a strategy.
 
 ### What the assets prove and what they don't
 
@@ -80,6 +107,8 @@ python -B -m galecore_ai.adapters.cli query --symbol SPY --since <YYYY-MM-DD> [-
 | TradingAgent | `config/agents/trading-agent.yaml` | Agent definition: mission, capabilities, restrictions |
 | GEX Skill | `config/skills/gex-analysis/skill.yaml` | Instructions, output contract, examples |
 | Regime Skill | `config/skills/regime-analysis/skill.yaml` | Daily regime: GEX + put skew + VIX/VVIX, output contract, examples |
+| Research Skill | `config/skills/research/skill.yaml` | Resumable investigation: antecedents, typed statements, test plan, next steps |
+| Catalog | `config/catalog.yaml` | Every capability: request served, skill, contract, flow, storage, controls |
 | Facts Discipline | `config/protocols/facts-discipline.yaml` | Guardrails: no invented numbers, facts match source, no trading recommendation, no numbers in prose, quantitative claims valid |
 | Trading Defaults | `config/conventions/trading-defaults.yaml` | Near-zero threshold, timezone, currency |
 

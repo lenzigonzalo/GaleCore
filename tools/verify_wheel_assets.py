@@ -25,6 +25,13 @@ REQUIRED_MODULES = (
     "galecore_ai/capabilities/regime_mapper.py",
     "galecore_ai/contracts/regime_analysis.py",
     "galecore_ai/contracts/regime_record.py",
+    # GC-AI-0005: catalog, knowledge base, investigations
+    "galecore_ai/adapters/frontmatter.py",
+    "galecore_ai/adapters/knowledge_base.py",
+    "galecore_ai/adapters/research_store.py",
+    "galecore_ai/application/knowledge.py",
+    "galecore_ai/contracts/research.py",
+    "galecore_ai/harness/catalog.py",
 )
 # Every file under config/ must be packaged under galecore_ai/_assets/ unchanged.
 ASSET_PREFIX = "galecore_ai/_assets/"
