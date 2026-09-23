@@ -9,8 +9,8 @@
 **Serie AC-08 completa y revisada.** `GC-AI-0002` no tiene criterios abiertos; lo único pendiente
 es la **decisión del owner** sobre el cierre (`VALIDATED`/`CLOSED`). Si la toma, el implementer la
 transcribe al work item y, recién entonces, crea el tag `phase4-closed` (política de tags de
-`ENGINEERING.md`). Después, según `roadmap/REALINEACION-2026-09-21.md`: rebase de GC-AI-0004 /
-GC-0001 sobre el `feature/gc-ai-0002` final y paso 2 (consolidar estado) → paso 3 (SHADOW).
+`ENGINEERING.md`). Después, según `roadmap/REALINEACION-2026-09-21.md`: paso 2 (consolidar
+estado) → paso 3 (SHADOW). El rebase de GC-AI-0003/0004 ya está hecho (ver abajo).
 
 **No cambiar el corte de datos** de la skill de régimen sin pasar por `BL-011`: los registros de la
 serie son comparables entre sí porque comparten corte.
@@ -78,13 +78,11 @@ humano como único mecanismo que la detecta. De ahí salieron `BL-010` (proceden
   borrados: puramente aditivo). Pendiente commitear por tema en ramas locales. `origin/master` no
   se movió desde el 2026-09-04, así que no hay divergencia entrante.
 - **GC-AI-0003 / GC-AI-0004 / GC-0001** (visor de régimen y pestaña Inteligencia): APPROVE interno
-  y Codex; faltaba el recheck de Codex que abortó por límite de cuota, y la decisión del owner.
-  **El 2026-09-22 el owner autorizó correr los dos rechecks** (GC-AI-0004 en `b7f76b9`, GC-0001 en
-  `d05a87c`), así que puede que ya estén hechos. **No autorizó el rebase**: se hace una sola vez,
-  después de cerrar la serie, sobre el `feature/gc-ai-0002` final. Motivo: el solapamiento de
-  archivos entre las dos ramas es cero (GC-AI-0002 tocó `cli.py`, `record_regime.py` y su test;
-  GC-AI-0004 toca `record_store.py` y archivos nuevos), así que rebasar antes no cambia nada de lo
-  que Codex revisa, y cada rebase reescribe SHAs e invalida el rango declarado del review.
+  y Codex recheck APPROVE en los dos (23/09 00:06/00:08 UTC). **Rebase hecho el 2026-09-23**, una
+  sola vez y después de completar la serie: GC-AI-0003 → `7adb741`, GC-AI-0004 → `c69f64b` sobre
+  `02a3df3`; sin conflictos, 648 tests, lee los 4 registros reales. Tabla de SHAs viejos/nuevos en
+  el work item de GC-AI-0004; refs previos en `backup/GC-AI-000{3,4}-pre-rebase`. GC-0001 vive en
+  GaleCore y no se rebasa sobre GaleCore-AI. Falta: decisión del owner sobre los tres items.
 - **Prioridad de cuota de Codex:** si está justa, el recheck de `GC-AI-0002` va primero — es lo
   único que bloquea el DoD del item activo.
 
