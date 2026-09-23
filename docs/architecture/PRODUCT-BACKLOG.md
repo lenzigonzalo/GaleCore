@@ -282,6 +282,17 @@ GC-AI-0001 en `VALIDATED` o `CLOSED`, y acuerdo del product owner para tocar Gal
 - Ningún factor de escala vive hardcodeado en el validador.
 - Los consumidores actuales de `NetGEX` (Monitor, RPF, front) no cambian de comportamiento.
 
+**Addendum 2026-09-23 — review del owner, jornada 3 de AC-08:** la unidad declarada tiene que
+incluir la **convención de movimiento**, no solo la escala. GaleCore calcula
+`gamma × OI × 100 × spot²` (`GammaExposureHandler.cs:567`), sin el `× 0.01` de la convención "por
+movimiento del 1 %" que usan Unusual Whales y SqueezeMetrics: sus "billions" son 100× los de esas
+fuentes. El owner no pudo reconciliar el `net_gex` de −822.1 del registro `SPY/2026-09-23.md` con
+UW por eso (≈ −8.2 B por 1 %), además de que UW agrega todos los vencimientos con otra fuente de
+OI/griegos. Consecuencia para el alcance: la metadata declara escala **y** convención, y un
+contract test fija ambas. Pendiente sin reproducir: el owner vio −280 B en el front ese día a una
+hora no registrada; con el cache de 600 s y el mismo formateo, no coincide con ningún vencimiento
+ni con el agregado de las 20:32 UTC.
+
 ---
 
 ## BL-003 — Onboarding de mercados, proveedores y conectores
@@ -1302,6 +1313,14 @@ GC-AI-0002 en `VALIDATED` o `CLOSED`, y el ADR de taxonomía aprobado por el own
   caso no encaja en la taxonomía en vez de elegir por defecto.
 - Ningún criterio de residencia queda sólo en esta conversación o en un handoff.
 
+**Addendum 2026-09-23 — pedido del owner:** la parte de **proceso** de la skill de ruteo se
+adelantó sin esperar el entry gate: `ENGINEERING.md` §1 ahora dice dónde va lo que surge
+trabajando (backlog único, addendum antes que `BL-` nuevo, work item, ADR, pendientes, handoff) y
+la skill `/donde-va` del workspace lo aplica. No decide nada nuevo: transcribe convenciones ya
+vigentes. Lo que sigue abierto en este ítem es la **taxonomía del conocimiento de dominio** (los
+cuatro tipos y su residencia), que §1 marca como "Sin regla todavía" y la skill deriva al owner.
+Cuando el ADR se apruebe, se agrega como filas de §1; la skill no cambia.
+
 ---
 
 ## BL-010 — Procedencia de hechos como asset versionado
@@ -1412,3 +1431,12 @@ del owner sobre el conjunto inicial de recetas.
 - El registro declara receta y versión; `query` permite distinguir registros comparables.
 - Un pedido cuyo corte no corresponde al contexto produce pregunta o negativa registrada.
 - Las recetas son un conjunto cerrado y versionado; agregar una es un cambio de asset revisado.
+
+**Addendum 2026-09-23 — review del owner, jornada 3 de AC-08:** el corte fijo actual **incluye el
+0DTE del mismo día en una lectura post-cierre**, cuando esos contratos ya vencieron y su gamma a
+DTE 0 está degenerada. Medido en `/App/Gex/Analysis` de SPY a las 20:56 UTC: el vencimiento
+2026-09-23 aporta −435.7 de un agregado de −822.5 (53 %); sin él, ≈ −386.8. Afecta igual a los
+registros del 21 y 22 (mismo corte), así que la serie es consistente entre sí pero comparte el
+sesgo. Consecuencia para el alcance: toda receta declara qué hace con el vencimiento del día según
+el momento de la lectura (intradía vs post-cierre), y el cambio va en GaleCore (`IncludeZeroDte`
+ya existe en `GammaExposureRequest`). No se aplica a la serie AC-08 en curso (ver no objetivos).
