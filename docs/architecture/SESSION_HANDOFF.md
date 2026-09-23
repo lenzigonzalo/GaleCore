@@ -97,7 +97,15 @@ humano como único mecanismo que la detecta. De ahí salieron `BL-010` (proceden
   borrados: puramente aditivo). Pendiente commitear por tema en ramas locales. `origin/master` no
   se movió desde el 2026-09-04, así que no hay divergencia entrante.
 - **GC-AI-0003 / GC-AI-0004 / GC-0001** (visor de régimen y pestaña Inteligencia): APPROVE interno
-  y Codex, falta el recheck de Codex que abortó por límite de cuota, y la decisión del owner.
+  y Codex; faltaba el recheck de Codex que abortó por límite de cuota, y la decisión del owner.
+  **El 2026-09-22 el owner autorizó correr los dos rechecks** (GC-AI-0004 en `b7f76b9`, GC-0001 en
+  `d05a87c`), así que puede que ya estén hechos. **No autorizó el rebase**: se hace una sola vez,
+  después de cerrar la serie, sobre el `feature/gc-ai-0002` final. Motivo: el solapamiento de
+  archivos entre las dos ramas es cero (GC-AI-0002 tocó `cli.py`, `record_regime.py` y su test;
+  GC-AI-0004 toca `record_store.py` y archivos nuevos), así que rebasar antes no cambia nada de lo
+  que Codex revisa, y cada rebase reescribe SHAs e invalida el rango declarado del review.
+- **Prioridad de cuota de Codex:** si está justa, el recheck de `GC-AI-0002` va primero — es lo
+  único que bloquea el DoD del item activo.
 
 ### Quirks del entorno
 
