@@ -7,7 +7,7 @@ reviewer: codex
 approver: user
 feature_freeze: false
 closure_blocked: true
-review_result: PENDING
+review_result: APPROVED
 approval_result: PENDING
 ---
 
@@ -42,7 +42,7 @@ outcomes y guarda su review humano, con el mismo diseño y navegación del table
   `RegimeDetail` (+ `RegimeFailedDetail`), `ReviewForm`, `ui.tsx` (piezas con el tema del tablero).
 - `src/api/regime.ts` (cliente axios propio, sin el interceptor de auth de la API), `src/types/regime.ts`.
 - `.env.development`: `REACT_APP_REGIME_ADAPTER_URL=http://127.0.0.1:8765`.
-- `src/components/inteligencia/RegimeTab.test.tsx` (13 tests, adapter mockeado).
+- `src/components/inteligencia/RegimeTab.test.tsx` (14 tests, adapter mockeado).
 - `docs/engineering/evidence/gc-0001-monitor/`: procedimiento Playwright reproducible + corrida guardada.
 
 ## Criterios de aceptación
@@ -71,15 +71,15 @@ outcomes y guarda su review humano, con el mismo diseño y navegación del table
 
 | Criterio | Implementación | Verificación automática | Artefacto reproducible | Estado |
 |---|---|---|---|---|
-| AC-01 | `TabNav.tsx` (+`'inteligencia'`), `App.tsx`, `pages/Inteligencia.tsx`, `inteligencia/ui.tsx` | `tsc --noEmit`; `e2e_regime_monitor.py` paso `tabs` | `evidence/gc-0001-monitor/run-2026-09-22/run.json` + `01-regimen.png` | IMPLEMENTADO (pendiente AC-09) |
-| AC-02 | `RegimeToday.tsx` ← `/api/today` | `RegimeTab.test.tsx`: "hoy sin análisis…"; e2e paso `hoy` | GC-AI-0004 `today-QQQ-no-record.json` (NO_RECORD) y `real-dir-readonly-check.json` (`/api/today` real: 21/09 OK, outcome y review presentes); `run.json` paso `hoy` | IMPLEMENTADO (pendiente AC-09) |
-| AC-03 | `RegimeHistory.tsx` ← `/api/records` (200/409/422 aceptados); `RegimeTab.load` con número de generación (una respuesta tardía de otra consulta se descarta; símbolo y resultados se comprometen juntos) | tests "estados del registro…", "una respuesta tardía de un símbolo anterior no pisa al símbolo actual" | `run.json` pasos `synthetic_days`, `historial` (3 filas) | IMPLEMENTADO (pendiente AC-09) |
-| AC-04 | `RegimeDetail.tsx` | test "estados del registro…" asegura claims (`igual`), evidencia (`facts.net_gex`), guardrails (`snapshot_integrity`), timestamps por fuente y del snapshot, capability y `entry_hash` | `02-detalle-pendiente.png`; lectura real: `real-dir-readonly-check.json` | IMPLEMENTADO (pendiente AC-09) |
-| AC-05 | `RegimeDetail.tsx` (tabla Δ + leyenda) | test "estados…": `+2.47`, leyenda; e2e paso `outcome` (leyenda + tabla) | `run.json`, `04-outcome.png` | IMPLEMENTADO (pendiente AC-09) |
-| AC-06 | `ReviewForm.tsx`, `RegimeTab.submitReview` (token recordado solo tras un 201; "guardado" solo si la relectura trae el review; `reread_error` → "quedó guardado, no reenviar"; la relectura solo reemplaza el registro si la pantalla sigue en ese símbolo), `api/regime.postRegimeReview` | tests "el review se manda…", "un 401…", "un 201 con reread_error…", "un 201 cuya relectura no trae el review…", "la relectura de un review llegada tras cambiar de símbolo…", "reviews deshabilitados…" | `run.json` pasos `review_wrong_token` (401), `review_ok` (201), `review_after_reload`, `cli_reads_review_back`; `03-review-guardado.png` | IMPLEMENTADO (pendiente AC-09) |
-| AC-07 | `RegimeTab.tsx` (`NoticePanel`, título según `classifyRegimeError`; adapter sin `/api/today` avisado), `RegimeFailedDetail`, anotación en `RegimeDetail` | tests "sin adapter…", "un adapter sin /api/today…", "un error del adapter (500)…", "la anotación F-7…"; e2e paso `integrity_failed` (tarjeta, contenido oculto) | `run.json`, `05-integridad-fallida.png`; anotación F-7 real vista en sesión sobre el dir real (no versionada) | IMPLEMENTADO (pendiente AC-09) |
-| AC-08 | — | `npx tsc --noEmit` exit 0; `react-scripts test`: 13 passed; `e2e_regime_monitor.py` → `ok: true`, sin `pageerror` | `evidence/gc-0001-monitor/run-2026-09-22/` (procedimiento + `run.json` + capturas) | IMPLEMENTADO |
-| AC-09 | — | — | review interno R1: APPROVE con MINORs → corregidos; Codex C1 (`reviews/GC-0001-20260922T001238Z.md`): CHANGES_REQUESTED → corregidos (abajo); recheck pendiente | PARCIAL |
+| AC-01 | `TabNav.tsx` (+`'inteligencia'`), `App.tsx`, `pages/Inteligencia.tsx`, `inteligencia/ui.tsx` | `tsc --noEmit`; `e2e_regime_monitor.py` paso `tabs` | `evidence/gc-0001-monitor/run-2026-09-23/run.json` + `01-regimen.png` | IMPLEMENTADO (AC-09 APPROVED) |
+| AC-02 | `RegimeToday.tsx` ← `/api/today` | `RegimeTab.test.tsx`: "hoy sin análisis…"; e2e paso `hoy` | GC-AI-0004 `today-QQQ-no-record.json` (NO_RECORD) y `real-dir-readonly-check.json` (`/api/today` real: 21/09 OK, outcome y review presentes); `run.json` paso `hoy` | IMPLEMENTADO (AC-09 APPROVED) |
+| AC-03 | `RegimeHistory.tsx` ← `/api/records` (200/409/422 aceptados); `RegimeTab.load` con número de generación (una respuesta tardía de otra consulta se descarta; símbolo y resultados se comprometen juntos) | tests "estados del registro…", "una respuesta tardía de un símbolo anterior no pisa al símbolo actual" | `run-2026-09-23/run.json` pasos `synthetic_days`, `historial` (3 filas) | IMPLEMENTADO (AC-09 APPROVED) |
+| AC-04 | `RegimeDetail.tsx` | test "estados del registro…" asegura claims (`igual`), evidencia (`facts.net_gex`), guardrails (`snapshot_integrity`), timestamps por fuente y del snapshot, capability y `entry_hash` | `02-detalle-pendiente.png`; lectura real: `real-dir-readonly-check.json` | IMPLEMENTADO (AC-09 APPROVED) |
+| AC-05 | `RegimeDetail.tsx` (tabla Δ + leyenda) | test "estados…": `+2.47`, leyenda; e2e paso `outcome` (leyenda + tabla) | `run.json`, `04-outcome.png` | IMPLEMENTADO (AC-09 APPROVED) |
+| AC-06 | `ReviewForm.tsx`, `RegimeTab.submitReview` (token recordado solo tras un 201; "guardado" solo si la relectura trae el review; `reread_error` → "quedó guardado, no reenviar"; la relectura solo reemplaza el registro si la pantalla sigue en ese símbolo), `api/regime.postRegimeReview` | tests "el review se manda…", "un 401…", "un 201 con reread_error…", "un 201 cuya relectura no trae el review…", "la relectura de un review llegada tras cambiar de símbolo…", "reviews deshabilitados…" | `run-2026-09-23/run.json` pasos `review_wrong_token` (401), `review_ok` (201), `review_after_reload`, `cli_reads_review_back`; `03-review-guardado.png` | IMPLEMENTADO (AC-09 APPROVED) |
+| AC-07 | `RegimeTab.tsx` (`NoticePanel`, título según `classifyRegimeError`; adapter sin `/api/today` avisado), `RegimeFailedDetail`, anotación en `RegimeDetail` | tests "sin adapter…", "un adapter sin /api/today…", "un error del adapter (500)…", "la anotación F-7…"; e2e paso `integrity_failed` (tarjeta, contenido oculto) | `run.json`, `05-integridad-fallida.png`; anotación F-7 real vista en sesión sobre el dir real (no versionada) | IMPLEMENTADO (AC-09 APPROVED) |
+| AC-08 | — | `npx tsc --noEmit` exit 0; `react-scripts test`: 14 passed; `e2e_regime_monitor.py` → `ok: true` (incluye que el CLI relea el comentario exacto y salga 3), sin `pageerror` | `evidence/gc-0001-monitor/run-2026-09-23/` (procedimiento + `run.json` + capturas) | IMPLEMENTADO |
+| AC-09 | — | — | review interno R1 → corregido; Codex C1 (`reviews/GC-0001-20260922T001238Z.md`): CHANGES_REQUESTED → corregido; Codex recheck C2 (`reviews/GC-0001-20260923T000849Z.md`): **APPROVE** (5 hallazgos RESOLVED, 3 MINORs nuevos → corregidos, abajo) | IMPLEMENTADO (APPROVE es insumo; el cierre lo pone el owner) |
 
 ## Validación requerida
 
@@ -124,8 +124,8 @@ $env:CI = "true"; npx react-scripts test --watchAll=false --testMatch '**/src/**
 ```
 npx tsc --noEmit -p tsconfig.json                                → exit 0
 CI=true npx react-scripts test --watchAll=false --testMatch '**/src/**/*.test.tsx' --testPathIgnorePatterns node_modules App.test
-                                                                → Tests: 13 passed, 13 total
-python -B docs/engineering/evidence/gc-0001-monitor/e2e_regime_monitor.py <GaleCore-AI GC-AI-0004> → ok = True (run-2026-09-22)
+                                                                → Tests: 14 passed, 14 total
+python -B docs/engineering/evidence/gc-0001-monitor/e2e_regime_monitor.py <GaleCore-AI GC-AI-0004> → ok = True (run-2026-09-23)
 PORT=3039 REACT_APP_REGIME_ADAPTER_URL=http://127.0.0.1:8767 react-scripts start → Compiled successfully!
 ```
 
@@ -179,8 +179,30 @@ implementer los volvió a correr tras las correcciones (abajo).
 | C1-m1 | MINOR | Artefacto `today-TEST-no-record.json` contenía `INTEGRITY_FAILED` | **Corregido en GC-AI-0004** (`today-QQQ-no-record.json` asertado + `today-TEST.json`); matriz actualizada |
 | C1-m2 | MINOR | AC-04 citaba aserciones que el test no hacía | **Corregido.** El test asegura claims, evidencia, guardrails, timestamps, capability y hash |
 
-## Review independiente — recheck
+## Review independiente 2 (Codex, `--recheck`, esfuerzo medio, 2026-09-23T00:08Z) — `docs/engineering/reviews/GC-0001-20260923T000849Z.md`
 
-**Reviewer:** PENDING
-**Resultado:** PENDING
-**Revisión/worktree revisado:** PENDING
+**Alcance:** `0bb228b..d05a87c` (14 archivos). **Veredicto: APPROVE** — C1-M1, C1-M2, C1-M3, C1-m1 y
+C1-m2 RESOLVED. Codex volvió a no poder ejecutar `node` en su sandbox (`EPERM lstat` en el home), así
+que `tsc` y Jest siguen sin reproducirse por él: los corrió el implementer (abajo). Corrió sin rebase
+sobre `feature/gc-ai-0002` por decisión del owner del 2026-09-22 (solapamiento de archivos nulo entre
+las ramas; rebasar hoy se rehace al cerrar la serie AC-08 e invalidaría el rango declarado del review).
+
+Tres MINORs nuevos, corregidos en este incremento:
+
+| # | Sev | Hallazgo | Resolución |
+|---|---|---|---|
+| C2-m1 | MINOR | El cartel de error del review era global: un fallo tardío de un símbolo podía aparecer en el formulario de otro | `reviewError` guarda símbolo, fecha y `run_id` de origen; el formulario solo lo muestra si coinciden con el run en pantalla. Test "un error de review llegado tras cambiar de símbolo no aparece en el formulario del otro run" |
+| C2-m2 | MINOR | El `ok` agregado del e2e ignoraba el contenido y el exit code del CLI | El paso `cli_reads_review_back` exige el comentario exacto en su día (`comment_found`) y `exit_code == 3` (hay un día sintético manipulado); ambos entran en el `ok`. Corrida `run-2026-09-23` |
+| C2-m3 | MINOR | El enlace relativo al artefacto de lectura real no resolvía (cruza worktrees) | Reemplazado por la referencia textual al repo e item (GaleCore-AI, GC-AI-0004) |
+
+### Verificación tras las correcciones
+
+- `npx tsc --noEmit` exit 0 · `react-scripts test` 14 passed · `e2e_regime_monitor.py` → `ok: true`
+  (`run-2026-09-23`, sin `pageerror`, CLI con el comentario exacto y exit 3).
+
+### Decisión del product owner
+
+- PENDIENTE. `status`, `closure_blocked` y `approval_result` sin cambios; `review_result: APPROVED`
+  solo transcribe el veredicto del reviewer. Pendiente de esta mitad: login real con la API .NET
+  levantada (validado con sesión simulada) y la medición de utilidad frente a la alternativa de
+  terminal.

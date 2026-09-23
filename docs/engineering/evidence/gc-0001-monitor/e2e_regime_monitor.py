@@ -31,6 +31,7 @@ HERE = Path(__file__).resolve().parent
 MONITOR = HERE.parents[3] / "source" / "galecore-monitor"
 SUPABASE_KEY = "sb-vsbnukptdvsyhujgtook-auth-token"  # el ref del proyecto en .env.development
 TOKEN = "e2e-review-token-not-a-secret"
+REVIEW_COMMENT = "E2E SYNTHETIC review desde el monitor; no es un veredicto real"
 
 
 def free_port() -> int:
@@ -119,7 +120,7 @@ def main() -> int:
             page.wait_for_timeout(600)
             page.screenshot(path=str(out / "02-detalle-pendiente.png"), full_page=True)
             page.get_by_role("button", name="Partial", exact=True).click()
-            page.get_by_label("Comentario del review").fill("E2E SYNTHETIC review desde el monitor; no es un veredicto real")
+            page.get_by_label("Comentario del review").fill(REVIEW_COMMENT)
             page.get_by_label("Token de review").fill("wrong-token")
             page.get_by_role("button", name="Guardar review").click()
             page.wait_for_timeout(1200)
@@ -129,7 +130,7 @@ def main() -> int:
             page.get_by_role("button", name="Guardar review").click()
             page.wait_for_timeout(1500)
             status = page.get_by_role("status").inner_text()
-            shown = page.get_by_text("E2E SYNTHETIC review desde el monitor").count()
+            shown = page.get_by_text(REVIEW_COMMENT).count()
             step("review_ok", status=status, review_shown=shown > 0)
             page.screenshot(path=str(out / "03-review-guardado.png"), full_page=True)
             # relectura tras Actualizar
@@ -138,7 +139,7 @@ def main() -> int:
             page.wait_for_selector("button.card-interactive", timeout=15000)
             page.locator("button.card-interactive", has_text=pending_day).first.click()
             page.wait_for_timeout(600)
-            step("review_after_reload", review_shown=page.get_by_text("E2E SYNTHETIC review desde el monitor").count() > 0)
+            step("review_after_reload", review_shown=page.get_by_text(REVIEW_COMMENT).count() > 0)
             # día con outcome y día rechazado
             page.locator("button.card-interactive", has_text=outcome_day).first.click(timeout=15000)
             page.wait_for_timeout(600)
@@ -157,9 +158,14 @@ def main() -> int:
                               "--since", "2026-01-01"], cwd=ai_repo, env=env_ai, capture_output=True, text=True, check=False)
         data = json.loads(cli.stdout)
         reviews = [(r["date"], [h["comment"] for e in r.get("entries", []) for h in e["human_reviews"]]) for r in data["records"]]
-        step("cli_reads_review_back", exit_code=cli.returncode, reviews=reviews)
+        # El CLI tiene que leer EXACTAMENTE el review que se escribió desde el monitor, en su día, y
+        # salir 3 (hay un día sintético manipulado a propósito) — no cualquier salida.
+        written = [c for d, cs in reviews if d == pending_day for c in cs]
+        step("cli_reads_review_back", exit_code=cli.returncode, reviews=reviews,
+             comment_found=REVIEW_COMMENT in written, exit_expected=cli.returncode == 3)
         checks = [s.get(k, True) for s in run["steps"] for k in ("has_inteligencia", "is_401", "review_shown", "legend",
-                                                                    "comparison_table", "card", "content_hidden")]
+                                                                 "comparison_table", "card", "content_hidden",
+                                                                 "comment_found", "exit_expected")]
         run["ok"] = all(checks) and not errors
     except Exception as exc:  # noqa: BLE001 - the run itself is the evidence; record the failure
         run["ok"] = False

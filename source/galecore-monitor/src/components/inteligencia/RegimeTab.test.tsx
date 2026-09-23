@@ -271,3 +271,28 @@ test('la relectura de un review llegada tras cambiar de símbolo no toca el sím
   expect(screen.getAllByText('qqq-run').length).toBeGreaterThan(0);
   expect(screen.queryByText('test-run')).not.toBeInTheDocument();
 });
+
+test('un error de review llegado tras cambiar de símbolo no aparece en el formulario del otro run', async () => {
+  const twoSymbols = { ...meta, symbols: ['TEST', 'QQQ'] };
+  mocked.fetchRegimeMeta.mockResolvedValue(twoSymbols);
+  const testDay = { date: '2026-09-19', status: 'OK' as const, path: 't', entries: [entry({ run_id: 'test-run' })] };
+  const qqqDay = { date: '2026-09-19', status: 'OK' as const, path: 'q', entries: [entry({ run_id: 'qqq-run' })] };
+  mocked.fetchRegimeRecords.mockImplementation((symbol) => Promise.resolve({ ...records([symbol === 'TEST' ? testDay : qqqDay]), symbol }));
+  mocked.fetchRegimeToday.mockImplementation((symbol) => Promise.resolve({ ...noToday, symbol }));
+  let rejectReview: (e: unknown) => void = () => {};
+  mocked.postRegimeReview.mockImplementation(() => new Promise((_resolve, reject) => { rejectReview = reject; }));
+
+  render(<RegimeTab />);
+  await screen.findAllByText('test-run');
+  fireEvent.click(screen.getByText('Agree'));
+  fireEvent.change(screen.getByLabelText('Comentario del review'), { target: { value: 'ok' } });
+  fireEvent.change(screen.getByLabelText('Token de review'), { target: { value: 'tok' } });
+  fireEvent.click(screen.getByText('Guardar review'));
+  await waitFor(() => expect(mocked.postRegimeReview).toHaveBeenCalled());
+  fireEvent.change(screen.getByDisplayValue('TEST'), { target: { value: 'QQQ' } });
+  await screen.findAllByText('qqq-run');
+  // El POST de TEST falla ahora: el cartel no debe aparecer dentro del formulario de QQQ.
+  rejectReview({ response: { status: 503, data: { error: 'record store unavailable' } } });
+  await new Promise((r) => setTimeout(r, 30));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});

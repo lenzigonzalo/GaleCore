@@ -34,7 +34,9 @@ export function RegimeTab() {
   const [error, setError] = useState<{ title: string; detail: string } | null>(null);
   const [selected, setSelected] = useState<{ symbol: string; date: string; runId: string } | null>(null);
   const [reviewBusy, setReviewBusy] = useState(false);
-  const [reviewError, setReviewError] = useState<string | null>(null);
+  // El error se guarda con el run que lo originó: una respuesta tardía de otro símbolo no puede
+  // aparecer dentro del formulario del run que está en pantalla.
+  const [reviewError, setReviewError] = useState<{ symbol: string; date: string; runId: string; message: string } | null>(null);
   const [reviewOk, setReviewOk] = useState<string | null>(null);
   // Número de la última consulta lanzada. Una respuesta que llega para una consulta vieja (el
   // operador cambió de símbolo o de rango mientras tanto) se descarta: si no, un SPY lento podría
@@ -99,6 +101,7 @@ export function RegimeTab() {
     : null;
 
   const submitReview = async (body: RegimeReviewRequest, token: string) => {
+    const fail = (message: string) => setReviewError({ symbol: body.symbol, date: body.date, runId: body.run_id, message });
     setReviewBusy(true); setReviewError(null); setReviewOk(null);
     try {
       const res = await postRegimeReview(body, token);
@@ -118,11 +121,11 @@ export function RegimeTab() {
       const reread = res.record?.status === 'OK' ? res.record.entries.find((e) => e.run_id === body.run_id) : undefined;
       const landed = reread?.human_reviews.some((r) => r.verdict === body.verdict && r.comment === body.comment) ?? false;
       if (landed) setReviewOk(`Review ${res.recorded.verdict} de ${body.symbol} ${body.date} guardado en ${res.recorded.path}`);
-      else if (res.reread_error) setReviewError(`El review quedó guardado en ${res.recorded.path}, pero la relectura falló (${res.reread_error}). No lo vuelvas a enviar: tocá Actualizar.`);
-      else setReviewError(`El adapter contestó 201 pero la relectura del día (${res.record?.status ?? 'sin registro'}) no muestra el review. Actualizá y verificá.`);
+      else if (res.reread_error) fail(`El review quedó guardado en ${res.recorded.path}, pero la relectura falló (${res.reread_error}). No lo vuelvas a enviar: tocá Actualizar.`);
+      else fail(`El adapter contestó 201 pero la relectura del día (${res.record?.status ?? 'sin registro'}) no muestra el review. Actualizá y verificá.`);
     } catch (e) {
       if ((e as { response?: { status?: number } })?.response?.status === 401) storeReviewToken('');
-      setReviewError(describeRegimeError(e));
+      fail(describeRegimeError(e));
     } finally {
       setReviewBusy(false);
     }
@@ -191,7 +194,9 @@ export function RegimeTab() {
                 <RegimeDetail date={selectedRecord.date} symbol={symbol} entry={selectedEntry} />
                 <ReviewForm key={selectedEntry.run_id + selectedEntry.human_reviews.length}
                   date={selectedRecord.date} symbol={symbol} entry={selectedEntry}
-                  enabled={meta?.reviews_enabled ?? false} submitting={reviewBusy} error={reviewError} onSubmit={submitReview} />
+                  enabled={meta?.reviews_enabled ?? false} submitting={reviewBusy} onSubmit={submitReview}
+                  error={reviewError && reviewError.symbol === symbol && reviewError.date === selectedRecord.date
+                    && reviewError.runId === selectedEntry.run_id ? reviewError.message : null} />
                 {reviewOk && <div role="status" style={{ ...SANS, fontSize: 11, color: 'var(--green)' }}>{reviewOk}</div>}
               </>
             )}
