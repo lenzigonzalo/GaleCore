@@ -81,18 +81,20 @@ otra sesión." Entrega una investigación retomable y un plan de prueba, no una 
 
 ## Requirement-to-evidence matrix
 
+Evidencia de uso real: [`docs/evidence/gc-ai-0005/`](../../evidence/gc-ai-0005/README.md).
+
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 (A) | PENDING | PENDING | PENDING | PENDING |
-| AC-02 (B) | PENDING | PENDING | PENDING | PENDING |
-| AC-03 (C) | PENDING | PENDING | PENDING | PENDING |
-| AC-04 (D) | PENDING | PENDING | PENDING | PENDING |
-| AC-05 (E) | PENDING | PENDING | PENDING | PENDING |
-| AC-06 (F) | PENDING | PENDING | PENDING | PENDING |
-| AC-07 (G) | PENDING | PENDING | PENDING | PENDING |
-| AC-08 (H) | PENDING | PENDING | PENDING | PENDING |
-| AC-09 (I) | PENDING | PENDING | PENDING | PENDING |
-| AC-10 (J) | PENDING | PENDING | PENDING | PENDING |
+| AC-01 (A) | `config/catalog.yaml`, `harness/catalog.py` (`load_catalog`, `describe`), `cli catalog`; `asset_manifest` toma las skills del catálogo | `TestCatalog` (3 entradas disponibles, `prepare_skill` ↔ código, hash de la skill de régimen igual al de los registros), `TestCli::test_catalog_lists_three_capabilities` | `s1-step1-catalog.json`, `s2-step1-catalog.json` (la sesión 2 eligió `research` desde el catálogo) | IMPLEMENTED |
+| AC-02 (B) | `application/knowledge.py::check_content` / `resolve_ref`; `Antecedent.bearing` obligatorio | `TestSave::test_controls_reject` (archivo inexistente, investigación inexistente), `test_antecedent_without_bearing_is_not_valid_content`, `test_regime_record_can_be_cited` | `s1-step3-research-save.json` (6 refs con sha256), `s2-step6-research-revise.json` (13 refs) | IMPLEMENTED |
+| AC-03 (C) | `contracts/research.py` (tipos de afirmación, estado, plan, faltantes, pasos), `ResearchRevision` con host declarado, skill (versión + hash), `resolved_refs` y `content_hash` | `test_valid_investigation_is_stored_with_provenance`, `test_controls_reject` (hecho sin fuente, open sin pasos, test_planned sin hipótesis, sin limitaciones) | `knowledge/research/2026-09-23-gex-0dte-post-cierre.md` (sha256 `ed50078f…`, knowledge `d56a5fb`) | IMPLEMENTED |
+| AC-04 (D) | `kb search` (con `--status unfinished`), `kb show` (pendientes, historial, `cited_by`), `research revise` | `TestSearchAndShow`, `TestCli::test_save_search_show_revise` | Sesión 2 sin la conversación: `s2-*` y `s2-transcript.md`; encontró la investigación, leyó pendientes y registró la revisión 2. Defecto hallado (`--status open` no ve `test_planned`) corregido: `s3-kb-search-unfinished-after-fix.json` | IMPLEMENTED (real, con un defecto corregido después) |
+| AC-05 (E) | `FileResearchStore.append` (relee y exige revisiones intactas), `RevisionReason` continuation/correction/result, `note` obligatoria; `cited_by` para vínculos entre investigaciones | `TestRevise` (anteriores sin cambios, revisión inválida, autocita, revisión anterior adulterada → `INTEGRITY_FAILED` y `search` la reporta) | Revisión 2 real (`continuation`) sobre la 1, que queda intacta (`s2-step7-kb-show-after.json`) | IMPLEMENTED |
+| AC-06 (F) | `record_store` sin cambio de formato (frontmatter extraído a `adapters/frontmatter.py` con el mismo YAML); registros movidos byte a byte | Suite completa (689), incluidos `test_record_regime`, `test_regime_viewer`, E2E de CLI | `migration-report.json` (sha256 igual, integridad OK, `query` igual); `query` sin variables lee `knowledge/regime`: 4 registros, `integrity_failed: []` | IMPLEMENTED |
+| AC-07 (G) | Base en `<workspace>/knowledge` (repo de datos propio, `main`), `knowledge_base.knowledge_dir`; nunca se crea implícitamente | `TestLocation` | `g-branch-independence.json` (7 archivos idénticos al cambiar GaleCore-AI de rama y volver; ninguna rama de GaleCore tiene registros en `research/regime`); GaleCore `6e13394` | IMPLEMENTED |
+| AC-08 (H) | Ver "Qué se declaró y qué se programó" abajo | `test_prepare_skills_have_code_behind_them` | — | IMPLEMENTED |
+| AC-09 (I) | — | gate PASS, ruff, pytest 689 passed, `git diff --check`, wheel PASS (módulos nuevos exigidos) | comandos abajo | IMPLEMENTED |
+| AC-10 (J) | — | — | — | PENDING |
 
 ## Required validation
 
@@ -106,4 +108,53 @@ python tools/verify_wheel_assets.py
 
 ## Implementer handoff
 
-**State:** PENDING
+**State:** IMPLEMENTED — pendiente de review (AC-10).
+
+### Qué se declaró y qué se programó (AC-08)
+
+- **Declarado (sin código):** la entrada `research` del catálogo (pedido que resuelve, contrato,
+  flujo, dónde se guarda, controles) y la skill `config/skills/research/skill.yaml` (método).
+- **Común, generalizado desde GEX y régimen:** el catálogo como lista única de capacidades y skills
+  (antes repetida en `cli.py` y `asset_manifest.py`); la ubicación de la base y las referencias
+  (`knowledge_base.py`); la lectura/escritura de frontmatter (`frontmatter.py`, usada por los dos
+  stores); búsqueda y lectura sobre registros e investigaciones (`knowledge.py::search/show`).
+- **Código específico de la investigación:** su contrato (`contracts/research.py`), su store con
+  revisiones (`research_store.py`), sus controles (`knowledge.py::check_content`) y sus comandos
+  (`research save/revise`). No usa `prepare → accept` ni los guardrails de GEX: parte de
+  antecedentes, no de un snapshot de hechos, y controla referencias y estructura.
+- **Excepciones que quedan a la vista:** `prepare --skill` sigue mapeando a funciones en código
+  (`_SKILLS`; un test exige que coincida con el catálogo); el registro de régimen conserva su formato
+  propio; la búsqueda es por términos, no semántica; instalada como wheel fuera del workspace, la
+  base necesita `GALECORE_KNOWLEDGE_DIR` (la búsqueda hacia arriba sólo funciona desde un checkout).
+
+### Files changed
+
+GaleCore-AI (`feature/GC-AI-0005`, desde `feature/GC-AI-0004`): `config/catalog.yaml`,
+`config/skills/research/skill.yaml`, `src/galecore_ai/adapters/{knowledge_base,frontmatter,research_store}.py`
+(nuevos), `adapters/{record_store,asset_manifest,cli}.py`, `application/knowledge.py`,
+`contracts/research.py`, `harness/catalog.py`, `tests/unit/test_knowledge.py`,
+`tests/unit/test_record_regime.py`, `tools/{migrate_regime_to_knowledge,check_knowledge_branch_independence,verify_wheel_assets}.py`,
+`CLAUDE.md`, `docs/evidence/gc-ai-0005/`. Workspace: `.claude/hooks/guard_git.py` (repo `knowledge`,
+timeouts por check), `tests/test_guard_git.py`, `.gitignore` (`/knowledge/`). GaleCore
+(`feature/pcs-spy-shadow-runtime`, `6e13394`): `research/regime/` → README de puntero. `knowledge/`
+(repo nuevo): `c9be9dd`, `d56a5fb`.
+
+### Commands and exact results (2026-09-23, después de `db51c3a`)
+
+```text
+python tools/engineering_gate.py          → PASS (10 criterios abiertos)
+python -B -m ruff check --no-cache .      → All checks passed!
+git diff --check                          → exit 0
+python tools/verify_wheel_assets.py       → RESULT: PASS
+python -B -m pytest -q -p no:cacheprovider → 689 passed, 1 warning in 121.45s
+```
+
+### Limitaciones y decisiones
+
+- La revisión 1 de la investigación real quedó con acentos rotos (bug de stdin ya corregido); no se
+  reescribe por ser append-only. Está declarado en la evidencia.
+- La "otra sesión" de AC-04 es un subagente con contexto limpio, no una sesión del owner.
+- Controles de la investigación: verifican referencias y estructura, no que el razonamiento sea
+  correcto ni que la fuente sostenga el hecho.
+- `--status open` vs `unfinished`: el cambio de la skill a 1.1.0 queda en las revisiones futuras; las
+  revisiones 1 y 2 registran la 1.0.0 que las produjo.

@@ -1,0 +1,84 @@
+{
+  "host_provider": "claude-code",
+  "host_model": "claude-opus-5-5",
+  "content": {
+    "title": "¿El 0DTE vencido distorsiona el net GEX de los registros post-cierre?",
+    "question": "En los registros diarios de régimen, que se leen después del cierre, ¿cuánto del net GEX agregado proviene del vencimiento del mismo día, que ya expiró, y alcanza para cambiar la magnitud o el signo con que se clasifica el régimen?",
+    "status": "test_planned",
+    "antecedents": [
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Api/Files/Gex/galecore_rules_gex.json",
+        "summary": "La configuración de la estrategia GEX fija max_dte en sesenta días e include_zero_dte en verdadero, y declara que el GEX es global sobre todos los vencimientos del rango, incluido el 0DTE.",
+        "bearing": "Establece que el corte actual incluye el vencimiento del día por configuración y no por accidente: la pregunta es sobre el efecto de ese corte en una lectura post-cierre, no sobre un bug."
+      },
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureHandler.cs",
+        "summary": "El DTE mínimo es cero cuando IncludeZeroDte es verdadero, y el GEX por strike es gamma por open interest por cien por spot al cuadrado.",
+        "bearing": "Confirma el mecanismo por el que el vencimiento del día entra al agregado; el gamma de ese vencimiento a DTE cero es el término sospechoso."
+      },
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureRequest.cs",
+        "summary": "El request genérico de gamma exposure trae IncludeZeroDte en falso por defecto; la estrategia GEX lo pasa en verdadero.",
+        "bearing": "Abre una vía de prueba sin cambiar GaleCore: una lectura comparable sin el vencimiento del día podría pedirse por el endpoint genérico, si acepta los mismos parámetros de rango."
+      },
+      {
+        "ref": "file:GaleCore-AI/docs/architecture/PRODUCT-BACKLOG.md",
+        "summary": "El addendum de BL-011 del veintitrés de septiembre registra una observación no archivada: el vencimiento del día aportó más de la mitad del agregado en la lectura post-cierre.",
+        "bearing": "Es el origen de la hipótesis y marca su debilidad: un solo día, sin artefacto archivado, así que el primer paso del plan es producir la evidencia archivada."
+      },
+      {
+        "ref": "regime:SPY/2026-09-23",
+        "summary": "Registro del día con régimen negative_gamma y dos outcomes; el net GEX aceptado es el agregado del corte actual.",
+        "bearing": "Es uno de los registros cuya clasificación podría cambiar si el vencimiento del día se excluyera; sirve de caso a recalcular."
+      },
+      {
+        "ref": "regime:SPY/2026-09-22",
+        "summary": "Registro del día con régimen positive_gamma y el spot apenas por encima del zero-gamma.",
+        "bearing": "Un día con el spot pegado al flip es el candidato más sensible a un cambio de signo; su desglose por vencimiento no quedó archivado."
+      }
+    ],
+    "statements": [
+      {"kind": "fact", "text": "La configuración de la estrategia GEX incluye el vencimiento de DTE cero en el agregado.", "sources": ["file:GaleCore/source/galecore-datafeed/DataFeed.Api/Files/Gex/galecore_rules_gex.json", "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureHandler.cs"]},
+      {"kind": "fact", "text": "El request genérico de gamma exposure excluye el DTE cero por defecto.", "sources": ["file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureRequest.cs"]},
+      {"kind": "fact", "text": "El registro del veintitrés de septiembre clasificó el día como negative_gamma con el agregado del corte actual.", "sources": ["regime:SPY/2026-09-23"]},
+      {"kind": "fact", "text": "El desglose por vencimiento de los días de la serie no quedó archivado; la única observación del peso del vencimiento del día está en prosa en BL-011.", "sources": ["file:GaleCore-AI/docs/architecture/PRODUCT-BACKLOG.md"]},
+      {"kind": "interpretation", "text": "Si el peso observado el veintitrés es típico, el agregado post-cierre está dominado por contratos que ya vencieron y cuyo gamma está degenerado, así que describe mal el posicionamiento que sigue vivo al día siguiente."},
+      {"kind": "decision", "text": "No se cambia el corte de la serie de régimen mientras no haya evidencia archivada y una decisión del owner sobre recetas de corte (BL-011)."}
+    ],
+    "hypothesis": "Excluir el vencimiento del mismo día de la lectura post-cierre cambia de forma material la magnitud del net GEX agregado y, en los días con el spot cerca del zero-gamma, puede cambiar su signo y por lo tanto la clasificación del régimen.",
+    "test_plan": [
+      {
+        "step": "En cada lectura post-cierre, archivar junto al registro el desglose por vencimiento que devuelve /App/Gex/Analysis (byExpiry), sin cambiar el corte del registro.",
+        "data_needed": "byExpiry de /App/Gex/Analysis de SPY post-cierre, un día hábil tras otro, con su timestamp.",
+        "supports_if": "El vencimiento del día aporta una parte grande del agregado en la mayoría de los días.",
+        "weakens_if": "El aporte del vencimiento del día es chico o se compensa entre calls y puts en la mayoría de los días."
+      },
+      {
+        "step": "Para cada día archivado, recalcular el signo del agregado sin el vencimiento del día y compararlo con la clasificación registrada.",
+        "data_needed": "Los desgloses archivados en el paso anterior y el régimen registrado de cada día.",
+        "supports_if": "Al menos un día cambia de signo sin el vencimiento del día.",
+        "weakens_if": "Ningún día cambia de signo en una serie de al menos veinte días hábiles."
+      },
+      {
+        "step": "Verificar si el endpoint genérico de gamma exposure permite una lectura con el mismo rango y tipos de vencimiento que la estrategia GEX y sin DTE cero, como control cruzado sin tocar GaleCore.",
+        "data_needed": "El contrato y el handler de /App.Analytics/GammaExposure.",
+        "supports_if": "Acepta max DTE y tipos de vencimiento equivalentes: la comparación puede hacerse con una sola llamada extra.",
+        "weakens_if": "No los acepta: la comparación depende sólo del desglose archivado."
+      }
+    ],
+    "missing": [
+      "Desglose por vencimiento archivado de al menos veinte días hábiles post-cierre.",
+      "Decisión del owner sobre si archivar byExpiry forma parte del registro de régimen o de un artefacto aparte (toca el corte congelado de la serie, BL-011)."
+    ],
+    "next_steps": [
+      "Leer el contrato y el handler de /App.Analytics/GammaExposure y registrar si acepta el mismo rango y tipos de vencimiento que la estrategia GEX (paso tres del plan; no requiere GaleCore levantado).",
+      "Proponer al owner dónde se archiva el desglose por vencimiento sin cambiar el corte del registro."
+    ],
+    "limitations": [
+      "La hipótesis nace de una sola observación no archivada.",
+      "El gamma a DTE cero depende de las griegas del proveedor, que a DTE cero tienden a degenerar: el peso medido puede ser un artefacto del proveedor además del corte.",
+      "El open interest es el del cierre anterior, así que el aporte del vencimiento del día no refleja cierres intradía.",
+      "Estos controles verifican referencias y estructura, no que el razonamiento sea correcto."
+    ]
+  }
+}

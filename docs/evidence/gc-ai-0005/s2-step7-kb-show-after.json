@@ -1,0 +1,359 @@
+{
+  "ref": "research:2026-09-23-gex-0dte-post-cierre",
+  "kind": "research",
+  "path": "knowledge/research/2026-09-23-gex-0dte-post-cierre.md",
+  "current": {
+    "revision": 2,
+    "reason": "continuation",
+    "note": "Paso tres del plan hecho leyendo c\u00f3digo, sin GaleCore: el endpoint gen\u00e9rico acepta por query el mismo corte que la estrategia (con todos los par\u00e1metros expl\u00edcitos, incluida la banda de OI), pero la resta global menos DTE cero sobre el byExpiry de /App/Gex/Analysis compara el mismo instante y pasa a ser la medida central; el gen\u00e9rico queda como control cruzado. Se reescriben con UTF-8 correcto los textos de la revisi\u00f3n uno, que quedaron guardados con doble codificaci\u00f3n.",
+    "recorded_at": "2026-09-23T23:17:13.627068+00:00",
+    "content": {
+      "title": "\u00bfEl 0DTE vencido distorsiona el net GEX de los registros post-cierre?",
+      "question": "En los registros diarios de r\u00e9gimen, que se leen despu\u00e9s del cierre, \u00bfcu\u00e1nto del net GEX agregado proviene del vencimiento del mismo d\u00eda, que ya expir\u00f3, y alcanza para cambiar la magnitud o el signo con que se clasifica el r\u00e9gimen?",
+      "status": "test_planned",
+      "antecedents": [
+        {
+          "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Api/Files/Gex/galecore_rules_gex.json",
+          "summary": "La configuraci\u00f3n de la estrategia GEX fija max_dte en sesenta d\u00edas, include_zero_dte en verdadero, expiration_types Regular y Weekly y una banda de delta para el OI mucho m\u00e1s ancha que la del request gen\u00e9rico; su nota sobre esa banda registra que la banda angosta mov\u00eda el neto en forma apreciable.",
+          "bearing": "Establece que el corte actual incluye el vencimiento del d\u00eda por configuraci\u00f3n y no por accidente, y que una lectura de control s\u00f3lo es comparable si repite tambi\u00e9n la banda de delta del OI, no s\u00f3lo el rango de vencimientos."
+        },
+        {
+          "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureHandler.cs",
+          "summary": "El handler recalcula el DTE contra la fecha ET y s\u00f3lo descarta un vencimiento cuando su fecha ya pas\u00f3, as\u00ed que el del d\u00eda sigue con DTE cero hasta el cambio de fecha; filtra por tipos de vencimiento, DTE m\u00ednimo cero o uno seg\u00fan IncludeZeroDte y MaxDTE, y en modo AllExpirations agrega todos los vencimientos sumando el GEX por strike.",
+          "bearing": "Confirma que en una lectura post-cierre el vencimiento del d\u00eda todav\u00eda entra al agregado, y que el mismo handler sirve a la estrategia GEX y al endpoint gen\u00e9rico: la diferencia entre ambos est\u00e1 s\u00f3lo en los par\u00e1metros."
+        },
+        {
+          "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureRequest.cs",
+          "summary": "El request gen\u00e9rico expone como propiedades p\u00fablicas MaxDTE, AllExpirations, IncludeByExpiry, ExpirationTypes, IncludeZeroDte, GreeksBatchSize, GreeksRetries, OiDeltaMin y OiDeltaMax; sus defaults son un solo vencimiento Regular, sin DTE cero y con la banda de delta angosta.",
+          "bearing": "Resuelve el paso tres del plan: el endpoint gen\u00e9rico puede pedir el mismo corte que la estrategia GEX y el mismo corte sin el DTE cero, pero s\u00f3lo pasando todos esos par\u00e1metros; con los defaults la lectura no es comparable."
+        },
+        {
+          "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Api/Controllers/AppController.cs",
+          "summary": "/App.Analytics/GammaExposure recibe el GammaExposureRequest entero desde la query string; /App/Gex/Analysis carga el JSON de reglas y delega en el handler de la estrategia.",
+          "bearing": "Muestra que los par\u00e1metros del request gen\u00e9rico se pueden fijar desde la query sin cambiar GaleCore, lo que hace posible el control cruzado."
+        },
+        {
+          "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisHandler.cs",
+          "summary": "La estrategia GEX arma el GammaExposureRequest con AllExpirations e IncludeByExpiry en verdadero y toma max_dte, include_zero_dte, expiration_types, greeks_batch_size, greeks_retries y oi_delta_band del nodo gex del JSON de reglas.",
+          "bearing": "Da la lista exacta de par\u00e1metros que una lectura de control debe copiar para ser comparable con el agregado del registro."
+        },
+        {
+          "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisResponse.cs",
+          "summary": "La respuesta de /App/Gex/Analysis trae el agregado global con su NetGex, un desglose byExpiry con Dte y NetGex por vencimiento ordenado con el DTE cero primero, y los par\u00e1metros efectivos del barrido en Config.",
+          "bearing": "Cambia el plan: el net GEX sin el vencimiento del d\u00eda se puede obtener de una sola respuesta archivada restando el NetGex del vencimiento con DTE cero al global, en el mismo instante y sin una llamada extra; el endpoint gen\u00e9rico queda como control cruzado opcional."
+        },
+        {
+          "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureResponse.cs",
+          "summary": "El NetGEX de la ra\u00edz y el de cada vencimiento son propiedades calculadas: la suma de CallGEX y PutGEX de sus strikes, llevada a billones y redondeada a un decimal.",
+          "bearing": "Fija la tolerancia de la resta del plan: por el redondeo por vencimiento, la diferencia entre el global menos el DTE cero y la suma de los dem\u00e1s vencimientos puede no ser exacta, as\u00ed que un cambio de signo con un global muy cerca de cero debe leerse con ese margen."
+        },
+        {
+          "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Shared/CascadeUtils.cs",
+          "summary": "YearsToExpiry devuelve nulo para el DTE cero una vez pasadas las diecis\u00e9is ET.",
+          "bearing": "Post-cierre el vencimiento del d\u00eda no tiene tiempo restante para el expected move, pero su gamma sigue entrando al GEX desde las griegas del proveedor: refuerza la sospecha de que ese t\u00e9rmino describe contratos que ya no existen."
+        },
+        {
+          "ref": "file:GaleCore-AI/config/catalog.yaml",
+          "summary": "La capacidad regime_interpretation usa compute.gex_analysis de GaleCore.",
+          "bearing": "Ubica el net GEX de los registros de r\u00e9gimen en /App/Gex/Analysis, que es la respuesta cuyo byExpiry habr\u00eda que archivar."
+        },
+        {
+          "ref": "file:GaleCore-AI/src/galecore_ai/capabilities/dispatcher.py",
+          "summary": "El dispatcher mapea compute.gex_analysis a /App/Gex/Analysis y compute.gamma_exposure a /App.Analytics/GammaExposure, y pasa a la query los par\u00e1metros adicionales que reciba.",
+          "bearing": "Indica que un control cruzado por el endpoint gen\u00e9rico no exige tocar el dispatcher, aunque ning\u00fan comando del CLI lo expone hoy con esos par\u00e1metros."
+        },
+        {
+          "ref": "file:GaleCore-AI/docs/architecture/PRODUCT-BACKLOG.md",
+          "summary": "El addendum de BL-011 del veintitr\u00e9s de septiembre registra una observaci\u00f3n no archivada: el vencimiento del d\u00eda aport\u00f3 m\u00e1s de la mitad del agregado en la lectura post-cierre.",
+          "bearing": "Es el origen de la hip\u00f3tesis y marca su debilidad: un solo d\u00eda, sin artefacto archivado, as\u00ed que el primer paso del plan sigue siendo producir la evidencia archivada."
+        },
+        {
+          "ref": "regime:SPY/2026-09-23",
+          "summary": "Registro del d\u00eda con r\u00e9gimen negative_gamma y dos outcomes; el net GEX aceptado es el agregado del corte actual.",
+          "bearing": "Es uno de los registros cuya clasificaci\u00f3n podr\u00eda cambiar si el vencimiento del d\u00eda se excluyera; sirve de caso a recalcular."
+        },
+        {
+          "ref": "regime:SPY/2026-09-22",
+          "summary": "Registro del d\u00eda con r\u00e9gimen positive_gamma y el spot apenas por encima del zero-gamma.",
+          "bearing": "Un d\u00eda con el spot pegado al flip es el candidato m\u00e1s sensible a un cambio de signo; su desglose por vencimiento no qued\u00f3 archivado."
+        }
+      ],
+      "statements": [
+        {
+          "kind": "fact",
+          "text": "La configuraci\u00f3n de la estrategia GEX incluye el vencimiento de DTE cero en el agregado.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Api/Files/Gex/galecore_rules_gex.json",
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureHandler.cs"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "El request gen\u00e9rico de gamma exposure excluye el DTE cero por defecto.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureRequest.cs"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "El endpoint /App.Analytics/GammaExposure toma de la query string todos los par\u00e1metros del request, entre ellos MaxDTE, AllExpirations, IncludeByExpiry, ExpirationTypes, IncludeZeroDte, OiDeltaMin y OiDeltaMax.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Api/Controllers/AppController.cs",
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureRequest.cs"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "Los defaults del request gen\u00e9rico difieren del corte de la estrategia GEX en cuatro puntos: un solo vencimiento en vez de todos, s\u00f3lo Regular en vez de Regular y Weekly, sin DTE cero, y una banda de delta para el OI m\u00e1s angosta.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureRequest.cs",
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Api/Files/Gex/galecore_rules_gex.json",
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisHandler.cs"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "La estrategia GEX y el endpoint gen\u00e9rico usan el mismo handler; la estrategia le pasa AllExpirations e IncludeByExpiry en verdadero y el resto del corte desde el nodo gex del JSON de reglas.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisHandler.cs",
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureHandler.cs"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "El handler conserva con DTE cero el vencimiento cuya fecha es la de hoy en ET y s\u00f3lo lo descarta cuando la fecha ya pas\u00f3, as\u00ed que despu\u00e9s del cierre y hasta el cambio de fecha el vencimiento del d\u00eda sigue en el agregado.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureHandler.cs"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "Para el DTE cero, el tiempo a vencimiento del expected move es nulo despu\u00e9s de las diecis\u00e9is ET.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Shared/CascadeUtils.cs"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "La respuesta de /App/Gex/Analysis incluye el NetGex global, el NetGex y el Dte de cada vencimiento en byExpiry, y los par\u00e1metros efectivos del barrido.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisResponse.cs"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "El NetGEX global y el de cada vencimiento se redondean por separado a un decimal en billones.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureResponse.cs"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "El registro de r\u00e9gimen obtiene el GEX de compute.gex_analysis, que el dispatcher mapea a /App/Gex/Analysis.",
+          "sources": [
+            "file:GaleCore-AI/config/catalog.yaml",
+            "file:GaleCore-AI/src/galecore_ai/capabilities/dispatcher.py"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "El registro del veintitr\u00e9s de septiembre clasific\u00f3 el d\u00eda como negative_gamma con el agregado del corte actual.",
+          "sources": [
+            "regime:SPY/2026-09-23"
+          ]
+        },
+        {
+          "kind": "fact",
+          "text": "El desglose por vencimiento de los d\u00edas de la serie no qued\u00f3 archivado; la \u00fanica observaci\u00f3n del peso del vencimiento del d\u00eda est\u00e1 en prosa en BL-011.",
+          "sources": [
+            "file:GaleCore-AI/docs/architecture/PRODUCT-BACKLOG.md"
+          ]
+        },
+        {
+          "kind": "interpretation",
+          "text": "El paso tres del plan se resuelve a favor de la v\u00eda sin cambiar GaleCore: el endpoint gen\u00e9rico acepta el mismo rango, los mismos tipos de vencimiento y la misma banda de OI que la estrategia, as\u00ed que una lectura sin el DTE cero cuesta una llamada extra con par\u00e1metros expl\u00edcitos. No se verific\u00f3 en ejecuci\u00f3n que la query acepte la lista de tipos de vencimiento.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Api/Controllers/AppController.cs",
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureRequest.cs"
+          ]
+        },
+        {
+          "kind": "interpretation",
+          "text": "La llamada extra no es la mejor comparaci\u00f3n: es otro barrido, en otro momento, con otro spot y otras griegas. Restar el NetGex del vencimiento con DTE cero al global de una misma respuesta de /App/Gex/Analysis compara el mismo instante, as\u00ed que la evidencia central es el byExpiry archivado y el endpoint gen\u00e9rico s\u00f3lo sirve como control cruzado.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisResponse.cs"
+          ]
+        },
+        {
+          "kind": "interpretation",
+          "text": "Para el paso dos alcanza con archivar por vencimiento la fecha, el Dte, el NetGex, el CallGex y el PutGex, m\u00e1s el NetGex global y los par\u00e1metros efectivos del barrido; no hace falta archivar los strikes. Eso achica el artefacto que habr\u00eda que proponerle al owner.",
+          "sources": [
+            "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisResponse.cs"
+          ]
+        },
+        {
+          "kind": "interpretation",
+          "text": "Si el peso observado el veintitr\u00e9s es t\u00edpico, el agregado post-cierre est\u00e1 dominado por contratos que ya vencieron y cuyo gamma est\u00e1 degenerado, as\u00ed que describe mal el posicionamiento que sigue vivo al d\u00eda siguiente.",
+          "sources": []
+        },
+        {
+          "kind": "hypothesis",
+          "text": "Una lectura del endpoint gen\u00e9rico con el corte de la estrategia y sin el DTE cero, tomada en el mismo minuto, deber\u00eda coincidir con el global menos el vencimiento del d\u00eda salvo por el redondeo y la variaci\u00f3n entre barridos; si no coincide, la resta sobre byExpiry no es una buena medida.",
+          "sources": []
+        },
+        {
+          "kind": "decision",
+          "text": "No se cambia el corte de la serie de r\u00e9gimen mientras no haya evidencia archivada y una decisi\u00f3n del owner sobre recetas de corte (BL-011).",
+          "sources": []
+        }
+      ],
+      "hypothesis": "Excluir el vencimiento del mismo d\u00eda de la lectura post-cierre cambia de forma material la magnitud del net GEX agregado y, en los d\u00edas con el spot cerca del zero-gamma, puede cambiar su signo y por lo tanto la clasificaci\u00f3n del r\u00e9gimen.",
+      "test_plan": [
+        {
+          "step": "En cada lectura post-cierre, archivar junto al registro el resumen por vencimiento de /App/Gex/Analysis (fecha, Dte, NetGex, CallGex y PutGex de cada vencimiento, NetGex global y Config), sin cambiar el corte del registro.",
+          "data_needed": "byExpiry y global de /App/Gex/Analysis de SPY post-cierre, un d\u00eda h\u00e1bil tras otro, con su timestamp.",
+          "supports_if": "El vencimiento del d\u00eda aporta una parte grande del agregado en la mayor\u00eda de los d\u00edas.",
+          "weakens_if": "El aporte del vencimiento del d\u00eda es chico o se compensa entre calls y puts en la mayor\u00eda de los d\u00edas."
+        },
+        {
+          "step": "Para cada d\u00eda archivado, calcular el NetGex global menos el NetGex del vencimiento con Dte cero de la misma respuesta y comparar su signo con la clasificaci\u00f3n registrada, tratando como indeterminado un resultado dentro del margen de redondeo.",
+          "data_needed": "Los res\u00famenes archivados en el paso anterior y el r\u00e9gimen registrado de cada d\u00eda.",
+          "supports_if": "Al menos un d\u00eda cambia de signo fuera del margen de redondeo sin el vencimiento del d\u00eda.",
+          "weakens_if": "Ning\u00fan d\u00eda cambia de signo en una serie de al menos veinte d\u00edas h\u00e1biles."
+        },
+        {
+          "step": "Control cruzado opcional: en algunos d\u00edas archivados, pedir en el mismo minuto /App.Analytics/GammaExposure para SPY con AllExpirations verdadero, MaxDTE, ExpirationTypes, OiDeltaMin, OiDeltaMax, GreeksBatchSize y GreeksRetries iguales al Config de la estrategia e IncludeZeroDte falso, y comparar su NetGEX con la resta del paso dos.",
+          "data_needed": "Una llamada al endpoint gen\u00e9rico con GaleCore levantado, junto a la respuesta de /App/Gex/Analysis archivada del mismo minuto.",
+          "supports_if": "La lectura gen\u00e9rica coincide con la resta salvo redondeo y variaci\u00f3n entre barridos: la resta es una medida v\u00e1lida del agregado sin el vencimiento del d\u00eda.",
+          "weakens_if": "Difieren m\u00e1s de lo que explican el redondeo y la variaci\u00f3n entre barridos: hay algo en el agregado que la resta no captura y la medida del paso dos no es confiable."
+        }
+      ],
+      "missing": [
+        "Resumen por vencimiento archivado de al menos veinte d\u00edas h\u00e1biles post-cierre.",
+        "Decisi\u00f3n del owner sobre si archivar el resumen por vencimiento forma parte del registro de r\u00e9gimen o de un artefacto aparte (toca el corte congelado de la serie, BL-011).",
+        "Verificaci\u00f3n en ejecuci\u00f3n de que /App.Analytics/GammaExposure acepta la lista ExpirationTypes desde la query y devuelve el mismo agregado que la estrategia con IncludeZeroDte verdadero; requiere GaleCore levantado."
+      ],
+      "next_steps": [
+        "Proponer al owner d\u00f3nde se archiva el resumen por vencimiento sin cambiar el corte del registro: basta fecha, Dte, NetGex, CallGex y PutGex por vencimiento, NetGex global y Config de /App/Gex/Analysis; no hace falta archivar strikes.",
+        "Con la decisi\u00f3n tomada y GaleCore levantado despu\u00e9s del cierre, archivar el primer resumen y calcular el global menos el vencimiento con Dte cero (paso dos del plan).",
+        "En la misma sesi\u00f3n, antes de confiar en la resta, hacer una vez el control cruzado del paso tres con todos los par\u00e1metros expl\u00edcitos: primero con IncludeZeroDte verdadero para confirmar que reproduce el global de la estrategia, despu\u00e9s con falso."
+      ],
+      "limitations": [
+        "La hip\u00f3tesis nace de una sola observaci\u00f3n no archivada.",
+        "El gamma a DTE cero depende de las griegas del proveedor, que a DTE cero tienden a degenerar: el peso medido puede ser un artefacto del proveedor adem\u00e1s del corte.",
+        "El open interest es el del cierre anterior, as\u00ed que el aporte del vencimiento del d\u00eda no refleja cierres intrad\u00eda.",
+        "Lo de esta revisi\u00f3n sale de leer c\u00f3digo, no de ejecutarlo: no se llam\u00f3 a GaleCore, as\u00ed que el binding de la query y la equivalencia de los dos endpoints no est\u00e1n verificados en ejecuci\u00f3n.",
+        "Estos controles verifican referencias y estructura, no que el razonamiento sea correcto."
+      ]
+    },
+    "resolved_refs": [
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Api/Files/Gex/galecore_rules_gex.json",
+        "path": "GaleCore/source/galecore-datafeed/DataFeed.Api/Files/Gex/galecore_rules_gex.json",
+        "content_hash": "sha256:75fd24f0dab291a4fb845701e4ee099699bc96cf117baf4c4e3f2b19f6a9572d"
+      },
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureHandler.cs",
+        "path": "GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureHandler.cs",
+        "content_hash": "sha256:2b2097fe95be867f794bff51c4453463772c2249fac38b74671ff4f579ce8550"
+      },
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureRequest.cs",
+        "path": "GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureRequest.cs",
+        "content_hash": "sha256:286fa06d9577367fc184301e642df1dab788dae25c5209dfa11c76fb51391e1a"
+      },
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Api/Controllers/AppController.cs",
+        "path": "GaleCore/source/galecore-datafeed/DataFeed.Api/Controllers/AppController.cs",
+        "content_hash": "sha256:1a6f48a42cf1bc3699d05f19b773b118de932aa38f8fd73ab63560c5fa6d703f"
+      },
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisHandler.cs",
+        "path": "GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisHandler.cs",
+        "content_hash": "sha256:f14378b9ff7c3f1f5fc7533dd0ee1d4fdf83860bc57c85f28ff374145b465dd6"
+      },
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisResponse.cs",
+        "path": "GaleCore/source/galecore-datafeed/DataFeed.Application/App/Gex/GexAnalysisResponse.cs",
+        "content_hash": "sha256:e4a0010e0652542efd358b3944e774ff57ce99d5cf5b43c61d7393b18b04a3c5"
+      },
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureResponse.cs",
+        "path": "GaleCore/source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureResponse.cs",
+        "content_hash": "sha256:6cf11fb25c2647eb1d5b663aeb9f6af1818ade7086bc91fcfdb5313df286ffd1"
+      },
+      {
+        "ref": "file:GaleCore/source/galecore-datafeed/DataFeed.Application/App/Shared/CascadeUtils.cs",
+        "path": "GaleCore/source/galecore-datafeed/DataFeed.Application/App/Shared/CascadeUtils.cs",
+        "content_hash": "sha256:7abac559f51b5c630038d3c946cc447760951aa447c7bdc2f46569d08f12f609"
+      },
+      {
+        "ref": "file:GaleCore-AI/config/catalog.yaml",
+        "path": "GaleCore-AI/config/catalog.yaml",
+        "content_hash": "sha256:39d52ac12e9e69a264d9403bd28c8af4b10e9b35b3c3b169b1ad9436c13f3e26"
+      },
+      {
+        "ref": "file:GaleCore-AI/src/galecore_ai/capabilities/dispatcher.py",
+        "path": "GaleCore-AI/src/galecore_ai/capabilities/dispatcher.py",
+        "content_hash": "sha256:8ad325fbfea31d8d729c07c68eae18eae8d9980e29d60744b75dff04b06afb1f"
+      },
+      {
+        "ref": "file:GaleCore-AI/docs/architecture/PRODUCT-BACKLOG.md",
+        "path": "GaleCore-AI/docs/architecture/PRODUCT-BACKLOG.md",
+        "content_hash": "sha256:06af26a0d8e4cac3ab08cba554cea27704a0254e3c472b152328dceb6529c029"
+      },
+      {
+        "ref": "regime:SPY/2026-09-23",
+        "path": "knowledge/regime/SPY/2026-09-23.md",
+        "content_hash": "sha256:c8e2fbd21edd638654bb0351ab69265aa221b2f837260909addec7ace398170e"
+      },
+      {
+        "ref": "regime:SPY/2026-09-22",
+        "path": "knowledge/regime/SPY/2026-09-22.md",
+        "content_hash": "sha256:a3a60e23b96f99fd0d16209d7c45e9373d4b65f647a0c5437fd93ab01940dbef"
+      }
+    ]
+  },
+  "pending": {
+    "status": "test_planned",
+    "next_steps": [
+      "Proponer al owner d\u00f3nde se archiva el resumen por vencimiento sin cambiar el corte del registro: basta fecha, Dte, NetGex, CallGex y PutGex por vencimiento, NetGex global y Config de /App/Gex/Analysis; no hace falta archivar strikes.",
+      "Con la decisi\u00f3n tomada y GaleCore levantado despu\u00e9s del cierre, archivar el primer resumen y calcular el global menos el vencimiento con Dte cero (paso dos del plan).",
+      "En la misma sesi\u00f3n, antes de confiar en la resta, hacer una vez el control cruzado del paso tres con todos los par\u00e1metros expl\u00edcitos: primero con IncludeZeroDte verdadero para confirmar que reproduce el global de la estrategia, despu\u00e9s con falso."
+    ],
+    "missing": [
+      "Resumen por vencimiento archivado de al menos veinte d\u00edas h\u00e1biles post-cierre.",
+      "Decisi\u00f3n del owner sobre si archivar el resumen por vencimiento forma parte del registro de r\u00e9gimen o de un artefacto aparte (toca el corte congelado de la serie, BL-011).",
+      "Verificaci\u00f3n en ejecuci\u00f3n de que /App.Analytics/GammaExposure acepta la lista ExpirationTypes desde la query y devuelve el mismo agregado que la estrategia con IncludeZeroDte verdadero; requiere GaleCore levantado."
+    ]
+  },
+  "history": [
+    {
+      "revision": 1,
+      "recorded_at": "2026-09-23T23:13:34.521890+00:00",
+      "reason": "initial",
+      "note": "",
+      "prompt": "Investig\u00e1 si el 0DTE vencido distorsiona el net GEX que registramos post-cierre y c\u00f3mo lo probar\u00edamos.",
+      "host": {
+        "provider": "claude-code",
+        "model": "claude-opus-5-5",
+        "provenance": "HOST_DECLARED"
+      },
+      "content_hash": "sha256:b435ce71e511cbf5f5ddf2147cbd067abcdac962618222e085c597e974c9ee42"
+    },
+    {
+      "revision": 2,
+      "recorded_at": "2026-09-23T23:17:13.627068+00:00",
+      "reason": "continuation",
+      "note": "Paso tres del plan hecho leyendo c\u00f3digo, sin GaleCore: el endpoint gen\u00e9rico acepta por query el mismo corte que la estrategia (con todos los par\u00e1metros expl\u00edcitos, incluida la banda de OI), pero la resta global menos DTE cero sobre el byExpiry de /App/Gex/Analysis compara el mismo instante y pasa a ser la medida central; el gen\u00e9rico queda como control cruzado. Se reescriben con UTF-8 correcto los textos de la revisi\u00f3n uno, que quedaron guardados con doble codificaci\u00f3n.",
+      "prompt": "Retom\u00e1 la investigaci\u00f3n que dejamos abierta sobre el GEX post-cierre y avanz\u00e1 lo que se pueda hacer hoy sin levantar GaleCore.",
+      "host": {
+        "provider": "claude-code",
+        "model": "claude-opus-5-5",
+        "provenance": "HOST_DECLARED"
+      },
+      "content_hash": "sha256:9eb234a2b8f0032251d41529d2881f02c25b5f0e72687dd0473497764318a26e"
+    }
+  ],
+  "cited_by": []
+}
