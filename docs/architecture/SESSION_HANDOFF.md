@@ -12,6 +12,21 @@ backlog). El trabajo activo es el **Paso 1 — base mínima probada con trabajo 
 (`ACTIVE_WORK_ITEM`). La realineación del 21/09 está archivada y no se sigue; SHADOW no es el próximo
 frente (es el Paso 3 del plan).
 
+### GC-AI-0005 al 2026-09-23 (noche)
+
+- **Estado:** READY_FOR_REVIEW. Implementado y probado con uso real (evidencia
+  `docs/evidence/gc-ai-0005/`); review interno R1 CHANGES_REQUESTED → corregido. **Falta Codex**:
+  el primer intento (`--base d6a35d8 --effort high`) no corrió por cuota agotada. Siguiente:
+  `/review-codex --base d6a35d8 --effort high`.
+- **Qué cambió para el host:** empezar por `cli catalog`; buscar antecedentes con `cli kb search`
+  (`--status unfinished` para trabajo pendiente); la base de conocimiento es `<workspace>/knowledge/`
+  (repo de datos propio; commitearla después de cada sesión que escriba). Los registros de régimen
+  viven ahí desde hoy; en GaleCore queda un README de puntero (`6e13394`).
+- **Investigación abierta:** `research:2026-09-23-gex-0dte-post-cierre` (test_planned, revisión 2).
+  Su pendiente depende del owner: **dónde se archiva el desglose por vencimiento** de cada lectura
+  post-cierre sin cambiar el corte del registro (toca `BL-011`). Después: archivar el primero con
+  GaleCore levantado y hacer la resta global − 0DTE.
+
 ### Cierres pendientes del owner
 
 Ninguno bloquea técnicamente el Paso 1: GC-AI-0005 parte de `feature/GC-AI-0004` (que ya contiene
