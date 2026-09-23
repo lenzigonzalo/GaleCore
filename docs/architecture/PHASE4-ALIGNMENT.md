@@ -2,7 +2,7 @@
 
 **Fecha:** 2026-09-16
 **Work item:** `GC-AI-0002` (`docs/engineering/work-items/`). Contrato aprobado por el product owner el 2026-09-16 con las decisiones D-1..D-5.
-**Estado (2026-09-21):** código implementado y verificado en local (600 tests). Evidencia real completa del loop diario el 2026-09-21 (post-cierre, F-2): prepare → interpretación → accept+record → outcome posterior → review del owner (`agree`) → query; E2E regenerada (16/16, F-8). Revisión interna 2 APPROVE; Codex recheck 2 **APPROVE** del incremento (`GC-AI-0002-20260921T225617Z.md`). **Pendiente:** AC-08 (serie de 3 días: 1/3, siguen 2026-09-22 y 2026-09-23 después del cierre) y la aprobación/cierre por el product owner. Decisiones del owner tomadas: D-6, F-2, F-6, F-7; abierta: F-9 (rotar la ApiKey de desarrollo). Phase 4 **no** está cerrada.
+**Estado (2026-09-23):** código implementado y verificado en local (600 tests). Serie AC-08 **completa, 3/3**: 21, 22 y 23 de septiembre, post-cierre (F-2), cada día con prepare → interpretación → accept+record → outcome posterior → review del owner (`agree`, `partial`, `agree`) → query; E2E regenerada (16/16, F-8). Revisión interna 3 APPROVE y Codex recheck 3 **APPROVE** sobre la serie completa (`GC-AI-0002-20260923T213537Z.md`). **Pendiente:** solo la aprobación/cierre por el product owner. Decisiones del owner tomadas: D-6, F-2, F-6, F-7; abierta: F-9 (rotar la ApiKey de desarrollo). Phase 4 **no** está cerrada.
 
 ## 1. Resultado
 

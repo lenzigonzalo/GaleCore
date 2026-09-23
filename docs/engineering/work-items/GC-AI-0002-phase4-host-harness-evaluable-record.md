@@ -407,6 +407,19 @@ Rechecked the day-2 evidence, the regenerated E2E, the runner fix and the matrix
 | I2-m4 | Day-1 evidence sanitized as `<home>\OneDrive\…` vs day-2 `<workspace>` | **Not changed:** the day-1 files were already reviewed by Codex; no username leaked. |
 | I2-m5 | Pre-existing, out of scope: GC-AI-0001 review files quote the dev ApiKey verbatim; `increment4-e2e` has absolute user paths | **Owner decision:** rotate the local dev ApiKey (reviews are immutable by rule) — recorded as F-9. |
 
+## Internal review 3 (Claude `reviewer` subagent, 2026-09-23 ~21:45 UTC, range `fa853e5..72f1dd9`) — APPROVE (AC-08 series)
+
+AC-08 met: three real records on consecutive trading days (21-23 Sept), each post-session with outcome and owner review; `query` rerun independently returns 4 records, `integrity_failed: []`, identical to `day4-step8` except run-specific fields. Day-4 chain verified byte-for-byte (interpretation → request → accepted result → record; facts/facts_hash equal to prepare). ApiKey checked against every `day4-*` file, the README and the record: 0 hits. Gates reproduced (gate PASS, wheel PASS, ruff, 600 passed, diff --check). No BLOCKER/MAJOR.
+
+| # | Finding | Disposition |
+|---|---|---|
+| I3-m1 | README called the 20:56 read that cached the second outcome's GEX "unrelated"; it was the host's own investigation read | **Fixed** (`f5e9747`). |
+| I3-m2 | The 0DTE per-expiry figures in README and BL-011 have no archived artifact | **Fixed:** declared "observed, not archived" in both; the archived aggregate is `day4-step5b`. |
+| I3-m3 | README header said Opus 5 and named a single hand-written artifact | **Fixed** (model per day; per-day interpretations and requests). |
+| I3-m4 | Day-4 table rows 5b/6 out of time order | **Fixed** (reordered). |
+| I3-m5 | Accepted prose "a move *back* above the flip point" presupposes an earlier state | **Recorded** as README note (d); record is hash-bound; entailment gap F-3. |
+| I3-m6 | BL-009 addendum records a workspace process change outside this item's objective | **Recorded:** backlog note at the owner's request; no code or asset change in this item. |
+
 ## Independent review 1 (Codex, `--uncommitted`, effort high, 2026-09-17T11:02Z) — `docs/engineering/reviews/GC-AI-0002-20260917T110236Z.md`
 
 **Verdict:** CHANGES_REQUESTED. Reviewed the full dirty tree on top of `4e42079`. Checks reproduced (gate PASS, ruff, 582 passed, diff --check).
@@ -458,6 +471,17 @@ Weekend note: 2026-09-19 (Sat) and 2026-09-20 (Sun) attempts are impossible by d
 | C3-m2 | MINOR (new) | day-2 README times were command-issue times, not the artifact timestamps | **Fixed** (table transcribes `accepted_at`/`queried_at`/`observed_at`/`reviewed_at`). |
 
 AC-09 was PARTIAL for those two minors; with them fixed the documentation matches the matrix. Next: days 2 and 3 of the AC-08 series (2026-09-22, 2026-09-23 after the close, steps 3–5 of the runbook), then the reviewer evaluates AC-08 and the owner decides closure.
+
+## Independent review 4 (Codex, `--recheck`, effort medium, 2026-09-23T21:35Z) — `docs/engineering/reviews/GC-AI-0002-20260923T213537Z.md`
+
+Range `ce6645a..f5e9747`, clean tree. **Verdict: APPROVE** (AC-08 series 3/3 SUPPORTED; AC-01..AC-11 SUPPORTED except AC-09 PARTIAL for the item below). Does not change `status`, `closure_blocked` or `approval_result`.
+
+| # | Finding | Disposition |
+|---|---|---|
+| C4-B (carried) | Bounded recommendation patterns in `guardrails.py` | **Owner decision D-6**, unchanged. |
+| C4-M (carried) | 2026-09-17 interpretation compares from memory | **Owner decision F-7**, excluded from the series. |
+| C4-m1 | `PHASE4-ALIGNMENT.md` and `SESSION_HANDOFF.md` status lines still said 1/3 and 2/3; obsolete next-session runbook | **Fixed:** both status lines at 3/3 with the new reviews; the day-3 runbook replaced by the closure-pending state. |
+| C4-m2 | Day-2 README timestamps | **Resolved** (confirmed by Codex). |
 
 ## Product-owner decisions (2026-09-19, after Codex recheck 1)
 
