@@ -199,3 +199,25 @@ be redone after the AC-08 series closes and would invalidate this review's decla
 - PENDING. `status`, `closure_blocked` and `approval_result` unchanged; `review_result: APPROVED`
   only transcribes the reviewer's verdict. AC-08 (integration with the final GC-AI-0002 tree) stays
   open, to be done once after that series closes.
+
+## Rebase onto the final `feature/gc-ai-0002` (2026-09-23)
+
+Done once, after the GC-AI-0002 AC-08 series was completed and reviewed (owner's instruction of
+2026-09-22: no rebase before that). `feature/GC-AI-0003` was rebased onto `feature/gc-ai-0002`
+(`02a3df3`), then `feature/GC-AI-0004` onto it with `--onto`. No conflicts: GC-AI-0002 and this item
+touch disjoint files. Pre-rebase refs kept as `backup/GC-AI-0003-pre-rebase` and
+`backup/GC-AI-0004-pre-rebase`.
+
+| Commit | Before | After |
+|---|---|---|
+| GC-AI-0003 checkpoint | `7ad598b` | `7adb741` |
+| GC-AI-0004 feat | `0b9b089` | `35b5c08` |
+| GC-AI-0004 review fixes | `b7f76b9` | `3ad84c3` |
+| GC-AI-0004 recheck recorded | `297da6f` | `48c8f02` |
+
+The Codex reviews above cite the pre-rebase SHAs; their content is unchanged by the rebase (same
+patches, new parents). Verified after the rebase in this worktree: `ruff` clean, `pytest` 648 passed /
+1 skipped (with `PYTHONPATH=src`), and `query --since 2026-09-14` against the real records dir reads
+the four records of the GC-AI-0002 series (09-23 with two outcomes and the owner's review),
+`integrity_failed: []`. Pre-existing and unchanged: `git diff --check` flags a blank line at EOF of
+the GC-AI-0003 work item (already in `7ad598b`).
