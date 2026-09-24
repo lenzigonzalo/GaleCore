@@ -87,21 +87,30 @@ una pestaña del monitor con login real.
 
 ## Requirement-to-evidence matrix
 
-"Tests" = probado en tests automáticos; "En vivo" = observado corriendo contra GaleCore Dev con datos
-de mercado reales. Nada de lo "en vivo" pasó todavía: falta configurar el proyecto de desarrollo.
+"Tests" = tests automáticos; "Postgres" = tests contra la base real de GaleCore Dev (`galecore_test`);
+"En vivo" = API corriendo contra GaleCore Dev con su rol real (`galecore_api`) y datos de mercado reales.
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 | `dev/galecore_dev.py` (`init`, `migrate`, `set-demo-password`, `api`, `monitor`, `deploy`, `test`), roles `galecore_ddl`/`galecore_api`, migración `AddShadowRuntime` | — | salida de `migrate` | Implementado; **no ejecutado** |
-| AC-02 | `ShadowRuntimeStore` (base antes que memoria; posición + evento de apertura/cierre en una transacción; specs guardadas antes de registrarse), `EfShadowRuntimeRepository` | `ShadowRuntimePersistenceTests`; `EfShadowRuntimeRepositoryTests` contra Postgres | — | Tests con repositorio falso: sí. Contra Postgres: **skipped** hasta configurar la base |
-| AC-03 | `ShadowPersistenceGuard` (interruptor), `appsettings.json` (apagado), `ShadowRuntimePersistenceStatus`, 503 en Deploy/Metrics | `ShadowMetricsTests` (PersistenceOff_…, PersistenceOn_…, PersistenceIsOffByDefault_…) | — | Tests: sí. En vivo: pendiente |
-| AC-04 | `ShadowRuntimeRecovery`, `Hydrate`, `SpecFor` por hash, `DeployOrGetRunning`, índice único `ix_strategy_instances_single_running`, `ActiveInstance` determinística | `AfterRestart_*`, `RecoveringTwice_*`, `RecoveryFails_*`, `Deploy_*` (concurrente), `ActiveInstance_*`; contra Postgres: `SavedRecords_ComeBackAfterRestart…`, `TwoProcesses_…` | `docs/evidence/gc-0004/restart_demo.py` (PASS / INCOMPLETE / FAIL) | Tests con repositorio falso: sí. Postgres y en vivo: pendiente |
-| AC-05 | `ShadowMetrics` (salidas simultáneas = un paso), `LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; `MetricsInputs_…` contra Postgres | — | Cálculo: sí. Desde la base: pendiente |
-| AC-06 | `pages/Shadow.tsx`, `api/shadow.ts`, `types/shadow.ts`, pestaña en `TabNav`/`App` | `Shadow.test.tsx` 6/6; `tsc --noEmit` | — | Tests: sí. En el navegador: pendiente |
-| AC-07 | Mismo flujo de login que producción, contra Auth de GaleCore Dev | — | — | Implementado; **no ejecutado** |
-| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `docs/evidence/gc-0004/<run>.json` | Pendiente: base configurada + día hábil en sesión |
-| AC-09 | — | `dotnet test` 427 pass / 5 skipped (base 401); jest 6/6 | — | Parcial: faltan los 5 de Postgres |
-| AC-10 | — | Interno R1 y Codex C1 CHANGES_REQUESTED → corregidos (abajo) | `docs/engineering/reviews/GC-0004-20260924T215421Z.md` | Recheck de Codex pendiente |
+| AC-01 | `dev/galecore_dev.py`; proyecto GaleCore Dev (`ecymbgpimqbtcvqyjtaq`, org propia, plan Free, Postgres 17); roles `galecore_ddl`/`galecore_api`; cadena completa de migraciones | — | `galecore_dev.py migrate` (6 migraciones aplicadas; `Down` de `AddShadowRuntime` probado) | **En vivo (24/09):** tablas de dueño `galecore_ddl`, la API sólo DML, `anon`/`authenticated` sin acceso |
+| AC-02 | `ShadowRuntimeStore`, `EfShadowRuntimeRepository` (posición + evento en una transacción; specs antes de registrarse; `seq` para el orden) | `ShadowRuntimePersistenceTests`; Postgres: `OpenedPosition_AndItsEvent_…`, `SavingTwice_…` | — | Tests y Postgres: sí |
+| AC-03 | Interruptor `Runtime:Persistence:Enabled` (apagado en `appsettings.json`), 503 en Deploy/Metrics | `ShadowMetricsTests` (PersistenceOff_…, PersistenceIsOffByDefault_…) | — | Tests: sí. En vivo: Status con persistencia disponible sólo con el interruptor prendido |
+| AC-04 | Recuperación, `SpecFor` por hash, `DeployOrGetRunning`, índice `ix_strategy_instances_single_running` | Tests con repositorio falso; Postgres: `SavedRecords_ComeBackAfterRestart…`, `TwoProcesses_…` | `docs/evidence/gc-0004/run0-fuera-de-sesion.json` | Postgres: sí. **En vivo:** reinicio con la misma instancia, nada perdido ni duplicado; INCOMPLETE por falta de evaluaciones/posiciones (fuera de sesión) |
+| AC-05 | `ShadowMetrics`, `LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; Postgres: `MetricsInputs_…` | — | Tests y Postgres: sí. En vivo con datos: pendiente (sesión) |
+| AC-06 | `pages/Shadow.tsx`, `api/shadow.ts`, `types/shadow.ts` | `Shadow.test.tsx` 6/6; `tsc --noEmit` | — | Tests: sí. En el navegador: pendiente |
+| AC-07 | Mismo flujo que producción contra Auth de GaleCore Dev (ES256 por JWKS, igual que producción); usuario `demo` (admin) con su fila en `users` | — | smoke del 24/09 (abajo) | **En vivo:** login 200, `/Me` = demo/admin, sin token 401 |
+| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run0-fuera-de-sesion.json` (INCOMPLETE) | Pendiente: corrida en sesión y recorrido del owner |
+| AC-09 | — | `dotnet test` **432/432, 0 skipped** con `GALECORE_TEST_DB` (base 401); jest 6/6 | — | Sí |
+| AC-10 | — | Interno R1 y Codex C1 CHANGES_REQUESTED → corregidos | `docs/engineering/reviews/GC-0004-20260924T215421Z.md` | Recheck de Codex pendiente |
+
+## Hallazgos de probar contra la base real (24/09)
+
+- **Pooler en modo transacción (6543):** sin `No Reset On Close=true;Max Auto Prepare=0`, un `INSERT`
+  se confirma en la base pero Npgsql se cuelga leyendo la respuesta (reproducido dos veces; con las
+  opciones, funciona). El script de desarrollo las agrega; el plan de producción lo incluye (paso 5).
+- **Orden de eventos tras reiniciar:** los eventos de un mismo tick comparten la hora y volvían en
+  otro orden. Ahora `evaluation_logs` y `operational_events` tienen `seq` (identity de la base) y la
+  recarga ordena por hora y `seq`, con orden estable en memoria. Lo detectó el test de Postgres.
 
 ## Supabase local, evaluado y descartado (24/09)
 
@@ -151,7 +160,11 @@ Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
    pasa por el chat). Se verifica que `galecore_api` tenga SELECT/INSERT/UPDATE/DELETE en las tablas
    nuevas (privilegios por defecto o `GRANT` explícito).
 5. **Configuración:** `Runtime__Persistence__Enabled=true` en App Settings de la API de producción.
-   El switch del runtime sigue en OFF (config versionada) hasta que el owner lo prenda.
+   El switch del runtime sigue en OFF (config versionada) hasta que el owner lo prenda. **La cadena
+   `ConnectionStrings:GaleCore` de producción (pooler en modo transacción, 6543) tiene que incluir
+   `No Reset On Close=true;Max Auto Prepare=0`**: comprobado en GaleCore Dev el 24/09 que sin eso un
+   `INSERT` se confirma pero el cliente se cuelga leyendo la respuesta (la API de producción hoy casi
+   no escribe, por eso no se vio). Verificarlo antes de prender la persistencia.
 6. **Despliegue** de la API y del monitor (pestaña SHADOW).
 7. **Verificación:** `GET /App/Runtime/Status` → persistencia disponible y recuperación vacía; deploy
    de la spec que el owner elija; una evaluación en sesión queda en `evaluation_logs`.
@@ -160,17 +173,19 @@ Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
 
 ## Decisiones del owner pendientes
 
-- Ninguna de diseño. Pendiente de ejecución: configurar GaleCore Dev y la demostración.
+- Ninguna de diseño. Pendiente de ejecución: la demostración en sesión.
 
 ## Limitaciones declaradas
 
 - Un solo runtime SHADOW a la vez (una instancia RUNNING); cambiar de versión requiere parar la
   instancia, y no hay endpoint para eso (no lo pide I3).
-- Todavía no se configuró GaleCore Dev: nada en vivo ni los 5 tests de Postgres se ejecutaron.
-- Las contraseñas de los roles de desarrollo las genera el script y quedan en `dev/.local/` (fuera de
-  git); son de un proyecto con datos de prueba.
+- Las contraseñas de los roles de desarrollo y del usuario `demo` las genera el script y quedan en
+  `dev/.local/env.json` (fuera de git); son de un proyecto con datos de prueba. El usuario `demo` se
+  creó por SQL en `auth.users`/`auth.identities` de GaleCore Dev (el MCP no tiene alta de usuarios).
+- La instancia de la corrida `run0` quedó RUNNING en GaleCore Dev: la próxima corrida la retoma.
 
 ## Implementer handoff
 
-**State:** IMPLEMENTING — código completo; interno R1 y Codex C1 corregidos; falta el recheck de
-Codex, configurar GaleCore Dev y la demostración en vivo.
+**State:** IMPLEMENTING — código completo; interno R1 y Codex C1 corregidos; GaleCore Dev configurado
+(migraciones, roles, usuario de prueba, login real verificado, 432/432). Falta el recheck de Codex, la
+corrida en sesión y el recorrido del owner en el monitor.

@@ -176,8 +176,9 @@ namespace DataFeed.Repositories
                 e.Property(x => x.ResultsJson).IsRequired();
                 e.Property(x => x.EvaluatedAt).HasDefaultValueSql("now()");
                 e.HasOne(x => x.Instance).WithMany().HasForeignKey(x => x.InstanceId).OnDelete(DeleteBehavior.Cascade);
-                // Al arrancar se recargan las últimas de cada instancia (GC-0004).
-                e.HasIndex(x => new { x.InstanceId, x.EvaluatedAt });
+                // Al arrancar se recargan las últimas de cada instancia, en su orden (GC-0004).
+                e.Property(x => x.Seq).UseIdentityAlwaysColumn();
+                e.HasIndex(x => new { x.InstanceId, x.EvaluatedAt, x.Seq });
             });
 
             b.Entity<OperationalEventEntity>(e =>
@@ -190,7 +191,8 @@ namespace DataFeed.Repositories
                 e.Property(x => x.PayloadJson).IsRequired();
                 e.Property(x => x.Timestamp).HasDefaultValueSql("now()");
                 e.HasOne(x => x.Instance).WithMany().HasForeignKey(x => x.InstanceId).OnDelete(DeleteBehavior.Cascade);
-                e.HasIndex(x => new { x.InstanceId, x.Timestamp });
+                e.Property(x => x.Seq).UseIdentityAlwaysColumn();
+                e.HasIndex(x => new { x.InstanceId, x.Timestamp, x.Seq });
             });
         }
     }

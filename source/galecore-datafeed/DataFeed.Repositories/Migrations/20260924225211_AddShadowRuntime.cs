@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore.Migrations;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
@@ -84,7 +85,9 @@ namespace DataFeed.Repositories.Migrations
                     symbol = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     overall_pass = table.Column<bool>(type: "boolean", nullable: false),
                     results_json = table.Column<string>(type: "text", nullable: false),
-                    evaluated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
+                    evaluated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
+                    seq = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityAlwaysColumn)
                 },
                 constraints: table =>
                 {
@@ -106,7 +109,9 @@ namespace DataFeed.Repositories.Migrations
                     event_type = table.Column<string>(type: "character varying(40)", maxLength: 40, nullable: false),
                     symbol = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: true),
                     payload_json = table.Column<string>(type: "text", nullable: false),
-                    timestamp = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()")
+                    timestamp = table.Column<DateTime>(type: "timestamp with time zone", nullable: false, defaultValueSql: "now()"),
+                    seq = table.Column<long>(type: "bigint", nullable: false)
+                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityAlwaysColumn)
                 },
                 constraints: table =>
                 {
@@ -159,14 +164,14 @@ namespace DataFeed.Repositories.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "ix_evaluation_logs_instance_id_evaluated_at",
+                name: "ix_evaluation_logs_instance_id_evaluated_at_seq",
                 table: "evaluation_logs",
-                columns: new[] { "instance_id", "evaluated_at" });
+                columns: new[] { "instance_id", "evaluated_at", "seq" });
 
             migrationBuilder.CreateIndex(
-                name: "ix_operational_events_instance_id_timestamp",
+                name: "ix_operational_events_instance_id_timestamp_seq",
                 table: "operational_events",
-                columns: new[] { "instance_id", "timestamp" });
+                columns: new[] { "instance_id", "timestamp", "seq" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_shadow_positions_instance_id_status",

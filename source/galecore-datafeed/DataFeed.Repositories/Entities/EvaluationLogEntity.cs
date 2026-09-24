@@ -13,5 +13,10 @@ namespace DataFeed.Repositories.Entities
         /// <summary>Gate results serializados como JSON.</summary>
         public string ResultsJson { get; set; } = "[]";
         public DateTime EvaluatedAt { get; set; }
+        /// <summary>
+        /// Orden de llegada, lo pone la base (GC-0004). Varias filas de un mismo tick comparten la hora:
+        /// sin esto, al recargar tras un reinicio se pierde en qué orden pasaron.
+        /// </summary>
+        public long Seq { get; set; }
     }
 }

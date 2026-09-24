@@ -58,8 +58,10 @@ namespace DataFeed.Application.App.Runtime
                 lock (list)
                 {
                     var known = list.Select(e => e.EvaluationId).ToHashSet();
-                    list.AddRange(group.Where(e => known.Add(e.EvaluationId)));
-                    list.Sort((a, b) => a.EvaluatedAt.CompareTo(b.EvaluatedAt));
+                    // Orden estable: con la misma hora queda el orden en que vinieron (el de la base).
+                    var merged = list.Concat(group.Where(e => known.Add(e.EvaluationId))).OrderBy(e => e.EvaluatedAt).ToList();
+                    list.Clear();
+                    list.AddRange(merged);
                     if (list.Count > MaxEvaluationsPerInstance) list.RemoveRange(0, list.Count - MaxEvaluationsPerInstance);
                 }
             }
@@ -69,8 +71,9 @@ namespace DataFeed.Application.App.Runtime
                 lock (list)
                 {
                     var known = list.Select(e => e.EventId).ToHashSet();
-                    list.AddRange(group.Where(e => known.Add(e.EventId)));
-                    list.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+                    var merged = list.Concat(group.Where(e => known.Add(e.EventId))).OrderBy(e => e.Timestamp).ToList();
+                    list.Clear();
+                    list.AddRange(merged);
                 }
             }
         }

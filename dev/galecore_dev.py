@@ -73,9 +73,12 @@ def save_env(env: dict) -> None:
 def cs(env: dict, role: str, password_key: str, database: str = "postgres", port: int = 5432) -> str:
     # Pooler de Supabase (Supavisor): usuario "<rol>.<ref del proyecto>". 5432 = modo sesión (migraciones,
     # CREATE DATABASE); 6543 = modo transacción, el mismo que usa la API en producción.
+    # En modo transacción, Npgsql necesita no resetear la sesión ni preparar sentencias: sin esto, una
+    # escritura se confirma en la base pero el cliente se cuelga leyendo la respuesta (GC-0004, 24/09).
+    pooler_safe = ";No Reset On Close=true;Max Auto Prepare=0" if port == 6543 else ""
     return (
         f"Host={env['pooler_host']};Port={port};Database={database};"
-        f"Username={role}.{env['project_ref']};Password={env[password_key]};SSL Mode=Require"
+        f"Username={role}.{env['project_ref']};Password={env[password_key]};SSL Mode=Require{pooler_safe}"
     )
 
 
@@ -93,6 +96,8 @@ def http(method: str, url: str, body: dict | None = None, headers: dict | None =
             return e.code, json.loads(raw) if raw else None
         except json.JSONDecodeError:
             return e.code, {"raw": raw.decode(errors="replace")[:500]}
+    except urllib.error.URLError as e:  # la API todavía no escucha (arrancando) o se cayó
+        return 0, {"error": str(e.reason)}
 
 
 # ── comandos ──────────────────────────────────────────────────────────

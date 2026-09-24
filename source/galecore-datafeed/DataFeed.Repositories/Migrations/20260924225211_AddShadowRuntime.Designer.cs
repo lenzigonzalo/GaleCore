@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DataFeed.Repositories.Migrations
 {
     [DbContext(typeof(GaleCoreDbContext))]
-    [Migration("20260924221235_AddShadowRuntime")]
+    [Migration("20260924225211_AddShadowRuntime")]
     partial class AddShadowRuntime
     {
         /// <inheritdoc />
@@ -118,6 +118,13 @@ namespace DataFeed.Repositories.Migrations
                         .HasColumnType("text")
                         .HasColumnName("results_json");
 
+                    b.Property<long>("Seq")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Seq"));
+
                     b.Property<string>("Symbol")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -127,8 +134,8 @@ namespace DataFeed.Repositories.Migrations
                     b.HasKey("Id")
                         .HasName("pk_evaluation_logs");
 
-                    b.HasIndex("InstanceId", "EvaluatedAt")
-                        .HasDatabaseName("ix_evaluation_logs_instance_id_evaluated_at");
+                    b.HasIndex("InstanceId", "EvaluatedAt", "Seq")
+                        .HasDatabaseName("ix_evaluation_logs_instance_id_evaluated_at_seq");
 
                     b.ToTable("evaluation_logs", (string)null);
                 });
@@ -156,6 +163,13 @@ namespace DataFeed.Repositories.Migrations
                         .HasColumnType("text")
                         .HasColumnName("payload_json");
 
+                    b.Property<long>("Seq")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Seq"));
+
                     b.Property<string>("Symbol")
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
@@ -170,8 +184,8 @@ namespace DataFeed.Repositories.Migrations
                     b.HasKey("Id")
                         .HasName("pk_operational_events");
 
-                    b.HasIndex("InstanceId", "Timestamp")
-                        .HasDatabaseName("ix_operational_events_instance_id_timestamp");
+                    b.HasIndex("InstanceId", "Timestamp", "Seq")
+                        .HasDatabaseName("ix_operational_events_instance_id_timestamp_seq");
 
                     b.ToTable("operational_events", (string)null);
                 });
