@@ -11,6 +11,7 @@ import { MyAccount } from './pages/MyAccount';
 import { Monitor } from './pages/Monitor';
 import { Rpf } from './pages/Rpf';
 import { Gex } from './pages/Gex';
+import { Shadow } from './pages/Shadow';
 import { useMarketSocket, ConnectionStatus } from './socket/useMarketSocket';
 import { useAppConfigStore } from './store/useAppConfigStore';
 import { useAccountStore } from './store/useAccountStore';
@@ -93,6 +94,8 @@ function Dashboard({ onLogout }: DashboardProps) {
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}
           {tab === 'gex' && <Gex subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
+          {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
+          {tab === 'shadow' && <Shadow />}
         </main>
       </div>
     </div>
