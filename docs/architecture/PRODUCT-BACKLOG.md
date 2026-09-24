@@ -1440,3 +1440,33 @@ registros del 21 y 22 (mismo corte), así que la serie es consistente entre sí 
 sesgo. Consecuencia para el alcance: toda receta declara qué hace con el vencimiento del día según
 el momento de la lectura (intradía vs post-cierre), y el cambio va en GaleCore (`IncludeZeroDte`
 ya existe en `GammaExposureRequest`). No se aplica a la serie AC-08 en curso (ver no objetivos).
+
+---
+
+## BL-012 — Acceso del host a GaleCore por MCP
+
+**Estado:** `CAPTURED` (pedido del owner, 2026-09-24)
+
+**Origen:** el owner notó que el host consulta GaleCore "a mano" (CLI de GaleCore-AI, `curl`, scripts)
+y preguntó si no debería existir un MCP de GaleCore bien detallado.
+
+**Lo que hay (verificado 24/09):** GaleCore ya expone un servidor MCP en `/mcp`
+(`DataFeed.Api/Infrastructure/McpTools.cs`, `app.MapMcp("/mcp")` en `Program.cs`) con ~11 tools de
+datos crudos: cotización, trade, griegas, trade+quote+greeks, cadena de opciones, candles, GEX por
+strike, IV Rank/Percentile, IV por plazo. **No está conectado** a Claude Code en este workspace.
+
+**Lo que falta o hay que revisar:**
+- No cubre lo que el trabajo usa hoy: `/App/Gex/Analysis` (el GEX global de la estrategia), put
+  skew, el runtime SHADOW (`App/Runtime/*`: specs, instancias, evaluaciones, eventos), cuenta.
+- Algunas descripciones podrían estar desactualizadas (dicen "Black-Scholes" y "expiración regular
+  más cercana" donde el GEX de la estrategia es global con griegas de DXLink): verificar.
+- Autenticación (ApiKey o JWT), solo lectura por defecto, y cómo se registra en el host.
+- Relación con GaleCore-AI: las capabilities de GaleCore-AI (procedencia, frescura, validación) vs un
+  acceso directo del host por MCP. v5 §6 ya distingue REST y MCP; hay que decidir qué va por cada uno
+  para no tener dos caminos a los mismos datos con garantías distintas.
+
+**Pregunta para el owner:** ¿el MCP de GaleCore pasa a ser la forma principal en que el host lee
+datos, con GaleCore-AI validando lo que se afirma? Se decide al contrastar con el plan (no entra en I2).
+
+**Relación:** `BL-006` (tools externas y confianza), v5 §6.
+
