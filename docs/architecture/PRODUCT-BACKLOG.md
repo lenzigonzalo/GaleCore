@@ -1514,7 +1514,13 @@ cambio transversal y necesita verificar que ningún consumidor dependa del forma
 
 ## BL-014 — Cobertura del OI en el GEX (¿falta o es cero?)
 
-**Estado:** `CAPTURED` (decisión del owner en GC-0002, 2026-09-24)
+**Estado:** `DIAGNOSED` (24/09, mismo día). Dos causas: (1) **bug**: la ventana de 2 días de candles
+dejaba sin OI a strikes sin operaciones recientes (call 515 OI 97 → 0); fix listo en GaleCore
+`fix/gex-oi-lookback`, Codex APPROVE, PR a la espera del owner (GC-0003); (2) **no bug**: strikes de $1
+recién listados y calls muy dentro del dinero con OI 0 real (verificado contra IBKR). Pendiente: medir el
+impacto en el GEX global sobre la misma foto del mercado. Captura original abajo.
+
+**Estado original:** `CAPTURED` (decisión del owner en GC-0002, 2026-09-24)
 
 **Origen:** Codex C2 de GC-0002 pidió exigir cobertura de OI por lado en el net GEX del gate. Con los
 contadores nuevos de `GammaExposureResponse` (`CallOiRequested/Received`, `PutOiRequested/Received`),
