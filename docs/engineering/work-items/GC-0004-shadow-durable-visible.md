@@ -92,16 +92,16 @@ una pestaña del monitor con login real.
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 | `dev/galecore_dev.py`; proyecto GaleCore Dev (`ecymbgpimqbtcvqyjtaq`, org propia, plan Free, Postgres 17); roles `galecore_ddl`/`galecore_api`; cadena completa de migraciones | — | `galecore_dev.py migrate` (6 migraciones aplicadas; `Down` de `AddShadowRuntime` probado) | **En vivo (24/09):** tablas de dueño `galecore_ddl`, la API sólo DML, `anon`/`authenticated` sin acceso |
-| AC-02 | `ShadowRuntimeStore`, `EfShadowRuntimeRepository` (posición + evento en una transacción; specs antes de registrarse; `seq` para el orden) | `ShadowRuntimePersistenceTests`; Postgres: `OpenedPosition_AndItsEvent_…`, `SavingTwice_…` | — | Tests y Postgres: sí |
-| AC-03 | Interruptor `Runtime:Persistence:Enabled` (apagado en `appsettings.json`), 503 en Deploy/Metrics | `ShadowMetricsTests` (PersistenceOff_…, PersistenceIsOffByDefault_…) | — | Tests: sí. En vivo: Status con persistencia disponible sólo con el interruptor prendido |
-| AC-04 | Recuperación, `SpecFor` por hash, `DeployOrGetRunning`, índice `ix_strategy_instances_single_running` | Tests con repositorio falso; Postgres: `SavedRecords_ComeBackAfterRestart…`, `TwoProcesses_…` | `docs/evidence/gc-0004/run0-fuera-de-sesion.json` | Postgres: sí. **En vivo:** reinicio con la misma instancia, nada perdido ni duplicado; INCOMPLETE por falta de evaluaciones/posiciones (fuera de sesión) |
-| AC-05 | `ShadowMetrics`, `LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; Postgres: `MetricsInputs_…` | — | Tests y Postgres: sí. En vivo con datos: pendiente (sesión) |
+| AC-01 | `dev/galecore_dev.py` (sólo corre contra `ecymbgpimqbtcvqyjtaq`; producción rechazada); proyecto GaleCore Dev (org propia, plan Free, Postgres 17); roles `galecore_ddl`/`galecore_api`; cadena completa de migraciones | — | `env1.json` (migraciones aplicadas, árbol limpio `23233b1`); `env1-roles-grants.json` (**declarado por el host**, consulta MCP) | En vivo: sí (ver artefactos) |
+| AC-02 | `ShadowRuntimeStore`, `EfShadowRuntimeRepository` (posición + evento en una transacción; specs antes de registrarse; `seq` para el orden) | `ShadowRuntimePersistenceTests`; Postgres: `OpenedPosition_AndItsEvent_…`, `SavingTwice_…` | `env1-dotnet-test.txt` | Tests y Postgres: sí |
+| AC-03 | Interruptor `Runtime:Persistence:Enabled` (apagado en `appsettings.json`), 503 en Deploy/Metrics | `ShadowMetricsTests` (PersistenceOff_…, PersistenceIsOffByDefault_…) | `env1.json` (Status con el interruptor prendido) | Tests: sí. En vivo: el caso prendido; el apagado sólo en tests |
+| AC-04 | Recuperación, `SpecFor` por hash, `DeployOrGetRunning`, índice `ix_strategy_instances_single_running` | Tests con repositorio falso; Postgres: `SavedRecords_ComeBackAfterRestart…`, `TwoProcesses_…` | `run0b-fuera-de-sesion.json` (árbol limpio `f29355b`) | Postgres: sí. En vivo: la instancia sobrevive el reinicio sin perder ni duplicar; **INCOMPLETE** (fuera de sesión: sin evaluaciones ni posiciones) |
+| AC-05 | `ShadowMetrics`, `LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; Postgres: `MetricsInputs_…` | `env1.json` (Metrics sin operaciones: valores `null`, `noTrades`) | Tests y Postgres: sí. En vivo con evaluaciones: pendiente (sesión) |
 | AC-06 | `pages/Shadow.tsx`, `api/shadow.ts`, `types/shadow.ts` | `Shadow.test.tsx` 6/6; `tsc --noEmit` | — | Tests: sí. En el navegador: pendiente |
-| AC-07 | Mismo flujo que producción contra Auth de GaleCore Dev (ES256 por JWKS, igual que producción); usuario `demo` (admin) con su fila en `users` | — | smoke del 24/09 (abajo) | **En vivo:** login 200, `/Me` = demo/admin, sin token 401 |
-| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run0-fuera-de-sesion.json` (INCOMPLETE) | Pendiente: corrida en sesión y recorrido del owner |
-| AC-09 | — | `dotnet test` **432/432, 0 skipped** con `GALECORE_TEST_DB` (base 401); jest 6/6 | — | Sí |
-| AC-10 | — | Interno R1 y Codex C1 CHANGES_REQUESTED → corregidos | `docs/engineering/reviews/GC-0004-20260924T215421Z.md` | Recheck de Codex pendiente |
+| AC-07 | Mismo flujo que producción contra Auth de GaleCore Dev (ES256 por JWKS, igual que producción); usuario `demo` (admin) con su fila en `users` | — | `env1.json` (`api_smoke`) | En vivo: login 200, `/Me` = demo/admin, sin token 401. Login en el navegador: pendiente (recorrido del owner) |
+| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run0b-fuera-de-sesion.json` (INCOMPLETE) | Pendiente: corrida en sesión y recorrido del owner |
+| AC-09 | — | `dotnet test` **432/432, 0 skipped** con `GALECORE_TEST_DB` (base 401); jest 6/6 | `env1-dotnet-test.txt` | Sí |
+| AC-10 | — | Interno R1, Codex C1 y recheck C2 CHANGES_REQUESTED → corregidos | `GC-0004-20260924T215421Z.md`, `GC-0004-20260924T225600Z.md` | Recheck C3 de Codex pendiente |
 
 ## Hallazgos de probar contra la base real (24/09)
 
@@ -147,6 +147,16 @@ Reprodujo 430/3 skipped (vstest; NuGet bloqueado en su sandbox), jest 6/6, tsc, 
 | C1-m1 | MINOR | Drawdown dependía del orden con salidas simultáneas | Las salidas del mismo instante son un paso (test `SimultaneousExits_…`) |
 | C1-m2 | MINOR | Roadmap con referencias viejas a `pcs_spy_shadow_v1` | Corregido |
 
+## Recheck Codex C2 (`GC-0004-20260924T225600Z.md`, `392934b..c81d6cb`) — CHANGES_REQUESTED
+
+C1-M1, M2, M3, M5, m1 y m2: resueltos; C1-M4: decisión del owner. Hallazgos nuevos:
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| C2-B1 | BLOCKER | `galecore_dev.py init` aceptaba cualquier URL: por error se podía migrar o persistir SHADOW en producción | El script sólo corre contra `ecymbgpimqbtcvqyjtaq` (GaleCore Dev); el ref de producción se rechaza explícitamente; se revalida en cada comando (probado: producción y otro proyecto → exit 1) |
+| C2-M1 | MAJOR | La matriz afirmaba verificaciones en vivo (roles, permisos, `/Me`, 401) sin artefacto | `dev_env_evidence.py` → `env1.json` + `env1-dotnet-test.txt` desde árbol limpio; roles y permisos en `env1-roles-grants.json`, marcados como declarados por el host |
+| C2-M2 | MAJOR | `run0` corrido con árbol sucio y etiquetado "Supabase local en Docker" | Retirado; `run0b` desde árbol limpio con el entorno correcto (proyecto, auth, rol) |
+
 ## Paso a producción (plan; no se ejecuta sin aprobación del owner)
 
 Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
@@ -182,7 +192,7 @@ Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
 - Las contraseñas de los roles de desarrollo y del usuario `demo` las genera el script y quedan en
   `dev/.local/env.json` (fuera de git); son de un proyecto con datos de prueba. El usuario `demo` se
   creó por SQL en `auth.users`/`auth.identities` de GaleCore Dev (el MCP no tiene alta de usuarios).
-- La instancia de la corrida `run0` quedó RUNNING en GaleCore Dev: la próxima corrida la retoma.
+- La instancia desplegada en las corridas fuera de sesión quedó RUNNING en GaleCore Dev (switch OFF): la próxima corrida la retoma.
 
 ## Implementer handoff
 
