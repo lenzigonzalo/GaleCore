@@ -152,13 +152,21 @@ public class ShadowRiskValidatorTests
     {
         var result = ShadowRiskValidator.Validate(QuotedAt(Now.AddSeconds(-151)), TestSpec(), 0, null, Now);
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("too old"));
+        Assert.Contains(result.Errors, e => e.Contains("dato viejo"));
     }
 
     [Fact]
     public void FreshQuote_Passes()
     {
         Assert.True(ShadowRiskValidator.Validate(QuotedAt(Now.AddSeconds(-20)), TestSpec(), 0, null, Now).IsValid);
+    }
+
+    [Fact]
+    public void FutureQuoteTime_Rejected()
+    {
+        var result = ShadowRiskValidator.Validate(QuotedAt(Now.AddMinutes(2)), TestSpec(), 0, null, Now);
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("futuro"));
     }
 
     [Fact]

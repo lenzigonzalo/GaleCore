@@ -63,12 +63,11 @@ namespace DataFeed.Application.App.Runtime
             // runtime armó el snapshot: esa siempre es "ahora" y el chequeo nunca fallaría (GC-0002,
             // R1-M1). Si el proveedor no informa la hora, la edad es desconocida y no se puede medir;
             // lo que evita operar con precios viejos en ese caso es no simular fills fuera de sesión.
-            if (spec.DataQuality.MaxQuoteAgeSeconds > 0 && candidate.Snapshot.OldestQuoteAt is DateTime quotedAt)
-            {
-                var age = ((nowUtc ?? DateTime.UtcNow) - quotedAt).TotalSeconds;
-                if (age > spec.DataQuality.MaxQuoteAgeSeconds * 10) // 10x para SHADOW (más permisivo)
-                    errors.Add($"Market snapshot too old ({age:F0}s, limit {spec.DataQuality.MaxQuoteAgeSeconds * 10}s)");
-            }
+            // El constructor ya rechaza cada pata vieja o con hora futura; esto es la segunda barrera.
+            var freshness = DataFreshness.Problem(
+                candidate.Snapshot.OldestQuoteAt, nowUtc ?? DateTime.UtcNow, DataFreshness.MaxAge(spec));
+            if (freshness != null)
+                errors.Add($"Market snapshot not fresh: {freshness}");
 
             return new RiskValidationResult(errors.Count == 0, errors);
         }

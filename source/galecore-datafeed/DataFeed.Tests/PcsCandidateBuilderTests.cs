@@ -118,11 +118,64 @@ public class PcsCandidateBuilderTests
     public async Task QuoteWithoutProviderTime_AgeIsUnknown_NotNow()
     {
         var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
         source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, null);
 
         var result = await Build(source);
 
         Assert.Null(result.Candidate!.Snapshot.OldestQuoteAt);
+        Assert.Equal(2, result.Candidate.Snapshot.QuotesWithoutTime);
+    }
+
+    [Fact]
+    public async Task StaleLeg_NoCandidate_EvenIfTheOtherHasNoTime()
+    {
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddMinutes(-10));
+
+        var result = await Build(source);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("dato viejo", result.RejectReason);
+    }
+
+    [Fact]
+    public async Task FutureLegTime_NoCandidate()
+    {
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now.AddMinutes(5));
+
+        var result = await Build(source);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("futuro", result.RejectReason);
+    }
+
+    [Fact]
+    public async Task OneLegWithoutTime_OldestIsTheKnownOne_AndItIsCounted()
+    {
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
+
+        var result = await Build(source);
+
+        Assert.Equal(Now.AddSeconds(-8), result.Candidate!.Snapshot.OldestQuoteAt);
+        Assert.Equal(1, result.Candidate.Snapshot.QuotesWithoutTime);
+    }
+
+    [Fact]
+    public async Task InfiniteQuote_NeverReachesTheCandidate()
+    {
+        // La fuente real filtra con QuoteRules; acá se simula una que no, para probar la segunda barrera.
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(double.PositiveInfinity, double.PositiveInfinity, Now);
+        source.Quotes[".SPY261103P715"] = new LegQuote(double.PositiveInfinity, double.PositiveInfinity, Now);
+
+        var result = await Build(source);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("no finito", result.RejectReason);
     }
 
     [Fact]

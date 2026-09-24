@@ -53,7 +53,7 @@ public class ShadowRuntimeTickTests
         var (store, _) = RuntimeWithSpec();
         var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
 
-        var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: true, Now, default);
+        var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
 
         Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, outcomes["SPY"]);
         Assert.Equal(ShadowRuntimeTick.SchedulerStates.Idle, store.GetInstance("i-1")!.SchedulerState);
@@ -66,7 +66,7 @@ public class ShadowRuntimeTickTests
         var (store, _) = RuntimeWithSpec();
         var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
 
-        var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: true, when, default);
+        var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, when, default);
 
         Assert.Empty(outcomes);
         Assert.Equal(0, data.BuildCalls);
@@ -84,13 +84,13 @@ public class ShadowRuntimeTickTests
     {
         var (store, _) = RuntimeWithSpec();
         var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
-        await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: true, Now, default);
+        await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
         var pos = Assert.Single(store.AllPositions());
         int eventsBefore = store.GetEvents("i-1").Count;
         int evaluationsBefore = store.GetEvaluations("i-1").Count;
 
         // Switch OFF, en sesión: el tick de entrada no evalúa ni abre, y la instancia muestra la pausa.
-        var entry = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: false, Now.AddMinutes(1), default);
+        var entry = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => false, Now.AddMinutes(1), default);
         Assert.Empty(entry);
         Assert.Equal(1, data.BuildCalls);
         Assert.Equal(ShadowRuntimeTick.SchedulerStates.Paused, store.GetInstance("i-1")!.SchedulerState);
@@ -116,10 +116,10 @@ public class ShadowRuntimeTickTests
     {
         var (store, _) = RuntimeWithSpec();
         var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
-        await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: true, Now, default);
+        await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
         var pos = store.AllPositions().Single();
-        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now);   // take profit si se evaluara
-        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Night);   // take profit si se evaluara
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Night);
 
         var monitor = await ShadowRuntimeTick.RunMonitorTickAsync(store, data, Night, default);
 
@@ -147,11 +147,20 @@ public class ShadowRuntimeTickTests
 /// <summary>GC-0002 R1-B1 — un net GEX sin datos reales es NO_DATA, no 0.</summary>
 public class MetricResolverNetGexTests
 {
-    private static GammaExposureResponse WithStrikes(int greeks, long oi) => new()
+    private static GammaExposureResponse WithStrikes(int greeks, long oi, int requested = 2, long? putOi = null) => new()
     {
+        SymbolsRequested = requested,
         SymbolsWithGreeks = greeks,
-        Strikes = new() { new() { Strike = 700, CallOI = oi, PutOI = oi, CallGEX = 5000, PutGEX = -2000 } },
+        Strikes = new() { new() { Strike = 700, CallOI = oi, PutOI = putOi ?? oi, CallGEX = 5000, PutGEX = -2000 } },
     };
+
+    [Fact]
+    public void PartialCoverage_OrOneSidedOi_IsNoData()
+    {
+        Assert.Null(MetricResolver.UsableNetGex(WithStrikes(greeks: 441, oi: 10, requested: 442)));
+        Assert.Null(MetricResolver.UsableNetGex(WithStrikes(greeks: 2, oi: 10, requested: 0)));
+        Assert.Null(MetricResolver.UsableNetGex(WithStrikes(greeks: 2, oi: 10, putOi: 0)));   // sólo calls
+    }
 
     [Fact]
     public void NoResponse_NoStrikes_NoGreeks_NoOi_AreNoData()
@@ -194,18 +203,32 @@ public class MetricResolverQuoteTests
 /// <summary>GC-0002 AC-08 — VIX sale del último trade (DXLink publica el Quote del índice sin bid/ask).</summary>
 public class MetricResolverTradeTests
 {
+    // 2026-09-24T17:05:46.314Z, un trade real de VIX de la corrida en vivo.
+    private const long TradeTime = 1790269546314;
+    private static readonly DateTime At = DateTimeOffset.FromUnixTimeMilliseconds(TradeTime).UtcDateTime;
+    private static readonly TimeSpan Max = TimeSpan.FromSeconds(150);
+
     [Fact]
     public void TradeWithoutTimeOrPrice_IsNoData()
     {
-        Assert.Null(MetricResolver.UsableTradePrice(null));
-        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = 15.42, Time = 0 }));
-        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = double.NaN, Time = 1790269546314 }));
-        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = 0, Time = 1790269546314 }));
+        Assert.Null(MetricResolver.UsableTradePrice(null, At, Max));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = 15.42, Time = 0 }, At, Max));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = double.NaN, Time = TradeTime }, At, Max));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = double.PositiveInfinity, Time = TradeTime }, At, Max));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = 0, Time = TradeTime }, At, Max));
+    }
+
+    [Fact]
+    public void StaleOrFutureTrade_IsNoData()
+    {
+        var trade = new TradeEvent { Price = 15.42, Time = TradeTime };
+        Assert.Null(MetricResolver.UsableTradePrice(trade, At.AddSeconds(151), Max));   // viejo: un VIX de ayer no pasa
+        Assert.Null(MetricResolver.UsableTradePrice(trade, At.AddSeconds(-30), Max));   // hora en el futuro
     }
 
     [Fact]
     public void RealTrade_IsThePrice()
     {
-        Assert.Equal(15.42, MetricResolver.UsableTradePrice(new TradeEvent { Price = 15.42, Time = 1790269546314 }));
+        Assert.Equal(15.42, MetricResolver.UsableTradePrice(new TradeEvent { Price = 15.42, Time = TradeTime }, At.AddSeconds(20), Max));
     }
 }

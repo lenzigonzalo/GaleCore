@@ -23,7 +23,8 @@ public class ShadowRuntimeEngineTests
         public int BuildCalls;
         public Dictionary<string, LegQuote?> Quotes = new();
 
-        public Task<Dictionary<string, double?>> ResolveMetricsAsync(IEnumerable<string> metricRefs, CancellationToken ct)
+        public Task<Dictionary<string, double?>> ResolveMetricsAsync(
+            IEnumerable<string> metricRefs, DateTime nowUtc, TimeSpan? maxAge, CancellationToken ct)
         {
             if (ThrowOnMetrics) throw new InvalidOperationException("proveedor caído");
             return Task.FromResult(metricRefs.ToDictionary(r => r, r => Metrics.GetValueOrDefault(r)));
@@ -341,6 +342,57 @@ public class ShadowRuntimeEngineTests
         var same = store.GetPosition(pos.PositionId)!;
         Assert.Equal("OPEN", same.Status);
         Assert.Equal(0.3, same.LastSpreadValue);
+    }
+
+    [Fact]
+    public async Task Valuation_StaleLegQuote_IsNoData_AndNeverCloses()
+    {
+        var (store, pos, data) = await OpenPosition();
+        // Precios que dispararían take profit, pero una pata cotiza hace 10 minutos.
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now.AddMinutes(-10));
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(
+            store, data, pos, Spec().Exits.Deterministic, Now, default, maxQuoteAge: DataFreshness.MaxAge(Spec()));
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoData, outcome);
+        var same = store.GetPosition(pos.PositionId)!;
+        Assert.Equal("OPEN", same.Status);
+        Assert.Contains(same.ValuationProblems!, p => p.Contains("dato viejo"));
+    }
+
+    [Fact]
+    public async Task Entry_SwitchTurnedOffWhileBuilding_NoPosition()
+    {
+        var (store, instance) = NewRuntime();
+        bool enabled = true;
+        var data = new FakeData { Build = () => { enabled = false; return CandidateBuildResult.Built(RealCandidate()); } };
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(
+            store, data, instance, Spec(), "SPY", Now, default, canOpen: () => enabled);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Paused, outcome);
+        Assert.Empty(store.AllPositions());
+        Assert.Contains("ENTRY_ABORTED", EventTypes(store));
+    }
+
+    [Fact]
+    public void QuoteRules_RejectNonFinite()
+    {
+        Assert.False(QuoteRules.IsUsable(1.0, double.PositiveInfinity));
+        Assert.False(QuoteRules.IsUsable(double.PositiveInfinity, double.PositiveInfinity));
+        Assert.False(QuoteRules.IsUsable(double.NaN, 1.0));
+        Assert.True(QuoteRules.IsUsable(0, 0.05));
+    }
+
+    [Fact]
+    public void Freshness_StaleFutureUnknown()
+    {
+        var max = TimeSpan.FromSeconds(150);
+        Assert.Null(DataFreshness.Problem(Now.AddSeconds(-149), Now, max));
+        Assert.Contains("viejo", DataFreshness.Problem(Now.AddSeconds(-151), Now, max));
+        Assert.Contains("futuro", DataFreshness.Problem(Now.AddSeconds(30), Now, max));
+        Assert.Null(DataFreshness.Problem(null, Now, max));   // desconocida: limitación declarada
     }
 
     [Fact]

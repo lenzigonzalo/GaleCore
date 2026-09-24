@@ -49,7 +49,7 @@ namespace DataFeed.Api.Infrastructure
                     var (enabled, source) = _switch.Resolve();
 
                     // Con el switch OFF el tick sólo deja la instancia en PAUSED; no toca lo registrado.
-                    await TickAsync(enabled, stoppingToken);
+                    await TickAsync(stoppingToken);
                     if (!enabled && !_inertLogged)
                     {
                         _logger.LogInformation(
@@ -75,11 +75,12 @@ namespace DataFeed.Api.Infrastructure
             }
         }
 
-        private async Task TickAsync(bool switchEnabled, CancellationToken ct)
+        private async Task TickAsync(CancellationToken ct)
         {
             using var scope = _scopeFactory.CreateScope();
             var data = new MediatorRuntimeMarketData(scope.ServiceProvider.GetRequiredService<IMediator>(), _logger);
-            var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(_store, data, switchEnabled, DateTime.UtcNow, ct);
+            var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(
+                _store, data, () => _switch.Resolve().Enabled, DateTime.UtcNow, ct);
             foreach (var (symbol, outcome) in outcomes)
                 _logger.LogDebug("ShadowEntryLoop: {Symbol} → {Outcome}", symbol, outcome);
         }

@@ -157,23 +157,37 @@ namespace DataFeed.Application.App.Runtime
             if (longQuote == null)
                 return Rejected($"sin cotización utilizable para la pata comprada {longSymbol}");
 
+            // Frescura por pata: una pata vieja o con hora futura descarta el candidato aunque la otra
+            // no tenga hora (Codex C1). Sin hora, la edad no se puede medir (ver DataFreshness).
+            var maxAge = DataFreshness.MaxAge(spec);
+            foreach (var (legName, legSymbol, quote) in new[] { ("vendida", shortSymbol, shortQuote), ("comprada", longSymbol, longQuote) })
+            {
+                var problem = DataFreshness.Problem(quote.AsOf, nowUtc, maxAge);
+                if (problem != null)
+                    return Rejected($"cotización de la pata {legName} {legSymbol} no utilizable: {problem}");
+            }
+
             // Credit = short mid - long mid
             double credit = Math.Round(shortQuote.Mid - longQuote.Mid, 2);
+            if (!double.IsFinite(credit))
+                return Rejected($"crédito no finito ({credit})");
 
             if (credit < minCredit)
                 return Rejected($"crédito {credit} menor al mínimo {minCredit}");
 
             double actualWidth = shortPutStrike.Strike - longPutStrike.Strike;
             double maxRisk = Math.Round((actualWidth - credit) * 100, 2);
+            if (!double.IsFinite(maxRisk))
+                return Rejected($"riesgo máximo no finito ({maxRisk})");
 
             // ── 6. Construir OCC symbols ──
             string shortOcc = CascadeUtils.BuildOccSymbol(symbol, expirationDate, shortPutStrike.Strike, 'P');
             string longOcc = CascadeUtils.BuildOccSymbol(symbol, expirationDate, longPutStrike.Strike, 'P');
 
-            // Frescura: la hora del proveedor si la informa en las dos patas; si no, desconocida (null).
-            DateTime? oldestQuoteAt = shortQuote.AsOf is DateTime s && longQuote.AsOf is DateTime l
-                ? (s < l ? s : l)
-                : null;
+            // La hora más vieja entre las patas que la informan; las que no, se cuentan aparte.
+            var knownTimes = new[] { shortQuote.AsOf, longQuote.AsOf }.Where(t => t.HasValue).Select(t => t!.Value).ToList();
+            DateTime? oldestQuoteAt = knownTimes.Count > 0 ? knownTimes.Min() : null;
+            int quotesWithoutTime = 2 - knownTimes.Count;
 
             // ── 7. Armar TradeCandidate ──
             return CandidateBuildResult.Built(new TradeCandidate
@@ -220,6 +234,7 @@ namespace DataFeed.Application.App.Runtime
                     Vix = vixPrice,
                     AsOf = nowUtc,
                     OldestQuoteAt = oldestQuoteAt,
+                    QuotesWithoutTime = quotesWithoutTime,
                 },
                 CreatedAt = nowUtc
             });

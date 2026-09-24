@@ -26,13 +26,18 @@ namespace DataFeed.Application.App.Runtime
             public const string NoData = "NO_DATA";
             public const string Valued = "VALUED";
             public const string Closed = "CLOSED";
+            public const string Paused = "PAUSED";
         }
 
         // ── Entrada ──────────────────────────────────────────────────
 
+        /// <param name="canOpen">
+        /// Se consulta justo antes de registrar la posición: si el switch se apagó mientras se pedían
+        /// datos, no se abre (Codex C1). null = siempre se puede.
+        /// </param>
         public static async Task<string> EvaluateEntryAsync(
             ShadowRuntimeStore store, IRuntimeMarketData data, StrategyInstance instance, StrategySpec spec,
-            string symbol, DateTime nowUtc, CancellationToken ct)
+            string symbol, DateTime nowUtc, CancellationToken ct, Func<bool>? canOpen = null)
         {
             var gates = spec.EntryFilters.GateLayer.Gates;
             var metricRefs = gates.Select(g => g.MetricRef).Distinct().ToList();
@@ -41,7 +46,7 @@ namespace DataFeed.Application.App.Runtime
             Dictionary<string, double?> metrics;
             try
             {
-                metrics = await data.ResolveMetricsAsync(metricRefs, ct);
+                metrics = await data.ResolveMetricsAsync(metricRefs, nowUtc, DataFreshness.MaxAge(spec), ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -104,6 +109,7 @@ namespace DataFeed.Application.App.Runtime
                 ("candidate_id", candidate.CandidateId), ("credit", candidate.Credit), ("max_risk", candidate.MaxRisk),
                 ("delta_short", candidate.DeltaShort), ("dte", candidate.Dte),
                 ("quotes_as_of", candidate.Snapshot.OldestQuoteAt?.ToString("o") ?? "desconocida (el proveedor no informa la hora)"),
+                ("quotes_without_time", candidate.Snapshot.QuotesWithoutTime),
                 ("legs", candidate.Legs.Select(l => $"{l.Side} {l.Type} {l.Strike} {l.Expiration} bid={l.Bid} ask={l.Ask}").ToList()));
 
             // 5. Riesgo duro.
@@ -125,6 +131,12 @@ namespace DataFeed.Application.App.Runtime
                 AddEvent(store, instance, "CANDIDATE_NOT_VIABLE", symbol, nowUtc, ("reason", ex.Message));
                 return Outcomes.NoCandidate;
             }
+            if (canOpen != null && !canOpen())
+            {
+                AddEvent(store, instance, "ENTRY_ABORTED", symbol, nowUtc,
+                    ("reason", "el switch se apagó mientras se evaluaba la entrada"), ("candidate_id", candidate.CandidateId));
+                return Outcomes.Paused;
+            }
             store.AddPosition(position);
             AddEvent(store, instance, "POSITION_OPENED", symbol, nowUtc,
                 ("position_id", position.PositionId), ("credit", position.EntryCredit),
@@ -143,7 +155,7 @@ namespace DataFeed.Application.App.Runtime
         /// </summary>
         public static async Task<string> ValuePositionAsync(
             ShadowRuntimeStore store, IRuntimeMarketData data, ShadowPosition pos, DeterministicExits exits,
-            DateTime nowUtc, CancellationToken ct, bool evaluateExits = true)
+            DateTime nowUtc, CancellationToken ct, bool evaluateExits = true, TimeSpan? maxQuoteAge = null)
         {
             var problems = new List<string>();
             double spreadValue = 0;
@@ -162,6 +174,13 @@ namespace DataFeed.Application.App.Runtime
                     problems.Add($"{leg.StreamerSymbol}: sin cotización utilizable");
                     continue;
                 }
+                // Una cotización vieja no puede disparar un take profit ni un stop (Codex C1).
+                var stale = DataFreshness.Problem(quote.AsOf, nowUtc, maxQuoteAge);
+                if (stale != null)
+                {
+                    problems.Add($"{leg.StreamerSymbol}: {stale}");
+                    continue;
+                }
                 // Débito para cerrar: recomprar lo vendido (+mid) y vender lo comprado (−mid).
                 if (leg.Side == "SELL") spreadValue += quote.Mid;
                 else if (leg.Side == "BUY") spreadValue -= quote.Mid;
@@ -170,6 +189,7 @@ namespace DataFeed.Application.App.Runtime
 
             int? dte = CurrentDte(pos, nowUtc);
             if (dte == null) problems.Add("sin fecha de vencimiento en las patas");
+            if (problems.Count == 0 && !double.IsFinite(spreadValue)) problems.Add($"valor del spread no finito ({spreadValue})");
 
             if (problems.Count > 0)
             {

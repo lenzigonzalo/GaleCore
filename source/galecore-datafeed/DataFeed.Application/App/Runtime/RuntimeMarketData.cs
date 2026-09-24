@@ -47,8 +47,12 @@ namespace DataFeed.Application.App.Runtime
     /// </summary>
     public interface IRuntimeMarketData
     {
-        /// <summary>metric_ref → valor real, o null si no hay dato.</summary>
-        Task<Dictionary<string, double?>> ResolveMetricsAsync(IEnumerable<string> metricRefs, CancellationToken ct);
+        /// <summary>
+        /// metric_ref → valor real, o null si no hay dato. Un dato con hora vieja o futura respecto de
+        /// <paramref name="nowUtc"/> (tolerancia <paramref name="maxAge"/>) también es null.
+        /// </summary>
+        Task<Dictionary<string, double?>> ResolveMetricsAsync(
+            IEnumerable<string> metricRefs, DateTime nowUtc, TimeSpan? maxAge, CancellationToken ct);
 
         Task<CandidateBuildResult> BuildCandidateAsync(
             StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, DateTime nowUtc,
@@ -61,11 +65,44 @@ namespace DataFeed.Application.App.Runtime
     public static class QuoteRules
     {
         /// <summary>
-        /// Una cotización sirve si tiene ask positivo, bid no negativo y no está cruzada.
-        /// Un bid 0 es real (una put muy fuera del dinero puede no tener comprador); un ask 0 no.
+        /// Una cotización sirve si bid y ask son finitos, el ask es positivo, el bid no negativo y no
+        /// está cruzada. Un bid 0 es real (una put muy fuera del dinero puede no tener comprador); un
+        /// ask 0 no. Infinito tampoco: dos mids infinitos dan un crédito NaN que ninguna comparación
+        /// rechaza (Codex C1).
         /// </summary>
         public static bool IsUsable(double bid, double ask) =>
-            !double.IsNaN(bid) && !double.IsNaN(ask) && ask > 0 && bid >= 0 && ask >= bid;
+            double.IsFinite(bid) && double.IsFinite(ask) && ask > 0 && bid >= 0 && ask >= bid;
+    }
+
+    /// <summary>
+    /// Frescura de un dato con hora del proveedor. SHADOW tolera 10 veces
+    /// data_quality.max_quote_age_seconds (con 15 s en la spec: 150 s).
+    ///
+    /// Una hora desconocida (null) no se puede medir y hoy se acepta: DXLink manda el Quote con
+    /// EventTime 0 (verificado en vivo el 24/09), así que exigir hora dejaría al runtime sin poder
+    /// cotizar ninguna pata. Es una limitación declarada del item; la protección que queda es no
+    /// simular fills ni cierres fuera de sesión.
+    /// </summary>
+    public static class DataFreshness
+    {
+        public const int ShadowAgeFactor = 10;
+        /// <summary>Diferencia de relojes tolerada antes de declarar una hora "en el futuro".</summary>
+        public static readonly TimeSpan ClockSkew = TimeSpan.FromSeconds(5);
+
+        public static TimeSpan? MaxAge(StrategySpec spec) =>
+            spec.DataQuality.MaxQuoteAgeSeconds > 0
+                ? TimeSpan.FromSeconds(spec.DataQuality.MaxQuoteAgeSeconds * ShadowAgeFactor)
+                : null;
+
+        /// <summary>null si el dato sirve; si no, por qué (viejo o con hora en el futuro).</summary>
+        public static string? Problem(DateTime? asOf, DateTime nowUtc, TimeSpan? maxAge)
+        {
+            if (asOf is not DateTime t) return null;
+            if (t > nowUtc + ClockSkew) return $"hora en el futuro ({t:o})";
+            if (maxAge is TimeSpan max && nowUtc - t > max)
+                return $"dato viejo ({(nowUtc - t).TotalSeconds:F0}s, límite {max.TotalSeconds:F0}s)";
+            return null;
+        }
     }
 
     /// <summary>
@@ -82,8 +119,9 @@ namespace DataFeed.Application.App.Runtime
             _logger = logger;
         }
 
-        public Task<Dictionary<string, double?>> ResolveMetricsAsync(IEnumerable<string> metricRefs, CancellationToken ct)
-            => new MetricResolver(_mediator, _logger).ResolveAsync(metricRefs, ct);
+        public Task<Dictionary<string, double?>> ResolveMetricsAsync(
+            IEnumerable<string> metricRefs, DateTime nowUtc, TimeSpan? maxAge, CancellationToken ct)
+            => new MetricResolver(_mediator, _logger).ResolveAsync(metricRefs, ct, nowUtc, maxAge);
 
         public Task<CandidateBuildResult> BuildCandidateAsync(
             StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, DateTime nowUtc,

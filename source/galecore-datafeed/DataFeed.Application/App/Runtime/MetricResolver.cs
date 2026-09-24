@@ -21,6 +21,8 @@ namespace DataFeed.Application.App.Runtime
     {
         private readonly IMediator _mediator;
         private readonly ILogger _logger;
+        private DateTime _nowUtc = DateTime.UtcNow;
+        private TimeSpan? _maxAge;
 
         public MetricResolver(IMediator mediator, ILogger logger)
         {
@@ -33,8 +35,10 @@ namespace DataFeed.Application.App.Runtime
         /// Las keys del resultado son los metric_ref originales; null = sin dato.
         /// </summary>
         public async Task<Dictionary<string, double?>> ResolveAsync(
-            IEnumerable<string> metricRefs, CancellationToken ct = default)
+            IEnumerable<string> metricRefs, CancellationToken ct = default, DateTime? nowUtc = null, TimeSpan? maxAge = null)
         {
+            _nowUtc = nowUtc ?? DateTime.UtcNow;
+            _maxAge = maxAge;
             var result = new Dictionary<string, double?>();
 
             foreach (var metricRef in metricRefs.Distinct())
@@ -75,7 +79,7 @@ namespace DataFeed.Application.App.Runtime
             if (parts.Length == 4 && parts[0] == "market_data" && parts[1] == "trade" && parts[3] == "price")
             {
                 var trade = await _mediator.Send(new MarketDataTradeRequest { Symbol = parts[2] }, ct);
-                return UsableTradePrice(trade?.Data?.FirstOrDefault());
+                return UsableTradePrice(trade?.Data?.FirstOrDefault(), _nowUtc, _maxAge);
             }
 
             // compute.gamma_exposure.{SYMBOL}.net_gex
@@ -123,15 +127,19 @@ namespace DataFeed.Application.App.Runtime
         }
 
         /// <summary>
-        /// El precio del último trade, o null si no hay trade, el precio no es positivo o el proveedor no
-        /// informa cuándo fue: un precio sin hora no se distingue de uno viejo. Es la fuente de VIX:
-        /// DXLink publica el Quote del índice sin bid/ask (verificado en vivo el 24/09, GC-0002 AC-08).
+        /// El precio del último trade, o null si no hay trade, el precio no es positivo y finito, el
+        /// proveedor no informa cuándo fue, o fue hace más de <paramref name="maxAge"/> (o "en el
+        /// futuro") respecto de <paramref name="nowUtc"/>: un VIX viejo debajo de 30 pasaría el gate
+        /// (Codex C1). Es la fuente de VIX: DXLink publica el Quote del índice sin bid/ask
+        /// (verificado en vivo el 24/09, GC-0002 AC-08).
         /// </summary>
-        public static double? UsableTradePrice(TradeEvent? trade)
+        public static double? UsableTradePrice(TradeEvent? trade, DateTime nowUtc, TimeSpan? maxAge)
         {
             if (trade == null || trade.Time <= 0) return null;
+            var tradedAt = DateTimeOffset.FromUnixTimeMilliseconds(trade.Time).UtcDateTime;
+            if (DataFreshness.Problem(tradedAt, nowUtc, maxAge) != null) return null;
             var price = trade.Price;
-            return double.IsNaN(price) || double.IsInfinity(price) || price <= 0 ? null : price;
+            return double.IsFinite(price) && price > 0 ? price : null;
         }
 
         private async Task<double?> ResolveNetGex(string symbol, CancellationToken ct)
@@ -150,15 +158,18 @@ namespace DataFeed.Application.App.Runtime
         }
 
         /// <summary>
-        /// El net GEX de la respuesta, o null si no se calculó con datos reales. NetGEX es una suma
-        /// sobre los strikes: sin strikes, sin símbolos con griegas o sin ningún open interest da 0,
-        /// y un 0 inventado pasa el gate "GEX >= 0" (GC-0002, R1-B1). Esos casos son NO_DATA.
+        /// El net GEX de la respuesta, o null si no se calculó con datos reales y completos. NetGEX es
+        /// una suma sobre los strikes: sin strikes, sin griegas o sin open interest da 0, y un 0
+        /// inventado pasa el gate "GEX >= 0" (R1-B1). Una cobertura parcial es igual de peligrosa: sin
+        /// las puts queda sólo el gamma de las calls, positivo (Codex C1). Se exige que todos los
+        /// símbolos pedidos hayan devuelto griegas y que haya OI de calls y de puts; en vivo el 24/09
+        /// SPY dio 442/442 en tres corridas seguidas.
         /// </summary>
         public static double? UsableNetGex(GammaExposureResponse? response)
         {
             if (response?.Strikes == null || response.Strikes.Count == 0) return null;
-            if (response.SymbolsWithGreeks <= 0) return null;
-            if (response.StrikesWithOI <= 0) return null;
+            if (response.SymbolsRequested <= 0 || response.SymbolsWithGreeks < response.SymbolsRequested) return null;
+            if (!response.Strikes.Any(s => s.CallOI > 0) || !response.Strikes.Any(s => s.PutOI > 0)) return null;
             var net = response.NetGEX;
             return double.IsNaN(net) || double.IsInfinity(net) ? null : net;
         }

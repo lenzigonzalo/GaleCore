@@ -59,15 +59,19 @@ namespace DataFeed.Application.App.Runtime
             public const string SpecNotFound = "SPEC_NOT_FOUND";
         }
 
-        /// <summary>Tick de entrada. Devuelve el outcome por símbolo evaluado (vacío si no evaluó).</summary>
+        /// <summary>
+        /// Tick de entrada. Devuelve el outcome por símbolo evaluado (vacío si no evaluó).
+        /// <paramref name="switchEnabled"/> se consulta al empezar y otra vez justo antes de cada
+        /// fill: apagar mientras se piden datos no deja abrir una posición (Codex C1).
+        /// </summary>
         public static async Task<IReadOnlyDictionary<string, string>> RunEntryTickAsync(
-            ShadowRuntimeStore store, IRuntimeMarketData data, bool switchEnabled, DateTime nowUtc, CancellationToken ct)
+            ShadowRuntimeStore store, IRuntimeMarketData data, Func<bool> switchEnabled, DateTime nowUtc, CancellationToken ct)
         {
             var outcomes = new Dictionary<string, string>();
             var instance = store.ActiveInstance();
             if (instance == null) return outcomes;
 
-            if (!switchEnabled)
+            if (!switchEnabled())
             {
                 store.UpdateInstanceState(instance.InstanceId, "RUNNING", SchedulerStates.Paused);
                 return outcomes;
@@ -93,7 +97,7 @@ namespace DataFeed.Application.App.Runtime
                 try
                 {
                     outcomes[symbol] = await ShadowRuntimeEngine.EvaluateEntryAsync(
-                        store, data, instance, spec, symbol, nowUtc, ct);
+                        store, data, instance, spec, symbol, nowUtc, ct, canOpen: switchEnabled);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
@@ -125,7 +129,8 @@ namespace DataFeed.Application.App.Runtime
                 {
                     outcomes[pos.PositionId] = await ShadowRuntimeEngine.ValuePositionAsync(
                         store, data, pos, spec.Exits.Deterministic, nowUtc, ct,
-                        evaluateExits: ShadowSession.IsOpen(spec.Operational, nowUtc));
+                        evaluateExits: ShadowSession.IsOpen(spec.Operational, nowUtc),
+                        maxQuoteAge: DataFreshness.MaxAge(spec));
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
