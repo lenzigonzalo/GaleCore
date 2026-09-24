@@ -84,7 +84,7 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 **State:** IMPLEMENTING — interno R2 APPROVE; Codex C1 CHANGES_REQUESTED con sus MAJOR corregidos
 (`07501d1`) salvo uno que decide el owner (edad de cotización desconocida, ver "Codex C1");
 `dotnet test` 398/398; AC-08 hecho en vivo salvo candidato/fill/valuación (GEX negativo todo el día).
-Siguiente: decisión del owner sobre C1-M1 y Codex `--recheck`.
+El owner aceptó la hora desconocida como limitación (C1-M1, `BL-013`). Siguiente: Codex `--recheck`.
 
 **Hash de la spec (AC-06, R1-m8)**, `StrategySpecHasher` sobre el archivo:
 - antes `pcs_spy_shadow_v1.json` (`5fa6615`): `sha256:09ad790a3d885d13ac13a6ecb1bde402345b7d9333741e4b5741a67764b1139b`
@@ -104,7 +104,8 @@ VIX < 30 no cambia. Evidencia de la corrida anterior: `docs/evidence/gc-0002/ac0
 - Si DXLink no informa la hora de la cotización (`EventTime` = 0, confirmado en vivo), la edad no
   se puede medir y el chequeo de frescura no aplica a esa pata (`QuotesWithoutTime` en el snapshot y
   en `CANDIDATE_CREATED`). La protección en ese caso es no simular fills ni cierres fuera de sesión.
-  **Pendiente de decisión del owner** (Codex C1-M1).
+  **Aceptado por el owner el 24/09** (Codex C1-M1); la mejora de fondo quedó en el backlog de
+  GaleCore-AI como `BL-013` (pedir a DXLink la hora de bid/ask).
 
 ## Internal review R1 (agente `reviewer`, 2026-09-24 ~02:00 UTC, rango `5fa6615..be3206a`) — CHANGES_REQUESTED, corregido (abajo)
 
@@ -205,7 +206,7 @@ hashes (coinciden) y comparó las corridas 2 antes/después del OFF. Corregido e
 
 | # | Hallazgo | Resolución |
 |---|---|---|
-| C1-M1 | Cotización sin hora saltea la frescura; hora futura pasa; una pata sin hora enmascaraba una vieja | **Parcial.** Hora futura rechazada (`DataFreshness`, tolerancia 5 s); cada pata se valida por separado en el builder; `OldestQuoteAt` = la más vieja entre las que tienen hora y `QuotesWithoutTime` cuenta las otras. **Rechazar la hora desconocida queda para el owner:** DXLink manda el Quote con `EventTime` 0 (confirmado en vivo), así que exigir hora hace que el runtime no pueda cotizar ninguna pata nunca. Tests `StaleLeg_NoCandidate_EvenIfTheOtherHasNoTime`, `FutureLegTime_NoCandidate`, `FutureQuoteTime_Rejected`, `Freshness_StaleFutureUnknown` |
+| C1-M1 | Cotización sin hora saltea la frescura; hora futura pasa; una pata sin hora enmascaraba una vieja | **Parcial.** Hora futura rechazada (`DataFreshness`, tolerancia 5 s); cada pata se valida por separado en el builder; `OldestQuoteAt` = la más vieja entre las que tienen hora y `QuotesWithoutTime` cuenta las otras. **Rechazar la hora desconocida: disputado, decisión del owner (24/09) de aceptarla como limitación declarada:** DXLink manda el Quote con `EventTime` 0 (confirmado en vivo), así que exigir hora hace que el runtime no pueda cotizar ninguna pata nunca. Mejora de fondo: `BL-013`. Tests `StaleLeg_NoCandidate_EvenIfTheOtherHasNoTime`, `FutureLegTime_NoCandidate`, `FutureQuoteTime_Rejected`, `Freshness_StaleFutureUnknown` |
 | C1-M2 | VIX por Trade sin chequeo de antigüedad | Trade viejo (> 150 s) o con hora futura = NO_DATA. `StaleOrFutureTrade_IsNoData` |
 | C1-M3 | La valuación no mira la hora de las cotizaciones | Pata vieja o futura → `VALUATION_NO_DATA`, sin salidas. `Valuation_StaleLegQuote_IsNoData_AndNeverCloses` |
 | C1-M4 | Net GEX con cobertura parcial | Exige griegas de todos los símbolos pedidos y OI de calls y de puts (en vivo: 442/442). `PartialCoverage_OrOneSidedOi_IsNoData`; en vivo bloqueó un barrido incompleto (corrida 4) |
