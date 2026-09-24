@@ -1512,3 +1512,23 @@ cambio transversal y necesita verificar que ningún consumidor dependa del forma
 
 **Entry gate:** GC-0002 cerrado y decisión del owner de abrirlo como work item de GaleCore.
 
+## BL-014 — Cobertura del OI en el GEX (¿falta o es cero?)
+
+**Estado:** `CAPTURED` (decisión del owner en GC-0002, 2026-09-24)
+
+**Origen:** Codex C2 de GC-0002 pidió exigir cobertura de OI por lado en el net GEX del gate. Con los
+contadores nuevos de `GammaExposureResponse` (`CallOiRequested/Received`, `PutOiRequested/Received`),
+en vivo el 24/09 ~18:00 UTC el GEX de SPY (vencimiento 2026-11-20) recibió OI para **50 de 168 calls y
+44 de 124 puts** de la banda de |delta| 0.02–0.98, igual en cuatro corridas. `TryParseValidOpenInterest`
+descarta el OI ≤ 0, así que no se distingue un OI cero real de un candle que no llegó. El owner eligió
+mantener en el gate la regla mínima (griegas completas + OI de los dos lados) y declararlo.
+
+**Qué es:** averiguar si el OI faltante es cero real o dato perdido (candles sin OI, cupo de
+suscripción, lotes que vencen), y según eso: registrar el cero como dato, o reintentar/marcar el
+faltante. Después, definir con evidencia qué cobertura exige el gate.
+
+**Relación:** mismo cálculo que `BL-002` (escala) y `BL-011` (corte post-cierre). Afecta a todo
+consumidor del GEX de GaleCore, no sólo al runtime.
+
+**Entry gate:** GC-0002 cerrado y decisión del owner.
+
