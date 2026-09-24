@@ -138,7 +138,7 @@ namespace DataFeed.Application.App.Runtime
         {
             var response = await _mediator.Send(new MarketDataQuoteRequest { Symbol = streamerSymbol }, ct);
             var q = response?.Data?.FirstOrDefault();
-            if (q == null || !QuoteRules.IsUsable(q.BidPrice, q.AskPrice))
+            if (q == null || !QuoteRules.IsUsable(q.BidPrice, q.AskPrice) || !double.IsFinite(q.BidPrice + q.AskPrice))
             {
                 _logger.LogDebug("RuntimeMarketData: sin cotización utilizable para {Symbol}", streamerSymbol);
                 return null;

@@ -32,8 +32,9 @@ namespace DataFeed.Application.App.Runtime
         // ── Entrada ──────────────────────────────────────────────────
 
         /// <param name="canOpen">
-        /// Se consulta justo antes de registrar la posición: si el switch se apagó mientras se pedían
-        /// datos, no se abre (Codex C1). null = siempre se puede.
+        /// Se consulta al registrar la posición, bajo el mismo lock que el cambio del switch
+        /// (ShadowRuntimeStore.TryAddPosition): si el switch se apagó mientras se pedían datos, no se
+        /// abre (Codex C1/C2). null = siempre se puede.
         /// </param>
         public static async Task<string> EvaluateEntryAsync(
             ShadowRuntimeStore store, IRuntimeMarketData data, StrategyInstance instance, StrategySpec spec,
@@ -131,13 +132,12 @@ namespace DataFeed.Application.App.Runtime
                 AddEvent(store, instance, "CANDIDATE_NOT_VIABLE", symbol, nowUtc, ("reason", ex.Message));
                 return Outcomes.NoCandidate;
             }
-            if (canOpen != null && !canOpen())
+            if (!store.TryAddPosition(position, canOpen ?? (() => true)))
             {
                 AddEvent(store, instance, "ENTRY_ABORTED", symbol, nowUtc,
                     ("reason", "el switch se apagó mientras se evaluaba la entrada"), ("candidate_id", candidate.CandidateId));
                 return Outcomes.Paused;
             }
-            store.AddPosition(position);
             AddEvent(store, instance, "POSITION_OPENED", symbol, nowUtc,
                 ("position_id", position.PositionId), ("credit", position.EntryCredit),
                 ("max_risk", position.MaxRisk), ("dte", position.EntryDte));

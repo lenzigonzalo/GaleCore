@@ -305,6 +305,7 @@ namespace DataFeed.Application.App.GammaExposure
                 .Where(sym => result.Greeks.TryGetValue(sym, out var g)
                               && Math.Abs(g.Delta) >= candleDeltaMin && Math.Abs(g.Delta) <= candleDeltaMax)
                 .ToArray();
+            result.OiRequested = candleSymbols.ToHashSet();
 
             // Cache diario de OI: resolver hits sin pedir Candle; juntar los miss.
             var today = DateTime.UtcNow.Date;
@@ -511,6 +512,15 @@ namespace DataFeed.Application.App.GammaExposure
                 response.SymbolsRequested = multiGreeks.SymbolsRequested;
                 response.SymbolsWithGreeks = multiGreeks.Greeks.Count;
                 response.ExpirationsRequested = expirations.Count;
+
+                // Cobertura del OI por lado: pedidos (en la banda de delta) contra recibidos.
+                foreach (var sym in multiGreeks.OiRequested)
+                {
+                    if (!strikeMap.TryGetValue(sym, out var info)) continue;
+                    bool received = multiGreeks.OpenInterest.ContainsKey(sym);
+                    if (info.Item2 == "C") { response.CallOiRequested++; if (received) response.CallOiReceived++; }
+                    else { response.PutOiRequested++; if (received) response.PutOiReceived++; }
+                }
 
                 response.Spot = spot;
 

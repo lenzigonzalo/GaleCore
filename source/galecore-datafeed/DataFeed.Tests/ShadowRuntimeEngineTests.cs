@@ -377,6 +377,35 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
+    public void Store_TryAddPosition_RespectsCanOpen()
+    {
+        var store = new ShadowRuntimeStore();
+        Assert.False(store.TryAddPosition(new ShadowPosition { PositionId = "p-1", Status = "OPEN" }, () => false));
+        Assert.Empty(store.AllPositions());
+        Assert.True(store.TryAddPosition(new ShadowPosition { PositionId = "p-2", Status = "OPEN" }, () => true));
+        Assert.Single(store.AllPositions());
+    }
+
+    [Fact]
+    public void Store_SwitchChangeAndPositionCommit_AreSerialized()
+    {
+        // Mientras el switch se está apagando (dentro del lock), un registro concurrente espera y
+        // después ve el switch apagado: no hay posición registrada "después" del OFF.
+        var store = new ShadowRuntimeStore();
+        bool enabled = true;
+        using var insideGate = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var switcher = Task.Run(() => store.UnderCommitGate(() => { insideGate.Set(); release.Wait(); enabled = false; }));
+        insideGate.Wait();
+        var committer = Task.Run(() => store.TryAddPosition(new ShadowPosition { PositionId = "p", Status = "OPEN" }, () => enabled));
+        Assert.False(committer.Wait(200));   // bloqueado por el lock
+        release.Set();
+        switcher.Wait();
+        Assert.False(committer.Result);
+        Assert.Empty(store.AllPositions());
+    }
+
+    [Fact]
     public void QuoteRules_RejectNonFinite()
     {
         Assert.False(QuoteRules.IsUsable(1.0, double.PositiveInfinity));

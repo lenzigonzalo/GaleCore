@@ -20,5 +20,12 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade.Models
         /// snapshot: un símbolo sin Greeks no aporta al GEX, y sin este número la falta es invisible.
         /// </summary>
         public int SymbolsRequested { get; set; }
+
+        /// <summary>
+        /// Símbolos a los que se les pidió OI (los que tienen Greeks y caen en la banda de |delta|).
+        /// Contra <c>OpenInterest</c> da la cobertura del OI: un OI que no volvió cuenta como cero en
+        /// el GEX y, sin esto, no se distingue de un cero real.
+        /// </summary>
+        public HashSet<string> OiRequested { get; set; } = new();
     }
 }

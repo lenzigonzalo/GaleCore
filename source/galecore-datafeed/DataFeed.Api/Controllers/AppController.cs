@@ -128,7 +128,12 @@ namespace DataFeed.Controllers
             var denied = await DenyIfNotPlatformAdminAsync($"el servicio {serviceId}", ct);
             if (denied != null) return denied;
 
-            _serviceSwitch.Set(serviceId, body.Enabled);
+            // El switch del runtime SHADOW se cambia bajo el mismo lock con el que se registra una
+            // posición: apagarlo no deja que una entrada en curso se registre después (GC-0002).
+            if (serviceId == RuntimeStrategyId)
+                _runtimeStore.UnderCommitGate(() => _serviceSwitch.Set(serviceId, body.Enabled));
+            else
+                _serviceSwitch.Set(serviceId, body.Enabled);
 
             var resolved = _serviceSwitch.Resolve(serviceId)!.Value;
             return Ok(new { enabled = resolved.Enabled, source = resolved.Source, scope = "platform" });

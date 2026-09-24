@@ -11,11 +11,13 @@ namespace DataFeed.Api.Infrastructure
     public class RuntimeStrategySwitch
     {
         private readonly PlatformServiceSwitch _serviceSwitch;
+        private readonly DataFeed.Application.App.Runtime.ShadowRuntimeStore _store;
         private const string ServiceId = "runtime";
 
-        public RuntimeStrategySwitch(PlatformServiceSwitch serviceSwitch)
+        public RuntimeStrategySwitch(PlatformServiceSwitch serviceSwitch, DataFeed.Application.App.Runtime.ShadowRuntimeStore store)
         {
             _serviceSwitch = serviceSwitch;
+            _store = store;
         }
 
         /// <summary>Nivel de reglas: lo que declara services[].enabled en la config.</summary>
@@ -28,6 +30,7 @@ namespace DataFeed.Api.Infrastructure
         public (bool Enabled, string Source) Resolve()
             => _serviceSwitch.Resolve(ServiceId) ?? (false, "rules");
 
-        public void Set(bool enabled) => _serviceSwitch.Set(ServiceId, enabled);
+        /// <summary>Cambia el switch bajo el lock del registro de posiciones (ver ShadowRuntimeStore.TryAddPosition).</summary>
+        public void Set(bool enabled) => _store.UnderCommitGate(() => _serviceSwitch.Set(ServiceId, enabled));
     }
 }

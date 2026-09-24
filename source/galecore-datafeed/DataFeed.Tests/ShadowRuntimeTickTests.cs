@@ -181,29 +181,43 @@ public class MetricResolverNetGexTests
 /// <summary>GC-0002 (recheck R2, m-c) — un precio de cotización sólo sale de una cotización utilizable.</summary>
 public class MetricResolverQuoteTests
 {
-    private static QuoteEvent Q(double bid, double ask) => new() { BidPrice = bid, AskPrice = ask };
+    private static readonly DateTime QNow = new(2026, 9, 24, 17, 0, 0, DateTimeKind.Utc);
+    private static readonly TimeSpan QMax = TimeSpan.FromSeconds(150);
+    private static QuoteEvent Q(double bid, double ask, long eventTime = 0) =>
+        new() { BidPrice = bid, AskPrice = ask, EventTime = eventTime };
+    private static double? P(QuoteEvent? q) => MetricResolver.UsableQuotePrice(q, QNow, QMax);
+    private static long Ms(DateTime t) => new DateTimeOffset(t).ToUnixTimeMilliseconds();
 
     [Fact]
     public void OneSidedOrCrossedOrEmpty_IsNoData()
     {
-        Assert.Null(MetricResolver.UsableQuotePrice(null));
-        Assert.Null(MetricResolver.UsableQuotePrice(Q(0, 0)));
-        Assert.Null(MetricResolver.UsableQuotePrice(Q(20, 0)));    // sin ask
-        Assert.Null(MetricResolver.UsableQuotePrice(Q(16, 15)));   // cruzada
-        Assert.Null(MetricResolver.UsableQuotePrice(Q(double.NaN, 15)));
+        Assert.Null(P(null));
+        Assert.Null(P(Q(0, 0)));
+        Assert.Null(P(Q(20, 0)));    // sin ask
+        Assert.Null(P(Q(16, 15)));   // cruzada
+        Assert.Null(P(Q(double.NaN, 15)));
+        Assert.Null(P(Q(double.MaxValue, double.MaxValue)));   // finitos, pero el mid desborda
     }
 
     [Fact]
     public void RealQuote_IsTheMid()
     {
-        Assert.Equal(15.25, MetricResolver.UsableQuotePrice(Q(15.2, 15.3))!.Value, 10);
+        Assert.Equal(15.25, P(Q(15.2, 15.3))!.Value, 10);                          // sin hora: se acepta (BL-013)
+        Assert.Equal(15.25, P(Q(15.2, 15.3, Ms(QNow.AddSeconds(-10))))!.Value, 10);
+    }
+
+    [Fact]
+    public void StaleOrFutureQuote_IsNoData()
+    {
+        Assert.Null(P(Q(15.2, 15.3, Ms(QNow.AddSeconds(-151)))));
+        Assert.Null(P(Q(15.2, 15.3, Ms(QNow.AddSeconds(30)))));
     }
 }
 
 /// <summary>GC-0002 AC-08 — VIX sale del último trade (DXLink publica el Quote del índice sin bid/ask).</summary>
 public class MetricResolverTradeTests
 {
-    // 2026-09-24T17:05:46.314Z, un trade real de VIX de la corrida en vivo.
+    // Hora fija y representativa (2026-09-24 durante la sesión); no es la de un trade registrado.
     private const long TradeTime = 1790269546314;
     private static readonly DateTime At = DateTimeOffset.FromUnixTimeMilliseconds(TradeTime).UtcDateTime;
     private static readonly TimeSpan Max = TimeSpan.FromSeconds(150);

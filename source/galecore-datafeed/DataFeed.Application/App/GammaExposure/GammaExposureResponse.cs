@@ -82,6 +82,15 @@ namespace DataFeed.Application.App.GammaExposure
         /// <summary>Vencimientos que entraron en el barrido (los que quedaron sin datos no aparecen en ByExpiry).</summary>
         public int ExpirationsRequested { get; set; }
 
+        /// <summary>Calls a las que se les pidió OI (con Greeks y dentro de la banda de |delta|).</summary>
+        public int CallOiRequested { get; set; }
+        /// <summary>Calls de las pedidas cuyo OI volvió válido (&gt; 0).</summary>
+        public int CallOiReceived { get; set; }
+        /// <summary>Puts a las que se les pidió OI (con Greeks y dentro de la banda de |delta|).</summary>
+        public int PutOiRequested { get; set; }
+        /// <summary>Puts de las pedidas cuyo OI volvió válido (&gt; 0).</summary>
+        public int PutOiReceived { get; set; }
+
         public int StrikesWithOI => Strikes.Count(s => s.CallOI > 0 || s.PutOI > 0);
         public int StrikesWithGEX => Strikes.Count(s => s.CallGEX > 0 || s.PutGEX < 0);
 

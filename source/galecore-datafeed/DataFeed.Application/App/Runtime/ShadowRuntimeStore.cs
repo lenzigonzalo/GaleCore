@@ -81,6 +81,30 @@ namespace DataFeed.Application.App.Runtime
         public void AddPosition(ShadowPosition position)
             => _positions[position.PositionId] = position;
 
+        // Serializa el cambio del switch del runtime con el registro de una posición nueva: si el
+        // switch se apaga, ninguna entrada que ya estaba en curso puede registrarse después (Codex C2).
+        private readonly object _commitGate = new();
+
+        /// <summary>Corre <paramref name="action"/> (el cambio del switch) sin que se registre una posición en el medio.</summary>
+        public void UnderCommitGate(Action action)
+        {
+            lock (_commitGate) action();
+        }
+
+        /// <summary>
+        /// Registra la posición sólo si <paramref name="canOpen"/> sigue siendo true, en el mismo lock
+        /// que el cambio del switch. Devuelve false si no la registró.
+        /// </summary>
+        public bool TryAddPosition(ShadowPosition position, Func<bool> canOpen)
+        {
+            lock (_commitGate)
+            {
+                if (!canOpen()) return false;
+                AddPosition(position);
+                return true;
+            }
+        }
+
         public void UpdatePosition(ShadowPosition position)
             => _positions[position.PositionId] = position;
 

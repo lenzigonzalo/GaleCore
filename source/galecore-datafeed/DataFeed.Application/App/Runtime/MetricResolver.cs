@@ -103,7 +103,7 @@ namespace DataFeed.Application.App.Runtime
             }
 
             var quote = response.Data[0];
-            var price = UsableQuotePrice(quote);
+            var price = UsableQuotePrice(quote, _nowUtc, _maxAge);
             if (price == null)
             {
                 _logger.LogDebug("MetricResolver: cotización no utilizable para {Symbol}: bid={Bid} ask={Ask}",
@@ -116,14 +116,19 @@ namespace DataFeed.Application.App.Runtime
         }
 
         /// <summary>
-        /// El mid de la cotización, o null si la cotización no sirve (QuoteRules.IsUsable) o el mid no es
-        /// positivo. Una cotización de un solo lado (bid 0, ask 20) daría un mid de 10 que no existe.
+        /// El mid de la cotización, o null si la cotización no sirve (QuoteRules.IsUsable), el mid no es
+        /// positivo y finito, o la hora del proveedor es vieja o futura. Una cotización de un solo lado
+        /// (bid 0, ask 20) daría un mid de 10 que no existe; dos precios finitos enormes suman
+        /// infinito (Codex C2). Sin hora (EventTime 0) la edad no se puede medir y se acepta, como en
+        /// las patas (decisión del owner, BL-013).
         /// </summary>
-        public static double? UsableQuotePrice(QuoteEvent? quote)
+        public static double? UsableQuotePrice(QuoteEvent? quote, DateTime nowUtc, TimeSpan? maxAge)
         {
             if (quote == null || !QuoteRules.IsUsable(quote.BidPrice, quote.AskPrice)) return null;
+            DateTime? quotedAt = quote.EventTime > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(quote.EventTime).UtcDateTime : null;
+            if (DataFreshness.Problem(quotedAt, nowUtc, maxAge) != null) return null;
             var mid = quote.MidPrice;
-            return mid > 0 ? mid : null;
+            return double.IsFinite(mid) && mid > 0 ? mid : null;
         }
 
         /// <summary>
@@ -164,6 +169,11 @@ namespace DataFeed.Application.App.Runtime
         /// las puts queda sólo el gamma de las calls, positivo (Codex C1). Se exige que todos los
         /// símbolos pedidos hayan devuelto griegas y que haya OI de calls y de puts; en vivo el 24/09
         /// SPY dio 442/442 en tres corridas seguidas.
+        ///
+        /// La cobertura del OI NO se exige completa (decisión del owner, 24/09): en vivo vuelve OI para
+        /// ~30% de las patas de la banda de delta y el handler descarta el OI 0, así que no se sabe si el
+        /// resto es cero o no llegó. Queda declarado y visible en CallOi/PutOi Requested/Received de la
+        /// respuesta; la causa se investiga en BL-014.
         /// </summary>
         public static double? UsableNetGex(GammaExposureResponse? response)
         {
