@@ -7,7 +7,7 @@ reviewer: codex
 approver: user
 feature_freeze: false
 closure_blocked: true
-review_result: PENDING
+review_result: APPROVED
 approval_result: PENDING
 ---
 
@@ -94,7 +94,7 @@ Evidencia de uso real: [`docs/evidence/gc-ai-0005/`](../../evidence/gc-ai-0005/R
 | AC-07 (G) | Base en `<workspace>/knowledge` (repo de datos propio, `main`), `knowledge_base.knowledge_dir`; nunca se crea implícitamente | `TestLocation` | `g-branch-independence.json` (7 archivos idénticos al cambiar GaleCore-AI de rama y volver; ninguna rama de GaleCore tiene registros en `research/regime`); GaleCore `6e13394` | IMPLEMENTED |
 | AC-08 (H) | Ver "Qué se declaró y qué se programó" abajo | `test_prepare_skills_have_code_behind_them` | — | IMPLEMENTED |
 | AC-09 (I) | — | En `a21cfa3` (después de R1 y C1): gate PASS, ruff, pytest 699 passed, `git diff --check`, wheel reconstruido y PASS (módulos nuevos exigidos, 22 checks) | comandos abajo | IMPLEMENTED |
-| AC-10 (J) | — | Interno R1 CHANGES_REQUESTED → corregido; Codex C1 CHANGES_REQUESTED → corregido | `reviews/GC-AI-0005-20260924T002326Z.md` | PENDING (recheck de Codex) |
+| AC-10 (J) | — | Interno R1 CHANGES_REQUESTED → corregido; Codex C1 CHANGES_REQUESTED → corregido; Codex recheck C2 **APPROVE** | `reviews/GC-AI-0005-20260924T002326Z.md`, `reviews/GC-AI-0005-20260924T003647Z.md` | IMPLEMENTED (APPROVE es insumo; el cierre es del owner) |
 
 ## Required validation
 
@@ -108,7 +108,7 @@ python tools/verify_wheel_assets.py
 
 ## Implementer handoff
 
-**State:** READY_FOR_REVIEW — review interno R1 hecho (abajo); falta Codex (AC-10).
+**State:** READY_FOR_REVIEW — interno R1 y Codex C1 corregidos; Codex recheck C2 APPROVE. Falta la decisión del owner.
 
 ### Qué se declaró y qué se programó (AC-08)
 
@@ -202,3 +202,14 @@ PARTIAL. No cambia `status`, `closure_blocked` ni `approval_result`.
 | C1-m1 | MINOR | Guía de régimen, `PHASE4-ALIGNMENT.md` y v5 seguían dando `GaleCore/research/regime` como ubicación | **Corregido:** la guía indica `knowledge/regime`; los documentos históricos anotan la migración |
 | C1-m2 | MINOR | AC-09 citaba una verificación del wheel anterior a R1 | **Corregido:** wheel reconstruido y verificado en `a21cfa3`, con salida exacta arriba; lo anterior queda como histórico |
 | — | nota | Fallo intermitente `test_oversized_or_empty_body_is_refused` (visor, código no tocado) | **Registrado:** no se reprodujo en las corridas de `a21cfa3` (699 passed) |
+
+## Independent review C2 (Codex, `--recheck`, esfuerzo medio, 2026-09-24T00:36Z) — `docs/engineering/reviews/GC-AI-0005-20260924T003647Z.md`
+
+Rango `9c1b08f..c56aa66`, árbol limpio. **APPROVE:** C1-M1, C1-m1 y C1-m2 RESOLVED; sin hallazgos
+nuevos. Reprodujo gate PASS, ruff, 699 passed, `diff --check`; wheel verificado de sólo lectura (13
+módulos requeridos, 9 assets y 71 módulos empaquetados iguales a HEAD). `review_result: APPROVED`
+sólo transcribe el veredicto; `status`, `closure_blocked` y `approval_result` no cambian.
+
+### Product-owner decision
+
+PENDING. El owner decide VALIDATED/CLOSED.

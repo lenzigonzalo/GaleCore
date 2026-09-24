@@ -1,7 +1,7 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado (2026-09-23):** plan único en `roadmap/README.md`. Activo: GC-AI-0005 (Paso 1, base mínima de conocimiento). GC-AI-0002/0003/0004 y GC-0001 con APPROVE, esperando la decisión del owner (tabla abajo). APPROVE no cierra.
+**Estado (2026-09-24):** plan único en `roadmap/README.md`. GC-AI-0005 (Paso 1) con Codex APPROVE, esperando al owner. GC-AI-0002/0003/0004 y GC-0001 con APPROVE, esperando al owner (tabla abajo). APPROVE no cierra.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## Próxima sesión — punto de entrada
@@ -12,20 +12,32 @@ backlog). El trabajo activo es el **Paso 1 — base mínima probada con trabajo 
 (`ACTIVE_WORK_ITEM`). La realineación del 21/09 está archivada y no se sigue; SHADOW no es el próximo
 frente (es el Paso 3 del plan).
 
-### GC-AI-0005 al 2026-09-23 (noche)
+### GC-AI-0005 al 2026-09-24
 
-- **Estado:** READY_FOR_REVIEW. Implementado y probado con uso real (evidencia
-  `docs/evidence/gc-ai-0005/`); review interno R1 CHANGES_REQUESTED → corregido. **Falta Codex**:
-  el primer intento (`--base d6a35d8 --effort high`) no corrió por cuota agotada. Siguiente:
-  `/review-codex --base d6a35d8 --effort high`.
-- **Qué cambió para el host:** empezar por `cli catalog`; buscar antecedentes con `cli kb search`
-  (`--status unfinished` para trabajo pendiente); la base de conocimiento es `<workspace>/knowledge/`
-  (repo de datos propio; commitearla después de cada sesión que escriba). Los registros de régimen
-  viven ahí desde hoy; en GaleCore queda un README de puntero (`6e13394`).
+- **Estado:** READY_FOR_REVIEW con **Codex recheck C2 APPROVE** (`GC-AI-0005-20260924T003647Z.md`),
+  después de interno R1 y Codex C1 corregidos. **Falta sólo la decisión del owner** (VALIDATED/CLOSED).
+- **Qué cambió para el host:** empezar por `cli catalog`; antecedentes con `cli kb search`
+  (`--status unfinished` para trabajo pendiente); la base es `<workspace>/knowledge/` (repo de datos
+  propio, se commitea después de cada sesión que escribe). Los registros de régimen viven ahí; en
+  GaleCore queda un README de puntero (`6e13394`).
 - **Investigación abierta:** `research:2026-09-23-gex-0dte-post-cierre` (test_planned, revisión 2).
   Su pendiente depende del owner: **dónde se archiva el desglose por vencimiento** de cada lectura
-  post-cierre sin cambiar el corte del registro (toca `BL-011`). Después: archivar el primero con
-  GaleCore levantado y hacer la resta global − 0DTE.
+  post-cierre sin cambiar el corte del registro (`BL-011`).
+
+### Cómo iniciar y retomar una investigación (para el owner)
+
+Se le habla al host en lenguaje normal; el host hace el resto con el catálogo y la base.
+
+1. **Iniciar:** *"Investigá <la idea>. Usá lo que ya tengamos y dejame una hipótesis y un plan de
+   prueba."* El host corre `cli catalog` (elige `research`), `cli kb search --text "<términos>"`
+   (antecedentes), lee las fuentes, y guarda con `cli research save --slug <nombre> --prompt
+   "<tu pedido>"`. Queda `knowledge/research/<fecha>-<nombre>.md`, legible en Obsidian.
+2. **Retomar en otra sesión:** *"Retomá la investigación sobre <tema> y avanzá lo que se pueda."*
+   El host corre `cli kb search --text "<tema>" --status unfinished`, `cli kb show research:<id>`
+   (pendientes, faltantes, historial) y registra el avance con `cli research revise --id <id>
+   --reason continuation --note "<qué cambió>"`. Las revisiones anteriores no se tocan.
+3. **Corregir o cargar un resultado:** lo mismo con `--reason correction` o `--reason result`.
+4. **Al terminar:** el host commitea `knowledge/` (`git -C <workspace>/knowledge add -A` y `commit`).
 
 ### Cierres pendientes del owner
 
