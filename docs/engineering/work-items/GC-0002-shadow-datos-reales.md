@@ -75,15 +75,16 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 | AC-05 | `ShadowRuntimeStore` (historial acotado, eventos de ciclo de vida no se descartan); eventos por gate, NO_DATA, descarte y valuación sin precio | `EveryEvaluationIsKept_NotOnlyTheLast`, `Store_*`, `Valuation_NoDataEvent_OnlyWhenTheProblemChanges` | ídem | Verificado en tests |
 | AC-06 | `shadow_runtime_test_v1.json` (renombrada); hashes viejo/nuevo en el handoff | `RuntimeSpecJsonTests` | hashes abajo | Verificado |
 | AC-07 | Runtime sólo pide cadena, griegas y cotización | `ShadowRuntimeBoundaryTests` (patrones ampliados en R1-m5) | ídem | Verificado en tests |
-| AC-08 | API local desde la rama (`55b18d1` y luego `HEAD`), Development, 24/09 ~17:05-17:15 UTC (mercado abierto) | — | `docs/evidence/gc-0002/ac08-run1-vix-quote.json`, `ac08-run2-before-off.json`, `ac08-run2-after-off.json` | Hecho en parte (ver "AC-08, 24/09") |
-| AC-09 | Tests nuevos para AC-01..05 y AC-07 | `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj` → 387/387 (base 331) | salida del comando | Verificado |
-| AC-10 | — | Interno R1 CHANGES_REQUESTED → corregido; recheck R2 APPROVE (MINORs corregidos) | este item | Codex PENDING |
+| AC-08 | API local desde la rama, Development, 24/09 17:05-17:40 UTC (mercado abierto); corridas 3 y 4 con el código de `07501d1`/`e3eb613` y `docs/evidence/gc-0002/ac08_capture.py` (cada request con hora, SHA, payload y respuesta) | — | `ac08-run3-forced-nodata.jsonl`, `ac08-run4-real-and-off.jsonl` (y las corridas 1-2, previas a Codex C1) | Hecho salvo candidato/fill/valuación en vivo (ver "AC-08, 24/09") |
+| AC-09 | Tests nuevos para AC-01..05 y AC-07 | `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj` → 398/398 (base 331) | `docs/evidence/gc-0002/dotnet-test-e3eb613.txt` | Verificado |
+| AC-10 | — | Interno R1 CHANGES_REQUESTED → corregido; recheck R2 APPROVE (MINORs corregidos); Codex C1 CHANGES_REQUESTED → corregido (abajo) | `docs/engineering/reviews/GC-0002-20260924T171716Z.md` | Codex recheck PENDING |
 
 ## Implementer handoff
 
-**State:** IMPLEMENTING — primera versión en `be3206a` (357 tests); R1 corregido (ver "Correcciones de R1"),
-`dotnet test` 385/385, build de `DataFeed.Api` a directorio temporal sin errores. Recheck interno R2:
-APPROVE (abajo). Siguiente: AC-08 en día hábil, después Codex.
+**State:** IMPLEMENTING — interno R2 APPROVE; Codex C1 CHANGES_REQUESTED con sus MAJOR corregidos
+(`07501d1`) salvo uno que decide el owner (edad de cotización desconocida, ver "Codex C1");
+`dotnet test` 398/398; AC-08 hecho en vivo salvo candidato/fill/valuación (GEX negativo todo el día).
+Siguiente: decisión del owner sobre C1-M1 y Codex `--recheck`.
 
 **Hash de la spec (AC-06, R1-m8)**, `StrategySpecHasher` sobre el archivo:
 - antes `pcs_spy_shadow_v1.json` (`5fa6615`): `sha256:09ad790a3d885d13ac13a6ecb1bde402345b7d9333741e4b5741a67764b1139b`
@@ -93,15 +94,17 @@ APPROVE (abajo). Siguiente: AC-08 en día hábil, después Codex.
 **Decisión del owner (24/09, durante AC-08):** en vivo, DXLink publica el Quote de VIX sin bid/ask
 (`NaN`), así que el gate `vix_absolute` era NO_DATA en todo tick. El VIX real llega por Trade (así lo
 leen RPF y GEX). El owner eligió leerlo de ahí: `metric_ref` → `capability:market_data.trade.VIX.price`
-(`MetricResolver.UsableTradePrice`: sin precio positivo o sin hora del trade = NO_DATA). El umbral
+(`MetricResolver.UsableTradePrice`: sin precio positivo, sin hora del trade o con un trade más viejo
+que la tolerancia = NO_DATA). El umbral
 VIX < 30 no cambia. Evidencia de la corrida anterior: `docs/evidence/gc-0002/ac08-run1-vix-quote.json`.
 
 **Limitaciones declaradas:**
 - Sin calendario de feriados: un feriado de NYSE en día hábil cuenta como sesión abierta
   (`ShadowSession`). Cubre noche y fin de semana.
-- Si DXLink no informa la hora de la cotización (`EventTime` = 0), la edad no se puede medir y el
-  chequeo de frescura no aplica (`OldestQuoteAt` = null, visible en `CANDIDATE_CREATED` como
-  "desconocida"). La protección en ese caso es no simular fills ni cierres fuera de sesión.
+- Si DXLink no informa la hora de la cotización (`EventTime` = 0, confirmado en vivo), la edad no
+  se puede medir y el chequeo de frescura no aplica a esa pata (`QuotesWithoutTime` en el snapshot y
+  en `CANDIDATE_CREATED`). La protección en ese caso es no simular fills ni cierres fuera de sesión.
+  **Pendiente de decisión del owner** (Codex C1-M1).
 
 ## Internal review R1 (agente `reviewer`, 2026-09-24 ~02:00 UTC, rango `5fa6615..be3206a`) — CHANGES_REQUESTED, corregido (abajo)
 
@@ -155,23 +158,58 @@ declarados; sin BLOCKER ni MAJOR ni regresiones. MINORs, corregidos en el commit
 
 ## AC-08, 24/09 (API local desde la rama, mercado abierto)
 
-Deploy SHADOW de `shadow_runtime_test_v1` con el switch ON; evidencia sin credenciales en
-`docs/evidence/gc-0002/`.
+Evidencia sin credenciales en `docs/evidence/gc-0002/`. Reproducir (API local en
+`http://localhost:7001`, `ASPNETCORE_ENVIRONMENT=Development`, `dotnet run --project
+source/galecore-datafeed/DataFeed.Api/DataFeed.Api.csproj --no-launch-profile`):
 
-- **Corrida 1** (`55b18d1`, 17:07 UTC): DXLink publica el Quote de VIX con bid/ask `NaN` y
-  `eventTime` 0 → `METRICS_NO_DATA` + gate `vix_absolute` NO_DATA → `GATES_NOT_PASSED`, sin
-  candidato ni posición. Es el caso NO_DATA de AC-08, con un faltante **real** (no forzado). GEX real
-  −83.5 (FAIL). Llevó a la decisión del owner de leer VIX por Trade (arriba).
-- **Corrida 2** (`HEAD`, 17:10 UTC en adelante): VIX 15.48 por Trade (PASS), GEX −83.6 (FAIL) →
-  descarte explicado con los valores por gate. Dos evaluaciones.
-- **Switch OFF** (17:12:40): después de más de dos ticks, 2 evaluaciones y 5 eventos iguales a los
-  de antes, instancia `RUNNING` / `PAUSED`, nada borrado.
-- **No demostrado en vivo:** construcción de candidato, fill y valuación real. Con GEX negativo el
-  gate corta antes (comportamiento correcto de la spec). Esos caminos quedan cubiertos sólo por
-  tests con datos falsos (`PcsCandidateBuilderTests`, `ShadowRuntimeEngineTests`); verlos en vivo
-  requiere un día con GEX ≥ 0.
-- **Confirmado en vivo:** el Quote de DXLink trae `eventTime` 0, así que la frescura de las
-  cotizaciones no se puede medir (limitación declarada arriba).
-- El override del switch persiste en disco: al reiniciar, la API arrancó con el switch ON (el
-  último valor puesto), no "inerte". Comportamiento previo del `PlatformServiceSwitch`, fuera de
-  este item; el switch quedó OFF al terminar.
+```
+python docs/evidence/gc-0002/ac08_capture.py <log> deploy <spec>
+python docs/evidence/gc-0002/ac08_capture.py <log> switch on
+python docs/evidence/gc-0002/ac08_capture.py <log> wait-evals <instance_id> 2 300
+python docs/evidence/gc-0002/ac08_capture.py <log> snapshot <instance_id> before-off
+python docs/evidence/gc-0002/ac08_capture.py <log> switch off
+python docs/evidence/gc-0002/ac08_capture.py <log> wait-state <instance_id> PAUSED 200
+python docs/evidence/gc-0002/ac08_capture.py <log> snapshot <instance_id> after-off   # >2 ticks después
+```
+
+Cada línea del log tiene hora UTC, `repo_head`, request (método, ruta, payload), status y respuesta.
+
+- **Corrida 3, NO_DATA forzado** (`ac08-run3-forced-nodata.jsonl`, código `07501d1`, 17:31-17:33
+  UTC): la API arrancó con una copia de la spec (`shadow_runtime_forced_nodata_v1.json`, en la
+  carpeta de evidencia; sólo cambian nombre, id y el `metric_ref` de VIX, que apunta a un símbolo
+  inexistente) copiada **sin commitear** en `Files/Runtime` y borrada después; por eso el log dice
+  `07501d1` con el árbol no limpio. Hash `sha256:60f2a8fd…`. Dos evaluaciones: `METRICS_NO_DATA` →
+  VIX NO_DATA → `GATES_NOT_PASSED`; 0 posiciones.
+- **Corrida 4, spec real y switch OFF** (`ac08-run4-real-and-off.jsonl`, `e3eb613`, árbol limpio,
+  17:34-17:40 UTC): evaluación 1: VIX 15.70 (PASS) y **GEX NO_DATA**: el primer barrido después de
+  arrancar no tuvo cobertura completa y la regla nueva lo bloqueó (C1-M4 actuando sobre datos
+  reales); evaluación 2: VIX 15.71 (PASS), GEX −87.4 (FAIL) → descarte explicado. Switch OFF: con
+  más de dos ticks, 2 evaluaciones y 6 eventos iguales antes y después, 0 posiciones, instancia
+  `RUNNING` / `PAUSED`.
+- **Corridas 1 y 2** (previas a Codex C1, sin script de captura; `ac08-run1-vix-quote.json`,
+  `ac08-run2-*.json`): Quote de VIX con bid/ask `NaN` → NO_DATA real, que llevó a la decisión de leer
+  VIX por Trade; con Trade, VIX 15.48 y GEX −83.6 → descarte; switch OFF conservando estado.
+- **No demostrado en vivo:** construcción de candidato, fill y valuación real. Con GEX negativo todo
+  el día el gate corta antes (comportamiento correcto de la spec). Esos caminos quedan cubiertos
+  sólo por tests con datos falsos; verlos en vivo requiere un día con GEX ≥ 0.
+- **Confirmado en vivo:** el Quote de DXLink trae `eventTime` 0 (frescura de patas no medible) y la
+  cobertura del GEX de SPY fue 442/442 en tres corridas seguidas a las ~17:20 UTC.
+- El override del switch persiste en disco: al reiniciar, la API arranca con el último valor
+  puesto, no "inerte". Comportamiento previo del `PlatformServiceSwitch`, fuera de este item; el
+  switch quedó OFF al terminar.
+
+## Independent review Codex C1 (`docs/engineering/reviews/GC-0002-20260924T171716Z.md`, modo `base`, `5fa6615..50dbb05`) — CHANGES_REQUESTED
+
+Codex no pudo correr `dotnet test` ni el build (su sandbox no llega a NuGet); recalculó los tres
+hashes (coinciden) y comparó las corridas 2 antes/después del OFF. Corregido en `07501d1` (398/398):
+
+| # | Hallazgo | Resolución |
+|---|---|---|
+| C1-M1 | Cotización sin hora saltea la frescura; hora futura pasa; una pata sin hora enmascaraba una vieja | **Parcial.** Hora futura rechazada (`DataFreshness`, tolerancia 5 s); cada pata se valida por separado en el builder; `OldestQuoteAt` = la más vieja entre las que tienen hora y `QuotesWithoutTime` cuenta las otras. **Rechazar la hora desconocida queda para el owner:** DXLink manda el Quote con `EventTime` 0 (confirmado en vivo), así que exigir hora hace que el runtime no pueda cotizar ninguna pata nunca. Tests `StaleLeg_NoCandidate_EvenIfTheOtherHasNoTime`, `FutureLegTime_NoCandidate`, `FutureQuoteTime_Rejected`, `Freshness_StaleFutureUnknown` |
+| C1-M2 | VIX por Trade sin chequeo de antigüedad | Trade viejo (> 150 s) o con hora futura = NO_DATA. `StaleOrFutureTrade_IsNoData` |
+| C1-M3 | La valuación no mira la hora de las cotizaciones | Pata vieja o futura → `VALUATION_NO_DATA`, sin salidas. `Valuation_StaleLegQuote_IsNoData_AndNeverCloses` |
+| C1-M4 | Net GEX con cobertura parcial | Exige griegas de todos los símbolos pedidos y OI de calls y de puts (en vivo: 442/442). `PartialCoverage_OrOneSidedOi_IsNoData`; en vivo bloqueó un barrido incompleto (corrida 4) |
+| C1-M5 | Switch apagado mientras se piden datos igual abre | El switch se consulta de nuevo justo antes del fill → `ENTRY_ABORTED`. `Entry_SwitchTurnedOffWhileBuilding_NoPosition` |
+| C1-M6 | Infinito pasa `IsUsable` | Bid/ask, crédito, riesgo y valor del spread tienen que ser finitos. `QuoteRules_RejectNonFinite`, `InfiniteQuote_NeverReachesTheCandidate` |
+| C1-M7 | AC-08 sin procedencia reproducible ni NO_DATA forzado | Script `ac08_capture.py`, corrida 3 (forzado) y 4 (real + OFF), salida de tests guardada |
+| C1-m1 | Estado del handoff contradictorio | Actualizado |
