@@ -1,30 +1,62 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado (2026-09-24, noche):** I1 e I2 **cerrados** (GC-AI-0005; GC-0002 en GaleCore, tag `gc-0002-closed`). **I3 activo** (SHADOW durable y visible, GC-0004 en GaleCore), decidido por el owner el 24/09. Plan: `roadmap/README.md`.
+**Estado (2026-09-24, noche):** I1 e I2 **cerrados** (GC-AI-0005; GC-0002 en GaleCore, tag `gc-0002-closed`). **I3 activo** (SHADOW durable y visible, GC-0004 en GaleCore): implementado, base de desarrollo GaleCore Dev andando; falta la demo en sesión y el cierre. Plan: `roadmap/README.md`.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## Próxima sesión — punto de entrada
 
-### ▶ Retomar acá (I3 en curso, 2026-09-24, noche)
+### ▶ Retomar acá (I3 en curso — cierre del 2026-09-24, noche)
 
-**I3 = GC-0004** en GaleCore, rama local `feature/GC-0004-shadow-durable` (sin push). Todo lo de
-detalle está en el work item `GaleCore/docs/engineering/work-items/GC-0004-shadow-durable-visible.md`.
-- **Hecho:** persistencia de SHADOW en Postgres/EF (misma implementación que irá a producción),
-  recuperación tras reinicio, métricas por versión, pestaña SHADOW del monitor, script de desarrollo,
-  plan de paso a producción (no ejecutado). Interno R1 y Codex C1 CHANGES_REQUESTED, todo corregido.
-  `dotnet test` 427 pass / 5 skipped (Postgres), jest 6/6.
-- **Decisión del owner (24/09):** base de desarrollo = proyecto Supabase **GaleCore Dev**, en una
-  organización propia del owner (Free), separada de producción (org del padre). Avisar antes de
-  cualquier costo. El MCP de Supabase está conectado en la cuenta; **ojo: puede ver también la org de
-  producción — sólo tocar el proyecto "GaleCore Dev"**.
-- **Siguiente (en orden):** (1) con el MCP: confirmar ref/región/plan de GaleCore Dev, costo $0,
-  URL, anon key y host del pooler; (2) `python dev/galecore_dev.py init ...` y aplicar
-  `dev/.local/roles.sql` con el MCP; (3) `migrate`; (4) el owner crea el usuario de prueba en el
-  dashboard (Auth → Add user, auto-confirm, mail `demo@galecore-dev.test`) y corre
-  `set-demo-password`; fila en `users` (username `demo`, is_admin) con el MCP; (5) `test` (5 de
-  Postgres); (6) Codex `--recheck`; (7) demo en día hábil en sesión: `restart_demo.py` + owner en
-  el monitor (`api` + `monitor`).
+**En criollo, para el owner:**
+- **Qué es I3:** que el simulador SHADOW guarde todo en una base de datos (sobrevive reinicios) y que
+  se vea en una pestaña nueva del monitor, "SHADOW". Es la misma implementación que después irá a
+  producción; hoy se prueba en tu proyecto Supabase **GaleCore Dev** (organización propia, plan Free,
+  $0), separado de producción.
+- **Qué quedó andando:** la base de GaleCore Dev con todas las migraciones, el login real con un
+  usuario de prueba `demo`, y la API guardando y recuperando el estado tras reiniciar (probado en
+  vivo fuera de horario: no se perdió ni duplicó nada). 432 tests en verde, incluidos los que usan la
+  base real.
+- **Qué falta:** verlo con el mercado abierto (evaluaciones, descartes y, si el mercado da, una
+  operación) y que vos lo mires en el monitor. Después, tu decisión de cierre.
+
+**Mañana, en orden (día hábil, 09:30–16:00 ET = 10:30–17:00 ART):**
+1. **Recheck de Codex:** quedó corriendo al cerrar. Buscar `GaleCore/docs/engineering/reviews/GC-0004-*.md`
+   más nuevo que `…215421Z.md`. Si no está: `python GaleCore/docs/evidence/gc-0004/codex_review.py
+   --recheck --model gpt-5.6-sol` (desde el workspace). Hacer triage en el work item; recheck sólo de
+   lo que se corrija (`ENGINEERING.md` §3).
+2. **Corrida en sesión (host):** desde `GaleCore/`, con el puerto 7001 libre:
+   `python docs/evidence/gc-0004/restart_demo.py --name run1-en-sesion --switch-on --minutes 10 --after 5`.
+   Da PASS / INCOMPLETE / FAIL con el motivo; no fuerza operaciones ni toca gates. Commitear el JSON
+   (antes, verificar que no tenga secretos, como con `run0`).
+3. **Recorrido del owner en el monitor:** dos terminales en `GaleCore/`:
+   `python dev/galecore_dev.py api` y `python dev/galecore_dev.py monitor`; abrir
+   http://localhost:3039, entrar con `demo` y la contraseña de `GaleCore/dev/.local/env.json`
+   (`demo_password`), pestaña **SHADOW**. Para el reinicio: cortar la API (Ctrl+C), volver a
+   levantarla y refrescar: los registros siguen.
+4. Actualizar la matriz de GC-0004 (AC-06, AC-08) separando tests de lo visto en vivo, y pedir el cierre.
+
+**Dónde está todo (local, sin push):**
+- GaleCore: rama `feature/GC-0004-shadow-durable` (desde `gc-0002-closed`). Work item con criterios,
+  evidencia, reviews, hallazgos y **plan de paso a producción (no ejecutar sin aprobación)**:
+  `GaleCore/docs/engineering/work-items/GC-0004-shadow-durable-visible.md`.
+- Script del entorno de desarrollo: `GaleCore/dev/galecore_dev.py` (`--help`). Config local y
+  contraseñas (proyecto de desarrollo, datos de prueba): `GaleCore/dev/.local/` (fuera de git).
+- Workspace: `roadmap/README.md` (I3 activo) y `ENGINEERING.md` §3 (revisión completa + rechecks
+  acotados). Los cambios ajenos de BL-006/I5, `.gitignore`/Obsidian y D-0004 siguen sin commitear, a
+  propósito (no son de I3).
+
+**Para el host (técnico, breve):**
+- Supabase por MCP: sólo ve la org "GaleCore Dev" (proyecto `ecymbgpimqbtcvqyjtaq`, us-west-2,
+  Postgres 17). Producción no es visible. Avisar al owner antes de cualquier costo.
+- Conexión: pooler `aws-0-us-west-2.pooler.supabase.com`; 5432 (sesión) para migraciones y tests,
+  6543 (transacción) para la API **con `No Reset On Close=true;Max Auto Prepare=0`** (sin eso Npgsql
+  se cuelga tras un INSERT; ver hallazgos en el work item).
+- Tests con la base real: `python dev/galecore_dev.py test` (base `galecore_test`, que los tests vacían).
+- La instancia de `run0` quedó RUNNING en GaleCore Dev: `deploy` la retoma (idempotente); el switch
+  del runtime quedó OFF.
+- PR del GEX: sigue pendiente por decisión del owner (sin push ni PR). GC-0001 sigue abierto; no se
+  amplió ni se cerró.
 
 ### Cierre del 2026-09-24, noche (histórico)
 
