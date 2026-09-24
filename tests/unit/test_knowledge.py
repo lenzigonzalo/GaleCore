@@ -167,6 +167,11 @@ class TestSave:
         ({"status": "open", "next_steps": []}, "requires at least one next step"),
         ({"hypothesis": None}, "requires a hypothesis and a test plan"),
         ({"limitations": []}, "at least one limitation"),
+        # Codex C1 MAJOR: blank text passed as content
+        ({"hypothesis": "   "}, "hypothesis is blank"),
+        ({"next_steps": [" "]}, r"next_steps\[0\] is blank"),
+        ({"limitations": [""]}, r"limitations\[0\] is blank"),
+        ({"missing": ["x", "  "]}, r"missing\[1\] is blank"),
     ])
     def test_controls_reject(self, kb, overrides, problem):
         with pytest.raises(KnowledgeError, match=problem):
@@ -229,6 +234,13 @@ class TestRevise:
         with pytest.raises(KnowledgeError, match=problem):
             revise_research(kb=kb, research_id=first.id, reason=reason, note=note, prompt="p", host=HOST,
                             content=content())
+
+    def test_blank_content_is_refused_on_revise_too(self, kb):
+        first, _ = save(kb)
+        with pytest.raises(KnowledgeError, match=r"next_steps\[0\] is blank"):
+            revise_research(kb=kb, research_id=first.id, reason=RevisionReason.CONTINUATION, note="n",
+                            prompt="p", host=HOST, content=content(status="open", next_steps=["  "]))
+        assert len(kb.research.load(first.id).revisions) == 1
 
     def test_self_citation_is_refused(self, kb):
         first, _ = save(kb)

@@ -782,7 +782,8 @@ GEX-SPY read-only con host interactivo, assets versionados, GaleCore real, assur
 
 Más Skills y workflows sólo después de evaluar GEX. Primer incremento (`GC-AI-0002`, 2026-09-16):
 harness completo desde el host — skill de régimen diario (GEX + put skew + VIX/VVIX) con registro
-evaluable en `GaleCore/research/regime/` y consulta posterior. Ver `PHASE4-ALIGNMENT.md`.
+evaluable en `GaleCore/research/regime/` (movido a `<workspace>/knowledge/regime/` por GC-AI-0005,
+2026-09-23) y consulta posterior. Ver `PHASE4-ALIGNMENT.md`.
 
 El lifecycle futuro de bundles de Skills, creación desde evidencia, drafts, evals, revisión y
 publicación está capturado como `BL-001` en `PRODUCT-BACKLOG.md`. Su registro preserva la

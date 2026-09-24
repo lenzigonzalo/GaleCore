@@ -12,8 +12,9 @@ autonomous runtime is not involved; the validator never calls a model.
 - GaleCore API running on `http://localhost:5000` with Tastytrade market data available.
 - The GaleCore ApiKey from `dotnet user-secrets` (project `DataFeed.Api`). It is passed as
   `GALECORE_API_KEY` and is never written to records, evidence, fixtures or docs.
-- The GaleCore checkout next to this one (`../GaleCore/research/` must exist) or
-  `GALECORE_RECORDS_DIR` pointing elsewhere.
+- The workspace knowledge base `<workspace>/knowledge/` (must exist; `GALECORE_KNOWLEDGE_DIR`
+  overrides it) or `GALECORE_RECORDS_DIR` pointing at a records directory. Until GC-AI-0005
+  (2026-09-23) the default was `../GaleCore/research/regime`; the records were moved from there.
 
 ```bash
 export GALECORE_BASE_URL=http://localhost:5000
@@ -116,7 +117,7 @@ written; exit 1). `--record` without `--prompt` is an argument error (exit 3).
 ## 5. The record
 
 Path: `<records_dir>/<SYMBOL>/<YYYY-MM-DD>.md`, where `records_dir` is `GALECORE_RECORDS_DIR` or
-`../GaleCore/research/regime`, and the date is `prepared_at` in the convention timezone
+`<workspace>/knowledge/regime` (before GC-AI-0005: `../GaleCore/research/regime`), and the date is `prepared_at` in the convention timezone
 (`America/New_York`, from `trading-defaults.yaml`). One file per symbol and trading day; a second
 run the same day appends an entry; the same `run_id` cannot be recorded twice.
 
@@ -157,7 +158,7 @@ python tools/e2e_regime_cases.py --phase run --out docs/evidence/gc-ai-0002-e2e 
 ```
 
 Every record the runner writes goes to temporary directories deleted at the end; the runner never
-touches `GaleCore/research/regime`. P3 is a runner-authored review (mechanics only). Artifacts are
+touches the real records directory (`knowledge/regime`, formerly `GaleCore/research/regime`). P3 is a runner-authored review (mechanics only). Artifacts are
 sanitized (first-line errors, `<repo>/<tmp>/<home>` paths). Real records come only from genuine
 host runs; the first one is documented in `docs/evidence/gc-ai-0002-manual-host-run/`.
 

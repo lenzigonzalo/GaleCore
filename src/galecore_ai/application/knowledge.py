@@ -138,7 +138,15 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
             problems.append(f"statements[{i}]: a fact must cite at least one source")
         for src in s.sources:
             cite(src, f"statements[{i}].sources")
-    if content.status in (ResearchStatus.OPEN, ResearchStatus.TEST_PLANNED) and not content.next_steps:
+    # Blank text is not content: "   " is neither a hypothesis nor a next step (Codex C1 MAJOR).
+    if content.hypothesis is not None and not content.hypothesis.strip():
+        problems.append("hypothesis is blank; omit it or state it")
+    for field in ("missing", "next_steps", "limitations"):
+        for i, item in enumerate(getattr(content, field)):
+            if not item.strip():
+                problems.append(f"{field}[{i}] is blank")
+    if content.status in (ResearchStatus.OPEN, ResearchStatus.TEST_PLANNED) and not any(
+            s.strip() for s in content.next_steps):
         problems.append(f"status {content.status.value} requires at least one next step")
     if content.status == ResearchStatus.TEST_PLANNED and not (content.hypothesis and content.test_plan):
         problems.append("status test_planned requires a hypothesis and a test plan")

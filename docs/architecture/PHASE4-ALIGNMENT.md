@@ -6,7 +6,7 @@
 
 ## 1. Resultado
 
-El host (Claude Code) puede completar un caso de uso de punta a punta con el mismo adapter CLI de Phase 3: pedir datos (`prepare --skill regime`), interpretar, pedir persistencia (`accept --record`), dejar un registro evaluable (`GaleCore/research/regime/<SYMBOL>/<YYYY-MM-DD>.md`), anotar qué pasó después (`record outcome`) y qué opinó el humano (`record review`), y consultarlo (`query`). No se agregó runtime autónomo, scheduler, provider ni base de datos. GaleCore no se tocó (UC-2 y UC-4 quedaron fuera por decisión D-1/D-2 porque requieren código en GaleCore).
+El host (Claude Code) puede completar un caso de uso de punta a punta con el mismo adapter CLI de Phase 3: pedir datos (`prepare --skill regime`), interpretar, pedir persistencia (`accept --record`), dejar un registro evaluable (`GaleCore/research/regime/<SYMBOL>/<YYYY-MM-DD>.md`; desde GC-AI-0005, 2026-09-23, en `<workspace>/knowledge/regime/`), anotar qué pasó después (`record outcome`) y qué opinó el humano (`record review`), y consultarlo (`query`). No se agregó runtime autónomo, scheduler, provider ni base de datos. GaleCore no se tocó (UC-2 y UC-4 quedaron fuera por decisión D-1/D-2 porque requieren código en GaleCore).
 
 ## 2. Clasificación de lo nuevo
 
