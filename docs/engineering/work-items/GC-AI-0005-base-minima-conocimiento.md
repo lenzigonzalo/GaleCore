@@ -93,8 +93,8 @@ Evidencia de uso real: [`docs/evidence/gc-ai-0005/`](../../evidence/gc-ai-0005/R
 | AC-06 (F) | `record_store` sin cambio de formato (frontmatter extraído a `adapters/frontmatter.py` con el mismo YAML); registros movidos byte a byte | Suite completa (689), incluidos `test_record_regime`, `test_regime_viewer`, E2E de CLI | `migration-report.json` (sha256 igual, integridad OK, `query` igual); `query` sin variables lee `knowledge/regime`: 4 registros, `integrity_failed: []` | IMPLEMENTED |
 | AC-07 (G) | Base en `<workspace>/knowledge` (repo de datos propio, `main`), `knowledge_base.knowledge_dir`; nunca se crea implícitamente | `TestLocation` | `g-branch-independence.json` (7 archivos idénticos al cambiar GaleCore-AI de rama y volver; ninguna rama de GaleCore tiene registros en `research/regime`); GaleCore `6e13394` | IMPLEMENTED |
 | AC-08 (H) | Ver "Qué se declaró y qué se programó" abajo | `test_prepare_skills_have_code_behind_them` | — | IMPLEMENTED |
-| AC-09 (I) | — | gate PASS, ruff, pytest 689 passed, `git diff --check`, wheel PASS (módulos nuevos exigidos) | comandos abajo | IMPLEMENTED |
-| AC-10 (J) | — | — | — | PENDING |
+| AC-09 (I) | — | En `a21cfa3` (después de R1 y C1): gate PASS, ruff, pytest 699 passed, `git diff --check`, wheel reconstruido y PASS (módulos nuevos exigidos, 22 checks) | comandos abajo | IMPLEMENTED |
+| AC-10 (J) | — | Interno R1 CHANGES_REQUESTED → corregido; Codex C1 CHANGES_REQUESTED → corregido | `reviews/GC-AI-0005-20260924T002326Z.md` | PENDING (recheck de Codex) |
 
 ## Required validation
 
@@ -139,7 +139,17 @@ timeouts por check), `tests/test_guard_git.py`, `.gitignore` (`/knowledge/`). Ga
 (`feature/pcs-spy-shadow-runtime`, `6e13394`): `research/regime/` → README de puntero. `knowledge/`
 (repo nuevo): `c9be9dd`, `d56a5fb`.
 
-### Commands and exact results (2026-09-23, después de `db51c3a`)
+### Commands and exact results — revisión final `a21cfa3` (2026-09-24, después de R1 y C1)
+
+```text
+python tools/engineering_gate.py           → PASS
+python -B -m ruff check --no-cache .       → All checks passed!
+git diff --check a21cfa3                   → exit 0
+python tools/verify_wheel_assets.py        → wheel reconstruido (rm dist + build); 22 checks ok; RESULT: PASS
+python -B -m pytest -q -p no:cacheprovider → 699 passed, 1 warning in 85.31s
+```
+
+### Commands and exact results (histórico, 2026-09-23, después de `db51c3a`)
 
 ```text
 python tools/engineering_gate.py          → PASS (10 criterios abiertos)
@@ -178,3 +188,17 @@ migrados igual a los blobs de `6e13394^`. Sondas sobre una copia en el scratchpa
 | R1-m8 | MINOR | `status` seguía en IN_PROGRESS | **Corregido:** READY_FOR_REVIEW |
 | R1-m9 | MINOR | Prompt de la sesión 2 parafraseado | **Corregido:** `docs/evidence/gc-ai-0005/s2-prompt.md` con el texto literal |
 | R1-m10 | MINOR | `guard_git` rechazó commits a `knowledge/` desde Git Bash (la sesión 2 terminó usando PowerShell; el hook corrió igual) | **Registrado:** los commits del implementer a `knowledge/` desde Bash con `git -C "<ruta con />"` pasaron; la transcripción de la sesión 2 no guarda los comandos rechazados, así que la causa no está verificada. Sin efecto de seguridad (el destino no tiene gate y el push está bloqueado); se investiga si vuelve a pasar |
+
+## Independent review C1 (Codex, `--base d6a35d8`, esfuerzo alto, 2026-09-24T00:23Z) — `docs/engineering/reviews/GC-AI-0005-20260924T002326Z.md`
+
+Rango `d6a35d8..9c1b08f`, árbol limpio. **CHANGES_REQUESTED.** Reprodujo gate, ruff, `diff --check`;
+pytest 694 passed en la segunda corrida (la primera tuvo 1 fallo intermitente en un test del visor
+no tocado, `WinError 10053`, que pasó aislado). AC-01/02/04/05/06/07/08 SUPPORTED; AC-03 y AC-09
+PARTIAL. No cambia `status`, `closure_blocked` ni `approval_result`.
+
+| # | Sev. | Hallazgo | Disposición |
+|---|---|---|---|
+| C1-M1 | MAJOR | `hypothesis="   "`, `next_steps=[" "]`, `limitations=[""]` pasaban los controles | **Corregido** (`a21cfa3`): se rechazan en save y revise; 5 tests de regresión |
+| C1-m1 | MINOR | Guía de régimen, `PHASE4-ALIGNMENT.md` y v5 seguían dando `GaleCore/research/regime` como ubicación | **Corregido:** la guía indica `knowledge/regime`; los documentos históricos anotan la migración |
+| C1-m2 | MINOR | AC-09 citaba una verificación del wheel anterior a R1 | **Corregido:** wheel reconstruido y verificado en `a21cfa3`, con salida exacta arriba; lo anterior queda como histórico |
+| — | nota | Fallo intermitente `test_oversized_or_empty_body_is_refused` (visor, código no tocado) | **Registrado:** no se reprodujo en las corridas de `a21cfa3` (699 passed) |
