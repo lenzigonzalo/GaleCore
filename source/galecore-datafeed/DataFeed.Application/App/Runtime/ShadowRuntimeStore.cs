@@ -121,20 +121,28 @@ namespace DataFeed.Application.App.Runtime
             _instances[instanceId] = instance;
         }
 
-        /// <summary>La instancia RUNNING de esa versión de spec, si hay una (el deploy no la duplica).</summary>
-        public StrategyInstance? RunningInstanceFor(string versionHash)
-            => _instances.Values.FirstOrDefault(i => i.LifecycleState == "RUNNING" && i.VersionHash == versionHash);
+        private readonly object _deployGate = new();
 
         /// <summary>
-        /// Despliega: guarda el deployment, la instancia y su evento INSTANCE_CREATED, en ese orden. Si
-        /// algo falla a mitad de camino, lo que quedó en la base es un deployment sin instancia, que no
-        /// corre nada.
+        /// Despliega, con una sola instancia RUNNING a la vez (el loop de entrada evalúa una):
+        /// si ya corre esa misma versión, devuelve esa instancia sin crear otra; si corre otra versión,
+        /// no despliega (Conflict). Chequeo y alta bajo el mismo lock: dos deploys simultáneos no crean
+        /// dos instancias. Guarda el deployment, la instancia y su evento INSTANCE_CREATED, en ese orden,
+        /// cada uno en su propia escritura: si una falla, lo anterior queda guardado (p. ej. una instancia
+        /// sin su evento), pero en memoria nunca hay algo que no esté en la base.
         /// </summary>
-        public void Deploy(StrategyDeployment deployment, StrategyInstance instance, OperationalEvent created)
+        public DeployResult DeployOrGetRunning(StrategyDeployment deployment, StrategyInstance instance, OperationalEvent created)
         {
-            _repository?.SaveDeployment(deployment);
-            SetInstance(instance.InstanceId, instance);
-            AddEvent(created);
+            lock (_deployGate)
+            {
+                var running = ActiveInstance();
+                if (running != null)
+                    return running.VersionHash == instance.VersionHash ? DeployResult.Existing(running) : DeployResult.Conflict(running);
+                _repository?.SaveDeployment(deployment);
+                SetInstance(instance.InstanceId, instance);
+                AddEvent(created);
+                return DeployResult.Created(instance);
+            }
         }
 
         public StrategyInstance? GetInstance(string instanceId)
@@ -143,23 +151,24 @@ namespace DataFeed.Application.App.Runtime
         public IReadOnlyCollection<StrategyInstance> AllInstances()
             => _instances.Values.ToList().AsReadOnly();
 
-        /// <summary>Devuelve la primera instancia RUNNING, o null si no hay ninguna.</summary>
+        /// <summary>
+        /// La instancia RUNNING más vieja, o null si no hay ninguna. Determinística (GC-0004): el orden
+        /// de un ConcurrentDictionary no lo es, y tras un reinicio podría cambiar cuál evalúa.
+        /// </summary>
         public StrategyInstance? ActiveInstance()
-            => _instances.Values.FirstOrDefault(i => i.LifecycleState == "RUNNING");
+            => _instances.Values.Where(i => i.LifecycleState == "RUNNING")
+                .OrderBy(i => i.CreatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).FirstOrDefault();
 
         public void UpdateInstanceState(string instanceId, string lifecycleState, string? schedulerState = null)
         {
             if (_instances.TryGetValue(instanceId, out var inst))
             {
-                var updated = inst with
-                {
-                    LifecycleState = lifecycleState,
-                    SchedulerState = schedulerState ?? inst.SchedulerState,
-                    UpdatedAt = DateTime.UtcNow
-                };
-                // Se guarda sólo si cambió el estado: el loop lo toca en cada tick.
-                if (updated.LifecycleState != inst.LifecycleState || updated.SchedulerState != inst.SchedulerState)
-                    _repository?.SaveInstance(updated);
+                // El loop lo llama en cada tick: si el estado no cambió no se toca nada, ni en memoria
+                // ni en la base (así no divergen).
+                var scheduler = schedulerState ?? inst.SchedulerState;
+                if (lifecycleState == inst.LifecycleState && scheduler == inst.SchedulerState) return;
+                var updated = inst with { LifecycleState = lifecycleState, SchedulerState = scheduler, UpdatedAt = DateTime.UtcNow };
+                _repository?.SaveInstance(updated);
                 _instances[instanceId] = updated;
             }
         }

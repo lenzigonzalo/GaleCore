@@ -59,6 +59,17 @@ namespace DataFeed.Application.App.Runtime
         public List<ShadowPosition> Positions { get; init; } = new();
     }
 
+    /// <summary>Resultado de ShadowRuntimeStore.DeployOrGetRunning.</summary>
+    public record DeployResult(string Kind, StrategyInstance Instance)
+    {
+        public const string KindCreated = "CREATED", KindExisting = "EXISTING", KindConflict = "CONFLICT";
+        public static DeployResult Created(StrategyInstance i) => new(KindCreated, i);
+        /// <summary>Ya corre esa misma versión: es esa instancia.</summary>
+        public static DeployResult Existing(StrategyInstance i) => new(KindExisting, i);
+        /// <summary>Corre otra versión; <see cref="Instance"/> es la que corre.</summary>
+        public static DeployResult Conflict(StrategyInstance running) => new(KindConflict, running);
+    }
+
     /// <summary>Qué se recuperó al arrancar y qué no se pudo (AC-04).</summary>
     public record ShadowRecoveryReport
     {

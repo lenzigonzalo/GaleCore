@@ -91,12 +91,14 @@ public class ShadowRuntimePersistenceTests
         var repo = new FakeRepository();
         ShadowRuntimeRecovery.Recover(store, repo, files);
         var instance = InstanceOf(files.Values.Single().Spec!);
-        store.Deploy(
-            new StrategyDeployment { DeploymentId = instance.DeploymentId, VersionHash = instance.VersionHash, DeployedAt = Now },
-            instance,
-            new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = instance.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now });
+        Assert.Equal(DeployResult.KindCreated, Deploy(store, instance).Kind);
         return (store, repo, instance);
     }
+
+    private static DeployResult Deploy(ShadowRuntimeStore store, StrategyInstance instance) => store.DeployOrGetRunning(
+        new StrategyDeployment { DeploymentId = instance.DeploymentId, VersionHash = instance.VersionHash, DeployedAt = Now },
+        instance,
+        new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = instance.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now });
 
     private static TradeCandidate CandidateFor(StrategyInstance instance) => RealCandidate() with { InstanceId = instance.InstanceId };
 
@@ -182,11 +184,51 @@ public class ShadowRuntimePersistenceTests
     }
 
     [Fact]
-    public void Deploy_SameVersionTwice_ReturnsTheRunningInstance()
+    public void Deploy_SameVersionAgain_ReturnsTheRunningInstance_AndOtherVersionIsAConflict()
     {
-        var (store, _, instance) = DurableRuntime();
-        Assert.Equal(instance.InstanceId, store.RunningInstanceFor(instance.VersionHash)?.InstanceId);
-        Assert.Null(store.RunningInstanceFor("sha256:otra"));
+        var (store, repo, instance) = DurableRuntime();
+
+        var again = Deploy(store, instance with { InstanceId = Guid.NewGuid().ToString(), DeploymentId = Guid.NewGuid().ToString() });
+        Assert.Equal(DeployResult.KindExisting, again.Kind);
+        Assert.Equal(instance.InstanceId, again.Instance.InstanceId);
+
+        var other = Deploy(store, instance with { InstanceId = Guid.NewGuid().ToString(), VersionHash = "sha256:otra" });
+        Assert.Equal(DeployResult.KindConflict, other.Kind);
+        Assert.Equal(instance.InstanceId, other.Instance.InstanceId);
+
+        Assert.Single(store.AllInstances());
+        Assert.Single(repo.Instances);
+        Assert.Single(repo.Deployments);
+    }
+
+    [Fact]
+    public async Task Deploy_Concurrent_CreatesOneInstance()
+    {
+        var files = FileSpecs();
+        var store = FreshStore(files);
+        var repo = new FakeRepository();
+        ShadowRuntimeRecovery.Recover(store, repo, files);
+        var spec = files.Values.Single().Spec!;
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ => Task.Run(() =>
+            Deploy(store, InstanceOf(spec, Guid.NewGuid().ToString()) with { DeploymentId = Guid.NewGuid().ToString() }))));
+
+        Assert.Single(results, r => r.Kind == DeployResult.KindCreated);
+        Assert.Single(results.Select(r => r.Instance.InstanceId).Distinct());
+        Assert.Single(store.AllInstances());
+        Assert.Single(repo.Deployments);
+    }
+
+    [Fact]
+    public void ActiveInstance_IsTheOldestRunning_Deterministically()
+    {
+        var store = new ShadowRuntimeStore();
+        var spec = SpecFile().Spec!;
+        var newer = InstanceOf(spec, "b") with { CreatedAt = Now.AddMinutes(5) };
+        var older = InstanceOf(spec, "z") with { CreatedAt = Now };
+        store.SetInstance(newer.InstanceId, newer);
+        store.SetInstance(older.InstanceId, older);
+        Assert.Equal("z", store.ActiveInstance()?.InstanceId);
     }
 
     // ── AC-04: recuperación ────────────────────────────────────────

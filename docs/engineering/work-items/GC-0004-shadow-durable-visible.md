@@ -82,18 +82,21 @@ una pestaña del monitor con login real.
 
 ## Requirement-to-evidence matrix
 
+"Tests" = probado en tests automáticos; "En vivo" = observado corriendo contra el entorno local con
+datos de mercado reales. Nada de lo "en vivo" pasó todavía: falta Docker (ver abajo).
+
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 | | | | Pendiente |
-| AC-02 | | | | Pendiente |
-| AC-03 | | | | Pendiente |
-| AC-04 | | | | Pendiente |
-| AC-05 | | | | Pendiente |
-| AC-06 | | | | Pendiente |
-| AC-07 | | | | Pendiente |
-| AC-08 | | | | Pendiente |
-| AC-09 | | | | Pendiente |
-| AC-10 | | | | Pendiente |
+| AC-01 | `dev/galecore_dev.py` (`check`, `up`, `seed-user`, `api`, `monitor`, `test`, `down`), `dev/supabase/config.toml`, roles `galecore_ddl`/`galecore_api`, migración `AddShadowRuntime` | `galecore_dev.py check` (detecta que falta Docker) | salida de `up` | Implementado; **no ejecutado** (sin Docker) |
+| AC-02 | `ShadowRuntimeStore` (repositorio antes que memoria), `EfShadowRuntimeRepository` | `ShadowRuntimePersistenceTests` (OpenedPosition_IsSaved…, DatabaseDown_…, DatabaseDownAtTheFill_…, InstanceState_…); `EfShadowRuntimeRepositoryTests` contra Postgres | — | Tests con repositorio falso: sí. Contra Postgres: **skipped** hasta tener base local |
+| AC-03 | `ShadowPersistenceGuard`, `ShadowRuntimePersistenceStatus`, 503 en Deploy/Metrics | `ShadowMetricsTests` (LocalDatabase_…, RemoteDatabase_…, MissingDatabase_…) | — | Tests: sí. En vivo: pendiente |
+| AC-04 | `ShadowRuntimeRecovery`, `Hydrate`, `SpecFor` por hash, `DeployOrGetRunning` (una instancia RUNNING, bajo lock), `ActiveInstance` determinística | `AfterRestart_*`, `RecoveringTwice_*`, `RecoveryFails_*`, `Deploy_*` (incluye concurrente), `ActiveInstance_*`; `SavedRecords_ComeBackAfterRestart…` contra Postgres | `docs/evidence/gc-0004/restart_demo.py` | Tests con repositorio falso: sí. Postgres y en vivo: pendiente |
+| AC-05 | `ShadowMetrics`, `EfShadowRuntimeRepository.LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; `MetricsInputs_…` contra Postgres | — | Cálculo: sí. Desde la base: pendiente |
+| AC-06 | `pages/Shadow.tsx`, `api/shadow.ts`, `types/shadow.ts`, pestaña en `TabNav`/`App` | `Shadow.test.tsx` 6/6; `tsc --noEmit` | — | Tests: sí. En el navegador: pendiente |
+| AC-07 | Mismo flujo de login contra Auth local; `RequireHttpsMetadata` sólo para issuer loopback | — | — | Implementado; **no ejecutado** |
+| AC-08 | `restart_demo.py` + recorrido tuyo en el monitor | — | `docs/evidence/gc-0004/<run>.json` | Pendiente: Docker + día hábil en sesión |
+| AC-09 | — | `dotnet test` 430 pass / 3 skipped (base 401); jest 6/6 | — | Parcial: faltan los 3 de Postgres |
+| AC-10 | — | Interno R1 CHANGES_REQUESTED → corregido (abajo) | — | Codex pendiente |
 
 ## Evaluación de Supabase local (24/09)
 
@@ -104,6 +107,38 @@ levantando sólo lo que el flujo usa (Postgres, Auth y el gateway) y excluyendo 
 Realtime, Edge Functions, logs y analytics. Intervención del owner: instalar WSL2 y Docker Desktop
 (requieren administrador y un reinicio).
 
+## Revisión interna R1 (agente `reviewer`, 24/09, `gc-0002-closed..cd41711`) — CHANGES_REQUESTED
+
+Reprodujo `dotnet test` 428/3 skipped, jest 6/6, `tsc`, `git diff --check`.
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| M1 | MAJOR | Deploy no atómico: dos POST simultáneos crean dos instancias | `DeployOrGetRunning` bajo lock; test concurrente (16 deploys → 1 instancia) |
+| M2 | MAJOR | La migración `AddShadowRuntime` está en la cadena que, sin `GALECORE_DB`, apunta a producción | **Decisión del owner** (abajo). Mitigación: el entorno dev siempre pasa `GALECORE_DB`; la rama no se reunifica sin esa decisión |
+| M3 | MAJOR | `ActiveInstance` no determinística; con dos versiones RUNNING podía evaluar cualquiera | Una sola instancia RUNNING: deploy de otra versión → 409 con la que corre; `ActiveInstance` = la más vieja |
+| m1 | MINOR | La recuperación perdía eventos de ciclo de vida viejos (tope 20000) | Se recargan todos los de ciclo de vida + los últimos N del resto |
+| m2 | MINOR | Escrituras de varias filas no transaccionales; comentario de `Deploy` equivocado | Comentario corregido: puede quedar una instancia sin su evento, nunca memoria sin base. Métricas no dependen de eventos |
+| m3 | MINOR | Comentario del test apuntaba a un script inexistente | Corregido; además el test de Postgres sólo corre contra una base `*_test` (vacía tablas) |
+| m4 | MINOR | `UpdatedAt` cambiaba en memoria sin guardarse | Si el estado no cambia, no se toca nada |
+| n1–n3 | NIT | SQL con f-strings en el script (valores generados, no explotable); puerto 54322 con contraseña por defecto; microsegundos | Aceptados; ver limitaciones |
+
+## Decisiones del owner pendientes
+
+1. **M2 — tablas de SHADOW y la cadena de migraciones de producción.** Hoy la migración vive sólo en
+   esta rama local. Si algún día se reunifica con `master`, el próximo `database update` a producción
+   crearía las 6 tablas (vacías; SHADOW no escribe ahí por el guard). Opciones: (a) no reunificar
+   esta migración hasta decidir llevar SHADOW a producción (recomendado: no cuesta nada hoy);
+   (b) contexto/historial de migraciones separado para el runtime. No bloquea I3.
+
+## Limitaciones declaradas
+
+- Un solo runtime SHADOW a la vez (una instancia RUNNING); cambiar de versión requiere parar la
+  instancia, y no hay endpoint para eso (no lo pide I3).
+- Sin Docker en este equipo: nada del entorno local ni los 3 tests de Postgres se ejecutaron aún.
+- Supabase local publica Postgres en :54322 con la contraseña por defecto de la CLI; sólo tiene datos
+  de prueba. Versión de Postgres local 17 (la de producción no se verificó).
+
 ## Implementer handoff
 
-**State:** IMPLEMENTING.
+**State:** IMPLEMENTING — código completo y revisado internamente; falta Codex, el entorno local
+(Docker) y la demostración en vivo.

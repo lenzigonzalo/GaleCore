@@ -8,9 +8,10 @@ using static DataFeed.Tests.ShadowRuntimeEngineTests;
 namespace DataFeed.Tests;
 
 /// <summary>
-/// Corre sólo con una base PostgreSQL local de prueba en GALECORE_TEST_DB (la levanta
-/// tools/dev/galecore-dev.ps1 test). Sin ella, o si no es local, el test queda Skipped con el motivo:
-/// nunca pasa en falso ni toca una base remota.
+/// Corre sólo con una base PostgreSQL local de prueba en GALECORE_TEST_DB (la pone
+/// `python dev/galecore_dev.py test`). Sin ella, si no es local, o si la base no se llama *_test
+/// (cada test vacía las tablas del runtime: nunca contra la base de desarrollo), queda Skipped con el
+/// motivo: nunca pasa en falso ni toca otra base.
 /// </summary>
 public sealed class PostgresFactAttribute : FactAttribute
 {
@@ -18,6 +19,8 @@ public sealed class PostgresFactAttribute : FactAttribute
     {
         var cs = Environment.GetEnvironmentVariable("GALECORE_TEST_DB");
         var reject = ShadowPersistenceGuard.RejectReason(cs);
+        if (reject == null && !(new NpgsqlConnectionStringBuilder(cs).Database ?? "").EndsWith("_test", StringComparison.Ordinal))
+            reject = "la base no se llama *_test";
         if (reject != null) Skip = $"sin base de prueba local (GALECORE_TEST_DB): {reject}";
     }
 }
@@ -94,7 +97,7 @@ public class EfShadowRuntimeRepositoryTests
             SpecName = "shadow_runtime_test_v1", LifecycleState = "RUNNING", SchedulerState = "IDLE", Mode = "SHADOW",
             CreatedAt = Now, UpdatedAt = Now,
         };
-        store.Deploy(
+        store.DeployOrGetRunning(
             new StrategyDeployment { DeploymentId = instance.DeploymentId, VersionHash = instance.VersionHash, DeployedAt = Now },
             instance,
             new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = instance.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now,
@@ -126,7 +129,7 @@ public class EfShadowRuntimeRepositoryTests
         Assert.Equal(store.GetEvaluations(instance.InstanceId).Single().GateResults.Count,
                      after.GetEvaluations(instance.InstanceId).Single().GateResults.Count);
         Assert.Equal(store.GetEvents(instance.InstanceId).Select(e => e.EventType), after.GetEvents(instance.InstanceId).Select(e => e.EventType));
-        Assert.Equal(instance.InstanceId, after.RunningInstanceFor(instance.VersionHash)?.InstanceId);
+        Assert.Equal(instance.InstanceId, after.ActiveInstance()?.InstanceId);
 
         data.Quotes[".SPY261030P720"] = new LegQuote(1.20, 1.30, Now);
         data.Quotes[".SPY261030P715"] = new LegQuote(0.60, 0.70, Now);

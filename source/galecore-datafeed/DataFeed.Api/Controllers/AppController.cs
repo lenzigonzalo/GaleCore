@@ -1263,9 +1263,9 @@ namespace DataFeed.Controllers
 
         /// <summary>
         /// Deploy de un spec cargado en modo SHADOW → crea deployment + instance, guardados en la base.
-        /// Sin persistencia no despliega (503 con el motivo, GC-0004). Si ya hay una instancia RUNNING
-        /// de esa misma versión, la devuelve en vez de crear otra: dos instancias de la misma versión
-        /// evaluarían dos veces y no respetarían el máximo de posiciones.
+        /// Sin persistencia no despliega (503 con el motivo, GC-0004). Una instancia RUNNING a la vez: si
+        /// ya corre esa misma versión la devuelve (existing = true) en vez de crear otra; si corre otra
+        /// versión, 409. Dos instancias evaluarían dos veces y no respetarían el máximo de posiciones.
         /// </summary>
         [Tags("App.Runtime")]
         [HttpPost("Runtime/Deploy")]
@@ -1282,19 +1282,6 @@ namespace DataFeed.Controllers
                 {
                     error = "SHADOW sin persistencia: no se despliega nada que se perdería al reiniciar.",
                     reason = _runtimePersistence.Reason,
-                });
-
-            var running = _runtimeStore.RunningInstanceFor(spec.ContentHash ?? "");
-            if (running != null)
-                return Ok(new
-                {
-                    deploymentId = running.DeploymentId,
-                    instanceId = running.InstanceId,
-                    specName = running.SpecName,
-                    mode = running.Mode,
-                    lifecycleState = running.LifecycleState,
-                    versionHash = running.VersionHash,
-                    existing = true,
                 });
 
             var deploymentId = Guid.NewGuid().ToString();
@@ -1325,7 +1312,7 @@ namespace DataFeed.Controllers
                 SpecVersion = spec.Identity.Version,
             };
 
-            _runtimeStore.Deploy(deployment, instance, new DataFeed.Application.App.Runtime.Contracts.OperationalEvent
+            var result = _runtimeStore.DeployOrGetRunning(deployment, instance, new DataFeed.Application.App.Runtime.Contracts.OperationalEvent
             {
                 EventId = Guid.NewGuid().ToString(),
                 InstanceId = instanceId,
@@ -1339,18 +1326,27 @@ namespace DataFeed.Controllers
                 Timestamp = now
             });
 
-            _logger.LogInformation("Runtime: deployed {SpecName} → instance {InstanceId} (SHADOW)",
-                body.SpecName, instanceId);
+            var shown = result.Instance;
+            if (result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindConflict)
+                return Conflict(new
+                {
+                    error = "Ya corre otra versión de spec en SHADOW; el runtime evalúa una instancia a la vez.",
+                    running = new { shown.InstanceId, shown.SpecName, shown.VersionHash },
+                });
+
+            if (result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindCreated)
+                _logger.LogInformation("Runtime: deployed {SpecName} → instance {InstanceId} (SHADOW)",
+                    body.SpecName, instanceId);
 
             return Ok(new
             {
-                deploymentId,
-                instanceId,
-                specName = body.SpecName,
-                mode = "SHADOW",
-                lifecycleState = "RUNNING",
-                versionHash = spec.ContentHash,
-                existing = false,
+                deploymentId = shown.DeploymentId,
+                instanceId = shown.InstanceId,
+                specName = shown.SpecName,
+                mode = shown.Mode,
+                lifecycleState = shown.LifecycleState,
+                versionHash = shown.VersionHash,
+                existing = result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindExisting,
             });
         }
 

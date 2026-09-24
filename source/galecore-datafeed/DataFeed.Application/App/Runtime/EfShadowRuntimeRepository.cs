@@ -164,9 +164,13 @@ namespace DataFeed.Application.App.Runtime
                 snapshot.Evaluations.AddRange(db.EvaluationLogs.AsNoTracking().Where(e => e.InstanceId == i.Id)
                     .OrderByDescending(e => e.EvaluatedAt).Take(maxEvaluationsPerInstance)
                     .AsEnumerable().Reverse().Select(ToContract));
-                snapshot.Events.AddRange(db.OperationalEvents.AsNoTracking().Where(e => e.InstanceId == i.Id)
-                    .OrderByDescending(e => e.Timestamp).Take(maxEventsPerInstance)
-                    .AsEnumerable().Reverse().Select(ToContract));
+                // Los de ciclo de vida vuelven todos (el store no los descarta nunca); del resto, los últimos N.
+                var lifecycle = ShadowRuntimeStore.LifecycleEventTypes.ToList();
+                var events = db.OperationalEvents.AsNoTracking().Where(e => e.InstanceId == i.Id);
+                var kept = events.Where(e => lifecycle.Contains(e.EventType)).ToList();
+                kept.AddRange(events.Where(e => !lifecycle.Contains(e.EventType))
+                    .OrderByDescending(e => e.Timestamp).Take(maxEventsPerInstance).ToList());
+                snapshot.Events.AddRange(kept.OrderBy(e => e.Timestamp).Select(ToContract));
             }
             return snapshot;
         }
