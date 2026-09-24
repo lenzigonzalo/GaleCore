@@ -47,6 +47,12 @@ Se le habla al host en lenguaje normal; el host hace el resto con el catálogo y
 
 **Actualización 24/09:** el owner cerró GC-AI-0002, 0003, 0004 y 0005; F-9 hecho. Queda GC-0001: el owner
 quiere ver la pestaña antes de decidir. La tabla queda como registro de lo que se evaluó.
+**GC-0001, login real bloqueado:** la API local no tiene `ConnectionStrings:GaleCore` (rol
+`galecore_api`, vive en App Settings de Azure), así que no puede resolver el usuario al loguear. El
+owner decidió dejarlo para cuando se pueda loguear; para probarlo: `dotnet user-secrets set
+"ConnectionStrings:GaleCore" "<cadena>" --project GaleCore/source/galecore-datafeed/DataFeed.Api` y
+reiniciar la API (queda conectada a la base real de usuarios). Un MCP de Supabase no resuelve esto y
+es una capacidad nueva (`BL-006`).
 
 Ninguno bloquea técnicamente el Paso 1: GC-AI-0005 parte de `feature/GC-AI-0004` (que ya contiene
 0002 y 0003) y cambia la ubicación del store de registros que estos items leen; si se cierran antes,
