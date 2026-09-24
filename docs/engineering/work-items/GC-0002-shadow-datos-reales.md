@@ -81,4 +81,25 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 
 ## Implementer handoff
 
-**State:** PENDING
+**State:** IMPLEMENTING — primera versión en `be3206a` (357 tests); review interno R1 CHANGES_REQUESTED, pendiente de corregir (abajo).
+
+## Internal review R1 (agente `reviewer`, 2026-09-24 ~02:00 UTC, rango `5fa6615..be3206a`) — CHANGES_REQUESTED, **pendiente de corregir**
+
+Reprodujo `dotnet test` 357/357 y build de `DataFeed.Api` a directorio temporal (0 errores).
+
+| # | Sev. | Hallazgo | A hacer |
+|---|---|---|---|
+| R1-B1 | BLOCKER | `MetricResolver.ResolveNetGex` (≈l.106-118): sin griegas u OI, `Strikes` queda vacío y `NetGEX` = 0 inventado, que **pasa** el gate `GEX >= 0` | Devolver null si no hay strikes, sin símbolos con griegas o sin OI > 0; regla en función pura con test |
+| R1-B2 | BLOCKER | `PcsCandidateBuilder` (≈l.73-96, 161-201): elige vencimiento/DTE de la cadena (incluye weeklies) pero pide GEX sin `ExpirationTypes` → el handler toma sólo mensuales; strikes, deltas, streamer y quotes pueden ser de **otro** vencimiento que el que se registra (ej. 24/09: weekly 11-03 vs mensual 11-20) | Pasar `ExpirationTypes = {Regular, Weekly}`; rechazar si `gexResponse.Expiration != expirationDate`; DTE desde `gexResponse.DTE` (ET); test del builder con mediator falso |
+| R1-M1 | MAJOR | `Snapshot.AsOf = DateTime.UtcNow` hace que el check de frescura del riesgo nunca falle; `LegQuote.AsOf` no se usa; `session_hours` ignorado (fills/cierres fuera de sesión con mids viejos) | Usar tiempos reales de cotización (o "edad desconocida"); no fills ni cierres fuera de sesión, valuación sí; o declararlo |
+| R1-M2 | MAJOR | AC-04 sin test de comportamiento (sólo reflexión sobre `Clear`); la lógica del switch vive en `DataFeed.Api`, sin tests | Mover la decisión de tick a Application y testear con switch OFF, o scan de fuente |
+| R1-m1 | MINOR | Defaults de parámetros de la spec en el builder (`?? -0.16`, etc.) | Fallar cerrado si la spec no declara el parámetro |
+| R1-m2 | MINOR | `ValuePositionAsync`: lado de pata desconocido se valúa como BUY | Reportarlo como problema |
+| R1-m3 | MINOR | Comentario "~8 días hábiles" falso (≈2 días a 1/min); el tope de eventos puede desalojar `POSITION_OPENED` de una posición abierta | Corregir número; no desalojar eventos de ciclo de vida |
+| R1-m4 | MINOR | `AllEvaluations()` sin uso; monitor salta posición sin spec sólo con log; la pausa no se ve en la instancia | Limpiar / evento / exponer pausa |
+| R1-m5 | MINOR | Scan de AC-07 no ve `GaleCoreAI`/`GaleCore.AI` ni `new()` tipado | Ampliar patrones |
+| R1-m6 | MINOR | `IRuntimeMarketData.BuildCandidateAsync` es media abstracción: deja el builder sin test | Replantear al corregir R1-B2 |
+| R1-m7 | MINOR | Dos relojes (`EvaluatedAt = UtcNow` en el evaluador vs `nowUtc` del motor) | Pasar el reloj |
+| R1-m8 | MINOR | AC-06: el cambio de hash no quedó registrado | Registrar hash viejo/nuevo en este item |
+| — | riesgo AC-08 | El gate de VIX usa el mid de la cotización; si DXLink no da bid/ask para índices, todo tick será NO_DATA | Verificar en vivo antes de la demo |
+
