@@ -21,10 +21,10 @@
   operación) y que vos lo mires en el monitor. Después, tu decisión de cierre.
 
 **Mañana, en orden (día hábil, 09:30–16:00 ET = 10:30–17:00 ART):**
-1. **Recheck de Codex:** quedó corriendo al cerrar. Buscar `GaleCore/docs/engineering/reviews/GC-0004-*.md`
-   más nuevo que `…215421Z.md`. Si no está: `python GaleCore/docs/evidence/gc-0004/codex_review.py
-   --recheck --model gpt-5.6-sol` (desde el workspace). Hacer triage en el work item; recheck sólo de
-   lo que se corrija (`ENGINEERING.md` §3).
+1. **Recheck C3 de Codex** (acotado a lo corregido por C2: bloqueo del script a GaleCore Dev y
+   evidencia `env1*`/`run0b`): `python GaleCore/docs/evidence/gc-0004/codex_review.py --recheck
+   --model gpt-5.6-sol` (desde el workspace; lee el último review, `…225600Z.md`). Triage en el work
+   item. Los MAJOR de C1 ya están resueltos según C2.
 2. **Corrida en sesión (host):** desde `GaleCore/`, con el puerto 7001 libre:
    `python docs/evidence/gc-0004/restart_demo.py --name run1-en-sesion --switch-on --minutes 10 --after 5`.
    Da PASS / INCOMPLETE / FAIL con el motivo; no fuerza operaciones ni toca gates. Commitear el JSON
