@@ -77,10 +77,17 @@ namespace DataFeed.Application.App.Runtime
             row.SpecName = instance.SpecName;
             row.Mode = instance.Mode;
             row.UpdatedAt = Utc(instance.UpdatedAt);
-            db.SaveChanges();
+            try
+            {
+                db.SaveChanges();
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505", ConstraintName: "ix_strategy_instances_single_running" })
+            {
+                throw new ShadowRuntimeConflictException("ya hay otra instancia SHADOW RUNNING en la base", ex);
+            }
         }
 
-        public void SavePosition(ShadowPosition p)
+        public void SavePosition(ShadowPosition p, OperationalEvent? lifecycleEvent = null)
         {
             using var db = _newContext();
             var id = Guid.Parse(p.PositionId);
@@ -111,6 +118,12 @@ namespace DataFeed.Application.App.Runtime
             row.LastValuedAt = UtcOrNull(p.LastValuedAt);
             row.ValuationProblemsJson = p.ValuationProblems == null ? null : JsonConvert.SerializeObject(p.ValuationProblems);
             row.UpdatedAt = Utc(p.UpdatedAt);
+            // Un solo SaveChanges = una transacción: la posición y su evento quedan juntos o no queda ninguno.
+            if (lifecycleEvent != null)
+            {
+                var eventId = Guid.Parse(lifecycleEvent.EventId);
+                if (!db.OperationalEvents.Any(x => x.Id == eventId)) db.OperationalEvents.Add(ToEntity(lifecycleEvent));
+            }
             db.SaveChanges();
         }
 
@@ -136,17 +149,19 @@ namespace DataFeed.Application.App.Runtime
             using var db = _newContext();
             var id = Guid.Parse(e.EventId);
             if (db.OperationalEvents.Any(x => x.Id == id)) return;
-            db.OperationalEvents.Add(new OperationalEventEntity
-            {
-                Id = id,
-                InstanceId = Guid.Parse(e.InstanceId),
-                EventType = e.EventType,
-                Symbol = e.Symbol,
-                PayloadJson = JsonConvert.SerializeObject(e.Payload),
-                Timestamp = Utc(e.Timestamp),
-            });
+            db.OperationalEvents.Add(ToEntity(e));
             db.SaveChanges();
         }
+
+        private static OperationalEventEntity ToEntity(OperationalEvent e) => new()
+        {
+            Id = Guid.Parse(e.EventId),
+            InstanceId = Guid.Parse(e.InstanceId),
+            EventType = e.EventType,
+            Symbol = e.Symbol,
+            PayloadJson = JsonConvert.SerializeObject(e.Payload),
+            Timestamp = Utc(e.Timestamp),
+        };
 
         // ── Lectura ────────────────────────────────────────────────
 

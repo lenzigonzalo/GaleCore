@@ -1326,13 +1326,14 @@ namespace DataFeed.Controllers
                 Timestamp = now
             });
 
-            var shown = result.Instance;
             if (result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindConflict)
                 return Conflict(new
                 {
-                    error = "Ya corre otra versión de spec en SHADOW; el runtime evalúa una instancia a la vez.",
-                    running = new { shown.InstanceId, shown.SpecName, shown.VersionHash },
+                    error = "Ya corre otra instancia SHADOW; el runtime evalúa una a la vez.",
+                    running = result.Instance == null ? null
+                        : new { result.Instance.InstanceId, result.Instance.SpecName, result.Instance.VersionHash },
                 });
+            var shown = result.Instance!;
 
             if (result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindCreated)
                 _logger.LogInformation("Runtime: deployed {SpecName} → instance {InstanceId} (SHADOW)",

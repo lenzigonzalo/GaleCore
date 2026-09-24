@@ -139,7 +139,14 @@ namespace DataFeed.Application.App.Runtime
                 if (running != null)
                     return running.VersionHash == instance.VersionHash ? DeployResult.Existing(running) : DeployResult.Conflict(running);
                 _repository?.SaveDeployment(deployment);
-                SetInstance(instance.InstanceId, instance);
+                try
+                {
+                    SetInstance(instance.InstanceId, instance);
+                }
+                catch (ShadowRuntimeConflictException)
+                {
+                    return DeployResult.Conflict(null);   // otro proceso desplegó primero; la base lo impidió
+                }
                 AddEvent(created);
                 return DeployResult.Created(instance);
             }
@@ -175,11 +182,7 @@ namespace DataFeed.Application.App.Runtime
 
         // ── Positions ──
 
-        public void AddPosition(ShadowPosition position)
-        {
-            _repository?.SavePosition(position);
-            _positions[position.PositionId] = position;
-        }
+        public void AddPosition(ShadowPosition position) => UpdatePosition(position);
 
         // Serializa el cambio del switch del runtime con el registro de una posición nueva: si el
         // switch se apaga, ninguna entrada que ya estaba en curso puede registrarse después (Codex C2).
@@ -193,22 +196,28 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>
         /// Registra la posición sólo si <paramref name="canOpen"/> sigue siendo true, en el mismo lock
-        /// que el cambio del switch. Devuelve false si no la registró.
+        /// que el cambio del switch. Devuelve false si no la registró. La posición y su evento de
+        /// apertura se guardan juntos (GC-0004): o quedan los dos o ninguno.
         /// </summary>
-        public bool TryAddPosition(ShadowPosition position, Func<bool> canOpen)
+        public bool TryAddPosition(ShadowPosition position, Func<bool> canOpen, OperationalEvent? opened = null)
         {
             lock (_commitGate)
             {
                 if (!canOpen()) return false;
-                AddPosition(position);
+                UpdatePosition(position, opened);
                 return true;
             }
         }
 
-        public void UpdatePosition(ShadowPosition position)
+        /// <summary>
+        /// Guarda la posición y, si viene, su evento de ciclo de vida (apertura o cierre) en una sola
+        /// transacción; recién después los deja en memoria.
+        /// </summary>
+        public void UpdatePosition(ShadowPosition position, OperationalEvent? lifecycleEvent = null)
         {
-            _repository?.SavePosition(position);
+            _repository?.SavePosition(position, lifecycleEvent);
             _positions[position.PositionId] = position;
+            if (lifecycleEvent != null) RememberEvent(lifecycleEvent);
         }
 
         public ShadowPosition? GetPosition(string positionId)
@@ -251,6 +260,11 @@ namespace DataFeed.Application.App.Runtime
         public void AddEvent(OperationalEvent evt)
         {
             _repository?.AddEvent(evt);
+            RememberEvent(evt);
+        }
+
+        private void RememberEvent(OperationalEvent evt)
+        {
             var list = _events.GetOrAdd(evt.InstanceId, _ => new List<OperationalEvent>());
             lock (list)
             {

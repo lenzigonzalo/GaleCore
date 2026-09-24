@@ -23,13 +23,24 @@ public class ShadowRuntimePersistenceTests
         public int InstanceSaves;
         public bool Fail;
         public bool FailOnSpecJson;
+        public bool FailOnSpec;
 
         private void Check() { if (Fail) throw new InvalidOperationException("base caída"); }
 
-        public void SaveSpec(StrategySpec spec, string specJson) { Check(); Specs.TryAdd(spec.ContentHash!, specJson); }
+        public void SaveSpec(StrategySpec spec, string specJson)
+        {
+            Check();
+            if (FailOnSpec) throw new InvalidOperationException("base caída");
+            Specs.TryAdd(spec.ContentHash!, specJson);
+        }
         public void SaveDeployment(StrategyDeployment d) { Check(); Deployments.Add(d); }
         public void SaveInstance(StrategyInstance i) { Check(); InstanceSaves++; Instances[i.InstanceId] = i; }
-        public void SavePosition(ShadowPosition p) { Check(); Positions[p.PositionId] = p; }
+        public void SavePosition(ShadowPosition p, OperationalEvent? e = null)
+        {
+            Check();   // una transacción: la posición y su evento, o nada
+            Positions[p.PositionId] = p;
+            if (e != null) Events.Add(e);
+        }
         public void AddEvaluation(EvaluationResult e) { Check(); Evaluations.Add(e); }
         public void AddEvent(OperationalEvent e) { Check(); Events.Add(e); }
 
@@ -68,13 +79,8 @@ public class ShadowRuntimePersistenceTests
 
     private static Dictionary<string, SpecLoadResult> FileSpecs() => new() { ["shadow_runtime_test_v1"] = SpecFile() };
 
-    /// <summary>Un store recién arrancado: specs de archivo registradas, como hace Program.</summary>
-    private static ShadowRuntimeStore FreshStore(Dictionary<string, SpecLoadResult> fileSpecs)
-    {
-        var store = new ShadowRuntimeStore();
-        foreach (var (name, r) in fileSpecs) store.RegisterSpec(name, r.Spec!);
-        return store;
-    }
+    /// <summary>Un store recién arrancado: vacío; las specs las registra la recuperación después de guardarlas.</summary>
+    private static ShadowRuntimeStore FreshStore(Dictionary<string, SpecLoadResult> _) => new();
 
     private static StrategyInstance InstanceOf(StrategySpec spec, string id = "11111111-1111-1111-1111-111111111111") => new()
     {
@@ -152,6 +158,37 @@ public class ShadowRuntimePersistenceTests
         Assert.Empty(store.AllPositions());
         Assert.Empty(repo.Positions);
         Assert.DoesNotContain(store.GetEvents(instance.InstanceId), e => e.EventType == "POSITION_OPENED");
+        Assert.DoesNotContain(repo.Events, e => e.EventType == "POSITION_OPENED");
+    }
+
+    [Fact]
+    public async Task ClosingAPosition_SavesTheCloseAndItsEventTogether()
+    {
+        var (store, repo, instance) = DurableRuntime();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(CandidateFor(instance)) };
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, store.SpecFor(instance)!, "SPY", Now, default);
+        var pos = store.AllPositions().Single();
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now);   // take profit con precios reales
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(store, data, pos, store.SpecFor(instance)!.Exits.Deterministic, Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Closed, outcome);
+        Assert.Equal("CLOSED", repo.Positions[pos.PositionId].Status);
+        Assert.Single(repo.Events, e => e.EventType == "POSITION_CLOSED");
+        Assert.Single(store.GetEvents(instance.InstanceId), e => e.EventType == "POSITION_CLOSED");
+    }
+
+    [Fact]
+    public void SpecCannotBeSaved_NothingIsRegistered_AndTheStoreIsNotDurable()
+    {
+        var repo = new FakeRepository { FailOnSpec = true };
+        var store = new ShadowRuntimeStore();
+
+        Assert.Throws<InvalidOperationException>(() => ShadowRuntimeRecovery.Recover(store, repo, FileSpecs()));
+
+        Assert.Empty(store.AllSpecs());
+        Assert.False(store.IsDurable);
     }
 
     private sealed class FailingOnPosition : IShadowRuntimeRepository
@@ -161,7 +198,7 @@ public class ShadowRuntimePersistenceTests
         public void SaveSpec(StrategySpec spec, string specJson) => _inner.SaveSpec(spec, specJson);
         public void SaveDeployment(StrategyDeployment d) => _inner.SaveDeployment(d);
         public void SaveInstance(StrategyInstance i) => _inner.SaveInstance(i);
-        public void SavePosition(ShadowPosition p) => throw new InvalidOperationException("base caída");
+        public void SavePosition(ShadowPosition p, OperationalEvent? e = null) => throw new InvalidOperationException("base caída");
         public void AddEvaluation(EvaluationResult e) => _inner.AddEvaluation(e);
         public void AddEvent(OperationalEvent e) => _inner.AddEvent(e);
         public ShadowRuntimeSnapshot Load(int a, int b) => _inner.Load(a, b);

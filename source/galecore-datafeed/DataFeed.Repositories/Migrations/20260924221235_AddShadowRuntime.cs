@@ -184,6 +184,13 @@ namespace DataFeed.Repositories.Migrations
                 column: "deployment_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_strategy_instances_single_running",
+                table: "strategy_instances",
+                column: "lifecycle_state",
+                unique: true,
+                filter: "lifecycle_state = 'RUNNING'");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_strategy_specs_content_hash",
                 table: "strategy_specs",
                 column: "content_hash",

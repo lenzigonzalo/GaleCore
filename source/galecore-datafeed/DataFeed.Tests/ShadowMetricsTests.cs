@@ -59,6 +59,16 @@ public class ShadowMetricsTests
     }
 
     [Fact]
+    public void SimultaneousExits_CountAsOneStep_WhateverTheRowOrder()
+    {
+        // Dos salidas en el mismo tick (+100 y −100) no generan un drawdown que dependa del orden.
+        var a = ShadowMetrics.Compute(new SpecVersionRecord { Positions = new() { Closed(100, 10), Closed(-100, 10) } });
+        var b = ShadowMetrics.Compute(new SpecVersionRecord { Positions = new() { Closed(-100, 10), Closed(100, 10) } });
+        Assert.Equal(0, a.MaxDrawdown);
+        Assert.Equal(a.MaxDrawdown, b.MaxDrawdown);
+    }
+
+    [Fact]
     public void Drawdown_FromTheStart_CountsAFirstLoss()
     {
         Assert.Equal(30, ShadowMetrics.MaxDrawdown(new[] { -30.0, 10.0 }));
@@ -84,30 +94,31 @@ public class ShadowMetricsTests
         Assert.Equal(1, m.OpenPositionsNotValued);
     }
 
-    // ── AC-03: nunca producción ────────────────────────────────────
+    // ── AC-03: persiste sólo donde el entorno lo prende ───────────
 
-    [Theory]
-    [InlineData("Host=127.0.0.1;Port=54322;Database=postgres;Username=galecore_api;Password=x")]
-    [InlineData("Host=localhost;Port=54322;Database=postgres")]
-    [InlineData("Host=::1;Database=postgres")]
-    [InlineData("Host=localhost,127.0.0.1:5433;Database=postgres")]
-    public void LocalDatabase_IsAccepted(string cs) => Assert.Null(ShadowPersistenceGuard.RejectReason(cs));
-
-    [Theory]
-    [InlineData("Host=aws-0-sa-east-1.pooler.supabase.com;Port=6543;Database=postgres;Username=galecore_api.ref;Password=x")]
-    [InlineData("Host=db.vsbnukptdvsyhujgtook.supabase.co;Database=postgres")]
-    [InlineData("Host=localhost,db.example.com;Database=postgres")]
-    [InlineData("Host=10.0.0.5;Database=postgres")]
-    public void RemoteDatabase_IsRejected(string cs)
+    [Fact]
+    public void PersistenceOff_IsRejected_EvenWithADatabase()
     {
-        var reason = ShadowPersistenceGuard.RejectReason(cs);
+        var reason = ShadowPersistenceGuard.RejectReason(false, "Host=db.example.supabase.co;Database=postgres");
         Assert.NotNull(reason);
-        Assert.Contains("no es local", reason);
+        Assert.Contains(ShadowPersistenceGuard.EnabledKey, reason);
     }
 
     [Theory]
     [InlineData(null)]
     [InlineData("")]
-    [InlineData("Database=postgres")]
-    public void MissingDatabase_IsRejected(string? cs) => Assert.NotNull(ShadowPersistenceGuard.RejectReason(cs));
+    public void PersistenceOn_WithoutDatabase_IsRejected(string? cs) => Assert.NotNull(ShadowPersistenceGuard.RejectReason(true, cs));
+
+    [Fact]
+    public void PersistenceOn_WithDatabase_IsAccepted()
+        => Assert.Null(ShadowPersistenceGuard.RejectReason(true, "Host=aws-1-sa-east-1.pooler.supabase.com;Database=postgres"));
+
+    [Fact]
+    public void PersistenceIsOffByDefault_InTheCommittedConfig()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !File.Exists(Path.Combine(dir.FullName, "DataFeed.Api", "appsettings.json"))) dir = dir.Parent;
+        var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(dir!.FullName, "DataFeed.Api", "appsettings.json")));
+        Assert.False(json.RootElement.GetProperty("Runtime").GetProperty("Persistence").GetProperty("Enabled").GetBoolean());
+    }
 }

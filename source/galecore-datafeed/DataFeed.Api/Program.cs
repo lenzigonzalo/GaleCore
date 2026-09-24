@@ -103,9 +103,6 @@ namespace DataFeed
                     .AddJwtBearer(options =>
                     {
                         options.Authority = supabaseIssuer;
-                        // La metadata se baja por https, salvo del Supabase local de desarrollo (loopback,
-                        // GC-0004): ahí no hay https y el JWKS igual viaja sin salir de la máquina.
-                        options.RequireHttpsMetadata = !new Uri(supabaseIssuer).IsLoopback;
 
                         // Los claims conservan el nombre que les puso Supabase. Por defecto ASP.NET
                         // los renombra a URIs XML heredadas de WS-Federation (sub -> nameidentifier,
@@ -349,7 +346,7 @@ namespace DataFeed
                 {
                     if (result.Success && result.Spec != null)
                     {
-                        runtimeStore.RegisterSpec(name, result.Spec);
+                        // Se registra más abajo: con persistencia, recién después de guardarla (GC-0004).
                         app.Services.GetRequiredService<ILogger<Program>>().LogInformation(
                             "Runtime: spec '{Name}' cargado (hash={Hash})", name, result.ContentHash);
                     }
@@ -360,14 +357,19 @@ namespace DataFeed
                     }
                 }
 
-                // GC-0004: persistencia y recuperación. Sólo en una base local (nunca producción); si
-                // no se puede, el runtime no despliega nada y la API sigue sirviendo todo lo demás.
+                // GC-0004: persistencia y recuperación, sólo donde el entorno la prende explícitamente
+                // (Runtime:Persistence:Enabled). Si no, el runtime no despliega nada y la API sigue
+                // sirviendo todo lo demás.
                 var persistence = app.Services.GetRequiredService<ShadowRuntimePersistenceStatus>();
                 var runtimeLog = app.Services.GetRequiredService<ILogger<Program>>();
-                var rejected = DataFeed.Application.App.Runtime.ShadowPersistenceGuard.RejectReason(galeCoreDb);
+                var rejected = DataFeed.Application.App.Runtime.ShadowPersistenceGuard.RejectReason(
+                    builder.Configuration.GetValue<bool>(DataFeed.Application.App.Runtime.ShadowPersistenceGuard.EnabledKey), galeCoreDb);
                 if (rejected != null)
                 {
                     persistence.MarkUnavailable(rejected);
+                    // Sin persistencia las specs se muestran (sólo lectura); no se puede desplegar ninguna.
+                    foreach (var (name, result) in specResults)
+                        if (result.Success && result.Spec != null) runtimeStore.RegisterSpec(name, result.Spec);
                     runtimeLog.LogWarning("Runtime SHADOW sin persistencia: {Reason}. No se puede desplegar.", rejected);
                 }
                 else

@@ -1,10 +1,10 @@
 """GC-0004 AC-08 — el runtime SHADOW sobrevive un reinicio de la API (evidencia reproducible).
 
-Contra el entorno de desarrollo aislado (`dev/galecore_dev.py up` + `seed-user`), con datos de mercado
+Contra el entorno de desarrollo aislado (proyecto Supabase GaleCore Dev, `dev/galecore_dev.py`), con datos de mercado
 reales. Hace, en un solo comando:
 
   1. build y arranque de la API (:7001) con la config del entorno local;
-  2. login real del usuario de prueba (username → API → Supabase Auth local → JWT);
+  2. login real del usuario de prueba (username -> API -> Supabase Auth local -> JWT);
   3. deploy de la spec de prueba (idempotente) y, con --switch-on, switch del runtime en ON;
   4. espera --minutes para que corran evaluaciones (sólo en sesión: 09:30–16:00 ET, días hábiles);
   5. captura A: Status, Metrics, evaluaciones, eventos y posiciones de la instancia;
@@ -129,6 +129,46 @@ def compare(a: dict, b: dict) -> dict:
     return checks
 
 
+def verdict(ev: dict) -> dict:
+    """PASS sólo si se comprobó todo; INCOMPLETE si el mercado no dio con qué (nunca un PASS vacío)."""
+    failures, missing = [], []
+    for name in ("capture_a", "capture_b", "capture_c"):
+        for key, got in ev[name].items():
+            if key != "captured_at" and got["http"] != 200:
+                failures.append(f"{name}.{key}: HTTP {got['http']}")
+    if failures:
+        return {"result": "FAIL", "failures": failures, "missing": missing}
+    for name in ("capture_a", "capture_b", "capture_c"):
+        if not ev[name]["status"]["body"]["persistence"]["available"]:
+            failures.append(f"{name}: persistencia no disponible")
+    for check in ("restart_check", "continue_check"):
+        c = ev[check]
+        for k in ("evaluations", "events", "positions"):
+            if not c[k]["all_kept"] or c[k]["duplicates_after"]:
+                failures.append(f"{check}.{k}: faltan {c[k]['missing']} o hay {c[k]['duplicates_after']} duplicados")
+        if not c["positions_unchanged"] and check == "restart_check":
+            failures.append("restart_check: una posición cambió con el reinicio")
+        if not c["instances"]["same"]:
+            failures.append(f"{check}: cambió la instancia ({c['instances']})")
+    if failures:
+        return {"result": "FAIL", "failures": failures, "missing": missing}
+    # Lo que tiene que haberse observado en vivo para que el reinicio signifique algo.
+    if ev["restart_check"]["evaluations"]["before"] == 0:
+        missing.append("sin evaluaciones antes del reinicio (fuera de sesión o switch OFF)")
+    if ev["continue_check"]["evaluations"]["after"] <= ev["continue_check"]["evaluations"]["before"]:
+        missing.append("sin evaluaciones nuevas después del reinicio (el seguimiento no se vio continuar)")
+    open_before = [p for p in ev["capture_b"]["positions"]["body"] or [] if p["status"] == "OPEN"]
+    if not open_before:
+        missing.append("sin posiciones abiertas: la recuperación de posiciones no se pudo observar en vivo")
+    else:
+        after = {p["positionId"]: p for p in ev["capture_c"]["positions"]["body"] or []}
+        if not any(
+            (after[p["positionId"]].get("lastValuedAt") or "") > (p.get("lastValuedAt") or "") for p in open_before
+        ):
+            missing.append("las posiciones abiertas no se volvieron a valuar después del reinicio")
+    return {"result": "INCOMPLETE" if missing else "PASS", "failures": [], "missing": missing}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", required=True)
@@ -191,13 +231,9 @@ def main() -> int:
         time.sleep(args.after * 60)
         ev["capture_c"] = capture(token, instance_id)
         ev["continue_check"] = compare(ev["capture_b"], ev["capture_c"])
-        ok = all(
-            ev["restart_check"][k]["all_kept"] and ev["restart_check"][k]["duplicates_after"] == 0
-            for k in ("evaluations", "events", "positions")
-        )
-        ok = ok and ev["restart_check"]["positions_unchanged"] and ev["restart_check"]["instances"]["same"]
-        ev["result"] = "PASS" if ok else "FAIL"
-        exit_code = 0 if ok else 2
+        ev["verdict"] = verdict(ev)
+        ev["result"] = ev["verdict"]["result"]
+        exit_code = {"PASS": 0, "INCOMPLETE": 3}.get(ev["result"], 2)
     except Exception as e:  # noqa: BLE001 — se registra y se sale con código de error
         ev["error"] = str(e)
         ev["result"] = "ERROR"
@@ -215,7 +251,7 @@ def main() -> int:
         )
         out = OUT / f"{args.name}.json"
         out.write_text(json.dumps(ev, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
-        print(f"{ev['result']} → {out}")
+        print(f"{ev['result']} -> {out}")
     return exit_code
 
 

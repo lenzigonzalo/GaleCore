@@ -56,8 +56,7 @@ namespace DataFeed.Application.App.Runtime
 
         public static SpecVersionMetrics Compute(SpecVersionRecord r)
         {
-            var closed = r.Positions.Where(p => p.Status == "CLOSED" && p.RealizedPnl != null)
-                .OrderBy(p => p.ExitAt ?? DateTime.MaxValue).ToList();
+            var closed = r.Positions.Where(p => p.Status == "CLOSED" && p.RealizedPnl != null).ToList();
             var open = r.Positions.Where(p => p.Status == "OPEN").ToList();
             var valued = open.Where(p => p.UnrealizedPnl != null).ToList();
             var discards = DiscardEventTypes
@@ -84,7 +83,10 @@ namespace DataFeed.Application.App.Runtime
                 RealizedPnl = closed.Count == 0 ? null : Math.Round(closed.Sum(p => p.RealizedPnl!.Value), 2),
                 UnrealizedPnl = valued.Count == 0 ? null : Math.Round(valued.Sum(p => p.UnrealizedPnl!.Value), 2),
                 WinRate = closed.Count == 0 ? null : Math.Round((double)closed.Count(p => p.RealizedPnl > 0) / closed.Count, 4),
-                MaxDrawdown = closed.Count == 0 ? null : MaxDrawdown(closed.Select(p => p.RealizedPnl!.Value)),
+                // Las salidas del mismo instante (un mismo tick del monitor) cuentan como un solo paso:
+                // así el drawdown no depende del orden en que la base devuelva las filas.
+                MaxDrawdown = closed.Count == 0 ? null : MaxDrawdown(closed.GroupBy(p => p.ExitAt)
+                    .OrderBy(g => g.Key ?? DateTime.MaxValue).Select(g => g.Sum(p => p.RealizedPnl!.Value))),
             };
         }
 

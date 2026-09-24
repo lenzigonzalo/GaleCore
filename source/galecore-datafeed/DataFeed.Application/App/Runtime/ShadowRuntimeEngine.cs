@@ -132,15 +132,15 @@ namespace DataFeed.Application.App.Runtime
                 AddEvent(store, instance, "CANDIDATE_NOT_VIABLE", symbol, nowUtc, ("reason", ex.Message));
                 return Outcomes.NoCandidate;
             }
-            if (!store.TryAddPosition(position, canOpen ?? (() => true)))
+            var opened = NewEvent(instance.InstanceId, "POSITION_OPENED", symbol, nowUtc,
+                ("position_id", position.PositionId), ("credit", position.EntryCredit),
+                ("max_risk", position.MaxRisk), ("dte", position.EntryDte));
+            if (!store.TryAddPosition(position, canOpen ?? (() => true), opened))
             {
                 AddEvent(store, instance, "ENTRY_ABORTED", symbol, nowUtc,
                     ("reason", "el switch se apagó mientras se evaluaba la entrada"), ("candidate_id", candidate.CandidateId));
                 return Outcomes.Paused;
             }
-            AddEvent(store, instance, "POSITION_OPENED", symbol, nowUtc,
-                ("position_id", position.PositionId), ("credit", position.EntryCredit),
-                ("max_risk", position.MaxRisk), ("dte", position.EntryDte));
             return Outcomes.Opened;
         }
 
@@ -214,17 +214,10 @@ namespace DataFeed.Application.App.Runtime
             if (reason == null) return Outcomes.Valued;
 
             var closed = ShadowFillSimulator.Close(valued, spreadValue, reason, nowUtc);
-            store.UpdatePosition(closed);
-            store.AddEvent(new OperationalEvent
-            {
-                EventId = Guid.NewGuid().ToString(), InstanceId = pos.InstanceId, EventType = "POSITION_CLOSED",
-                Symbol = pos.Symbol, Timestamp = nowUtc,
-                Payload = new Dictionary<string, object?>
-                {
-                    ["position_id"] = pos.PositionId, ["exit_reason"] = reason,
-                    ["realized_pnl"] = closed.RealizedPnl, ["exit_debit"] = closed.ExitDebit, ["dte"] = dte,
-                },
-            });
+            // El cierre y su evento se guardan juntos (GC-0004).
+            store.UpdatePosition(closed, NewEvent(pos.InstanceId, "POSITION_CLOSED", pos.Symbol, nowUtc,
+                ("position_id", pos.PositionId), ("exit_reason", reason),
+                ("realized_pnl", closed.RealizedPnl), ("exit_debit", closed.ExitDebit), ("dte", dte)));
             return Outcomes.Closed;
         }
 
@@ -260,16 +253,17 @@ namespace DataFeed.Application.App.Runtime
 
         private static void AddEvent(ShadowRuntimeStore store, StrategyInstance instance, string type, string symbol,
             DateTime nowUtc, params (string Key, object? Value)[] payload)
+            => store.AddEvent(NewEvent(instance.InstanceId, type, symbol, nowUtc, payload));
+
+        private static OperationalEvent NewEvent(string instanceId, string type, string? symbol,
+            DateTime nowUtc, params (string Key, object? Value)[] payload) => new()
         {
-            store.AddEvent(new OperationalEvent
-            {
-                EventId = Guid.NewGuid().ToString(),
-                InstanceId = instance.InstanceId,
-                EventType = type,
-                Symbol = symbol,
-                Payload = payload.ToDictionary(p => p.Key, p => p.Value),
-                Timestamp = nowUtc,
-            });
-        }
+            EventId = Guid.NewGuid().ToString(),
+            InstanceId = instanceId,
+            EventType = type,
+            Symbol = symbol,
+            Payload = payload.ToDictionary(p => p.Key, p => p.Value),
+            Timestamp = nowUtc,
+        };
     }
 }

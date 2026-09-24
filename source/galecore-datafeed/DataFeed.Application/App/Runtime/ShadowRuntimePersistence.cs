@@ -16,7 +16,8 @@ namespace DataFeed.Application.App.Runtime
         void SaveSpec(StrategySpec spec, string specJson);
         void SaveDeployment(StrategyDeployment deployment);
         void SaveInstance(StrategyInstance instance);
-        void SavePosition(ShadowPosition position);
+        /// <summary>Guarda la posición y, si viene, su evento de ciclo de vida en la misma transacción.</summary>
+        void SavePosition(ShadowPosition position, OperationalEvent? lifecycleEvent = null);
         void AddEvaluation(EvaluationResult evaluation);
         void AddEvent(OperationalEvent evt);
 
@@ -59,15 +60,24 @@ namespace DataFeed.Application.App.Runtime
         public List<ShadowPosition> Positions { get; init; } = new();
     }
 
+    /// <summary>
+    /// La base rechazó una segunda instancia RUNNING (índice único parcial): otro proceso desplegó
+    /// primero. El invariante "una sola instancia RUNNING" vale aunque haya más de una API.
+    /// </summary>
+    public class ShadowRuntimeConflictException : Exception
+    {
+        public ShadowRuntimeConflictException(string message, Exception inner) : base(message, inner) { }
+    }
+
     /// <summary>Resultado de ShadowRuntimeStore.DeployOrGetRunning.</summary>
-    public record DeployResult(string Kind, StrategyInstance Instance)
+    public record DeployResult(string Kind, StrategyInstance? Instance)
     {
         public const string KindCreated = "CREATED", KindExisting = "EXISTING", KindConflict = "CONFLICT";
         public static DeployResult Created(StrategyInstance i) => new(KindCreated, i);
         /// <summary>Ya corre esa misma versión: es esa instancia.</summary>
         public static DeployResult Existing(StrategyInstance i) => new(KindExisting, i);
-        /// <summary>Corre otra versión; <see cref="Instance"/> es la que corre.</summary>
-        public static DeployResult Conflict(StrategyInstance running) => new(KindConflict, running);
+        /// <summary>Corre otra instancia; <see cref="Instance"/> es la que corre (null si la creó otro proceso).</summary>
+        public static DeployResult Conflict(StrategyInstance? running) => new(KindConflict, running);
     }
 
     /// <summary>Qué se recuperó al arrancar y qué no se pudo (AC-04).</summary>
@@ -99,9 +109,11 @@ namespace DataFeed.Application.App.Runtime
             ShadowRuntimeStore store, IShadowRuntimeRepository repository,
             IReadOnlyDictionary<string, SpecLoadResult> fileSpecs)
         {
-            foreach (var (_, result) in fileSpecs)
-                if (result.Success && result.Spec != null && result.Json != null)
-                    repository.SaveSpec(result.Spec, result.Json);
+            // Las specs de archivo se guardan antes de registrarse en memoria (AC-02): el store no
+            // ofrece una spec que no esté en la base.
+            var valid = fileSpecs.Where(f => f.Value is { Success: true, Spec: not null, Json: not null }).ToList();
+            foreach (var (_, result) in valid) repository.SaveSpec(result.Spec!, result.Json!);
+            var fileHashes = valid.Select(f => f.Value.ContentHash).ToHashSet();
 
             // Todas las lecturas de la base van antes de tocar la memoria: si una falla, el store queda
             // como estaba (sin instancias recuperadas que corran sin persistencia).
@@ -111,7 +123,7 @@ namespace DataFeed.Application.App.Runtime
             var problems = new List<string>();
             foreach (var hash in snapshot.Instances.Select(i => i.VersionHash).Where(h => !string.IsNullOrEmpty(h)).Distinct())
             {
-                if (store.GetSpecByHash(hash) != null) continue;
+                if (fileHashes.Contains(hash) || store.GetSpecByHash(hash) != null) continue;
 
                 var json = repository.GetSpecJson(hash);
                 var loaded = json == null ? null : StrategySpecLoader.LoadFromJson(json);
@@ -128,6 +140,7 @@ namespace DataFeed.Application.App.Runtime
                 }
             }
 
+            foreach (var (name, result) in valid) store.RegisterSpec(name, result.Spec!);
             store.Hydrate(snapshot);
             foreach (var spec in rebuiltSpecs) store.RegisterSpecVersion(spec);
             store.AttachRepository(repository);

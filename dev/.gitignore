@@ -1,5 +1,2 @@
-# Generado por galecore_dev.py: credenciales del entorno LOCAL de prueba. Nunca a git.
+# Generado por galecore_dev.py: credenciales del proyecto de DESARROLLO (datos de prueba). Nunca a git.
 .local/
-supabase/signing_keys.json
-supabase/.temp/
-supabase/.branches/

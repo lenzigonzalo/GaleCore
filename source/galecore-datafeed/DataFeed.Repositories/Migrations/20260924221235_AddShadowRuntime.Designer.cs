@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace DataFeed.Repositories.Migrations
 {
     [DbContext(typeof(GaleCoreDbContext))]
-    [Migration("20260924201445_AddShadowRuntime")]
+    [Migration("20260924221235_AddShadowRuntime")]
     partial class AddShadowRuntime
     {
         /// <inheritdoc />
@@ -399,6 +399,11 @@ namespace DataFeed.Repositories.Migrations
 
                     b.HasIndex("DeploymentId")
                         .HasDatabaseName("ix_strategy_instances_deployment_id");
+
+                    b.HasIndex("LifecycleState")
+                        .IsUnique()
+                        .HasDatabaseName("ix_strategy_instances_single_running")
+                        .HasFilter("lifecycle_state = 'RUNNING'");
 
                     b.ToTable("strategy_instances", (string)null);
                 });

@@ -8,20 +8,19 @@ using static DataFeed.Tests.ShadowRuntimeEngineTests;
 namespace DataFeed.Tests;
 
 /// <summary>
-/// Corre sólo con una base PostgreSQL local de prueba en GALECORE_TEST_DB (la pone
-/// `python dev/galecore_dev.py test`). Sin ella, si no es local, o si la base no se llama *_test
-/// (cada test vacía las tablas del runtime: nunca contra la base de desarrollo), queda Skipped con el
-/// motivo: nunca pasa en falso ni toca otra base.
+/// Corre sólo con una base PostgreSQL de prueba en GALECORE_TEST_DB (la pone
+/// `python dev/galecore_dev.py test`, en el proyecto de desarrollo). Sin ella, o si la base no se
+/// llama *_test (cada test vacía las tablas del runtime: nunca contra la base de desarrollo ni la de
+/// producción), queda Skipped con el motivo: nunca pasa en falso ni toca otra base.
 /// </summary>
 public sealed class PostgresFactAttribute : FactAttribute
 {
     public PostgresFactAttribute()
     {
         var cs = Environment.GetEnvironmentVariable("GALECORE_TEST_DB");
-        var reject = ShadowPersistenceGuard.RejectReason(cs);
-        if (reject == null && !(new NpgsqlConnectionStringBuilder(cs).Database ?? "").EndsWith("_test", StringComparison.Ordinal))
-            reject = "la base no se llama *_test";
-        if (reject != null) Skip = $"sin base de prueba local (GALECORE_TEST_DB): {reject}";
+        if (string.IsNullOrWhiteSpace(cs)) Skip = "sin base de prueba (GALECORE_TEST_DB)";
+        else if (!(new NpgsqlConnectionStringBuilder(cs).Database ?? "").EndsWith("_test", StringComparison.Ordinal))
+            Skip = "GALECORE_TEST_DB no apunta a una base *_test";
     }
 }
 
@@ -97,7 +96,7 @@ public class EfShadowRuntimeRepositoryTests
             SpecName = "shadow_runtime_test_v1", LifecycleState = "RUNNING", SchedulerState = "IDLE", Mode = "SHADOW",
             CreatedAt = Now, UpdatedAt = Now,
         };
-        store.DeployOrGetRunning(
+        _ = store.DeployOrGetRunning(
             new StrategyDeployment { DeploymentId = instance.DeploymentId, VersionHash = instance.VersionHash, DeployedAt = Now },
             instance,
             new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = instance.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now,
@@ -139,6 +138,51 @@ public class EfShadowRuntimeRepositoryTests
         var third = Boot(new EfShadowRuntimeRepository(() => new GaleCoreDbContext(Options())), out _);
         Assert.Equal(25.0, third.GetPosition(opened.PositionId)!.UnrealizedPnl);
         Assert.Single(third.AllPositions());
+    }
+
+    [PostgresFact]
+    public async Task OpenedPosition_AndItsEvent_AreOneTransaction()
+    {
+        var repo = FreshRepository();
+        var store = Boot(repo, out _);
+        var instance = Deploy(store);
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate() with { InstanceId = instance.InstanceId }) };
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, store.SpecFor(instance)!, "SPY", Now, default);
+
+        using var db = new GaleCoreDbContext(Options());
+        Assert.Equal(1, db.ShadowPositions.Count());
+        Assert.Equal(1, db.OperationalEvents.Count(e => e.EventType == "POSITION_OPENED"));
+    }
+
+    [PostgresFact]
+    public void TwoProcesses_CannotBothHaveARunningInstance()
+    {
+        var repo = FreshRepository();
+        var first = Boot(repo, out _);
+        Deploy(first);
+        // Otro proceso con su propio store (no comparte el lock en memoria): la base lo frena.
+        var second = Boot(new EfShadowRuntimeRepository(() => new GaleCoreDbContext(Options())), out _);
+        second.UpdateInstanceState(second.ActiveInstance()!.InstanceId, "STOPPED");   // simula un store que no la ve
+        var spec = second.GetSpec("shadow_runtime_test_v1")!;
+        var other = new StrategyInstance
+        {
+            InstanceId = Guid.NewGuid().ToString(), DeploymentId = Guid.NewGuid().ToString(), VersionHash = spec.ContentHash!,
+            SpecName = "shadow_runtime_test_v1", LifecycleState = "RUNNING", SchedulerState = "IDLE", Mode = "SHADOW",
+            CreatedAt = Now, UpdatedAt = Now,
+        };
+        using (var db = new GaleCoreDbContext(Options()))
+        {
+            db.Database.ExecuteSqlRaw("UPDATE strategy_instances SET lifecycle_state = 'RUNNING'");   // la del primero sigue RUNNING
+        }
+
+        var result = second.DeployOrGetRunning(
+            new StrategyDeployment { DeploymentId = other.DeploymentId, VersionHash = other.VersionHash, DeployedAt = Now },
+            other,
+            new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = other.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now });
+
+        Assert.Equal(DeployResult.KindConflict, result.Kind);
+        using var check = new GaleCoreDbContext(Options());
+        Assert.Equal(1, check.StrategyInstances.Count(i => i.LifecycleState == "RUNNING"));
     }
 
     [PostgresFact]

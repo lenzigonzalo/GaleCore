@@ -140,6 +140,13 @@ namespace DataFeed.Repositories
                 e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
                 e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
                 e.HasOne(x => x.Deployment).WithMany().HasForeignKey(x => x.DeploymentId).OnDelete(DeleteBehavior.Cascade);
+                // Como máximo UNA instancia RUNNING (GC-0004): el loop de entrada evalúa una sola, y el
+                // invariante lo garantiza la base —igual que la cuenta de sistema— porque un lock en
+                // memoria no alcanza con dos procesos.
+                e.HasIndex(x => x.LifecycleState)
+                 .IsUnique()
+                 .HasFilter("lifecycle_state = 'RUNNING'")
+                 .HasDatabaseName("ix_strategy_instances_single_running");
             });
 
             b.Entity<ShadowPositionEntity>(e =>
