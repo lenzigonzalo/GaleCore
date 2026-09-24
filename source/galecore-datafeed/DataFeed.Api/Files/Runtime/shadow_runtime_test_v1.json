@@ -43,7 +43,7 @@
         {
           "id": "vix_absolute",
           "label": "VIX < 30",
-          "metric_ref": "capability:market_data.quote.VIX.price",
+          "metric_ref": "capability:market_data.trade.VIX.price",
           "operator": "LT",
           "threshold": { "value": 30 },
           "on_fail": "NO_TRADE",

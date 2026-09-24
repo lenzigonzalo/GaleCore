@@ -1,0 +1,284 @@
+{
+  "label": "AC-08 corrida 1 (codigo 55b18d1, VIX por Quote)",
+  "captured_at_utc": "2026-09-24T17:09:03.081881+00:00",
+  "instance_id": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+  "instance": {
+    "status": 200,
+    "body": {
+      "instance": {
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "deploymentId": "e79a430c-3558-4568-a74c-e62c152eabc8",
+        "versionHash": "sha256:91f3fd0a240363f6d77b3f0046e51d3b4e45fe058323b8d13fb81b18622c6ba3",
+        "lifecycleState": "RUNNING",
+        "schedulerState": "IDLE",
+        "createdAt": "2026-09-24T17:06:30.7047863Z",
+        "updatedAt": "2026-09-24T17:08:28.3762225Z",
+        "specName": "shadow_runtime_test_v1",
+        "mode": "SHADOW"
+      },
+      "positions": []
+    }
+  },
+  "evaluations": {
+    "status": 200,
+    "body": [
+      {
+        "evaluationId": "0225a3bf-59dd-40e6-b48c-027d363cda31",
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "symbol": "SPY",
+        "overallPass": false,
+        "gateResults": [
+          {
+            "gateId": "vix_absolute",
+            "label": "VIX < 30",
+            "status": "NO_DATA",
+            "value": null,
+            "threshold": 30.0,
+            "operator": "LT",
+            "onFail": "NO_TRADE"
+          },
+          {
+            "gateId": "gex_non_negative",
+            "label": "GEX >= 0",
+            "status": "FAIL",
+            "value": -83.5,
+            "threshold": 0.0,
+            "operator": "GTE",
+            "onFail": "NO_TRADE"
+          }
+        ],
+        "evaluatedAt": "2026-09-24T17:07:08.1238404Z"
+      },
+      {
+        "evaluationId": "3ed1eb07-f04e-4db7-9fa5-5fd9e231b3b7",
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "symbol": "SPY",
+        "overallPass": false,
+        "gateResults": [
+          {
+            "gateId": "vix_absolute",
+            "label": "VIX < 30",
+            "status": "NO_DATA",
+            "value": null,
+            "threshold": 30.0,
+            "operator": "LT",
+            "onFail": "NO_TRADE"
+          },
+          {
+            "gateId": "gex_non_negative",
+            "label": "GEX >= 0",
+            "status": "FAIL",
+            "value": -83.3,
+            "threshold": 0.0,
+            "operator": "GTE",
+            "onFail": "NO_TRADE"
+          }
+        ],
+        "evaluatedAt": "2026-09-24T17:08:18.223755Z"
+      }
+    ]
+  },
+  "events": {
+    "status": 200,
+    "body": [
+      {
+        "eventId": "2d2c05a5-db71-40c4-843d-50baabdb668b",
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "eventType": "INSTANCE_CREATED",
+        "symbol": null,
+        "payload": {
+          "spec_name": "shadow_runtime_test_v1",
+          "deployment_id": "e79a430c-3558-4568-a74c-e62c152eabc8",
+          "version_hash": "sha256:91f3fd0a240363f6d77b3f0046e51d3b4e45fe058323b8d13fb81b18622c6ba3"
+        },
+        "timestamp": "2026-09-24T17:06:30.7047863Z"
+      },
+      {
+        "eventId": "276f7b4c-d701-4e69-bdce-7e125c3a3938",
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "eventType": "METRICS_NO_DATA",
+        "symbol": "SPY",
+        "payload": {
+          "metric_refs": [
+            "capability:market_data.quote.VIX.price"
+          ]
+        },
+        "timestamp": "2026-09-24T17:07:08.1238404Z"
+      },
+      {
+        "eventId": "673a8182-8a28-4a8c-8aee-052bef3dcd3f",
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "eventType": "EVALUATION_COMPLETED",
+        "symbol": "SPY",
+        "payload": {
+          "evaluation_id": "0225a3bf-59dd-40e6-b48c-027d363cda31",
+          "overall_pass": false,
+          "gates": [
+            {
+              "gate_id": "vix_absolute",
+              "status": "NO_DATA",
+              "value": null,
+              "operator": "LT",
+              "threshold": 30.0
+            },
+            {
+              "gate_id": "gex_non_negative",
+              "status": "FAIL",
+              "value": -83.5,
+              "operator": "GTE",
+              "threshold": 0.0
+            }
+          ]
+        },
+        "timestamp": "2026-09-24T17:07:08.1238404Z"
+      },
+      {
+        "eventId": "cd92036e-e0ea-4497-a8ad-55bd4e8c08ff",
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "eventType": "GATES_NOT_PASSED",
+        "symbol": "SPY",
+        "payload": {
+          "evaluation_id": "0225a3bf-59dd-40e6-b48c-027d363cda31",
+          "gates": [
+            {
+              "gate_id": "vix_absolute",
+              "status": "NO_DATA",
+              "value": null,
+              "operator": "LT",
+              "threshold": 30.0
+            },
+            {
+              "gate_id": "gex_non_negative",
+              "status": "FAIL",
+              "value": -83.5,
+              "operator": "GTE",
+              "threshold": 0.0
+            }
+          ]
+        },
+        "timestamp": "2026-09-24T17:07:08.1238404Z"
+      },
+      {
+        "eventId": "6431a15f-a9c4-4505-8df3-38577e065735",
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "eventType": "METRICS_NO_DATA",
+        "symbol": "SPY",
+        "payload": {
+          "metric_refs": [
+            "capability:market_data.quote.VIX.price"
+          ]
+        },
+        "timestamp": "2026-09-24T17:08:18.223755Z"
+      },
+      {
+        "eventId": "b79898b8-7403-4f22-ba27-c8b981a80510",
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "eventType": "EVALUATION_COMPLETED",
+        "symbol": "SPY",
+        "payload": {
+          "evaluation_id": "3ed1eb07-f04e-4db7-9fa5-5fd9e231b3b7",
+          "overall_pass": false,
+          "gates": [
+            {
+              "gate_id": "vix_absolute",
+              "status": "NO_DATA",
+              "value": null,
+              "operator": "LT",
+              "threshold": 30.0
+            },
+            {
+              "gate_id": "gex_non_negative",
+              "status": "FAIL",
+              "value": -83.3,
+              "operator": "GTE",
+              "threshold": 0.0
+            }
+          ]
+        },
+        "timestamp": "2026-09-24T17:08:18.223755Z"
+      },
+      {
+        "eventId": "70d57ce4-27da-4c37-9bd7-18f22e69e711",
+        "instanceId": "9804fef3-18ee-4882-8ccf-80a211beb09e",
+        "eventType": "GATES_NOT_PASSED",
+        "symbol": "SPY",
+        "payload": {
+          "evaluation_id": "3ed1eb07-f04e-4db7-9fa5-5fd9e231b3b7",
+          "gates": [
+            {
+              "gate_id": "vix_absolute",
+              "status": "NO_DATA",
+              "value": null,
+              "operator": "LT",
+              "threshold": 30.0
+            },
+            {
+              "gate_id": "gex_non_negative",
+              "status": "FAIL",
+              "value": -83.3,
+              "operator": "GTE",
+              "threshold": 0.0
+            }
+          ]
+        },
+        "timestamp": "2026-09-24T17:08:18.223755Z"
+      }
+    ]
+  },
+  "switch": {
+    "status": 200,
+    "body": {
+      "enabled": true,
+      "source": "platform"
+    }
+  },
+  "vix_quote": {
+    "status": 200,
+    "body": {
+      "type": "FEED_DATA",
+      "channel": 3,
+      "data": [
+        {
+          "eventType": "Quote",
+          "eventSymbol": "VIX",
+          "eventTime": 0,
+          "sequence": 0,
+          "bidPrice": "NaN",
+          "bidSize": "NaN",
+          "askPrice": "NaN",
+          "askSize": "NaN",
+          "bidExchangeCode": "",
+          "askExchangeCode": "",
+          "midPrice": "NaN"
+        }
+      ]
+    }
+  },
+  "vix_trade": {
+    "status": 200,
+    "body": {
+      "type": "FEED_DATA",
+      "channel": 3,
+      "data": [
+        {
+          "eventType": "Trade",
+          "eventSymbol": "VIX",
+          "eventTime": 0,
+          "time": 1790269741214,
+          "timeNanoPart": 0,
+          "sequence": 4708,
+          "exchangeCode": "",
+          "price": 15.36,
+          "change": 0.18,
+          "size": "NaN",
+          "dayId": 20720,
+          "dayVolume": "NaN",
+          "dayTurnover": "NaN",
+          "tickDirection": "ZERO_DOWN",
+          "extendedTradingHours": false,
+          "timeStamp": "2026-09-24T17:09:01.214"
+        }
+      ]
+    }
+  }
+}

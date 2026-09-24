@@ -14,7 +14,7 @@ namespace DataFeed.Application.App.Runtime
     /// </summary>
     public static class ShadowRuntimeEngine
     {
-        public const string VixMetricRef = "capability:market_data.quote.VIX.price";
+        public const string VixMetricRef = "capability:market_data.trade.VIX.price";
 
         public static class Outcomes
         {

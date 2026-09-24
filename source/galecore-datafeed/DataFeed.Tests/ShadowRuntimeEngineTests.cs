@@ -10,7 +10,7 @@ namespace DataFeed.Tests;
 /// </summary>
 public class ShadowRuntimeEngineTests
 {
-    internal const string VixRef = "capability:market_data.quote.VIX.price";
+    internal const string VixRef = "capability:market_data.trade.VIX.price";
     internal const string GexRef = "capability:compute.gamma_exposure.SPY.net_gex";
     internal static readonly DateTime Now = new(2026, 9, 24, 15, 0, 0, DateTimeKind.Utc); // 11:00 ET
 

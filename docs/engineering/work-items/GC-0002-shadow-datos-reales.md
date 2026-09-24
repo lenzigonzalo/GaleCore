@@ -88,6 +88,13 @@ APPROVE (abajo). Siguiente: AC-08 en día hábil, después Codex.
 **Hash de la spec (AC-06, R1-m8)**, `StrategySpecHasher` sobre el archivo:
 - antes `pcs_spy_shadow_v1.json` (`5fa6615`): `sha256:09ad790a3d885d13ac13a6ecb1bde402345b7d9333741e4b5741a67764b1139b`
 - ahora `shadow_runtime_test_v1.json`: `sha256:91f3fd0a240363f6d77b3f0046e51d3b4e45fe058323b8d13fb81b18622c6ba3`
+- 24/09, decisión del owner en AC-08 (VIX por Trade, abajo): `sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076`
+
+**Decisión del owner (24/09, durante AC-08):** en vivo, DXLink publica el Quote de VIX sin bid/ask
+(`NaN`), así que el gate `vix_absolute` era NO_DATA en todo tick. El VIX real llega por Trade (así lo
+leen RPF y GEX). El owner eligió leerlo de ahí: `metric_ref` → `capability:market_data.trade.VIX.price`
+(`MetricResolver.UsableTradePrice`: sin precio positivo o sin hora del trade = NO_DATA). El umbral
+VIX < 30 no cambia. Evidencia de la corrida anterior: `docs/evidence/gc-0002/ac08-run1-vix-quote.json`.
 
 **Limitaciones declaradas:**
 - Sin calendario de feriados: un feriado de NYSE en día hábil cuenta como sesión abierta

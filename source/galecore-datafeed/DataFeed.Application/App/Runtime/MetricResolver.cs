@@ -1,5 +1,6 @@
 using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
+using DataFeed.Application.Data.Tastytrade.MarketDataTrade;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
@@ -10,6 +11,7 @@ namespace DataFeed.Application.App.Runtime
     ///
     /// Convención de metric_ref:
     ///   "capability:market_data.quote.{SYMBOL}.price"   → MarketDataQuoteRequest → MidPrice
+    ///   "capability:market_data.trade.{SYMBOL}.price"   → MarketDataTradeRequest → Price (último trade)
     ///   "capability:compute.gamma_exposure.{SYMBOL}.net_gex" → GammaExposureRequest → NetGEX
     ///
     /// Cada metric_ref se parsea y se despacha al handler MediatR correspondiente.
@@ -69,6 +71,13 @@ namespace DataFeed.Application.App.Runtime
                 return await ResolveQuotePrice(parts[2], ct);
             }
 
+            // market_data.trade.{SYMBOL}.price — para índices como VIX, que DXLink publica sin bid/ask
+            if (parts.Length == 4 && parts[0] == "market_data" && parts[1] == "trade" && parts[3] == "price")
+            {
+                var trade = await _mediator.Send(new MarketDataTradeRequest { Symbol = parts[2] }, ct);
+                return UsableTradePrice(trade?.Data?.FirstOrDefault());
+            }
+
             // compute.gamma_exposure.{SYMBOL}.net_gex
             if (parts.Length == 4 && parts[0] == "compute" && parts[1] == "gamma_exposure" && parts[3] == "net_gex")
             {
@@ -111,6 +120,18 @@ namespace DataFeed.Application.App.Runtime
             if (quote == null || !QuoteRules.IsUsable(quote.BidPrice, quote.AskPrice)) return null;
             var mid = quote.MidPrice;
             return mid > 0 ? mid : null;
+        }
+
+        /// <summary>
+        /// El precio del último trade, o null si no hay trade, el precio no es positivo o el proveedor no
+        /// informa cuándo fue: un precio sin hora no se distingue de uno viejo. Es la fuente de VIX:
+        /// DXLink publica el Quote del índice sin bid/ask (verificado en vivo el 24/09, GC-0002 AC-08).
+        /// </summary>
+        public static double? UsableTradePrice(TradeEvent? trade)
+        {
+            if (trade == null || trade.Time <= 0) return null;
+            var price = trade.Price;
+            return double.IsNaN(price) || double.IsInfinity(price) || price <= 0 ? null : price;
         }
 
         private async Task<double?> ResolveNetGex(string symbol, CancellationToken ct)

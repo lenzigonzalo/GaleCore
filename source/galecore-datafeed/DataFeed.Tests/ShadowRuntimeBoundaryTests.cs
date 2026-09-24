@@ -11,7 +11,7 @@ public class ShadowRuntimeBoundaryTests
 {
     private static readonly string[] AllowedRequests =
     {
-        "OptionChainsRequest", "GammaExposureRequest", "MarketDataQuoteRequest",
+        "OptionChainsRequest", "GammaExposureRequest", "MarketDataQuoteRequest", "MarketDataTradeRequest",
     };
 
     private static IEnumerable<string> RuntimeSources()

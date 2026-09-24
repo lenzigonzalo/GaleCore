@@ -2,6 +2,7 @@ using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime;
 using DataFeed.Application.App.Runtime.Contracts;
 using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
+using DataFeed.Application.Data.Tastytrade.MarketDataTrade;
 using static DataFeed.Tests.ShadowRuntimeEngineTests;
 
 namespace DataFeed.Tests;
@@ -187,5 +188,24 @@ public class MetricResolverQuoteTests
     public void RealQuote_IsTheMid()
     {
         Assert.Equal(15.25, MetricResolver.UsableQuotePrice(Q(15.2, 15.3))!.Value, 10);
+    }
+}
+
+/// <summary>GC-0002 AC-08 — VIX sale del último trade (DXLink publica el Quote del índice sin bid/ask).</summary>
+public class MetricResolverTradeTests
+{
+    [Fact]
+    public void TradeWithoutTimeOrPrice_IsNoData()
+    {
+        Assert.Null(MetricResolver.UsableTradePrice(null));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = 15.42, Time = 0 }));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = double.NaN, Time = 1790269546314 }));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = 0, Time = 1790269546314 }));
+    }
+
+    [Fact]
+    public void RealTrade_IsThePrice()
+    {
+        Assert.Equal(15.42, MetricResolver.UsableTradePrice(new TradeEvent { Price = 15.42, Time = 1790269546314 }));
     }
 }
