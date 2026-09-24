@@ -1,7 +1,7 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado (2026-09-24):** plan único en `roadmap/README.md`. GC-AI-0005 (Paso 1) con Codex APPROVE, esperando al owner. GC-AI-0002/0003/0004 y GC-0001 con APPROVE, esperando al owner (tabla abajo). APPROVE no cierra.
+**Estado (2026-09-24, cierre de sesión):** GC-AI-0002/0003/0004/0005 **CLOSED** por el owner (tag `phase4-closed`); F-9 hecho (ApiKey rotada). Pendiente sólo GC-0001 (el owner mira la pestaña). Siguiente decidido: **I2, SHADOW con datos reales** (work item de GaleCore). Plan: `roadmap/README.md`.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## Próxima sesión — punto de entrada
@@ -9,15 +9,14 @@
 **Qué seguir:** el plan único es [`roadmap/README.md`](../../../roadmap/README.md): estado, base
 común, secuencia I1–I5, casos de uso y decisiones abiertas. El item activo sigue siendo
 [GC-AI-0005](../engineering/work-items/GC-AI-0005-base-minima-conocimiento.md) (= I1), terminado y
-esperando el cierre del owner. **No se empieza otro incremento** hasta que el owner decida la
-prioridad (README §6; recomendación: I2, SHADOW con datos reales en GaleCore). La realineación del
+cerrado. El owner decidió el siguiente: **I2, SHADOW con datos reales en GaleCore** (README §4). La realineación del
 21/09 está archivada y no se sigue. Una idea nueva del owner se contrasta primero con el plan
 (`ENGINEERING.md` §1, "Ideas nuevas y el plan").
 
 ### GC-AI-0005 al 2026-09-24
 
-- **Estado:** READY_FOR_REVIEW con **Codex recheck C2 APPROVE** (`GC-AI-0005-20260924T003647Z.md`),
-  después de interno R1 y Codex C1 corregidos. **Falta sólo la decisión del owner** (VALIDATED/CLOSED).
+- **Estado:** **CLOSED** por el owner el 24/09, después de interno R1 y Codex C1 corregidos y
+  Codex recheck C2 APPROVE (`GC-AI-0005-20260924T003647Z.md`).
 - **Qué cambió para el host:** empezar por `cli catalog`; antecedentes con `cli kb search`
   (`--status unfinished` para trabajo pendiente); la base es `<workspace>/knowledge/` (repo de datos
   propio, se commitea después de cada sesión que escribe). Los registros de régimen viven ahí; en
@@ -45,6 +44,9 @@ Se le habla al host en lenguaje normal; el host hace el resto con el catálogo y
 4. **Al terminar:** el host commitea `knowledge/` (`git -C <workspace>/knowledge add -A` y `commit`).
 
 ### Cierres pendientes del owner
+
+**Actualización 24/09:** el owner cerró GC-AI-0002, 0003, 0004 y 0005; F-9 hecho. Queda GC-0001: el owner
+quiere ver la pestaña antes de decidir. La tabla queda como registro de lo que se evaluó.
 
 Ninguno bloquea técnicamente el Paso 1: GC-AI-0005 parte de `feature/GC-AI-0004` (que ya contiene
 0002 y 0003) y cambia la ubicación del store de registros que estos items leen; si se cierran antes,
