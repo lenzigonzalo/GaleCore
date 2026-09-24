@@ -48,6 +48,14 @@
       "description": "Cada 6h registra el skew25 del dia por simbolo en skew25_history.json. Es la serie de la que sale el RoC 5d del gate tail_score de RPF, asi que apagarlo no es gratis: cada dia sin registrar es un hueco en la historia. Corre un GammaExposure completo por simbolo, o sea que compite por DXLink.",
       "enabled": true,
       "switch_endpoint": "/App/GaleCore/Services/skew/Switch"
+    },
+    {
+      "id": "runtime",
+      "label": "Trading Runtime",
+      "name": "ShadowEntryLoopService",
+      "description": "Trading Runtime SHADOW (Phase 1). Evalua gates, construye candidatos, ejecuta fills simulados al mid-price y monitorea posiciones con exits deterministicos. NO ejecuta ordenes reales: todo es SHADOW. Arranca OFF.",
+      "enabled": false,
+      "switch_endpoint": "/App/GaleCore/Services/runtime/Switch"
     }
   ],
 

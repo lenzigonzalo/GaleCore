@@ -217,6 +217,13 @@ namespace DataFeed
             // único que esa estrategia corre por su cuenta (y lo que compite por el feed DXLink).
             builder.Services.AddSingleton<GexStrategySwitch>();
 
+            // Trading Runtime SHADOW (Phase 1) — store in-memory + loops. Arranca INERTE (switch OFF).
+            // Namespace separado (App.Runtime), switches independientes, sin FK a users/accounts.
+            builder.Services.AddSingleton<DataFeed.Application.App.Runtime.ShadowRuntimeStore>();
+            builder.Services.AddSingleton<RuntimeStrategySwitch>();
+            builder.Services.AddHostedService<ShadowEntryLoopService>();
+            builder.Services.AddHostedService<ShadowPositionMonitorService>();
+
             // Quién es quién (tabla `users`): hoy resuelve si quien llama es admin, que es el
             // permiso para tocar los kill switch. Se registra siempre, incluso sin base: adentro
             // resuelve el DbContext por scope y, si no está registrado, no hay permisos que
@@ -328,6 +335,27 @@ namespace DataFeed
             // Después de la autorización: solo tiene efecto sobre las rutas que declaran una
             // política ([EnableRateLimiting]), o sea hoy el login y nada más.
             app.UseRateLimiter();
+
+            // Trading Runtime: cargar specs de Files/Runtime/ al arrancar.
+            {
+                var runtimeStore = app.Services.GetRequiredService<DataFeed.Application.App.Runtime.ShadowRuntimeStore>();
+                var runtimeDir = Path.Combine(builder.Environment.ContentRootPath, "Files", "Runtime");
+                var specResults = DataFeed.Application.App.Runtime.StrategySpecLoader.LoadAll(runtimeDir);
+                foreach (var (name, result) in specResults)
+                {
+                    if (result.Success && result.Spec != null)
+                    {
+                        runtimeStore.RegisterSpec(name, result.Spec);
+                        app.Services.GetRequiredService<ILogger<Program>>().LogInformation(
+                            "Runtime: spec '{Name}' cargado (hash={Hash})", name, result.ContentHash);
+                    }
+                    else
+                    {
+                        app.Services.GetRequiredService<ILogger<Program>>().LogWarning(
+                            "Runtime: spec '{Name}' falló validación: {Errors}", name, string.Join("; ", result.Errors));
+                    }
+                }
+            }
 
             //app.MapGet("/health", () => "DataFeed OK");
             app.MapControllers();

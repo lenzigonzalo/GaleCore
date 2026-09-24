@@ -25,6 +25,8 @@ namespace DataFeed.Controllers
         private readonly DataFeed.Api.Infrastructure.UserStore _users;
         private readonly DataFeed.Api.Infrastructure.PlatformServiceSwitch _serviceSwitch;
         private readonly DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser _currentUser;
+        private readonly DataFeed.Application.App.Runtime.ShadowRuntimeStore _runtimeStore;
+        private readonly DataFeed.Api.Infrastructure.RuntimeStrategySwitch _runtimeSwitch;
         private readonly ILogger<AppController> _logger;
 
         public AppController(IMediator mediator, IWebHostEnvironment env,
@@ -35,6 +37,8 @@ namespace DataFeed.Controllers
             DataFeed.Api.Infrastructure.UserStore users,
             DataFeed.Api.Infrastructure.PlatformServiceSwitch serviceSwitch,
             DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            DataFeed.Application.App.Runtime.ShadowRuntimeStore runtimeStore,
+            DataFeed.Api.Infrastructure.RuntimeStrategySwitch runtimeSwitch,
             ILogger<AppController> logger)
             : base(mediator)
         {
@@ -46,6 +50,8 @@ namespace DataFeed.Controllers
             _broadcaster = broadcaster;
             _users = users;
             _currentUser = currentUser;
+            _runtimeStore = runtimeStore;
+            _runtimeSwitch = runtimeSwitch;
             _logger = logger;
         }
 
@@ -1208,6 +1214,155 @@ namespace DataFeed.Controllers
             // Sin el nodo, la estrategia se considera prendida: es informativa y no ejecuta nada.
             return (bool?)root?["gex"]?["enabled"] ?? true;
         }
+
+        #endregion
+
+        #region Runtime
+
+        // Trading Runtime SHADOW (Phase 1). Namespace propio, switch independiente, sin FK a
+        // users/accounts. Arranca INERTE (switch OFF por defecto).
+        private const string RuntimeStrategyId = "runtime";
+
+        /// <summary>Specs cargados en el runtime.</summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Specs")]
+        public IActionResult RuntimeSpecs()
+        {
+            var specs = _runtimeStore.AllSpecs().Select(s => new
+            {
+                s.Identity.Id,
+                s.Identity.Name,
+                s.Identity.DisplayName,
+                s.Identity.Version,
+                s.ContentHash,
+                s.StrategySpecVersion,
+                s.DeploymentConstraints.EligibleModes,
+                symbols = s.Universe.Symbols,
+                structure = s.Structure.DefaultStructure
+            });
+            return Ok(specs);
+        }
+
+        /// <summary>Spec completo por nombre, con hash.</summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Specs/{name}")]
+        public IActionResult RuntimeSpec(string name)
+        {
+            var spec = _runtimeStore.GetSpec(name);
+            if (spec == null) return NotFound($"Spec '{name}' not found");
+            return Ok(spec);
+        }
+
+        /// <summary>Deploy de un spec cargado en modo SHADOW → crea deployment + instance.</summary>
+        [Tags("App.Runtime")]
+        [HttpPost("Runtime/Deploy")]
+        public async Task<IActionResult> RuntimeDeploy([FromBody] RuntimeDeployRequest body, CancellationToken ct)
+        {
+            var spec = _runtimeStore.GetSpec(body.SpecName);
+            if (spec == null) return NotFound($"Spec '{body.SpecName}' not found");
+
+            if (!spec.DeploymentConstraints.EligibleModes.Contains("SHADOW"))
+                return BadRequest("Spec is not eligible for SHADOW mode");
+
+            var deploymentId = Guid.NewGuid().ToString();
+            var instanceId = Guid.NewGuid().ToString();
+            var now = DateTime.UtcNow;
+
+            var instance = new DataFeed.Application.App.Runtime.Contracts.StrategyInstance
+            {
+                InstanceId = instanceId,
+                DeploymentId = deploymentId,
+                VersionHash = spec.ContentHash ?? "",
+                LifecycleState = "RUNNING",
+                SchedulerState = "IDLE",
+                CreatedAt = now,
+                UpdatedAt = now,
+                SpecName = body.SpecName,
+                Mode = "SHADOW"
+            };
+
+            _runtimeStore.SetInstance(instanceId, instance);
+
+            _runtimeStore.AddEvent(new DataFeed.Application.App.Runtime.Contracts.OperationalEvent
+            {
+                EventId = Guid.NewGuid().ToString(),
+                InstanceId = instanceId,
+                EventType = "INSTANCE_CREATED",
+                Payload = new Dictionary<string, object?>
+                {
+                    ["spec_name"] = body.SpecName,
+                    ["deployment_id"] = deploymentId,
+                    ["version_hash"] = spec.ContentHash
+                },
+                Timestamp = now
+            });
+
+            _logger.LogInformation("Runtime: deployed {SpecName} → instance {InstanceId} (SHADOW)",
+                body.SpecName, instanceId);
+
+            return Ok(new
+            {
+                deploymentId,
+                instanceId,
+                specName = body.SpecName,
+                mode = "SHADOW",
+                lifecycleState = "RUNNING",
+                versionHash = spec.ContentHash
+            });
+        }
+
+        public class RuntimeDeployRequest
+        {
+            public string SpecName { get; set; } = "";
+        }
+
+        /// <summary>Instancias activas del runtime.</summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Instances")]
+        public IActionResult RuntimeInstances()
+            => Ok(_runtimeStore.AllInstances());
+
+        /// <summary>Detalle de una instancia con sus posiciones.</summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Instances/{id}")]
+        public IActionResult RuntimeInstance(string id)
+        {
+            var instance = _runtimeStore.GetInstance(id);
+            if (instance == null) return NotFound();
+            var positions = _runtimeStore.AllPositions()
+                .Where(p => p.InstanceId == id).ToList();
+            return Ok(new { instance, positions });
+        }
+
+        /// <summary>Posiciones SHADOW de una instancia.</summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Instances/{id}/Positions")]
+        public IActionResult RuntimePositions(string id)
+        {
+            var positions = _runtimeStore.AllPositions()
+                .Where(p => p.InstanceId == id).ToList();
+            return Ok(positions);
+        }
+
+        /// <summary>Historial de evaluaciones de una instancia.</summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Instances/{id}/Evaluations")]
+        public IActionResult RuntimeEvaluations(string id)
+        {
+            var evaluations = _runtimeStore.AllEvaluations()
+                .Where(e => e.InstanceId == id).ToList();
+            return Ok(evaluations);
+        }
+
+        /// <summary>Eventos operacionales de una instancia.</summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Instances/{id}/Events")]
+        public IActionResult RuntimeEvents(string id)
+            => Ok(_runtimeStore.GetEvents(id));
+
+        // El switch del runtime usa el endpoint genérico de servicios de plataforma:
+        // GET/POST /App/GaleCore/Services/runtime/Switch — ya existe en PlatformServiceSwitch.
+        // No se duplica acá. El loop lee via RuntimeStrategySwitch que delega a PlatformServiceSwitch.
 
         #endregion
 

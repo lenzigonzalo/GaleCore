@@ -33,6 +33,14 @@ namespace DataFeed.Repositories
         public DbSet<User> Users => Set<User>();
         public DbSet<Account> Accounts => Set<Account>();
 
+        // ── Runtime (Trading Runtime SHADOW) ──
+        public DbSet<StrategySpecEntity> StrategySpecs => Set<StrategySpecEntity>();
+        public DbSet<StrategyDeploymentEntity> StrategyDeployments => Set<StrategyDeploymentEntity>();
+        public DbSet<StrategyInstanceEntity> StrategyInstances => Set<StrategyInstanceEntity>();
+        public DbSet<ShadowPositionEntity> ShadowPositions => Set<ShadowPositionEntity>();
+        public DbSet<EvaluationLogEntity> EvaluationLogs => Set<EvaluationLogEntity>();
+        public DbSet<OperationalEventEntity> OperationalEvents => Set<OperationalEventEntity>();
+
         protected override void OnModelCreating(ModelBuilder b)
         {
             b.Entity<User>(e =>
@@ -89,6 +97,89 @@ namespace DataFeed.Repositories
                  .HasDatabaseName("ix_accounts_single_system");
             });
 
+            // ── Runtime tables (Trading Runtime SHADOW) ──
+            // Tablas separadas, sin FK a users/accounts. El runtime no depende de la identidad del
+            // operador: las posiciones SHADOW son de la instancia, no de nadie.
+
+            b.Entity<StrategySpecEntity>(e =>
+            {
+                e.ToTable("strategy_specs");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.Name).HasMaxLength(120).IsRequired();
+                e.Property(x => x.DisplayName).HasMaxLength(120);
+                e.Property(x => x.Version).HasMaxLength(20).IsRequired();
+                e.Property(x => x.ContentHash).HasMaxLength(80).IsRequired();
+                e.Property(x => x.SpecJson).IsRequired();
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+                e.HasIndex(x => x.ContentHash).IsUnique();
+            });
+
+            b.Entity<StrategyDeploymentEntity>(e =>
+            {
+                e.ToTable("strategy_deployments");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.VersionHash).HasMaxLength(80).IsRequired();
+                e.Property(x => x.Mode).HasMaxLength(10).IsRequired();
+                e.Property(x => x.DeployedBy).HasMaxLength(80).IsRequired();
+                e.Property(x => x.DeployedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Spec).WithMany().HasForeignKey(x => x.SpecId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            b.Entity<StrategyInstanceEntity>(e =>
+            {
+                e.ToTable("strategy_instances");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.VersionHash).HasMaxLength(80).IsRequired();
+                e.Property(x => x.LifecycleState).HasMaxLength(20).IsRequired();
+                e.Property(x => x.SchedulerState).HasMaxLength(20).IsRequired();
+                e.Property(x => x.SpecName).HasMaxLength(120);
+                e.Property(x => x.Mode).HasMaxLength(10).IsRequired();
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+                e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Deployment).WithMany().HasForeignKey(x => x.DeploymentId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            b.Entity<ShadowPositionEntity>(e =>
+            {
+                e.ToTable("shadow_positions");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.CandidateId).HasMaxLength(80).IsRequired();
+                e.Property(x => x.Symbol).HasMaxLength(20).IsRequired();
+                e.Property(x => x.Structure).HasMaxLength(40).IsRequired();
+                e.Property(x => x.LegsJson).IsRequired();
+                e.Property(x => x.Status).HasMaxLength(10).IsRequired();
+                e.Property(x => x.ExitReason).HasMaxLength(20);
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+                e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Instance).WithMany().HasForeignKey(x => x.InstanceId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            b.Entity<EvaluationLogEntity>(e =>
+            {
+                e.ToTable("evaluation_logs");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.Symbol).HasMaxLength(20).IsRequired();
+                e.Property(x => x.ResultsJson).IsRequired();
+                e.Property(x => x.EvaluatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Instance).WithMany().HasForeignKey(x => x.InstanceId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            b.Entity<OperationalEventEntity>(e =>
+            {
+                e.ToTable("operational_events");
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.EventType).HasMaxLength(40).IsRequired();
+                e.Property(x => x.Symbol).HasMaxLength(20);
+                e.Property(x => x.PayloadJson).IsRequired();
+                e.Property(x => x.Timestamp).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Instance).WithMany().HasForeignKey(x => x.InstanceId).OnDelete(DeleteBehavior.Cascade);
+            });
         }
     }
 }
