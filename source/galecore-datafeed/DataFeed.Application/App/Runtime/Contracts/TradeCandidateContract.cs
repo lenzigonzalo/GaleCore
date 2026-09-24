@@ -33,6 +33,8 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double Strike { get; init; }
         public string? Expiration { get; init; }
         public string? OccSymbol { get; init; }
+        /// <summary>Símbolo con el que se cotiza la pata en el streamer (DXLink).</summary>
+        public string? StreamerSymbol { get; init; }
         public double? Delta { get; init; }
         public double? Bid { get; init; }
         public double? Ask { get; init; }

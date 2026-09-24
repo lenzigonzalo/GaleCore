@@ -34,6 +34,12 @@ namespace DataFeed.Application.App.Runtime.Contracts
         /// <summary>Unrealized P&L basado en mid-price actual (solo cuando OPEN).</summary>
         public double? UnrealizedPnl { get; init; }
 
+        // Última valuación con precios reales de las patas (null si nunca se pudo valuar)
+        /// <summary>Débito para cerrar la posición a mid real de sus patas.</summary>
+        public double? LastSpreadValue { get; init; }
+        public int? CurrentDte { get; init; }
+        public DateTime? LastValuedAt { get; init; }
+
         public DateTime CreatedAt { get; init; }
         public DateTime UpdatedAt { get; init; }
     }
@@ -45,6 +51,8 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double Strike { get; init; }
         public string? Expiration { get; init; }
         public string? OccSymbol { get; init; }
+        /// <summary>Símbolo con el que se cotiza la pata en el streamer (DXLink); necesario para valuarla.</summary>
+        public string? StreamerSymbol { get; init; }
         public double EntryPrice { get; init; }
         public double? ExitPrice { get; init; }
         public double? Delta { get; init; }

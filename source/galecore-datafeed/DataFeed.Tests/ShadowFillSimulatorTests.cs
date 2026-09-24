@@ -36,11 +36,42 @@ public class ShadowFillSimulatorTests
         Assert.Equal(1.60, ShadowFillSimulator.ComputeMidPrice(leg));
     }
 
+    // GC-0002: sin cotización real no hay precio (antes devolvía 0, un precio inventado).
     [Fact]
-    public void MidPrice_NoBidAsk_Zero()
+    public void MidPrice_NoBidAsk_IsNull()
     {
         var leg = new CandidateLeg();
-        Assert.Equal(0, ShadowFillSimulator.ComputeMidPrice(leg));
+        Assert.Null(ShadowFillSimulator.ComputeMidPrice(leg));
+    }
+
+    [Theory]
+    [InlineData(1.0, 0.0)]   // ask 0
+    [InlineData(1.2, 1.0)]   // cruzada
+    [InlineData(-0.1, 1.0)]  // bid negativo
+    public void MidPrice_UnusableQuote_IsNull(double bid, double ask)
+    {
+        Assert.Null(ShadowFillSimulator.ComputeMidPrice(new CandidateLeg { Bid = bid, Ask = ask }));
+    }
+
+    [Fact]
+    public void MidPrice_ZeroBid_IsReal()
+    {
+        // Una put muy fuera del dinero puede no tener comprador: bid 0 es un dato real.
+        Assert.Equal(0.03, ShadowFillSimulator.ComputeMidPrice(new CandidateLeg { Bid = 0, Ask = 0.06 }));
+    }
+
+    [Fact]
+    public void Fill_LegWithoutQuote_Throws()
+    {
+        var candidate = TestCandidate() with
+        {
+            Legs = new List<CandidateLeg>
+            {
+                new() { Side = "SELL", Type = "PUT", Strike = 520, Bid = 1.50, Ask = 1.70 },
+                new() { Side = "BUY", Type = "PUT", Strike = 515 }
+            }
+        };
+        Assert.Throws<InvalidOperationException>(() => ShadowFillSimulator.Fill(candidate, DateTime.UtcNow));
     }
 
     [Fact]

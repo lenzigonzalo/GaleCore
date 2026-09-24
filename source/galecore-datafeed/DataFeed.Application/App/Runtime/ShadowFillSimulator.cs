@@ -11,8 +11,8 @@ namespace DataFeed.Application.App.Runtime
     {
         /// <summary>
         /// Crea una ShadowPosition a partir de un TradeCandidate validado.
-        /// Entry price de cada leg = mid-price (bid+ask)/2. Si bid/ask no están disponibles,
-        /// se usa el crédito total del candidato repartido proporcionalmente.
+        /// Entry price de cada leg = mid-price real (bid+ask)/2. Si una pata no tiene una cotización
+        /// utilizable, no hay fill: lanza InvalidOperationException (datos reales o nada, GC-0002).
         /// </summary>
         public static ShadowPosition Fill(TradeCandidate candidate, DateTime now)
         {
@@ -23,7 +23,10 @@ namespace DataFeed.Application.App.Runtime
                 Strike = leg.Strike,
                 Expiration = leg.Expiration,
                 OccSymbol = leg.OccSymbol,
-                EntryPrice = ComputeMidPrice(leg),
+                StreamerSymbol = leg.StreamerSymbol,
+                EntryPrice = ComputeMidPrice(leg)
+                    ?? throw new InvalidOperationException(
+                        $"Sin cotización utilizable para la pata {leg.Side} {leg.Type} {leg.Strike}: no hay fill"),
                 Delta = leg.Delta
             }).ToList();
 
@@ -46,12 +49,12 @@ namespace DataFeed.Application.App.Runtime
             };
         }
 
-        /// <summary>Mid-price del leg. Si no hay bid/ask, devuelve 0 (el crédito viene del candidato).</summary>
-        public static double ComputeMidPrice(CandidateLeg leg)
+        /// <summary>Mid-price real del leg, o null si no tiene una cotización utilizable.</summary>
+        public static double? ComputeMidPrice(CandidateLeg leg)
         {
-            if (leg.Bid.HasValue && leg.Ask.HasValue)
+            if (leg.Bid.HasValue && leg.Ask.HasValue && QuoteRules.IsUsable(leg.Bid.Value, leg.Ask.Value))
                 return Math.Round((leg.Bid.Value + leg.Ask.Value) / 2.0, 2);
-            return 0;
+            return null;
         }
 
         /// <summary>

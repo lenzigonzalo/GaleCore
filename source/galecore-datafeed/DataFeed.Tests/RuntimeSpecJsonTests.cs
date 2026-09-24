@@ -23,7 +23,7 @@ public class RuntimeSpecJsonTests
             "No se encontro DataFeed.Api/Files subiendo desde " + AppContext.BaseDirectory);
     }
 
-    private static string SpecPath() => Path.Combine(FilesDir(), "Runtime", "pcs_spy_shadow_v1.json");
+    private static string SpecPath() => Path.Combine(FilesDir(), "Runtime", "shadow_runtime_test_v1.json");
 
     private static JsonObject SpecJson()
         => JsonNode.Parse(File.ReadAllText(SpecPath()))!.AsObject();
@@ -31,13 +31,13 @@ public class RuntimeSpecJsonTests
     // ── Archivo existe y parsea ──
 
     [Fact]
-    public void PcsSpy_FileExists()
+    public void TestSpec_FileExists()
     {
-        Assert.True(File.Exists(SpecPath()), $"pcs_spy_shadow_v1.json not found at {SpecPath()}");
+        Assert.True(File.Exists(SpecPath()), $"shadow_runtime_test_v1.json not found at {SpecPath()}");
     }
 
     [Fact]
-    public void PcsSpy_ValidJson()
+    public void TestSpec_ValidJson()
     {
         var json = File.ReadAllText(SpecPath());
         var node = JsonNode.Parse(json);
@@ -47,7 +47,7 @@ public class RuntimeSpecJsonTests
     // ── Loader valida y hashea ──
 
     [Fact]
-    public void PcsSpy_LoaderSucceeds()
+    public void TestSpec_LoaderSucceeds()
     {
         var result = StrategySpecLoader.LoadFromFile(SpecPath());
         Assert.True(result.Success, $"Loader failed: {string.Join("; ", result.Errors)}");
@@ -57,7 +57,7 @@ public class RuntimeSpecJsonTests
     }
 
     [Fact]
-    public void PcsSpy_HashIsDeterministic()
+    public void TestSpec_HashIsDeterministic()
     {
         var result1 = StrategySpecLoader.LoadFromFile(SpecPath());
         var result2 = StrategySpecLoader.LoadFromFile(SpecPath());
@@ -67,12 +67,12 @@ public class RuntimeSpecJsonTests
     // ── Identity ──
 
     [Fact]
-    public void PcsSpy_IdentityIsCorrect()
+    public void TestSpec_IdentityIsCorrect()
     {
         var spec = SpecJson();
         var identity = spec["identity"]!.AsObject();
-        Assert.Equal("pcs_spy_shadow_v1", identity["name"]!.GetValue<string>());
-        Assert.Equal("PCS SPY SHADOW", identity["display_name"]!.GetValue<string>());
+        Assert.Equal("shadow_runtime_test_v1", identity["name"]!.GetValue<string>());
+        Assert.Contains("no es una estrategia", identity["display_name"]!.GetValue<string>());
         Assert.Equal("1.0.0", identity["version"]!.GetValue<string>());
         Assert.Equal("HUMAN", identity["author"]!["type"]!.GetValue<string>());
     }
@@ -80,7 +80,7 @@ public class RuntimeSpecJsonTests
     // ── Deployment constraints ──
 
     [Fact]
-    public void PcsSpy_OnlyShadowEligible()
+    public void TestSpec_OnlyShadowEligible()
     {
         var spec = SpecJson();
         var modes = spec["deployment_constraints"]!["eligible_modes"]!.AsArray();
@@ -91,7 +91,7 @@ public class RuntimeSpecJsonTests
     // ── Universe ──
 
     [Fact]
-    public void PcsSpy_UniverseIsSpy()
+    public void TestSpec_UniverseIsSpy()
     {
         var spec = SpecJson();
         var symbols = spec["universe"]!["symbols"]!.AsArray();
@@ -103,7 +103,7 @@ public class RuntimeSpecJsonTests
     // ── Structure ──
 
     [Fact]
-    public void PcsSpy_OnlyPutCreditSpread()
+    public void TestSpec_OnlyPutCreditSpread()
     {
         var spec = SpecJson();
         var structure = spec["structure"]!.AsObject();
@@ -115,7 +115,7 @@ public class RuntimeSpecJsonTests
     }
 
     [Fact]
-    public void PcsSpy_ForbidsNakedShort()
+    public void TestSpec_ForbidsNakedShort()
     {
         var spec = SpecJson();
         var forbidden = spec["structure"]!["forbidden_strategies"]!.AsArray()
@@ -128,7 +128,7 @@ public class RuntimeSpecJsonTests
     // ── Entry filters ──
 
     [Fact]
-    public void PcsSpy_HasVixAndGexGates()
+    public void TestSpec_HasVixAndGexGates()
     {
         var spec = SpecJson();
         var gates = spec["entry_filters"]!["gate_layer"]!["gates"]!.AsArray();
@@ -146,7 +146,7 @@ public class RuntimeSpecJsonTests
     // ── Candidate construction — test defaults ──
 
     [Fact]
-    public void PcsSpy_CandidateConstructionDefaults()
+    public void TestSpec_CandidateConstructionDefaults()
     {
         var spec = SpecJson();
         var cc = spec["candidate_construction"]!.AsObject();
@@ -170,7 +170,7 @@ public class RuntimeSpecJsonTests
     // ── Exits ──
 
     [Fact]
-    public void PcsSpy_ExitDefaults()
+    public void TestSpec_ExitDefaults()
     {
         var spec = SpecJson();
         var exits = spec["exits"]!["deterministic"]!.AsObject();
@@ -183,7 +183,7 @@ public class RuntimeSpecJsonTests
     // ── Risk limits ──
 
     [Fact]
-    public void PcsSpy_RiskLimits()
+    public void TestSpec_RiskLimits()
     {
         var spec = SpecJson();
         var risk = spec["risk_limits"]!.AsObject();

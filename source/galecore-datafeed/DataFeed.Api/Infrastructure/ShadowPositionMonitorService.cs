@@ -1,28 +1,32 @@
 using DataFeed.Application.App.Runtime;
-using DataFeed.Application.App.Runtime.Contracts;
+using MediatR;
 
 namespace DataFeed.Api.Infrastructure
 {
     /// <summary>
-    /// Monitor de posiciones SHADOW (Step F). BackgroundService singleton.
-    /// Cada tick: evalúa exits determinísticos contra posiciones abiertas.
-    /// Cadencia: 30 segundos. Corre solo cuando el switch está ON y hay una instancia activa.
+    /// Monitor de posiciones SHADOW. BackgroundService singleton.
+    /// Cada tick: valúa cada posición abierta con el mid real de sus patas y evalúa sus salidas
+    /// determinísticas (ShadowRuntimeEngine.ValuePositionAsync). Cadencia: 30 segundos.
+    ///
+    /// GC-0002: sin precio real de todas las patas no se evalúan salidas (queda VALUATION_NO_DATA);
+    /// nada de decaimientos inventados. Corre aunque el switch esté OFF: apagar pausa las entradas
+    /// nuevas, no el seguimiento de lo que ya está abierto (decisión del owner, 24/09).
     /// </summary>
     public class ShadowPositionMonitorService : BackgroundService
     {
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ShadowRuntimeStore _store;
-        private readonly RuntimeStrategySwitch _switch;
         private readonly ILogger<ShadowPositionMonitorService> _logger;
 
         private const int TickSeconds = 30;
 
         public ShadowPositionMonitorService(
+            IServiceScopeFactory scopeFactory,
             ShadowRuntimeStore store,
-            RuntimeStrategySwitch strategySwitch,
             ILogger<ShadowPositionMonitorService> logger)
         {
+            _scopeFactory = scopeFactory;
             _store = store;
-            _switch = strategySwitch;
             _logger = logger;
         }
 
@@ -36,9 +40,7 @@ namespace DataFeed.Api.Infrastructure
             {
                 try
                 {
-                    var (enabled, _) = _switch.Resolve();
-                    if (enabled)
-                        TickMonitor();
+                    await TickMonitorAsync(stoppingToken);
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
                 {
@@ -49,76 +51,38 @@ namespace DataFeed.Api.Infrastructure
                     _logger.LogError(ex, "ShadowPositionMonitor error en tick");
                 }
 
-                await Task.Delay(TimeSpan.FromSeconds(TickSeconds), stoppingToken);
+                try { await Task.Delay(TimeSpan.FromSeconds(TickSeconds), stoppingToken); }
+                catch (OperationCanceledException) { break; }
             }
         }
 
-        private void TickMonitor()
+        private async Task TickMonitorAsync(CancellationToken ct)
         {
-            var instance = _store.ActiveInstance();
-            if (instance == null) return;
+            var openPositions = _store.OpenPositions();
+            if (openPositions.Count == 0) return;
 
-            var spec = _store.GetSpec(instance.SpecName);
-            if (spec == null) return;
-
-            var exits = spec.Exits.Deterministic;
-            var openPositions = _store.OpenPositions(instance.InstanceId);
+            using var scope = _scopeFactory.CreateScope();
+            var data = new MediatorRuntimeMarketData(scope.ServiceProvider.GetRequiredService<IMediator>(), _logger);
 
             foreach (var pos in openPositions)
             {
+                var instance = _store.GetInstance(pos.InstanceId);
+                var spec = instance == null ? null : _store.GetSpec(instance.SpecName);
+                if (spec == null)
+                {
+                    _logger.LogWarning("ShadowPositionMonitor: sin spec para la posición {Id}", pos.PositionId);
+                    continue;
+                }
                 try
                 {
-                    EvaluatePosition(pos, exits, instance);
+                    var outcome = await ShadowRuntimeEngine.ValuePositionAsync(
+                        _store, data, pos, spec.Exits.Deterministic, DateTime.UtcNow, ct);
+                    _logger.LogDebug("ShadowPositionMonitor: {Id} → {Outcome}", pos.PositionId, outcome);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     _logger.LogError(ex, "ShadowPositionMonitor: error evaluando posición {Id}", pos.PositionId);
                 }
-            }
-        }
-
-        private void EvaluatePosition(ShadowPosition pos, DeterministicExits exits, StrategyInstance instance)
-        {
-            // DTE actual (stub: calculado desde entry)
-            int currentDte = Math.Max(0, pos.EntryDte - (int)(DateTime.UtcNow - pos.EntryAt).TotalDays);
-
-            // Spread value actual (stub: simula decay lineal del spread)
-            // En producción: se resolvería con mid-prices reales de las patas.
-            double daysPassed = (DateTime.UtcNow - pos.EntryAt).TotalDays;
-            double decayFactor = Math.Max(0, 1.0 - (daysPassed / pos.EntryDte) * 0.7);
-            double currentSpreadValue = pos.EntryCredit * decayFactor;
-
-            // Unrealized P&L
-            double unrealizedPnl = Math.Round((pos.EntryCredit - currentSpreadValue) * 100, 2);
-            _store.UpdatePosition(pos with { UnrealizedPnl = unrealizedPnl, UpdatedAt = DateTime.UtcNow });
-
-            // Evaluar exits
-            var exitReason = ShadowFillSimulator.EvaluateExits(pos, exits, currentSpreadValue, currentDte);
-
-            if (exitReason != null)
-            {
-                var closed = ShadowFillSimulator.Close(pos, currentSpreadValue, exitReason, DateTime.UtcNow);
-                _store.UpdatePosition(closed);
-
-                _logger.LogInformation(
-                    "ShadowPositionMonitor: CLOSE {Symbol} pos={Id} reason={Reason} pnl={Pnl}",
-                    pos.Symbol, pos.PositionId, exitReason, closed.RealizedPnl);
-
-                _store.AddEvent(new OperationalEvent
-                {
-                    EventId = Guid.NewGuid().ToString(),
-                    InstanceId = instance.InstanceId,
-                    EventType = "POSITION_CLOSED",
-                    Symbol = pos.Symbol,
-                    Payload = new Dictionary<string, object?>
-                    {
-                        ["position_id"] = pos.PositionId,
-                        ["exit_reason"] = exitReason,
-                        ["realized_pnl"] = closed.RealizedPnl,
-                        ["exit_debit"] = closed.ExitDebit
-                    },
-                    Timestamp = DateTime.UtcNow
-                });
             }
         }
     }

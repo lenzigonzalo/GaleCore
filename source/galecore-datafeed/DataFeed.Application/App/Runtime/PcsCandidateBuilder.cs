@@ -1,7 +1,6 @@
 using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime.Contracts;
 using DataFeed.Application.App.Shared;
-using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
 using DataFeed.Application.Data.Tastytrade.OptionChains;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -18,23 +17,29 @@ namespace DataFeed.Application.App.Runtime
     ///   4. Quotes de ambas patas → credit = short mid - long mid
     ///   5. Armar TradeCandidate con snapshot real
     ///
+    /// Datos reales o nada (GC-0002, W-1): si falta la cadena, un strike, un delta o una cotización
+    /// utilizable de cualquiera de las patas, no hay candidato y el resultado dice por qué. Nunca se
+    /// completa un precio con cero.
+    ///
     /// Específico para PCS. Se generaliza cuando haya más estructuras.
     /// </summary>
     public class PcsCandidateBuilder
     {
         private readonly IMediator _mediator;
         private readonly ILogger _logger;
+        private readonly IRuntimeMarketData _quotes;
 
-        public PcsCandidateBuilder(IMediator mediator, ILogger logger)
+        public PcsCandidateBuilder(IMediator mediator, ILogger logger, IRuntimeMarketData quotes)
         {
             _mediator = mediator;
             _logger = logger;
+            _quotes = quotes;
         }
 
         /// <summary>
-        /// Construye un TradeCandidate PCS real o null si no hay candidato viable.
+        /// Construye un TradeCandidate PCS real, o el motivo por el que no hay candidato viable.
         /// </summary>
-        public async Task<TradeCandidate?> BuildAsync(
+        public async Task<CandidateBuildResult> BuildAsync(
             StrategyInstance instance,
             StrategySpec spec,
             string symbol,
@@ -48,8 +53,7 @@ namespace DataFeed.Application.App.Runtime
             var buyLeg = cc.Legs.FirstOrDefault(l => l.Side == "BUY" && l.Type == "PUT");
             if (sellLeg == null || buyLeg == null)
             {
-                _logger.LogWarning("PcsCandidateBuilder: spec no tiene legs SELL PUT + BUY PUT");
-                return null;
+                return Reject("la spec no declara una pata SELL PUT y una BUY PUT");
             }
 
             double targetDelta = sellLeg.StrikeSelection.TargetDelta ?? -0.16;
@@ -63,8 +67,7 @@ namespace DataFeed.Application.App.Runtime
             var chainResponse = await _mediator.Send(new OptionChainsRequest { Symbol = symbol }, ct);
             if (chainResponse?.expirations == null || chainResponse.expirations.Count == 0)
             {
-                _logger.LogWarning("PcsCandidateBuilder: sin cadena de opciones para {Symbol}", symbol);
-                return null;
+                return Reject($"sin cadena de opciones para {symbol}");
             }
 
             // Filtrar expiraciones regulares en rango DTE, la más cercana al centro
@@ -77,9 +80,7 @@ namespace DataFeed.Application.App.Runtime
 
             if (validExpirations.Count == 0)
             {
-                _logger.LogDebug("PcsCandidateBuilder: sin expiración en DTE [{Min},{Max}] para {Symbol}",
-                    minDte, maxDte, symbol);
-                return null;
+                return Reject($"sin vencimiento regular o weekly con DTE entre {minDte} y {maxDte}");
             }
 
             var expiration = validExpirations.First();
@@ -96,8 +97,7 @@ namespace DataFeed.Application.App.Runtime
 
             if (gexResponse?.Strikes == null || gexResponse.Strikes.Count == 0)
             {
-                _logger.LogWarning("PcsCandidateBuilder: sin strikes GEX para {Symbol} DTE={Dte}", symbol, dte);
-                return null;
+                return Reject($"sin strikes con griegas para el vencimiento {expirationDate} (DTE {dte})");
             }
 
             double spot = gexResponse.Spot;
@@ -112,8 +112,7 @@ namespace DataFeed.Application.App.Runtime
 
             if (putStrikes.Count == 0)
             {
-                _logger.LogDebug("PcsCandidateBuilder: sin puts OTM con delta válido para {Symbol}", symbol);
-                return null;
+                return Reject("sin puts fuera del dinero con delta válido");
             }
 
             var shortPutStrike = putStrikes.First();
@@ -121,10 +120,8 @@ namespace DataFeed.Application.App.Runtime
             // Verificar que el delta está dentro de la tolerancia
             if (Math.Abs(shortPutStrike.PutDelta - targetDelta) > deltaTolerance)
             {
-                _logger.LogDebug(
-                    "PcsCandidateBuilder: delta más cercano {Delta} fuera de tolerancia ±{Tol} para target {Target}",
-                    shortPutStrike.PutDelta, deltaTolerance, targetDelta);
-                return null;
+                return Reject($"el delta más cercano ({shortPutStrike.PutDelta:0.000}) está fuera de ±{deltaTolerance} "
+                              + $"del objetivo {targetDelta}");
             }
 
             // ── 4. Long put = short strike - width ──
@@ -135,48 +132,27 @@ namespace DataFeed.Application.App.Runtime
 
             if (longPutStrike == null || Math.Abs(longPutStrike.Strike - longPutStrikePrice) > 1.0)
             {
-                _logger.LogDebug("PcsCandidateBuilder: no hay strike para long put en {Price}", longPutStrikePrice);
-                return null;
+                return Reject($"no hay strike para la pata comprada cerca de {longPutStrikePrice}");
             }
 
-            // ── 5. Obtener quotes para ambas patas ──
-            // Usar streamer symbols del GEX response para pedir quotes
+            // ── 5. Cotizaciones reales de ambas patas (por símbolo de streamer) ──
             string? shortSymbol = shortPutStrike.PutStreamerSymbol;
             string? longSymbol = longPutStrike.PutStreamerSymbol;
+            if (string.IsNullOrEmpty(shortSymbol) || string.IsNullOrEmpty(longSymbol))
+                return Reject("falta el símbolo de streamer de una pata; no se puede cotizar");
 
-            double shortBid = 0, shortAsk = 0, longBid = 0, longAsk = 0;
-
-            if (!string.IsNullOrEmpty(shortSymbol))
-            {
-                var shortQuote = await _mediator.Send(new MarketDataQuoteRequest { Symbol = shortSymbol }, ct);
-                if (shortQuote?.Data?.Count > 0)
-                {
-                    shortBid = shortQuote.Data[0].BidPrice;
-                    shortAsk = shortQuote.Data[0].AskPrice;
-                }
-            }
-
-            if (!string.IsNullOrEmpty(longSymbol))
-            {
-                var longQuote = await _mediator.Send(new MarketDataQuoteRequest { Symbol = longSymbol }, ct);
-                if (longQuote?.Data?.Count > 0)
-                {
-                    longBid = longQuote.Data[0].BidPrice;
-                    longAsk = longQuote.Data[0].AskPrice;
-                }
-            }
+            var shortQuote = await _quotes.GetQuoteAsync(shortSymbol, ct);
+            if (shortQuote == null)
+                return Reject($"sin cotización utilizable para la pata vendida {shortSymbol}");
+            var longQuote = await _quotes.GetQuoteAsync(longSymbol, ct);
+            if (longQuote == null)
+                return Reject($"sin cotización utilizable para la pata comprada {longSymbol}");
 
             // Credit = short mid - long mid
-            double shortMid = (shortBid + shortAsk) / 2;
-            double longMid = (longBid + longAsk) / 2;
-            double credit = Math.Round(shortMid - longMid, 2);
+            double credit = Math.Round(shortQuote.Mid - longQuote.Mid, 2);
 
             if (credit < minCredit)
-            {
-                _logger.LogDebug("PcsCandidateBuilder: crédito {Credit} < mínimo {Min} para {Symbol}",
-                    credit, minCredit, symbol);
-                return null;
-            }
+                return Reject($"crédito {credit} menor al mínimo {minCredit}");
 
             double actualWidth = shortPutStrike.Strike - longPutStrike.Strike;
             double maxRisk = Math.Round((actualWidth - credit) * 100, 2);
@@ -186,7 +162,7 @@ namespace DataFeed.Application.App.Runtime
             string longOcc = CascadeUtils.BuildOccSymbol(symbol, expirationDate, longPutStrike.Strike, 'P');
 
             // ── 7. Armar TradeCandidate ──
-            return new TradeCandidate
+            return CandidateBuildResult.Built(new TradeCandidate
             {
                 CandidateId = Guid.NewGuid().ToString(),
                 InstanceId = instance.InstanceId,
@@ -206,9 +182,10 @@ namespace DataFeed.Application.App.Runtime
                         Strike = shortPutStrike.Strike,
                         Expiration = expirationDate,
                         OccSymbol = shortOcc,
+                        StreamerSymbol = shortSymbol,
                         Delta = shortPutStrike.PutDelta,
-                        Bid = shortBid,
-                        Ask = shortAsk
+                        Bid = shortQuote.Bid,
+                        Ask = shortQuote.Ask
                     },
                     new()
                     {
@@ -217,9 +194,10 @@ namespace DataFeed.Application.App.Runtime
                         Strike = longPutStrike.Strike,
                         Expiration = expirationDate,
                         OccSymbol = longOcc,
+                        StreamerSymbol = longSymbol,
                         Delta = longPutStrike.PutDelta,
-                        Bid = longBid,
-                        Ask = longAsk
+                        Bid = longQuote.Bid,
+                        Ask = longQuote.Ask
                     }
                 },
                 Snapshot = new MarketSnapshot
@@ -229,7 +207,13 @@ namespace DataFeed.Application.App.Runtime
                     AsOf = DateTime.UtcNow
                 },
                 CreatedAt = DateTime.UtcNow
-            };
+            });
+        }
+
+        private CandidateBuildResult Reject(string reason)
+        {
+            _logger.LogDebug("PcsCandidateBuilder: sin candidato: {Reason}", reason);
+            return CandidateBuildResult.Rejected(reason);
         }
     }
 }

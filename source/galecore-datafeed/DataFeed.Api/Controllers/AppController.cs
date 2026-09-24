@@ -1344,15 +1344,11 @@ namespace DataFeed.Controllers
             return Ok(positions);
         }
 
-        /// <summary>Historial de evaluaciones de una instancia.</summary>
+        /// <summary>Historial de evaluaciones de una instancia (más viejas primero; acotado en memoria).</summary>
         [Tags("App.Runtime")]
         [HttpGet("Runtime/Instances/{id}/Evaluations")]
         public IActionResult RuntimeEvaluations(string id)
-        {
-            var evaluations = _runtimeStore.AllEvaluations()
-                .Where(e => e.InstanceId == id).ToList();
-            return Ok(evaluations);
-        }
+            => Ok(_runtimeStore.GetEvaluations(id));
 
         /// <summary>Eventos operacionales de una instancia.</summary>
         [Tags("App.Runtime")]

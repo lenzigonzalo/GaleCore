@@ -5,8 +5,8 @@
 
   "identity": {
     "id": "550e8400-e29b-41d4-a716-446655440000",
-    "name": "pcs_spy_shadow_v1",
-    "display_name": "PCS SPY SHADOW",
+    "name": "shadow_runtime_test_v1",
+    "display_name": "Spec de prueba del runtime SHADOW (no es una estrategia)",
     "version": "1.0.0",
     "author": {
       "type": "HUMAN",
@@ -160,6 +160,6 @@
     "schema_version": "1.0.0",
     "methodology_version": "1.0.0",
     "reference_docs": [],
-    "notes": "Test defaults for PCS-SPY SHADOW vertical slice. Not research conclusions."
+    "notes": "Spec de prueba para validar el runtime SHADOW con datos reales (GC-0002). Usa una estructura put credit spread sobre SPY con parametros de prueba; no es una estrategia ni una conclusion de research. Antes se llamaba pcs_spy_shadow_v1."
   }
 }

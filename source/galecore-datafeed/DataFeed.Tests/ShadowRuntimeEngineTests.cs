@@ -1,0 +1,317 @@
+using DataFeed.Application.App.Runtime;
+using DataFeed.Application.App.Runtime.Contracts;
+
+namespace DataFeed.Tests;
+
+/// <summary>
+/// GC-0002 — el runtime SHADOW decide sólo con datos reales. Un proveedor falso controla qué datos
+/// "existen"; los tests verifican que un dato faltante bloquea y queda registrado, y que nunca se
+/// inventa una métrica, un candidato ni un precio.
+/// </summary>
+public class ShadowRuntimeEngineTests
+{
+    private const string VixRef = "capability:market_data.quote.VIX.price";
+    private const string GexRef = "capability:compute.gamma_exposure.SPY.net_gex";
+    private static readonly DateTime Now = new(2026, 9, 24, 15, 0, 0, DateTimeKind.Utc); // 11:00 ET
+
+    private sealed class FakeData : IRuntimeMarketData
+    {
+        public Dictionary<string, double?> Metrics = new() { [VixRef] = 15.2, [GexRef] = 120.0 };
+        public bool ThrowOnMetrics;
+        public Func<CandidateBuildResult>? Build;
+        public bool ThrowOnBuild;
+        public int BuildCalls;
+        public Dictionary<string, LegQuote?> Quotes = new();
+
+        public Task<Dictionary<string, double?>> ResolveMetricsAsync(IEnumerable<string> metricRefs, CancellationToken ct)
+        {
+            if (ThrowOnMetrics) throw new InvalidOperationException("proveedor caído");
+            return Task.FromResult(metricRefs.ToDictionary(r => r, r => Metrics.GetValueOrDefault(r)));
+        }
+
+        public Task<CandidateBuildResult> BuildCandidateAsync(
+            StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, CancellationToken ct)
+        {
+            BuildCalls++;
+            if (ThrowOnBuild) throw new InvalidOperationException("cadena caída");
+            return Task.FromResult(Build?.Invoke() ?? CandidateBuildResult.Rejected("sin candidato"));
+        }
+
+        public Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
+            => Task.FromResult(Quotes.GetValueOrDefault(streamerSymbol));
+    }
+
+    private static StrategySpec Spec()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "DataFeed.Api", "Files", "Runtime")))
+            dir = dir.Parent;
+        var path = Path.Combine(dir!.FullName, "DataFeed.Api", "Files", "Runtime", "shadow_runtime_test_v1.json");
+        var result = StrategySpecLoader.LoadFromFile(path);
+        Assert.True(result.Success, string.Join("; ", result.Errors));
+        return result.Spec!;
+    }
+
+    private static (ShadowRuntimeStore Store, StrategyInstance Instance) NewRuntime()
+    {
+        var store = new ShadowRuntimeStore();
+        var instance = new StrategyInstance
+        {
+            InstanceId = "i-1", DeploymentId = "d-1", SpecName = "shadow_runtime_test_v1",
+            LifecycleState = "RUNNING", SchedulerState = "IDLE", Mode = "SHADOW", CreatedAt = Now, UpdatedAt = Now,
+        };
+        store.SetInstance(instance.InstanceId, instance);
+        return (store, instance);
+    }
+
+    private static TradeCandidate RealCandidate() => new()
+    {
+        CandidateId = "c-1", InstanceId = "i-1", Symbol = "SPY", Structure = "put_credit_spread",
+        Credit = 0.85, MaxRisk = 415, Width = 5, Dte = 35, DeltaShort = -0.16,
+        Legs = new List<CandidateLeg>
+        {
+            new() { Side = "SELL", Type = "PUT", Strike = 720, Expiration = "2026-10-30", StreamerSymbol = ".SPY261030P720",
+                    Bid = 1.50, Ask = 1.70, Delta = -0.16 },
+            new() { Side = "BUY", Type = "PUT", Strike = 715, Expiration = "2026-10-30", StreamerSymbol = ".SPY261030P715",
+                    Bid = 0.70, Ask = 0.90 },
+        },
+        Snapshot = new MarketSnapshot { UnderlyingPrice = 767.7, Vix = 15.2, AsOf = DateTime.UtcNow },
+        CreatedAt = Now,
+    };
+
+    private static List<string> EventTypes(ShadowRuntimeStore store) =>
+        store.GetEvents("i-1").Select(e => e.EventType).ToList();
+
+    // ── AC-01: sin métricas inventadas ─────────────────────────────
+
+    [Fact]
+    public async Task MetricsProviderDown_BlocksEntry_AndNeverBuildsCandidate()
+    {
+        var (store, instance) = NewRuntime();
+        var data = new FakeData { ThrowOnMetrics = true };
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.GatesNotPassed, outcome);
+        Assert.Equal(0, data.BuildCalls);
+        Assert.Empty(store.AllPositions());
+        Assert.Contains("METRICS_UNAVAILABLE", EventTypes(store));
+        Assert.All(store.GetEvaluations("i-1").Single().GateResults, g => Assert.Equal("NO_DATA", g.Status));
+    }
+
+    [Fact]
+    public async Task OneMetricMissing_IsNoData_AndBlocks()
+    {
+        var (store, instance) = NewRuntime();
+        var data = new FakeData();
+        data.Metrics[GexRef] = null;
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.GatesNotPassed, outcome);
+        Assert.Equal(0, data.BuildCalls);
+        var noData = store.GetEvents("i-1").Single(e => e.EventType == "METRICS_NO_DATA");
+        Assert.Equal(new List<string> { GexRef }, noData.Payload["metric_refs"]);
+        Assert.Contains("GATES_NOT_PASSED", EventTypes(store));
+    }
+
+    [Fact]
+    public async Task GateFails_WithRealValue_IsRecordedWithTheValue()
+    {
+        var (store, instance) = NewRuntime();
+        var data = new FakeData();
+        data.Metrics[VixRef] = 34.0;
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.GatesNotPassed, outcome);
+        var vix = store.GetEvaluations("i-1").Single().GateResults.Single(g => g.GateId == "vix_absolute");
+        Assert.Equal("FAIL", vix.Status);
+        Assert.Equal(34.0, vix.Value);
+    }
+
+    // ── AC-02: sin candidato inventado ─────────────────────────────
+
+    [Fact]
+    public async Task BuilderRejects_NoPosition_AndReasonIsRecorded()
+    {
+        var (store, instance) = NewRuntime();
+        var data = new FakeData { Build = () => CandidateBuildResult.Rejected("sin cotización utilizable para la pata vendida") };
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoCandidate, outcome);
+        Assert.Empty(store.AllPositions());
+        var ev = store.GetEvents("i-1").Single(e => e.EventType == "CANDIDATE_NOT_VIABLE");
+        Assert.Equal("sin cotización utilizable para la pata vendida", ev.Payload["reason"]);
+    }
+
+    [Fact]
+    public async Task BuilderThrows_NoPosition()
+    {
+        var (store, instance) = NewRuntime();
+        var data = new FakeData { ThrowOnBuild = true };
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoCandidate, outcome);
+        Assert.Empty(store.AllPositions());
+        Assert.Contains("CANDIDATE_NOT_VIABLE", EventTypes(store));
+    }
+
+    [Fact]
+    public async Task CandidateWithoutLegQuote_NeverBecomesAPosition()
+    {
+        var (store, instance) = NewRuntime();
+        var bad = RealCandidate() with
+        {
+            Legs = RealCandidate().Legs.Select((l, i) => i == 1 ? l with { Bid = null, Ask = null } : l).ToList()
+        };
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(bad) };
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoCandidate, outcome);
+        Assert.Empty(store.AllPositions());
+    }
+
+    [Fact]
+    public async Task RealData_OpensPosition_WithStreamerSymbols_AndFullTrace()
+    {
+        var (store, instance) = NewRuntime();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, outcome);
+        var pos = Assert.Single(store.AllPositions());
+        Assert.Equal(new[] { ".SPY261030P720", ".SPY261030P715" }, pos.Legs.Select(l => l.StreamerSymbol));
+        Assert.Equal(new[] { "EVALUATION_COMPLETED", "CANDIDATE_CREATED", "POSITION_OPENED" }, EventTypes(store));
+        Assert.DoesNotContain(store.GetEvents("i-1"), e => e.Payload.Keys.Any(k => k.StartsWith("real_")));
+    }
+
+    [Fact]
+    public async Task MaxPositionsReached_SkipsWithReason()
+    {
+        var (store, instance) = NewRuntime();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.MaxPositions, outcome);
+        Assert.Single(store.AllPositions());
+        Assert.Contains("ENTRY_SKIPPED", EventTypes(store));
+    }
+
+    // ── AC-05: historial de evaluaciones ───────────────────────────
+
+    [Fact]
+    public async Task EveryEvaluationIsKept_NotOnlyTheLast()
+    {
+        var (store, instance) = NewRuntime();
+        var data = new FakeData();
+        data.Metrics[VixRef] = 40.0;
+        for (int i = 0; i < 3; i++)
+            await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now.AddMinutes(i), default);
+
+        Assert.Equal(3, store.GetEvaluations("i-1").Count);
+    }
+
+    // ── AC-03: valuación real ──────────────────────────────────────
+
+    private static async Task<(ShadowRuntimeStore, ShadowPosition, FakeData)> OpenPosition()
+    {
+        var (store, instance) = NewRuntime();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+        return (store, store.AllPositions().Single(), data);
+    }
+
+    [Fact]
+    public async Task Valuation_UsesRealLegMids()
+    {
+        var (store, pos, data) = await OpenPosition();
+        data.Quotes[".SPY261030P720"] = new LegQuote(1.20, 1.30, Now);
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.60, 0.70, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(store, data, pos, Spec().Exits.Deterministic, Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Valued, outcome);
+        var valued = store.GetPosition(pos.PositionId)!;
+        Assert.Equal(0.6, valued.LastSpreadValue);          // 1.25 − 0.65
+        Assert.Equal(25.0, valued.UnrealizedPnl);           // (0.85 − 0.60) × 100
+        Assert.Equal(36, valued.CurrentDte);                // 24/09 → 30/10 en fecha ET
+    }
+
+    [Fact]
+    public async Task Valuation_TakeProfitWithRealPrices_Closes()
+    {
+        var (store, pos, data) = await OpenPosition();
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now);
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(store, data, pos, Spec().Exits.Deterministic, Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Closed, outcome);
+        var closed = store.GetPosition(pos.PositionId)!;
+        Assert.Equal("TAKE_PROFIT", closed.ExitReason);
+        Assert.Equal(0.3, closed.ExitDebit);
+    }
+
+    [Fact]
+    public async Task Valuation_MissingQuote_IsNoData_AndNeverEvaluatesExits()
+    {
+        var (store, pos, data) = await OpenPosition();
+        // Precio que dispararía take profit en una pata; la otra no tiene cotización.
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.10, 0.20, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(store, data, pos, Spec().Exits.Deterministic, Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoData, outcome);
+        var same = store.GetPosition(pos.PositionId)!;
+        Assert.Equal("OPEN", same.Status);
+        Assert.Null(same.LastSpreadValue);
+        Assert.Contains("VALUATION_NO_DATA", EventTypes(store));
+    }
+
+    [Fact]
+    public async Task Valuation_DoesNotDependOnTimeElapsed()
+    {
+        // Antes: un decaimiento lineal con el tiempo movía el P&L sin mercado. Ahora sin precio no hay valor.
+        var (store, pos, data) = await OpenPosition();
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(
+            store, data, pos, Spec().Exits.Deterministic, Now.AddDays(20), default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoData, outcome);
+        Assert.Null(store.GetPosition(pos.PositionId)!.UnrealizedPnl);
+    }
+
+    [Fact]
+    public void CurrentDte_IsCountedInMarketDate()
+    {
+        var pos = new ShadowPosition { Legs = new() { new ShadowLeg { Expiration = "2026-10-16" } } };
+        // 02:00 UTC del 24/09 es todavía 23/09 en Nueva York.
+        Assert.Equal(23, ShadowRuntimeEngine.CurrentDte(pos, new DateTime(2026, 9, 24, 2, 0, 0, DateTimeKind.Utc)));
+        Assert.Null(ShadowRuntimeEngine.CurrentDte(new ShadowPosition(), Now));
+    }
+
+    // ── AC-04: apagar no borra ─────────────────────────────────────
+
+    [Fact]
+    public void Store_HasNoWayToWipeTheState()
+    {
+        Assert.Null(typeof(ShadowRuntimeStore).GetMethod("Clear"));
+    }
+
+    [Fact]
+    public void Store_EvaluationHistory_IsBounded()
+    {
+        var store = new ShadowRuntimeStore();
+        for (int i = 0; i < ShadowRuntimeStore.MaxEvaluationsPerInstance + 5; i++)
+            store.AddEvaluation("i-1:SPY", new EvaluationResult { EvaluationId = $"e{i}", InstanceId = "i-1" });
+        var history = store.GetEvaluations("i-1");
+        Assert.Equal(ShadowRuntimeStore.MaxEvaluationsPerInstance, history.Count);
+        Assert.Equal("e5", history.First().EvaluationId);
+    }
+}

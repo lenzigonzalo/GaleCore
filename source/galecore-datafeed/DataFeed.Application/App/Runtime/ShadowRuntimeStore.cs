@@ -7,15 +7,26 @@ namespace DataFeed.Application.App.Runtime
     /// Estado vivo del runtime SHADOW — singleton in-memory.
     /// Patrón: ConcurrentDictionary como RpfStateStore (§4.2).
     ///
-    /// Guarda: instancias activas, posiciones abiertas, últimas evaluaciones.
+    /// Guarda: instancias, posiciones, historial de evaluaciones y eventos.
     /// Write-through a DB es responsabilidad de quien escribe (el loop), no del store.
     /// Thread-safe por ConcurrentDictionary; operaciones compuestas con lock por entrada.
+    ///
+    /// GC-0002: no hay borrado. Apagar el runtime pausa entradas y conserva todo lo registrado
+    /// (decisión del owner, 24/09). El estado vive en memoria (W-2): un reinicio lo pierde. El
+    /// historial de evaluaciones y los eventos se acotan por instancia para no crecer sin límite;
+    /// cuando se llega al tope se descarta lo más viejo.
     /// </summary>
     public class ShadowRuntimeStore
     {
         private readonly ConcurrentDictionary<string, StrategyInstance> _instances = new();
         private readonly ConcurrentDictionary<string, ShadowPosition> _positions = new();
         private readonly ConcurrentDictionary<string, EvaluationResult> _lastEvaluations = new();
+        private readonly ConcurrentDictionary<string, List<EvaluationResult>> _evaluationHistory = new();
+
+        /// <summary>Tope de evaluaciones guardadas por instancia (~8 días hábiles a un tick por minuto).</summary>
+        public const int MaxEvaluationsPerInstance = 3000;
+        /// <summary>Tope de eventos guardados por instancia.</summary>
+        public const int MaxEventsPerInstance = 20000;
         private readonly ConcurrentDictionary<string, List<OperationalEvent>> _events = new();
         private readonly ConcurrentDictionary<string, StrategySpec> _specs = new();
 
@@ -82,8 +93,24 @@ namespace DataFeed.Application.App.Runtime
 
         // ── Evaluations ──
 
-        public void SetLastEvaluation(string key, EvaluationResult evaluation)
-            => _lastEvaluations[key] = evaluation;
+        /// <summary>Registra una evaluación: queda como la última de su clave y en el historial de la instancia.</summary>
+        public void AddEvaluation(string key, EvaluationResult evaluation)
+        {
+            _lastEvaluations[key] = evaluation;
+            var list = _evaluationHistory.GetOrAdd(evaluation.InstanceId, _ => new List<EvaluationResult>());
+            lock (list)
+            {
+                list.Add(evaluation);
+                if (list.Count > MaxEvaluationsPerInstance) list.RemoveRange(0, list.Count - MaxEvaluationsPerInstance);
+            }
+        }
+
+        /// <summary>Historial de evaluaciones de una instancia, de la más vieja a la más nueva.</summary>
+        public IReadOnlyCollection<EvaluationResult> GetEvaluations(string instanceId)
+        {
+            if (!_evaluationHistory.TryGetValue(instanceId, out var list)) return Array.Empty<EvaluationResult>();
+            lock (list) { return list.ToList().AsReadOnly(); }
+        }
 
         public EvaluationResult? GetLastEvaluation(string key)
             => _lastEvaluations.TryGetValue(key, out var e) ? e : null;
@@ -96,7 +123,11 @@ namespace DataFeed.Application.App.Runtime
         public void AddEvent(OperationalEvent evt)
         {
             var list = _events.GetOrAdd(evt.InstanceId, _ => new List<OperationalEvent>());
-            lock (list) { list.Add(evt); }
+            lock (list)
+            {
+                list.Add(evt);
+                if (list.Count > MaxEventsPerInstance) list.RemoveRange(0, list.Count - MaxEventsPerInstance);
+            }
         }
 
         public IReadOnlyCollection<OperationalEvent> GetEvents(string instanceId)
@@ -105,16 +136,5 @@ namespace DataFeed.Application.App.Runtime
             lock (list) { return list.ToList().AsReadOnly(); }
         }
 
-        // ── Clear ──
-
-        /// <summary>Borra todo el estado — se usa al apagar el runtime.</summary>
-        public void Clear()
-        {
-            _instances.Clear();
-            _positions.Clear();
-            _lastEvaluations.Clear();
-            _events.Clear();
-            // No limpia _specs: se recargan del disco, no del estado.
-        }
     }
 }
