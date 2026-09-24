@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0004
 title: Regime record adapter for the GaleCore monitor (today, CORS, protected review write)
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: APPROVED
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-AI-0004 — Regime record adapter for the GaleCore monitor
@@ -55,23 +55,23 @@ write to any other page or process.
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Today:** `/api/today` reports the date in the convention timezone and the record's
+- [x] **AC-01 — Today:** `/api/today` reports the date in the convention timezone and the record's
   states (`outcome_pending`, `review_pending`) or `NO_RECORD`; nothing is inferred beyond the record.
-- [ ] **AC-02 — Review through `record_review`:** a valid POST appends exactly one `HumanReview` to
+- [x] **AC-02 — Review through `record_review`:** a valid POST appends exactly one `HumanReview` to
   the selected `run_id`, leaves `entry_hash` unchanged, and the response is the day re-read through
   `query`; the CLI path reads the same review back.
-- [ ] **AC-03 — Write protection:** the write is refused (and nothing is written) without the token
+- [x] **AC-03 — Write protection:** the write is refused (and nothing is written) without the token
   (401), from a non-allowed or missing `Origin` (403), with a non-loopback `Host` (403), with a
   non-JSON body (415), oversized/empty body (413), invalid schema/verdict/comment/date (400),
   unknown run_id/day (404), or on a record `query` rejects (422). Reviews disabled → 403.
-- [ ] **AC-04 — CORS:** only allowed origins receive `Access-Control-Allow-Origin` (echoed, with
+- [x] **AC-04 — CORS:** only allowed origins receive `Access-Control-Allow-Origin` (echoed, with
   `Vary: Origin`) and a 204 preflight; other origins get neither.
-- [ ] **AC-05 — Reads unchanged:** every GC-AI-0003 behaviour and test still holds (same `query`
+- [x] **AC-05 — Reads unchanged:** every GC-AI-0003 behaviour and test still holds (same `query`
   path, integrity, consistency between reads, annotation F-7, standalone page).
-- [ ] **AC-06 — Repository validation:** gate, pytest, Ruff, `git diff --check`, wheel PASS in the
+- [x] **AC-06 — Repository validation:** gate, pytest, Ruff, `git diff --check`, wheel PASS in the
   worktree (`PYTHONPATH=src`).
-- [ ] **AC-07 — Independent review:** internal `reviewer` then `/review-codex` on the diff.
-- [ ] **AC-08 — Integration with GC-AI-0002 final:** before closing, the adapter is verified against
+- [x] **AC-07 — Independent review:** internal `reviewer` then `/review-codex` on the diff.
+- [x] **AC-08 — Integration with GC-AI-0002 final:** before closing, the adapter is verified against
   the final `feature/gc-ai-0002` tree (rebase or merge, tests green). Not required to start.
 
 ## Requirement-to-evidence matrix
@@ -221,3 +221,7 @@ patches, new parents). Verified after the rebase in this worktree: `ruff` clean,
 the four records of the GC-AI-0002 series (09-23 with two outcomes and the owner's review),
 `integrity_failed: []`. Pre-existing and unchanged: `git diff --check` flags a blank line at EOF of
 the GC-AI-0003 work item (already in `7ad598b`).
+
+## Product-owner decision — CLOSED (2026-09-24)
+
+El owner aprobó el cierre en la sesión del 2026-09-24 ("Cerrá los 4", junto con GC-AI-0002/0003/0004/0005). Codex recheck C2 APPROVE (`GC-AI-0004-20260923T000602Z.md`); AC-08 (integración con el GC-AI-0002 final) hecha por el rebase `c69f64b`, aceptada por el owner sin nuevo review. Desde GC-AI-0005 el adapter lee los registros de `knowledge/regime`. Transcripción del implementer; la decisión es del owner.

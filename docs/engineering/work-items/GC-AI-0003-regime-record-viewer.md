@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0003
 title: Local read-only viewer for evaluable regime records
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: APPROVED
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-AI-0003 — Local read-only viewer for evaluable regime records
@@ -53,35 +53,35 @@ CLI uses.
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Same read path as `query`:** the list of records and every OK/INTEGRITY_FAILED
+- [x] **AC-01 — Same read path as `query`:** the list of records and every OK/INTEGRITY_FAILED
   verdict come from `query_records`; entry detail comes from `FileRecordStore.load` (same
   verification) and must agree field by field with what `query` returned, else the query is
   retried and a day that stays inconsistent is `READ_INCONSISTENT` (no content, HTTP 409). A
   tampered file appears as INTEGRITY_FAILED with its problems and none of its content; the HTTP
   response carries the same non-success signal the CLI gives (exit 3 ↔ HTTP 422).
-- [ ] **AC-02 — Filter by date and symbol:** `GET /api/records?symbol=&since=&until=` mirrors the
+- [x] **AC-02 — Filter by date and symbol:** `GET /api/records?symbol=&since=&until=` mirrors the
   CLI flags; invalid parameters return 400 JSON and never a 500.
-- [ ] **AC-03 — Detail:** facts with their per-source freshness timestamps, snapshot identity
+- [x] **AC-03 — Detail:** facts with their per-source freshness timestamps, snapshot identity
   (`prepared_at`, `market_data_as_of`, `freshness_status`, hashes), effective assets (skill
   version), accepted interpretation (regime, tail pricing, observations, implications, claims,
   evidence, limitations), guardrail trace, host declaration.
-- [ ] **AC-04 — Outcome and human review:** shown when present, with a side-by-side comparison of
+- [x] **AC-04 — Outcome and human review:** shown when present, with a side-by-side comparison of
   facts at acceptance vs facts observed later; explicit states `outcome pending` and
   `review pending` derived from the record (no outcome / no review), never inferred.
-- [ ] **AC-05 — Empty and error states:** no records in range, records dir unavailable, integrity
+- [x] **AC-05 — Empty and error states:** no records in range, records dir unavailable, integrity
   failed, all shown explicitly; the page always names the directory read and the query time.
-- [ ] **AC-06 — Observed-history annotation:** the 2026-09-17 SPY record shows the owner's F-7
+- [x] **AC-06 — Observed-history annotation:** the 2026-09-17 SPY record shows the owner's F-7
   condition ("kept as observed history; does not count toward AC-08") bound to its `entry_hash`
   and citing the work-item source, visually separated from the validated content, not as an
   integrity failure nor as a pending decision. If the hash no longer matches, the annotation is
   not shown.
-- [ ] **AC-07 — Read-only, loopback, no secrets:** server binds `127.0.0.1` only; every non-GET method → 405;
+- [x] **AC-07 — Read-only, loopback, no secrets:** server binds `127.0.0.1` only; every non-GET method → 405;
   no GaleCore API call, no API key read; static page has no external resources.
-- [ ] **AC-08 — Real records untouched:** reading the real directory leaves every file
+- [x] **AC-08 — Real records untouched:** reading the real directory leaves every file
   byte-identical (verified by hash before/after in the handoff).
-- [ ] **AC-09 — Repository validation:** engineering gate, pytest, Ruff and `git diff --check`
+- [x] **AC-09 — Repository validation:** engineering gate, pytest, Ruff and `git diff --check`
   pass in the worktree (`PYTHONPATH=src`, since the editable install points to the main checkout).
-- [ ] **AC-10 — Independent review:** internal `reviewer` then `/review-codex` inspect the diff.
+- [x] **AC-10 — Independent review:** internal `reviewer` then `/review-codex` inspect the diff.
 
 ## Requirement-to-evidence matrix
 
@@ -306,3 +306,6 @@ terminal; se cierra con Ctrl+C allí. No se tocó GC-AI-0002 ni su serie.
 **Próximo paso del plan.** Esperar el acuerdo del siguiente incremento sobre el plan completo
 (realineación, punto 6). Este item no se amplía hasta entonces.
 
+## Product-owner decision — CLOSED (2026-09-24)
+
+El owner aprobó el cierre en la sesión del 2026-09-24 ("Cerrá los 4", junto con GC-AI-0002/0003/0004/0005). Codex recheck APPROVE (`GC-AI-0003-20260921T171056Z.md`); integrado por rebase sobre el GC-AI-0002 final (`7adb741`). La página independiente queda preservada, sin ampliarse. Transcripción del implementer; la decisión es del owner.

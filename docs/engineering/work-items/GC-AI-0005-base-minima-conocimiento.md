@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0005
 title: Base mínima probada con trabajo real — catálogo, base de conocimiento e investigación retomable
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: APPROVED
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-AI-0005 — Base mínima probada con trabajo real
@@ -56,28 +56,28 @@ otra sesión." Entrega una investigación retomable y un plan de prueba, no una 
 
 ## Acceptance criteria
 
-- [ ] **AC-01 (A) — Descubrimiento:** desde un pedido normal, el host usa `catalog` para encontrar la
+- [x] **AC-01 (A) — Descubrimiento:** desde un pedido normal, el host usa `catalog` para encontrar la
   capacidad adecuada y su flujo; GEX, régimen e investigación figuran con skill, contrato y flujo.
-- [ ] **AC-02 (B) — Antecedentes con efecto:** una investigación sólo se guarda si cada antecedente
+- [x] **AC-02 (B) — Antecedentes con efecto:** una investigación sólo se guarda si cada antecedente
   resuelve a un item de la base o a un archivo local y declara cómo afecta a la hipótesis o al plan.
-- [ ] **AC-03 (C) — Procedencia y estado:** la investigación guarda pregunta, estado, antecedentes,
+- [x] **AC-03 (C) — Procedencia y estado:** la investigación guarda pregunta, estado, antecedentes,
   afirmaciones tipadas (hecho / interpretación / hipótesis / decisión; un hecho sin fuente se
   rechaza), plan de prueba, faltantes y siguientes pasos, con host declarado, skill (versión + hash)
   y hash de contenido por revisión.
-- [ ] **AC-04 (D) — Retomar sin memoria:** una sesión nueva del host, sin la conversación anterior,
+- [x] **AC-04 (D) — Retomar sin memoria:** una sesión nueva del host, sin la conversación anterior,
   encuentra la investigación por `kb search`, la lee con `kb show` y la continúa desde sus pendientes
   con `research revise`.
-- [ ] **AC-05 (E) — Corrección o resultado vinculado:** una revisión posterior (`continuation`,
+- [x] **AC-05 (E) — Corrección o resultado vinculado:** una revisión posterior (`continuation`,
   `correction`, `result`) se agrega sin alterar las anteriores; una revisión anterior modificada se
   detecta como `INTEGRITY_FAILED`.
-- [ ] **AC-06 (F) — GEX y régimen intactos:** las suites existentes pasan; los registros de régimen
+- [x] **AC-06 (F) — GEX y régimen intactos:** las suites existentes pasan; los registros de régimen
   existentes siguen legibles y verificables desde la nueva ubicación con el mismo contenido.
-- [ ] **AC-07 (G) — Independiente de la rama:** la base vive fuera de todo checkout de código; cambiar la
+- [x] **AC-07 (G) — Independiente de la rama:** la base vive fuera de todo checkout de código; cambiar la
   rama de GaleCore o GaleCore-AI no cambia su contenido.
-- [ ] **AC-08 (H) — La tercera capacidad usa el mecanismo común:** el handoff enumera qué se declaró y qué
+- [x] **AC-08 (H) — La tercera capacidad usa el mecanismo común:** el handoff enumera qué se declaró y qué
   código específico hizo falta, sin ocultar excepciones.
-- [ ] **AC-09 (I) — Repositorio:** gate, pytest, ruff, `git diff --check`, verificación del wheel.
-- [ ] **AC-10 (J) — Review:** `reviewer` interno y `/review-codex` sobre el diff.
+- [x] **AC-09 (I) — Repositorio:** gate, pytest, ruff, `git diff --check`, verificación del wheel.
+- [x] **AC-10 (J) — Review:** `reviewer` interno y `/review-codex` sobre el diff.
 
 ## Requirement-to-evidence matrix
 
@@ -212,4 +212,8 @@ sólo transcribe el veredicto; `status`, `closure_blocked` y `approval_result` n
 
 ### Product-owner decision
 
-PENDING. El owner decide VALIDATED/CLOSED.
+Ver la decisión de cierre al final.
+
+## Product-owner decision — CLOSED (2026-09-24)
+
+El owner aprobó el cierre en la sesión del 2026-09-24 ("Cerrá los 4", junto con GC-AI-0002/0003/0004/0005). Codex recheck C2 APPROVE (`GC-AI-0005-20260924T003647Z.md`). La continuación de AC-04 la hizo un subagente con contexto limpio; una sesión del owner queda como verificación de uso, no como criterio. Transcripción del implementer; la decisión es del owner.

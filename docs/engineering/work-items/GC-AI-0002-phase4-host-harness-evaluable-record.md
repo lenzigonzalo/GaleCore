@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0002
 title: Phase 4 — complete harness from the host with an evaluable record
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0002 — Phase 4: complete harness from the host with an evaluable record
@@ -59,52 +59,52 @@ are research artifacts, not platform code; GaleCore is never pushed.
 
 ## Acceptance criteria (draft)
 
-- [ ] **AC-01 — Regime facts capability:** the registry exposes `compute.gex_analysis`, `compute.put_skew`
+- [x] **AC-01 — Regime facts capability:** the registry exposes `compute.gex_analysis`, `compute.put_skew`
   (COMPUTE) and `market_data.trade` (PURE_QUERY; VIX, VVIX) — read-only classes only, as Phase 3 allows —
   *(ids/classes fixed by the implementer on 2026-09-16 to match GaleCore's actual endpoints; the draft said
   `put_skew`/`index_quote`, `PURE_QUERY`)*; `prepare --skill regime --symbol SPY`
   returns one `PreparedAnalysisView` whose `facts` carry all three sources with per-source
   provenance `GALECORE_VERIFIED`, observed timestamps and freshness; a missing or stale source
   fails closed with a documented error (no partial regime).
-- [ ] **AC-02 — Regime skill and contract:** a versioned `regime-analysis` skill (YAML + Pydantic
+- [x] **AC-02 — Regime skill and contract:** a versioned `regime-analysis` skill (YAML + Pydantic
   `RegimeInterpretation`) reuses the GEX assurance rules (no invented numbers, no numbers in prose,
   closed metric/unit set, evidence refs, no trading directive) extended to skew25 and VIX/VVIX
   metrics; `accept` rejects any interpretation that violates them, with adversarial tests per new
   metric and per guardrail (EN + ES).
-- [ ] **AC-03 — Evaluable record:** an accepted result can be persisted as
+- [x] **AC-03 — Evaluable record:** an accepted result can be persisted as
   `GaleCore/research/regime/YYYY-MM-DD.md` with frontmatter containing: request, `run_id`, snapshot
   identity, facts with hashes, asset ids/versions/hashes, host-declared model metadata, accepted
   payload, trace summary, and empty `outcome` / `human_review` sections. Writing is idempotent per
   date+symbol (a second run of the same day appends a new entry, never overwrites), fails closed if
   the run was not accepted, and never stores secrets or raw logs.
-- [ ] **AC-04 — Outcome and human review:** a `record outcome` step fetches a later fact set
+- [x] **AC-04 — Outcome and human review:** a `record outcome` step fetches a later fact set
   (spot, net_gex, VIX at time T+n) through the same capabilities and appends it to the record with
   its own provenance; a `record review` step appends the human's verdict (free text + enum
   `agree|partial|disagree`) with UTC timestamp. Neither step can modify the original accepted
   payload.
-- [ ] **AC-05 — Query:** `query --since YYYY-MM-DD --symbol SPY` (or equivalent) returns the records
+- [x] **AC-05 — Query:** `query --since YYYY-MM-DD --symbol SPY` (or equivalent) returns the records
   as JSON (what was said, with which facts, what happened, what the human thought) without calling
   a model; a record with a corrupt frontmatter or a hash mismatch against its stored facts is
   reported as `INTEGRITY_FAILED`, not silently skipped.
-- [ ] **AC-06 — Host entry point:** `CLAUDE.md` and the skill let Claude Code run the full loop
+- [x] **AC-06 — Host entry point:** `CLAUDE.md` and the skill let Claude Code run the full loop
   (prepare → interpret → accept → record → later outcome → review → query) from the prompt
   "Analizá el régimen de hoy de SPY y guardalo" with no manual JSON assembly beyond the
   interpretation itself; the four-step protocol from GC-AI-0001 stays valid for the GEX skill.
-- [ ] **AC-07 — Reproducible E2E:** sanitized evidence under `docs/evidence/gc-ai-0002-e2e/` records
+- [x] **AC-07 — Reproducible E2E:** sanitized evidence under `docs/evidence/gc-ai-0002-e2e/` records
   against live local GaleCore: ≥1 positive full loop (including outcome and review on a later
   run), and negatives for stale source, missing source, rejected interpretation, record of a
   non-accepted run, tampered record on query. One JSON per case with command, stdin, stdout,
   exit code, UTC timestamp. Runner extended from `tools/e2e_interactive_cases.py`.
-- [ ] **AC-08 — Series evidence:** at least 3 real daily records on consecutive trading days exist
+- [x] **AC-08 — Series evidence:** at least 3 real daily records on consecutive trading days exist
   in `GaleCore/research/regime/` produced through the host loop (not synthesized), and the query
   case reads them back. If the calendar does not allow 3 days before review, the criterion stays
   `PENDING`, never simulated.
-- [ ] **AC-09 — Documentation coherence:** v5 §13/§17, `PHASE3-ALIGNMENT.md` (or a new
+- [x] **AC-09 — Documentation coherence:** v5 §13/§17, `PHASE3-ALIGNMENT.md` (or a new
   `PHASE4-ALIGNMENT.md`), `CLAUDE.md`, validation guide and `roadmap/README.md` describe Phase 4
   as implemented/validated maturity, no more.
-- [ ] **AC-10 — Repository validation:** engineering gate, pytest, Ruff, `git diff --check` and wheel
+- [x] **AC-10 — Repository validation:** engineering gate, pytest, Ruff, `git diff --check` and wheel
   build pass; new runtime assets are packaged.
-- [ ] **AC-11 — Independent review:** internal `reviewer` then `/review-codex` inspect the diff and
+- [x] **AC-11 — Independent review:** internal `reviewer` then `/review-codex` inspect the diff and
   evidence, rerun checks, and record approval separately from the handoff.
 
 ## Requirement-to-evidence matrix
@@ -491,3 +491,7 @@ Range `ce6645a..f5e9747`, clean tree. **Verdict: APPROVE** (AC-08 series 3/3 SUP
 | F-2 | Staleness policy outside the cash session (records at pre-market with the 24 h cap, or only during/after the session?) | **Only produce daily records after the cash session** (e.g. 16:30–20:00 ET) with `MAX_STALENESS_SECONDS=36000`; document it in the guide. | **Post-session only** (owner, 2026-09-19). Guide §1/§7 and `CLAUDE.md` updated; the 86400 cap is not to be used for the daily series. |
 | F-7 | Disposition of `SPY/2026-09-17.md` | **Keep as flagged history; series for AC-08 starts on the next trading day.** | **Keep** (owner, 2026-09-19); not counted toward AC-08. |
 | F-6 | A real `record review` on a real record | Needs you: run it on the first compliant record. | **Agreed** (owner, 2026-09-19): the owner will run `record review` on the first compliant record. |
+
+## Product-owner decision — CLOSED (2026-09-24)
+
+El owner aprobó el cierre en la sesión del 2026-09-24 ("Cerrá los 4", junto con GC-AI-0002/0003/0004/0005). Evidencia completa (serie AC-08 3/3), Codex recheck 3 APPROVE (`GC-AI-0002-20260923T213537Z.md`). F-9 (rotar la ApiKey de desarrollo) hecho el mismo día: rotada en user-secrets, verificada en caliente (clave nueva 200, vieja 401). Transcripción del implementer; la decisión es del owner.
