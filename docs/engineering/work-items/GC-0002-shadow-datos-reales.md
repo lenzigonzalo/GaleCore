@@ -75,8 +75,8 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 | AC-05 | `ShadowRuntimeStore` (historial acotado, eventos de ciclo de vida no se descartan); eventos por gate, NO_DATA, descarte y valuación sin precio | `EveryEvaluationIsKept_NotOnlyTheLast`, `Store_*`, `Valuation_NoDataEvent_OnlyWhenTheProblemChanges` | ídem | Verificado en tests |
 | AC-06 | `shadow_runtime_test_v1.json` (renombrada); hashes viejo/nuevo en el handoff | `RuntimeSpecJsonTests` | hashes abajo | Verificado |
 | AC-07 | Runtime sólo pide cadena, griegas y cotización | `ShadowRuntimeBoundaryTests` (patrones ampliados en R1-m5) | ídem | Verificado en tests |
-| AC-08 | — | — | Demo en día hábil con mercado abierto | PENDING |
-| AC-09 | Tests nuevos para AC-01..05 y AC-07 | `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj` → 385/385 (base 331) | salida del comando | Verificado |
+| AC-08 | API local desde la rama (`55b18d1` y luego `HEAD`), Development, 24/09 ~17:05-17:15 UTC (mercado abierto) | — | `docs/evidence/gc-0002/ac08-run1-vix-quote.json`, `ac08-run2-before-off.json`, `ac08-run2-after-off.json` | Hecho en parte (ver "AC-08, 24/09") |
+| AC-09 | Tests nuevos para AC-01..05 y AC-07 | `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj` → 387/387 (base 331) | salida del comando | Verificado |
 | AC-10 | — | Interno R1 CHANGES_REQUESTED → corregido; recheck R2 APPROVE (MINORs corregidos) | este item | Codex PENDING |
 
 ## Implementer handoff
@@ -152,3 +152,26 @@ declarados; sin BLOCKER ni MAJOR ni regresiones. MINORs, corregidos en el commit
 | m-c | El VIX usaba el mid sin `QuoteRules.IsUsable` (bid 0 / ask 20 daba 10 y pasaba el gate); previo al item, cae en AC-01 | `MetricResolver.UsableQuotePrice` + `MetricResolverQuoteTests` |
 | m-d | `ShadowSession` sin fallback a la zona de Windows: sesión cerrada para siempre en un host sin ICU | Prueba el id IANA y su equivalente de Windows |
 | m-e | Con 0DTE, `TargetDte = 0` hace que el handler elija el de mayor DTE | El builder rechaza 0DTE con la razón explícita + test |
+
+## AC-08, 24/09 (API local desde la rama, mercado abierto)
+
+Deploy SHADOW de `shadow_runtime_test_v1` con el switch ON; evidencia sin credenciales en
+`docs/evidence/gc-0002/`.
+
+- **Corrida 1** (`55b18d1`, 17:07 UTC): DXLink publica el Quote de VIX con bid/ask `NaN` y
+  `eventTime` 0 → `METRICS_NO_DATA` + gate `vix_absolute` NO_DATA → `GATES_NOT_PASSED`, sin
+  candidato ni posición. Es el caso NO_DATA de AC-08, con un faltante **real** (no forzado). GEX real
+  −83.5 (FAIL). Llevó a la decisión del owner de leer VIX por Trade (arriba).
+- **Corrida 2** (`HEAD`, 17:10 UTC en adelante): VIX 15.48 por Trade (PASS), GEX −83.6 (FAIL) →
+  descarte explicado con los valores por gate. Dos evaluaciones.
+- **Switch OFF** (17:12:40): después de más de dos ticks, 2 evaluaciones y 5 eventos iguales a los
+  de antes, instancia `RUNNING` / `PAUSED`, nada borrado.
+- **No demostrado en vivo:** construcción de candidato, fill y valuación real. Con GEX negativo el
+  gate corta antes (comportamiento correcto de la spec). Esos caminos quedan cubiertos sólo por
+  tests con datos falsos (`PcsCandidateBuilderTests`, `ShadowRuntimeEngineTests`); verlos en vivo
+  requiere un día con GEX ≥ 0.
+- **Confirmado en vivo:** el Quote de DXLink trae `eventTime` 0, así que la frescura de las
+  cotizaciones no se puede medir (limitación declarada arriba).
+- El override del switch persiste en disco: al reiniciar, la API arrancó con el switch ON (el
+  último valor puesto), no "inerte". Comportamiento previo del `PlatformServiceSwitch`, fuera de
+  este item; el switch quedó OFF al terminar.
