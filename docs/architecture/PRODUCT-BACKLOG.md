@@ -1493,3 +1493,22 @@ datos, con GaleCore-AI validando lo que se afirma? Se decide al contrastar con e
 
 **Relación:** `BL-006` (tools externas y confianza), v5 §6.
 
+## BL-013 — Hora de bid/ask en las cotizaciones de DXLink
+
+**Estado:** `CAPTURED` (decisión del owner en GC-0002, 2026-09-24)
+
+**Origen:** Codex C1 de GC-0002 pidió rechazar las cotizaciones de opciones sin hora del proveedor.
+En vivo (24/09), DXLink manda todos los Quote con `eventTime` 0, así que esa regla dejaría al runtime
+SHADOW sin poder cotizar ninguna pata. El owner decidió aceptar la hora desconocida como limitación
+declarada (protección: sin fills ni cierres fuera de sesión; hora vieja o futura sí se rechaza) y
+capturar acá la mejora de fondo.
+
+**Qué es:** pedir a DXLink los campos de hora de la cotización (`bidTime`/`askTime`, o `time` del
+evento) en la configuración del feed de Quote, mapearlos en `QuoteModel`/`QuoteEvent` y usarlos en
+`MediatorRuntimeMarketData.GetQuoteAsync` para que `DataFreshness` pueda medir la edad de cada pata.
+
+**Riesgo:** el streaming DXLink lo usa todo GaleCore (RPF, GEX, monitor); cambiar el FEED_SETUP es un
+cambio transversal y necesita verificar que ningún consumidor dependa del formato actual.
+
+**Entry gate:** GC-0002 cerrado y decisión del owner de abrirlo como work item de GaleCore.
+
