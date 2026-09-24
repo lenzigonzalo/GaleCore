@@ -387,21 +387,27 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
-    public void Store_SwitchChangeAndPositionCommit_AreSerialized()
+    public async Task Store_SwitchChangeAndPositionCommit_AreSerialized()
     {
         // Mientras el switch se está apagando (dentro del lock), un registro concurrente espera y
         // después ve el switch apagado: no hay posición registrada "después" del OFF.
         var store = new ShadowRuntimeStore();
         bool enabled = true;
-        using var insideGate = new ManualResetEventSlim();
-        using var release = new ManualResetEventSlim();
-        var switcher = Task.Run(() => store.UnderCommitGate(() => { insideGate.Set(); release.Wait(); enabled = false; }));
-        insideGate.Wait();
+        using var insideGate = new SemaphoreSlim(0);
+        using var release = new SemaphoreSlim(0);
+        var limit = TimeSpan.FromSeconds(10);
+        var switcher = Task.Run(() => store.UnderCommitGate(() =>
+        {
+            insideGate.Release();
+            if (!release.Wait(limit)) throw new TimeoutException("el test no liberó el lock");
+            enabled = false;
+        }));
+        Assert.True(await insideGate.WaitAsync(limit));
         var committer = Task.Run(() => store.TryAddPosition(new ShadowPosition { PositionId = "p", Status = "OPEN" }, () => enabled));
-        Assert.False(committer.Wait(200));   // bloqueado por el lock
-        release.Set();
-        switcher.Wait();
-        Assert.False(committer.Result);
+        Assert.NotSame(committer, await Task.WhenAny(committer, Task.Delay(200)));   // bloqueado por el lock
+        release.Release();
+        await switcher.WaitAsync(limit);
+        Assert.False(await committer.WaitAsync(limit));
         Assert.Empty(store.AllPositions());
     }
 

@@ -13,7 +13,7 @@ Cada request HTTP queda en el JSONL (ver ac08_capture.py); un status >= 400 cort
 La ApiKey se lee de user-secrets y nunca se escribe.
 
 Uso, desde la raíz del repo GaleCore, con el puerto 7001 libre y mercado abierto:
-    python docs/evidence/gc-0002/ac08_run.py --name <run> --spec <spec_name> [--extra-spec <archivo.json>] [--evals 2]
+    python docs/evidence/gc-0002/ac08_run.py --name <run> --spec <spec_name> [--extra-spec <archivo.json>] [--evals 2] [--gex-samples 3]
 Deja docs/evidence/gc-0002/<run>.jsonl y <run>.manifest.json. Exit code 0 sólo si todo salió bien.
 """
 from __future__ import annotations
@@ -84,6 +84,8 @@ def main() -> int:
     ap.add_argument("--spec", required=True)
     ap.add_argument("--extra-spec", type=Path)
     ap.add_argument("--evals", type=int, default=2)
+    ap.add_argument("--gex-samples", type=int, default=0,
+                    help="respuestas de /App.Analytics/GammaExposure (el mismo request que usa el gate) a registrar")
     args = ap.parse_args()
 
     log = EVIDENCE / f"{args.name}.jsonl"
@@ -143,6 +145,17 @@ def main() -> int:
         else:
             raise RuntimeError("la API no arrancó en 240 s")
         step("api_ready", log_lines=[ln.strip() for ln in text.splitlines() if LOG_KEEP.search(ln)])
+
+        # Cobertura del GEX en vivo: la respuesta completa queda en el JSONL; los contadores, acá.
+        samples = []
+        for i in range(args.gex_samples):
+            st, gex = cap.call(log, "GET", "App.Analytics/GammaExposure?Symbol=SPY", note=f"gex sample {i + 1}")
+            expect_ok(st, "gex sample")
+            samples.append({k: gex.get(k) for k in ("expiration", "dte", "symbolsRequested", "symbolsWithGreeks",
+                                                     "callOiRequested", "callOiReceived", "putOiRequested",
+                                                     "putOiReceived", "netGEX")})
+        if samples:
+            step("gex_coverage", samples=samples)
 
         status, _ = cap.call(log, "POST", "App/GaleCore/Services/runtime/Switch", {"enabled": False}, note="switch off (inicio limpio)")
         expect_ok(status, "switch off inicial")
