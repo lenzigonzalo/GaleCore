@@ -1,7 +1,7 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado (2026-09-24, noche):** I1 e I2 **cerrados** (GC-AI-0005; GC-0002 en GaleCore, tag `gc-0002-closed`). Siguiente propuesto: **I3** (SHADOW visible y que no se borre), a confirmar por el owner. Plan: `roadmap/README.md`.
+**Estado (2026-09-24, noche):** I1 e I2 **cerrados** (GC-AI-0005; GC-0002 en GaleCore, tag `gc-0002-closed`). **I3 activo** (SHADOW durable y visible, GC-0004 en GaleCore), decidido por el owner el 24/09. Plan: `roadmap/README.md`.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## Próxima sesión — punto de entrada
@@ -11,19 +11,18 @@
 **En criollo, para el owner:**
 - **Qué se terminó hoy:** el simulador SHADOW de GaleCore (paso 2 del plan). Mira el mercado cada
   minuto y, si se cumplen las reglas, simula una entrada con precios reales; si falta un dato no hace
-  nada y anota por qué. Lo probamos en vivo. Cerrado por el owner.
+  nada y anota por qué. En vivo se vieron evaluaciones, bloqueos, descartes y pausa; candidato, fill
+  y valuación **no** se observaron en vivo (sólo en tests), y el cierre aceptó esa limitación.
 - **Qué no se ve todavía:** no tiene pantalla y olvida todo al reiniciar. Eso es el paso 3.
 - **Hallazgo aparte:** un error en el GEX que hoy corre en producción (a opciones sin operaciones en
   los últimos 2 días les ponía 0 contratos abiertos). Arreglado en local y aprobado; **no se mandó**.
 - **Autocrítica de la sesión:** se dedicó la última parte al PR sin preguntar si era prioridad, y hubo
-  demasiadas rondas de revisión. Regla nueva: preguntar antes de desviarse; una ronda de review;
-  reportes cortos; cada paso termina en algo visible.
+  demasiadas rondas de revisión. Reglas: preguntar antes de desviarse; reportes cortos; cada paso
+  termina en algo visible. Cuánta revisión: `ENGINEERING.md` §3 (una completa + rechecks acotados).
 
 **Decisiones pendientes del owner (en este orden):**
-1. **Qué sigue:** propuesta = **I3** (pantalla del simulador + que no se borre al reiniciar). O revisar
-   antes el plan completo. El objetivo es el ecosistema entero (análisis, investigaciones, estrategias,
-   planes, cartera, informes, dashboards, automatización), no sólo el simulador.
-2. **PR del GEX** (no urgente): rama `fix/gex-oi-lookback` en GaleCore, 2 commits sobre `master`,
+1. ~~Qué sigue~~ **Decidido (24/09): I3.** El PR del GEX queda pendiente, sin push ni PR.
+2. **PR del GEX** (pendiente por decisión del owner): rama `fix/gex-oi-lookback` en GaleCore, 2 commits sobre `master`,
    Codex APPROVE, `dotnet test` 244/244. Descripción lista en
    `GaleCore/docs/evidence/gc-0003/pr-description.md` (rama `feature/GC-0003-gex-oi-coverage`).
    Push y `gh pr create` sólo si el owner dice que sí (el hook bloquea el push: habrá que habilitarlo
@@ -51,12 +50,12 @@ host a GaleCore por MCP (ya existe `/mcp` con ~11 tools crudas, no conectado; ve
 Investigación abierta GEX 0DTE: espera dónde archivar el desglose por vencimiento.
 
 **Estado de la sesión:** ApiKey dev rotada (en user-secrets; tomada en caliente). Cerrados por el
-owner: GC-AI-0002/0003/0004/0005 (tag `phase4-closed`). Plan: `roadmap/README.md` (I2 activo).
+owner: GC-AI-0002/0003/0004/0005 (tag `phase4-closed`). Plan: `roadmap/README.md` (I3 activo).
 
 **Qué seguir:** el plan único es [`roadmap/README.md`](../../../roadmap/README.md): estado, base
 común, secuencia I1–I5, casos de uso y decisiones abiertas. El item activo sigue siendo
 [GC-AI-0005](../engineering/work-items/GC-AI-0005-base-minima-conocimiento.md) (= I1), terminado y
-cerrado. El owner decidió el siguiente: **I2, SHADOW con datos reales en GaleCore** (README §4). La realineación del
+cerrado. I2 (GC-0002) está cerrado; el activo es **I3, SHADOW durable y visible** (GC-0004, README §4). La realineación del
 21/09 está archivada y no se sigue. Una idea nueva del owner se contrasta primero con el plan
 (`ENGINEERING.md` §1, "Ideas nuevas y el plan").
 
