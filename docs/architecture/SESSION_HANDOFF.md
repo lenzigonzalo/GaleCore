@@ -6,7 +6,27 @@
 
 ## Próxima sesión — punto de entrada
 
-### ▶ Retomar acá (cierre del 2026-09-24, noche)
+### ▶ Retomar acá (I3 en curso, 2026-09-24, noche)
+
+**I3 = GC-0004** en GaleCore, rama local `feature/GC-0004-shadow-durable` (sin push). Todo lo de
+detalle está en el work item `GaleCore/docs/engineering/work-items/GC-0004-shadow-durable-visible.md`.
+- **Hecho:** persistencia de SHADOW en Postgres/EF (misma implementación que irá a producción),
+  recuperación tras reinicio, métricas por versión, pestaña SHADOW del monitor, script de desarrollo,
+  plan de paso a producción (no ejecutado). Interno R1 y Codex C1 CHANGES_REQUESTED, todo corregido.
+  `dotnet test` 427 pass / 5 skipped (Postgres), jest 6/6.
+- **Decisión del owner (24/09):** base de desarrollo = proyecto Supabase **GaleCore Dev**, en una
+  organización propia del owner (Free), separada de producción (org del padre). Avisar antes de
+  cualquier costo. El MCP de Supabase está conectado en la cuenta; **ojo: puede ver también la org de
+  producción — sólo tocar el proyecto "GaleCore Dev"**.
+- **Siguiente (en orden):** (1) con el MCP: confirmar ref/región/plan de GaleCore Dev, costo $0,
+  URL, anon key y host del pooler; (2) `python dev/galecore_dev.py init ...` y aplicar
+  `dev/.local/roles.sql` con el MCP; (3) `migrate`; (4) el owner crea el usuario de prueba en el
+  dashboard (Auth → Add user, auto-confirm, mail `demo@galecore-dev.test`) y corre
+  `set-demo-password`; fila en `users` (username `demo`, is_admin) con el MCP; (5) `test` (5 de
+  Postgres); (6) Codex `--recheck`; (7) demo en día hábil en sesión: `restart_demo.py` + owner en
+  el monitor (`api` + `monitor`).
+
+### Cierre del 2026-09-24, noche (histórico)
 
 **En criollo, para el owner:**
 - **Qué se terminó hoy:** el simulador SHADOW de GaleCore (paso 2 del plan). Mira el mercado cada
