@@ -6,6 +6,38 @@
 
 ## Próxima sesión — punto de entrada
 
+### ▶ Retomar acá (cierre del 2026-09-24, ~02:30 UTC)
+
+**Trabajo activo: I2 = [GC-0002](../../../GaleCore/docs/engineering/work-items/GC-0002-shadow-datos-reales.md)**
+(repo **GaleCore**, rama `feature/GC-0002-shadow-datos-reales`). Estado:
+- Hecho: checkpoint del runtime tal como estaba (`5fa6615`); implementación sin caminos ficticios
+  (`be3206a`): sin métricas/candidatos stub, sin rellenos con 0, valuación con mid real, apagar
+  pausa sin borrar, historial de evaluaciones, eventos de descarte, spec renombrada a
+  `shadow_runtime_test_v1`. `dotnet test` 357/357 (base 331). Todo commiteado, sin push.
+- **Siguiente, en orden:**
+  1. Corregir el review interno **R1 (CHANGES_REQUESTED)** — tabla completa en el work item.
+     BLOCKERS: `MetricResolver` inventa net GEX = 0 sin griegas/OI (pasa el gate); el constructor de
+     candidatos mezcla vencimientos (weekly elegido vs mensual cotizado). MAJORS: frescura con
+     `AsOf = now` y horario de sesión ignorado; AC-04 sin test de comportamiento.
+  2. `dotnet test` + reviewer interno recheck.
+  3. **AC-08, demo en día hábil con mercado abierto:** necesita que GaleCore corra el código de la
+     rama. El GaleCore local actual corre desde `bin/Debug` (pid cambia) con el código viejo:
+     **pedir al owner reiniciarlo desde la rama** (o autorización para hacerlo). Verificar primero si
+     DXLink da bid/ask para VIX (el gate usa el mid; si no, todo sería NO_DATA). Probar también un
+     caso NO_DATA forzado y el switch OFF conservando estado. Evidencia sanitizada en GaleCore.
+  4. Codex (`/review-codex`) sobre `5fa6615..HEAD` y decisión del owner.
+- Cómo correr tests de GaleCore sin prompts: `python <scratchpad>/dotnet_test.py` no persiste entre
+  sesiones; alcanza con `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj`.
+  Para compilar la API con GaleCore corriendo: `dotnet build ... -o <dir temporal>`.
+
+**Otros pendientes del owner:** GC-0001 (pestaña Inteligencia) sin cerrar: el login real necesita
+`ConnectionStrings:GaleCore` en la API local (ver "Cierres pendientes"). `BL-012` nuevo: acceso del
+host a GaleCore por MCP (ya existe `/mcp` con ~11 tools crudas, no conectado; ver qué falta).
+Investigación abierta GEX 0DTE: espera dónde archivar el desglose por vencimiento.
+
+**Estado de la sesión:** ApiKey dev rotada (en user-secrets; tomada en caliente). Cerrados por el
+owner: GC-AI-0002/0003/0004/0005 (tag `phase4-closed`). Plan: `roadmap/README.md` (I2 activo).
+
 **Qué seguir:** el plan único es [`roadmap/README.md`](../../../roadmap/README.md): estado, base
 común, secuencia I1–I5, casos de uso y decisiones abiertas. El item activo sigue siendo
 [GC-AI-0005](../engineering/work-items/GC-AI-0005-base-minima-conocimiento.md) (= I1), terminado y
