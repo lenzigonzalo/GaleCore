@@ -1,12 +1,14 @@
+using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime.Contracts;
 using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
+using DataFeed.Application.Data.Tastytrade.OptionChains;
 using MediatR;
 using Microsoft.Extensions.Logging;
 
 namespace DataFeed.Application.App.Runtime
 {
     /// <summary>
-    /// Cotización real de una pata: bid, ask y cuándo la publicó el proveedor.
+    /// Cotización real de una pata: bid, ask y cuándo la publicó el proveedor (null si no lo informa).
     /// </summary>
     public record LegQuote(double Bid, double Ask, DateTime? AsOf)
     {
@@ -24,6 +26,22 @@ namespace DataFeed.Application.App.Runtime
     }
 
     /// <summary>
+    /// Los datos de mercado que necesita el constructor de candidatos: vencimientos, griegas de un
+    /// vencimiento y cotizaciones. Separado para poder probar el constructor sin proveedor.
+    /// </summary>
+    public interface IPcsMarketSource
+    {
+        /// <summary>Vencimientos de la cadena de opciones, o null si no hay cadena.</summary>
+        Task<List<Expiration>?> GetExpirationsAsync(string symbol, CancellationToken ct);
+
+        /// <summary>Griegas y OI por strike del vencimiento que pide el request, o null.</summary>
+        Task<GammaExposureResponse?> GetGammaExposureAsync(GammaExposureRequest request, CancellationToken ct);
+
+        /// <summary>Cotización utilizable de un símbolo de streamer, o null si no la hay.</summary>
+        Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct);
+    }
+
+    /// <summary>
     /// Lo único que el runtime le pide al mercado. Separa las decisiones del runtime de cómo se
     /// obtienen los datos, para poder probar las decisiones sin proveedor.
     /// </summary>
@@ -33,7 +51,8 @@ namespace DataFeed.Application.App.Runtime
         Task<Dictionary<string, double?>> ResolveMetricsAsync(IEnumerable<string> metricRefs, CancellationToken ct);
 
         Task<CandidateBuildResult> BuildCandidateAsync(
-            StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, CancellationToken ct);
+            StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, DateTime nowUtc,
+            CancellationToken ct);
 
         /// <summary>Cotización utilizable de un símbolo de streamer, o null si no la hay.</summary>
         Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct);
@@ -52,7 +71,7 @@ namespace DataFeed.Application.App.Runtime
     /// <summary>
     /// Implementación con los handlers MediatR de GaleCore (Tastytrade/DXLink).
     /// </summary>
-    public class MediatorRuntimeMarketData : IRuntimeMarketData
+    public class MediatorRuntimeMarketData : IRuntimeMarketData, IPcsMarketSource
     {
         private readonly IMediator _mediator;
         private readonly ILogger _logger;
@@ -67,8 +86,15 @@ namespace DataFeed.Application.App.Runtime
             => new MetricResolver(_mediator, _logger).ResolveAsync(metricRefs, ct);
 
         public Task<CandidateBuildResult> BuildCandidateAsync(
-            StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, CancellationToken ct)
-            => new PcsCandidateBuilder(_mediator, _logger, this).BuildAsync(instance, spec, symbol, vixPrice, ct);
+            StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, DateTime nowUtc,
+            CancellationToken ct)
+            => new PcsCandidateBuilder(this).BuildAsync(instance, spec, symbol, vixPrice, nowUtc, ct);
+
+        public async Task<List<Expiration>?> GetExpirationsAsync(string symbol, CancellationToken ct)
+            => (await _mediator.Send(new OptionChainsRequest { Symbol = symbol }, ct))?.expirations;
+
+        public async Task<GammaExposureResponse?> GetGammaExposureAsync(GammaExposureRequest request, CancellationToken ct)
+            => await _mediator.Send(request, ct);
 
         public async Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
         {

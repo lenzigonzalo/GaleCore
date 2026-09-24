@@ -30,8 +30,9 @@ public class ShadowRuntimeBoundaryTests
     [Fact]
     public void Runtime_OnlyRequestsReadOnlyMarketData()
     {
+        // Cualquier mención a un tipo *Request, no sólo "new XRequest": también "XRequest x = new()" (R1-m5).
         var used = RuntimeSources()
-            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"new\s+(\w+Request)\b").Select(m => m.Groups[1].Value))
+            .SelectMany(f => Regex.Matches(File.ReadAllText(f), @"\b([A-Z]\w*Request)\b").Select(m => m.Groups[1].Value))
             .Distinct().ToList();
         Assert.NotEmpty(used);
         Assert.All(used, r => Assert.Contains(r, AllowedRequests));
@@ -39,7 +40,7 @@ public class ShadowRuntimeBoundaryTests
 
     [Theory]
     [InlineData(@"HttpClient")]
-    [InlineData(@"galecore[_-]ai")]
+    [InlineData(@"galecore[\s_.\-]?ai")]
     [InlineData(@"\w*Order(Request|Command|Client|Service)\b")]
     [InlineData(@"(Place|Submit|Send)Order")]
     public void Runtime_HasNoForbiddenDependency(string pattern)

@@ -139,4 +139,32 @@ public class ShadowRiskValidatorTests
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.Contains("max_loss_per_trade_usd"));
     }
+
+    // ── GC-0002 R1-M1: frescura con la hora del proveedor ──
+
+    private static readonly DateTime Now = new(2026, 9, 24, 15, 0, 0, DateTimeKind.Utc);
+
+    private static TradeCandidate QuotedAt(DateTime? at) =>
+        ValidCandidate() with { Snapshot = new MarketSnapshot { UnderlyingPrice = 545, AsOf = Now, OldestQuoteAt = at } };
+
+    [Fact]
+    public void StaleQuote_Rejected_EvenIfTheSnapshotWasBuiltNow()
+    {
+        var result = ShadowRiskValidator.Validate(QuotedAt(Now.AddSeconds(-151)), TestSpec(), 0, null, Now);
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("too old"));
+    }
+
+    [Fact]
+    public void FreshQuote_Passes()
+    {
+        Assert.True(ShadowRiskValidator.Validate(QuotedAt(Now.AddSeconds(-20)), TestSpec(), 0, null, Now).IsValid);
+    }
+
+    [Fact]
+    public void UnknownQuoteTime_IsNotMeasured()
+    {
+        // Sin hora del proveedor la edad no se puede medir; la protección es no operar fuera de sesión.
+        Assert.True(ShadowRiskValidator.Validate(QuotedAt(null), TestSpec(), 0, null, Now).IsValid);
+    }
 }

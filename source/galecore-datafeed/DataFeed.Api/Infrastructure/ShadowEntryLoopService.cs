@@ -1,13 +1,12 @@
 using DataFeed.Application.App.Runtime;
-using DataFeed.Application.App.Runtime.Contracts;
 using MediatR;
 
 namespace DataFeed.Api.Infrastructure
 {
     /// <summary>
     /// Loop de entrada SHADOW. BackgroundService singleton.
-    /// Cada tick: para cada símbolo de la spec activa, ShadowRuntimeEngine.EvaluateEntryAsync
-    /// (gates con métricas reales → candidato real → riesgo duro → fill simulado al mid real).
+    /// Cada tick: ShadowRuntimeTick.RunEntryTickAsync (en sesión, para cada símbolo de la spec activa:
+    /// gates con métricas reales → candidato real → riesgo duro → fill simulado al mid real).
     /// Cadencia: 60 segundos. Arranca inerte (switch OFF por defecto).
     ///
     /// GC-0002: datos reales o nada. No hay métricas ni candidatos de relleno: un dato que falta
@@ -49,19 +48,17 @@ namespace DataFeed.Api.Infrastructure
                 {
                     var (enabled, source) = _switch.Resolve();
 
-                    if (!enabled)
+                    // Con el switch OFF el tick sólo deja la instancia en PAUSED; no toca lo registrado.
+                    await TickAsync(enabled, stoppingToken);
+                    if (!enabled && !_inertLogged)
                     {
-                        if (!_inertLogged)
-                        {
-                            _logger.LogInformation(
-                                "ShadowEntryLoop pausado (switch={Source}): sin entradas nuevas; el estado se conserva", source);
-                            _inertLogged = true;
-                        }
+                        _logger.LogInformation(
+                            "ShadowEntryLoop pausado (switch={Source}): sin entradas nuevas; el estado se conserva", source);
+                        _inertLogged = true;
                     }
-                    else
+                    else if (enabled)
                     {
                         _inertLogged = false;
-                        await TickAsync(stoppingToken);
                     }
                 }
                 catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -78,52 +75,13 @@ namespace DataFeed.Api.Infrastructure
             }
         }
 
-        private async Task TickAsync(CancellationToken ct)
+        private async Task TickAsync(bool switchEnabled, CancellationToken ct)
         {
-            var activeInstance = _store.ActiveInstance();
-            if (activeInstance == null)
-            {
-                _logger.LogDebug("ShadowEntryLoop: sin instancia activa");
-                return;
-            }
-
-            var spec = _store.GetSpec(activeInstance.SpecName);
-            if (spec == null)
-            {
-                _logger.LogWarning("ShadowEntryLoop: spec '{Name}' no encontrado para instancia {Id}",
-                    activeInstance.SpecName, activeInstance.InstanceId);
-                return;
-            }
-
-            _store.UpdateInstanceState(activeInstance.InstanceId, "RUNNING", "EVALUATING");
-
-            foreach (var symbol in spec.Universe.Symbols)
-            {
-                try
-                {
-                    using var scope = _scopeFactory.CreateScope();
-                    var data = new MediatorRuntimeMarketData(
-                        scope.ServiceProvider.GetRequiredService<IMediator>(), _logger);
-                    var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(
-                        _store, data, activeInstance, spec, symbol, DateTime.UtcNow, ct);
-                    _logger.LogDebug("ShadowEntryLoop: {Symbol} → {Outcome}", symbol, outcome);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _logger.LogError(ex, "ShadowEntryLoop: error evaluando {Symbol}", symbol);
-                    _store.AddEvent(new OperationalEvent
-                    {
-                        EventId = Guid.NewGuid().ToString(),
-                        InstanceId = activeInstance.InstanceId,
-                        EventType = "ERROR",
-                        Symbol = symbol,
-                        Payload = new Dictionary<string, object?> { ["error"] = ex.Message },
-                        Timestamp = DateTime.UtcNow
-                    });
-                }
-            }
-
-            _store.UpdateInstanceState(activeInstance.InstanceId, "RUNNING", "IDLE");
+            using var scope = _scopeFactory.CreateScope();
+            var data = new MediatorRuntimeMarketData(scope.ServiceProvider.GetRequiredService<IMediator>(), _logger);
+            var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(_store, data, switchEnabled, DateTime.UtcNow, ct);
+            foreach (var (symbol, outcome) in outcomes)
+                _logger.LogDebug("ShadowEntryLoop: {Symbol} → {Outcome}", symbol, outcome);
         }
     }
 }

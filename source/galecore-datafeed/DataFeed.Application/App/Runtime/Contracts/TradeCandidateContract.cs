@@ -45,6 +45,12 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double? UnderlyingPrice { get; init; }
         public double? Vix { get; init; }
         public double? IvRank { get; init; }
+        /// <summary>Cuándo el runtime recibió los datos del snapshot (reloj del runtime, no del mercado).</summary>
         public DateTime AsOf { get; init; }
+        /// <summary>
+        /// Hora de publicación de la cotización más vieja de las patas, según el proveedor; null si el
+        /// proveedor no la informa (DXLink puede mandar Quote sin hora). Es lo que mide la frescura.
+        /// </summary>
+        public DateTime? OldestQuoteAt { get; init; }
     }
 }

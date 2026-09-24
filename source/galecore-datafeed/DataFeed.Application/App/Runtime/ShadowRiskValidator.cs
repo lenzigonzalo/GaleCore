@@ -13,7 +13,8 @@ namespace DataFeed.Application.App.Runtime
             TradeCandidate candidate,
             StrategySpec spec,
             int currentOpenPositions,
-            double? accountNetLiq)
+            double? accountNetLiq,
+            DateTime? nowUtc = null)
         {
             var errors = new List<string>();
 
@@ -57,10 +58,14 @@ namespace DataFeed.Application.App.Runtime
             if (candidate.MaxRisk <= 0)
                 errors.Add($"MaxRisk must be positive, got {candidate.MaxRisk}");
 
-            // ── Freshness del snapshot ──
-            if (spec.DataQuality.MaxQuoteAgeSeconds > 0 && candidate.Snapshot.AsOf != default)
+            // ── Freshness de las cotizaciones ──
+            // Se mide con la hora que publica el proveedor (OldestQuoteAt), no con la hora en que el
+            // runtime armó el snapshot: esa siempre es "ahora" y el chequeo nunca fallaría (GC-0002,
+            // R1-M1). Si el proveedor no informa la hora, la edad es desconocida y no se puede medir;
+            // lo que evita operar con precios viejos en ese caso es no simular fills fuera de sesión.
+            if (spec.DataQuality.MaxQuoteAgeSeconds > 0 && candidate.Snapshot.OldestQuoteAt is DateTime quotedAt)
             {
-                var age = (DateTime.UtcNow - candidate.Snapshot.AsOf).TotalSeconds;
+                var age = ((nowUtc ?? DateTime.UtcNow) - quotedAt).TotalSeconds;
                 if (age > spec.DataQuality.MaxQuoteAgeSeconds * 10) // 10x para SHADOW (más permisivo)
                     errors.Add($"Market snapshot too old ({age:F0}s, limit {spec.DataQuality.MaxQuoteAgeSeconds * 10}s)");
             }

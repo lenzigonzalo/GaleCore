@@ -56,8 +56,8 @@ namespace DataFeed.Application.App.Runtime
             // 2. Gates.
             var eval = GenericGateEvaluator.Evaluate(
                 gates, spec.EntryFilters.GateLayer.PassRule, spec.EntryFilters.GateLayer.OnFail,
-                metrics, instance.InstanceId, symbol);
-            store.AddEvaluation($"{instance.InstanceId}:{symbol}", eval);
+                metrics, instance.InstanceId, symbol, nowUtc);
+            store.AddEvaluation(eval);
             var gateSummary = eval.GateResults.Select(g => new Dictionary<string, object?>
             {
                 ["gate_id"] = g.GateId, ["status"] = g.Status, ["value"] = g.Value,
@@ -87,7 +87,8 @@ namespace DataFeed.Application.App.Runtime
             CandidateBuildResult built;
             try
             {
-                built = await data.BuildCandidateAsync(instance, spec, symbol, metrics.GetValueOrDefault(VixMetricRef), ct);
+                built = await data.BuildCandidateAsync(
+                    instance, spec, symbol, metrics.GetValueOrDefault(VixMetricRef), nowUtc, ct);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -102,10 +103,11 @@ namespace DataFeed.Application.App.Runtime
             AddEvent(store, instance, "CANDIDATE_CREATED", symbol, nowUtc,
                 ("candidate_id", candidate.CandidateId), ("credit", candidate.Credit), ("max_risk", candidate.MaxRisk),
                 ("delta_short", candidate.DeltaShort), ("dte", candidate.Dte),
+                ("quotes_as_of", candidate.Snapshot.OldestQuoteAt?.ToString("o") ?? "desconocida (el proveedor no informa la hora)"),
                 ("legs", candidate.Legs.Select(l => $"{l.Side} {l.Type} {l.Strike} {l.Expiration} bid={l.Bid} ask={l.Ask}").ToList()));
 
             // 5. Riesgo duro.
-            var risk = ShadowRiskValidator.Validate(candidate, spec, openCount, null);
+            var risk = ShadowRiskValidator.Validate(candidate, spec, openCount, null, nowUtc);
             if (!risk.IsValid)
             {
                 AddEvent(store, instance, "RISK_CHECK_FAILED", symbol, nowUtc, ("errors", risk.Errors));
@@ -134,11 +136,14 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>
         /// Valúa una posición abierta con el mid real de cada pata y evalúa sus salidas. Si falta el
-        /// precio de alguna pata (o su vencimiento), no evalúa salidas y registra NO_DATA.
+        /// precio de alguna pata (o su vencimiento), no evalúa salidas y registra NO_DATA; el evento
+        /// se registra cuando el problema aparece o cambia, no en cada tick.
+        /// Con <paramref name="evaluateExits"/> en false (fuera de sesión) valúa pero no cierra:
+        /// no se simula un cierre con precios de un mercado cerrado (R1-M1).
         /// </summary>
         public static async Task<string> ValuePositionAsync(
             ShadowRuntimeStore store, IRuntimeMarketData data, ShadowPosition pos, DeterministicExits exits,
-            DateTime nowUtc, CancellationToken ct)
+            DateTime nowUtc, CancellationToken ct, bool evaluateExits = true)
         {
             var problems = new List<string>();
             double spreadValue = 0;
@@ -158,7 +163,9 @@ namespace DataFeed.Application.App.Runtime
                     continue;
                 }
                 // Débito para cerrar: recomprar lo vendido (+mid) y vender lo comprado (−mid).
-                spreadValue += leg.Side == "SELL" ? quote.Mid : -quote.Mid;
+                if (leg.Side == "SELL") spreadValue += quote.Mid;
+                else if (leg.Side == "BUY") spreadValue -= quote.Mid;
+                else problems.Add($"{leg.StreamerSymbol}: lado de pata desconocido '{leg.Side}'");
             }
 
             int? dte = CurrentDte(pos, nowUtc);
@@ -166,12 +173,7 @@ namespace DataFeed.Application.App.Runtime
 
             if (problems.Count > 0)
             {
-                store.AddEvent(new OperationalEvent
-                {
-                    EventId = Guid.NewGuid().ToString(), InstanceId = pos.InstanceId, EventType = "VALUATION_NO_DATA",
-                    Symbol = pos.Symbol, Timestamp = nowUtc,
-                    Payload = new Dictionary<string, object?> { ["position_id"] = pos.PositionId, ["problems"] = problems },
-                });
+                RecordValuationProblems(store, pos, problems, nowUtc);
                 return Outcomes.NoData;
             }
 
@@ -182,9 +184,11 @@ namespace DataFeed.Application.App.Runtime
                 CurrentDte = dte,
                 LastValuedAt = nowUtc,
                 UnrealizedPnl = Math.Round((pos.EntryCredit - spreadValue) * 100, 2),
+                ValuationProblems = null,
                 UpdatedAt = nowUtc,
             };
             store.UpdatePosition(valued);
+            if (!evaluateExits) return Outcomes.Valued;
 
             var reason = ShadowFillSimulator.EvaluateExits(valued, exits, spreadValue, dte!.Value);
             if (reason == null) return Outcomes.Valued;
@@ -202,6 +206,25 @@ namespace DataFeed.Application.App.Runtime
                 },
             });
             return Outcomes.Closed;
+        }
+
+        /// <summary>
+        /// Deja en la posición por qué no se pudo valuar, y un evento VALUATION_NO_DATA sólo si el
+        /// problema es nuevo o cambió. El monitor corre cada 30 s: sin esto, una noche sin
+        /// cotizaciones llenaría el registro de eventos con el mismo aviso.
+        /// </summary>
+        public static void RecordValuationProblems(
+            ShadowRuntimeStore store, ShadowPosition pos, List<string> problems, DateTime nowUtc)
+        {
+            bool changed = pos.ValuationProblems == null || !pos.ValuationProblems.SequenceEqual(problems);
+            store.UpdatePosition(pos with { ValuationProblems = problems, UpdatedAt = nowUtc });
+            if (!changed) return;
+            store.AddEvent(new OperationalEvent
+            {
+                EventId = Guid.NewGuid().ToString(), InstanceId = pos.InstanceId, EventType = "VALUATION_NO_DATA",
+                Symbol = pos.Symbol, Timestamp = nowUtc,
+                Payload = new Dictionary<string, object?> { ["position_id"] = pos.PositionId, ["problems"] = problems },
+            });
         }
 
         /// <summary>Días hasta el vencimiento de la posición, contados en la fecha del mercado (ET).</summary>

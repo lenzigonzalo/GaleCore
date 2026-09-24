@@ -6,7 +6,8 @@ namespace DataFeed.Api.Infrastructure
     /// <summary>
     /// Monitor de posiciones SHADOW. BackgroundService singleton.
     /// Cada tick: valúa cada posición abierta con el mid real de sus patas y evalúa sus salidas
-    /// determinísticas (ShadowRuntimeEngine.ValuePositionAsync). Cadencia: 30 segundos.
+    /// determinísticas (ShadowRuntimeTick.RunMonitorTickAsync); fuera de sesión valúa pero no cierra.
+    /// Cadencia: 30 segundos.
     ///
     /// GC-0002: sin precio real de todas las patas no se evalúan salidas (queda VALUATION_NO_DATA);
     /// nada de decaimientos inventados. Corre aunque el switch esté OFF: apagar pausa las entradas
@@ -58,32 +59,13 @@ namespace DataFeed.Api.Infrastructure
 
         private async Task TickMonitorAsync(CancellationToken ct)
         {
-            var openPositions = _store.OpenPositions();
-            if (openPositions.Count == 0) return;
+            if (_store.OpenPositions().Count == 0) return;
 
             using var scope = _scopeFactory.CreateScope();
             var data = new MediatorRuntimeMarketData(scope.ServiceProvider.GetRequiredService<IMediator>(), _logger);
-
-            foreach (var pos in openPositions)
-            {
-                var instance = _store.GetInstance(pos.InstanceId);
-                var spec = instance == null ? null : _store.GetSpec(instance.SpecName);
-                if (spec == null)
-                {
-                    _logger.LogWarning("ShadowPositionMonitor: sin spec para la posición {Id}", pos.PositionId);
-                    continue;
-                }
-                try
-                {
-                    var outcome = await ShadowRuntimeEngine.ValuePositionAsync(
-                        _store, data, pos, spec.Exits.Deterministic, DateTime.UtcNow, ct);
-                    _logger.LogDebug("ShadowPositionMonitor: {Id} → {Outcome}", pos.PositionId, outcome);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    _logger.LogError(ex, "ShadowPositionMonitor: error evaluando posición {Id}", pos.PositionId);
-                }
-            }
+            var outcomes = await ShadowRuntimeTick.RunMonitorTickAsync(_store, data, DateTime.UtcNow, ct);
+            foreach (var (id, outcome) in outcomes)
+                _logger.LogDebug("ShadowPositionMonitor: {Id} → {Outcome}", id, outcome);
         }
     }
 }

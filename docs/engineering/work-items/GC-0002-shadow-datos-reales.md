@@ -81,9 +81,22 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 
 ## Implementer handoff
 
-**State:** IMPLEMENTING — primera versión en `be3206a` (357 tests); review interno R1 CHANGES_REQUESTED, pendiente de corregir (abajo).
+**State:** IMPLEMENTING — primera versión en `be3206a` (357 tests); R1 corregido (ver "Correcciones de R1"),
+`dotnet test` 382/382, build de `DataFeed.Api` a directorio temporal sin errores. Siguiente: recheck interno,
+después AC-08 en día hábil y Codex.
 
-## Internal review R1 (agente `reviewer`, 2026-09-24 ~02:00 UTC, rango `5fa6615..be3206a`) — CHANGES_REQUESTED, **pendiente de corregir**
+**Hash de la spec (AC-06, R1-m8)**, `StrategySpecHasher` sobre el archivo:
+- antes `pcs_spy_shadow_v1.json` (`5fa6615`): `sha256:09ad790a3d885d13ac13a6ecb1bde402345b7d9333741e4b5741a67764b1139b`
+- ahora `shadow_runtime_test_v1.json`: `sha256:91f3fd0a240363f6d77b3f0046e51d3b4e45fe058323b8d13fb81b18622c6ba3`
+
+**Limitaciones declaradas:**
+- Sin calendario de feriados: un feriado de NYSE en día hábil cuenta como sesión abierta
+  (`ShadowSession`). Cubre noche y fin de semana.
+- Si DXLink no informa la hora de la cotización (`EventTime` = 0), la edad no se puede medir y el
+  chequeo de frescura no aplica (`OldestQuoteAt` = null, visible en `CANDIDATE_CREATED` como
+  "desconocida"). La protección en ese caso es no simular fills ni cierres fuera de sesión.
+
+## Internal review R1 (agente `reviewer`, 2026-09-24 ~02:00 UTC, rango `5fa6615..be3206a`) — CHANGES_REQUESTED, corregido (abajo)
 
 Reprodujo `dotnet test` 357/357 y build de `DataFeed.Api` a directorio temporal (0 errores).
 
@@ -102,4 +115,21 @@ Reprodujo `dotnet test` 357/357 y build de `DataFeed.Api` a directorio temporal 
 | R1-m7 | MINOR | Dos relojes (`EvaluatedAt = UtcNow` en el evaluador vs `nowUtc` del motor) | Pasar el reloj |
 | R1-m8 | MINOR | AC-06: el cambio de hash no quedó registrado | Registrar hash viejo/nuevo en este item |
 | — | riesgo AC-08 | El gate de VIX usa el mid de la cotización; si DXLink no da bid/ask para índices, todo tick será NO_DATA | Verificar en vivo antes de la demo |
+
+### Correcciones de R1
+
+| # | Qué se hizo | Test |
+|---|---|---|
+| R1-B1 | `MetricResolver.UsableNetGex`: null sin strikes, sin símbolos con griegas o sin OI > 0 (o NaN) | `MetricResolverNetGexTests` |
+| R1-B2 | El builder pide griegas con `ExpirationTypes = {Regular, Weekly}`, `TargetDte` = DTE elegido y `MaxDTE` = max de la spec; rechaza si `gexResponse.Expiration` ≠ el elegido; DTE desde la respuesta. DTE de la cadena recalculado en fecha ET (el del proveedor no es confiable) | `PcsCandidateBuilderTests` (mismo vencimiento en todo, request, vencimiento ajeno → sin candidato) |
+| R1-M1 | Frescura con `Snapshot.OldestQuoteAt` (hora del proveedor, la más vieja de las patas) contra el reloj del runtime; `AsOf` queda como hora de recepción. `ShadowSession` (session_hours + zona de la spec, lunes a viernes; falla cerrado): fuera de sesión no se evalúan entradas (instancia `OUTSIDE_SESSION`) y el monitor valúa pero no cierra. Feriados y hora desconocida: declarados arriba | `ShadowRiskValidatorTests` (vieja/fresca/desconocida), `ShadowRuntimeTickTests` (sesión, entrada fuera de sesión, monitor fuera de sesión) |
+| R1-M2 | La decisión de tick pasó a Application (`ShadowRuntimeTick`); los BackgroundService sólo la llaman. Switch OFF: no evalúa ni abre, instancia en `PAUSED`, nada se borra, el monitor sigue valuando y cerrando | `SwitchOff_PausesEntries_KeepsState_MonitorKeepsValuing` |
+| R1-m1 | Sin defaults: si la spec no declara target_delta, delta_tolerance, width, min/max_dte o min_credit, no hay candidato y la razón los nombra | `SpecWithoutParameter_NoCandidate_NoDefault` |
+| R1-m2 | Lado de pata desconocido es un problema de valuación (NO_DATA), no una compra | `Valuation_UnknownLegSide_IsAProblem_NotABuy` |
+| R1-m3 | Comentario corregido (~7 sesiones con un símbolo); al llegar al tope de eventos nunca se descartan `INSTANCE_CREATED`, `POSITION_OPENED`, `POSITION_CLOSED` | `Store_EventCap_NeverEvictsLifecycleEvents` |
+| R1-m4 | Quitados `AllEvaluations`/`GetLastEvaluation`; posición sin spec queda registrada (`VALUATION_NO_DATA` + `ValuationProblems` en la posición); la pausa se ve en `SchedulerState`. `VALUATION_NO_DATA` se registra cuando el problema aparece o cambia, no cada 30 s | `MonitorTick_PositionWithoutSpec_IsRecorded_Once`, `Valuation_NoDataEvent_OnlyWhenTheProblemChanges` |
+| R1-m5 | Scan de AC-07: cualquier mención a `*Request` (no sólo `new X`), y `galecore[\s_.-]?ai` | `ShadowRuntimeBoundaryTests` |
+| R1-m6 | El builder depende de `IPcsMarketSource` (vencimientos, griegas, cotización), sin MediatR ni logger | `PcsCandidateBuilderTests` |
+| R1-m7 | Un reloj: el motor pasa `nowUtc` al evaluador de gates, al builder y al validador de riesgo | `Evaluation_UsesTheRuntimeClock` |
+| R1-m8 | Hashes registrados arriba | — |
 

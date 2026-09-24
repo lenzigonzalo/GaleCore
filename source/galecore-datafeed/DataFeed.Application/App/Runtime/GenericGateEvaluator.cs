@@ -19,13 +19,15 @@ namespace DataFeed.Application.App.Runtime
         /// <param name="passRule">"ALL" — todos deben pasar.</param>
         /// <param name="layerOnFail">"NO_TRADE" | "INFORM_ONLY" — comportamiento default de la capa.</param>
         /// <param name="metrics">Valores resueltos: metric_ref → valor (null = no data).</param>
+        /// <param name="evaluatedAt">Reloj del que llama (el runtime pasa el suyo); por defecto, ahora.</param>
         public static EvaluationResult Evaluate(
             List<GateDefinition> gates,
             string passRule,
             string layerOnFail,
             Dictionary<string, double?> metrics,
             string instanceId,
-            string symbol)
+            string symbol,
+            DateTime? evaluatedAt = null)
         {
             var results = new List<GateResult>();
             bool overallPass = true;
@@ -51,7 +53,7 @@ namespace DataFeed.Application.App.Runtime
                 Symbol = symbol,
                 OverallPass = overallPass,
                 GateResults = results,
-                EvaluatedAt = DateTime.UtcNow
+                EvaluatedAt = evaluatedAt ?? DateTime.UtcNow
             };
         }
 

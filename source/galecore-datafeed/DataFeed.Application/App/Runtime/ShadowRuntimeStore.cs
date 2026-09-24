@@ -14,21 +14,28 @@ namespace DataFeed.Application.App.Runtime
     /// GC-0002: no hay borrado. Apagar el runtime pausa entradas y conserva todo lo registrado
     /// (decisión del owner, 24/09). El estado vive en memoria (W-2): un reinicio lo pierde. El
     /// historial de evaluaciones y los eventos se acotan por instancia para no crecer sin límite;
-    /// cuando se llega al tope se descarta lo más viejo.
+    /// cuando se llega al tope se descarta lo más viejo, salvo los eventos de ciclo de vida
+    /// (instancia creada, posición abierta o cerrada), que no se descartan nunca.
     /// </summary>
     public class ShadowRuntimeStore
     {
         private readonly ConcurrentDictionary<string, StrategyInstance> _instances = new();
         private readonly ConcurrentDictionary<string, ShadowPosition> _positions = new();
-        private readonly ConcurrentDictionary<string, EvaluationResult> _lastEvaluations = new();
         private readonly ConcurrentDictionary<string, List<EvaluationResult>> _evaluationHistory = new();
 
-        /// <summary>Tope de evaluaciones guardadas por instancia (~8 días hábiles a un tick por minuto).</summary>
+        /// <summary>
+        /// Tope de evaluaciones guardadas por instancia. Sólo se evalúa en sesión (390 minutos), a un
+        /// tick por minuto y por símbolo: con un símbolo alcanza para ~7 sesiones.
+        /// </summary>
         public const int MaxEvaluationsPerInstance = 3000;
-        /// <summary>Tope de eventos guardados por instancia.</summary>
+        /// <summary>Tope de eventos guardados por instancia (los de ciclo de vida no cuentan para descartar).</summary>
         public const int MaxEventsPerInstance = 20000;
         private readonly ConcurrentDictionary<string, List<OperationalEvent>> _events = new();
         private readonly ConcurrentDictionary<string, StrategySpec> _specs = new();
+
+        /// <summary>Eventos que no se descartan al llegar al tope: sin ellos no se puede reconstruir qué pasó.</summary>
+        public static readonly IReadOnlySet<string> LifecycleEventTypes =
+            new HashSet<string> { "INSTANCE_CREATED", "POSITION_OPENED", "POSITION_CLOSED" };
 
         // ── Specs ──
 
@@ -93,10 +100,9 @@ namespace DataFeed.Application.App.Runtime
 
         // ── Evaluations ──
 
-        /// <summary>Registra una evaluación: queda como la última de su clave y en el historial de la instancia.</summary>
-        public void AddEvaluation(string key, EvaluationResult evaluation)
+        /// <summary>Registra una evaluación en el historial de su instancia.</summary>
+        public void AddEvaluation(EvaluationResult evaluation)
         {
-            _lastEvaluations[key] = evaluation;
             var list = _evaluationHistory.GetOrAdd(evaluation.InstanceId, _ => new List<EvaluationResult>());
             lock (list)
             {
@@ -112,12 +118,6 @@ namespace DataFeed.Application.App.Runtime
             lock (list) { return list.ToList().AsReadOnly(); }
         }
 
-        public EvaluationResult? GetLastEvaluation(string key)
-            => _lastEvaluations.TryGetValue(key, out var e) ? e : null;
-
-        public IReadOnlyCollection<EvaluationResult> AllEvaluations()
-            => _lastEvaluations.Values.ToList().AsReadOnly();
-
         // ── Events ──
 
         public void AddEvent(OperationalEvent evt)
@@ -126,7 +126,11 @@ namespace DataFeed.Application.App.Runtime
             lock (list)
             {
                 list.Add(evt);
-                if (list.Count > MaxEventsPerInstance) list.RemoveRange(0, list.Count - MaxEventsPerInstance);
+                if (list.Count > MaxEventsPerInstance)
+                {
+                    int oldest = list.FindIndex(e => !LifecycleEventTypes.Contains(e.EventType));
+                    if (oldest >= 0) list.RemoveAt(oldest);
+                }
             }
         }
 

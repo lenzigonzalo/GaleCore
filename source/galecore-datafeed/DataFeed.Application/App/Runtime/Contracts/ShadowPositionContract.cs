@@ -39,6 +39,8 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double? LastSpreadValue { get; init; }
         public int? CurrentDte { get; init; }
         public DateTime? LastValuedAt { get; init; }
+        /// <summary>Por qué la última valuación no se pudo hacer (null si la última se hizo).</summary>
+        public List<string>? ValuationProblems { get; init; }
 
         public DateTime CreatedAt { get; init; }
         public DateTime UpdatedAt { get; init; }

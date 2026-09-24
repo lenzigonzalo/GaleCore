@@ -1,9 +1,7 @@
+using System.Globalization;
 using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime.Contracts;
 using DataFeed.Application.App.Shared;
-using DataFeed.Application.Data.Tastytrade.OptionChains;
-using MediatR;
-using Microsoft.Extensions.Logging;
 
 namespace DataFeed.Application.App.Runtime
 {
@@ -11,29 +9,29 @@ namespace DataFeed.Application.App.Runtime
     /// Construye un TradeCandidate para un Put Credit Spread (PCS) usando datos de mercado reales.
     ///
     /// Pipeline:
-    ///   1. OptionChains → expirations → filtrar por DTE del spec
-    ///   2. GammaExposure con TargetDte → deltas por strike → short put por delta
+    ///   1. Cadena → vencimientos (DTE recalculado en fecha ET) → el más cercano al centro del rango
+    ///   2. Griegas y OI de ESE vencimiento → short put por delta
     ///   3. Long put = short put strike - width
     ///   4. Quotes de ambas patas → credit = short mid - long mid
     ///   5. Armar TradeCandidate con snapshot real
     ///
-    /// Datos reales o nada (GC-0002, W-1): si falta la cadena, un strike, un delta o una cotización
-    /// utilizable de cualquiera de las patas, no hay candidato y el resultado dice por qué. Nunca se
-    /// completa un precio con cero.
+    /// Datos reales o nada (GC-0002, W-1): si falta la cadena, un strike, un delta, una cotización
+    /// utilizable de cualquiera de las patas o un parámetro de la spec, no hay candidato y el
+    /// resultado dice por qué. Nunca se completa un precio con cero ni un parámetro con un default.
+    /// Todo lo que se registra (vencimiento, DTE, strikes, deltas, precios) es del mismo vencimiento:
+    /// si el cálculo de griegas no usó el elegido, no hay candidato (R1-B2).
     ///
     /// Específico para PCS. Se generaliza cuando haya más estructuras.
     /// </summary>
     public class PcsCandidateBuilder
     {
-        private readonly IMediator _mediator;
-        private readonly ILogger _logger;
-        private readonly IRuntimeMarketData _quotes;
+        private static readonly string[] ExpirationTypes = { "Regular", "Weekly" };
 
-        public PcsCandidateBuilder(IMediator mediator, ILogger logger, IRuntimeMarketData quotes)
+        private readonly IPcsMarketSource _market;
+
+        public PcsCandidateBuilder(IPcsMarketSource market)
         {
-            _mediator = mediator;
-            _logger = logger;
-            _quotes = quotes;
+            _market = market;
         }
 
         /// <summary>
@@ -44,85 +42,93 @@ namespace DataFeed.Application.App.Runtime
             StrategySpec spec,
             string symbol,
             double? vixPrice,
+            DateTime nowUtc,
             CancellationToken ct = default)
         {
             var cc = spec.CandidateConstruction;
 
-            // Leer parámetros del spec
+            // Leer parámetros del spec: si falta uno, no se inventa (R1-m1).
             var sellLeg = cc.Legs.FirstOrDefault(l => l.Side == "SELL" && l.Type == "PUT");
             var buyLeg = cc.Legs.FirstOrDefault(l => l.Side == "BUY" && l.Type == "PUT");
             if (sellLeg == null || buyLeg == null)
-            {
-                return Reject("la spec no declara una pata SELL PUT y una BUY PUT");
-            }
+                return Rejected("la spec no declara una pata SELL PUT y una BUY PUT");
 
-            double targetDelta = sellLeg.StrikeSelection.TargetDelta ?? -0.16;
-            double deltaTolerance = sellLeg.StrikeSelection.DeltaTolerance ?? 0.04;
-            double width = buyLeg.StrikeSelection.Width ?? 5.0;
-            int minDte = cc.Constraints.MinDte ?? 30;
-            int maxDte = cc.Constraints.MaxDte ?? 50;
-            double minCredit = cc.Constraints.MinCredit ?? 0.10;
+            var missing = new List<string>();
+            if (sellLeg.StrikeSelection.TargetDelta == null) missing.Add("target_delta");
+            if (sellLeg.StrikeSelection.DeltaTolerance == null) missing.Add("delta_tolerance");
+            if (buyLeg.StrikeSelection.Width == null) missing.Add("width");
+            if (cc.Constraints.MinDte == null) missing.Add("min_dte");
+            if (cc.Constraints.MaxDte == null) missing.Add("max_dte");
+            if (cc.Constraints.MinCredit == null) missing.Add("min_credit");
+            if (missing.Count > 0)
+                return Rejected($"la spec no declara {string.Join(", ", missing)}");
 
-            // ── 1. Option chain → encontrar expiración en rango DTE ──
-            var chainResponse = await _mediator.Send(new OptionChainsRequest { Symbol = symbol }, ct);
-            if (chainResponse?.expirations == null || chainResponse.expirations.Count == 0)
-            {
-                return Reject($"sin cadena de opciones para {symbol}");
-            }
+            double targetDelta = sellLeg.StrikeSelection.TargetDelta!.Value;
+            double deltaTolerance = sellLeg.StrikeSelection.DeltaTolerance!.Value;
+            double width = buyLeg.StrikeSelection.Width!.Value;
+            int minDte = cc.Constraints.MinDte!.Value;
+            int maxDte = cc.Constraints.MaxDte!.Value;
+            double minCredit = cc.Constraints.MinCredit!.Value;
 
-            // Filtrar expiraciones regulares en rango DTE, la más cercana al centro
+            // ── 1. Cadena → vencimiento en rango DTE ──
+            // El DTE del proveedor no es confiable (ver GammaExposureHandler.NormalizeExpirations):
+            // se recalcula en fecha ET contra el reloj del runtime, con la misma regla.
+            var rawExpirations = await _market.GetExpirationsAsync(symbol, ct);
+            if (rawExpirations == null || rawExpirations.Count == 0)
+                return Rejected($"sin cadena de opciones para {symbol}");
+
+            var today = CascadeUtils.TodayEt(new DateTimeOffset(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc)));
             int midDte = (minDte + maxDte) / 2;
-            var validExpirations = chainResponse.expirations
-                .Where(e => e.DaysToExpiration >= minDte && e.DaysToExpiration <= maxDte)
-                .Where(e => e.ExpirationType == "Regular" || e.ExpirationType == "Weekly")
-                .OrderBy(e => Math.Abs(e.DaysToExpiration - midDte))
-                .ToList();
+            var expiration = rawExpirations
+                .Where(e => e != null && ExpirationTypes.Contains(e.ExpirationType))
+                .Select(e => (e.ExpirationDate, Dte: DteFrom(e.ExpirationDate, today)))
+                .Where(e => e.Dte is int d && d >= minDte && d <= maxDte)
+                .Select(e => (e.ExpirationDate, Dte: e.Dte!.Value))
+                .OrderBy(e => Math.Abs(e.Dte - midDte))
+                .ThenBy(e => e.Dte)
+                .FirstOrDefault();
+            if (expiration.ExpirationDate == null)
+                return Rejected($"sin vencimiento regular o weekly con DTE entre {minDte} y {maxDte}");
 
-            if (validExpirations.Count == 0)
-            {
-                return Reject($"sin vencimiento regular o weekly con DTE entre {minDte} y {maxDte}");
-            }
-
-            var expiration = validExpirations.First();
-            int dte = expiration.DaysToExpiration;
             string expirationDate = expiration.ExpirationDate;
 
-            // ── 2. GammaExposure con TargetDte → deltas por strike ──
-            var gexResponse = await _mediator.Send(new GammaExposureRequest
+            // ── 2. Griegas y OI del vencimiento elegido ──
+            // Sin ExpirationTypes el handler sólo mira mensuales y puede devolver otro vencimiento.
+            var gexResponse = await _market.GetGammaExposureAsync(new GammaExposureRequest
             {
                 Symbol = symbol,
-                TargetDte = dte,
-                MaxDTE = maxDte + 10
+                TargetDte = expiration.Dte,
+                MaxDTE = maxDte,
+                ExpirationTypes = ExpirationTypes,
+                IncludeZeroDte = minDte == 0,
             }, ct);
 
-            if (gexResponse?.Strikes == null || gexResponse.Strikes.Count == 0)
-            {
-                return Reject($"sin strikes con griegas para el vencimiento {expirationDate} (DTE {dte})");
-            }
+            if (gexResponse == null)
+                return Rejected($"sin griegas para el vencimiento {expirationDate}");
+            if (gexResponse.Expiration != expirationDate)
+                return Rejected($"las griegas son del vencimiento {gexResponse.Expiration ?? "(ninguno)"}, "
+                                + $"no del elegido {expirationDate}");
+            if (gexResponse.Strikes == null || gexResponse.Strikes.Count == 0)
+                return Rejected($"sin strikes con griegas para el vencimiento {expirationDate}");
 
+            int dte = gexResponse.DTE;
             double spot = gexResponse.Spot;
+            if (!(spot > 0))
+                return Rejected($"sin precio del subyacente {symbol}");
 
             // ── 3. Encontrar short put por delta ──
-            // Buscar puts OTM (strike < spot) con delta cercano al target
-            // Put delta es negativo, target es negativo (ej: -0.16)
-            var putStrikes = gexResponse.Strikes
+            // Puts OTM (strike < spot) con delta cercano al target. Put delta es negativo.
+            var shortPutStrike = gexResponse.Strikes
                 .Where(s => s.Strike < spot && s.PutDelta < 0 && s.PutDelta > -0.5)
                 .OrderBy(s => Math.Abs(s.PutDelta - targetDelta))
-                .ToList();
+                .FirstOrDefault();
 
-            if (putStrikes.Count == 0)
-            {
-                return Reject("sin puts fuera del dinero con delta válido");
-            }
+            if (shortPutStrike == null)
+                return Rejected("sin puts fuera del dinero con delta válido");
 
-            var shortPutStrike = putStrikes.First();
-
-            // Verificar que el delta está dentro de la tolerancia
             if (Math.Abs(shortPutStrike.PutDelta - targetDelta) > deltaTolerance)
-            {
-                return Reject($"el delta más cercano ({shortPutStrike.PutDelta:0.000}) está fuera de ±{deltaTolerance} "
-                              + $"del objetivo {targetDelta}");
-            }
+                return Rejected($"el delta más cercano ({shortPutStrike.PutDelta:0.000}) está fuera de ±{deltaTolerance} "
+                                + $"del objetivo {targetDelta}");
 
             // ── 4. Long put = short strike - width ──
             double longPutStrikePrice = shortPutStrike.Strike - width;
@@ -131,28 +137,26 @@ namespace DataFeed.Application.App.Runtime
                 .FirstOrDefault();
 
             if (longPutStrike == null || Math.Abs(longPutStrike.Strike - longPutStrikePrice) > 1.0)
-            {
-                return Reject($"no hay strike para la pata comprada cerca de {longPutStrikePrice}");
-            }
+                return Rejected($"no hay strike para la pata comprada cerca de {longPutStrikePrice}");
 
             // ── 5. Cotizaciones reales de ambas patas (por símbolo de streamer) ──
             string? shortSymbol = shortPutStrike.PutStreamerSymbol;
             string? longSymbol = longPutStrike.PutStreamerSymbol;
             if (string.IsNullOrEmpty(shortSymbol) || string.IsNullOrEmpty(longSymbol))
-                return Reject("falta el símbolo de streamer de una pata; no se puede cotizar");
+                return Rejected("falta el símbolo de streamer de una pata; no se puede cotizar");
 
-            var shortQuote = await _quotes.GetQuoteAsync(shortSymbol, ct);
+            var shortQuote = await _market.GetQuoteAsync(shortSymbol, ct);
             if (shortQuote == null)
-                return Reject($"sin cotización utilizable para la pata vendida {shortSymbol}");
-            var longQuote = await _quotes.GetQuoteAsync(longSymbol, ct);
+                return Rejected($"sin cotización utilizable para la pata vendida {shortSymbol}");
+            var longQuote = await _market.GetQuoteAsync(longSymbol, ct);
             if (longQuote == null)
-                return Reject($"sin cotización utilizable para la pata comprada {longSymbol}");
+                return Rejected($"sin cotización utilizable para la pata comprada {longSymbol}");
 
             // Credit = short mid - long mid
             double credit = Math.Round(shortQuote.Mid - longQuote.Mid, 2);
 
             if (credit < minCredit)
-                return Reject($"crédito {credit} menor al mínimo {minCredit}");
+                return Rejected($"crédito {credit} menor al mínimo {minCredit}");
 
             double actualWidth = shortPutStrike.Strike - longPutStrike.Strike;
             double maxRisk = Math.Round((actualWidth - credit) * 100, 2);
@@ -160,6 +164,11 @@ namespace DataFeed.Application.App.Runtime
             // ── 6. Construir OCC symbols ──
             string shortOcc = CascadeUtils.BuildOccSymbol(symbol, expirationDate, shortPutStrike.Strike, 'P');
             string longOcc = CascadeUtils.BuildOccSymbol(symbol, expirationDate, longPutStrike.Strike, 'P');
+
+            // Frescura: la hora del proveedor si la informa en las dos patas; si no, desconocida (null).
+            DateTime? oldestQuoteAt = shortQuote.AsOf is DateTime s && longQuote.AsOf is DateTime l
+                ? (s < l ? s : l)
+                : null;
 
             // ── 7. Armar TradeCandidate ──
             return CandidateBuildResult.Built(new TradeCandidate
@@ -204,16 +213,23 @@ namespace DataFeed.Application.App.Runtime
                 {
                     UnderlyingPrice = spot,
                     Vix = vixPrice,
-                    AsOf = DateTime.UtcNow
+                    AsOf = nowUtc,
+                    OldestQuoteAt = oldestQuoteAt,
                 },
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = nowUtc
             });
         }
 
-        private CandidateBuildResult Reject(string reason)
+        /// <summary>DTE en fecha ET; null si la fecha no parsea o el vencimiento ya pasó.</summary>
+        private static int? DteFrom(string? expirationDate, DateTime todayEt)
         {
-            _logger.LogDebug("PcsCandidateBuilder: sin candidato: {Reason}", reason);
-            return CandidateBuildResult.Rejected(reason);
+            if (!DateTime.TryParseExact(expirationDate, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var date))
+                return null;
+            int dte = (date.Date - todayEt).Days;
+            return dte < 0 ? null : dte;
         }
+
+        private static CandidateBuildResult Rejected(string reason) => CandidateBuildResult.Rejected(reason);
     }
 }

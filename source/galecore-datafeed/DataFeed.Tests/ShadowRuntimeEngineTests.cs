@@ -10,11 +10,11 @@ namespace DataFeed.Tests;
 /// </summary>
 public class ShadowRuntimeEngineTests
 {
-    private const string VixRef = "capability:market_data.quote.VIX.price";
-    private const string GexRef = "capability:compute.gamma_exposure.SPY.net_gex";
-    private static readonly DateTime Now = new(2026, 9, 24, 15, 0, 0, DateTimeKind.Utc); // 11:00 ET
+    internal const string VixRef = "capability:market_data.quote.VIX.price";
+    internal const string GexRef = "capability:compute.gamma_exposure.SPY.net_gex";
+    internal static readonly DateTime Now = new(2026, 9, 24, 15, 0, 0, DateTimeKind.Utc); // 11:00 ET
 
-    private sealed class FakeData : IRuntimeMarketData
+    internal sealed class FakeData : IRuntimeMarketData
     {
         public Dictionary<string, double?> Metrics = new() { [VixRef] = 15.2, [GexRef] = 120.0 };
         public bool ThrowOnMetrics;
@@ -30,7 +30,8 @@ public class ShadowRuntimeEngineTests
         }
 
         public Task<CandidateBuildResult> BuildCandidateAsync(
-            StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, CancellationToken ct)
+            StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, DateTime nowUtc,
+            CancellationToken ct)
         {
             BuildCalls++;
             if (ThrowOnBuild) throw new InvalidOperationException("cadena caída");
@@ -41,7 +42,7 @@ public class ShadowRuntimeEngineTests
             => Task.FromResult(Quotes.GetValueOrDefault(streamerSymbol));
     }
 
-    private static StrategySpec Spec()
+    internal static StrategySpec Spec()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "DataFeed.Api", "Files", "Runtime")))
@@ -52,7 +53,7 @@ public class ShadowRuntimeEngineTests
         return result.Spec!;
     }
 
-    private static (ShadowRuntimeStore Store, StrategyInstance Instance) NewRuntime()
+    internal static (ShadowRuntimeStore Store, StrategyInstance Instance) NewRuntime()
     {
         var store = new ShadowRuntimeStore();
         var instance = new StrategyInstance
@@ -64,7 +65,7 @@ public class ShadowRuntimeEngineTests
         return (store, instance);
     }
 
-    private static TradeCandidate RealCandidate() => new()
+    internal static TradeCandidate RealCandidate() => new()
     {
         CandidateId = "c-1", InstanceId = "i-1", Symbol = "SPY", Structure = "put_credit_spread",
         Credit = 0.85, MaxRisk = 415, Width = 5, Dte = 35, DeltaShort = -0.16,
@@ -288,6 +289,69 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
+    public async Task Valuation_NoDataEvent_OnlyWhenTheProblemChanges()
+    {
+        var (store, pos, data) = await OpenPosition();
+        for (int i = 0; i < 3; i++)
+            await ShadowRuntimeEngine.ValuePositionAsync(
+                store, data, store.GetPosition(pos.PositionId)!, Spec().Exits.Deterministic, Now.AddSeconds(30 * i), default);
+
+        Assert.Single(store.GetEvents("i-1"), e => e.EventType == "VALUATION_NO_DATA");
+        Assert.NotNull(store.GetPosition(pos.PositionId)!.ValuationProblems);
+
+        // Vuelve el precio: se valúa y el problema se limpia; si vuelve a faltar, hay un evento nuevo.
+        data.Quotes[".SPY261030P720"] = new LegQuote(1.20, 1.30, Now);
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.60, 0.70, Now);
+        await ShadowRuntimeEngine.ValuePositionAsync(
+            store, data, store.GetPosition(pos.PositionId)!, Spec().Exits.Deterministic, Now, default);
+        Assert.Null(store.GetPosition(pos.PositionId)!.ValuationProblems);
+        data.Quotes.Clear();
+        await ShadowRuntimeEngine.ValuePositionAsync(
+            store, data, store.GetPosition(pos.PositionId)!, Spec().Exits.Deterministic, Now, default);
+        Assert.Equal(2, store.GetEvents("i-1").Count(e => e.EventType == "VALUATION_NO_DATA"));
+    }
+
+    [Fact]
+    public async Task Valuation_UnknownLegSide_IsAProblem_NotABuy()
+    {
+        var (store, pos, data) = await OpenPosition();
+        var odd = pos with { Legs = pos.Legs.Select((l, i) => i == 1 ? l with { Side = "HOLD" } : l).ToList() };
+        store.UpdatePosition(odd);
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.10, 0.20, Now);
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.05, 0.10, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(store, data, odd, Spec().Exits.Deterministic, Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoData, outcome);
+        Assert.Equal("OPEN", store.GetPosition(pos.PositionId)!.Status);
+        Assert.Contains(store.GetPosition(pos.PositionId)!.ValuationProblems!, p => p.Contains("lado de pata desconocido"));
+    }
+
+    [Fact]
+    public async Task Valuation_WithoutExits_ValuesButNeverCloses()
+    {
+        var (store, pos, data) = await OpenPosition();
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now);   // take profit si se evaluara
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(
+            store, data, pos, Spec().Exits.Deterministic, Now, default, evaluateExits: false);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Valued, outcome);
+        var same = store.GetPosition(pos.PositionId)!;
+        Assert.Equal("OPEN", same.Status);
+        Assert.Equal(0.3, same.LastSpreadValue);
+    }
+
+    [Fact]
+    public async Task Evaluation_UsesTheRuntimeClock()
+    {
+        var (store, instance) = NewRuntime();
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, new FakeData(), instance, Spec(), "SPY", Now, default);
+        Assert.Equal(Now, store.GetEvaluations("i-1").Single().EvaluatedAt);
+    }
+
+    [Fact]
     public void CurrentDte_IsCountedInMarketDate()
     {
         var pos = new ShadowPosition { Legs = new() { new ShadowLeg { Expiration = "2026-10-16" } } };
@@ -305,11 +369,25 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
+    public void Store_EventCap_NeverEvictsLifecycleEvents()
+    {
+        var store = new ShadowRuntimeStore();
+        store.AddEvent(new OperationalEvent { EventId = "open", InstanceId = "i-1", EventType = "POSITION_OPENED" });
+        for (int i = 0; i < ShadowRuntimeStore.MaxEventsPerInstance + 10; i++)
+            store.AddEvent(new OperationalEvent { EventId = $"n{i}", InstanceId = "i-1", EventType = "EVALUATION_COMPLETED" });
+
+        var events = store.GetEvents("i-1");
+        Assert.Equal(ShadowRuntimeStore.MaxEventsPerInstance, events.Count);
+        Assert.Equal("open", events.First().EventId);
+        Assert.DoesNotContain(events, e => e.EventId == "n0");
+    }
+
+    [Fact]
     public void Store_EvaluationHistory_IsBounded()
     {
         var store = new ShadowRuntimeStore();
         for (int i = 0; i < ShadowRuntimeStore.MaxEvaluationsPerInstance + 5; i++)
-            store.AddEvaluation("i-1:SPY", new EvaluationResult { EvaluationId = $"e{i}", InstanceId = "i-1" });
+            store.AddEvaluation(new EvaluationResult { EvaluationId = $"e{i}", InstanceId = "i-1" });
         var history = store.GetEvaluations("i-1");
         Assert.Equal(ShadowRuntimeStore.MaxEvaluationsPerInstance, history.Count);
         Assert.Equal("e5", history.First().EvaluationId);

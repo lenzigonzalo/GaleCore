@@ -106,15 +106,30 @@ namespace DataFeed.Application.App.Runtime
         private async Task<double?> ResolveNetGex(string symbol, CancellationToken ct)
         {
             var response = await _mediator.Send(new GammaExposureRequest { Symbol = symbol }, ct);
+            var netGex = UsableNetGex(response);
 
-            if (response == null)
+            if (netGex == null)
             {
-                _logger.LogDebug("MetricResolver: sin GEX para {Symbol}", symbol);
+                _logger.LogDebug("MetricResolver: sin GEX utilizable para {Symbol}", symbol);
                 return null;
             }
 
-            _logger.LogDebug("MetricResolver: {Symbol} NetGEX={NetGEX}", symbol, response.NetGEX);
-            return response.NetGEX;
+            _logger.LogDebug("MetricResolver: {Symbol} NetGEX={NetGEX}", symbol, netGex);
+            return netGex;
+        }
+
+        /// <summary>
+        /// El net GEX de la respuesta, o null si no se calculó con datos reales. NetGEX es una suma
+        /// sobre los strikes: sin strikes, sin símbolos con griegas o sin ningún open interest da 0,
+        /// y un 0 inventado pasa el gate "GEX >= 0" (GC-0002, R1-B1). Esos casos son NO_DATA.
+        /// </summary>
+        public static double? UsableNetGex(GammaExposureResponse? response)
+        {
+            if (response?.Strikes == null || response.Strikes.Count == 0) return null;
+            if (response.SymbolsWithGreeks <= 0) return null;
+            if (response.StrikesWithOI <= 0) return null;
+            var net = response.NetGEX;
+            return double.IsNaN(net) || double.IsInfinity(net) ? null : net;
         }
     }
 }
