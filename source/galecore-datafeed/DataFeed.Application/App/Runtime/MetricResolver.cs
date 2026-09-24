@@ -90,17 +90,27 @@ namespace DataFeed.Application.App.Runtime
             }
 
             var quote = response.Data[0];
-            var price = quote.MidPrice;
-
-            // Si bid/ask son 0 o NaN, no es un precio válido
-            if (double.IsNaN(price) || price <= 0)
+            var price = UsableQuotePrice(quote);
+            if (price == null)
             {
-                _logger.LogDebug("MetricResolver: precio inválido para {Symbol}: {Price}", symbol, price);
+                _logger.LogDebug("MetricResolver: cotización no utilizable para {Symbol}: bid={Bid} ask={Ask}",
+                    symbol, quote?.BidPrice, quote?.AskPrice);
                 return null;
             }
 
             _logger.LogDebug("MetricResolver: {Symbol} price={Price}", symbol, price);
             return price;
+        }
+
+        /// <summary>
+        /// El mid de la cotización, o null si la cotización no sirve (QuoteRules.IsUsable) o el mid no es
+        /// positivo. Una cotización de un solo lado (bid 0, ask 20) daría un mid de 10 que no existe.
+        /// </summary>
+        public static double? UsableQuotePrice(QuoteEvent? quote)
+        {
+            if (quote == null || !QuoteRules.IsUsable(quote.BidPrice, quote.AskPrice)) return null;
+            var mid = quote.MidPrice;
+            return mid > 0 ? mid : null;
         }
 
         private async Task<double?> ResolveNetGex(string symbol, CancellationToken ct)

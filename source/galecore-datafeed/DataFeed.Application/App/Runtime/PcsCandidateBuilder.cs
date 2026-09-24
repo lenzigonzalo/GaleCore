@@ -92,6 +92,11 @@ namespace DataFeed.Application.App.Runtime
 
             string expirationDate = expiration.ExpirationDate;
 
+            // El handler de griegas interpreta TargetDte = 0 como "el de mayor DTE": con un 0DTE
+            // elegido las griegas serían de otro vencimiento. No se soporta (la spec pide 30-50).
+            if (expiration.Dte == 0)
+                return Rejected($"el vencimiento elegido {expirationDate} es 0DTE; el constructor no lo soporta");
+
             // ── 2. Griegas y OI del vencimiento elegido ──
             // Sin ExpirationTypes el handler sólo mira mensuales y puede devolver otro vencimiento.
             var gexResponse = await _market.GetGammaExposureAsync(new GammaExposureRequest

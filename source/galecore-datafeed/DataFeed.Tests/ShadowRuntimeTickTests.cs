@@ -1,6 +1,7 @@
 using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime;
 using DataFeed.Application.App.Runtime.Contracts;
+using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
 using static DataFeed.Tests.ShadowRuntimeEngineTests;
 
 namespace DataFeed.Tests;
@@ -164,5 +165,27 @@ public class MetricResolverNetGexTests
     public void RealData_ReturnsTheSum()
     {
         Assert.Equal(3.0, MetricResolver.UsableNetGex(WithStrikes(greeks: 2, oi: 10)));   // (5000 − 2000) / 1000
+    }
+}
+
+/// <summary>GC-0002 (recheck R2, m-c) — un precio de cotización sólo sale de una cotización utilizable.</summary>
+public class MetricResolverQuoteTests
+{
+    private static QuoteEvent Q(double bid, double ask) => new() { BidPrice = bid, AskPrice = ask };
+
+    [Fact]
+    public void OneSidedOrCrossedOrEmpty_IsNoData()
+    {
+        Assert.Null(MetricResolver.UsableQuotePrice(null));
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(0, 0)));
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(20, 0)));    // sin ask
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(16, 15)));   // cruzada
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(double.NaN, 15)));
+    }
+
+    [Fact]
+    public void RealQuote_IsTheMid()
+    {
+        Assert.Equal(15.25, MetricResolver.UsableQuotePrice(Q(15.2, 15.3))!.Value, 10);
     }
 }

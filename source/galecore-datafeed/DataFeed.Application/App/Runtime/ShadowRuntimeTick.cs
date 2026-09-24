@@ -27,8 +27,15 @@ namespace DataFeed.Application.App.Runtime
 
         private static bool TryZone(string id, out TimeZoneInfo zone)
         {
-            try { zone = TimeZoneInfo.FindSystemTimeZoneById(id); return true; }
-            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException) { zone = TimeZoneInfo.Utc; return false; }
+            // Windows sin ICU no conoce los ids IANA ("America/New_York"): se prueba el id de Windows equivalente.
+            foreach (var candidate in new[] { id, TimeZoneInfo.TryConvertIanaIdToWindowsId(id, out var win) ? win : null })
+            {
+                if (candidate == null) continue;
+                try { zone = TimeZoneInfo.FindSystemTimeZoneById(candidate); return true; }
+                catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException) { }
+            }
+            zone = TimeZoneInfo.Utc;
+            return false;
         }
     }
 

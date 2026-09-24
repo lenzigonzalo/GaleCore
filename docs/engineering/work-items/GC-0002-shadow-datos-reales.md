@@ -68,22 +68,22 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 | PENDING | PENDING | PENDING | PENDING |
-| AC-02 | PENDING | PENDING | PENDING | PENDING |
-| AC-03 | PENDING | PENDING | PENDING | PENDING |
-| AC-04 | PENDING | PENDING | PENDING | PENDING |
-| AC-05 | PENDING | PENDING | PENDING | PENDING |
-| AC-06 | PENDING | PENDING | PENDING | PENDING |
-| AC-07 | PENDING | PENDING | PENDING | PENDING |
-| AC-08 | PENDING | PENDING | PENDING | PENDING |
-| AC-09 | PENDING | PENDING | PENDING | PENDING |
-| AC-10 | PENDING | PENDING | PENDING | PENDING |
+| AC-01 | `ShadowRuntimeEngine.EvaluateEntryAsync` (métrica sin dato → NO_DATA → BLOCK); `MetricResolver.UsableNetGex` y `UsableQuotePrice`; `BuildStubMetrics` eliminado | `ShadowRuntimeEngineTests` (MetricsProviderDown_…, OneMetricMissing_…), `MetricResolverNetGexTests`, `MetricResolverQuoteTests` | `dotnet test` 385/385 | Verificado en tests |
+| AC-02 | `PcsCandidateBuilder` → `CandidateBuildResult` con razón; evento `CANDIDATE_NOT_VIABLE`; `BuildStubCandidate` eliminado | `ShadowRuntimeEngineTests` (BuilderRejects_…, BuilderThrows_…, CandidateWithoutLegQuote_…), `PcsCandidateBuilderTests` | ídem | Verificado en tests |
+| AC-03 | `ShadowRuntimeEngine.ValuePositionAsync` (mid real por pata, DTE en fecha ET, NO_DATA sin precio); decaimiento lineal eliminado | `ShadowRuntimeEngineTests` (Valuation_*) , `ShadowRuntimeTickTests.MonitorTick_OutsideSession_…` | ídem | Verificado en tests |
+| AC-04 | `ShadowRuntimeTick.RunEntryTickAsync` (switch OFF → `PAUSED`, no evalúa) y `RunMonitorTickAsync` (sin switch); store sin borrado | `ShadowRuntimeTickTests.SwitchOff_PausesEntries_KeepsState_MonitorKeepsValuing`, `Store_HasNoWayToWipeTheState` | ídem | Verificado en tests; en vivo en AC-08 |
+| AC-05 | `ShadowRuntimeStore` (historial acotado, eventos de ciclo de vida no se descartan); eventos por gate, NO_DATA, descarte y valuación sin precio | `EveryEvaluationIsKept_NotOnlyTheLast`, `Store_*`, `Valuation_NoDataEvent_OnlyWhenTheProblemChanges` | ídem | Verificado en tests |
+| AC-06 | `shadow_runtime_test_v1.json` (renombrada); hashes viejo/nuevo en el handoff | `RuntimeSpecJsonTests` | hashes abajo | Verificado |
+| AC-07 | Runtime sólo pide cadena, griegas y cotización | `ShadowRuntimeBoundaryTests` (patrones ampliados en R1-m5) | ídem | Verificado en tests |
+| AC-08 | — | — | Demo en día hábil con mercado abierto | PENDING |
+| AC-09 | Tests nuevos para AC-01..05 y AC-07 | `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj` → 385/385 (base 331) | salida del comando | Verificado |
+| AC-10 | — | Interno R1 CHANGES_REQUESTED → corregido; recheck R2 APPROVE (MINORs corregidos) | este item | Codex PENDING |
 
 ## Implementer handoff
 
 **State:** IMPLEMENTING — primera versión en `be3206a` (357 tests); R1 corregido (ver "Correcciones de R1"),
-`dotnet test` 382/382, build de `DataFeed.Api` a directorio temporal sin errores. Siguiente: recheck interno,
-después AC-08 en día hábil y Codex.
+`dotnet test` 385/385, build de `DataFeed.Api` a directorio temporal sin errores. Recheck interno R2:
+APPROVE (abajo). Siguiente: AC-08 en día hábil, después Codex.
 
 **Hash de la spec (AC-06, R1-m8)**, `StrategySpecHasher` sobre el archivo:
 - antes `pcs_spy_shadow_v1.json` (`5fa6615`): `sha256:09ad790a3d885d13ac13a6ecb1bde402345b7d9333741e4b5741a67764b1139b`
@@ -133,3 +133,15 @@ Reprodujo `dotnet test` 357/357 y build de `DataFeed.Api` a directorio temporal 
 | R1-m7 | Un reloj: el motor pasa `nowUtc` al evaluador de gates, al builder y al validador de riesgo | `Evaluation_UsesTheRuntimeClock` |
 | R1-m8 | Hashes registrados arriba | — |
 
+## Internal recheck R2 (agente `reviewer`, 2026-09-24, rango `5fa6615..6e73ef0`) — APPROVE
+
+Reprodujo 382/382 y el build de la API a directorio temporal. Los 12 hallazgos de R1 resueltos o
+declarados; sin BLOCKER ni MAJOR ni regresiones. MINORs, corregidos en el commit siguiente (385/385):
+
+| # | Hallazgo | Corrección |
+|---|---|---|
+| m-a | Línea en blanco al final de este archivo (`git diff --check`) | Quitada |
+| m-b | Matriz de evidencia toda en PENDING | Completada |
+| m-c | El VIX usaba el mid sin `QuoteRules.IsUsable` (bid 0 / ask 20 daba 10 y pasaba el gate); previo al item, cae en AC-01 | `MetricResolver.UsableQuotePrice` + `MetricResolverQuoteTests` |
+| m-d | `ShadowSession` sin fallback a la zona de Windows: sesión cerrada para siempre en un host sin ICU | Prueba el id IANA y su equivalente de Windows |
+| m-e | Con 0DTE, `TargetDte = 0` hace que el handler elija el de mayor DTE | El builder rechaza 0DTE con la razón explícita + test |

@@ -138,6 +138,26 @@ public class PcsCandidateBuilderTests
     }
 
     [Fact]
+    public async Task ZeroDteExpiration_NoCandidate_Explained()
+    {
+        var spec = ShadowRuntimeEngineTests.Spec();
+        spec = spec with
+        {
+            CandidateConstruction = spec.CandidateConstruction with
+            {
+                Constraints = spec.CandidateConstruction.Constraints with { MinDte = 0, MaxDte = 0 },
+            },
+        };
+        var source = new FakeSource { Expirations = new() { new() { ExpirationDate = "2026-09-24", ExpirationType = "Weekly" } } };
+
+        var result = await Build(source, spec);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("0DTE", result.RejectReason);
+        Assert.Null(source.LastGexRequest);
+    }
+
+    [Fact]
     public async Task SpecWithoutParameter_NoCandidate_NoDefault()
     {
         var spec = ShadowRuntimeEngineTests.Spec();
