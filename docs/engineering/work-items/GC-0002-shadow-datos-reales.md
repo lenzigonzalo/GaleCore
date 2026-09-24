@@ -1,14 +1,14 @@
 ---
 id: GC-0002
 title: SHADOW con datos reales — el runtime sin ningún camino ficticio (I2)
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-0002 — SHADOW con datos reales (I2 del plan)
@@ -40,29 +40,29 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Sin métricas inventadas:** si el resolver de métricas falla o no devuelve valor, la
+- [x] **AC-01 — Sin métricas inventadas:** si el resolver de métricas falla o no devuelve valor, la
   métrica es `NO_DATA`, el gate aplica su `on_no_data` (`BLOCK` en la spec) y no se construye
   candidato. Se elimina `BuildStubMetrics`.
-- [ ] **AC-02 — Sin candidato inventado:** si el constructor no produce un candidato real, no hay
+- [x] **AC-02 — Sin candidato inventado:** si el constructor no produce un candidato real, no hay
   posición y queda un evento de descarte con la razón. Se elimina `BuildStubCandidate`.
-- [ ] **AC-03 — Valuación real de posiciones:** el monitor valúa cada posición con el mid real de
+- [x] **AC-03 — Valuación real de posiciones:** el monitor valúa cada posición con el mid real de
   sus patas y el DTE real de su vencimiento; si falta un precio, no evalúa salidas y registra
   `NO_DATA`. Se elimina el decaimiento lineal.
-- [ ] **AC-04 — Apagar pausa, no borra:** con el switch OFF no se abren posiciones, las abiertas
+- [x] **AC-04 — Apagar pausa, no borra:** con el switch OFF no se abren posiciones, las abiertas
   siguen monitoreándose y todo el estado sigue consultable. Se elimina el borrado al apagar.
-- [ ] **AC-05 — Trazabilidad:** cada evaluación queda consultable (serie acotada en memoria, no sólo
+- [x] **AC-05 — Trazabilidad:** cada evaluación queda consultable (serie acotada en memoria, no sólo
   la última), con valores por gate; hay eventos para gates que no pasan, `NO_DATA`, candidato no
   viable (con razón) y salida no evaluada por falta de precio.
-- [ ] **AC-06 — Spec de prueba con nombre honesto:** la spec se renombra para decir que es una spec
+- [x] **AC-06 — Spec de prueba con nombre honesto:** la spec se renombra para decir que es una spec
   de prueba del runtime, no una estrategia; su hash cambia y queda registrado.
-- [ ] **AC-07 — Sin IA y sin órdenes:** un test impide que el runtime referencie GaleCore-AI o un
+- [x] **AC-07 — Sin IA y sin órdenes:** un test impide que el runtime referencie GaleCore-AI o un
   cliente de órdenes del broker.
-- [ ] **AC-08 — Demostración en un día hábil real:** con la API local y datos reales: evaluaciones
+- [x] **AC-08 — Demostración en un día hábil real:** con la API local y datos reales: evaluaciones
   con métricas reales, al menos un descarte o entrada explicados, un caso `NO_DATA` forzado que no
   abre posición, valuación real si hay posición, switch OFF que conserva el estado. Evidencia
   sanitizada.
-- [ ] **AC-09 — Repositorio:** `dotnet test` pasa (base: 331); tests nuevos para AC-01..AC-05 y AC-07.
-- [ ] **AC-10 — Review:** reviewer interno y Codex sobre el diff contra `5fa6615`.
+- [x] **AC-09 — Repositorio:** `dotnet test` pasa (base: 331); tests nuevos para AC-01..AC-05 y AC-07.
+- [x] **AC-10 — Review:** reviewer interno y Codex sobre el diff contra `5fa6615`.
 
 ## Requirement-to-evidence matrix
 
@@ -75,13 +75,18 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 | AC-05 | `ShadowRuntimeStore` (historial acotado, eventos de ciclo de vida no se descartan); eventos por gate, NO_DATA, descarte y valuación sin precio | `EveryEvaluationIsKept_NotOnlyTheLast`, `Store_*`, `Valuation_NoDataEvent_OnlyWhenTheProblemChanges` | ídem | Verificado en tests |
 | AC-06 | `shadow_runtime_test_v1.json` (renombrada); hashes viejo/nuevo en el handoff | `RuntimeSpecJsonTests` | hashes abajo | Verificado |
 | AC-07 | Runtime sólo pide cadena, griegas y cotización | `ShadowRuntimeBoundaryTests` (patrones ampliados en R1-m5) | ídem | Verificado en tests |
-| AC-08 | Corridas 5, 6 y 7 con `docs/evidence/gc-0002/ac08_run.py` (build, arranque, corrida y baja de la API en un solo comando; 7 con árbol limpio en `050d486` y muestras del GEX) | — | `ac08-run5-forced-nodata.*`, `ac08-run6-real-and-off.*`, `ac08-run7-real-gex-coverage.*` (corridas 1-4: históricas) | Hecho salvo candidato/fill/valuación en vivo (ver "AC-08, 24/09") |
+| AC-08 | Corridas 5, 6 y 7 con `docs/evidence/gc-0002/ac08_run.py` (build, arranque, corrida y baja de la API en un solo comando; 7 con árbol limpio en `050d486` y muestras del GEX) | — | `ac08-run5-forced-nodata.*`, `ac08-run6-real-and-off.*`, `ac08-run7-real-gex-coverage.*` (corridas 1-4: históricas) | Aceptado por el owner sin candidato/fill/valuación en vivo (ver "AC-08, 24/09") |
 | AC-09 | Tests nuevos para AC-01..05 y AC-07 | `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj` → 401/401 (base 331) | `docs/evidence/gc-0002/dotnet-test-<sha>.txt` (el último) | Verificado |
-| AC-10 | — | Interno R1 → corregido; R2 APPROVE; Codex C1-C3 CHANGES_REQUESTED → corregidos o decididos por el owner; **Codex C4 APPROVE** | `docs/engineering/reviews/GC-0002-20260924T171716Z.md`, `…174724Z.md`, `…181353Z.md`, `…182548Z.md` | Verificado; cierre: owner |
+| AC-10 | — | Interno R1 → corregido; R2 APPROVE; Codex C1-C3 CHANGES_REQUESTED → corregidos o decididos por el owner; **Codex C4 APPROVE** | `docs/engineering/reviews/GC-0002-20260924T171716Z.md`, `…174724Z.md`, `…181353Z.md`, `…182548Z.md` | Verificado; cerrado por el owner (24/09) |
 
 ## Implementer handoff
 
-**State:** IMPLEMENTING — interno R2 APPROVE; Codex C1 y C2 CHANGES_REQUESTED, todo lo abierto
+**State:** CLOSED por el owner el 2026-09-24 ("avancemos así"), aceptando que candidato, fill y
+valuación no se vieron en vivo (GEX negativo todo el día; cubiertos por tests y reproducibles con
+`ac08_run.py` en un día con GEX ≥ 0). Siguiente trabajo: `BL-014` (OI del GEX), como fix de algo que
+hoy está mal en GaleCore.
+
+Historial: IMPLEMENTING — interno R2 APPROVE; Codex C1 y C2 CHANGES_REQUESTED, todo lo abierto
 corregido (`9115ba3`) o decidido por el owner (hora de cotización desconocida → `BL-013`; cobertura
 de OI del GEX → `BL-014`); `dotnet test` 401/401; AC-08 con corridas reproducibles (runner + manifiesto)
 salvo candidato/fill/valuación en vivo (GEX negativo todo el día). Codex C3: sólo un MAJOR de evidencia (conteos del GEX sin artefacto) y un MINOR de test, corregidos
