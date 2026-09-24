@@ -14,18 +14,16 @@
   (`be3206a`): sin métricas/candidatos stub, sin rellenos con 0, valuación con mid real, apagar
   pausa sin borrar, historial de evaluaciones, eventos de descarte, spec renombrada a
   `shadow_runtime_test_v1`. `dotnet test` 357/357 (base 331). Todo commiteado, sin push.
-- **24/09 (sesión de la tarde):** R1 corregido (`6e73ef0`) y recheck interno **R2 APPROVE**; sus
-  5 MINORs corregidos (`55b18d1`). `dotnet test` 385/385, build de la API OK, matriz de evidencia
-  completa salvo AC-08 y Codex. Limitaciones declaradas en el item: sin feriados de NYSE; edad de
-  cotización desconocida si DXLink no manda hora.
-- **Siguiente, en orden:**
-  1. ~~Corregir R1~~ hecho. 2. ~~`dotnet test` + recheck~~ hecho (R2 APPROVE).
-  3. **AC-08, demo en día hábil con mercado abierto:** necesita que GaleCore corra el código de la
-     rama. Al 24/09 17:00 UTC la API local **no estaba corriendo**: hace falta que el owner la
-     levante desde la rama (o autorice hacerlo). Verificar primero si DXLink da bid/ask para VIX
-     (el gate ahora exige cotización utilizable; si no, todo sería NO_DATA). Probar también un
-     caso NO_DATA forzado y el switch OFF conservando estado. Evidencia sanitizada en GaleCore.
-  4. Codex (`/review-codex`) sobre `5fa6615..HEAD` y decisión del owner.
+- **24/09 (tarde): implementación terminada, espera la decisión del owner.** Interno R2 APPROVE;
+  Codex C1→C4 (`gpt-5.6-sol` desde C2), **C4 APPROVE**. `dotnet test` 401/401. AC-08 hecho en vivo
+  con `docs/evidence/gc-0002/ac08_run.py` (corridas 5-7 con manifiesto): NO_DATA forzado, descarte
+  explicado con VIX/GEX reales, switch OFF conservando estado. **No visto en vivo:** candidato, fill y
+  valuación (GEX negativo todo el día). Decisiones del owner en el camino: VIX por Trade (el Quote de
+  DXLink viene sin bid/ask); aceptar cotizaciones sin hora (`BL-013`) y la cobertura mínima de OI del
+  GEX (`BL-014`, en vivo 50/169 calls y 44/124 puts con OI).
+- **Siguiente:** que el owner decida el cierre de GC-0002 (o pida ver candidato/fill en un día con
+  GEX ≥ 0). El runner de Codex para repos que no son GaleCore-AI es un driver de sesión (importa
+  `run_review` y redirige repo/item); pasar `--model gpt-5.6-sol`.
 - Cómo correr tests de GaleCore sin prompts: `python <scratchpad>/dotnet_test.py` no persiste entre
   sesiones; alcanza con `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj`.
   Para compilar la API con GaleCore corriendo: `dotnet build ... -o <dir temporal>`.
