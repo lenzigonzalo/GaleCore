@@ -49,6 +49,17 @@ API_URL = "http://localhost:7001"
 TEST_USERNAME = "demo"
 TEST_EMAIL = "demo@galecore-dev.test"
 TEST_DATABASE = "galecore_test"
+# El ÚNICO proyecto contra el que corre este script: "GaleCore Dev" (org propia del owner, plan Free).
+# Cualquier otro se rechaza antes de guardar config o ejecutar nada; el de producción, explícitamente.
+DEV_PROJECT_REF = "ecymbgpimqbtcvqyjtaq"
+PRODUCTION_PROJECT_REF = "vsbnukptdvsyhujgtook"
+
+
+def require_dev_project(ref: str | None) -> None:
+    if ref == PRODUCTION_PROJECT_REF:
+        sys.exit(f"{ref} es el proyecto de PRODUCCIÓN: este script nunca corre contra producción")
+    if ref != DEV_PROJECT_REF:
+        sys.exit(f"{ref} no es el proyecto GaleCore Dev ({DEV_PROJECT_REF}); este script sólo corre contra él")
 
 
 def sh(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None, check: bool = True) -> int:
@@ -62,7 +73,12 @@ def sh(cmd: list[str], *, cwd: Path | None = None, env: dict | None = None, chec
 def load_env() -> dict:
     if not ENV_FILE.exists():
         sys.exit("falta dev/.local/env.json: correr primero `python dev/galecore_dev.py init ...`")
-    return json.loads(ENV_FILE.read_text(encoding="utf-8"))
+    env = json.loads(ENV_FILE.read_text(encoding="utf-8"))
+    # Se revalida en cada comando: un env.json editado a mano tampoco puede apuntar a otro proyecto.
+    require_dev_project(env.get("project_ref"))
+    if urlparse(env["supabase_url"]).hostname != f"{DEV_PROJECT_REF}.supabase.co":
+        sys.exit("supabase_url de dev/.local/env.json no es la de GaleCore Dev")
+    return env
 
 
 def save_env(env: dict) -> None:
@@ -104,7 +120,10 @@ def http(method: str, url: str, body: dict | None = None, headers: dict | None =
 
 
 def cmd_init(args: argparse.Namespace) -> int:
-    ref = urlparse(args.url).hostname.split(".")[0]
+    ref = (urlparse(args.url).hostname or "").split(".")[0]
+    require_dev_project(ref)
+    if urlparse(args.url).hostname != f"{DEV_PROJECT_REF}.supabase.co":
+        sys.exit("la URL no es la de GaleCore Dev")
     env = json.loads(ENV_FILE.read_text(encoding="utf-8")) if ENV_FILE.exists() else {}
     if env.get("project_ref") not in (None, ref):
         sys.exit(f"dev/.local/env.json es de otro proyecto ({env['project_ref']}); borrarlo a mano si es a propósito")

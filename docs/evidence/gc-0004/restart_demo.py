@@ -191,7 +191,11 @@ def main() -> int:
         },
         "command": sys.argv,
         "started_at": now(),
-        "environment": "desarrollo aislado: Supabase local en Docker; datos de mercado reales (Tastytrade)",
+        "environment": {
+            "database": f"Supabase GaleCore Dev ({dev.DEV_PROJECT_REF}), rol galecore_api por el pooler 6543",
+            "auth": f"{env['supabase_url']}/auth/v1",
+            "market_data": "reales (Tastytrade, credenciales de user-secrets)",
+        },
         "steps": [],
     }
     build = subprocess.run(
