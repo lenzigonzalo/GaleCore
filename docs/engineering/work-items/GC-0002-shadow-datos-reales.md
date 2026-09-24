@@ -77,7 +77,7 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 | AC-07 | Runtime sólo pide cadena, griegas y cotización | `ShadowRuntimeBoundaryTests` (patrones ampliados en R1-m5) | ídem | Verificado en tests |
 | AC-08 | Corridas 5, 6 y 7 con `docs/evidence/gc-0002/ac08_run.py` (build, arranque, corrida y baja de la API en un solo comando; 7 con árbol limpio en `050d486` y muestras del GEX) | — | `ac08-run5-forced-nodata.*`, `ac08-run6-real-and-off.*`, `ac08-run7-real-gex-coverage.*` (corridas 1-4: históricas) | Hecho salvo candidato/fill/valuación en vivo (ver "AC-08, 24/09") |
 | AC-09 | Tests nuevos para AC-01..05 y AC-07 | `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj` → 401/401 (base 331) | `docs/evidence/gc-0002/dotnet-test-<sha>.txt` (el último) | Verificado |
-| AC-10 | — | Interno R1 → corregido; R2 APPROVE; Codex C1, C2 y C3 CHANGES_REQUESTED → corregidos o decididos por el owner (abajo) | `docs/engineering/reviews/GC-0002-20260924T171716Z.md`, `…174724Z.md`, `…181353Z.md` | Codex recheck C4 PENDING |
+| AC-10 | — | Interno R1 → corregido; R2 APPROVE; Codex C1-C3 CHANGES_REQUESTED → corregidos o decididos por el owner; **Codex C4 APPROVE** | `docs/engineering/reviews/GC-0002-20260924T171716Z.md`, `…174724Z.md`, `…181353Z.md`, `…182548Z.md` | Verificado; cierre: owner |
 
 ## Implementer handoff
 
@@ -85,7 +85,7 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 corregido (`9115ba3`) o decidido por el owner (hora de cotización desconocida → `BL-013`; cobertura
 de OI del GEX → `BL-014`); `dotnet test` 401/401; AC-08 con corridas reproducibles (runner + manifiesto)
 salvo candidato/fill/valuación en vivo (GEX negativo todo el día). Codex C3: sólo un MAJOR de evidencia (conteos del GEX sin artefacto) y un MINOR de test, corregidos
-(corrida 7, `050d486`). Siguiente: Codex `--recheck` (C4).
+(corrida 7, `050d486`). **Codex recheck C4: APPROVE** (abajo). Siguiente: decisión del owner.
 
 **Hash de la spec (AC-06, R1-m8)**, `StrategySpecHasher` sobre el archivo:
 - antes `pcs_spy_shadow_v1.json` (`5fa6615`): `sha256:09ad790a3d885d13ac13a6ecb1bde402345b7d9333741e4b5741a67764b1139b`
@@ -248,3 +248,10 @@ mid finito, runner con manifiesto). `BL-013` y `BL-014`: decisiones del owner, a
 |---|---|---|
 | C3-M | Conteos de cobertura del GEX sólo en prosa | `ac08_run.py --gex-samples`; corrida 7 los registra en el manifiesto (`gex_coverage`) y el JSONL; el texto cita esa corrida (50/**169**, no 168) |
 | C3-m | Test de concurrencia con `Wait`/`Result` sin límite (`xUnit1031`) | Async con `SemaphoreSlim` y esperas de 10 s; sin warnings; 401/401 |
+
+## Independent recheck Codex C4 (`docs/engineering/reviews/GC-0002-20260924T182548Z.md`, modo `recheck`, `gpt-5.6-sol`) — APPROVE
+
+C3-M (conteos del GEX con procedencia, corrida 7) y C3-m (test async) resueltos; sin hallazgos nuevos.
+`BL-013` y `BL-014` siguen como limitaciones aceptadas por el owner. Codex no pudo compilar (NuGet
+bloqueado en su sandbox): corrió el DLL de tests con `dotnet vstest` (401/401) y tomó el build del
+manifiesto de la corrida 7. El APPROVE no cierra el item: decide el owner.
