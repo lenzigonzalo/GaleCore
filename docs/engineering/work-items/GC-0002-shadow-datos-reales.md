@@ -75,16 +75,17 @@ una métrica, un candidato ni un precio. SHADOW simula la *orden* (no hay broker
 | AC-05 | `ShadowRuntimeStore` (historial acotado, eventos de ciclo de vida no se descartan); eventos por gate, NO_DATA, descarte y valuación sin precio | `EveryEvaluationIsKept_NotOnlyTheLast`, `Store_*`, `Valuation_NoDataEvent_OnlyWhenTheProblemChanges` | ídem | Verificado en tests |
 | AC-06 | `shadow_runtime_test_v1.json` (renombrada); hashes viejo/nuevo en el handoff | `RuntimeSpecJsonTests` | hashes abajo | Verificado |
 | AC-07 | Runtime sólo pide cadena, griegas y cotización | `ShadowRuntimeBoundaryTests` (patrones ampliados en R1-m5) | ídem | Verificado en tests |
-| AC-08 | Corridas 5 y 6 con `docs/evidence/gc-0002/ac08_run.py` (build, arranque, corrida y baja de la API en un solo comando, código `9115ba3`) | — | `ac08-run5-forced-nodata.{jsonl,manifest.json}`, `ac08-run6-real-and-off.{jsonl,manifest.json}` (corridas 1-4: históricas) | Hecho salvo candidato/fill/valuación en vivo (ver "AC-08, 24/09") |
+| AC-08 | Corridas 5, 6 y 7 con `docs/evidence/gc-0002/ac08_run.py` (build, arranque, corrida y baja de la API en un solo comando; 7 con árbol limpio en `050d486` y muestras del GEX) | — | `ac08-run5-forced-nodata.*`, `ac08-run6-real-and-off.*`, `ac08-run7-real-gex-coverage.*` (corridas 1-4: históricas) | Hecho salvo candidato/fill/valuación en vivo (ver "AC-08, 24/09") |
 | AC-09 | Tests nuevos para AC-01..05 y AC-07 | `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj` → 401/401 (base 331) | `docs/evidence/gc-0002/dotnet-test-<sha>.txt` (el último) | Verificado |
-| AC-10 | — | Interno R1 → corregido; R2 APPROVE; Codex C1 y recheck C2 CHANGES_REQUESTED → corregidos o decididos por el owner (abajo) | `docs/engineering/reviews/GC-0002-20260924T171716Z.md`, `GC-0002-20260924T174724Z.md` | Codex recheck C3 PENDING |
+| AC-10 | — | Interno R1 → corregido; R2 APPROVE; Codex C1, C2 y C3 CHANGES_REQUESTED → corregidos o decididos por el owner (abajo) | `docs/engineering/reviews/GC-0002-20260924T171716Z.md`, `…174724Z.md`, `…181353Z.md` | Codex recheck C4 PENDING |
 
 ## Implementer handoff
 
 **State:** IMPLEMENTING — interno R2 APPROVE; Codex C1 y C2 CHANGES_REQUESTED, todo lo abierto
 corregido (`9115ba3`) o decidido por el owner (hora de cotización desconocida → `BL-013`; cobertura
 de OI del GEX → `BL-014`); `dotnet test` 401/401; AC-08 con corridas reproducibles (runner + manifiesto)
-salvo candidato/fill/valuación en vivo (GEX negativo todo el día). Siguiente: Codex `--recheck` (C3).
+salvo candidato/fill/valuación en vivo (GEX negativo todo el día). Codex C3: sólo un MAJOR de evidencia (conteos del GEX sin artefacto) y un MINOR de test, corregidos
+(corrida 7, `050d486`). Siguiente: Codex `--recheck` (C4).
 
 **Hash de la spec (AC-06, R1-m8)**, `StrategySpecHasher` sobre el archivo:
 - antes `pcs_spy_shadow_v1.json` (`5fa6615`): `sha256:09ad790a3d885d13ac13a6ecb1bde402345b7d9333741e4b5741a67764b1139b`
@@ -192,8 +193,16 @@ python docs/evidence/gc-0002/ac08_run.py --name <run> --spec shadow_runtime_forc
 - **No demostrado en vivo:** construcción de candidato, fill y valuación real. Con GEX negativo todo
   el día el gate corta antes (comportamiento correcto de la spec). Esos caminos quedan cubiertos
   sólo por tests con datos falsos; verlos en vivo requiere un día con GEX ≥ 0.
-- **Confirmado en vivo:** el Quote de DXLink trae `eventTime` 0 (`BL-013`); griegas del GEX 442/442;
-  OI por lado 50/168 calls y 44/124 puts (`BL-014`).
+- **Corrida 7, cobertura del GEX con procedencia** (`ac08-run7-real-gex-coverage.*`, HEAD `050d486`,
+  **árbol limpio**, 18:20-18:25 UTC, `--gex-samples 3`): el paso `gex_coverage` del manifiesto (y las
+  respuestas completas en el JSONL) registra, igual en las tres muestras, vencimiento 2026-11-20,
+  griegas **442/442**, OI de calls **50/169**, OI de puts **44/124** (`BL-014`). Después, dos
+  evaluaciones: VIX 15.65 (PASS), GEX −86.5 y −87.3 (FAIL) → descarte; OFF con 2 evaluaciones y 5
+  eventos iguales, `PAUSED`. Esta vez el primer GEX del gate no fue NO_DATA: las muestras previas
+  calentaron el cache del handler, lo que confirma que el NO_DATA de las corridas 4 y 6 es el primer
+  barrido en frío.
+- **Confirmado en vivo:** el Quote de DXLink trae `eventTime` 0 (`BL-013`; ver `vix_quote` en
+  `ac08-run1-vix-quote.json`).
 - El override del switch persiste en disco: al reiniciar, la API arranca con el último valor
   puesto, no "inerte" (comportamiento previo del `PlatformServiceSwitch`, fuera de este item). El
   runner lo apaga al empezar y al terminar.
@@ -222,10 +231,20 @@ corregido en `31166e8`/`9115ba3` (401/401) o decidido por el owner:
 | # | Hallazgo | Resolución |
 |---|---|---|
 | C1-M1 | Hora de cotización desconocida aceptada | **Decisión del owner (24/09):** limitación declarada, `BL-013` |
-| C1-M4 | Cobertura de OI por lado | El handler publica `CallOi/PutOi Requested/Received` (aditivo). En vivo: 50/168 calls y 44/124 puts, sin poder distinguir cero de faltante. **Decisión del owner (24/09):** se mantiene la regla mínima (griegas completas + OI de los dos lados) y se declara; causa en `BL-014` |
+| C1-M4 | Cobertura de OI por lado | El handler publica `CallOi/PutOi Requested/Received` (aditivo). En vivo (corrida 7): 50/169 calls y 44/124 puts, sin poder distinguir cero de faltante. **Decisión del owner (24/09):** se mantiene la regla mínima (griegas completas + OI de los dos lados) y se declara; causa en `BL-014` |
 | C1-M5 | Chequeo del switch y registro de la posición no atómicos | `ShadowRuntimeStore.TryAddPosition` y `UnderCommitGate`: el cambio del switch del runtime (endpoint y `RuntimeStrategySwitch.Set`) y el registro de la posición comparten lock. `Store_SwitchChangeAndPositionCommit_AreSerialized`, `Store_TryAddPosition_RespectsCanOpen` |
 | C2-M (nuevo) | Métricas de Quote sin frescura | `UsableQuotePrice` valida la hora del proveedor (vieja/futura = NO_DATA; sin hora, como las patas). `StaleOrFutureQuote_IsNoData` |
 | C1-M6 | Mid que desborda a infinito en métricas | `double.IsFinite(mid)` en métricas y en `GetQuoteAsync`. Caso `double.MaxValue` en `OneSidedOrCrossedOrEmpty_IsNoData` |
 | C1-M7 | Procedencia de AC-08 | `ac08_run.py` + corridas 5 y 6 con manifiesto |
 | C2-m (nuevo) | AC-01 con conteo de tests viejo | La fila remite a AC-09 |
 | C2-m (nuevo) | Timestamp del fixture presentado como trade real | Comentario corregido: hora representativa |
+
+## Independent recheck Codex C3 (`docs/engineering/reviews/GC-0002-20260924T181353Z.md`, modo `recheck`, `c0439c6..<HEAD de entonces>`, `gpt-5.6-sol`) — CHANGES_REQUESTED
+
+Todo lo anterior de código y procedencia: resuelto (lock switch/fill, frescura de métricas de Quote,
+mid finito, runner con manifiesto). `BL-013` y `BL-014`: decisiones del owner, aceptadas. Nuevo:
+
+| # | Hallazgo | Resolución |
+|---|---|---|
+| C3-M | Conteos de cobertura del GEX sólo en prosa | `ac08_run.py --gex-samples`; corrida 7 los registra en el manifiesto (`gex_coverage`) y el JSONL; el texto cita esa corrida (50/**169**, no 168) |
+| C3-m | Test de concurrencia con `Wait`/`Result` sin límite (`xUnit1031`) | Async con `SemaphoreSlim` y esperas de 10 s; sin warnings; 401/401 |
