@@ -1,32 +1,49 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado (2026-09-24, cierre de sesión):** GC-AI-0002/0003/0004/0005 **CLOSED** por el owner (tag `phase4-closed`); F-9 hecho (ApiKey rotada). Pendiente sólo GC-0001 (el owner mira la pestaña). Siguiente decidido: **I2, SHADOW con datos reales** (work item de GaleCore). Plan: `roadmap/README.md`.
+**Estado (2026-09-24, noche):** I1 e I2 **cerrados** (GC-AI-0005; GC-0002 en GaleCore, tag `gc-0002-closed`). Siguiente propuesto: **I3** (SHADOW visible y que no se borre), a confirmar por el owner. Plan: `roadmap/README.md`.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## Próxima sesión — punto de entrada
 
-### ▶ Retomar acá (cierre del 2026-09-24, ~02:30 UTC)
+### ▶ Retomar acá (cierre del 2026-09-24, noche)
 
-**Trabajo activo: I2 = [GC-0002](../../../GaleCore/docs/engineering/work-items/GC-0002-shadow-datos-reales.md)**
-(repo **GaleCore**, rama `feature/GC-0002-shadow-datos-reales`). Estado:
-- Hecho: checkpoint del runtime tal como estaba (`5fa6615`); implementación sin caminos ficticios
-  (`be3206a`): sin métricas/candidatos stub, sin rellenos con 0, valuación con mid real, apagar
-  pausa sin borrar, historial de evaluaciones, eventos de descarte, spec renombrada a
-  `shadow_runtime_test_v1`. `dotnet test` 357/357 (base 331). Todo commiteado, sin push.
-- **24/09 (tarde): implementación terminada, espera la decisión del owner.** Interno R2 APPROVE;
-  Codex C1→C4 (`gpt-5.6-sol` desde C2), **C4 APPROVE**. `dotnet test` 401/401. AC-08 hecho en vivo
-  con `docs/evidence/gc-0002/ac08_run.py` (corridas 5-7 con manifiesto): NO_DATA forzado, descarte
-  explicado con VIX/GEX reales, switch OFF conservando estado. **No visto en vivo:** candidato, fill y
-  valuación (GEX negativo todo el día). Decisiones del owner en el camino: VIX por Trade (el Quote de
-  DXLink viene sin bid/ask); aceptar cotizaciones sin hora (`BL-013`) y la cobertura mínima de OI del
-  GEX (`BL-014`, en vivo 50/169 calls y 44/124 puts con OI).
-- **Siguiente:** que el owner decida el cierre de GC-0002 (o pida ver candidato/fill en un día con
-  GEX ≥ 0). El runner de Codex para repos que no son GaleCore-AI es un driver de sesión (importa
-  `run_review` y redirige repo/item); pasar `--model gpt-5.6-sol`.
-- Cómo correr tests de GaleCore sin prompts: `python <scratchpad>/dotnet_test.py` no persiste entre
-  sesiones; alcanza con `dotnet test source/galecore-datafeed/DataFeed.Tests/DataFeed.Tests.csproj`.
-  Para compilar la API con GaleCore corriendo: `dotnet build ... -o <dir temporal>`.
+**En criollo, para el owner:**
+- **Qué se terminó hoy:** el simulador SHADOW de GaleCore (paso 2 del plan). Mira el mercado cada
+  minuto y, si se cumplen las reglas, simula una entrada con precios reales; si falta un dato no hace
+  nada y anota por qué. Lo probamos en vivo. Cerrado por el owner.
+- **Qué no se ve todavía:** no tiene pantalla y olvida todo al reiniciar. Eso es el paso 3.
+- **Hallazgo aparte:** un error en el GEX que hoy corre en producción (a opciones sin operaciones en
+  los últimos 2 días les ponía 0 contratos abiertos). Arreglado en local y aprobado; **no se mandó**.
+- **Autocrítica de la sesión:** se dedicó la última parte al PR sin preguntar si era prioridad, y hubo
+  demasiadas rondas de revisión. Regla nueva: preguntar antes de desviarse; una ronda de review;
+  reportes cortos; cada paso termina en algo visible.
+
+**Decisiones pendientes del owner (en este orden):**
+1. **Qué sigue:** propuesta = **I3** (pantalla del simulador + que no se borre al reiniciar). O revisar
+   antes el plan completo. El objetivo es el ecosistema entero (análisis, investigaciones, estrategias,
+   planes, cartera, informes, dashboards, automatización), no sólo el simulador.
+2. **PR del GEX** (no urgente): rama `fix/gex-oi-lookback` en GaleCore, 2 commits sobre `master`,
+   Codex APPROVE, `dotnet test` 244/244. Descripción lista en
+   `GaleCore/docs/evidence/gc-0003/pr-description.md` (rama `feature/GC-0003-gex-oi-coverage`).
+   Push y `gh pr create` sólo si el owner dice que sí (el hook bloquea el push: habrá que habilitarlo
+   para ese PR puntual).
+3. GC-0001 (pestaña Inteligencia) sigue abierto (ver abajo).
+
+**Dónde quedó cada cosa (todo local, sin push):**
+- GaleCore: `feature/GC-0002-shadow-datos-reales` (cerrado, tag `gc-0002-closed`), `fix/gex-oi-lookback`
+  (el PR), `feature/GC-0003-gex-oi-coverage` (registro y evidencia del bug). El checkout quedó en esta
+  última. La API local está **abajo**.
+- GaleCore-AI: backlog con `BL-013` (hora de cotización en DXLink) y `BL-014` (OI del GEX, diagnosticado).
+- Workspace: `ENGINEERING.md` con la excepción de PR para fixes de lo que hoy está mal.
+
+**Para el host (técnico, breve):**
+- SHADOW en vivo: `python docs/evidence/gc-0002/ac08_run.py --name <run> --spec shadow_runtime_test_v1 --evals 2`
+  desde GaleCore en la rama de GC-0002, puerto 7001 libre (levanta y baja la API solo).
+- Codex para repos que no son GaleCore-AI: driver de sesión que importa `run_review` y redirige repo e
+  item; siempre `--model gpt-5.6-sol`.
+- IBKR: sólo lectura como referencia para validar, avisando.
+- `guard_git`: un solo `git -C` por comando de commit.
 
 **Otros pendientes del owner:** GC-0001 (pestaña Inteligencia) sin cerrar: el login real necesita
 `ConnectionStrings:GaleCore` en la API local (ver "Cierres pendientes"). `BL-012` nuevo: acceso del
