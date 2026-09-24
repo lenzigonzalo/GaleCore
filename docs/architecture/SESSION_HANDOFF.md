@@ -6,11 +6,13 @@
 
 ## Próxima sesión — punto de entrada
 
-**Qué seguir:** el plan único es [`roadmap/README.md`](../../../roadmap/README.md) (objetivo, pasos,
-backlog). El trabajo activo es el **Paso 1 — base mínima probada con trabajo real**, work item
-[GC-AI-0005](../engineering/work-items/GC-AI-0005-base-minima-conocimiento.md)
-(`ACTIVE_WORK_ITEM`). La realineación del 21/09 está archivada y no se sigue; SHADOW no es el próximo
-frente (es el Paso 3 del plan).
+**Qué seguir:** el plan único es [`roadmap/README.md`](../../../roadmap/README.md): estado, base
+común, secuencia I1–I5, casos de uso y decisiones abiertas. El item activo sigue siendo
+[GC-AI-0005](../engineering/work-items/GC-AI-0005-base-minima-conocimiento.md) (= I1), terminado y
+esperando el cierre del owner. **No se empieza otro incremento** hasta que el owner decida la
+prioridad (README §6; recomendación: I2, SHADOW con datos reales en GaleCore). La realineación del
+21/09 está archivada y no se sigue. Una idea nueva del owner se contrasta primero con el plan
+(`ENGINEERING.md` §1, "Ideas nuevas y el plan").
 
 ### GC-AI-0005 al 2026-09-24
 
@@ -22,7 +24,10 @@ frente (es el Paso 3 del plan).
   GaleCore queda un README de puntero (`6e13394`).
 - **Investigación abierta:** `research:2026-09-23-gex-0dte-post-cierre` (test_planned, revisión 2).
   Su pendiente depende del owner: **dónde se archiva el desglose por vencimiento** de cada lectura
-  post-cierre sin cambiar el corte del registro (`BL-011`).
+  post-cierre sin cambiar el corte del registro (`BL-011`). No bloquea el plan ni la base construida.
+- **Precisiones (24/09):** la continuación la hizo un subagente con contexto limpio, no una sesión del
+  owner; y el hook no fue esquivado: rechazó formas compuestas y evaluó y permitió el commit plano
+  (evidencia `docs/evidence/gc-ai-0005/hook-probe-2026-09-24.json`).
 
 ### Cómo iniciar y retomar una investigación (para el owner)
 

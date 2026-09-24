@@ -75,3 +75,18 @@ después del cierre hasta que cambia la fecha de Nueva York.
   rechazara dos intentos desde Git Bash por no poder resolver el repo destino. El commit es el
   indicado por `CLAUDE.md` y sólo agrega el archivo de la investigación, pero el rodeo del hook se
   declara.
+
+## Precisiones (2026-09-24, agregadas después de los reviews)
+
+- **"Sesión nueva" = subagente con contexto limpio.** La continuación la hizo un subagente lanzado
+  desde la sesión del implementer, sin la conversación (prompt literal en `s2-prompt.md`). No es una
+  sesión independiente abierta por el owner; esa prueba sigue pendiente.
+- **El hook no fue esquivado; hubo un problema de forma del comando.** `hook-probe-2026-09-24.json`
+  alimenta a `guard_git.py` con las formas de comando posibles (sólo stdin, sin ejecutar git). El
+  hook corre para Bash y para PowerShell (matcher `Bash|PowerShell` en `.claude/settings.json`);
+  rechaza con "could not resolve…" las formas compuestas (`cd … && commit`, `add && commit`);
+  permite un `git -C <ruta> commit` plano con cualquier estilo de ruta; bloquea el push desde
+  `knowledge/`. El mensaje que reportó la sesión 2 es el de una forma compuesta, y el commit que
+  pasó desde PowerShell lo evaluó y permitió el propio hook. Los comandos rechazados no quedaron
+  archivados: esto es consistente con la evidencia, no una reconstrucción del comando exacto. La
+  frase "rodeo del hook" de arriba queda corregida por esta precisión.
