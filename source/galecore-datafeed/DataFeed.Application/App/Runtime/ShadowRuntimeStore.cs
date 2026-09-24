@@ -8,12 +8,15 @@ namespace DataFeed.Application.App.Runtime
     /// Patrón: ConcurrentDictionary como RpfStateStore (§4.2).
     ///
     /// Guarda: instancias, posiciones, historial de evaluaciones y eventos.
-    /// Write-through a DB es responsabilidad de quien escribe (el loop), no del store.
     /// Thread-safe por ConcurrentDictionary; operaciones compuestas con lock por entrada.
     ///
+    /// GC-0004 (I3): con un repositorio conectado (ShadowRuntimeRecovery), cada cambio se guarda en
+    /// la base ANTES de quedar en memoria; si la base falla, la excepción sube y la memoria no cambia.
+    /// Sin repositorio es el store en memoria de GC-0002 (lo usan los tests del motor).
+    ///
     /// GC-0002: no hay borrado. Apagar el runtime pausa entradas y conserva todo lo registrado
-    /// (decisión del owner, 24/09). El estado vive en memoria (W-2): un reinicio lo pierde. El
-    /// historial de evaluaciones y los eventos se acotan por instancia para no crecer sin límite;
+    /// (decisión del owner, 24/09). El historial en memoria de evaluaciones y eventos se acota por
+    /// instancia para no crecer sin límite (lo completo queda en la base);
     /// cuando se llega al tope se descarta lo más viejo, salvo los eventos de ciclo de vida
     /// (instancia creada, posición abierta o cerrada), que no se descartan nunca.
     /// </summary>
@@ -32,6 +35,45 @@ namespace DataFeed.Application.App.Runtime
         public const int MaxEventsPerInstance = 20000;
         private readonly ConcurrentDictionary<string, List<OperationalEvent>> _events = new();
         private readonly ConcurrentDictionary<string, StrategySpec> _specs = new();
+        private readonly ConcurrentDictionary<string, StrategySpec> _specsByHash = new();
+        private IShadowRuntimeRepository? _repository;
+
+        /// <summary>true si cada cambio se guarda en la base antes de quedar en memoria.</summary>
+        public bool IsDurable => _repository != null;
+
+        /// <summary>Conecta la persistencia. Lo hace ShadowRuntimeRecovery después de recargar lo guardado.</summary>
+        public void AttachRepository(IShadowRuntimeRepository repository) => _repository = repository;
+
+        /// <summary>
+        /// Carga en memoria lo recuperado de la base, sin volver a guardarlo. Las identidades se
+        /// conservan, así que recargar dos veces no duplica nada.
+        /// </summary>
+        public void Hydrate(ShadowRuntimeSnapshot snapshot)
+        {
+            foreach (var i in snapshot.Instances) _instances[i.InstanceId] = i;
+            foreach (var p in snapshot.Positions) _positions[p.PositionId] = p;
+            foreach (var group in snapshot.Evaluations.GroupBy(e => e.InstanceId))
+            {
+                var list = _evaluationHistory.GetOrAdd(group.Key, _ => new List<EvaluationResult>());
+                lock (list)
+                {
+                    var known = list.Select(e => e.EvaluationId).ToHashSet();
+                    list.AddRange(group.Where(e => known.Add(e.EvaluationId)));
+                    list.Sort((a, b) => a.EvaluatedAt.CompareTo(b.EvaluatedAt));
+                    if (list.Count > MaxEvaluationsPerInstance) list.RemoveRange(0, list.Count - MaxEvaluationsPerInstance);
+                }
+            }
+            foreach (var group in snapshot.Events.GroupBy(e => e.InstanceId))
+            {
+                var list = _events.GetOrAdd(group.Key, _ => new List<OperationalEvent>());
+                lock (list)
+                {
+                    var known = list.Select(e => e.EventId).ToHashSet();
+                    list.AddRange(group.Where(e => known.Add(e.EventId)));
+                    list.Sort((a, b) => a.Timestamp.CompareTo(b.Timestamp));
+                }
+            }
+        }
 
         /// <summary>Eventos que no se descartan al llegar al tope: sin ellos no se puede reconstruir qué pasó.</summary>
         public static readonly IReadOnlySet<string> LifecycleEventTypes =
@@ -40,7 +82,30 @@ namespace DataFeed.Application.App.Runtime
         // ── Specs ──
 
         public void RegisterSpec(string name, StrategySpec spec)
-            => _specs[name] = spec;
+        {
+            _specs[name] = spec;
+            if (!string.IsNullOrEmpty(spec.ContentHash)) _specsByHash[spec.ContentHash] = spec;
+        }
+
+        /// <summary>
+        /// Registra una versión de spec sólo por su hash (una versión vieja reconstruida de la base): la
+        /// instancia que la corre la encuentra, pero no reemplaza a la spec vigente de ese nombre.
+        /// </summary>
+        public void RegisterSpecVersion(StrategySpec spec)
+        {
+            if (string.IsNullOrEmpty(spec.ContentHash)) throw new ArgumentException("la spec no tiene content hash", nameof(spec));
+            _specsByHash[spec.ContentHash] = spec;
+        }
+
+        public StrategySpec? GetSpecByHash(string contentHash)
+            => _specsByHash.TryGetValue(contentHash, out var s) ? s : null;
+
+        /// <summary>
+        /// La spec que ejecuta la instancia: la de su hash (corre exactamente esa versión, AC-04). Una
+        /// instancia sin hash —sólo en tests— se resuelve por nombre.
+        /// </summary>
+        public StrategySpec? SpecFor(StrategyInstance instance)
+            => string.IsNullOrEmpty(instance.VersionHash) ? GetSpec(instance.SpecName) : GetSpecByHash(instance.VersionHash);
 
         public StrategySpec? GetSpec(string name)
             => _specs.TryGetValue(name, out var s) ? s : null;
@@ -51,7 +116,26 @@ namespace DataFeed.Application.App.Runtime
         // ── Instances ──
 
         public void SetInstance(string instanceId, StrategyInstance instance)
-            => _instances[instanceId] = instance;
+        {
+            _repository?.SaveInstance(instance);
+            _instances[instanceId] = instance;
+        }
+
+        /// <summary>La instancia RUNNING de esa versión de spec, si hay una (el deploy no la duplica).</summary>
+        public StrategyInstance? RunningInstanceFor(string versionHash)
+            => _instances.Values.FirstOrDefault(i => i.LifecycleState == "RUNNING" && i.VersionHash == versionHash);
+
+        /// <summary>
+        /// Despliega: guarda el deployment, la instancia y su evento INSTANCE_CREATED, en ese orden. Si
+        /// algo falla a mitad de camino, lo que quedó en la base es un deployment sin instancia, que no
+        /// corre nada.
+        /// </summary>
+        public void Deploy(StrategyDeployment deployment, StrategyInstance instance, OperationalEvent created)
+        {
+            _repository?.SaveDeployment(deployment);
+            SetInstance(instance.InstanceId, instance);
+            AddEvent(created);
+        }
 
         public StrategyInstance? GetInstance(string instanceId)
             => _instances.TryGetValue(instanceId, out var i) ? i : null;
@@ -67,19 +151,26 @@ namespace DataFeed.Application.App.Runtime
         {
             if (_instances.TryGetValue(instanceId, out var inst))
             {
-                _instances[instanceId] = inst with
+                var updated = inst with
                 {
                     LifecycleState = lifecycleState,
                     SchedulerState = schedulerState ?? inst.SchedulerState,
                     UpdatedAt = DateTime.UtcNow
                 };
+                // Se guarda sólo si cambió el estado: el loop lo toca en cada tick.
+                if (updated.LifecycleState != inst.LifecycleState || updated.SchedulerState != inst.SchedulerState)
+                    _repository?.SaveInstance(updated);
+                _instances[instanceId] = updated;
             }
         }
 
         // ── Positions ──
 
         public void AddPosition(ShadowPosition position)
-            => _positions[position.PositionId] = position;
+        {
+            _repository?.SavePosition(position);
+            _positions[position.PositionId] = position;
+        }
 
         // Serializa el cambio del switch del runtime con el registro de una posición nueva: si el
         // switch se apaga, ninguna entrada que ya estaba en curso puede registrarse después (Codex C2).
@@ -106,7 +197,10 @@ namespace DataFeed.Application.App.Runtime
         }
 
         public void UpdatePosition(ShadowPosition position)
-            => _positions[position.PositionId] = position;
+        {
+            _repository?.SavePosition(position);
+            _positions[position.PositionId] = position;
+        }
 
         public ShadowPosition? GetPosition(string positionId)
             => _positions.TryGetValue(positionId, out var p) ? p : null;
@@ -127,6 +221,7 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Registra una evaluación en el historial de su instancia.</summary>
         public void AddEvaluation(EvaluationResult evaluation)
         {
+            _repository?.AddEvaluation(evaluation);
             var list = _evaluationHistory.GetOrAdd(evaluation.InstanceId, _ => new List<EvaluationResult>());
             lock (list)
             {
@@ -146,6 +241,7 @@ namespace DataFeed.Application.App.Runtime
 
         public void AddEvent(OperationalEvent evt)
         {
+            _repository?.AddEvent(evt);
             var list = _events.GetOrAdd(evt.InstanceId, _ => new List<OperationalEvent>());
             lock (list)
             {

@@ -27,6 +27,7 @@ namespace DataFeed.Controllers
         private readonly DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser _currentUser;
         private readonly DataFeed.Application.App.Runtime.ShadowRuntimeStore _runtimeStore;
         private readonly DataFeed.Api.Infrastructure.RuntimeStrategySwitch _runtimeSwitch;
+        private readonly DataFeed.Api.Infrastructure.ShadowRuntimePersistenceStatus _runtimePersistence;
         private readonly ILogger<AppController> _logger;
 
         public AppController(IMediator mediator, IWebHostEnvironment env,
@@ -39,6 +40,7 @@ namespace DataFeed.Controllers
             DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
             DataFeed.Application.App.Runtime.ShadowRuntimeStore runtimeStore,
             DataFeed.Api.Infrastructure.RuntimeStrategySwitch runtimeSwitch,
+            DataFeed.Api.Infrastructure.ShadowRuntimePersistenceStatus runtimePersistence,
             ILogger<AppController> logger)
             : base(mediator)
         {
@@ -52,6 +54,7 @@ namespace DataFeed.Controllers
             _currentUser = currentUser;
             _runtimeStore = runtimeStore;
             _runtimeSwitch = runtimeSwitch;
+            _runtimePersistence = runtimePersistence;
             _logger = logger;
         }
 
@@ -1258,7 +1261,12 @@ namespace DataFeed.Controllers
             return Ok(spec);
         }
 
-        /// <summary>Deploy de un spec cargado en modo SHADOW → crea deployment + instance.</summary>
+        /// <summary>
+        /// Deploy de un spec cargado en modo SHADOW → crea deployment + instance, guardados en la base.
+        /// Sin persistencia no despliega (503 con el motivo, GC-0004). Si ya hay una instancia RUNNING
+        /// de esa misma versión, la devuelve en vez de crear otra: dos instancias de la misma versión
+        /// evaluarían dos veces y no respetarían el máximo de posiciones.
+        /// </summary>
         [Tags("App.Runtime")]
         [HttpPost("Runtime/Deploy")]
         public async Task<IActionResult> RuntimeDeploy([FromBody] RuntimeDeployRequest body, CancellationToken ct)
@@ -1268,6 +1276,26 @@ namespace DataFeed.Controllers
 
             if (!spec.DeploymentConstraints.EligibleModes.Contains("SHADOW"))
                 return BadRequest("Spec is not eligible for SHADOW mode");
+
+            if (!_runtimePersistence.Available || !_runtimeStore.IsDurable)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+                {
+                    error = "SHADOW sin persistencia: no se despliega nada que se perdería al reiniciar.",
+                    reason = _runtimePersistence.Reason,
+                });
+
+            var running = _runtimeStore.RunningInstanceFor(spec.ContentHash ?? "");
+            if (running != null)
+                return Ok(new
+                {
+                    deploymentId = running.DeploymentId,
+                    instanceId = running.InstanceId,
+                    specName = running.SpecName,
+                    mode = running.Mode,
+                    lifecycleState = running.LifecycleState,
+                    versionHash = running.VersionHash,
+                    existing = true,
+                });
 
             var deploymentId = Guid.NewGuid().ToString();
             var instanceId = Guid.NewGuid().ToString();
@@ -1286,9 +1314,18 @@ namespace DataFeed.Controllers
                 Mode = "SHADOW"
             };
 
-            _runtimeStore.SetInstance(instanceId, instance);
+            var deployment = new DataFeed.Application.App.Runtime.Contracts.StrategyDeployment
+            {
+                DeploymentId = deploymentId,
+                VersionHash = spec.ContentHash ?? "",
+                Mode = "SHADOW",
+                DeployedAt = now,
+                DeployedBy = _currentUser.UserId?.ToString() ?? "SYSTEM",
+                SpecName = body.SpecName,
+                SpecVersion = spec.Identity.Version,
+            };
 
-            _runtimeStore.AddEvent(new DataFeed.Application.App.Runtime.Contracts.OperationalEvent
+            _runtimeStore.Deploy(deployment, instance, new DataFeed.Application.App.Runtime.Contracts.OperationalEvent
             {
                 EventId = Guid.NewGuid().ToString(),
                 InstanceId = instanceId,
@@ -1312,7 +1349,8 @@ namespace DataFeed.Controllers
                 specName = body.SpecName,
                 mode = "SHADOW",
                 lifecycleState = "RUNNING",
-                versionHash = spec.ContentHash
+                versionHash = spec.ContentHash,
+                existing = false,
             });
         }
 
@@ -1349,17 +1387,75 @@ namespace DataFeed.Controllers
             return Ok(positions);
         }
 
-        /// <summary>Historial de evaluaciones de una instancia (más viejas primero; acotado en memoria).</summary>
+        /// <summary>
+        /// Historial de evaluaciones de una instancia (más viejas primero; acotado en memoria, lo
+        /// completo está en la base). <paramref name="limit"/> devuelve sólo las últimas N.
+        /// </summary>
         [Tags("App.Runtime")]
         [HttpGet("Runtime/Instances/{id}/Evaluations")]
-        public IActionResult RuntimeEvaluations(string id)
-            => Ok(_runtimeStore.GetEvaluations(id));
+        public IActionResult RuntimeEvaluations(string id, [FromQuery] int? limit = null)
+            => Ok(TakeLast(_runtimeStore.GetEvaluations(id), limit));
 
-        /// <summary>Eventos operacionales de una instancia.</summary>
+        /// <summary>
+        /// Eventos operacionales de una instancia (más viejos primero). <paramref name="types"/> filtra
+        /// por tipo (separados por coma) y <paramref name="limit"/> devuelve sólo los últimos N.
+        /// </summary>
         [Tags("App.Runtime")]
         [HttpGet("Runtime/Instances/{id}/Events")]
-        public IActionResult RuntimeEvents(string id)
-            => Ok(_runtimeStore.GetEvents(id));
+        public IActionResult RuntimeEvents(string id, [FromQuery] string? types = null, [FromQuery] int? limit = null)
+        {
+            IEnumerable<DataFeed.Application.App.Runtime.Contracts.OperationalEvent> events = _runtimeStore.GetEvents(id);
+            if (!string.IsNullOrWhiteSpace(types))
+            {
+                var wanted = types.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
+                events = events.Where(e => wanted.Contains(e.EventType));
+            }
+            return Ok(TakeLast(events.ToList(), limit));
+        }
+
+        private static IReadOnlyCollection<T> TakeLast<T>(IReadOnlyCollection<T> items, int? limit)
+            => limit is int n && n >= 0 && n < items.Count ? items.Skip(items.Count - n).ToList() : items;
+
+        /// <summary>
+        /// Estado del runtime para la pantalla SHADOW (GC-0004): persistencia (y qué se recuperó al
+        /// arrancar), switch e instancias.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Status")]
+        public IActionResult RuntimeStatus()
+        {
+            var (enabled, source) = _runtimeSwitch.Resolve();
+            return Ok(new
+            {
+                persistence = new
+                {
+                    available = _runtimePersistence.Available && _runtimeStore.IsDurable,
+                    reason = _runtimePersistence.Reason,
+                    recoveredAt = _runtimePersistence.RecoveredAt,
+                    recovery = _runtimePersistence.Recovery,
+                },
+                @switch = new { enabled, source },
+                instances = _runtimeStore.AllInstances().OrderBy(i => i.CreatedAt),
+            });
+        }
+
+        /// <summary>
+        /// Métricas por versión de spec, calculadas desde la base (no desde la ventana en memoria).
+        /// Lo que no existe es null: sin operaciones cerradas no hay P&amp;L realizado ni drawdown.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Metrics")]
+        public IActionResult RuntimeMetrics()
+        {
+            var repository = _runtimePersistence.Repository;
+            if (!_runtimePersistence.Available || repository == null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+                {
+                    error = "SHADOW sin persistencia: no hay métricas guardadas.",
+                    reason = _runtimePersistence.Reason,
+                });
+            return Ok(repository.LoadMetricsInputs().Select(DataFeed.Application.App.Runtime.ShadowMetrics.Compute));
+        }
 
         // El switch del runtime usa el endpoint genérico de servicios de plataforma:
         // GET/POST /App/GaleCore/Services/runtime/Switch — ya existe en PlatformServiceSwitch.

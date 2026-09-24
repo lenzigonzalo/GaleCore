@@ -77,10 +77,11 @@ namespace DataFeed.Application.App.Runtime
                 return outcomes;
             }
 
-            var spec = store.GetSpec(instance.SpecName);
+            var spec = store.SpecFor(instance);
             if (spec == null)
             {
-                // No puede pasar por deploy (valida la spec); queda visible en la instancia, sin un evento por minuto.
+                // Por deploy no pasa (valida la spec); sí tras un reinicio si su versión no se pudo
+                // recuperar (GC-0004). Queda visible en la instancia, sin un evento por minuto.
                 store.UpdateInstanceState(instance.InstanceId, "RUNNING", SchedulerStates.SpecNotFound);
                 return outcomes;
             }
@@ -117,7 +118,7 @@ namespace DataFeed.Application.App.Runtime
             foreach (var pos in store.OpenPositions())
             {
                 var instance = store.GetInstance(pos.InstanceId);
-                var spec = instance == null ? null : store.GetSpec(instance.SpecName);
+                var spec = instance == null ? null : store.SpecFor(instance);
                 if (spec == null)
                 {
                     ShadowRuntimeEngine.RecordValuationProblems(store, pos,

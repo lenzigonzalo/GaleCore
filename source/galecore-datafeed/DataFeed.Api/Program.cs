@@ -103,6 +103,9 @@ namespace DataFeed
                     .AddJwtBearer(options =>
                     {
                         options.Authority = supabaseIssuer;
+                        // La metadata se baja por https, salvo del Supabase local de desarrollo (loopback,
+                        // GC-0004): ahí no hay https y el JWKS igual viaja sin salir de la máquina.
+                        options.RequireHttpsMetadata = !new Uri(supabaseIssuer).IsLoopback;
 
                         // Los claims conservan el nombre que les puso Supabase. Por defecto ASP.NET
                         // los renombra a URIs XML heredadas de WS-Federation (sub -> nameidentifier,
@@ -221,6 +224,7 @@ namespace DataFeed
             // Namespace separado (App.Runtime), switches independientes, sin FK a users/accounts.
             builder.Services.AddSingleton<DataFeed.Application.App.Runtime.ShadowRuntimeStore>();
             builder.Services.AddSingleton<RuntimeStrategySwitch>();
+            builder.Services.AddSingleton<ShadowRuntimePersistenceStatus>();
             builder.Services.AddHostedService<ShadowEntryLoopService>();
             builder.Services.AddHostedService<ShadowPositionMonitorService>();
 
@@ -353,6 +357,39 @@ namespace DataFeed
                     {
                         app.Services.GetRequiredService<ILogger<Program>>().LogWarning(
                             "Runtime: spec '{Name}' falló validación: {Errors}", name, string.Join("; ", result.Errors));
+                    }
+                }
+
+                // GC-0004: persistencia y recuperación. Sólo en una base local (nunca producción); si
+                // no se puede, el runtime no despliega nada y la API sigue sirviendo todo lo demás.
+                var persistence = app.Services.GetRequiredService<ShadowRuntimePersistenceStatus>();
+                var runtimeLog = app.Services.GetRequiredService<ILogger<Program>>();
+                var rejected = DataFeed.Application.App.Runtime.ShadowPersistenceGuard.RejectReason(galeCoreDb);
+                if (rejected != null)
+                {
+                    persistence.MarkUnavailable(rejected);
+                    runtimeLog.LogWarning("Runtime SHADOW sin persistencia: {Reason}. No se puede desplegar.", rejected);
+                }
+                else
+                {
+                    try
+                    {
+                        var dbOptions = new DbContextOptionsBuilder<GaleCoreDbContext>()
+                            .UseNpgsql(galeCoreDb).UseSnakeCaseNamingConvention().Options;
+                        var repository = new DataFeed.Application.App.Runtime.EfShadowRuntimeRepository(
+                            () => new GaleCoreDbContext(dbOptions));
+                        var report = DataFeed.Application.App.Runtime.ShadowRuntimeRecovery.Recover(runtimeStore, repository, specResults);
+                        persistence.MarkAvailable(report, repository);
+                        runtimeLog.LogInformation(
+                            "Runtime SHADOW persistente: recuperadas {Instances} instancias, {Open} posiciones abiertas, " +
+                            "{Closed} cerradas, {Evaluations} evaluaciones, {Events} eventos; specs reconstruidas: {Rebuilt}; problemas: {Problems}",
+                            report.Instances, report.OpenPositions, report.ClosedPositions, report.Evaluations, report.Events,
+                            report.SpecsRebuilt.Count, string.Join("; ", report.Problems));
+                    }
+                    catch (Exception ex)
+                    {
+                        persistence.MarkUnavailable($"no se pudo recuperar el estado guardado: {ex.GetBaseException().Message}");
+                        runtimeLog.LogError(ex, "Runtime SHADOW sin persistencia: falló la recuperación. No se puede desplegar.");
                     }
                 }
             }

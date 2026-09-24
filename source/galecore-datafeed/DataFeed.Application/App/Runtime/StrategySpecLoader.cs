@@ -52,7 +52,7 @@ namespace DataFeed.Application.App.Runtime
             var hash = StrategySpecHasher.ComputeHash(json);
             spec = spec with { ContentHash = hash };
 
-            return SpecLoadResult.Ok(spec, hash);
+            return SpecLoadResult.Ok(spec, hash) with { Json = json };
         }
 
         /// <summary>
@@ -77,6 +77,8 @@ namespace DataFeed.Application.App.Runtime
         public bool Success { get; init; }
         public StrategySpec? Spec { get; init; }
         public string? ContentHash { get; init; }
+        /// <summary>El JSON exacto del que sale el hash; se guarda para reconstruir la spec (GC-0004).</summary>
+        public string? Json { get; init; }
         public List<string> Errors { get; init; } = new();
 
         public static SpecLoadResult Ok(StrategySpec spec, string hash) => new()

@@ -88,6 +88,371 @@ namespace DataFeed.Repositories.Migrations
                     b.ToTable("accounts", (string)null);
                 });
 
+            modelBuilder.Entity("DataFeed.Repositories.Entities.EvaluationLogEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("EvaluatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("evaluated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("instance_id");
+
+                    b.Property<bool>("OverallPass")
+                        .HasColumnType("boolean")
+                        .HasColumnName("overall_pass");
+
+                    b.Property<string>("ResultsJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("results_json");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("symbol");
+
+                    b.HasKey("Id")
+                        .HasName("pk_evaluation_logs");
+
+                    b.HasIndex("InstanceId", "EvaluatedAt")
+                        .HasDatabaseName("ix_evaluation_logs_instance_id_evaluated_at");
+
+                    b.ToTable("evaluation_logs", (string)null);
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.OperationalEventEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("event_type");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("instance_id");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payload_json");
+
+                    b.Property<string>("Symbol")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("symbol");
+
+                    b.Property<DateTime>("Timestamp")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("timestamp")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("pk_operational_events");
+
+                    b.HasIndex("InstanceId", "Timestamp")
+                        .HasDatabaseName("ix_operational_events_instance_id_timestamp");
+
+                    b.ToTable("operational_events", (string)null);
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.ShadowPositionEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("CandidateId")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("candidate_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int?>("CurrentDte")
+                        .HasColumnType("integer")
+                        .HasColumnName("current_dte");
+
+                    b.Property<DateTime>("EntryAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("entry_at");
+
+                    b.Property<double>("EntryCredit")
+                        .HasColumnType("double precision")
+                        .HasColumnName("entry_credit");
+
+                    b.Property<int>("EntryDte")
+                        .HasColumnType("integer")
+                        .HasColumnName("entry_dte");
+
+                    b.Property<DateTime?>("ExitAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("exit_at");
+
+                    b.Property<double?>("ExitDebit")
+                        .HasColumnType("double precision")
+                        .HasColumnName("exit_debit");
+
+                    b.Property<string>("ExitReason")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("exit_reason");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("instance_id");
+
+                    b.Property<double?>("LastSpreadValue")
+                        .HasColumnType("double precision")
+                        .HasColumnName("last_spread_value");
+
+                    b.Property<DateTime?>("LastValuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_valued_at");
+
+                    b.Property<string>("LegsJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("legs_json");
+
+                    b.Property<double>("MaxRisk")
+                        .HasColumnType("double precision")
+                        .HasColumnName("max_risk");
+
+                    b.Property<double?>("RealizedPnl")
+                        .HasColumnType("double precision")
+                        .HasColumnName("realized_pnl");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Structure")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("structure");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("symbol");
+
+                    b.Property<double?>("UnrealizedPnl")
+                        .HasColumnType("double precision")
+                        .HasColumnName("unrealized_pnl");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("ValuationProblemsJson")
+                        .HasColumnType("text")
+                        .HasColumnName("valuation_problems_json");
+
+                    b.Property<double>("Width")
+                        .HasColumnType("double precision")
+                        .HasColumnName("width");
+
+                    b.HasKey("Id")
+                        .HasName("pk_shadow_positions");
+
+                    b.HasIndex("InstanceId", "Status")
+                        .HasDatabaseName("ix_shadow_positions_instance_id_status");
+
+                    b.ToTable("shadow_positions", (string)null);
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.StrategyDeploymentEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("DeployedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deployed_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DeployedBy")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("deployed_by");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("mode");
+
+                    b.Property<Guid>("SpecId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("spec_id");
+
+                    b.Property<string>("VersionHash")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("version_hash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_strategy_deployments");
+
+                    b.HasIndex("SpecId")
+                        .HasDatabaseName("ix_strategy_deployments_spec_id");
+
+                    b.ToTable("strategy_deployments", (string)null);
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.StrategyInstanceEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<Guid>("DeploymentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deployment_id");
+
+                    b.Property<string>("LifecycleState")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("lifecycle_state");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("mode");
+
+                    b.Property<string>("SchedulerState")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("scheduler_state");
+
+                    b.Property<string>("SpecName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("spec_name");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("VersionHash")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("version_hash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_strategy_instances");
+
+                    b.HasIndex("DeploymentId")
+                        .HasDatabaseName("ix_strategy_instances_deployment_id");
+
+                    b.ToTable("strategy_instances", (string)null);
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.StrategySpecEntity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("ContentHash")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("content_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("SpecJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("spec_json");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id")
+                        .HasName("pk_strategy_specs");
+
+                    b.HasIndex("ContentHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_strategy_specs_content_hash");
+
+                    b.ToTable("strategy_specs", (string)null);
+                });
+
             modelBuilder.Entity("DataFeed.Repositories.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -156,6 +521,66 @@ namespace DataFeed.Repositories.Migrations
                         .HasConstraintName("fk_accounts_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.EvaluationLogEntity", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.StrategyInstanceEntity", "Instance")
+                        .WithMany()
+                        .HasForeignKey("InstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_evaluation_logs_strategy_instances_instance_id");
+
+                    b.Navigation("Instance");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.OperationalEventEntity", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.StrategyInstanceEntity", "Instance")
+                        .WithMany()
+                        .HasForeignKey("InstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_operational_events_strategy_instances_instance_id");
+
+                    b.Navigation("Instance");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.ShadowPositionEntity", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.StrategyInstanceEntity", "Instance")
+                        .WithMany()
+                        .HasForeignKey("InstanceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_shadow_positions_strategy_instances_instance_id");
+
+                    b.Navigation("Instance");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.StrategyDeploymentEntity", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.StrategySpecEntity", "Spec")
+                        .WithMany()
+                        .HasForeignKey("SpecId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_strategy_deployments_strategy_specs_spec_id");
+
+                    b.Navigation("Spec");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.StrategyInstanceEntity", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.StrategyDeploymentEntity", "Deployment")
+                        .WithMany()
+                        .HasForeignKey("DeploymentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_strategy_instances_strategy_deployments_deployment_id");
+
+                    b.Navigation("Deployment");
                 });
 
             modelBuilder.Entity("DataFeed.Repositories.Entities.User", b =>

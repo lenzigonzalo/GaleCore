@@ -27,6 +27,15 @@ namespace DataFeed.Repositories.Entities
         public string? ExitReason { get; set; }
         public double? RealizedPnl { get; set; }
 
+        // Última valuación con precios reales de las patas (GC-0004): sin esto, un reinicio mostraría
+        // la posición como nunca valuada hasta el próximo tick del monitor.
+        public double? UnrealizedPnl { get; set; }
+        public double? LastSpreadValue { get; set; }
+        public int? CurrentDte { get; set; }
+        public DateTime? LastValuedAt { get; set; }
+        /// <summary>Por qué la última valuación no se pudo hacer, como JSON (null si se hizo).</summary>
+        public string? ValuationProblemsJson { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }
