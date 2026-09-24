@@ -886,6 +886,29 @@ independiente, el output entregado por el host no debe etiquetarse `GALECORE_VER
 - ¿Hace falta un gateway/BFF para Work o alcanza una conexión dual?
 - ¿Cómo se revocan, versionan y auditan permisos de tools externas?
 
+**Addendum 2026-09-24 — conversación con el owner sobre MCPs de brokers y datos:**
+
+- **Host objetivo (dicho por el owner):** Claude Code, o como mucho sesiones de Claude levantadas
+  desde una interfaz propia. Responde en parte la pregunta de entry gate "existe un host objetivo
+  concreto". Un agente propio sin Claude como host queda fuera del horizonte.
+- **Opt-in por usuario ya resuelto por el host:** los conectores de claude.ai (IoL e IBKR ya
+  conectados en la cuenta del owner; AlphaAdvantage, Daloopa y LSEG listados, sin autorizar) son de
+  la cuenta de cada usuario, con OAuth propio. GaleCore no guarda credenciales ni sabe de ellos.
+  Si más adelante una interfaz propia lanza sesiones (Agent SDK), esa interfaz pasa la
+  configuración MCP de cada usuario al lanzar la sesión; custodia de tokens → `BL-008`.
+- **Regla operativa propuesta (compatible con las 4 clases de arriba):** lo que decide o ejecuta
+  sin IA (gates, SHADOW, sizing, riesgo, órdenes) sale sólo de GaleCore; el análisis asistido
+  (cartera, macro, investigación) puede usar cualquier MCP conectado, guardando en `knowledge/`
+  server, tool, timestamp y el valor tal como vino (no es re-consultable).
+- **Tools de broker con mutación, observadas:** IoL expone `place_order`, `place_caucion`,
+  `subscribe_fci`, `redeem_fci`, `cancel_order` y una `buy_ggal_at_50_cents` de propósito no
+  verificado; IBKR expone `create_order_instruction`. En flujos del ecosistema se usan sólo las de
+  lectura, bloqueando las de escritura por permisos del host (fuera de la obediencia del modelo).
+- **Criterio de promoción a GaleCore:** un dato de MCP pasa a adapter de GaleCore (`BL-003`) cuando
+  lo necesita el runtime/riesgo, o cuando su uso se vuelve recurrente y hace falta reproducibilidad.
+- **Primer caso concreto:** I5 (revisión de cartera con IoL/IBKR en lectura). Ahí se abre el work
+  item y, con el caso real, se escribe el ADR; hoy no se decide nada.
+
 ---
 
 ## BL-007 — Portfolio de estrategias, adecuación contextual y asignación adaptativa

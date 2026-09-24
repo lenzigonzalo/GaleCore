@@ -14,16 +14,16 @@
   (`be3206a`): sin métricas/candidatos stub, sin rellenos con 0, valuación con mid real, apagar
   pausa sin borrar, historial de evaluaciones, eventos de descarte, spec renombrada a
   `shadow_runtime_test_v1`. `dotnet test` 357/357 (base 331). Todo commiteado, sin push.
+- **24/09 (sesión de la tarde):** R1 corregido (`6e73ef0`) y recheck interno **R2 APPROVE**; sus
+  5 MINORs corregidos (`55b18d1`). `dotnet test` 385/385, build de la API OK, matriz de evidencia
+  completa salvo AC-08 y Codex. Limitaciones declaradas en el item: sin feriados de NYSE; edad de
+  cotización desconocida si DXLink no manda hora.
 - **Siguiente, en orden:**
-  1. Corregir el review interno **R1 (CHANGES_REQUESTED)** — tabla completa en el work item.
-     BLOCKERS: `MetricResolver` inventa net GEX = 0 sin griegas/OI (pasa el gate); el constructor de
-     candidatos mezcla vencimientos (weekly elegido vs mensual cotizado). MAJORS: frescura con
-     `AsOf = now` y horario de sesión ignorado; AC-04 sin test de comportamiento.
-  2. `dotnet test` + reviewer interno recheck.
+  1. ~~Corregir R1~~ hecho. 2. ~~`dotnet test` + recheck~~ hecho (R2 APPROVE).
   3. **AC-08, demo en día hábil con mercado abierto:** necesita que GaleCore corra el código de la
-     rama. El GaleCore local actual corre desde `bin/Debug` (pid cambia) con el código viejo:
-     **pedir al owner reiniciarlo desde la rama** (o autorización para hacerlo). Verificar primero si
-     DXLink da bid/ask para VIX (el gate usa el mid; si no, todo sería NO_DATA). Probar también un
+     rama. Al 24/09 17:00 UTC la API local **no estaba corriendo**: hace falta que el owner la
+     levante desde la rama (o autorice hacerlo). Verificar primero si DXLink da bid/ask para VIX
+     (el gate ahora exige cotización utilizable; si no, todo sería NO_DATA). Probar también un
      caso NO_DATA forzado y el switch OFF conservando estado. Evidencia sanitizada en GaleCore.
   4. Codex (`/review-codex`) sobre `5fa6615..HEAD` y decisión del owner.
 - Cómo correr tests de GaleCore sin prompts: `python <scratchpad>/dotnet_test.py` no persiste entre
