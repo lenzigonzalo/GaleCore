@@ -101,7 +101,7 @@ una pestaña del monitor con login real.
 | AC-07 | Mismo flujo que producción contra Auth de GaleCore Dev (ES256 por JWKS, igual que producción); usuario `demo` (admin) con su fila en `users` | — | `env1.json` (`api_smoke`) | En vivo: login 200, `/Me` = demo/admin, sin token 401. Login en el navegador: pendiente (recorrido del owner) |
 | AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run1-en-sesion.json` (**INCOMPLETE**: sólo falta la posición, que el mercado no dio) | (2), (3) en vivo: sí; (4) sin posiciones que recuperar; (1) recorrido del owner en el navegador: pendiente |
 | AC-09 | — | `dotnet test` **432/432, 0 skipped** con `GALECORE_TEST_DB` (base 401); jest 6/6 | `env1-dotnet-test.txt` | Sí |
-| AC-10 | — | Interno R1, Codex C1 y recheck C2 CHANGES_REQUESTED → corregidos | `GC-0004-20260924T215421Z.md`, `GC-0004-20260924T225600Z.md` | Recheck C3 de Codex pendiente |
+| AC-10 | — | Interno R1, Codex C1 y recheck C2 CHANGES_REQUESTED → corregidos | `GC-0004-20260924T215421Z.md`, `GC-0004-20260924T225600Z.md`, `GC-0004-20260925T154157Z.md` | Sí: recheck C3 de Codex **APPROVE** |
 
 ## Hallazgos de probar contra la base real (24/09)
 
@@ -157,6 +157,13 @@ C1-M1, M2, M3, M5, m1 y m2: resueltos; C1-M4: decisión del owner. Hallazgos nue
 | C2-M1 | MAJOR | La matriz afirmaba verificaciones en vivo (roles, permisos, `/Me`, 401) sin artefacto | `dev_env_evidence.py` → `env1.json` + `env1-dotnet-test.txt` desde árbol limpio; roles y permisos en `env1-roles-grants.json`, marcados como declarados por el host |
 | C2-M2 | MAJOR | `run0` corrido con árbol sucio y etiquetado "Supabase local en Docker" | Retirado; `run0b` desde árbol limpio con el entorno correcto (proyecto, auth, rol) |
 
+## Recheck Codex C3 (`GC-0004-20260925T154157Z.md`, `c81d6cb..8381797`) — APPROVE
+
+C2-B1, C2-M1 y C2-M2: resueltos; C1-M4: decisión del owner. Sin hallazgos nuevos. Reprodujo 427 + 5
+Postgres skipped (sin `GALECORE_TEST_DB` en su sandbox; la corrida contra GaleCore Dev es `env1-dotnet-test.txt`),
+jest 6/6, tsc, ruff, `diff --check`, rechazo de producción en `init`. Los artefactos en vivo los verificó por
+procedencia y consistencia, sin re-ejecutarlos. El APPROVE no cambia estado: cierra el owner.
+
 ## Paso a producción (plan; no se ejecuta sin aprobación del owner)
 
 Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
@@ -207,4 +214,4 @@ sin duplicados, la misma instancia `95e58d15…`; luego 18 evaluaciones y 38 eve
 
 **State:** IMPLEMENTING — código completo; interno R1 y Codex C1 corregidos; GaleCore Dev configurado
 (migraciones, roles, usuario de prueba, login real verificado, 432/432); corrida en sesión run1 INCOMPLETE
-sólo por falta de entrada del mercado. Falta el recheck C3 de Codex y el recorrido del owner en el monitor.
+sólo por falta de entrada del mercado; Codex C3 APPROVE. Falta el recorrido del owner en el monitor y su decisión.
