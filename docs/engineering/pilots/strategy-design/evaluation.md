@@ -120,3 +120,61 @@ después con host sin skill, igual modelo, acceso a datos/herramientas, inputs y
 sin saber condición cuando sea viable; registrar outputs, omisiones críticas, contradicciones,
 trazabilidad, utilidad del owner y tiempo/consumo sólo si se pueden medir. No usar win rate financiero
 como métrica de calidad de instrucciones.
+
+---
+
+# Primer recorrido real — 25/09/2026 (idea del owner: PCS sobre SPY)
+
+Estado: evidencia de un recorrido, no A/B ni revisión independiente. Host: Claude Code (Opus 5.5), la misma
+sesión que cerró GC-0004, **no** un contexto limpio: conocía RPF y GaleCore de antes, y eso pudo suplir huecos
+de la instrucción (sesgo a declarar). Salida: [propuesta-pcs-spy-2026-09-25.md](propuesta-pcs-spy-2026-09-25.md).
+No se midieron tokens ni costo; tiempo aproximado: una tarde de sesión, sin cronometrar.
+
+**Input:** "investigar si vender prima mediante put credit spreads sobre SPY, cuando la prima resulte atractiva
+y el entorno cumpla condiciones de riesgo, tiene una ventaja verificable después de costos. RPF como
+antecedente, no como respuesta aprobada."
+
+**Recorrido real:** `cli kb search` (dos búsquedas; sólo devolvió registros de régimen) → lectura de la
+definición, el JSON, el backtesting y la reconciliación de RPF en `GaleCore/docs/rpf/` y
+`Files/Rpf/galecore_rules_rpf.json` → cuatro búsquedas web y tres lecturas: dos fallaron (un PDF primario
+sin extractor en esta máquina y una página de AQR que dio 404); se usó la nota del patrocinador y se declaró → propuesta.
+
+## Qué aportó la instrucción
+
+- **Separar hechos, interpretaciones, hipótesis, parámetros y decisiones** (SKILL §3–§4) dio la estructura de
+  tres capas pedida por el owner y la distinción entre **parámetro investigable** y **restricción del usuario**
+  (heat, maxDD, riesgo por operación), que RPF mezcla en la misma tabla.
+- **Tesis como mecanismo → falla + explicaciones alternativas** (§4) llevó a la pregunta central que RPF no se
+  hace de forma explícita: ¿la ventaja es la prima en sí o el timing de los filtros?
+- **"Un conjunto consultado para ajustar deja de ser prueba intacta"** y **dependencia entre observaciones**
+  (§6) permitieron leer el backtesting de RPF con criterio: ventana OOS reutilizada, señales-día superpuestas.
+- **"No inventes umbrales"** (§4, §6) obligó a dejar los criterios de la prueba en forma y los números como
+  decisión del owner.
+- **Coverage** marcó dos huecos que la propuesta dejó pendientes: eventos contractuales (asignación, entrega)
+  y ejecución (no asumir fill a mid).
+
+## Qué omitió o dificultó
+
+1. **Auditar evidencia existente.** La instrucción dice cómo construir una propuesta, no cómo evaluar un
+   antecedente con backtests propios: cuántas veces se usó la ventana, si la configuración elegida fue medida
+   tal cual, cuántas pérdidas sostienen la estimación de cola. Se hizo a criterio del host. Propuesta: una
+   sección breve "auditar un antecedente cuantitativo" con esas preguntas.
+2. **Renta vs pérdida máxima.** Para venta de prima, la comparación "cuántos períodos de cobro borra una
+   pérdida máxima" fue lo más revelador y la instrucción no la pide (coverage/Medición habla de colas en
+   general). Propuesta: agregarla a la rama de opciones.
+3. **Dónde persistir.** SKILL §7 pide un destino autorizado; no existe uno para propuestas (`BL-009` abierto).
+   Se usó la carpeta del piloto.
+4. **Base de conocimiento incompleta para el caso.** `kb search` no indexa `GaleCore/docs/` (RPF): la búsqueda
+   "vacía" habría hecho perder el antecedente principal a un host sin contexto previo. La instrucción advierte
+   que una búsqueda vacía no prueba ausencia, pero no dice dónde mirar después.
+5. **Fuentes que no se pueden leer.** No hay guía para una fuente primaria inaccesible (PDF sin extractor). Se
+   declaró el uso de una fuente secundaria del patrocinador; conviene que la instrucción lo pida.
+6. **Pedido de propuesta completa.** La guía de primera respuesta (1–3 preguntas, no bloquear) no aplicó: el
+   owner pidió la entrega completa. La instrucción lo permite (§1, "acordá el próximo resultado útil"), pero
+   la mayor parte de su texto está orientada a la primera vuelta.
+
+## Límites de esta evidencia
+
+Un solo caso, host con contexto previo, sin evaluador ciego ni comparación contra el host sin la instrucción
+(paso posterior previsto en el piloto). No dice nada sobre la calidad financiera de la idea; eso lo dice la
+propuesta, con sus pendientes.

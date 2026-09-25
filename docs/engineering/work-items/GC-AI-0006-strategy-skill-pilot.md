@@ -59,6 +59,22 @@ host sin la skill (A/B del roadmap) va después de esta entrega.
 **Verificación:** revisión interna y de Codex de la propuesta contra SKILL.md y coverage.md (fuentes que
 resuelven, ningún número sin origen, pendientes explícitos); la evaluación del owner decide si sirve.
 
+### Requirement-to-evidence matrix (primera entrega)
+
+| Criterio | Evidencia | Estado |
+|---|---|---|
+| AC-01 | [propuesta](../pilots/strategy-design/propuesta-pcs-spy-2026-09-25.md) §1, §3.1, §3.3 | Entregado; falta revisión |
+| AC-02 | propuesta §4.A (RPF con fuente), §4.B (R1–R8 con razón), §4.C (pendientes sin números) | Entregado; falta revisión |
+| AC-03 | propuesta §3.2 (E1–E18 con fuente; cálculos propios marcados), §7 | Entregado; falta revisión |
+| AC-04 | propuesta §6 (P1–P4, datos, método, criterios en forma; umbrales del owner) | Entregado; umbrales y compra de datos: decisión del owner |
+| AC-05 | [evaluation.md](../pilots/strategy-design/evaluation.md) "Primer recorrido real — 25/09" | Entregado |
+| AC-06 | — | Pendiente: revisión interna y Codex; evaluación del owner |
+
+**Handoff de la entrega (25/09):** propuesta y evaluación escritas por Claude Code en la misma sesión que cerró
+GC-0004 (contexto previo de RPF: declarado como sesgo en la evaluación). Fuentes externas verificadas por
+búsqueda; el PDF de Bondarenko (2019) no se pudo leer y se usó la nota de Cboe. Ningún número nuevo sin origen;
+los cálculos propios están marcados. Sin cambios de código, runtime, catálogo ni knowledge.
+
 ## Alcance del borrador (24/09)
 
 Origen: conversación del owner del 24/09/2026, I4 de roadmap/README.md y BL-001. El owner
