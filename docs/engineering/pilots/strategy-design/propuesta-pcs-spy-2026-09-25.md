@@ -69,22 +69,23 @@ datos nuevos. Las rutas son relativas al workspace (`GaleCore/…`, `knowledge/�
 |---|---|---|---|
 | E1 | A favor | La varianza implícita del índice (swap rate sintetizado con opciones) supera sistemáticamente a la realizada: existe una prima de riesgo de varianza. | Carr & Wu (2009), *Variance Risk Premiums*, RFS 22(3):1311–1341, [doi:10.1093/rfs/hhn038](https://academic.oup.com/rfs/article-abstract/22/3/1311/1581057) |
 | E2 | A favor | 1990–2018: VIX promedio 19,3 % vs volatilidad realizada del S&P 500 15,1 %; el índice PutWrite (PUT) tuvo volatilidad anual 9,95 % vs 14,93 % del S&P 500 (1986–2018). | Nota de Cboe sobre el estudio de Bondarenko, 29/05/2019, [cboe.com](https://www.cboe.com/insights/posts/white-paper-shows-volatility-risk-premium-facilitated-higher-risk-adjusted-returns-for-put-index/). Es del patrocinador del índice; el PDF original no se pudo leer en esta máquina. |
-| E3 | A favor (con reserva) | Los puts del S&P 500 fueron "demasiado caros" para los modelos estándar de valuación. | Bondarenko (2014), *Why Are Put Options So Expensive?*, QJF 4(3), [worldscientific](https://www.worldscientific.com/doi/abs/10.1142/S2010139214500153) |
-| E4 | **En contra / alternativa** | El mismo trabajo analiza el "peso problem": que la muestra no contenga los desastres raros que justifican el precio. Si eso fuera la explicación, la "ventaja" es pago por un riesgo que todavía no se vio. | Bondarenko (2014), misma fuente (resumen del artículo) |
-| E5 | **En contra / matiz** | Todos los índices de opciones y de acciones estudiados tienen asimetría negativa: métricas tipo Sharpe pueden sobrestimar la calidad. | Nota de Cboe (E2) |
-| E6 | A favor (in-sample) | Vender PCS **sin filtros** en SPY 2013–2025 ya dio $17,1 promedio neto por señal-día (win 91,9 %); con todos los filtros de RPF, $50,9 (win 99,2 %) y las pérdidas > $200 cayeron de 195 a 1. | BT-5, `GaleCore/docs/rpf/galecore-research-backtesting-rpf.md` §BT-5 |
+| E3 | A favor | Los puts del S&P 500 fueron históricamente "demasiado caros" y, con un método que admite sesgos de selección como el *peso problem* y creencias incorrectas, "no model within a studied class of models can possibly explain the put anomaly". | Bondarenko (2014), *Why Are Put Options So Expensive?*, QJF 4(3); leído sólo el abstract, en [Crossref](https://api.crossref.org/works/10.1142/S2010139214500153) |
+| E4 | **Alternativa (hipótesis del host, sin fuente propia)** | *Peso problem*: que la muestra no contenga los desastres raros que justifican el precio; si fuera así, la "ventaja" es pago por un riesgo todavía no visto. E3 la descarta dentro de la clase de modelos que estudia; no se buscó otra fuente que la sostenga. | Hipótesis del host |
+| E5 | Matiz | La asimetría fue negativa en todos los índices estudiados (PUT −2,09; S&P 500 −0,81), pero el índice de Stutzer, que la penaliza, fue sólo "slightly lower" que el Sharpe, y PUT siguió primero en Sharpe, Sortino y Stutzer. | Nota de Cboe (E2) |
+| E6 | A favor (in-sample) | Vender PCS **sin filtros de entorno** (sólo cascada de strikes + piso de crédito 1/3) en SPY 2013–2025 dio $17,1 promedio neto por señal-día (win 91,9 %); con todas las capas, $50,9 (win 99,2 %) y las pérdidas > $200 cayeron de 195 a 1. Medido con la configuración de entonces, hold a vencimiento y por señal-día: **no es** la "venta mecánica" que propone P1. | BT-5, `GaleCore/docs/rpf/galecore-research-backtesting-rpf.md` §BT-5 |
 | E7 | **En contra** | Esa escalera es in-sample con 5 capas ajustadas sobre los mismos 13 años (lo dice el propio documento). | BT-5, caveat 4 |
-| E8 | **En contra** | Primer walk-forward (H1, criterios pre-declarados): **reprobado**. La separación del filtro casi desapareció fuera de muestra (seleccionadas $13,31 vs rechazadas $12,60) y 2018 dio −$5.496 en SPY. | BT-9, mismo documento |
+| E8 | **En contra** | Primer walk-forward (H1, criterios pre-declarados): **reprobado**. La separación del filtro casi desapareció fuera de muestra (seleccionadas $13,31 vs rechazadas $12,60) y 2018 dio −$5.496 en SPY. **Erratum posterior:** esa corrida no aplicó el piso de crédito del 10 %; con el piso, 2018 da −$903 y win 94 %, y el veredicto se mantiene porque 2020 (−$1.776) sigue violando C3. | BT-9 y erratum en BT-10 punto 4, mismo documento |
 | E9 | A favor (condicionado) | Tercera iteración (H3, delta 0,30) aprobó en QQQ; con gestión B, SPY dio win 96,5 %, avg $35,5, p5 +$32, peor año −$449. | BT-10c, mismo documento |
 | E10 | **En contra** | La ventana 2018–2025 quedó "agotada": se usó en scan exploratorio y en tres iteraciones; el documento lo declara ("no queda superficie virgen"). | BT-11, mismo documento; RPF §12.1 |
+| E10b | **En contra** | En el scan exploratorio, delta 0,25 pasó C3 pero "frágil a barras": con barras −0,05 el peor año pasa a −$1.829 (delta 0,30 era robusto ±0,05). | BT-10b, mismo documento |
 | E11 | **En contra** | La configuración elegida (delta 0,25 + GEX ≥ 0) es una **interpolación**, no una fila medida: el ganador de BT-17 es delta 0,25 **sin** GEX. | RPF §12.4; `_meta.config_note` de `galecore_rules_rpf.json` |
 | E12 | Renta vs cola | BT-17 variante C: 10,6 operaciones/año, win 97,6 %, total $2.723 en 8 años, peor año −$140, maxDD −8,4 %. | BT-17 |
 | E13 | **En contra (cálculo propio)** | Con 10,6 op/año × 8 años ≈ 85 operaciones y 2,4 % de pérdidas, la cola se estima con **≈ 2 operaciones perdedoras**: no alcanza para medir el riesgo de cola. | Cálculo propio sobre E12 |
 | E14 | **En contra (cálculo propio)** | Renta ≈ $340/año por contrato ($2.723 / 8, coincide con RPF §12). Riesgo máximo por contrato ≈ $425–450 (ancho $5 − crédito de 10–15 % del ancho, RPF §4). **Una pérdida máxima ≈ 1,25–1,3 años de renta.** | Cálculo propio sobre RPF §4, §12 y E12 |
 | E15 | **En contra (cálculo propio)** | El piso de fricción de RPF (1,02–1,06) se calculó con crédito = 1/3 del ancho; a delta 0,25 el crédito es 10–15 % del ancho: $6,30 sobre $50–75 da un piso ≈ 1,08–1,13, **por encima** de la barra `min_edge` de régimen normal (1,05). | Cálculo propio sobre §7 del documento de backtesting y RPF §4, §6 |
-| E16 | **En contra** | Los datos de opciones del backtest cubren 2013–2025: **2008 nunca se probó** con la estrategia. | §2.1 del documento de backtesting |
+| E16 | **En contra** | Los datos de opciones usados empiezan en 2013 (adquiridos 2013–2023 según §2.1; las corridas BT-0/BT-1/BT-9 usan 2013–2025): **2008 nunca se probó** con la estrategia. | §2.1, BT-0, BT-1, BT-9 del documento de backtesting |
 | E17 | Contexto | Los umbrales del veto de cola (VVIX 110/130, skew 5 %/8 %) se calibraron "con ~5 crashes reales (muestra de un dígito)" y el documento los llama "provisorios y sobreajustados". | §1 del documento de backtesting |
-| E18 | Contexto vivo | El 25/09 en sesión, el GEX de SPY estuvo entre −81,9 y −86,3 en las 17 lecturas con dato (escala de GaleCore): con el gate GEX ≥ 0, RPF no habría operado. | `GaleCore/docs/evidence/gc-0004/run1-en-sesion.json` |
+| E18 | Contexto vivo | El 25/09 en sesión, el GEX de SPY estuvo entre −81,9 y −86,3 en las 17 lecturas con dato (escala de GaleCore): medido por el gate `gex_non_negative` de la spec de prueba `shadow_runtime_test_v1`, no con la fórmula de RPF (DTE < 90). **Inferencia, no observación:** con su propio corte RPF probablemente tampoco habría operado, pero el signo puede depender del corte (R6). | `GaleCore/docs/evidence/gc-0004/run1-en-sesion.json` |
 
 **Lectura.** La existencia de una prima de volatilidad en el índice está bien respaldada fuera de GaleCore
 (E1–E3). Lo que **no** está respaldado es que el **timing de RPF** agregue valor fuera de muestra (E7, E8, E10,
@@ -117,9 +118,10 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 | Edge | (crédito/ancho) / p_pérdida empírica ≥ 1,05 normal · 1,10 low_vol/elevated · 1,20 caution | BT-3 run-2 |
 | Construcción | short delta 0,25; ancho $5; DTE 35–50 (objetivo 45); short ≤ put wall | BT-17, BT-12, BT 3-bis |
 | Pisos | crédito ≥ $0,30 y ≥ 10 % del ancho; OI ≥ 100; spread ≤ 5 % | BT-3, §8 |
-| Tamaño y cartera | riesgo 3,5 % (máx 5 %, banda 5–8 % con aprobación); ≤ 2 posiciones, vencimientos distintos; heat ≤ 7 % | BT-15, decisión 3 |
+| Tamaño y cartera | riesgo 3,5 % (máx 5 %, banda 5–8 % con aprobación); ≤ 2 posiciones, vencimientos distintos; heat ≤ 7 % | Riesgo, banda y heat: diseño RPF §7.1/§7.2 ("diseño; no refutado", reconciliación); 2 posiciones: BT-15; capital: decisión 3 |
 | Salidas | cierre al 50 % del crédito; sin salida por DTE; defensa si delta short > 0,42 o pérdida ≥ 2× crédito; roll defensivo desde pérdida ≥ 1× crédito (nuevo vencimiento ≥ 21 DTE); kill switch −1 % diario | BT-4, BT-12, decisión 4; el roll: "§9 diseño; no refutado" (reconciliación) |
 | Fricción | $6,30 por operación | §7 del documento de backtesting |
+| Dato faltante | VIX absoluto sin dato → no opera (fail-closed); estructura temporal del VIX y veto de cola sin dato → **pasan** (`on_no_data: pass`, por cortes del feed); sin put wall → no opera | JSON (`_no_data_note`), definición §10 |
 
 ### 4.B Recomendaciones nuevas (propuestas en este recorrido)
 
@@ -129,10 +131,11 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 | R2 | Todo resultado de cabecera **por operación** de la cartera real (no por señal-día) y con intervalos por bloques de tiempo. | BT-5 cuenta señales-día superpuestas, que no son independientes (coverage: dependencia entre observaciones). |
 | R3 | La cola se evalúa con **escenarios de estrés y la pérdida máxima por construcción**, no con la tasa de acierto. | Con ≈ 2 pérdidas (E13) la estadística de cola no informa. |
 | R4 | Recalcular el piso de fricción con el **crédito real a delta 0,25** y revisar la barra de régimen normal. | E15: el principio "min_edge ≥ 1 + fricción/crédito" de RPF no se cumpliría con créditos típicos. |
-| R5 | Aclarar la regla de estructura temporal: **VIX9D < VIX** (JSON) vs **VIX9D > VIX3M** (definición §5). | Dos documentos de RPF dicen cosas distintas; manda el JSON, pero la definición es la que se cita. |
-| R6 | Probar la sensibilidad del gate GEX a la definición del corte (0DTE incluido o no, DTE < 90 vs < 60). | El gate usa sólo el signo, y el signo puede cambiar con el corte (`knowledge/research/2026-09-23-gex-0dte-post-cierre.md`). |
+| R5 | Aclarar la regla de estructura temporal: **VIX9D < VIX** (JSON) vs **VIX9D > VIX3M** (definición §5 y reconciliación). Aclarar también "el GEX es informativo, no operativo" (`D-0001`) frente al gate GEX ≥ 0 de RPF (probablemente se refiere a la estrategia GEX). | Documentos de RPF que dicen cosas distintas; manda el JSON, pero la definición es la que se cita. |
+| R6 | Probar la sensibilidad del gate GEX a la definición del corte (0DTE incluido o no, DTE < 90 vs < 60). | El gate usa sólo el signo, y el signo puede cambiar con el corte (`knowledge/research/2026-09-23-gex-0dte-post-cierre.md`: hipótesis en estado `test_planned`, nacida de una observación no archivada). |
 | R7 | Tratar la configuración final como **no medida** hasta correr la fila delta 0,25 + GEX + V2. | E11; RPF §12.4 ya lo prevé si paper no coincide. |
 | R8 | Declarar el **edge a vencimiento** vs la **gestión al 50 %**: el edge se calcula con probabilidades a vencimiento, pero la posición se cierra antes. | Coherencia entre la señal y la salida real (coverage: gestión y salidas). |
+| R9 | Revisar qué pasa con dato faltante en los gates de seguridad: hoy la estructura temporal y el veto de cola **pasan** sin dato. | Una guarda que se apaga cuando falta el dato no protege en ese momento; la razón (cortes del feed) es operativa, no de la tesis. |
 
 ### 4.C Parámetros pendientes de fundamento (no se proponen números)
 
@@ -142,9 +145,9 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 | Veto de cola (VVIX 110/130, skew 5 %/8 %) | pendiente | "~5 crashes", "provisorios y sobreajustados" (E17) | Datos pre-2013 con 2008; escenarios |
 | `vrp_min` 1,2 | pendiente | Prior de literatura, validado in-sample | §6, pregunta P2 |
 | Barras `min_edge` | pendiente | Elegidas con barrido full-sample (BT-9); normal < piso de fricción (E15) | R4 + §6 |
-| Delta 0,25 con GEX | pendiente | Interpolación (E11) | R7 |
+| Delta 0,25 con GEX | pendiente | Interpolación (E11) y frágil a barras en el scan (E10b) | R7 |
 | Roll defensivo desde 1× crédito | pendiente | Del diseño original, nunca medido | Datos nuevos, §6 |
-| Hard defense 0,42 / 2× crédito | definida con reserva | BT-12 midió deterioro sin acantilado en la ventana usada | §6 |
+| Hard defense 0,42 / 2× crédito | pendiente | BT-12 midió hasta delta 0,35; 0,42 es una extrapolación ("vive ~0,40–0,45") | §6 |
 | Riesgo por operación, heat 7 %, maxDD 5 %, kill −1 % | **restricción del usuario**, no parámetro investigable | Son preferencias de riesgo del owner, no se optimizan | Confirmación del owner (§1c) |
 
 ---
@@ -162,7 +165,7 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 | Sizing y cartera | pendiente | Depende de §1c; RPF: base $16k, fondeo $32k. |
 | Ejecución | parcial | Fricción $6,30 base / $9,30 conservador (fills al natural); falta observar fills reales (SHADOW/paper). No se asume fill a mid como resultado. |
 | Gestión y salidas | antecedente + R8 | |
-| Riesgo operacional | antecedente | Sugiere y no ejecuta; kill switch; datos que faltan bloquean (runtime SHADOW, I2). |
+| Riesgo operacional | parcial | Sugiere y no ejecuta; kill switch. Con dato faltante, algunos gates de RPF bloquean y otros pasan (§4.A, R9); en el runtime SHADOW (I2) todo dato faltante bloquea. |
 | Eventos y obligaciones | **pendiente** | SPY: opciones de estilo americano con entrega física; asignación anticipada del put corto en profundidad ITM y riesgo al vencimiento. RPF cierra ITM; falta verificar términos vigentes en fuente primaria (OCC/Cboe) y el efecto de dividendos. |
 | Medición | definida (propuesta) | R1–R3. |
 | Evaluación | definida (propuesta) | §6. |
@@ -184,7 +187,7 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 
 | Paso | Datos | Método | Estado |
 |---|---|---|---|
-| 1 | Cadenas EOD de opciones SPY **anteriores a 2013** (idealmente desde 2004–2005, con 2008), con bid/ask, griegas, IV y OI | Misma tubería que BT-15/17, **una sola corrida** con reglas congeladas de §4.A y las dos líneas de base de R1 | **bloqueado**: compra de datos (costo a cotizar, decide el owner) |
+| 1 | Cadenas EOD de opciones SPY **anteriores a 2013** (que incluyan 2008; desde qué año, lo fijan el costo y la disponibilidad), con bid/ask, griegas, IV y OI | Misma tubería que BT-15/17, **una sola corrida** con reglas congeladas de §4.A y las dos líneas de base de R1 | **bloqueado**: compra de datos (costo a cotizar, decide el owner) |
 | 2 | Las mismas | Sensibilidad: fricción $6,30 y $9,30; gate GEX con y sin 0DTE (R6); fila delta 0,25 + GEX + V2 (R7) | depende de 1 |
 | 3 | Estrés sintético | Gap a pérdida máxima con 1 y 2 posiciones abiertas; consumo de capital y heat | se puede hacer ya (no requiere datos nuevos) |
 | 4 | Prospectivo: runtime SHADOW (GaleCore Dev) con la regla congelada | Frecuencia, fricción y fills observados vs supuestos | requiere una spec equivalente (I4, conversión posterior) |
@@ -196,12 +199,15 @@ corrida; los fallos se reportan; ningún dato de 2013–2025 cuenta como prueba 
 
 | Pregunta | Apoya si | Refuta si | Inconcluso si |
 |---|---|---|---|
-| P1 | Resultado neto por operación > T-bill con intervalo por bloques que excluye cero | El intervalo queda por debajo o incluye cero con la fricción base | Muy pocas operaciones para el intervalo |
-| P2 | RPF mejora a la mecánica en resultado por unidad de riesgo **y** no empeora la peor pérdida | RPF no mejora o sólo reduce frecuencia | Diferencias dentro del intervalo |
-| P3 | La peor pérdida de período (2008) cabe en la pérdida tolerable declarada (§1c) | No cabe | — |
-| P4 | Fricción observada ≤ el supuesto conservador ($9,30) y frecuencia compatible con lo esperado | Fricción observada > conservador | Menos de [n a decidir] operaciones observadas |
+| P1 | n ≥ mínimo **y** el intervalo por bloques de (resultado neto por operación − T-bill) queda entero por encima de cero | n ≥ mínimo **y** no se cumple "apoya" | n < mínimo (se evalúa primero) |
+| P2 | n ≥ mínimo **y** el intervalo de la diferencia RPF − mecánica (resultado por unidad de riesgo) queda entero por encima de cero **y** la peor pérdida de RPF no es mayor | n ≥ mínimo **y** no se cumple "apoya" | n < mínimo (se evalúa primero) |
+| P3 | La peor pérdida del período con 2008 cabe en la pérdida tolerable declarada (§1c) | No cabe | Sin datos del período |
+| P4 | n ≥ mínimo **y** fricción observada ≤ supuesto conservador ($9,30) **y** frecuencia dentro del rango esperado | n ≥ mínimo **y** no se cumple "apoya" | n < mínimo (se evalúa primero) |
 
-Los niveles de confianza, el tamaño mínimo de muestra y la pérdida tolerable **no los fijo**: son decisión del
+Los resultados son excluyentes: primero se mira el tamaño de muestra; después, "apoya"; todo lo demás refuta.
+Así no queda margen para clasificar el resultado después de verlo.
+
+El nivel del intervalo, el tamaño mínimo de muestra (n), el rango de frecuencia esperado y la pérdida tolerable **no los fijo**: son decisión del
 owner (§1). Sin esos números la prueba no se corre.
 
 ---
@@ -235,3 +241,6 @@ pérdida máxima (E14).
 ## Historial
 
 - 2026-09-25 — primera versión, primer recorrido de la instrucción (GC-AI-0006).
+- 2026-09-25 — correcciones de la revisión interna: E3/E4 (Bondarenko 2014 estaba leído al revés), erratum de
+  BT-9 en E8, E10b nuevo, E5/E6/E16/E18 precisados, origen del sizing, dato faltante (4.A, R9), hard defense
+  pendiente, criterios de §6.3 excluyentes.

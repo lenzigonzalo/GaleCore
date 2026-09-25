@@ -22,9 +22,9 @@ y dejar la propuesta en esa carpeta. Alcance, fuera de alcance y verificación: 
 rama `feature/GC-AI-0006`).
 
 **Dónde está todo (local, sin push):**
-- Puntero activo: `ACTIVE_WORK_ITEM` del workspace → GC-AI-0006. El puntero propio de GaleCore-AI
-  (`docs/engineering/ACTIVE_WORK_ITEM`, sólo tooling) sigue en GC-AI-0005: actualizarlo antes de correr
-  `/review-codex` sobre este item.
+- Puntero activo: `ACTIVE_WORK_ITEM` del workspace → GC-AI-0006. El puntero interno de GaleCore-AI apunta a
+  GC-AI-0006 en la rama `feature/GC-AI-0006` (en el checkout principal, `feature/GC-AI-0005`, no puede: el gate
+  exige que el archivo exista ahí). `/review-codex`: `docs/evidence/gc-ai-0006/codex_review.py`.
 - El borrador original de Codex (24/09) sigue sin commitear en `.worktrees/galecore-ai/strategy-skill-pilot`
   (worktree creado por otro usuario de Windows; git lo rechaza sin `safe.directory`). Se copió sin cambios a
   GC-AI-0006 (`24fdf00`); no borrar el viejo sin pedido.

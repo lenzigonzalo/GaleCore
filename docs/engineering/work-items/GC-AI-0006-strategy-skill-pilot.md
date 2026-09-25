@@ -68,12 +68,26 @@ resuelven, ningún número sin origen, pendientes explícitos); la evaluación d
 | AC-03 | propuesta §3.2 (E1–E18 con fuente; cálculos propios marcados), §7 | Entregado; falta revisión |
 | AC-04 | propuesta §6 (P1–P4, datos, método, criterios en forma; umbrales del owner) | Entregado; umbrales y compra de datos: decisión del owner |
 | AC-05 | [evaluation.md](../pilots/strategy-design/evaluation.md) "Primer recorrido real — 25/09" | Entregado |
-| AC-06 | — | Pendiente: revisión interna y Codex; evaluación del owner |
+| AC-06 | Revisión interna R1 (25/09): CHANGES_REQUESTED → corregido (ver abajo) | Pendiente: Codex y evaluación del owner |
 
 **Handoff de la entrega (25/09):** propuesta y evaluación escritas por Claude Code en la misma sesión que cerró
-GC-0004 (contexto previo de RPF: declarado como sesgo en la evaluación). Fuentes externas verificadas por
-búsqueda; el PDF de Bondarenko (2019) no se pudo leer y se usó la nota de Cboe. Ningún número nuevo sin origen;
+GC-0004 (contexto previo de RPF: declarado como sesgo en la evaluación). Fuentes externas: la nota de Cboe se
+leyó; Carr & Wu (2009) sólo se vio en resultados de búsqueda; Bondarenko (2014) se verificó por su abstract
+después de la revisión interna; el PDF de Bondarenko (2019) no se pudo leer. Ningún número nuevo sin origen;
 los cálculos propios están marcados. Sin cambios de código, runtime, catálogo ni knowledge.
+
+### Revisión interna R1 (agente `reviewer`, `24fdf00..f588259`) — CHANGES_REQUESTED
+
+Reprodujo gate PASS, ruff, pytest 699 passed y `diff --check`. Recalculó los cálculos propios (E13–E15) y
+confirmó 4.A contra el JSON y la definición.
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| R1-M1 | MAJOR | E4 invertía a Bondarenko (2014) | E3 reescrito con el abstract (Crossref); el *peso problem* queda como hipótesis del host |
+| R1-M2 | MAJOR | E8 omitía el erratum de BT-9 | Agregado: 2018 −$903 con piso; el veredicto se mantiene por 2020 −$1.776 |
+| R1-M3 | MAJOR | §6.3 con refuta/inconcluso solapados | Criterios excluyentes con orden de evaluación |
+| R1-m | MINOR | E5 selectivo; E6 no era la venta mecánica; faltaba BT-10b; cita de E16; origen del sizing; hard defense extrapolado; dato faltante en RPF; E18 era inferencia; fuentes sólo de buscador; handoff desactualizado | Todos corregidos (E5, E6, E10b, E16, 4.A, 4.C, R9, §5, E18, evaluación, handoff) |
+| R1-n | NIT | Cita no textual de SKILL; "2004–2005" sin origen; R6 sin aclarar estado; D-0001 "GEX informativo" | Corregidos (R5 incluye D-0001) |
 
 ## Alcance del borrador (24/09)
 

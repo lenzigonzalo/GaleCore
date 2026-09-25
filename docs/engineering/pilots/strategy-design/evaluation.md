@@ -148,8 +148,8 @@ sin extractor en esta máquina y una página de AQR que dio 404); se usó la not
   hace de forma explícita: ¿la ventaja es la prima en sí o el timing de los filtros?
 - **"Un conjunto consultado para ajustar deja de ser prueba intacta"** y **dependencia entre observaciones**
   (§6) permitieron leer el backtesting de RPF con criterio: ventana OOS reutilizada, señales-día superpuestas.
-- **"No inventes umbrales"** (§4, §6) obligó a dejar los criterios de la prueba en forma y los números como
-  decisión del owner.
+- **"No inventes datos…"** (§3) y **"sin umbrales universales"** (§6) llevaron a dejar los criterios de la prueba
+  en forma y los números como decisión del owner.
 - **Coverage** marcó dos huecos que la propuesta dejó pendientes: eventos contractuales (asignación, entrega)
   y ejecución (no asumir fill a mid).
 
@@ -172,6 +172,30 @@ sin extractor en esta máquina y una página de AQR que dio 404); se usó la not
 6. **Pedido de propuesta completa.** La guía de primera respuesta (1–3 preguntas, no bloquear) no aplicó: el
    owner pidió la entrega completa. La instrucción lo permite (§1, "acordá el próximo resultado útil"), pero
    la mayor parte de su texto está orientada a la primera vuelta.
+
+## Revisión interna de la entrega (25/09) — qué encontró y qué dice de la instrucción
+
+La revisión interna (agente `reviewer`, contexto limpio) pidió cambios; todos se corrigieron en la propuesta:
+
+- **E4 contradecía su fuente.** El host citó a Bondarenko (2014) como fuente del *peso problem* cuando el abstract
+  dice lo contrario: la anomalía no se explica ni admitiendo ese sesgo. **Falla del host, no de la instrucción:**
+  SKILL §3 ya pide "comprobá el contenido y anotá contradicciones"; el host usó el fragmento de un buscador.
+- **Fuentes vistas sólo en resultados de búsqueda:** Carr & Wu (E1) y Bondarenko 2014 (E3) no se abrieron
+  (E3 se verificó después, por el abstract en Crossref); la nota de Cboe (E2, E5) sí se leyó. En el work item
+  decía "verificadas por búsqueda", que sobrestimaba lo hecho.
+- **Erratum omitido:** E8 usaba cifras de BT-9 que el mismo documento corrige en BT-10.
+- **Criterios de prueba solapados** (refuta/inconcluso): permitían clasificar después de ver el resultado.
+- **Respuesta a dato faltante por regla:** SKILL §4 la pide y la propuesta la omitía; en RPF algunos gates de
+  seguridad pasan sin dato.
+
+Huecos de la instrucción que agrega esta revisión:
+
+7. **Fuentes de buscador.** La instrucción no pide distinguir una fuente leída de una vista en el resultado de un
+   buscador. Propuesta: exigir marcar "sólo resumen/fragmento" y no usarlo como hecho sin abrirlo.
+8. **Erratas y versiones dentro de un antecedente.** No pide buscar correcciones posteriores del mismo
+   documento antes de citar un número. Propuesta: sumarlo a "auditar un antecedente cuantitativo" (punto 1).
+9. **Criterios excluyentes.** §6 pide criterios de apoyo, refutación e inconclusión, pero no que sean
+   mutuamente excluyentes con un orden de evaluación. Propuesta: agregarlo.
 
 ## Límites de esta evidencia
 
