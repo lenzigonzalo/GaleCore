@@ -60,9 +60,8 @@ def main() -> None:
         page.click("text=SHADOW")
         page.wait_for_timeout(8000)
         page.screenshot(path=str(OUT / "walk-3-shadow.png"), full_page=True)
-        text = "
-".join(line.rstrip() for line in page.locator("body").inner_text().splitlines()) + "
-"
+        lines = page.locator("body").inner_text().splitlines()
+        text = "".join(line.rstrip() + "\n" for line in lines)   # sin espacios finales (git diff --check)
         (OUT / "walk-shadow.txt").write_text(text, encoding="utf-8")
         browser.close()
     (OUT / "walk-log.json").write_text(json.dumps(log, indent=1, ensure_ascii=False), encoding="utf-8")
