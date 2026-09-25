@@ -104,9 +104,9 @@ una pestaña del monitor con login real.
 | AC-05 | `ShadowMetrics`, `LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; Postgres: `MetricsInputs_…` | `env1.json`; `run1-en-sesion.json` (sin operaciones: `null`, `noTrades`); `run2-en-sesion-v2.json` (v2: 1 abierta, P&L no realizado -2, realizado/acierto/drawdown `null` sin cierres) | Tests, Postgres y en vivo: sí, con y sin operaciones |
 | AC-06 | `pages/Shadow.tsx`, `api/shadow.ts`, `types/shadow.ts` | `Shadow.test.tsx` 6/6; `tsc --noEmit` | `monitor_walk.py` → `walk1/` (captura, texto, llamadas) | Tests: sí. En el navegador (headless, Chromium): sí — persistencia, switch ON, instancia RUNNING, métricas de la API con `—` sin operaciones, descartes con su motivo y evaluaciones con el valor de cada gate; todas las llamadas del runtime 200 |
 | AC-07 | Mismo flujo que producción contra Auth de GaleCore Dev (ES256 por JWKS, igual que producción); usuario `demo` (admin) con su fila en `users` | — | `env1.json` (`api_smoke`) | En vivo: login 200, `/Me` = demo/admin, sin token 401. Login en el navegador: sí (headless, `walk1/`) |
-| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run1-en-sesion.json` (INCOMPLETE, v1 sin entrada); `run2-en-sesion-v2.json` (**PASS**) | (1) monitor con login real: sí (`walk1/`, headless); el owner entró en su navegador el 25/09 (**declarado por el owner** en el chat, sin artefacto); (2), (3), (4) en vivo: sí (run2) |
+| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run1-en-sesion.json` (INCOMPLETE, v1 sin entrada); `run2-en-sesion-v2.json` (**PASS**) | (1) monitor con login real: sí (`walk1/`, headless); recorrido del owner en su navegador: **pendiente de su confirmación al cierre** (no hay artefacto); (2), (3), (4) en vivo: sí (run2) |
 | AC-09 | — | `dotnet test` **441/441, 0 skipped** con `GALECORE_TEST_DB` (base 401; incluye Stop y la spec v2); jest 6/6 | `env2.json` + `env2-dotnet-test.txt` (árbol limpio `e26fea1`); antes `env1-dotnet-test.txt` (432 al `23233b1`) | Sí |
-| AC-10 | — | Interno R1, Codex C1 y recheck C2 CHANGES_REQUESTED → corregidos | `GC-0004-20260924T215421Z.md`, `GC-0004-20260924T225600Z.md`, `GC-0004-20260925T154157Z.md` | Sí: recheck C3 de Codex **APPROVE** |
+| AC-10 | — | Interno R1 y R2 APPROVE; Codex C1–C2 corregidos, C3 APPROVE; C4 y C5 CHANGES_REQUESTED sobre la evidencia → corregidos | `GC-0004-20260925T154157Z.md` (C3), `GC-0004-20260925T164536Z.md` (C4), `GC-0004-20260925T165412Z.md` (C5) | **Pendiente**: recheck C6 |
 
 ## Hallazgos de probar contra la base real (24/09)
 
@@ -202,10 +202,15 @@ Sin hallazgos de código. Reprodujo 435 + 6 Postgres skipped, jest 6/6, tsc, ruf
 
 | # | Sev. | Hallazgo | Resolución |
 |---|---|---|---|
-| C4-M1 | MAJOR | AC-08 afirmaba el recorrido del owner en su navegador sin artefacto | Corregido: headless con artefacto (`walk1/`); lo del owner, declarado por él en el chat |
+| C4-M1 | MAJOR | AC-08 afirmaba el recorrido del owner en su navegador sin artefacto | Headless con artefacto (`walk1/`); el del owner, pendiente de su confirmación al cierre (C5) |
 | C4-M2 | MAJOR | 441/441 con Postgres sin artefacto | `env2.json` + `env2-dotnet-test.txt` desde árbol limpio `e26fea1` (migraciones, 441/441, API) |
 | C4-m1 | MINOR | `walk-shadow.txt` con espacios finales: `git diff --check` fallaba | Limpio; `monitor_walk.py` ya no los genera |
 | C4-m2 | MINOR | Deploy/Stop sin admin | Decisión del owner antes de producción (= R2-m3) |
+
+## Recheck Codex C5 (`GC-0004-20260925T165412Z.md`, `b1edb9b..e7284bb`) — CHANGES_REQUESTED
+
+C4-M2 y C4-m1 resueltos. Abiertos: C4-M1 (el chat no es evidencia: el recorrido del owner queda pendiente de su
+confirmación) y C5-m1 (AC-10 figuraba "Sí" con C4 en CHANGES_REQUESTED → pendiente). Ambos corregidos en la matriz.
 
 ## Paso a producción (plan; no se ejecuta sin aprobación del owner)
 
@@ -259,4 +264,4 @@ sin duplicados, la misma instancia `95e58d15…`; luego 18 evaluaciones y 38 eve
 
 **State:** IMPLEMENTING — código completo; interno R1 y Codex C1 corregidos; GaleCore Dev configurado
 (migraciones, roles, usuario de prueba, login real verificado, 432/432); corrida en sesión run1 INCOMPLETE
-sólo por falta de entrada del mercado; Codex C3 APPROVE; recorrido del monitor hecho. Por pedido del owner, spec v2 + Stop: run2 **PASS** con posición real; interna R2 APPROVE. Codex C4 CHANGES_REQUESTED (evidencia) corregido; falta el recheck C5 y la decisión del owner.
+sólo por falta de entrada del mercado; Codex C3 APPROVE; recorrido del monitor hecho. Por pedido del owner, spec v2 + Stop: run2 **PASS** con posición real; interna R2 APPROVE. Codex C4/C5 pidieron sólo correcciones de evidencia, hechas; falta el recheck C6, la confirmación del recorrido y la decisión del owner.
