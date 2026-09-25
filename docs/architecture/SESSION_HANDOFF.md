@@ -1,12 +1,43 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado (2026-09-24, noche):** I1 e I2 **cerrados** (GC-AI-0005; GC-0002 en GaleCore, tag `gc-0002-closed`). **I3 activo** (SHADOW durable y visible, GC-0004 en GaleCore): implementado, base de desarrollo GaleCore Dev andando; falta la demo en sesión y el cierre. Plan: `roadmap/README.md`.
+**Estado (2026-09-25):** I1, I2 e I3 **cerrados** (GC-0004 en GaleCore, tag `gc-0004-closed`). **Activo: piloto de I4, GC-AI-0006** (propuesta de estrategia desde una idea del owner). Plan: `roadmap/README.md`.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## Próxima sesión — punto de entrada
 
-### ▶ Retomar acá (I3 en curso — cierre del 2026-09-24, noche)
+### ▶ Retomar acá (piloto de I4 — 2026-09-25)
+
+**En criollo, para el owner:**
+- **I3 cerrado (25/09):** SHADOW guarda todo en GaleCore Dev, sobrevive reinicios y se ve en la pestaña SHADOW.
+  Con la spec v2 se abrió una posición real y se siguió valuando tras reiniciar. No está en producción.
+- **Ahora:** el piloto de I4. Tu idea: si vender prima con put credit spreads sobre SPY, cuando la prima es
+  atractiva y el entorno cumple condiciones de riesgo, tiene ventaja verificable después de costos. RPF es
+  antecedente, no respuesta. Primera entrega: una propuesta que puedas entender y evaluar, con faltantes y
+  plan de prueba, sin desplegar ni ampliar el runtime.
+
+**Siguiente paso:** aplicar `docs/engineering/pilots/strategy-design/SKILL.md` (+ `coverage.md`) a esa idea
+y dejar la propuesta en esa carpeta. Alcance, fuera de alcance y verificación: el work item
+`docs/engineering/work-items/GC-AI-0006-strategy-skill-pilot.md` (worktree `.worktrees/galecore-ai/GC-AI-0006`,
+rama `feature/GC-AI-0006`).
+
+**Dónde está todo (local, sin push):**
+- Puntero activo: `ACTIVE_WORK_ITEM` del workspace → GC-AI-0006. El puntero propio de GaleCore-AI
+  (`docs/engineering/ACTIVE_WORK_ITEM`, sólo tooling) sigue en GC-AI-0005: actualizarlo antes de correr
+  `/review-codex` sobre este item.
+- El borrador original de Codex (24/09) sigue sin commitear en `.worktrees/galecore-ai/strategy-skill-pilot`
+  (worktree creado por otro usuario de Windows; git lo rechaza sin `safe.directory`). Se copió sin cambios a
+  GC-AI-0006 (`24fdf00`); no borrar el viejo sin pedido.
+- GaleCore: `feature/GC-0004-shadow-durable`, tag `gc-0004-closed`. API y monitor de desarrollo pueden seguir
+  corriendo contra GaleCore Dev (spec v2 RUNNING con una posición abierta, switch ON): `python dev/galecore_dev.py api|monitor`.
+- Registrado el 25/09: `GaleCore/decisiones/D-0003` (Deploy/Stop sólo admin antes de producción); backlog
+  `BL-007` (multiinstancia, multi-ticker y acciones: postergados), `BL-015` (403 de RPF, evidencia sólo en
+  desarrollo), `BL-016` (mejoras visuales de SHADOW).
+- Cambios ajenos sin commitear, a propósito: workspace (`.gitignore`, `ENGINEERING.md`, parte de
+  `roadmap/README.md`, D-0004, D-0005, `.obsidian/`) y el backlog de GaleCore-AI en `feature/GC-AI-0005`
+  (addendums de BL-001 y BL-006 del 24/09).
+
+### Cierre del 2026-09-24, noche — I3 en curso (histórico)
 
 **En criollo, para el owner:**
 - **Qué es I3:** que el simulador SHADOW guarde todo en una base de datos (sobrevive reinicios) y que
