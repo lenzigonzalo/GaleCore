@@ -80,7 +80,7 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>Eventos que no se descartan al llegar al tope: sin ellos no se puede reconstruir qué pasó.</summary>
         public static readonly IReadOnlySet<string> LifecycleEventTypes =
-            new HashSet<string> { "INSTANCE_CREATED", "POSITION_OPENED", "POSITION_CLOSED" };
+            new HashSet<string> { "INSTANCE_CREATED", "INSTANCE_STOPPED", "POSITION_OPENED", "POSITION_CLOSED" };
 
         // ── Specs ──
 
@@ -171,8 +171,12 @@ namespace DataFeed.Application.App.Runtime
 
         public void UpdateInstanceState(string instanceId, string lifecycleState, string? schedulerState = null)
         {
-            if (_instances.TryGetValue(instanceId, out var inst))
+            // Bajo el lock del deploy/stop: un tick que empezó antes de parar la instancia no la vuelve a
+            // RUNNING (con otra versión ya desplegada, serían dos RUNNING).
+            lock (_deployGate)
             {
+                if (!_instances.TryGetValue(instanceId, out var inst)) return;
+                if (inst.LifecycleState != "RUNNING" && lifecycleState == "RUNNING") return;
                 // El loop lo llama en cada tick: si el estado no cambió no se toca nada, ni en memoria
                 // ni en la base (así no divergen).
                 var scheduler = schedulerState ?? inst.SchedulerState;
@@ -180,6 +184,29 @@ namespace DataFeed.Application.App.Runtime
                 var updated = inst with { LifecycleState = lifecycleState, SchedulerState = scheduler, UpdatedAt = DateTime.UtcNow };
                 _repository?.SaveInstance(updated);
                 _instances[instanceId] = updated;
+            }
+        }
+
+        /// <summary>
+        /// Para una instancia RUNNING (GC-0004): deja de evaluar entradas y libera el lugar de la única
+        /// instancia RUNNING para desplegar otra versión. Sus posiciones abiertas se siguen valuando hasta
+        /// su salida, como con el switch apagado. Idempotente: parar una instancia ya parada no hace nada.
+        /// Bajo el lock del registro de posiciones: una entrada en curso no se registra después de parar.
+        /// Guarda la instancia y después su evento INSTANCE_STOPPED, cada uno antes de tocar la memoria
+        /// (como el deploy: puede quedar la instancia parada sin su evento, nunca memoria sin base).
+        /// </summary>
+        public StopResult Stop(string instanceId, OperationalEvent stopped)
+        {
+            lock (_commitGate)
+            lock (_deployGate)
+            {
+                if (!_instances.TryGetValue(instanceId, out var inst)) return StopResult.NotFound();
+                if (inst.LifecycleState != "RUNNING") return StopResult.AlreadyStopped(inst);
+                var updated = inst with { LifecycleState = "STOPPED", SchedulerState = "STOPPED", UpdatedAt = stopped.Timestamp };
+                _repository?.SaveInstance(updated);
+                _instances[instanceId] = updated;
+                AddEvent(stopped);
+                return StopResult.Stopped(updated);
             }
         }
 
@@ -207,6 +234,7 @@ namespace DataFeed.Application.App.Runtime
             lock (_commitGate)
             {
                 if (!canOpen()) return false;
+                if (GetInstance(position.InstanceId) is { LifecycleState: not "RUNNING" }) return false;   // se paró en el medio
                 UpdatePosition(position, opened);
                 return true;
             }

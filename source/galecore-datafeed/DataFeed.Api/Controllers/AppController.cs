@@ -1356,6 +1356,51 @@ namespace DataFeed.Controllers
             public string SpecName { get; set; } = "";
         }
 
+        /// <summary>
+        /// Para una instancia SHADOW (GC-0004): deja de evaluar entradas y libera el lugar para desplegar
+        /// otra versión. Sus posiciones abiertas se siguen valuando hasta su salida. Idempotente: si ya
+        /// estaba parada devuelve 200 con alreadyStopped = true. Sin persistencia, 503 (no se cambia en
+        /// memoria algo que no se puede guardar).
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpPost("Runtime/Instances/{id}/Stop")]
+        public IActionResult RuntimeStop(string id)
+        {
+            if (!_runtimePersistence.Available || !_runtimeStore.IsDurable)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+                {
+                    error = "SHADOW sin persistencia: no se cambia una instancia sin poder guardarlo.",
+                    reason = _runtimePersistence.Reason,
+                });
+
+            var now = DateTime.UtcNow;
+            var result = _runtimeStore.Stop(id, new DataFeed.Application.App.Runtime.Contracts.OperationalEvent
+            {
+                EventId = Guid.NewGuid().ToString(),
+                InstanceId = id,
+                EventType = "INSTANCE_STOPPED",
+                Payload = new Dictionary<string, object?>
+                {
+                    ["stopped_by"] = _currentUser.UserId?.ToString() ?? "SYSTEM",
+                    ["open_positions"] = _runtimeStore.OpenPositionCount(id),
+                },
+                Timestamp = now
+            });
+            if (result.Kind == DataFeed.Application.App.Runtime.StopResult.KindNotFound) return NotFound();
+
+            var shown = result.Instance!;
+            if (result.Kind == DataFeed.Application.App.Runtime.StopResult.KindStopped)
+                _logger.LogInformation("Runtime: stopped instance {InstanceId} ({SpecName})", id, shown.SpecName);
+            return Ok(new
+            {
+                instanceId = shown.InstanceId,
+                specName = shown.SpecName,
+                lifecycleState = shown.LifecycleState,
+                openPositions = _runtimeStore.OpenPositionCount(id),
+                alreadyStopped = result.Kind == DataFeed.Application.App.Runtime.StopResult.KindAlreadyStopped,
+            });
+        }
+
         /// <summary>Instancias activas del runtime.</summary>
         [Tags("App.Runtime")]
         [HttpGet("Runtime/Instances")]

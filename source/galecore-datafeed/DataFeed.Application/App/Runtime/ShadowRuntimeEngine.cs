@@ -138,7 +138,7 @@ namespace DataFeed.Application.App.Runtime
             if (!store.TryAddPosition(position, canOpen ?? (() => true), opened))
             {
                 AddEvent(store, instance, "ENTRY_ABORTED", symbol, nowUtc,
-                    ("reason", "el switch se apagó mientras se evaluaba la entrada"), ("candidate_id", candidate.CandidateId));
+                    ("reason", "el switch se apagó o la instancia se paró mientras se evaluaba la entrada"), ("candidate_id", candidate.CandidateId));
                 return Outcomes.Paused;
             }
             return Outcomes.Opened;

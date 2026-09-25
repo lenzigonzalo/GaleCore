@@ -80,6 +80,16 @@ namespace DataFeed.Application.App.Runtime
         public static DeployResult Conflict(StrategyInstance? running) => new(KindConflict, running);
     }
 
+    /// <summary>Resultado de ShadowRuntimeStore.Stop.</summary>
+    public record StopResult(string Kind, StrategyInstance? Instance)
+    {
+        public const string KindStopped = "STOPPED", KindAlreadyStopped = "ALREADY_STOPPED", KindNotFound = "NOT_FOUND";
+        public static StopResult Stopped(StrategyInstance i) => new(KindStopped, i);
+        /// <summary>No estaba RUNNING: no se tocó nada.</summary>
+        public static StopResult AlreadyStopped(StrategyInstance i) => new(KindAlreadyStopped, i);
+        public static StopResult NotFound() => new(KindNotFound, null);
+    }
+
     /// <summary>Qué se recuperó al arrancar y qué no se pudo (AC-04).</summary>
     public record ShadowRecoveryReport
     {

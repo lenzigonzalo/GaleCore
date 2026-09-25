@@ -393,4 +393,97 @@ public class ShadowRuntimePersistenceTests
         Assert.Null(store.ActiveInstance());
         Assert.Contains(instance.InstanceId, repo.Instances.Keys);
     }
+
+    // ── Parar una instancia (para desplegar otra versión) ──────────
+
+    private static StopResult Stop(ShadowRuntimeStore store, string instanceId) => store.Stop(instanceId,
+        new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = instanceId, EventType = "INSTANCE_STOPPED", Timestamp = Now });
+
+    [Fact]
+    public void Stop_IsSaved_AndFreesTheSlotForAnotherVersion()
+    {
+        var (store, repo, instance) = DurableRuntime();
+
+        var result = Stop(store, instance.InstanceId);
+
+        Assert.Equal(StopResult.KindStopped, result.Kind);
+        Assert.Equal("STOPPED", repo.Instances[instance.InstanceId].LifecycleState);
+        Assert.Equal("STOPPED", store.GetInstance(instance.InstanceId)!.LifecycleState);
+        Assert.Single(repo.Events, e => e.EventType == "INSTANCE_STOPPED");
+        Assert.Null(store.ActiveInstance());
+        var other = instance with { InstanceId = "33333333-3333-3333-3333-333333333333", VersionHash = "sha256:otra-version" };
+        Assert.Equal(DeployResult.KindCreated, Deploy(store, other).Kind);
+        Assert.Equal(other.InstanceId, store.ActiveInstance()!.InstanceId);
+    }
+
+    [Fact]
+    public void Stop_Twice_DoesNothingTheSecondTime()
+    {
+        var (store, repo, instance) = DurableRuntime();
+        Stop(store, instance.InstanceId);
+        int saves = repo.InstanceSaves;
+
+        var again = Stop(store, instance.InstanceId);
+
+        Assert.Equal(StopResult.KindAlreadyStopped, again.Kind);
+        Assert.Equal(saves, repo.InstanceSaves);
+        Assert.Single(repo.Events, e => e.EventType == "INSTANCE_STOPPED");
+        Assert.Equal(StopResult.KindNotFound, Stop(store, "no-existe").Kind);
+    }
+
+    [Fact]
+    public void Stop_DatabaseDown_InstanceKeepsRunning()
+    {
+        var (store, repo, instance) = DurableRuntime();
+        repo.Fail = true;
+
+        Assert.Throws<InvalidOperationException>(() => Stop(store, instance.InstanceId));
+
+        Assert.Equal("RUNNING", store.GetInstance(instance.InstanceId)!.LifecycleState);
+        Assert.Equal(instance.InstanceId, store.ActiveInstance()!.InstanceId);
+    }
+
+    [Fact]
+    public void ATickThatStartedBeforeTheStop_DoesNotBringTheInstanceBack()
+    {
+        var (store, repo, instance) = DurableRuntime();
+        Stop(store, instance.InstanceId);
+
+        store.UpdateInstanceState(instance.InstanceId, "RUNNING", ShadowRuntimeTick.SchedulerStates.Idle);
+
+        Assert.Equal("STOPPED", store.GetInstance(instance.InstanceId)!.LifecycleState);
+        Assert.Equal("STOPPED", repo.Instances[instance.InstanceId].LifecycleState);
+        Assert.Null(store.ActiveInstance());
+    }
+
+    [Fact]
+    public async Task InstanceStoppedDuringTheEntry_NoPositionIsOpened()
+    {
+        var (store, repo, instance) = DurableRuntime();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(CandidateFor(instance)) };
+        // Se para justo al registrar la posición (canOpen corre dentro del mismo lock que Stop).
+        bool canOpen() { Stop(store, instance.InstanceId); return true; }
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(
+            store, data, instance, store.SpecFor(instance)!, "SPY", Now, default, canOpen: canOpen);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Paused, outcome);
+        Assert.Empty(store.AllPositions());
+        Assert.Empty(repo.Positions);
+        Assert.Contains(repo.Events, e => e.EventType == "ENTRY_ABORTED");
+    }
+
+    [Fact]
+    public void StoppedInstance_StaysStoppedAfterRestart()
+    {
+        var (store, repo, instance) = DurableRuntime();
+        Stop(store, instance.InstanceId);
+
+        var restarted = new ShadowRuntimeStore();
+        ShadowRuntimeRecovery.Recover(restarted, repo, FileSpecs());
+
+        Assert.Equal("STOPPED", restarted.GetInstance(instance.InstanceId)!.LifecycleState);
+        Assert.Null(restarted.ActiveInstance());
+        Assert.Contains(restarted.GetEvents(instance.InstanceId), e => e.EventType == "INSTANCE_STOPPED");
+    }
 }

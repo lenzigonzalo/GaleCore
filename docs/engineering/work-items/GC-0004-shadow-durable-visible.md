@@ -37,6 +37,11 @@ una pestaña del monitor con login real.
 - **Login (owner, 24/09):** el mismo flujo de autenticación en desarrollo, con un usuario de prueba y
   su fila en `users`. La persistencia de SHADOW nunca se conecta a producción; no se copian datos
   personales ni credenciales productivas. Los datos de mercado de SHADOW siguen siendo reales.
+- **Spec de prueba v2 y parar instancias (owner, 25/09):** para ver al runtime operar, una versión nueva
+  `shadow_runtime_test_v2` igual a v1 salvo el gate de GEX, ampliado de `>= 0` a `>= -150` (el GEX de SPY estaba
+  en torno a -85 y v1 no entraba). v1 no se modifica. Para desplegar v2 se agrega
+  `POST /App/Runtime/Instances/{id}/Stop` (misma implementación que va a producción); las posiciones abiertas de
+  una instancia parada se siguen valuando hasta su salida.
 - Heredadas: datos siempre reales (W-1, 24/09); apagar el switch pausa entradas y sigue monitoreando
   lo abierto (24/09); no se cambian gates para forzar una operación.
 
@@ -46,7 +51,7 @@ una pestaña del monitor con login real.
 - El PR del GEX (`fix/gex-oi-lookback`). Ampliar o cerrar GC-0001 (pestaña Inteligencia).
 - Afirmar calidad económica: las métricas describen lo que pasó, no si la spec gana plata.
 - Ejecutar el paso a producción (migración, configuración, despliegue): sólo se planifica.
-- Cambiar gates, umbrales o la spec de prueba.
+- Cambiar gates, umbrales o la spec de prueba, salvo la v2 que pidió el owner el 25/09 (v1 queda igual).
 
 ## Acceptance criteria
 
@@ -211,8 +216,8 @@ sin duplicados, la misma instancia `95e58d15…`; luego 18 evaluaciones y 38 eve
 
 ## Limitaciones declaradas
 
-- Un solo runtime SHADOW a la vez (una instancia RUNNING); cambiar de versión requiere parar la
-  instancia, y no hay endpoint para eso (no lo pide I3).
+- Un solo runtime SHADOW a la vez (una instancia RUNNING); para cambiar de versión se para la que corre
+  (`POST /App/Runtime/Instances/{id}/Stop`, sin botón en el monitor).
 - Las contraseñas de los roles de desarrollo y del usuario `demo` las genera el script y quedan en
   `dev/.local/env.json` (fuera de git); son de un proyecto con datos de prueba. El usuario `demo` se
   creó por SQL en `auth.users`/`auth.identities` de GaleCore Dev (el MCP no tiene alta de usuarios).

@@ -68,12 +68,12 @@ public class EfShadowRuntimeRepositoryTests
             new NpgsqlCommand($"CREATE DATABASE \"{target.Database}\"", conn).ExecuteNonQuery();
     }
 
-    private static SpecLoadResult SpecFile()
+    private static SpecLoadResult SpecFile(string name = "shadow_runtime_test_v1")
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "DataFeed.Api", "Files", "Runtime")))
             dir = dir.Parent;
-        return StrategySpecLoader.LoadFromFile(Path.Combine(dir!.FullName, "DataFeed.Api", "Files", "Runtime", "shadow_runtime_test_v1.json"));
+        return StrategySpecLoader.LoadFromFile(Path.Combine(dir!.FullName, "DataFeed.Api", "Files", "Runtime", name + ".json"));
     }
 
     private static Dictionary<string, SpecLoadResult> FileSpecs() => new() { ["shadow_runtime_test_v1"] = SpecFile() };
@@ -183,6 +183,35 @@ public class EfShadowRuntimeRepositoryTests
         Assert.Equal(DeployResult.KindConflict, result.Kind);
         using var check = new GaleCoreDbContext(Options());
         Assert.Equal(1, check.StrategyInstances.Count(i => i.LifecycleState == "RUNNING"));
+    }
+
+    [PostgresFact]
+    public void StoppedInstance_LetsAnotherVersionRun_AndStaysStoppedAfterRestart()
+    {
+        var repo = FreshRepository();
+        var store = Boot(repo, out _);
+        var first = Deploy(store);
+
+        var stopped = store.Stop(first.InstanceId,
+            new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = first.InstanceId, EventType = "INSTANCE_STOPPED", Timestamp = Now });
+        var v2 = SpecFile("shadow_runtime_test_v2");
+        repo.SaveSpec(v2.Spec!, v2.Json!);
+        var other = first with
+        {
+            InstanceId = Guid.NewGuid().ToString(), DeploymentId = Guid.NewGuid().ToString(),
+            VersionHash = v2.ContentHash, SpecName = "shadow_runtime_test_v2",
+        };
+        var deployed = store.DeployOrGetRunning(
+            new StrategyDeployment { DeploymentId = other.DeploymentId, VersionHash = other.VersionHash, DeployedAt = Now },
+            other,
+            new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = other.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now });
+
+        Assert.Equal(StopResult.KindStopped, stopped.Kind);
+        Assert.Equal(DeployResult.KindCreated, deployed.Kind);   // el índice único sólo cuenta las RUNNING
+        var restarted = Boot(new EfShadowRuntimeRepository(() => new GaleCoreDbContext(Options())), out _);
+        Assert.Equal("STOPPED", restarted.GetInstance(first.InstanceId)!.LifecycleState);
+        Assert.Equal(other.InstanceId, restarted.ActiveInstance()!.InstanceId);
+        Assert.Contains(restarted.GetEvents(first.InstanceId), e => e.EventType == "INSTANCE_STOPPED");
     }
 
     [PostgresFact]
