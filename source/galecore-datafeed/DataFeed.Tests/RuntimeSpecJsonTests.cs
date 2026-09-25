@@ -190,4 +190,41 @@ public class RuntimeSpecJsonTests
         Assert.Equal(1, risk["max_concurrent_positions"]!.GetValue<int>());
         Assert.Equal(5.0, risk["max_risk_per_trade_pct"]!.GetValue<double>());
     }
+
+    // ── v2 (GC-0004, owner 25/09): igual a v1 salvo el gate de GEX ──
+
+    private static string SpecV2Path() => Path.Combine(FilesDir(), "Runtime", "shadow_runtime_test_v2.json");
+
+    [Fact]
+    public void TestSpecV2_LoadsAndItsParentIsTheUnchangedV1()
+    {
+        var v1 = StrategySpecLoader.LoadFromFile(SpecPath());
+        var v2 = StrategySpecLoader.LoadFromFile(SpecV2Path());
+        Assert.True(v2.Success, string.Join("; ", v2.Errors));
+        // Si v1 cambiara, su hash ya no sería el padre declarado por v2.
+        Assert.Equal(v1.ContentHash, v2.Spec!.Identity.ParentVersionHash);
+        Assert.NotEqual(v1.ContentHash, v2.ContentHash);
+    }
+
+    [Fact]
+    public void TestSpecV2_DiffersFromV1OnlyInTheGexGate()
+    {
+        var v1 = SpecJson();
+        var v2 = JsonNode.Parse(File.ReadAllText(SpecV2Path()))!.AsObject();
+
+        var gex1 = v1["entry_filters"]!["gate_layer"]!["gates"]![1]!.AsObject();
+        var gex2 = v2["entry_filters"]!["gate_layer"]!["gates"]![1]!.AsObject();
+        Assert.Equal(gex1["metric_ref"]!.GetValue<string>(), gex2["metric_ref"]!.GetValue<string>());
+        Assert.Equal("GTE", gex2["operator"]!.GetValue<string>());
+        Assert.Equal(-150, gex2["threshold"]!["value"]!.GetValue<double>());
+
+        // Fuera de identidad, notas y ese gate, todo igual.
+        foreach (var spec in new[] { v1, v2 })
+        {
+            spec.Remove("identity");
+            spec["metadata"]!.AsObject().Remove("notes");
+            spec["entry_filters"]!["gate_layer"]!["gates"]!.AsArray().RemoveAt(1);
+        }
+        Assert.True(JsonNode.DeepEquals(v1, v2), "v2 cambia algo más que el gate de GEX");
+    }
 }
