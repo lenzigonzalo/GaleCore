@@ -1120,6 +1120,23 @@ mantener la asignación actual y ver por qué una estrategia fue preferida, limi
 - ¿Qué decisions requieren aprobación por cambio y cuáles podrían quedar dentro de una policy
   preaprobada en SHADOW/PAPER?
 
+**Addendum 2026-09-25 — GC-0004 (I3), propuesta de multiinstancia en SHADOW:** el owner pidió ver varias
+estrategias en SHADOW a la vez y decidió **no** ampliar el runtime ahora ni abrir un incremento previo a I4; se
+retoma cuando haya que comparar dos propuestas concretas (coincide con el primer E2E de este ítem: dos specs
+SHADOW). Lo que implica, medido en el código al cierre de I3 (rama `feature/GC-0004-shadow-durable`, GaleCore):
+- el invariante "una sola instancia RUNNING" está garantizado en memoria (`ShadowRuntimeStore.ActiveInstance`,
+  `_deployGate`) y en la base (índice único parcial `ix_strategy_instances_single_running`); fue pedido por la
+  revisión interna R1-M3 y Codex C1-M3 — pasaría a "una RUNNING por spec" con una migración nueva;
+- el loop de entrada evalúa una instancia por tick; tendría que evaluar todas, cada una con su máximo de posiciones;
+- ya existe: valuación de todas las posiciones abiertas de cualquier instancia, métricas por versión de spec y
+  `POST /App/Runtime/Instances/{id}/Stop` (I3); la pestaña SHADOW muestra una instancia (la RUNNING) y no lista
+  las posiciones de instancias paradas;
+- riesgo: más llamadas a Tastytrade/DXLink por minuto (instancias × símbolos) compitiendo con RPF y GEX, y más
+  filas en el plan Free de GaleCore Dev.
+**Postergados, no descartados** (owner, 25/09), como capacidades futuras: una spec de prueba de acciones (hoy choca
+con la prohibición de posiciones long direccionales de `GaleCore/CLAUDE.md`; requeriría una decisión explícita) y
+una multi-ticker de spreads. Toca GaleCore.
+
 ---
 
 ## BL-008 — Gestión integral del portfolio y espacio financiero personal y compartido
@@ -1538,3 +1555,43 @@ consumidor del GEX de GaleCore, no sólo al runtime.
 
 **Entry gate:** GC-0002 cerrado y decisión del owner.
 
+## BL-015 — 403 de Tastytrade en los endpoints de cuenta que llama `RpfLoopService`
+
+**Estado:** `CAPTURED` (owner, 2026-09-25; observado en GC-0004)
+
+**Origen:** corridas de GC-0004 en GaleCore Dev, 25/09. En sesión de mercado, cada tick de `RpfLoopService`
+falla con `AccountPositionsHandler Error: … 403 (Forbidden)` y `AccountBalancesHandler Error: … 403 (Forbidden)`
+("RpfLoop: fallo evaluando SPY; emito estado de error"). Conteo en los logs locales de la API de esa sesión
+(`%TEMP%/gc0004-*-api.log`, fuera de git): 68 de posiciones y 85 de balances; **cero** en las corridas fuera de
+sesión del 24/09 (`run0`, `run0b`, `env1`), porque el loop sólo evalúa en sesión. Los datos de mercado (quotes,
+cadenas, GEX) funcionaron en las mismas corridas; el runtime SHADOW no se ve afectado.
+
+**Qué se sabe y qué no:**
+- **Sólo hay evidencia en desarrollo:** API local contra el proyecto Supabase GaleCore Dev. Sin usuario en la
+  request (el loop corre sin token), `AccountPositionsHandler` resuelve la credencial de sistema y, si no la
+  hay, cae a la configuración (`Tastytrade:AccountNumber` y el refresh token de user-secrets); GaleCore Dev no
+  tiene la fila `is_system` de `accounts` (verificado el 25/09: `accounts` vacía, 0 filas; en producción la
+  credencial de sistema sale de esa fila, según `GaleCore/CLAUDE.md`). Hipótesis sin verificar: la credencial o el
+  número de cuenta que usa el loop en local no tienen acceso a esa cuenta.
+- **Producción: sin evidencia en ningún sentido.** No se revisaron logs del VPS; no se supone que ocurra ni que
+  no ocurra.
+
+**Qué es:** determinar qué credencial y qué número de cuenta usa el loop en cada entorno, si el 403 existe en
+producción (logs del VPS en sesión) y, si es sólo del entorno local, documentar cómo configurarlo o que el loop
+lo informe como estado esperado en vez de error por tick.
+
+**Entry gate:** decisión del owner de abrirlo como work item de GaleCore. No es de I3 ni lo bloquea. Toca GaleCore.
+
+## BL-016 — Mejoras visuales de la pestaña SHADOW del monitor
+
+**Estado:** `CAPTURED` (owner, 2026-09-25)
+
+**Origen:** recorrido del owner de la pestaña SHADOW (GC-0004, I3) contra GaleCore Dev: "requiere mejoras
+visuales pero anda". Evidencia de cómo se ve hoy: `GaleCore/docs/evidence/gc-0004/walk1/walk-3-shadow.png`.
+
+**Qué es:** las mejoras concretas las define el owner al abrirlo. Observado al hacer el recorrido headless, para
+considerar: las horas de las tablas salen en la hora local del navegador y el reloj del encabezado en ET; con
+varias instancias o versiones, la pantalla muestra sólo la RUNNING (ver addendum de `BL-007`). Las métricas
+siguen calculándose en la API (el front no calcula).
+
+**Entry gate:** GC-0004 cerrado y lista de mejoras del owner. Toca GaleCore (monitor).
