@@ -78,82 +78,82 @@ Hora	Símbolo	Motivo	Detalle
 25/9/26, 12:18:23	SPY	Gates no cumplidos	gex_non_negative: NO_DATA
 EVALUACIONES RECIENTES · valor real de cada gate
 Hora	Símbolo	Resultado	Gates
-25/9/26, 12:51:41	SPY	NO PASA	
+25/9/26, 12:51:41	SPY	NO PASA
 PASS vix_absolute: 15.48 LT 30
 FAIL gex_non_negative: -86.4 GTE 0
 
-25/9/26, 12:50:19	SPY	NO PASA	
+25/9/26, 12:50:19	SPY	NO PASA
 PASS vix_absolute: 15.42 LT 30
 FAIL gex_non_negative: -86.5 GTE 0
 
-25/9/26, 12:39:54	SPY	NO PASA	
+25/9/26, 12:39:54	SPY	NO PASA
 PASS vix_absolute: 15.42 LT 30
 FAIL gex_non_negative: -86.3 GTE 0
 
-25/9/26, 12:38:41	SPY	NO PASA	
+25/9/26, 12:38:41	SPY	NO PASA
 PASS vix_absolute: 15.37 LT 30
 FAIL gex_non_negative: -85 GTE 0
 
-25/9/26, 12:37:29	SPY	NO PASA	
+25/9/26, 12:37:29	SPY	NO PASA
 PASS vix_absolute: 15.35 LT 30
 FAIL gex_non_negative: -84.7 GTE 0
 
-25/9/26, 12:36:17	SPY	NO PASA	
+25/9/26, 12:36:17	SPY	NO PASA
 PASS vix_absolute: 15.31 LT 30
 FAIL gex_non_negative: -82.1 GTE 0
 
-25/9/26, 12:35:05	SPY	NO PASA	
+25/9/26, 12:35:05	SPY	NO PASA
 PASS vix_absolute: 15.28 LT 30
 FAIL gex_non_negative: -81.9 GTE 0
 
-25/9/26, 12:33:37	SPY	NO PASA	
+25/9/26, 12:33:37	SPY	NO PASA
 PASS vix_absolute: 15.25 LT 30
 FAIL gex_non_negative: -81.9 GTE 0
 
-25/9/26, 12:31:54	SPY	NO PASA	
+25/9/26, 12:31:54	SPY	NO PASA
 PASS vix_absolute: 15.28 LT 30
 FAIL gex_non_negative: -84.6 GTE 0
 
-25/9/26, 12:30:42	SPY	NO PASA	
+25/9/26, 12:30:42	SPY	NO PASA
 PASS vix_absolute: 15.3 LT 30
 FAIL gex_non_negative: -84.5 GTE 0
 
-25/9/26, 12:29:30	SPY	NO PASA	
+25/9/26, 12:29:30	SPY	NO PASA
 PASS vix_absolute: 15.35 LT 30
 FAIL gex_non_negative: -84.7 GTE 0
 
-25/9/26, 12:28:18	SPY	NO PASA	
+25/9/26, 12:28:18	SPY	NO PASA
 PASS vix_absolute: 15.36 LT 30
 FAIL gex_non_negative: -84.5 GTE 0
 
-25/9/26, 12:27:06	SPY	NO PASA	
+25/9/26, 12:27:06	SPY	NO PASA
 PASS vix_absolute: 15.35 LT 30
 FAIL gex_non_negative: -84.5 GTE 0
 
-25/9/26, 12:25:54	SPY	NO PASA	
+25/9/26, 12:25:54	SPY	NO PASA
 PASS vix_absolute: 15.39 LT 30
 FAIL gex_non_negative: -83.9 GTE 0
 
-25/9/26, 12:24:42	SPY	NO PASA	
+25/9/26, 12:24:42	SPY	NO PASA
 PASS vix_absolute: 15.36 LT 30
 FAIL gex_non_negative: -83.8 GTE 0
 
-25/9/26, 12:23:30	SPY	NO PASA	
+25/9/26, 12:23:30	SPY	NO PASA
 PASS vix_absolute: 15.32 LT 30
 FAIL gex_non_negative: -84.3 GTE 0
 
-25/9/26, 12:22:17	SPY	NO PASA	
+25/9/26, 12:22:17	SPY	NO PASA
 PASS vix_absolute: 15.35 LT 30
 FAIL gex_non_negative: -85 GTE 0
 
-25/9/26, 12:21:05	SPY	NO PASA	
+25/9/26, 12:21:05	SPY	NO PASA
 PASS vix_absolute: 15.37 LT 30
 FAIL gex_non_negative: -85.1 GTE 0
 
-25/9/26, 12:19:53	SPY	NO PASA	
+25/9/26, 12:19:53	SPY	NO PASA
 PASS vix_absolute: 15.42 LT 30
 FAIL gex_non_negative: -83.6 GTE 0
 
-25/9/26, 12:18:23	SPY	NO PASA	
+25/9/26, 12:18:23	SPY	NO PASA
 PASS vix_absolute: 15.35 LT 30
 NO_DATA gex_non_negative: sin dato GTE 0
