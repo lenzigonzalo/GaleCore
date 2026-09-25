@@ -104,7 +104,7 @@ una pestaña del monitor con login real.
 | AC-05 | `ShadowMetrics`, `LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; Postgres: `MetricsInputs_…` | `env1.json`; `run1-en-sesion.json` (sin operaciones: `null`, `noTrades`); `run2-en-sesion-v2.json` (v2: 1 abierta, P&L no realizado -2, realizado/acierto/drawdown `null` sin cierres) | Tests, Postgres y en vivo: sí, con y sin operaciones |
 | AC-06 | `pages/Shadow.tsx`, `api/shadow.ts`, `types/shadow.ts` | `Shadow.test.tsx` 6/6; `tsc --noEmit` | `monitor_walk.py` → `walk1/` (captura, texto, llamadas) | Tests: sí. En el navegador (headless, Chromium): sí — persistencia, switch ON, instancia RUNNING, métricas de la API con `—` sin operaciones, descartes con su motivo y evaluaciones con el valor de cada gate; todas las llamadas del runtime 200 |
 | AC-07 | Mismo flujo que producción contra Auth de GaleCore Dev (ES256 por JWKS, igual que producción); usuario `demo` (admin) con su fila en `users` | — | `env1.json` (`api_smoke`) | En vivo: login 200, `/Me` = demo/admin, sin token 401. Login en el navegador: sí (headless, `walk1/`) |
-| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run1-en-sesion.json` (INCOMPLETE, v1 sin entrada); `run2-en-sesion-v2.json` (**PASS**) | (1) monitor con login real: sí (`walk1/`, headless); recorrido del owner en su navegador: **pendiente de su confirmación al cierre** (no hay artefacto); (2), (3), (4) en vivo: sí (run2) |
+| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run1-en-sesion.json` (INCOMPLETE, v1 sin entrada); `run2-en-sesion-v2.json` (**PASS**) | (1) monitor con login real: sí (`walk1/`, headless); recorrido del owner en su navegador: **confirmado por el owner el 25/09** ("lo vi, requiere mejoras visuales pero anda"; mejoras → backlog `BL-016`); (2), (3), (4) en vivo: sí (run2) |
 | AC-09 | — | `dotnet test` **441/441, 0 skipped** con `GALECORE_TEST_DB` (base 401; incluye Stop y la spec v2); jest 6/6 | `env2.json` + `env2-dotnet-test.txt` (árbol limpio `e26fea1`); antes `env1-dotnet-test.txt` (432 al `23233b1`) | Sí |
 | AC-10 | — | Interno R1 y R2 APPROVE; Codex C1–C2 corregidos, C3 APPROVE; C4 y C5 CHANGES_REQUESTED sobre la evidencia → corregidos; **C6 APPROVE** | `GC-0004-20260925T154157Z.md` (C3), `…164536Z.md` (C4), `…165412Z.md` (C5), `GC-0004-20260925T165744Z.md` (C6) | Sí |
 
@@ -175,7 +175,7 @@ máximo 1/1. **run2** (`--spec shadow_runtime_test_v2 --minutes 3 --after 3`, `b
 |---|---|---|---|
 | R2-m1 | MINOR | Las posiciones abiertas de una instancia parada se valúan pero no se listan en la pestaña (sólo en métricas) | Limitación declarada (v1 nunca abrió) |
 | R2-m2 | MINOR | Si el evento INSTANCE_STOPPED no se guarda, un reintento no lo repone | Aceptado: mismo patrón que el deploy; memoria nunca sin base |
-| R2-m3 | MINOR | Deploy y Stop no exigen admin (el switch sí) | Previo a este cambio; **decisión del owner antes del paso a producción** |
+| R2-m3 | MINOR | Deploy y Stop no exigen admin (el switch sí) | Decidido por el owner (25/09): exigen admin, antes de producción → `D-0003` |
 | R2-m4 | MINOR | Sin tests del contrato HTTP de Stop | Registrado (Deploy tampoco los tiene); la lógica está cubierta en el store |
 | R2-m5 | MINOR | Sin test de v2 fuera de Postgres | `TestSpecV2_LoadsAndItsParentIsTheUnchangedV1`, `TestSpecV2_DiffersFromV1OnlyInTheGexGate` |
 | R2-m6 | MINOR | Matriz sin Stop/v2 | Actualizada |
@@ -229,22 +229,33 @@ Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
 4. **Aplicación** con el rol `galecore_ddl` de producción (su credencial la tiene el owner; nunca
    pasa por el chat). Se verifica que `galecore_api` tenga SELECT/INSERT/UPDATE/DELETE en las tablas
    nuevas (privilegios por defecto o `GRANT` explícito).
-5. **Configuración:** `Runtime__Persistence__Enabled=true` en App Settings de la API de producción.
+5. **Permisos ([`D-0003`](../../../decisiones/D-0003-shadow-deploy-stop-solo-admin.md)):** Deploy y Stop exigen admin
+   con `CanManagePlatformAsync`; verificado con admin (200) y no-admin (403) antes de seguir.
+6. **Configuración:** `Runtime__Persistence__Enabled=true` en App Settings de la API de producción.
    El switch del runtime sigue en OFF (config versionada) hasta que el owner lo prenda. **La cadena
    `ConnectionStrings:GaleCore` de producción (pooler en modo transacción, 6543) tiene que incluir
    `No Reset On Close=true;Max Auto Prepare=0`**: comprobado en GaleCore Dev el 24/09 que sin eso un
    `INSERT` se confirma pero el cliente se cuelga leyendo la respuesta (la API de producción hoy casi
    no escribe, por eso no se vio). Verificarlo antes de prender la persistencia.
-6. **Despliegue** de la API y del monitor (pestaña SHADOW).
-7. **Verificación:** `GET /App/Runtime/Status` → persistencia disponible y recuperación vacía; deploy
+7. **Despliegue** de la API y del monitor (pestaña SHADOW).
+8. **Verificación:** `GET /App/Runtime/Status` → persistencia disponible y recuperación vacía; deploy
    de la spec que el owner elija; una evaluación en sesión queda en `evaluation_logs`.
-8. **Vuelta atrás:** `Runtime__Persistence__Enabled=false` detiene persistencia y despliegues sin
+9. **Vuelta atrás:** `Runtime__Persistence__Enabled=false` detiene persistencia y despliegues sin
    tocar datos; las tablas se pueden quitar con el `Down` de la migración si el owner lo decide.
 
 ## Decisiones del owner pendientes
 
-- Si Deploy y Stop deben exigir admin como el switch (R2-m3), antes del paso a producción.
-- Cierre de GC-0004.
+- Cierre de GC-0004: sólo la confirmación explícita del owner (C6 y verificaciones recibidas por él el 25/09).
+
+## Decisiones del owner del 25/09 (tras C6)
+
+- Recorrido visual: lo hizo; anda y requiere mejoras visuales → `BL-016` (backlog), fuera de I3.
+- Deploy y Stop exigen admin → [`D-0003`](../../../decisiones/D-0003-shadow-deploy-stop-solo-admin.md), paso 5 del
+  plan de producción; no amplía I3.
+- No se amplía el runtime (multiinstancia, multi-ticker, acciones); se sigue con la v2. Multiinstancia → addendum
+  en `BL-007`, se retoma al comparar dos propuestas concretas. Sin incremento previo a I4.
+- 403 de Tastytrade en `RpfLoopService` → `BL-015`, sin corregirlo en I3.
+- API y monitor quedan corriendo contra GaleCore Dev para el owner; switch e instancia sin cambios.
 
 ## Corrida en sesión run1 (25/09, 15:17–15:41 UTC, `ec77468` limpio) — INCOMPLETE
 
@@ -269,4 +280,4 @@ sin duplicados, la misma instancia `95e58d15…`; luego 18 evaluaciones y 38 eve
 
 **State:** IMPLEMENTING — código completo; interno R1 y Codex C1 corregidos; GaleCore Dev configurado
 (migraciones, roles, usuario de prueba, login real verificado, 432/432); corrida en sesión run1 INCOMPLETE
-sólo por falta de entrada del mercado; Codex C3 APPROVE; recorrido del monitor hecho. Por pedido del owner, spec v2 + Stop: run2 **PASS** con posición real; interna R2 APPROVE. Codex C6 APPROVE. Falta la confirmación del owner de su recorrido en el navegador y su decisión de cierre.
+sólo por falta de entrada del mercado; Codex C3 APPROVE; recorrido del monitor hecho. Por pedido del owner, spec v2 + Stop: run2 **PASS** con posición real; interna R2 APPROVE. Codex C6 APPROVE; recorrido del owner confirmado. Falta sólo su confirmación explícita de cierre.
