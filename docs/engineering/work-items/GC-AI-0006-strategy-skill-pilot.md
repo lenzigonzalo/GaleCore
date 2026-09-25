@@ -104,6 +104,13 @@ Reprodujo gate, ruff, pytest 699 y `diff --check`; recalculó E13–E15 (coincid
 | C1-m3 | MINOR | "Sin cambios de código" con un driver agregado | Handoff corregido |
 | C1-m4 | MINOR | Roadmap: "la skill hoy no existe" | Aclarado: existe un borrador experimental, no aprobado ni catalogado |
 
+### Recheck Codex C2 (`GC-AI-0006-20260925T190220Z.md`, `a16eb1a..11be19f`) — CHANGES_REQUESTED
+
+C1-M1, C1-M3 y los cuatro MINOR resueltos. Abierto C1-M2: la serie del T-bill, su unidad y su convención no
+estaban identificadas. Corregido: FRED `GS3M` (mensual, %, desde 1981-09), la misma de BT-15 (el CSV del
+research coincide 96/96 con GS3M, no con TB3MS; verificado contra FRED el 25/09), tasa del mes del día,
+porcentaje/100 y 252 días hábiles.
+
 ## Alcance del borrador (24/09)
 
 Origen: conversación del owner del 24/09/2026, I4 de roadmap/README.md y BL-001. El owner

@@ -200,9 +200,13 @@ corrida; los fallos se reportan; ningún dato de 2013–2025 cuenta como prueba 
 
 - **Operación:** cada put spread abierto y cerrado por la cartera simulada (no señal-día), con la gestión de §4.A
   salvo el roll (R10). Resultado neto = crédito − costo de cierre − fricción.
-- **Contrafactual T-bill por operación:** la pérdida máxima por construcción de esa operación (capital que
-  queda comprometido) × tasa T-bill vigente al abrir × días en posición / 365. Fuente de la tasa: serie diaria
-  del T-bill a 3 meses (FRED; integración ya existente en GaleCore, §2.2 del documento de backtesting).
+- **Contrafactual T-bill por operación:** pérdida máxima por construcción de la operación (capital que queda
+  comprometido) × Σ, sobre cada día hábil en posición, de (tasa del día / 100) / 252. **Serie:** FRED `GS3M`
+  (*Market Yield on U.S. Treasury Securities at 3-Month Constant Maturity, Investment Basis*; mensual, en
+  porcentaje; desde 1981-09). Es la misma que usó BT-15 (`GaleCore/research/data/tbill_3m_monthly.csv`:
+  coincide con GS3M en los 96 meses 2018–2025, verificado el 25/09 contra la descarga de FRED; no es TB3MS).
+  **Tasa del día:** el valor del mes calendario del día (último dato mensual con fecha ≤ día, como
+  `Series.asof` en `bt15_portfolio.py`). **Convención:** porcentaje / 100 y 252 días hábiles por año, igual que BT-15.
 - **Exceso por operación (P1):** resultado neto − contrafactual T-bill.
 - **Resultado por unidad de riesgo (P2):** exceso por operación / pérdida máxima por construcción. La mecánica
   y RPF se comparan por la media de esta razón en el mismo período.
