@@ -1,0 +1,122 @@
+# Prueba del borrador — 24/09/2026
+
+Estado: piloto de comportamiento inicial. No aprobación de ingeniería ni evaluación económica.
+Artefacto evaluado: SKILL.md v0.1.0-draft y coverage.md, antes de la precisión de primera respuesta
+descrita al final. Evaluador: subagente `pilot_behavior_review`, contexto inicial sin historial del
+owner, con instrucción de leer únicamente esos dos archivos. Cinco casos dentro de un mismo contexto.
+Sin red, mercado, operaciones, edición de archivos ni acceso a otras capacidades durante la prueba.
+
+## Protocolo y reproducción
+
+En una sesión nueva, pedir leer SKILL.md y coverage.md y aplicar la instrucción a los cinco inputs
+de abajo, produciendo una respuesta inicial de máximo 160 palabras por caso y luego hallazgos y
+límites. No proveer estas respuestas al evaluador. Permitir sólo lectura de esos archivos; ninguna
+acción financiera. En esta corrida no se proporcionó la respuesta esperada ni hallazgos anticipados.
+El evaluador recibió el rol de evaluación de comportamiento, no aprobación independiente de ingeniería.
+Las respuestas siguientes son su salida real, conservada sin convertirla en resultados de mercado.
+No se midieron latencia, tokens ni costo; no inferirlos. No se hizo A/B ni sesiones separadas por caso.
+
+## Inputs y salidas reales
+
+### 1 — SPY
+
+Input: «Quiero SPY, retornos continuos estables, automatizable, bajo riesgo, alta probabilidad de
+ganancia, no naked, idealmente spreads y poca gestión manual de roll.»
+
+Tomaría como restricciones SPY y no naked; como preferencias, spreads y poca gestión manual de roll. Falta convertir «estable», «bajo riesgo» y «alta probabilidad de ganancia» en criterios: una alta frecuencia de ganancias no basta para evaluar pérdidas grandes ni retorno total.
+
+Para orientar la primera propuesta:
+- ¿Buscás retirar efectivo periódicamente o hacer crecer el capital? Eso cambia cómo medimos el resultado.
+- ¿Qué priorizás si hay tensión: limitar pérdidas, regularidad o rentabilidad?
+- ¿Qué intervención manual aceptarías ante una contingencia? Podés responder «todavía no sé».
+
+Mientras tanto, podemos comparar diseños con y sin roll previsto, dejando sizing pendiente. La restricción no naked debe resolverse durante entrada, mantenimiento y salida, incluidos fills parciales y eventos contractuales. No hay todavía una tesis ni evidencia de estabilidad; los términos contractuales y capacidades del broker quedan pendientes de verificación.
+
+### 2 — Bono
+
+Input: «Quiero comprar un bono argentino porque sí; no sé cuál y no tengo una tesis.»
+
+Podemos tratarlo como una compra discrecional: no hace falta inventar una ventaja predictiva. Por ahora está definida la intención de comprar un bono argentino; están pendientes el instrumento, la exposición buscada y la capacidad de pérdida.
+
+¿Hay alguna moneda en la que quieras recibir los pagos? ¿Cuándo podrías necesitar recuperar el dinero? Podés decir «todavía no sé»: esas respuestas orientan qué flujos y plazos tendría sentido investigar.
+
+El próximo resultado útil sería una comparación de exposiciones y condiciones, antes de elegir un bono. Para cada candidato habría que verificar serie y prospecto, monedas de negociación y pago, ley aplicable, cupones, amortizaciones, liquidez y escenarios de incumplimiento o reestructuración. La evaluación inicial puede centrarse en flujos y escenarios; no exige un backtest. No consulté fuentes ni seleccioné un instrumento.
+
+### 3 — Futuros
+
+Input: «Quiero automatizar cruces de medias en futuros; tengo OHLC de una serie continua, no sé contrato ni tamaño.»
+
+Tenemos una idea de señal y datos OHLC de una serie continua. Falta identificar qué futuro representa y cómo fue construida la serie. No asumiría que sus valores son precios a los que se puede operar.
+
+¿Qué subyacente y fuente tienen esos datos? ¿Cuál es la frecuencia de las barras? Eso permite decidir qué señales podemos investigar y qué información falta para simular operaciones.
+
+Podemos avanzar definiendo cómo se calculan las medias, cuándo se conoce el cruce y cómo se responde a datos faltantes. Ventanas, dirección y salidas quedan pendientes, sin asignar defaults.
+
+La simulación de ejecución depende de identificar contratos negociables, meses, calendario y roll, precios y costos. El sizing queda bloqueado hasta conocer especificaciones contractuales y límites de riesgo; el margen no se tratará como pérdida máxima. No construí ni probé aún la estrategia.
+
+### 4 — Sentimiento
+
+Input: «Quiero comprar penny stocks por sentimiento de redes y vender cuando cambie.»
+
+La intención es comprar según sentimiento y vender cuando cambie. Todavía falta una regla observable: «sentimiento» y «cambio» admiten distintas interpretaciones, y no tenemos evidencia de que anticipen un resultado aprovechable.
+
+¿Qué mercado o universo querés considerar y qué redes o fuente de datos tenés disponibles? ¿El cambio significa pasar a negativo o deteriorarse respecto del nivel de entrada? Podés dejar cualquiera pendiente.
+
+Mientras tanto, definiría una prueba que conserve qué mensajes estaban disponibles al decidir, su procedencia y las versiones del clasificador. También debe examinar duplicados, bots y manipulación. Antes de evaluar rendimiento, hay que resolver cómo representar liquidez, suspensiones y una venta sin contraparte: una señal de salida no equivale a una venta ejecutada.
+
+El próximo entregable sería una definición verificable de señal y un inventario de datos faltantes. No hay universo elegido, sizing ni resultados.
+
+### 5 — Diseño de skill
+
+Input: «Diseñá la skill que atienda esos inputs; son ejemplos, no quiero completar ahora esas estrategias.»
+
+El trabajo es diseñar la skill; los cuatro casos son pruebas de cobertura. No necesitamos completar sus estrategias ni pedirte capital o broker.
+
+Usaría una conducción común: identificar el trabajo solicitado, preservar restricciones y preferencias, hacer pocas preguntas que cambien la siguiente decisión y avanzar con lo independiente. Cada propuesta conservaría decisiones, hipótesis, fuentes, pendientes y próximos pasos.
+
+Las ramas cubrirían opciones y contingencias no naked; compra discrecional y términos de bonos; futuros, series continuas y contratos negociables; sentimiento, procedencia temporal y salida factible. Cada caso recibiría una evaluación acorde con su propósito, sin imponer backtest a todos.
+
+La entrega sería una skill con cobertura condicional y casos de evaluación que comprueben también este cambio de nivel: diseñar el método no debe activar la elaboración de las estrategias de ejemplo. El texto del piloto ya ofrece esa base; aún queda comprobar su comportamiento sostenido.
+
+## Hallazgos del evaluador (salida real)
+
+- Los cuatro casos tienen ramas explícitas y pueden combinarse con cobertura común. El quinto está contemplado expresamente como diseño o evaluación de la propia skill.
+- El método permite avanzar sin inventar sizing, parámetros ni tesis. Separa compra discrecional de estrategias repetitivas y no exige backtest universal.
+- La cobertura aborda detalles que podrían perderse en una respuesta genérica: no naked durante todo el ciclo, contrato negociable frente a serie continua, flujos específicos del bono y disponibilidad temporal del sentimiento.
+- Hay una tensión operativa entre «revisar siempre» toda la cobertura común y evitar un formulario o plantilla extensa. El texto permite una entrega progresiva, pero no define un criterio preciso para decidir qué dimensiones deben hacerse visibles en la primera respuesta.
+- La estructura de entrega y el registro por dimensión son amplios. Estas respuestas iniciales priorizan decisiones inmediatas y pendientes; no demuestran cumplimiento del registro completo.
+- No detecté una contradicción directa entre ambos archivos en estos casos. Las consultas de investigación y verificación contractual quedan pendientes por el alcance de esta prueba, no se simularon.
+
+## Límites del evaluador (salida real)
+
+Una pasada de cinco casos en un mismo contexto, con lectura de ambos archivos y sin respuestas posteriores del usuario. No son sesiones independientes ni una comparación A/B. No se probaron investigación, persistencia, recuperación, delegación, adaptación a StrategySpec, ejecución ni resistencia a fuentes adversariales. No se consultaron datos financieros, ejecutaron operaciones ni editaron archivos. Esto aporta observaciones sobre respuestas iniciales; no constituye validación económica ni aprobación independiente de ingeniería.
+
+## Ajuste y checks del implementer
+
+Después de esa corrida se precisó en §2 de SKILL.md qué mostrar en la primera respuesta (mandato,
+faltantes que afectan el paso inmediato y resultado propuesto) y cuándo exponer cobertura completa.
+No se rehízo la evaluación conductual: la mejora está redactada, su efecto queda pendiente de prueba.
+
+- `python -X utf8 C:/Users/lenzi/.codex/skills/.system/skill-creator/scripts/quick_validate.py docs/engineering/pilots/strategy-design`: `Skill is valid!`, exit 0 antes del ajuste.
+- Comprobación Python de UTF-8, links Markdown locales y whitespace de los tres archivos iniciales:
+  `PASS`, exit 0. No prueba semántica financiera.
+- `git diff --check`: exit 0; no cubre archivos untracked. La revisión de whitespace anterior sí los leyó.
+- Puntero raíz sigue en GC-0004. Los status del workspace y checkout original de GaleCore-AI mantienen
+  los mismos archivos sucios observados al inicio. No se editaron desde este piloto.
+
+## Matriz de alcance
+
+| Criterio | Evidencia disponible | Pendiente |
+|---|---|---|
+| C1 | Casos 1–5: intención, preferencias, preguntas iniciales | Conversación de varias vueltas y contradicciones del usuario |
+| C2 | Casos 1–4: ramas distintas sin defaults comunes | Instrumento nuevo, combinaciones, cobertura completa de una propuesta |
+| C3 | Salidas sin precios, probabilidades o resultados fabricados | Fuentes reales, calidad de respaldo, reglas simultáneas y eventos |
+| C4 | Instrucciones de ruteo y límites inspeccionadas | Ejecución de ese ruteo, capacidades ausentes y respuesta a fallos |
+| C5 | Salidas reales y caso 5 | Persistir/retomar propuesta, A/B, utilidad evaluada por owner |
+
+Siguiente evaluación propuesta: conversación multivuelta y recuperación, usando inputs del owner
+ya disponibles sin convertir la evaluación de la skill en un pedido de estrategia perfecta. Comparar
+después con host sin skill, igual modelo, acceso a datos/herramientas, inputs y presupuesto. Evaluador
+sin saber condición cuando sea viable; registrar outputs, omisiones críticas, contradicciones,
+trazabilidad, utilidad del owner y tiempo/consumo sólo si se pueden medir. No usar win rate financiero
+como métrica de calidad de instrucciones.
