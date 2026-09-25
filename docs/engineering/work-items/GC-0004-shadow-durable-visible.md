@@ -97,9 +97,9 @@ una pestaña del monitor con login real.
 | AC-03 | Interruptor `Runtime:Persistence:Enabled` (apagado en `appsettings.json`), 503 en Deploy/Metrics | `ShadowMetricsTests` (PersistenceOff_…, PersistenceIsOffByDefault_…) | `env1.json` (Status con el interruptor prendido) | Tests: sí. En vivo: el caso prendido; el apagado sólo en tests |
 | AC-04 | Recuperación, `SpecFor` por hash, `DeployOrGetRunning`, índice `ix_strategy_instances_single_running` | Tests con repositorio falso; Postgres: `SavedRecords_ComeBackAfterRestart…`, `TwoProcesses_…` | `run1-en-sesion.json` (en sesión, árbol limpio `ec77468`); `run0b-fuera-de-sesion.json` | Postgres: sí. En vivo (run1): la misma instancia, 12 evaluaciones y 26 eventos recuperados sin pérdidas ni duplicados; el switch sigue ON y continúa evaluando (12 → 18). Posiciones: no hubo entrada (18/18 `GATES_NOT_PASSED`), su recuperación en vivo no se observó; sólo tests |
 | AC-05 | `ShadowMetrics`, `LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; Postgres: `MetricsInputs_…` | `env1.json`; `run1-en-sesion.json` (18 evaluaciones, 0 pasaron, descartes por motivo, P&L/acierto/drawdown `null`, `noTrades`) | Tests, Postgres y en vivo: sí (sin operaciones) |
-| AC-06 | `pages/Shadow.tsx`, `api/shadow.ts`, `types/shadow.ts` | `Shadow.test.tsx` 6/6; `tsc --noEmit` | — | Tests: sí. En el navegador: pendiente |
-| AC-07 | Mismo flujo que producción contra Auth de GaleCore Dev (ES256 por JWKS, igual que producción); usuario `demo` (admin) con su fila en `users` | — | `env1.json` (`api_smoke`) | En vivo: login 200, `/Me` = demo/admin, sin token 401. Login en el navegador: pendiente (recorrido del owner) |
-| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run1-en-sesion.json` (**INCOMPLETE**: sólo falta la posición, que el mercado no dio) | (2), (3) en vivo: sí; (4) sin posiciones que recuperar; (1) recorrido del owner en el navegador: pendiente |
+| AC-06 | `pages/Shadow.tsx`, `api/shadow.ts`, `types/shadow.ts` | `Shadow.test.tsx` 6/6; `tsc --noEmit` | `monitor_walk.py` → `walk1/` (captura, texto, llamadas) | Tests: sí. En el navegador (headless, Chromium): sí — persistencia, switch ON, instancia RUNNING, métricas de la API con `—` sin operaciones, descartes con su motivo y evaluaciones con el valor de cada gate; todas las llamadas del runtime 200 |
+| AC-07 | Mismo flujo que producción contra Auth de GaleCore Dev (ES256 por JWKS, igual que producción); usuario `demo` (admin) con su fila en `users` | — | `env1.json` (`api_smoke`) | En vivo: login 200, `/Me` = demo/admin, sin token 401. Login en el navegador: sí (headless, `walk1/`) |
+| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run1-en-sesion.json` (**INCOMPLETE**: sólo falta la posición, que el mercado no dio) | (1) monitor con login real: sí (`walk1/`, headless); (2), (3) en vivo: sí; (4) sin posiciones que recuperar |
 | AC-09 | — | `dotnet test` **432/432, 0 skipped** con `GALECORE_TEST_DB` (base 401); jest 6/6 | `env1-dotnet-test.txt` | Sí |
 | AC-10 | — | Interno R1, Codex C1 y recheck C2 CHANGES_REQUESTED → corregidos | `GC-0004-20260924T215421Z.md`, `GC-0004-20260924T225600Z.md`, `GC-0004-20260925T154157Z.md` | Sí: recheck C3 de Codex **APPROVE** |
 
@@ -157,6 +157,14 @@ C1-M1, M2, M3, M5, m1 y m2: resueltos; C1-M4: decisión del owner. Hallazgos nue
 | C2-M1 | MAJOR | La matriz afirmaba verificaciones en vivo (roles, permisos, `/Me`, 401) sin artefacto | `dev_env_evidence.py` → `env1.json` + `env1-dotnet-test.txt` desde árbol limpio; roles y permisos en `env1-roles-grants.json`, marcados como declarados por el host |
 | C2-M2 | MAJOR | `run0` corrido con árbol sucio y etiquetado "Supabase local en Docker" | Retirado; `run0b` desde árbol limpio con el entorno correcto (proyecto, auth, rol) |
 
+## Recorrido del monitor walk1 (25/09, ~15:50 UTC, headless) — a pedido del owner
+
+API y monitor de `dev/galecore_dev.py` contra GaleCore Dev; `monitor_walk.py` (Playwright/Chromium) entra con
+`demo` por el login real y abre SHADOW. La pantalla muestra lo de run1 más las evaluaciones nuevas (20), con
+fechas en hora local del navegador (el reloj del encabezado está en ET). Las únicas respuestas no-200 son 409 de
+`/Data/Tastytrade/Account/*`: `demo` no tiene cuenta de bróker (lo dice la barra lateral); no es de SHADOW.
+El script se agregó después de C3 (sólo evidencia, sin cambios de código de la API ni del monitor).
+
 ## Recheck Codex C3 (`GC-0004-20260925T154157Z.md`, `c81d6cb..8381797`) — APPROVE
 
 C2-B1, C2-M1 y C2-M2: resueltos; C1-M4: decisión del owner. Sin hallazgos nuevos. Reprodujo 427 + 5
@@ -190,7 +198,7 @@ Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
 
 ## Decisiones del owner pendientes
 
-- Ninguna de diseño. Pendiente: el recorrido del owner en el monitor (AC-08 punto 1, AC-06 en el navegador).
+- Ninguna de diseño. Pendiente: la decisión del owner de cerrar sin posición en vivo (como en I2) o esperar una entrada.
   La recuperación de posiciones en vivo depende de que el mercado dé una entrada (no se fuerza).
 
 ## Corrida en sesión run1 (25/09, 15:17–15:41 UTC, `ec77468` limpio) — INCOMPLETE
@@ -214,4 +222,4 @@ sin duplicados, la misma instancia `95e58d15…`; luego 18 evaluaciones y 38 eve
 
 **State:** IMPLEMENTING — código completo; interno R1 y Codex C1 corregidos; GaleCore Dev configurado
 (migraciones, roles, usuario de prueba, login real verificado, 432/432); corrida en sesión run1 INCOMPLETE
-sólo por falta de entrada del mercado; Codex C3 APPROVE. Falta el recorrido del owner en el monitor y su decisión.
+sólo por falta de entrada del mercado; Codex C3 APPROVE; recorrido del monitor hecho (headless, `walk1/`). Falta la decisión del owner.
