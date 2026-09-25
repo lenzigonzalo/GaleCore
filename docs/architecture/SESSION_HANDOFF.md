@@ -16,8 +16,10 @@
   antecedente, no respuesta. Primera entrega: una propuesta que puedas entender y evaluar, con faltantes y
   plan de prueba, sin desplegar ni ampliar el runtime.
 
-**Siguiente paso:** aplicar `docs/engineering/pilots/strategy-design/SKILL.md` (+ `coverage.md`) a esa idea
-y dejar la propuesta en esa carpeta. Alcance, fuera de alcance y verificación: el work item
+**Estado (25/09, tarde):** primera entrega hecha — `docs/engineering/pilots/strategy-design/propuesta-pcs-spy-2026-09-25.md`
++ evaluación del primer recorrido al final de `evaluation.md`; interna R1 y Codex C1–C2 corregidos, **Codex C3 APPROVE**.
+**Siguiente paso:** la evaluación del owner de la propuesta (y sus decisiones de §1: datos pre-2013, umbrales,
+pérdida tolerable); después, el contraste contra el host sin la instrucción (paso previsto del piloto). Alcance, fuera de alcance y verificación: el work item
 `docs/engineering/work-items/GC-AI-0006-strategy-skill-pilot.md` (worktree `.worktrees/galecore-ai/GC-AI-0006`,
 rama `feature/GC-AI-0006`).
 

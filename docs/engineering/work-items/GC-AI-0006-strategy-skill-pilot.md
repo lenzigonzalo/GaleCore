@@ -63,12 +63,12 @@ resuelven, ningún número sin origen, pendientes explícitos); la evaluación d
 
 | Criterio | Evidencia | Estado |
 |---|---|---|
-| AC-01 | [propuesta](../pilots/strategy-design/propuesta-pcs-spy-2026-09-25.md) §1, §3.1, §3.3 | Entregado; falta revisión |
-| AC-02 | propuesta §4.A (RPF con fuente), §4.B (R1–R8 con razón), §4.C (pendientes sin números) | Entregado; falta revisión |
-| AC-03 | propuesta §3.2 (E1–E18 con fuente; cálculos propios marcados), §7 | Entregado; falta revisión |
+| AC-01 | [propuesta](../pilots/strategy-design/propuesta-pcs-spy-2026-09-25.md) §1, §3.1, §3.3 | Entregado; revisado (Codex C3 APPROVE) |
+| AC-02 | propuesta §4.A (RPF con fuente), §4.B (R1–R8 con razón), §4.C (pendientes sin números) | Entregado; revisado (Codex C3 APPROVE) |
+| AC-03 | propuesta §3.2 (E1–E18 con fuente; cálculos propios marcados), §7 | Entregado; revisado (Codex C3 APPROVE) |
 | AC-04 | propuesta §6 (P1–P4, datos, método, criterios en forma; umbrales del owner) | Entregado; umbrales y compra de datos: decisión del owner |
 | AC-05 | [evaluation.md](../pilots/strategy-design/evaluation.md) "Primer recorrido real — 25/09" | Entregado |
-| AC-06 | Revisión interna R1 (25/09): CHANGES_REQUESTED → corregido (ver abajo) | Pendiente: Codex y evaluación del owner |
+| AC-06 | Interna R1 CHANGES_REQUESTED → corregido; Codex C1 y C2 CHANGES_REQUESTED → corregidos; **Codex C3 APPROVE** (`GC-AI-0006-20260925T191102Z.md`) | Revisión: sí. Pendiente: evaluación del owner |
 
 **Handoff de la entrega (25/09):** propuesta y evaluación escritas por Claude Code en la misma sesión que cerró
 GC-0004 (contexto previo de RPF: declarado como sesgo en la evaluación). Fuentes externas: la nota de Cboe se
@@ -110,6 +110,12 @@ C1-M1, C1-M3 y los cuatro MINOR resueltos. Abierto C1-M2: la serie del T-bill, s
 estaban identificadas. Corregido: FRED `GS3M` (mensual, %, desde 1981-09), la misma de BT-15 (el CSV del
 research coincide 96/96 con GS3M, no con TB3MS; verificado contra FRED el 25/09), tasa del mes del día,
 porcentaje/100 y 252 días hábiles.
+
+### Recheck Codex C3 (`GC-AI-0006-20260925T191102Z.md`, `11be19f..a9aeac8`) — APPROVE
+
+C1-M2 resuelto (serie y convención del T-bill reproducibles); sin hallazgos nuevos. AC-01..AC-05 soportados;
+los umbrales de la prueba, la compra de datos y la utilidad de la propuesta quedan como decisión del owner.
+El APPROVE no cambia estado: evalúa y cierra el owner.
 
 ## Alcance del borrador (24/09)
 
