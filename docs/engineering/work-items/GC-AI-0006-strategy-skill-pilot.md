@@ -74,7 +74,8 @@ resuelven, ningún número sin origen, pendientes explícitos); la evaluación d
 GC-0004 (contexto previo de RPF: declarado como sesgo en la evaluación). Fuentes externas: la nota de Cboe se
 leyó; Carr & Wu (2009) sólo se vio en resultados de búsqueda; Bondarenko (2014) se verificó por su abstract
 después de la revisión interna; el PDF de Bondarenko (2019) no se pudo leer. Ningún número nuevo sin origen;
-los cálculos propios están marcados. Sin cambios de código, runtime, catálogo ni knowledge.
+los cálculos propios están marcados. Sin cambios de producto, runtime, catálogo ni knowledge; se agregó un driver de `/review-codex` para el
+worktree (`docs/evidence/gc-ai-0006/codex_review.py`).
 
 ### Revisión interna R1 (agente `reviewer`, `24fdf00..f588259`) — CHANGES_REQUESTED
 
@@ -88,6 +89,20 @@ confirmó 4.A contra el JSON y la definición.
 | R1-M3 | MAJOR | §6.3 con refuta/inconcluso solapados | Criterios excluyentes con orden de evaluación |
 | R1-m | MINOR | E5 selectivo; E6 no era la venta mecánica; faltaba BT-10b; cita de E16; origen del sizing; hard defense extrapolado; dato faltante en RPF; E18 era inferencia; fuentes sólo de buscador; handoff desactualizado | Todos corregidos (E5, E6, E10b, E16, 4.A, 4.C, R9, §5, E18, evaluación, handoff) |
 | R1-n | NIT | Cita no textual de SKILL; "2004–2005" sin origen; R6 sin aclarar estado; D-0001 "GEX informativo" | Corregidos (R5 incluye D-0001) |
+
+### Revisión Codex C1 (`GC-AI-0006-20260925T184338Z.md`, `24fdf00..a16eb1a`) — CHANGES_REQUESTED
+
+Reprodujo gate, ruff, pytest 699 y `diff --check`; recalculó E13–E15 (coinciden).
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| C1-M1 | MAJOR | Roll defensivo: `min_dte_remaining: 21` (JSON) vs "nueva expiración ≥ 21" (definición) presentado sin ambigüedad | 4.A declara la disputa; R10 nuevo; el roll queda fuera de la prueba hasta resolverlo |
+| C1-M2 | MAJOR | P1/P2 no reproducibles: T-bill por operación, unidad de riesgo, intervalo | §6.3 nuevo con las fórmulas (contrafactual, exceso, razón por riesgo, bootstrap por meses) |
+| C1-M3 | MAJOR | Intervalo que cruza cero clasificado como refutación | §6.4: cruza cero → inconcluso; refuta sólo si queda entero en cero o por debajo; la peor pérdida es regla de seguridad explícita |
+| C1-m1 | MINOR | E1 visto sólo en buscador | Declarado en E1 |
+| C1-m2 | MINOR | Quirks de datos sólo de memoria del host | Marcados "no verificados en este recorrido" |
+| C1-m3 | MINOR | "Sin cambios de código" con un driver agregado | Handoff corregido |
+| C1-m4 | MINOR | Roadmap: "la skill hoy no existe" | Aclarado: existe un borrador experimental, no aprobado ni catalogado |
 
 ## Alcance del borrador (24/09)
 

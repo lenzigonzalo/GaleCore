@@ -29,7 +29,7 @@ datos nuevos. Las rutas son relativas al workspace (`GaleCore/…`, `knowledge/�
   prospectivo, que el resultado neto por operación no supere a no operar (T-bill), o que los filtros no mejoren
   a la venta mecánica por unidad de riesgo.
 - **Decisiones tuyas que destraban el paso siguiente:** (a) si se compran datos de opciones SPY anteriores
-  a 2013 (costo a cotizar); (b) los umbrales de aceptación de la prueba (§6.3), que no fijo yo; (c) qué
+  a 2013 (costo a cotizar); (b) los umbrales de aceptación de la prueba (§6.4), que no fijo yo; (c) qué
   pérdida máxima tolerás respecto de la renta esperada (define sizing y si la idea sirve para tu objetivo).
 
 ---
@@ -67,7 +67,7 @@ datos nuevos. Las rutas son relativas al workspace (`GaleCore/…`, `knowledge/�
 
 | # | A favor / en contra | Qué dice | Fuente |
 |---|---|---|---|
-| E1 | A favor | La varianza implícita del índice (swap rate sintetizado con opciones) supera sistemáticamente a la realizada: existe una prima de riesgo de varianza. | Carr & Wu (2009), *Variance Risk Premiums*, RFS 22(3):1311–1341, [doi:10.1093/rfs/hhn038](https://academic.oup.com/rfs/article-abstract/22/3/1311/1581057) |
+| E1 | A favor | La varianza implícita del índice (swap rate sintetizado con opciones) supera sistemáticamente a la realizada: existe una prima de riesgo de varianza. | Carr & Wu (2009), *Variance Risk Premiums*, RFS 22(3):1311–1341, [doi:10.1093/rfs/hhn038](https://academic.oup.com/rfs/article-abstract/22/3/1311/1581057). **Visto sólo en resultados de búsqueda**, no se abrió el artículo. |
 | E2 | A favor | 1990–2018: VIX promedio 19,3 % vs volatilidad realizada del S&P 500 15,1 %; el índice PutWrite (PUT) tuvo volatilidad anual 9,95 % vs 14,93 % del S&P 500 (1986–2018). | Nota de Cboe sobre el estudio de Bondarenko, 29/05/2019, [cboe.com](https://www.cboe.com/insights/posts/white-paper-shows-volatility-risk-premium-facilitated-higher-risk-adjusted-returns-for-put-index/). Es del patrocinador del índice; el PDF original no se pudo leer en esta máquina. |
 | E3 | A favor | Los puts del S&P 500 fueron históricamente "demasiado caros" y, con un método que admite sesgos de selección como el *peso problem* y creencias incorrectas, "no model within a studied class of models can possibly explain the put anomaly". | Bondarenko (2014), *Why Are Put Options So Expensive?*, QJF 4(3); leído sólo el abstract, en [Crossref](https://api.crossref.org/works/10.1142/S2010139214500153) |
 | E4 | **Alternativa (hipótesis del host, sin fuente propia)** | *Peso problem*: que la muestra no contenga los desastres raros que justifican el precio; si fuera así, la "ventaja" es pago por un riesgo todavía no visto. E3 la descarta dentro de la clase de modelos que estudia; no se buscó otra fuente que la sostenga. | Hipótesis del host |
@@ -119,7 +119,7 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 | Construcción | short delta 0,25; ancho $5; DTE 35–50 (objetivo 45); short ≤ put wall | BT-17, BT-12, BT 3-bis |
 | Pisos | crédito ≥ $0,30 y ≥ 10 % del ancho; OI ≥ 100; spread ≤ 5 % | BT-3, §8 |
 | Tamaño y cartera | riesgo 3,5 % (máx 5 %, banda 5–8 % con aprobación); ≤ 2 posiciones, vencimientos distintos; heat ≤ 7 % | Riesgo, banda y heat: diseño RPF §7.1/§7.2 ("diseño; no refutado", reconciliación); 2 posiciones: BT-15; capital: decisión 3 |
-| Salidas | cierre al 50 % del crédito; sin salida por DTE; defensa si delta short > 0,42 o pérdida ≥ 2× crédito; roll defensivo desde pérdida ≥ 1× crédito (nuevo vencimiento ≥ 21 DTE); kill switch −1 % diario | BT-4, BT-12, decisión 4; el roll: "§9 diseño; no refutado" (reconciliación) |
+| Salidas | cierre al 50 % del crédito; sin salida por DTE; defensa si delta short > 0,42 o pérdida ≥ 2× crédito; roll defensivo desde pérdida ≥ 1× crédito con `min_dte_remaining: 21` y crédito neto ≥ 0,20 (JSON; **la definición y la reconciliación dicen "nueva expiración ≥ 21 DTE"**: semántica en disputa, ver R10); kill switch −1 % diario | BT-4, BT-12, decisión 4; el roll: "§9 diseño; no refutado" (reconciliación) |
 | Fricción | $6,30 por operación | §7 del documento de backtesting |
 | Dato faltante | VIX absoluto sin dato → no opera (fail-closed); estructura temporal del VIX y veto de cola sin dato → **pasan** (`on_no_data: pass`, por cortes del feed); sin put wall → no opera | JSON (`_no_data_note`), definición §10 |
 
@@ -135,6 +135,7 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 | R6 | Probar la sensibilidad del gate GEX a la definición del corte (0DTE incluido o no, DTE < 90 vs < 60). | El gate usa sólo el signo, y el signo puede cambiar con el corte (`knowledge/research/2026-09-23-gex-0dte-post-cierre.md`: hipótesis en estado `test_planned`, nacida de una observación no archivada). |
 | R7 | Tratar la configuración final como **no medida** hasta correr la fila delta 0,25 + GEX + V2. | E11; RPF §12.4 ya lo prevé si paper no coincide. |
 | R8 | Declarar el **edge a vencimiento** vs la **gestión al 50 %**: el edge se calcula con probabilidades a vencimiento, pero la posición se cierra antes. | Coherencia entre la señal y la salida real (coverage: gestión y salidas). |
+| R10 | Resolver la semántica del roll defensivo: `min_dte_remaining: 21` (JSON) vs "nueva expiración ≥ 21 DTE" (definición §9, reconciliación). Hasta resolverlo, el roll queda fuera de la prueba (§6) y figura pendiente en 4.C. | Son reglas distintas (cuándo se puede rolar vs a qué se rola) y la prueba no puede simular una regla ambigua. |
 | R9 | Revisar qué pasa con dato faltante en los gates de seguridad: hoy la estructura temporal y el veto de cola **pasan** sin dato. | Una guarda que se apaga cuando falta el dato no protege en ese momento; la razón (cortes del feed) es operativa, no de la tesis. |
 
 ### 4.C Parámetros pendientes de fundamento (no se proponen números)
@@ -146,7 +147,7 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 | `vrp_min` 1,2 | pendiente | Prior de literatura, validado in-sample | §6, pregunta P2 |
 | Barras `min_edge` | pendiente | Elegidas con barrido full-sample (BT-9); normal < piso de fricción (E15) | R4 + §6 |
 | Delta 0,25 con GEX | pendiente | Interpolación (E11) y frágil a barras en el scan (E10b) | R7 |
-| Roll defensivo desde 1× crédito | pendiente | Del diseño original, nunca medido | Datos nuevos, §6 |
+| Roll defensivo desde 1× crédito | pendiente | Del diseño original, nunca medido; semántica de los 21 DTE en disputa (R10) | R10, después datos nuevos |
 | Hard defense 0,42 / 2× crédito | pendiente | BT-12 midió hasta delta 0,35; 0,42 es una extrapolación ("vive ~0,40–0,45") | §6 |
 | Riesgo por operación, heat 7 %, maxDD 5 %, kill −1 % | **restricción del usuario**, no parámetro investigable | Son preferencias de riesgo del owner, no se optimizan | Confirmación del owner (§1c) |
 
@@ -159,7 +160,7 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 | Mandato e identidad | parcial | Nombre por propósito pendiente (no se usa "RPF" ni "PCS-SPY" como nombre de la estrategia); objetivo y pérdida tolerable: §1c. |
 | Tesis y contexto | definida | §3.1, §3.3; abstención = los filtros de RPF cuando corresponda. |
 | Universo | definida | SPY, opciones listadas en EE. UU., cuenta Tastytrade (antecedente RPF). |
-| Datos y variables | parcial | EOD 2013–2025 con quirks conocidos (IV/griegas degeneradas en 0DTE; `in_the_money` roto, memoria del host); faltan pre-2013 (bloqueado por compra). |
+| Datos y variables | parcial | EOD 2013–2025; quirks declarados sólo en notas del host, **no verificados en este recorrido** (IV/griegas degeneradas en 0DTE; `in_the_money` roto); faltan pre-2013 (bloqueado por compra). |
 | Señal y selección | antecedente | §4.A; cuestionada en §4.B/§4.C. |
 | Construcción | antecedente | §4.A. |
 | Sizing y cartera | pendiente | Depende de §1c; RPF: base $16k, fondeo $32k. |
@@ -195,20 +196,34 @@ Fuente de verdad operativa: `GaleCore/source/galecore-datafeed/DataFeed.Api/File
 Reglas del método (de SKILL.md §6): versión de reglas, comparación, costos y métricas fijadas antes; una
 corrida; los fallos se reportan; ningún dato de 2013–2025 cuenta como prueba nueva.
 
-### 6.3 Criterios (forma fijada; umbrales los decide el owner antes de correr)
+### 6.3 Métricas y comparación (definidas antes de correr)
 
-| Pregunta | Apoya si | Refuta si | Inconcluso si |
+- **Operación:** cada put spread abierto y cerrado por la cartera simulada (no señal-día), con la gestión de §4.A
+  salvo el roll (R10). Resultado neto = crédito − costo de cierre − fricción.
+- **Contrafactual T-bill por operación:** la pérdida máxima por construcción de esa operación (capital que
+  queda comprometido) × tasa T-bill vigente al abrir × días en posición / 365. Fuente de la tasa: serie diaria
+  del T-bill a 3 meses (FRED; integración ya existente en GaleCore, §2.2 del documento de backtesting).
+- **Exceso por operación (P1):** resultado neto − contrafactual T-bill.
+- **Resultado por unidad de riesgo (P2):** exceso por operación / pérdida máxima por construcción. La mecánica
+  y RPF se comparan por la media de esta razón en el mismo período.
+- **Intervalo:** bootstrap por bloques de mes calendario de apertura (se remuestrean meses enteros, para
+  conservar la dependencia entre operaciones cercanas); intervalo de percentiles de la media. Número de
+  remuestreos y nivel del intervalo: decisión del owner.
+- **Peor pérdida:** la peor pérdida neta de una operación y la peor pérdida de equity diaria (MTM) de la cartera.
+
+### 6.4 Criterios (regiones excluyentes; umbrales los decide el owner antes de correr)
+
+Orden de evaluación: primero el tamaño de muestra; después, apoya o refuta; lo que queda es inconcluso.
+
+| Pregunta | Inconcluso si | Apoya si | Refuta si |
 |---|---|---|---|
-| P1 | n ≥ mínimo **y** el intervalo por bloques de (resultado neto por operación − T-bill) queda entero por encima de cero | n ≥ mínimo **y** no se cumple "apoya" | n < mínimo (se evalúa primero) |
-| P2 | n ≥ mínimo **y** el intervalo de la diferencia RPF − mecánica (resultado por unidad de riesgo) queda entero por encima de cero **y** la peor pérdida de RPF no es mayor | n ≥ mínimo **y** no se cumple "apoya" | n < mínimo (se evalúa primero) |
-| P3 | La peor pérdida del período con 2008 cabe en la pérdida tolerable declarada (§1c) | No cabe | Sin datos del período |
-| P4 | n ≥ mínimo **y** fricción observada ≤ supuesto conservador ($9,30) **y** frecuencia dentro del rango esperado | n ≥ mínimo **y** no se cumple "apoya" | n < mínimo (se evalúa primero) |
+| P1 | n < mínimo, **o** el intervalo del exceso cruza cero | el intervalo queda entero por encima de cero | el intervalo queda entero en cero o por debajo |
+| P2 | n < mínimo, **o** el intervalo de la diferencia (RPF − mecánica) cruza cero y la peor pérdida de RPF no es mayor | el intervalo queda entero por encima de cero **y** la peor pérdida de RPF no es mayor | el intervalo queda entero en cero o por debajo, **o** la peor pérdida de RPF es mayor (regla de seguridad, no estadística) |
+| P3 | no hay datos del período | la peor pérdida del período con 2008 cabe en la pérdida tolerable (§1c) | no cabe |
+| P4 | n < mínimo | fricción media observada ≤ $9,30 (supuesto conservador, §7 del documento de backtesting) **y** frecuencia dentro del rango esperado | fricción media observada > $9,30, **o** frecuencia fuera del rango |
 
-Los resultados son excluyentes: primero se mira el tamaño de muestra; después, "apoya"; todo lo demás refuta.
-Así no queda margen para clasificar el resultado después de verlo.
-
-El nivel del intervalo, el tamaño mínimo de muestra (n), el rango de frecuencia esperado y la pérdida tolerable **no los fijo**: son decisión del
-owner (§1). Sin esos números la prueba no se corre.
+El tamaño mínimo (n), los parámetros del intervalo, el rango de frecuencia esperado y la pérdida tolerable
+**no los fijo**: son decisión del owner (§1). Sin esos números la prueba no se corre.
 
 ---
 
@@ -231,7 +246,7 @@ pérdida máxima (E14).
 
 | # | Pendiente | Quién / qué lo resuelve |
 |---|---|---|
-| 1 | Pérdida tolerable y umbrales de §6.3 | Owner |
+| 1 | Pérdida tolerable y umbrales de §6.4 | Owner |
 | 2 | Cotizar datos de opciones SPY pre-2013 (proveedores candidatos en §2.1 del documento de backtesting) | Owner decide; el host cotiza sin comprar |
 | 3 | Estrés sintético (§6.2 paso 3) | Host, sin datos nuevos |
 | 4 | Aclarar VIX9D vs VIX/VIX3M (R5) y recalcular el piso de fricción (R4) | Host, lectura de código y documentos |
@@ -241,6 +256,8 @@ pérdida máxima (E14).
 ## Historial
 
 - 2026-09-25 — primera versión, primer recorrido de la instrucción (GC-AI-0006).
+- 2026-09-25 — correcciones de Codex C1: semántica del roll en disputa (R10), métricas de §6.3 definidas, regiones
+  de §6.4 con inconcluso real, E1 y quirks de datos con su acceso declarado.
 - 2026-09-25 — correcciones de la revisión interna: E3/E4 (Bondarenko 2014 estaba leído al revés), erratum de
   BT-9 en E8, E10b nuevo, E5/E6/E16/E18 precisados, origen del sizing, dato faltante (4.A, R9), hard defense
   pendiente, criterios de §6.3 excluyentes.
