@@ -39,6 +39,20 @@ que el owner pueda entender y evaluar**, con:
 multi-ticker, acciones: postergados en `BL-007`), backtests con datos comprados, PAPER/LIVE. El contraste contra el
 host sin la skill (A/B del roadmap) va después de esta entrega.
 
+### Acceptance criteria (primera entrega)
+
+- [ ] **AC-01 — Ventaja y mecanismo:** la propuesta dice qué ventaja se busca, por qué podría existir
+  (mecanismo → resultado → forma de capturarlo → condiciones de falla) y qué explicaciones alternativas hay.
+- [ ] **AC-02 — Tres capas separadas:** reglas actuales de RPF (con su fuente), recomendaciones nuevas (con su
+  razón) y parámetros pendientes de fundamento; ningún umbral nuevo inventado.
+- [ ] **AC-03 — Evidencia:** a favor y en contra, cada hecho con una fuente que resuelve; lo que falta para
+  concluir queda explícito como conclusión pendiente.
+- [ ] **AC-04 — Prueba que permitiría descartarla:** plan con datos, costos, comparación y criterios de apoyo,
+  refutación e inconclusión fijados antes de ver resultados.
+- [ ] **AC-05 — Evaluación de la instrucción:** qué aportó SKILL.md/coverage.md y qué omitió o dificultó,
+  como evidencia del primer recorrido (la comparación contra el host sin la instrucción es el paso posterior).
+- [ ] **AC-06 — Revisión:** interna y de Codex; la utilidad la evalúa el owner.
+
 **Dónde queda:** la propuesta, como evidencia del piloto en `docs/engineering/pilots/strategy-design/`
 (ubicación experimental, sin decidir la taxonomía de `BL-009`).
 
