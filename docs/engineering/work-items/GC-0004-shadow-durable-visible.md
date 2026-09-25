@@ -95,11 +95,11 @@ una pestaña del monitor con login real.
 | AC-01 | `dev/galecore_dev.py` (sólo corre contra `ecymbgpimqbtcvqyjtaq`; producción rechazada); proyecto GaleCore Dev (org propia, plan Free, Postgres 17); roles `galecore_ddl`/`galecore_api`; cadena completa de migraciones | — | `env1.json` (migraciones aplicadas, árbol limpio `23233b1`); `env1-roles-grants.json` (**declarado por el host**, consulta MCP) | En vivo: sí (ver artefactos) |
 | AC-02 | `ShadowRuntimeStore`, `EfShadowRuntimeRepository` (posición + evento en una transacción; specs antes de registrarse; `seq` para el orden) | `ShadowRuntimePersistenceTests`; Postgres: `OpenedPosition_AndItsEvent_…`, `SavingTwice_…` | `env1-dotnet-test.txt` | Tests y Postgres: sí |
 | AC-03 | Interruptor `Runtime:Persistence:Enabled` (apagado en `appsettings.json`), 503 en Deploy/Metrics | `ShadowMetricsTests` (PersistenceOff_…, PersistenceIsOffByDefault_…) | `env1.json` (Status con el interruptor prendido) | Tests: sí. En vivo: el caso prendido; el apagado sólo en tests |
-| AC-04 | Recuperación, `SpecFor` por hash, `DeployOrGetRunning`, índice `ix_strategy_instances_single_running` | Tests con repositorio falso; Postgres: `SavedRecords_ComeBackAfterRestart…`, `TwoProcesses_…` | `run0b-fuera-de-sesion.json` (árbol limpio `f29355b`) | Postgres: sí. En vivo: la instancia sobrevive el reinicio sin perder ni duplicar; **INCOMPLETE** (fuera de sesión: sin evaluaciones ni posiciones) |
-| AC-05 | `ShadowMetrics`, `LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; Postgres: `MetricsInputs_…` | `env1.json` (Metrics sin operaciones: valores `null`, `noTrades`) | Tests y Postgres: sí. En vivo con evaluaciones: pendiente (sesión) |
+| AC-04 | Recuperación, `SpecFor` por hash, `DeployOrGetRunning`, índice `ix_strategy_instances_single_running` | Tests con repositorio falso; Postgres: `SavedRecords_ComeBackAfterRestart…`, `TwoProcesses_…` | `run1-en-sesion.json` (en sesión, árbol limpio `ec77468`); `run0b-fuera-de-sesion.json` | Postgres: sí. En vivo (run1): la misma instancia, 12 evaluaciones y 26 eventos recuperados sin pérdidas ni duplicados; el switch sigue ON y continúa evaluando (12 → 18). Posiciones: no hubo entrada (18/18 `GATES_NOT_PASSED`), su recuperación en vivo no se observó; sólo tests |
+| AC-05 | `ShadowMetrics`, `LoadMetricsInputs`, `GET Runtime/Metrics` | `ShadowMetricsTests`; Postgres: `MetricsInputs_…` | `env1.json`; `run1-en-sesion.json` (18 evaluaciones, 0 pasaron, descartes por motivo, P&L/acierto/drawdown `null`, `noTrades`) | Tests, Postgres y en vivo: sí (sin operaciones) |
 | AC-06 | `pages/Shadow.tsx`, `api/shadow.ts`, `types/shadow.ts` | `Shadow.test.tsx` 6/6; `tsc --noEmit` | — | Tests: sí. En el navegador: pendiente |
 | AC-07 | Mismo flujo que producción contra Auth de GaleCore Dev (ES256 por JWKS, igual que producción); usuario `demo` (admin) con su fila en `users` | — | `env1.json` (`api_smoke`) | En vivo: login 200, `/Me` = demo/admin, sin token 401. Login en el navegador: pendiente (recorrido del owner) |
-| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run0b-fuera-de-sesion.json` (INCOMPLETE) | Pendiente: corrida en sesión y recorrido del owner |
+| AC-08 | `restart_demo.py` + recorrido del owner en el monitor | — | `run1-en-sesion.json` (**INCOMPLETE**: sólo falta la posición, que el mercado no dio) | (2), (3) en vivo: sí; (4) sin posiciones que recuperar; (1) recorrido del owner en el navegador: pendiente |
 | AC-09 | — | `dotnet test` **432/432, 0 skipped** con `GALECORE_TEST_DB` (base 401); jest 6/6 | `env1-dotnet-test.txt` | Sí |
 | AC-10 | — | Interno R1, Codex C1 y recheck C2 CHANGES_REQUESTED → corregidos | `GC-0004-20260924T215421Z.md`, `GC-0004-20260924T225600Z.md` | Recheck C3 de Codex pendiente |
 
@@ -183,7 +183,16 @@ Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
 
 ## Decisiones del owner pendientes
 
-- Ninguna de diseño. Pendiente de ejecución: la demostración en sesión.
+- Ninguna de diseño. Pendiente: el recorrido del owner en el monitor (AC-08 punto 1, AC-06 en el navegador).
+  La recuperación de posiciones en vivo depende de que el mercado dé una entrada (no se fuerza).
+
+## Corrida en sesión run1 (25/09, 15:17–15:41 UTC, `ec77468` limpio) — INCOMPLETE
+
+Switch ON, 15 min, reinicio, 8 min. 12 evaluaciones y 26 eventos antes; los mismos después del reinicio,
+sin duplicados, la misma instancia `95e58d15…`; luego 18 evaluaciones y 38 eventos. 0 pasaron gates
+(`GATES_NOT_PASSED` 18, 1 bloque sin datos), 0 posiciones: métricas de P&L en `null` con `noTrades`.
+Único faltante: posiciones abiertas para ver su recuperación en vivo. Observado aparte (fuera de SHADOW):
+`RpfLoopService` recibe 403 de Tastytrade en `AccountPositions`/`AccountBalances` en sesión.
 
 ## Limitaciones declaradas
 
@@ -197,5 +206,5 @@ Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
 ## Implementer handoff
 
 **State:** IMPLEMENTING — código completo; interno R1 y Codex C1 corregidos; GaleCore Dev configurado
-(migraciones, roles, usuario de prueba, login real verificado, 432/432). Falta el recheck de Codex, la
-corrida en sesión y el recorrido del owner en el monitor.
+(migraciones, roles, usuario de prueba, login real verificado, 432/432); corrida en sesión run1 INCOMPLETE
+sólo por falta de entrada del mercado. Falta el recheck C3 de Codex y el recorrido del owner en el monitor.
