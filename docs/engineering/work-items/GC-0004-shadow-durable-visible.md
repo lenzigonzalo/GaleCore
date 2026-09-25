@@ -1,14 +1,14 @@
 ---
 id: GC-0004
 title: SHADOW durable y visible — persistencia, recuperación tras reinicio y pantalla en el monitor (I3)
-status: IMPLEMENTING
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
 closure_blocked: false
-review_result: PENDING
-approval_result: PENDING
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-0004 — SHADOW durable y visible (I3 del plan)
@@ -55,39 +55,39 @@ una pestaña del monitor con login real.
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Entorno de desarrollo aislado:** proyecto Supabase GaleCore Dev (Postgres + Auth),
+- [x] **AC-01 — Entorno de desarrollo aislado:** proyecto Supabase GaleCore Dev (Postgres + Auth),
   separado de producción; la cadena completa de migraciones EF se aplica ahí con los mismos dos roles
   que producción; nada del entorno apunta a producción. Script para configurarlo, migrar, preparar el
   usuario de prueba y arrancar API y monitor contra él.
-- [ ] **AC-02 — Persistencia write-through:** spec (por hash, con su JSON), deployment, instancia,
+- [x] **AC-02 — Persistencia write-through:** spec (por hash, con su JSON), deployment, instancia,
   evaluaciones, eventos y posiciones se guardan en Postgres **antes** de quedar en memoria. Si la
   base falla, no se abre la posición ni se registra en memoria algo que no quedó guardado.
-- [ ] **AC-03 — Persistencia sólo donde se prende:** el runtime persiste sólo si el entorno lo prende
+- [x] **AC-03 — Persistencia sólo donde se prende:** el runtime persiste sólo si el entorno lo prende
   explícitamente (`Runtime:Persistence:Enabled`, apagado en la config versionada). Apagado o sin base,
   no se puede desplegar una instancia (503 con el motivo) y la pantalla lo dice. Producción no lo
   prende hasta la aprobación del owner.
-- [ ] **AC-04 — Recuperación tras reinicio:** al arrancar se recargan instancias, posiciones y la
+- [x] **AC-04 — Recuperación tras reinicio:** al arrancar se recargan instancias, posiciones y la
   historia reciente de evaluaciones y eventos. Cada instancia sigue con **su** spec por hash (si el
   archivo cambió, se reconstruye del JSON guardado y se verifica el hash; si no se puede, la
   instancia no evalúa y lo dice). Las posiciones abiertas se siguen valuando. No se duplica nada:
   identidades estables, deploy idempotente y una sola instancia RUNNING (garantizada por la base).
-- [ ] **AC-05 — Métricas por versión de spec**, calculadas en la API desde la base: evaluaciones,
+- [x] **AC-05 — Métricas por versión de spec**, calculadas en la API desde la base: evaluaciones,
   evaluaciones que pasaron, descartes por motivo, operaciones abiertas y cerradas, P&L realizado y
   no realizado, tasa de acierto, drawdown máximo del P&L realizado. Sin operaciones, los valores
   que no existen son `null` y se dice que no hay operaciones; nada se inventa.
-- [ ] **AC-06 — Pantalla SHADOW en el monitor:** estado de la instancia, del switch y de la
+- [x] **AC-06 — Pantalla SHADOW en el monitor:** estado de la instancia, del switch y de la
   persistencia; métricas por versión; evaluaciones recientes con el valor de cada gate; descartes con
   su motivo; posiciones abiertas y cerradas; estado vacío explícito. El front no calcula métricas.
-- [ ] **AC-07 — Login real en desarrollo:** username → API → Supabase Auth de GaleCore Dev → JWT
+- [x] **AC-07 — Login real en desarrollo:** username → API → Supabase Auth de GaleCore Dev → JWT
   validado por JWKS, con un usuario de prueba y su fila en `users`. Sin datos ni credenciales de
   producción.
-- [ ] **AC-08 — Demostración:** (1) monitor con login real; (2) evaluaciones, motivos de descarte y
+- [x] **AC-08 — Demostración:** (1) monitor con login real; (2) evaluaciones, motivos de descarte y
   las operaciones/métricas que existan; (3) reiniciar la API y comprobar que los registros siguen;
   (4) recuperar y continuar el seguimiento de posiciones si existen, sin duplicar. Datos de mercado
   reales. Evidencia que separa lo probado en tests de lo observado en vivo.
-- [ ] **AC-09 — Repositorio:** `dotnet test` pasa (base 401) con tests nuevos para AC-02..AC-05;
+- [x] **AC-09 — Repositorio:** `dotnet test` pasa (base 401) con tests nuevos para AC-02..AC-05;
   tests del monitor para AC-06.
-- [ ] **AC-10 — Review:** una revisión completa (interna + Codex) y rechecks acotados a las
+- [x] **AC-10 — Review:** una revisión completa (interna + Codex) y rechecks acotados a las
   correcciones necesarias (`ENGINEERING.md` §3).
 
 ## Requirement-to-evidence matrix
@@ -245,14 +245,21 @@ Es la misma implementación: nada se reescribe, sólo se aplica y se configura.
 
 ## Decisiones del owner pendientes
 
-- Cierre de GC-0004: sólo la confirmación explícita del owner (C6 y verificaciones recibidas por él el 25/09).
+- Ninguna. GC-0004 cerrado por el owner el 25/09.
+
+## Cierre (owner, 25/09)
+
+**CLOSED.** El owner confirmó el cierre con la evidencia y las revisiones aprobadas (interna R2, Codex C6).
+Quedan fuera y registrados: las mejoras visuales en `BL-016` y los permisos admin de Deploy/Stop como
+requisito antes de producción (`D-0003`). SHADOW no está en producción; el paso a producción sigue el plan de
+abajo cuando el owner lo apruebe. Siguiente trabajo activo: piloto de I4 (GC-AI-0006).
 
 ## Decisiones del owner del 25/09 (tras C6)
 
 - Recorrido visual: lo hizo; anda y requiere mejoras visuales → `BL-016` (backlog), fuera de I3.
 - Deploy y Stop exigen admin → [`D-0003`](../../../decisiones/D-0003-shadow-deploy-stop-solo-admin.md), paso 5 del
   plan de producción; no amplía I3.
-- No se amplía el runtime (multiinstancia, multi-ticker, acciones); se sigue con la v2. Multiinstancia → addendum
+- No se amplía el runtime (multiinstancia, multi-ticker, acciones); se sigue con la v2. Multiinstancia, multi-ticker y acciones quedan **postergados, no descartados** → addendum
   en `BL-007`, se retoma al comparar dos propuestas concretas. Sin incremento previo a I4.
 - 403 de Tastytrade en `RpfLoopService` → `BL-015`, sin corregirlo en I3.
 - API y monitor quedan corriendo contra GaleCore Dev para el owner; switch e instancia sin cambios.
@@ -278,6 +285,6 @@ sin duplicados, la misma instancia `95e58d15…`; luego 18 evaluaciones y 38 eve
 
 ## Implementer handoff
 
-**State:** IMPLEMENTING — código completo; interno R1 y Codex C1 corregidos; GaleCore Dev configurado
+**State:** CLOSED (owner, 25/09) — código completo; interno R1 y Codex C1 corregidos; GaleCore Dev configurado
 (migraciones, roles, usuario de prueba, login real verificado, 432/432); corrida en sesión run1 INCOMPLETE
 sólo por falta de entrada del mercado; Codex C3 APPROVE; recorrido del monitor hecho. Por pedido del owner, spec v2 + Stop: run2 **PASS** con posición real; interna R2 APPROVE. Codex C6 APPROVE; recorrido del owner confirmado. Falta sólo su confirmación explícita de cierre.
