@@ -117,6 +117,33 @@ C1-M2 resuelto (serie y convención del T-bill reproducibles); sin hallazgos nue
 los umbrales de la prueba, la compra de datos y la utilidad de la propuesta quedan como decisión del owner.
 El APPROVE no cambia estado: evalúa y cierra el owner.
 
+## Segunda entrega: evaluación del owner y contraste (owner, 25/09/2026, noche)
+
+El owner evaluó la primera entrega: se entiende y sirve para ordenar la investigación; **no** aprueba la
+estrategia, no valida la instrucción ni cierra el item. El objetivo sigue siendo evaluar y mejorar la
+instrucción; perfeccionar RPF, comprar datos o fijar su tolerancia no son requisitos para seguir.
+
+- [ ] **AC-07 — Correcciones de la propuesta:** venta de puts ≠ put spread; disponibilidad por insumo antes de
+  2013 (VIX9D) y variantes; comparación de carteras; P4 por nivel de ejecución; estadística separada de
+  restricciones; E14 ilustrativo; tasa de efectivo sin información futura y referencia ≠ invertible; método
+  estadístico recomendado por el host.
+- [ ] **AC-08 — Instrucción:** cambios sólo donde hay omisión generalizable, con cada hallazgo clasificado como
+  falla del host o de la instrucción; sin volverla un manual de RPF.
+- [ ] **AC-09 — Contraste:** con y sin instrucción, contextos separados, mismas condiciones, SPY + un
+  instrumento distinto, rúbrica fijada antes, evaluador independiente y ciego si es viable, salidas sin
+  corregir, condiciones reales y limitaciones registradas.
+- [ ] **AC-10 — Revisión** del cambio (interna y Codex); la utilidad la evalúa el owner.
+
+| Criterio | Evidencia | Estado |
+|---|---|---|
+| AC-07 | [propuesta](../pilots/strategy-design/propuesta-pcs-spy-2026-09-25.md) §1, E14, E19–E22, §5, §6.1–§6.5, §7, §8, historial | Entregado |
+| AC-08 | [SKILL.md](../pilots/strategy-design/SKILL.md) v0.2.0-draft §3 y §6; [coverage.md](../pilots/strategy-design/coverage.md) Datos y Evaluación; clasificación en [evaluation.md](../pilots/strategy-design/evaluation.md) "Evaluación del owner…" | Entregado |
+| AC-09 | [protocol.md](../pilots/strategy-design/contrast-2026-09-25/protocol.md) (commit `69848fa`, antes de correr); [results.md](../pilots/strategy-design/contrast-2026-09-25/results.md); `raw/`, `blind/`, `eval-codex.md`, `label_map.json` | Ejecutado; evidencia preliminar (n = 1 por celda, ciego no efectivo) |
+| AC-10 | pendiente | — |
+
+Datos consultados (públicos, sin compras ni contactos): historias de Cboe (VIX, VIX9D, VIX3M, VVIX), series de
+FRED (`GS3M`, `DGS3MO`, `DTB3`) y el precio público de un proveedor de cadenas SPY.
+
 ## Alcance del borrador (24/09)
 
 Origen: conversación del owner del 24/09/2026, I4 de roadmap/README.md y BL-001. El owner

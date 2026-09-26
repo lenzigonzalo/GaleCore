@@ -202,3 +202,43 @@ Huecos de la instrucción que agrega esta revisión:
 Un solo caso, host con contexto previo, sin evaluador ciego ni comparación contra el host sin la instrucción
 (paso posterior previsto en el piloto). No dice nada sobre la calidad financiera de la idea; eso lo dice la
 propuesta, con sus pendientes.
+
+---
+
+# Evaluación del owner de la primera entrega — 25/09/2026
+
+El owner evaluó la propuesta: se entiende y sirve para ordenar la investigación; **no** aprueba la estrategia,
+no valida la instrucción ni cierra el item. Marcó siete problemas; se corrigieron en la propuesta (historial,
+entrada del 25/09 "evaluación del owner"). Para cada uno: ¿la instrucción ya lo pedía y el host no lo hizo, o
+la instrucción no lo pedía?
+
+| Problema | Clasificación | Qué cambió en v0.2.0-draft |
+|---|---|---|
+| Evidencia de venta de puts usada como si fuera del spread (la pata comprada también paga prima) | **Omisión de la instrucción**: pedía evidencia a favor/en contra y alternativas, no distinguir mecanismo de implementación | SKILL §3: evidencia del mecanismo ≠ de la implementación |
+| "Cadenas pre-2013 permiten probar RPF en 2008" sin verificar insumos (VIX9D existe desde 2011) | **Falla del host** (coverage ya pedía cobertura histórica y disponibilidad point-in-time) + omisión menor: no decía que reconstruir/sustituir/omitir crea una variante | SKILL §6: verificar cada insumo antes de proponer un período; variantes con nombre |
+| Sólo métricas por operación; sin carteras comparables | **Omisión de la instrucción** (pedía baseline y drawdown, no comparación de carteras con el mismo calendario, capital, restricciones y efectivo) | SKILL §6 y coverage/Evaluación |
+| P4: SHADOW presentado como fuente de fills | **Falla del host** (SKILL §4 ya separa señal, orden y fill) + omisión menor: no aplicaba esa separación a las fuentes de evidencia | SKILL §6: niveles de ejecución (estimada, cotizada, simulada, real) |
+| Estadística y restricciones de riesgo mezcladas; una violación podía quedar como "inconcluso" | **Omisión de la instrucción** | SKILL §6 y coverage/Evaluación: restricciones juzgadas aparte; criterios excluyentes con orden (también hallazgo 9 del recorrido anterior) |
+| Cociente pérdida máxima/renta que mezcla antecedentes y no escala | **Falla del host** (SKILL §3: comprobar el contenido) + omisión menor | SKILL §3: un cálculo que combina fuentes se declara ilustrativo, con supuestos y efecto de escala |
+| GS3M del mismo mes (información futura) y rendimiento de referencia tomado como invertible | **Falla del host** (coverage pedía point-in-time) + omisión: no extendía point-in-time a benchmarks y tasas ni separaba referencia de retorno invertible | SKILL §6 y coverage/Datos |
+| Método, nivel del intervalo y muestra suficiente delegados al owner | **Omisión (y efecto no buscado) de la instrucción:** "sin umbrales universales" y "decisiones del usuario" empujaron al host a delegar detalles técnicos | SKILL §6: el investigador recomienda método, nivel y suficiencia; el usuario decide riesgo aceptable y utilidad mínima |
+
+No se agregó nada específico de RPF ni de opciones. Las propuestas 1–8 del recorrido anterior (auditar un
+antecedente cuantitativo, fuentes de buscador, erratas, dónde persistir, etc.) siguen **propuestas, no
+aplicadas**: no las pidió esta evaluación. La 9 (criterios excluyentes) quedó incorporada.
+
+**Contaminación declarada:** v0.2 se escribió a partir de problemas del caso SPY; en el contraste, SPY no es
+un caso nuevo para v0.2. El caso oro sí.
+
+## Contraste con y sin instrucción (v0.2.0-draft) — 25/09
+
+Protocolo y rúbrica fijados antes ([protocol.md](contrast-2026-09-25/protocol.md)); resultados, salidas sin
+corregir y evaluación ciega de Codex en [results.md](contrast-2026-09-25/results.md). En corto: en el caso
+nuevo (futuros de oro) la salida con instrucción fue claramente mejor (34 vs 24 sobre 35; la salida sin
+instrucción probó GLD en vez de GC y juzgó por Sharpe); en SPY, levemente mejor (30 vs 28) con los mismos
+errores materiales, en un caso contaminado porque v0.2 salió de él. n = 1 por celda y el ciego no funcionó
+(el evaluador reconoció las condiciones por la estructura): indicio a favor, no efecto medido.
+
+Candidatos a la instrucción que surgen del contraste, **no aplicados** (sería otra ronda sin caso nuevo):
+declarar qué riesgo iguala un benchmark "de igual riesgo" y comprobar que no cambie la pregunta; revisar que
+la síntesis no contradiga las reglas del cuerpo.
