@@ -141,6 +141,13 @@ instrucción; perfeccionar RPF, comprar datos o fijar su tolerancia no son requi
 | AC-09 | [protocol.md](../pilots/strategy-design/contrast-2026-09-25/protocol.md) (commit `69848fa`, antes de correr); [results.md](../pilots/strategy-design/contrast-2026-09-25/results.md); `raw/`, `blind/`, `eval-codex.md`, `label_map.json` | Ejecutado; evidencia preliminar (n = 1 por celda, ciego no efectivo) |
 | AC-10 | pendiente | — |
 
+**Corrección de foco del owner (25/09):** el piloto busca que el host obtenga datos de GaleCore y construya el
+análisis sobre ellos. Ninguna de las cuatro corridas consultó datos de GaleCore (sólo documentos, `research/data`,
+`catalog`/`kb search` y web): **ese recorrido no está probado** (detalle en results.md). El próximo contraste usa
+GaleCore local como fuente, con las mismas capacidades y un estado de datos comparable, sin web; antes se verifica el
+acceso y qué información da realmente. Revisión de esta entrega: interna R2 CHANGES_REQUESTED (4 MAJOR, sin corregir
+aún); Codex no lanzado.
+
 Datos consultados (públicos, sin compras ni contactos): historias de Cboe (VIX, VIX9D, VIX3M, VVIX), series de
 FRED (`GS3M`, `DGS3MO`, `DTB3`) y el precio público de un proveedor de cadenas SPY.
 

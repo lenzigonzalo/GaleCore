@@ -101,3 +101,21 @@ indicio a favor en generalización (oro), no un efecto medido.
 - **Sin ronda de mejoras:** el esfuerzo de revisión se estima por los errores materiales encontrados; no se
   midió cuánto cuesta corregirlos.
 - El evaluador usó la web aunque el sandbox era de sólo lectura; sus verificaciones externas no se re-verificaron.
+
+## Corrección de foco del owner (25/09, después del contraste): datos de GaleCore — no probado
+
+El piloto busca que el host **obtenga datos de GaleCore** y construya su análisis sobre ellos. En este
+contraste **ninguna corrida consultó datos de GaleCore**: no hubo llamadas a la API DataFeed (`/Data/*`,
+`/App/*`), al MCP ni al runtime SHADOW, y no hay solicitudes ni respuestas para conservar. Lo que hubo
+(según los registros autodeclarados de cada salida):
+
+| Corrida | Consultas locales | Datos obtenidos de GaleCore usados en conclusiones |
+|---|---|---|
+| spy-A | lectura de documentos de RPF y del JSON de reglas; listado de `GaleCore/research/data/` | ninguno |
+| spy-B | ídem, más esquema y rango de parquets de `research/data/`; CLI de GaleCore-AI `catalog` y `kb search` (sólo registros de régimen, sin datos de mercado) | ninguno |
+| gold-A | primeras/últimas filas de `research/data/tbill_3m_monthly.csv` | ninguno (GaleCore no tiene futuros ni oro) |
+| gold-B | CLI `catalog` y dos `kb search` (sin resultados pertinentes) | ninguno |
+
+Leer documentación, archivos de research o la web no equivale a obtener datos de GaleCore. **El recorrido
+"consultar GaleCore → interpretar lo obtenido" sigue sin probar**; este contraste sólo informa sobre
+investigación documental y diseño de la prueba. El siguiente contraste usa GaleCore local como fuente, sin web.
