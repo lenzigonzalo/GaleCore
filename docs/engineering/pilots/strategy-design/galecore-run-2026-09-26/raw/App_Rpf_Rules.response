@@ -1,0 +1,446 @@
+{
+  "_meta": {
+    "version": "0.2.0-draft",
+    "strategy": "rpf_real_premium_firing",
+    "strategy_name_es": "Disparo por prima real",
+    "profile": "core",
+    "status": "paper_only",
+    "enabled_for_live": false,
+    "config_ref": "BT-17 variante C con capa gamma mantenida (delta 0.25 + GEX>=0)",
+    "config_note": "delta 0.25 + GEX es una INTERPOLACION (ganador BT-17 es sin GEX). Conjuncion de dos palancas validadas por separado. Ver reconciliacion 10.5.",
+    "schema_note": "Espeja el schema del core (macro_regime.checks, signal_gates.gates, position_builder.layers) para reutilizar SignalGatesEvaluator y los handlers SIN codigo nuevo (Fase 4, Fork A). El concepto de 2 ejes (arma/dispara) vive en la definicion v2, no en el JSON.",
+    "last_updated": "2026-07-29",
+    "reference_doc": "docs/rpf/galecore-estrategia-rpf.md",
+    "ledger_doc": "docs/rpf/galecore-rpf-reconciliacion.md",
+    "research_doc": "docs/rpf/galecore-research-backtesting-rpf.md",
+    "location_note": "Presente en Files junto a core/live/paper pero SIN endpoint (AppController sirve solo core/live/paper). paper_only + enabled_for_live:false gatean el paso a real.",
+    "signal_layer_note": "La capa de senal (VRP, edge, tail, put_wall, credit) YA corre en DataFeed.Application/App/SignalGates/*. La Decision 5 (RPF completo) agrega la ORQUESTACION: state_machine + loop backend + trade_suggestion (Fase 5).",
+    "expected_metrics": {
+      "trades_per_year": 8,
+      "win_rate": 0.97,
+      "worst_year_usd": -140,
+      "note": "interpolado entre variante A (7.4/ano) y C (10.6/ano) de BT-17; revalidar en paper"
+    }
+  },
+
+  "principles": {
+    "safety_first": true,
+    "gates_vs_triggers": true,
+    "no_cross_compensation": true,
+    "prune_dont_add": true,
+    "json_first": true,
+    "suggest_never_execute": true,
+    "show_only_what_is_used": true
+  },
+
+  "strategy_scope": {
+    "allowed_strategies": ["put_credit_spread"],
+    "forbidden_strategies": ["iron_condor", "call_credit_spread", "naked_short", "ratio_spread", "long_directional"],
+    "default_structure": "put_credit_spread",
+    "structure_selection_method": "disabled_forced_pcs",
+    "forbidden_note": "IC/CCS in-edgeable a probabilidad honesta (BT-11). El motor multi_factor degradaba el baseline; a re-diseno con ciclo nuevo si se revive."
+  },
+
+  "universe": {
+    "mode": "whitelist",
+    "tickers": ["SPY"],
+    "excluded": {
+      "QQQ": "operador 2026-07-14 (replico en BT-6 pero fuera del trading)",
+      "IWM": "BT-6: sin prima rica, refutado"
+    }
+  },
+
+  "data_quality": {
+    "max_quote_age_seconds": 15,
+    "max_structural_levels_age_minutes": 15,
+    "block_on_crossed_market": true,
+    "block_on_missing_critical_data": true
+  },
+
+  "definitions": {
+    "vrp": {
+      "type": "formula",
+      "formula": "atm_iv_30d / realized_vol_30d_trailing",
+      "rv_denominator": "realized_vol_30d_trailing",
+      "denominator_note": "TRAILING. HAR-RV probado y refutado (BT-16): reabre el bear 2022."
+    },
+    "edge_emp": {
+      "type": "formula",
+      "formula": "(net_credit / spread_width) / p_perdida_trailing",
+      "p_loss_source": "pop_calibration (tabla POP empirica de puts, trailing anti-lookahead, SIN shrinkage)",
+      "semantics": "edge > 1 <=> EV > 0 con probabilidad honesta (BT-3 run-2)"
+    },
+    "pop_calibration": {
+      "type": "lookup_table",
+      "side": "put_only",
+      "method": "expanding_window_anti_lookahead",
+      "shrinkage": null,
+      "shrinkage_note": "SIN shrinkage (BT-10b: la palanca es el delta, no la calibracion)",
+      "served_file": "Files/pop_calibration.json",
+      "served_format": "symbols.SPY[] = { delta, pLoss, n }; interpolar linealmente por |delta|",
+      "reader_code": "DataFeed.Application/App/SignalGates/PopCalibrationTable.cs",
+      "origin": "research/data/derived/pop_calibration_spy.parquet (BT-10)",
+      "caveat": "Hija del drift (BT-6/IWM). Monitorear el factor por ventana (C4; quedo en falla declarada en H3, absorbido por barras robustas)."
+    },
+    "gex": {
+      "type": "formula",
+      "formula": "sum(open_interest * gamma * 100 * spot^2 * 0.01) para DTE<90, callGEX - putGEX",
+      "unit": "billions_usd",
+      "fix_note": "BT-5: el backend calculaba sin el x0.01 y /1e6 en NetGexBillions (bug -5e16). Fix pendiente en GammaExposureHandler.cs."
+    },
+    "gex_threshold_by_symbol": {
+      "type": "lookup_by_symbol",
+      "values": { "SPY": 0 },
+      "unit": "billions_usd",
+      "note": "Recalibrado 50B -> 0 (BT-5). GEX >= 0 = dealers long gamma (amortiguan). El umbral 25B/50B era inalcanzable con la formula real."
+    },
+    "tail_score": {
+      "type": "formula",
+      "components": {
+        "vvix": { "warn": 110, "block": 130 },
+        "skew25_roc5d": { "warn": 0.05, "block": 0.08 }
+      },
+      "scoring": "none=0 / warn=1 / block=2 por componente; suma >= 2 -> engine_out",
+      "streak_smoothing_days": 2,
+      "market_wide": "SPY"
+    },
+    "put_wall": {
+      "type": "formula",
+      "formula": "strike con maximo gamma*open_interest de puts, DTE < 90",
+      "role": "restriccion de sanidad (short <= put_wall), NO ancla (BT 3-bis)"
+    },
+    "credit_ratio": {
+      "type": "formula",
+      "formula": "net_credit / spread_width",
+      "role": "piso anti-pennies (>=0.10) + display. El 33.3% quedo RETIRADO como piso (BT-3 run-2)."
+    },
+    "regime_classification": {
+      "type": "lookup_by_range",
+      "input": "IV30 (nivel), rango [min, max)",
+      "reader_code": "DataFeed.Application/App/Shared/CascadeUtils.ClassifyRegime",
+      "ranges": [
+        { "min": 0, "max": 15, "value": "low_vol" },
+        { "min": 15, "max": 25, "value": "normal" },
+        { "min": 25, "max": 30, "value": "elevated" },
+        { "min": 30, "max": 999, "value": "caution" }
+      ],
+      "note": "Etiqueta que elige la barra signal_gates.edge.bars_by_regime. Cortes espejo del core (gap de Fase 4 CERRADO: no eran provisorios). El sweet spot elevated (25-30) coincide con BT-2/3 (VIX 25-30 = 98.9% win)."
+    },
+    "friction": {
+      "type": "model",
+      "per_trade_usd": 6.30,
+      "components": "comisiones + fees + slippage + gestion esperada (PCS 2 legs, round trip, cierre 50%)",
+      "floor_formula": "min_edge_floor = 1 + friction_usd / credit_usd"
+    }
+  },
+
+  "macro_regime": {
+    "name": "macro_regime",
+    "description": "Entorno operable (TIER A / arma). Flags rapidos (BT-0), NO el regime engine de 8 regimenes.",
+    "engine": "fast_flags",
+    "pass_rule": "all_checks_pass",
+    "on_fail": "short_circuit_no_trade",
+    "checks": [
+      {
+        "id": "vix_absolute",
+        "label": "VIX < 30",
+        "metric": { "ref": "marketdata.VIX.price" },
+        "operator": "lt",
+        "threshold": { "value": 30 },
+        "source": "/Data/Tastytrade/MarketData/Trade -> Symbol=VIX (indice CBOE, mismo camino que VVIX)",
+        "_note": "VIX real, NO la IV del simbolo. Hasta 2026-08-10 usaba IV30_30d como proxy; en SPY coincidia por casualidad. Sin dato de VIX el check NO pasa (fail-closed): con on_fail no_trade, quedarse sin el indice bloquea, no habilita.",
+        "on_fail": "no_trade"
+      },
+      {
+        "id": "vix_term_structure",
+        "label": "VIX TS normal (VIX9D < VIX)",
+        "metric": { "ref": "marketdata.VIX9D.price" },
+        "operator": "lt",
+        "threshold": { "ref": "marketdata.VIX.price" },
+        "source": "/Data/Tastytrade/MarketData/Trade -> Symbol=VIX9D y Symbol=VIX (indices CBOE, mismo camino que VVIX)",
+        "on_fail": "no_trade",
+        "on_no_data": "pass",
+        "_note": "Contango del VIX: VIX9D por debajo del VIX de 30d es lo normal; invertido (backwardation) senala estres de corto plazo y es cuando este gate tiene que frenar. Hasta 2026-08-10 el ref decia close_9d_ago vs close_30d_ago, o sea el cierre del VIX HACE 9 dias contra el de HACE 30: eso son dos puntos de la misma serie en el pasado, una tendencia, no una curva. Una estructura temporal compara TENORES distintos en el MISMO instante. El ref contradecia a su propia label, que ya decia 'VIX-9d < VIX-30d'. El codigo, mientras tanto, no implementaba ninguno de los dos: usaba la IV del propio simbolo a 9d y 30d.",
+        "_no_data_note": "on_no_data pass: sin dato el check NO bloquea, a diferencia de vix_absolute que es fail-closed. Motivo: el feed DXLink tiene desconexiones intermitentes sin causa identificada (ver commit 1663a84), y fail-closed aca seria un freno silencioso de TODA la operatoria de RPF ante una caida de datos. Mismo criterio que el gate tail_score. Queda registrado en el log del loop para que la perdida de la guarda no sea invisible."
+      },
+      {
+        "id": "iv_momentum",
+        "label": "Aceleracion de vol <= 12%",
+        "metric": { "ref": "definitions.iv30_atm_roc_pct" },
+        "operator": "lte",
+        "threshold": { "value": 12.0 },
+        "on_fail": "wait_for_stabilization",
+        "_rpf_note": "BT-0 valido sobre RoC5d de VIX; el handler actual computa IV30 RoC. Divergencia menor a reconciliar (Fase 4, punto D)."
+      },
+      {
+        "id": "gex_total",
+        "label": "GEX >= 0 (dealers long gamma = amortiguan)",
+        "metric": { "ref": "definitions.gex" },
+        "operator": "gte",
+        "threshold": { "ref": "definitions.gex_threshold_by_symbol" },
+        "on_fail": "no_trade",
+        "_rpf_note": "Decision operador 2026-07-29: MANTENER (safety-first). Aca vive el requisito GEX>=0 (no en signal_gates.gamma_support). Punto ciego: el unico episodio que lo justifica (ago-2015) esta fuera del OOS."
+      }
+    ],
+    "_removed": {
+      "iv_rank": "REMOVIDO (Fork B, 2026-07-29): BT-0 no lo valido y el principio 2 rechaza la banda de IVR dentro del AND de seguridad. 'Lo que no se usa no se muestra'.",
+      "spot_vs_zgl": "OMITIDO: no testeado (requiere ZGL historico + OI). Diferido.",
+      "spy_exdiv": "OMITIDO: son checks del lado call (block CCS); inactivos con PCS-only."
+    }
+  },
+
+  "signal_gates": {
+    "description": "Filtros de entrada validados (H3 / BT-9b..BT-17). Se evaluan tras macro_regime, antes de construir strikes. Cortocircuitantes. Los lee SignalGatesEvaluator.",
+    "evaluation": "all_must_pass",
+    "gates": {
+      "volatility_risk_premium": {
+        "enabled": true,
+        "label": "VRP >= 1.2 (el seguro esta caro)",
+        "formula": "atm_iv_30d / realized_vol_30d_trailing",
+        "rv_denominator": "realized_vol_30d_trailing",
+        "min": 1.2,
+        "on_fail": "no_trade"
+      },
+      "tail_score": {
+        "enabled": true,
+        "label": "Score de cola < 2 (sin alerta de crash)",
+        "components": {
+          "vvix": { "warn": 110, "block": 130, "source": "CBOE VVIX" },
+          "skew25_roc5d": { "warn": 0.05, "block": 0.08, "source": "IV_put25d / IV_atm, RoC 5d. La serie diaria (skew25_history.json) se mide sobre el vencimiento mas cercano a 30 DTE, Regular o Weekly, para que sea comparable consigo misma; el RoC se anula si el DTE de la lectura viva y el del punto historico difieren en mas de 7 dias" }
+        },
+        "scoring": "none=0 / warn=1 / block=2 por componente; suma >= 2 -> engine_out",
+        "streak_smoothing_days": 2,
+        "market_wide": "SPY",
+        "on_fail": "no_trade"
+      },
+      "short_below_put_wall": {
+        "enabled": true,
+        "label": "Short put strike <= put wall (restriccion de sanidad)",
+        "on_missing_wall": "no_trade",
+        "_on_missing_wall_note": "Que hace el gate cuando NO hay put wall. 'no_trade' = falla cerrado; 'inform_only' = no bloquea (el comportamiento hasta 2026-08-18). Hasta esa fecha un muro ausente caia en no_data y no_data NO bloquea, asi que la restriccion de sanidad se apagaba sola justo cuando no habia con que verificarla — el unico gate del embudo cuyo dato faltante significa 'no puedo comprobar que el short este protegido', no 'todavia no se'. Se volvio relevante el mismo dia: los muros ahora exigen que el neto del strike tenga el signo de su lado (ver GammaExposureHandler.SelectPutWall), asi que un putWall null pasa de ser una rareza de datos a un resultado legitimo — significa que ningun strike bajo el spot tiene gamma neto negativo. OJO: esto solo aplica al MURO ausente. Sin short put strike el gate sigue en no_data, porque ahi no falta el dato: falta el candidato, y un gate no puede juzgar lo que todavia no existe.",
+        "on_fail": "no_trade"
+      },
+      "edge": {
+        "enabled": true,
+        "label": "Edge >= barra por regimen (te pagan mas que el riesgo real)",
+        "formula": "(credito / ancho) / p_perdida_trailing",
+        "p_loss_source": "pop_calibration (SIN shrinkage)",
+        "bars_by_regime": {
+          "low_vol": 1.1,
+          "normal": 1.05,
+          "elevated": 1.1,
+          "caution": 1.2
+        },
+        "bars_note": "CALIBRADO (BT-3 run-2), congelado BT-9..17. Las etiquetas (low_vol/normal/elevated/caution) las asigna definitions.regime_classification (cortes espejo del core; gap Fase 4 cerrado).",
+        "on_fail": "no_trade"
+      },
+      "credit_minimum": {
+        "enabled": true,
+        "label": "Credito neto >= $0.30 y ratio anti-pennies >= 10% del ancho",
+        "min_usd": 0.3,
+        "min_ratio_of_width": 0.1,
+        "on_fail": "try_wider_spread_then_discard"
+      }
+    },
+    "_removed": {
+      "gamma_support": "OMITIDO: el requisito GEX>=0 vive en macro_regime.gex_total, no aca (evita redundancia). 'Lo que no se usa no se muestra'."
+    }
+  },
+
+  "position_builder": {
+    "description": "TIER B / dispara + asignacion.",
+    "cascade_rule": "all_layers_pass",
+    "ranking": {
+      "status": "dormant",
+      "note": "priorityScore es desempate multi-simbolo; con SPY-only queda inactivo (definicion v2 seccion 4)."
+    },
+    "layers": [
+      {
+        "id": 2,
+        "name": "strike_engine",
+        "config": {
+          "dte_selection": { "target": 45, "min": 35, "max": 50 },
+          "structure_selection": {
+            "enabled": false,
+            "forced_structure_while_disabled": "put_credit_spread",
+            "note": "PCS-only (BT-11). El motor multi_factor y sus inputs (z-score, gex_skew, trend, flow) quedan fuera."
+          },
+          "delta_target": { "put_short": 0.25 },
+          "delta_note": "0.25 fijo (BT-17 ganador; BT-12 meseta). El implementado v1.4.0 usa rango 0.25-0.30.",
+          "spread_width": { "symbol_overrides": { "SPY": { "default": 5, "fixed": true } }, "unit": "points" },
+          "width_note": "$5 fijo. $10 rechazado (BT-17: apalancamiento, no alpha). El implementado v1.4.0 permite hasta $10."
+        }
+      },
+      {
+        "id": 3,
+        "name": "microstructure",
+        "config": {
+          "open_interest_min": 100,
+          "oi_note": "bajo de 2000 (BT seccion 8): el OI no predice calidad de quote en SPY moderno",
+          "spread_max_pct": 0.05,
+          "volume_min_status": "el filtro de volumen (>200) muerde parecido; pendiente revisar (BT seccion 8)"
+        },
+        "checks": [
+          { "id": "oi_short_leg", "label": "OI short >= 100", "applies_per_leg": "short", "operator": "gte", "threshold": { "value": 100 }, "on_fail": "discard_side" },
+          { "id": "oi_long_leg", "label": "OI long >= 100", "applies_per_leg": "long", "operator": "gte", "threshold": { "value": 100 }, "on_fail": "discard_side" },
+          { "id": "bid_ask_spread", "label": "B/A <= 5% mid", "applies_per_leg": "all", "operator": "lte", "threshold": { "value": 0.05 }, "on_fail": "discard_side" },
+          { "id": "credit_minimum", "label": "Credito >= $0.30", "applies_per_spread": true, "operator": "gte", "threshold": { "value": 0.30 }, "on_fail": "try_wider_spread_then_discard" }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "risk_and_sizing",
+        "config": {
+          "risk_per_trade_pct": 0.035,
+          "risk_per_trade_max_pct": 0.05,
+          "high_risk_band_pct": [0.05, 0.08],
+          "high_risk_note": "flag high_risk: solo regimen benigno, aprobacion manual explicita SIEMPRE",
+          "never_gt_pct": 0.08,
+          "max_positions": 2,
+          "portfolio_variant": "V2",
+          "v2_constraint": "la 2a posicion solo con vencimiento distinto (BT-15)",
+          "max_heat_pct_net_liq": 0.07,
+          "heat_note": "intacto. NO se relaja para que V2 entre a $10k (principio no_cross_compensation).",
+          "maxdd_cap_pct": 0.05,
+          "capital": {
+            "base_reference_usd": 16000,
+            "base_note": "respeta maxDD 5% + heat 7% sin tocar limites (V2 ~$820 riesgo simultaneo, maxDD -8.3% a 1 contrato)",
+            "live_funding_target_usd": 32000,
+            "live_note": "objetivo negocio $200/mes; lo cierra el capital, no un parametro"
+          },
+          "impl_divergence_note": "El core v1.4.0 usa risk 1.5% / heat 4.5%; RPF adopta los numeros de la definicion (3.5% / 7%)."
+        }
+      }
+    ]
+  },
+
+  "trade_management": {
+    "evaluation_priority": ["daily_kill_switch", "take_profit", "structural_support_loss", "hard_defense", "defensive_roll"],
+    "daily_kill_switch": {
+      "daily_portfolio_mtm_loss_pct_net_liq_max": 0.01,
+      "action": "block_new_entries_for_rest_of_session",
+      "note": "RPF/definicion usa 1%; el core v1.4.0 usa 1.5%."
+    },
+    "take_profit": {
+      "pct_of_initial_credit": 0.5,
+      "action": "close_position",
+      "validation": "BT-4: politica B domina en $/dia (win 99%, libera capital ~17d vs ~43)"
+    },
+    "structural_support_loss": {
+      "trigger": "relevant_wall_moves_inside_short_strike",
+      "confirm_consecutive_recalculations": 2,
+      "action": "close_position"
+    },
+    "hard_defense": {
+      "trigger_any": {
+        "short_leg_delta_abs_gt": 0.42,
+        "unrealized_loss_pct_of_initial_credit_gte": 2.0
+      },
+      "action": "evaluate_immediate_risk_reduction",
+      "delta_note": "0.42 (Fork 4): con entrada delta 0.25, el 0.30 del core v1.4.0 disparia casi en la entrada. BT-12: deterioro gradual sin acantilado hasta 0.35."
+    },
+    "defensive_roll": {
+      "trigger_unrealized_loss_pct_of_initial_credit_gte": 1.0,
+      "min_dte_remaining": 21,
+      "min_net_credit_for_roll": 0.2,
+      "max_rolls_per_position": 1,
+      "itm_note": "ITM se cierra, no se rolla"
+    },
+    "time_exit": {
+      "enabled": false,
+      "reason": "BT-4 REFUTO la salida forzada a 21 DTE: destruye win 97->75%, cola negativa (cristaliza rebotes). El core v1.4.0 todavia la tiene ACTIVA (time_exit dte_threshold 21) -> limpieza pendiente de la estrategia vigente."
+    },
+    "ex_div_spy": {
+      "enabled": false,
+      "reason": "block CCS ex-dividend inactivo con PCS-only; reactiva si vuelve el lado call"
+    },
+    "structure_mutation": {
+      "enabled": false,
+      "reason": "PCS->IC muerto (IC prohibido, BT-11)"
+    }
+  },
+
+  "cooldown": {
+    "enabled": true,
+    "type": "edge_hysteresis",
+    "delta": null,
+    "note": "la ocupacion de la posicion (~17d) hace ~80% del trabajo (BT-7/BT-15); delta = refinamiento menor"
+  },
+
+  "state_machine": {
+    "enabled": true,
+    "enabled_note": "ACTIVADA EN PAPER 2026-07-29. RpfLoopService corre la cascada sobre este JSON y emite estado+sugerencia. paper_only + enabled_for_live:false siguen bloqueando real. Fase 5/6a diseno+impl; activacion = validacion en paper (ver reconciliacion caveat OOS agotado).",
+    "scope": "por simbolo",
+    "precedence": ["VETOED", "WAITING_CAPACITY", "IN_POSITION", "DORMANT", "ARMED", "COOLDOWN", "TRIGGERED"],
+    "precedence_note": "Se evalua de arriba hacia abajo; el primero que matchea gana. VETOED tiene autoridad (safety-first, principio 1.1): el peligro activo domina la lectura aunque haya posiciones abiertas; la gestion sigue corriendo por trade_management.",
+    "states": {
+      "VETOED": "tail_score >= 2 (peligro de cola activo)",
+      "WAITING_CAPACITY": "trigger vivo (Tier A & edge >= barra) & sin cupo (2 posiciones V2 ocupadas): se senaliza sin poder abrir",
+      "IN_POSITION": "sin cupo & sin trigger vivo & con posiciones abiertas: solo gestion",
+      "DORMANT": "sin veto y sin setup operable (Tier A no pasa, o sin cupo por heat y sin posiciones)",
+      "ARMED": "Tier A pasa (macro_regime & VRP & tail & GEX>=0) & cupo & edge < barra",
+      "COOLDOWN": "trigger vivo & cupo & cooldown activo (recien disparo/ack; suprime re-disparo)",
+      "TRIGGERED": "trigger vivo & cupo & sin cooldown => emite trade_suggestion"
+    },
+    "v2_semantics_note": "Decision operador 2026-07-29: IN_POSITION es 'libro lleno sin trigger vivo', NO 'cualquier posicion abierta'. Con 1 de 2 cupos el sistema SIGUE armando/disparando para la 2a posicion (es lo que valida BT-15: 4.9->7.4 trades/ano y mejor peor-ano). La lectura literal de la tabla 8 de la definicion habria desactivado el 2o cupo y dejado WAITING_CAPACITY inalcanzable.",
+    "computed_from": "outputs de macro_regime + signal_gates + cupo (posiciones de cuenta) + cooldown (store in-memory)"
+  },
+
+  "trade_suggestion": {
+    "enabled": true,
+    "enabled_note": "ACTIVADO EN PAPER 2026-07-29 (junto con state_machine). El loop emite TradeSuggestion al entrar en TRIGGERED. El sistema sugiere, nunca ejecuta.",
+    "transport": "SignalR grupo 'rpf' (backend empuja; frontend = tablero). Evento ReceiveTradeSuggestion.",
+    "payload": ["id", "symbol", "structure", "legs", "credit", "width", "creditRatio", "edgeEmp", "bar", "regime", "deltaShort", "dte", "riskPerTradePct", "highRisk", "contracts", "state", "createdAt", "ttlSeconds"],
+    "state_semantics": "foto del estado que la emitio (TRIGGERED); no muta en el payload. Los cambios viajan como RpfStateUpdate separado + ackStatus.",
+    "ttl": { "mode": "multiple_of_tier_b", "factor": 2, "note": "cada tick Tier B con el simbolo aun TRIGGERED refresca (mismo id); al vencer sin ack se descarta" },
+    "persistence": "in_memory_singleton",
+    "persistence_note": "el estado se recomputa de los gates al reiniciar; IN_POSITION viene de la cuenta; el cooldown perdido es refinamiento menor (definicion seccion 6)",
+    "ack": {
+      "mode": "explicit_operator",
+      "methods": ["AcceptSuggestion", "DismissSuggestion"],
+      "accept_note": "confirma intencion + arranca cooldown; NO ejecuta la orden; IN_POSITION lo confirma la cuenta, no el ack",
+      "dismiss_note": "descarta + arranca cooldown",
+      "idempotency": "por id (un ack sobre sugerencia vencida/reemplazada se ignora)"
+    }
+  },
+
+  "orchestration": {
+    "enabled": true,
+    "enabled_note": "ACTIVADO EN PAPER 2026-07-29. Cadencias del loop RpfLoopService (BackgroundService singleton). Referencia de diseno; se afinan en paper.",
+    "loop": "RpfLoopService",
+    "tier_a_refresh_seconds": 300,
+    "tier_a_note": "arma/desarma: macro_regime + VRP + tail + GEX>=0. Escala diaria/horaria; cacheado en el store.",
+    "tier_b_tick_seconds": 30,
+    "tier_b_note": "dispara: strike engine PCS + edge + cupo + cooldown. Necesita quotes frescos; corre solo si Tier A dejo ARMED.",
+    "cooldown_seconds": 120,
+    "cooldown_note": "anti-doble-emision tras ack/TTL. La histeresis de edge (delta) queda null (definicion seccion 6). La freshness dura la gatea data_quality.max_quote_age_seconds (15s).",
+    "emit_timeout_seconds": 10,
+    "emit_timeout_note": "Corte del BROADCAST al grupo rpf, separado del tick. SignalR escribe en el canal de salida de CADA conexion del grupo; un cliente tapado (long-polling que dejo de pollear sin cerrar limpio) llena el buffer y el SendAsync espera para siempre. Un solo zombi wedgeaba el loop entero. Diagnosticado el 2026-08-10 con la traza de 3 puntos: el tick moria entre 'cascada OK' y 'emitido'. Es corto a proposito (10s): emitir a clientes sanos es instantaneo, asi que cualquier demora real ya es un cliente colgado y la emision no vale la pena. Perder una emision no cuesta nada — el proximo tick manda el estado completo de nuevo.",
+    "tick_timeout_seconds": 90,
+    "tick_timeout_note": "Corte duro por tick. Un mediator.Send colgado (canal DXLink saturado, snapshot que nunca completa) wedgeaba el loop PARA SIEMPRE: sin log, sin heartbeat, y el tablero mostrando datos viejos que parecen vigentes. Observado el 2026-08-10: un solo tick y 12+ minutos de silencio. Con el corte el tick muere, cae en el catch que ya existe y emite estado de error -> el cuelgue silencioso pasa a ser un fallo visible y recuperable. NO arregla la causa raiz, solo evita que se coma el loop. 90s es holgado a proposito: los timeouts internos de DXLink son 10s (trade/quote/greeks), 15s (multi-candle) y 30s (candle historico), y corren concurrentes, asi que un tick sano nunca deberia acercarse. Si se baja de ~60s se corre el riesgo de matar ticks legitimamente lentos.",
+    "physical_timer": "un solo timer a la cadencia rapida (tier_b_tick_seconds); Tier A se recomputa cada N ticks (N = tier_a_refresh_seconds / tier_b_tick_seconds)"
+  },
+
+  "research_provenance": {
+    "_note": "Ata cada decision del JSON a su BT. El test de Fase 4 falla si un parametro cambia sin respaldo.",
+    "universe_spy_only": "operador 2026-07-14 + BT-6",
+    "structure_pcs_only": "BT-11",
+    "delta_target_0_25": "BT-17 (ganador) + BT-12 (meseta)",
+    "width_5": "BT-13c + BT-17",
+    "pop_empirical_no_shrinkage": "BT-1 + BT-9b + BT-10c",
+    "min_edge_bars": "BT-3 run-2",
+    "vrp_min_1_2_flat": "BT-2/3",
+    "vrp_denominator_trailing": "BT-16 (HAR refutado)",
+    "tail_gate_vvix_skew": "BT-9b",
+    "gamma_gate_gex_ge_0": "BT-5 (SPY) + BT-6 (poda QQQ) + BT-17/P1 (decision mantener)",
+    "put_wall_restriction": "BT 3-bis",
+    "microstructure_oi_100": "BT seccion 8",
+    "portfolio_v2": "BT-15",
+    "management_b_50pct": "BT-4",
+    "forced_dte_exit_refuted": "BT-4",
+    "hard_defense_0_42": "BT-12",
+    "capital_16k_32k": "BT-15 + BT-17",
+    "iv_rank_removed": "Fork B 2026-07-29 (BT-0 no lo valido + principio 2)",
+    "architecture_full_rpf": "decision operador 2026-07-29 (no es hallazgo de datos)"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "method": "GET",
+  "url": "http://127.0.0.1:7001/App/Runtime/Instances/95e58d15-0167-4c27-a2b0-c3981500df4c/Evaluations?limit=2",
+  "utc": "2026-09-26T13:22:53Z",
+  "status": 200,
+  "bytes": 926
+}
