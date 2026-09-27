@@ -1,6 +1,6 @@
 {
   "name": "spy_prima_varianza_30_45d",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "display_name": "Cobro de prima de varianza en SPY a 30–45 días con riesgo definido",
   "purpose": "Cobrar parte de la prima de varianza de SPY vendiendo un put spread de riesgo definido por vez, y observar en SHADOW si el runtime la ejecuta tal como está escrita, antes de cualquier evaluación económica.",
   "research_refs": [
@@ -352,7 +352,7 @@
   },
   "owner_decisions": [
     {
-      "question": "¿Aprobás strategy:spy_prima_varianza_30_45d/1.0.0 con su hash para SHADOW en GaleCore Dev?",
+      "question": "¿Aprobás strategy:spy_prima_varianza_30_45d/1.0.2 con su hash para SHADOW en GaleCore Dev?",
       "recommendation": "Aprobar: todas las reglas ejecutables están en la spec y las no ejecutables están declaradas.",
       "status": "pending"
     },
@@ -380,6 +380,6 @@
     "Sin evidencia económica propia: ninguna prueba corrida",
     "Cinco reglas no son ejecutables por el runtime (E3, E4, S2, R2, M2) y quedan fuera de la spec, declaradas",
     "El chequeo compara la spec con una tabla del runtime leída en código; no ejecuta GaleCore",
-    "1.0.0 quedó guardada y nunca se aprobó: la revisión de Codex encontró reglas descritas de más (frescura, ancho) y parámetros heredados marcados como decisión del owner"
+    "1.0.0 y 1.0.1 quedaron guardadas y nunca se aprobaron: la revisión de Codex encontró reglas descritas de más (frescura, ancho), parámetros heredados marcados como decisión del owner y, en la segunda, la pregunta de aprobación con otra versión"
   ]
 }

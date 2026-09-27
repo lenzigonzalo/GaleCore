@@ -62,10 +62,10 @@ reutiliza el método de GC-AI-0006 (piloto, abierto) y la investigación de GC-A
 
 | Criterio | Implementación | Verificación automática | Artefacto | Estado |
 |---|---|---|---|---|
-| AC-01 | `config/catalog.yaml` (`strategy_design`, `strategy_followup`), `config/skills/strategy-design/skill.yaml` 0.3.0 (continúa el piloto 0.2.0-draft), `config/skills/strategy-followup/skill.yaml` | `test_catalog_offers_the_strategy_path`, catálogo en `test_knowledge.py` | `cli catalog` lista 6 capacidades | Implementado; verificado local |
-| AC-02 | `contracts/strategy.py` (`ProposalContent`: bloques obligatorios, `basis` por regla, plan de evaluación) | `test_every_block_needs_a_rule`, `test_grounded_rules_cite_and_unsupported_rules_explain`, `test_evaluation_plan_needs_dependence_and_sample_sufficiency` | `strategy:spy_prima_varianza_30_45d/1.0.1` (22 reglas; 1.0.0 guardada, nunca aprobada) | Implementado; propuesta real guardada |
+| AC-01 | `config/catalog.yaml` (`strategy_design`, `strategy_followup`), `config/skills/strategy-design/skill.yaml` 0.3.1 (continúa el piloto 0.2.0-draft), `config/skills/strategy-followup/skill.yaml` | `test_catalog_offers_the_strategy_path`, catálogo en `test_knowledge.py` | `cli catalog` lista 6 capacidades | Implementado; verificado local |
+| AC-02 | `contracts/strategy.py` (`ProposalContent`: bloques obligatorios, `basis` por regla, plan de evaluación) | `test_every_block_needs_a_rule`, `test_grounded_rules_cite_and_unsupported_rules_explain`, `test_evaluation_plan_needs_dependence_and_sample_sufficiency` | `strategy:spy_prima_varianza_30_45d/1.0.2` (22 reglas; 1.0.0 y 1.0.1 guardadas, nunca aprobadas) | Implementado; propuesta real guardada |
 | AC-03 | `application/strategy.py` (`check_proposal`, tabla de soporte leída del código de GaleCore `bc62f22`) | `test_candidate_is_valid_with_its_declared_gaps`, `test_owner_draft_spec_is_refused_for_what_the_runtime_ignores`, `test_a_spec_promising_behavior_the_runtime_ignores_is_invalid` (5), `test_an_unmapped_field_fails_closed`, `test_fields_with_a_single_runtime_semantics_are_fixed` (4), `test_every_gate_leaf_is_validated` (5), y más | Chequeo real: `VALID_WITH_DECLARED_GAPS`, declaradas E3, E4, S2, R2, M2; `pcs_spy_16d_v1` → `INVALID` (sizing RISK_BASED, riesgo %, analytics_refs) | Implementado; verificado local |
-| AC-04 | `galecore_spec_hash`; spec en GaleCore `Files/Runtime/spy_prima_varianza_30_45d.json` (rama local `feature/GC-AI-0008-estrategia-shadow`) | `test_hash_equals_the_one_galecore_computed` (v1, v2 contra los hashes persistidos en GaleCore Dev); GaleCore `StrategySpecVersionTests` (su loader: carga, valida, hash 1.0.1 `sha256:48b5a3c3…`) | 16/16 tests de specs en GaleCore | Implementado; revalidado con el código de GaleCore |
+| AC-04 | `galecore_spec_hash`; spec en GaleCore `Files/Runtime/spy_prima_varianza_30_45d.json` (rama local `feature/GC-AI-0008-estrategia-shadow`) | `test_hash_equals_the_one_galecore_computed` (v1, v2 contra los hashes persistidos en GaleCore Dev); GaleCore `StrategySpecVersionTests` (su loader: carga, valida, hash 1.0.2 `sha256:8a744381…`) | 16/16 tests de specs en GaleCore | Implementado; revalidado con el código de GaleCore |
 | AC-05 | `approve`, `deploy_check` (create-only, hash), `galecore_dev.py deploy --approval` (relee aprobación y propuesta, verifica sus hashes y el cargado por GaleCore) | `test_approval_needs_the_exact_hash`, `test_deploy_is_refused_without_approval_or_with_another_hash`, `test_an_edited_approval_blocks_the_deploy`, `test_cli_save_approve_deploy_check` | — | Implementado; **aprobación real pendiente del owner** |
 | AC-06 | `galecore_dev.py deploy/stop` | — | — | **Bloqueado:** aprobación, parar v2, API de GaleCore Dev no levantada (ver hallazgos) |
 | AC-07 | `strategy_followup` + `galecore_dev.py runtime-report` | `test_research_can_cite_the_strategy_version` | — | Implementado el camino; demostración después del despliegue |
@@ -140,3 +140,12 @@ Gate, ruff, 765 tests y `diff --check` en verde; hash de la candidata reproducid
 | C1-m3 | MINOR | La investigación decía que todas las reglas de entrada eran ejecutables | Corregido: revisión r3 `correction` |
 
 La versión a aprobar es **1.0.1** (`sha256:48b5a3c36fdf9fe64c18dd2dc9bc1140d545525219b210b2f6b193d1b4a40b3a`); 1.0.0 queda guardada como historia.
+
+## Recheck Codex C2 (`GC-AI-0008-20260927T194521Z.md`, `2e66f4e..2d7445d` + GaleCore `ef6d1a5..8ae9be1`) — CHANGES_REQUESTED
+
+C1-B1, B2, M1–M3 y m1–m3 RESUELTOS; C1-B3 pasa a **decisión del owner** (exigir la aprobación en el endpoint antes de producción).
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| C2-M1 | MAJOR | La propuesta 1.0.1 pedía aprobar `…/1.0.0` y un test registraba esas palabras contra 1.0.1 | Corregido: versión **1.0.2** (`sha256:8a7443812d0291dcb27aad6cb8674cf92496fd32f036267640521059ca77e149`); la propuesta no puede mencionar otra versión en sus decisiones del owner y `approve` rechaza palabras que nombran otra versión (+2 tests) |
+| C2-m1 | MINOR | Matriz decía skill 0.3.0 | Corregido: 0.3.1 |

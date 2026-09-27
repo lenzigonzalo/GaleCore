@@ -29,13 +29,13 @@ from tests.unit.test_knowledge import HOST, NOW, content, kb, save  # noqa: F401
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 SPECS = FIXTURES / "galecore" / "runtime_specs"
 NAME = "spy_prima_varianza_30_45d"
-KEY = f"{NAME}/1.0.1"
+KEY = f"{NAME}/1.0.2"
 # Hashes GaleCore computed at load and persisted in GaleCore Dev (strategy_specs.content_hash, 27/09).
 GALECORE_HASHES = {
     "shadow_runtime_test_v1.json": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076",
     "shadow_runtime_test_v2.json": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
     # The candidate submitted for approval; GaleCore's StrategySpecVersionTests pins the same value.
-    f"{NAME}.json": "sha256:48b5a3c36fdf9fe64c18dd2dc9bc1140d545525219b210b2f6b193d1b4a40b3a",
+    f"{NAME}.json": "sha256:8a7443812d0291dcb27aad6cb8674cf92496fd32f036267640521059ca77e149",
 }
 
 
@@ -126,7 +126,7 @@ def test_candidate_is_valid_with_its_declared_gaps():
 def test_owner_draft_spec_is_refused_for_what_the_runtime_ignores():
     """pcs_spy_16d_v1 declares risk-based sizing and a VRP analytics ref the runtime never uses."""
     def as_draft(d):
-        d["name"], d["version"] = "pcs_spy_16d_v1", "1.0.0"
+        d["name"], d["version"], d["owner_decisions"] = "pcs_spy_16d_v1", "1.0.0", []
     errors = check(proposal(as_draft), spec_text("pcs_spy_16d_v1.json"), "pcs_spy_16d_v1.json").errors
     joined = "\n".join(errors)
     assert "candidate_construction.sizing.method = 'RISK_BASED'" in joined
@@ -286,7 +286,7 @@ def stored(kb, research_ref):  # noqa: F811
 
 def test_saved_version_keeps_the_exact_spec_and_its_hash(kb, research_ref):  # noqa: F811
     doc, path = stored(kb, research_ref)
-    assert Path(path) == kb.base / "strategies" / NAME / "1.0.1.proposal.json"
+    assert Path(path) == kb.base / "strategies" / NAME / "1.0.2.proposal.json"
     assert doc.spec_json == spec_text()
     assert doc.spec_hash == galecore_spec_hash(spec_text())
     assert doc.check.verdict == "VALID_WITH_DECLARED_GAPS"
@@ -319,12 +319,26 @@ def test_approval_needs_the_exact_hash(kb, research_ref):  # noqa: F811
     with pytest.raises(KnowledgeError, match="is not this version's"):
         approve(kb=kb, key=KEY, spec_hash=GALECORE_HASHES["shadow_runtime_test_v2.json"],
                 owner_words="apruebo", host=HOST, now=NOW)
-    approval, _ = approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo la 1.0.0 para SHADOW",
+    approval, _ = approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo la 1.0.2 para SHADOW",
                           host=HOST, now=NOW)
     assert approval.scope == "SHADOW:galecore-dev" and approval.proposal_hash == doc.content_hash
     with pytest.raises(KnowledgeError, match="already exists"):
         approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="otra vez", host=HOST, now=NOW)
     assert search(kb, kind="strategy")["results"][0]["approved"] is True
+
+
+def test_approval_words_naming_another_version_are_refused(kb, research_ref):  # noqa: F811
+    """Codex C2 MAJOR: 1.0.1 asked for approval of 1.0.0."""
+    doc, _ = stored(kb, research_ref)
+    with pytest.raises(KnowledgeError, match="name version"):
+        approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo la 1.0.0", host=HOST, now=NOW)
+
+
+def test_owner_decisions_cannot_ask_about_another_version():
+    def stale(d):
+        d["owner_decisions"][0]["question"] = f"¿Aprobás {NAME}/1.0.0?"
+    with pytest.raises(ValidationError, match="mention other versions"):
+        proposal(stale)
 
 
 def test_deploy_is_refused_without_approval_or_with_another_hash(kb, research_ref):  # noqa: F811
@@ -395,7 +409,7 @@ def test_cli_check_and_hash():
     code, out = _cli("strategy", "hash", "--spec", str(SPECS / "shadow_runtime_test_v2.json"))
     assert code == 0 and out["spec_hash"] == GALECORE_HASHES["shadow_runtime_test_v2.json"]
     bad = copy.deepcopy(proposal_data())
-    bad["name"], bad["version"] = "pcs_spy_16d_v1", "1.0.0"
+    bad["name"], bad["version"], bad["owner_decisions"] = "pcs_spy_16d_v1", "1.0.0", []
     code, report = _cli("strategy", "check", "--spec", str(SPECS / "pcs_spy_16d_v1.json"),
                         stdin=json.dumps({"content": bad}))
     assert code == 3 and report["verdict"] == "INVALID"

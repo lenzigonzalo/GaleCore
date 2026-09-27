@@ -33,6 +33,7 @@ STRATEGY_NAME_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 STRATEGY_VERSION_RE = re.compile(r"^\d+\.\d+\.\d+$")
 SPEC_HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 APPROVAL_SCOPE = "SHADOW:galecore-dev"  # the only scope this increment can approve
+VERSION_MENTION_RE = re.compile(r"(?<![\d.])(\d+\.\d+\.\d+)(?![\d.])")
 
 
 def _non_blank(value: str) -> str:
@@ -212,6 +213,11 @@ class ProposalContent(BaseModel):
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         if dupes:
             raise ValueError(f"duplicate rule ids: {dupes}")
+        wrong = sorted({v for d in self.owner_decisions for v in VERSION_MENTION_RE.findall(
+            f"{d.question} {d.recommendation}") if v != self.version})
+        if wrong:
+            raise ValueError(f"owner decisions of version {self.version} mention other versions {wrong}; "
+                             "an approval must name this exact version")
         present = {r.block for r in self.rules}
         missing = [b.value for b in REQUIRED_BLOCKS if b not in present]
         if missing:

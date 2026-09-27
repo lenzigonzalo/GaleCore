@@ -31,6 +31,7 @@ from galecore_ai.adapters.strategy_store import (
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError, resolve_ref
 from galecore_ai.contracts.regime_record import RecordHost
 from galecore_ai.contracts.strategy import (
+    VERSION_MENTION_RE,
     ApprovalDocument,
     CheckReport,
     ProposalContent,
@@ -416,6 +417,9 @@ def approve(*, kb: KnowledgeBase, key: str, spec_hash: str, owner_words: str, ho
         raise KnowledgeError(f"strategy:{key}: the approved hash {spec_hash} is not this version's {doc.spec_hash}")
     if doc.check.verdict == "INVALID":
         raise KnowledgeError(f"strategy:{key}: an INVALID proposal cannot be approved")
+    others = sorted({v for v in VERSION_MENTION_RE.findall(owner_words) if v != doc.version})
+    if others:
+        raise KnowledgeError(f"strategy:{key}: the owner's words name version(s) {others}, not {doc.version}")
     now = now or datetime.now(UTC)
     try:
         draft = ApprovalDocument(strategy_ref=f"strategy:{key}", spec_hash=spec_hash,
