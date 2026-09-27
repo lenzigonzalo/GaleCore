@@ -67,8 +67,8 @@ reutiliza el método de GC-AI-0006 (piloto, abierto) y la investigación de GC-A
 | AC-03 | `application/strategy.py` (`check_proposal`, tabla de soporte leída del código de GaleCore `bc62f22`) | `test_candidate_is_valid_with_its_declared_gaps`, `test_owner_draft_spec_is_refused_for_what_the_runtime_ignores`, `test_a_spec_promising_behavior_the_runtime_ignores_is_invalid` (5), `test_an_unmapped_field_fails_closed`, `test_fields_with_a_single_runtime_semantics_are_fixed` (4), `test_every_gate_leaf_is_validated` (5), y más | Chequeo real: `VALID_WITH_DECLARED_GAPS`, declaradas E3, E4, S2, R2, M2; `pcs_spy_16d_v1` → `INVALID` (sizing RISK_BASED, riesgo %, analytics_refs) | Implementado; verificado local |
 | AC-04 | `galecore_spec_hash`; spec en GaleCore `Files/Runtime/spy_prima_varianza_30_45d.json` (rama local `feature/GC-AI-0008-estrategia-shadow`) | `test_hash_equals_the_one_galecore_computed` (v1, v2 contra los hashes persistidos en GaleCore Dev); GaleCore `StrategySpecVersionTests` (su loader: carga, valida, hash 1.0.3 `sha256:19884e77…`) | 16/16 tests de specs en GaleCore | Implementado; revalidado con el código de GaleCore |
 | AC-05 | `approve`, `deploy_check` (create-only, hash), `galecore_dev.py deploy --approval` (relee aprobación y propuesta, verifica sus hashes y el cargado por GaleCore) | `test_approval_needs_the_exact_hash`, `test_deploy_is_refused_without_approval_or_with_another_hash`, `test_an_edited_approval_blocks_the_deploy`, `test_cli_save_approve_deploy_check` | — | Implementado; **aprobación real pendiente del owner** |
-| AC-06 | `galecore_dev.py deploy/stop` | — | — | **Bloqueado:** aprobación, parar v2, API de GaleCore Dev no levantada (ver hallazgos) |
-| AC-07 | `strategy_followup` + `galecore_dev.py runtime-report` | `test_research_can_cite_the_strategy_version` | — | Implementado el camino; demostración después del despliegue |
+| AC-06 | `galecore_dev.py deploy --approval`/`stop`; API de GaleCore Dev levantada con arranque controlado (27/09) | — | Runtime verificado por API: persistencia, switch OFF, v2 recuperada con su posición | **Pendiente de tu aprobación** (propuesta abajo); evaluación en sesión después |
+| AC-07 | `application/followup.py`, `followup run/history`, `strategy_followup` 0.2.0, `galecore_dev.py runtime-report` | `tests/unit/test_followup.py` (6) | 2 seguimientos reales (`knowledge/followups/spy_prima_varianza_30_45d/`), evidencia directa, revisión `result` de la investigación | Implementado y ejecutado con datos reales; sin resultados SHADOW de esta versión hasta desplegarla |
 | AC-08 | — | — | — | Pendiente |
 
 ## Required validation
@@ -181,3 +181,33 @@ de Codex). Versión para aprobar: `strategy:spy_prima_varianza_30_45d/1.0.3`,
 
 **Comandos y resultados:** pytest `tests/unit/test_strategy.py` 49 passed; suite completa 777 passed (Codex C3); ruff limpio;
 GaleCore `StrategySpecVersionTests` 1/1 con hash 1.0.3.
+
+## Arranque controlado de GaleCore Dev (27/09, autorizado por el owner)
+
+- Antes: override del switch `runtime` en `Files/platform_services_switch_state.json` = `enabled: true` (25/09); se
+  puso en `false` **antes** de arrancar (mismo efecto que apagar el switch: sin entradas nuevas, lo abierto se sigue
+  valuando; decisión del owner del 24/09). Domingo: además, fuera de sesión no hay entradas.
+- Se detuvo el `DataFeed.Api` sin base de :7001 (PID 2012, lanzado el 26/09 por otra sesión) y se levantó
+  `galecore_dev.py api`. Log: specs cargadas, entre ellas `spy_prima_varianza_30_45d` con el hash de la 1.0.3; «recuperadas
+  2 instancias, 1 posición abierta, 213 evaluaciones, 435 eventos; problemas: ninguno».
+- Verificado por la API con login real (`runtime-report`): persistencia disponible, switch OFF (`source: platform`),
+  v2 RUNNING/PAUSED con su posición OPEN (0,44 de crédito, −0,50 USD), `VALUATION_NO_DATA` fuera de mercado. No se
+  aprobó ni desplegó nada. `runtime-report` corregido para escribir UTF-8.
+
+## Propuesta operativa para tu decisión (no ejecutada)
+
+1. **Aprobar** `strategy:spy_prima_varianza_30_45d/1.0.3`, hash `sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51`.
+   Reglas: SPY, put credit spread; put vendido con delta más cercano a −0,16 (±0,04) en un vencimiento de 30–45 DTE (el
+   más cercano a 37); comprado en el strike más cercano a 5 USD debajo (±1); crédito mínimo 0,10; entrada sólo con
+   VIX < 30 (sin dato fresco, bloqueo); 1 contrato, 1 posición a la vez, riesgo ≤ 500 USD; salidas: pérdida ≥ 2× crédito,
+   valor ≤ 50 % del crédito, DTE ≤ 21 (en ese orden); sin roll; sin filtro de GEX (decisión explícita, E5). No
+   ejecutables y declaradas: IV30/RV20, eventos, sizing por riesgo, kill switch, feriados. Parámetros heredados del
+   borrador del 26/09, **pendientes de tu confirmación**.
+2. **Parar `shadow_runtime_test_v2`** (`galecore_dev.py stop --instance 0bbd904a-…`). Efecto: deja de evaluar entradas y
+   libera el único lugar RUNNING; su posición 731/726P (vence 06/11) **se sigue valuando hasta su salida** por las reglas de
+   v2 (stop 2×, objetivo 50 %, salida a 7 DTE); queda visible en la pestaña SHADOW y en el reporte.
+3. **Desplegar**: `galecore_dev.py deploy --spec spy_prima_varianza_30_45d --approval knowledge/strategies/spy_prima_varianza_30_45d/1.0.3.approval.json`.
+   **Encender el switch** del runtime (hoy OFF) para que la estrategia pueda entrar en sesión: es una decisión separada
+   que va con el despliegue.
+4. **Verificación posterior**: `followup run` → la 1.0.3 con instancia RUNNING y el hash aprobado; en la primera sesión
+   (lunes 28/09 desde 09:30 ET) al menos una evaluación explicada (entrada, descarte o bloqueo), sin tocar umbrales.

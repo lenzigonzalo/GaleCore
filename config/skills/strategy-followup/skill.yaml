@@ -1,5 +1,5 @@
 skill_id: strategy_followup
-version: "0.1.0"
+version: "0.2.0"
 display_name: Seguimiento de una estrategia en SHADOW y retroalimentación de su investigación
 description: >
   Answers "what did this strategy do since the last review, why did it enter or not, how did its
@@ -13,10 +13,11 @@ required_capabilities: []
 system_prompt: >
   1. Find the strategy and its investigation: `kb search --kind strategy`, `kb show strategy:<ref>`
      (spec hash, approval), and the last revision of its research (the "last review").
-  2. Read GaleCore, not memory: the runtime report of the development environment (instances,
-     evaluations, events, positions, metrics) for the instance whose version hash equals the approved
-     spec hash, captured directly from the command's output and kept with `evidence add`. Data from
-     another hash belongs to another version and is not mixed in.
+  2. Run `followup run --strategy <name>`: it reads GaleCore through its API (development environment),
+     keeps the output verbatim as evidence, evaluates the approved version (or the latest, flagged not
+     approved) and writes a hashed follow-up record with operation, SHADOW results, hypothesis evidence,
+     other versions (never mixed in) and attention points. Present that record; do not re-derive numbers.
+     If GaleCore did not answer, the record says so: report it as the first attention point.
   3. Separate three things and label them:
      - Funcionamiento operativo: evaluations run, blocks and their reasons (NO_DATA, stale quotes,
        outside session), errors; whether the runtime did what the rules say.

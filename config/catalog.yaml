@@ -141,18 +141,18 @@ entries:
   - id: strategy_followup
     kind: investigation
     serves: >-
-      Responder qué hizo una estrategia en SHADOW desde la última revisión, por qué entró o no, cómo
-      evolucionaron sus posiciones y qué cambia en la hipótesis, con datos de GaleCore atados a la
-      versión aprobada, y guardarlo como revisión de su investigación.
+      Mostrar la estrategia, qué está ejecutando GaleCore, qué pasó desde la última revisión (entradas,
+      descartes, posiciones) y qué merece atención, con datos de GaleCore atados a la versión exacta, y
+      guardarlo como registro de seguimiento y revisión de su investigación.
     example_requests:
+      - Mostrame mi estrategia, qué está ejecutando, qué pasó desde la última revisión y qué merece mi atención.
       - ¿Qué hizo esta estrategia desde la última revisión, por qué entró o no entró, cómo evolucionaron sus posiciones y qué cambia en nuestra hipótesis?
     skill: skills/strategy-followup/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
-    galecore_capabilities: [App/Runtime/Instances, App/Runtime/Metrics]
+    galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics]
     flow:
-      - kb show strategy:<name>/<version>
-      - python GaleCore/dev/galecore_dev.py runtime-report --spec <name>   # sólo lectura, GaleCore Dev
-      - evidence add --slug <strategy>-shadow-<fecha> --prompt "<pedido>" < {content con la salida exacta}
+      - followup run --strategy <name> --prompt "<pedido>" --host-model <model>   # lee GaleCore por API; guarda evidencia y registro con hash
+      - followup history --strategy <name>
       - research revise --capability strategy_followup --id <investigación> --reason result --note "<qué cambia>" --prompt "<pedido>" < {...}
     stored_as: research
     controls:

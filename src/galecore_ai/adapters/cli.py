@@ -18,6 +18,8 @@ Usage:
     python -m galecore_ai.adapters.cli strategy approve --ref strategy:NAME/VERSION --spec-hash sha256:...         --owner-words "..." --host-model MODEL
     python -m galecore_ai.adapters.cli strategy deploy-check --ref strategy:NAME/VERSION --galecore-hash sha256:...
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
+    python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
+    python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
 
 Exit codes:
     0  SUCCESS
@@ -531,6 +533,23 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+async def _cmd_followup(args: argparse.Namespace) -> None:
+    from galecore_ai.application.followup import FollowupError, history, run_followup
+    kb = _build_knowledge_base()
+    try:
+        if args.followup_command == "run":
+            rec, path = run_followup(kb=kb, strategy=args.strategy, prompt=args.prompt, task_id=args.task,
+                                     host=RecordHost(provider=args.host_provider, model=args.host_model))
+            _json_out({"status": "RECORDED", "path": str(path), "latest": str(path.parent / "LATEST.md"),
+                       **rec.model_dump(mode="json")},
+                      exit_code=_EXIT_SUCCESS if rec.status != "ERROR" else _EXIT_RECORD_FAILED)
+        records = history(kb, args.strategy, limit=args.limit)
+        _json_out({"strategy": args.strategy, "count": len(records),
+                   "records": [r.model_dump(mode="json") for r in records]})
+    except (FollowupError, KnowledgeError) as exc:
+        _json_out({"status": "REJECTED", "error": str(exc)}, exit_code=_EXIT_VALIDATION_ERROR)
+
+
 def main() -> None:
     parser = _JsonArgumentParser(
         prog="galecore-ai-cli",
@@ -579,6 +598,18 @@ def main() -> None:
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
     p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id>, "
                                     "strategy:<name>/<version> or file:<path>")
+
+    p_fu = sub.add_parser("followup", help="What a strategy did in GaleCore, tied to its version (read-only)")
+    fu_sub = p_fu.add_subparsers(dest="followup_command", required=True)
+    p_fu_run = fu_sub.add_parser("run", help="Read GaleCore now and record the follow-up")
+    p_fu_run.add_argument("--strategy", required=True)
+    p_fu_run.add_argument("--prompt", required=True, help="What the user asked (or the task objective)")
+    p_fu_run.add_argument("--task", help="Recurring task id, when a task runs it")
+    p_fu_run.add_argument("--host-provider", dest="host_provider", default="claude-code")
+    p_fu_run.add_argument("--host-model", dest="host_model", required=True)
+    p_fu_hist = fu_sub.add_parser("history", help="Recorded follow-ups, newest first")
+    p_fu_hist.add_argument("--strategy", required=True)
+    p_fu_hist.add_argument("--limit", type=int, default=10)
 
     p_strategy = sub.add_parser("strategy", help="Proposal -> spec check -> approval -> deploy check")
     st_sub = p_strategy.add_subparsers(dest="strategy_command", required=True)
@@ -650,6 +681,8 @@ def main() -> None:
             asyncio.run(_cmd_evidence_add(args))
         elif args.command == "strategy":
             asyncio.run(_cmd_strategy(args))
+        elif args.command == "followup":
+            asyncio.run(_cmd_followup(args))
     except SystemExit:
         raise
     except (OSError, ValueError, RuntimeError) as exc:
