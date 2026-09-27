@@ -13,6 +13,37 @@ closure_blocked: true
 
 # Alcance acordado
 
+## Hallazgo de producto y propuesta de siguiente entrega (26/09/2026)
+
+El owner aclaró que el entregable al partner debe mostrar asistencia contextual para desarrollar
+estrategias: identificar factores relevantes (incluida macro cuando corresponda), obtener datos de
+GaleCore y fuentes externas, conservar lo aprendido y reutilizarlo. Presentar el régimen GEX/skew/
+VIX/VVIX como «cómo está el mercado» excede la cobertura implementada. El problema no exige que
+GaleCore exponga toda fuente externa: el host puede consultarla con el método de GaleCore-AI.
+
+**Clasificación:** `CURRENT_FINDING` sobre el objetivo de uso y `ALIGNED_WITH_PREREQUISITE` para
+la extensión. Evidencia: `config/catalog.yaml` sólo ofrece GEX, régimen y research;
+`application/prepare_regime.py` fija las cuatro consultas; research permite fuentes locales y
+revisiones; el contraste del 25/09 no consultó GaleCore; el recorrido del 26/09 sí lo hizo, pero no
+quedó incorporado como investigación PCS recuperable (`kb search --text PCS`: cero resultados en
+la auditoría del 26/09). No hay conector FRED callable verificado en esta sesión; el proveedor C#
+existente en GaleCore no integra por sí solo análisis macro en GaleCore-AI.
+
+**Propuesta concreta:** ver `roadmap/README.md` del workspace, §4 «Corrección propuesta para el
+entregable al partner (26/09/2026)». Allí viven recorrido, entregas, evidencia y efecto sobre prioridades.
+Reutilizar catálogo, research/knowledge y el método piloto; la primera prueba es acceso real a GaleCore
+y una fuente externa, seguida por guardar y retomar un análisis desde una sesión nueva.
+
+**Estado:** diagnóstico y propuesta registrados; sin implementación de macro/conector, sin prueba
+externa en vivo ni evaluación nueva. No reemplaza los AC ni las revisiones pendientes, no cambia el
+puntero activo y no convierte la propuesta en alcance aprobado. Para ejecutar la nueva secuencia,
+concretar ese alcance en el item con sus criterios antes de construir, preservando el trabajo previo.
+
+**Traspaso (owner, 27/09/2026):** el owner autorizó priorizar la entrega contextual. Se ejecuta en
+**GC-AI-0007** (rama `feature/GC-AI-0007`, creada desde esta), que pasa a ser el puntero activo. Este item
+sigue `IN_PROGRESS` y **no se cierra**: conserva AC-07..AC-10 abiertos, la revisión interna R2
+(CHANGES_REQUESTED, 4 MAJOR sin corregir) y el Codex de la segunda entrega sin lanzar. Se retoma después.
+
 ## Primera entrega del piloto de I4 (owner, 25/09/2026) — activa
 
 GC-0004 (I3) se cerró el 25/09 y este item pasa a ser el trabajo activo (`ACTIVE_WORK_ITEM`). El borrador de
