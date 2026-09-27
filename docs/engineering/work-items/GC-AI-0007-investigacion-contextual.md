@@ -146,3 +146,12 @@ Todos los valores cuantitativos de r1–r3 coinciden con la evidencia citada; AC
 | C1-M5 | MAJOR | El comando exacto de pytest fallaba en el worktree; conteo 716 desactualizado | Corregido: `tests/conftest.py` antepone el `src` del checkout (import y subprocesos); comando exacto → 726 passed |
 | C1-m1 | MINOR | Creación no exclusiva (check-then-replace) | Corregido: `open("x")`; una escritura cortada queda INTEGRITY_FAILED, nunca sobrescribe |
 | C1-m2 | MINOR | Skill editada sin subir versión | Registrado: regla — toda edición de una skill ya usada sube su versión; el hash de cada revisión identifica la definición exacta |
+
+## Recheck Codex C2 (`--recheck`, `869e1cf..1cdeb5f`) — CHANGES_REQUESTED
+
+C1-M2..M5 y C1-m1 resueltos; AC-03 y AC-04 pasan a PASS. Abiertos y corregidos después:
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| C1-M1 | MAJOR | `{"session":"…"}` y `Session: …` todavía pasaban | Corregido: `session` sin sufijo reconocido; +2 casos; las 28 evidencias siguen válidas |
+| C1-m2 | MINOR | Versión 0.1.0 con dos definiciones distintas ya selladas | Corregido: skill a 0.1.1. Para las revisiones existentes el hash es la identidad: r1 `sha256:dff3e57d…` = definición del commit `1d7c0be`; r2 y r3 `sha256:258d1ec5…` = commit `2572a5d`. Regla: toda edición de una skill ya usada sube versión |

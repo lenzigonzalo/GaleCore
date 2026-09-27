@@ -36,7 +36,7 @@ SENSITIVE_PARAM_MARKERS = ("key", "token", "secret", "password", "auth", "creden
 # A credential echoed inside a response (signed URL, query string, header dump) is refused too.
 _CREDENTIAL_IN_TEXT = re.compile(
     r"(api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|token|client[_-]?secret|secret|password|"
-    r"authorization|cookie|session[_-]?id|x-api-key)[\"']?\s*[=:]\s*[\"']?(bearer\s+)?[A-Za-z0-9._~+/-]{8,}",
+    r"authorization|cookie|session(?:[_-]?id)?|x-api-key)[\"']?\s*[=:]\s*[\"']?(bearer\s+)?[A-Za-z0-9._~+/-]{8,}",
     re.IGNORECASE)
 
 

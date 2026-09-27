@@ -64,7 +64,8 @@ def test_parameters_that_may_carry_credentials_are_refused(param):
 @pytest.mark.parametrize("payload", ["https://x/obs?series_id=A&api_key=abcdef1234567890",
                                      '{"Authorization": "Bearer0123456789abc"}', "apikey: ZZZZ9999YYYY",
                                      '{"token":"SECRETSECRET"}', "Cookie: sessionid=abcdefgh1234",
-                                     "X-API-KEY: 0123456789abcdef", "https://x?access_token=abcdefgh123"])
+                                     "X-API-KEY: 0123456789abcdef", "https://x?access_token=abcdefgh123",
+                                     '{"session":"SECRETSECRET"}', "Session: SECRETSECRET"])
 def test_payload_with_an_echoed_credential_is_refused(payload):
     with pytest.raises(ValidationError, match="credential"):
         evidence(payload=payload)
