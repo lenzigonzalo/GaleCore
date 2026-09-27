@@ -56,7 +56,7 @@ actualizar plan y alcance y crear este item; GC-AI-0006 sigue abierto con sus pe
 | Criterio | Implementación | Verificación automática | Artefacto | Estado |
 |---|---|---|---|---|
 | AC-01 | `config/catalog.yaml` (`context_research`), `config/skills/context-research/skill.yaml`, `research save/revise --capability` (`application/knowledge.py`) | `test_catalog_offers_context_research`, `test_revision_records_the_method_followed`, catálogo en `test_knowledge.py` | Revisiones r1–r3 selladas con `context_research` 0.1.0 | Implementado; verificado local |
-| AC-02 | `contracts/evidence.py`, `adapters/evidence_store.py`, ref `evidence:` (`knowledge_base.py`), `evidence add` (`cli.py`), `tools/fred_query.py` | `tests/unit/test_evidence.py` (17 casos: HOST_DECLARED, no sobrescribe, credenciales, extracto, futuro, integridad, cita y backlink, búsqueda, CLI) | 22 items `knowledge/evidence/2026-09-27-spy-ctx-*.json` | Implementado; verificado local y en el recorrido real |
+| AC-02 | `contracts/evidence.py`, `adapters/evidence_store.py`, ref `evidence:` (`knowledge_base.py`), `evidence add` (`cli.py`), `tools/fred_query.py` | `tests/unit/test_evidence.py` (20 casos: HOST_DECLARED, credenciales en payload, no sobrescribe, credenciales, extracto, futuro, integridad, cita y backlink, búsqueda, CLI) | 22 items `knowledge/evidence/2026-09-27-spy-ctx-*.json` | Implementado; verificado local y en el recorrido real |
 | AC-03 | — | — | [README §Fuentes](../../evidence/gc-ai-0007/README.md); hallazgos abajo; evidencia de la denegación FMP | Hecho con acceso real (GaleCore, FMP, Alpha Vantage, FRED) |
 | AC-04 | — | `recompute.py` reproduce los cálculos propios desde la evidencia | `research:2026-09-27-spy-contexto-prima-30-60d` r1; README §Análisis | Entregado; utilidad: evalúa el owner |
 | AC-05 | — | `kb search --status unfinished` la encuentra; `kb show` muestra r1→r3 y `cited_by` | r2 (corrección CPI), r3 (resultado FRED) | Guardar/encontrar/revisar: hecho. **Continuidad desde sesión nueva: NO probada** (bloqueada por permisos del host) |
@@ -109,7 +109,7 @@ git diff --check
 
 ### Comandos y resultados
 
-- `PYTHONPATH=src python -B -m pytest -q -p no:cacheprovider` → 716 passed (incluye los 17 casos nuevos de test_evidence.py).
+- `PYTHONPATH=src python -B -m pytest -q -p no:cacheprovider` → 716 passed (incluye los casos nuevos de test_evidence.py).
 - `python -B -m ruff check --no-cache .` → All checks passed. `python tools/engineering_gate.py` → PASS.
 - `python docs/evidence/gc-ai-0007/recompute.py` → reproduce RV20 10,76 %, IV30/RV20 1,39, 2–10 25→36 pb,
   CPI 3,40 % (AV) / 3,35 % (FRED SA), DFII10 2,63→2,85, T10YIE 2,33→2,33.
@@ -121,3 +121,15 @@ git diff --check
 - `recompute.py` ubica `knowledge/` por la estructura de worktree (`parents[6]`).
 - Referencia `file:` al recorrido del 26/09 apunta al worktree GC-AI-0007; si se borra, queda sólo su hash.
 - Las payloads de conectores las transcribió el host; horas de consulta son cotas superiores.
+
+## Revisión interna R1 (agente `reviewer`, Sonnet, `e7dd338..a5170c6`) — APPROVE
+
+Re-corrió gate PASS, ruff, pytest 716 y `diff --check`; recalculó a mano cada número de la investigación contra
+las 22 evidencias (todos coinciden); buscó el prefijo de la clave FRED en worktree, `knowledge/` y `git log -p`
+de ambos repos: cero apariciones. Confirmó que ningún texto afirma la continuidad desde sesión nueva.
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| R1-m1 | MINOR | El contrato sólo rechazaba credenciales en `params`, no en el `payload` | Corregido: patrón de credencial en el payload se rechaza (+3 casos); las 22 evidencias existentes siguen válidas |
+| R1-m2 | MINOR | Lint en `galecore_query.py` (archivo de GC-AI-0006) | Aceptado: declarado, trivial, necesario para el gate |
+| R1-m3 | MINOR | Skill editada entre r1 y r2 sin subir versión | Aceptado como gap declarado; próxima edición sube versión |

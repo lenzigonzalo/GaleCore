@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import datetime
 from enum import Enum
 
@@ -32,6 +33,11 @@ EVIDENCE_PROVENANCE = "HOST_DECLARED"
 
 # Parameter names that could carry a credential. Evidence is shared data; a key never goes in it.
 SENSITIVE_PARAM_MARKERS = ("key", "token", "secret", "password", "auth", "credential", "cookie", "session")
+# A credential echoed inside a response (signed URL, query string, header dump) is refused too.
+_CREDENTIAL_IN_TEXT = re.compile(
+    r"(api[_-]?key|apikey|access[_-]?token|client[_-]?secret|password|authorization)[\"']?\s*[=:]\s*[\"']?"
+    r"(bearer\s+)?[A-Za-z0-9._~+/-]{8,}",
+    re.IGNORECASE)
 
 
 def _non_blank(value: str) -> str:
@@ -83,6 +89,13 @@ class EvidenceContent(BaseModel):
         if bad:
             raise ValueError(f"parameters that may carry credentials are not stored: {bad}")
         return params
+
+    @field_validator("payload")
+    @classmethod
+    def _no_credentials_in_payload(cls, payload: str) -> str:
+        if _CREDENTIAL_IN_TEXT.search(payload):
+            raise ValueError("the payload seems to contain a credential; remove it before storing")
+        return payload
 
     @field_validator("retrieved_at")
     @classmethod

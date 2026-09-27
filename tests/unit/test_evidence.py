@@ -61,6 +61,13 @@ def test_parameters_that_may_carry_credentials_are_refused(param):
         evidence(params={param: "x"})
 
 
+@pytest.mark.parametrize("payload", ["https://x/obs?series_id=A&api_key=abcdef1234567890",
+                                     '{"Authorization": "Bearer0123456789abc"}', "apikey: ZZZZ9999YYYY"])
+def test_payload_with_an_echoed_credential_is_refused(payload):
+    with pytest.raises(ValidationError, match="credential"):
+        evidence(payload=payload)
+
+
 def test_excerpt_needs_a_note_and_series_are_required():
     with pytest.raises(ValidationError, match="excerpt_note"):
         evidence(payload_scope="excerpt")
