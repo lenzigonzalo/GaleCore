@@ -17,6 +17,10 @@ Uso, desde la raíz del repo GaleCore:
     python dev/galecore_dev.py api                # API en :7001 contra GaleCore Dev (primer plano)
     python dev/galecore_dev.py monitor            # monitor en :3039 contra GaleCore Dev (primer plano)
     python dev/galecore_dev.py deploy [--switch-on]   # login del usuario de prueba + deploy de la spec de prueba
+    python dev/galecore_dev.py deploy --spec <name> --expect-hash <sha256:...>
+        # una estrategia: sólo si el hash que GaleCore cargó es el aprobado (GC-AI-0008, strategy deploy-check)
+    python dev/galecore_dev.py stop --instance <id>   # deja de entrar; lo abierto se sigue valuando
+    python dev/galecore_dev.py runtime-report --spec <name>   # sólo lectura: instancias, posiciones, eventos
     python dev/galecore_dev.py test               # dotnet test con la base galecore_test del proyecto de desarrollo
 
 Nada de esto toca producción ni sus secretos. Lo generado (dev/.local/) queda fuera de git; son
@@ -223,12 +227,57 @@ def login(env: dict) -> str:
 def cmd_deploy(args: argparse.Namespace) -> int:
     env = load_env()
     auth = {"Authorization": f"Bearer {login(env)}"}
+    if args.expect_hash is None and not args.spec.startswith("shadow_runtime_test_"):
+        sys.exit("una estrategia se despliega sólo con --expect-hash <hash aprobado> (strategy deploy-check)")
+    if args.expect_hash is not None:
+        code, spec = http("GET", API_URL + f"/App/Runtime/Specs/{args.spec}", None, auth)
+        loaded = spec.get("contentHash") if code == 200 and isinstance(spec, dict) else None
+        if loaded != args.expect_hash:
+            sys.exit(f"no se despliega: GaleCore cargó {loaded or f'nada (HTTP {code})'}, "
+                     f"el aprobado es {args.expect_hash}")
+        print(f"hash cargado por GaleCore = aprobado: {loaded}")
     code, body = http("POST", API_URL + "/App/Runtime/Deploy", {"specName": args.spec}, auth)
     print(f"deploy HTTP {code}: {json.dumps(body, ensure_ascii=False)}")
     if args.switch_on and code == 200:
         code2, body2 = http("POST", API_URL + "/App/GaleCore/Services/runtime/Switch", {"enabled": True}, auth)
         print(f"switch HTTP {code2}: {json.dumps(body2, ensure_ascii=False)}")
     return 0 if code == 200 else 1
+
+
+def cmd_stop(args: argparse.Namespace) -> int:
+    env = load_env()
+    auth = {"Authorization": f"Bearer {login(env)}"}
+    code, body = http("POST", API_URL + f"/App/Runtime/Instances/{args.instance}/Stop", None, auth)
+    print(f"stop HTTP {code}: {json.dumps(body, ensure_ascii=False)}")
+    return 0 if code == 200 else 1
+
+
+def cmd_runtime_report(args: argparse.Namespace) -> int:
+    """Lo que GaleCore Dev sabe de una spec, sólo con GET: la salida se guarda tal cual como evidencia."""
+    env = load_env()
+    auth = {"Authorization": f"Bearer {login(env)}"}
+
+    def get(path: str) -> object:
+        code, body = http("GET", API_URL + path, None, auth)
+        return {"http": code, "body": body}
+
+    spec = get(f"/App/Runtime/Specs/{args.spec}")
+    instances = get("/App/Runtime/Instances")
+    mine = [i for i in (instances["body"] or []) if isinstance(i, dict) and i.get("specName") == args.spec]
+    report = {
+        "api": API_URL, "spec_name": args.spec,
+        "spec_content_hash": (spec["body"] or {}).get("contentHash") if isinstance(spec["body"], dict) else None,
+        "status": get("/App/Runtime/Status"),
+        "instances": [{
+            "instance": i,
+            "detail": get(f"/App/Runtime/Instances/{i['instanceId']}"),
+            "evaluations": get(f"/App/Runtime/Instances/{i['instanceId']}/Evaluations?limit={args.limit}"),
+            "events": get(f"/App/Runtime/Instances/{i['instanceId']}/Events?limit={args.limit}"),
+        } for i in mine],
+        "metrics": get("/App/Runtime/Metrics"),
+    }
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    return 0
 
 
 def cmd_test(_: argparse.Namespace) -> int:
@@ -257,7 +306,15 @@ def main() -> int:
     d = sub.add_parser("deploy")
     d.add_argument("--spec", default="shadow_runtime_test_v1")
     d.add_argument("--switch-on", action="store_true", help="además prende el switch del runtime")
+    d.add_argument("--expect-hash", help="hash aprobado; si GaleCore cargó otro, no se despliega")
     d.set_defaults(fn=cmd_deploy)
+    st = sub.add_parser("stop")
+    st.add_argument("--instance", required=True)
+    st.set_defaults(fn=cmd_stop)
+    r = sub.add_parser("runtime-report")
+    r.add_argument("--spec", required=True)
+    r.add_argument("--limit", type=int, default=200, help="últimas N evaluaciones y eventos por instancia")
+    r.set_defaults(fn=cmd_runtime_report)
     args = p.parse_args()
     return args.fn(args)
 
