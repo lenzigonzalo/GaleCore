@@ -227,3 +227,21 @@ Scripts commiteados antes de correrlos (`hypothesis_study.py` en `11d69b8`, `rea
 operativa** del recorrido (el runtime la ejecuta tal cual), pero sus resultados a mid van a verse mejores que lo que el
 estudio indica con ejecución realista: no son evidencia económica. La alternativa es rediseñar antes (una versión nueva,
 p. ej. precio límite en el mid o crédito mínimo relativo al spread, con su propio estudio preregistrado). Decisión del owner.
+
+## Decisión del owner y despliegue (27/09/2026, 20:20 local)
+
+Owner: «Vamos con tus recomendaciones, y usa tastytrade via galecore. IBKR e IOL todavía no» — sobre la propuesta de
+desplegar la 1.0.3 como prueba operativa (sabiendo que el estudio la refuta con ejecución realista), parar v2 y encender el
+switch. Ejecutado, en este orden:
+1. `strategy approve` → `knowledge/strategies/spy_prima_varianza_30_45d/1.0.3.approval.json` (palabras del owner transcriptas,
+   hash `sha256:19884e77…`, alcance SHADOW:galecore-dev).
+2. `strategy deploy-check` con el hash que reporta GaleCore → `DEPLOY_ALLOWED`.
+3. `galecore_dev.py stop` de `shadow_runtime_test_v2` → STOPPED, `openPositions: 1` (se sigue valuando hasta su salida).
+4. `galecore_dev.py deploy --approval … --switch-on` → aprobación íntegra, hash cargado = aprobado; instancia
+   `d533f033-628a-4dc8-bc70-5c3d38f484d2` RUNNING; switch `enabled: true`.
+5. Verificación: `followup run` → versión aprobada, hash coincide, instancia RUNNING/IDLE, estado OK. Primera evaluación en
+   sesión: lunes 28/09 desde 09:30 ET; el seguimiento diario de las 17:05 ET la recoge.
+
+**Corrección de un hallazgo:** RLS deshabilitado en GaleCore Dev **no** expone las tablas: `anon` y `authenticated` no tienen
+privilegios de SELECT ni INSERT sobre `accounts`, `users`, `shadow_positions`, `strategy_instances` (sólo `galecore_api`),
+consultado el 27/09. El aviso del advisor sobrestimaba; RLS sigue recomendado como defensa en profundidad antes de producción.
