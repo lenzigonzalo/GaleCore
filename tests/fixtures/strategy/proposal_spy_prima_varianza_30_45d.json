@@ -1,6 +1,6 @@
 {
   "name": "spy_prima_varianza_30_45d",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "display_name": "Cobro de prima de varianza en SPY a 30–45 días con riesgo definido",
   "purpose": "Cobrar parte de la prima de varianza de SPY vendiendo un put spread de riesgo definido por vez, y observar en SHADOW si el runtime la ejecuta tal como está escrita, antes de cualquier evaluación económica.",
   "research_refs": [
@@ -116,10 +116,10 @@
     {
       "id": "C2",
       "block": "construction",
-      "text": "Put vendido con delta −0,16 ± 0,04 en un vencimiento de 30 a 45 días (mensual o semanal).",
-      "basis": "owner_decision",
+      "text": "Vencimiento regular o semanal con DTE entre 30 y 45 (el más cercano a 37); put vendido fuera del dinero con el delta más cercano a −0,16; si ese delta queda fuera de ±0,04, no hay candidato.",
+      "basis": "pending_parameter",
       "parameter": "delta −0,16 ± 0,04; DTE 30–45",
-      "rationale": "Parámetros de pcs_spy_16d_v1 (26/09, nota «estrategia simple del owner»); a confirmar por el owner al aprobar. 16Δ ≈ un desvío; sin evidencia propia todavía.",
+      "rationale": "Parámetros de pcs_spy_16d_v1 (borrador del 26/09 con la nota «estrategia simple del owner»); no son decisión del owner hasta que los confirme. 16Δ ≈ un desvío; sin evidencia propia.",
       "runtime": {
         "status": "supported",
         "spec_paths": [
@@ -133,10 +133,10 @@
     {
       "id": "C3",
       "block": "construction",
-      "text": "Put comprado 5 USD debajo del vendido, mismo vencimiento.",
-      "basis": "owner_decision",
+      "text": "Put comprado en el strike listado más cercano a 5 USD debajo del vendido, mismo vencimiento; GaleCore acepta hasta 1 USD de diferencia y, si no hay strike, no hay candidato. El riesgo se calcula con el ancho real.",
+      "basis": "pending_parameter",
       "parameter": "ancho 5 USD",
-      "rationale": "De pcs_spy_16d_v1; a confirmar al aprobar.",
+      "rationale": "De pcs_spy_16d_v1; pendiente de confirmación del owner.",
       "runtime": {
         "status": "supported",
         "spec_paths": [
@@ -187,9 +187,9 @@
       "id": "R1",
       "block": "risk",
       "text": "Riesgo máximo por operación (ancho − crédito) × 100 ≤ 500 USD; si no, no se abre.",
-      "basis": "owner_decision",
+      "basis": "pending_parameter",
       "parameter": "500 USD",
-      "rationale": "Recomendación: tope de respaldo; con 1 contrato de 5 USD no puede superarse. A confirmar por el owner.",
+      "rationale": "Recomendación: tope de respaldo; con 1 contrato y ~5 USD de ancho casi nunca limita. Pendiente de confirmación del owner.",
       "runtime": {
         "status": "supported",
         "spec_paths": [
@@ -211,9 +211,9 @@
     {
       "id": "M1",
       "block": "monitoring",
-      "text": "La posición abierta se valúa en cada ciclo con cotizaciones reales; una cotización con más de 15 s o cruzada no se usa (sin valuación ni salida en ese ciclo).",
+      "text": "La posición abierta se valúa en cada ciclo con cotizaciones reales. En SHADOW una cotización se usa si su hora tiene hasta 150 s (15 s × el factor 10 del runtime) o si no trae hora (entonces la edad no se puede medir); una cotización cruzada o sin bid/ask válido nunca se usa (sin valuación ni salida en ese ciclo).",
       "basis": "design_choice",
-      "rationale": "Mismo control de frescura que las specs de prueba ya validadas en I2–I3; nunca un precio supuesto.",
+      "rationale": "Control de frescura de las specs de prueba validadas en I2–I3, descrito como lo ejecuta GaleCore; aceptar cotizaciones sin hora es una limitación del runtime, visible en los eventos.",
       "runtime": {
         "status": "supported",
         "spec_paths": [
@@ -265,12 +265,12 @@
       "id": "X1",
       "block": "exit",
       "text": "Stop: cerrar si la pérdida a mid es ≥ 2× el crédito cobrado. Si en el mismo ciclo se cumplen varias salidas, manda el stop, después el objetivo, después el tiempo.",
-      "basis": "owner_decision",
+      "basis": "pending_parameter",
       "parameter": "200 % del crédito",
       "sources": [
         "file:GaleCore/docs/rpf/galecore-estrategia-rpf.md"
       ],
-      "rationale": "De pcs_spy_16d_v1; RPF usa 2× como defensa dura. Sin evidencia propia para esta construcción.",
+      "rationale": "De pcs_spy_16d_v1; RPF usa 2× como defensa dura. Sin evidencia propia para esta construcción. Pendiente de confirmación del owner.",
       "runtime": {
         "status": "supported",
         "spec_paths": [
@@ -282,12 +282,12 @@
       "id": "X2",
       "block": "exit",
       "text": "Objetivo: cerrar cuando el spread vale ≤ 50 % del crédito cobrado.",
-      "basis": "owner_decision",
+      "basis": "pending_parameter",
       "parameter": "50 % del crédito",
       "sources": [
         "file:GaleCore/docs/rpf/galecore-estrategia-rpf.md"
       ],
-      "rationale": "De pcs_spy_16d_v1; coincide con la salida de RPF.",
+      "rationale": "De pcs_spy_16d_v1; coincide con la salida de RPF. Pendiente de confirmación del owner.",
       "runtime": {
         "status": "supported",
         "spec_paths": [
@@ -299,9 +299,9 @@
       "id": "X3",
       "block": "exit",
       "text": "Tiempo: cerrar cuando faltan 21 días o menos al vencimiento (nunca se llega al vencimiento ni a la asignación).",
-      "basis": "owner_decision",
+      "basis": "pending_parameter",
       "parameter": "21 DTE",
-      "rationale": "De pcs_spy_16d_v1; RPF no tiene salida por tiempo. Evita la gamma alta de las últimas semanas.",
+      "rationale": "De pcs_spy_16d_v1; RPF no tiene salida por tiempo. Evita la gamma alta de las últimas semanas. Pendiente de confirmación del owner.",
       "runtime": {
         "status": "supported",
         "spec_paths": [
@@ -378,7 +378,8 @@
   ],
   "limitations": [
     "Sin evidencia económica propia: ninguna prueba corrida",
-    "Tres reglas pensadas no son ejecutables por el runtime (E3, E4, S2/R2) y quedan fuera de la spec, declaradas",
-    "El chequeo compara la spec con una tabla del runtime leída en código; no ejecuta GaleCore"
+    "Cinco reglas no son ejecutables por el runtime (E3, E4, S2, R2, M2) y quedan fuera de la spec, declaradas",
+    "El chequeo compara la spec con una tabla del runtime leída en código; no ejecuta GaleCore",
+    "1.0.0 quedó guardada y nunca se aprobó: la revisión de Codex encontró reglas descritas de más (frescura, ancho) y parámetros heredados marcados como decisión del owner"
   ]
 }

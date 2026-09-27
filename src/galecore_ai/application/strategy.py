@@ -124,7 +124,7 @@ GATE = "entry_filters.gate_layer.gates"
 
 # Executed by the runtime: a non-null value changes what GaleCore does, so a supported rule explains it.
 EXECUTED = {
-    "universe.symbols": "símbolo evaluado (el primero de la lista)",
+    "universe.symbols": "cada símbolo de la lista se evalúa en cada ciclo",
     "structure.allowed_strategies": "ShadowRiskValidator rechaza estructuras fuera de la lista",
     "structure.forbidden_strategies": "ShadowRiskValidator rechaza estructuras de la lista",
     "structure.default_structure": "PcsCandidateBuilder: sólo put_credit_spread",
@@ -142,7 +142,8 @@ EXECUTED = {
     "operational.timezone": "zona horaria de la sesión",
     "operational.session_hours.start": "inicio de la sesión evaluada (lunes a viernes)",
     "operational.session_hours.end": "fin de la sesión evaluada",
-    "data_quality.max_quote_age_seconds": "antigüedad máxima de una cotización usable; más vieja → sin dato",
+    "data_quality.max_quote_age_seconds": ("antigüedad máxima × 10 en SHADOW (DataFreshness.ShadowAgeFactor); "
+                                           "una cotización sin hora no se puede medir y se acepta"),
 }
 
 # Ignored by the runtime: only the value that matches what the runtime really does is honest.
@@ -184,16 +185,28 @@ MUST_DECLARE = {
     "operational.calendar": "sólo excluye sábados y domingos; no conoce feriados",
 }
 
-# Descriptive fields: no behavior in SHADOW (shape is checked separately where it matters).
-_INFORMATIONAL_PREFIXES = (
-    "strategy_spec_version", "canonicalization_version", "content_hash", "identity.", "metadata.",
-    "deployment_constraints.", "universe.mode", "universe.instrument_types", "universe.excluded",
-    "structure.selection_method", "entry_filters.gate_layer.pass_rule", "entry_filters.gate_layer.on_fail",
-    "entry_filters.signal_layer.pass_rule", "operational.decimal_precision", "operational.currency",
-    "operational.rounding", "operational.symbology", f"{SELL_PUT}.side", f"{SELL_PUT}.type",
-    f"{SELL_PUT}.strike_selection.method", f"{BUY_PUT}.side", f"{BUY_PUT}.type",
-    f"{BUY_PUT}.strike_selection.method", "exits.deterministic.defensive_roll.",
-)
+# The runtime has exactly one semantics for these: any other value would promise behavior it does not have.
+_FIXED: dict[str, Any] = {
+    "universe.mode": "WHITELIST",
+    "universe.instrument_types": ["EQUITY_OPTION"],
+    "universe.excluded": {},
+    "structure.selection_method": "FIXED",
+    "entry_filters.gate_layer.pass_rule": "ALL",
+    "entry_filters.gate_layer.on_fail": "NO_TRADE",
+    "deployment_constraints.eligible_modes": ["SHADOW"],
+    f"{SELL_PUT}.strike_selection.method": "DELTA",
+    f"{BUY_PUT}.strike_selection.method": "FIXED_WIDTH",
+}
+
+# Descriptive fields with no behavior in SHADOW (leg side/type are checked by the legs' shape).
+_INFORMATIONAL = {
+    "strategy_spec_version", "canonicalization_version", "content_hash",
+    "deployment_constraints.requires_human_approval_for", "entry_filters.signal_layer.pass_rule",
+    "operational.decimal_precision", "operational.currency", "operational.rounding", "operational.symbology",
+    f"{SELL_PUT}.side", f"{SELL_PUT}.type", f"{BUY_PUT}.side", f"{BUY_PUT}.type",
+}
+_INFORMATIONAL_PREFIXES = ("identity.", "metadata.")
+_ROLL = "exits.deterministic.defensive_roll."
 # Leg fields the builder never reads for that leg: only null is honest.
 _NULL_ONLY = (f"{SELL_PUT}.strike_selection.width", f"{BUY_PUT}.strike_selection.target_delta",
               f"{BUY_PUT}.strike_selection.delta_tolerance")
@@ -202,6 +215,7 @@ _METRIC_RE = re.compile(
     r"^capability:(market_data\.quote\.[A-Z0-9.^]+\.price|market_data\.trade\.[A-Z0-9.^]+\.price|"
     r"compute\.gamma_exposure\.[A-Z0-9.^]+\.net_gex)$")
 _OPERATORS = {"LT", "LTE", "GT", "GTE", "EQ", "NEQ", "BETWEEN"}
+_GATE_KEYS = {"id", "label", "metric_ref", "operator", "threshold", "on_fail", "on_no_data"}
 
 
 def _leg_key(leg: dict) -> str:
@@ -240,6 +254,23 @@ def _check_gate(key: str, gate: Any, errors: list[str]) -> None:
         errors.append(f"{key}: operator {gate.get('operator')!r} unknown")
     if gate.get("on_fail") != "NO_TRADE" or gate.get("on_no_data") != "BLOCK":
         errors.append(f"{key}: only on_fail=NO_TRADE and on_no_data=BLOCK keep a gate fail-closed")
+    unknown = sorted(set(gate) - _GATE_KEYS)
+    if unknown:
+        errors.append(f"{key}: properties the gate evaluator never reads: {unknown}")
+    threshold = gate.get("threshold")
+    if not isinstance(threshold, dict):
+        errors.append(f"{key}: threshold must be an object")
+        return
+    def number(v: Any) -> bool:
+        return isinstance(v, int | float) and not isinstance(v, bool)
+    extra = sorted(set(threshold) - {"value", "min", "max"})
+    if extra:
+        errors.append(f"{key}: threshold properties never read: {extra}")
+    if gate.get("operator") == "BETWEEN":
+        if not (number(threshold.get("min")) and number(threshold.get("max"))) or threshold.get("value") is not None:
+            errors.append(f"{key}: BETWEEN needs numeric threshold.min and threshold.max and no value")
+    elif not number(threshold.get("value")) or threshold.get("min") is not None or threshold.get("max") is not None:
+        errors.append(f"{key}: {gate.get('operator')} needs a numeric threshold.value and no min/max")
 
 
 def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> CheckReport:
@@ -263,13 +294,8 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
                       "reproduced here, so their hash could differ; prose belongs in the proposal")
     if spec.get("content_hash") is not None:
         errors.append("content_hash must be null in the file; GaleCore computes it")
-    if spec.get("deployment_constraints", {}).get("eligible_modes") != ["SHADOW"]:
-        errors.append("eligible_modes must be exactly [\"SHADOW\"] (this increment approves only SHADOW)")
     if spec.get("structure", {}).get("default_structure") != "put_credit_spread":
         errors.append("default_structure must be put_credit_spread (the runtime's only builder)")
-    gl = spec.get("entry_filters", {}).get("gate_layer", {})
-    if gl.get("pass_rule") != "ALL" or gl.get("on_fail") != "NO_TRADE":
-        errors.append("gate_layer must be pass_rule=ALL and on_fail=NO_TRADE (the only evaluated semantics)")
 
     leaves: dict[str, Any] = {}
     _leaves(spec, "", leaves, errors)
@@ -305,10 +331,14 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
             if path not in declared_paths:
                 errors.append(f"{path} = {value!r}: the runtime {MUST_DECLARE[path]}; declare it with an "
                               "unsupported rule naming this field")
-        elif path in _NULL_ONLY:
+        elif path in _FIXED:
+            if value != _FIXED[path]:
+                errors.append(f"{path} = {value!r}: the runtime only has {_FIXED[path]!r} semantics (only SHADOW, "
+                              "a fixed whitelist of equity options, one PCS builder, gates with ALL/NO_TRADE)")
+        elif path in _NULL_ONLY or path.startswith(_ROLL):
             if value is not None:
-                errors.append(f"{path} = {value!r}: the builder never reads it for this leg; it must be null")
-        elif not path.startswith(_INFORMATIONAL_PREFIXES):
+                errors.append(f"{path} = {value!r}: the runtime never reads it; it must be null")
+        elif path not in _INFORMATIONAL and not path.startswith(_INFORMATIONAL_PREFIXES):
             errors.append(f"{path}: not in the runtime support table; nobody verified what GaleCore does with it")
 
     for path, rule_ids in supported_paths.items():

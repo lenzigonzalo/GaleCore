@@ -29,13 +29,13 @@ from tests.unit.test_knowledge import HOST, NOW, content, kb, save  # noqa: F401
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 SPECS = FIXTURES / "galecore" / "runtime_specs"
 NAME = "spy_prima_varianza_30_45d"
-KEY = f"{NAME}/1.0.0"
+KEY = f"{NAME}/1.0.1"
 # Hashes GaleCore computed at load and persisted in GaleCore Dev (strategy_specs.content_hash, 27/09).
 GALECORE_HASHES = {
     "shadow_runtime_test_v1.json": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076",
     "shadow_runtime_test_v2.json": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
     # The candidate submitted for approval; GaleCore's StrategySpecVersionTests pins the same value.
-    f"{NAME}.json": "sha256:dfed1af1efcc27a466f6e5894357157c8633422cf41b9f5e14869cabd52576f8",
+    f"{NAME}.json": "sha256:48b5a3c36fdf9fe64c18dd2dc9bc1140d545525219b210b2f6b193d1b4a40b3a",
 }
 
 
@@ -182,6 +182,37 @@ def test_the_calendar_must_be_declared():
     assert any("operational.calendar" in e and "declare it" in e for e in report.errors)
 
 
+@pytest.mark.parametrize(("change", "expected"), [
+    ({"universe.mode": "DYNAMIC"}, "universe.mode"),
+    ({"structure.selection_method": "AI_RECOMMENDED"}, "structure.selection_method"),
+    ({"universe.instrument_types": ["EQUITY_OPTION", "FUTURE"]}, "universe.instrument_types"),
+    ({"exits.deterministic.defensive_roll": {"enabled": False, "min_dte_remaining": 21}}, "defensive_roll.min_dte"),
+])
+def test_fields_with_a_single_runtime_semantics_are_fixed(change, expected):
+    """Codex C1 BLOCKER: these reproduced VALID_WITH_DECLARED_GAPS as 'informational'."""
+    assert any(expected in e for e in check(text=spec_with(**change)).errors)
+
+
+def test_a_leg_selection_method_the_builder_does_not_use_is_invalid():
+    data = json.loads(spec_text())
+    data["candidate_construction"]["legs"][1]["strike_selection"]["method"] = "DELTA"
+    assert any("strike_selection.method" in e for e in check(text=json.dumps(data)).errors)
+
+
+@pytest.mark.parametrize(("mutate", "expected"), [
+    (lambda g: g.update(cooldown_minutes=30), "never reads"),
+    (lambda g: g.update(threshold={}), "numeric threshold.value"),
+    (lambda g: g.update(threshold={"value": 30, "max": 40}), "no min/max"),
+    (lambda g: g.update(operator="BETWEEN"), "BETWEEN needs"),
+    (lambda g: g.update(threshold={"value": 30, "unit": "points"}), "threshold properties never read"),
+])
+def test_every_gate_leaf_is_validated(mutate, expected):
+    """Codex C1 BLOCKER: gates were checked as whole objects."""
+    data = json.loads(spec_text())
+    mutate(data["entry_filters"]["gate_layer"]["gates"][0])
+    assert any(expected in e for e in check(text=json.dumps(data)).errors)
+
+
 def test_a_gate_on_a_metric_the_runtime_cannot_resolve_is_invalid():
     data = json.loads(spec_text())
     data["entry_filters"]["gate_layer"]["gates"][0]["metric_ref"] = "capability:compute.vrp.SPY.ratio"
@@ -198,7 +229,7 @@ def test_a_gate_that_passes_without_data_is_invalid():
 def test_identity_and_file_name_must_match():
     report = check(file="other.json")
     assert any("GaleCore deploys by file name" in e for e in report.errors)
-    report = check(text=spec_with(**{"identity.version": "1.0.1"}))
+    report = check(text=spec_with(**{"identity.version": "9.9.9"}))
     assert any("is not the proposal's" in e for e in report.errors)
 
 
@@ -255,7 +286,7 @@ def stored(kb, research_ref):  # noqa: F811
 
 def test_saved_version_keeps_the_exact_spec_and_its_hash(kb, research_ref):  # noqa: F811
     doc, path = stored(kb, research_ref)
-    assert Path(path) == kb.base / "strategies" / NAME / "1.0.0.proposal.json"
+    assert Path(path) == kb.base / "strategies" / NAME / "1.0.1.proposal.json"
     assert doc.spec_json == spec_text()
     assert doc.spec_hash == galecore_spec_hash(spec_text())
     assert doc.check.verdict == "VALID_WITH_DECLARED_GAPS"

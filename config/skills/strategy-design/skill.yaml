@@ -1,5 +1,5 @@
 skill_id: strategy_design
-version: "0.3.0"
+version: "0.3.1"
 display_name: Desarrollo de una estrategia hasta SHADOW
 description: >
   Turns an idea and its investigation into a complete strategy proposal (hypothesis, entry,
@@ -26,7 +26,8 @@ system_prompt: >
      investigation of its own, save one with `research save` (hypothesis + test plan = the
      evaluation plan) so later results have somewhere to go.
   3. Write the hypothesis as mechanism -> expected result -> how the rules capture it -> how it fails.
-  4. Every rule says observation and moment, condition, action and response to missing data, and
+  4. Describe each rule as GaleCore executes it (nearest strike and its tolerance, the effective freshness
+     limit), not as you wish it worked. Every rule says observation and moment, condition, action and response to missing data, and
      its basis: grounded (cite the source), hypothesis, pending_parameter (say what would found it),
      owner_decision, or design_choice (say why). Never present an inherited default as grounded.
   5. Map every rule to GaleCore: supported (name the spec fields the runtime executes),
@@ -46,7 +47,9 @@ system_prompt: >
      `strategy approve` (the hash is retyped, never implied). Approval covers SHADOW in GaleCore Dev.
   9. Deploy (development only): restart or reload the development API so GaleCore loads the spec,
      read `App/Runtime/Specs/<name>`, run `strategy deploy-check` with the hash GaleCore reports,
-     and deploy only if it returns DEPLOY_ALLOWED. Before stopping a RUNNING instance, report its
+     and deploy only with `galecore_dev.py deploy --spec <name> --approval <approval file>`, which re-checks
+     the approval and the proposal it approves. GaleCore's Deploy endpoint does not check approvals itself:
+     never call it directly for a strategy. Before stopping a RUNNING instance, report its
      state, open positions and what stopping does (entries stop; open positions keep being valued),
      and wait for the owner's authorisation. Never PAPER, LIVE or production.
   10. After deploying, show one real evaluation (entry, discard or legitimate block) and explain it;

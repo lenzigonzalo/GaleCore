@@ -126,7 +126,7 @@ entries:
       - strategy save --spec <file> --prompt "<pedido>" < {content, host_provider, host_model}
       - strategy approve --ref strategy:<name>/<version> --spec-hash <hash> --owner-words "<owner>" --host-model <model>
       - strategy deploy-check --ref strategy:<name>/<version> --galecore-hash <hash de App/Runtime/Specs/<name>>
-      - python GaleCore/dev/galecore_dev.py deploy --spec <name> --expect-hash <hash>   # sólo GaleCore Dev
+      - python GaleCore/dev/galecore_dev.py deploy --spec <name> --approval knowledge/strategies/<name>/<version>.approval.json   # sólo GaleCore Dev
     stored_as: strategy
     controls:
       - Every block (entry, construction, sizing, monitoring, adjustment, exit, invalidation) has a rule or a not-applicable rule that says why
@@ -135,7 +135,7 @@ entries:
       - A field the runtime executes is explained by a supported rule; a supported rule names only fields the runtime executes
       - A field the runtime ignores must hold the value the runtime really behaves as (one contract, no roll, no heat); unsupported rules stay out of the spec, declared
       - The spec hash is GaleCore's (JCS + SHA-256, verified against hashes GaleCore computed); versions and approvals are create-only and hashed
-      - Deploy is allowed only with an intact approval of the same proposal and the hash GaleCore reports; scope SHADOW in GaleCore Dev
+      - Deploy (dev tool) reads the approval file, re-checks the approval's and the proposal's hashes and requires the hash GaleCore loaded; scope SHADOW in GaleCore Dev. GaleCore's Deploy endpoint itself does not check approvals (admin-only, D-0003)
       - Not checked - that the hypothesis is right, that parameters are good, or that the strategy is profitable
 
   - id: strategy_followup
