@@ -211,3 +211,19 @@ GaleCore `StrategySpecVersionTests` 1/1 con hash 1.0.3.
    que va con el despliegue.
 4. **Verificación posterior**: `followup run` → la 1.0.3 con instancia RUNNING y el hash aprobado; en la primera sesión
    (lunes 28/09 desde 09:30 ET) al menos una evaluación explicada (entrada, descarte o bloqueo), sin tocar umbrales.
+
+## Estudios preregistrados (27/09, trabajo independiente autorizado)
+
+Scripts commiteados antes de correrlos (`hypothesis_study.py` en `11d69b8`, `real_rate_study.py` en `f049e24`); resultados en
+`docs/evidence/gc-ai-0008/*_result.json` (`f7e3c40`); FRED (VIXCLS, DTB3, DFII10, DGS10) guardado como evidencia directa.
+
+- **Hipótesis de la 1.0.3 (2013–2023, fills naturales + comisiones): REFUTA.** 314 operaciones, 76 % ganadoras, promedio
+  −2,85 USD; exceso anual −17,7 % sobre 500 USD, IC 90 % [−40,8 %; +3,9 %]. Sensibilidad a mid sin costos: +33,8 %, IC 90 %
+  [+12,0 %; +53,9 %]. Extensión 2024–2025: −53,6 % (insuficiente sola). Lectura: la prima existe antes de costos; la fricción
+  de cruzar el spread y las comisiones la superan. Ver revisión 7 de la investigación de la estrategia.
+- **Shocks de tasa real (contexto SPY): INSUFICIENTE** — 6 eventos (12 con la tasa nominal) < 27; sin diferencias.
+
+**Efecto sobre la propuesta operativa de arriba:** desplegar la 1.0.3 en SHADOW sigue siendo válido **como prueba
+operativa** del recorrido (el runtime la ejecuta tal cual), pero sus resultados a mid van a verse mejores que lo que el
+estudio indica con ejecución realista: no son evidencia económica. La alternativa es rediseñar antes (una versión nueva,
+p. ej. precio límite en el mid o crédito mínimo relativo al spread, con su propio estudio preregistrado). Decisión del owner.
