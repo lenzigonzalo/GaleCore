@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0006
 title: Piloto de instrucciones para desarrollo de estrategias
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 review_result: PENDING
-approval_result: PENDING
+approval_result: APPROVED
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 ---
 
 # Alcance acordado
@@ -238,3 +238,16 @@ Borrador experimental; no disponible mediante selección del catálogo. Se puede
 host que lea el SKILL.md y procese un input. Mantener evaluación separada de resultados financieros.
 No sobrescribir cambios ajenos en archivos compartidos (backlog, roadmap, engineering): ediciones acotadas.
 No marcar VALIDATED/CLOSED ni presentar el piloto como integración E2E.
+
+## Cierre (owner, 27/09/2026) — absorbido por GC-AI-0008
+
+Decisión del owner sobre la recomendación «cerrarlo como absorbido por GC-AI-0008, dejando registrado como no demostrado el
+contraste con y sin la instrucción»: «Vamos con tus recomendaciones, y usa tastytrade via galecore. IBKR e IOL todavía no» (owner, 27/09/2026).
+
+- **Absorbido:** el método (SKILL.md 0.2.0-draft) se catalogó como `strategy_design` 0.3.x en GC-AI-0008, con el mapeo
+  regla → runtime, la aprobación atada al hash y el uso de datos de GaleCore; la estrategia recorrió propuesta → aprobación
+  → SHADOW.
+- **Revisado:** primera entrega (AC-01..AC-06) con Codex C3 APPROVE.
+- **No demostrado y no revisado, cerrado por decisión del owner:** la segunda entrega (AC-07..AC-10): el contraste con/sin
+  instrucción quedó preliminar (n = 1 por celda, ciego no efectivo, sin datos de GaleCore) y la revisión interna R2
+  (4 MAJOR, detalle no registrado) no se corrigió ni pasó por Codex. No se afirma nada de esa entrega.
