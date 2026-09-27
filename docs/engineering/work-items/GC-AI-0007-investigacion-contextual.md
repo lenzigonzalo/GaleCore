@@ -59,7 +59,7 @@ actualizar plan y alcance y crear este item; GC-AI-0006 sigue abierto con sus pe
 | AC-02 | `contracts/evidence.py`, `adapters/evidence_store.py`, ref `evidence:` (`knowledge_base.py`), `evidence add` (`cli.py`), `tools/fred_query.py` | `tests/unit/test_evidence.py` (29 casos: HOST_DECLARED también en `host`, credenciales en nombres/valores/payload, creación exclusiva, no sobrescribe, credenciales, extracto, futuro, integridad, cita y backlink, búsqueda, CLI) | 28 items `knowledge/evidence/2026-09-27-spy-ctx-*.json` (incluye metadatos FRED y respuestas de error/denegación) | Implementado; verificado local y en el recorrido real |
 | AC-03 | — | — | [README §Fuentes](../../evidence/gc-ai-0007/README.md); hallazgos abajo; evidencia de la denegación FMP | Hecho con acceso real (GaleCore, FMP, Alpha Vantage, FRED) |
 | AC-04 | — | `recompute.py` verifica con asserts los 28 valores derivados contra la evidencia (exit 0) | `research:2026-09-27-spy-contexto-prima-30-60d` r1; README §Análisis | Entregado; utilidad: evalúa el owner |
-| AC-05 | — | `kb search --status unfinished` la encuentra; `kb show` muestra r1→r3 y `cited_by` | r2 (corrección CPI), r3 (resultado FRED) | Guardar/encontrar/revisar: hecho. **Continuidad desde sesión nueva: NO probada** (bloqueada por permisos del host) |
+| AC-05 | — | `kb search --status unfinished` la encuentra; `kb show` muestra r1→r3 y `cited_by` | r2 (corrección CPI), r3 (resultado FRED), **r4 (sesión nueva, 27/09)** | Guardar/encontrar/revisar: hecho. **Continuidad desde sesión nueva: ejecutada** el 27/09 (ver abajo); utilidad: evalúa el owner |
 | AC-06 | — | — | README §Guion, §Aporte, §No demostrado | Entregado |
 | AC-07 | — | — | Interna R1 APPROVE; Codex C1 y C2 CHANGES_REQUESTED → corregidos; **Codex C3 APPROVE** | Revisión: sí. Pendiente: utilidad y cierre (owner) |
 
@@ -94,7 +94,7 @@ git diff --check
 
 ## Implementer handoff
 
-**State:** READY_FOR_REVIEW del owner — implementada, ejecutada, revisión interna y Codex APPROVE. Falta: prueba de continuidad en sesión nueva (owner) y evaluación de utilidad.
+**State:** READY_FOR_REVIEW del owner — implementada, ejecutada, revisión interna y Codex APPROVE; continuidad en sesión nueva ejecutada el 27/09 (r4). Falta: evaluación de utilidad y cierre (owner).
 
 ### Qué se hizo
 
@@ -161,3 +161,18 @@ C1-M2..M5 y C1-m1 resueltos; AC-03 y AC-04 pasan a PASS. Abiertos y corregidos d
 C1-M1 y C1-m2 resueltos; AC-01..AC-04 y AC-06 PASS; AC-05 y AC-07 quedan como decisión del owner (continuidad en
 sesión nueva y utilidad). MINOR nuevo (conteos 27/726 desactualizados) corregido: 29 casos, 728 tests.
 El APPROVE no cambia `status`, `closure_blocked` ni `approval_result`: cierra el owner.
+
+## Continuidad desde una sesión nueva (27/09, tarde) — sin cambios de código
+
+Pedido del owner, en una sesión sin el contexto anterior: «Retomá la investigación de contexto sobre vender prima en
+SPY, incorporá una observación o corrección real y explicá qué cambia y qué se mantiene. Guardalo.»
+
+- **Recuperar:** `catalog` (desde este worktree; el checkout principal está en `feature/GC-AI-0005` y no tiene
+  `context_research`) y `kb search --text "vender prima SPY contexto"` → `research:2026-09-27-spy-contexto-prima-30-60d` r3,
+  mostrada antes de escribir.
+- **Fuentes en esta sesión:** FMP responde. FRED **no**: `FRED_API_KEY` no está en el entorno (la clave anterior se
+  usó sólo por variable de aquella sesión); no se pidió por chat. Sin datos de mercado nuevos (domingo, último cierre 25/09).
+- **Aporte real → r4 (`correction`):** 3 evidencias FMP `earnings-company` (MSFT 28/10, AAPL 29/10, NVDA 18/11; payload
+  transcripto por el host, declarado en `access_notes`) y corrección del diseño del estudio condicional: umbrales ya no
+  delegados al owner; eventos no solapados, bootstrap por bloques y suficiencia calculada. El estudio no se corrió (FRED).
+- **Qué no prueba:** que el razonamiento sea correcto ni útil; eso lo evalúa el owner. knowledge commit local.
