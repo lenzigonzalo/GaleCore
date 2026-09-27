@@ -105,6 +105,22 @@ def _versions(kb: KnowledgeBase, strategy: str) -> tuple[StrategyDocument, bool]
         raise FollowupError(f"strategy {strategy}: not usable ({exc})") from exc
 
 
+def _research_state(kb: KnowledgeBase, doc: StrategyDocument) -> str | None:
+    """The hypothesis as the strategy's investigation last recorded it (its latest revision), never a fixed text."""
+    ref = next((r for r in doc.content.research_refs if r.startswith("research:")), None)
+    if ref is None:
+        return None
+    try:
+        rd = kb.research.load(ref.split(":", 1)[1])
+    except Exception:  # noqa: BLE001 - an unreadable investigation is reported, not hidden
+        return f"{ref}: no se pudo leer (integridad); revisar"
+    if rd is None:
+        return None
+    cur = rd.current
+    return (f"Hipótesis según {ref} (revisión {cur.revision}, {cur.reason.value}, {cur.recorded_at:%Y-%m-%d}): "
+            f"{cur.note[:400]}")
+
+
 def default_report_command(workspace: Path, strategy: str) -> list[str]:
     return [sys.executable, "-B", str(workspace / "GaleCore" / "dev" / "galecore_dev.py"), "runtime-report",
             "--spec", strategy, "--limit", "500"]
@@ -140,7 +156,7 @@ def _ts(value: str | None) -> datetime | None:
 
 
 def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime | None,
-            now: datetime) -> dict[str, list[str]]:
+            now: datetime, research_state: str | None = None) -> dict[str, list[str]]:
     op, shadow, hyp, others, attention = [], [], [], [], []
     ref = f"strategy:{doc.name}/{doc.version}"
     if not approved:
@@ -213,8 +229,7 @@ def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime
                    "de evaluación; con esta muestra no hay evidencia económica")
     if not mine:
         hyp.append(f"Sin operaciones de esta versión: 0 de {MIN_CLOSED_TRADES} operaciones cerradas que pide el plan")
-    hyp.append("El estudio histórico de la hipótesis sigue pendiente (ver la investigación de la estrategia); este "
-               "seguimiento no lo reemplaza")
+    hyp.append(research_state or "Sin investigación de la estrategia legible: el estado de la hipótesis no se puede informar")
     return {"operation": op, "shadow": shadow, "hypothesis": hyp, "other_versions": others, "attention": attention}
 
 
@@ -249,7 +264,7 @@ def run_followup(*, kb: KnowledgeBase, strategy: str, prompt: str, host: RecordH
     ev_doc, _ = save_evidence(kb=kb, slug=f"{strategy.replace('_', '-')}-shadow-{stamp.lower()}", prompt=prompt,
                               host=host, content=evidence, now=now)
     if ok:
-        parts = analyse(report, doc, approved, since, now)
+        parts = analyse(report, doc, approved, since, now, _research_state(kb, doc))
         status = "DEGRADED" if parts["attention"] else "OK"
     else:
         parts = {"operation": [f"No se pudo leer GaleCore (exit {code}): {(err or out).strip()[:300]}"],

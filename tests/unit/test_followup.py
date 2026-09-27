@@ -66,6 +66,7 @@ def test_unapproved_undeployed_strategy_is_reported_as_such(kb, research_ref, tm
     assert any("no está desplegada" in o for o in rec.operation)
     assert rec.other_versions and "no se mezcla" in rec.other_versions[0]
     assert rec.sources[0].startswith("evidence:") and rec.research_ref == research_ref
+    assert any(h.startswith(f"Hipótesis según {research_ref} (revisión 1") for h in rec.hypothesis)
     assert (path.parent / "LATEST.md").read_text(encoding="utf-8").startswith(f"# Seguimiento de {NAME}")
 
 
