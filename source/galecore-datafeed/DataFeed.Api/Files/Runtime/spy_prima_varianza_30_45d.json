@@ -6,7 +6,7 @@
     "id": "15da4d03-c76b-4d1b-8b83-192fd2f177c9",
     "name": "spy_prima_varianza_30_45d",
     "display_name": "Cobro de prima de varianza en SPY a 30-45 dias con riesgo definido",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "author": {
       "type": "COLLABORATIVE",
       "agent_definition_version": "strategy-design 0.3.0"
@@ -147,6 +147,6 @@
     "schema_version": "1.0.0",
     "methodology_version": "1.0.0",
     "reference_docs": [],
-    "notes": "Propuesta completa en knowledge: strategy:spy_prima_varianza_30_45d/1.0.2 (GC-AI-0008; reemplaza a 1.0.0 y 1.0.1, nunca aprobadas ni desplegadas, corregidas por la revision de Codex). Parametros de pcs_spy_16d_v1 (borrador local del 26/09, nunca desplegado) con sizing y limites ajustados a lo que el runtime ejecuta: 1 contrato fijo, sin riesgo por % de capital, sin roll. Reglas no ejecutables declaradas en la propuesta, fuera de esta spec. Sin validacion de rentabilidad."
+    "notes": "Propuesta completa en knowledge: strategy:spy_prima_varianza_30_45d/1.0.3 (GC-AI-0008; reemplaza a 1.0.0, 1.0.1 y 1.0.2, nunca aprobadas ni desplegadas, corregidas por la revision de Codex). Parametros de pcs_spy_16d_v1 (borrador local del 26/09, nunca desplegado) con sizing y limites ajustados a lo que el runtime ejecuta: 1 contrato fijo, sin riesgo por % de capital, sin roll. Reglas no ejecutables declaradas en la propuesta, fuera de esta spec. Sin validacion de rentabilidad."
   }
 }

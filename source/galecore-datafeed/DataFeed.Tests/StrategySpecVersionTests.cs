@@ -11,7 +11,7 @@ public class StrategySpecVersionTests
 {
     private const string Name = "spy_prima_varianza_30_45d";
     private const string ApprovedCandidateHash =
-        "sha256:8a7443812d0291dcb27aad6cb8674cf92496fd32f036267640521059ca77e149";
+        "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51";
 
     private static string SpecPath()
     {
@@ -32,7 +32,7 @@ public class StrategySpecVersionTests
         Assert.True(result.Success, string.Join("; ", result.Errors));
         Assert.Equal(ApprovedCandidateHash, result.ContentHash);
         Assert.Equal(Name, result.Spec!.Identity.Name);
-        Assert.Equal("1.0.2", result.Spec.Identity.Version);
+        Assert.Equal("1.0.3", result.Spec.Identity.Version);
         Assert.Equal(new[] { "SHADOW" }, result.Spec.DeploymentConstraints.EligibleModes);
     }
 }
