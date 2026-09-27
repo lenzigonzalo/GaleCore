@@ -307,6 +307,7 @@ def cmd_runtime_report(args: argparse.Namespace) -> int:
         } for i in mine],
         "metrics": get("/App/Runtime/Metrics"),
     }
+    sys.stdout.reconfigure(encoding="utf-8")  # la salida se guarda tal cual como evidencia: UTF-8 siempre
     print(json.dumps(report, ensure_ascii=False, indent=2))
     return 0
 
