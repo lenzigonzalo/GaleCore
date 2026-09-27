@@ -157,3 +157,27 @@ C2-M1 y C2-m1 RESUELTOS; el límite del endpoint sigue como decisión del owner.
 | # | Sev. | Hallazgo | Resolución |
 |---|---|---|---|
 | C3-M1 | MAJOR | El plan de evaluación de 1.0.2 decía «estas reglas (v1.0.0)»; también la investigación | Corregido de forma general: ninguna parte operativa (propósito, hipótesis, reglas, plan, decisiones del owner) puede nombrar otra versión; sólo limitaciones y pendientes citan historia (+2 casos). Versión **1.0.3** (`sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51`); investigación r5 ata la reproducción histórica a la versión aprobada |
+
+## Recheck Codex C4 (`76e9958..bb8f592`) — NO CORRIÓ
+
+Dos intentos (27/09 ~17:08 y ~17:11): Codex respondió «You've hit your usage limit… try again at 5:48 PM»; el runner no
+escribió revisión. Pendiente de correr con el mismo comando (`codex_review.py --recheck --model gpt-5.6-sol`). No se
+compraron créditos. Sin este recheck no hay APPROVE independiente de las correcciones C3.
+
+## Implementer handoff (27/09)
+
+**State:** IN_PROGRESS. Implementado y revisado (interna R1 + Codex C1–C3, correcciones aplicadas; C4 pendiente por límite
+de Codex). Versión para aprobar: `strategy:spy_prima_varianza_30_45d/1.0.3`,
+`sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51`.
+
+**Para desplegar (después de la aprobación y autorizaciones):**
+1. `strategy approve --ref strategy:spy_prima_varianza_30_45d/1.0.3 --spec-hash <hash> --owner-words "<owner>" --host-model <m>`
+2. Reemplazar el DataFeed.Api sin base que ocupa :7001 por `python GaleCore/dev/galecore_dev.py api` (reactiva v2).
+3. `galecore_dev.py stop --instance 0bbd904a-baf2-44a6-b81c-166e13896cf4` (v2; su posición se sigue valuando).
+4. `galecore_dev.py deploy --spec spy_prima_varianza_30_45d --approval knowledge/strategies/spy_prima_varianza_30_45d/1.0.3.approval.json`
+5. En sesión (lunes 28/09 desde 09:30 ET): `galecore_dev.py runtime-report --spec spy_prima_varianza_30_45d` → `evidence add`
+   con la salida exacta → `research revise --capability strategy_followup --reason result` sobre
+   `research:2026-09-27-spy-prima-varianza-estrategia`.
+
+**Comandos y resultados:** pytest `tests/unit/test_strategy.py` 49 passed; suite completa 777 passed (Codex C3); ruff limpio;
+GaleCore `StrategySpecVersionTests` 1/1 con hash 1.0.3.
