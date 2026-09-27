@@ -18,8 +18,10 @@ import json
 import os
 import subprocess
 import sys
+import time
 import traceback
 from collections.abc import Callable
+from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -32,6 +34,8 @@ from galecore_ai.contracts.regime_record import RecordHost
 from galecore_ai.contracts.task import Schedule, TaskDefinition
 
 LOCK_STALE_MINUTES = 30
+STATE_LOCK_TIMEOUT_SECONDS = 15
+STATE_LOCK_STALE_SECONDS = 120
 SCHEDULER_FOLDER = "GaleCore-AI"
 _REPO = Path(__file__).resolve().parents[3]
 RUNNER_HOST = RecordHost(provider="windows-task-scheduler", model="deterministic-runner")
@@ -121,7 +125,37 @@ def events(kb: KnowledgeBase, task_id: str) -> list[dict]:
     return out
 
 
+@contextmanager
+def _state_lock(kb: KnowledgeBase, task_id: str, timeout: float = STATE_LOCK_TIMEOUT_SECONDS):
+    """Serializes every read-modify-write of task.json and events.jsonl (chat commands and scheduled runs)."""
+    path = _dir(kb, task_id) / "state.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            break
+        except FileExistsError:
+            if time.time() - path.stat().st_mtime > STATE_LOCK_STALE_SECONDS:
+                path.unlink(missing_ok=True)       # a writer died holding it; its write never completed
+                continue
+            if time.monotonic() > deadline:
+                raise TaskError(f"task {task_id} is being changed by another process; try again") from None
+            time.sleep(0.05)
+    try:
+        os.close(fd)
+        yield
+    finally:
+        path.unlink(missing_ok=True)
+
+
 def _event(kb: KnowledgeBase, task_id: str, kind: str, now: datetime, **data) -> dict:
+    with _state_lock(kb, task_id):
+        return _append(kb, task_id, kind, now, **data)
+
+
+def _append(kb: KnowledgeBase, task_id: str, kind: str, now: datetime, **data) -> dict:
+    """Append one event; the caller holds the state lock."""
     path = _dir(kb, task_id) / "events.jsonl"
     existing = events(kb, task_id)
     prev = None
@@ -137,7 +171,11 @@ def _event(kb: KnowledgeBase, task_id: str, kind: str, now: datetime, **data) ->
 
 
 def local_time_for(schedule: Schedule, now: datetime) -> str | None:
-    """The owner's HH:MM in their timezone, as this PC's local HH:MM for the next occurrence."""
+    """The owner's HH:MM in their timezone, as this PC's local HH:MM for the next occurrence.
+
+    A weekdays schedule whose conversion lands on another local calendar day would need a shifted day set; that is
+    not supported, so it is refused instead of firing on the wrong days.
+    """
     if schedule.time is None:
         return None
     tz = ZoneInfo(schedule.timezone)
@@ -146,7 +184,11 @@ def local_time_for(schedule: Schedule, now: datetime) -> str | None:
     target = datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz)
     if target <= now:
         target += timedelta(days=1)
-    return target.astimezone().strftime("%H:%M")
+    local = target.astimezone()
+    if schedule.frequency == "weekdays" and local.date() != target.date():
+        raise TaskError(f"{schedule.time} {schedule.timezone} is another calendar day on this PC "
+                        f"({local:%a %H:%M}); a weekdays schedule would fire on the wrong days. Use daily or another time")
+    return local.strftime("%H:%M")
 
 
 def runner_command(code_path: Path, task_id: str) -> list[str]:
@@ -171,41 +213,56 @@ def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str, objecti
                           updated_at=now, created_by_prompt=prompt, scheduler_name=f"{SCHEDULER_FOLDER}\\{task_id}",
                           local_time=local_time_for(schedule, now), code_path=str(code_path))
     scheduler.create(task.scheduler_name, runner_command(code_path, task_id), schedule, task.local_time)
-    _save(kb, task)
-    _event(kb, task_id, "created", now, schedule=schedule.model_dump(), local_time=task.local_time, prompt=prompt)
+    with _state_lock(kb, task_id):
+        _save(kb, task)
+        _append(kb, task_id, "created", now, schedule=schedule.model_dump(), local_time=task.local_time, prompt=prompt)
     return task
+
+
+def _scheduler_call(kb: KnowledgeBase, task_id: str, now: datetime, what: str, fn, *args) -> None:
+    """A scheduler failure is appended to the log before it propagates, so status explains a mismatch."""
+    try:
+        fn(*args)
+    except TaskError as exc:
+        _append(kb, task_id, "scheduler_error", now, operation=what, error=str(exc)[:500])
+        raise
 
 
 def set_frequency(*, kb: KnowledgeBase, scheduler, task_id: str, schedule: Schedule, prompt: str,
                   now: datetime | None = None) -> TaskDefinition:
     now = now or datetime.now(UTC)
-    task = load(kb, task_id)
-    if task.status == "cancelled":
-        raise TaskError(f"task {task_id} is cancelled; create a new one")
     local = local_time_for(schedule, now)
-    scheduler.delete(task.scheduler_name)
-    scheduler.create(task.scheduler_name, runner_command(Path(task.code_path), task_id), schedule, local)
-    if task.status == "paused":
-        scheduler.set_enabled(task.scheduler_name, False)
-    old = task.schedule.describe()
-    task = task.model_copy(update={"schedule": schedule, "local_time": local, "updated_at": now})
-    _save(kb, task)
-    _event(kb, task_id, "frequency_changed", now, before=old, after=schedule.describe(), local_time=local, prompt=prompt)
+    with _state_lock(kb, task_id):
+        task = load(kb, task_id)
+        if task.status == "cancelled":
+            raise TaskError(f"task {task_id} is cancelled; create a new one")
+        # `schtasks /create /f` replaces the task in place: if it fails, the previous schedule is still registered.
+        _scheduler_call(kb, task_id, now, "set_frequency", scheduler.create, task.scheduler_name,
+                        runner_command(Path(task.code_path), task_id), schedule, local)
+        if task.status == "paused":
+            _scheduler_call(kb, task_id, now, "keep_paused", scheduler.set_enabled, task.scheduler_name, False)
+        old = task.schedule.describe()
+        task = task.model_copy(update={"schedule": schedule, "local_time": local, "updated_at": now})
+        _save(kb, task)
+        _append(kb, task_id, "frequency_changed", now, before=old, after=schedule.describe(), local_time=local,
+                prompt=prompt)
     return task
 
 
 def _set_status(kb: KnowledgeBase, scheduler, task_id: str, status: str, prompt: str, now: datetime | None):
     now = now or datetime.now(UTC)
-    task = load(kb, task_id)
-    if task.status == "cancelled":
-        raise TaskError(f"task {task_id} is already cancelled")
-    if status == "cancelled":
-        scheduler.delete(task.scheduler_name)
-    else:
-        scheduler.set_enabled(task.scheduler_name, status == "active")
-    task = task.model_copy(update={"status": status, "updated_at": now})
-    _save(kb, task)
-    _event(kb, task_id, {"active": "resumed", "paused": "paused", "cancelled": "cancelled"}[status], now, prompt=prompt)
+    with _state_lock(kb, task_id):
+        task = load(kb, task_id)
+        if task.status == "cancelled":
+            raise TaskError(f"task {task_id} is already cancelled")
+        if status == "cancelled":
+            _scheduler_call(kb, task_id, now, "cancel", scheduler.delete, task.scheduler_name)
+        else:
+            _scheduler_call(kb, task_id, now, status, scheduler.set_enabled, task.scheduler_name, status == "active")
+        task = task.model_copy(update={"status": status, "updated_at": now})
+        _save(kb, task)
+        _append(kb, task_id, {"active": "resumed", "paused": "paused", "cancelled": "cancelled"}[status], now,
+                prompt=prompt)
     return task
 
 
@@ -270,11 +327,12 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
         followup: Callable[..., tuple[FollowupRecord, Path]] = run_followup, commit: bool = True) -> dict:
     """What the scheduler invokes. Never raises for a failed run: the failure is the recorded result."""
     now = now or datetime.now(UTC)
-    task = load(kb, task_id)
     d = _dir(kb, task_id)
-    if task.status != "active":
-        ev = _event(kb, task_id, "run_skipped", now, reason=f"task is {task.status}")
-        return {"status": "SKIPPED", **ev}
+    with _state_lock(kb, task_id):
+        task = load(kb, task_id)
+        if task.status != "active":
+            ev = _append(kb, task_id, "run_skipped", now, reason=f"task is {task.status}")
+            return {"status": "SKIPPED", **ev}
     lock = d / "run.lock"
     note = None
     try:
@@ -293,13 +351,15 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
         _event(kb, task_id, "run_started", now, pid=os.getpid(), note=note)
         written = [d / "task.json", d / "events.jsonl"]
         if scheduler is not None and task.local_time is not None:
-            local = local_time_for(task.schedule, now)
-            if local != task.local_time:       # the owner's timezone changed offset against this PC (DST)
-                scheduler.delete(task.scheduler_name)
-                scheduler.create(task.scheduler_name, runner_command(Path(task.code_path), task_id), task.schedule, local)
-                task = task.model_copy(update={"local_time": local, "updated_at": now})
-                _save(kb, task)
-                _event(kb, task_id, "local_time_resynced", now, local_time=local)
+            with _state_lock(kb, task_id):
+                task = load(kb, task_id)           # fresh: a chat command may have changed it meanwhile
+                local = local_time_for(task.schedule, now) if task.status == "active" else task.local_time
+                if local != task.local_time:       # the owner's timezone changed offset against this PC (DST)
+                    _scheduler_call(kb, task_id, now, "resync", scheduler.create, task.scheduler_name,
+                                    runner_command(Path(task.code_path), task_id), task.schedule, local)
+                    task = task.model_copy(update={"local_time": local, "updated_at": now})
+                    _save(kb, task)
+                    _append(kb, task_id, "local_time_resynced", now, local_time=local)
         try:
             rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=RUNNER_HOST,
                                  task_id=task_id, now=now)
@@ -314,6 +374,8 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
         ev = _event(kb, task_id, "run_finished", datetime.now(UTC), followup=rec.id, result=rec.status,
                     strategy_ref=rec.strategy_ref, spec_hash=rec.spec_hash, attention=rec.attention[:5])
         committed = _commit_knowledge(kb, written, f"task {task_id}: {rec.status} {rec.id}") if commit else "skipped"
+        if committed.startswith("commit failed"):
+            _event(kb, task_id, "commit_failed", datetime.now(UTC), error=committed)
         return {"status": rec.status, "followup": rec.id, "knowledge": committed, **ev}
     finally:
         lock.unlink(missing_ok=True)

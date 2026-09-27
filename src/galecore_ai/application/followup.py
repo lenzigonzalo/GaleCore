@@ -168,8 +168,7 @@ def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime
         if inst.get("lifecycleState") == "RUNNING":
             others.append(f"{inst.get('specName')} ({inst.get('versionHash', '')[:19]}…) {inst.get('lifecycleState')}"
                           f"/{inst.get('schedulerState')} — otra versión, no se mezcla con esta estrategia")
-            if not any(i.get("instance", {}).get("lifecycleState") == "RUNNING"
-                       for i in report.get("instances", []) if i.get("instance", {}).get("versionHash") == doc.spec_hash):
+            if not any(i.get("instance", {}).get("lifecycleState") == "RUNNING" for i in mine):
                 attention.append(f"{inst.get('specName')} ocupa el único lugar RUNNING del runtime: desplegar {ref} "
                                  "requiere pararla (decisión tuya; su posición abierta se sigue valuando)")
     if not mine:

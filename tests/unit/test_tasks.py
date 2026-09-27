@@ -164,3 +164,50 @@ def test_an_edited_event_log_is_detected(env):
     path.write_text(lines[0].replace("Hacé", "Hace") + "\n" + lines[1] + "\n", encoding="utf-8")
     with pytest.raises(KnowledgeError, match="hash chain"):
         t.events(kb, "seguimiento-spy")
+
+
+def test_weekdays_crossing_midnight_is_refused():
+    """Review R1 MAJOR: the weekday set would shift; refuse instead of firing on the wrong days."""
+    here = datetime.now().astimezone().utcoffset()
+    tz, hhmm = ("Pacific/Pago_Pago", "23:30") if here > timedelta(hours=-11) else ("Pacific/Kiritimati", "00:30")
+    with pytest.raises(t.TaskError, match="another calendar day"):
+        t.local_time_for(Schedule(frequency="weekdays", time=hhmm, timezone=tz), NOW)
+    assert t.local_time_for(Schedule(frequency="daily", time=hhmm, timezone=tz), NOW)
+
+
+def test_a_scheduler_failure_keeps_the_old_schedule_and_is_logged(env):
+    kb, sch, _ = env  # noqa: F811
+    make(kb, sch)
+
+    def failing(*_):
+        raise t.TaskError("schtasks create failed: Access is denied")
+    sch.create = failing
+    new = Schedule(frequency="every_minutes", minutes=30, timezone="UTC")
+    with pytest.raises(t.TaskError, match="Access is denied"):
+        t.set_frequency(kb=kb, scheduler=sch, task_id="seguimiento-spy", schedule=new, prompt="Cambiá", now=NOW)
+    assert t.load(kb, "seguimiento-spy").schedule == DAILY
+    assert r"GaleCore-AI\seguimiento-spy" in sch.tasks                  # the previous registration is intact
+    assert t.events(kb, "seguimiento-spy")[-1]["event"] == "scheduler_error"
+
+
+def test_pausing_during_a_run_is_not_overwritten(env):
+    """Review R1 MAJOR: a chat command during an in-flight run keeps its effect and the chain stays intact."""
+    kb, sch, follow = env  # noqa: F811
+    make(kb, sch)
+
+    def follow_and_pause(**kw):
+        t.pause(kb=kb, scheduler=sch, task_id="seguimiento-spy", prompt="Pausalo", now=NOW)
+        return follow(**kw)
+    t.run(kb=kb, task_id="seguimiento-spy", scheduler=sch, followup=follow_and_pause, commit=False,
+          now=NOW + timedelta(hours=1))
+    assert t.load(kb, "seguimiento-spy").status == "paused"
+    kinds = [e["event"] for e in t.events(kb, "seguimiento-spy")]           # raises if the chain broke
+    assert kinds == ["created", "run_started", "paused", "run_finished"]
+
+
+def test_a_busy_state_lock_times_out_instead_of_racing(env):
+    kb, sch, _ = env  # noqa: F811
+    make(kb, sch)
+    (kb.base / "tasks" / "seguimiento-spy" / "state.lock").write_text("held", encoding="utf-8")
+    with pytest.raises(t.TaskError, match="being changed"), t._state_lock(kb, "seguimiento-spy", timeout=0.2):
+        pass
