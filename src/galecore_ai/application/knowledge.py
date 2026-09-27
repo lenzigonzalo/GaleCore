@@ -15,6 +15,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from galecore_ai.adapters.evidence_store import (
+    EvidenceIntegrityError,
+    EvidenceStoreError,
+    FileEvidenceStore,
+)
 from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, Ref, parse_ref, ref_path
 from galecore_ai.adapters.record_store import (
     FileRecordStore,
@@ -26,6 +31,7 @@ from galecore_ai.adapters.research_store import (
     ResearchIntegrityError,
     ResearchStoreError,
 )
+from galecore_ai.contracts.evidence import EvidenceContent, EvidenceDocument, compute_evidence_hash
 from galecore_ai.contracts.prepared_analysis import AssetEntry
 from galecore_ai.contracts.regime_record import RecordHost
 from galecore_ai.contracts.research import (
@@ -39,7 +45,7 @@ from galecore_ai.contracts.research import (
     compute_revision_hash,
 )
 from galecore_ai.harness.assets import definition_hash, load_asset
-from galecore_ai.harness.catalog import load_catalog
+from galecore_ai.harness.catalog import CatalogError, load_catalog
 from galecore_ai.harness.definitions import SkillDefinition
 
 
@@ -60,6 +66,10 @@ class KnowledgeBase:
     @property
     def workspace(self) -> Path:
         return self.base.parent
+
+    @property
+    def evidence(self) -> FileEvidenceStore:
+        return FileEvidenceStore(self.base)
 
 
 def _sha256_file(path: Path) -> str:
@@ -100,11 +110,19 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
         except (ResearchIntegrityError, ResearchStoreError) as exc:
             raise KnowledgeError(f"{ref}: not usable ({exc})") from exc
         path = kb.research.path_for(ref.key)
+    elif ref.kind == "evidence":
+        try:
+            if kb.evidence.load(ref.key) is None:
+                raise KnowledgeError(f"{ref}: no such evidence")
+        except (EvidenceIntegrityError, EvidenceStoreError) as exc:
+            raise KnowledgeError(f"{ref}: not usable ({exc})") from exc
+        path = kb.evidence.path_for(ref.key)
     else:
         path = ref_path(ref, kb.base)
         if path.is_relative_to(kb.base.resolve()):
             # Knowledge items are cited by kind so their integrity (and self-citation) is checked.
-            raise KnowledgeError(f"{ref}: points inside the knowledge base; cite it as regime: or research:")
+            raise KnowledgeError(f"{ref}: points inside the knowledge base; cite it as regime:, research: "
+                                 "or evidence:")
         if not path.is_relative_to(kb.workspace.resolve()) or not path.is_file():
             raise KnowledgeError(f"{ref}: no such file inside the workspace")
     return ResolvedRef(ref=str(ref), path=_display_path(path, kb), content_hash=_sha256_file(path))
@@ -157,23 +175,34 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
     return list(resolved.values()), problems
 
 
-def research_skill() -> AssetEntry:
-    entry = load_catalog().get("research")
+RESEARCH_CONTRACT = "galecore_ai.contracts.research.ResearchContent"
+
+
+def research_skill(capability: str = "research") -> AssetEntry:
+    """The skill a revision was written with: any catalog entry whose output is an investigation."""
+    try:
+        entry = load_catalog().get(capability)
+    except CatalogError as exc:
+        raise KnowledgeError(f"Unknown capability {capability!r}", [str(exc)]) from exc
+    if entry.output_contract != RESEARCH_CONTRACT:
+        raise KnowledgeError(f"Capability {capability!r} does not produce an investigation",
+                             [f"its output contract is {entry.output_contract}"])
     skill = load_asset(entry.skill, SkillDefinition)
     return AssetEntry(asset_id=skill.skill_id, version=skill.version, content_hash=definition_hash(skill))
 
 
 def _revision(*, number: int, reason: RevisionReason, note: str, prompt: str, host: RecordHost,
-              content: ResearchContent, resolved: list[ResolvedRef], now: datetime) -> ResearchRevision:
+              content: ResearchContent, resolved: list[ResolvedRef], now: datetime,
+              capability: str) -> ResearchRevision:
     draft = ResearchRevision(
         revision=number, recorded_at=now, reason=reason, note=note, prompt=prompt, host=host,
-        skill=research_skill(), content=content, resolved_refs=resolved, content_hash="",
+        skill=research_skill(capability), content=content, resolved_refs=resolved, content_hash="",
     )
     return draft.model_copy(update={"content_hash": compute_revision_hash(draft.hashable_content())})
 
 
 def save_research(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost, content: ResearchContent,
-                  now: datetime | None = None) -> tuple[ResearchDocument, Path]:
+                  now: datetime | None = None, capability: str = "research") -> tuple[ResearchDocument, Path]:
     now = now or datetime.now(UTC)
     research_id = f"{now.date().isoformat()}-{slug}"
     if not prompt.strip():
@@ -186,7 +215,7 @@ def save_research(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost
     if problems:
         raise KnowledgeError("Refusing to save", problems)
     revision = _revision(number=1, reason=RevisionReason.INITIAL, note="", prompt=prompt, host=host,
-                         content=content, resolved=resolved, now=now)
+                         content=content, resolved=resolved, now=now, capability=capability)
     document = ResearchDocument(id=research_id, created_at=now, revisions=[revision])
     try:
         path = kb.research.create(document)
@@ -196,8 +225,8 @@ def save_research(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost
 
 
 def revise_research(*, kb: KnowledgeBase, research_id: str, reason: RevisionReason, note: str, prompt: str,
-                    host: RecordHost, content: ResearchContent,
-                    now: datetime | None = None) -> tuple[ResearchDocument, Path]:
+                    host: RecordHost, content: ResearchContent, now: datetime | None = None,
+                    capability: str = "research") -> tuple[ResearchDocument, Path]:
     now = now or datetime.now(UTC)
     problems: list[str] = []
     if reason == RevisionReason.INITIAL:
@@ -217,11 +246,56 @@ def revise_research(*, kb: KnowledgeBase, research_id: str, reason: RevisionReas
     if problems:
         raise KnowledgeError("Refusing to revise", problems)
     revision = _revision(number=len(current.revisions) + 1, reason=reason, note=note, prompt=prompt,
-                         host=host, content=content, resolved=resolved, now=now)
+                         host=host, content=content, resolved=resolved, now=now, capability=capability)
     try:
         return kb.research.append(research_id, revision)
     except (ResearchIntegrityError, ResearchStoreError) as exc:
         raise KnowledgeError("Refusing to revise", [str(exc)]) from exc
+
+
+# ── evidence ─────────────────────────────────────────────────────
+
+
+def save_evidence(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost, content: EvidenceContent,
+                  now: datetime | None = None) -> tuple[EvidenceDocument, Path]:
+    """Keep one source response with its provenance. Always HOST_DECLARED; never overwrites."""
+    now = now or datetime.now(UTC)
+    evidence_id = f"{now.date().isoformat()}-{slug}"
+    if not prompt.strip():
+        raise KnowledgeError("Refusing to save", ["the user's prompt is required"])
+    if content.retrieved_at > now:
+        raise KnowledgeError("Refusing to save", ["retrieved_at is in the future"])
+    draft = EvidenceDocument(id=evidence_id, recorded_at=now, host=host, prompt=prompt, content=content,
+                             content_hash="")
+    document = draft.model_copy(update={"content_hash": compute_evidence_hash(draft.hashable_content())})
+    try:
+        path = kb.evidence.create(document)
+    except EvidenceStoreError as exc:
+        raise KnowledgeError("Refusing to save", [str(exc)]) from exc
+    return document, path
+
+
+def _evidence_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, str]]:
+    items = []
+    for eid in kb.evidence.ids():
+        try:
+            doc = kb.evidence.load(eid)
+        except (EvidenceIntegrityError, EvidenceStoreError) as exc:
+            failed.append({"ref": f"evidence:{eid}", "status": "INTEGRITY_FAILED", "problems": [str(exc)]})
+            continue
+        if doc is None:
+            continue
+        c = doc.content
+        summary = {
+            "ref": f"evidence:{eid}", "kind": "evidence", "title": f"{c.source} · {c.tool}",
+            "provenance": doc.provenance, "retrieved_at": c.retrieved_at.isoformat(),
+            "series": [s.name for s in c.series], "updated_at": doc.recorded_at.isoformat(),
+            "path": _display_path(kb.evidence.path_for(eid), kb),
+        }
+        text = " ".join([eid, c.source, c.tool, *map(str, c.params.values()), *c.access_notes,
+                         *[f"{s.name} {s.unit} {s.frequency} {s.revision_note}" for s in c.series]])
+        items.append((summary, text))
+    return items
 
 
 # ── search and show ──────────────────────────────────────────────
@@ -312,6 +386,8 @@ def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status
                        if status is None or s["status"] in wanted]
     if kind in (None, "regime") and status is None:
         candidates += _regime_items(kb, failed, symbol)
+    if kind in (None, "evidence") and status is None:
+        candidates += _evidence_items(kb, failed)
     results = []
     for summary, body in candidates:
         lowered = body.lower()
@@ -376,6 +452,15 @@ def show(kb: KnowledgeBase, ref_text: str) -> dict:
             } for e in doc.entries],
             "cited_by": cited_by(kb, ref),
         }
+    if ref.kind == "evidence":
+        try:
+            doc = kb.evidence.load(ref.key)
+        except (EvidenceIntegrityError, EvidenceStoreError) as exc:
+            raise KnowledgeError(f"{ref}: INTEGRITY_FAILED", [str(exc)]) from exc
+        if doc is None:
+            raise KnowledgeError(f"{ref}: no such evidence")
+        return {"ref": str(ref), "kind": "evidence", "path": _display_path(kb.evidence.path_for(ref.key), kb),
+                **doc.model_dump(mode="json"), "cited_by": cited_by(kb, ref)}
     resolved = resolve_ref(str(ref), kb)
     return {"ref": str(ref), "kind": "file", "path": resolved.path, "content_hash": resolved.content_hash,
             "cited_by": cited_by(kb, ref)}

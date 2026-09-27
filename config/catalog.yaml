@@ -78,3 +78,30 @@ entries:
       - "Revisions are append-only and hashed; an edit that breaks a revision's hash is INTEGRITY_FAILED (removing or consistently rewriting revisions shows only in the knowledge base's git history)"
       - "Knowledge items are cited as regime or research refs; a file ref into the knowledge base is refused"
       - Not checked - whether the reasoning is right, or whether a fact's source supports it
+
+  - id: context_research
+    kind: investigation
+    serves: >-
+      Investigar el contexto de una idea de trading sobre un instrumento y horizonte: qué factores
+      importan (tasas, inflación, actividad, beneficios, eventos, opciones…), consultarlos en GaleCore
+      y en las fuentes externas del host según haga falta, conservar cada respuesta con su procedencia,
+      contrastar escenarios y dejar qué implica para investigar la estrategia, qué falta y cómo probarlo.
+    example_requests:
+      - Quiero investigar una estrategia sobre SPY. ¿Qué contexto importa para esta idea y horizonte?
+      - Retomá la investigación de contexto de SPY e incorporá lo nuevo.
+    skill: skills/context-research/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: []
+    flow:
+      - kb search --text "<idea, instrumento>" [--kind research|evidence] [--status unfinished]
+      - evidence add --slug <fuente-serie> --prompt "<pedido del usuario>" < {content, host_provider, host_model}
+      - research save --capability context_research --slug <slug> --prompt "<pedido>" < {content, host_provider, host_model}
+      - kb show research:<id>
+      - research revise --capability context_research --id <id> --reason result|continuation|correction --note "<qué cambia>" --prompt "<pedido>" < {...}
+    stored_as: research
+    controls:
+      - The research controls, plus every evidence:<id> cited must resolve to an intact evidence item
+      - Evidence is create-only and hashed; an edited item is INTEGRITY_FAILED and cannot be cited
+      - Evidence provenance is always HOST_DECLARED; parameters that may carry credentials are refused
+      - Each revision records the skill (version and hash) of the method followed
+      - Not checked - that the payload is what the source returned, that factors were well chosen, or that the scenarios are right

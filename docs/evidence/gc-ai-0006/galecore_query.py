@@ -14,7 +14,7 @@ import re
 import sys
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 BASE = os.environ.get("GALECORE_URL", "http://127.0.0.1:7001")
@@ -69,7 +69,7 @@ def main(out_dir: str, paths: list[str]) -> int:
     failures = 0
     for path in paths:
         req = urllib.request.Request(BASE + path, method="GET", headers={"X-API-KEY": key})
-        utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
             with urllib.request.urlopen(req, timeout=TIMEOUT_S) as resp:
                 status, body = resp.status, resp.read()

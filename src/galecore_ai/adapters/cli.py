@@ -8,10 +8,11 @@ Usage:
         --verdict agree|partial|disagree --comment "..."
     python -m galecore_ai.adapters.cli query --symbol SPY --since YYYY-MM-DD [--until YYYY-MM-DD]
     python -m galecore_ai.adapters.cli catalog
-    python -m galecore_ai.adapters.cli kb search [--text "..."] [--kind research|regime] [--status S] [--symbol SPY]
+    python -m galecore_ai.adapters.cli kb search [--text "..."] [--kind research|regime|evidence] [--status S] [--symbol SPY]
     python -m galecore_ai.adapters.cli kb show <ref>
-    python -m galecore_ai.adapters.cli research save --slug SLUG --prompt "..." < request.json
-    python -m galecore_ai.adapters.cli research revise --id ID --reason R --note "..." --prompt "..." < request.json
+    python -m galecore_ai.adapters.cli research save --slug SLUG --prompt "..." [--capability C] < request.json
+    python -m galecore_ai.adapters.cli research revise --id ID --reason R --note "..." --prompt "..."         [--capability C] < request.json
+    python -m galecore_ai.adapters.cli evidence add --slug SLUG --prompt "..." < request.json
 
 Exit codes:
     0  SUCCESS
@@ -46,6 +47,7 @@ from galecore_ai.application.knowledge import (
     KnowledgeBase,
     KnowledgeError,
     revise_research,
+    save_evidence,
     save_research,
 )
 from galecore_ai.application.knowledge import search as kb_search
@@ -63,6 +65,7 @@ from galecore_ai.capabilities.contracts import KNOWN_CAPABILITIES
 from galecore_ai.capabilities.dispatcher import CapabilityDispatcher
 from galecore_ai.capabilities.registry import CapabilityRegistry
 from galecore_ai.contracts.agent_run import RunStatus
+from galecore_ai.contracts.evidence import EvidenceContent
 from galecore_ai.contracts.prepared_analysis import AcceptanceRequest
 from galecore_ai.contracts.regime_record import RecordHost, ReviewVerdict
 from galecore_ai.contracts.research import ResearchContent, ResearchStatus, RevisionReason
@@ -355,6 +358,23 @@ def _read_research_request() -> tuple[ResearchContent, RecordHost]:
     return content, host
 
 
+def _read_evidence_request() -> tuple[EvidenceContent, RecordHost]:
+    try:
+        payload = json.loads(_read_stdin())
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable") from exc
+    if not isinstance(payload, dict) or "content" not in payload:
+        _error_out("Input must be a JSON object with a 'content' key", exit_code=_EXIT_VALIDATION_ERROR)
+    try:
+        content = EvidenceContent.model_validate(payload["content"])
+    except ValueError as exc:
+        _error_out(f"Invalid evidence content: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable") from exc
+    host = RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model"))
+    return content, host
+
+
 def _knowledge_error_out(exc: KnowledgeError) -> None:
     _json_out({"status": "REJECTED", "error": str(exc), "problems": exc.problems,
                "timestamp": datetime.now(UTC).isoformat()}, exit_code=_EXIT_VALIDATION_ERROR)
@@ -397,7 +417,8 @@ async def _cmd_research_save(args: argparse.Namespace) -> None:
     kb = _build_knowledge_base()
     content, host = _read_research_request()
     try:
-        document, path = save_research(kb=kb, slug=args.slug, prompt=args.prompt, host=host, content=content)
+        document, path = save_research(kb=kb, slug=args.slug, prompt=args.prompt, host=host, content=content,
+                                       capability=args.capability)
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
         return
@@ -412,7 +433,8 @@ async def _cmd_research_revise(args: argparse.Namespace) -> None:
     content, host = _read_research_request()
     try:
         document, path = revise_research(kb=kb, research_id=args.id, reason=RevisionReason(args.reason),
-                                         note=args.note, prompt=args.prompt, host=host, content=content)
+                                         note=args.note, prompt=args.prompt, host=host, content=content,
+                                         capability=args.capability)
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
         return
@@ -421,6 +443,18 @@ async def _cmd_research_revise(args: argparse.Namespace) -> None:
                "revision": rev.revision, "reason": rev.reason.value, "content_hash": rev.content_hash,
                "previous_revisions": len(document.revisions) - 1,
                "resolved_refs": [r.model_dump(mode="json") for r in rev.resolved_refs]})
+
+
+async def _cmd_evidence_add(args: argparse.Namespace) -> None:
+    kb = _build_knowledge_base()
+    content, host = _read_evidence_request()
+    try:
+        document, path = save_evidence(kb=kb, slug=args.slug, prompt=args.prompt, host=host, content=content)
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+        return
+    _json_out({"status": "RECORDED", "ref": f"evidence:{document.id}", "path": str(path),
+               "provenance": document.provenance, "content_hash": document.content_hash})
 
 
 def main() -> None:
@@ -464,24 +498,34 @@ def main() -> None:
     kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)
     p_search = kb_sub.add_parser("search", help="Items matching the terms, best first")
     p_search.add_argument("--text", help="Terms to look for (empty lists everything)")
-    p_search.add_argument("--kind", choices=["research", "regime"])
+    p_search.add_argument("--kind", choices=["research", "regime", "evidence"])
     p_search.add_argument("--status", choices=["unfinished", *[s.value for s in ResearchStatus]],
                           help="unfinished = open or test_planned")
     p_search.add_argument("--symbol")
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
-    p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id> or file:<path>")
+    p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id> or file:<path>")
+
+    p_evidence = sub.add_parser("evidence", help="Keep a source response with its provenance (content on stdin)")
+    ev_sub = p_evidence.add_subparsers(dest="evidence_command", required=True)
+    p_ev_add = ev_sub.add_parser("add", help="Store one response; never overwrites (HOST_DECLARED)")
+    p_ev_add.add_argument("--slug", required=True, help="Short name; the id is <date>-<slug>")
+    p_ev_add.add_argument("--prompt", required=True, help="What the user asked")
 
     p_research = sub.add_parser("research", help="Save or continue an investigation (content on stdin)")
     res_sub = p_research.add_subparsers(dest="research_command", required=True)
     p_save = res_sub.add_parser("save", help="Start a new investigation")
     p_save.add_argument("--slug", required=True, help="Short name; the id is <date>-<slug>")
     p_save.add_argument("--prompt", required=True, help="What the user asked")
+    p_save.add_argument("--capability", default="research",
+                        help="Catalog entry whose method was followed (research, context_research)")
     p_revise = res_sub.add_parser("revise", help="Append a revision; earlier ones stay readable")
     p_revise.add_argument("--id", required=True)
     p_revise.add_argument("--reason", required=True,
                           choices=[r.value for r in RevisionReason if r != RevisionReason.INITIAL])
     p_revise.add_argument("--note", required=True, help="What this revision changes")
     p_revise.add_argument("--prompt", required=True, help="What the user asked")
+    p_revise.add_argument("--capability", default="research",
+                          help="Catalog entry whose method was followed (research, context_research)")
 
     args = parser.parse_args()
 
@@ -506,6 +550,8 @@ def main() -> None:
             asyncio.run(_cmd_research_save(args))
         elif args.command == "research" and args.research_command == "revise":
             asyncio.run(_cmd_research_revise(args))
+        elif args.command == "evidence" and args.evidence_command == "add":
+            asyncio.run(_cmd_evidence_add(args))
     except SystemExit:
         raise
     except (OSError, ValueError, RuntimeError) as exc:

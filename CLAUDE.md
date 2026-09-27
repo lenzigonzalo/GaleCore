@@ -36,7 +36,8 @@ a session that wrote to it, commit it: `git -C <workspace>/knowledge add -A`, th
 `git -C <workspace>/knowledge commit -m "..."` (local only, never pushed).
 
 Current capabilities: `gex_interpretation` (read-only GEX), `regime_interpretation` (daily regime
-with an evaluable record) and `research` (resumable investigation, below).
+with an evaluable record), `research` (resumable investigation, below) and `context_research` (context
+of a trading idea with GaleCore + the host's external sources; every response kept as `evidence:`).
 
 Common environment (GaleCore on `localhost:5000`; the ApiKey comes from GaleCore's user-secrets and is never written anywhere):
 
@@ -94,6 +95,21 @@ hypothesis or plan; `statements` `{kind: fact|interpretation|hypothesis|decision
 cites a source; `hypothesis`; `test_plan` `{step, data_needed, supports_if, weakens_if}`; `missing`;
 `next_steps` (required while open or test_planned); at least one limitation. Revisions are append-only
 and hashed. Storing does not validate the reasoning; it is not a strategy.
+
+## Capability 4: context of a trading idea (`context_research`, GC-AI-0007)
+
+Method: `config/skills/context-research/skill.yaml` (factors by idea and horizon, sources by verified
+access, observation / implied expectation / consensus / hypothesis, competing scenarios). Each source
+response used is stored first, then cited; the investigation itself is `research` with the method stamped:
+
+```bash
+echo '{"content": <EvidenceContent JSON>, "host_provider": "...", "host_model": "..."}' | python -B -m galecore_ai.adapters.cli evidence add --slug <source-series> --prompt "<request>"
+echo '{"content": <ResearchContent JSON>, ...}' | python -B -m galecore_ai.adapters.cli research save --capability context_research --slug <slug> --prompt "<request>"
+python -B -m galecore_ai.adapters.cli kb search --text "<terms>" --kind evidence
+```
+
+Evidence (`<knowledge>/evidence/<id>.json`) is create-only, hashed and always `HOST_DECLARED`: GaleCore-AI
+did not fetch it and never labels it GaleCore-verified. Params that may carry credentials are refused.
 
 ### What the assets prove and what they don't
 

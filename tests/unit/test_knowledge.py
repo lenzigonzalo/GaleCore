@@ -132,7 +132,8 @@ class TestRefs:
 class TestCatalog:
     def test_every_entry_is_available_and_consistent(self):
         entries = describe(load_catalog())
-        assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "research"}
+        assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "research",
+                                              "context_research"}
         assert all(e["available"] for e in entries), entries
 
     def test_prepare_skills_have_code_behind_them(self):
@@ -190,10 +191,10 @@ class TestSave:
     def test_file_ref_into_the_knowledge_base_is_refused(self, kb, regime_record):
         # Review R1 MAJOR: file: paths skipped the self-citation and integrity checks.
         day = regime_record.rsplit("/", 1)[1]
-        with pytest.raises(KnowledgeError, match="cite it as regime: or research:"):
+        with pytest.raises(KnowledgeError, match="cite it as regime:, research: or evidence:"):
             save(kb, antecedents=[{"ref": f"file:knowledge/regime/SPY/{day}.md", "summary": "s", "bearing": "b"}])
         first, _ = save(kb)
-        with pytest.raises(KnowledgeError, match="cite it as regime: or research:"):
+        with pytest.raises(KnowledgeError, match="cite it as regime:, research: or evidence:"):
             revise_research(kb=kb, research_id=first.id, reason=RevisionReason.CONTINUATION, note="n",
                             prompt="p", host=HOST,
                             content=content(statements=[{"kind": "fact", "text": "t",
@@ -305,10 +306,11 @@ class TestCli:
                                 env={**os.environ, **(env or {})})
         return result.returncode, json.loads(result.stdout)
 
-    def test_catalog_lists_three_capabilities(self, kb):
+    def test_catalog_lists_the_capabilities(self, kb):
         code, data = self._run("catalog", env={KNOWLEDGE_DIR_ENV: str(kb.base)})
         assert code == 0 and data["knowledge_base"]["available"]
-        assert [e["id"] for e in data["entries"]] == ["gex_interpretation", "regime_interpretation", "research"]
+        assert [e["id"] for e in data["entries"]] == ["gex_interpretation", "regime_interpretation", "research",
+                                                    "context_research"]
 
     def test_save_search_show_revise(self, kb):
         env = {KNOWLEDGE_DIR_ENV: str(kb.base)}
