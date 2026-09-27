@@ -97,7 +97,10 @@ instructions: |
   - FMP (current plan): treasury-rates (whole curve, date range), quote, chart EOD,
     calendar earnings-calendar (consensus EPS) work; economics-calendar and
     etfAndMutualFunds are denied by plan.
-  - FRED: not connected in Claude Code (real yields, breakevens, vintages unavailable).
+  - FRED: the MCP server is not registered in Claude Code. With FRED_API_KEY in the environment
+    (never in a file), `python tools/fred_query.py <out_dir> <SERIES>:<start> ...` saves metadata
+    (units, frequency, seasonal adjustment, last update) and observations with their vintage
+    (realtime_start/end) for `evidence add`. Real yields (DFII10), breakevens (T10YIE), release dates.
 
   For turning the context into a complete strategy proposal, continue with the strategy
   pilot method (docs/engineering/pilots/strategy-design/SKILL.md); this skill does not
