@@ -20,6 +20,10 @@ Usage:
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
+    python -m galecore_ai.adapters.cli task create --id ID --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
+    python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
+    python -m galecore_ai.adapters.cli task set-frequency ID --frequency ... [--time HH:MM | --minutes N] --timezone TZ --prompt "..."
+    python -m galecore_ai.adapters.cli task pause|resume|cancel ID --prompt "..."
 
 Exit codes:
     0  SUCCESS
@@ -550,6 +554,43 @@ async def _cmd_followup(args: argparse.Namespace) -> None:
         _json_out({"status": "REJECTED", "error": str(exc)}, exit_code=_EXIT_VALIDATION_ERROR)
 
 
+async def _cmd_task(args: argparse.Namespace) -> None:
+    from galecore_ai.application import tasks as t
+    from galecore_ai.contracts.task import Schedule
+    kb = _build_knowledge_base()
+    sch = t.WindowsScheduler()
+    c = args.task_command
+
+    def schedule() -> Schedule:
+        return Schedule(frequency=args.frequency, time=args.time, minutes=args.minutes, timezone=args.timezone)
+    try:
+        if c == "create":
+            task = t.create(kb=kb, scheduler=sch, task_id=args.id, strategy=args.strategy, objective=args.objective,
+                            expected_result=args.expected, sources=args.source, schedule=schedule(), prompt=args.prompt)
+            _json_out({"status": "CREATED", "task": task.model_dump(mode="json"), "schedule": task.schedule.describe(),
+                       "scheduler": sch.query(task.scheduler_name)})
+        elif c == "list":
+            _json_out({"tasks": t.list_tasks(kb)})
+        elif c == "status":
+            _json_out(t.status(kb=kb, scheduler=sch, task_id=args.id))
+        elif c == "history":
+            task = t.load(kb, args.id)
+            _json_out({"task": args.id, "runs": [r.model_dump(mode="json") for r in t.runs(kb, task, args.limit)],
+                       "events": t.events(kb, args.id)[-(args.limit * 4):]})
+        elif c == "run":
+            _json_out(t.run(kb=kb, task_id=args.id, scheduler=sch))
+        elif c == "set-frequency":
+            task = t.set_frequency(kb=kb, scheduler=sch, task_id=args.id, schedule=schedule(), prompt=args.prompt)
+            _json_out({"status": "CHANGED", "schedule": task.schedule.describe(), "scheduler": sch.query(task.scheduler_name)})
+        else:
+            fn = {"pause": t.pause, "resume": t.resume, "cancel": t.cancel}[c]
+            task = fn(kb=kb, scheduler=sch, task_id=args.id, prompt=args.prompt)
+            _json_out({"status": task.status.upper(), "task": args.id,
+                       "scheduler": sch.query(task.scheduler_name) if task.status != "cancelled" else {"registered": False}})
+    except (t.TaskError, KnowledgeError, ValueError) as exc:
+        _json_out({"status": "REJECTED", "error": str(exc)}, exit_code=_EXIT_VALIDATION_ERROR)
+
+
 def main() -> None:
     parser = _JsonArgumentParser(
         prog="galecore-ai-cli",
@@ -610,6 +651,36 @@ def main() -> None:
     p_fu_hist = fu_sub.add_parser("history", help="Recorded follow-ups, newest first")
     p_fu_hist.add_argument("--strategy", required=True)
     p_fu_hist.add_argument("--limit", type=int, default=10)
+
+    p_task = sub.add_parser("task", help="Recurring follow-up run by the Windows Task Scheduler (read-only)")
+    t_sub = p_task.add_subparsers(dest="task_command", required=True)
+
+    def schedule_args(p):
+        p.add_argument("--frequency", required=True, choices=["daily", "weekdays", "every_minutes"])
+        p.add_argument("--time", help="HH:MM in --timezone (daily, weekdays)")
+        p.add_argument("--minutes", type=int, help="period for every_minutes (15..1440)")
+        p.add_argument("--timezone", required=True, help="IANA name, e.g. America/New_York")
+        p.add_argument("--prompt", required=True, help="What the user asked")
+    p_tc = t_sub.add_parser("create", help="Create and schedule a follow-up task")
+    p_tc.add_argument("--id", required=True)
+    p_tc.add_argument("--strategy", required=True)
+    p_tc.add_argument("--objective", required=True)
+    p_tc.add_argument("--expected", required=True, help="What each run must leave")
+    p_tc.add_argument("--source", action="append", required=True)
+    schedule_args(p_tc)
+    t_sub.add_parser("list", help="All tasks")
+    for name in ("status", "run"):
+        t_sub.add_parser(name).add_argument("id")
+    p_th = t_sub.add_parser("history", help="Runs (follow-up records) and events of a task")
+    p_th.add_argument("id")
+    p_th.add_argument("--limit", type=int, default=10)
+    p_tf = t_sub.add_parser("set-frequency", help="Change the schedule")
+    p_tf.add_argument("id")
+    schedule_args(p_tf)
+    for name in ("pause", "resume", "cancel"):
+        p = t_sub.add_parser(name)
+        p.add_argument("id")
+        p.add_argument("--prompt", required=True)
 
     p_strategy = sub.add_parser("strategy", help="Proposal -> spec check -> approval -> deploy check")
     st_sub = p_strategy.add_subparsers(dest="strategy_command", required=True)
@@ -683,6 +754,8 @@ def main() -> None:
             asyncio.run(_cmd_strategy(args))
         elif args.command == "followup":
             asyncio.run(_cmd_followup(args))
+        elif args.command == "task":
+            asyncio.run(_cmd_task(args))
     except SystemExit:
         raise
     except (OSError, ValueError, RuntimeError) as exc:

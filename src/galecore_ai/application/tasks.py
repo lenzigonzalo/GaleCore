@@ -1,0 +1,319 @@
+"""Recurring tasks (GC-AI-0009): create, inspect, change, pause, cancel and run a delegated follow-up.
+
+Execution is the Windows Task Scheduler of the owner's PC (verified 27/09: a task runs as the user, with the
+user's environment, even with no Claude session open). It needs the PC on, the user logged on, GaleCore Dev's API
+up and its development credentials; when any is missing the run is still recorded, with the error.
+
+Controls: one run at a time per task (exclusive lock file; a stale lock older than LOCK_STALE_MINUTES is broken
+and noted), a paused or cancelled task never runs even if the scheduler fires, every change and run is appended
+to a hash-chained events log, and the only thing a run can do is the read-only strategy follow-up.
+"""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import io
+import json
+import os
+import subprocess
+import sys
+import traceback
+from collections.abc import Callable
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+from galecore_ai.application.followup import history as followup_history
+from galecore_ai.application.followup import run_followup
+from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
+from galecore_ai.contracts.followup import FollowupRecord
+from galecore_ai.contracts.regime_record import RecordHost
+from galecore_ai.contracts.task import Schedule, TaskDefinition
+
+LOCK_STALE_MINUTES = 30
+SCHEDULER_FOLDER = "GaleCore-AI"
+_REPO = Path(__file__).resolve().parents[3]
+RUNNER_HOST = RecordHost(provider="windows-task-scheduler", model="deterministic-runner")
+
+
+class TaskError(Exception):
+    """A task operation was refused or the scheduler failed."""
+
+
+# ── scheduler adapter (schtasks.exe) ─────────────────────────────
+
+
+class WindowsScheduler:
+    """Thin wrapper over schtasks.exe. Every call is an argument list; failures raise TaskError with its output."""
+
+    def _run(self, args: list[str]) -> str:
+        r = subprocess.run(["schtasks", *args], capture_output=True, check=False)
+        out = (r.stdout + r.stderr).decode(errors="replace")
+        if r.returncode != 0:
+            raise TaskError(f"schtasks {args[0]} failed: {out.strip()}")
+        return out
+
+    def create(self, name: str, command: list[str], schedule: Schedule, local_time: str | None) -> None:
+        tr = subprocess.list2cmdline(command)
+        if schedule.frequency == "every_minutes":
+            sc = ["/sc", "minute", "/mo", str(schedule.minutes)]
+        elif schedule.frequency == "weekdays":
+            sc = ["/sc", "weekly", "/d", "MON,TUE,WED,THU,FRI", "/st", local_time]
+        else:
+            sc = ["/sc", "daily", "/st", local_time]
+        self._run(["/create", "/tn", name, "/tr", tr, *sc, "/f"])
+
+    def delete(self, name: str) -> None:
+        self._run(["/delete", "/tn", name, "/f"])
+
+    def set_enabled(self, name: str, enabled: bool) -> None:
+        self._run(["/change", "/tn", name, "/enable" if enabled else "/disable"])
+
+    def query(self, name: str) -> dict:
+        try:
+            out = self._run(["/query", "/tn", name, "/fo", "csv", "/v"])
+        except TaskError as exc:
+            return {"registered": False, "error": str(exc)}
+        rows = list(csv.DictReader(io.StringIO(out)))
+        if not rows:
+            return {"registered": False}
+        row = rows[0]
+        return {"registered": True, "status": row.get("Status"), "next_run": row.get("Next Run Time"),
+                "last_run": row.get("Last Run Time"), "last_result": row.get("Last Result"),
+                "schedule": row.get("Schedule Type"), "start_time": row.get("Start Time")}
+
+
+# ── store ────────────────────────────────────────────────────────
+
+
+def _dir(kb: KnowledgeBase, task_id: str) -> Path:
+    return kb.base / "tasks" / task_id
+
+
+def load(kb: KnowledgeBase, task_id: str) -> TaskDefinition:
+    path = _dir(kb, task_id) / "task.json"
+    if not path.is_file():
+        raise TaskError(f"no task {task_id}")
+    return TaskDefinition.model_validate(json.loads(path.read_text(encoding="utf-8")))
+
+
+def _save(kb: KnowledgeBase, task: TaskDefinition) -> None:
+    path = _dir(kb, task.id) / "task.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(task.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def events(kb: KnowledgeBase, task_id: str) -> list[dict]:
+    """The task's log, oldest first; a broken hash chain raises (an edited or removed line is visible)."""
+    path = _dir(kb, task_id) / "events.jsonl"
+    if not path.is_file():
+        return []
+    out, prev = [], None
+    for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        ev = json.loads(line)
+        if ev.get("prev") != prev:
+            raise KnowledgeError(f"task {task_id}: events.jsonl line {n} breaks the hash chain (INTEGRITY_FAILED)")
+        prev = hashlib.sha256(line.encode("utf-8")).hexdigest()
+        out.append(ev)
+    return out
+
+
+def _event(kb: KnowledgeBase, task_id: str, kind: str, now: datetime, **data) -> dict:
+    path = _dir(kb, task_id) / "events.jsonl"
+    existing = events(kb, task_id)
+    prev = None
+    if existing:
+        prev = hashlib.sha256(path.read_text(encoding="utf-8").splitlines()[-1].encode("utf-8")).hexdigest()
+    ev = {"at": now.isoformat(), "event": kind, "prev": prev, **data}
+    with path.open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write(json.dumps(ev, ensure_ascii=False, sort_keys=True) + "\n")
+    return ev
+
+
+# ── schedule helpers ─────────────────────────────────────────────
+
+
+def local_time_for(schedule: Schedule, now: datetime) -> str | None:
+    """The owner's HH:MM in their timezone, as this PC's local HH:MM for the next occurrence."""
+    if schedule.time is None:
+        return None
+    tz = ZoneInfo(schedule.timezone)
+    hh, mm = (int(x) for x in schedule.time.split(":"))
+    day = now.astimezone(tz).date()
+    target = datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz)
+    if target <= now:
+        target += timedelta(days=1)
+    return target.astimezone().strftime("%H:%M")
+
+
+def runner_command(code_path: Path, task_id: str) -> list[str]:
+    pyw = Path(sys.executable).with_name("pythonw.exe")
+    return [str(pyw if pyw.exists() else sys.executable), "-B", str(code_path / "tools" / "task_runner.py"), task_id]
+
+
+# ── conversation-facing operations ───────────────────────────────
+
+
+def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str, objective: str, expected_result: str,
+           sources: list[str], schedule: Schedule, prompt: str, code_path: Path | None = None,
+           now: datetime | None = None) -> TaskDefinition:
+    now = now or datetime.now(UTC)
+    if (_dir(kb, task_id) / "task.json").exists():
+        raise TaskError(f"task {task_id} already exists (a cancelled task keeps its id and history)")
+    if not any(k.split("/")[0] == strategy for k in kb.strategies.versions()):
+        raise TaskError(f"no strategy named {strategy} in the knowledge base")
+    code_path = code_path or _REPO
+    task = TaskDefinition(kind="strategy_followup", id=task_id, objective=objective, strategy=strategy,
+                          sources=sources, expected_result=expected_result, schedule=schedule, created_at=now,
+                          updated_at=now, created_by_prompt=prompt, scheduler_name=f"{SCHEDULER_FOLDER}\\{task_id}",
+                          local_time=local_time_for(schedule, now), code_path=str(code_path))
+    scheduler.create(task.scheduler_name, runner_command(code_path, task_id), schedule, task.local_time)
+    _save(kb, task)
+    _event(kb, task_id, "created", now, schedule=schedule.model_dump(), local_time=task.local_time, prompt=prompt)
+    return task
+
+
+def set_frequency(*, kb: KnowledgeBase, scheduler, task_id: str, schedule: Schedule, prompt: str,
+                  now: datetime | None = None) -> TaskDefinition:
+    now = now or datetime.now(UTC)
+    task = load(kb, task_id)
+    if task.status == "cancelled":
+        raise TaskError(f"task {task_id} is cancelled; create a new one")
+    local = local_time_for(schedule, now)
+    scheduler.delete(task.scheduler_name)
+    scheduler.create(task.scheduler_name, runner_command(Path(task.code_path), task_id), schedule, local)
+    if task.status == "paused":
+        scheduler.set_enabled(task.scheduler_name, False)
+    old = task.schedule.describe()
+    task = task.model_copy(update={"schedule": schedule, "local_time": local, "updated_at": now})
+    _save(kb, task)
+    _event(kb, task_id, "frequency_changed", now, before=old, after=schedule.describe(), local_time=local, prompt=prompt)
+    return task
+
+
+def _set_status(kb: KnowledgeBase, scheduler, task_id: str, status: str, prompt: str, now: datetime | None):
+    now = now or datetime.now(UTC)
+    task = load(kb, task_id)
+    if task.status == "cancelled":
+        raise TaskError(f"task {task_id} is already cancelled")
+    if status == "cancelled":
+        scheduler.delete(task.scheduler_name)
+    else:
+        scheduler.set_enabled(task.scheduler_name, status == "active")
+    task = task.model_copy(update={"status": status, "updated_at": now})
+    _save(kb, task)
+    _event(kb, task_id, {"active": "resumed", "paused": "paused", "cancelled": "cancelled"}[status], now, prompt=prompt)
+    return task
+
+
+def pause(*, kb, scheduler, task_id, prompt, now=None):
+    return _set_status(kb, scheduler, task_id, "paused", prompt, now)
+
+
+def resume(*, kb, scheduler, task_id, prompt, now=None):
+    return _set_status(kb, scheduler, task_id, "active", prompt, now)
+
+
+def cancel(*, kb, scheduler, task_id, prompt, now=None):
+    return _set_status(kb, scheduler, task_id, "cancelled", prompt, now)
+
+
+def runs(kb: KnowledgeBase, task: TaskDefinition, limit: int | None = None) -> list[FollowupRecord]:
+    return [r for r in followup_history(kb, task.strategy) if r.task_id == task.id][:limit]
+
+
+def status(*, kb: KnowledgeBase, scheduler, task_id: str) -> dict:
+    task = load(kb, task_id)
+    log = events(kb, task_id)
+    last = runs(kb, task, limit=1)
+    problems = [e for e in log if e["event"] in ("run_failed", "run_skipped")][-3:]
+    return {
+        "task": task.model_dump(mode="json"), "schedule": task.schedule.describe(),
+        "scheduler": scheduler.query(task.scheduler_name) if task.status != "cancelled" else {"registered": False},
+        "last_result": last[0].model_dump(mode="json") if last else None,
+        "runs": sum(1 for e in log if e["event"] == "run_finished"),
+        "recent_problems": problems, "recent_events": log[-5:],
+        "latest_readable": str(kb.base / "followups" / task.strategy / "LATEST.md"),
+    }
+
+
+def list_tasks(kb: KnowledgeBase) -> list[dict]:
+    base = kb.base / "tasks"
+    if not base.is_dir():
+        return []
+    out = []
+    for d in sorted(p for p in base.iterdir() if (p / "task.json").is_file()):
+        t = load(kb, d.name)
+        out.append({"id": t.id, "status": t.status, "strategy": t.strategy, "schedule": t.schedule.describe(),
+                    "objective": t.objective})
+    return out
+
+
+# ── the scheduled run ────────────────────────────────────────────
+
+
+def _commit_knowledge(kb: KnowledgeBase, paths: list[Path], message: str) -> str:
+    rel = [str(p.relative_to(kb.base)) for p in paths if p.exists()]
+    if not rel or not (kb.base / ".git").exists():
+        return "not committed (no git in the knowledge base)"
+    add = subprocess.run(["git", "-C", str(kb.base), "add", "--", *rel], capture_output=True, check=False)
+    com = subprocess.run(["git", "-C", str(kb.base), "commit", "-q", "-m", message, "--", *rel],
+                         capture_output=True, check=False)
+    return "committed" if add.returncode == 0 and com.returncode == 0 else \
+        f"commit failed: {(com.stderr or add.stderr).decode(errors='replace').strip()[:200]}"
+
+
+def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None = None,
+        followup: Callable[..., tuple[FollowupRecord, Path]] = run_followup, commit: bool = True) -> dict:
+    """What the scheduler invokes. Never raises for a failed run: the failure is the recorded result."""
+    now = now or datetime.now(UTC)
+    task = load(kb, task_id)
+    d = _dir(kb, task_id)
+    if task.status != "active":
+        ev = _event(kb, task_id, "run_skipped", now, reason=f"task is {task.status}")
+        return {"status": "SKIPPED", **ev}
+    lock = d / "run.lock"
+    note = None
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        age = now - datetime.fromtimestamp(lock.stat().st_mtime, UTC)
+        if age < timedelta(minutes=LOCK_STALE_MINUTES):
+            ev = _event(kb, task_id, "run_skipped", now, reason=f"another run is in progress ({age.seconds}s)")
+            return {"status": "SKIPPED", **ev}
+        lock.unlink()
+        note = f"stale lock of {int(age.total_seconds() // 60)} min broken"
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    try:
+        os.write(fd, f"{os.getpid()} {now.isoformat()}".encode())
+        os.close(fd)
+        _event(kb, task_id, "run_started", now, pid=os.getpid(), note=note)
+        written = [d / "task.json", d / "events.jsonl"]
+        if scheduler is not None and task.local_time is not None:
+            local = local_time_for(task.schedule, now)
+            if local != task.local_time:       # the owner's timezone changed offset against this PC (DST)
+                scheduler.delete(task.scheduler_name)
+                scheduler.create(task.scheduler_name, runner_command(Path(task.code_path), task_id), task.schedule, local)
+                task = task.model_copy(update={"local_time": local, "updated_at": now})
+                _save(kb, task)
+                _event(kb, task_id, "local_time_resynced", now, local_time=local)
+        try:
+            rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=RUNNER_HOST,
+                                 task_id=task_id, now=now)
+        except Exception as exc:  # noqa: BLE001 - any failure is the run's result, recorded, never silent
+            ev = _event(kb, task_id, "run_failed", datetime.now(UTC), error=f"{type(exc).__name__}: {exc}",
+                        trace=traceback.format_exc()[-800:])
+            if commit:
+                _commit_knowledge(kb, written, f"task {task_id}: run failed")
+            return {"status": "FAILED", **ev}
+        evidence = [kb.base / "evidence" / f"{s.split(':', 1)[1]}.json" for s in rec.sources]
+        written += [path, path.parent / "LATEST.md", *evidence]
+        ev = _event(kb, task_id, "run_finished", datetime.now(UTC), followup=rec.id, result=rec.status,
+                    strategy_ref=rec.strategy_ref, spec_hash=rec.spec_hash, attention=rec.attention[:5])
+        committed = _commit_knowledge(kb, written, f"task {task_id}: {rec.status} {rec.id}") if commit else "skipped"
+        return {"status": rec.status, "followup": rec.id, "knowledge": committed, **ev}
+    finally:
+        lock.unlink(missing_ok=True)

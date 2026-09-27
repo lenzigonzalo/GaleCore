@@ -1,0 +1,27 @@
+skill_id: recurring_followup
+version: "0.1.0"
+display_name: Seguimiento recurrente delegado desde la conversación
+description: >
+  Turns a follow-up the owner found useful into a small recurring task run by the Windows Task Scheduler of the
+  owner's PC, and manages it from the conversation: status and history, change frequency, pause, resume, cancel.
+  Each run is the read-only strategy follow-up, tied to the strategy version it evaluated, with its sources.
+
+output_contract: galecore_ai.contracts.task.TaskDefinition
+
+required_capabilities: []
+
+system_prompt: >
+  1. Offer it when it adds value: after a follow-up the owner found useful, or when they ask the same question
+     repeatedly, propose making it recurring. Never create a task without their explicit request.
+  2. Define it with the owner before creating it, in plain words, one short confirmation: objective (what they
+     want to know), strategy, frequency (daily, weekdays or every N minutes for a supervised trial), time and
+     timezone (propose after the US close, e.g. 17:05 America/New_York, for a daily follow-up), sources (GaleCore
+     Dev API; the knowledge base) and the expected result (a follow-up record + LATEST.md). Say what it depends on:
+     the PC on and the user logged on, GaleCore Dev's API up, its development credentials; no Claude session needed.
+  3. Create with `task create`; show `task status` (scheduler registered, next run). Changes only on request:
+     `task set-frequency`, `task pause`, `task resume`, `task cancel`, each with the owner's words as --prompt.
+  4. "Show me the last result and the history": `task status <id>` and `task history <id>`; present the latest
+     follow-up record (attention first) and point to knowledge/followups/<strategy>/LATEST.md. Report failed or
+     skipped runs plainly; never hide them.
+  5. A task may only run the read-only follow-up. It never approves, deploys, stops, changes a strategy or trades.
+     If the owner wants any of that, it is a separate, explicit decision outside the task.

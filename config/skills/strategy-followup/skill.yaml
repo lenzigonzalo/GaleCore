@@ -1,5 +1,5 @@
 skill_id: strategy_followup
-version: "0.2.0"
+version: "0.3.0"
 display_name: Seguimiento de una estrategia en SHADOW y retroalimentación de su investigación
 description: >
   Answers "what did this strategy do since the last review, why did it enter or not, how did its
@@ -27,3 +27,5 @@ system_prompt: >
        (number of closed trades vs the sample the plan needs). A few trades are not evidence of edge.
   4. What changes in the hypothesis: only what the data support; otherwise say it is unchanged and
      why. Record it with `research revise --capability strategy_followup --reason result`.
+  5. If this follow-up was useful and the owner will want it again, offer to make it recurring
+     (catalog entry recurring_followup); do not create it without their request.
