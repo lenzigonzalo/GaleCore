@@ -56,12 +56,12 @@ actualizar plan y alcance y crear este item; GC-AI-0006 sigue abierto con sus pe
 | Criterio | Implementación | Verificación automática | Artefacto | Estado |
 |---|---|---|---|---|
 | AC-01 | `config/catalog.yaml` (`context_research`), `config/skills/context-research/skill.yaml`, `research save/revise --capability` (`application/knowledge.py`) | `test_catalog_offers_context_research`, `test_revision_records_the_method_followed`, catálogo en `test_knowledge.py` | Revisiones r1–r3 selladas con `context_research` 0.1.0 | Implementado; verificado local |
-| AC-02 | `contracts/evidence.py`, `adapters/evidence_store.py`, ref `evidence:` (`knowledge_base.py`), `evidence add` (`cli.py`), `tools/fred_query.py` | `tests/unit/test_evidence.py` (27 casos: HOST_DECLARED también en `host`, credenciales en nombres/valores/payload, creación exclusiva, no sobrescribe, credenciales, extracto, futuro, integridad, cita y backlink, búsqueda, CLI) | 28 items `knowledge/evidence/2026-09-27-spy-ctx-*.json` (incluye metadatos FRED y respuestas de error/denegación) | Implementado; verificado local y en el recorrido real |
+| AC-02 | `contracts/evidence.py`, `adapters/evidence_store.py`, ref `evidence:` (`knowledge_base.py`), `evidence add` (`cli.py`), `tools/fred_query.py` | `tests/unit/test_evidence.py` (29 casos: HOST_DECLARED también en `host`, credenciales en nombres/valores/payload, creación exclusiva, no sobrescribe, credenciales, extracto, futuro, integridad, cita y backlink, búsqueda, CLI) | 28 items `knowledge/evidence/2026-09-27-spy-ctx-*.json` (incluye metadatos FRED y respuestas de error/denegación) | Implementado; verificado local y en el recorrido real |
 | AC-03 | — | — | [README §Fuentes](../../evidence/gc-ai-0007/README.md); hallazgos abajo; evidencia de la denegación FMP | Hecho con acceso real (GaleCore, FMP, Alpha Vantage, FRED) |
 | AC-04 | — | `recompute.py` verifica con asserts los 28 valores derivados contra la evidencia (exit 0) | `research:2026-09-27-spy-contexto-prima-30-60d` r1; README §Análisis | Entregado; utilidad: evalúa el owner |
 | AC-05 | — | `kb search --status unfinished` la encuentra; `kb show` muestra r1→r3 y `cited_by` | r2 (corrección CPI), r3 (resultado FRED) | Guardar/encontrar/revisar: hecho. **Continuidad desde sesión nueva: NO probada** (bloqueada por permisos del host) |
 | AC-06 | — | — | README §Guion, §Aporte, §No demostrado | Entregado |
-| AC-07 | — | — | Interna R1 APPROVE; Codex C1 CHANGES_REQUESTED → corregido; recheck pendiente | En revisión |
+| AC-07 | — | — | Interna R1 APPROVE; Codex C1 y C2 CHANGES_REQUESTED → corregidos; **Codex C3 APPROVE** | Revisión: sí. Pendiente: utilidad y cierre (owner) |
 
 ## Required validation
 
@@ -94,7 +94,7 @@ git diff --check
 
 ## Implementer handoff
 
-**State:** entrega implementada y ejecutada; revisión pendiente.
+**State:** READY_FOR_REVIEW del owner — implementada, ejecutada, revisión interna y Codex APPROVE. Falta: prueba de continuidad en sesión nueva (owner) y evaluación de utilidad.
 
 ### Qué se hizo
 
@@ -109,7 +109,7 @@ git diff --check
 
 ### Comandos y resultados
 
-- `python -B -m pytest -q -p no:cacheprovider` (comando exacto; `tests/conftest.py` usa el `src` de este checkout) → 726 passed, 1 warning.
+- `python -B -m pytest -q -p no:cacheprovider` (comando exacto; `tests/conftest.py` usa el `src` de este checkout) → 728 passed, 1 warning.
 - `python -B -m ruff check --no-cache .` → All checks passed. `python tools/engineering_gate.py` → PASS.
 - `python docs/evidence/gc-ai-0007/recompute.py` → 28 OK, «Todos los valores coinciden», exit 0.
 
@@ -155,3 +155,9 @@ C1-M2..M5 y C1-m1 resueltos; AC-03 y AC-04 pasan a PASS. Abiertos y corregidos d
 |---|---|---|---|
 | C1-M1 | MAJOR | `{"session":"…"}` y `Session: …` todavía pasaban | Corregido: `session` sin sufijo reconocido; +2 casos; las 28 evidencias siguen válidas |
 | C1-m2 | MINOR | Versión 0.1.0 con dos definiciones distintas ya selladas | Corregido: skill a 0.1.1. Para las revisiones existentes el hash es la identidad: r1 `sha256:dff3e57d…` = definición del commit `1d7c0be`; r2 y r3 `sha256:258d1ec5…` = commit `2572a5d`. Regla: toda edición de una skill ya usada sube versión |
+
+## Recheck Codex C3 (`GC-AI-0007-20260927T173748Z.md`, `1cdeb5f..00930ab`) — APPROVE
+
+C1-M1 y C1-m2 resueltos; AC-01..AC-04 y AC-06 PASS; AC-05 y AC-07 quedan como decisión del owner (continuidad en
+sesión nueva y utilidad). MINOR nuevo (conteos 27/726 desactualizados) corregido: 29 casos, 728 tests.
+El APPROVE no cambia `status`, `closure_blocked` ni `approval_result`: cierra el owner.
