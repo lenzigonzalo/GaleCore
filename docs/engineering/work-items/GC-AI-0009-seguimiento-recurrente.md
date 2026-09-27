@@ -72,3 +72,25 @@ git diff --check
   borra, la tarea falla (visible en `%LOCALAPPDATA%\GaleCore-AI\task_runner.log`). Pasa a `main` al cerrar.
 - Zona horaria: el horario del owner se convierte a la hora local de esta PC al crear, y se re-sincroniza en cada
   ejecución si el desfase cambió (horario de verano de EE. UU.).
+
+## Revisión interna R1 (agente `reviewer`, Sonnet, `5f49b53..274b23d`) — CHANGES_REQUESTED
+
+Gate PASS, ruff, 792 tests, `diff --check`; sin secretos en la evidencia; commits del runner sólo sobre sus paths.
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| R1-M1 | MAJOR | Carrera: `run()` podía guardar un `task.json` viejo encima de una pausa hecha en el medio | Corregido: lock de estado (`state.lock`) en toda lectura-modificación de `task.json` y eventos; `run()` relee la tarea bajo el lock antes de re-sincronizar (+test de pausa durante una ejecución) |
+| R1-M2 | MAJOR | La cadena de eventos podía romperse con dos escritores simultáneos | Corregido: todo `append` va bajo el mismo lock (+test de lock ocupado) |
+| R1-M3 | MAJOR | `set_frequency` borraba y recreaba: si fallaba la creación, la tarea quedaba sin registrar y sin rastro | Corregido: `schtasks /create /f` reemplaza en el lugar (si falla, queda la anterior) y el error se registra como `scheduler_error` (+test) |
+| R1-M4 | MAJOR | Días hábiles que cruzan medianoche al convertir la zona horaria disparaban en días equivocados | Corregido: se rechaza ese caso con un mensaje claro (+test) |
+| R1-m1 | MINOR | Condición redundante en `followup.analyse` | Corregido |
+| R1-m2 | MINOR | Un commit fallido del runner no dejaba rastro durable | Corregido: evento `commit_failed` |
+| — | Obs. | «La única ejecución fue manual; `schtasks` muestra 1999 como última» | **Disputado con evidencia:** el reviewer miró después de que `set-frequency` recreara la tarea. Antes, `schtasks /query` mostró «Last Run Time 27/09/2026 6:49:00 PM, Last Result 0» y el evento `run_started` tiene el PID 25440 (no esta sesión); la segunda automática (19:04, PID 2736) quedó en el Programador como «Last Run Time 7:04:01 PM, Last Result 0» |
+
+## Demostración real (27/09, en curso)
+
+- 18:45 «Hacé este seguimiento diariamente y guardalo» → `task create` diaria 17:49 America/New_York (18:49 local).
+- **18:49:01 ejecución automática** (PID 25440) → `followup spy_prima_varianza_30_45d/20260927T214901Z`, commit del runner `8419ba7` en knowledge.
+- 18:49 «Cambiá la frecuencia» → cada 15 min (prueba supervisada). **19:04:02 ejecución automática** (PID 2736).
+- 19:04 «Pausalo» → Programador `Disabled`, próxima «N/A».
+- 19:10 «Cancelalo» sobre `prueba-cancelacion`: registrada → cancelada → `schtasks` ya no la encuentra; `task run` posterior → SKIPPED.
