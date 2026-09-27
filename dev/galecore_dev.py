@@ -17,8 +17,8 @@ Uso, desde la raíz del repo GaleCore:
     python dev/galecore_dev.py api                # API en :7001 contra GaleCore Dev (primer plano)
     python dev/galecore_dev.py monitor            # monitor en :3039 contra GaleCore Dev (primer plano)
     python dev/galecore_dev.py deploy [--switch-on]   # login del usuario de prueba + deploy de la spec de prueba
-    python dev/galecore_dev.py deploy --spec <name> --expect-hash <sha256:...>
-        # una estrategia: sólo si el hash que GaleCore cargó es el aprobado (GC-AI-0008, strategy deploy-check)
+    python dev/galecore_dev.py deploy --spec <name> --approval <knowledge/strategies/<name>/<version>.approval.json>
+        # una estrategia: sólo con una aprobación íntegra de esa propuesta y si GaleCore cargó el hash aprobado
     python dev/galecore_dev.py stop --instance <id>   # deja de entrar; lo abierto se sigue valuando
     python dev/galecore_dev.py runtime-report --spec <name>   # sólo lectura: instancias, posiciones, eventos
     python dev/galecore_dev.py test               # dotnet test con la base galecore_test del proyecto de desarrollo
@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import hashlib
 import json
 import os
 import secrets
@@ -224,18 +225,48 @@ def login(env: dict) -> str:
     return resp["accessToken"]
 
 
+def _intact(path: Path) -> dict:
+    """Un documento de knowledge/strategies con su content_hash verificado (misma regla que GaleCore-AI)."""
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    body = {k: v for k, v in doc.items() if k != "content_hash"}
+    digest = "sha256:" + hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if digest != doc.get("content_hash"):
+        sys.exit(f"no se despliega: {path.name} fue editado (content_hash no coincide)")
+    return doc
+
+
+def approved_hash(spec: str, approval_path: Path) -> str:
+    """El hash aprobado, sólo si la aprobación y la propuesta que aprueba están íntegras y son de esta spec."""
+    approval = _intact(approval_path)
+    version = approval_path.name.removesuffix(".approval.json")
+    proposal = _intact(approval_path.with_name(f"{version}.proposal.json"))
+    checks = {
+        "es una aprobación": approval.get("kind") == "strategy_approval",
+        "alcance SHADOW de desarrollo": approval.get("scope") == "SHADOW:galecore-dev",
+        "aprueba esta spec": approval.get("strategy_ref") == f"strategy:{spec}/{version}"
+                             and proposal.get("name") == spec and proposal.get("spec_file") == f"{spec}.json",
+        "aprueba esta propuesta": approval.get("proposal_hash") == proposal.get("content_hash"),
+        "mismo hash de spec": approval.get("spec_hash") == proposal.get("spec_hash"),
+    }
+    failed = [k for k, ok in checks.items() if not ok]
+    if failed:
+        sys.exit(f"no se despliega: la aprobación no cumple {failed}")
+    return approval["spec_hash"]
+
+
 def cmd_deploy(args: argparse.Namespace) -> int:
     env = load_env()
     auth = {"Authorization": f"Bearer {login(env)}"}
-    if args.expect_hash is None and not args.spec.startswith("shadow_runtime_test_"):
-        sys.exit("una estrategia se despliega sólo con --expect-hash <hash aprobado> (strategy deploy-check)")
-    if args.expect_hash is not None:
+    if args.approval is None and not args.spec.startswith("shadow_runtime_test_"):
+        sys.exit("una estrategia se despliega sólo con --approval <archivo de aprobación> (GC-AI-0008)")
+    if args.approval is not None:
+        expected = approved_hash(args.spec, Path(args.approval))
         code, spec = http("GET", API_URL + f"/App/Runtime/Specs/{args.spec}", None, auth)
         loaded = spec.get("contentHash") if code == 200 and isinstance(spec, dict) else None
-        if loaded != args.expect_hash:
-            sys.exit(f"no se despliega: GaleCore cargó {loaded or f'nada (HTTP {code})'}, "
-                     f"el aprobado es {args.expect_hash}")
-        print(f"hash cargado por GaleCore = aprobado: {loaded}")
+        if loaded != expected:
+            sys.exit(f"no se despliega: GaleCore cargó {loaded or f'nada (HTTP {code})'}, el aprobado es {expected}")
+        # GET y POST leen la misma spec, cargada una vez al arrancar; sólo un reinicio entre ambos la cambiaría.
+        print(f"aprobación íntegra; hash cargado por GaleCore = aprobado: {loaded}")
     code, body = http("POST", API_URL + "/App/Runtime/Deploy", {"specName": args.spec}, auth)
     print(f"deploy HTTP {code}: {json.dumps(body, ensure_ascii=False)}")
     if args.switch_on and code == 200:
@@ -306,7 +337,7 @@ def main() -> int:
     d = sub.add_parser("deploy")
     d.add_argument("--spec", default="shadow_runtime_test_v1")
     d.add_argument("--switch-on", action="store_true", help="además prende el switch del runtime")
-    d.add_argument("--expect-hash", help="hash aprobado; si GaleCore cargó otro, no se despliega")
+    d.add_argument("--approval", help="knowledge/strategies/<name>/<version>.approval.json (GC-AI-0008)")
     d.set_defaults(fn=cmd_deploy)
     st = sub.add_parser("stop")
     st.add_argument("--instance", required=True)
