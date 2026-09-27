@@ -35,8 +35,8 @@ EVIDENCE_PROVENANCE = "HOST_DECLARED"
 SENSITIVE_PARAM_MARKERS = ("key", "token", "secret", "password", "auth", "credential", "cookie", "session")
 # A credential echoed inside a response (signed URL, query string, header dump) is refused too.
 _CREDENTIAL_IN_TEXT = re.compile(
-    r"(api[_-]?key|apikey|access[_-]?token|client[_-]?secret|password|authorization)[\"']?\s*[=:]\s*[\"']?"
-    r"(bearer\s+)?[A-Za-z0-9._~+/-]{8,}",
+    r"(api[_-]?key|apikey|access[_-]?token|refresh[_-]?token|token|client[_-]?secret|secret|password|"
+    r"authorization|cookie|session[_-]?id|x-api-key)[\"']?\s*[=:]\s*[\"']?(bearer\s+)?[A-Za-z0-9._~+/-]{8,}",
     re.IGNORECASE)
 
 
@@ -86,6 +86,7 @@ class EvidenceContent(BaseModel):
     @classmethod
     def _no_credentials(cls, params: dict) -> dict:
         bad = [k for k in params if any(m in k.lower() for m in SENSITIVE_PARAM_MARKERS)]
+        bad += [k for k, v in params.items() if isinstance(v, str) and _CREDENTIAL_IN_TEXT.search(v)]
         if bad:
             raise ValueError(f"parameters that may carry credentials are not stored: {bad}")
         return params
@@ -146,6 +147,13 @@ class EvidenceDocument(BaseModel):
         if v != EVIDENCE_PROVENANCE:
             raise ValueError(f"evidence provenance is always {EVIDENCE_PROVENANCE}, got {v!r}")
         return v
+
+    @field_validator("host")
+    @classmethod
+    def _host_declared_host(cls, host: RecordHost) -> RecordHost:
+        if host.provenance != EVIDENCE_PROVENANCE:
+            raise ValueError(f"host provenance is always {EVIDENCE_PROVENANCE}, got {host.provenance!r}")
+        return host
 
     def hashable_content(self) -> dict:
         data = self.model_dump(mode="json")

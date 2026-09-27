@@ -1,8 +1,8 @@
 # GC-AI-0007 — Investigación contextual de SPY: recorrido del 27/09/2026
 
 Registro autoritativo: `research:2026-09-27-spy-contexto-prima-30-60d` en `knowledge/` (3 revisiones) y
-22 evidencias `evidence:2026-09-27-spy-ctx-*`. Este archivo resume y rutea; no reemplaza ese registro.
-Recalcular los cálculos propios desde la evidencia: `python docs/evidence/gc-ai-0007/recompute.py`.
+28 evidencias `evidence:2026-09-27-spy-ctx-*` (22 del recorrido + 6 respuestas crudas agregadas tras Codex C1: metadatos FRED, límite de Alpha Vantage, denegación de ETF en FMP). Este archivo resume y rutea; no reemplaza ese registro.
+Verificar los 28 valores derivados contra la evidencia: `python docs/evidence/gc-ai-0007/recompute.py` (sale con 1 si alguno no coincide).
 
 ## Cómo se pide
 
@@ -60,7 +60,7 @@ A hacia B. Se mantuvieron D, la consecuencia para la estrategia y el bloqueo por
 | Fuente | Usada para | Funcionó | Límite real encontrado |
 |---|---|---|---|
 | GaleCore (DataFeed local, 7 GET) | VIX, VIX9D, VIX3M, VVIX, SPY, skew, IV por plazo | Sí | Sin historia ni vol realizada; IV/skew sin hora del dato; RoC IV30 repetido del 26/09 |
-| FMP | Curva completa, SPY (cotización y diario), calendario de resultados | Parcial | Calendario macro y ETF/fondos **denegados por plan** |
+| FMP | Curva completa, SPY (cotización y diario), calendario de resultados | Parcial | Calendario macro y ETF/fondos **denegados por plan** (ambas respuestas guardadas) |
 | Alpha Vantage | CPI, desempleo, empleo, fondos federales, perfil de SPY | Sí | 1 consulta/s y 25/día; mensuales sin filtro de fecha; diarias truncadas a 2 puntos; CPI sin ajuste estacional |
 | FRED (API directa, `tools/fred_query.py`) | Tasa real, breakeven, 10 años, CPI desestacionalizado con vintage | Sí | MCP no registrado en Claude Code; se usó la clave por entorno |
 
@@ -87,10 +87,10 @@ verificado por GaleCore. Las horas de consulta a conectores son cotas superiores
 - Un método descubrible desde el catálogo que selecciona factores por idea y horizonte y fuerza a separar
   tipos de afirmación y a contrastar escenarios (visible en la investigación guardada).
 - Evidencia durable, inmutable y citable, con procedencia, que otra sesión puede recalcular
-  (`recompute.py` reproduce todos los cálculos propios desde `knowledge/`).
+  (`recompute.py` recalcula y verifica los 28 valores derivados desde `knowledge/`).
 - Memoria con historia: correcciones y resultados como revisiones append-only con hash y nota.
 - Controles automáticos: una cita a evidencia inexistente o editada se rechaza; parámetros con aspecto de
-  credencial se rechazan (716+ tests; ver el work item).
+  credencial (en nombres, valores o dentro del payload) se rechazan; la procedencia no puede declararse verificada por GaleCore (726 tests; ver el work item).
 
 ## Qué todavía no está demostrado
 

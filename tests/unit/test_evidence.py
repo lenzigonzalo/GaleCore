@@ -62,10 +62,33 @@ def test_parameters_that_may_carry_credentials_are_refused(param):
 
 
 @pytest.mark.parametrize("payload", ["https://x/obs?series_id=A&api_key=abcdef1234567890",
-                                     '{"Authorization": "Bearer0123456789abc"}', "apikey: ZZZZ9999YYYY"])
+                                     '{"Authorization": "Bearer0123456789abc"}', "apikey: ZZZZ9999YYYY",
+                                     '{"token":"SECRETSECRET"}', "Cookie: sessionid=abcdefgh1234",
+                                     "X-API-KEY: 0123456789abcdef", "https://x?access_token=abcdefgh123"])
 def test_payload_with_an_echoed_credential_is_refused(payload):
     with pytest.raises(ValidationError, match="credential"):
         evidence(payload=payload)
+
+
+def test_parameter_values_carrying_credentials_are_refused():
+    with pytest.raises(ValidationError, match="credentials"):
+        evidence(params={"url": "https://api.x/obs?api_key=abcdef1234567890"})
+
+
+def test_payload_mentioning_token_counts_is_not_a_credential():
+    assert evidence(payload='{"full_data_tokens":350272,"max_tokens_exceeded":true}').payload
+
+
+def test_nested_host_provenance_cannot_claim_galecore_verification(kb):  # noqa: F811
+    from galecore_ai.contracts.regime_record import RecordHost
+
+    with pytest.raises(KnowledgeError):
+        save_evidence(kb=kb, slug="x", prompt="p", host=RecordHost(provenance="GALECORE_VERIFIED"),
+                      content=evidence(), now=NOW)
+    with pytest.raises(ValidationError, match="host provenance"):
+        document, _ = add(kb)
+        type(document).model_validate({**document.model_dump(mode="json"),
+                                       "host": {"provenance": "GALECORE_VERIFIED"}})
 
 
 def test_excerpt_needs_a_note_and_series_are_required():

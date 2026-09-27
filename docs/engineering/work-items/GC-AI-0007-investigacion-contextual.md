@@ -56,12 +56,12 @@ actualizar plan y alcance y crear este item; GC-AI-0006 sigue abierto con sus pe
 | Criterio | Implementación | Verificación automática | Artefacto | Estado |
 |---|---|---|---|---|
 | AC-01 | `config/catalog.yaml` (`context_research`), `config/skills/context-research/skill.yaml`, `research save/revise --capability` (`application/knowledge.py`) | `test_catalog_offers_context_research`, `test_revision_records_the_method_followed`, catálogo en `test_knowledge.py` | Revisiones r1–r3 selladas con `context_research` 0.1.0 | Implementado; verificado local |
-| AC-02 | `contracts/evidence.py`, `adapters/evidence_store.py`, ref `evidence:` (`knowledge_base.py`), `evidence add` (`cli.py`), `tools/fred_query.py` | `tests/unit/test_evidence.py` (20 casos: HOST_DECLARED, credenciales en payload, no sobrescribe, credenciales, extracto, futuro, integridad, cita y backlink, búsqueda, CLI) | 22 items `knowledge/evidence/2026-09-27-spy-ctx-*.json` | Implementado; verificado local y en el recorrido real |
+| AC-02 | `contracts/evidence.py`, `adapters/evidence_store.py`, ref `evidence:` (`knowledge_base.py`), `evidence add` (`cli.py`), `tools/fred_query.py` | `tests/unit/test_evidence.py` (27 casos: HOST_DECLARED también en `host`, credenciales en nombres/valores/payload, creación exclusiva, no sobrescribe, credenciales, extracto, futuro, integridad, cita y backlink, búsqueda, CLI) | 28 items `knowledge/evidence/2026-09-27-spy-ctx-*.json` (incluye metadatos FRED y respuestas de error/denegación) | Implementado; verificado local y en el recorrido real |
 | AC-03 | — | — | [README §Fuentes](../../evidence/gc-ai-0007/README.md); hallazgos abajo; evidencia de la denegación FMP | Hecho con acceso real (GaleCore, FMP, Alpha Vantage, FRED) |
-| AC-04 | — | `recompute.py` reproduce los cálculos propios desde la evidencia | `research:2026-09-27-spy-contexto-prima-30-60d` r1; README §Análisis | Entregado; utilidad: evalúa el owner |
+| AC-04 | — | `recompute.py` verifica con asserts los 28 valores derivados contra la evidencia (exit 0) | `research:2026-09-27-spy-contexto-prima-30-60d` r1; README §Análisis | Entregado; utilidad: evalúa el owner |
 | AC-05 | — | `kb search --status unfinished` la encuentra; `kb show` muestra r1→r3 y `cited_by` | r2 (corrección CPI), r3 (resultado FRED) | Guardar/encontrar/revisar: hecho. **Continuidad desde sesión nueva: NO probada** (bloqueada por permisos del host) |
 | AC-06 | — | — | README §Guion, §Aporte, §No demostrado | Entregado |
-| AC-07 | — | — | pendiente | — |
+| AC-07 | — | — | Interna R1 APPROVE; Codex C1 CHANGES_REQUESTED → corregido; recheck pendiente | En revisión |
 
 ## Required validation
 
@@ -109,16 +109,15 @@ git diff --check
 
 ### Comandos y resultados
 
-- `PYTHONPATH=src python -B -m pytest -q -p no:cacheprovider` → 716 passed (incluye los casos nuevos de test_evidence.py).
+- `python -B -m pytest -q -p no:cacheprovider` (comando exacto; `tests/conftest.py` usa el `src` de este checkout) → 726 passed, 1 warning.
 - `python -B -m ruff check --no-cache .` → All checks passed. `python tools/engineering_gate.py` → PASS.
-- `python docs/evidence/gc-ai-0007/recompute.py` → reproduce RV20 10,76 %, IV30/RV20 1,39, 2–10 25→36 pb,
-  CPI 3,40 % (AV) / 3,35 % (FRED SA), DFII10 2,63→2,85, T10YIE 2,33→2,33.
+- `python docs/evidence/gc-ai-0007/recompute.py` → 28 OK, «Todos los valores coinciden», exit 0.
 
 ### Gaps y riesgos conocidos
 
 - Continuidad desde sesión nueva no probada (arriba). r2 y r3 las escribió la misma sesión.
 - La skill se editó (línea de FRED) después de r1: r1 tiene otro hash que r2/r3 con la misma versión 0.1.0.
-- `recompute.py` ubica `knowledge/` por la estructura de worktree (`parents[6]`).
+- `recompute.py` ubica `knowledge/` por la estructura de worktree (`parents[6]`) salvo `GALECORE_KNOWLEDGE_DIR`.
 - Referencia `file:` al recorrido del 26/09 apunta al worktree GC-AI-0007; si se borra, queda sólo su hash.
 - Las payloads de conectores las transcribió el host; horas de consulta son cotas superiores.
 
@@ -133,3 +132,17 @@ de ambos repos: cero apariciones. Confirmó que ningún texto afirma la continui
 | R1-m1 | MINOR | El contrato sólo rechazaba credenciales en `params`, no en el `payload` | Corregido: patrón de credencial en el payload se rechaza (+3 casos); las 22 evidencias existentes siguen válidas |
 | R1-m2 | MINOR | Lint en `galecore_query.py` (archivo de GC-AI-0006) | Aceptado: declarado, trivial, necesario para el gate |
 | R1-m3 | MINOR | Skill editada entre r1 y r2 sin subir versión | Aceptado como gap declarado; próxima edición sube versión |
+
+## Revisión Codex C1 (`GC-AI-0007-20260927T170318Z.md`, `e7dd338..869e1cf`) — CHANGES_REQUESTED
+
+Todos los valores cuantitativos de r1–r3 coinciden con la evidencia citada; AC-01 y AC-06 PASS.
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| C1-M1 | MAJOR | Credenciales en valores de `params` y formas como `{"token":"…"}` pasaban | Corregido: se revisan valores y payload con un patrón ampliado (token, cookie, session, X-API-KEY, URL); +8 casos; las evidencias existentes siguen válidas |
+| C1-M2 | MAJOR | `host.provenance` podía declarar `GALECORE_VERIFIED` | Corregido: el documento exige `HOST_DECLARED` también en `host`; `save_evidence` lo rechaza como `KnowledgeError` |
+| C1-M3 | MAJOR | Metadatos FRED, límite de Alpha Vantage y denegación de ETF de FMP sólo como notas | Corregido: 6 evidencias nuevas con las respuestas exactas (`*-series-meta`, `av-rate-limit-response`, `fmp-etf-information-denied`) |
+| C1-M4 | MAJOR | `recompute.py` fallaba en consola Windows y no cubría todos los derivados | Corregido: salida UTF-8 segura; verifica con asserts los 28 valores derivados |
+| C1-M5 | MAJOR | El comando exacto de pytest fallaba en el worktree; conteo 716 desactualizado | Corregido: `tests/conftest.py` antepone el `src` del checkout (import y subprocesos); comando exacto → 726 passed |
+| C1-m1 | MINOR | Creación no exclusiva (check-then-replace) | Corregido: `open("x")`; una escritura cortada queda INTEGRITY_FAILED, nunca sobrescribe |
+| C1-m2 | MINOR | Skill editada sin subir versión | Registrado: regla — toda edición de una skill ya usada sube su versión; el hash de cada revisión identifica la definición exacta |

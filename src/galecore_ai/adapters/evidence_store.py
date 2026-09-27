@@ -14,7 +14,6 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from galecore_ai.adapters import frontmatter
 from galecore_ai.adapters.knowledge_base import RESEARCH_ID_RE
 from galecore_ai.contracts.evidence import EvidenceDocument, compute_evidence_hash
 
@@ -73,9 +72,15 @@ class FileEvidenceStore:
 
     def create(self, document: EvidenceDocument) -> Path:
         path = self.path_for(document.id)
-        if path.exists():
-            raise EvidenceStoreError(f"evidence:{document.id} already exists; a new reading is a new item")
         if compute_evidence_hash(document.hashable_content()) != document.content_hash:
             raise EvidenceStoreError("Refusing to write evidence whose hash does not match its content")
-        frontmatter.atomic_write(path, _render(document))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            # Exclusive creation: two writers of the same id cannot both succeed. A write interrupted
+            # halfway leaves a file whose hash fails on read (INTEGRITY_FAILED), never a silent overwrite.
+            with path.open("x", encoding="utf-8", newline="\n") as fh:
+                fh.write(_render(document))
+        except FileExistsError as exc:
+            raise EvidenceStoreError(
+                f"evidence:{document.id} already exists; a new reading is a new item") from exc
         return path

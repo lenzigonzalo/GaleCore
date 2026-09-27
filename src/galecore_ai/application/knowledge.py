@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from galecore_ai.adapters.evidence_store import (
     EvidenceIntegrityError,
     EvidenceStoreError,
@@ -265,8 +267,11 @@ def save_evidence(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost
         raise KnowledgeError("Refusing to save", ["the user's prompt is required"])
     if content.retrieved_at > now:
         raise KnowledgeError("Refusing to save", ["retrieved_at is in the future"])
-    draft = EvidenceDocument(id=evidence_id, recorded_at=now, host=host, prompt=prompt, content=content,
-                             content_hash="")
+    try:
+        draft = EvidenceDocument(id=evidence_id, recorded_at=now, host=host, prompt=prompt, content=content,
+                                 content_hash="")
+    except ValidationError as exc:
+        raise KnowledgeError("Refusing to save", [str(exc)]) from exc
     document = draft.model_copy(update={"content_hash": compute_evidence_hash(draft.hashable_content())})
     try:
         path = kb.evidence.create(document)
