@@ -1,0 +1,426 @@
+"""Strategy use cases (GC-AI-0008): check a proposal against its spec and the runtime, store it,
+record the owner's approval of an exact version, and refuse a deploy whose hash is not the approved one.
+
+The check answers one question: does the spec make GaleCore do what the proposal says, and does the
+proposal say everything the runtime will not do? It is fail-closed:
+
+- every leaf of the spec must be in the runtime support table (a field nobody mapped is an error);
+- a field the runtime ignores must hold the value that matches what the runtime really does
+  (e.g. sizing is always one contract), otherwise the spec would promise behavior that never runs;
+- a field the runtime executes must be explained by a supported rule, and a supported rule may only
+  name fields the runtime executes;
+- a rule the runtime cannot execute stays out of the spec and is listed as a declared gap.
+
+The support table describes GaleCore's SHADOW runtime as read in code (``RUNTIME_REFERENCE``). When
+the runtime changes, the table changes with it; until then an unknown field fails the check.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+from datetime import UTC, datetime
+from typing import Any
+
+from galecore_ai.adapters.strategy_store import (
+    StrategyIntegrityError,
+    StrategyStoreError,
+    split_key,
+)
+from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError, resolve_ref
+from galecore_ai.contracts.regime_record import RecordHost
+from galecore_ai.contracts.strategy import (
+    ApprovalDocument,
+    CheckReport,
+    ProposalContent,
+    RuntimeStatus,
+    StrategyDocument,
+    compute_document_hash,
+)
+
+RUNTIME_REFERENCE = (
+    "GaleCore feature/GC-0004-shadow-durable @ bc62f22: DataFeed.Application/App/Runtime "
+    "(ShadowRuntimeEngine, GenericGateEvaluator, MetricResolver, PcsCandidateBuilder, ShadowRiskValidator, "
+    "ShadowFillSimulator.EvaluateExits, ShadowRuntimeTick, StrategySpecHasher)"
+)
+
+# ── GaleCore's content hash ──────────────────────────────────────
+# StrategySpecHasher: drop content_hash, keys sorted by UTF-16 code units, no whitespace, numbers
+# written exactly as in the source text (JsonValue.WriteTo keeps "5.0"), relaxed string escaping.
+
+_BS = chr(92)
+
+
+class _RawNumber(str):
+    pass
+
+
+def _escape(s: str) -> str:
+    out = ['"']
+    for ch in s:
+        if ch == '"':
+            out.append(_BS + '"')
+        elif ch == _BS:
+            out.append(_BS + _BS)
+        elif ch == "\n":
+            out.append(_BS + "n")
+        elif ch == "\r":
+            out.append(_BS + "r")
+        elif ch == "\t":
+            out.append(_BS + "t")
+        elif ord(ch) < 0x20:
+            out.append(_BS + f"u{ord(ch):04X}")
+        else:
+            out.append(ch)
+    out.append('"')
+    return "".join(out)
+
+
+def _canonical(v: Any) -> str:
+    if isinstance(v, dict):
+        keys = sorted(v, key=lambda k: k.encode("utf-16-be"))
+        return "{" + ",".join(_escape(k) + ":" + _canonical(v[k]) for k in keys) + "}"
+    if isinstance(v, list):
+        return "[" + ",".join(_canonical(x) for x in v) + "]"
+    if isinstance(v, _RawNumber):
+        return str(v)
+    if isinstance(v, str):
+        return _escape(v)
+    if v is True:
+        return "true"
+    if v is False:
+        return "false"
+    if v is None:
+        return "null"
+    raise TypeError(f"unexpected JSON value {v!r}")
+
+
+def galecore_spec_hash(spec_json: str) -> str:
+    """The content_hash GaleCore computes for this spec text (verified against GaleCore's own hashes)."""
+    data = json.loads(spec_json, parse_float=_RawNumber, parse_int=_RawNumber)
+    if not isinstance(data, dict):
+        raise TypeError("a StrategySpec is a JSON object")
+    data.pop("content_hash", None)
+    return "sha256:" + hashlib.sha256(_canonical(data).encode("utf-8")).hexdigest()
+
+
+# ── runtime support table ────────────────────────────────────────
+
+SELL_PUT = "candidate_construction.legs[sell_put]"
+BUY_PUT = "candidate_construction.legs[buy_put]"
+GATE = "entry_filters.gate_layer.gates"
+
+# Executed by the runtime: a non-null value changes what GaleCore does, so a supported rule explains it.
+EXECUTED = {
+    "universe.symbols": "símbolo evaluado (el primero de la lista)",
+    "structure.allowed_strategies": "ShadowRiskValidator rechaza estructuras fuera de la lista",
+    "structure.forbidden_strategies": "ShadowRiskValidator rechaza estructuras de la lista",
+    "structure.default_structure": "PcsCandidateBuilder: sólo put_credit_spread",
+    f"{SELL_PUT}.strike_selection.target_delta": "delta objetivo del put vendido",
+    f"{SELL_PUT}.strike_selection.delta_tolerance": "tolerancia alrededor del delta objetivo",
+    f"{BUY_PUT}.strike_selection.width": "ancho del spread en dólares",
+    "candidate_construction.constraints.min_dte": "DTE mínimo del vencimiento elegido",
+    "candidate_construction.constraints.max_dte": "DTE máximo del vencimiento elegido",
+    "candidate_construction.constraints.min_credit": "crédito mínimo a mid; menos → sin candidato",
+    "risk_limits.max_concurrent_positions": "posiciones abiertas máximas → ENTRY_SKIPPED",
+    "risk_limits.max_loss_per_trade_usd": "riesgo máximo por operación (ancho − crédito) × 100",
+    "exits.deterministic.stop_loss.pct_of_credit": "cierra si pérdida ≥ pct × crédito (precedencia 1)",
+    "exits.deterministic.take_profit.pct_of_credit": "cierra si valor ≤ (1 − pct) × crédito (precedencia 2)",
+    "exits.deterministic.time_exit.max_dte": "cierra si DTE ≤ max_dte (precedencia 3)",
+    "operational.timezone": "zona horaria de la sesión",
+    "operational.session_hours.start": "inicio de la sesión evaluada (lunes a viernes)",
+    "operational.session_hours.end": "fin de la sesión evaluada",
+    "data_quality.max_quote_age_seconds": "antigüedad máxima de una cotización usable; más vieja → sin dato",
+}
+
+# Ignored by the runtime: only the value that matches what the runtime really does is honest.
+_NEUTRAL: dict[str, tuple[Any, ...]] = {
+    "candidate_construction.sizing.method": ("FIXED",),
+    "candidate_construction.sizing.fixed_contracts": (None, 1),
+    "candidate_construction.sizing.risk_per_trade_pct": (None,),
+    "candidate_construction.constraints.max_bid_ask_spread_pct": (None,),
+    "exits.deterministic.defensive_roll.enabled": (False,),
+    "risk_limits.max_risk_per_trade_pct": (None,),   # compared against net liq, which SHADOW passes as null
+    "risk_limits.max_portfolio_heat_pct": (None,),
+    "entry_filters.signal_layer.gates": ([],),       # validated, never evaluated
+    "analytics_refs": ({},),
+    "data_quality.block_on_crossed_market": (True,),  # the runtime always discards crossed quotes
+    "data_quality.block_on_missing_critical_data": (True,),  # and always blocks without data
+}
+_RUNTIME_DOES = {
+    "candidate_construction.sizing.method": "siempre 1 contrato",
+    "candidate_construction.sizing.fixed_contracts": "siempre 1 contrato",
+    "candidate_construction.sizing.risk_per_trade_pct": "no dimensiona por riesgo",
+    "candidate_construction.constraints.max_bid_ask_spread_pct": "no filtra por bid/ask",
+    "exits.deterministic.defensive_roll.enabled": "no hace roll",
+    "risk_limits.max_risk_per_trade_pct": "no lo aplica (net liq nula en SHADOW)",
+    "risk_limits.max_portfolio_heat_pct": "no mide heat",
+    "entry_filters.signal_layer.gates": "no evalúa la capa de señales",
+    "analytics_refs": "no usa analytics_refs",
+    "data_quality.block_on_crossed_market": "siempre descarta cotizaciones cruzadas",
+    "data_quality.block_on_missing_critical_data": "siempre bloquea sin datos",
+}
+
+# What the runtime always does, whatever the spec says: a supported rule may rest on these fields when
+# they hold that value. A null neutral (no heat, no bid/ask filter) is an absence, never support.
+IMPLICIT_BEHAVIOR = ("candidate_construction.sizing.method", "candidate_construction.sizing.fixed_contracts",
+                     "exits.deterministic.defensive_roll.enabled", "data_quality.block_on_crossed_market",
+                     "data_quality.block_on_missing_critical_data")
+
+# No neutral value exists: the proposal must declare the gap with an unsupported rule naming the field.
+MUST_DECLARE = {
+    "operational.calendar": "sólo excluye sábados y domingos; no conoce feriados",
+}
+
+# Descriptive fields: no behavior in SHADOW (shape is checked separately where it matters).
+_INFORMATIONAL_PREFIXES = (
+    "strategy_spec_version", "canonicalization_version", "content_hash", "identity.", "metadata.",
+    "deployment_constraints.", "universe.mode", "universe.instrument_types", "universe.excluded",
+    "structure.selection_method", "entry_filters.gate_layer.pass_rule", "entry_filters.gate_layer.on_fail",
+    "entry_filters.signal_layer.pass_rule", "operational.decimal_precision", "operational.currency",
+    "operational.rounding", "operational.symbology", f"{SELL_PUT}.side", f"{SELL_PUT}.type",
+    f"{SELL_PUT}.strike_selection.method", f"{BUY_PUT}.side", f"{BUY_PUT}.type",
+    f"{BUY_PUT}.strike_selection.method", "exits.deterministic.defensive_roll.",
+)
+# Leg fields the builder never reads for that leg: only null is honest.
+_NULL_ONLY = (f"{SELL_PUT}.strike_selection.width", f"{BUY_PUT}.strike_selection.target_delta",
+              f"{BUY_PUT}.strike_selection.delta_tolerance")
+
+_METRIC_RE = re.compile(
+    r"^capability:(market_data\.quote\.[A-Z0-9.^]+\.price|market_data\.trade\.[A-Z0-9.^]+\.price|"
+    r"compute\.gamma_exposure\.[A-Z0-9.^]+\.net_gex)$")
+_OPERATORS = {"LT", "LTE", "GT", "GTE", "EQ", "NEQ", "BETWEEN"}
+
+
+def _leg_key(leg: dict) -> str:
+    return f"{str(leg.get('side', '')).lower()}_{str(leg.get('type', '')).lower()}"
+
+
+def _leaves(node: Any, path: str, out: dict[str, Any], errors: list[str]) -> None:
+    if isinstance(node, dict) and node:
+        for k, v in node.items():
+            _leaves(v, f"{path}.{k}" if path else k, out, errors)
+        return
+    if path == GATE and isinstance(node, list):
+        for gate in node:
+            gid = gate.get("id") if isinstance(gate, dict) else None
+            out[f"{GATE}[{gid}]"] = gate
+        return
+    if path == "candidate_construction.legs" and isinstance(node, list):
+        keys = [_leg_key(leg) if isinstance(leg, dict) else "?" for leg in node]
+        if sorted(keys) != ["buy_put", "sell_put"]:
+            errors.append(f"legs must be exactly one SELL PUT and one BUY PUT (the only builder); got {keys}")
+            return
+        for leg in node:
+            _leaves(leg, f"candidate_construction.legs[{_leg_key(leg)}]", out, errors)
+        return
+    out[path] = node
+
+
+def _check_gate(key: str, gate: Any, errors: list[str]) -> None:
+    if not isinstance(gate, dict) or not gate.get("id"):
+        errors.append(f"{key}: a gate needs an id")
+        return
+    if not _METRIC_RE.fullmatch(str(gate.get("metric_ref", ""))):
+        errors.append(f"{key}: metric_ref {gate.get('metric_ref')!r} is not one the runtime resolves "
+                      "(quote/trade price or net GEX); it would be NO_DATA forever")
+    if gate.get("operator") not in _OPERATORS:
+        errors.append(f"{key}: operator {gate.get('operator')!r} unknown")
+    if gate.get("on_fail") != "NO_TRADE" or gate.get("on_no_data") != "BLOCK":
+        errors.append(f"{key}: only on_fail=NO_TRADE and on_no_data=BLOCK keep a gate fail-closed")
+
+
+def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> CheckReport:
+    errors: list[str] = []
+    try:
+        spec = json.loads(spec_json)
+    except json.JSONDecodeError as exc:
+        return CheckReport(verdict="INVALID", errors=[f"spec is not JSON: {exc}"], declared_gaps=[],
+                           coverage={}, runtime_reference=RUNTIME_REFERENCE)
+    if not isinstance(spec, dict):
+        return CheckReport(verdict="INVALID", errors=["a StrategySpec is a JSON object"], declared_gaps=[],
+                           coverage={}, runtime_reference=RUNTIME_REFERENCE)
+    ident = spec.get("identity", {}) if isinstance(spec, dict) else {}
+    if ident.get("name") != content.name or ident.get("version") != content.version:
+        errors.append(f"spec identity {ident.get('name')}/{ident.get('version')} is not the proposal's "
+                      f"{content.name}/{content.version}")
+    if spec_file != f"{content.name}.json":
+        errors.append(f"spec file {spec_file!r} must be {content.name}.json (GaleCore deploys by file name)")
+    if spec.get("content_hash") is not None:
+        errors.append("content_hash must be null in the file; GaleCore computes it")
+    if spec.get("deployment_constraints", {}).get("eligible_modes") != ["SHADOW"]:
+        errors.append("eligible_modes must be exactly [\"SHADOW\"] (this increment approves only SHADOW)")
+    if spec.get("structure", {}).get("default_structure") != "put_credit_spread":
+        errors.append("default_structure must be put_credit_spread (the runtime's only builder)")
+    gl = spec.get("entry_filters", {}).get("gate_layer", {})
+    if gl.get("pass_rule") != "ALL" or gl.get("on_fail") != "NO_TRADE":
+        errors.append("gate_layer must be pass_rule=ALL and on_fail=NO_TRADE (the only evaluated semantics)")
+
+    leaves: dict[str, Any] = {}
+    _leaves(spec, "", leaves, errors)
+
+    supported_paths: dict[str, list[str]] = {}
+    declared_paths: set[str] = set()
+    for rule in content.rules:
+        if rule.runtime.status == RuntimeStatus.SUPPORTED:
+            for p in rule.runtime.spec_paths:
+                supported_paths.setdefault(p, []).append(rule.id)
+        else:
+            declared_paths.update(rule.runtime.spec_paths)
+
+    coverage: dict[str, list[str]] = {}
+    for path, value in sorted(leaves.items()):
+        if path.startswith(f"{GATE}["):
+            _check_gate(path, value, errors)
+            if path not in supported_paths:
+                errors.append(f"{path}: the runtime evaluates this gate but no supported rule explains it")
+            coverage[path] = supported_paths.get(path, [])
+        elif path in EXECUTED:
+            if value is None:
+                continue
+            if path not in supported_paths:
+                errors.append(f"{path} = {value!r}: the runtime executes it ({EXECUTED[path]}) "
+                              "but no supported rule explains it")
+            coverage[path] = supported_paths.get(path, [])
+        elif path in _NEUTRAL:
+            if value not in _NEUTRAL[path]:
+                errors.append(f"{path} = {value!r}: the runtime ignores it ({_RUNTIME_DOES[path]}); the spec "
+                              f"must say {_NEUTRAL[path][0]!r} and the rule stays declared as unsupported")
+        elif path in MUST_DECLARE:
+            if path not in declared_paths:
+                errors.append(f"{path} = {value!r}: the runtime {MUST_DECLARE[path]}; declare it with an "
+                              "unsupported rule naming this field")
+        elif path in _NULL_ONLY:
+            if value is not None:
+                errors.append(f"{path} = {value!r}: the builder never reads it for this leg; it must be null")
+        elif not path.startswith(_INFORMATIONAL_PREFIXES):
+            errors.append(f"{path}: not in the runtime support table; nobody verified what GaleCore does with it")
+
+    for path, rule_ids in supported_paths.items():
+        if path.startswith(f"{GATE}["):
+            if path not in leaves:
+                errors.append(f"rules {rule_ids}: gate {path} is not in the spec")
+        elif path in IMPLICIT_BEHAVIOR:
+            # Supported only as what the runtime already does regardless of the spec (one contract, no roll).
+            if path not in leaves or leaves[path] not in _NEUTRAL[path]:
+                errors.append(f"rules {rule_ids}: {path} is supported only with the runtime's own behavior "
+                              f"({_RUNTIME_DOES[path]}), value {_NEUTRAL[path][0]!r}")
+        elif path not in EXECUTED:
+            errors.append(f"rules {rule_ids}: {path} is marked supported but the runtime does not execute it")
+        elif leaves.get(path) is None:
+            errors.append(f"rules {rule_ids}: {path} is marked supported but the spec leaves it empty")
+
+    gaps = [f"{r.id}: {r.text} — {r.runtime.note}" for r in content.rules
+            if r.runtime.status == RuntimeStatus.UNSUPPORTED]
+    verdict = "INVALID" if errors else ("VALID_WITH_DECLARED_GAPS" if gaps else "VALID")
+    return CheckReport(verdict=verdict, errors=errors, declared_gaps=gaps, coverage=coverage,
+                       runtime_reference=RUNTIME_REFERENCE)
+
+
+def _check_refs(content: ProposalContent, kb: KnowledgeBase) -> list[str]:
+    problems = []
+    refs = list(content.research_refs) + list(content.hypothesis.sources)
+    refs += [s for r in content.rules for s in r.sources]
+    for ref in dict.fromkeys(refs):
+        try:
+            resolve_ref(ref, kb)
+        except KnowledgeError as exc:
+            problems.append(str(exc))
+    problems += [f"research_refs must be research: refs, got {r}" for r in content.research_refs
+                 if not r.startswith("research:")]
+    return problems
+
+
+def save_proposal(*, kb: KnowledgeBase, prompt: str, host: RecordHost, content: ProposalContent,
+                  spec_json: str, spec_file: str, now: datetime | None = None) -> tuple[StrategyDocument, str]:
+    """Check and store a version. An INVALID check or an unresolved reference is refused, not stored."""
+    problems = _check_refs(content, kb)
+    report = check_proposal(content, spec_json, spec_file)
+    if report.verdict == "INVALID" or problems:
+        raise KnowledgeError("proposal refused", problems + report.errors)
+    now = now or datetime.now(UTC)
+    try:
+        draft = StrategyDocument(name=content.name, version=content.version, recorded_at=now, host=host,
+                                 prompt=prompt, content=content, spec_file=spec_file, spec_json=spec_json,
+                                 spec_hash=galecore_spec_hash(spec_json), check=report, content_hash="pending")
+    except ValueError as exc:
+        raise KnowledgeError("proposal refused", [str(exc)]) from exc
+    doc = draft.model_copy(update={"content_hash": compute_document_hash(draft.hashable_content())})
+    try:
+        path = kb.strategies.create(doc)
+    except StrategyStoreError as exc:
+        raise KnowledgeError(str(exc)) from exc
+    return doc, str(path)
+
+
+def load_proposal(kb: KnowledgeBase, key: str) -> StrategyDocument:
+    try:
+        doc = kb.strategies.load(key)
+    except (StrategyStoreError, StrategyIntegrityError) as exc:
+        raise KnowledgeError(f"strategy:{key}: not usable ({exc})") from exc
+    if doc is None:
+        raise KnowledgeError(f"strategy:{key}: no such strategy version")
+    return doc
+
+
+def approve(*, kb: KnowledgeBase, key: str, spec_hash: str, owner_words: str, host: RecordHost,
+            now: datetime | None = None) -> tuple[ApprovalDocument, str]:
+    """Record the owner's approval of exactly this version and hash. The hash must be retyped, not implied."""
+    doc = load_proposal(kb, key)
+    if spec_hash != doc.spec_hash:
+        raise KnowledgeError(f"strategy:{key}: the approved hash {spec_hash} is not this version's {doc.spec_hash}")
+    if doc.check.verdict == "INVALID":
+        raise KnowledgeError(f"strategy:{key}: an INVALID proposal cannot be approved")
+    now = now or datetime.now(UTC)
+    try:
+        draft = ApprovalDocument(strategy_ref=f"strategy:{key}", spec_hash=spec_hash,
+                                 proposal_hash=doc.content_hash, owner_words=owner_words, recorded_at=now,
+                                 host=host, content_hash="pending")
+    except ValueError as exc:
+        raise KnowledgeError("approval refused", [str(exc)]) from exc
+    approval = draft.model_copy(update={"content_hash": compute_document_hash(draft.hashable_content())})
+    try:
+        path = kb.strategies.create_approval(key, approval)
+    except StrategyStoreError as exc:
+        raise KnowledgeError(str(exc)) from exc
+    return approval, str(path)
+
+
+def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_spec_json: str | None = None) -> dict:
+    """Allow a deploy only if an intact approval exists for this version and GaleCore reports its hash.
+
+    ``galecore_hash`` is what GaleCore says it loaded (``App/Runtime/Specs/<name>``); when GaleCore
+    also returns the spec text, it must hash to the same value.
+    """
+    doc = load_proposal(kb, key)
+    try:
+        approval = kb.strategies.load_approval(key)
+    except (StrategyStoreError, StrategyIntegrityError) as exc:
+        raise KnowledgeError(f"strategy:{key}: approval not usable ({exc})") from exc
+    problems = []
+    if approval is None:
+        problems.append(f"strategy:{key} has no recorded approval")
+    else:
+        if approval.proposal_hash != doc.content_hash:
+            problems.append("the approval is for another proposal document")
+        if approval.spec_hash != doc.spec_hash:
+            problems.append("the approval is for another spec hash")
+    if galecore_hash != doc.spec_hash:
+        problems.append(f"GaleCore loaded {galecore_hash}, the approved version is {doc.spec_hash}")
+    if galecore_spec_json is not None and galecore_spec_hash(galecore_spec_json) != galecore_hash:
+        problems.append("the spec text GaleCore returned does not hash to the hash it reports")
+    if problems:
+        raise KnowledgeError(f"deploy of strategy:{key} refused", problems)
+    return {"status": "DEPLOY_ALLOWED", "strategy": f"strategy:{key}", "spec_file": doc.spec_file,
+            "spec_hash": doc.spec_hash, "approval_recorded_at": approval.recorded_at.isoformat(),
+            "scope": approval.scope}
+
+
+def strategy_key(ref_or_key: str) -> str:
+    key = ref_or_key.removeprefix("strategy:")
+    try:
+        split_key(key)
+    except StrategyStoreError as exc:
+        raise KnowledgeError(str(exc)) from exc
+    return key

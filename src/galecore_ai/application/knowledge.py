@@ -33,6 +33,11 @@ from galecore_ai.adapters.research_store import (
     ResearchIntegrityError,
     ResearchStoreError,
 )
+from galecore_ai.adapters.strategy_store import (
+    FileStrategyStore,
+    StrategyIntegrityError,
+    StrategyStoreError,
+)
 from galecore_ai.contracts.evidence import EvidenceContent, EvidenceDocument, compute_evidence_hash
 from galecore_ai.contracts.prepared_analysis import AssetEntry
 from galecore_ai.contracts.regime_record import RecordHost
@@ -72,6 +77,10 @@ class KnowledgeBase:
     @property
     def evidence(self) -> FileEvidenceStore:
         return FileEvidenceStore(self.base)
+
+    @property
+    def strategies(self) -> FileStrategyStore:
+        return FileStrategyStore(self.base)
 
 
 def _sha256_file(path: Path) -> str:
@@ -119,12 +128,19 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
         except (EvidenceIntegrityError, EvidenceStoreError) as exc:
             raise KnowledgeError(f"{ref}: not usable ({exc})") from exc
         path = kb.evidence.path_for(ref.key)
+    elif ref.kind == "strategy":
+        try:
+            if kb.strategies.load(ref.key) is None:
+                raise KnowledgeError(f"{ref}: no such strategy version")
+        except (StrategyIntegrityError, StrategyStoreError) as exc:
+            raise KnowledgeError(f"{ref}: not usable ({exc})") from exc
+        path = kb.strategies.path_for(ref.key)
     else:
         path = ref_path(ref, kb.base)
         if path.is_relative_to(kb.base.resolve()):
             # Knowledge items are cited by kind so their integrity (and self-citation) is checked.
-            raise KnowledgeError(f"{ref}: points inside the knowledge base; cite it as regime:, research: "
-                                 "or evidence:")
+            raise KnowledgeError(f"{ref}: points inside the knowledge base; cite it as regime:, research:, "
+                                 "evidence: or strategy:")
         if not path.is_relative_to(kb.workspace.resolve()) or not path.is_file():
             raise KnowledgeError(f"{ref}: no such file inside the workspace")
     return ResolvedRef(ref=str(ref), path=_display_path(path, kb), content_hash=_sha256_file(path))
@@ -306,6 +322,29 @@ def _evidence_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, s
 # ── search and show ──────────────────────────────────────────────
 
 
+def _strategy_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, str]]:
+    items = []
+    for key in kb.strategies.versions():
+        try:
+            doc = kb.strategies.load(key)
+            approval = kb.strategies.load_approval(key)
+        except (StrategyIntegrityError, StrategyStoreError) as exc:
+            failed.append({"ref": f"strategy:{key}", "status": "INTEGRITY_FAILED", "problems": [str(exc)]})
+            continue
+        if doc is None:
+            continue
+        c = doc.content
+        summary = {
+            "ref": f"strategy:{key}", "kind": "strategy", "title": c.display_name, "purpose": c.purpose,
+            "spec_hash": doc.spec_hash, "check": doc.check.verdict, "approved": approval is not None,
+            "updated_at": (approval.recorded_at if approval else doc.recorded_at).isoformat(),
+            "path": _display_path(kb.strategies.path_for(key), kb),
+        }
+        body = " ".join([c.name, c.display_name, c.purpose, c.hypothesis.mechanism, *(r.text for r in c.rules)])
+        items.append((summary, body))
+    return items
+
+
 def _cited_refs(document: ResearchDocument) -> set[str]:
     c = document.current.content
     refs = {a.ref for a in c.antecedents} | {src for s in c.statements for src in s.sources}
@@ -393,6 +432,8 @@ def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status
         candidates += _regime_items(kb, failed, symbol)
     if kind in (None, "evidence") and status is None:
         candidates += _evidence_items(kb, failed)
+    if kind in (None, "strategy") and status is None:
+        candidates += _strategy_items(kb, failed)
     results = []
     for summary, body in candidates:
         lowered = body.lower()
@@ -466,6 +507,18 @@ def show(kb: KnowledgeBase, ref_text: str) -> dict:
             raise KnowledgeError(f"{ref}: no such evidence")
         return {"ref": str(ref), "kind": "evidence", "path": _display_path(kb.evidence.path_for(ref.key), kb),
                 **doc.model_dump(mode="json"), "cited_by": cited_by(kb, ref)}
+    if ref.kind == "strategy":
+        try:
+            doc = kb.strategies.load(ref.key)
+            approval = kb.strategies.load_approval(ref.key)
+        except (StrategyIntegrityError, StrategyStoreError) as exc:
+            raise KnowledgeError(f"{ref}: INTEGRITY_FAILED", [str(exc)]) from exc
+        if doc is None:
+            raise KnowledgeError(f"{ref}: no such strategy version")
+        return {"ref": str(ref), "kind": "strategy", "path": _display_path(kb.strategies.path_for(ref.key), kb),
+                **doc.model_dump(mode="json"),
+                "approval": approval.model_dump(mode="json") if approval else None,
+                "cited_by": cited_by(kb, ref)}
     resolved = resolve_ref(str(ref), kb)
     return {"ref": str(ref), "kind": "file", "path": resolved.path, "content_hash": resolved.content_hash,
             "cited_by": cited_by(kb, ref)}

@@ -105,3 +105,58 @@ entries:
       - Evidence provenance is always HOST_DECLARED; parameters that may carry credentials are refused
       - Each revision records the skill (version and hash) of the method followed
       - Not checked - that the payload is what the source returned, that factors were well chosen, or that the scenarios are right
+
+  - id: strategy_design
+    kind: strategy
+    serves: >-
+      Desarrollar una estrategia completa desde su investigación (hipótesis, entrada, construcción,
+      sizing, monitoreo, ajustes, salidas, invalidación y plan de evaluación), mapear cada regla a lo
+      que el runtime de GaleCore ejecuta, preparar la StrategySpec versionada con el hash de GaleCore,
+      registrar la aprobación del owner de esa versión exacta y desplegarla en SHADOW de desarrollo.
+    example_requests:
+      - Desarrollá esta estrategia hasta SHADOW.
+      - ¿Qué le falta a esta estrategia para correr en SHADOW y qué reglas no soporta GaleCore?
+    skill: skills/strategy-design/skill.yaml
+    output_contract: galecore_ai.contracts.strategy.ProposalContent
+    galecore_capabilities: [App/Runtime/Specs, App/Runtime/Deploy]
+    flow:
+      - kb search --text "<idea>" [--kind research|evidence|strategy]
+      - research save --slug <slug> --prompt "<pedido>" < {content, host_provider, host_model}   # si la estrategia no tiene investigación propia
+      - strategy check --spec <GaleCore Files/Runtime/<name>.json> < {content}
+      - strategy save --spec <file> --prompt "<pedido>" < {content, host_provider, host_model}
+      - strategy approve --ref strategy:<name>/<version> --spec-hash <hash> --owner-words "<owner>" --host-model <model>
+      - strategy deploy-check --ref strategy:<name>/<version> --galecore-hash <hash de App/Runtime/Specs/<name>>
+      - python GaleCore/dev/galecore_dev.py deploy --spec <name> --expect-hash <hash>   # sólo GaleCore Dev
+    stored_as: strategy
+    controls:
+      - Every block (entry, construction, sizing, monitoring, adjustment, exit, invalidation) has a rule or a not-applicable rule that says why
+      - A grounded rule cites a source; a pending parameter or design choice says its reason
+      - Every spec field is in the runtime support table; a field nobody mapped fails the check
+      - A field the runtime executes is explained by a supported rule; a supported rule names only fields the runtime executes
+      - A field the runtime ignores must hold the value the runtime really behaves as (one contract, no roll, no heat); unsupported rules stay out of the spec, declared
+      - The spec hash is GaleCore's (JCS + SHA-256, verified against hashes GaleCore computed); versions and approvals are create-only and hashed
+      - Deploy is allowed only with an intact approval of the same proposal and the hash GaleCore reports; scope SHADOW in GaleCore Dev
+      - Not checked - that the hypothesis is right, that parameters are good, or that the strategy is profitable
+
+  - id: strategy_followup
+    kind: investigation
+    serves: >-
+      Responder qué hizo una estrategia en SHADOW desde la última revisión, por qué entró o no, cómo
+      evolucionaron sus posiciones y qué cambia en la hipótesis, con datos de GaleCore atados a la
+      versión aprobada, y guardarlo como revisión de su investigación.
+    example_requests:
+      - ¿Qué hizo esta estrategia desde la última revisión, por qué entró o no entró, cómo evolucionaron sus posiciones y qué cambia en nuestra hipótesis?
+    skill: skills/strategy-followup/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [App/Runtime/Instances, App/Runtime/Metrics]
+    flow:
+      - kb show strategy:<name>/<version>
+      - python GaleCore/dev/galecore_dev.py runtime-report --spec <name>   # sólo lectura, GaleCore Dev
+      - evidence add --slug <strategy>-shadow-<fecha> --prompt "<pedido>" < {content con la salida exacta}
+      - research revise --capability strategy_followup --id <investigación> --reason result --note "<qué cambia>" --prompt "<pedido>" < {...}
+    stored_as: research
+    controls:
+      - The research and evidence controls; the runtime report is kept verbatim as evidence
+      - Only data of the instance whose version hash equals the approved spec hash
+      - Operation, SHADOW results and economic evidence are reported separately; simulated fills are never executions
+      - Not checked - that the interpretation of the results is right

@@ -1,0 +1,384 @@
+{
+  "name": "spy_prima_varianza_30_45d",
+  "version": "1.0.0",
+  "display_name": "Cobro de prima de varianza en SPY a 30–45 días con riesgo definido",
+  "purpose": "Cobrar parte de la prima de varianza de SPY vendiendo un put spread de riesgo definido por vez, y observar en SHADOW si el runtime la ejecuta tal como está escrita, antes de cualquier evaluación económica.",
+  "research_refs": [
+    "research:2026-09-27-spy-prima-varianza-estrategia",
+    "research:2026-09-27-spy-contexto-prima-30-60d"
+  ],
+  "hypothesis": {
+    "mechanism": "La volatilidad implícita de los puts de SPY supera en promedio a la realizada (prima de varianza): quien vende seguro contra caídas cobra por asumir ese riesgo.",
+    "expected_result": "Resultado esperado positivo después de costos frente al efectivo, con muchas ganancias chicas y pérdidas grandes poco frecuentes.",
+    "capture": "Un put spread 16Δ / 5 USD a 30–45 días cobra el crédito; el put comprado acota la pérdida; salir al 50 % del crédito o a 21 DTE acorta la exposición a gamma cerca del vencimiento.",
+    "failure_conditions": [
+      "La realizada supera a la implícita dentro de la ventana (shocks de volatilidad; la investigación de contexto propone shocks de tasa real como disparador a probar)",
+      "Eventos idiosincráticos del índice dentro de la ventana (resultados de MSFT, AAPL, NVDA; NVDA dos días antes de un vencimiento de noviembre)",
+      "El put comprado se lleva la mayor parte de la prima (pendiente del skew) y los costos de cruzar el spread consumen el resto",
+      "El stop a 2× cristaliza pérdidas en caídas que después revierten"
+    ],
+    "sources": [
+      "research:2026-09-27-spy-contexto-prima-30-60d",
+      "file:.worktrees/galecore-ai/GC-AI-0006/docs/engineering/pilots/strategy-design/propuesta-pcs-spy-2026-09-25.md"
+    ]
+  },
+  "rules": [
+    {
+      "id": "E1",
+      "block": "entry",
+      "text": "En cada ciclo del runtime dentro de la sesión (lunes a viernes 09:30–16:00 America/New_York), si no hay una posición abierta, se evalúan los gates y, si pasan, se busca un candidato.",
+      "basis": "design_choice",
+      "rationale": "Una posición por vez hace que cada operación sea observable y comparable; el runtime evalúa una sola instancia.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "operational.timezone",
+          "operational.session_hours.start",
+          "operational.session_hours.end",
+          "risk_limits.max_concurrent_positions"
+        ]
+      }
+    },
+    {
+      "id": "E2",
+      "block": "entry",
+      "text": "Entrar sólo si el último trade del VIX es menor que 30; si el VIX no tiene dato fresco, no se entra (bloqueo, no se supone).",
+      "basis": "pending_parameter",
+      "parameter": "VIX < 30",
+      "sources": [
+        "file:GaleCore/docs/rpf/galecore-estrategia-rpf.md"
+      ],
+      "rationale": "Umbral heredado de RPF para excluir regímenes de estrés; calibrado en una ventana ya usada (piloto GC-AI-0006 §4.C). Lo fundaría la reproducción histórica sin reajustarlo.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "entry_filters.gate_layer.gates[vix_below_30]"
+        ]
+      }
+    },
+    {
+      "id": "E3",
+      "block": "entry",
+      "text": "Entrar sólo si la implícita a 30 días supera a la realizada a 20 sesiones (IV30/RV20 > 1).",
+      "basis": "hypothesis",
+      "sources": [
+        "research:2026-09-27-spy-contexto-prima-30-60d"
+      ],
+      "runtime": {
+        "status": "unsupported",
+        "note": "El MetricResolver sólo resuelve precio de cotización, último trade y GEX neto; no hay IV30 ni vol realizada como métrica. Queda fuera de la spec: se registra en el seguimiento y se prueba en la reproducción histórica como variante con nombre propio."
+      }
+    },
+    {
+      "id": "E4",
+      "block": "entry",
+      "text": "No abrir un spread cuyo vencimiento quede a dos días hábiles o menos de un resultado de MSFT, AAPL o NVDA o de un anuncio del FOMC.",
+      "basis": "hypothesis",
+      "sources": [
+        "evidence:2026-09-27-spy-ctx-fmp-earnings-nvda",
+        "evidence:2026-09-27-spy-ctx-fmp-earnings-msft",
+        "evidence:2026-09-27-spy-ctx-fmp-earnings-aapl"
+      ],
+      "runtime": {
+        "status": "unsupported",
+        "note": "El runtime no tiene calendario de eventos. Queda fuera de la spec; el seguimiento marca las posiciones que atraviesan un evento. Soportarlo requiere un dato operacional en GaleCore."
+      }
+    },
+    {
+      "id": "E5",
+      "block": "entry",
+      "text": "No se filtra por GEX.",
+      "basis": "design_choice",
+      "rationale": "Sin evidencia propia para esta estrategia, y el GEX de GaleCore tiene escala y corte post-cierre abiertos (BL-002, BL-011); con GEX ≥ 0 la estrategia casi no habría entrado la última semana.",
+      "runtime": {
+        "status": "not_applicable",
+        "note": "Ningún gate de GEX en la spec; se registra como decisión explícita, no como omisión."
+      }
+    },
+    {
+      "id": "C1",
+      "block": "construction",
+      "text": "Sólo SPY y sólo put credit spread (riesgo definido); estructuras prohibidas por la plataforma rechazadas.",
+      "basis": "owner_decision",
+      "sources": [
+        "file:GaleCore/CLAUDE.md"
+      ],
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "universe.symbols",
+          "structure.allowed_strategies",
+          "structure.forbidden_strategies",
+          "structure.default_structure"
+        ]
+      }
+    },
+    {
+      "id": "C2",
+      "block": "construction",
+      "text": "Put vendido con delta −0,16 ± 0,04 en un vencimiento de 30 a 45 días (mensual o semanal).",
+      "basis": "owner_decision",
+      "parameter": "delta −0,16 ± 0,04; DTE 30–45",
+      "rationale": "Parámetros de pcs_spy_16d_v1 (26/09, nota «estrategia simple del owner»); a confirmar por el owner al aprobar. 16Δ ≈ un desvío; sin evidencia propia todavía.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "candidate_construction.legs[sell_put].strike_selection.target_delta",
+          "candidate_construction.legs[sell_put].strike_selection.delta_tolerance",
+          "candidate_construction.constraints.min_dte",
+          "candidate_construction.constraints.max_dte"
+        ]
+      }
+    },
+    {
+      "id": "C3",
+      "block": "construction",
+      "text": "Put comprado 5 USD debajo del vendido, mismo vencimiento.",
+      "basis": "owner_decision",
+      "parameter": "ancho 5 USD",
+      "rationale": "De pcs_spy_16d_v1; a confirmar al aprobar.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "candidate_construction.legs[buy_put].strike_selection.width"
+        ]
+      }
+    },
+    {
+      "id": "C4",
+      "block": "construction",
+      "text": "Crédito mínimo a mid de 0,10 USD; con menos no hay candidato.",
+      "basis": "pending_parameter",
+      "parameter": "0,10 USD",
+      "rationale": "Piso operativo contra spreads degenerados, no un umbral de valor: a 16Δ/5 USD el crédito observado fue ~0,44. Lo fundaría medir costos (comisiones + medio spread) contra el crédito en el seguimiento.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "candidate_construction.constraints.min_credit"
+        ]
+      }
+    },
+    {
+      "id": "S1",
+      "block": "sizing",
+      "text": "Un contrato por operación.",
+      "basis": "design_choice",
+      "rationale": "Es lo que el runtime SHADOW hace siempre; alcanza para observar el comportamiento, no para dimensionar capital.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "candidate_construction.sizing.method",
+          "candidate_construction.sizing.fixed_contracts"
+        ]
+      }
+    },
+    {
+      "id": "S2",
+      "block": "sizing",
+      "text": "Dimensionar por riesgo: cantidad de contratos tal que el riesgo máximo sea un porcentaje fijo del capital.",
+      "basis": "owner_decision",
+      "rationale": "Requiere capital base y porcentaje del owner; necesario antes de PAPER.",
+      "runtime": {
+        "status": "unsupported",
+        "note": "El runtime SHADOW no dimensiona (siempre 1 contrato) y compara el riesgo contra un net liq que en SHADOW es nulo. Fuera de la spec hasta PAPER."
+      }
+    },
+    {
+      "id": "R1",
+      "block": "risk",
+      "text": "Riesgo máximo por operación (ancho − crédito) × 100 ≤ 500 USD; si no, no se abre.",
+      "basis": "owner_decision",
+      "parameter": "500 USD",
+      "rationale": "Recomendación: tope de respaldo; con 1 contrato de 5 USD no puede superarse. A confirmar por el owner.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "risk_limits.max_loss_per_trade_usd"
+        ]
+      }
+    },
+    {
+      "id": "R2",
+      "block": "risk",
+      "text": "Límite de pérdida acumulada o drawdown que pausa entradas (kill switch).",
+      "basis": "owner_decision",
+      "rationale": "El owner fija el drawdown aceptable; necesario antes de PAPER.",
+      "runtime": {
+        "status": "unsupported",
+        "note": "El runtime no mide heat ni drawdown para pausar. En SHADOW lo vigila el seguimiento; fuera de la spec."
+      }
+    },
+    {
+      "id": "M1",
+      "block": "monitoring",
+      "text": "La posición abierta se valúa en cada ciclo con cotizaciones reales; una cotización con más de 15 s o cruzada no se usa (sin valuación ni salida en ese ciclo).",
+      "basis": "design_choice",
+      "rationale": "Mismo control de frescura que las specs de prueba ya validadas en I2–I3; nunca un precio supuesto.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "data_quality.max_quote_age_seconds",
+          "data_quality.block_on_crossed_market",
+          "data_quality.block_on_missing_critical_data"
+        ]
+      }
+    },
+    {
+      "id": "M2",
+      "block": "monitoring",
+      "text": "No evaluar en feriados de NYSE.",
+      "basis": "design_choice",
+      "rationale": "En un feriado no hay mercado.",
+      "runtime": {
+        "status": "unsupported",
+        "spec_paths": [
+          "operational.calendar"
+        ],
+        "note": "El runtime sólo excluye sábados y domingos. En un feriado las cotizaciones quedan viejas y el control de frescura bloquea; el efecto es el mismo, pero la regla no existe como tal."
+      }
+    },
+    {
+      "id": "M3",
+      "block": "monitoring",
+      "text": "Revisión periódica a pedido del owner: qué hizo la estrategia, por qué entró o no, cómo evolucionaron las posiciones y qué cambia en la hipótesis.",
+      "basis": "design_choice",
+      "rationale": "Es la retroalimentación de la investigación (capacidad strategy_followup).",
+      "runtime": {
+        "status": "not_applicable",
+        "note": "La hace el host con el reporte del runtime; no es comportamiento del runtime."
+      }
+    },
+    {
+      "id": "A1",
+      "block": "adjustment",
+      "text": "Sin ajustes ni roll: la posición sólo se cierra por las salidas.",
+      "basis": "design_choice",
+      "rationale": "El runtime no hace roll y la semántica del roll de RPF está en disputa (R10 del piloto); un roll mal definido no se puede evaluar.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "exits.deterministic.defensive_roll.enabled"
+        ]
+      }
+    },
+    {
+      "id": "X1",
+      "block": "exit",
+      "text": "Stop: cerrar si la pérdida a mid es ≥ 2× el crédito cobrado. Si en el mismo ciclo se cumplen varias salidas, manda el stop, después el objetivo, después el tiempo.",
+      "basis": "owner_decision",
+      "parameter": "200 % del crédito",
+      "sources": [
+        "file:GaleCore/docs/rpf/galecore-estrategia-rpf.md"
+      ],
+      "rationale": "De pcs_spy_16d_v1; RPF usa 2× como defensa dura. Sin evidencia propia para esta construcción.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "exits.deterministic.stop_loss.pct_of_credit"
+        ]
+      }
+    },
+    {
+      "id": "X2",
+      "block": "exit",
+      "text": "Objetivo: cerrar cuando el spread vale ≤ 50 % del crédito cobrado.",
+      "basis": "owner_decision",
+      "parameter": "50 % del crédito",
+      "sources": [
+        "file:GaleCore/docs/rpf/galecore-estrategia-rpf.md"
+      ],
+      "rationale": "De pcs_spy_16d_v1; coincide con la salida de RPF.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "exits.deterministic.take_profit.pct_of_credit"
+        ]
+      }
+    },
+    {
+      "id": "X3",
+      "block": "exit",
+      "text": "Tiempo: cerrar cuando faltan 21 días o menos al vencimiento (nunca se llega al vencimiento ni a la asignación).",
+      "basis": "owner_decision",
+      "parameter": "21 DTE",
+      "rationale": "De pcs_spy_16d_v1; RPF no tiene salida por tiempo. Evita la gamma alta de las últimas semanas.",
+      "runtime": {
+        "status": "supported",
+        "spec_paths": [
+          "exits.deterministic.time_exit.max_dte"
+        ]
+      }
+    },
+    {
+      "id": "I1",
+      "block": "invalidation",
+      "text": "La hipótesis se considera refutada con el criterio del plan de evaluación (cota superior del exceso anualizado < utilidad mínima del owner, o estimación ≤ 0); entonces no se promueve y se retira de SHADOW.",
+      "basis": "design_choice",
+      "rationale": "Criterio fijado antes de ver resultados.",
+      "runtime": {
+        "status": "not_applicable",
+        "note": "Decisión de evaluación del host y del owner."
+      }
+    },
+    {
+      "id": "I2",
+      "block": "invalidation",
+      "text": "Se para la instancia si el seguimiento encuentra una decisión del runtime que contradice estas reglas o un dato no real usado como si lo fuera.",
+      "basis": "design_choice",
+      "rationale": "Lo que se observa en SHADOW sólo sirve si es la estrategia escrita con datos reales.",
+      "runtime": {
+        "status": "not_applicable",
+        "note": "Lo dispara el seguimiento; parar requiere autorización del owner."
+      }
+    }
+  ],
+  "evaluation_plan": {
+    "question": "Después de costos, ¿estas reglas (v1.0.0) tienen resultado esperado positivo frente al efectivo, con una cola aceptable para el owner?",
+    "method": "Dos etapas separadas. (1) Reproducción histórica de exactamente estas reglas sobre cadenas EOD de SPY 2013–2023, una posición a la vez, entrada al cierre con VIX < 30, salidas evaluadas al cierre (limitación: stops intradía no observables). (2) Seguimiento SHADOW prospectivo como verificación operativa y del modelo de fills, no como prueba económica.",
+    "primary_metric": "P&L diario a mercado de la cartera por USD de riesgo máximo, neto de comisiones (0,65 USD por contrato y pata) y de medio spread por pata en entrada y salida, en exceso del rendimiento de letras a 3 meses sobre el mismo capital.",
+    "comparison": "Contra el efectivo (letras) sobre el mismo capital reservado y el mismo calendario; secundario: SPY comprado por unidad de drawdown.",
+    "dependence": "Las posiciones duran semanas y los días consecutivos no son independientes: bootstrap estacionario por bloques sobre el P&L diario, bloque medio de 30 sesiones, 10 000 remuestreos; las operaciones nunca se tratan como observaciones independientes.",
+    "sample_sufficiency": "≈ 2 770 sesiones ≈ 90 bloques de 30; con una posición por vez y ~20–25 sesiones por operación se esperan ~100–120 operaciones. Mínimo: 60 operaciones cerradas y al menos 2 episodios de estrés (2015-08, 2018-02, 2020-03, 2022). Con menos, insuficiente sin calcular la diferencia. La cola descansa en ~4 episodios: sus métricas son descriptivas, no inferencia.",
+    "supports_if": "Cota inferior del intervalo al 90 % del exceso anualizado > 0, estimación ≥ utilidad económica mínima del owner y drawdown máximo ≤ su límite.",
+    "refutes_if": "Cota superior del intervalo < utilidad mínima del owner, o estimación puntual ≤ 0.",
+    "inconclusive_if": "Cualquier otro caso. No se reajustan umbrales después de ver resultados; un cambio de reglas es una versión nueva con su propia prueba.",
+    "data": "Cadenas EOD de SPY 2013–2023 locales (GaleCore/research/data/spy_options; in_the_money roto, delta confiable sólo lejos del 0DTE); VIX diario y letras a 3 meses de FRED (VIXCLS, DTB3), disponibles en el momento de cada decisión; sin acceso a FRED en esta sesión.",
+    "execution_evidence": "Histórico: fills estimados por modelo a partir de cotizaciones EOD. SHADOW: fills simulados a mid con cotizaciones reales, no ejecutados. Sólo una ejecución real mide slippage (fuera de alcance).",
+    "owner_inputs": [
+      "Utilidad económica mínima: exceso anualizado por USD de riesgo que haría útil la estrategia",
+      "Drawdown máximo aceptable de la cartera",
+      "Riesgo máximo por operación (recomendado 500 USD en SHADOW)"
+    ]
+  },
+  "owner_decisions": [
+    {
+      "question": "¿Aprobás strategy:spy_prima_varianza_30_45d/1.0.0 con su hash para SHADOW en GaleCore Dev?",
+      "recommendation": "Aprobar: todas las reglas ejecutables están en la spec y las no ejecutables están declaradas.",
+      "status": "pending"
+    },
+    {
+      "question": "¿Autorizás parar shadow_runtime_test_v2 (RUNNING, 1 posición abierta) para liberar la única instancia?",
+      "recommendation": "Parar: deja de entrar y su posición se sigue valuando hasta salir.",
+      "status": "pending"
+    },
+    {
+      "question": "¿Los parámetros 16Δ, 5 USD, 30–45 DTE, 50 %, 2× y 21 DTE de pcs_spy_16d_v1 son tuyos?",
+      "recommendation": "Confirmarlos al aprobar; si no, se cambian y es otra versión.",
+      "status": "pending"
+    },
+    {
+      "question": "Utilidad económica mínima y drawdown máximo aceptables",
+      "recommendation": "Fijarlos antes de correr la reproducción histórica; no hacen falta para desplegar en SHADOW.",
+      "status": "pending"
+    }
+  ],
+  "pending": [
+    "Reproducción histórica: requiere acceso a FRED (VIXCLS, DTB3)",
+    "Sizing por riesgo y kill switch antes de cualquier PAPER"
+  ],
+  "limitations": [
+    "Sin evidencia económica propia: ninguna prueba corrida",
+    "Tres reglas pensadas no son ejecutables por el runtime (E3, E4, S2/R2) y quedan fuera de la spec, declaradas",
+    "El chequeo compara la spec con una tabla del runtime leída en código; no ejecuta GaleCore"
+  ]
+}

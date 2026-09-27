@@ -36,8 +36,11 @@ a session that wrote to it, commit it: `git -C <workspace>/knowledge add -A`, th
 `git -C <workspace>/knowledge commit -m "..."` (local only, never pushed).
 
 Current capabilities: `gex_interpretation` (read-only GEX), `regime_interpretation` (daily regime
-with an evaluable record), `research` (resumable investigation, below) and `context_research` (context
-of a trading idea with GaleCore + the host's external sources; every response kept as `evidence:`).
+with an evaluable record), `research` (resumable investigation, below), `context_research` (context
+of a trading idea with GaleCore + the host's external sources; every response kept as `evidence:`),
+`strategy_design` (proposal → `strategy check` against the runtime → `strategy save` → owner's
+`strategy approve` of the exact hash → `strategy deploy-check` → deploy to SHADOW in GaleCore Dev only) and
+`strategy_followup` (what a deployed version did, saved as a revision of its investigation).
 
 Common environment (GaleCore on `localhost:5000`; the ApiKey comes from GaleCore's user-secrets and is never written anywhere):
 

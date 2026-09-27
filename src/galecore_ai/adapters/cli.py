@@ -13,6 +13,11 @@ Usage:
     python -m galecore_ai.adapters.cli research save --slug SLUG --prompt "..." [--capability C] < request.json
     python -m galecore_ai.adapters.cli research revise --id ID --reason R --note "..." --prompt "..."         [--capability C] < request.json
     python -m galecore_ai.adapters.cli evidence add --slug SLUG --prompt "..." < request.json
+    python -m galecore_ai.adapters.cli strategy check --spec PATH < proposal.json
+    python -m galecore_ai.adapters.cli strategy save --spec PATH --prompt "..." < request.json
+    python -m galecore_ai.adapters.cli strategy approve --ref strategy:NAME/VERSION --spec-hash sha256:...         --owner-words "..." --host-model MODEL
+    python -m galecore_ai.adapters.cli strategy deploy-check --ref strategy:NAME/VERSION --galecore-hash sha256:...
+    python -m galecore_ai.adapters.cli strategy hash --spec PATH
 
 Exit codes:
     0  SUCCESS
@@ -33,6 +38,7 @@ import logging
 import os
 import sys
 from datetime import UTC, date, datetime
+from pathlib import Path
 
 from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, knowledge_dir
 from galecore_ai.adapters.record_store import (
@@ -61,6 +67,16 @@ from galecore_ai.application.record_regime import (
     record_outcome,
     record_review,
 )
+from galecore_ai.application.strategy import (
+    approve as strategy_approve,
+)
+from galecore_ai.application.strategy import (
+    check_proposal,
+    deploy_check,
+    galecore_spec_hash,
+    save_proposal,
+    strategy_key,
+)
 from galecore_ai.capabilities.contracts import KNOWN_CAPABILITIES
 from galecore_ai.capabilities.dispatcher import CapabilityDispatcher
 from galecore_ai.capabilities.registry import CapabilityRegistry
@@ -69,6 +85,7 @@ from galecore_ai.contracts.evidence import EvidenceContent
 from galecore_ai.contracts.prepared_analysis import AcceptanceRequest
 from galecore_ai.contracts.regime_record import RecordHost, ReviewVerdict
 from galecore_ai.contracts.research import ResearchContent, ResearchStatus, RevisionReason
+from galecore_ai.contracts.strategy import ProposalContent
 from galecore_ai.harness.catalog import CatalogError, describe, load_catalog
 
 logger = logging.getLogger(__name__)
@@ -457,6 +474,63 @@ async def _cmd_evidence_add(args: argparse.Namespace) -> None:
                "provenance": document.provenance, "content_hash": document.content_hash})
 
 
+def _read_spec(path: str) -> tuple[str, str]:
+    try:
+        return Path(path).read_bytes().decode("utf-8-sig"), Path(path).name
+    except (OSError, UnicodeDecodeError) as exc:
+        _error_out(f"Cannot read spec {path}: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable") from exc
+
+
+def _read_proposal_request() -> tuple[ProposalContent, RecordHost]:
+    try:
+        payload = json.loads(_read_stdin())
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable") from exc
+    if not isinstance(payload, dict) or "content" not in payload:
+        _error_out("Input must be a JSON object with a 'content' key", exit_code=_EXIT_VALIDATION_ERROR)
+    try:
+        content = ProposalContent.model_validate(payload["content"])
+    except ValueError as exc:
+        _error_out(f"Invalid proposal: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable") from exc
+    return content, RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model"))
+
+
+async def _cmd_strategy(args: argparse.Namespace) -> None:
+    if args.strategy_command == "hash":
+        text, name = _read_spec(args.spec)
+        _json_out({"spec_file": name, "spec_hash": galecore_spec_hash(text)})
+    if args.strategy_command == "check":
+        content, _ = _read_proposal_request()
+        text, name = _read_spec(args.spec)
+        report = check_proposal(content, text, name)
+        _json_out({**report.model_dump(mode="json"), "spec_hash": galecore_spec_hash(text)},
+                  exit_code=_EXIT_VALIDATION_ERROR if report.verdict == "INVALID" else _EXIT_SUCCESS)
+    kb = _build_knowledge_base()
+    try:
+        if args.strategy_command == "save":
+            content, host = _read_proposal_request()
+            text, name = _read_spec(args.spec)
+            doc, path = save_proposal(kb=kb, prompt=args.prompt, host=host, content=content,
+                                      spec_json=text, spec_file=name)
+            _json_out({"status": "RECORDED", "ref": f"strategy:{doc.name}/{doc.version}", "path": path,
+                       "spec_hash": doc.spec_hash, "check": doc.check.verdict,
+                       "declared_gaps": doc.check.declared_gaps, "content_hash": doc.content_hash})
+        key = strategy_key(args.ref)
+        if args.strategy_command == "approve":
+            approval, path = strategy_approve(kb=kb, key=key, spec_hash=args.spec_hash, owner_words=args.owner_words,
+                                              host=RecordHost(provider=args.host_provider, model=args.host_model))
+            _json_out({"status": "APPROVED", "ref": approval.strategy_ref, "path": path,
+                       "spec_hash": approval.spec_hash, "scope": approval.scope,
+                       "content_hash": approval.content_hash})
+        if args.strategy_command == "deploy-check":
+            _json_out(deploy_check(kb=kb, key=key, galecore_hash=args.galecore_hash))
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+
+
 def main() -> None:
     parser = _JsonArgumentParser(
         prog="galecore-ai-cli",
@@ -498,12 +572,34 @@ def main() -> None:
     kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)
     p_search = kb_sub.add_parser("search", help="Items matching the terms, best first")
     p_search.add_argument("--text", help="Terms to look for (empty lists everything)")
-    p_search.add_argument("--kind", choices=["research", "regime", "evidence"])
+    p_search.add_argument("--kind", choices=["research", "regime", "evidence", "strategy"])
     p_search.add_argument("--status", choices=["unfinished", *[s.value for s in ResearchStatus]],
                           help="unfinished = open or test_planned")
     p_search.add_argument("--symbol")
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
-    p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id> or file:<path>")
+    p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id>, "
+                                    "strategy:<name>/<version> or file:<path>")
+
+    p_strategy = sub.add_parser("strategy", help="Proposal -> spec check -> approval -> deploy check")
+    st_sub = p_strategy.add_subparsers(dest="strategy_command", required=True)
+    p_st_hash = st_sub.add_parser("hash", help="GaleCore's content_hash of a spec file")
+    p_st_hash.add_argument("--spec", required=True)
+    p_st_check = st_sub.add_parser("check", help="Check a proposal (stdin) against a spec and the runtime")
+    p_st_check.add_argument("--spec", required=True)
+    p_st_save = st_sub.add_parser("save", help="Check and store a version (create-only)")
+    p_st_save.add_argument("--spec", required=True)
+    p_st_save.add_argument("--prompt", required=True, help="What the user asked")
+    p_st_approve = st_sub.add_parser("approve", help="Record the owner's approval of an exact version and hash")
+    p_st_approve.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_approve.add_argument("--spec-hash", dest="spec_hash", required=True, help="the hash the owner approved")
+    p_st_approve.add_argument("--owner-words", dest="owner_words", required=True,
+                              help="the owner's approval, verbatim")
+    p_st_approve.add_argument("--host-provider", dest="host_provider", default="claude-code")
+    p_st_approve.add_argument("--host-model", dest="host_model", required=True)
+    p_st_deploy = st_sub.add_parser("deploy-check", help="Allow a deploy only with an approval of GaleCore's hash")
+    p_st_deploy.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", required=True,
+                             help="contentHash that App/Runtime/Specs/<name> reports")
 
     p_evidence = sub.add_parser("evidence", help="Keep a source response with its provenance (content on stdin)")
     ev_sub = p_evidence.add_subparsers(dest="evidence_command", required=True)
@@ -552,6 +648,8 @@ def main() -> None:
             asyncio.run(_cmd_research_revise(args))
         elif args.command == "evidence" and args.evidence_command == "add":
             asyncio.run(_cmd_evidence_add(args))
+        elif args.command == "strategy":
+            asyncio.run(_cmd_strategy(args))
     except SystemExit:
         raise
     except (OSError, ValueError, RuntimeError) as exc:
