@@ -38,6 +38,7 @@ from galecore_ai.contracts.strategy import (
     RuntimeStatus,
     StrategyDocument,
     compute_document_hash,
+    other_version_mentions,
 )
 
 RUNTIME_REFERENCE = (
@@ -293,6 +294,10 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
     if not json.dumps(spec, ensure_ascii=False).isascii():
         errors.append("the spec's strings must be ASCII: GaleCore's JSON escaping of other characters is not fully "
                       "reproduced here, so their hash could differ; prose belongs in the proposal")
+    wrong = other_version_mentions(content)
+    if wrong:
+        errors.append(f"version {content.version} mentions other versions {wrong} outside limitations/pending; "
+                      "rules, evaluation plan and approval questions must name this exact version")
     if spec.get("content_hash") is not None:
         errors.append("content_hash must be null in the file; GaleCore computes it")
     if spec.get("structure", {}).get("default_structure") != "put_credit_spread":

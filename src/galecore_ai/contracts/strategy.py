@@ -172,6 +172,17 @@ class OwnerDecision(BaseModel):
         return self
 
 
+def other_version_mentions(content: ProposalContent) -> list[str]:
+    """Versions named in what defines or evaluates this version (limitations and pending may cite history).
+
+    Checked when a version is saved, not when it is read: versions stored before this rule stay readable.
+    """
+    operative = content.model_dump(mode="json", include={"purpose", "display_name", "hypothesis", "rules",
+                                                         "evaluation_plan", "owner_decisions"})
+    return sorted({v for v in VERSION_MENTION_RE.findall(json.dumps(operative, ensure_ascii=False))
+                   if v != content.version})
+
+
 class ProposalContent(BaseModel):
     """What the host writes for one version. The check compares it with the spec and the runtime."""
 
@@ -213,15 +224,6 @@ class ProposalContent(BaseModel):
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         if dupes:
             raise ValueError(f"duplicate rule ids: {dupes}")
-        # Everything that defines or evaluates this version must name only this version; limitations and
-        # pending notes may cite history (earlier versions that were superseded).
-        operative = self.model_dump(mode="json", include={"purpose", "display_name", "hypothesis", "rules",
-                                                          "evaluation_plan", "owner_decisions"})
-        wrong = sorted({v for v in VERSION_MENTION_RE.findall(json.dumps(operative, ensure_ascii=False))
-                        if v != self.version})
-        if wrong:
-            raise ValueError(f"version {self.version} mentions other versions {wrong} outside limitations/pending; "
-                             "rules, evaluation plan and approval questions must name this exact version")
         present = {r.block for r in self.rules}
         missing = [b.value for b in REQUIRED_BLOCKS if b not in present]
         if missing:

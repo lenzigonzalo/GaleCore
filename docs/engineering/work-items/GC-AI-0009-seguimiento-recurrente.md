@@ -94,3 +94,15 @@ Gate PASS, ruff, 792 tests, `diff --check`; sin secretos en la evidencia; commit
 - 18:49 «Cambiá la frecuencia» → cada 15 min (prueba supervisada). **19:04:02 ejecución automática** (PID 2736).
 - 19:04 «Pausalo» → Programador `Disabled`, próxima «N/A».
 - 19:10 «Cancelalo» sobre `prueba-cancelacion`: registrada → cancelada → `schtasks` ya no la encuentra; `task run` posterior → SKIPPED.
+- 19:21: pasadas las 19:19 la tarea pausada **no corrió** (última ejecución sigue 19:04). «Reanudalo» → `Ready`;
+  «Cambiá la frecuencia: diario, después del cierre» → diaria 17:05 America/New_York (18:05 local), próxima 28/09.
+- 19:2x: **recuperación desde una sesión limpia** (agente Haiku sin contexto, sólo comandos de lectura): encontró por el
+  catálogo la estrategia 1.0.3 (no aprobada), la tarea diaria, el último resultado (22:04 UTC, DEGRADED), el historial y
+  los puntos de atención. **Destapó una regresión:** las versiones históricas 1.0.1 y 1.0.2 figuraban INTEGRITY_FAILED
+  porque el control de versiones de Codex C3 estaba en el contrato de lectura. Corregido: el control se aplica al guardar
+  (`check_proposal`); lo guardado antes queda legible (+test). `kb search`: 0 fallas de integridad.
+
+## Revisión Codex — NO CORRIÓ (27/09 ~19:13)
+
+`codex_review.py --base 76e9958` (cubre la corrección C3 de 0008, el seguimiento y 0009): Codex respondió «usage limit…
+try again at 10:51 PM». Sin revisión independiente de este rango todavía.

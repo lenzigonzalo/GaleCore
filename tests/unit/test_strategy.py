@@ -337,17 +337,28 @@ def test_approval_words_naming_another_version_are_refused(kb, research_ref):  #
 def test_owner_decisions_cannot_ask_about_another_version():
     def stale(d):
         d["owner_decisions"][0]["question"] = f"¿Aprobás {NAME}/1.0.0?"
-    with pytest.raises(ValidationError, match="mentions other versions"):
-        proposal(stale)
+    assert any("mentions other versions" in e for e in check(proposal(stale)).errors)
 
     def stale_plan(d):  # Codex C3 MAJOR
         d["evaluation_plan"]["question"] = "¿Estas reglas (v1.0.0) tienen resultado positivo?"
-    with pytest.raises(ValidationError, match="mentions other versions"):
-        proposal(stale_plan)
+    assert any("mentions other versions" in e for e in check(proposal(stale_plan)).errors)
 
     def history(d):
         d["limitations"].append("1.0.0 nunca se aprobó")
-    assert proposal(history).limitations[-1] == "1.0.0 nunca se aprobó"
+    assert not any("mentions other versions" in e for e in check(proposal(history)).errors)
+
+
+def test_versions_saved_before_the_rule_stay_readable(kb, research_ref):  # noqa: F811
+    """Fresh-session test (27/09): the rule lived in the contract, so 1.0.1/1.0.2 became unreadable history."""
+    _, path = stored(kb, research_ref)
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    data["content"]["owner_decisions"][0]["question"] = f"¿Aprobás {NAME}/1.0.0?"   # what 1.0.1 really stored
+    from galecore_ai.contracts.strategy import StrategyDocument, compute_document_hash
+    old = StrategyDocument.model_validate(data)
+    old = old.model_copy(update={"content_hash": compute_document_hash(old.hashable_content())})
+    Path(path).write_text(json.dumps(old.model_dump(mode="json")), encoding="utf-8")
+    assert search(kb, kind="strategy")["integrity_failed"] == []
+    assert show(kb, f"strategy:{KEY}")["content"]["owner_decisions"][0]["question"].endswith("1.0.0?")
 
 
 def test_deploy_is_refused_without_approval_or_with_another_hash(kb, research_ref):  # noqa: F811
