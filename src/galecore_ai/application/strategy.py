@@ -57,9 +57,16 @@ class _RawNumber(str):
 
 
 def _escape(s: str) -> str:
+    """UnsafeRelaxedJsonEscaping as far as it was verified: C0/C1 controls, U+2028/U+2029 and characters
+    outside the BMP (as a UTF-16 surrogate pair) are escaped with uppercase hex. The check additionally
+    refuses non-ASCII text in a spec, so a case not reproduced here cannot reach an approval."""
     out = ['"']
     for ch in s:
-        if ch == '"':
+        o = ord(ch)
+        if o > 0xFFFF:
+            o -= 0x10000
+            out.append(_BS + f"u{0xD800 + (o >> 10):04X}" + _BS + f"u{0xDC00 + (o & 0x3FF):04X}")
+        elif ch == '"':
             out.append(_BS + '"')
         elif ch == _BS:
             out.append(_BS + _BS)
@@ -69,8 +76,12 @@ def _escape(s: str) -> str:
             out.append(_BS + "r")
         elif ch == "\t":
             out.append(_BS + "t")
-        elif ord(ch) < 0x20:
-            out.append(_BS + f"u{ord(ch):04X}")
+        elif ch == "\b":
+            out.append(_BS + "b")
+        elif ch == "\f":
+            out.append(_BS + "f")
+        elif o < 0x20 or 0x7F <= o <= 0x9F or o in (0x2028, 0x2029):
+            out.append(_BS + f"u{o:04X}")
         else:
             out.append(ch)
     out.append('"')
@@ -247,6 +258,9 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
                       f"{content.name}/{content.version}")
     if spec_file != f"{content.name}.json":
         errors.append(f"spec file {spec_file!r} must be {content.name}.json (GaleCore deploys by file name)")
+    if not json.dumps(spec, ensure_ascii=False).isascii():
+        errors.append("the spec's strings must be ASCII: GaleCore's JSON escaping of other characters is not fully "
+                      "reproduced here, so their hash could differ; prose belongs in the proposal")
     if spec.get("content_hash") is not None:
         errors.append("content_hash must be null in the file; GaleCore computes it")
     if spec.get("deployment_constraints", {}).get("eligible_modes") != ["SHADOW"]:

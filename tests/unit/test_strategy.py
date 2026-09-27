@@ -34,6 +34,8 @@ KEY = f"{NAME}/1.0.0"
 GALECORE_HASHES = {
     "shadow_runtime_test_v1.json": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076",
     "shadow_runtime_test_v2.json": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+    # The candidate submitted for approval; GaleCore's StrategySpecVersionTests pins the same value.
+    f"{NAME}.json": "sha256:dfed1af1efcc27a466f6e5894357157c8633422cf41b9f5e14869cabd52576f8",
 }
 
 
@@ -90,6 +92,21 @@ def test_hash_ignores_formatting_but_keeps_number_literals():
     reformatted = text.replace("\n", "").replace("  ", "")
     assert galecore_spec_hash(reformatted) == galecore_spec_hash(text)
     assert galecore_spec_hash(text.replace('"width": 5.0', '"width": 5')) != galecore_spec_hash(text)
+
+
+def test_escapes_follow_galecore_for_separators_astral_and_controls():
+    """Forms observed from .NET's UnsafeRelaxedJsonEscaping (internal review R1, dotnet run)."""
+    from galecore_ai.application.strategy import _escape
+    bs = chr(92)
+    assert _escape(chr(0x2028) + chr(0x2029)) == f'"{bs}u2028{bs}u2029"'
+    assert _escape(chr(0x1F642)) == f'"{bs}uD83D{bs}uDE42"'
+    assert _escape(chr(0x85) + chr(8) + chr(12)) == f'"{bs}u0085{bs}b{bs}f"'
+    assert _escape("días") == '"días"'
+
+
+def test_non_ascii_spec_text_is_refused():
+    report = check(text=spec_with(**{"metadata.notes": "estrategia con acentos: días"}))
+    assert any("must be ASCII" in e for e in report.errors)  # also when written as \u escapes
 
 
 def test_hash_excludes_content_hash():

@@ -110,3 +110,15 @@ git diff --check
 
 `feature/GC-AI-0008-estrategia-shadow` (desde `feature/GC-0004-shadow-durable`): la spec de la estrategia, su test
 de hash y `dev/galecore_dev.py` (`deploy --expect-hash`, `stop`, `runtime-report`). Nada toca el código del runtime.
+
+## Revisión interna R1 (agente `reviewer`, Sonnet, `778201b..8cc97f6` + GaleCore HEAD) — CHANGES_REQUESTED
+
+Re-corrió gate PASS, ruff, pytest completo (762) y `diff --check`; contrastó cada entrada de la tabla de soporte con el
+código del runtime de GaleCore sin encontrar clasificaciones erróneas; verificó con el encoder real de .NET los escapes.
+
+| # | Sev. | Hallazgo | Resolución |
+|---|---|---|---|
+| R1-M1 | MAJOR | `galecore_spec_hash` no reproducía `UnsafeRelaxedJsonEscaping` para U+2028/2029 ni para caracteres fuera del BMP | Corregido: esos casos, controles C1, `\b` y `\f` se escapan como .NET (formas observadas por el reviewer); además el chequeo rechaza strings no ASCII en la spec, así un caso no reproducido no llega a una aprobación (+2 tests) |
+| R1-M2 | MAJOR | El hash de la candidata no estaba fijado en los tests de este repo | Corregido: `spy_prima_varianza_30_45d.json` en `GALECORE_HASHES` (mismo valor que `StrategySpecVersionTests` de GaleCore) |
+| R1-m1 | MINOR | `deploy --expect-hash` hace GET y después POST | Aceptado: ambos leen la spec cargada una vez al arrancar; sólo un reinicio de la API entre las dos llamadas podría cambiarla |
+| R1-m2 | MINOR | El hash se transcribe a mano entre repos | Aceptado: un error sólo produce un deploy rechazado (fail-closed) |
