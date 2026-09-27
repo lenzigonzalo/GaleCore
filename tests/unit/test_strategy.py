@@ -29,13 +29,13 @@ from tests.unit.test_knowledge import HOST, NOW, content, kb, save  # noqa: F401
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 SPECS = FIXTURES / "galecore" / "runtime_specs"
 NAME = "spy_prima_varianza_30_45d"
-KEY = f"{NAME}/1.0.2"
+KEY = f"{NAME}/1.0.3"
 # Hashes GaleCore computed at load and persisted in GaleCore Dev (strategy_specs.content_hash, 27/09).
 GALECORE_HASHES = {
     "shadow_runtime_test_v1.json": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076",
     "shadow_runtime_test_v2.json": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
     # The candidate submitted for approval; GaleCore's StrategySpecVersionTests pins the same value.
-    f"{NAME}.json": "sha256:8a7443812d0291dcb27aad6cb8674cf92496fd32f036267640521059ca77e149",
+    f"{NAME}.json": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51",
 }
 
 
@@ -286,7 +286,7 @@ def stored(kb, research_ref):  # noqa: F811
 
 def test_saved_version_keeps_the_exact_spec_and_its_hash(kb, research_ref):  # noqa: F811
     doc, path = stored(kb, research_ref)
-    assert Path(path) == kb.base / "strategies" / NAME / "1.0.2.proposal.json"
+    assert Path(path) == kb.base / "strategies" / NAME / "1.0.3.proposal.json"
     assert doc.spec_json == spec_text()
     assert doc.spec_hash == galecore_spec_hash(spec_text())
     assert doc.check.verdict == "VALID_WITH_DECLARED_GAPS"
@@ -319,7 +319,7 @@ def test_approval_needs_the_exact_hash(kb, research_ref):  # noqa: F811
     with pytest.raises(KnowledgeError, match="is not this version's"):
         approve(kb=kb, key=KEY, spec_hash=GALECORE_HASHES["shadow_runtime_test_v2.json"],
                 owner_words="apruebo", host=HOST, now=NOW)
-    approval, _ = approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo la 1.0.2 para SHADOW",
+    approval, _ = approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo la 1.0.3 para SHADOW",
                           host=HOST, now=NOW)
     assert approval.scope == "SHADOW:galecore-dev" and approval.proposal_hash == doc.content_hash
     with pytest.raises(KnowledgeError, match="already exists"):
@@ -337,8 +337,17 @@ def test_approval_words_naming_another_version_are_refused(kb, research_ref):  #
 def test_owner_decisions_cannot_ask_about_another_version():
     def stale(d):
         d["owner_decisions"][0]["question"] = f"¿Aprobás {NAME}/1.0.0?"
-    with pytest.raises(ValidationError, match="mention other versions"):
+    with pytest.raises(ValidationError, match="mentions other versions"):
         proposal(stale)
+
+    def stale_plan(d):  # Codex C3 MAJOR
+        d["evaluation_plan"]["question"] = "¿Estas reglas (v1.0.0) tienen resultado positivo?"
+    with pytest.raises(ValidationError, match="mentions other versions"):
+        proposal(stale_plan)
+
+    def history(d):
+        d["limitations"].append("1.0.0 nunca se aprobó")
+    assert proposal(history).limitations[-1] == "1.0.0 nunca se aprobó"
 
 
 def test_deploy_is_refused_without_approval_or_with_another_hash(kb, research_ref):  # noqa: F811

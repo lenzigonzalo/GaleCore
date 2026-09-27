@@ -213,11 +213,15 @@ class ProposalContent(BaseModel):
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         if dupes:
             raise ValueError(f"duplicate rule ids: {dupes}")
-        wrong = sorted({v for d in self.owner_decisions for v in VERSION_MENTION_RE.findall(
-            f"{d.question} {d.recommendation}") if v != self.version})
+        # Everything that defines or evaluates this version must name only this version; limitations and
+        # pending notes may cite history (earlier versions that were superseded).
+        operative = self.model_dump(mode="json", include={"purpose", "display_name", "hypothesis", "rules",
+                                                          "evaluation_plan", "owner_decisions"})
+        wrong = sorted({v for v in VERSION_MENTION_RE.findall(json.dumps(operative, ensure_ascii=False))
+                        if v != self.version})
         if wrong:
-            raise ValueError(f"owner decisions of version {self.version} mention other versions {wrong}; "
-                             "an approval must name this exact version")
+            raise ValueError(f"version {self.version} mentions other versions {wrong} outside limitations/pending; "
+                             "rules, evaluation plan and approval questions must name this exact version")
         present = {r.block for r in self.rules}
         missing = [b.value for b in REQUIRED_BLOCKS if b not in present]
         if missing:

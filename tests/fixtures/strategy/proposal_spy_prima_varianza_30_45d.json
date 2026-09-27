@@ -1,6 +1,6 @@
 {
   "name": "spy_prima_varianza_30_45d",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "display_name": "Cobro de prima de varianza en SPY a 30–45 días con riesgo definido",
   "purpose": "Cobrar parte de la prima de varianza de SPY vendiendo un put spread de riesgo definido por vez, y observar en SHADOW si el runtime la ejecuta tal como está escrita, antes de cualquier evaluación económica.",
   "research_refs": [
@@ -333,7 +333,7 @@
     }
   ],
   "evaluation_plan": {
-    "question": "Después de costos, ¿estas reglas (v1.0.0) tienen resultado esperado positivo frente al efectivo, con una cola aceptable para el owner?",
+    "question": "Después de costos, ¿exactamente las reglas de esta versión tienen resultado esperado positivo frente al efectivo, con una cola aceptable para el owner?",
     "method": "Dos etapas separadas. (1) Reproducción histórica de exactamente estas reglas sobre cadenas EOD de SPY 2013–2023, una posición a la vez, entrada al cierre con VIX < 30, salidas evaluadas al cierre (limitación: stops intradía no observables). (2) Seguimiento SHADOW prospectivo como verificación operativa y del modelo de fills, no como prueba económica.",
     "primary_metric": "P&L diario a mercado de la cartera por USD de riesgo máximo, neto de comisiones (0,65 USD por contrato y pata) y de medio spread por pata en entrada y salida, en exceso del rendimiento de letras a 3 meses sobre el mismo capital.",
     "comparison": "Contra el efectivo (letras) sobre el mismo capital reservado y el mismo calendario; secundario: SPY comprado por unidad de drawdown.",
@@ -352,7 +352,7 @@
   },
   "owner_decisions": [
     {
-      "question": "¿Aprobás strategy:spy_prima_varianza_30_45d/1.0.2 con su hash para SHADOW en GaleCore Dev?",
+      "question": "¿Aprobás strategy:spy_prima_varianza_30_45d/1.0.3 con su hash para SHADOW en GaleCore Dev?",
       "recommendation": "Aprobar: todas las reglas ejecutables están en la spec y las no ejecutables están declaradas.",
       "status": "pending"
     },
@@ -380,6 +380,6 @@
     "Sin evidencia económica propia: ninguna prueba corrida",
     "Cinco reglas no son ejecutables por el runtime (E3, E4, S2, R2, M2) y quedan fuera de la spec, declaradas",
     "El chequeo compara la spec con una tabla del runtime leída en código; no ejecuta GaleCore",
-    "1.0.0 y 1.0.1 quedaron guardadas y nunca se aprobaron: la revisión de Codex encontró reglas descritas de más (frescura, ancho), parámetros heredados marcados como decisión del owner y, en la segunda, la pregunta de aprobación con otra versión"
+    "1.0.0, 1.0.1 y 1.0.2 quedaron guardadas y nunca se aprobaron: la revisión de Codex encontró reglas descritas de más (frescura, ancho), parámetros heredados marcados como decisión del owner y referencias a otra versión en la aprobación y en el plan"
   ]
 }
