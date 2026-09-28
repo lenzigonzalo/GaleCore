@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0007
 title: Investigación contextual de una idea de trading con fuentes reales y memoria
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: PENDING
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-AI-0007 — Investigación contextual de una idea de trading
@@ -176,3 +176,10 @@ SPY, incorporá una observación o corrección real y explicá qué cambia y qu�
   transcripto por el host, declarado en `access_notes`) y corrección del diseño del estudio condicional: umbrales ya no
   delegados al owner; eventos no solapados, bootstrap por bloques y suficiencia calculada. El estudio no se corrió (FRED).
 - **Qué no prueba:** que el razonamiento sea correcto ni útil; eso lo evalúa el owner. knowledge commit local.
+
+## Cierre (owner, 27/09/2026)
+
+Decisión del owner sobre la recomendación «tiene la revisión técnica aprobada; falta tu juicio: ¿te resultó útil? Si sí, se
+cierra»: «Vamos con tus recomendaciones, y usa tastytrade via galecore. IBKR e IOL todavía no» (owner, 27/09/2026). Revisión independiente: Codex C3 APPROVE (`GC-AI-0007-20260927T173748Z.md`); después sólo cambió este
+documento (continuidad en sesión nueva, r4). Continuidad desde sesión nueva: ejecutada (r4). No demostrado: comparación
+con/sin el método. El estudio condicional de la investigación se corrió después en GC-AI-0008 (insuficiente, 6 eventos).
