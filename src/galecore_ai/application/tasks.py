@@ -39,6 +39,9 @@ STATE_LOCK_STALE_SECONDS = 120
 SCHEDULER_FOLDER = "GaleCore-AI"
 _REPO = Path(__file__).resolve().parents[3]
 RUNNER_HOST = RecordHost(provider="windows-task-scheduler", model="deterministic-runner")
+# A run started by hand (`task run`) is the same code but must never pass for an automatic one (Codex C4 MAJOR).
+MANUAL_HOST = RecordHost(provider="manual-cli", model="deterministic-runner")
+INVOKERS = {"scheduler": RUNNER_HOST, "manual": MANUAL_HOST}
 
 
 class TaskError(Exception):
@@ -239,13 +242,22 @@ def set_frequency(*, kb: KnowledgeBase, scheduler, task_id: str, schedule: Sched
         # `schtasks /create /f` replaces the task in place: if it fails, the previous schedule is still registered.
         _scheduler_call(kb, task_id, now, "set_frequency", scheduler.create, task.scheduler_name,
                         runner_command(Path(task.code_path), task_id), schedule, local)
-        if task.status == "paused":
-            _scheduler_call(kb, task_id, now, "keep_paused", scheduler.set_enabled, task.scheduler_name, False)
         old = task.schedule.describe()
         task = task.model_copy(update={"schedule": schedule, "local_time": local, "updated_at": now})
+        pause_error = None
+        if task.status == "paused":
+            try:
+                _scheduler_call(kb, task_id, now, "keep_paused", scheduler.set_enabled, task.scheduler_name, False)
+            except TaskError as exc:
+                pause_error = exc
+        # The new schedule is registered either way, so the state records it; if re-disabling failed the task
+        # stays paused here and every run it fires is skipped (run() checks this status), until `task pause`.
         _save(kb, task)
         _append(kb, task_id, "frequency_changed", now, before=old, after=schedule.describe(), local_time=local,
-                prompt=prompt)
+                prompt=prompt, **({"scheduler_left_enabled": True} if pause_error else {}))
+    if pause_error:
+        raise TaskError(f"frequency changed, but the scheduler task could not be disabled again ({pause_error}); "
+                        "it stays paused and its runs are skipped - repeat `task pause`") from pause_error
     return task
 
 
@@ -324,8 +336,15 @@ def _commit_knowledge(kb: KnowledgeBase, paths: list[Path], message: str) -> str
 
 
 def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None = None,
-        followup: Callable[..., tuple[FollowupRecord, Path]] = run_followup, commit: bool = True) -> dict:
-    """What the scheduler invokes. Never raises for a failed run: the failure is the recorded result."""
+        followup: Callable[..., tuple[FollowupRecord, Path]] = run_followup, commit: bool = True,
+        invoked_by: str = "manual") -> dict:
+    """What the scheduler invokes. Never raises for a failed run: the failure is the recorded result.
+
+    `invoked_by` is "scheduler" only from tools/task_runner.py (the registered command); then the Scheduler's own
+    view of the task (Last Run Time/Result) is stored in run_started, so an automatic run can be told from a manual one.
+    """
+    if invoked_by not in INVOKERS:
+        raise TaskError(f"invoked_by must be one of {sorted(INVOKERS)}")
     now = now or datetime.now(UTC)
     d = _dir(kb, task_id)
     with _state_lock(kb, task_id):
@@ -348,7 +367,13 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
     try:
         os.write(fd, f"{os.getpid()} {now.isoformat()}".encode())
         os.close(fd)
-        _event(kb, task_id, "run_started", now, pid=os.getpid(), note=note)
+        seen = None
+        if invoked_by == "scheduler" and scheduler is not None:
+            q = scheduler.query(task.scheduler_name)     # the Scheduler updates Last Run Time when it launches us
+            seen = {k: q.get(k) for k in ("registered", "status", "last_run", "last_result", "next_run", "error")
+                    if q.get(k) is not None}
+        _event(kb, task_id, "run_started", now, pid=os.getpid(), note=note, invoked_by=invoked_by,
+               **({"scheduler_seen": seen} if seen is not None else {}))
         written = [d / "task.json", d / "events.jsonl"]
         if scheduler is not None and task.local_time is not None:
             with _state_lock(kb, task_id):
@@ -361,7 +386,7 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
                     _save(kb, task)
                     _append(kb, task_id, "local_time_resynced", now, local_time=local)
         try:
-            rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=RUNNER_HOST,
+            rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=INVOKERS[invoked_by],
                                  task_id=task_id, now=now)
         except Exception as exc:  # noqa: BLE001 - any failure is the run's result, recorded, never silent
             ev = _event(kb, task_id, "run_failed", datetime.now(UTC), error=f"{type(exc).__name__}: {exc}",

@@ -29,7 +29,7 @@ def main(argv: list[str]) -> int:
 
         base = knowledge_dir()
         kb = KnowledgeBase(base=base, records=FileRecordStore(default_records_dir()), research=FileResearchStore(base))
-        result = run(kb=kb, task_id=task_id, scheduler=WindowsScheduler())
+        result = run(kb=kb, task_id=task_id, scheduler=WindowsScheduler(), invoked_by="scheduler")
         return 0 if result["status"] in ("OK", "DEGRADED", "SKIPPED") else 1
     except Exception:  # noqa: BLE001 - last resort: never fail silently
         log = Path(os.environ.get("LOCALAPPDATA", str(REPO))) / "GaleCore-AI" / "task_runner.log"

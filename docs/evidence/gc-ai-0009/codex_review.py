@@ -34,8 +34,10 @@ rr.INSTRUCTIONS = rr.INSTRUCTIONS.replace(
 ).replace(
     "5. Documentation coherence between architecture, alignment, handoff, validation guide and CLAUDE.md.",
     "5. Coherence between work items GC-AI-0008 and GC-AI-0009 (criteria, matrix, findings), the catalog and skills, "
-    "and ../roadmap/README.md (secuencia activa). Approval/deployment of the strategy is pending the owner: must not "
-    "be claimed.",
+    "and ../roadmap/README.md (secuencia activa). The owner approved 1.0.3 and its deployment to SHADOW in GaleCore Dev "
+    "on 2026-09-27 20:20 local (quoted in GC-AI-0008 'Decisión del owner y despliegue'; the approval file is "
+    "HOST_DECLARED by design: the host records the owner's words). Check that every matrix row and the roadmap agree "
+    "with that; closure of GC-AI-0008/0009 is still the owner's and must not be claimed.",
 )
 
 if __name__ == "__main__":

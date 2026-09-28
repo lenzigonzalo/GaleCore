@@ -47,7 +47,7 @@ gestor universal de agentes. La tarea no modifica la estrategia aprobada ni oper
 | Criterio | Implementación | Verificación automática | Artefacto | Estado |
 |---|---|---|---|---|
 | AC-01 | `config/catalog.yaml` (`recurring_followup`), `config/skills/recurring-followup/skill.yaml`; `strategy_followup` 0.3.0 propone la recurrencia | catálogo en `test_knowledge.py` | — | Implementado |
-| AC-02 | `application/tasks.py` (`WindowsScheduler`, `run`), `tools/task_runner.py` | `test_run_records_a_followup_tied_to_the_task` | PENDING (demo real) | Implementado |
+| AC-02 | `application/tasks.py` (`WindowsScheduler`, `run(invoked_by=)`), `tools/task_runner.py` | `test_run_records_a_followup_tied_to_the_task`, `test_manual_and_scheduled_runs_are_told_apart` | PENDING: corridas del 27/09 no distinguibles (C4-M2); prueba el 28/09 17:05 NY | Implementado |
 | AC-03 | `contracts/task.py`, `tasks.events/status/runs`, `followup.history` | `test_an_edited_event_log_is_detected` | PENDING | Implementado |
 | AC-04 | `tasks.set_frequency/pause/resume/cancel`, CLI `task` | `test_paused_or_cancelled_tasks_do_not_run`, `test_changing_frequency_recreates_the_schedule_and_keeps_pause` | PENDING | Implementado |
 | AC-05 | lock exclusivo, `run_failed`, `local_time_for` + resync | `test_overlapping_runs_are_skipped_and_stale_locks_broken`, `test_a_failed_run_is_recorded_not_raised`, `test_timezone_is_converted_to_this_pc` | PENDING | Implementado |
@@ -106,3 +106,18 @@ Gate PASS, ruff, 792 tests, `diff --check`; sin secretos en la evidencia; commit
 
 `codex_review.py --base 76e9958` (cubre la corrección C3 de 0008, el seguimiento y 0009): Codex respondió «usage limit…
 try again at 10:51 PM». Sin revisión independiente de este rango todavía.
+
+## Revisión Codex C4 (28/09, `76e9958..78c8541`) — CHANGES_REQUESTED
+
+Review: `docs/engineering/reviews/GC-AI-0009-20260928T145832Z.md` (797 tests, gate/ruff OK en su rerun).
+
+| # | Sev. | Hallazgo | Triage |
+|---|---|---|---|
+| C4-B1 | BLOCKER | «Aprobación y despliegue de 1.0.3 afirmados sin autorización del owner» | **Rechazado en lo sustancial:** el prompt del driver (`codex_review.py`) seguía diciendo «approval pending», escrito antes de la decisión del owner del 27/09 20:20 (citada en GC-AI-0008). **Válido lo accesorio:** la matriz de GC-AI-0008 (AC-05/AC-06) y el roadmap no se habían actualizado → corregidos; prompt del driver corregido |
+| C4-M1 | MAJOR | Toda corrida (manual o del Programador) se sella `windows-task-scheduler` | Corregido: `run(invoked_by=)`; sólo `tools/task_runner.py` pasa `scheduler` (host `windows-task-scheduler`), la CLI `task run` queda `manual-cli`; `run_started` guarda `invoked_by` y, si es del Programador, `scheduler_seen` (Last Run Time/Result, estado, próxima). Test `test_manual_and_scheduled_runs_are_told_apart` |
+| C4-M2 | MAJOR | Las corridas automáticas del 27/09 sólo están en prosa | **Aceptado:** esas dos corridas quedan como no demostradas de forma reproducible. AC-02 vuelve a PENDING hasta la corrida del 28/09 17:05 NY con `invoked_by=scheduler` + `scheduler_seen` + consulta `schtasks` guardada como evidencia |
+| C4-M3 | MAJOR | Cambio de frecuencia en pausa: si falla re-deshabilitar, estado y Programador divergen | Corregido: el estado guarda el horario ya registrado, sigue `paused` (el runner saltea), evento `frequency_changed` con `scheduler_left_enabled`, y se levanta el error pidiendo repetir `task pause`. Test `test_a_paused_frequency_change_that_cannot_disable_again_stays_consistent` |
+| C4-M4 | MAJOR | Roadmap incoherente (activo, aprobación) | Corregido en `roadmap/README.md` (activo GC-AI-0009; 1.0.3 aprobada y desplegada; filas 1–3 al 28/09) |
+
+Checks tras las correcciones: `engineering_gate` PASS, ruff OK, **799 passed**. Pendiente: evidencia de la corrida automática
+de hoy y recheck acotado de Codex.

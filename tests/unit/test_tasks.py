@@ -190,6 +190,47 @@ def test_a_scheduler_failure_keeps_the_old_schedule_and_is_logged(env):
     assert t.events(kb, "seguimiento-spy")[-1]["event"] == "scheduler_error"
 
 
+def test_a_paused_frequency_change_that_cannot_disable_again_stays_consistent(env):
+    """Codex C4 MAJOR: replacement succeeded, re-disabling failed -> state records the registered schedule, stays
+    paused, the scheduler's runs are skipped, and the failure is raised and logged."""
+    kb, sch, follow = env  # noqa: F811
+    make(kb, sch)
+    t.pause(kb=kb, scheduler=sch, task_id="seguimiento-spy", prompt="Pausalo", now=NOW)
+
+    def failing(*_):
+        raise t.TaskError("schtasks change failed: Access is denied")
+    sch.set_enabled = failing
+    new = Schedule(frequency="weekdays", time="09:45", timezone="America/New_York")
+    with pytest.raises(t.TaskError, match="could not be disabled again"):
+        t.set_frequency(kb=kb, scheduler=sch, task_id="seguimiento-spy", schedule=new, prompt="Cambiá", now=NOW)
+    task = t.load(kb, "seguimiento-spy")
+    assert task.schedule == new == sch.tasks[task.scheduler_name]["schedule"] and task.status == "paused"
+    log = t.events(kb, "seguimiento-spy")
+    assert [e["event"] for e in log[-2:]] == ["scheduler_error", "frequency_changed"]
+    assert log[-1]["scheduler_left_enabled"] is True
+    assert t.run(kb=kb, task_id="seguimiento-spy", followup=follow, commit=False,
+                 invoked_by="scheduler")["status"] == "SKIPPED"
+
+
+def test_manual_and_scheduled_runs_are_told_apart(env):
+    """Codex C4 MAJOR: a manual `task run` must not look like an automatic one."""
+    kb, sch, follow = env  # noqa: F811
+    make(kb, sch)
+    sch.query = lambda name: {"registered": True, "status": "Running", "last_run": "28/09/2026 6:05:00 PM",
+                              "last_result": "267009", "next_run": "29/09/2026 6:05:00 PM", "schedule": "Daily"}
+    t.run(kb=kb, task_id="seguimiento-spy", scheduler=sch, followup=follow, commit=False, now=NOW + timedelta(hours=1))
+    t.run(kb=kb, task_id="seguimiento-spy", scheduler=sch, followup=follow, commit=False, now=NOW + timedelta(hours=2),
+          invoked_by="scheduler")
+    started = [e for e in t.events(kb, "seguimiento-spy") if e["event"] == "run_started"]
+    assert [e["invoked_by"] for e in started] == ["manual", "scheduler"]
+    assert "scheduler_seen" not in started[0]
+    assert started[1]["scheduler_seen"]["last_run"] == "28/09/2026 6:05:00 PM"
+    hosts = [r.host.provider for r in t.runs(kb, t.load(kb, "seguimiento-spy"))]
+    assert sorted(hosts) == ["manual-cli", "windows-task-scheduler"]
+    with pytest.raises(t.TaskError, match="invoked_by"):
+        t.run(kb=kb, task_id="seguimiento-spy", followup=follow, commit=False, invoked_by="cron")
+
+
 def test_pausing_during_a_run_is_not_overwritten(env):
     """Review R1 MAJOR: a chat command during an in-flight run keeps its effect and the chain stays intact."""
     kb, sch, follow = env  # noqa: F811
