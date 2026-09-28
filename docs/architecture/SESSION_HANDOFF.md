@@ -13,15 +13,14 @@ valor temprano y comunicación concisa incorporadas a ENGINEERING §3. Anteceden
 [`PLAN-HANDOFF-20260928-codex.md`](../../../docs/engineering/reviews/PLAN-HANDOFF-20260928-codex.md).
 No se volvió a ejecutar el runtime ni se cerró ningún item al corregir estos documentos.
 
-### ▶ Retomar acá (28/09 tarde → próxima sesión)
+### ▶ Retomar acá (28/09 noche → próxima sesión)
 
-**Seguir:** [roadmap §4 — paso a paso](../../../roadmap/README.md#paso-a-paso-ordenado), desde el **paso 1**.
-**Falta ahora:** comprobar la corrida automática prevista para el 28/09 17:05 NY y explicar una evaluación real de 1.0.3;
-no suponer que ocurrió. Al último registro del 28/09 15:00 UTC había cero evaluaciones, con la API recién recuperada.
-**Detalle técnico y evidencia:** [GC-AI-0009 activo](../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/work-items/GC-AI-0009-seguimiento-recurrente.md),
-incluido el pendiente de 0008. La tarea seguía enlazada a ese worktree: no borrarlo antes del traslado comprobado.
-**Del usuario:** nada técnico para empezar; presentar resultado y después sólo el feedback o cierre que corresponda.
-Los siguientes pasos, sus dependencias y el trabajo permitido durante esperas están en el roadmap, no se duplican acá.
+**Seguir:** [roadmap §4](../../../roadmap/README.md#4-plan-de-construcción) (rearmado el 28/09 noche): primero la base del
+harness (Parte 1: fuentes, perfil, molde de capacidad, probar/guardar, programar, entrada única), después las capacidades
+de trading (Parte 2). **Ahora:** paso 0, cerrar GC-AI-0009 con los hallazgos del recheck Codex `GC-AI-0009-20260928T221056Z.md`
+y la automática por horario del 29/09 17:05 NY, que ya corre desde `GaleCore-AI` main (no hace falta el worktree para
+el Programador). Después, abrir el work item de la entrega 1. C (GC-AI-0010) y B (GC-AI-0011) quedan suspendidos.
+**Del usuario:** nada para empezar. Mensajes cortos, en español, contrastando cada tarea contra el objetivo del §4.
 
 **Reglas de esta sesión que valen para seguir:**
 - Tono de equipo en todo lo que lea el padre: nada de «owner», nada de lenguaje de permisos; repartir esfuerzo.
