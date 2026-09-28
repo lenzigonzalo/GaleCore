@@ -56,3 +56,18 @@ después y tengo 2.5k usd nomás… no te pierdas en eso, acordate del objetivo 
   referencia es un **parámetro declarado** por el owner, no un dato de cuenta.
 - El contexto macro se elige por esa exposición (puts de SPY a 30–45 días), reutilizando `context_research` y las fuentes con
   acceso comprobado (FRED, FMP, Alpha Vantage).
+
+## Primer informe (28/09/2026)
+
+Owner: «lo macro lo podés hacer ahora? … cap de referencia poné 10000 usd no sé».
+
+- **Capital de referencia declarado:** 10.000 USD (parámetro, no dato de cuenta).
+- **Informe:** `research:2026-09-28-cartera-shadow-contexto-macro` (método `context_research`), 20 evidencias
+  `evidence:2026-09-28-cartera-ctx-*` (GaleCore Dev, FRED, FMP). Exposición: PCS SPY 731/726 vto. 06/11 (v2, riesgo 456 USD =
+  4,6 %) + hasta 500 USD de la 1.0.3 (peor caso conjunto ≈ 9,6 %, mismo factor). Hallazgos: la suba del 10 años del 22–24/09
+  fue toda tasa real (breakeven plano) → pierde el escenario A del 25/09; HY OAS +27 pb en 4 sesiones; la implícita repreció
+  el 28/09 (VIX +10 %, VVIX > 90). Atención: semana 27–29/10 (FOMC a confirmar, PBI, resultados de MSFT/GOOGL/META/AAPL/AMZN);
+  empleo el mismo día del vencimiento.
+- **Faltantes:** calendario del FOMC con fuente (FMP denegado, FRED 101 no sirve); FMP `quote` denegado por plan.
+- Avance contra AC: AC-03 con primera demostración (sin revisión); AC-02 sólo el capital, faltan objetivos (retorno, drawdown,
+  horizonte) — se piden si el owner considera útil el informe; AC-01 queda reemplazado por la reorientación (sin cuenta).
