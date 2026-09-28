@@ -71,3 +71,21 @@ Owner: «lo macro lo podés hacer ahora? … cap de referencia poné 10000 usd n
 - **Faltantes:** calendario del FOMC con fuente (FMP denegado, FRED 101 no sirve); FMP `quote` denegado por plan.
 - Avance contra AC: AC-03 con primera demostración (sin revisión); AC-02 sólo el capital, faltan objetivos (retorno, drawdown,
   horizonte) — se piden si el owner considera útil el informe; AC-01 queda reemplazado por la reorientación (sin cuenta).
+
+## Revisión técnica del informe (28/09) — separada de la utilidad
+
+**Revisión técnica interna** (agente `reviewer`, solo lectura, sobre r1): CHANGES_REQUESTED sin BLOCKER. Recalculó todos los
+valores desde los payloads: coinciden, salvo el techo conjunto (≤ 946 USD, no ~956). MAJOR: (1) comparado contra el
+antecedente r1 en vez de r5 (r3 ya había separado tasa real/breakeven, r4 tenía NVDA 18/11, r5 el estudio insuficiente);
+(2) faltaban las reglas de salida de v2 y 1.0.3 en la cadena exposición → riesgo → atención; (3) el tope de 500 USD sin
+citar la spec y leído como pérdida y no como cota; (4) los objetivos del owner no figuraban como faltantes. MINOR: ventanas
+de HY y breakeven desalineadas, afirmaciones más firmes que su respaldo, skew leído en otro vencimiento, RoC de IV30 sin
+explicar, bancos 13–15/10 omitidos.
+
+**Corrección:** revisión r2 (`reason=correction`) de `research:2026-09-28-cartera-shadow-contexto-macro` resuelve los cuatro
+MAJOR y los MINOR que cambiaban conclusiones. Cambio principal: con las salidas, el riesgo relevante pasa de un techo de
+9,5 % a stops del orden de 1,7 % del capital, con la condición de que la API de GaleCore Dev esté levantada en horario de
+mercado; la v2 sale por tiempo el 30/10 (expuesta a los resultados del 28–29/10, no al empleo del 06/11). Pendiente:
+recheck acotado de r2 (interno o Codex).
+
+**Utilidad (owner):** pendiente — se registra acá, aparte, cuando la evalúes.
