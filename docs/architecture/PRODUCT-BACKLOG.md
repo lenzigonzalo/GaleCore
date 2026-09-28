@@ -85,6 +85,31 @@ Esta aclaración registra una necesidad central del producto. Los targets histó
 allí explícitamente. Este registro no cambia `ACTIVE_WORK_ITEM` ni declara implementadas o
 validadas estas capacidades.
 
+### Addendum 2026-09-28 — harness que amplía capacidades y aprende del uso
+
+**Origen:** el owner pide entender y tradear mejor, hacer más rápido el trabajo, crear skills y
+agentes desde la conversación, unificar su descubrimiento y rutear modelos/agentes según el pedido.
+**Clasificación:** `BACKLOG_CANDIDATE`, `ALIGNED_WITH_PREREQUISITE`. Amplía BL-001; relaciona BL-006
+(herramientas/host) y BL-008 (delegación y preferencias). El informe de producto vive en
+`roadmap/README.md` §1; la secuencia §4 conserva la prioridad y no cambia el item activo.
+
+**Base inspeccionada:** catálogo y métodos en el checkout GC-AI-0009 (`config/catalog.yaml`),
+registros de investigación/seguimiento y `.claude/agents/{reviewer,handoff}.md` del workspace.
+Estos últimos son agentes de ingeniería: no demuestran creación conversacional de agentes
+financieros ni routing automático de producto. La recurrencia actual sólo ejecuta `strategy_followup`.
+
+**Primer recorrido candidato:** un análisis útil → método versionado y descubrible → nueva ejecución
+desde otra sesión → feedback asociado al resultado → mejora propuesta y probada contra el caso
+anterior. Si el trabajo requiere delegación, definir un agente con objetivo, skills, herramientas,
+salida y límites, usando las capacidades reales del host. Selección de modelo sólo cuando el host
+la permita, con motivo y consumo disponible registrados; no inventar ahorro ni construir otro host.
+
+**Entry gate:** caso real elegido, capacidades de delegación/modelos del host verificadas y entrega
+ubicada en la secuencia. **Aceptación:** el trabajo se recupera y reutiliza sin reconstruir instrucciones;
+el método/agente utilizado queda identificado; feedback y resultados sustentan una revisión explícita.
+No hay autopublicación silenciosa de mejoras, migración de skills existentes ni plataforma universal
+como prerrequisito. El alcance semanal no incluye automáticamente toda esta evolución.
+
 ### Encaje con la implementación actual
 
 **Clasificación:** `ALIGNED_WITH_PREREQUISITE`.
