@@ -247,7 +247,13 @@ def freshness(task: TaskDefinition, log: list[dict], now: datetime) -> dict:
     since = max((datetime.fromisoformat(e["at"]) for e in log
                  if e["event"] in ("created", "resumed", "frequency_changed")), default=task.created_at)
     if task.schedule.frequency == "every_minutes":
-        due = now - timedelta(minutes=task.schedule.minutes)
+        # No wall-clock anchor: the last scheduler start (or when the schedule was set) plus one period is when the
+        # next run was due (Codex C4 recheck: `now - period` never let an omission turn into MISSED).
+        period = timedelta(minutes=task.schedule.minutes)
+        starts = [datetime.fromisoformat(e["at"]) for e in log
+                  if e.get("invoked_by") == "scheduler" and e["event"] == "run_started"]
+        anchor = max([since, *starts])
+        due = anchor + period if now >= anchor + period else (anchor if starts and anchor > since else None)
     else:
         due = last_due(task.schedule, now)
     out = {"expected_at": due.isoformat() if due else None, "next_expected_at": next_due(task.schedule, now).isoformat()}

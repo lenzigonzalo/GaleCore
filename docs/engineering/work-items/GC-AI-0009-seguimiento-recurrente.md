@@ -121,3 +121,14 @@ Review: `docs/engineering/reviews/GC-AI-0009-20260928T145832Z.md` (797 tests, ga
 
 Checks tras las correcciones: `engineering_gate` PASS, ruff OK, **799 passed**. Pendiente: evidencia de la corrida automática
 de hoy y recheck acotado de Codex.
+
+## Recheck Codex C4 (28/09, `78c8541..5103d50`) — CHANGES_REQUESTED
+
+Review: `docs/engineering/reviews/GC-AI-0009-20260928T155533Z.md` (802 passed en su rerun).
+
+| # | Estado según Codex | Triage |
+|---|---|---|
+| C4-B1 | DISPUTED/resuelto: la aprobación del owner está transcripta y corroborada | Sin cambios |
+| C4-M1, C4-M3, C4-M4 | RESOLVED | — |
+| C4-M2 | STILL OPEN: falta la corrida automática posterior al arreglo | Se captura tras la corrida del 28/09 17:05 NY (evento con `invoked_by`/`scheduler_seen` + `schtasks /query` con comando, salida y exit code) |
+| R-N1 | NEW MAJOR: en `every_minutes`, `due = now − período` dejaba una omisión en `DUE_NOW` para siempre | Corregido: ancla = último inicio del Programador (o cuándo se fijó el horario) + un período. Test `test_a_prolonged_omission_of_a_minutes_task_becomes_missed` |

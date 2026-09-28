@@ -266,6 +266,23 @@ def test_a_missed_run_is_told_apart_from_the_current_result(env):
     assert state(_ny(2026, 9, 30, 18, 0)) == "PAUSED"
 
 
+def test_a_prolonged_omission_of_a_minutes_task_becomes_missed(env):
+    """Codex C4 recheck NEW: an every_minutes task that stops running must not stay DUE_NOW forever."""
+    kb, sch, follow = env  # noqa: F811
+    t0 = _ny(2026, 9, 28, 12, 0)
+    make(kb, sch, now=t0, schedule=Schedule(frequency="every_minutes", minutes=15, timezone="UTC"))
+
+    def state(at):
+        return t.freshness(t.load(kb, "seguimiento-spy"), t.events(kb, "seguimiento-spy"), at)["state"]
+    assert state(t0 + timedelta(minutes=10)) == "NOT_DUE_YET"
+    assert state(t0 + timedelta(minutes=20)) == "DUE_NOW"
+    t.run(kb=kb, task_id="seguimiento-spy", followup=follow, commit=False, now=t0 + timedelta(minutes=21),
+          invoked_by="scheduler")
+    assert state(t0 + timedelta(minutes=30)) == "CURRENT"
+    assert state(t0 + timedelta(minutes=40)) == "DUE_NOW"              # next one due at +36, not started yet
+    assert state(t0 + timedelta(hours=3)) == "MISSED"                  # and it never came
+
+
 def test_a_failed_scheduled_run_is_reported_as_failed(env):
     kb, sch, _ = env  # noqa: F811
     make(kb, sch, now=_ny(2026, 9, 28, 12, 0))
