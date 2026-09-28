@@ -109,6 +109,16 @@ def test_galecore_down_is_recorded_as_an_error_not_skipped(kb, research_ref, tmp
     assert history(kb, NAME)[0].id == rec.id
 
 
+def test_after_an_error_the_window_starts_at_the_last_run_that_read_galecore(kb, research_ref, tmp_path):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    first, _ = run(kb, tmp_path, report(doc.spec_hash, mine=True))
+    failed, _ = run(kb, tmp_path, None, exit_code=1, now=NOW + timedelta(hours=6))
+    events = [{"timestamp": (NOW + timedelta(hours=2)).isoformat(), "eventType": "POSITION_OPENED", "payload": {}}]
+    retry, _ = run(kb, tmp_path, report(doc.spec_hash, mine=True, events=events), now=NOW + timedelta(hours=7))
+    assert failed.status == "ERROR" and retry.since == first.recorded_at
+    assert any("POSITION_OPENED 1" in o for o in retry.operation)
+
+
 def test_a_followup_never_writes_strategy_versions_or_approvals(kb, research_ref, tmp_path):  # noqa: F811
     doc, _ = stored(kb, research_ref)
     before = sorted(p.name for p in (kb.base / "strategies" / NAME).iterdir())

@@ -1,0 +1,39 @@
+$ schtasks /query /tn "GaleCore-AI\seguimiento-spy-prima-varianza" /fo LIST /v
+# captured 2026-09-28T21:14:03Z
+
+Folder: GaleCore-AI
+HostName:                             LAPTOP-KERDMNAD
+TaskName:                             GaleCore-AI\seguimiento-spy-prima-varianza
+Next Run Time:                        29/09/2026 6:05:00 PM
+Status:                               Ready
+Logon Mode:                           Interactive only
+Last Run Time:                        28/09/2026 6:08:47 PM
+Last Result:                          0
+Author:                               LAPTOP-KERDMNAD\lenzi
+Task To Run:                          C:\Apli\Gonza\pythonw.exe -B C:\Users\lenzi\OneDrive\Escritorio\GaleCore\.worktrees\galecore-ai\GC-AI-0009\tools\task_runner.py seguimiento-spy-prima-varianza
+Start In:                             N/A
+Comment:                              N/A
+Scheduled Task State:                 Enabled
+Idle Time:                            Disabled
+Power Management:                     Stop On Battery Mode, No Start On Batteries
+Run As User:                          lenzi
+Delete Task If Not Rescheduled:       Disabled
+Stop Task If Runs X Hours and X Mins: 72:00:00
+Schedule:                             Scheduling data is not available in this format.
+Schedule Type:                        Daily
+Start Time:                           6:05:00 PM
+Start Date:                           27/09/2026
+End Date:                             N/A
+Days:                                 Every 1 day(s)
+Months:                               N/A
+Repeat: Every:                        Disabled
+Repeat: Until: Time:                  Disabled
+Repeat: Until: Duration:              Disabled
+Repeat: Stop If Still Running:        Disabled
+# exit code: 0
+
+# knowledge/tasks/seguimiento-spy-prima-varianza/events.jsonl (28/09)
+{"at": "2026-09-28T21:05:02.785038+00:00", "event": "run_started", "invoked_by": "scheduler", "note": null, "pid": 12752, "prev": "837abb71b5b451b1c0f0c9c00cc8b6aa5f913697c8c7ebf9f7113043fbf57cba", "scheduler_seen": {"last_result": "267009", "last_run": "28/09/2026 6:05:01 PM", "next_run": "29/09/2026 6:05:00 PM", "registered": true, "status": "Running"}}
+{"at": "2026-09-28T21:05:09.386375+00:00", "attention": ["GaleCore Dev no respondió: ¿está levantada la API (`galecore_dev.py api`)?"], "event": "run_finished", "followup": "spy_prima_varianza_30_45d/20260928T210502Z", "prev": "455874ae3c815fd5e36d01f590eb1dc2e04735b9ce6a5351a12ae988b5df4d23", "result": "ERROR", "spec_hash": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51", "strategy_ref": "strategy:spy_prima_varianza_30_45d/1.0.3"}
+{"at": "2026-09-28T21:08:47.955363+00:00", "event": "run_started", "invoked_by": "scheduler", "note": null, "pid": 15540, "prev": "2427fa75e0fb013cb4d3e7a39ddba7841f76c0d321084033e5f29eeb81ec045d", "scheduler_seen": {"last_result": "267009", "last_run": "28/09/2026 6:08:47 PM", "next_run": "29/09/2026 6:05:00 PM", "registered": true, "status": "Running"}}
+{"at": "2026-09-28T21:08:58.975690+00:00", "attention": [], "event": "run_finished", "followup": "spy_prima_varianza_30_45d/20260928T210847Z", "prev": "2326ccece70dd792b85bc8244cff177a09e8eb6a09b74fdaa46443d0ded3960d", "result": "OK", "spec_hash": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51", "strategy_ref": "strategy:spy_prima_varianza_30_45d/1.0.3"}

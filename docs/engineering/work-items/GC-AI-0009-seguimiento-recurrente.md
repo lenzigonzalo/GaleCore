@@ -132,3 +132,24 @@ Review: `docs/engineering/reviews/GC-AI-0009-20260928T155533Z.md` (802 passed en
 | C4-M1, C4-M3, C4-M4 | RESOLVED | — |
 | C4-M2 | STILL OPEN: falta la corrida automática posterior al arreglo | Se captura tras la corrida del 28/09 17:05 NY (evento con `invoked_by`/`scheduler_seen` + `schtasks /query` con comando, salida y exit code) |
 | R-N1 | NEW MAJOR: en `every_minutes`, `due = now − período` dejaba una omisión en `DUE_NOW` para siempre | Corregido: ancla = último inicio del Programador (o cuándo se fijó el horario) + un período. Test `test_a_prolonged_omission_of_a_minutes_task_becomes_missed` |
+
+## Paso 1 del roadmap (28/09, 18:05 local) — corrida automática post-fix y evaluación real de 1.0.3
+
+Evidencia: `docs/evidence/gc-ai-0009/scheduler-20260928-post-fix.txt` (`schtasks /query` con comando, salida y exit code;
+eventos del 28/09 de `knowledge/tasks/seguimiento-spy-prima-varianza/events.jsonl`).
+
+- **18:05:01 automática por horario** (`invoked_by=scheduler`, `scheduler_seen`, PID 12752) → `ERROR`: la API de GaleCore
+  Dev estaba caída (último evento del runtime 20:00 UTC, última valuación 20:34 UTC). El fallo quedó registrado y visible
+  (AC-05), no se omitió. Causa de la caída sin determinar; la API dependía de un proceso de sesión.
+- 18:08 API levantada (`galecore_dev.py api`, persistencia recuperó 499 evaluaciones y 2 posiciones abiertas) y **la misma
+  tarea lanzada a demanda en el Programador** (`Start-ScheduledTask`, no el horario) → `OK`, `invoked_by=scheduler`, PID 15540,
+  `Last Result 0`. Prueba el camino Programador → runner → registro con la API arriba; la automática **por horario** con
+  resultado OK queda para el 29/09 17:05 NY (o desde main, paso 2).
+- **Evaluación real de 1.0.3 (28/09, `runtime-report`):** 286 evaluaciones 10:59–15:59 ET, todas con VIX ≈ 15,8 < 30 (PASS).
+  La primera abrió un put credit spread SPY 722/717 (vence 06/11, 39 DTE, delta corta −0,16), crédito 0,44, riesgo máx. 456
+  USD; las 285 siguientes: `ENTRY_SKIPPED` «máximo de posiciones abiertas alcanzado (1/1)». Al cierre: valor 0,405, P&L
+  simulado +3,5 USD. La posición de la v2 (731/726P) sigue valuándose aparte (−11 USD). El único gate evaluado es VIX < 30.
+- **Defecto encontrado y corregido:** tras un `ERROR`, el siguiente seguimiento tomaba como «desde» la corrida fallida y
+  omitía lo ocurrido antes (el OK de 18:08 informó «eventos: ninguno» pese a la entrada del día). `run_followup` ahora ancla
+  en la última corrida que leyó GaleCore. Test `test_after_an_error_the_window_starts_at_the_last_run_that_read_galecore`;
+  805 passed, ruff OK. El registro 20260928T210847Z queda como está (hash); este párrafo lo explica.
