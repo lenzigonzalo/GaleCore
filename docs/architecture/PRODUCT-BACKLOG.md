@@ -29,12 +29,86 @@ para reutilizar código existente, ni esconder una reescritura bajo lenguaje de 
 
 **Estado:** `CAPTURED`
 
+**Addendum 2026-09-24 — generador de estrategias acordado por el owner:** se confirma la skill de
+desarrollo de estrategias ya prevista en el plan, I4. Su piloto y secuencia viven en
+[`roadmap/README.md`](../../../roadmap/README.md), sección I4. Es una capacidad de producto sobre
+el catálogo, conocimiento y host existentes; no requiere activar toda la plataforma de evolución
+de BL-001 ni crear un agente autónomo. I3 sigue activo. Referencias externas se evaluarán por método,
+licencia, datos, dependencias y resultados antes de adoptarlas; no hay instalación ni validación
+de una skill externa por este acuerdo. No se abre otro BL para duplicar I4.
+
 **Target:** Phase 4 — Broader read-only intelligence, después de cerrar y evaluar el vertical
 GEX de Phase 3.
 
 **Objetivo:** convertir Skills, Protocols, Conventions, ejemplos y evals en assets declarativos
 versionados que puedan crearse y evolucionar a partir de evidencia, con revisión humana y sin
 automodificación silenciosa.
+
+### Aclaración del owner 2026-09-27: crear capacidades desde la conversación
+
+El valor de GaleCore-AI incluye guiar al usuario para convertir una necesidad en una capacidad
+reutilizable y gestionable desde el host. No alcanza con ofrecer un catálogo de Skills ya escritas.
+Esto es una experiencia de producto, además de una herramienta para desarrollar el sistema.
+
+Dos recorridos concretos definen la necesidad:
+
+1. Idea de estrategia → formalización según objetivos → datos y pruebas → misma estrategia
+   aprobada y ejecutada en SHADOW → seguimiento → creación y gestión conversacional de una tarea
+   recurrente → historial persistente consultable para revisión retrospectiva.
+2. Análisis macro transversal al portfolio → selección informada de GaleCore, FRED, FMP y
+   Alpha Vantage según disponibilidad real → informe con evidencia → guardar el método como
+   Skill reutilizable → proponer mejoras → producir artifacts visibles en la interfaz del host.
+
+El sistema debe poder sugerir estas posibilidades y guiar su creación. Guardar un informe no
+equivale a crear una Skill; una Skill define un método, un artifact es un resultado y una tarea
+recurrente necesita ejecución efectiva además de instrucciones. La recurrencia debe permitir
+consultar estado e historial, modificar frecuencia, pausar y cancelar desde la conversación.
+Cada ejecución debe identificar la versión del método y, cuando corresponda, la estrategia
+canónica evaluada. Ninguna tarea de seguimiento implica autorización para cambiar la estrategia
+o ejecutar operaciones reales.
+
+**Estado observado:** el catálogo de GC-AI-0008 contiene `gex_interpretation`,
+`regime_interpretation`, `research`, `context_research`, `strategy_design` y `strategy_followup`.
+Eso aporta piezas del recorrido; no demuestra creación conversacional de Skills, scheduling,
+gestión de tareas recurrentes ni presentación integrada de artifacts. La memoria de `knowledge/`
+no demuestra por sí sola una base histórica de ejecuciones consultable para este uso.
+
+**Encaje:** ampliar BL-001 para creación y evolución de métodos; relacionar BL-005 para artifacts
+y BL-008 para agentes/tareas recurrentes y contexto del usuario. El primer incremento puede
+reutilizar mecanismos del host o un scheduler existente, previa verificación de sus capacidades
+y límites; no presupone construir una plataforma general ni una interfaz nueva. Un candidato
+concreto es el seguimiento recurrente de la misma estrategia de GC-AI-0008, con resultado
+persistente, recuperación en otra sesión y controles de pausa/cancelación demostrados.
+
+Esta aclaración registra una necesidad central del producto. Los targets históricos de este
+ítem no sustituyen la secuencia vigente en `roadmap/README.md`; la próxima entrega debe ubicarse
+allí explícitamente. Este registro no cambia `ACTIVE_WORK_ITEM` ni declara implementadas o
+validadas estas capacidades.
+
+### Addendum 2026-09-28 — harness que amplía capacidades y aprende del uso
+
+**Origen:** el owner pide entender y tradear mejor, hacer más rápido el trabajo, crear skills y
+agentes desde la conversación, unificar su descubrimiento y rutear modelos/agentes según el pedido.
+**Clasificación:** `BACKLOG_CANDIDATE`, `ALIGNED_WITH_PREREQUISITE`. Amplía BL-001; relaciona BL-006
+(herramientas/host) y BL-008 (delegación y preferencias). El informe de producto vive en
+`roadmap/README.md` §1; la secuencia §4 conserva la prioridad y no cambia el item activo.
+
+**Base inspeccionada:** catálogo y métodos en el checkout GC-AI-0009 (`config/catalog.yaml`),
+registros de investigación/seguimiento y `.claude/agents/{reviewer,handoff}.md` del workspace.
+Estos últimos son agentes de ingeniería: no demuestran creación conversacional de agentes
+financieros ni routing automático de producto. La recurrencia actual sólo ejecuta `strategy_followup`.
+
+**Primer recorrido candidato:** un análisis útil → método versionado y descubrible → nueva ejecución
+desde otra sesión → feedback asociado al resultado → mejora propuesta y probada contra el caso
+anterior. Si el trabajo requiere delegación, definir un agente con objetivo, skills, herramientas,
+salida y límites, usando las capacidades reales del host. Selección de modelo sólo cuando el host
+la permita, con motivo y consumo disponible registrados; no inventar ahorro ni construir otro host.
+
+**Entry gate:** caso real elegido, capacidades de delegación/modelos del host verificadas y entrega
+ubicada en la secuencia. **Aceptación:** el trabajo se recupera y reutiliza sin reconstruir instrucciones;
+el método/agente utilizado queda identificado; feedback y resultados sustentan una revisión explícita.
+No hay autopublicación silenciosa de mejoras, migración de skills existentes ni plataforma universal
+como prerrequisito. El alcance semanal no incluye automáticamente toda esta evolución.
 
 ### Encaje con la implementación actual
 
@@ -721,6 +795,19 @@ continúan llegando desde las capabilities y canales de streaming de GaleCore.
 - ¿Qué cambios se aplican inmediatamente y cuáles requieren preview/confirmación?
 - ¿Hasta dónde se permiten fórmulas visuales sin crear una segunda capa de cálculo financiero?
 
+**Addendum 2026-09-28 — owner, a partir de la vista práctica de GC-AI-0010:** «estaría bueno que por cada estrategia uno
+pueda generar este nivel de informes en la misma interfaz, y con el host o el chat desde la interfaz ir iterándolo
+(agregando, mejorando, sacando)… un breve dashboard especial para cada estrategia». Primer caso concreto de este BL:
+un dashboard por estrategia con la estructura ya validada por el owner (números clave, «qué mirar», posiciones y salidas,
+calendario posiciones × eventos, precio contra strikes, contexto de tasas/volatilidad, faltantes; registro con fuentes al
+pie). Referencia visual: https://claude.ai/artifact/G7L8oniVGHvQfFupAQzS8R. Criterios del owner: tablas y gráficos
+primero, texto mínimo. Costo: la actualización de números debe ser determinista (plantilla + datos de la API de GaleCore
+y de `knowledge/`), sin modelo; el modelo sólo al iterar la plantilla o al escribir interpretación opcional. Responde la
+primera pregunta abierta con una recomendación: vivir en el monitor de GaleCore (lee GaleCore local en vivo; un artifact
+de claude.ai no alcanza `localhost`). Iterarlo con un chat dentro de la interfaz depende del «host propio», fuera del
+plan. Dentro de la secuencia activa sólo entra la vista generada por script de la skill del paso 3 y del reporte del
+paso 4 (roadmap §4); actualizarla por la tarea programada requiere ampliar el scheduler (hoy sólo `strategy_followup`).
+
 ---
 
 ## BL-006 — Federación MCP, trust y routing de tools externas
@@ -888,26 +975,63 @@ independiente, el output entregado por el host no debe etiquetarse `GALECORE_VER
 
 **Addendum 2026-09-24 — conversación con el owner sobre MCPs de brokers y datos:**
 
-- **Host objetivo (dicho por el owner):** Claude Code, o como mucho sesiones de Claude levantadas
-  desde una interfaz propia. Responde en parte la pregunta de entry gate "existe un host objetivo
-  concreto". Un agente propio sin Claude como host queda fuera del horizonte.
-- **Opt-in por usuario ya resuelto por el host:** los conectores de claude.ai (IoL e IBKR ya
-  conectados en la cuenta del owner; AlphaAdvantage, Daloopa y LSEG listados, sin autorizar) son de
-  la cuenta de cada usuario, con OAuth propio. GaleCore no guarda credenciales ni sabe de ellos.
-  Si más adelante una interfaz propia lanza sesiones (Agent SDK), esa interfaz pasa la
-  configuración MCP de cada usuario al lanzar la sesión; custodia de tokens → `BL-008`.
-- **Regla operativa propuesta (compatible con las 4 clases de arriba):** lo que decide o ejecuta
-  sin IA (gates, SHADOW, sizing, riesgo, órdenes) sale sólo de GaleCore; el análisis asistido
-  (cartera, macro, investigación) puede usar cualquier MCP conectado, guardando en `knowledge/`
-  server, tool, timestamp y el valor tal como vino (no es re-consultable).
-- **Tools de broker con mutación, observadas:** IoL expone `place_order`, `place_caucion`,
-  `subscribe_fci`, `redeem_fci`, `cancel_order` y una `buy_ggal_at_50_cents` de propósito no
-  verificado; IBKR expone `create_order_instruction`. En flujos del ecosistema se usan sólo las de
-  lectura, bloqueando las de escritura por permisos del host (fuera de la obediencia del modelo).
-- **Criterio de promoción a GaleCore:** un dato de MCP pasa a adapter de GaleCore (`BL-003`) cuando
-  lo necesita el runtime/riesgo, o cuando su uso se vuelve recurrente y hace falta reproducibilidad.
-- **Primer caso concreto:** I5 (revisión de cartera con IoL/IBKR en lectura). Ahí se abre el work
-  item y, con el caso real, se escribe el ADR; hoy no se decide nada.
+*Dicho por el owner (24/09):*
+
+- El host objetivo es Claude Code; como mucho, sesiones de Claude lanzadas desde una interfaz.
+  Esto responde en parte el entry gate "existe un host objetivo concreto".
+- El tema se queda en este ítem y **fuera de I3**. I5 es el **primer caso propuesto**, no un
+  compromiso.
+- Cuando se aborde, el primer paso es acotado: **un solo broker, leer posiciones y compararlas
+  contra la cuenta**. Antes de eso no se construye una plataforma de conectores ni una interfaz
+  propia.
+
+*Regla vigente (no es propuesta):* las órdenes y el control operativo pasan por GaleCore (clase 4
+de arriba). Que un broker exponga tools en el host no prueba que funcionen ni autoriza usarlas.
+
+*Propuestas (mías, sin aprobar) — lo que queda por diseñar y probar:*
+
+- Cómo se permiten las lecturas externas: el análisis asistido (cartera, macro, investigación)
+  podría usar un MCP conectado guardando en `knowledge/` server, tool, timestamp y el valor tal
+  como vino, porque no se puede volver a consultar igual. Lo que decide o ejecuta sin IA sigue
+  saliendo sólo de GaleCore.
+- Cómo se bloquean técnicamente las escrituras: en los permisos del host, sin depender de lo que
+  obedezca el modelo. El mecanismo concreto está sin elegir ni probar.
+- Un dato de MCP pasa a adapter de GaleCore (`BL-003`) cuando lo necesitan el runtime o el riesgo,
+  o cuando se usa seguido y hace falta reproducirlo.
+- El opt-in por usuario lo darían los conectores de la cuenta de cada usuario en el host. Si una
+  interfaz propia lanzara sesiones, pasaría la configuración MCP de cada usuario; la custodia de
+  tokens va a `BL-008`.
+
+*Verificado y no verificado:*
+
+- **Observado:** en una sesión de Claude Code (extensión de VS Code, 24/09) se ven tools con
+  prefijo `mcp__claude_ai_IoL__*` y `mcp__claude_ai_Interactive_Brokers_IBKR__*`. Entre los nombres
+  hay tools que escriben: IoL `place_order`, `cancel_order`, `place_caucion`, `subscribe_fci`,
+  `redeem_fci` y `buy_ggal_at_50_cents` (no se sabe qué hace); IBKR `create_order_instruction`.
+  AlphaAdvantage, Daloopa y LSEG aparecen como servidores que piden autenticación.
+- **No verificado:** que alguna de esas tools responda desde Claude Code (no se llamó ninguna); que
+  los conectores de claude.ai funcionen en Claude Code igual que en claude.ai; que los datos
+  coincidan con la cuenta; qué frescura y límites tienen; que las tools que escriben estén o
+  puedan quedar bloqueadas por permisos del host. **Hoy no hay ningún bloqueo configurado ni
+  probado.**
+
+---
+
+**Addendum de BL-006, 2026-09-26 — primer caso externo de análisis propuesto:**
+
+El owner necesita demostrar asistencia para estrategias con contexto de mercado, memoria y
+retroalimentación; mencionó FRED, Alpha Vantage y SEC EDGAR como fuentes. El régimen actual sólo
+consulta GEX, skew, VIX y VVIX. El host puede consultar una fuente externa directamente para análisis
+asistido; no necesita esperar a que GaleCore la exponga. `ALIGNED_WITH_PREREQUISITE`: reutilizar
+research/knowledge y catálogo; falta verificar acceso real y registrar el recorrido. El proveedor
+FRED interno de GaleCore no integra por sí solo una capacidad macro en GaleCore-AI.
+
+La propuesta de secuencia vive en `roadmap/README.md` del workspace, §4 «Corrección propuesta para
+el entregable al partner (26/09/2026)», con el hallazgo en GC-AI-0006: análisis SPY + FRED antes del
+despliegue completo de I4, sin esperar al caso de broker de I5. Es propuesta, no cambio aprobado de
+estado o prioridad. MCP o adapter API se elige por acceso probado; no hay una tool FRED callable
+verificada en esta sesión. No implica que FRED cubra consenso, geopolítica o toda explicación de
+precios. Riesgo y ejecución automáticos conservan la autoridad de GaleCore.
 
 ---
 

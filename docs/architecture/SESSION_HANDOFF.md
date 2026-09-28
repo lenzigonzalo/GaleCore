@@ -1,38 +1,45 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado (2026-09-27):** I1, I2 e I3 **cerrados**. **Activo: GC-AI-0008** (estrategia SPY hasta SHADOW). GC-AI-0007 espera cierre del owner; GC-AI-0006 abierto. Plan: `roadmap/README.md`.
+**Estado (2026-09-27, noche):** I1–I3 cerrados; GC-AI-0006 y 0007 cerrados. **Activos:** GC-AI-0008 (1.0.3 en SHADOW Dev) y GC-AI-0009 (seguimiento diario), esperando Codex y cierre del owner; GC-AI-0010 en borrador. Plan: `roadmap/README.md`.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## Próxima sesión — punto de entrada
 
-### ▶ Retomar acá (2026-09-27, tarde) — ordenar dos temas del owner antes de seguir
+### ▶ Retomar acá (lunes 2026-09-28) — primera sesión de mercado de la estrategia
 
-**Estado técnico:** GC-AI-0008 listo para aprobación: `strategy:spy_prima_varianza_30_45d/1.0.3`
-(`sha256:19884e77…`). Pendientes: aprobación del owner, parar `shadow_runtime_test_v2`, reemplazar la API sin base de
-:7001 por la de GaleCore Dev, recheck Codex C4 (se cortó por límite de uso). Pasos exactos: handoff del work item
-GC-AI-0008.
+**Plan:** `roadmap/README.md` §4 «Secuencia activa» (repriorizada el 27/09). `ACTIVE_WORK_ITEM` del workspace → GC-AI-0009.
 
-**Tema A — capacidades creadas desde la conversación (requisito del owner, 27/09).** Recorridos: (1) el seguimiento
-de esa misma estrategia pedido desde el chat → tarea recurrente (objetivo, frecuencia, zona horaria, fuentes,
-resultado) → ejecución real, historial consultable desde otra sesión, pausar/cambiar/cancelar, resultado como
-artifact; (2) informe macro → skill reutilizable (método, fuentes, parámetros, criterios de calidad) ejecutable desde
-una sesión nueva. Ya registrado por otra sesión como addendum de BL-001, **sin commitear** en el checkout principal
-de GaleCore-AI. Análisis hecho: reordena el roadmap (la recurrencia estaba después de I5). Host: `CronCreate` y
-`/loop` sólo viven en la sesión (7 días) → no son recurrencia; las rutinas en la nube no llegan a GaleCore Dev ni a
-`knowledge/` locales; el programador de tareas de Windows sí, con la PC encendida, la API Dev levantada y las
-credenciales de desarrollo. Propuesta: cerrar GC-AI-0008 → GC-AI-0009 (seguimiento recurrente) → GC-AI-0010
-(macro → skill). **Falta del owner:** si la otra sesión terminó (para commitear su addendum y editar el roadmap) y
-si acepta depender de la PC encendida por ahora.
+**En criollo, dónde quedamos (27/09 noche):**
+- **Estrategia `spy_prima_varianza_30_45d` 1.0.3 aprobada por el owner y desplegada en SHADOW de GaleCore Dev** como prueba
+  operativa (instancia `d533f033…`, switch de entradas encendido). `shadow_runtime_test_v2` detenida; su posición 731/726P
+  (vence 06/11) se sigue valuando. El estudio histórico preregistrado la **refuta con ejecución realista** (−17,7 %/año con
+  fills naturales; +33,8 % a mid sin costos): SHADOW a mid no es evidencia económica.
+- **Seguimiento diario automático** (GC-AI-0009): tarea `GaleCore-AI\seguimiento-spy-prima-varianza`, 17:05 America/New_York
+  (18:05 local), en el Programador de tareas. Resultado legible: `knowledge/followups/spy_prima_varianza_30_45d/LATEST.md`.
+- GC-AI-0006 y GC-AI-0007 **cerrados** por el owner. GC-AI-0010 (cartera + macro) en borrador, **reorientado**: sin cuenta de
+  bróker ni saldos inventados; la «cartera» son las posiciones SHADOW reales y el capital es un parámetro declarado.
 
-**Tema B — compartir trabajo de GaleCore con su padre** (remoto `github.com/ericlenzi/GaleCore`; GaleCore no se
-pushea). Idea: separar los BL que son de GaleCore (back y front) para que él pueda tomarlos. Choca con el backlog
-único (decisión del 21/09) → requiere una decisión nueva en `decisiones/`. Riesgo: SHADOW (I2–I4) vive en ramas
-locales sin reunificar; él no debería tocar esas zonas antes de reunificar. Candidatos listos: BL-014 (fix
-diagnosticado), BL-013, BL-015; con decisión previa: BL-002/BL-011, BL-012, BL-016, `Deploy` con aprobación, RLS,
-reglas no soportadas por el runtime. **Falta del owner:** canal (archivo en el repo por PR vs Issues de GitHub),
-reunificar SHADOW primero o no, y si su padre usa Claude Code. El owner dijo que lo ordenan en una sesión nueva:
-**no implementar nada de A ni B sin su respuesta.**
+**Qué hacer primero mañana:**
+1. **Revisión de Codex** del rango `76e9958..HEAD` (cierre de 0008 + 0009 + estudios): se lanzó sola a las 22:53 del 27/09.
+   Buscar `docs/engineering/reviews/GC-AI-0009-*.md` en el worktree de GC-AI-0009 (el log está en el scratchpad de la sesión
+   anterior, `codex0009b.log`). Si no hay review (límite de uso), correr desde el workspace:
+   `python .worktrees/galecore-ai/GC-AI-0009/docs/evidence/gc-ai-0009/codex_review.py --base 76e9958 --model gpt-5.6-sol`.
+   Triage en los work items de 0008/0009; rechecks acotados.
+2. **Antes de las 09:30 ET:** confirmar que la API de GaleCore Dev sigue arriba (`curl localhost:7001/App/Runtime/Status` → 401);
+   si no, `python GaleCore/dev/galecore_dev.py api` (el switch de entradas ya quedó encendido; la persistencia recupera todo).
+3. **En sesión:** pedir el seguimiento («Mostrame mi estrategia…» → `followup run`) y explicar la primera evaluación real
+   (entrada, descarte o bloqueo), sin tocar umbrales. A las 17:05 ET verificar que la tarea corrió sola (`task status`).
+4. **Siguiente entrega (GC-AI-0010):** informe de contexto macro para la exposición SHADOW (puts de SPY 30–45 d), reutilizando
+   `context_research` + FRED/FMP/Alpha Vantage; si al owner le sirve, guardar el método como primera skill creada desde la
+   conversación (roadmap §4 fila 4). Pedir al owner el capital de referencia sólo si hace falta.
+
+**No olvidar:**
+- El Programador ejecuta el código de `.worktrees/galecore-ai/GC-AI-0009`: no borrar ese worktree hasta pasar a `main`.
+- `FRED_API_KEY` quedó persistida en el entorno del usuario (HKCU); nunca mostrarla.
+- GaleCore: todo en la rama local `feature/GC-AI-0008-estrategia-shadow`, sin push. `pcs_spy_16d_v1.json` sin trackear no es nuestro.
+- En el workspace siguen sin commitear cambios de otra sesión (ENGINEERING.md, .gitignore, D-0004, D-0005, .obsidian): no mezclarlos.
+- Pendientes del owner: cierre de GC-AI-0008/0009 tras Codex; utilidad del informe macro.
 
 ### ▶ Retomar acá (piloto de I4 — 2026-09-25)
 
