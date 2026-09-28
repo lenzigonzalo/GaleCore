@@ -240,8 +240,8 @@ def run_followup(*, kb: KnowledgeBase, strategy: str, prompt: str, host: RecordH
                  report_command: list[str] | None = None, now: datetime | None = None) -> tuple[FollowupRecord, Path]:
     now = now or datetime.now(UTC)
     doc, approved = _versions(kb, strategy)
-    previous = history(kb, strategy, limit=1)
-    since = previous[0].recorded_at if previous else None
+    # An ERROR run read nothing from GaleCore: anchoring on it would hide what happened before it.
+    since = next((r.recorded_at for r in history(kb, strategy) if r.status != "ERROR"), None)
     cmd = report_command or default_report_command(kb.workspace, strategy)
     code, out, err = _run_report(cmd)
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
