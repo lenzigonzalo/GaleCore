@@ -33,7 +33,8 @@ gestor universal de agentes. La tarea no modifica la estrategia aprobada ni oper
 - [ ] **AC-01 — Descubrible y guiado:** entrada `recurring_followup` con su skill (define objetivo, frecuencia, zona
   horaria, fuentes, resultado; propone la recurrencia cuando aporta valor).
 - [ ] **AC-02 — Ejecución real:** ejecuciones automáticas del Programador de tareas, sin sesión de Claude, cada una con
-  estrategia, versión, hash, método, commit y fuentes.
+  estrategia, versión, hash, método, commit y fuentes. Incluir una automática posterior al fix de procedencia y otra
+  desde el checkout estable después del traslado auditable con `task rebind`, conservando identidad e historial.
 - [ ] **AC-03 — Persistencia e historial:** cada resultado queda (registro de seguimiento con hash + evidencia +
   eventos encadenados) y se consulta desde otra sesión (`task status/history`, `LATEST.md`).
 - [ ] **AC-04 — Control:** cambiar frecuencia, pausar, reanudar y cancelar desde el chat, con efecto verificado en el
@@ -56,6 +57,11 @@ gestor universal de agentes. La tarea no modifica la estrategia aprobada ni oper
 
 ## Required validation
 
+Orden para completar A (alineación con roadmap, 28/09): capturar automática post-fix y evaluación real de 1.0.3
+(AC-06 de 0008); trasladar con `task rebind` ya implementado; capturar automática desde main; enlazar toda la evidencia
+aquí; ejecutar un recheck final acotado sobre fixes y hallazgos abiertos de 0008/0009. No repetir revisión completa ni
+ampliar scheduler. Handoff vigente: `GaleCore-AI/docs/architecture/SESSION_HANDOFF.md` del workspace.
+
 ```powershell
 python tools/engineering_gate.py
 python -B -m pytest -q -p no:cacheprovider
@@ -68,8 +74,10 @@ git diff --check
 - Corre sólo con la PC encendida y **el usuario con sesión de Windows iniciada** (modo «Interactive only», sin guardar
   contraseña); no hace falta una sesión de Claude. Necesita la API de GaleCore Dev levantada y sus credenciales de
   desarrollo; si falta, la ejecución queda registrada como ERROR.
-- El Programador ejecuta el código del checkout registrado en la tarea (`code_path`); hoy es este worktree. Si se mueve o
-  borra, la tarea falla (visible en `%LOCALAPPDATA%\GaleCore-AI\task_runner.log`). Pasa a `main` al cerrar.
+- El Programador ejecuta el código del checkout registrado en la tarea (`code_path`); el último registro apunta al
+  worktree GC-AI-0009. Si se mueve o borra, la tarea falla (visible en `%LOCALAPPDATA%\GaleCore-AI\task_runner.log`).
+  Se traslada a `main` con `task rebind` y se prueba la automática desde ahí antes del recheck final y del cierre.
+  No borrar el worktree durante el traspaso.
 - Zona horaria: el horario del owner se convierte a la hora local de esta PC al crear, y se re-sincroniza en cada
   ejecución si el desfase cambió (horario de verano de EE. UU.).
 

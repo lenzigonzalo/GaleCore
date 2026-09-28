@@ -11,14 +11,23 @@ review_result: PENDING
 approval_result: PENDING
 ---
 
-# GC-AI-0011 — Backtest de punta a punta con acciones (roadmap §4, pasos 4 y 5)
+# GC-AI-0011 — Backtest de punta a punta con acciones (roadmap §4, recorrido B posterior)
 
 Origen: owner, 28/09/2026 — «agregar estrategias simples y estándar de acciones (buy & hold, reversión a la media) para
 aplicar backtesting en el flujo… el fin es más testear que el andamiaje funcione e2e que los resultados de la estrategia».
-Repriorizado el mismo día como MVP de la semana (roadmap §4): primera entrega = datos → backtest → reporte; segunda entrega
-(SHADOW) condicional a la evidencia y la capacidad. SHADOW de acciones, si se hace, dentro de GaleCore (opción a).
+El recorte posterior del roadmap §4 dejó **sólo la compuerta de datos esta semana**. El recorrido completo datos →
+backtest → reporte → decisión queda como incremento propio posterior. SHADOW de acciones es otra entrega condicional,
+dentro de GaleCore (opción a); no bloquea la utilidad del backtest.
 
-## Acuerdo breve
+## Alcance actual: compuerta de datos
+
+Guardar precios y dividendos con procedencia y hash; comprobar que precio sin ajustar + dividendos reproduce el retorno
+ajustado dentro de una tolerancia declarada, con sesiones alineadas y tratamiento explícito de splits. El parquet local
+sirve como contraste, con su procedencia incompleta declarada. Registrar señal al cierre, fill en apertura de la próxima
+sesión, ex-date y payment date. Si falta evidencia para resolverlo, dejar el bloqueo preciso. No construir motor,
+reporte, spec SHADOW ni optimización en esta compuerta.
+
+## Acuerdo breve del incremento posterior (borrador)
 
 - **Problema:** hoy no hay forma estándar de evaluar una idea antes de SHADOW: los estudios de la 1.0.3 fueron scripts
   sueltos (`docs/evidence/gc-ai-0008/hypothesis_study.py`), no un método reutilizable ni un reporte atado a la versión.
@@ -50,11 +59,14 @@ Repriorizado el mismo día como MVP de la semana (roadmap §4): primera entrega 
 subestimado ~1,5–2 %/año y la comparación contra la estrategia sería engañosa. Si los dividendos no se pueden obtener con
 procedencia, el reporte lo declara y compara sólo retorno de precio en ambos lados (bloqueo explícito del retorno total).
 
-## Acceptance criteria (borrador; se fijan al empezar la construcción)
+## Acceptance criteria del incremento posterior (borrador; no son el compromiso semanal)
 
 - [ ] **AC-01 — Datos:** precios y dividendos del símbolo guardados con procedencia y hash; problemas de calidad resueltos o
   que bloquean el resultado explícitamente.
-- [ ] **AC-02 — Estrategia:** propuesta con `strategy_design` y versión congelada antes de correr (reglas + parámetros).
+- [ ] **AC-02 — Estrategia:** reglas y parámetros identificados y congelados antes de correr; reutilizar el método de
+  diseño cuando aplique, sin forzar acciones al contrato ejecutable actual de `strategy_design` (sólo EQUITY_OPTION).
+  El contrato de reporte debe identificar esa versión; no afirmar que su hash es el de SHADOW hasta que GaleCore soporte
+  acciones, rechace campos desconocidos y se verifique la correspondencia.
 - [ ] **AC-03 — Backtest:** sin información futura (señal al cierre, ejecución en la apertura siguiente o equivalente
   declarado), costos y slippage explícitos, período fuera de muestra separado, comparado contra buy & hold, reproducible.
 - [ ] **AC-04 — Reporte:** atado a la versión y al hash de datos/código; recuperable desde otra sesión; iterar = versión nueva.

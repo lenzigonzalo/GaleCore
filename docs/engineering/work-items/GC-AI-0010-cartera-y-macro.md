@@ -11,39 +11,46 @@ review_result: PENDING
 approval_result: PENDING
 ---
 
-# GC-AI-0010 — Cartera de sólo lectura + macro (roadmap §4, entrega 3)
+# GC-AI-0010 — Método de contexto de exposición SHADOW (roadmap §4, recorrido C)
 
 Origen: owner, 27/09/2026 — «Vamos con tus recomendaciones, y usa tastytrade via galecore. IBKR e IOL todavía no».
-Fuente de la cartera: **Tastytrade vía GaleCore**, sólo lectura. Fuera: IBKR, IoL, plataforma de conectores, ejecución.
+Alcance vigente tras la reorientación del 27/09 y la revisión aplicada el 28/09: **exposición SHADOW vía GaleCore**,
+capital de referencia declarado de 10.000 USD, sin cuenta de bróker. El roadmap §4 fija la secuencia C → H.
 
 ## Acuerdo breve
 
-- **Problema:** GaleCore-AI analiza estrategias y contexto, pero no conoce tus objetivos ni tus posiciones: el contexto macro
-  no se puede elegir por lo que realmente tenés en riesgo.
-- **Qué vas a poder hacer:** declarar tus objetivos (retorno buscado, drawdown aceptable, horizonte, liquidez) y pedir «mostrame
-  mi cartera y qué contexto macro importa para ella»: posiciones leídas de tu cuenta por GaleCore, exposiciones, factores
-  macro elegidos por esas exposiciones (reutilizando `context_research` con FRED/FMP/Alpha Vantage), evidencia guardada y
-  «qué merece tu atención»; delegable con la misma tarea recurrente de GC-AI-0009.
-- **Primera demostración:** tus posiciones reales leídas por la API de GaleCore Dev, guardadas como evidencia, con un informe
-  de exposiciones y contexto.
-- **Qué falta para correrla (bloqueo verificado 27/09):** `GET /Data/Tastytrade/Account/Balances|Positions` en GaleCore Dev →
-  **409 «El usuario autenticado no tiene una cuenta de bróker vinculada»** (tabla `accounts` de Dev vacía). Se destraba
-  vinculando tu cuenta desde la tarjeta de cuenta del monitor de desarrollo (http://localhost:3039, usuario de prueba): número
-  de cuenta + refresh token de Tastytrade, cifrados por la API (AES-GCM); nunca por el chat. Después puede aparecer el 403 de
-  `BL-015` (visto con la credencial de sistema); se diagnostica con el primer intento real.
-- **Método reutilizable:** si el informe macro resulta útil, su método se guarda como la primera skill creada desde la
-  conversación (versionada, descubrible, ejecutable con datos nuevos) — roadmap §4 fila 4, entrega chica.
-- **Fuera:** asignación automática, órdenes, otras cuentas, pantallas nuevas.
+- **Problema:** el informe ya existe, pero el método y las correcciones todavía no se reutilizan de forma demostrada;
+  la vista guardada contiene números y texto escritos a mano.
+- **Qué vas a poder hacer:** pedir contexto de tu exposición SHADOW, obtener una vista práctica con respaldo trazable,
+  corregir el método y comprobar que el análisis siguiente aplica esa corrección sin repetirla.
+- **Primera demostración de valor:** retomar antecedentes y correcciones existentes, leer exposición y salidas, elegir
+  factores/fuentes y mostrar una vista pequeña con datos nuevos. Puede ser supervisada y parcialmente manual, con ese
+  límite visible; no esperar la skill terminada ni la revisión de cierre para comprobar si ayuda.
+- **Después de esa prueba:** completar el método versionado y la generación reproducible de registro + vista. Una
+  corrección concreta basada en feedback se incorpora al método y se aplica desde otra sesión (roadmap pasos 4–7).
+- **Qué falta:** skill concreta, generación de toda la vista desde registro/evidencia y vínculo feedback → versión →
+  ejecución posterior. Reutilizar `context_research` y `docs/evidence/gc-ai-0010/vista-practica/`; verificar acceso mínimo
+  a las fuentes necesarias. La falta de cuenta de bróker no bloquea esta entrega.
+- **Fuera:** cuenta real, recurrencia de este informe (0009 sólo ejecuta `strategy_followup`), asignación automática,
+  órdenes, pantallas nuevas y plataforma general de creación de skills.
 
-## Acceptance criteria (borrador, se fijan al destrabar el acceso)
+## Acceptance criteria vigentes (alineados con roadmap C, 28/09)
 
-- [ ] **AC-01 — Acceso comprobado:** lectura real de balances y posiciones por la API de GaleCore, guardada como evidencia.
-- [ ] **AC-02 — Objetivos:** declarados por el owner y guardados; cada informe los usa.
+- [ ] **AC-01 — Exposición comprobada:** posiciones y estado SHADOW por la API de GaleCore, con versión, reglas de salida
+  y evidencia. No presentar fills simulados como operaciones reales ni capital de referencia como saldo de cuenta.
+- [ ] **AC-02 — Contexto del usuario:** usar el capital declarado y los objetivos disponibles. Los objetivos aún no
+  declarados se muestran como faltantes; sólo se preguntan cuando cambian una conclusión concreta, sin inventarlos.
 - [ ] **AC-03 — Informe:** exposiciones, factores macro elegidos por ellas con fuentes comprobadas, tipos de afirmación
-  separados, «qué merece tu atención»; sin recomendaciones de operar.
-- [ ] **AC-04 — Delegable:** la tarea recurrente puede correr este informe.
-- [ ] **AC-05 — Método como skill** (si el owner lo encuentra útil).
+  separados, «qué merece tu atención»; registro + vista práctica generada por código desde registro/evidencia, sin
+  valores o conclusiones de la captura anterior incrustados como si fueran actuales; sin recomendaciones de operar.
+- [ ] **AC-04 — Mejora reutilizada:** feedback vinculado a resultado y versión → cambio explícito del método → ejecución
+  posterior desde sesión nueva que aplique la corrección. Registrar cuál se aplicó y qué intervención siguió haciendo
+  falta. Casos existentes: antecedente pertinente, reglas de salida y formato práctico. No basta guardar el comentario.
+- [ ] **AC-05 — Método como skill:** versionado, descubrible por catálogo y ejecutado con datos nuevos; conservar
+  procedencia y versión utilizada. H reutiliza este método y su feedback; no se exige aquí una entrada general del host.
 - [ ] **AC-06 — Revisión:** interna y Codex; utilidad y cierre, el owner.
+
+Estos criterios sustituyen los originales de cuenta de bróker y recurrencia. No declaran cumplimiento ni cierre.
 
 ## Reorientación (owner, 27/09/2026)
 
@@ -57,7 +64,7 @@ después y tengo 2.5k usd nomás… no te pierdas en eso, acordate del objetivo 
 - El contexto macro se elige por esa exposición (puts de SPY a 30–45 días), reutilizando `context_research` y las fuentes con
   acceso comprobado (FRED, FMP, Alpha Vantage).
 
-## Primer informe (28/09/2026)
+## Primer informe (28/09/2026, histórico r1; corregido abajo)
 
 Owner: «lo macro lo podés hacer ahora? … cap de referencia poné 10000 usd no sé».
 
@@ -92,7 +99,7 @@ recuperación de la API 14:59 UTC; vencimiento real que elegiría la 1.0.3 ~04�
 CPI; crédito de la 1.0.3 como supuesto; test plan con el diseño de r4; historia del HY OAS a verificar). Revisión técnica
 cerrada del lado interno; Codex sobre el informe, opcional si el owner lo pide.
 
-**Utilidad (owner):** pendiente — se registra acá, aparte, cuando la evalúes.
+**Utilidad:** ver la evaluación y el estado de formato de la sección siguiente; separada de la revisión técnica.
 
 ## Utilidad (owner, 28/09) — registrada aparte de la revisión técnica
 
@@ -102,8 +109,11 @@ tablas, gráficos, tanto texto se pierde y es difícil entender». **Evaluación
 Respuesta: vista práctica derivada del mismo registro y evidencias (sin datos nuevos), publicada como página privada
 https://claude.ai/artifact/G7L8oniVGHvQfFupAQzS8R — 4 números clave, «qué mirar» en 4 líneas, tabla de posiciones con sus
 salidas, calendario posiciones × eventos, SPY contra strikes, tasas y crédito en pb, tabla de volatilidad, faltantes; el
-registro con fuentes queda como respaldo al pie. Pendiente: que el owner diga si esta vista le sirve.
+registro con fuentes queda como respaldo al pie. **Formato práctico aprobado**, según el roadmap y el README de
+`docs/evidence/gc-ai-0010/vista-practica/`. Falta evaluar la utilidad de la próxima ejecución reproducible; no volver
+a pedir aprobación del formato ya registrado.
 
 Consecuencia para el paso 3 (skill): el método incluye **dos salidas**: el registro trazable (research + evidence) y la
-vista del owner (tablas y gráficos, texto mínimo), generada desde el registro. Hoy la vista se generó con un script de
-sesión; si la skill se aprueba, el generador pasa al repo con tests.
+vista del owner (tablas y gráficos, texto mínimo), generada desde el registro. Plantilla HTML y series guardadas en
+`docs/evidence/gc-ai-0010/vista-practica/`; tablas y texto siguen siendo manuales. Falta generar todo el contenido desde
+el registro/evidencia y comprobar que las correcciones del método se reutilizan.
