@@ -721,6 +721,19 @@ continúan llegando desde las capabilities y canales de streaming de GaleCore.
 - ¿Qué cambios se aplican inmediatamente y cuáles requieren preview/confirmación?
 - ¿Hasta dónde se permiten fórmulas visuales sin crear una segunda capa de cálculo financiero?
 
+**Addendum 2026-09-28 — owner, a partir de la vista práctica de GC-AI-0010:** «estaría bueno que por cada estrategia uno
+pueda generar este nivel de informes en la misma interfaz, y con el host o el chat desde la interfaz ir iterándolo
+(agregando, mejorando, sacando)… un breve dashboard especial para cada estrategia». Primer caso concreto de este BL:
+un dashboard por estrategia con la estructura ya validada por el owner (números clave, «qué mirar», posiciones y salidas,
+calendario posiciones × eventos, precio contra strikes, contexto de tasas/volatilidad, faltantes; registro con fuentes al
+pie). Referencia visual: https://claude.ai/artifact/G7L8oniVGHvQfFupAQzS8R. Criterios del owner: tablas y gráficos
+primero, texto mínimo. Costo: la actualización de números debe ser determinista (plantilla + datos de la API de GaleCore
+y de `knowledge/`), sin modelo; el modelo sólo al iterar la plantilla o al escribir interpretación opcional. Responde la
+primera pregunta abierta con una recomendación: vivir en el monitor de GaleCore (lee GaleCore local en vivo; un artifact
+de claude.ai no alcanza `localhost`). Iterarlo con un chat dentro de la interfaz depende del «host propio», fuera del
+plan. Dentro de la secuencia activa sólo entra la vista generada por script de la skill del paso 3 y del reporte del
+paso 4 (roadmap §4); actualizarla por la tarea programada requiere ampliar el scheduler (hoy sólo `strategy_followup`).
+
 ---
 
 ## BL-006 — Federación MCP, trust y routing de tools externas
