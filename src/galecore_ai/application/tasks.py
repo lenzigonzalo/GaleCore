@@ -199,6 +199,78 @@ def runner_command(code_path: Path, task_id: str) -> list[str]:
     return [str(pyw if pyw.exists() else sys.executable), "-B", str(code_path / "tools" / "task_runner.py"), task_id]
 
 
+# How long after a due time a run may still be starting or in progress before it counts as missed.
+MISSED_GRACE = timedelta(minutes=30)
+
+
+def _fires_on(schedule: Schedule, day) -> bool:
+    return schedule.frequency == "daily" or day.weekday() < 5
+
+
+def _occurrence(schedule: Schedule, day) -> datetime:
+    hh, mm = (int(x) for x in schedule.time.split(":"))
+    return datetime(day.year, day.month, day.day, hh, mm, tzinfo=ZoneInfo(schedule.timezone))
+
+
+def last_due(schedule: Schedule, now: datetime) -> datetime | None:
+    """The most recent time the schedule should have fired at or before `now` (UTC); None for every_minutes."""
+    if schedule.time is None:
+        return None
+    day = now.astimezone(ZoneInfo(schedule.timezone)).date()
+    for back in range(8):
+        d = day - timedelta(days=back)
+        if _fires_on(schedule, d) and (at := _occurrence(schedule, d)) <= now:
+            return at.astimezone(UTC)
+    return None
+
+
+def next_due(schedule: Schedule, now: datetime) -> datetime | None:
+    """The next time the schedule should fire after `now` (UTC)."""
+    if schedule.frequency == "every_minutes":
+        return (now + timedelta(minutes=schedule.minutes)).astimezone(UTC)
+    day = now.astimezone(ZoneInfo(schedule.timezone)).date()
+    for ahead in range(8):
+        d = day + timedelta(days=ahead)
+        if _fires_on(schedule, d) and (at := _occurrence(schedule, d)) > now:
+            return at.astimezone(UTC)
+    return None
+
+
+def freshness(task: TaskDefinition, log: list[dict], now: datetime) -> dict:
+    """Whether the newest result is the current one, or a due run was missed or failed.
+
+    Only runs the Scheduler started count (a manual `task run` does not cover a missed automatic one), and a due
+    time before the schedule was last set (created, resumed, frequency changed) is not expected.
+    """
+    if task.status != "active":
+        return {"state": task.status.upper(), "detail": f"task is {task.status}: no run is expected"}
+    since = max((datetime.fromisoformat(e["at"]) for e in log
+                 if e["event"] in ("created", "resumed", "frequency_changed")), default=task.created_at)
+    if task.schedule.frequency == "every_minutes":
+        due = now - timedelta(minutes=task.schedule.minutes)
+    else:
+        due = last_due(task.schedule, now)
+    out = {"expected_at": due.isoformat() if due else None, "next_expected_at": next_due(task.schedule, now).isoformat()}
+    if due is None or due < since:
+        return {**out, "state": "NOT_DUE_YET", "detail": "no scheduled time has passed since the schedule was set"}
+    runs = [i for i, e in enumerate(log) if e.get("invoked_by") == "scheduler" and e["event"] == "run_started"
+            and datetime.fromisoformat(e["at"]) >= due - timedelta(minutes=1)]
+    if not runs:
+        late = now - due
+        if late <= MISSED_GRACE:
+            return {**out, "state": "DUE_NOW", "detail": f"due {int(late.total_seconds() // 60)} min ago; not started yet"}
+        return {**out, "state": "MISSED",
+                "detail": "the scheduler did not run it at the expected time (PC off, user logged off or scheduler "
+                          "error): the latest result is older than it should be"}
+    last = runs[-1]                                   # the log is append-only: what follows it is that run's outcome
+    after = [e for e in log[last + 1:] if e["event"] in ("run_finished", "run_failed")]
+    if not after:
+        return {**out, "state": "RUNNING", "detail": f"started {log[last]['at']}"}
+    if after[0]["event"] == "run_failed":
+        return {**out, "state": "FAILED", "detail": after[0].get("error", "")[:300]}
+    return {**out, "state": "CURRENT", "detail": f"result {after[0].get('result')} of {after[0].get('followup')}"}
+
+
 # ── conversation-facing operations ───────────────────────────────
 
 
@@ -294,12 +366,13 @@ def runs(kb: KnowledgeBase, task: TaskDefinition, limit: int | None = None) -> l
     return [r for r in followup_history(kb, task.strategy) if r.task_id == task.id][:limit]
 
 
-def status(*, kb: KnowledgeBase, scheduler, task_id: str) -> dict:
+def status(*, kb: KnowledgeBase, scheduler, task_id: str, now: datetime | None = None) -> dict:
     task = load(kb, task_id)
     log = events(kb, task_id)
     last = runs(kb, task, limit=1)
     problems = [e for e in log if e["event"] in ("run_failed", "run_skipped")][-3:]
     return {
+        "freshness": freshness(task, log, now or datetime.now(UTC)),
         "task": task.model_dump(mode="json"), "schedule": task.schedule.describe(),
         "scheduler": scheduler.query(task.scheduler_name) if task.status != "cancelled" else {"registered": False},
         "last_result": last[0].model_dump(mode="json") if last else None,
@@ -333,6 +406,19 @@ def _commit_knowledge(kb: KnowledgeBase, paths: list[Path], message: str) -> str
                          capture_output=True, check=False)
     return "committed" if add.returncode == 0 and com.returncode == 0 else \
         f"commit failed: {(com.stderr or add.stderr).decode(errors='replace').strip()[:200]}"
+
+
+def _mark_validity(latest: Path, task: TaskDefinition, now: datetime) -> None:
+    """LATEST.md cannot update itself when a run is missed, so it says until when it is the current result."""
+    nxt = next_due(task.schedule, now)
+    if nxt is None or not latest.exists():
+        return
+    note = (f"\n\n> **Vigencia:** resultado de la tarea `{task.id}` ({task.schedule.describe()}). La próxima corrida "
+            f"esperada es **{nxt:%Y-%m-%d %H:%M} UTC** (+{int(MISSED_GRACE.total_seconds() // 60)} min de margen): si esa "
+            f"hora ya pasó y esto no cambió, **la corrida se omitió** y este resultado no es el vigente "
+            f"(`task status {task.id}` lo confirma).\n")
+    with latest.open("a", encoding="utf-8", newline="\n") as fh:
+        fh.write(note)
 
 
 def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None = None,
@@ -396,6 +482,8 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
             return {"status": "FAILED", **ev}
         evidence = [kb.base / "evidence" / f"{s.split(':', 1)[1]}.json" for s in rec.sources]
         written += [path, path.parent / "LATEST.md", *evidence]
+        if invoked_by == "scheduler":
+            _mark_validity(path.parent / "LATEST.md", task, now)
         ev = _event(kb, task_id, "run_finished", datetime.now(UTC), followup=rec.id, result=rec.status,
                     strategy_ref=rec.strategy_ref, spec_hash=rec.spec_hash, attention=rec.attention[:5])
         committed = _commit_knowledge(kb, written, f"task {task_id}: {rec.status} {rec.id}") if commit else "skipped"

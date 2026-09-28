@@ -231,6 +231,53 @@ def test_manual_and_scheduled_runs_are_told_apart(env):
         t.run(kb=kb, task_id="seguimiento-spy", followup=follow, commit=False, invoked_by="cron")
 
 
+def _ny(y, mo, d, h, mi):
+    return datetime(y, mo, d, h, mi, tzinfo=__import__("zoneinfo").ZoneInfo("America/New_York")).astimezone(UTC)
+
+
+def test_due_times_follow_the_owner_timezone_and_weekdays():
+    weekdays = Schedule(frequency="weekdays", time="17:05", timezone="America/New_York")
+    monday_noon = _ny(2026, 9, 28, 12, 0)                         # Monday 28/09
+    assert t.last_due(DAILY, monday_noon) == _ny(2026, 9, 27, 17, 5)
+    assert t.last_due(weekdays, monday_noon) == _ny(2026, 9, 25, 17, 5)   # Friday, not Sunday
+    assert t.next_due(weekdays, _ny(2026, 10, 2, 18, 0)) == _ny(2026, 10, 5, 17, 5)  # Friday evening -> Monday
+    assert t.last_due(Schedule(frequency="every_minutes", minutes=15, timezone="UTC"), monday_noon) is None
+
+
+def test_a_missed_run_is_told_apart_from_the_current_result(env):
+    """Owner 28/09: a result that is old because the scheduler did not run must not look current."""
+    kb, sch, follow = env  # noqa: F811
+    created = _ny(2026, 9, 28, 12, 0)
+    make(kb, sch, now=created)
+    task = t.load(kb, "seguimiento-spy")
+
+    def state(at):
+        return t.freshness(t.load(kb, "seguimiento-spy"), t.events(kb, "seguimiento-spy"), at)["state"]
+    assert state(_ny(2026, 9, 28, 16, 0)) == "NOT_DUE_YET"
+    assert state(_ny(2026, 9, 28, 17, 20)) == "DUE_NOW"
+    t.run(kb=kb, task_id=task.id, followup=follow, commit=False, now=_ny(2026, 9, 28, 17, 21))   # manual: does not count
+    assert state(_ny(2026, 9, 28, 17, 40)) == "MISSED"
+    t.run(kb=kb, task_id=task.id, followup=follow, commit=False, now=_ny(2026, 9, 28, 17, 45), invoked_by="scheduler")
+    assert state(_ny(2026, 9, 28, 18, 0)) == "CURRENT"
+    assert state(_ny(2026, 9, 29, 18, 0)) == "MISSED"                 # the next day nothing ran
+    latest = (kb.base / "followups" / task.strategy / "LATEST.md").read_text(encoding="utf-8")
+    assert "la corrida se omitió" in latest and "2026-09-29 21:05 UTC" in latest
+    t.pause(kb=kb, scheduler=sch, task_id=task.id, prompt="Pausalo", now=_ny(2026, 9, 29, 18, 1))
+    assert state(_ny(2026, 9, 30, 18, 0)) == "PAUSED"
+
+
+def test_a_failed_scheduled_run_is_reported_as_failed(env):
+    kb, sch, _ = env  # noqa: F811
+    make(kb, sch, now=_ny(2026, 9, 28, 12, 0))
+
+    def broken(**_):
+        raise RuntimeError("GaleCore API down")
+    t.run(kb=kb, task_id="seguimiento-spy", followup=broken, commit=False, now=_ny(2026, 9, 28, 17, 5),
+          invoked_by="scheduler")
+    fr = t.status(kb=kb, scheduler=sch, task_id="seguimiento-spy", now=_ny(2026, 9, 28, 17, 30))["freshness"]
+    assert fr["state"] == "FAILED" and "GaleCore API down" in fr["detail"]
+
+
 def test_pausing_during_a_run_is_not_overwritten(env):
     """Review R1 MAJOR: a chat command during an in-flight run keeps its effect and the chain stays intact."""
     kb, sch, follow = env  # noqa: F811
