@@ -295,6 +295,25 @@ def test_a_failed_scheduled_run_is_reported_as_failed(env):
     assert fr["state"] == "FAILED" and "GaleCore API down" in fr["detail"]
 
 
+def test_rebind_moves_the_task_to_another_checkout_keeping_id_history_and_pause(env, tmp_path):
+    """Codex plan review: the task is bound to a work-item worktree; moving it must be auditable and keep its state."""
+    kb, sch, _ = env  # noqa: F811
+    make(kb, sch)
+    t.pause(kb=kb, scheduler=sch, task_id="seguimiento-spy", prompt="Pausalo", now=NOW)
+    with pytest.raises(t.TaskError, match="not a GaleCore-AI checkout"):
+        t.rebind(kb=kb, scheduler=sch, task_id="seguimiento-spy", code_path=tmp_path, prompt="Mové la tarea", now=NOW)
+    stable = tmp_path / "GaleCore-AI"
+    (stable / "tools").mkdir(parents=True)
+    (stable / "tools" / "task_runner.py").write_text("# runner", encoding="utf-8")
+    task = t.rebind(kb=kb, scheduler=sch, task_id="seguimiento-spy", code_path=stable, prompt="Mové la tarea", now=NOW)
+    reg = sch.tasks[task.scheduler_name]
+    assert task.code_path == str(stable.resolve()) and task.status == "paused" and task.schedule == DAILY
+    assert reg["command"][-2] == str(stable.resolve() / "tools" / "task_runner.py") and reg["enabled"] is False
+    log = t.events(kb, "seguimiento-spy")                                 # raises if the chain broke
+    assert [e["event"] for e in log] == ["created", "paused", "code_path_changed"]
+    assert log[-1]["after"] == str(stable.resolve()) and log[-1]["before"] != log[-1]["after"]
+
+
 def test_pausing_during_a_run_is_not_overwritten(env):
     """Review R1 MAJOR: a chat command during an in-flight run keeps its effect and the chain stays intact."""
     kb, sch, follow = env  # noqa: F811

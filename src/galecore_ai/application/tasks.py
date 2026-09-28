@@ -339,6 +339,32 @@ def set_frequency(*, kb: KnowledgeBase, scheduler, task_id: str, schedule: Sched
     return task
 
 
+def rebind(*, kb: KnowledgeBase, scheduler, task_id: str, code_path: Path, prompt: str,
+           now: datetime | None = None) -> TaskDefinition:
+    """Point the task at another checkout (e.g. from a work-item worktree to the stable one), keeping id and history.
+
+    The new checkout must contain the runner. The scheduler registration is replaced in place (a failure leaves the
+    previous one registered and is logged); a paused task stays disabled.
+    """
+    now = now or datetime.now(UTC)
+    code_path = Path(code_path).resolve()
+    if not (code_path / "tools" / "task_runner.py").is_file():
+        raise TaskError(f"{code_path} has no tools/task_runner.py: not a GaleCore-AI checkout")
+    with _state_lock(kb, task_id):
+        task = load(kb, task_id)
+        if task.status == "cancelled":
+            raise TaskError(f"task {task_id} is cancelled; create a new one")
+        before = task.code_path
+        _scheduler_call(kb, task_id, now, "rebind", scheduler.create, task.scheduler_name,
+                        runner_command(code_path, task_id), task.schedule, task.local_time)
+        if task.status == "paused":
+            _scheduler_call(kb, task_id, now, "keep_paused", scheduler.set_enabled, task.scheduler_name, False)
+        task = task.model_copy(update={"code_path": str(code_path), "updated_at": now})
+        _save(kb, task)
+        _append(kb, task_id, "code_path_changed", now, before=before, after=str(code_path), prompt=prompt)
+    return task
+
+
 def _set_status(kb: KnowledgeBase, scheduler, task_id: str, status: str, prompt: str, now: datetime | None):
     now = now or datetime.now(UTC)
     with _state_lock(kb, task_id):

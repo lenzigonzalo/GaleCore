@@ -24,6 +24,7 @@ Usage:
     python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
     python -m galecore_ai.adapters.cli task set-frequency ID --frequency ... [--time HH:MM | --minutes N] --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task pause|resume|cancel ID --prompt "..."
+    python -m galecore_ai.adapters.cli task rebind ID --code-path CHECKOUT --prompt "..."
 
 Exit codes:
     0  SUCCESS
@@ -582,6 +583,9 @@ async def _cmd_task(args: argparse.Namespace) -> None:
         elif c == "set-frequency":
             task = t.set_frequency(kb=kb, scheduler=sch, task_id=args.id, schedule=schedule(), prompt=args.prompt)
             _json_out({"status": "CHANGED", "schedule": task.schedule.describe(), "scheduler": sch.query(task.scheduler_name)})
+        elif c == "rebind":
+            task = t.rebind(kb=kb, scheduler=sch, task_id=args.id, code_path=Path(args.code_path), prompt=args.prompt)
+            _json_out({"status": "REBOUND", "code_path": task.code_path, "scheduler": sch.query(task.scheduler_name)})
         else:
             fn = {"pause": t.pause, "resume": t.resume, "cancel": t.cancel}[c]
             task = fn(kb=kb, scheduler=sch, task_id=args.id, prompt=args.prompt)
@@ -677,6 +681,10 @@ def main() -> None:
     p_tf = t_sub.add_parser("set-frequency", help="Change the schedule")
     p_tf.add_argument("id")
     schedule_args(p_tf)
+    p_tr = t_sub.add_parser("rebind", help="Run the task from another checkout, keeping its id and history")
+    p_tr.add_argument("id")
+    p_tr.add_argument("--code-path", dest="code_path", required=True, help="GaleCore-AI checkout with tools/task_runner.py")
+    p_tr.add_argument("--prompt", required=True)
     for name in ("pause", "resume", "cancel"):
         p = t_sub.add_parser(name)
         p.add_argument("id")
