@@ -93,3 +93,17 @@ CPI; crédito de la 1.0.3 como supuesto; test plan con el diseño de r4; histori
 cerrada del lado interno; Codex sobre el informe, opcional si el owner lo pide.
 
 **Utilidad (owner):** pendiente — se registra acá, aparte, cuando la evalúes.
+
+## Utilidad (owner, 28/09) — registrada aparte de la revisión técnica
+
+Owner, sobre el registro r3: «está muy complicado de leer, los informes de finanzas tienen que ser más prácticos, más
+tablas, gráficos, tanto texto se pierde y es difícil entender». **Evaluación: el contenido no le resulta usable en prosa.**
+
+Respuesta: vista práctica derivada del mismo registro y evidencias (sin datos nuevos), publicada como página privada
+https://claude.ai/artifact/G7L8oniVGHvQfFupAQzS8R — 4 números clave, «qué mirar» en 4 líneas, tabla de posiciones con sus
+salidas, calendario posiciones × eventos, SPY contra strikes, tasas y crédito en pb, tabla de volatilidad, faltantes; el
+registro con fuentes queda como respaldo al pie. Pendiente: que el owner diga si esta vista le sirve.
+
+Consecuencia para el paso 3 (skill): el método incluye **dos salidas**: el registro trazable (research + evidence) y la
+vista del owner (tablas y gráficos, texto mínimo), generada desde el registro. Hoy la vista se generó con un script de
+sesión; si la skill se aprueba, el generador pasa al repo con tests.
