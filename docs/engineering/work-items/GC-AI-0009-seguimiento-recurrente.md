@@ -33,7 +33,8 @@ gestor universal de agentes. La tarea no modifica la estrategia aprobada ni oper
 - [ ] **AC-01 — Descubrible y guiado:** entrada `recurring_followup` con su skill (define objetivo, frecuencia, zona
   horaria, fuentes, resultado; propone la recurrencia cuando aporta valor).
 - [ ] **AC-02 — Ejecución real:** ejecuciones automáticas del Programador de tareas, sin sesión de Claude, cada una con
-  estrategia, versión, hash, método, commit y fuentes.
+  estrategia, versión, hash, método, commit y fuentes. Incluir una automática posterior al fix de procedencia y otra
+  desde el checkout estable después del traslado auditable con `task rebind`, conservando identidad e historial.
 - [ ] **AC-03 — Persistencia e historial:** cada resultado queda (registro de seguimiento con hash + evidencia +
   eventos encadenados) y se consulta desde otra sesión (`task status/history`, `LATEST.md`).
 - [ ] **AC-04 — Control:** cambiar frecuencia, pausar, reanudar y cancelar desde el chat, con efecto verificado en el
@@ -47,14 +48,35 @@ gestor universal de agentes. La tarea no modifica la estrategia aprobada ni oper
 | Criterio | Implementación | Verificación automática | Artefacto | Estado |
 |---|---|---|---|---|
 | AC-01 | `config/catalog.yaml` (`recurring_followup`), `config/skills/recurring-followup/skill.yaml`; `strategy_followup` 0.3.0 propone la recurrencia | catálogo en `test_knowledge.py` | — | Implementado |
-| AC-02 | `application/tasks.py` (`WindowsScheduler`, `run(invoked_by=)`), `tools/task_runner.py` | `test_run_records_a_followup_tied_to_the_task`, `test_manual_and_scheduled_runs_are_told_apart` | PENDING: corridas del 27/09 no distinguibles (C4-M2); prueba el 28/09 17:05 NY | Implementado |
-| AC-03 | `contracts/task.py`, `tasks.events/status/runs`, `followup.history` | `test_an_edited_event_log_is_detected` | PENDING | Implementado |
-| AC-04 | `tasks.set_frequency/pause/resume/cancel`, CLI `task` | `test_paused_or_cancelled_tasks_do_not_run`, `test_changing_frequency_recreates_the_schedule_and_keeps_pause` | PENDING | Implementado |
-| AC-05 | lock exclusivo, `run_failed`, `local_time_for` + resync | `test_overlapping_runs_are_skipped_and_stale_locks_broken`, `test_a_failed_run_is_recorded_not_raised`, `test_timezone_is_converted_to_this_pc` | PENDING | Implementado |
+| AC-02 | `application/tasks.py` (`WindowsScheduler`, `run(invoked_by=)`), `tools/task_runner.py` | `test_run_records_a_followup_tied_to_the_task`, `test_manual_and_scheduled_runs_are_told_apart` | `scheduler-20260928-post-fix.txt`: automática por horario 28/09 18:05 (`invoked_by=scheduler`, ERROR por API caída) y a demanda por el Programador desde worktree (OK) y desde main (OK, 18:23). **Falta:** automática por horario desde main (29/09 17:05 NY) | Parcial |
+| AC-03 | `contracts/task.py`, `tasks.events/status/runs`, `followup.history` | `test_an_edited_event_log_is_detected` | Registros `20260928T210502Z`/`210847Z`/`212308Z` + eventos encadenados; `task status/history` en sesión | Verificado local |
+| AC-04 | `tasks.set_frequency/pause/resume/cancel`, CLI `task` | `test_paused_or_cancelled_tasks_do_not_run`, `test_changing_frequency_recreates_the_schedule_and_keeps_pause`, `test_a_paused_rebind_that_cannot_disable_again_stays_consistent` | `scheduler-20260928-controles.txt`: pausa → Disabled/N/A; reanudar → Ready; frecuencia → Weekly L–V 18:10 y vuelta a Daily 18:05; cancelar → la tarea ya no existe y `task run` → SKIPPED | Verificado en el Programador |
+| AC-05 | lock exclusivo, `run_failed`, `local_time_for` + resync | `test_overlapping_runs_are_skipped_and_stale_locks_broken`, `test_a_failed_run_is_recorded_not_raised`, `test_timezone_is_converted_to_this_pc` | ERROR real del 28/09 18:05 registrado y visible en `task status` | Verificado local |
 | AC-06 | `TaskDefinition.kind` sólo `strategy_followup`; el runner sólo llama `run_followup` | `test_a_followup_never_writes_strategy_versions_or_approvals` | — | Implementado |
 | AC-07 | — | — | — | Pendiente |
 
 ## Required validation
+
+Orden para completar A (alineación con roadmap, 28/09): capturar automática post-fix y evaluación real de 1.0.3
+(AC-06 de 0008); trasladar con `task rebind` ya implementado; capturar automática desde main; enlazar toda la evidencia
+aquí; ejecutar un recheck final acotado sobre fixes y hallazgos abiertos de 0008/0009. No repetir revisión completa ni
+ampliar scheduler. Handoff vigente: `GaleCore-AI/docs/architecture/SESSION_HANDOFF.md` del workspace.
+
+### Referencias operativas para los pasos 1–3 del roadmap
+
+- Tarea: `seguimiento-spy-prima-varianza`; corrida prevista 28/09 17:05 NY. Leer
+  `knowledge/tasks/seguimiento-spy-prima-varianza/events.jsonl` del workspace: inicio con `invoked_by=scheduler` y
+  `scheduler_seen`, fin y seguimiento con versión/hash de 1.0.3. Si no está, registrar el faltante, no darla por ocurrida.
+- Captura del Programador: `schtasks /query /tn "GaleCore-AI\seguimiento-spy-prima-varianza" /fo LIST /v`, guardando
+  comando, salida sanitizada y exit code; contrastar con `task status seguimiento-spy-prima-varianza` y su frescura.
+- Evaluación de 0008: desde workspace, `python GaleCore/dev/galecore_dev.py runtime-report --spec spy_prima_varianza_30_45d`.
+- Traslado con la CLI `task rebind seguimiento-spy-prima-varianza --code-path <workspace>/GaleCore-AI --prompt "..."`;
+  comprobar identidad/historial y automática posterior desde el destino, como exige AC-02.
+- Con evidencia completa: desde workspace,
+  `python .worktrees/galecore-ai/GC-AI-0009/docs/evidence/gc-ai-0009/codex_review.py --recheck docs/engineering/reviews/GC-AI-0009-20260928T155533Z.md --base 5103d50 --model gpt-5.6-sol`.
+  Incluir fixes de `every_minutes`/`rebind`, evidencia de ambos checkouts y resolución referenciada del C3 de 0008.
+
+La primera lectura útil se muestra antes de terminar ese recheck; presentar cierre requiere la evidencia completa.
 
 ```powershell
 python tools/engineering_gate.py
@@ -69,7 +91,8 @@ git diff --check
   contraseña); no hace falta una sesión de Claude. Necesita la API de GaleCore Dev levantada y sus credenciales de
   desarrollo; si falta, la ejecución queda registrada como ERROR.
 - El Programador ejecuta el código del checkout registrado en la tarea (`code_path`); hoy es este worktree. Si se mueve o
-  borra, la tarea falla (visible en `%LOCALAPPDATA%\GaleCore-AI\task_runner.log`). Pasa a `main` al cerrar.
+  borra, la tarea falla (visible en `%LOCALAPPDATA%\GaleCore-AI\task_runner.log`). Se traslada a `main` con `task rebind`
+  y se prueba la ejecución automática desde ahí antes del recheck final y del cierre. No borrar el worktree durante el traspaso.
 - Zona horaria: el horario del owner se convierte a la hora local de esta PC al crear, y se re-sincroniza en cada
   ejecución si el desfase cambió (horario de verano de EE. UU.).
 
@@ -153,3 +176,14 @@ eventos del 28/09 de `knowledge/tasks/seguimiento-spy-prima-varianza/events.json
   omitía lo ocurrido antes (el OK de 18:08 informó «eventos: ninguno» pese a la entrada del día). `run_followup` ahora ancla
   en la última corrida que leyó GaleCore. Test `test_after_an_error_the_window_starts_at_the_last_run_that_read_galecore`;
   805 passed, ruff OK. El registro 20260928T210847Z queda como está (hash); este párrafo lo explica.
+
+## Recheck Codex (28/09, `5103d50..1c52c39`) — CHANGES_REQUESTED
+
+Review: `docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md`.
+
+| # | Estado según Codex | Triage |
+|---|---|---|
+| C4-B1 | DISPUTED: la aprobación está transcripta | Sin cambios |
+| C4-M2 | STILL OPEN: faltaba evidencia real de pausa, reanudación, frecuencia y cancelación | Corregido: `docs/evidence/gc-ai-0009/scheduler-20260928-controles.txt` (comando, estado y exit code de cada paso contra el Programador). Un primer intento del script de captura aplicó la pausa y falló antes de guardar la salida; se reanudó y se repitió la secuencia entera |
+| NEW MAJOR | La automática desde el checkout estable fue lanzada a demanda | Aceptado: se captura la automática por horario del 29/09 17:05 NY desde main |
+| NEW MAJOR | `rebind` de una tarea pausada: si volver a deshabilitar falla, estado y Programador divergen | Corregido como en `set_frequency`: guarda el nuevo `code_path`, sigue `paused` (sus corridas se saltean), evento `code_path_changed` con `scheduler_left_enabled` y error pidiendo repetir `task pause`. Test `test_a_paused_rebind_that_cannot_disable_again_stays_consistent` |

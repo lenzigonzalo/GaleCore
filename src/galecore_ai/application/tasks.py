@@ -357,11 +357,20 @@ def rebind(*, kb: KnowledgeBase, scheduler, task_id: str, code_path: Path, promp
         before = task.code_path
         _scheduler_call(kb, task_id, now, "rebind", scheduler.create, task.scheduler_name,
                         runner_command(code_path, task_id), task.schedule, task.local_time)
+        pause_error = None
         if task.status == "paused":
-            _scheduler_call(kb, task_id, now, "keep_paused", scheduler.set_enabled, task.scheduler_name, False)
+            try:
+                _scheduler_call(kb, task_id, now, "keep_paused", scheduler.set_enabled, task.scheduler_name, False)
+            except TaskError as exc:
+                pause_error = exc
+        # The scheduler already points at the new checkout, so the state records it (same rule as set_frequency).
         task = task.model_copy(update={"code_path": str(code_path), "updated_at": now})
         _save(kb, task)
-        _append(kb, task_id, "code_path_changed", now, before=before, after=str(code_path), prompt=prompt)
+        _append(kb, task_id, "code_path_changed", now, before=before, after=str(code_path), prompt=prompt,
+                **({"scheduler_left_enabled": True} if pause_error else {}))
+    if pause_error:
+        raise TaskError(f"task moved, but the scheduler task could not be disabled again ({pause_error}); "
+                        "it stays paused and its runs are skipped - repeat `task pause`") from pause_error
     return task
 
 

@@ -314,6 +314,30 @@ def test_rebind_moves_the_task_to_another_checkout_keeping_id_history_and_pause(
     assert log[-1]["after"] == str(stable.resolve()) and log[-1]["before"] != log[-1]["after"]
 
 
+def test_a_paused_rebind_that_cannot_disable_again_stays_consistent(env, tmp_path):
+    """Codex recheck MAJOR: the scheduler already points at the new checkout, so the state must too."""
+    kb, sch, follow = env  # noqa: F811
+    make(kb, sch)
+    t.pause(kb=kb, scheduler=sch, task_id="seguimiento-spy", prompt="Pausalo", now=NOW)
+    stable = tmp_path / "GaleCore-AI"
+    (stable / "tools").mkdir(parents=True)
+    (stable / "tools" / "task_runner.py").write_text("# runner", encoding="utf-8")
+
+    def failing(*_):
+        raise t.TaskError("schtasks change failed: Access is denied")
+    sch.set_enabled = failing
+    with pytest.raises(t.TaskError, match="could not be disabled again"):
+        t.rebind(kb=kb, scheduler=sch, task_id="seguimiento-spy", code_path=stable, prompt="Mové la tarea", now=NOW)
+    task = t.load(kb, "seguimiento-spy")
+    assert task.code_path == str(stable.resolve()) and task.status == "paused"
+    assert sch.tasks[task.scheduler_name]["command"][-2] == str(stable.resolve() / "tools" / "task_runner.py")
+    log = t.events(kb, "seguimiento-spy")
+    assert [e["event"] for e in log[-2:]] == ["scheduler_error", "code_path_changed"]
+    assert log[-1]["scheduler_left_enabled"] is True
+    assert t.run(kb=kb, task_id="seguimiento-spy", followup=follow, commit=False,
+                 invoked_by="scheduler")["status"] == "SKIPPED"
+
+
 def test_pausing_during_a_run_is_not_overwritten(env):
     """Review R1 MAJOR: a chat command during an in-flight run keeps its effect and the chain stays intact."""
     kb, sch, follow = env  # noqa: F811

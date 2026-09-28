@@ -1,5 +1,12 @@
 # GaleCore-AI — Session Handoff
 
+> **Histórico en este checkout (aclaración Codex, 28/09):** el handoff vigente para retomar está en
+> [`GaleCore-AI/docs/architecture/SESSION_HANDOFF.md`](../../../../../GaleCore-AI/docs/architecture/SESSION_HANDOFF.md)
+> del checkout principal. Las indicaciones de aprobación pendiente y de esperar decisiones de A/B que siguen abajo
+> pertenecen al 27/09 y no sustituyen las decisiones posteriores. Leer también la
+> [revisión de coherencia](../../../../../docs/engineering/reviews/PLAN-HANDOFF-20260928-codex.md).
+> El trabajo activo sigue siendo GC-AI-0009 según `ACTIVE_WORK_ITEM` del workspace.
+
 **Fecha:** 2026-09-16
 **Estado (2026-09-27):** I1, I2 e I3 **cerrados**. **Activo: GC-AI-0008** (estrategia SPY hasta SHADOW). GC-AI-0007 espera cierre del owner; GC-AI-0006 abierto. Plan: `roadmap/README.md`.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
@@ -165,7 +172,7 @@ Investigación abierta GEX 0DTE: espera dónde archivar el desglose por vencimie
 **Estado de la sesión:** ApiKey dev rotada (en user-secrets; tomada en caliente). Cerrados por el
 owner: GC-AI-0002/0003/0004/0005 (tag `phase4-closed`). Plan: `roadmap/README.md` (I3 activo).
 
-**Qué seguir:** el plan único es [`roadmap/README.md`](../../../roadmap/README.md): estado, base
+**Qué seguir:** el plan único es [`roadmap/README.md`](../../../../../roadmap/README.md): estado, base
 común, secuencia I1–I5, casos de uso y decisiones abiertas. El item activo sigue siendo
 [GC-AI-0005](../engineering/work-items/GC-AI-0005-base-minima-conocimiento.md) (= I1), terminado y
 cerrado. I2 (GC-0002) está cerrado; el activo es **I3, SHADOW durable y visible** (GC-0004, README §4). La realineación del
