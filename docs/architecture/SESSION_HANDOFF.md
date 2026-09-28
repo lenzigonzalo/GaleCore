@@ -15,11 +15,13 @@ No se volvió a ejecutar el runtime ni se cerró ningún item al corregir estos 
 
 ### ▶ Retomar acá (28/09 noche → próxima sesión)
 
-**Seguir:** [roadmap §4](../../../roadmap/README.md#4-plan-de-construcción) (rearmado el 28/09 noche): primero la base del
-harness (Parte 1: fuentes, perfil, molde de capacidad, probar/guardar, programar, entrada única), después las capacidades
-de trading (Parte 2). **Ahora:** paso 0, cerrar GC-AI-0009 con los hallazgos del recheck Codex `GC-AI-0009-20260928T221056Z.md`
-y la automática por horario del 29/09 17:05 NY, que ya corre desde `GaleCore-AI` main (no hace falta el worktree para
-el Programador). Después, abrir el work item de la entrega 1. C (GC-AI-0010) y B (GC-AI-0011) quedan suspendidos.
+**Seguir:** [roadmap §4](../../../roadmap/README.md#4-plan-de-construcción): primero la base del harness (Parte 1), después
+las capacidades de trading (Parte 2). **Activo: [GC-AI-0012 — mapa de fuentes](../../../.worktrees/galecore-ai/GC-AI-0012/docs/engineering/work-items/GC-AI-0012-mapa-de-fuentes.md)**
+(entrega 1; worktree y rama `feature/GC-AI-0012` creados, acuerdo y criterios escritos, sin código todavía).
+**Pendiente de GC-AI-0009 (paso 0):** el código y la evidencia de controles ya están; falta capturar la automática por
+horario del 29/09 17:05 NY desde `GaleCore-AI` main (`task status seguimiento-spy-prima-varianza` + `schtasks /query`),
+anotarla en su matriz (AC-02) y presentar el cierre. La API de GaleCore Dev quedó en una ventana propia; si se reinició
+la PC, levantarla antes de esa hora. C (GC-AI-0010) y B (GC-AI-0011) quedan suspendidos.
 **Del usuario:** nada para empezar. Mensajes cortos, en español, contrastando cada tarea contra el objetivo del §4.
 
 **Reglas de esta sesión que valen para seguir:**
