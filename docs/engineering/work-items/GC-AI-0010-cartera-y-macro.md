@@ -44,3 +44,15 @@ Fuente de la cartera: **Tastytrade vía GaleCore**, sólo lectura. Fuera: IBKR, 
 - [ ] **AC-04 — Delegable:** la tarea recurrente puede correr este informe.
 - [ ] **AC-05 — Método como skill** (si el owner lo encuentra útil).
 - [ ] **AC-06 — Revisión:** interna y Codex; utilidad y cierre, el owner.
+
+## Reorientación (owner, 27/09/2026)
+
+Owner: «¿Es necesario que ponga mi cuenta de bróker? Inventame plata y listo si necesitas… lo tengo que conectar en produ
+después y tengo 2.5k usd nomás… no te pierdas en eso, acordate del objetivo final».
+
+- **No se vincula la cuenta de bróker ahora.** Queda para cuando se conecte producción.
+- **No se inventan posiciones ni saldos** (regla del owner: datos siempre reales). La «cartera» de esta entrega es lo que ya
+  está en riesgo con datos reales en GaleCore: las posiciones SHADOW (1.0.3 y la posición remanente de v2). El capital de
+  referencia es un **parámetro declarado** por el owner, no un dato de cuenta.
+- El contexto macro se elige por esa exposición (puts de SPY a 30–45 días), reutilizando `context_research` y las fuentes con
+  acceso comprobado (FRED, FMP, Alpha Vantage).
