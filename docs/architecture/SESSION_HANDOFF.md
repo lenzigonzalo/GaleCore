@@ -1,10 +1,57 @@
 # GaleCore-AI — Session Handoff
 
 **Fecha:** 2026-09-16
-**Estado (2026-09-27, noche):** I1–I3 cerrados; GC-AI-0006 y 0007 cerrados. **Activos:** GC-AI-0008 (1.0.3 en SHADOW Dev) y GC-AI-0009 (seguimiento diario), esperando Codex y cierre del owner; GC-AI-0010 en borrador. Plan: `roadmap/README.md`.
+**Estado (2026-09-28, tarde):** semana A → C → H con E en paralelo (roadmap §4). Activo: GC-AI-0009 (recorrido A). `main` de GaleCore-AI consolidado (0002–0011). Traspaso de GaleCore publicado. Plan: `roadmap/README.md`.
 **Fuente operativa:** `docs/engineering/ACTIVE_WORK_ITEM`. Las declaraciones históricas de cierre deben revalidarse contra su matriz de evidencia.
 
 ## Próxima sesión — punto de entrada
+
+### ▶ Retomar acá (28/09 tarde → próxima sesión)
+
+**Plan único:** `roadmap/README.md` (workspace) — §1 objetivo (el harness es lo crítico), §4 secuencia de la semana:
+**A** seguimiento confiable → **C** skill de contexto con feedback → **H** harness mínimo sobre A y C; **E** traspaso de
+GaleCore en paralelo; **B** backtest sólo compuerta de datos esta semana (incremento propio después); **D** postergado.
+Viabilidad revisada por Codex: `docs/engineering/reviews/MVP-PLAN-20260928-codex.md` (workspace). `ACTIVE_WORK_ITEM` del
+workspace → GC-AI-0009 (no cambiar hasta completar A).
+
+**Primero (A, GC-AI-0009):**
+1. Verificar el **estado real** de la corrida automática del 28/09 17:05 NY (18:05 local), sin suponer que ocurrió:
+   `knowledge/tasks/seguimiento-spy-prima-varianza/events.jsonl` debe tener `run_started` con `invoked_by=scheduler` y
+   `scheduler_seen`, y `run_finished`; follow-up con host `windows-task-scheduler`, 1.0.3 y su hash. Guardar como evidencia
+   una consulta `schtasks /query /tn "GaleCore-AI\seguimiento-spy-prima-varianza" /fo LIST /v` con comando, salida y
+   exit code. `task status seguimiento-spy-prima-varianza` debe dar `freshness.state=CURRENT`.
+2. AC-06 de 0008: una **evaluación real de la 1.0.3** explicada (`python GaleCore/dev/galecore_dev.py runtime-report --spec spy_prima_varianza_30_45d`).
+   El 28/09 a las 15:00 UTC tenía cero evaluaciones (la API había estado caída hasta las 14:59 UTC).
+3. Recheck acotado de Codex: `python .worktrees/galecore-ai/GC-AI-0009/docs/evidence/gc-ai-0009/codex_review.py --recheck docs/engineering/reviews/GC-AI-0009-20260928T155533Z.md --base 5103d50 --model gpt-5.6-sol`
+   (desde el workspace; cubre el fix de `every_minutes` y `task rebind` + la evidencia). Pendiente también el recheck C3
+   de 0008 que Codex marcó.
+4. Mover la tarea al checkout estable: `task rebind seguimiento-spy-prima-varianza --code-path <workspace>/GaleCore-AI --prompt "..."`
+   (hoy corre desde `.worktrees/galecore-ai/GC-AI-0009`: no borrar ese worktree hasta el rebind). Verificar la corrida
+   automática siguiente desde `main`. Después, pedir los cierres de 0008/0009 (son del usuario).
+
+**Después:** C (GC-AI-0010): skill de contexto de la exposición SHADOW, registro + vista práctica **generada por código**
+desde el registro (punto de partida: `docs/evidence/gc-ai-0010/vista-practica/`), ejecutada con datos nuevos desde una
+sesión limpia, feedback asociado al resultado y a la versión de la skill. Estándar de fuentes: FMP `quote` y calendario
+económico denegados por plan → spot de GaleCore, calendario del FOMC como faltante. Luego H sobre A y C. En esperas: la
+compuerta de datos de B (GC-AI-0011: dividendos con hash; reconciliar con `GaleCore/research/data/.../spy_underlying_prices.parquet`).
+
+**Traspaso de GaleCore (E) — hecho de nuestro lado:** handoff en `docs/engineering/HANDOFF-GALECORE-SHADOW.md` del
+workspace (publicado en GitHub). El usuario invitó a su padre (GitHub y Supabase GaleCore Dev) y le manda `env.json` por
+canal seguro. **Falta que el usuario pushee** las 4 ramas a `ericlenzi/GaleCore` (el hook lo bloquea para el agente):
+`feature/GC-AI-0008-estrategia-shadow fix/gex-oi-lookback feature/GC-0003-gex-oi-coverage feature/GC-0001`. La base Dev es
+compartida: una sola instancia RUNNING; coordinar antes de levantar APIs en paralelo o desplegar.
+
+**Reglas de esta sesión que valen para seguir:**
+- Tono de equipo en todo lo que lea el padre: nada de «owner», nada de lenguaje de permisos; repartir esfuerzo.
+- Informes para el usuario: tablas y gráficos primero, texto mínimo (memoria `feedback-informes-practicos`).
+- No crear repos, cambiar remotos ni pushear sin pedido explícito. Estructura: GaleCore, GaleCore-AI y workspace (repo
+  de convenciones); `knowledge/` local, sin repo remoto (el `galecore-knowledge` que se creó en GitHub queda para que lo
+  archiven o borren; el remoto `origin` local sigue configurado: no pushear ahí).
+- La API de GaleCore Dev tiene que estar levantada en horario de mercado (`python GaleCore/dev/galecore_dev.py api`).
+
+**Páginas publicadas:** producto https://claude.ai/artifact/9goVMriibtrQeQZWwRSNWE · vista de la cartera
+https://claude.ai/artifact/G7L8oniVGHvQfFupAQzS8R. **Temporales ya innecesarios:** `C:	mp	raspaso-galecore-20260928*` y
+el zip del Escritorio (los borra el usuario si quiere).
 
 ### ▶ Retomar acá (lunes 2026-09-28) — primera sesión de mercado de la estrategia
 
