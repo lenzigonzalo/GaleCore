@@ -85,7 +85,11 @@ explicar, bancos 13–15/10 omitidos.
 **Corrección:** revisión r2 (`reason=correction`) de `research:2026-09-28-cartera-shadow-contexto-macro` resuelve los cuatro
 MAJOR y los MINOR que cambiaban conclusiones. Cambio principal: con las salidas, el riesgo relevante pasa de un techo de
 9,5 % a stops del orden de 1,7 % del capital, con la condición de que la API de GaleCore Dev esté levantada en horario de
-mercado; la v2 sale por tiempo el 30/10 (expuesta a los resultados del 28–29/10, no al empleo del 06/11). Pendiente:
-recheck acotado de r2 (interno o Codex).
+mercado; la v2 sale por tiempo el 30/10 (expuesta a los resultados del 28–29/10, no al empleo del 06/11).
+
+**Recheck interno de r2:** APPROVE (sin BLOCKER ni MAJOR; 5 MINOR). Los MINOR de hecho se corrigen en r3 (hora de
+recuperación de la API 14:59 UTC; vencimiento real que elegiría la 1.0.3 ~04–09/11 con salida ~14–19/10, que pasa por el
+CPI; crédito de la 1.0.3 como supuesto; test plan con el diseño de r4; historia del HY OAS a verificar). Revisión técnica
+cerrada del lado interno; Codex sobre el informe, opcional si el owner lo pide.
 
 **Utilidad (owner):** pendiente — se registra acá, aparte, cuando la evalúes.
