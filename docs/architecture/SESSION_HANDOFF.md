@@ -20,8 +20,8 @@ las capacidades de trading (Parte 2). **Activo: [GC-AI-0012 — mapa de fuentes]
 (entrega 1; worktree y rama `feature/GC-AI-0012` creados, acuerdo y criterios escritos, sin código todavía).
 **Pendiente de GC-AI-0009 (paso 0):** el código y la evidencia de controles ya están; falta capturar la automática por
 horario del 29/09 17:05 NY desde `GaleCore-AI` main (`task status seguimiento-spy-prima-varianza` + `schtasks /query`),
-anotarla en su matriz (AC-02) y presentar el cierre. La API de GaleCore Dev quedó en una ventana propia; si se reinició
-la PC, levantarla antes de esa hora. C (GC-AI-0010) y B (GC-AI-0011) quedan suspendidos.
+anotarla en su matriz (AC-02) y presentar el cierre. La API de GaleCore Dev arranca sola al iniciar sesión en Windows (tarea
+`GaleCore-AI\galecore-dev-api`, 28/09); comprobar que responde antes de esa hora. C (GC-AI-0010) y B (GC-AI-0011) quedan suspendidos.
 **Del usuario:** nada para empezar. Mensajes cortos, en español, contrastando cada tarea contra el objetivo del §4.
 
 **Reglas de esta sesión que valen para seguir:**
