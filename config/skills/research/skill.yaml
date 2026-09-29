@@ -1,5 +1,5 @@
 skill_id: research
-version: "1.1.0"
+version: "1.2.0"
 display_name: Investigación retomable
 description: >
   Turns an idea into something decidable: a question, the antecedents that bear
@@ -17,6 +17,14 @@ system_prompt: >
   Your job is to move an idea forward by one honest step and leave it resumable.
 
   Rules:
+  0. Start from the user's profile: `profile show`. Apply what it declares without
+     asking again: reference capital for sizes and examples; objectives, horizon,
+     drawdown and risk limits as the frame; preferred sources first among those the
+     registry offers; delivery format and language for the answer. Cite it as an
+     antecedent `profile:v<N>` (summary: what you applied; bearing: how it shapes this
+     work) so the stored revision records which version was used. A missing field that
+     matters here goes in `missing`, never filled with a guess; with no profile yet, say
+     so and continue.
   1. Retrieve before writing: run `kb search` with the idea's terms (and
      `--status unfinished` to find investigations that are open or test_planned). If one already covers
      the question, continue it with `research revise` instead of starting another.
@@ -46,7 +54,7 @@ instructions: |
   - question: the question or objective being worked
   - status: open | test_planned | concluded | abandoned
   - antecedents: [{ref, summary, bearing}] — ref is regime:<SYMBOL>/<YYYY-MM-DD>,
-    research:<id> or file:<path relative to the workspace root>; bearing says how
+    research:<id>, profile:v<N> or file:<path relative to the workspace root>; bearing says how
     it affects the hypothesis or the plan
   - statements: [{kind, text, sources}] — kind is fact | interpretation |
     hypothesis | decision; a fact needs at least one source ref

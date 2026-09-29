@@ -80,6 +80,33 @@ entries:
       - output_contract names SourceQueryResult, the shape `sources query` answers with (the entry's primary output); `sources list` answers with the related SourceCatalogSummary
       - Not checked - whether a source's own data is correct
 
+  - id: user_profile
+    kind: harness
+    serves: >-
+      Tus objetivos, capital de referencia, horizonte, drawdown y límites de riesgo,
+      fuentes preferidas y formato de entrega, versionados, para que cada capacidad los
+      aplique sin que los repitas y deje registrado qué versión usó.
+    example_requests:
+      - ¿Qué perfil tengo?
+      - Mi capital de referencia es 10.000 USD
+      - Los informes, tablas y gráficos primero
+    skill: skills/user-profile/skill.yaml
+    output_contract: galecore_ai.contracts.profile.ProfileVersion
+    galecore_capabilities: []
+    flow:
+      - profile show
+      - 'profile set --note "<qué cambia>" --prompt "<tus palabras>" --host-model <model> < {"changes": {...}}'
+      - profile history
+    stored_as: profile
+    controls:
+      - Create-only versions; every read re-checks the hash, an edited version is INTEGRITY_FAILED and blocks changes
+      - Partial changes on top of the current version; no real change creates no version
+      - Unknown fields, blank values and sources outside config/sources.yaml are refused
+      - Never stores a key or token; a refused value is not echoed back
+      - Missing fields are declared, never defaulted
+      - "research and context_research cite profile:v<N> as an antecedent, so the stored revision records the version (hash) used"
+      - Not checked - whether the declared objectives or limits are sensible
+
   - id: research
     kind: investigation
     serves: >-

@@ -21,7 +21,7 @@ from galecore_ai.harness.assets import asset_root, definition_hash, load_asset
 from galecore_ai.harness.definitions import SkillDefinition
 
 CATALOG_PATH = "catalog.yaml"
-STORED_AS = ("none", "regime", "research", "strategy", "task")
+STORED_AS = ("none", "regime", "research", "strategy", "task", "profile")
 
 
 class CatalogError(Exception):
@@ -40,7 +40,7 @@ class CatalogEntry(BaseModel):
     galecore_capabilities: list[str] = Field(default_factory=list)
     prepare_skill: str | None = None     # value of `prepare --skill` when the flow starts from a fact snapshot
     flow: list[str]                      # CLI commands, in order
-    stored_as: str                       # none | regime | research | strategy | task
+    stored_as: str                       # none | regime | research | strategy | task | profile
     controls: list[str]                  # what the validator checks for this kind of work (and what it does not)
     guide: str | None = None             # longer guide in docs/, if any
 

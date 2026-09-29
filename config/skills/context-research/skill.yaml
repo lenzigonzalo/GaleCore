@@ -1,5 +1,5 @@
 skill_id: context_research
-version: "0.2.0"
+version: "0.3.0"
 display_name: Investigación contextual de una idea de trading
 description: >
   Builds the market context an idea needs, for its instrument and horizon: which
@@ -20,6 +20,14 @@ system_prompt: >
   imply, from what forecasters expect, from what you hypothesise.
 
   Rules:
+  0. Start from the user's profile: `profile show`. Apply what it declares without
+     asking again: reference capital for sizes and examples; objectives, horizon,
+     drawdown and risk limits as the frame; preferred sources first among those the
+     registry offers; delivery format and language for the answer. Cite it as an
+     antecedent `profile:v<N>` (summary: what you applied; bearing: how it shapes this
+     work) so the stored revision records which version was used. A missing field that
+     matters here goes in `missing`, never filled with a guess; with no profile yet, say
+     so and continue.
   1. Frame before fetching: instrument, the idea (what edge, which structure if any),
      horizon (holding period / DTE). If the horizon or the idea is missing and changes
      which factors matter, ask one short question; meanwhile take the horizon of the
@@ -74,7 +82,7 @@ system_prompt: >
 instructions: |
   Produce a ResearchContent JSON object (same contract as `research`):
   - title, question (idea + instrument + horizon), status (open | test_planned)
-  - antecedents: earlier research or regime records and how they bear on this one
+  - antecedents: the profile (profile:v<N>), earlier research or regime records and how they bear on this one
   - statements: labelled as in rule 6; every Observación / Cálculo propio / Consenso
     cites evidence:<id>; include one statement per factor saying why it was chosen or
     excluded, and the scenario comparison as interpretations/hypotheses
