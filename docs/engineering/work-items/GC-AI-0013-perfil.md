@@ -70,11 +70,11 @@ en código; cablearlo sería plomería sin uso. Se conecta cuando una capacidad 
 
 | Criterio | Implementación | Verificación automática | Artefacto | Estado |
 |---|---|---|---|---|
-| AC-01 | PENDING | PENDING | PENDING | PENDING |
-| AC-02 | PENDING | PENDING | PENDING | PENDING |
-| AC-03 | PENDING | PENDING | PENDING | PENDING |
-| AC-04 | PENDING | PENDING | PENDING | PENDING |
-| AC-05 | — | — | PENDING | PENDING |
+| AC-01 | `contracts/profile.py` (`ProfileContent` con `missing()`, `ProfileVersion` con hash y guarda de credenciales); `adapters/profile_store.py` (create-only, `knowledge/profile/v<N>.json`, integridad en cada lectura) | `tests/unit/test_profile.py::TestContent`, `TestStore` | `knowledge/profile/v1.json` (commit `072728e` de `knowledge`) | DONE (sin revisar) |
+| AC-02 | `application/profile.py` (`show`, `set_profile` con cambios parciales y sin versión si no cambia nada, fuentes validadas contra `config/sources.yaml`, `history`); CLI `profile show/set/history` | `TestSetAndShow`, `test_cli_profile_set_show_history` | — | DONE (sin revisar) |
+| AC-03 | `adapters/knowledge_base.py` (`profile:v<N>`); `application/knowledge.py` (`resolve_ref`, `kb show`, `kb search --kind profile`) | `TestCitable` | — | DONE (sin revisar) |
+| AC-04 | `config/catalog.yaml` (`user_profile`, `stored_as: profile`); `config/skills/user-profile/skill.yaml`; regla 0 en `research` 1.2.0 y `context-research` 0.3.0 | `test_an_investigation_records_the_profile_version_it_used`; `cli catalog` → `user_profile.available` | — | DONE (sin revisar) |
+| AC-05 | — | — | `docs/evidence/gc-ai-0013/ac05-demo-v1-2026-09-29.md` (parte 1: sesión nueva aplica y cita `profile:v1`, verificado) | PARCIAL — parte 2 espera los objetivos del owner |
 | AC-06 | — | — | — | PENDING |
 
 ## Required validation
