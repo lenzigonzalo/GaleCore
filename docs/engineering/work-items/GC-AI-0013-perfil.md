@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0013
 title: Tu perfil (base del harness, entrega 2)
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0013 — Tu perfil
@@ -64,7 +64,7 @@ en código; cablearlo sería plomería sin uso. Se conecta cuando una capacidad 
   empezar, lo aplican y citan `profile:vN` en lo que guardan; lo faltante del perfil se declara en el resultado.
 - [x] **AC-05 — Demostración:** sesión nueva: investigación de contexto aplica el perfil sin repetirlo y cita `profile:v1`;
   cambio de perfil → la corrida siguiente cita `profile:v2`.
-- [ ] **AC-06 — Revisión:** interna y Codex; utilidad y cierre, el owner.
+- [x] **AC-06 — Revisión:** interna y Codex; utilidad y cierre, el owner.
 
 ## Requirement-to-evidence matrix
 
@@ -75,7 +75,7 @@ en código; cablearlo sería plomería sin uso. Se conecta cuando una capacidad 
 | AC-03 | `adapters/knowledge_base.py` (`profile:v<N>`); `application/knowledge.py` (`resolve_ref`, `kb show`, `kb search --kind profile`) | `TestCitable` | — | DONE (sin revisar) |
 | AC-04 | `config/catalog.yaml` (`user_profile`, `stored_as: profile`); `config/skills/user-profile/skill.yaml`; regla 0 en `research` 1.2.0 y `context-research` 0.3.0 | `test_an_investigation_records_the_profile_version_it_used`; `cli catalog` → `user_profile.available` | — | DONE (sin revisar) |
 | AC-05 | — | — | `docs/evidence/gc-ai-0013/ac05-demo-2026-09-29.md` (parte 1: sesión nueva aplica y cita `profile:v1`; parte 2: tras el cambio cita `profile:v2`; parte 3: `context_research` 0.3.0 cita `profile:v3` y rotula lo provisorio; todas verificadas) | DONE (sin revisar) |
-| AC-06 | — | — | `docs/engineering/reviews/GC-AI-0013-20260929T192821Z.md` (Codex recheck C2 APPROVE) | PENDING — utilidad y cierre del owner |
+| AC-06 | — | — | `docs/engineering/reviews/GC-AI-0013-20260929T192821Z.md` (Codex recheck C2 APPROVE) | DONE — CLOSED por decisión del owner (29/09) |
 
 ## Required validation
 
@@ -143,3 +143,9 @@ Rango `cf73c38..fe84c75`. Los tres MAJOR y los tres MINOR de C1, resueltos; sin 
 del owner (no bloquea): adelantar a `main` el reconocimiento de `profile:vN` o esperar el merge. Límite declarado: los
 logs crudos de los subagentes no se commitean; la verificación usó las transcripciones saneadas y los commits de
 `knowledge`.
+
+## Cierre (2026-09-29)
+
+CLOSED por decisión del owner: ante «¿Cerramos la entrega 2? Si decís que sí, registro el cierre, pongo el tag y la
+mergeo a `main`», respondió «ok». Revisión independiente APPROVE (C2). Tag `gc-ai-0013-closed`. El merge a `main`
+resuelve que el código de `main` no leyera las investigaciones que citan `profile:`.
