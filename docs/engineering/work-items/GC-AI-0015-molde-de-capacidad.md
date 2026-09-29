@@ -139,3 +139,9 @@ git diff --check
   lo declara faltante, y trae el cálculo al stop como `fact`; la próxima revisión sigue la skill 0.1.2.
 - **Traza de FRED (tasas reales, crédito):** la consume `context_research` (sus `data_needs`), no `daily_attention`;
   entra por AC-01 (declaración honesta de las entradas existentes), no por el caso.
+
+## Revisión independiente (Codex) — pendiente
+
+29/09 23:45Z: el runner no pudo correr Codex por límite de uso de la cuenta («try again at Sep 30th, 2026 12:07 AM»);
+no se escribió review. Se re-lanza `--base main` al habilitarse. La rama mergeó `main` (BL-008 de otra sesión) para que
+el rango revisado sea sólo el de este item.
