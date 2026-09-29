@@ -18,6 +18,17 @@ aprobación → SHADOW → seguimiento → retroalimentación. Autoriza los camb
 órdenes reales, PAPER/LIVE, cambios en producción ni push/PR de GaleCore. Continúa `roadmap/README.md` §4 I4;
 reutiliza el método de GC-AI-0006 (piloto, abierto) y la investigación de GC-AI-0007.
 
+
+## Punto de retorno documental (29/09; prevalece sobre pendientes históricos)
+
+La copia de main quedó rezagada respecto del worktree de GC-AI-0009. Consultar el
+[review del 28/09](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md)
+y la [matriz vigente de 0009](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/work-items/GC-AI-0009-seguimiento-recurrente.md).
+AC-06 de 0008 tiene respaldo y `every_minutes` está resuelto. No repetir esos trabajos.
+Pendientes: automática por horario desde main, revisión de evidencia de controles ya capturada,
+recheck del arreglo posterior de `rebind` y consolidación de referencias antes del cierre del owner.
+Esta nota no modifica estados de aceptación ni fabrica evidencia; el orden está en roadmap §4.
+
 ## Acuerdo breve (ENGINEERING §3)
 
 - **Problema:** hay investigación retomable y un runtime SHADOW durable, pero no un camino controlado entre
@@ -67,7 +78,7 @@ reutiliza el método de GC-AI-0006 (piloto, abierto) y la investigación de GC-A
 | AC-03 | `application/strategy.py` (`check_proposal`, tabla de soporte leída del código de GaleCore `bc62f22`) | `test_candidate_is_valid_with_its_declared_gaps`, `test_owner_draft_spec_is_refused_for_what_the_runtime_ignores`, `test_a_spec_promising_behavior_the_runtime_ignores_is_invalid` (5), `test_an_unmapped_field_fails_closed`, `test_fields_with_a_single_runtime_semantics_are_fixed` (4), `test_every_gate_leaf_is_validated` (5), y más | Chequeo real: `VALID_WITH_DECLARED_GAPS`, declaradas E3, E4, S2, R2, M2; `pcs_spy_16d_v1` → `INVALID` (sizing RISK_BASED, riesgo %, analytics_refs) | Implementado; verificado local |
 | AC-04 | `galecore_spec_hash`; spec en GaleCore `Files/Runtime/spy_prima_varianza_30_45d.json` (rama local `feature/GC-AI-0008-estrategia-shadow`) | `test_hash_equals_the_one_galecore_computed` (v1, v2 contra los hashes persistidos en GaleCore Dev); GaleCore `StrategySpecVersionTests` (su loader: carga, valida, hash 1.0.3 `sha256:19884e77…`) | 16/16 tests de specs en GaleCore | Implementado; revalidado con el código de GaleCore |
 | AC-05 | `approve`, `deploy_check` (create-only, hash), `galecore_dev.py deploy --approval` (relee aprobación y propuesta, verifica sus hashes y el cargado por GaleCore) | `test_approval_needs_the_exact_hash`, `test_deploy_is_refused_without_approval_or_with_another_hash`, `test_an_edited_approval_blocks_the_deploy`, `test_cli_save_approve_deploy_check` | `knowledge/strategies/spy_prima_varianza_30_45d/1.0.3.approval.json` (frase del owner, 27/09 20:20 local, HOST_DECLARED por diseño) | Implementado; **aprobación real registrada** (ver «Decisión del owner y despliegue») |
-| AC-06 | `galecore_dev.py deploy --approval`/`stop`; API de GaleCore Dev levantada con arranque controlado (27/09) | — | Despliegue verificado por API: instancia `d533f033` RUNNING con hash `sha256:19884e77…`, v2 detenida con su posición valuándose, switch ON; seguimiento del 28/09 (`followups/spy_prima_varianza_30_45d/20260928T145950Z`) | Desplegada (27/09); primera sesión de mercado 28/09, sin entradas todavía |
+| AC-06 | Deploy Dev con aprobación/hash; evaluación real de 1.0.3 | Revisión independiente del payload | [Review del 28/09](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md), sección Evidence matrix check | Respaldado; cierre del item pendiente |
 | AC-07 | `application/followup.py`, `followup run/history`, `strategy_followup` 0.2.0, `galecore_dev.py runtime-report` | `tests/unit/test_followup.py` (6) | 2 seguimientos reales (`knowledge/followups/spy_prima_varianza_30_45d/`), evidencia directa, revisión `result` de la investigación | Implementado y ejecutado con datos reales; sin resultados SHADOW de esta versión hasta desplegarla |
 | AC-08 | — | — | — | Pendiente |
 

@@ -1,28 +1,40 @@
 # GaleCore-AI — Session Handoff
 
-**Actualizado:** 2026-09-29.
-**Punto de retorno:** roadmap §4, Parte 1, entrega 2. Activo: GC-AI-0013 (tu perfil). GC-AI-0012 (mapa de fuentes)
-CLOSED 29/09, tag `gc-ai-0012-closed`, mergeado a `main`.
-Traspaso de GaleCore realizado según el owner (28/09); no volver a preparar ni reclamar el envío.
-**Único plan:** [`roadmap/README.md`](../../../roadmap/README.md). **Fuente operativa:**
-[`ACTIVE_WORK_ITEM`](../../../ACTIVE_WORK_ITEM) del workspace; el puntero interno sólo alimenta tooling.
+**Actualizado:** 2026-09-29, reconciliación documental.
+**Único plan:** [roadmap §4](../../../roadmap/README.md#4-plan-de-construcción).
+**Activo:** [GC-AI-0014](../../../.worktrees/galecore-ai/GC-AI-0014/docs/engineering/work-items/GC-AI-0014-desempate-fuentes.md),
+según `ACTIVE_WORK_ITEM` del workspace. Codex C2 APPROVE; falta cierre del owner.
+GC-AI-0012 y GC-AI-0013 están cerrados.
 
 ## Próxima sesión — punto de entrada
 
-### ▶ Retomar acá (29/09 → próxima sesión)
+Retomar el paso 0 de §4. La evidencia más reciente de 0008/0009 está en el worktree de 0009:
+[review del 28/09](../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md)
+y [matriz/handoff del item](../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/work-items/GC-AI-0009-seguimiento-recurrente.md).
+No repetir AC-06 de 0008 ni el arreglo de `every_minutes`: ya están respaldados.
+Completar evidencia por horario desde main, recheck acotado de pendientes y consolidación hacia
+main antes de presentar cierres. Verificar los artefactos existentes antes de programar otra prueba.
 
-**Activo: [GC-AI-0013 — tu perfil](../../../.worktrees/galecore-ai/GC-AI-0013/docs/engineering/work-items/GC-AI-0013-perfil.md)**
-(worktree y rama `feature/GC-AI-0013`). Implementado y demostrado desde tres sesiones nuevas (transcripciones en
-`docs/evidence/gc-ai-0013/transcripts/`); revisión interna R1 y Codex C1 corregidas; falta el recheck de Codex y el
-cierre del owner. Perfil real vigente: `profile:v3` (objetivos, drawdown, horizonte y límites **provisorios**, a pedido
-del owner). **Ojo:** mientras esta rama no esté en `main`, el código de `main` no lee las investigaciones que citan
-`profile:` (cartera SHADOW y contexto SPY): trabajar desde este worktree o mergear primero.
-**Decisiones abiertas del owner:** adelantar a `main` el reconocimiento de `profile:vN`; desempate de fuentes según su
-regla (gratis → GaleCore → cupo diario sólo si hace falta → plan), propuesto el 29/09.
-**Pendiente de GC-AI-0009 (paso 0):** capturar la automática por horario del 29/09 17:05 NY desde `GaleCore-AI` main
-(`task status seguimiento-spy-prima-varianza` + `schtasks /query`), anotarla en su matriz (AC-02) y presentar el cierre.
-C (GC-AI-0010) y B (GC-AI-0011) quedan suspendidos.
-**Del usuario:** nada para empezar. Mensajes cortos, en español, contrastando cada tarea contra el objetivo del §4.
+La próxima construcción es la entrega 3 de §4, con atención diaria **SHADOW**, work item y
+rama/worktree propios. Durante esperas se permite trabajo independiente autorizado. Los pasos
+posteriores y la cuenta real se ordenan exclusivamente en el roadmap.
+
+El puntero interno de `GaleCore-AI` main conserva 0013 porque ese checkout no contiene todavía
+0014; sólo alimenta su tooling. El puntero interno del worktree activo corresponde a 0014.
+No crear una copia ficticia de 0014 ni cambiar el activo del workspace para eliminar esa diferencia.
+
+**Workspace tooling (29/09):** hooks del workspace corregidos — `settings.json` tenía `"command": "python"`
+sin path de script; los tres hooks (SessionStart, PostToolUse ruff, PreToolUse guard_git) ahora tienen
+el path completo con `${CLAUDE_PROJECT_DIR}`. Verificado: ruff bloquea correctamente edits con errores F401.
+
+**No olvidar:**
+- `FRED_API_KEY` en el entorno del usuario (HKCU); nunca mostrarla ni commitearla.
+- GaleCore: rama local `feature/GC-AI-0008-estrategia-shadow`, sin push. No borrar worktrees de 0009 hasta que la tarea esté en `main` estable.
+- `knowledge/` commitear tras cada sesión que escriba en él.
+- Perfil vigente: `profile:v3` en `knowledge/profile/`; campos marcados `provisional`.
+- C (GC-AI-0010) y B (GC-AI-0011) suspendidos; su material se conserva.
+
+**Del usuario:** mensajes cortos, en español. No confirmar pasos operativos; sólo parar ante decisiones de producto o arquitectura.
 
 **Reglas de esta sesión que valen para seguir:**
 - Tono de equipo en todo lo que lea el padre: nada de «owner», nada de lenguaje de permisos; repartir esfuerzo.

@@ -17,6 +17,17 @@ Origen: owner, 27/09/2026 (repriorización). Caso conductor: `spy_prima_varianza
 dependencia de la PC encendida y los servicios locales; reutilizar el Programador de tareas de Windows; no construir un
 gestor universal de agentes. La tarea no modifica la estrategia aprobada ni opera dinero.
 
+
+## Punto de retorno documental (29/09; prevalece sobre pendientes históricos)
+
+La copia de main quedó rezagada respecto del worktree de GC-AI-0009. Consultar el
+[review del 28/09](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md)
+y la [matriz vigente de 0009](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/work-items/GC-AI-0009-seguimiento-recurrente.md).
+AC-06 de 0008 tiene respaldo y `every_minutes` está resuelto. No repetir esos trabajos.
+Pendientes: automática por horario desde main, revisión de evidencia de controles ya capturada,
+recheck del arreglo posterior de `rebind` y consolidación de referencias antes del cierre del owner.
+Esta nota no modifica estados de aceptación ni fabrica evidencia; el orden está en roadmap §4.
+
 ## Acuerdo breve
 
 - **Problema:** el seguimiento de GC-AI-0008 sólo corre cuando alguien lo pide en una sesión.
@@ -48,10 +59,10 @@ gestor universal de agentes. La tarea no modifica la estrategia aprobada ni oper
 | Criterio | Implementación | Verificación automática | Artefacto | Estado |
 |---|---|---|---|---|
 | AC-01 | `config/catalog.yaml` (`recurring_followup`), `config/skills/recurring-followup/skill.yaml`; `strategy_followup` 0.3.0 propone la recurrencia | catálogo en `test_knowledge.py` | — | Implementado |
-| AC-02 | `application/tasks.py` (`WindowsScheduler`, `run(invoked_by=)`), `tools/task_runner.py` | `test_run_records_a_followup_tied_to_the_task`, `test_manual_and_scheduled_runs_are_told_apart` | PENDING: corridas del 27/09 no distinguibles (C4-M2); prueba el 28/09 17:05 NY | Implementado |
+| AC-02 | Procedencia de ejecución y traslado a checkout estable | Tests de origen manual/scheduler | [Review del 28/09](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md): ejecución a demanda desde main no acredita horario | Pendiente: automática por horario desde main y recheck |
 | AC-03 | `contracts/task.py`, `tasks.events/status/runs`, `followup.history` | `test_an_edited_event_log_is_detected` | PENDING | Implementado |
-| AC-04 | `tasks.set_frequency/pause/resume/cancel`, CLI `task` | `test_paused_or_cancelled_tasks_do_not_run`, `test_changing_frequency_recreates_the_schedule_and_keeps_pause` | PENDING | Implementado |
-| AC-05 | lock exclusivo, `run_failed`, `local_time_for` + resync | `test_overlapping_runs_are_skipped_and_stale_locks_broken`, `test_a_failed_run_is_recorded_not_raised`, `test_timezone_is_converted_to_this_pc` | PENDING | Implementado |
+| AC-04 | Cambiar frecuencia, pausar, reanudar y cancelar; arreglo posterior de rebind | Tests existentes de controles y fallo parcial de rebind | [Captura del Programador](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/evidence/gc-ai-0009/scheduler-20260928-controles.txt) | Capturado; revisión de evidencia y recheck de rebind pendientes |
+| AC-05 | Lock, errores, zona horaria y detección de omisiones | Tests existentes; every_minutes resuelto en review | [Review del 28/09](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md) | Respaldado en esos aspectos; rebind requiere recheck |
 | AC-06 | `TaskDefinition.kind` sólo `strategy_followup`; el runner sólo llama `run_followup` | `test_a_followup_never_writes_strategy_versions_or_approvals` | — | Implementado |
 | AC-07 | — | — | — | Pendiente |
 

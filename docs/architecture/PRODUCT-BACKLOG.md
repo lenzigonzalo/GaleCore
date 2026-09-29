@@ -1419,6 +1419,61 @@ y evidencia históricas recuperables; ninguna skill, agente o tarea concede auto
 - ¿Qué tareas necesitan recurrencia, qué aprobación las habilita y cuándo se justifica un runtime
   propio frente a la capacidad del host?
 
+### Addendum 2026-09-29 — Atención diaria, capital disponible y seguimiento de posiciones
+
+**Actualización posterior (29/09):** el owner autorizó la integración en el plan; el orden vigente
+vive en `roadmap/README.md` §4 del workspace. La captura y recomendación originales de abajo se
+conservan como antecedente, no como secuencia alternativa. Atención diaria empieza en SHADOW;
+cuenta real y capital disponible van después de la base, en incrementos separados.
+
+**Origen:** el owner pide evaluar y priorizar una propuesta de skills de datos (S-1..S-4),
+análisis de capital disponible/briefing/posiciones (A-1..A-3), monitores (M-1..M-3) y propuesta/
+ejecución (E-1/E-2). **Clasificación:** `BACKLOG_CANDIDATE`, `ALIGNED_WITH_PREREQUISITE`.
+Se conserva en BL-008; enlaza BL-001 (creación y evolución), BL-006 (host/conectores), BL-007
+(adecuación y riesgo), BL-015 (acceso de cuenta). No autoriza implementación ni modifica §4.
+
+**Base inspeccionada:** GC-AI-0012 (fuentes) y GC-AI-0013 (perfil) figuran CLOSED en main;
+GC-AI-0014 (orden por tipo de uso) es el activo según el puntero del workspace.
+`config/sources.yaml` registra FMP economics-calendar denegado y acceso externo dependiente
+del host. `capabilities/contracts.py` no registra balances/posiciones de cuenta, aunque
+`DataController.cs` de GaleCore tiene endpoints de lectura. BL-015 registra 403 en Dev, no
+un diagnóstico vigente de producción. `contracts/task.py` sólo acepta `strategy_followup`;
+`application/followup.py` corre sin modelo. El scheduler actual no demuestra ejecución
+autónoma de análisis con modelo ni disponibilidad de los MCP de una sesión interactiva.
+
+**Secuencia recomendada, no aprobada:**
+
+1. Completar el incremento activo. Usar «qué merece mi atención hoy» como primer caso de las
+   entregas 3–4 del harness: método versionado, perfil, fuentes, datos frescos, faltantes y
+   resultado recuperable. Reutilizar GC-AI-0007/0008 y el material de GC-AI-0010 (suspendido),
+   sin reabrirlo implícitamente. Una vista SHADOW se identifica como tal y no representa la cuenta.
+2. Si el objetivo elegido es capital disponible real, comprobar primero lectura autenticada
+   de balances/posiciones de una cuenta delimitada y acordar la semántica de capital disponible.
+   Un capital de referencia del perfil no sustituye un saldo ni buying power. Este acceso es
+   una dependencia de GaleCore, no requiere activar todo BL-008 ni implementar multiusuario.
+3. Convertir el recorrido útil en tarea recurrente con la entrega 5, tras demostrar ejecución
+   sin sesión interactiva, acceso a fuentes/modelo, presupuesto, destino, fallos y pausa/cancelación.
+   Checks de frescura/umbrales van en código; no requieren un agente ni modelo por chequeo.
+4. Incorporar evaluación de posiciones contra las reglas/tesis aprobadas; después alternativas
+   de asignación y construcción de operaciones, con datos y cálculos autoritativos suficientes.
+   E-2 queda para un incremento de ejecución explícitamente autorizado, fuera de esta captura.
+
+**Primer resultado observable:** pedido natural → perfil y antecedentes → estado/exposición
+con origen y fecha → cambios y condiciones que requieren atención → pendientes explícitos →
+registro con versiones recuperable en otra sesión. Sin calendario verificado no se informa
+«semana sin eventos»; ausencia de datos no habilita una recomendación de inversión.
+Medir utilidad por omisiones, tiempo de revisión, frescura y alertas duplicadas, no por número
+de agentes ni rentabilidad inferida de un informe. La automatización agrega evidencia de
+corrida por horario y destino accesible del resultado, no sólo un archivo de configuración.
+
+**Ownership y límites:** métodos/contratos en GaleCore-AI (`config/skills`, catálogo y services),
+datos operacionales/cálculos/riesgo/autorización en GaleCore, modelo y conectores en el host,
+resultados/perfil en `knowledge/`. `.claude/` sólo adapta al host; no duplica métodos canónicos.
+Los umbrales propuestos ($1000, 10 DTE, frescura de dos días, spot menos 5 %) son propuestas
+sin validar, no reglas globales. Una etiqueta de eventos no prueba edge ni retorno esperado.
+Un «sí» textual aislado no reemplaza aprobación de una propuesta identificada, revalidación e
+idempotencia de ejecución. No se añaden proveedores pagos ni se asume acceso ilimitado.
+
 ---
 
 ## BL-009 — Taxonomía de conocimiento entre GaleCore y GaleCore-AI, y skill de ruteo
