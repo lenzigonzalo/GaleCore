@@ -145,13 +145,13 @@ class AnthropicProvider:
 
         elapsed = int((time.monotonic() - t0) * 1000)
         usage = response.usage
-        _usage_kwargs = dict(
-            input_tokens=usage.input_tokens,
-            output_tokens=usage.output_tokens,
-            cache_read_tokens=getattr(usage, "cache_read_input_tokens", None),
-            cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", None),
-            latency_ms=elapsed,
-        )
+        _usage_kwargs = {
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "cache_read_tokens": getattr(usage, "cache_read_input_tokens", None),
+            "cache_creation_tokens": getattr(usage, "cache_creation_input_tokens", None),
+            "latency_ms": elapsed,
+        }
 
         # Extract tool_use block
         tool_input = None
