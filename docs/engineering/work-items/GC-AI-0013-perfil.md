@@ -53,16 +53,16 @@ en código; cablearlo sería plomería sin uso. Se conecta cuando una capacidad 
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Perfil versionado:** contrato del perfil (objetivos, capital de referencia con moneda, horizonte, límites
+- [x] **AC-01 — Perfil versionado:** contrato del perfil (objetivos, capital de referencia con moneda, horizonte, límites
   de riesgo, fuentes preferidas validadas contra el registro de fuentes, formato de entrega, idioma); cada campo puede
   quedar declarado faltante; versiones create-only en `knowledge/profile/` con nota de qué cambió, pedido que lo originó y
   hash; nunca credenciales.
-- [ ] **AC-02 — Ver y cambiar desde el chat:** `profile show` (versión vigente y faltantes), `profile set` (cambios
+- [x] **AC-02 — Ver y cambiar desde el chat:** `profile show` (versión vigente y faltantes), `profile set` (cambios
   parciales → versión nueva; sin cambios reales, no crea versión), `profile history`.
-- [ ] **AC-03 — Citable:** `profile:vN` resuelve con integridad en `resolve_ref`, `kb show` y `kb search`.
-- [ ] **AC-04 — Uso por las capacidades:** entrada en el catálogo; `research` y `context_research` leen el perfil al
+- [x] **AC-03 — Citable:** `profile:vN` resuelve con integridad en `resolve_ref`, `kb show` y `kb search`.
+- [x] **AC-04 — Uso por las capacidades:** entrada en el catálogo; `research` y `context_research` leen el perfil al
   empezar, lo aplican y citan `profile:vN` en lo que guardan; lo faltante del perfil se declara en el resultado.
-- [ ] **AC-05 — Demostración:** sesión nueva: investigación de contexto aplica el perfil sin repetirlo y cita `profile:v1`;
+- [x] **AC-05 — Demostración:** sesión nueva: investigación de contexto aplica el perfil sin repetirlo y cita `profile:v1`;
   cambio de perfil → la corrida siguiente cita `profile:v2`.
 - [ ] **AC-06 — Revisión:** interna y Codex; utilidad y cierre, el owner.
 
@@ -74,7 +74,7 @@ en código; cablearlo sería plomería sin uso. Se conecta cuando una capacidad 
 | AC-02 | `application/profile.py` (`show`, `set_profile` con cambios parciales y sin versión si no cambia nada, fuentes validadas contra `config/sources.yaml`, `history`); CLI `profile show/set/history` | `TestSetAndShow`, `test_cli_profile_set_show_history` | — | DONE (sin revisar) |
 | AC-03 | `adapters/knowledge_base.py` (`profile:v<N>`); `application/knowledge.py` (`resolve_ref`, `kb show`, `kb search --kind profile`) | `TestCitable` | — | DONE (sin revisar) |
 | AC-04 | `config/catalog.yaml` (`user_profile`, `stored_as: profile`); `config/skills/user-profile/skill.yaml`; regla 0 en `research` 1.2.0 y `context-research` 0.3.0 | `test_an_investigation_records_the_profile_version_it_used`; `cli catalog` → `user_profile.available` | — | DONE (sin revisar) |
-| AC-05 | — | — | `docs/evidence/gc-ai-0013/ac05-demo-v1-2026-09-29.md` (parte 1: sesión nueva aplica y cita `profile:v1`, verificado) | PARCIAL — parte 2 espera los objetivos del owner |
+| AC-05 | — | — | `docs/evidence/gc-ai-0013/ac05-demo-2026-09-29.md` (parte 1: sesión nueva aplica y cita `profile:v1`; parte 2: tras el cambio cita `profile:v2`; ambas verificadas) | DONE (sin revisar) |
 | AC-06 | — | — | — | PENDING |
 
 ## Required validation
