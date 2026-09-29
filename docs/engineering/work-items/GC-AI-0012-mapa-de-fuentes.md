@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0012
 title: Mapa de fuentes de datos (base del harness, entrega 1)
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0012 — Mapa de fuentes de datos
@@ -64,7 +64,7 @@ Roadmap §4, Parte 1, entrega 1 (owner, 28/09 noche).
 - [x] **AC-05 — Uso por las capacidades:** entrada en el catálogo; la regla 4 de `context-research` pasa a consultar el
   registro y a registrar hallazgos de acceso en vez de decidir por su cuenta.
 - [x] **AC-06 — Demostración:** desde una sesión nueva, las dos preguntas del acuerdo se responden desde el registro.
-- [ ] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
+- [x] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
 
 ## Requirement-to-evidence matrix
 
@@ -76,7 +76,7 @@ Roadmap §4, Parte 1, entrega 1 (owner, 28/09 noche).
 | AC-04 | `application/source_query.py` (`query_sources`: todas las palabras del pedido, sin acentos, dentro de la misma cobertura; `catalog_summary`; estado específico por categoría vía `_relevant_observation`) | `tests/unit/test_sources.py::TestQuery` (incluye los casos reproducidos por ambas revisiones) | `docs/evidence/gc-ai-0012/ac03-ac04-ac06-evidence-2026-09-29.md` | DONE |
 | AC-05 | `config/catalog.yaml` (entrada `data_sources`); `config/skills/data-sources/skill.yaml`; `config/skills/context-research/skill.yaml` regla 4 reescrita (consulta el registro, ya no decide ni lista fuentes hardcodeadas) | `cli catalog` reporta `data_sources.available == true` | — | DONE |
 | AC-06 | — (demostración, no código) | — | `docs/evidence/gc-ai-0012/ac03-ac04-ac06-evidence-2026-09-29.md`: las dos preguntas del acuerdo más los casos de la revisión de Codex, procesos `python -B` nuevos e independientes, contestadas desde el registro con estado real y específico por categoría; "cadena de opciones de SPY" da `missing: true` (hallazgo honesto: ninguna capability registrada la sirve hoy); "cotizaciones de SPY" y "VIX" sí resuelven a GaleCore | DONE |
-| AC-07 | — | — | — | PENDING (revisión interna 1 y Codex 1, ambas CHANGES_REQUESTED → corregidas; falta la del owner) |
+| AC-07 | — | — | `docs/engineering/reviews/GC-AI-0012-20260929T172934Z.md` (Codex recheck C3 APPROVE) | DONE — CLOSED por decisión del owner (29/09) |
 
 ## Required validation
 
@@ -363,3 +363,14 @@ calificación de `retrieved_at`. Quedaban:
 - **MINOR (decisión del owner) — desempate por costo en prosa:** recomendación: reformular AC-04 como «GaleCore
   primero, después `preference`» (el campo ya ordena por costo y conveniencia, lo fija quien registra la fuente)
   en vez de agregar un rango de costo numérico sin un caso que lo necesite.
+
+## Independent review 3 (Codex, `--recheck`, effort medium, 2026-09-29T17:29:34Z) — `docs/engineering/reviews/GC-AI-0012-20260929T172934Z.md` — APPROVE
+
+Rango `d53d8d4..8fc15fe`. Los dos MAJOR del recheck anterior, resueltos (desempate conservador y `any_symbol`, con
+consultas en vivo de QQQ). AC-07 destildado coherente. Queda como **decisión del owner** (MINOR, no bloquea): el
+desempate por costo en prosa — recomendación registrada arriba (ordenar por `preference`).
+
+## Cierre (2026-09-29)
+
+CLOSED por decisión del owner: confirmó la utilidad («ok, dale avanza») y pidió resolver los pendientes para cerrar
+(«Resolvé los pendientes y arrancá con la entrega»). Revisión independiente APPROVE (C3). Tag `gc-ai-0012-closed`.
