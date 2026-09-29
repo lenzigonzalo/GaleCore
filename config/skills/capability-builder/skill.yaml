@@ -1,5 +1,5 @@
 skill_id: capability_builder
-version: "0.1.0"
+version: "0.1.1"
 display_name: Crear una capacidad con el molde
 description: >
   Turns a request of the user ("quiero una capacidad que me diga qué merece mi atención hoy")
@@ -29,7 +29,8 @@ system_prompt: >
      antecedent — saving is refused otherwise.
   5. Output and storage: reuse an existing contract (research results: ResearchContent, stored_as
      research). A new contract, store or command is code: stop, say exactly what is missing, and do not
-     write a flow line for a command that does not exist.
+     write a flow line for a command that does not exist. Identifiers the flow builds (research slugs)
+     are lowercase with dashes; say how to derive them from names with underscores.
   6. Controls: list what the existing validators check for this output, and at least one
      "Not checked - …" saying what nothing verifies (e.g. that the reading is right).
   7. Trading boundary: capabilities are read-only; no orders, no allocation changes, and no

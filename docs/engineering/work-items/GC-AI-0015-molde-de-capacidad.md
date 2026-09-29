@@ -1,7 +1,7 @@
 ---
 id: GC-AI-0015
 title: Molde de capacidad y guía para crearla (base del harness, entrega 3)
-status: DRAFT
+status: READY_FOR_REVIEW
 implementer: claude-code
 reviewer: codex
 approver: user
@@ -60,20 +60,56 @@ Sólo entran en este item las dos primeras filas. No se abre una ampliación gen
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Molde:** cada entrada del catálogo declara sus necesidades de datos, cada una resuelta contra el registro
+- [x] **AC-01 — Molde:** cada entrada del catálogo declara sus necesidades de datos, cada una resuelta contra el registro
   de fuentes o marcada faltante con motivo; las entradas existentes quedan declaradas con el mismo formato.
-- [ ] **AC-02 — Validación:** `catalog check` rechaza una capacidad incompleta (skill o contrato ausentes, flujo con
+- [x] **AC-02 — Validación:** `catalog --check` rechaza una capacidad incompleta (skill o contrato ausentes, flujo con
   comandos que la CLI no tiene, una necesidad que no resuelve ni está declarada faltante, controles sin decir qué no se
   verifica) y lista qué falta.
-- [ ] **AC-03 — Guía:** skill que lleva de un pedido a la entrada de catálogo y su skill, consultando el registro y el
+- [x] **AC-03 — Guía:** skill que lleva de un pedido a la entrada de catálogo y su skill, consultando el registro y el
   perfil, y termina con `catalog check` en verde o con lo pendiente declarado.
-- [ ] **AC-04 — Fuentes del primer caso:** el registro declara el runtime SHADOW de GaleCore (vía `followup run`) y las
+- [x] **AC-04 — Fuentes del primer caso:** el registro declara el runtime SHADOW de GaleCore (vía `followup run`) y las
   tasas reales y spreads de crédito de FRED; nada más.
-- [ ] **AC-05 — Primer caso:** capacidad `daily_attention` («¿Qué merece mi atención hoy?») creada con la guía: exposición
+- [x] **AC-05 — Primer caso:** capacidad `daily_attention` («¿Qué merece mi atención hoy?») creada con la guía: exposición
   SHADOW, reglas de la estrategia, cambios desde la última revisión, contexto y faltantes; perfil citado.
-- [ ] **AC-06 — Demostración:** sesión nueva corre la capacidad con datos reales (GaleCore Dev arriba) y guarda el
+- [x] **AC-06 — Demostración:** sesión nueva corre la capacidad con datos reales (GaleCore Dev arriba) y guarda el
   resultado; transcripción archivada.
 - [ ] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
+
+## Requirement-to-evidence matrix
+
+| Criterio | Implementación | Verificación automática | Artefacto | Estado |
+|---|---|---|---|---|
+| AC-01 | `harness/catalog.py` (`DataNeed`, `CatalogEntry.data_needs` obligatorio); `config/catalog.yaml` (las 9 entradas previas declaradas) | `test_data_needs_must_be_declared`, `test_the_real_catalog_is_complete` | `catalog --check` → complete | DONE (sin revisar) |
+| AC-02 | `application/catalog_check.py` (skill/contrato, flujo contra los comandos reales de la CLI vía `build_parser`, necesidades contra el registro, «Not checked»); CLI `catalog --check` | `test_an_incomplete_entry_is_rejected_with_the_reason` (7 casos), `test_a_need_without_source_passes_when_its_absence_is_declared`, `test_cli_commands_know_nested_subcommands` | — | DONE (sin revisar) |
+| AC-03 | `config/skills/capability-builder/skill.yaml`; entrada `capability_builder` | `test_the_real_catalog_is_complete` | `docs/evidence/gc-ai-0015/transcripts/ac05-crea-daily-attention.md` | DONE (sin revisar) |
+| AC-04 | `config/sources.yaml`: GaleCore `shadow_runtime`; FRED tasas reales y `credit`; límite de las dos vías a GaleCore (:5000 vs Dev :7001) | consultas reales: posiciones/evaluaciones/métricas SHADOW → galecore; tasa real, spread de crédito → fred | — | DONE (sin revisar) |
+| AC-05 | `config/skills/daily-attention/skill.yaml` + entrada `daily_attention`, escritas por una sesión nueva siguiendo la guía (no por el implementador) | `catalog --check` → daily_attention complete | transcripción `ac05-crea-daily-attention.md` | DONE (sin revisar) |
+| AC-06 | — | — | `docs/evidence/gc-ai-0015/transcripts/ac06-corre-daily-attention.md`; `research:2026-09-29-atencion-diaria-spy-prima-varianza-30-45d` r1 (skill `daily_attention` 0.1.0, cita `profile:v3` con hash igual al archivo), seguimiento `20260929T232040Z`, evidencia FMP earnings (commit `e8e9e2d` de `knowledge`) | DONE (sin revisar) |
+| AC-07 | — | — | — | PENDING |
+
+## Implementer handoff — Increment 1 (2026-09-29)
+
+**Hecho:** molde (`data_needs`), validación `catalog --check`, guía `capability_builder`, fuentes que bloqueaban el caso,
+y la capacidad `daily_attention` creada por una sesión nueva con sólo el pedido del owner. 905 tests, gate PASS.
+
+**Fuera de lo pedido, pero necesario (trazable):** `strategy_followup` 0.4.0 suma la regla del perfil — desde GC-AI-0013,
+guardar una revisión exige citar el perfil vigente y esa skill no lo decía (una sesión que la siguiera sería rechazada).
+
+**Hallazgo:** `sources check --source galecore`, `prepare` y las capabilities usan `GALECORE_BASE_URL` (por defecto
+:5000); GaleCore Dev corre en :7001 y `followup run` la alcanza por `galecore_dev.py`. El probe registró `down`
+(29/09 23:10Z) mientras Dev respondía. Declarado como límite en el registro; no se cambió la dirección por defecto.
+La tarea `GaleCore-AI\galecore-dev-api` nunca corrió (arranca al iniciar sesión); una instancia de la API del 28/09
+seguía viva en :7001.
+
+**AC-06 (29/09 ~23:20Z), sesión nueva con sólo «¿Qué merece mi atención hoy sobre lo que tengo en SHADOW?»:** leyó
+catálogo, perfil y estrategia aprobada; corrió `followup run` contra GaleCore Dev (:7001) y guardó la revisión. Lo que
+dejó a la vista, con fuente: el runtime arrancó tarde el 29/09 (primera evaluación 16:38 UTC, ~3 h sin stop) y también el
+28/09; peor caso por posición 456 USD contra el límite provisorio de 200 (dentro sólo si el stop se ejecuta); reglas
+cumplidas por el runtime; eventos hasta el 16/10. Faltantes declarados: GEX/skew/VVIX de hoy (`prepare` falló: :5000
+rechazado y :7001 pide clave — el límite de las dos vías), FOMC, calendario macro, valuación de la v2.
+**Correcciones tras la demo:** el primer `research save` falló por un slug con guiones bajos → `daily_attention` 0.1.1 y
+`capability_builder` 0.1.1 dicen cómo derivar el slug. La transcripción marcó dos falsos positivos de credencial (código y
+texto con acentos escapados `í`); no había secretos.
 
 ## Required validation
 

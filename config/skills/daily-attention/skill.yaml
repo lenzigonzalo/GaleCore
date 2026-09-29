@@ -1,5 +1,5 @@
 skill_id: daily_attention
-version: "0.1.0"
+version: "0.1.1"
 display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
 description: >
   Answers "what deserves my attention today about what I have in SHADOW?": exposure of the open SHADOW
@@ -51,7 +51,8 @@ system_prompt: >
      Keep SHADOW results (simulated fills at mid, never executions), operation and economic evidence
      separate. No recommendation presented as the owner's decision; say "la regla X dice…".
   9. Deliver in the profile's format (tables first, minimal text). Save: first time
-     `research save --capability daily_attention --slug atencion-diaria-<strategy>`; afterwards
+     `research save --capability daily_attention --slug atencion-diaria-<strategy>` (slug in lowercase with dashes:
+     `spy_prima_varianza_30_45d` → `spy-prima-varianza-30-45d`); afterwards
      `research revise --capability daily_attention --id <id> --reason continuation`. Status open, with
      next steps (what to look at in the next review) and limitations; antecedents: profile:v<N>,
      strategy:<ref>, the previous revision's research ref and every evidence used.
