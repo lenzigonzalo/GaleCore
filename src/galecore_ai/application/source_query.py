@@ -35,6 +35,8 @@ from galecore_ai.contracts.source_status import (
     most_recent,
 )
 from galecore_ai.contracts.sources import (
+    USAGE_NOTE,
+    USAGE_RANK,
     CategorySummary,
     DataSource,
     SourceCatalogSummary,
@@ -132,6 +134,8 @@ def _to_match(source: DataSource, status_store: FileSourceStatusStore, *,
         id=source.id,
         display_name=source.display_name,
         access_type=source.access_type,
+        usage=source.usage,
+        usage_note=USAGE_NOTE.get(source.usage),
         preference=source.preference,
         cost=source.cost,
         limits=list(source.limits),
@@ -140,8 +144,8 @@ def _to_match(source: DataSource, status_store: FileSourceStatusStore, *,
     )
 
 
-def _sort_key(source: DataSource) -> tuple[int, str, str]:
-    return (source.preference, source.cost, source.id)
+def _sort_key(source: DataSource) -> tuple[int, int, str]:
+    return (USAGE_RANK[source.usage], source.preference, source.id)
 
 
 def query_sources(need: str, registry: SourceRegistry, status_store: FileSourceStatusStore) -> SourceQueryResult:

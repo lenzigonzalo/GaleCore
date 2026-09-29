@@ -2,6 +2,9 @@
 # galecore_ai.adapters.cli sources list|query` reads this file together with the
 # observed access status kept in `<knowledge>/sources/<id>.md`.
 #
+# `usage` orders the answer (owner's rule, 29/09): free → own (GaleCore) → daily_quota
+# (only when the ones before do not cover the need) → plan; `preference` within each.
+#
 # Adding a source means adding an entry here. `access_type: galecore_api` and
 # `api_key` need a `probe.command` this repo's code can actually run (checked by
 # `sources check`); `host_connector` sources have no command — only the host, via
@@ -18,6 +21,7 @@ sources:
     display_name: GaleCore (API propia)
     access_type: galecore_api
     cost: sin costo adicional (API propia del ecosistema)
+    usage: own
     preference: 0
     covers:
       - category: market_data
@@ -37,6 +41,7 @@ sources:
     display_name: FRED (St. Louis Fed)
     access_type: api_key
     cost: clave gratuita (FRED_API_KEY en el entorno del usuario; no persiste entre sesiones)
+    usage: free
     preference: 10
     covers:
       - category: rates_curve
@@ -54,6 +59,7 @@ sources:
     display_name: Alpha Vantage
     access_type: host_connector
     cost: clave gratuita (límite de plan)
+    usage: daily_quota
     preference: 20
     covers:
       - category: rates_curve
@@ -80,6 +86,7 @@ sources:
     display_name: Financial Modeling Prep (FMP)
     access_type: host_connector
     cost: "plan actual insuficiente para varios endpoints: el conector responde que hace falta Starter/Premium/Ultimate/Enterprise (evidencia:2026-09-27-spy-ctx-fmp-economics-calendar-denied)"
+    usage: plan
     preference: 30
     covers:
       - category: rates_curve
@@ -87,7 +94,7 @@ sources:
       - category: market_data
         description: precio de cierre diario (EOD) de SPY vía chart historical-price-eod-light (funciona; evidencia:2026-09-28-cartera-ctx-fmp-spy-eod)
       - category: quotes
-        description: quote/batch-quote de SPY (intermitente por plan — ver historia de estado)
+        description: cotizaciones de SPY vía quote/batch-quote (intermitente por plan — ver historia de estado)
       - category: earnings_valuation
         description: calendario de earnings (funciona; filas por corrida sin garantía de cobertura completa)
       - category: scheduled_events

@@ -1,5 +1,5 @@
 skill_id: context_research
-version: "0.3.0"
+version: "0.4.0"
 display_name: Investigación contextual de una idea de trading
 description: >
   Builds the market context an idea needs, for its instrument and horizon: which
@@ -22,8 +22,8 @@ system_prompt: >
   Rules:
   0. Start from the user's profile: `profile show`. Apply what it declares without
      asking again: reference capital for sizes and examples; objectives, horizon,
-     drawdown and risk limits as the frame; preferred sources first among those the
-     registry offers; delivery format and language for the answer. Cite it as an
+     drawdown and risk limits as the frame; preferred sources to break ties within the
+     same usage class the registry returns; delivery format and language for the answer. Cite it as an
      antecedent `profile:v<N>` (summary: what you applied; bearing: how it shapes this
      work) so the stored revision records which version was used. A missing field that
      matters here goes in `missing`, never filled with a guess; with no profile yet, say
@@ -44,8 +44,8 @@ system_prompt: >
      skew, implied vs realised, dealer positioning); fiscal; geopolitics. Fiscal and
      geopolitics are PENDING unless a source with adequate evidence was consulted.
   4. Choose sources from the registry, not from memory or by guessing: `sources query
-     --need "<factor>"` returns which known sources cover it, ordered (GaleCore first,
-     then cost) with their last checked access and known limits; `sources list` gives
+     --need "<factor>"` returns which known sources cover it, ordered by usage (free, then
+     GaleCore, then daily quota, then plan) with their last checked access and known limits; `sources list` gives
      the full picture by category. For GaleCore and FRED, `sources check` re-verifies
      access with the minimal call this code can run when the last observation is stale
      or missing. For a host connector (Alpha Vantage, FMP, or any other), the last

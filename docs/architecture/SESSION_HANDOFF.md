@@ -2,9 +2,8 @@
 
 **Actualizado:** 2026-09-29, reconciliación documental.
 **Único plan:** [roadmap §4](../../../roadmap/README.md#4-plan-de-construcción).
-**Activo:** [GC-AI-0014](../../../.worktrees/galecore-ai/GC-AI-0014/docs/engineering/work-items/GC-AI-0014-desempate-fuentes.md),
-según `ACTIVE_WORK_ITEM` del workspace. Codex C2 APPROVE; falta cierre del owner.
-GC-AI-0012 y GC-AI-0013 están cerrados.
+GC-AI-0012 (mapa de fuentes), GC-AI-0013 (tu perfil) y GC-AI-0014 (orden de fuentes) están cerrados y mergeados a
+`main` (tags `gc-ai-0012-closed`, `gc-ai-0013-closed`, `gc-ai-0014-closed`). Activo: según `ACTIVE_WORK_ITEM` del workspace.
 
 ## Próxima sesión — punto de entrada
 
@@ -15,13 +14,10 @@ No repetir AC-06 de 0008 ni el arreglo de `every_minutes`: ya están respaldados
 Completar evidencia por horario desde main, recheck acotado de pendientes y consolidación hacia
 main antes de presentar cierres. Verificar los artefactos existentes antes de programar otra prueba.
 
-La próxima construcción es la entrega 3 de §4, con atención diaria **SHADOW**, work item y
+La próxima construcción es completar la cobertura del registro de fuentes (GaleCore y FRED) y después la entrega 3 de §4, con atención diaria **SHADOW**, work item y
 rama/worktree propios. Durante esperas se permite trabajo independiente autorizado. Los pasos
 posteriores y la cuenta real se ordenan exclusivamente en el roadmap.
 
-El puntero interno de `GaleCore-AI` main conserva 0013 porque ese checkout no contiene todavía
-0014; sólo alimenta su tooling. El puntero interno del worktree activo corresponde a 0014.
-No crear una copia ficticia de 0014 ni cambiar el activo del workspace para eliminar esa diferencia.
 
 **Workspace tooling (29/09):** hooks del workspace corregidos — `settings.json` tenía `"command": "python"`
 sin path de script; los tres hooks (SessionStart, PostToolUse ruff, PreToolUse guard_git) ahora tienen

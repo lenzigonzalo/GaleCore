@@ -76,7 +76,7 @@ entries:
       - "declare requires --observed-at (the moment the access was actually observed, e.g. an evidence item's retrieved_at); it is never the time the command ran"
       - A declared observation never carries a key or token; a cited evidence ref must resolve
       - Status history is append-only; an edited or reordered source's file is reported as integrity_failed, never a crash
-      - Query orders matching sources by preference (GaleCore first) then cost, and shows the most recent status that bears on the matched category, not an unrelated endpoint's; a need with no match is reported missing, never guessed
+      - Query orders matching sources by usage (free, own/GaleCore, daily_quota, plan) then preference, flags daily-quota sources to use only when needed, and shows the most recent status that bears on the matched category, not an unrelated endpoint's; a need with no match is reported missing, never guessed
       - output_contract names SourceQueryResult, the shape `sources query` answers with (the entry's primary output); `sources list` answers with the related SourceCatalogSummary
       - Not checked - whether a source's own data is correct
 

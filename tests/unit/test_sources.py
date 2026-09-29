@@ -43,6 +43,7 @@ def source(**overrides) -> DataSource:
         "display_name": "GaleCore",
         "access_type": AccessType.GALECORE_API,
         "cost": "sin costo",
+        "usage": "own",
         "preference": 0,
         "covers": [{"category": "market_data", "description": "cotizaciones y cadenas de opciones"}],
         "probe": {"description": "GET liviano", "command": "python -B -m galecore_ai.adapters.cli sources check"},
@@ -463,3 +464,46 @@ def test_cli_sources_check_galecore_reports_down_without_a_server(tmp_path):
     checked = _cli("sources", "check", "--source", "galecore", env=env)
     assert checked.returncode == 0, checked.stdout
     assert json.loads(checked.stdout)["checked"]["galecore"]["state"] == "down"
+
+
+# ── GC-AI-0014: order by usage (owner's rule, 29/09) ──────────────────
+
+
+def test_every_usage_has_a_rank():
+    from galecore_ai.contracts.sources import USAGE_RANK, Usage
+
+    assert set(USAGE_RANK) == set(Usage)
+
+
+def test_usage_is_required():
+    data = source().model_dump()
+    del data["usage"]
+    with pytest.raises(ValidationError, match="usage"):
+        DataSource.model_validate(data)
+
+
+def test_free_before_own_before_quota_before_plan_then_preference(status_store):
+    registry = SourceRegistry(sources=[
+        source(id="plan_src", usage="plan", preference=0, access_type=AccessType.HOST_CONNECTOR,
+               probe={"description": "host", "command": None}),
+        source(id="quota_src", usage="daily_quota", preference=0, access_type=AccessType.HOST_CONNECTOR,
+               probe={"description": "host", "command": None}),
+        source(id="own_src", usage="own", preference=0),
+        source(id="free_b", usage="free", preference=20, access_type=AccessType.API_KEY),
+        source(id="free_a", usage="free", preference=10, access_type=AccessType.API_KEY),
+    ])
+    result = query_sources("cotizaciones", registry, status_store)
+    assert [m.id for m in result.matches] == ["free_a", "free_b", "own_src", "quota_src", "plan_src"]
+    notes = {m.id: m.usage_note for m in result.matches}
+    assert notes["quota_src"] and "cupo" in notes["quota_src"]
+    assert notes["free_a"] is None and notes["plan_src"] is None
+    assert catalog_summary(registry, status_store).sources[0].id == "free_a"
+
+
+def test_real_registry_follows_the_owners_rule(status_store):
+    registry = load_source_registry()
+    assert [m.id for m in query_sources("curva de tasas", registry, status_store).matches] == [
+        "fred", "alpha_vantage", "fmp"]
+    assert [m.id for m in query_sources("cotizaciones de SPY", registry, status_store).matches] == [
+        "galecore", "fmp"]
+    assert [m.id for m in query_sources("GEX de SPY", registry, status_store).matches] == ["galecore"]

@@ -899,7 +899,7 @@ def main() -> None:
         "sources", help="Data source registry: what's known, its last checked access, and what covers a need")
     src_sub = p_sources.add_subparsers(dest="sources_command", required=True)
     src_sub.add_parser("list", help="Registry grouped by category, with each source's last known status")
-    p_src_query = src_sub.add_parser("query", help="Sources covering a need, ordered by preference then cost")
+    p_src_query = src_sub.add_parser("query", help="Sources covering a need, ordered by usage (free, own, daily quota, plan) then preference")
     p_src_query.add_argument("--need", required=True, help="What data is needed, in free text")
     p_src_check = src_sub.add_parser("check", help="Run the minimal probe this code can run (GaleCore, FRED)")
     p_src_check.add_argument("--source", choices=["galecore", "fred"], help="Default: both")

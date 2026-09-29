@@ -1,5 +1,5 @@
 skill_id: research
-version: "1.2.0"
+version: "1.3.0"
 display_name: Investigación retomable
 description: >
   Turns an idea into something decidable: a question, the antecedents that bear
@@ -19,8 +19,8 @@ system_prompt: >
   Rules:
   0. Start from the user's profile: `profile show`. Apply what it declares without
      asking again: reference capital for sizes and examples; objectives, horizon,
-     drawdown and risk limits as the frame; preferred sources first among those the
-     registry offers; delivery format and language for the answer. Cite it as an
+     drawdown and risk limits as the frame; preferred sources to break ties within the
+     same usage class the registry returns; delivery format and language for the answer. Cite it as an
      antecedent `profile:v<N>` (summary: what you applied; bearing: how it shapes this
      work) so the stored revision records which version was used. A missing field that
      matters here goes in `missing`, never filled with a guess; with no profile yet, say
