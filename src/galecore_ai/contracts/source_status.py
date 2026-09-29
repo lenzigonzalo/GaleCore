@@ -37,6 +37,18 @@ class AccessState(str, Enum):
     DOWN = "down"
 
 
+# Tie rule for observations with the same observed_at: the worst state wins, so a
+# conflict never reads as "available".
+_SEVERITY = {AccessState.AVAILABLE: 0, AccessState.LIMITED: 1, AccessState.DENIED: 2, AccessState.DOWN: 3}
+
+
+def most_recent(observations: list[SourceStatusObservation]) -> SourceStatusObservation | None:
+    """Latest by observed_at (not append order); on a tie, the most severe state."""
+    if not observations:
+        return None
+    return max(observations, key=lambda o: (o.observed_at, _SEVERITY[o.state]))
+
+
 class ObservationOrigin(str, Enum):
     CODE_PROBE = "code_probe"        # this repo's code ran the probe and observed the result (GaleCore, FRED)
     HOST_DECLARED = "host_declared"  # the host reports what it saw through a connector it holds
@@ -103,6 +115,4 @@ class SourceStatusDocument(BaseModel):
         a backdated ``sources declare`` (e.g. seeding an earlier finding after a newer one
         was already recorded) must not make an older state look current.
         """
-        if not self.observations:
-            return None
-        return max(self.observations, key=lambda o: o.observed_at)
+        return most_recent(self.observations)

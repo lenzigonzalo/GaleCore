@@ -64,7 +64,7 @@ Roadmap §4, Parte 1, entrega 1 (owner, 28/09 noche).
 - [x] **AC-05 — Uso por las capacidades:** entrada en el catálogo; la regla 4 de `context-research` pasa a consultar el
   registro y a registrar hallazgos de acceso en vez de decidir por su cuenta.
 - [x] **AC-06 — Demostración:** desde una sesión nueva, las dos preguntas del acuerdo se responden desde el registro.
-- [x] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
+- [ ] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
 
 ## Requirement-to-evidence matrix
 
@@ -337,10 +337,29 @@ git diff --check                                                                
 (`--recheck`) queda a criterio del owner: los 4 MAJOR y las 3 MINOR de la primera pasada están
 corregidos o documentados con su porqué; no hay BLOCKER pendiente.
 
-## Aprobación del owner (2026-09-29)
+## Utilidad según el owner (2026-09-29)
 
-Utilidad confirmada: el registro reemplaza decidir la fuente de datos en cada conversación por
-un registro consultable con evidencia y fecha, base de la Parte 1 del roadmap. Sin `--recheck`
-adicional de Codex pedido. Falta que el owner mueva el estado a `VALIDATED`/`CLOSED` (regla de
-`OPERATING-MODEL.md`: sólo el owner lo hace) y decidir el commit de los 4 archivos de
-`knowledge/sources/` (bloqueados por `guard_git.py`, no reconoce el repo `knowledge/`).
+Utilidad confirmada por el owner («ok, dale avanza»); pidió resolver lo pendiente para cerrar. Los 4 archivos
+de `knowledge/sources/` se commitearon en el repo `knowledge` (`a65c0dd`); el bloqueo anterior no era del hook
+sino de un `cd` antes de `git`. Para el cierre falta el APPROVE independiente (ver recheck abajo).
+
+## Independent review 2 (Codex, `--recheck`, effort medium, 2026-09-29T17:06:37Z) — `docs/engineering/reviews/GC-AI-0012-20260929T170637Z.md` — CHANGES_REQUESTED → corregido
+
+Rango `0cb6df3..d53d8d4`. Confirmó resueltos: credencial en el error, VIX/VVIX, artefacto de AC-03/AC-06 y la
+calificación de `retrieved_at`. Quedaban:
+
+- **MAJOR — empate de `observed_at` dependía del orden:** `[available, denied]` a la misma hora devolvía uno u
+  otro según el orden. **Corregido:** `contracts/source_status.most_recent` desempata por el estado más grave
+  (down > denied > limited > available); lo usan `SourceStatusDocument.latest` y `_relevant_observation`. Test:
+  `test_same_time_conflict_resolves_to_the_worse_state_in_any_order` (ambos órdenes, en el documento y en la
+  consulta).
+- **MAJOR — símbolo genérico daba faltante (`cotizaciones de QQQ`):** **Corregido:** `SourceCoverage.any_symbol`
+  (GaleCore `market_data` y `options_state`, que se piden por símbolo). Un término con forma de ticker en el
+  pedido (mayúsculas, 1–6 caracteres) se acepta en esa cobertura sólo si otro término del pedido ya coincide
+  con ella, para que una sigla suelta («CPI», «IV») no apunte a GaleCore. Test:
+  `test_generic_symbol_matches_a_coverage_that_serves_any_symbol` (QQQ con cotizaciones y con GEX coincide;
+  «CPI», «IV» y «QQQ» solos no; «datos de CPI» → FRED). Límite: un ticker escrito en minúsculas no se reconoce.
+- **MINOR — AC-07 tildado con la revisión pendiente:** correcto; se destildó hasta el APPROVE y el cierre del owner.
+- **MINOR (decisión del owner) — desempate por costo en prosa:** recomendación: reformular AC-04 como «GaleCore
+  primero, después `preference`» (el campo ya ordena por costo y conveniencia, lo fija quien registra la fuente)
+  en vez de agregar un rango de costo numérico sin un caso que lo necesite.

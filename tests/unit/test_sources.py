@@ -58,6 +58,16 @@ def observation(**overrides) -> SourceStatusObservation:
     return SourceStatusObservation.model_validate(data)
 
 
+class _StoreWith:
+    """Status store stub that returns one fixed document."""
+
+    def __init__(self, doc: SourceStatusDocument) -> None:
+        self._doc = doc
+
+    def load(self, source_id: str) -> SourceStatusDocument:
+        return self._doc
+
+
 @pytest.fixture
 def status_store(tmp_path) -> FileSourceStatusStore:
     return FileSourceStatusStore(tmp_path / "sources")
@@ -118,6 +128,17 @@ def test_config_sources_yaml_finds_symbols_it_actually_serves(status_store):
     for need in ("cotizaciones de SPY", "VIX"):
         result = query_sources(need, registry, status_store)
         assert "galecore" in {m.id for m in result.matches}, need
+
+
+def test_generic_symbol_matches_a_coverage_that_serves_any_symbol(status_store):
+    # Codex recheck GC-AI-0012: "cotizaciones de QQQ" reported missing although GaleCore
+    # serves any symbol; a bare acronym that only looks like a ticker must not match.
+    registry = load_source_registry()
+    for need in ("cotizaciones de QQQ", "GEX de QQQ"):
+        assert "galecore" in {m.id for m in query_sources(need, registry, status_store).matches}, need
+    for need in ("CPI", "IV", "QQQ"):
+        assert "galecore" not in {m.id for m in query_sources(need, registry, status_store).matches}, need
+    assert query_sources("datos de CPI", registry, status_store).matches[0].id == "fred"
 
 
 # ── contracts.source_status ─────────────────────────────────────────
@@ -185,6 +206,17 @@ class TestFileSourceStatusStore:
             observation(observed_at=NOW, state=AccessState.AVAILABLE, note="mas viejo, anexado despues")])
         status_store.append("galecore", older_appended_second)
         assert status_store.load("galecore").latest.state == AccessState.DOWN
+
+    @pytest.mark.parametrize("order", [(AccessState.AVAILABLE, AccessState.DENIED),
+                                       (AccessState.DENIED, AccessState.AVAILABLE)])
+    def test_same_time_conflict_resolves_to_the_worse_state_in_any_order(self, order):
+        # Codex recheck GC-AI-0012: equal observed_at must not depend on append order.
+        doc = SourceStatusDocument(source_id="fmp", observations=[
+            observation(state=order[0], note="a"), observation(state=order[1], note="b")])
+        assert doc.latest.state == AccessState.DENIED
+        view = query_sources("cotizaciones", SourceRegistry(sources=[source(id="fmp")]),
+                             _StoreWith(doc)).matches[0].last_status
+        assert view.state == "denied"
 
     def test_rewriting_an_existing_observation_is_refused(self, status_store):
         doc = SourceStatusDocument(source_id="galecore", observations=[observation()])

@@ -44,6 +44,7 @@ class SourceCoverage(BaseModel):
 
     category: str       # e.g. "market_data", "rates_curve", "inflation", "earnings_valuation"
     description: str    # what exactly, concretely, in this source's own vocabulary
+    any_symbol: bool = False  # serves any instrument symbol, so a ticker need not be named in the description
 
     check_not_blank = field_validator("category", "description")(_non_blank)
 

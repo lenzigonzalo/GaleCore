@@ -29,7 +29,11 @@ from galecore_ai.adapters.source_status_store import (
     FileSourceStatusStore,
     SourceStatusIntegrityError,
 )
-from galecore_ai.contracts.source_status import SourceStatusDocument, SourceStatusObservation
+from galecore_ai.contracts.source_status import (
+    SourceStatusDocument,
+    SourceStatusObservation,
+    most_recent,
+)
 from galecore_ai.contracts.sources import (
     CategorySummary,
     DataSource,
@@ -63,19 +67,34 @@ def _fold(word: str) -> str:
 _STOPWORDS_FOLDED = {_fold(w) for w in _STOPWORDS}
 
 
-def _terms(need: str) -> list[str]:
-    words = [_fold(w) for w in re.findall(r"\w+", need)]
-    return [w for w in words if len(w) >= _MIN_TERM_LEN and w not in _STOPWORDS_FOLDED]
+# A ticker as written in the need: all caps, 1–6 letters/digits (SPY, QQQ, BRK.B's parts).
+_TICKER_RE = re.compile(r"^[A-Z][A-Z0-9]{0,5}$")
+
+
+def _terms(need: str) -> list[tuple[str, bool]]:
+    """(folded term, looks like a ticker in the original text) for each meaningful word."""
+    out = []
+    for raw in re.findall(r"\w+", need):
+        term = _fold(raw)
+        if len(term) >= _MIN_TERM_LEN and term not in _STOPWORDS_FOLDED:
+            out.append((term, bool(_TICKER_RE.fullmatch(raw))))
+    return out
 
 
 def _coverage_words(coverage: SourceCoverage) -> list[str]:
     return [_fold(w) for w in re.findall(r"\w+", f"{coverage.category} {coverage.description}")]
 
 
-def _matches_coverage(terms: list[str], coverage: SourceCoverage) -> bool:
-    """Every term in `terms` must be (the start of) some word of this one coverage entry."""
+def _matches_coverage(terms: list[tuple[str, bool]], coverage: SourceCoverage) -> bool:
+    """Every term must be (the start of) some word of this one coverage entry. A ticker
+    not named there is accepted by a coverage that serves any symbol, but only when
+    another term already matched it: "cotizaciones de QQQ" matches, while a bare
+    acronym that merely looks like a ticker ("CPI", "IV") does not."""
     words = _coverage_words(coverage)
-    return all(any(word.startswith(term) for word in words) for term in terms)
+    in_words = [any(word.startswith(term) for word in words) for term, _ in terms]
+    if not any(in_words):
+        return False
+    return all(hit or (is_ticker and coverage.any_symbol) for hit, (_, is_ticker) in zip(in_words, terms))
 
 
 def _relevant_observation(document: SourceStatusDocument | None,
@@ -87,8 +106,7 @@ def _relevant_observation(document: SourceStatusDocument | None,
         return None
     if categories is None:
         return document.latest
-    candidates = [o for o in document.observations if o.category is None or o.category in categories]
-    return max(candidates, key=lambda o: o.observed_at) if candidates else None
+    return most_recent([o for o in document.observations if o.category is None or o.category in categories])
 
 
 def _status_view(observation: SourceStatusObservation | None) -> SourceStatusView:

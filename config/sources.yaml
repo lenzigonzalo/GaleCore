@@ -22,8 +22,10 @@ sources:
     covers:
       - category: market_data
         description: cotizaciones y trades de SPY y de cualquier otro símbolo que sirve el DataFeed, incluidos VIX y VVIX (market_data.quote, market_data.trade con symbol=SPY|VIX|VVIX|… — ver application/prepare_regime.py)
+        any_symbol: true
       - category: options_state
-        description: GEX (compute.gamma_exposure, compute.gex_analysis) y put skew 25Δ (compute.put_skew)
+        description: GEX (compute.gamma_exposure, compute.gex_analysis) y put skew 25Δ (compute.put_skew), por símbolo
+        any_symbol: true
     limits:
       - "Sólo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES): no expone cadenas de opciones, IV rank ni implied volatility por esta vía, aunque existan rutas en el dispatcher — no están habilitadas"
       - "No expone históricos ni volatilidad realizada por esta vía"
