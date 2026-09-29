@@ -43,7 +43,7 @@ class AnthropicProvider:
         if workspace_id:
             headers["anthropic-workspace-id"] = workspace_id
 
-        self._client = anthropic.Anthropic(
+        self._client = anthropic.AsyncAnthropic(
             api_key=api_key,
             max_retries=max_retries,
             timeout=timeout,
@@ -97,7 +97,7 @@ class AnthropicProvider:
         try:
             import anthropic as _anthropic
 
-            response = self._client.messages.create(
+            response = await self._client.messages.create(
                 model=self._model,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
