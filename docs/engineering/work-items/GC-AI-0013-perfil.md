@@ -75,7 +75,7 @@ en código; cablearlo sería plomería sin uso. Se conecta cuando una capacidad 
 | AC-03 | `adapters/knowledge_base.py` (`profile:v<N>`); `application/knowledge.py` (`resolve_ref`, `kb show`, `kb search --kind profile`) | `TestCitable` | — | DONE (sin revisar) |
 | AC-04 | `config/catalog.yaml` (`user_profile`, `stored_as: profile`); `config/skills/user-profile/skill.yaml`; regla 0 en `research` 1.2.0 y `context-research` 0.3.0 | `test_an_investigation_records_the_profile_version_it_used`; `cli catalog` → `user_profile.available` | — | DONE (sin revisar) |
 | AC-05 | — | — | `docs/evidence/gc-ai-0013/ac05-demo-2026-09-29.md` (parte 1: sesión nueva aplica y cita `profile:v1`; parte 2: tras el cambio cita `profile:v2`; parte 3: `context_research` 0.3.0 cita `profile:v3` y rotula lo provisorio; todas verificadas) | DONE (sin revisar) |
-| AC-06 | — | — | — | PENDING |
+| AC-06 | — | — | `docs/engineering/reviews/GC-AI-0013-20260929T192821Z.md` (Codex recheck C2 APPROVE) | PENDING — utilidad y cierre del owner |
 
 ## Required validation
 
@@ -136,3 +136,10 @@ git diff --check
   subagentes con `extract_transcripts.py` y saneadas con los filtros de credenciales (ninguna coincidencia).
 - **MINOR corregidos:** descripción de la skill `user-profile` acotada a los consumidores reales; `CLAUDE.md` con
   `user_profile`, `data_sources`, `profile:vN` y `--kind profile`; bloque «Retomar acá» del handoff al día.
+
+## Independent review 2 (Codex, `--recheck`, effort medium, 2026-09-29T19:28:21Z) — `docs/engineering/reviews/GC-AI-0013-20260929T192821Z.md` — APPROVE
+
+Rango `cf73c38..fe84c75`. Los tres MAJOR y los tres MINOR de C1, resueltos; sin hallazgos nuevos. Queda como decisión
+del owner (no bloquea): adelantar a `main` el reconocimiento de `profile:vN` o esperar el merge. Límite declarado: los
+logs crudos de los subagentes no se commitean; la verificación usó las transcripciones saneadas y los commits de
+`knowledge`.
