@@ -1421,6 +1421,214 @@ y evidencia históricas recuperables; ninguna skill, agente o tarea concede auto
 
 ### Addendum 2026-09-29 — Atención diaria, capital disponible y seguimiento de posiciones
 
+**Ideas aportadas por el usuario — texto completo, sin resumir ni modificar.**
+El orden de implementación acordado se consulta en el roadmap §4.
+
+```text
+● Acá va el plan completo. Lo organizo en capas — de lo más atómico a lo más compuesto — con modelo, actores y dependencias para cada
+  pieza.
+
+  ---
+  Fuentes disponibles y sus límites reales
+
+  ┌──────────────────────┬──────────────────────────────────────────────┬───────────────────┬────────────────────────────────────┐
+  │        Fuente        │                  Qué cubre                   │      Límite       │               Acceso               │
+  ├──────────────────────┼──────────────────────────────────────────────┼───────────────────┼────────────────────────────────────┤
+  │ GaleCore API (:5000) │ TastyTrade: balance, posiciones, opciones    │ Sin límite        │ httpx desde GaleCore-AI, ya está   │
+  │                      │ SPY, GEX                                     │ (local)           │ wired                              │
+  ├──────────────────────┼──────────────────────────────────────────────┼───────────────────┼────────────────────────────────────┤
+  │ FRED                 │ Treasury rates, Fed Funds, inflación, macro  │ Sin límite        │ API pública, httpx directo         │
+  ├──────────────────────┼──────────────────────────────────────────────┼───────────────────┼────────────────────────────────────┤
+  │ FMP MCP              │ Calendario económico, noticias, earnings     │ ~250 calls/día    │ MCP disponible en sesión           │
+  │                      │                                              │ free              │                                    │
+  ├──────────────────────┼──────────────────────────────────────────────┼───────────────────┼────────────────────────────────────┤
+  │ Alpha Vantage MCP    │ News sentiment, datos históricos,            │ 25 calls/día free │ MCP disponible en sesión           │
+  │                      │ indicadores                                  │                   │                                    │
+  ├──────────────────────┼──────────────────────────────────────────────┼───────────────────┼────────────────────────────────────┤
+  │ GaleCore-AI          │ Historial régimen, research, perfil          │ Sin límite        │ CLI o lectura directa              │
+  │ knowledge/           │                                              │ (local)           │                                    │
+  └──────────────────────┴──────────────────────────────────────────────┴───────────────────┴────────────────────────────────────┘
+
+  Sobre web scraping para noticias: no vale para agentes automáticos. Cada página cuesta tokens de contexto, es frágil y lento. FMP
+  calendar cubre FOMC, CPI, NFP, Fed speakers — que es el 90% de lo que necesitás saber. AV news sentiment da un pulso de sentimiento
+  con las 25 calls diarias. Para V1 es suficiente. El scraping lo reservamos para cuando el usuario pide investigar algo específico y
+  no hay otra fuente.
+
+  ---
+  Capa 1 — Skills atómicas (bloques de construcción)
+
+  Hacen una sola cosa, no sintetizan, no razonan. Modelo: Haiku.
+
+  S-1: fetch-market-context
+
+  Qué hace: trae calendario económico próximos 7 días + VIX actual + tasa treasury 3M
+  Fuentes: FMP MCP (calendar) + AV MCP (VIX) + FRED API (httpx directo, gratis)
+  Actores: Host llama MCPs, sin intervención de GaleCore ni del usuario
+  Output: JSON { events: [{date, name, impact}], vix: float, treasury_3m: float }
+  Cuándo se usa: llamada por A-1, A-2, A-3
+
+  S-2: fetch-account-status
+
+  Qué hace: trae balance TastyTrade, posiciones abiertas con DTE y P&L, buying power
+  Fuentes: GaleCore API :5000 (TastyTrade está ahí)
+  Actores: Host → GaleCore (HTTP) → TastyTrade
+  Output: { idle_cash: float, positions: [{symbol, strikes, dte, pnl_pct}], buying_power: float }
+  Cuándo se usa: llamada por A-1, A-2, A-3, M-1, M-2
+
+  S-3: fetch-regime-context
+
+  Qué hace: lee el último régimen de knowledge/regime/SPY/, calcula si está fresco (≤2 días hábiles)
+  Fuentes: filesystem local
+  Actores: Host lee archivos directamente
+  Output: { regime: {gamma, tail_pricing, date}, fresh: bool, days_old: int }
+  Cuándo se usa: llamada por A-1, A-2, A-3, M-3
+
+  S-4: score-risk-window
+
+  Qué hace: dado el output de S-1, puntúa el riesgo de la semana
+  Lógica: FOMC/CPI/NFP esta semana → alto; Fed speaker → medio; semana limpia → bajo
+  Actores: Host solo (sin MCPs, solo lógica sobre el JSON de S-1)
+  Modelo: Haiku
+  Output: { risk: "low|medium|high", reason: "CPI el miércoles" }
+
+  ---
+  Capa 2 — Agentes de análisis (síntesis y razonamiento)
+
+  Orquestan varias skills, razonan sobre los datos, proponen. Modelo: Sonnet.
+
+  A-1: capital-ocioso-agent
+
+  El caso de uso que describiste.
+
+  Flujo:
+  1. Llama S-2 → ¿hay idle cash > umbral (configurable, ej. $1000)?
+  → Si no hay capital ocioso: termina, informa
+  2. Llama S-1 y S-4 → ¿qué riesgo tiene la semana?
+  3. Llama S-3 → ¿cuál es el régimen? ¿está fresco?
+  4. Razona (Sonnet):
+    - Si risk=alto O régimen stale → propone conservador: "mové a T-bills, $X al 4.8% = $Y por 30 días"
+    - Si risk=bajo Y régimen gamma positivo → evalúa PCS: calcula strikes (SPY spot - 5%), spread 5pts, crédito estimado, max loss,
+  prob OTM
+    - Compara PCS vs treasury en retorno esperado ajustado por riesgo
+  5. Formula propuesta concreta para el usuario (llama E-1)
+  6. Espera confirmación del usuario — nunca ejecuta sin ella
+  7. Con confirmación → llama E-2 para colocar la orden en TastyTrade
+
+  Actores: Host orquesta → GaleCore-AI razona → GaleCore ejecuta (solo con OK del usuario)
+  Cuándo corre: on-demand (/capital-ocioso) o disparado por M-1
+  Modelo: Sonnet para el paso 4, Haiku para el resto
+
+  ---
+  A-2: daily-briefing-agent
+
+  Flujo:
+  1. Llama S-1, S-2, S-3 en paralelo
+  2. Sintetiza (Sonnet): qué pasó overnight, eventos del día, estado de cuenta, régimen vigente
+  3. Una línea de acción: "esperá el CPI antes de hacer algo" / "semana limpia, spread abierto al 76% del profit"
+
+  Actores: Host orquesta → MCPs + GaleCore + knowledge/
+  Output: texto para leer en 2 minutos
+  Cuándo corre: on-demand (/briefing) o scheduled 8:30 ET
+  Modelo: Haiku para fetches, Sonnet para síntesis final
+
+  ---
+  A-3: position-manager-agent
+
+  Flujo:
+  1. Llama S-2 → posiciones con DTE ≤ 10 días
+  2. Si no hay: termina
+  3. Para cada posición: evalúa P&L actual + régimen (S-3) + riesgo semana (S-4)
+  4. Propone por posición: cerrar / rollear (a qué fecha y strike) / dejar vencer
+  5. Presenta al usuario para confirmación
+
+  Actores: Host → GaleCore (posiciones) → GaleCore-AI (evaluación) → usuario confirma
+  Cuándo corre: daily si hay posiciones abiertas (disparado por M-2)
+  Modelo: Sonnet
+
+  ---
+  Capa 3 — Monitores (Haiku, scheduled, no interrumpen al usuario)
+
+  Corren solos. Solo notifican o disparan agentes. No toman decisiones.
+
+  M-1: idle-capital-monitor
+
+  Hace: llama S-2, chequea si idle_cash > $1000
+  Si sí: notifica al usuario "tenés $X ocioso, ¿corro el análisis?" y dispara A-1
+  Schedule: diario 9:00 ET
+  Modelo: Haiku
+
+  M-2: position-expiry-monitor
+
+  Hace: llama S-2, chequea posiciones con DTE ≤ 10
+  Si hay: notifica y dispara A-3
+  Schedule: diario 9:30 ET
+  Modelo: Haiku
+
+  M-3: regime-freshness-monitor
+
+  Hace: llama S-3, chequea freshness
+  Si stale: "el régimen tiene 3 días, GaleCore necesita estar corriendo para actualizarlo"
+  Schedule: diario 9:00 ET
+  Modelo: Haiku
+
+  ---
+  Capa 4 — Skills de ejecución (siempre con confirmación del usuario)
+
+  E-1: propose-trade
+
+  Hace: toma los parámetros de un trade y lo formatea legible
+  Ejemplo: "Vender PCS SPY 480/475 vto. 20 dic · crédito $0.42 · max loss $458 · prob OTM 84% · capital requerido: $500/spread"
+  No ejecuta nada. Solo presenta.
+  Modelo: Haiku
+
+  E-2: execute-trade (fase 2, no V1)
+
+  Hace: con confirmación explícita del usuario, llama GaleCore API para colocar la orden en TastyTrade
+  Nunca corre autónomamente. Requiere un "sí" textual del usuario en el turno anterior.
+  Modelo: cualquiera (una sola llamada HTTP)
+
+  ---
+  Routing de modelos
+
+  ┌─────────────────────────────────────────┬────────┬────────────────────────────────────────────────────────┐
+  │                  Tarea                  │ Modelo │                     Justificación                      │
+  ├─────────────────────────────────────────┼────────┼────────────────────────────────────────────────────────┤
+  │ Fetch de datos, monitores, checks       │ Haiku  │ Determinístico, 0 síntesis, barato                     │
+  ├─────────────────────────────────────────┼────────┼────────────────────────────────────────────────────────┤
+  │ Análisis, síntesis, propuestas de trade │ Sonnet │ Balance costo/calidad para razonamiento financiero     │
+  ├─────────────────────────────────────────┼────────┼────────────────────────────────────────────────────────┤
+  │ Research profundo, strategy design      │ Opus   │ Solo cuando el usuario pide análisis estratégico nuevo │
+  └─────────────────────────────────────────┴────────┴────────────────────────────────────────────────────────┘
+
+  ---
+  Secuencia de implementación
+
+  Fase 1 (base): S-1, S-2, S-3, S-4  ← skills atómicas, sin ellas nada funciona
+  Fase 2 (el caso real): A-1 + E-1    ← capital-ocioso funcional, sin ejecución aún
+  Fase 3 (automatización): M-1, M-2, M-3 + schedules
+  Fase 4 (completar flujos): A-2, A-3
+  Fase 5 (ejecución): E-2 con TastyTrade
+
+  ---
+  Dónde vive cada pieza
+
+  ┌──────────────────────┬──────────────────────────────────────┬───────────────────────────────────────┐
+  │        Pieza         │                Dónde                 │            Quién la invoca            │
+  ├──────────────────────┼──────────────────────────────────────┼───────────────────────────────────────┤
+  │ Skills S-1..S-4, E-1 │ .claude/skills/ (SKILL.md)           │ Agentes o usuario vía /nombre         │
+  ├──────────────────────┼──────────────────────────────────────┼───────────────────────────────────────┤
+  │ Agentes A-1..A-3     │ .claude/agents/ (.md)                │ Host como subagente                   │
+  ├──────────────────────┼──────────────────────────────────────┼───────────────────────────────────────┤
+  │ Monitores M-1..M-3   │ .claude/agents/ + cron via /schedule │ Scheduler autónomo                    │
+  ├──────────────────────┼──────────────────────────────────────┼───────────────────────────────────────┤
+  │ E-2                  │ .claude/skills/                      │ Solo A-1 con OK explícito del usuario │
+  └──────────────────────┴──────────────────────────────────────┴───────────────────────────────────────┘
+
+  ¿Arrancamos por Fase 1 y 2 en un work item?
+```
+
+**Evaluación y priorización posteriores del asistente (no sustituyen las ideas anteriores):**
+
 **Actualización posterior (29/09):** el owner autorizó la integración en el plan; el orden vigente
 vive en `roadmap/README.md` §4 del workspace. La captura y recomendación originales de abajo se
 conservan como antecedente, no como secuencia alternativa. Atención diaria empieza en SHADOW;
