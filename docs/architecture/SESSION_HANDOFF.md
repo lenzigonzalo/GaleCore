@@ -1,27 +1,27 @@
 # GaleCore-AI — Session Handoff
 
-**Actualizado:** 2026-09-28.
-**Punto de retorno:** roadmap §4, paso 1 (A). Activo: GC-AI-0009. `main` consolidado (0002–0011).
+**Actualizado:** 2026-09-29.
+**Punto de retorno:** roadmap §4, Parte 1, entrega 2. Activo: GC-AI-0013 (tu perfil). GC-AI-0012 (mapa de fuentes)
+CLOSED 29/09, tag `gc-ai-0012-closed`, mergeado a `main`.
 Traspaso de GaleCore realizado según el owner (28/09); no volver a preparar ni reclamar el envío.
 **Único plan:** [`roadmap/README.md`](../../../roadmap/README.md). **Fuente operativa:**
 [`ACTIVE_WORK_ITEM`](../../../ACTIVE_WORK_ITEM) del workspace; el puntero interno sólo alimenta tooling.
 
 ## Próxima sesión — punto de entrada
 
-**Hecho en esta sesión:** plan detallado en roadmap §4, criterios de 0010/0011 alineados y reglas de agilidad,
-valor temprano y comunicación concisa incorporadas a ENGINEERING §3. Antecedente de coherencia:
-[`PLAN-HANDOFF-20260928-codex.md`](../../../docs/engineering/reviews/PLAN-HANDOFF-20260928-codex.md).
-No se volvió a ejecutar el runtime ni se cerró ningún item al corregir estos documentos.
+### ▶ Retomar acá (29/09 → próxima sesión)
 
-### ▶ Retomar acá (28/09 noche → próxima sesión)
-
-**Seguir:** [roadmap §4](../../../roadmap/README.md#4-plan-de-construcción): primero la base del harness (Parte 1), después
-las capacidades de trading (Parte 2). **Activo: [GC-AI-0012 — mapa de fuentes](../../../.worktrees/galecore-ai/GC-AI-0012/docs/engineering/work-items/GC-AI-0012-mapa-de-fuentes.md)**
-(entrega 1; worktree y rama `feature/GC-AI-0012` creados, acuerdo y criterios escritos, sin código todavía).
-**Pendiente de GC-AI-0009 (paso 0):** el código y la evidencia de controles ya están; falta capturar la automática por
-horario del 29/09 17:05 NY desde `GaleCore-AI` main (`task status seguimiento-spy-prima-varianza` + `schtasks /query`),
-anotarla en su matriz (AC-02) y presentar el cierre. La API de GaleCore Dev arranca sola al iniciar sesión en Windows (tarea
-`GaleCore-AI\galecore-dev-api`, 28/09); comprobar que responde antes de esa hora. C (GC-AI-0010) y B (GC-AI-0011) quedan suspendidos.
+**Activo: [GC-AI-0013 — tu perfil](../../../.worktrees/galecore-ai/GC-AI-0013/docs/engineering/work-items/GC-AI-0013-perfil.md)**
+(worktree y rama `feature/GC-AI-0013`). Implementado y demostrado desde tres sesiones nuevas (transcripciones en
+`docs/evidence/gc-ai-0013/transcripts/`); revisión interna R1 y Codex C1 corregidas; falta el recheck de Codex y el
+cierre del owner. Perfil real vigente: `profile:v3` (objetivos, drawdown, horizonte y límites **provisorios**, a pedido
+del owner). **Ojo:** mientras esta rama no esté en `main`, el código de `main` no lee las investigaciones que citan
+`profile:` (cartera SHADOW y contexto SPY): trabajar desde este worktree o mergear primero.
+**Decisiones abiertas del owner:** adelantar a `main` el reconocimiento de `profile:vN`; desempate de fuentes según su
+regla (gratis → GaleCore → cupo diario sólo si hace falta → plan), propuesto el 29/09.
+**Pendiente de GC-AI-0009 (paso 0):** capturar la automática por horario del 29/09 17:05 NY desde `GaleCore-AI` main
+(`task status seguimiento-spy-prima-varianza` + `schtasks /query`), anotarla en su matriz (AC-02) y presentar el cierre.
+C (GC-AI-0010) y B (GC-AI-0011) quedan suspendidos.
 **Del usuario:** nada para empezar. Mensajes cortos, en español, contrastando cada tarea contra el objetivo del §4.
 
 **Reglas de esta sesión que valen para seguir:**

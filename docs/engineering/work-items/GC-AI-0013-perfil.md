@@ -120,3 +120,19 @@ git diff --check
   error de lectura sin eco del valor (`exc.errors()`); `amount` estricto y finito; texto con `strip` y fuentes
   sin repetir; la CLI informa `INTEGRITY_FAILED`; filas de evidencia corregidas (backlink fechado, formato como
   declarado por el host); handoff agregado.
+
+## Independent review 1 (Codex, `--base main`, effort high, 2026-09-29T19:09:01Z) — `docs/engineering/reviews/GC-AI-0013-20260929T190901Z.md` — CHANGES_REQUESTED → corregido
+
+- **MAJOR — el validador de `provisional` repetía el valor rechazado.** Corregido: mensajes sin valor; en
+  `application/profile.py` sólo se repiten nombres con forma de identificador (`_safe`) en `loc`, campos
+  desconocidos y fuentes; el chequeo de credenciales corre antes del de fuentes. Test
+  `test_no_rejection_path_echoes_the_value` (provisional, campo desconocido, fuente, clave extra anidada).
+- **MAJOR — citar el perfil no era un control.** Corregido: mientras exista un perfil, `research save/revise`
+  (ambas capacidades) rechaza guardar si ningún antecedente cita la versión vigente, y dice cuál citó si es vieja; un
+  perfil que falla la integridad también bloquea. Tests `TestCitationIsEnforced`. Catálogo y skill dicen ahora
+  quiénes lo usan (sólo `research` y `context_research`).
+- **MAJOR — AC-05 narrado, sin transcripción.** Corregido: `docs/evidence/gc-ai-0013/transcripts/` con las tres
+  sesiones (pedido inicial, cada comando con salida y marca de error, respuesta final), extraídas de los logs de los
+  subagentes con `extract_transcripts.py` y saneadas con los filtros de credenciales (ninguna coincidencia).
+- **MINOR corregidos:** descripción de la skill `user-profile` acotada a los consumidores reales; `CLAUDE.md` con
+  `user_profile`, `data_sources`, `profile:vN` y `--kind profile`; bloque «Retomar acá» del handoff al día.

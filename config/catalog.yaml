@@ -104,7 +104,8 @@ entries:
       - Unknown fields, blank values and sources outside config/sources.yaml are refused
       - Refuses text that looks like a key or token (heuristic, English and Spanish labels plus common key prefixes); a refused value is not echoed back
       - Missing fields are declared, never defaulted; placeholders the user asked for are listed in `provisional` and reported as such
-      - "research and context_research cite profile:v<N> as an antecedent, so the stored revision records the version (hash) used"
+      - "While a profile exists, research and context_research refuse to save unless an antecedent cites the version in force (profile:v<N>), so the stored revision records the version (hash) used"
+      - "Consumers today: research and context_research only; GEX, regime, strategy and follow-up outputs do not read the profile yet"
       - Not checked - whether the declared objectives or limits are sensible
 
   - id: research

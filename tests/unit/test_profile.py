@@ -231,3 +231,40 @@ def test_edited_file_error_does_not_echo_the_value(kb):
     with pytest.raises(ProfileIntegrityError) as exc:
         kb.profile.load("v1")
     assert "SYNTHSECRETKEY_ABC123" not in str(exc.value)
+
+
+class TestCitationIsEnforced:
+    """Codex GC-AI-0013 C1: citing the profile was an instruction, not a control."""
+
+    def _content(self, ref=None) -> ResearchContent:
+        antecedents = [{"ref": ref, "summary": "perfil aplicado", "bearing": "marco del trabajo"}] if ref else []
+        return ResearchContent.model_validate({"title": "t", "question": "q", "status": "concluded",
+                                               "antecedents": antecedents, "limitations": ["l"]})
+
+    def test_no_profile_no_requirement(self, kb):
+        doc, _ = save_research(kb=kb, slug="sin-perfil", prompt="p", host=HOST, content=self._content(), now=NOW)
+        assert doc.current.resolved_refs == []
+
+    def test_missing_or_stale_citation_is_refused(self, kb):
+        put(kb.profile, SEED)
+        put(kb.profile, {"horizon": "30 a 45 días"})
+        with pytest.raises(KnowledgeError, match="cite the profile in force as an antecedent: profile:v2"):
+            save_research(kb=kb, slug="sin-cita", prompt="p", host=HOST, content=self._content(), now=NOW)
+        with pytest.raises(KnowledgeError, match=r"profile:v2 \(this cites profile:v1\)"):
+            save_research(kb=kb, slug="vieja", prompt="p", host=HOST, content=self._content("profile:v1"), now=NOW)
+        doc, _ = save_research(kb=kb, slug="vigente", prompt="p", host=HOST, content=self._content("profile:v2"),
+                               now=NOW)
+        assert [r.ref for r in doc.current.resolved_refs] == ["profile:v2"]
+
+
+@pytest.mark.parametrize("changes", [{"provisional": ["api_key=SYNTHETIC_SECRET_123456"]},
+                                     {"api_key=SYNTHETIC_SECRET_123456": 1},
+                                     {"preferred_sources": ["api_key=SYNTHETIC_SECRET_123456"]},
+                                     {"reference_capital": {"amount": 1, "currency": "USD",
+                                                            "api_key=SYNTHETIC_SECRET_123456": 1}}])
+def test_no_rejection_path_echoes_the_value(kb, changes):
+    # Codex GC-AI-0013 C1: the provisional validator echoed the rejected value.
+    put(kb.profile, SEED)
+    with pytest.raises(ProfileError) as exc:
+        put(kb.profile, changes)
+    assert "SYNTHETIC_SECRET_123456" not in str(exc.value)

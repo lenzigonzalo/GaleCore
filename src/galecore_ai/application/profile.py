@@ -10,6 +10,7 @@ change says otherwise.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -37,9 +38,17 @@ class ProfileUnusable(ProfileError):
     """A stored version failed its integrity check."""
 
 
+# Only identifier-like names are echoed back; anything else the user sent may be a credential.
+_NAME = re.compile(r"^[a-z][a-z0-9_]{0,40}$")
+
+
+def _safe(part: object) -> str:
+    return str(part) if isinstance(part, int) or _NAME.fullmatch(str(part)) else "<unrecognised>"
+
+
 def _errors(exc: ValidationError) -> list[str]:
     # loc + msg only: str(ValidationError) would echo the rejected input (e.g. a credential).
-    return [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]
+    return [f"{'.'.join(_safe(p) for p in e['loc'])}: {e['msg']}" for e in exc.errors()]
 
 
 def _view(doc: ProfileVersion, store: FileProfileStore) -> dict:
@@ -83,7 +92,7 @@ def _check_sources(ids: list[str]) -> list[str]:
         registry = load_source_registry()
     except SourceRegistryError as exc:
         return [f"preferred_sources cannot be checked: {exc}"]
-    return [f"preferred_sources: {sid!r} is not in config/sources.yaml" for sid in ids if registry.get(sid) is None]
+    return [f"preferred_sources: {_safe(sid)} is not in config/sources.yaml" for sid in ids if registry.get(sid) is None]
 
 
 def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: str, host: RecordHost,
@@ -91,7 +100,7 @@ def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: st
     """New version with ``changes`` applied; (current, None) when nothing actually changes."""
     unknown = sorted(set(changes) - set(ProfileContent.model_fields))
     if unknown:
-        raise ProfileError("Refusing to change the profile", [f"unknown fields: {', '.join(unknown)}"])
+        raise ProfileError("Refusing to change the profile", [f"unknown fields: {', '.join(map(_safe, unknown))}"])
     current = _current(store)
     base = current.content.model_dump(mode="json") if current else {}
     if "provisional" not in changes and base.get("provisional"):
@@ -100,16 +109,16 @@ def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: st
         content = ProfileContent.model_validate({**base, **changes})
     except ValidationError as exc:
         raise ProfileError("Refusing to change the profile", _errors(exc)) from exc
-    problems = _check_sources(content.preferred_sources)
-    if problems:
-        raise ProfileError("Refusing to change the profile", problems)
-    if current is not None and content == current.content:
-        return current, None
     try:
         draft = ProfileVersion(version=(current.version + 1) if current else 1, recorded_at=now or datetime.now(UTC),
                                note=note, prompt=prompt, host=host, content=content, content_hash="")
     except ValidationError as exc:
         raise ProfileError("Refusing to change the profile", _errors(exc)) from exc
+    problems = _check_sources(content.preferred_sources)
+    if problems:
+        raise ProfileError("Refusing to change the profile", problems)
+    if current is not None and content == current.content:
+        return current, None
     doc = draft.model_copy(update={"content_hash": compute_profile_hash(draft.hashable_content())})
     try:
         return doc, store.create(doc)

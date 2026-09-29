@@ -83,7 +83,7 @@ class ProfileContent(BaseModel):
     def _provisional_are_declared_fields(self) -> ProfileContent:
         for name in self.provisional:
             if name not in self.declared_fields() or name in self.missing():
-                raise ValueError(f"provisional: {name!r} is not a declared field of this profile")
+                raise ValueError("provisional must list only fields this profile declares")
         return self
 
     @classmethod
@@ -111,7 +111,7 @@ class ProfileVersion(BaseModel):
     @classmethod
     def _known_schema(cls, v: str) -> str:
         if v != PROFILE_SCHEMA_VERSION:
-            raise ValueError(f"Unknown profile schema_version {v!r}; this reader knows {PROFILE_SCHEMA_VERSION!r}")
+            raise ValueError(f"Unknown profile schema_version; this reader knows {PROFILE_SCHEMA_VERSION!r}")
         return v
 
     @field_validator("kind")

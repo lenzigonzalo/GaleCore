@@ -3,8 +3,9 @@ version: "1.0.0"
 display_name: Tu perfil
 description: >
   Keeps the user's objectives, reference capital, horizon, drawdown and risk
-  limits, preferred sources, delivery format and language as a versioned profile
-  that every capability reads before working and cites when it stores a result.
+  limits, preferred sources, delivery format and language as a versioned profile.
+  Today research and context_research read it before working and must cite the
+  version in force when they store a result; other capabilities do not use it yet.
   It records what the user declared; it does not compute risk or sizing.
 
 output_contract: galecore_ai.contracts.profile.ProfileVersion
