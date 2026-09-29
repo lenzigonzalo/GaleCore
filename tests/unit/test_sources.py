@@ -469,6 +469,12 @@ def test_cli_sources_check_galecore_reports_down_without_a_server(tmp_path):
 # ── GC-AI-0014: order by usage (owner's rule, 29/09) ──────────────────
 
 
+def test_every_usage_has_a_rank():
+    from galecore_ai.contracts.sources import USAGE_RANK, Usage
+
+    assert set(USAGE_RANK) == set(Usage)
+
+
 def test_usage_is_required():
     data = source().model_dump()
     del data["usage"]
@@ -498,6 +504,6 @@ def test_real_registry_follows_the_owners_rule(status_store):
     registry = load_source_registry()
     assert [m.id for m in query_sources("curva de tasas", registry, status_store).matches] == [
         "fred", "alpha_vantage", "fmp"]
-    quotes = query_sources("cotizaciones de SPY", registry, status_store).matches
-    assert quotes[0].id == "galecore"
+    assert [m.id for m in query_sources("cotizaciones de SPY", registry, status_store).matches] == [
+        "galecore", "fmp"]
     assert [m.id for m in query_sources("GEX de SPY", registry, status_store).matches] == ["galecore"]

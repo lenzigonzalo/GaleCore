@@ -94,7 +94,7 @@ sources:
       - category: market_data
         description: precio de cierre diario (EOD) de SPY vía chart historical-price-eod-light (funciona; evidencia:2026-09-28-cartera-ctx-fmp-spy-eod)
       - category: quotes
-        description: quote/batch-quote de SPY (intermitente por plan — ver historia de estado)
+        description: cotizaciones de SPY vía quote/batch-quote (intermitente por plan — ver historia de estado)
       - category: earnings_valuation
         description: calendario de earnings (funciona; filas por corrida sin garantía de cobertura completa)
       - category: scheduled_events

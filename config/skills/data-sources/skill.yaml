@@ -33,7 +33,7 @@ system_prompt: >
 
 instructions: |
   sources list                                # registry by category, each source's last status
-  sources query --need "<text>"               # matching sources ordered by preference; missing if none
+  sources query --need "<text>"               # matching sources ordered by usage (free, own, daily_quota, plan), then preference; missing if none
   sources check [--source galecore|fred]      # code-run minimal probe (only for sources it can call)
   sources declare --source <id> --state available|denied|limited|down \
       --note "<what happened>" --observed-at <ISO8601, UTC> --host-model <model> \

@@ -1,8 +1,9 @@
 # GaleCore-AI — Session Handoff
 
 **Actualizado:** 2026-09-29.
-**Punto de retorno:** roadmap §4, Parte 1, entrega 2. Activo: GC-AI-0013 (tu perfil). GC-AI-0012 (mapa de fuentes)
-CLOSED 29/09, tag `gc-ai-0012-closed`, mergeado a `main`.
+**Punto de retorno:** roadmap §4, Parte 1. Activo: GC-AI-0014 (orden de fuentes por tipo de uso). GC-AI-0012 (mapa
+de fuentes) y GC-AI-0013 (tu perfil) CLOSED 29/09, tags `gc-ai-0012-closed` y `gc-ai-0013-closed`, mergeados a `main`.
+Siguiente: entrega 3 (molde de capacidad).
 Traspaso de GaleCore realizado según el owner (28/09); no volver a preparar ni reclamar el envío.
 **Único plan:** [`roadmap/README.md`](../../../roadmap/README.md). **Fuente operativa:**
 [`ACTIVE_WORK_ITEM`](../../../ACTIVE_WORK_ITEM) del workspace; el puntero interno sólo alimenta tooling.
@@ -11,14 +12,11 @@ Traspaso de GaleCore realizado según el owner (28/09); no volver a preparar ni 
 
 ### ▶ Retomar acá (29/09 → próxima sesión)
 
-**Activo: [GC-AI-0013 — tu perfil](../../../.worktrees/galecore-ai/GC-AI-0013/docs/engineering/work-items/GC-AI-0013-perfil.md)**
-(worktree y rama `feature/GC-AI-0013`). Implementado y demostrado desde tres sesiones nuevas (transcripciones en
-`docs/evidence/gc-ai-0013/transcripts/`); revisión interna R1 y Codex C1 corregidas; falta el recheck de Codex y el
-cierre del owner. Perfil real vigente: `profile:v3` (objetivos, drawdown, horizonte y límites **provisorios**, a pedido
-del owner). **Ojo:** mientras esta rama no esté en `main`, el código de `main` no lee las investigaciones que citan
-`profile:` (cartera SHADOW y contexto SPY): trabajar desde este worktree o mergear primero.
-**Decisiones abiertas del owner:** adelantar a `main` el reconocimiento de `profile:vN`; desempate de fuentes según su
-regla (gratis → GaleCore → cupo diario sólo si hace falta → plan), propuesto el 29/09.
+**Activo: [GC-AI-0014 — orden de fuentes](../../../.worktrees/galecore-ai/GC-AI-0014/docs/engineering/work-items/GC-AI-0014-desempate-fuentes.md)**
+(worktree y rama `feature/GC-AI-0014`). Regla del owner decidida el 29/09 (gratis → GaleCore → cupo diario sólo si hace
+falta → plan) e implementada; revisión interna APPROVE; correcciones de Codex C1 hechas; falta recheck de Codex y cierre.
+Perfil real vigente: `profile:v3` (objetivos, drawdown, horizonte y límites **provisorios**, a pedido del owner).
+Confirmado por el owner (29/09): las fuentes preferidas del perfil desempatan sólo dentro del mismo tipo de uso.
 **Pendiente de GC-AI-0009 (paso 0):** capturar la automática por horario del 29/09 17:05 NY desde `GaleCore-AI` main
 (`task status seguimiento-spy-prima-varianza` + `schtasks /query`), anotarla en su matriz (AC-02) y presentar el cierre.
 C (GC-AI-0010) y B (GC-AI-0011) quedan suspendidos.

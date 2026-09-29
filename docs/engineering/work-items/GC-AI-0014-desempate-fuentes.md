@@ -42,6 +42,30 @@ por costo comparaba la prosa alfabéticamente).
   describen el orden nuevo; las fuentes preferidas del perfil desempatan dentro del mismo tipo.
 - [ ] **AC-04 — Revisión:** interna y Codex; cierre, el owner.
 
+## Requirement-to-evidence matrix
+
+| Criterio | Implementación | Verificación automática | Artefacto | Estado |
+|---|---|---|---|---|
+| AC-01 | `contracts/sources.py` (`Usage`, `USAGE_RANK`, `DataSource.usage` obligatorio); `config/sources.yaml` (galecore own, fred free, alpha_vantage daily_quota, fmp plan) | `test_usage_is_required`, `test_every_usage_has_a_rank`, `test_config_sources_yaml_loads_and_validates` | — | DONE |
+| AC-02 | `application/source_query.py` (`_sort_key` = rango de uso, preference, id; `usage` y `usage_note` en cada resultado) | `test_free_before_own_before_quota_before_plan_then_preference` (query y list, nota de cupo); `test_real_registry_follows_the_owners_rule` (registro real: tasas → fred, alpha_vantage, fmp; cotizaciones de SPY → galecore, fmp; GEX → sólo galecore) | salida de pytest en el handoff | DONE |
+| AC-03 | `config/catalog.yaml` (control de `data_sources`); `config/skills/data-sources` 1.1.0 (prompt e instrucciones); `context-research` 0.4.0 (reglas 0 y 4); `research` 1.3.0 (regla 0); ayuda de la CLI | — (texto de método; el desempate por las fuentes preferidas del perfil es instrucción al host, sin evaluación de comportamiento) | — | DONE (con esa limitación) |
+| AC-04 | — | — | reviews en `docs/engineering/reviews/GC-AI-0014-*` | PENDING |
+
+## Implementer handoff — Increment 1 (2026-09-29)
+
+**Qué se hizo:** el registro declara cómo se paga el uso de cada fuente y la consulta ordena por ese tipo antes que por
+`preference`; las de cupo diario llevan un aviso. Textos de método al día.
+
+**Revisión interna R1 (`reviewer`):** APPROVE, 0 BLOCKER/MAJOR. MINOR: (1) las fuentes preferidas del perfil pasan a
+desempatar sólo dentro del mismo tipo — hoy sin efecto (GaleCore es la única `own`); **confirmado por el owner el
+29/09** («Si y 2 tambien»); (2) faltaba un test de que cada `Usage` tenga rango — agregado (`test_every_usage_has_a_rank`).
+
+**Codex C1 (`GC-AI-0014-20260929T211332Z.md`) — CHANGES_REQUESTED → corregido:** matriz y handoff agregados;
+«cotizaciones de SPY» ahora devuelve GaleCore y después FMP (la cobertura de FMP decía «quote/batch-quote», no
+«cotizaciones») y el test fija la secuencia completa; instrucción de `data-sources` al día; handoff de sesión al día.
+MINOR `codex_review.py`: se mantiene — es el driver con el que corre `/review-codex` sobre un worktree, con el mismo
+patrón en `docs/evidence/gc-ai-0006..0013/`; no se presenta como evidencia de aceptación.
+
 ## Required validation
 
 ```powershell
