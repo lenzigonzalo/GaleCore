@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0014
 title: Orden de fuentes por tipo de uso (regla del owner)
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0014 — Orden de fuentes por tipo de uso
@@ -40,7 +40,7 @@ por costo comparaba la prosa alfabéticamente).
   resultado informa su tipo, y las de cupo diario dicen que se usan sólo si las anteriores no cubren el dato.
 - [x] **AC-03 — Métodos al día:** catálogo y skills (`data-sources`, `context-research`, regla 0 de `research`)
   describen el orden nuevo; las fuentes preferidas del perfil desempatan dentro del mismo tipo.
-- [ ] **AC-04 — Revisión:** interna y Codex; cierre, el owner.
+- [x] **AC-04 — Revisión:** interna y Codex; cierre, el owner.
 
 ## Requirement-to-evidence matrix
 
@@ -49,7 +49,7 @@ por costo comparaba la prosa alfabéticamente).
 | AC-01 | `contracts/sources.py` (`Usage`, `USAGE_RANK`, `DataSource.usage` obligatorio); `config/sources.yaml` (galecore own, fred free, alpha_vantage daily_quota, fmp plan) | `test_usage_is_required`, `test_every_usage_has_a_rank`, `test_config_sources_yaml_loads_and_validates` | — | DONE |
 | AC-02 | `application/source_query.py` (`_sort_key` = rango de uso, preference, id; `usage` y `usage_note` en cada resultado) | `test_free_before_own_before_quota_before_plan_then_preference` (query y list, nota de cupo); `test_real_registry_follows_the_owners_rule` (registro real: tasas → fred, alpha_vantage, fmp; cotizaciones de SPY → galecore, fmp; GEX → sólo galecore) | `docs/engineering/reviews/GC-AI-0014-20260929T221435Z.md` (checks y reproducción por CLI: tasas fred → alpha_vantage → fmp; SPY galecore → fmp; GEX sólo galecore) | DONE |
 | AC-03 | `config/catalog.yaml` (control de `data_sources`); `config/skills/data-sources` 1.1.0 (prompt e instrucciones); `context-research` 0.4.0 (reglas 0 y 4); `research` 1.3.0 (regla 0); ayuda de la CLI | — (texto de método; el desempate por las fuentes preferidas del perfil es instrucción al host, sin evaluación de comportamiento) | — | DONE (con esa limitación) |
-| AC-04 | — | — | reviews en `docs/engineering/reviews/GC-AI-0014-*` | PENDING |
+| AC-04 | — | — | reviews en `docs/engineering/reviews/GC-AI-0014-*` (Codex C2 APPROVE) | DONE — CLOSED por decisión del owner (29/09) |
 
 ## Implementer handoff — Increment 1 (2026-09-29)
 
@@ -80,3 +80,9 @@ git diff --check
 Los cuatro MAJOR de C1, resueltos. MINOR `codex_review.py`: aceptado como DISPUTED (driver establecido, no es evidencia
 de aceptación). MINOR nuevo (puntero de artefacto de AC-02): corregido a este review, que contiene la reproducción.
 Queda el cierre del owner.
+
+## Cierre (2026-09-29)
+
+CLOSED por decisión del owner: ante «¿La cierro y abro esa entrega de cobertura antes del molde?» respondió «Ok».
+Codex C2 APPROVE. Tag `gc-ai-0014-closed`. Sigue: completar la cobertura del registro (GaleCore y FRED) y un handoff
+para que el MCP de GaleCore exponga lo que el harness necesita.
