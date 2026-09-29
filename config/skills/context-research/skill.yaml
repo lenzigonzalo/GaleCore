@@ -1,5 +1,5 @@
 skill_id: context_research
-version: "0.1.1"
+version: "0.2.0"
 display_name: Investigación contextual de una idea de trading
 description: >
   Builds the market context an idea needs, for its instrument and horizon: which
@@ -33,12 +33,18 @@ system_prompt: >
      expirations) inside the horizon; options and volatility (level, term structure,
      skew, implied vs realised, dealer positioning); fiscal; geopolitics. Fiscal and
      geopolitics are PENDING unless a source with adequate evidence was consulted.
-  4. Choose sources by need. GaleCore is the primary source for market data, options
-     and its own calculations and state. External sources (the host's connectors) are
-     for what GaleCore does not have. Verify access with one minimal call before relying
-     on a source; do not query every source by obligation; never assume a tool exists
-     or a plan allows an endpoint. A denial, a rate limit or a missing connector is a
-     finding: record it in access_notes and in `missing`.
+  4. Choose sources from the registry, not from memory or by guessing: `sources query
+     --need "<factor>"` returns which known sources cover it, ordered (GaleCore first,
+     then cost) with their last checked access and known limits; `sources list` gives
+     the full picture by category. For GaleCore and FRED, `sources check` re-verifies
+     access with the minimal call this code can run when the last observation is stale
+     or missing. For a host connector (Alpha Vantage, FMP, or any other), the last
+     `sources declare` observation is what is known; if it is stale or absent, try the
+     minimal call yourself and record what happened with `sources declare` before
+     relying on the source — never assume a tool exists or a plan allows an endpoint. A
+     denial, a rate limit or a missing connector is a finding: declare it (never silent),
+     and note it in `missing`. `sources query` reporting nothing covers a need is itself
+     a finding, not a reason to guess a source outside the registry.
   5. Keep every response you use as evidence BEFORE citing it: `evidence add` with
      source, tool, non-sensitive params, unit, observation dates, frequency and revision
      notes (seasonal adjustment, missing values, vintages). The payload is verbatim; if
@@ -86,21 +92,11 @@ instructions: |
                  "excerpt_note": "...", "access_notes": ["..."]},
      "host_provider": "...", "host_model": "..."}
 
-  Source access observed on 2026-09-27 (re-check; plans and connectors change):
-  - GaleCore DataFeed (local, read-only GETs with the pilot script
-    docs/evidence/gc-ai-0006/galecore_query.py): VIX, VIX9D, VIX3M, VVIX, SPY trades,
-    25-delta put skew, IV term (9d/30d/90d). No history, no realised volatility.
-  - Alpha Vantage (free key): 1 request/s, 25/day. Monthly macro series (CPI,
-    UNEMPLOYMENT, NONFARM_PAYROLL) return the whole history with no date filter; large
-    daily series (TREASURY_YIELD, FEDERAL_FUNDS_RATE) return a 2-point preview.
-    ETF_PROFILE gives sector weights and holdings, not valuation.
-  - FMP (current plan): treasury-rates (whole curve, date range), quote, chart EOD,
-    calendar earnings-calendar (consensus EPS) work; economics-calendar and
-    etfAndMutualFunds are denied by plan.
-  - FRED: the MCP server is not registered in Claude Code. With FRED_API_KEY in the environment
-    (never in a file), `python tools/fred_query.py <out_dir> <SERIES>:<start> ...` saves metadata
-    (units, frequency, seasonal adjustment, last update) and observations with their vintage
-    (realtime_start/end) for `evidence add`. Real yields (DFII10), breakevens (T10YIE), release dates.
+  Source access (GC-AI-0012): what each known source covers, its cost, its known limits
+  and its last checked status live in the registry, not here — `sources list` / `sources
+  query --need "..."`. FRED has no registered MCP server; with FRED_API_KEY in the
+  environment (never in a file), `python tools/fred_query.py <out_dir> <SERIES>:<start> ...`
+  saves metadata and observations with their vintage for `evidence add`.
 
   For turning the context into a complete strategy proposal, continue with the strategy
   pilot method (docs/engineering/pilots/strategy-design/SKILL.md); this skill does not

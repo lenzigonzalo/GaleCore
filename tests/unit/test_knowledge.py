@@ -132,8 +132,9 @@ class TestRefs:
 class TestCatalog:
     def test_every_entry_is_available_and_consistent(self):
         entries = describe(load_catalog())
-        assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "research",
-                                              "context_research", "strategy_design", "strategy_followup", "recurring_followup"}
+        assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "data_sources",
+                                              "research", "context_research", "strategy_design", "strategy_followup",
+                                              "recurring_followup"}
         assert all(e["available"] for e in entries), entries
 
     def test_prepare_skills_have_code_behind_them(self):
@@ -309,9 +310,9 @@ class TestCli:
     def test_catalog_lists_the_capabilities(self, kb):
         code, data = self._run("catalog", env={KNOWLEDGE_DIR_ENV: str(kb.base)})
         assert code == 0 and data["knowledge_base"]["available"]
-        assert [e["id"] for e in data["entries"]] == ["gex_interpretation", "regime_interpretation", "research",
-                                                    "context_research", "strategy_design", "strategy_followup",
-                                                    "recurring_followup"]
+        assert [e["id"] for e in data["entries"]] == ["gex_interpretation", "regime_interpretation", "data_sources",
+                                                    "research", "context_research", "strategy_design",
+                                                    "strategy_followup", "recurring_followup"]
 
     def test_save_search_show_revise(self, kb):
         env = {KNOWLEDGE_DIR_ENV: str(kb.base)}

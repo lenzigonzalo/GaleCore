@@ -1,0 +1,99 @@
+# Declarative registry of data sources (GC-AI-0012, AC-01). `python -B -m
+# galecore_ai.adapters.cli sources list|query` reads this file together with the
+# observed access status kept in `<knowledge>/sources/<id>.md`.
+#
+# Adding a source means adding an entry here. `access_type: galecore_api` and
+# `api_key` need a `probe.command` this repo's code can actually run (checked by
+# `sources check`); `host_connector` sources have no command — only the host, via
+# its own connector, can observe them (`sources declare`).
+#
+# "covers" lists only what a *registered* capability of this code can actually
+# reach; a source's own product may do more (e.g. GaleCore/Tastytrade also serves
+# option chains and VIX-family series through other paths), but if this registry's
+# probe cannot reach it, it does not belong in `covers` — it goes in `limits`
+# instead, so a query never points at a route that then fails.
+schema_version: "1"
+sources:
+  - id: galecore
+    display_name: GaleCore (API propia)
+    access_type: galecore_api
+    cost: sin costo adicional (API propia del ecosistema)
+    preference: 0
+    covers:
+      - category: market_data
+        description: cotizaciones y trades de SPY y de cualquier otro símbolo que sirve el DataFeed, incluidos VIX y VVIX (market_data.quote, market_data.trade con symbol=SPY|VIX|VVIX|… — ver application/prepare_regime.py)
+      - category: options_state
+        description: GEX (compute.gamma_exposure, compute.gex_analysis) y put skew 25Δ (compute.put_skew)
+    limits:
+      - "Sólo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES): no expone cadenas de opciones, IV rank ni implied volatility por esta vía, aunque existan rutas en el dispatcher — no están habilitadas"
+      - "No expone históricos ni volatilidad realizada por esta vía"
+    probe:
+      description: GET de bajo costo (market_data.trade de SPY) evaluando el código de estado HTTP
+      command: python -B -m galecore_ai.adapters.cli sources check --source galecore
+
+  - id: fred
+    display_name: FRED (St. Louis Fed)
+    access_type: api_key
+    cost: clave gratuita (FRED_API_KEY en el entorno del usuario; no persiste entre sesiones)
+    preference: 10
+    covers:
+      - category: rates_curve
+        description: tasas del Tesoro (curva), fed funds rate y otras series de tasas
+      - category: inflation
+        description: CPI y breakevens de inflación
+      - category: activity_employment
+        description: nonfarm payroll, desempleo y otras series de actividad
+    limits: []
+    probe:
+      description: GET a fred/series para una serie liviana (metadatos, sin observaciones históricas)
+      command: python -B -m galecore_ai.adapters.cli sources check --source fred
+
+  - id: alpha_vantage
+    display_name: Alpha Vantage
+    access_type: host_connector
+    cost: clave gratuita (límite de plan)
+    preference: 20
+    covers:
+      - category: rates_curve
+        description: tasas y curva de tasas (TREASURY_YIELD, FEDERAL_FUNDS_RATE)
+      - category: inflation
+        description: inflación (CPI, INFLATION)
+      - category: activity_employment
+        description: empleo y actividad (NONFARM_PAYROLL, UNEMPLOYMENT)
+      - category: earnings_valuation
+        description: resultados y estimaciones (EARNINGS, EARNINGS_ESTIMATES, EARNINGS_CALL_TRANSCRIPT)
+      - category: scheduled_events
+        description: calendario de resultados y salidas a bolsa (EARNINGS_CALENDAR, IPO_CALENDAR)
+      - category: volatility_options_external
+        description: opciones históricas y put/call ratio histórico (HISTORICAL_OPTIONS, HISTORICAL_PUT_CALL_RATIO)
+    limits:
+      - "Clave gratuita: 1 consulta/s y 25/día; en paralelo falla por límite (evidencia:2026-09-27-spy-ctx-av-effr-preview)"
+      - "Series diarias (TREASURY_YIELD, FEDERAL_FUNDS_RATE): el conector devuelve una vista previa de 2 puntos, no el historial completo (evidencia:2026-09-27-spy-ctx-av-treasury-10y-preview, evidencia:2026-09-27-spy-ctx-av-effr-preview); las mensuales sí devuelven la serie completa"
+      - "REALTIME_OPTIONS, REALTIME_PUT_CALL_RATIO y ETF_PROFILE: sin probar con la clave gratuita, no forman parte de covers hasta verificarlos"
+    probe:
+      description: sin comando propio; el host prueba con la llamada mínima del dato que necesita y declara el resultado (sources declare)
+      command: null
+
+  - id: fmp
+    display_name: Financial Modeling Prep (FMP)
+    access_type: host_connector
+    cost: "plan actual insuficiente para varios endpoints: el conector responde que hace falta Starter/Premium/Ultimate/Enterprise (evidencia:2026-09-27-spy-ctx-fmp-economics-calendar-denied)"
+    preference: 30
+    covers:
+      - category: rates_curve
+        description: curva de tasas del Tesoro, treasury-rates (funciona; evidencia:2026-09-27-spy-ctx-fmp-treasury-rates)
+      - category: market_data
+        description: precio de cierre diario (EOD) de SPY vía chart historical-price-eod-light (funciona; evidencia:2026-09-28-cartera-ctx-fmp-spy-eod)
+      - category: quotes
+        description: quote/batch-quote de SPY (intermitente por plan — ver historia de estado)
+      - category: earnings_valuation
+        description: calendario de earnings (funciona; filas por corrida sin garantía de cobertura completa)
+      - category: scheduled_events
+        description: economics-calendar (denegado por plan)
+    limits:
+      - "economics-calendar y etfAndMutualFunds information denegados por plan (evidencia:2026-09-27-spy-ctx-fmp-economics-calendar-denied, evidencia:2026-09-27-spy-ctx-fmp-etf-information-denied)"
+      - "quote/batch-quote: respondió en una sesión y fue denegado en otra sin cambio de código de este lado — el plan puede variar entre sesiones (evidencia:2026-09-27-spy-ctx-fmp-spy-quote, evidencia:2026-09-28-cartera-ctx-fmp-spy-eod)"
+      - "Calendario de earnings: corridas con 8 y con 50 filas, posible recorte del endpoint sin verificar (evidencia:2026-09-27-spy-ctx-fmp-earnings-calendar-oct13-16, evidencia:2026-09-28-cartera-ctx-fmp-earnings-oct19-nov6)"
+    probe:
+      description: sin comando propio; el host prueba con la llamada mínima del dato que necesita y declara el resultado (sources declare)
+      command: null

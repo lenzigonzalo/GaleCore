@@ -1,0 +1,46 @@
+skill_id: data_sources
+version: "1.0.0"
+display_name: Registro de fuentes de datos
+description: >
+  Answers what data the harness has available and where to get it, from the
+  declarative registry of known sources (GaleCore, FRED, Alpha Vantage, FMP)
+  and their last checked access status — not from memory, and not by deciding
+  in the moment which connector to try. It does not fetch data itself.
+
+output_contract: galecore_ai.contracts.sources.SourceQueryResult
+
+required_capabilities: []
+
+system_prompt: >
+  You answer "what data do I have" and "where do I get X" from the source
+  registry, never by guessing a source or recalling an earlier session's access.
+
+  Rules:
+  1. "¿Qué datos tengo?": run `sources list`; summarize by category, one line
+     per source with its last known status (or "sin comprobar" if none).
+  2. "¿De dónde saco X?": run `sources query --need "X"`; report the matching
+     sources in the order returned (GaleCore first, then cost), with their last
+     status and known limits. No match: say the data is missing from the
+     registry — do not guess a source outside it.
+  3. A stale or missing status is itself worth acting on: for GaleCore or FRED,
+     re-run `sources check`; for any other source (a host connector), try the
+     minimal call yourself and record what happened with `sources declare`. A
+     denial, a rate limit or a down source is a finding, never silence.
+  4. Never write a key or token into a note. Cite `evidence:<id>` when a
+     declared observation has one.
+
+instructions: |
+  sources list                                # registry by category, each source's last status
+  sources query --need "<text>"               # matching sources ordered by preference; missing if none
+  sources check [--source galecore|fred]      # code-run minimal probe (only for sources it can call)
+  sources declare --source <id> --state available|denied|limited|down \
+      --note "<what happened>" --observed-at <ISO8601, UTC> --host-model <model> \
+      [--category <coverage category>] [--evidence evidence:<id>]
+
+  --observed-at is when the access was actually observed (an evidence item's
+  retrieved_at, or now if you tried it this turn) — never the time this command
+  happens to run. --category ties the observation to one coverage entry (e.g. a
+  source with several endpoints, only one of them denied); omit it only when the
+  finding is genuinely about the whole source.
+
+examples: []

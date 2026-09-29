@@ -52,6 +52,34 @@ entries:
       - Daily records only after the cash session (F-2)
     guide: docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md
 
+  - id: data_sources
+    kind: harness
+    serves: >-
+      Saber qué fuentes de datos hay disponibles, qué cubre cada una, su costo y
+      límites conocidos, su último estado de acceso comprobado y cuál conviene usar
+      primero para un dato dado.
+    example_requests:
+      - ¿Qué datos tengo?
+      - ¿De dónde saco la cadena de opciones de SPY?
+    skill: skills/data-sources/skill.yaml
+    output_contract: galecore_ai.contracts.sources.SourceQueryResult
+    galecore_capabilities: []
+    flow:
+      - sources list
+      - sources query --need "<qué dato hace falta>"
+      - sources check [--source galecore|fred]
+      - sources declare --source <id> --state available|denied|limited|down --note "..." --observed-at <ISO8601> --host-model <model> [--category <cat>] [--evidence evidence:<id>]
+    stored_as: none
+    controls:
+      - The registry (config/sources.yaml) rejects a source missing coverage, cost or a probe where one is required
+      - GaleCore and FRED are checked with a minimal call this code runs; other sources are HOST_DECLARED only
+      - "declare requires --observed-at (the moment the access was actually observed, e.g. an evidence item's retrieved_at); it is never the time the command ran"
+      - A declared observation never carries a key or token; a cited evidence ref must resolve
+      - Status history is append-only; an edited or reordered source's file is reported as integrity_failed, never a crash
+      - Query orders matching sources by preference (GaleCore first) then cost, and shows the most recent status that bears on the matched category, not an unrelated endpoint's; a need with no match is reported missing, never guessed
+      - output_contract names SourceQueryResult, the shape `sources query` answers with (the entry's primary output); `sources list` answers with the related SourceCatalogSummary
+      - Not checked - whether a source's own data is correct
+
   - id: research
     kind: investigation
     serves: >-
