@@ -64,6 +64,10 @@ def test_data_needs_must_be_declared():
     ({"data_needs": [{"need": "curva de tasas", "missing": "sin fuente"}]}, "declared missing but the registry covers it"),
     ({"controls": ["Numbers match the facts"]}, "none says what is NOT checked"),
     ({"skill": "skills/nope/skill.yaml"}, "skill or contract"),
+    ({"flow": []}, "flow: empty"),
+    ({"flow": ["python ENGINEERING.md"]}, "script not found"),
+    ({"controls": ["Not checked"]}, "none says what is NOT checked"),
+    ({"controls": ["Not checked -  "]}, "none says what is NOT checked"),
 ])
 def test_an_incomplete_entry_is_rejected_with_the_reason(tmp_path, overrides, expected):
     result = run(entry(**overrides), tmp_path=tmp_path)
@@ -80,3 +84,8 @@ def test_cli_commands_know_nested_subcommands():
     commands = cli_commands(build_parser())
     assert "save" in commands["research"] and "check" in commands["sources"]
     assert commands["catalog"] == set()
+
+
+def test_a_blank_missing_reason_is_refused():
+    with pytest.raises(ValidationError, match="must not be blank"):
+        entry(data_needs=[{"need": "fecha del FOMC", "missing": "  "}])

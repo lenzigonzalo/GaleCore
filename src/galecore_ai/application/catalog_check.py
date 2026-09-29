@@ -29,14 +29,14 @@ def cli_commands(parser: argparse.ArgumentParser) -> dict[str, set[str]]:
 
 
 def _flow_problems(entry: CatalogEntry, commands: dict[str, set[str]], workspace: Path) -> list[str]:
-    problems = []
+    problems = [] if entry.flow else ["flow: empty; a capability says which commands run it"]
     for line in entry.flow:
         tokens = line.split()
         if not tokens:
             problems.append("flow: blank line")
             continue
         if tokens[0] == "python":
-            if len(tokens) < 2 or not (workspace / tokens[1]).is_file():
+            if len(tokens) < 2 or not tokens[1].endswith(".py") or not (workspace / tokens[1]).is_file():
                 problems.append(f"flow: script not found in the workspace: {line!r}")
             continue
         if tokens[0] not in commands:
@@ -66,7 +66,7 @@ def check_entry(entry: CatalogEntry, described: dict, *, commands: dict[str, set
     problems = [] if described.get("available") else [f"skill or contract: {described.get('error')}"]
     problems += _flow_problems(entry, commands, workspace)
     problems += _data_problems(entry, registry, status_store)
-    if not any(c.lower().startswith("not checked") for c in entry.controls):
+    if not any(c.lower().startswith("not checked") and c[len("not checked"):].strip(" -–:") for c in entry.controls):
         problems.append("controls: none says what is NOT checked")
     return problems
 

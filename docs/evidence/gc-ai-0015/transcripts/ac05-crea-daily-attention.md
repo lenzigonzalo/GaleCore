@@ -28,44 +28,44 @@ cd "C:/Users/lenzi/OneDrive/Escritorio/GaleCore/.worktrees/galecore-ai/GC-AI-001
 Resultado:
 
 ```text
-{
-  "catalog_version": "1",
-  "knowledge_base": {
-    "path": "C:\\Users\\lenzi\\OneDrive\\Escritorio\\GaleCore\\knowledge",
-    "available": true
-  },
-  "entries": [
-    {
-      "id": "gex_interpretation",
-      "kind": "interpretation",
-      "serves": "Interpretar la exposici\u00f3n gamma (GEX) actual de un s\u00edmbolo con datos de GaleCore.",
-      "example_requests": [
-        "Analiz\u00e1 el GEX actual de SPY."
-      ],
-      "skill": "skills/gex-analysis/skill.yaml",
-      "output_contract": "galecore_ai.contracts.gex_analysis.GexInterpretation",
-      "galecore_capabilities": [
-        "compute.gex_analysis"
-      ],
-      "data_needs": [
-        {
-          "need": "GEX de SPY",
-          "missing": null
-        }
-      ],
-      "prepare_skill": "gex",
-      "flow": [
-        "prepare --symbol <SYMBOL> --skill gex",
-        "accept < {run_id, interpretation, host_provider, host_model}"
-      ],
-      "stored_as": "none",
-      "controls": [
-        "Numbers only in quantitative_claims, each equal to a GaleCore fact with its unit",
-        "No digits in observations or implications",
-        "Regime by the sign of net_gex; near_zero always rejected",
-        "Evidence paths resolve (entailment is not checked)",
-        "No explicit trading recommendation (pattern-based, D-6)",
-        "Snapshot integrity and freshness, fail-closed",
+{
+  "catalog_version": "1",
+  "knowledge_base": {
+    "path": "C:\\Users\\lenzi\\OneDrive\\Escritorio\\GaleCore\\knowledge",
+    "available": true
+  },
+  "entries": [
+    {
+      "id": "gex_interpretation",
+      "kind": "interpretation",
+      "serves": "Interpretar la exposici\u00f3n gamma (GEX) actual de un s\u00edmbolo con datos de GaleCore.",
+      "example_requests": [
+        "Analiz\u00e1 el GEX actual de SPY."
+      ],
+      "skill": "skills/gex-analysis/skill.yaml",
+      "output_contract": "galecore_ai.contracts.gex_analysis.GexInterpretation",
+      "galecore_capabilities": [
+        "compute.gex_analysis"
+      ],
+      "data_needs": [
+        {
+          "need": "GEX de SPY",
+          "missing": null
+        }
+      ],
+      "prepare_skill": "gex",
+      "flow": [
+        "prepare --symbol <SYMBOL> --skill gex",
+        "accept < {run_id, interpretation, host_provider, host_model}"
+      ],
+      "stored_as": "none",
+      "controls": [
+        "Numbers only in quantitative_claims, each equal to a GaleCore fact with its unit",
+        "No digits in observations or implications",
+        "Regime by the sign of net_gex; near_zero always rejected",
+        "Evidence paths resolve (entailment is not checked)",
+        "No explicit trading recommendation (pattern-based, D-6)",
+        "Snapshot integrity and freshness, fail-closed",
         "Not checked - that the interpretation follows from the facts beyond numbers and evidence
 … [recortado: 24296 caracteres en total]
 ```
@@ -121,7 +121,7 @@ system_prompt: >
   2. Frame the request in the user's words: which decision it helps, two or three example requests,
      and what the result must contain for the user to act on it. Ask one short question only if the
      answer changes what data is needed.
-  3. Data needs from the registry, never from memory: for each datum, `sources query 
+  3. Data needs from the registry, never from memory: for each datum, `sources query
 … [recortado: 3479 caracteres en total]
 ```
 
@@ -134,28 +134,28 @@ cd "C:/Users/lenzi/OneDrive/Escritorio/GaleCore/.worktrees/galecore-ai/GC-AI-001
 Resultado:
 
 ```text
-skill_id: strategy_followup
-version: "0.4.0"
-display_name: Seguimiento de una estrategia en SHADOW y retroalimentación de su investigación
-description: >
-  Answers "what did this strategy do since the last review, why did it enter or not, how did its
-  positions evolve and what changes in our hypothesis?" from GaleCore's runtime data, tied to the
-  approved strategy version, and saves the answer as a revision of the strategy's investigation.
-
-output_contract: galecore_ai.contracts.research.ResearchContent
-
-required_capabilities: []
-
-system_prompt: >
-  0. Start from the user's profile: `profile show`. Use its reference capital and risk limits to size
-     what you report (fields listed in `provisional` are placeholders: label what depends on them as
-     provisional). When saving with `research revise`, cite the profile in force (`profile:v<N>`) as an
-     antecedent; saving is refused otherwise.
-  1. Find the strategy and its investigation: `kb search --kind strategy`, `kb show strategy:<ref>`
-     (spec hash, approval), and the last revision of its research (the "last review").
-  2. Run `followup run --strategy <name>`: it reads GaleCore through its API (development environment),
-     keeps the output verbatim as evidence, evaluates the approved version (or the latest, flagged not
-     approved) and writes a hashed follow-up record with operation, SHADOW results, hypothesis evidence,
+skill_id: strategy_followup
+version: "0.4.0"
+display_name: Seguimiento de una estrategia en SHADOW y retroalimentación de su investigación
+description: >
+  Answers "what did this strategy do since the last review, why did it enter or not, how did its
+  positions evolve and what changes in our hypothesis?" from GaleCore's runtime data, tied to the
+  approved strategy version, and saves the answer as a revision of the strategy's investigation.
+
+output_contract: galecore_ai.contracts.research.ResearchContent
+
+required_capabilities: []
+
+system_prompt: >
+  0. Start from the user's profile: `profile show`. Use its reference capital and risk limits to size
+     what you report (fields listed in `provisional` are placeholders: label what depends on them as
+     provisional). When saving with `research revise`, cite the profile in force (`profile:v<N>`) as an
+     antecedent; saving is refused otherwise.
+  1. Find the strategy and its investigation: `kb search --kind strategy`, `kb show strategy:<ref>`
+     (spec hash, approval), and the last revision of its research (the "last review").
+  2. Run `followup run --strategy <name>`: it reads GaleCore through its API (development environment),
+     keeps the output verbatim as evidence, evaluates the approved version (or the latest, flagged not
+     approved) and writes a hashed follow-up record with operation, SHADOW results, hypothesis evidence,
      other versions (never mixed in) and attention points. Present tha
 … [recortado: 21756 caracteres en total]
 ```
@@ -170,44 +170,44 @@ Resultado:
 
 ```text
 === posiciones SHADOW
-{
-  "need": "posiciones SHADOW",
-  "matches": [
-    {
-      "id": "galecore",
-      "display_name": "GaleCore (API propia)",
-      "access_type": "galecore_api",
-      "usage": "own",
-      "usage_note": null,
-      "preference": 0,
-      "cost": "sin costo adicional (API propia del ecosistema)",
-      "limits": [
-        "S\u00f3lo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES): no expone cadenas de opciones, IV rank ni implied volatility por esta v\u00eda, aunque existan rutas en el dispatcher \u2014 no est\u00e1n habilitadas",
-        "No expone hist\u00f3ricos ni volatilidad realizada por esta v\u00eda"
-      ],
-      "matched_coverage": [
-        {
-          "category": "shadow_runtime",
-          "description": "runtime SHADOW de GaleCore Dev \u2014 estado, instancias, evaluaciones, descartes, posiciones y m\u00e9tricas por versi\u00f3n de estrategia (App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics; se lee con `followup run`)",
-          "any_symbol": false
-        }
-      ],
-      "last_status": {
-        "state": "down",
-        "observed_at": "2026-09-29T23:10:56.901341+00:00",
-        "origin": "code_probe",
-        "note": "market_data.trade SPY: HTTP error calling market_data.trade: All connection attempts failed"
-      }
-    }
-  ],
-  "missing": false
-}
+{
+  "need": "posiciones SHADOW",
+  "matches": [
+    {
+      "id": "galecore",
+      "display_name": "GaleCore (API propia)",
+      "access_type": "galecore_api",
+      "usage": "own",
+      "usage_note": null,
+      "preference": 0,
+      "cost": "sin costo adicional (API propia del ecosistema)",
+      "limits": [
+        "S\u00f3lo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES): no expone cadenas de opciones, IV rank ni implied volatility por esta v\u00eda, aunque existan rutas en el dispatcher \u2014 no est\u00e1n habilitadas",
+        "No expone hist\u00f3ricos ni volatilidad realizada por esta v\u00eda"
+      ],
+      "matched_coverage": [
+        {
+          "category": "shadow_runtime",
+          "description": "runtime SHADOW de GaleCore Dev \u2014 estado, instancias, evaluaciones, descartes, posiciones y m\u00e9tricas por versi\u00f3n de estrategia (App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics; se lee con `followup run`)",
+          "any_symbol": false
+        }
+      ],
+      "last_status": {
+        "state": "down",
+        "observed_at": "2026-09-29T23:10:56.901341+00:00",
+        "origin": "code_probe",
+        "note": "market_data.trade SPY: HTTP error calling market_data.trade: All connection attempts failed"
+      }
+    }
+  ],
+  "missing": false
+}
 === evaluaciones SHADOW
-{
-  "need": "evaluaciones SHADOW",
-  "matches": [
-    {
-      "id": "galecore",
+{
+  "need": "evaluaciones SHADOW",
+  "matches": [
+    {
+      "id": "galecore",
       "display_name
 … [recortado: 11716 caracteres en total]
 ```
@@ -222,45 +222,45 @@ Resultado:
 
 ```text
 === calendario de earnings
-False [('alpha_vantage', 'limited'), ('fmp', 'limited')]
+False [('alpha_vantage', 'limited'), ('fmp', 'limited')]
 === delta de posiciones SHADOW
-True []
+True []
 === riesgo maximo de posiciones SHADOW
-True []
-{
-  "ref": "profile:v3",
-  "version": 3,
-  "recorded_at": "2026-09-29T18:54:11.684085+00:00",
-  "note": "Mismos valores provisorios de v2, ahora marcados en 'provisional' (estructura) en lugar del prefijo PROVISORIO en el texto; las capacidades los usan pero los rotulan como provisorios, no como decisi\u00f3n del owner.",
-  "content": {
-    "objectives": [
-      "retorno anual buscado de 10 a 15 % sobre el capital de referencia, vendiendo prima con riesgo definido"
-    ],
-    "max_drawdown": "15 % del capital de referencia (1.500 USD)",
-    "horizon": "operaciones de 30 a 45 d\u00edas; resultados evaluados por trimestre",
-    "reference_capital": {
-      "amount": 10000.0,
-      "currency": "USD"
-    },
-    "risk_limits": [
-      "p\u00e9rdida m\u00e1xima por operaci\u00f3n 2 % del capital de referencia (200 USD)",
-      "p\u00e9rdida m\u00e1xima sumada de las posiciones abiertas 10 % del capital de referencia (1.000 USD)"
-    ],
-    "preferred_sources": [
-      "galecore"
-    ],
-    "delivery_format": [
-      "tablas y gr\u00e1ficos primero, texto m\u00ednimo; el registro con fuentes queda de respaldo"
-    ],
-    "language": "espa\u00f1ol",
-    "provisional": [
-      "objectives",
-      "max_drawdown",
-      "horizon",
-      "risk_limits"
-    ]
-  },
-  "missing": [],
+True []
+{
+  "ref": "profile:v3",
+  "version": 3,
+  "recorded_at": "2026-09-29T18:54:11.684085+00:00",
+  "note": "Mismos valores provisorios de v2, ahora marcados en 'provisional' (estructura) en lugar del prefijo PROVISORIO en el texto; las capacidades los usan pero los rotulan como provisorios, no como decisi\u00f3n del owner.",
+  "content": {
+    "objectives": [
+      "retorno anual buscado de 10 a 15 % sobre el capital de referencia, vendiendo prima con riesgo definido"
+    ],
+    "max_drawdown": "15 % del capital de referencia (1.500 USD)",
+    "horizon": "operaciones de 30 a 45 d\u00edas; resultados evaluados por trimestre",
+    "reference_capital": {
+      "amount": 10000.0,
+      "currency": "USD"
+    },
+    "risk_limits": [
+      "p\u00e9rdida m\u00e1xima por operaci\u00f3n 2 % del capital de referencia (200 USD)",
+      "p\u00e9rdida m\u00e1xima sumada de las posiciones abiertas 10 % del capital de referencia (1.000 USD)"
+    ],
+    "preferred_sources": [
+      "galecore"
+    ],
+    "delivery_format": [
+      "tablas y gr\u00e1ficos primero, texto m\u00ednimo; el registro con fuentes queda de respaldo"
+    ],
+    "language": "espa\u00f1ol",
+    "provisional": [
+      "objectives",
+      "max_drawdown",
+      "horizon",
+      "risk_limits"
+    ]
+  },
+  "missing": [],
   "pr
 … [recortado: 1782 caracteres en total]
 ```
@@ -341,11 +341,11 @@ Resultado:
 222	    stale = sorted(r for r in cited if r.startswith("profile:"))
 223	    return [f"cite the profile in force as an antecedent: {current.ref}"
 224	            + (f" (this cites {', '.join(stale)})" if stale else "")]
-225	
-226	
+225
+226
 227	RESEARCH_CONTRACT = "galecore_ai.contracts.research.ResearchContent"
-228	
-229	
+228
+229
 230	def research_skill(capability: str = "research") -> AssetEntry:
 231	    """The skill a revision was written with: any catalog entry whose output is an investigation."""
 232	    try:
@@ -357,8 +357,8 @@ Resultado:
 238	                             [f"its output contract is {entry.output_contract}"])
 239	    skill = load_asset(entry.skill, SkillDefinition)
 240	    return AssetEntry(asset_id=skill.skill_id, version=skill.version, content_hash=definition_hash(skill))
-241	
-242	
+241
+242
 243	def _revision(*, number: int, reason: RevisionReason, note: str, prompt: str, host: RecordHost,
 244	              content: ResearchContent, resolved: list[ResolvedRef], now: datetime,
 245	              capability: str) -> ResearchRevision:
@@ -448,13 +448,13 @@ for e in d.get('entries',[]) if isinstance(d,dict) else []:
 Resultado:
 
 ```text
-{
- "complete": true
-}
-{
- "id": "daily_attention",
- "complete": true,
- "problems": []
+{
+ "complete": true
+}
+{
+ "id": "daily_attention",
+ "complete": true,
+ "problems": []
 }
 ```
 
@@ -504,7 +504,7 @@ Resultado:
 ```
 
 > Ya le pasé el informe a quien me lanzó. Quedó creada la capacidad `daily_attention` y `catalog --check` la da como completa, sin problemas. No la corrí contra datos.
-> 
+>
 > - **Qué hace:** te dice qué mirar hoy de lo que tenés en SHADOW. Cubre la exposición frente a los límites de tu perfil, lo que dicen las reglas de la estrategia aprobada, lo que cambió desde la última revisión, el contexto de mercado y lo que falta. Guarda cada día como una revisión nueva de una investigación «atencion-diaria-<estrategia>».
 > - **Qué reutiliza:**
 >   - Posiciones, evaluaciones y métricas SHADOW: `strategy_followup`.
@@ -519,14 +519,14 @@ Resultado:
 >   - Fecha del FOMC (FMP la niega por el plan).
 >   - Calendario macro.
 > - **Límite:** la tarea recurrente de hoy sólo corre el seguimiento de la estrategia. Para que toda esta capacidad corra sola cada día hace falta código.
-> 
+>
 > Salida de `catalog --check`:
 > ```
 > {"id": "daily_attention", "complete": true, "problems": []}
 > ```
-> 
+>
 > Comandos que corrí: `catalog`, `sources query --need` para cada dato, `profile show`, la ayuda de `followup run` y `kb search`, y `catalog --check`. También leí dos archivos Python, sin modificarlos, para confirmar que el guardado acepta esta capacidad. No llamé conectores externos ni hice commits.
-> 
+>
 > Archivos, en `C:/Users/lenzi/OneDrive/Escritorio/GaleCore/.worktrees/galecore-ai/GC-AI-0015/config/`:
 > - `skills/daily-attention/skill.yaml` (nuevo)
 > - `catalog.yaml` (entrada nueva `daily_attention`)

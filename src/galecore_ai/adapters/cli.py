@@ -53,7 +53,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, knowledge_dir
+from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, _workspace_root, knowledge_dir
 from galecore_ai.adapters.record_store import (
     FileRecordStore,
     RecordStoreError,
@@ -451,7 +451,9 @@ async def _cmd_catalog(args: argparse.Namespace) -> None:
     if args.check:
         try:
             registry = load_source_registry()
-            workspace = knowledge_dir().parent
+            workspace = _workspace_root(Path(__file__).resolve())
+            if workspace is None:
+                raise KnowledgeBaseError("Cannot locate the workspace root from this checkout")
         except (SourceRegistryError, KnowledgeBaseError) as exc:
             _error_out(str(exc), exit_code=_EXIT_INTERNAL_ERROR)
             return

@@ -15,7 +15,7 @@ entries:
     output_contract: galecore_ai.contracts.gex_analysis.GexInterpretation
     galecore_capabilities: [compute.gex_analysis]
     data_needs:
-      - need: GEX de SPY
+      - need: GEX
     prepare_skill: gex
     flow:
       - prepare --symbol <SYMBOL> --skill gex
@@ -116,7 +116,7 @@ entries:
       - Refuses text that looks like a key or token (heuristic, English and Spanish labels plus common key prefixes); a refused value is not echoed back
       - Missing fields are declared, never defaulted; placeholders the user asked for are listed in `provisional` and reported as such
       - "While a profile exists, research and context_research refuse to save unless an antecedent cites the version in force (profile:v<N>), so the stored revision records the version (hash) used"
-      - "Consumers today: research and context_research only; GEX, regime, strategy and follow-up outputs do not read the profile yet"
+      - "Consumers today: research, context_research, strategy_followup and daily_attention; GEX, regime, strategy design and tasks do not read the profile yet"
       - Not checked - whether the declared objectives or limits are sensible
 
   - id: capability_builder
@@ -142,6 +142,7 @@ entries:
       - "catalog --check rejects an entry whose skill or contract does not load, whose flow names a command this CLI does not have (or a script not in the workspace), whose data need no registered source covers without a declared reason, or whose controls do not say what is not checked"
       - A result stored as research must cite the profile in force (enforced when saving)
       - Not checked - that the capability is useful or that its method is right; that is judged by running it
+      - Not checked - the options and arguments of each flow line (only the command and subcommand)
 
   - id: research
     kind: investigation
@@ -222,8 +223,11 @@ entries:
     galecore_capabilities: [App/Runtime/Specs, App/Runtime/Deploy]
     data_needs:
       - need: cotizaciones de SPY
-      - need: GEX de SPY
       - need: posiciones SHADOW
+      - need: historicos de SPY con disponibilidad point-in-time
+        missing: "ninguna fuente registrada los sirve por el harness (GaleCore tiene velas por una ruta que el código no llama; el backtest GC-AI-0011 está suspendido)"
+      - need: volatilidad implicita de SPY
+        missing: "GaleCore la calcula (App.Analytics/ImpliedVolatility, IVRank) pero el harness no la llama; el piloto GC-AI-0006 la leyó a mano en :7001"
     flow:
       - kb search --text "<idea>" [--kind research|evidence|strategy]
       - research save --slug <slug> --prompt "<pedido>" < {content, host_provider, host_model}   # si la estrategia no tiene investigación propia
@@ -296,7 +300,6 @@ entries:
       - need: griegas de posiciones SHADOW
         missing: "ninguna fuente registrada las sirve (GaleCore no expone griegas de posiciones SHADOW por el harness)"
       - need: riesgo maximo de posiciones SHADOW
-        missing: "ninguna fuente registrada lo sirve; sólo se informa si el registro de followup lo trae"
       - need: fecha del FOMC
         missing: "ninguna fuente registrada la sirve (economics-calendar de FMP denegado por plan)"
       - need: calendario de eventos macro
@@ -339,6 +342,7 @@ entries:
     data_needs:
       - need: posiciones SHADOW
       - need: evaluaciones SHADOW
+      - need: metricas SHADOW
     flow:
       - task create --id <id> --strategy <name> --objective "<qué querés saber>" --expected "<resultado>" --source "<fuente>" --frequency daily --time 17:05 --timezone America/New_York --prompt "<pedido>"
       - task status <id>

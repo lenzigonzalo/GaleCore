@@ -119,3 +119,23 @@ python -B -m pytest -q -p no:cacheprovider
 python -B -m ruff check --no-cache .
 git diff --check
 ```
+
+## Revisión interna 1 (`reviewer`, 2026-09-29) — CHANGES_REQUESTED → corregido
+
+- **MAJOR — `strategy_design` no declaraba lo que su método necesita:** declaraba datos que consume el runtime
+  (cotizaciones, GEX) y omitía los históricos point-in-time y la volatilidad implícita, que el registro no sirve; el check
+  quedaba verde escondiendo el hueco. **Corregido:** declara históricos y volatilidad implícita como faltantes con motivo
+  (y quita GEX). También: `gex_interpretation` pide «GEX» (cualquier símbolo) y `recurring_followup` suma las métricas.
+- **MINOR corregidos:** `catalog --check` rechaza flujo vacío, un `python` que no apunta a un `.py` existente, «Not
+  checked» sin texto, y el modelo rechaza un `missing` en blanco (tests nuevos); las opciones de cada línea del flujo no se
+  verifican y ahora lo declara `capability_builder` en sus controles; la raíz del workspace se busca con `_workspace_root`
+  (antes fallaba con `GALECORE_KNOWLEDGE_DIR` apuntando a otro lado); control de consumidores del perfil al día
+  (`strategy_followup`, `daily_attention`); el riesgo máximo por posición sí lo trae el registro de seguimiento
+  (`maxRisk`) → cobertura `shadow_runtime` lo nombra y `daily_attention` ya no lo declara faltante; `daily_attention`
+  0.1.2 pide rotular la comparación con los límites como «Cálculo propio» (interpretación) y no rellenar un valor de otra
+  instancia; el límite de `KNOWN_CAPABILITIES` en el registro ya no contradice la cobertura SHADOW; transcripciones
+  regeneradas con fin de línea LF y sin espacios finales; docstring del extractor corregido.
+- **Registrado, no corregible:** la revisión r1 guardada en la base (append-only) muestra 456 USD para la v2 y a la vez
+  lo declara faltante, y trae el cálculo al stop como `fact`; la próxima revisión sigue la skill 0.1.2.
+- **Traza de FRED (tasas reales, crédito):** la consume `context_research` (sus `data_needs`), no `daily_attention`;
+  entra por AC-01 (declaración honesta de las entradas existentes), no por el caso.

@@ -1,7 +1,7 @@
 """Sanitized transcripts of the AC-05 fresh sessions, from the host's subagent JSONL logs.
 
 Usage (from this worktree):
-    PYTHONPATH=src python docs/evidence/gc-ai-0013/extract_transcripts.py <agent.jsonl> <label> <out.md>
+    PYTHONPATH=src python docs/evidence/gc-ai-0015/extract_transcripts.py <agent.jsonl> <label> <out.md>
 
 Keeps, in order: the initial prompt, every tool call (name + command or path), its result
 (truncated, with an error flag) and the final report. Credential-looking text is redacted
@@ -66,7 +66,9 @@ def main(src: str, label: str, out: str) -> None:
                 parts.append(f"Resultado{flag}:\n\n```text\n{cut(clean(as_text(block.get('content', ''))))}\n```\n")
             elif kind == "text" and msg.get("role") == "assistant" and block.get("text", "").strip():
                 parts.append("> " + clean(block["text"]).replace("\n", "\n> ") + "\n")
-    Path(out).write_text("\n".join(parts), encoding="utf-8")
+    text = "\n".join(parts).replace("\r\n", "\n").replace("\r", "\n")
+    text = "\n".join(line.rstrip() for line in text.split("\n")).rstrip("\n") + "\n"
+    Path(out).write_text(text, encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

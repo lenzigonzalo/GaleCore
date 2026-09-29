@@ -15,7 +15,7 @@ from __future__ import annotations
 from importlib import import_module
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from galecore_ai.harness.assets import asset_root, definition_hash, load_asset
 from galecore_ai.harness.definitions import SkillDefinition
@@ -35,6 +35,13 @@ class DataNeed(BaseModel):
 
     need: str                            # in the terms `sources query --need` understands
     missing: str | None = None           # why no source covers it today; required when the registry has none
+
+    @field_validator("need", "missing")
+    @classmethod
+    def _not_blank(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("must not be blank")
+        return v
 
 
 class CatalogEntry(BaseModel):
