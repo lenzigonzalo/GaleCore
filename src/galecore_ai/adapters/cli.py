@@ -69,6 +69,7 @@ from galecore_ai.adapters.source_status_store import (
     default_source_status_dir,
 )
 from galecore_ai.application.accept_interpretation import accept_interpretation
+from galecore_ai.application.catalog_check import check_catalog, cli_commands
 from galecore_ai.application.knowledge import (
     KnowledgeBase,
     KnowledgeError,
@@ -447,6 +448,17 @@ async def _cmd_catalog(args: argparse.Namespace) -> None:
         kb_status = {"path": str(knowledge_dir()), "available": True}
     except KnowledgeBaseError as exc:
         kb_status = {"available": False, "error": str(exc)}
+    if args.check:
+        try:
+            registry = load_source_registry()
+            workspace = knowledge_dir().parent
+        except (SourceRegistryError, KnowledgeBaseError) as exc:
+            _error_out(str(exc), exit_code=_EXIT_INTERNAL_ERROR)
+            return
+        result = check_catalog(catalog, commands=cli_commands(build_parser()), workspace=workspace,
+                               registry=registry, status_store=_build_source_status_store())
+        _json_out(result, exit_code=_EXIT_SUCCESS if result["complete"] else _EXIT_VALIDATION_ERROR)
+        return
     entries = describe(catalog)
     _json_out(
         {"catalog_version": catalog.catalog_version, "knowledge_base": kb_status, "entries": entries},
@@ -763,7 +775,7 @@ async def _cmd_task(args: argparse.Namespace) -> None:
         _json_out({"status": "REJECTED", "error": str(exc)}, exit_code=_EXIT_VALIDATION_ERROR)
 
 
-def main() -> None:
+def build_parser() -> _JsonArgumentParser:
     parser = _JsonArgumentParser(
         prog="galecore-ai-cli",
         description="Interactive host adapter: prepare facts, accept interpretations, keep records",
@@ -798,7 +810,9 @@ def main() -> None:
     p_query.add_argument("--since", required=True, help="YYYY-MM-DD inclusive")
     p_query.add_argument("--until", help="YYYY-MM-DD inclusive")
 
-    sub.add_parser("catalog", help="What the host can ask for: capabilities, skills, flows, controls")
+    p_catalog = sub.add_parser("catalog", help="What the host can ask for: capabilities, skills, flows, controls")
+    p_catalog.add_argument("--check", action="store_true",
+                           help="Validate every entry: skill, contract, flow commands, data needs, controls")
 
     p_kb = sub.add_parser("kb", help="Search and read the knowledge base (no model call)")
     kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)
@@ -932,6 +946,11 @@ def main() -> None:
     p_revise.add_argument("--capability", default="research",
                           help="Catalog entry whose method was followed (research, context_research)")
 
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
     args = parser.parse_args()
 
     try:

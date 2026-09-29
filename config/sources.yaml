@@ -30,6 +30,8 @@ sources:
       - category: options_state
         description: GEX (compute.gamma_exposure, compute.gex_analysis) y put skew 25Δ (compute.put_skew), por símbolo
         any_symbol: true
+      - category: shadow_runtime
+        description: runtime SHADOW de GaleCore Dev — estado, instancias, evaluaciones, descartes, posiciones y métricas por versión de estrategia (App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics; se lee con `followup run`)
     limits:
       - "Sólo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES): no expone cadenas de opciones, IV rank ni implied volatility por esta vía, aunque existan rutas en el dispatcher — no están habilitadas"
       - "No expone históricos ni volatilidad realizada por esta vía"
@@ -45,7 +47,9 @@ sources:
     preference: 10
     covers:
       - category: rates_curve
-        description: tasas del Tesoro (curva), fed funds rate y otras series de tasas
+        description: tasas del Tesoro (curva), fed funds rate, tasas reales (TIPS, DFII10) y otras series de tasas
+      - category: credit
+        description: spreads de crédito (high yield BAMLH0A0HYM2, investment grade BAMLC0A0CM)
       - category: inflation
         description: CPI y breakevens de inflación
       - category: activity_employment
