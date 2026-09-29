@@ -13,6 +13,10 @@ Usage:
     python -m galecore_ai.adapters.cli research save --slug SLUG --prompt "..." [--capability C] < request.json
     python -m galecore_ai.adapters.cli research revise --id ID --reason R --note "..." --prompt "..."         [--capability C] < request.json
     python -m galecore_ai.adapters.cli evidence add --slug SLUG --prompt "..." < request.json
+    python -m galecore_ai.adapters.cli sources list
+    python -m galecore_ai.adapters.cli sources query --need "TEXT"
+    python -m galecore_ai.adapters.cli sources check [--source galecore|fred]
+    python -m galecore_ai.adapters.cli sources declare --source ID --state available|denied|limited|down         --note "..." --observed-at ISO8601 --host-model MODEL [--category CAT] [--evidence REF]
     python -m galecore_ai.adapters.cli strategy check --spec PATH < proposal.json
     python -m galecore_ai.adapters.cli strategy save --spec PATH --prompt "..." < request.json
     python -m galecore_ai.adapters.cli strategy approve --ref strategy:NAME/VERSION --spec-hash sha256:...         --owner-words "..." --host-model MODEL
@@ -47,6 +51,8 @@ import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, knowledge_dir
 from galecore_ai.adapters.record_store import (
     FileRecordStore,
@@ -55,10 +61,18 @@ from galecore_ai.adapters.record_store import (
 )
 from galecore_ai.adapters.research_store import FileResearchStore
 from galecore_ai.adapters.snapshot_store import FileSnapshotStore, SnapshotNotFoundError
+from galecore_ai.adapters.source_registry_store import SourceRegistryError, load_source_registry
+from galecore_ai.adapters.source_status_store import (
+    FileSourceStatusStore,
+    SourceStatusIntegrityError,
+    SourceStatusStoreError,
+    default_source_status_dir,
+)
 from galecore_ai.application.accept_interpretation import accept_interpretation
 from galecore_ai.application.knowledge import (
     KnowledgeBase,
     KnowledgeError,
+    resolve_ref,
     revise_research,
     save_evidence,
     save_research,
@@ -74,6 +88,8 @@ from galecore_ai.application.record_regime import (
     record_outcome,
     record_review,
 )
+from galecore_ai.application.source_probe import probe_fred, probe_galecore
+from galecore_ai.application.source_query import catalog_summary, query_sources
 from galecore_ai.application.strategy import (
     approve as strategy_approve,
 )
@@ -92,6 +108,12 @@ from galecore_ai.contracts.evidence import EvidenceContent
 from galecore_ai.contracts.prepared_analysis import AcceptanceRequest
 from galecore_ai.contracts.regime_record import RecordHost, ReviewVerdict
 from galecore_ai.contracts.research import ResearchContent, ResearchStatus, RevisionReason
+from galecore_ai.contracts.source_status import (
+    AccessState,
+    ObservationOrigin,
+    SourceStatusDocument,
+    SourceStatusObservation,
+)
 from galecore_ai.contracts.strategy import ProposalContent
 from galecore_ai.harness.catalog import CatalogError, describe, load_catalog
 
@@ -171,6 +193,14 @@ def _build_record_store() -> FileRecordStore:
         return FileRecordStore(default_records_dir())
     except (RecordStoreError, OSError) as exc:
         _error_out(f"Record store unavailable: {exc}", exit_code=_EXIT_RECORD_FAILED)
+        raise AssertionError("unreachable") from exc
+
+
+def _build_source_status_store() -> FileSourceStatusStore:
+    try:
+        return FileSourceStatusStore(default_source_status_dir())
+    except (SourceStatusStoreError, OSError) as exc:
+        _error_out(f"Source status store unavailable: {exc}", exit_code=_EXIT_RECORD_FAILED)
         raise AssertionError("unreachable") from exc
 
 
@@ -481,6 +511,111 @@ async def _cmd_evidence_add(args: argparse.Namespace) -> None:
                "provenance": document.provenance, "content_hash": document.content_hash})
 
 
+def _append_observation(store: FileSourceStatusStore, source_id: str,
+                        observation: SourceStatusObservation) -> Path:
+    existing = store.load(source_id)
+    observations = [*(existing.observations if existing else []), observation]
+    document = SourceStatusDocument(source_id=source_id, observations=observations)
+    return store.append(source_id, document)
+
+
+def _parse_observed_at(value: str, *, flag: str = "--observed-at") -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        _error_out(f"Argument error: {flag} must be an ISO 8601 UTC timestamp, got {value!r}",
+                  exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable") from None
+    if parsed.tzinfo is None:
+        _error_out(f"Argument error: {flag} needs a timezone (e.g. a trailing Z)",
+                  exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable")
+    return parsed
+
+
+async def _cmd_sources(args: argparse.Namespace) -> None:
+    try:
+        registry = load_source_registry()
+    except SourceRegistryError as exc:
+        _error_out(str(exc), exit_code=_EXIT_INTERNAL_ERROR)
+        return
+    status_store = _build_source_status_store()
+
+    if args.sources_command == "list":
+        summary = catalog_summary(registry, status_store)
+        _json_out({"status_dir": str(status_store.base_dir), **summary.model_dump(mode="json")})
+        return
+
+    if args.sources_command == "query":
+        result = query_sources(args.need, registry, status_store)
+        _json_out(result.model_dump(mode="json"),
+                  exit_code=_EXIT_INSUFFICIENT_DATA if result.missing else _EXIT_SUCCESS)
+        return
+
+    if args.sources_command == "check":
+        targets = [args.source] if args.source else ["galecore", "fred"]
+        checked = {}
+        for source_id in targets:
+            source = registry.get(source_id)
+            if source is None or source.probe.command is None:
+                _error_out(f"{source_id}: not a source this code can probe; use 'sources declare'",
+                          exit_code=_EXIT_VALIDATION_ERROR)
+                return
+            observation = await probe_galecore(_build_dispatcher()) if source_id == "galecore" else probe_fred()
+            try:
+                path = _append_observation(status_store, source_id, observation)
+            except (SourceStatusStoreError, SourceStatusIntegrityError) as exc:
+                _error_out(f"{source_id}: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+                return
+            checked[source_id] = {"path": str(path), **observation.model_dump(mode="json")}
+        _json_out({"checked": checked})
+        return
+
+    # declare
+    source = registry.get(args.source)
+    if source is None:
+        _error_out(f"Unknown source: {args.source}", exit_code=_EXIT_VALIDATION_ERROR)
+        return
+    if source.access_type.value != "host_connector":
+        _error_out(f"{args.source}: not a host_connector; run 'sources check' instead",
+                   exit_code=_EXIT_VALIDATION_ERROR)
+        return
+    if args.category is not None and args.category not in {c.category for c in source.covers}:
+        _error_out(f"{args.source}: unknown category {args.category!r}; it covers "
+                   f"{sorted({c.category for c in source.covers})}", exit_code=_EXIT_VALIDATION_ERROR)
+        return
+    if args.evidence:
+        kb = _build_knowledge_base()
+        try:
+            resolve_ref(args.evidence, kb)
+        except KnowledgeError as exc:
+            _knowledge_error_out(exc)
+            return
+    try:
+        observation = SourceStatusObservation(
+            observed_at=_parse_observed_at(args.observed_at),
+            state=AccessState(args.state),
+            origin=ObservationOrigin.HOST_DECLARED,
+            note=args.note,
+            evidence=args.evidence,
+            category=args.category,
+            host=RecordHost(provider=args.host_provider, model=args.host_model),
+        )
+    except ValidationError as exc:
+        # Pydantic's default str(exc) echoes the rejected value (input_value=...); a note
+        # rejected for carrying a credential must not then leak that credential into the error.
+        messages = "; ".join(e["msg"] for e in exc.errors())
+        _error_out(f"Invalid observation: {messages}", exit_code=_EXIT_VALIDATION_ERROR)
+        return
+    try:
+        path = _append_observation(status_store, args.source, observation)
+    except (SourceStatusStoreError, SourceStatusIntegrityError) as exc:
+        _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
+        return
+    _json_out({"status": "RECORDED", "source": args.source, "path": str(path),
+               **observation.model_dump(mode="json")})
+
+
 def _read_spec(path: str) -> tuple[str, str]:
     try:
         return Path(path).read_bytes().decode("utf-8-sig"), Path(path).name
@@ -717,6 +852,27 @@ def main() -> None:
     p_ev_add.add_argument("--slug", required=True, help="Short name; the id is <date>-<slug>")
     p_ev_add.add_argument("--prompt", required=True, help="What the user asked")
 
+    p_sources = sub.add_parser(
+        "sources", help="Data source registry: what's known, its last checked access, and what covers a need")
+    src_sub = p_sources.add_subparsers(dest="sources_command", required=True)
+    src_sub.add_parser("list", help="Registry grouped by category, with each source's last known status")
+    p_src_query = src_sub.add_parser("query", help="Sources covering a need, ordered by preference then cost")
+    p_src_query.add_argument("--need", required=True, help="What data is needed, in free text")
+    p_src_check = src_sub.add_parser("check", help="Run the minimal probe this code can run (GaleCore, FRED)")
+    p_src_check.add_argument("--source", choices=["galecore", "fred"], help="Default: both")
+    p_src_declare = src_sub.add_parser("declare", help="Record what the host observed on a host_connector source")
+    p_src_declare.add_argument("--source", required=True)
+    p_src_declare.add_argument("--state", required=True, choices=[s.value for s in AccessState])
+    p_src_declare.add_argument("--note", required=True)
+    p_src_declare.add_argument("--observed-at", dest="observed_at", required=True,
+                               help="ISO 8601 UTC timestamp of when the access was actually observed "
+                                    "(e.g. an evidence item's retrieved_at) — never the time of this command")
+    p_src_declare.add_argument("--category", help="the coverage category this observation is about "
+                                                   "(default: the whole source)")
+    p_src_declare.add_argument("--evidence", help="evidence:<id> or file:<path> backing this observation")
+    p_src_declare.add_argument("--host-provider", dest="host_provider", default="claude-code")
+    p_src_declare.add_argument("--host-model", dest="host_model", required=True)
+
     p_research = sub.add_parser("research", help="Save or continue an investigation (content on stdin)")
     res_sub = p_research.add_subparsers(dest="research_command", required=True)
     p_save = res_sub.add_parser("save", help="Start a new investigation")
@@ -758,6 +914,8 @@ def main() -> None:
             asyncio.run(_cmd_research_revise(args))
         elif args.command == "evidence" and args.evidence_command == "add":
             asyncio.run(_cmd_evidence_add(args))
+        elif args.command == "sources":
+            asyncio.run(_cmd_sources(args))
         elif args.command == "strategy":
             asyncio.run(_cmd_strategy(args))
         elif args.command == "followup":
