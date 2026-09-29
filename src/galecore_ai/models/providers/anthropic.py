@@ -97,11 +97,34 @@ class AnthropicProvider:
         try:
             import anthropic as _anthropic
 
+            # Split system into stable prefix (cacheable) + volatile facts block.
+            # Render order is tools → system → messages; cache_control on the last
+            # stable block caches both the tool definition and the system prefix.
+            _FACTS_MARKER = "# Facts"
+            if system_text and _FACTS_MARKER in system_text:
+                stable, _, volatile = system_text.partition(_FACTS_MARKER)
+                system_param: list[dict] | str = [
+                    {
+                        "type": "text",
+                        "text": stable.strip(),
+                        "cache_control": {"type": "ephemeral"},
+                    },
+                    {"type": "text", "text": _FACTS_MARKER + volatile},
+                ]
+            else:
+                system_param = [
+                    {
+                        "type": "text",
+                        "text": system_text.strip(),
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ] if system_text else ""
+
             response = await self._client.messages.create(
                 model=self._model,
                 max_tokens=request.max_tokens,
                 temperature=request.temperature,
-                system=system_text.strip() if system_text else "",
+                system=system_param,
                 messages=api_messages,
                 tools=[tool_def],
                 tool_choice={"type": "tool", "name": tool_name},
@@ -121,6 +144,14 @@ class AnthropicProvider:
             )
 
         elapsed = int((time.monotonic() - t0) * 1000)
+        usage = response.usage
+        _usage_kwargs = dict(
+            input_tokens=usage.input_tokens,
+            output_tokens=usage.output_tokens,
+            cache_read_tokens=getattr(usage, "cache_read_input_tokens", None),
+            cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", None),
+            latency_ms=elapsed,
+        )
 
         # Extract tool_use block
         tool_input = None
@@ -134,9 +165,7 @@ class AnthropicProvider:
                 error="No tool_use block in response",
                 provider=self.provider_name,
                 model=self.model_id,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-                latency_ms=elapsed,
+                **_usage_kwargs,
             )
 
         # Parse into the output schema
@@ -148,9 +177,7 @@ class AnthropicProvider:
                 raw_text=json.dumps(tool_input, default=str),
                 provider=self.provider_name,
                 model=self.model_id,
-                input_tokens=response.usage.input_tokens,
-                output_tokens=response.usage.output_tokens,
-                latency_ms=elapsed,
+                **_usage_kwargs,
             )
 
         raw_text = json.dumps(tool_input, default=str)
@@ -159,7 +186,5 @@ class AnthropicProvider:
             raw_text=raw_text,
             provider=self.provider_name,
             model=self.model_id,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
-            latency_ms=elapsed,
+            **_usage_kwargs,
         )

@@ -45,6 +45,8 @@ class ModelResult(BaseModel, Generic[T]):
     model: str | None = None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    cache_read_tokens: int | None = None
+    cache_creation_tokens: int | None = None
     latency_ms: int | None = None
 
     @property
