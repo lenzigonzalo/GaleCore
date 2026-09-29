@@ -56,11 +56,16 @@ SEED = {"reference_capital": {"amount": 10000, "currency": "USD"},
 
 class TestContent:
     def test_empty_profile_declares_every_field_missing(self):
-        assert ProfileContent().missing() == list(ProfileContent.model_fields)
+        assert ProfileContent().missing() == ProfileContent.declared_fields()
 
     @pytest.mark.parametrize("bad", [{"horizon": "  "}, {"objectives": [""]},
                                      {"reference_capital": {"amount": 0, "currency": "USD"}},
                                      {"reference_capital": {"amount": 10, "currency": "usd"}},
+                                     {"reference_capital": {"amount": float("inf"), "currency": "USD"}},
+                                     {"reference_capital": {"amount": True, "currency": "USD"}},
+                                     {"preferred_sources": ["fred", "fred"]},
+                                     {"provisional": ["horizon"]},
+                                     {"provisional": ["provisional"]},
                                      {"unknown": 1}])
     def test_invalid_content_is_refused(self, bad):
         with pytest.raises(ValidationError):
@@ -87,10 +92,27 @@ class TestSetAndShow:
         assert doc.content.reference_capital.amount == 10000
         assert kb.profile.load("v1").content.max_drawdown is None  # v1 untouched
 
-    def test_null_clears_a_field_back_to_missing(self, kb):
+    @pytest.mark.parametrize("field", ["language", "delivery_format", "preferred_sources", "reference_capital"])
+    def test_null_clears_a_field_back_to_missing(self, kb, field):
+        # Internal review GC-AI-0013: null on a list field was rejected.
         put(kb.profile, SEED)
-        doc, _ = put(kb.profile, {"language": None})
-        assert "language" in doc.content.missing()
+        doc, _ = put(kb.profile, {field: None})
+        assert field in doc.content.missing()
+
+    def test_surrounding_spaces_are_not_a_change(self, kb):
+        put(kb.profile, SEED)
+        doc, path = put(kb.profile, {"language": "  español ", "delivery_format": [" tablas y gráficos primero, texto mínimo"]})
+        assert path is None and doc.version == 1
+
+    def test_provisional_values_are_marked_and_a_real_value_replaces_them(self, kb):
+        put(kb.profile, SEED)
+        doc, _ = put(kb.profile, {"max_drawdown": "15 %", "horizon": "30 a 45 días",
+                                  "provisional": ["max_drawdown", "horizon"]})
+        assert show(kb.profile)["provisional"] == ["max_drawdown", "horizon"]
+        doc, _ = put(kb.profile, {"max_drawdown": "10 %"})
+        assert doc.content.provisional == ["horizon"]
+        doc, _ = put(kb.profile, {"horizon": None})
+        assert doc.content.provisional == [] and "horizon" in doc.content.missing()
 
     def test_no_real_change_creates_no_version(self, kb):
         put(kb.profile, SEED)
@@ -105,10 +127,17 @@ class TestSetAndShow:
             put(kb.profile, {"preferred_sources": ["bloomberg"]})
         assert kb.profile.versions() == []
 
-    def test_credentials_are_refused_without_echoing_them(self, kb):
+    @pytest.mark.parametrize("text", ["api_key=SYNTHETIC_SECRET_123456", "contraseña: Abcdefgh12345",
+                                      "mi clave IBKR es sk-ant-api03-AAAAAAAAAAAAAAAA"])
+    def test_credentials_are_refused_without_echoing_them(self, kb, text):
         with pytest.raises(ProfileError) as exc:
-            put(kb.profile, {"risk_limits": ["api_key=SYNTHETIC_SECRET_123456"]})
-        assert "SYNTHETIC_SECRET_123456" not in str(exc.value)
+            put(kb.profile, {"risk_limits": [text]})
+        assert text.split()[-1] not in str(exc.value)
+        assert kb.profile.versions() == []
+
+    def test_spanish_prose_with_clave_is_not_a_credential(self, kb):
+        doc, _ = put(kb.profile, {"objectives": ["la clave del método es respetarlo siempre"]})
+        assert doc.version == 1
 
     def test_history_is_newest_first(self, kb):
         put(kb.profile, SEED, note="inicial")
@@ -184,3 +213,21 @@ def test_cli_profile_set_show_history(tmp_path):
     assert len(json.loads(_cli("profile", "history", kb_dir=kb_dir).stdout)["versions"]) == 1
     bad = _cli(*set_args, kb_dir=kb_dir, stdin=json.dumps({"changes": {}}))
     assert bad.returncode != 0
+
+
+def test_versions_written_before_provisional_existed_keep_their_hash(kb):
+    import json as _json
+
+    doc, path = put(kb.profile, SEED)
+    data = _json.loads(path.read_text(encoding="utf-8"))
+    del data["content"]["provisional"]
+    path.write_text(_json.dumps(data), encoding="utf-8")
+    assert kb.profile.load("v1").content_hash == doc.content_hash
+
+
+def test_edited_file_error_does_not_echo_the_value(kb):
+    _, path = put(kb.profile, SEED)
+    path.write_text(path.read_text(encoding="utf-8").replace('"USD"', '"SYNTHSECRETKEY_ABC123"'), encoding="utf-8")
+    with pytest.raises(ProfileIntegrityError) as exc:
+        kb.profile.load("v1")
+    assert "SYNTHSECRETKEY_ABC123" not in str(exc.value)

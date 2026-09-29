@@ -59,7 +59,9 @@ class FileProfileStore:
         except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise ProfileIntegrityError(path, [f"unreadable: {exc}"]) from exc
         except ValidationError as exc:
-            raise ProfileIntegrityError(path, [f"does not match the contract: {exc}"]) from exc
+            # loc + msg only: the rejected value itself is never echoed.
+            problems = [f"does not match the contract: {'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]
+            raise ProfileIntegrityError(path, problems) from exc
         if compute_profile_hash(doc.hashable_content()) != doc.content_hash:
             raise ProfileIntegrityError(path, ["content_hash mismatch"])
         if doc.version != version_number(key):

@@ -81,7 +81,7 @@ from galecore_ai.application.knowledge import search as kb_search
 from galecore_ai.application.knowledge import show as kb_show
 from galecore_ai.application.prepare_gex import PrepareError, prepare_gex_snapshot
 from galecore_ai.application.prepare_regime import fetch_regime_facts, prepare_regime_snapshot
-from galecore_ai.application.profile import ProfileError, set_profile
+from galecore_ai.application.profile import ProfileError, ProfileUnusable, set_profile
 from galecore_ai.application.profile import history as profile_history
 from galecore_ai.application.profile import show as profile_show
 from galecore_ai.application.record_regime import (
@@ -539,7 +539,8 @@ async def _cmd_profile(args: argparse.Namespace) -> None:
                            "content": doc.content.model_dump(mode="json"), "missing": doc.content.missing(),
                            "content_hash": doc.content_hash})
     except ProfileError as exc:
-        _json_out({"status": "REJECTED", "error": str(exc), "problems": exc.problems,
+        _json_out({"status": "INTEGRITY_FAILED" if isinstance(exc, ProfileUnusable) else "REJECTED",
+                   "error": str(exc), "problems": exc.problems,
                    "timestamp": datetime.now(UTC).isoformat()}, exit_code=_EXIT_VALIDATION_ERROR)
 
 

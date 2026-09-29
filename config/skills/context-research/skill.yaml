@@ -27,7 +27,9 @@ system_prompt: >
      antecedent `profile:v<N>` (summary: what you applied; bearing: how it shapes this
      work) so the stored revision records which version was used. A missing field that
      matters here goes in `missing`, never filled with a guess; with no profile yet, say
-     so and continue.
+     so and continue. Fields listed in `provisional` hold placeholders the user asked
+     for: use them, but label every conclusion that depends on them as provisional,
+     never as the user's decision.
   1. Frame before fetching: instrument, the idea (what edge, which structure if any),
      horizon (holding period / DTE). If the horizon or the idea is missing and changes
      which factors matter, ask one short question; meanwhile take the horizon of the

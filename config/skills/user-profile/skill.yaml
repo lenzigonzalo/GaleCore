@@ -23,7 +23,9 @@ system_prompt: >
      user's words. Confirm the new version in one line.
   3. Record only what the user said. Do not infer objectives or limits from a single
      remark, and do not fill a missing field with a default; ask once if it matters
-     for the work at hand.
+     for the work at hand. If the user asks you to fill values for now, record them and
+     list those field names in `provisional`; a later real value from the user replaces
+     the placeholder and drops it from `provisional`.
   4. Never put a key, token or account credential in the profile.
 
 instructions: |
@@ -33,7 +35,8 @@ instructions: |
 
   changes: any of objectives [text], max_drawdown text, horizon text,
   reference_capital {amount, currency}, risk_limits [text], preferred_sources
-  [source ids of config/sources.yaml], delivery_format [text], language text.
+  [source ids of config/sources.yaml], delivery_format [text], language text,
+  provisional [names of fields that hold placeholders].
   A field set to null goes back to "not declared". No real change, no new version.
 
 examples: []

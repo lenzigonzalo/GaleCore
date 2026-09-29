@@ -102,8 +102,8 @@ entries:
       - Create-only versions; every read re-checks the hash, an edited version is INTEGRITY_FAILED and blocks changes
       - Partial changes on top of the current version; no real change creates no version
       - Unknown fields, blank values and sources outside config/sources.yaml are refused
-      - Never stores a key or token; a refused value is not echoed back
-      - Missing fields are declared, never defaulted
+      - Refuses text that looks like a key or token (heuristic, English and Spanish labels plus common key prefixes); a refused value is not echoed back
+      - Missing fields are declared, never defaulted; placeholders the user asked for are listed in `provisional` and reported as such
       - "research and context_research cite profile:v<N> as an antecedent, so the stored revision records the version (hash) used"
       - Not checked - whether the declared objectives or limits are sensible
 

@@ -4,7 +4,8 @@
 fields present in ``changes`` are replaced (``null`` clears one back to "not
 declared"). No real change, no new version. Preferred sources must exist in the
 source registry (GC-AI-0012), so the profile never points at a source the harness
-does not know.
+does not know. A field the user sets again stops being provisional unless the same
+change says otherwise.
 """
 
 from __future__ import annotations
@@ -32,9 +33,19 @@ class ProfileError(Exception):
         self.problems = problems or []
 
 
+class ProfileUnusable(ProfileError):
+    """A stored version failed its integrity check."""
+
+
+def _errors(exc: ValidationError) -> list[str]:
+    # loc + msg only: str(ValidationError) would echo the rejected input (e.g. a credential).
+    return [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]
+
+
 def _view(doc: ProfileVersion, store: FileProfileStore) -> dict:
     return {"ref": doc.ref, "version": doc.version, "recorded_at": doc.recorded_at.isoformat(),
             "note": doc.note, "content": doc.content.model_dump(mode="json"), "missing": doc.content.missing(),
+            "provisional": doc.content.provisional,
             "content_hash": doc.content_hash, "path": str(store.path_for(f"v{doc.version}"))}
 
 
@@ -42,15 +53,15 @@ def _current(store: FileProfileStore) -> ProfileVersion | None:
     try:
         return store.latest()
     except (ProfileIntegrityError, ProfileStoreError) as exc:
-        raise ProfileError("The profile is not usable", [str(exc)]) from exc
+        raise ProfileUnusable("The profile is not usable", [str(exc)]) from exc
 
 
 def show(store: FileProfileStore) -> dict:
     """Current version and what is still missing; an empty profile says so instead of guessing."""
     doc = _current(store)
     if doc is None:
-        return {"ref": None, "version": None, "content": None, "missing": list(ProfileContent.model_fields),
-                "note": "no profile yet: every field is missing"}
+        return {"ref": None, "version": None, "content": None, "missing": ProfileContent.declared_fields(),
+                "provisional": [], "note": "no profile yet: every field is missing"}
     return _view(doc, store)
 
 
@@ -83,11 +94,12 @@ def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: st
         raise ProfileError("Refusing to change the profile", [f"unknown fields: {', '.join(unknown)}"])
     current = _current(store)
     base = current.content.model_dump(mode="json") if current else {}
+    if "provisional" not in changes and base.get("provisional"):
+        base["provisional"] = [f for f in base["provisional"] if f not in changes]
     try:
         content = ProfileContent.model_validate({**base, **changes})
     except ValidationError as exc:
-        raise ProfileError("Refusing to change the profile",
-                           [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]) from exc
+        raise ProfileError("Refusing to change the profile", _errors(exc)) from exc
     problems = _check_sources(content.preferred_sources)
     if problems:
         raise ProfileError("Refusing to change the profile", problems)
@@ -97,8 +109,7 @@ def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: st
         draft = ProfileVersion(version=(current.version + 1) if current else 1, recorded_at=now or datetime.now(UTC),
                                note=note, prompt=prompt, host=host, content=content, content_hash="")
     except ValidationError as exc:
-        raise ProfileError("Refusing to change the profile",
-                           [f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()]) from exc
+        raise ProfileError("Refusing to change the profile", _errors(exc)) from exc
     doc = draft.model_copy(update={"content_hash": compute_profile_hash(draft.hashable_content())})
     try:
         return doc, store.create(doc)
