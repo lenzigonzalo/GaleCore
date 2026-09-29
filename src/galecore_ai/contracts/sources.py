@@ -37,6 +37,19 @@ class AccessType(str, Enum):
     HOST_CONNECTOR = "host_connector"  # an MCP tool or similar the host has; this repo's code cannot call it
 
 
+class Usage(str, Enum):
+    """How using the source is paid for; queries order by this first (owner's rule, 29/09)."""
+
+    FREE = "free"                # no practical limit (e.g. FRED)
+    OWN = "own"                  # our own API: no extra cost, needs GaleCore Dev up
+    DAILY_QUOTA = "daily_quota"  # a daily call budget: only when cheaper sources do not cover the need
+    PLAN = "plan"                # limited by the subscription plan: only endpoints checked as available
+
+
+USAGE_RANK = {Usage.FREE: 0, Usage.OWN: 1, Usage.DAILY_QUOTA: 2, Usage.PLAN: 3}
+USAGE_NOTE = {Usage.DAILY_QUOTA: "consume cupo diario: usarla sólo si las fuentes anteriores no cubren el dato"}
+
+
 class SourceCoverage(BaseModel):
     """One thing this source can answer, in its own terms."""
 
@@ -74,7 +87,8 @@ class DataSource(BaseModel):
     display_name: str
     access_type: AccessType
     cost: str                                          # e.g. "sin costo adicional (API propia)", "clave gratuita"
-    preference: int                                     # lower sorts first; GaleCore is 0
+    usage: Usage                                        # orders first: free, own, daily_quota, plan
+    preference: int                                     # lower sorts first within the same usage
     covers: list[SourceCoverage]
     limits: list[str] = Field(default_factory=list)    # known constraints in prose, without a date (dated history is status)
     probe: SourceProbe
@@ -147,6 +161,8 @@ class SourceMatch(BaseModel):
     id: str
     display_name: str
     access_type: AccessType
+    usage: Usage
+    usage_note: str | None = None
     preference: int
     cost: str
     limits: list[str]
@@ -155,7 +171,7 @@ class SourceMatch(BaseModel):
 
 
 class SourceQueryResult(BaseModel):
-    """Answer to "¿de dónde saco X?" (AC-04): matches ordered by preference, then cost."""
+    """Answer to "¿de dónde saco X?" (AC-04): matches ordered by usage, then preference."""
 
     model_config = {"extra": "forbid"}
 

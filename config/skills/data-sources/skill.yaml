@@ -1,5 +1,5 @@
 skill_id: data_sources
-version: "1.0.0"
+version: "1.1.0"
 display_name: Registro de fuentes de datos
 description: >
   Answers what data the harness has available and where to get it, from the
@@ -19,8 +19,10 @@ system_prompt: >
   1. "¿Qué datos tengo?": run `sources list`; summarize by category, one line
      per source with its last known status (or "sin comprobar" if none).
   2. "¿De dónde saco X?": run `sources query --need "X"`; report the matching
-     sources in the order returned (GaleCore first, then cost), with their last
-     status and known limits. No match: say the data is missing from the
+     sources in the order returned (free, then GaleCore, then daily quota, then
+     plan; preference within each), with their last status and known limits. A
+     source with a usage_note (daily quota) is used only if the ones before it do
+     not cover the need. No match: say the data is missing from the
      registry — do not guess a source outside it.
   3. A stale or missing status is itself worth acting on: for GaleCore or FRED,
      re-run `sources check`; for any other source (a host connector), try the
