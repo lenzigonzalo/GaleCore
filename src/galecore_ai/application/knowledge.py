@@ -11,6 +11,7 @@ validator checks structure and references, never whether the reasoning is right.
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -23,6 +24,11 @@ from galecore_ai.adapters.evidence_store import (
     FileEvidenceStore,
 )
 from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, Ref, parse_ref, ref_path
+from galecore_ai.adapters.profile_store import (
+    FileProfileStore,
+    ProfileIntegrityError,
+    ProfileStoreError,
+)
 from galecore_ai.adapters.record_store import (
     FileRecordStore,
     RecordIntegrityError,
@@ -82,6 +88,10 @@ class KnowledgeBase:
     def strategies(self) -> FileStrategyStore:
         return FileStrategyStore(self.base)
 
+    @property
+    def profile(self) -> FileProfileStore:
+        return FileProfileStore(self.base)
+
 
 def _sha256_file(path: Path) -> str:
     return "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
@@ -135,12 +145,19 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
         except (StrategyIntegrityError, StrategyStoreError) as exc:
             raise KnowledgeError(f"{ref}: not usable ({exc})") from exc
         path = kb.strategies.path_for(ref.key)
+    elif ref.kind == "profile":
+        try:
+            if kb.profile.load(ref.key) is None:
+                raise KnowledgeError(f"{ref}: no such profile version")
+        except (ProfileIntegrityError, ProfileStoreError) as exc:
+            raise KnowledgeError(f"{ref}: not usable ({exc})") from exc
+        path = kb.profile.path_for(ref.key)
     else:
         path = ref_path(ref, kb.base)
         if path.is_relative_to(kb.base.resolve()):
             # Knowledge items are cited by kind so their integrity (and self-citation) is checked.
             raise KnowledgeError(f"{ref}: points inside the knowledge base; cite it as regime:, research:, "
-                                 "evidence: or strategy:")
+                                 "evidence:, strategy: or profile:")
         if not path.is_relative_to(kb.workspace.resolve()) or not path.is_file():
             raise KnowledgeError(f"{ref}: no such file inside the workspace")
     return ResolvedRef(ref=str(ref), path=_display_path(path, kb), content_hash=_sha256_file(path))
@@ -190,7 +207,21 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
         problems.append("a test plan needs the hypothesis it tests")
     if not content.limitations:
         problems.append("at least one limitation is required")
+    problems += _profile_problems(kb, set(resolved))
     return list(resolved.values()), problems
+
+
+def _profile_problems(kb: KnowledgeBase, cited: set[str]) -> list[str]:
+    """Work saved while a profile exists must cite the version in force (GC-AI-0013)."""
+    try:
+        current = kb.profile.latest()
+    except (ProfileIntegrityError, ProfileStoreError) as exc:
+        return [f"the profile is not usable ({exc}); fix it before saving work that must cite it"]
+    if current is None or current.ref in cited:
+        return []
+    stale = sorted(r for r in cited if r.startswith("profile:"))
+    return [f"cite the profile in force as an antecedent: {current.ref}"
+            + (f" (this cites {', '.join(stale)})" if stale else "")]
 
 
 RESEARCH_CONTRACT = "galecore_ai.contracts.research.ResearchContent"
@@ -345,6 +376,24 @@ def _strategy_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, s
     return items
 
 
+def _profile_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, str]]:
+    items = []
+    for key in kb.profile.versions():
+        try:
+            doc = kb.profile.load(key)
+        except (ProfileIntegrityError, ProfileStoreError) as exc:
+            failed.append({"ref": f"profile:{key}", "status": "INTEGRITY_FAILED", "problems": [str(exc)]})
+            continue
+        if doc is None:
+            continue
+        summary = {"ref": doc.ref, "kind": "profile", "title": f"Perfil {key}: {doc.note}",
+                   "missing": doc.content.missing(), "updated_at": doc.recorded_at.isoformat(),
+                   "path": _display_path(kb.profile.path_for(key), kb)}
+        items.append((summary, " ".join(["perfil profile", doc.note, doc.prompt,
+                                         json.dumps(doc.content.model_dump(mode="json"), ensure_ascii=False)])))
+    return items
+
+
 def _cited_refs(document: ResearchDocument) -> set[str]:
     c = document.current.content
     refs = {a.ref for a in c.antecedents} | {src for s in c.statements for src in s.sources}
@@ -434,6 +483,8 @@ def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status
         candidates += _evidence_items(kb, failed)
     if kind in (None, "strategy") and status is None:
         candidates += _strategy_items(kb, failed)
+    if kind in (None, "profile") and status is None:
+        candidates += _profile_items(kb, failed)
     results = []
     for summary, body in candidates:
         lowered = body.lower()
@@ -519,6 +570,15 @@ def show(kb: KnowledgeBase, ref_text: str) -> dict:
                 **doc.model_dump(mode="json"),
                 "approval": approval.model_dump(mode="json") if approval else None,
                 "cited_by": cited_by(kb, ref)}
+    if ref.kind == "profile":
+        try:
+            doc = kb.profile.load(ref.key)
+        except (ProfileIntegrityError, ProfileStoreError) as exc:
+            raise KnowledgeError(f"{ref}: INTEGRITY_FAILED", [str(exc)]) from exc
+        if doc is None:
+            raise KnowledgeError(f"{ref}: no such profile version")
+        return {"ref": str(ref), "kind": "profile", "path": _display_path(kb.profile.path_for(ref.key), kb),
+                **doc.model_dump(mode="json"), "missing": doc.content.missing(), "cited_by": cited_by(kb, ref)}
     resolved = resolve_ref(str(ref), kb)
     return {"ref": str(ref), "kind": "file", "path": resolved.path, "content_hash": resolved.content_hash,
             "cited_by": cited_by(kb, ref)}

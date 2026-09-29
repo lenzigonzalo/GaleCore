@@ -24,8 +24,9 @@ The host executes the model. GaleCore-AI teaches it how to work and verifies the
 
 ```bash
 python -B -m galecore_ai.adapters.cli catalog      # what can be asked: capability, skill (version+hash), contract, flow, controls
-python -B -m galecore_ai.adapters.cli kb search --text "<terms>" [--kind research|regime] [--status unfinished]
-python -B -m galecore_ai.adapters.cli kb show <ref>   # regime:SPY/2026-09-23 · research:<id> · file:<path from the workspace root>
+python -B -m galecore_ai.adapters.cli kb search --text "<terms>" [--kind research|regime|evidence|strategy|profile] [--status unfinished]
+python -B -m galecore_ai.adapters.cli kb show <ref>   # regime:SPY/2026-09-23 · research:<id> · profile:v3 · file:<path from the workspace root>
+python -B -m galecore_ai.adapters.cli profile show     # the user's profile in force: apply it, cite it, report what is missing or provisional
 ```
 
 Pick the capability for the user's request from `catalog` (no routing table here), follow its `flow`,
@@ -40,7 +41,12 @@ with an evaluable record), `research` (resumable investigation, below), `context
 of a trading idea with GaleCore + the host's external sources; every response kept as `evidence:`),
 `strategy_design` (proposal → `strategy check` against the runtime → `strategy save` → owner's
 `strategy approve` of the exact hash → `strategy deploy-check` → deploy to SHADOW in GaleCore Dev only) and
-`strategy_followup` (what a deployed version did, saved as a revision of its investigation).
+`strategy_followup` (what a deployed version did, saved as a revision of its investigation),
+`data_sources` (which source covers a need, its cost, limits and last checked access: `sources list|query|check|declare`)
+and `user_profile` (objectives, reference capital, horizon, limits, preferred sources, format:
+`profile show|set|history`, versions `profile:vN` in `knowledge/profile/`; fields in `provisional` are
+placeholders). While a profile exists, `research`/`context_research` refuse to save unless an antecedent
+cites the version in force.
 
 Common environment (GaleCore on `localhost:5000`; the ApiKey comes from GaleCore's user-secrets and is never written anywhere):
 

@@ -81,6 +81,9 @@ from galecore_ai.application.knowledge import search as kb_search
 from galecore_ai.application.knowledge import show as kb_show
 from galecore_ai.application.prepare_gex import PrepareError, prepare_gex_snapshot
 from galecore_ai.application.prepare_regime import fetch_regime_facts, prepare_regime_snapshot
+from galecore_ai.application.profile import ProfileError, ProfileUnusable, set_profile
+from galecore_ai.application.profile import history as profile_history
+from galecore_ai.application.profile import show as profile_show
 from galecore_ai.application.record_regime import (
     RecordError,
     query_records,
@@ -511,6 +514,36 @@ async def _cmd_evidence_add(args: argparse.Namespace) -> None:
                "provenance": document.provenance, "content_hash": document.content_hash})
 
 
+async def _cmd_profile(args: argparse.Namespace) -> None:
+    store = _build_knowledge_base().profile
+    try:
+        if args.profile_command == "show":
+            _json_out(profile_show(store))
+        elif args.profile_command == "history":
+            _json_out({"versions": profile_history(store)})
+        else:
+            try:
+                payload = json.loads(_read_stdin())
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+                _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+                raise AssertionError("unreachable") from exc
+            if not isinstance(payload, dict) or not isinstance(payload.get("changes"), dict) or not payload["changes"]:
+                _error_out("Input must be a JSON object with a non-empty 'changes' object",
+                           exit_code=_EXIT_VALIDATION_ERROR)
+            doc, path = set_profile(store, changes=payload["changes"], note=args.note, prompt=args.prompt,
+                                    host=RecordHost(provider=args.host_provider, model=args.host_model))
+            if path is None:
+                _json_out({"status": "UNCHANGED", "ref": doc.ref, "missing": doc.content.missing()})
+            else:
+                _json_out({"status": "RECORDED", "ref": doc.ref, "path": str(path),
+                           "content": doc.content.model_dump(mode="json"), "missing": doc.content.missing(),
+                           "content_hash": doc.content_hash})
+    except ProfileError as exc:
+        _json_out({"status": "INTEGRITY_FAILED" if isinstance(exc, ProfileUnusable) else "REJECTED",
+                   "error": str(exc), "problems": exc.problems,
+                   "timestamp": datetime.now(UTC).isoformat()}, exit_code=_EXIT_VALIDATION_ERROR)
+
+
 def _append_observation(store: FileSourceStatusStore, source_id: str,
                         observation: SourceStatusObservation) -> Path:
     existing = store.load(source_id)
@@ -771,13 +804,23 @@ def main() -> None:
     kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)
     p_search = kb_sub.add_parser("search", help="Items matching the terms, best first")
     p_search.add_argument("--text", help="Terms to look for (empty lists everything)")
-    p_search.add_argument("--kind", choices=["research", "regime", "evidence", "strategy"])
+    p_search.add_argument("--kind", choices=["research", "regime", "evidence", "strategy", "profile"])
     p_search.add_argument("--status", choices=["unfinished", *[s.value for s in ResearchStatus]],
                           help="unfinished = open or test_planned")
     p_search.add_argument("--symbol")
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
     p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id>, "
-                                    "strategy:<name>/<version> or file:<path>")
+                                    "strategy:<name>/<version>, profile:v<N> or file:<path>")
+
+    p_profile = sub.add_parser("profile", help="Your profile: objectives, capital, horizon, limits, format")
+    prof_sub = p_profile.add_subparsers(dest="profile_command", required=True)
+    prof_sub.add_parser("show", help="Current version and what is still missing")
+    prof_sub.add_parser("history", help="All versions, newest first")
+    p_prof_set = prof_sub.add_parser("set", help="Change fields ({\"changes\": {...}} on stdin); a new version")
+    p_prof_set.add_argument("--note", required=True, help="What this version changes")
+    p_prof_set.add_argument("--prompt", required=True, help="The user's words that asked for it")
+    p_prof_set.add_argument("--host-provider", dest="host_provider", default="claude-code")
+    p_prof_set.add_argument("--host-model", dest="host_model", required=True)
 
     p_fu = sub.add_parser("followup", help="What a strategy did in GaleCore, tied to its version (read-only)")
     fu_sub = p_fu.add_subparsers(dest="followup_command", required=True)
@@ -916,6 +959,8 @@ def main() -> None:
             asyncio.run(_cmd_evidence_add(args))
         elif args.command == "sources":
             asyncio.run(_cmd_sources(args))
+        elif args.command == "profile":
+            asyncio.run(_cmd_profile(args))
         elif args.command == "strategy":
             asyncio.run(_cmd_strategy(args))
         elif args.command == "followup":

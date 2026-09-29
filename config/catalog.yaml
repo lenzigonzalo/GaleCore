@@ -80,6 +80,34 @@ entries:
       - output_contract names SourceQueryResult, the shape `sources query` answers with (the entry's primary output); `sources list` answers with the related SourceCatalogSummary
       - Not checked - whether a source's own data is correct
 
+  - id: user_profile
+    kind: harness
+    serves: >-
+      Tus objetivos, capital de referencia, horizonte, drawdown y límites de riesgo,
+      fuentes preferidas y formato de entrega, versionados, para que cada capacidad los
+      aplique sin que los repitas y deje registrado qué versión usó.
+    example_requests:
+      - ¿Qué perfil tengo?
+      - Mi capital de referencia es 10.000 USD
+      - Los informes, tablas y gráficos primero
+    skill: skills/user-profile/skill.yaml
+    output_contract: galecore_ai.contracts.profile.ProfileVersion
+    galecore_capabilities: []
+    flow:
+      - profile show
+      - 'profile set --note "<qué cambia>" --prompt "<tus palabras>" --host-model <model> < {"changes": {...}}'
+      - profile history
+    stored_as: profile
+    controls:
+      - Create-only versions; every read re-checks the hash, an edited version is INTEGRITY_FAILED and blocks changes
+      - Partial changes on top of the current version; no real change creates no version
+      - Unknown fields, blank values and sources outside config/sources.yaml are refused
+      - Refuses text that looks like a key or token (heuristic, English and Spanish labels plus common key prefixes); a refused value is not echoed back
+      - Missing fields are declared, never defaulted; placeholders the user asked for are listed in `provisional` and reported as such
+      - "While a profile exists, research and context_research refuse to save unless an antecedent cites the version in force (profile:v<N>), so the stored revision records the version (hash) used"
+      - "Consumers today: research and context_research only; GEX, regime, strategy and follow-up outputs do not read the profile yet"
+      - Not checked - whether the declared objectives or limits are sensible
+
   - id: research
     kind: investigation
     serves: >-
