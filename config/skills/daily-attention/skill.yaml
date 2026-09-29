@@ -1,0 +1,74 @@
+skill_id: daily_attention
+version: "0.1.0"
+display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
+description: >
+  Answers "what deserves my attention today about what I have in SHADOW?": exposure of the open SHADOW
+  positions against the profile's limits, what the approved strategy's rules say about them, what
+  changed since the last review, the market context that bears on them and what is missing. It reuses
+  strategy_followup (runtime data), regime_interpretation's prepare (GEX, skew 25Δ, VIX/VVIX) and
+  context_research's evidence (external events), and keeps the answer as a revision of one "daily
+  attention" investigation per strategy. Read-only: no orders, no allocation changes.
+
+output_contract: galecore_ai.contracts.research.ResearchContent
+
+required_capabilities: []
+
+system_prompt: >
+  0. Profile first: `profile show`. Apply reference_capital, risk_limits (max loss per trade and summed
+     open loss), max_drawdown, horizon, preferred_sources and delivery_format. Fields in `provisional`
+     are placeholders: label every comparison that depends on them as provisional, never as the
+     owner's limit. Cite the profile in force (`profile:v<N>`) as an antecedent when saving; saving is
+     refused otherwise.
+  1. What is in SHADOW and its rules: `kb search --kind strategy`, then `kb show strategy:<ref>` of each
+     approved version (spec hash, approval, rules per block: entry, monitoring, adjustment, exit,
+     invalidation). The rules come from that stored proposal, never from memory.
+  2. Last review: `kb search --kind research --text "atencion diaria <strategy>"` and `kb show` of its
+     last revision; also `followup history --strategy <name>`. That revision (or, the first time, the
+     last follow-up record) is "the last review"; say which one you used and its date.
+  3. Runtime today: `followup run --strategy <name>` (reads GaleCore Dev through its API, keeps the
+     output verbatim as evidence, hashed record). Present its numbers; do not re-derive them. If GaleCore
+     did not answer, that is the first attention point and the rest is marked as not refreshed.
+  4. Exposure: per open position and summed, only what the follow-up record carries (positions,
+     valuations, simulated P&L). Compare against the profile's risk limits (provisional if so).
+     Greeks and the max loss per position are NOT served by any registered source: if the record
+     does not carry them, write them under `missing`, do not estimate them.
+  5. Rules check: for each open position and for today's evaluations, which rule of the approved spec
+     applies now (exit, adjustment, invalidation, entry blocked) and whether the runtime did what the
+     rule says. Rules the runtime does not execute (declared unsupported in the proposal) are the
+     owner's to watch: list them explicitly.
+  6. What changed since the last review: new entries, discards and why, closed positions, blocks
+     (NO_DATA, stale quotes, outside session), changes of version or instance, profile version change.
+  7. Context that matters, from registered sources only (`sources query --need "<dato>"` when unsure):
+     GEX, put skew 25Δ, VIX and VVIX from GaleCore via `prepare --symbol SPY --skill regime` (read only;
+     do not accept or record it unless the owner asks for the regime record), or the latest regime
+     record (`kb search --kind regime --symbol SPY`) if GaleCore is down, dated. Earnings dates inside
+     the positions' horizon from the host connectors the registry lists (FMP / Alpha Vantage, state
+     limited), each response kept with `evidence add` and cited as `evidence:<id>`. The FOMC date and a
+     macro events calendar have no registered source: write them under `missing`, never from memory
+     or the web.
+  8. Attention points, ordered: first what breaks a rule or a limit, then what is near one, then data
+     gaps, then context. Each point names its source (followup record, evidence id, strategy ref).
+     Keep SHADOW results (simulated fills at mid, never executions), operation and economic evidence
+     separate. No recommendation presented as the owner's decision; say "la regla X dice…".
+  9. Deliver in the profile's format (tables first, minimal text). Save: first time
+     `research save --capability daily_attention --slug atencion-diaria-<strategy>`; afterwards
+     `research revise --capability daily_attention --id <id> --reason continuation`. Status open, with
+     next steps (what to look at in the next review) and limitations; antecedents: profile:v<N>,
+     strategy:<ref>, the previous revision's research ref and every evidence used.
+  10. If the owner wants it every day, say that recurring_followup today runs only the strategy
+     follow-up (step 3); scheduling this whole capability is not available yet (it is code).
+
+instructions: |
+  profile show
+  kb search --kind strategy ; kb show strategy:<name>/<version>
+  kb search --kind research --text "atencion diaria <strategy>" ; followup history --strategy <name>
+  followup run --strategy <name> --prompt "<pedido>" --host-model <model>
+  prepare --symbol SPY --skill regime            # contexto GaleCore (GEX, skew, VIX/VVIX); sólo lectura
+  sources query --need "<dato>"                  # antes de usar una fuente externa
+  evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
+  research save|revise --capability daily_attention ...
+
+  Missing by registry (declare, never estimate): griegas y pérdida máxima de posiciones SHADOW,
+  fecha del FOMC, calendario macro.
+
+examples: []

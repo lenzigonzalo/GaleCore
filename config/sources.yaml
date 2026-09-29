@@ -35,6 +35,7 @@ sources:
     limits:
       - "Sólo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES): no expone cadenas de opciones, IV rank ni implied volatility por esta vía, aunque existan rutas en el dispatcher — no están habilitadas"
       - "No expone históricos ni volatilidad realizada por esta vía"
+      - "Dos vías con dirección distinta: `sources check`, `prepare` y las capabilities usan GALECORE_BASE_URL (por defecto :5000, sin clave); GaleCore Dev corre en :7001 y el runtime SHADOW se lee con `followup run` (galecore_dev.py, con su autenticación). Un `down` del probe sin GALECORE_BASE_URL/GALECORE_API_KEY apuntando a Dev no dice que GaleCore Dev esté caída (29/09: probe down mientras Dev respondía en :7001)"
     probe:
       description: GET de bajo costo (market_data.trade de SPY) evaluando el código de estado HTTP
       command: python -B -m galecore_ai.adapters.cli sources check --source galecore
