@@ -398,6 +398,18 @@ def load_feedback(kb: KnowledgeBase, ref_text: str) -> FeedbackDocument:
     return doc
 
 
+def _version_key(version: str) -> tuple[int, ...] | None:
+    """MAJOR.MINOR.PATCH as a comparable tuple; None when it is not that shape."""
+    parts = version.split(".")
+    return tuple(int(p) for p in parts) if len(parts) == 3 and all(p.isdigit() for p in parts) else None
+
+
+def is_later_version(applied: str, about: str) -> bool:
+    """True when ``applied`` is a later version than the one the feedback is about."""
+    a, b = _version_key(applied), _version_key(about)
+    return a is not None and b is not None and a > b
+
+
 def check_feedback_citations(kb: KnowledgeBase, refs: list[str], *, kind: FeedbackKind,
                              skill_id: str | None = None, applied_version: str | None = None) -> list[str]:
     """Problems with citing ``refs`` where a feedback of ``kind`` is applied (profile or skill history).
@@ -417,9 +429,9 @@ def check_feedback_citations(kb: KnowledgeBase, refs: list[str], *, kind: Feedba
                             f"{APPLIED_BY[doc.classification]}, not here")
         elif skill_id is not None and doc.target.skill.asset_id != skill_id:
             problems.append(f"{doc.ref} is about skill {doc.target.skill.asset_id}, not {skill_id}")
-        elif applied_version is not None and doc.target.skill.version == applied_version:
-            problems.append(f"{doc.ref} is about a result of version {applied_version} itself; "
-                            "the version that applies it is a new one")
+        elif applied_version is not None and not is_later_version(applied_version, doc.target.skill.version):
+            problems.append(f"{doc.ref} is about a result of version {doc.target.skill.version}; only a later "
+                            f"version can apply it, not {applied_version}")
     return problems
 
 
@@ -472,8 +484,9 @@ def _skill_citations(failed: list[dict]) -> dict[str, list[dict]]:
     for entry in entries:
         try:
             history = load_skill_history(entry.skill)
-        except SkillHistoryError:
-            continue  # catalog --check reports a missing history; here there is simply nothing cited
+        except SkillHistoryError as exc:
+            failed.append({"ref": f"skill:{entry.id}", "status": "UNUSABLE", "problems": [str(exc)]})
+            continue
         for note in history.versions:
             for ref in note.feedback:
                 out.setdefault(ref, []).append({"where": "skill", "skill": history.skill_id,
@@ -517,7 +530,8 @@ def feedback_status(kb: KnowledgeBase) -> dict:
         applied_in = [c for c in cited if c["where"] == APPLIED_BY[fb.classification] and (
             c["where"] == "profile"
             or (c["where"] == "research" and c["ref"] == fb.target.research)
-            or (c["where"] == "skill" and c["skill"] == fb.target.skill.asset_id))]
+            or (c["where"] == "skill" and c["skill"] == fb.target.skill.asset_id
+                and is_later_version(c["version"], fb.target.skill.version)))]
         items.append({"ref": fb.ref, "classification": fb.classification.value, "words": fb.words,
                       "formulation": fb.formulation, "about": f"{fb.target.research} r{fb.target.revision}",
                       "skill": f"{fb.target.skill.asset_id} {fb.target.skill.version}",

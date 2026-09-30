@@ -51,3 +51,12 @@ def test_bad_arguments_are_refused(tmp_path, monkeypatch, start, end, ids):
     monkeypatch.setenv("FRED_API_KEY", "k" * 32)
     with pytest.raises(SystemExit):
         fred_query.releases(str(tmp_path), start, end, ids)
+
+
+def test_a_response_echoing_the_key_is_not_saved(tmp_path, monkeypatch):
+    key = "k" * 32
+    monkeypatch.setattr(fred_query, "get", lambda endpoint, params, k: (200, f'{{"url": "{key}"}}'.encode(), "u"))
+    monkeypatch.setenv("FRED_API_KEY", key)
+    with pytest.raises(SystemExit, match="clave"):
+        fred_query.releases(str(tmp_path), "2026-09-30", "2026-11-15", [])
+    assert not (tmp_path / "releases.dates.json").exists()

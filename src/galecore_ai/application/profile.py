@@ -122,7 +122,8 @@ def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: st
     problems = _check_sources(content.preferred_sources)
     if problems:
         raise ProfileError("Refusing to change the profile", problems)
-    if current is not None and content == current.content:
+    if current is not None and content == current.content and not feedback:
+        # With feedback the version is still written: it records that the preference is applied.
         return current, None
     doc = draft.model_copy(update={"content_hash": compute_profile_hash(draft.hashable_content())})
     try:

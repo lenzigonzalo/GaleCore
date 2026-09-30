@@ -40,8 +40,10 @@ def problems(result: dict) -> list[str]:
 
 
 def test_the_real_catalog_is_complete(tmp_path):
+    # Cited feedback lives in the knowledge base (absent in CI); its resolution is tested in test_feedback.py.
     result = check_catalog(load_catalog(), commands=cli_commands(build_parser()), workspace=_workspace_root(WORKSPACE),
-                           registry=load_source_registry(), status_store=FileSourceStatusStore(tmp_path / "s"))
+                           registry=load_source_registry(), status_store=FileSourceStatusStore(tmp_path / "s"),
+                           feedback_check=lambda refs, skill_id, version: [])
     assert result["complete"], [e for e in result["entries"] if not e["complete"]]
 
 

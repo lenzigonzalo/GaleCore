@@ -218,3 +218,55 @@ def test_cli_feedback_add_and_list(kb):  # noqa: F811
                               "--classification", "case", "--slug", "otro", "--prompt", "p"],
                              input=request, capture_output=True, text=True, encoding="utf-8", check=False)
     assert refused.returncode == 3 and "no revision 5" in refused.stdout
+
+
+class TestReviewR1:
+    """Internal review R1 of GC-AI-0016."""
+
+    def test_only_a_later_version_can_apply_a_method_comment(self, kb, monkeypatch):  # noqa: F811
+        doc, _ = save(kb)
+        fb, _ = comment(kb, kind=FeedbackKind.METHOD)
+        skill = doc.current.skill
+        older = "0.0.1"
+        assert "only a later version" in check_feedback_citations(
+            kb, [fb.ref], kind=FeedbackKind.METHOD, skill_id=skill.asset_id, applied_version=older)[0]
+        history = SkillHistory(skill_id=skill.asset_id, versions=[
+            {"version": older, "date": date(2026, 9, 30), "changes": "x", "feedback": [fb.ref]}])
+        real = knowledge.load_skill_history
+        monkeypatch.setattr(knowledge, "load_skill_history",
+                            lambda path: history if path == "skills/research/skill.yaml" else real(path))
+        item = feedback_status(kb)["feedback"][0]
+        assert item["status"] == "pending" and item["cited_elsewhere"][0]["version"] == older
+
+    def test_a_broken_history_is_reported_not_hidden(self, kb, monkeypatch):  # noqa: F811
+        def broken(path):
+            raise SkillHistoryError(f"{path}: roto")
+        monkeypatch.setattr(knowledge, "load_skill_history", broken)
+        failed = feedback_status(kb)["integrity_failed"]
+        assert failed and all(f["status"] == "UNUSABLE" for f in failed)
+
+    def test_a_preference_already_in_force_still_gets_a_version_citing_it(self, kb):  # noqa: F811
+        save(kb)
+        fb, _ = comment(kb, kind=FeedbackKind.PREFERENCE)
+        set_profile(kb.profile, changes={"delivery_format": ["tablas"]}, note="n", prompt="p", host=HOST, now=NOW)
+        pv, path = set_profile(kb.profile, changes={"delivery_format": ["tablas"]}, note="aplica", prompt="p",
+                               host=HOST, now=NOW + timedelta(hours=3), feedback=[fb.ref])
+        assert path is not None and pv.version == 2 and pv.feedback == [fb.ref]
+        assert feedback_status(kb)["feedback"][0]["status"] == "applied"
+
+
+def test_cli_profile_set_cites_only_preference_feedback(kb):  # noqa: F811
+    save(kb)
+    method, _ = comment(kb, kind=FeedbackKind.METHOD, slug="metodo")
+    pref, _ = comment(kb, kind=FeedbackKind.PREFERENCE, slug="preferencia")
+    cli = [sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "profile", "set", "--note", "n", "--prompt", "p",
+           "--host-model", "test"]
+    changes = json.dumps({"changes": {"delivery_format": ["tablas"]}})
+    refused = subprocess.run([*cli, "--feedback", method.ref], input=changes, capture_output=True, text=True,
+                             encoding="utf-8", check=False)
+    assert refused.returncode == 3 and "applied in skill" in refused.stdout
+    assert kb.profile.versions() == []
+    ok = subprocess.run([*cli, "--feedback", pref.ref], input=changes, capture_output=True, text=True,
+                        encoding="utf-8", check=False)
+    assert ok.returncode == 0, ok.stdout
+    assert kb.profile.load("v1").feedback == [pref.ref]
