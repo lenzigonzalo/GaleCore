@@ -7,24 +7,24 @@ GC-AI-0012 (mapa de fuentes), GC-AI-0013 (tu perfil) y GC-AI-0014 (orden de fuen
 
 ## Retomar — punto de entrada (una sola sesión)
 
-1. **GC-AI-0015 (entrega 3), correcciones de Codex C1.** Rama `feature/GC-AI-0015` (worktree
-   `.worktrees/galecore-ai/GC-AI-0015`). Codex C1 (30/09, `docs/engineering/reviews/GC-AI-0015-20260930T121330Z.md`):
-   CHANGES_REQUESTED, sin BLOCKER. Corregidos: este handoff y el inventario de `CLAUDE.md`. Pendiente: re-correr AC-06
-   con `daily_attention` 0.1.2 en sesión nueva (nueva revisión del mismo resultado, transcripción archivada) y recheck
-   acotado de Codex (`--recheck`). El cierre es del owner. El `ACTIVE_WORK_ITEM` del workspace apunta a 0015 hasta su
-   cierre.
-2. **GC-AI-0016 (entrega 4).** Rama `feature/GC-AI-0016` desde la de 0015 (worktree `.worktrees/galecore-ai/GC-AI-0016`).
-   Código del registro de feedback hecho (checkpoint del 30/09): `feedback add|list`, cita desde revisión / perfil /
-   `history.yaml` de la skill, `catalog --check` exige historial, guía en `capability_builder` 0.2.0. Falta: FRED como
-   fuente del calendario de publicaciones macro (aprobado por el owner el 30/09), `daily_attention` 0.2.0 desde el
-   comentario real del owner y la demo desde sesión nueva; revisión interna y Codex. Mergear 0015 en 0016 antes de
-   revisar 0016.
-3. **0008/0009:** corrida automática por horario desde main (PC prendida); verificar artefactos antes de otra prueba.
+1. **GC-AI-0015 (entrega 3), en recheck de Codex.** Rama `feature/GC-AI-0015` (worktree
+   `.worktrees/galecore-ai/GC-AI-0015`). C1 (30/09) y C2 (recheck) sin BLOCKER; resoluciones en el work item. AC-06 se
+   recorrió con 0.1.2 (r2, cálculo propio quedó como hecho → control nuevo en `check_content`). El guardado E2E con ese
+   control es r3 (0.2.0, desde GC-AI-0016). Todo commiteado en `knowledge` `5597222`. Sigue: recheck C3; el cierre es
+   del owner. El `ACTIVE_WORK_ITEM` del workspace apunta a 0015 hasta su cierre.
+2. **GC-AI-0016 (entrega 4), READY_FOR_REVIEW.** Rama `feature/GC-AI-0016` desde la de 0015 (worktree
+   `.worktrees/galecore-ai/GC-AI-0016`). Registro de feedback, cita desde revisión / perfil / `history.yaml`,
+   `catalog --check` con historial, `capability_builder` 0.2.0, calendario FRED (alcance aprobado por el owner el 30/09).
+   Demo hecha con el comentario real del owner: `daily_attention` 0.2.0 y r3 con la tabla eventos × posiciones.
+   Revisión interna R1 corregida (946 tests). Sigue: Codex `--base feature/GC-AI-0015`. Si 0015 cambia, se mergea en
+   0016 antes.
+3. **0008/0009:** corrida automática por horario desde main (tarea de las 18:05 local); verificar los artefactos antes
+   de otra prueba. El 30/09 la API de Dev se levantó como proceso independiente (log en
+   `GaleCore/dev/.local/api-20260930.log`) y SHADOW evaluó a horario (13:30:24 UTC); el arranque tardío del 28 y 29/09
+   no se repitió con la PC prendida.
 
-Contexto nuevo del 29/09: la sesión de ideas del owner quedó completa en BL-008 (`ba61b7d`). Dónde entra cada idea:
-roadmap, «Estado en tres partes» y §4. Reportar al owner siempre en tres partes (qué y para qué, trabas, próximos pasos
-con para qué), corto y sin tecnicismos. SHADOW arrancó tarde el 28 y 29/09 (probable PC suspendida; no verificado): el
-owner deja la PC prendida el 30/09; si igual arranca tarde, es bug de GaleCore.
+Reportar al owner siempre en tres partes (qué y para qué, trabas, próximos pasos con para qué), corto y sin
+tecnicismos. Ideas del 29/09: completas en BL-008 (`ba61b7d`).
 
 ### Antecedente (paso 0, sigue vigente)
 
