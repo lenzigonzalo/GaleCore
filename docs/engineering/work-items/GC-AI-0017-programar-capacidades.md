@@ -86,6 +86,11 @@ datos del día y un resultado `INCOMPLETE` que dice qué faltó. Nunca un briefi
 - [ ] **AC-01 — Acceso sin sesión probado primero:** desde el Programador, con la sesión de Windows bloqueada, `claude -p`
   corre con herramientas limitadas y tope de turnos y devuelve JSON válido. Si no se puede, se frena y se vuelve a
   decidir la arquitectura (antes de escribir el resto).
+  **Evidencia 30/09 (parcial):** `docs/evidence/gc-ai-0017/probe_headless.py` + `probe_runs.jsonl`. Lanzado por el
+  Programador (tarea de una vez, mismo tipo de inicio que la de 0009), `claude -p` con una sola herramienta permitida
+  (`catalog`), `--max-turns 8` y esquema JSON: `OK`, 5 turnos, 20 s, salida validada (11 capacidades). Aprendido: con
+  tope 4 falla (un turno se va en un intento con PowerShell no permitido y otro en entregar el JSON). **Falta:** la
+  misma corrida con la pantalla bloqueada; se verifica con la primera corrida real de las 10:00.
 - [ ] **AC-02 — Programable por declaración:** `schedulable` en el catálogo; `catalog --check` rechaza una capacidad
   programable que escribe fuera de su resultado; `task create` rechaza una no programable.
 - [ ] **AC-03 — Corrida con modelo:** una tarea de `daily_attention` corre por horario desde `main`, sin sesión, y guarda
