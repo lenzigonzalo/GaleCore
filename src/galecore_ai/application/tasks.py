@@ -583,7 +583,10 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
                                         encoding="utf-8")
     base = {"invoked_by": invoked_by, "turns": reply.turns, "max_turns": caps.max_turns, "model": reply.model,
             "duration_model_s": reply.duration_s}
-    written: list[Path] = [kb.base / "followups" / task.strategy]   # a follow-up the model ran
+    # What the model's own `followup run` left since the start: the records and the runtime reports they cite.
+    written: list[Path] = [kb.base / "followups" / task.strategy]
+    written += [kb.base / "evidence" / f"{src.split(':', 1)[1]}.json" for r in followup_history(kb, task.strategy)
+                if r.recorded_at >= now for src in r.sources]
     problem = reply.error
     if reply.ok:
         reply, base = _repair_if_refused(kb, task, target, reply, base, client, scratch)

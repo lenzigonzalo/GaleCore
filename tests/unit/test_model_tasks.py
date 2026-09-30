@@ -300,3 +300,16 @@ def test_no_correction_round_beyond_the_turn_cap(briefing):
 def test_the_repair_call_has_no_tools():
     cmd = mr.ClaudeCodeClient(binary="claude").command(allowed=[], max_turns=4, schema={}, add_dir=Path("x"))
     assert cmd[cmd.index("--tools") + 1] == "" and "--allowedTools" not in cmd and "--add-dir" not in cmd
+
+
+def test_what_the_models_followup_left_is_committed_with_the_run(briefing, monkeypatch):
+    kb, _, follow = briefing
+    committed = []
+    monkeypatch.setattr(t, "_commit_knowledge", lambda kb_, paths, msg: committed.extend(paths) or "committed")
+
+    class RunsFollowup(FakeModel):
+        def run(self, **kw):
+            follow(kb=kb, strategy=NAME, prompt="p", host=t.MANUAL_HOST, task_id="atencion-diaria", now=LATER)
+            return super().run(**kw)
+    t.run(kb=kb, task_id="atencion-diaria", followup=follow, now=LATER, client=RunsFollowup(model_ok(output()).reply))
+    assert any(p.parent.name == "evidence" and "shadow" in p.name for p in committed)
