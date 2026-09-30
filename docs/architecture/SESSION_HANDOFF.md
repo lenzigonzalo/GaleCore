@@ -1,24 +1,39 @@
 # GaleCore-AI — Session Handoff
 
-**Actualizado:** 2026-09-30 mañana.
+**Actualizado:** 2026-09-30 tarde.
 **Único plan:** [roadmap](../../../roadmap/README.md) — arriba, «Estado en tres partes»; detalle en §4.
-GC-AI-0012 (mapa de fuentes), GC-AI-0013 (tu perfil) y GC-AI-0014 (orden de fuentes) están cerrados y mergeados a
-`main` (tags `gc-ai-0012-closed`, `gc-ai-0013-closed`, `gc-ai-0014-closed`). Activo: según `ACTIVE_WORK_ITEM` del workspace.
+GC-AI-0012 (mapa de fuentes), GC-AI-0013 (tu perfil) y GC-AI-0014 (orden de fuentes) y GC-AI-0015 (molde) están cerrados y
+mergeados a `main` (tags `gc-ai-0012-closed` … `gc-ai-0015-closed`). Activo: según `ACTIVE_WORK_ITEM` del workspace.
 
-## Retomar — punto de entrada (una sola sesión)
+## Retomar — punto de entrada (próxima sesión, en este orden)
 
-1. **GC-AI-0015 (entrega 3): CLOSED 30/09**, mergeada a `main` (tag `gc-ai-0015-closed`). El `ACTIVE_WORK_ITEM` del
-   workspace pasa a GC-AI-0016.
-2. **GC-AI-0016 (entrega 4), READY_FOR_REVIEW.** Rama `feature/GC-AI-0016` desde la de 0015 (worktree
-   `.worktrees/galecore-ai/GC-AI-0016`). Registro de feedback, cita desde revisión / perfil / `history.yaml`,
-   `catalog --check` con historial, `capability_builder` 0.2.0, calendario FRED (alcance aprobado por el owner el 30/09).
-   Demo hecha con el comentario real del owner: `daily_attention` 0.2.0 y r3 con la tabla eventos × posiciones.
-   Revisión interna R1 corregida (946 tests). Sigue: Codex `--base feature/GC-AI-0015`. Si 0015 cambia, se mergea en
-   0016 antes.
-3. **0008/0009:** corrida automática por horario desde main (tarea de las 18:05 local); verificar los artefactos antes
-   de otra prueba. El 30/09 la API de Dev se levantó como proceso independiente (log en
-   `GaleCore/dev/.local/api-20260930.log`) y SHADOW evaluó a horario (13:30:24 UTC); el arranque tardío del 28 y 29/09
-   no se repitió con la PC prendida.
+1. **0008/0009: verificar la corrida automática de las 18:05 del 30/09** (tarea `GaleCore-AI\seguimiento-spy-prima-varianza`,
+   corre desde `main`): `schtasks /query /tn ... /v`, el registro nuevo en `knowledge/followups/spy_prima_varianza_30_45d/`
+   con `invoked_by=scheduler`, y `knowledge/tasks/<id>/events.jsonl`. Si está bien: recheck interno acotado de los
+   pendientes y cierre del owner (evidencia vigente en el worktree de 0009, ver «Antecedente»).
+2. **Espaciado de entradas en SHADOW + estrategia 1.0.4 (acordado con el owner el 30/09).** Para qué: generar data
+   operando muchas posiciones escalonadas en vez de una sola (hoy E1 = máximo 1 abierta, 264 evaluaciones salteadas).
+   - GaleCore: rama nueva `feature/GC-0005-shadow-espaciado` **desde `85f1c2c`** (punta de
+     `feature/GC-AI-0008-estrategia-shadow`, tal como se traspasó el 28/09; no modificar esa rama). Campo de spec
+     `risk_limits.min_minutes_between_entries` + chequeo en `ShadowRuntimeEngine` (después del máximo de posiciones:
+     si la última entrada de la instancia fue hace menos de N minutos, `ENTRY_SKIPPED` con motivo) + validador + tests.
+     Work item GC-0005 en `GaleCore/docs/engineering/work-items/`. Sin push.
+   - GaleCore-AI: `strategy check` tiene que conocer el campo nuevo (clasificación en `application/strategy.py`).
+   - Estrategia `spy_prima_varianza_30_45d` **1.0.4**: `max_concurrent_positions` 10 (≈50 % de 10.000 a 456 de riesgo
+     por spread; `profile:v5` asigna 50 % sumado = 5.000 a pedido del owner), `min_minutes_between_entries` 1440 (una
+     por día). Flujo:
+     `strategy check` → `save` → **aprobación del owner por hash** → `deploy-check` → deploy en Dev.
+   - Entrega a quien lleva GaleCore: **paquete incremental** (`git bundle create <archivo> 85f1c2c..feature/GC-0005-shadow-espaciado`)
+     + addendum «Cambios posteriores al traspaso» en `docs/engineering/HANDOFF-GALECORE-SHADOW.md` del workspace (qué,
+     para qué, ejemplo de spec, tests). El owner le avisa antes por si tocó `ShadowRuntimeEngine.cs`.
+   - Roll: después, con data de la escalera y una definición del owner (cuándo y a qué se rolea).
+3. **GC-AI-0016 (entrega 4), READY_FOR_REVIEW.** Una pasada de Codex `--base feature/GC-AI-0015` desde el 3/10 19:28
+   (regla del 30/09: una vez, al cierre, sin rechecks) y cierre del owner.
+4. **Entrega 5 (programar el briefing):** abrir work item con acuerdo y criterios para aprobar antes del código.
+   Decisión de arquitectura a presentar: cómo una corrida programada invoca al host sin sesión abierta.
+
+Claves locales: `GALECORE_API_KEY` y `GALECORE_BASE_URL` (:7001) están en HKCU\Environment desde el 30/09 (una clave
+local nunca frena: resolver y seguir). Perfil vigente `profile:v5` (límites de testing usados como reales: 5 % por operación, 50 % sumado).
 
 Reportar al owner siempre en tres partes (qué y para qué, trabas, próximos pasos con para qué), corto y sin
 tecnicismos. Ideas del 29/09: completas en BL-008 (`ba61b7d`).
