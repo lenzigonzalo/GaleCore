@@ -60,11 +60,30 @@ cambia algo, se trae con un merge antes de revisar esta.
 ## Primera demostración
 
 1. Una sesión nueva corre `daily_attention` con datos reales (GaleCore Dev arriba) y guarda una revisión.
-2. **Vos das un comentario real sobre ese resultado.** No se inventa: si no hay comentario, no hay demo.
+2. **Vos das un comentario real sobre ese resultado.** No se inventa: si no hay comentario, no hay demo. Ya está: ver
+   «Comentario del owner para la demostración».
 3. Se guarda el feedback, se clasifica y se aplica: versión 2 de la capacidad (o del perfil, o corrección del caso)
    citándolo.
 4. Otra sesión nueva corre la versión 2; su resultado está sellado con la versión nueva y muestra el cambio pedido.
    `feedback list` lo da por aplicado.
+
+## Comentario del owner para la demostración (29/09/2026)
+
+Sobre el informe `research:2026-09-29-atencion-diaria-spy-prima-varianza-30-45d` (r1, `daily_attention` 0.1.0).
+Palabras textuales del owner en el chat:
+
+> «el briefing capaz era tambien relacionado a che hoy me levanto como trader, tengo una cartera, tengo estrategias
+> activas, sucedió algo o algo va a suceder, un brief rápido de todo estaba buena»
+
+Formulación propuesta por el asistente y **aceptada por el owner como su comentario** («Si tomalo como comentario»):
+«quiero que me diga qué evento macro viene y cómo afecta mis posiciones» (ejemplo: «hay un NFP en 3 días y tu PCS vence
+después»).
+
+Clasificación a registrar: **método** (lo que el briefing debe hacer siempre). Se guarda con `feedback add` cuando exista
+y origina `daily_attention` 0.2.0. Lo que no cubre este item: la cartera real (paso «Cuenta real»), el calendario de la
+Fed sin fuente registrada (se sigue declarando faltante), y mostrarlo en la interfaz de GaleCore (lado GaleCore, BL-005).
+Antecedente: la sesión que miraba FRED lo propuso como opción (a) «pendiente para la entrega que sigue»; el owner la
+eligió y la derivó a este item (29/09).
 
 ## Non-goals
 
