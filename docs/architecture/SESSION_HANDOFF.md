@@ -24,12 +24,17 @@ Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
    Anthropic se decide al pasar a producción); el briefing llega **leído por el modelo**; **lunes a viernes 10:00 local**;
    se reusa el Programador de 0009 tal cual; la llamada al modelo queda en un solo punto intercambiable; sin aviso de
    Windows ni costo en USD (sólo tope de turnos). Vale para cualquier capacidad de lectura declarada programable.
-   - **AC-01 hecho en parte:** `claude -p` lanzado por el Programador corre (5 turnos, 20 s, salida validada;
-     `docs/evidence/gc-ai-0017/probe_runs.jsonl`). Con `--max-turns 4` falla; usar 8. Falta con la pantalla bloqueada.
-   - **Siguiente:** AC-02 (`schedulable` en el catálogo + `catalog --check` + `task create` rechaza no programables),
-     `KINDS` abierto, runner con modelo que valida contra el contrato y guarda por `research revise` con
-     `invoked_by=scheduler`, `INCOMPLETE`/`FAILED` con motivo, `LATEST.md`. Después crear la tarea real de
-     `daily_attention` L–V 10:00 y demostrar (AC-07). La tarea de las 10:00 **todavía no existe**.
+   - **Hecho el 30/09 (commits `6239a39` y siguiente en el worktree):** AC-02 (`schedulable` en el catálogo,
+     `catalog --check`, `task create --capability`) y la corrida con modelo (`application/model_run.py`: el modelo
+     sólo lee con `--restricted`, el runner valida y guarda; ronda de corrección; datos del día + `INCOMPLETE` si
+     falla). **Tarea real `atencion-diaria-spy` creada: L–V 10:00 (Buenos Aires), corre desde el worktree.** La
+     corrida manual 5 guardó el briefing (research `2026-09-29-atencion-diaria-spy-prima-varianza-30-45d` rev 5).
+     Evidencia: `docs/evidence/gc-ai-0017/`.
+   - **Siguiente (1/10):** mirar la corrida de las 10:00 (`task status atencion-diaria-spy`; debe decir
+     `invoked_by=scheduler`) → cierra AC-01 (pantalla bloqueada) y AC-03. Después: prueba con la API apagada
+     (AC-05), pausa/reanudación desde el chat (AC-06), demo (AC-07), revisión interna + Codex (AC-08); al mergear,
+     `task rebind atencion-diaria-spy --code-path <main>`. En esta sesión el CLI necesita `PYTHONPATH=src` en el
+     worktree (sin eso toma el paquete instalado de main).
 3. **Entrega 4 — GC-AI-0016, READY_FOR_REVIEW.** Una pasada de Codex `--base feature/GC-AI-0015` desde el **3/10 19:28**
    (regla del 30/09: una vez, al cierre, sin rechecks) y cierre del owner. Si Codex cambia algo, mergearlo a GC-AI-0017.
 4. **GaleCore GC-0005 (espaciado), READY_FOR_REVIEW:** una pasada de Codex al cierre (desde el 3/10). Paquete para quien
