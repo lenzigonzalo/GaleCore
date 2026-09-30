@@ -1,25 +1,24 @@
 # GaleCore-AI — Session Handoff
 
-**Actualizado:** 2026-09-29 noche (23:00 AST).
+**Actualizado:** 2026-09-30 mañana.
 **Único plan:** [roadmap](../../../roadmap/README.md) — arriba, «Estado en tres partes»; detalle en §4.
 GC-AI-0012 (mapa de fuentes), GC-AI-0013 (tu perfil) y GC-AI-0014 (orden de fuentes) están cerrados y mergeados a
 `main` (tags `gc-ai-0012-closed`, `gc-ai-0013-closed`, `gc-ai-0014-closed`). Activo: según `ACTIVE_WORK_ITEM` del workspace.
 
-## Retomar 30/09 — punto de entrada (una sola sesión)
+## Retomar — punto de entrada (una sola sesión)
 
-El owner cerró la otra sesión: todo sigue desde una sola. Orden:
-
-1. **GC-AI-0015 (entrega 3), Codex.** Rama `feature/GC-AI-0015` (worktree `.worktrees/galecore-ai/GC-AI-0015`, HEAD
-   `f944256`), READY_FOR_REVIEW, revisión interna corregida, 910 tests. Codex no corrió el 29/09 por límite de uso
-   (habilitado desde 30/09 00:07): lanzar `/review-codex` con `--base main` en ese worktree, corregir, recheck acotado;
-   el cierre es del owner. El `ACTIVE_WORK_ITEM` del workspace apunta a 0015 hasta su cierre.
-2. **GC-AI-0016 (entrega 4), código.** Rama `feature/GC-AI-0016` desde la de 0015 (worktree
-   `.worktrees/galecore-ai/GC-AI-0016`); su propio `docs/engineering/ACTIVE_WORK_ITEM` ya apunta a 0016. Hay acuerdo,
-   criterios y el **comentario real del owner** para la demo (método: «qué evento macro viene y cómo afecta mis
-   posiciones»). Sin código aún. Lo que falta: registro `feedback:<id>` (patrón de `evidence`), cita desde revisión /
-   perfil / historial de la skill, `catalog --check` exige historial de versión, `feedback list`, guía en
-   `capability_builder`; después `daily_attention` 0.2.0 y la demo desde sesión nueva. Si Codex cambia 0015, mergear
-   esa rama en 0016 antes de revisar 0016.
+1. **GC-AI-0015 (entrega 3), correcciones de Codex C1.** Rama `feature/GC-AI-0015` (worktree
+   `.worktrees/galecore-ai/GC-AI-0015`). Codex C1 (30/09, `docs/engineering/reviews/GC-AI-0015-20260930T121330Z.md`):
+   CHANGES_REQUESTED, sin BLOCKER. Corregidos: este handoff y el inventario de `CLAUDE.md`. Pendiente: re-correr AC-06
+   con `daily_attention` 0.1.2 en sesión nueva (nueva revisión del mismo resultado, transcripción archivada) y recheck
+   acotado de Codex (`--recheck`). El cierre es del owner. El `ACTIVE_WORK_ITEM` del workspace apunta a 0015 hasta su
+   cierre.
+2. **GC-AI-0016 (entrega 4).** Rama `feature/GC-AI-0016` desde la de 0015 (worktree `.worktrees/galecore-ai/GC-AI-0016`).
+   Código del registro de feedback hecho (checkpoint del 30/09): `feedback add|list`, cita desde revisión / perfil /
+   `history.yaml` de la skill, `catalog --check` exige historial, guía en `capability_builder` 0.2.0. Falta: FRED como
+   fuente del calendario de publicaciones macro (aprobado por el owner el 30/09), `daily_attention` 0.2.0 desde el
+   comentario real del owner y la demo desde sesión nueva; revisión interna y Codex. Mergear 0015 en 0016 antes de
+   revisar 0016.
 3. **0008/0009:** corrida automática por horario desde main (PC prendida); verificar artefactos antes de otra prueba.
 
 Contexto nuevo del 29/09: la sesión de ideas del owner quedó completa en BL-008 (`ba61b7d`). Dónde entra cada idea:
