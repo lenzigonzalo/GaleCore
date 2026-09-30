@@ -13,7 +13,7 @@ approval_result: PENDING
 
 # GC-0005 — Espaciado entre entradas en SHADOW
 
-Acordado con el owner el 2026-09-30 (bloque «Retomar» del `SESSION_HANDOFF` de GaleCore-AI, paso 2).
+Acordado el 2026-09-30 (bloque «Retomar» del `SESSION_HANDOFF` de GaleCore-AI, paso 2).
 Base: `85f1c2c`, punta de `feature/GC-AI-0008-estrategia-shadow` tal como se traspasó el 28/09 (esa rama no
 se modifica). Rama local `feature/GC-0005-shadow-espaciado`. Sin push ni PR; se entrega como paquete
 incremental (`git bundle create <archivo> 85f1c2c..feature/GC-0005-shadow-espaciado`).
@@ -39,10 +39,10 @@ todas el mismo día; con un mínimo de minutos entre entradas se forma una escal
 
 ## Non-goals
 
-- Roll de posiciones (queda para después, con data de la escalera y una definición del owner).
+- Roll de posiciones (queda para después, con data de la escalera y una definición de cuándo y a qué se rolea).
 - Cambiar gates, umbrales, sizing o el cálculo de riesgo.
-- Cambiar la spec `spy_prima_varianza_30_45d.json` del repo: la versión 1.0.4 la prepara GaleCore-AI y se
-  despliega sólo con la aprobación del owner por hash.
+- Desplegar la spec 1.0.4: el archivo viaja en esta rama, pero se despliega sólo con su aprobación registrada
+  por hash (`strategy approve` → `strategy deploy-check` en GaleCore-AI) y después de integrar este cambio.
 
 ## Acceptance criteria
 
@@ -56,7 +56,12 @@ todas el mismo día; con un mínimo de minutos entre entradas se forma una escal
   completa sin cambios en los tests existentes.
 - [x] **AC-04 — Reinicio:** la entrada recuperada de la base cuenta para el espaciado.
   Evidencia: `ShadowRuntimePersistenceTests.AfterRestart_SpacingCountsTheRecoveredEntry`.
-- [ ] **AC-05 — Revisión:** Codex (una vez, al cierre) y cierre del owner.
+- [ ] **AC-05 — Revisión:** Codex (una vez, al cierre) y cierre.
+
+- [x] **AC-06 — Spec 1.0.4:** `spy_prima_varianza_30_45d.json` pasa a 1.0.4 (`max_concurrent_positions` 10,
+  `min_minutes_between_entries` 1440, `parent_version_hash` = hash de 1.0.3; nada más cambia). GaleCore la
+  carga, la valida y su hash es `sha256:e5654e45ff27afa94459b2ce7d45708b9f9ec6472d530ebf8be5d6ee2e021472`,
+  igual al que calcula GaleCore-AI. Evidencia: `StrategySpecVersionTests.LoadsValidatesAndHashesAsSubmitted`.
 
 ## Evidencia
 
