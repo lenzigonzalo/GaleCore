@@ -91,3 +91,61 @@ def test_cli_commands_know_nested_subcommands():
 def test_a_blank_missing_reason_is_refused():
     with pytest.raises(ValidationError, match="must not be blank"):
         entry(data_needs=[{"need": "griegas de posiciones SHADOW", "missing": "  "}])
+
+
+# ── GC-AI-0017: schedulable capabilities ─────────────────────────
+
+
+def scheduled(**overrides) -> CatalogEntry:
+    base = {"id": "daily_attention", "skill": "skills/daily-attention/skill.yaml", "data_needs": [],
+            "flow": ["profile show", "kb search --kind strategy", "followup run --strategy x --prompt p",
+                     "python GaleCore-AI/tools/fed_calendar.py <dir>", "evidence add --slug s --prompt p",
+                     "research save --capability daily_attention --slug s --prompt p"],
+            "schedulable": {"runs": "model", "max_turns": 30}}
+    base.update(overrides)
+    return entry(**base)
+
+
+def schedule_problems(e: CatalogEntry, tmp_path) -> list[str]:
+    return [p for p in problems(run(e, tmp_path=tmp_path)) if p.startswith("schedulable")]
+
+
+def test_a_read_only_schedulable_entry_passes(tmp_path):
+    assert schedule_problems(scheduled(), tmp_path) == []
+
+
+@pytest.mark.parametrize("line", [
+    "strategy save --spec f --prompt p", "strategy approve --ref r --spec-hash h --owner-words w --host-model m",
+    "profile set --note n --prompt p --host-model m", "sources declare --source fred --state down --note n",
+    "sources check", "feedback add --research r --revision 1 --classification case --slug s --prompt p",
+    "task pause x --prompt p", "accept --record --prompt p",
+    "python GaleCore/dev/galecore_dev.py deploy --spec x --approval a",
+])
+def test_a_schedulable_entry_that_writes_elsewhere_is_refused(tmp_path, line):
+    e = scheduled(flow=[*scheduled().flow, line])
+    assert schedule_problems(e, tmp_path), line
+
+
+def test_a_scheduled_research_save_must_be_its_own(tmp_path):
+    e = scheduled(flow=["research save --slug s --prompt p"])
+    assert any("--capability daily_attention" in p for p in schedule_problems(e, tmp_path))
+
+
+def test_schedulable_shape():
+    with pytest.raises(ValidationError, match="max_turns"):
+        scheduled(schedulable={"runs": "model"})
+    with pytest.raises(ValidationError, match="runs is one of"):
+        scheduled(schedulable={"runs": "cron"})
+    with pytest.raises(ValidationError, match="no max_turns"):
+        scheduled(schedulable={"runs": "code", "max_turns": 3})
+
+
+def test_code_runs_exist_only_for_the_followup(tmp_path):
+    assert any("no code runner" in p for p in schedule_problems(scheduled(schedulable={"runs": "code"}), tmp_path))
+    assert any("stored_as must be research" in p
+               for p in schedule_problems(scheduled(stored_as="none"), tmp_path))
+
+
+def test_the_real_catalog_declares_the_briefing_and_the_followup_schedulable():
+    declared = {e.id: e.schedulable.runs for e in load_catalog().entries if e.schedulable}
+    assert declared == {"strategy_followup": "code", "daily_attention": "model"}

@@ -279,6 +279,7 @@ entries:
       - Only data of the instance whose version hash equals the approved spec hash
       - Operation, SHADOW results and economic evidence are reported separately; simulated fills are never executions
       - Not checked - that the interpretation of the results is right
+    schedulable: {runs: code}
 
   - id: daily_attention
     kind: investigation
@@ -332,7 +333,9 @@ entries:
       - A data need no registered source covers is declared missing, never estimated
       - "Not checked - that exposure is compared against the right limits, that the rules were applied correctly to each position, or that the attention points are the right ones"
       - Not checked - that the events x positions table is present, complete for the range, or reads each event's bearing right; the next run shows it
-      - "Not checked - that a scheduled run covers this capability: recurring_followup runs only the strategy follow-up"
+      - "A scheduled run (recurring_followup) calls the model with only the read commands of this flow and a turn cap; the model returns the content and the evidence, and the runner validates and saves them (invoked_by=scheduler)"
+      - "Not checked - that a scheduled briefing is as complete as one made in a session; the run's status (OK, INCOMPLETE, FAILED) says what was missing"
+    schedulable: {runs: model, max_turns: 40, timeout_minutes: 20}
 
   - id: recurring_followup
     kind: task
@@ -353,14 +356,15 @@ entries:
       - need: evaluaciones SHADOW
       - need: metricas SHADOW
     flow:
-      - task create --id <id> --strategy <name> --objective "<qué querés saber>" --expected "<resultado>" --source "<fuente>" --frequency daily --time 17:05 --timezone America/New_York --prompt "<pedido>"
+      - task create --id <id> [--capability <schedulable id>] --strategy <name> --objective "<qué querés saber>" --expected "<resultado>" --source "<fuente>" --frequency daily --time 17:05 --timezone America/New_York --prompt "<pedido>"
       - task status <id>
       - task history <id>
       - task set-frequency <id> --frequency <...> [--time HH:MM | --minutes N] --timezone <tz> --prompt "<pedido>"
       - task pause <id> --prompt "<pedido>" · task resume <id> --prompt "<pedido>" · task cancel <id> --prompt "<pedido>"
     stored_as: task
     controls:
-      - A task runs only the read-only strategy follow-up; it cannot write strategy versions, approvals or deployments
+      - A task runs only a capability declared schedulable in this catalog (read-only; `catalog --check` refuses one whose flow writes beyond its own result); it cannot write strategy versions, approvals, deployments or the profile
+      - A model run has a turn cap and a time cap from the catalog; its duration and outcome (OK, INCOMPLETE, FAILED with the reason) go to the events log
       - One run at a time (exclusive lock; a stale lock is broken and noted); a paused or cancelled task never runs
       - Every change and run is appended to a hash-chained events log; each run leaves a hashed follow-up record naming the task, the strategy version and its sources
       - Runs depend on the PC on, the user logged on, GaleCore Dev's API up and its credentials; failures are recorded, never silent

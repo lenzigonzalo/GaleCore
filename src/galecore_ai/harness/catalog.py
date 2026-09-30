@@ -15,13 +15,14 @@ from __future__ import annotations
 from importlib import import_module
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from galecore_ai.harness.assets import asset_root, definition_hash, load_asset
 from galecore_ai.harness.definitions import SkillDefinition
 
 CATALOG_PATH = "catalog.yaml"
 STORED_AS = ("none", "regime", "research", "strategy", "task", "profile")
+RUNNERS = ("code", "model")
 
 
 class CatalogError(Exception):
@@ -44,6 +45,38 @@ class DataNeed(BaseModel):
         return v
 
 
+class Schedulable(BaseModel):
+    """A capability a recurring task may run (GC-AI-0017): read-only, by code or by the model with a turn cap."""
+
+    model_config = {"extra": "forbid"}
+
+    runs: str                            # code | model
+    max_turns: int | None = None         # model: turns per run (protects the plan's quota)
+    timeout_minutes: int = 20            # wall-clock cap per run
+
+    @field_validator("runs")
+    @classmethod
+    def _runs(cls, v: str) -> str:
+        if v not in RUNNERS:
+            raise ValueError(f"runs is one of {RUNNERS}")
+        return v
+
+    @field_validator("timeout_minutes")
+    @classmethod
+    def _timeout(cls, v: int) -> int:
+        if not 1 <= v <= 25:   # under the task's stale-lock age (30 min, application/tasks.py)
+            raise ValueError("timeout_minutes is between 1 and 25")
+        return v
+
+    @model_validator(mode="after")
+    def _turns(self) -> Schedulable:
+        if self.runs == "model" and (self.max_turns is None or not 1 <= self.max_turns <= 100):
+            raise ValueError("a model run needs max_turns between 1 and 100")
+        if self.runs == "code" and self.max_turns is not None:
+            raise ValueError("a code run has no max_turns")
+        return self
+
+
 class CatalogEntry(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -60,6 +93,7 @@ class CatalogEntry(BaseModel):
     stored_as: str                       # none | regime | research | strategy | task | profile
     controls: list[str]                  # what the validator checks for this kind of work (and what it does not)
     guide: str | None = None             # longer guide in docs/, if any
+    schedulable: Schedulable | None = None  # a recurring task may run it (read-only; `catalog --check` enforces it)
 
 
 class Catalog(BaseModel):

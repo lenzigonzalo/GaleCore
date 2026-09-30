@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de daily_attention y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: daily_attention
 versions:
+  - version: "0.2.2"
+    date: 2026-09-30
+    changes: >
+      Se puede programar (GC-AI-0017): el paso 10 ya no dice que no está disponible; dice cómo crear la tarea y
+      que una corrida programada no tiene los conectores de resultados (FMP/Alpha Vantage), así que esas
+      fechas salen de evidencia guardada o van a faltantes.
+    feedback: []
   - version: "0.2.1"
     date: 2026-09-30
     changes: >

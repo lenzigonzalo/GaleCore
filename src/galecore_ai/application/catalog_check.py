@@ -4,8 +4,9 @@ A capability is complete when its skill and output contract load (``describe``),
 flow line is a command this CLI actually has (or a script that exists in the workspace),
 every data need resolves to a source of the registry or says why none covers it, its
 controls say what is NOT checked, and its skill history says what the version in force
-changed and cites resolvable ``method`` feedback about that skill (GC-AI-0016). What fails
-is listed per entry; nothing is fixed here.
+changed and cites resolvable ``method`` feedback about that skill (GC-AI-0016), and, when it
+is declared schedulable, nothing in its flow writes beyond its own result (GC-AI-0017). What
+fails is listed per entry; nothing is fixed here.
 """
 
 from __future__ import annotations
@@ -66,6 +67,49 @@ def _flow_problems(entry: CatalogEntry, commands: dict[str, set[str]], workspace
     return problems
 
 
+# What a scheduled run may do (GC-AI-0017). Reads, plus writing its own result; anything else (strategy save|approve|
+# deploy, profile set, sources declare|check, feedback add, task changes, regime records, other scripts) is refused.
+SCHEDULED_READS = {("catalog", None), ("kb", "search"), ("kb", "show"), ("profile", "show"), ("profile", "history"),
+                   ("sources", "list"), ("sources", "query"), ("followup", "history"), ("feedback", "list"),
+                   ("query", None), ("prepare", None)}
+SCHEDULED_RESULT_WRITES = {("followup", "run"), ("evidence", "add"), ("research", "save"), ("research", "revise")}
+SCHEDULED_SCRIPTS = {"GaleCore-AI/tools/fred_query.py", "GaleCore-AI/tools/fed_calendar.py"}  # fetch into a scratch dir
+CODE_RUNNERS = ("strategy_followup",)   # capabilities a task runs without the model (application/tasks.py)
+
+
+def flow_key(tokens: list[str], commands: dict[str, set[str]]) -> tuple[str, str | None]:
+    """(command, subcommand or None) of a CLI flow line."""
+    return tokens[0], (tokens[1] if commands.get(tokens[0]) and len(tokens) > 1 else None)
+
+
+def _schedule_problems(entry: CatalogEntry, commands: dict[str, set[str]]) -> list[str]:
+    s = entry.schedulable
+    if s is None:
+        return []
+    problems = []
+    if s.runs == "code" and entry.id not in CODE_RUNNERS:
+        problems.append(f"schedulable: no code runner for {entry.id} (runs: code exists for {CODE_RUNNERS})")
+    if s.runs == "model" and entry.stored_as != "research":
+        problems.append("schedulable: a model run keeps its result as research; stored_as must be research")
+    for line in entry.flow:
+        tokens = line.split()
+        if not tokens:
+            continue
+        if tokens[0] == "python":
+            if len(tokens) < 2 or tokens[1] not in SCHEDULED_SCRIPTS:
+                problems.append(f"schedulable: {line!r} is not a read-only script a scheduled run may use")
+            continue
+        key = flow_key(tokens, commands)
+        if key in SCHEDULED_READS:
+            continue
+        if key not in SCHEDULED_RESULT_WRITES:
+            problems.append(f"schedulable: {' '.join(tokens[:2])!r} writes beyond the capability's own result")
+        elif key[0] == "research" and f"--capability {entry.id}" not in " ".join(tokens):
+            problems.append(f"schedulable: {' '.join(tokens[:2])!r} must keep its own result "
+                            f"(--capability {entry.id})")
+    return problems
+
+
 def _data_problems(entry: CatalogEntry, registry: SourceRegistry, status_store: FileSourceStatusStore) -> list[str]:
     problems = []
     for need in entry.data_needs:
@@ -108,6 +152,7 @@ def check_entry(entry: CatalogEntry, described: dict, *, commands: dict[str, set
     if not any(c.lower().startswith("not checked") and c[len("not checked"):].strip(" -–:") for c in entry.controls):
         problems.append("controls: none says what is NOT checked")
     problems += _history_problems(entry, described, feedback_check)
+    problems += _schedule_problems(entry, commands)
     return problems
 
 

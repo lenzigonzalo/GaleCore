@@ -1,9 +1,10 @@
 """Recurring task (GC-AI-0009): a follow-up the owner delegates from the conversation.
 
-A task is small and bounded on purpose: it runs one read-only capability (today, the strategy follow-up) on a
-schedule, through the Windows Task Scheduler of the owner's PC. Its definition and state live in
+A task is small and bounded on purpose: it runs one read-only capability on a schedule, through the Windows Task
+Scheduler of the owner's PC. Which capabilities may be scheduled is declared in the catalog (``schedulable``,
+GC-AI-0017): the strategy follow-up runs as code, others (the daily briefing) through the model. Its definition and state live in
 ``<knowledge>/tasks/<id>/task.json``; every change and every run is appended to ``events.jsonl``; each run's
-result is a follow-up record (``knowledge/followups/``) that names the task. A task can never write a strategy
+result is a follow-up record (``knowledge/followups/``) or a research revision, and names the task. A task can never write a strategy
 version, an approval or a deployment, and never operates money.
 """
 
@@ -17,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 TASK_SCHEMA_VERSION = "1"
 TASK_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){0,7}$")
-KINDS = ("strategy_followup",)            # the only capability a task may run today (read-only)
+KIND_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")  # a catalog id; that it is schedulable is checked when creating and running
 STATUSES = ("active", "paused", "cancelled")
 FREQUENCIES = ("daily", "weekdays", "every_minutes")
 
@@ -75,6 +76,7 @@ class TaskDefinition(BaseModel):
     local_time: str | None = None           # the schedule converted to this PC's local time (what the scheduler runs)
     code_path: str                          # checkout whose code the scheduler runs
     allowed: list[str] = Field(default_factory=lambda: ["followup run (read-only)"])
+    result_slug: str | None = None          # model runs: the investigation each run revises (research:<date>-<slug>)
 
     @field_validator("id")
     @classmethod
@@ -86,8 +88,15 @@ class TaskDefinition(BaseModel):
     @field_validator("kind")
     @classmethod
     def _kind(cls, v: str) -> str:
-        if v not in KINDS:
-            raise ValueError(f"a task may only run {KINDS}")
+        if not KIND_RE.fullmatch(v):
+            raise ValueError("kind is a catalog capability id")
+        return v
+
+    @field_validator("result_slug")
+    @classmethod
+    def _slug(cls, v: str | None) -> str | None:
+        if v is not None and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", v):
+            raise ValueError("result_slug is lowercase words separated by hyphens")
         return v
 
     @field_validator("status")

@@ -26,7 +26,7 @@ Usage:
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
-    python -m galecore_ai.adapters.cli task create --id ID --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
+    python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
     python -m galecore_ai.adapters.cli task set-frequency ID --frequency ... [--time HH:MM | --minutes N] --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task pause|resume|cancel ID --prompt "..."
@@ -797,7 +797,8 @@ async def _cmd_task(args: argparse.Namespace) -> None:
     try:
         if c == "create":
             task = t.create(kb=kb, scheduler=sch, task_id=args.id, strategy=args.strategy, objective=args.objective,
-                            expected_result=args.expected, sources=args.source, schedule=schedule(), prompt=args.prompt)
+                            expected_result=args.expected, sources=args.source, schedule=schedule(), prompt=args.prompt,
+                            capability=args.capability, result_slug=args.result_slug)
             _json_out({"status": "CREATED", "task": task.model_dump(mode="json"), "schedule": task.schedule.describe(),
                        "scheduler": sch.query(task.scheduler_name)})
         elif c == "list":
@@ -912,7 +913,7 @@ def build_parser() -> _JsonArgumentParser:
     p_fu_hist.add_argument("--strategy", required=True)
     p_fu_hist.add_argument("--limit", type=int, default=10)
 
-    p_task = sub.add_parser("task", help="Recurring follow-up run by the Windows Task Scheduler (read-only)")
+    p_task = sub.add_parser("task", help="Recurring read-only capability run by the Windows Task Scheduler")
     t_sub = p_task.add_subparsers(dest="task_command", required=True)
 
     def schedule_args(p):
@@ -921,8 +922,11 @@ def build_parser() -> _JsonArgumentParser:
         p.add_argument("--minutes", type=int, help="period for every_minutes (15..1440)")
         p.add_argument("--timezone", required=True, help="IANA name, e.g. America/New_York")
         p.add_argument("--prompt", required=True, help="What the user asked")
-    p_tc = t_sub.add_parser("create", help="Create and schedule a follow-up task")
+    p_tc = t_sub.add_parser("create", help="Create and schedule a task that runs a schedulable capability")
     p_tc.add_argument("--id", required=True)
+    p_tc.add_argument("--capability", default="strategy_followup", help="Catalog id declared schedulable")
+    p_tc.add_argument("--result-slug", dest="result_slug",
+                      help="Model runs: the investigation each run revises (default <capability>-<strategy>)")
     p_tc.add_argument("--strategy", required=True)
     p_tc.add_argument("--objective", required=True)
     p_tc.add_argument("--expected", required=True, help="What each run must leave")

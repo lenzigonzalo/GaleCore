@@ -1,5 +1,5 @@
 skill_id: daily_attention
-version: "0.2.1"
+version: "0.2.2"
 display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
 description: >
   Answers "what deserves my attention today about what I have in SHADOW?": exposure of the open SHADOW
@@ -81,8 +81,10 @@ system_prompt: >
      `research revise --capability daily_attention --id <id> --reason continuation`. Status open, with
      next steps (what to look at in the next review) and limitations; antecedents: profile:v<N>,
      strategy:<ref>, the previous revision's research ref and every evidence used.
-  10. If the owner wants it every day, say that recurring_followup today runs only the strategy
-     follow-up (step 3); scheduling this whole capability is not available yet (it is code).
+  10. If the owner wants it every day, it can be scheduled (recurring_followup: `task create --capability
+     daily_attention --strategy <name> ...`). A scheduled run follows this same method unattended, with
+     only the read commands of the flow; earnings connectors are not available there, so earnings dates
+     come from stored evidence or go under `missing`, said as such.
 
 instructions: |
   profile show

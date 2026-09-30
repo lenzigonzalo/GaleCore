@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de recurring_followup y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: recurring_followup
 versions:
+  - version: "0.2.0"
+    date: 2026-09-30
+    changes: >
+      Una tarea corre cualquier capacidad declarada programable (GC-AI-0017), no sólo el seguimiento: `--capability`,
+      tope de turnos y de tiempo en corridas con modelo, INCOMPLETE con motivo en vez de un resultado inventado, y el
+      estado muestra la última corrida (duración, turnos) y dónde leer el resultado.
+    feedback: []
   - version: "0.1.0"
     date: 2026-09-27
     changes: >

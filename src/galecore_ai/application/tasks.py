@@ -6,7 +6,9 @@ up and its development credentials; when any is missing the run is still recorde
 
 Controls: one run at a time per task (exclusive lock file; a stale lock older than LOCK_STALE_MINUTES is broken
 and noted), a paused or cancelled task never runs even if the scheduler fires, every change and run is appended
-to a hash-chained events log, and the only thing a run can do is the read-only strategy follow-up.
+to a hash-chained events log, and a run can only do what its capability is declared to do: the read-only strategy follow-up as code, or a
+capability declared schedulable with `runs: model` through the model with read commands only (GC-AI-0017,
+application/model_run.py). The catalog is checked again at every run.
 """
 
 from __future__ import annotations
@@ -26,12 +28,15 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from galecore_ai.application import model_run
+from galecore_ai.application.catalog_check import CODE_RUNNERS, cli_commands
 from galecore_ai.application.followup import history as followup_history
 from galecore_ai.application.followup import run_followup
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.followup import FollowupRecord
 from galecore_ai.contracts.regime_record import RecordHost
 from galecore_ai.contracts.task import Schedule, TaskDefinition
+from galecore_ai.harness.catalog import CatalogEntry, CatalogError, load_catalog
 
 LOCK_STALE_MINUTES = 30
 STATE_LOCK_TIMEOUT_SECONDS = 15
@@ -42,6 +47,7 @@ RUNNER_HOST = RecordHost(provider="windows-task-scheduler", model="deterministic
 # A run started by hand (`task run`) is the same code but must never pass for an automatic one (Codex C4 MAJOR).
 MANUAL_HOST = RecordHost(provider="manual-cli", model="deterministic-runner")
 INVOKERS = {"scheduler": RUNNER_HOST, "manual": MANUAL_HOST}
+MODEL_PROVIDERS = {"scheduler": "windows-task-scheduler+claude-code", "manual": "manual-cli+claude-code"}
 
 
 class TaskError(Exception):
@@ -109,7 +115,8 @@ def _save(kb: KnowledgeBase, task: TaskDefinition) -> None:
     path = _dir(kb, task.id) / "task.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(task.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    data = task.model_dump(mode="json", exclude={"result_slug"} if task.result_slug is None else None)
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, path)
 
 
@@ -274,29 +281,55 @@ def freshness(task: TaskDefinition, log: list[dict], now: datetime) -> dict:
         return {**out, "state": "RUNNING", "detail": f"started {log[last]['at']}"}
     if after[0]["event"] == "run_failed":
         return {**out, "state": "FAILED", "detail": after[0].get("error", "")[:300]}
-    return {**out, "state": "CURRENT", "detail": f"result {after[0].get('result')} of {after[0].get('followup')}"}
+    what = after[0].get("followup") or after[0].get("research")
+    return {**out, "state": "CURRENT", "detail": f"result {after[0].get('result')} of {what}"}
 
 
 # ── conversation-facing operations ───────────────────────────────
 
 
+def schedulable_entry(capability: str) -> CatalogEntry:
+    """The catalog entry of a capability a task may run; refused when it is not declared schedulable."""
+    try:
+        entry = load_catalog().get(capability)
+    except CatalogError as exc:
+        raise TaskError(str(exc)) from exc
+    if entry.schedulable is None:
+        schedulable = [e.id for e in load_catalog().entries if e.schedulable]
+        raise TaskError(f"{capability} is not schedulable (the catalog declares: {', '.join(schedulable)})")
+    if entry.schedulable.runs == "code" and capability not in CODE_RUNNERS:
+        raise TaskError(f"{capability}: no code runner")
+    return entry
+
+
 def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str, objective: str, expected_result: str,
            sources: list[str], schedule: Schedule, prompt: str, code_path: Path | None = None,
-           now: datetime | None = None) -> TaskDefinition:
+           now: datetime | None = None, capability: str = "strategy_followup",
+           result_slug: str | None = None) -> TaskDefinition:
     now = now or datetime.now(UTC)
     if (_dir(kb, task_id) / "task.json").exists():
         raise TaskError(f"task {task_id} already exists (a cancelled task keeps its id and history)")
+    entry = schedulable_entry(capability)
     if not any(k.split("/")[0] == strategy for k in kb.strategies.versions()):
         raise TaskError(f"no strategy named {strategy} in the knowledge base")
     code_path = code_path or _REPO
-    task = TaskDefinition(kind="strategy_followup", id=task_id, objective=objective, strategy=strategy,
+    extra: dict = {}
+    if entry.schedulable.runs == "model":
+        extra = {"result_slug": result_slug or f"{capability}-{strategy}".replace("_", "-"),
+                 "allowed": [(f"{capability} por el modelo: sólo comandos de lectura de su flujo, hasta "
+                              f"{entry.schedulable.max_turns} turnos y {entry.schedulable.timeout_minutes} min; "
+                              "guarda su resultado y la evidencia que usó")]}
+    elif result_slug:
+        raise TaskError(f"{capability} runs as code; it has no result_slug")
+    task = TaskDefinition(kind=capability, id=task_id, objective=objective, strategy=strategy,
                           sources=sources, expected_result=expected_result, schedule=schedule, created_at=now,
                           updated_at=now, created_by_prompt=prompt, scheduler_name=f"{SCHEDULER_FOLDER}\\{task_id}",
-                          local_time=local_time_for(schedule, now), code_path=str(code_path))
+                          local_time=local_time_for(schedule, now), code_path=str(code_path), **extra)
     scheduler.create(task.scheduler_name, runner_command(code_path, task_id), schedule, task.local_time)
     with _state_lock(kb, task_id):
         _save(kb, task)
-        _append(kb, task_id, "created", now, schedule=schedule.model_dump(), local_time=task.local_time, prompt=prompt)
+        _append(kb, task_id, "created", now, schedule=schedule.model_dump(), local_time=task.local_time, prompt=prompt,
+                capability=capability)
     return task
 
 
@@ -404,22 +437,35 @@ def cancel(*, kb, scheduler, task_id, prompt, now=None):
 
 
 def runs(kb: KnowledgeBase, task: TaskDefinition, limit: int | None = None) -> list[FollowupRecord]:
+    """The follow-up records a code task left (a model task's runs are its run_finished events)."""
+    if task.kind not in CODE_RUNNERS:
+        return []
     return [r for r in followup_history(kb, task.strategy) if r.task_id == task.id][:limit]
 
 
 def status(*, kb: KnowledgeBase, scheduler, task_id: str, now: datetime | None = None) -> dict:
     task = load(kb, task_id)
     log = events(kb, task_id)
-    last = runs(kb, task, limit=1)
     problems = [e for e in log if e["event"] in ("run_failed", "run_skipped")][-3:]
+    outcomes = [e for e in log if e["event"] in ("run_finished", "run_failed")]
+    if task.kind in CODE_RUNNERS:
+        last = runs(kb, task, limit=1)
+        last_result = last[0].model_dump(mode="json") if last else None
+        readable = kb.base / "followups" / task.strategy / "LATEST.md"
+    else:
+        last_result = next((e for e in reversed(log) if e["event"] == "run_finished"), None)
+        readable = _dir(kb, task_id) / "LATEST.md"
     return {
         "freshness": freshness(task, log, now or datetime.now(UTC)),
         "task": task.model_dump(mode="json"), "schedule": task.schedule.describe(),
         "scheduler": scheduler.query(task.scheduler_name) if task.status != "cancelled" else {"registered": False},
-        "last_result": last[0].model_dump(mode="json") if last else None,
+        "last_result": last_result,
+        "last_run": ({k: outcomes[-1].get(k) for k in ("at", "event", "result", "invoked_by", "duration_s", "turns",
+                                                       "max_turns", "model", "reason", "error") if k in outcomes[-1]}
+                     if outcomes else None),
         "runs": sum(1 for e in log if e["event"] == "run_finished"),
         "recent_problems": problems, "recent_events": log[-5:],
-        "latest_readable": str(kb.base / "followups" / task.strategy / "LATEST.md"),
+        "latest_readable": str(readable),
     }
 
 
@@ -430,7 +476,7 @@ def list_tasks(kb: KnowledgeBase) -> list[dict]:
     out = []
     for d in sorted(p for p in base.iterdir() if (p / "task.json").is_file()):
         t = load(kb, d.name)
-        out.append({"id": t.id, "status": t.status, "strategy": t.strategy, "schedule": t.schedule.describe(),
+        out.append({"id": t.id, "capability": t.kind, "status": t.status, "strategy": t.strategy, "schedule": t.schedule.describe(),
                     "objective": t.objective})
     return out
 
@@ -462,9 +508,116 @@ def _mark_validity(latest: Path, task: TaskDefinition, now: datetime) -> None:
         fh.write(note)
 
 
+def _scratch(task_id: str, now: datetime) -> Path:
+    """Where a model run's scripts write what they fetch (outside the knowledge base: only evidence is kept)."""
+    base = Path(os.environ.get("LOCALAPPDATA", str(_REPO))) / "GaleCore-AI" / "runs" / task_id
+    return base / now.strftime("%Y%m%dT%H%M%SZ")
+
+
+def _latest_research(kb: KnowledgeBase, task: TaskDefinition) -> str | None:
+    """The investigation a model task revises: the newest research:<date>-<result_slug>, if any."""
+    found = [i for i in kb.research.ids() if i[11:] == task.result_slug]
+    return f"research:{found[-1]}" if found else None
+
+
+def _write_latest(path: Path, task: TaskDefinition, outcome: dict, now: datetime) -> None:
+    """The task's readable latest result: what ran, how it ended, where the result is, and what was missing."""
+    saved = outcome.get("research") or outcome.get("followup") or "—"
+    if outcome.get("revision"):
+        saved += f" rev {outcome['revision']}"
+    lines = [f"# {task.objective}", "",
+             f"Tarea `{task.id}` · capacidad `{task.kind}` · estrategia `{task.strategy}` · {task.schedule.describe()}",
+             "", "| Corrida | Resultado | Guardado | Duración | Turnos |", "|---|---|---|---|---|",
+             (f"| {now:%Y-%m-%d %H:%M} UTC ({outcome.get('invoked_by')}) | **{outcome['result']}** | {saved} | "
+              f"{outcome.get('duration_s', '—')} s | {outcome.get('turns') or '—'} de {outcome.get('max_turns')} |"), ""]
+    if outcome["result"] != "OK":
+        lines += ["**No se pudo completar.** Motivo: " + (outcome.get("reason") or outcome.get("error") or "—"), ""]
+    if outcome["result"] == "FAILED":
+        lines += ["No hay resultado de esta corrida; el último guardado sigue siendo el anterior.", ""]
+    if outcome.get("research"):
+        rid = outcome["research"].removeprefix("research:")
+        lines += [f"Resultado completo: `kb show {outcome['research']}` (`knowledge/research/{rid}.md`).", ""]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8", newline="\n")
+
+
+def _repair_if_refused(kb: KnowledgeBase, task: TaskDefinition, target: str | None, reply, base: dict, client,
+                       scratch: Path):
+    """When the validators would refuse the output, one correction round without tools, inside the turn cap."""
+    try:
+        problems = model_run.check_refs(kb, model_run.parse_output(reply.structured), target)
+    except model_run.RunRefused as exc:
+        problems = [str(exc)]
+    left = base["max_turns"] - (reply.turns or 0)
+    if not problems or left < 2:
+        return reply, base
+    fixed = client.run(prompt=model_run.repair_prompt(reply.structured, problems), allowed=[],
+                       max_turns=min(model_run.REPAIR_TURNS, left), schema=model_run.output_schema(), cwd=_REPO,
+                       timeout_s=300, add_dir=scratch)
+    (scratch / "repair.json").write_text(json.dumps({"problems": problems, "reply": vars(fixed)}, ensure_ascii=False,
+                                                    indent=1, default=str), encoding="utf-8")
+    base = {**base, "turns": (reply.turns or 0) + (fixed.turns or 0), "repaired": problems[:5],
+            "duration_model_s": round((reply.duration_s or 0) + (fixed.duration_s or 0), 1)}
+    if not fixed.ok:
+        fixed.error = f"correction round failed ({fixed.error}) after: {'; '.join(problems)[:400]}"
+    return fixed, base
+
+
+def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, now: datetime, invoked_by: str,
+               client: model_run.ModelClient, followup) -> tuple[dict, list[Path]]:
+    """One model run: the model reads, the runner validates and saves. On any model failure the day's data is
+    still kept with the code follow-up and the run is INCOMPLETE; FAILED only when even that fails."""
+    from galecore_ai.adapters.cli import build_parser  # lazy: the CLI imports this module
+
+    t0 = time.monotonic()
+    caps = entry.schedulable
+    target = _latest_research(kb, task)
+    scratch = _scratch(task.id, now)
+    scratch.mkdir(parents=True, exist_ok=True)
+    allowed = model_run.allowed_tools(entry, cli_commands(build_parser()))
+    prompt = model_run.build_prompt(entry=entry, task=task, target=target, run_dir=scratch, now=now, allowed=allowed)
+    (scratch / "prompt.txt").write_text(prompt, encoding="utf-8")
+    reply = client.run(prompt=prompt, allowed=allowed, max_turns=caps.max_turns, schema=model_run.output_schema(),
+                       cwd=_REPO, timeout_s=caps.timeout_minutes * 60, add_dir=scratch)
+    (scratch / "reply.json").write_text(json.dumps(vars(reply), ensure_ascii=False, indent=1, default=str),
+                                        encoding="utf-8")
+    base = {"invoked_by": invoked_by, "turns": reply.turns, "max_turns": caps.max_turns, "model": reply.model,
+            "duration_model_s": reply.duration_s}
+    written: list[Path] = [kb.base / "followups" / task.strategy]   # a follow-up the model ran
+    problem = reply.error
+    if reply.ok:
+        reply, base = _repair_if_refused(kb, task, target, reply, base, client, scratch)
+        problem = reply.error
+    if reply.ok:
+        host = RecordHost(provider=MODEL_PROVIDERS[invoked_by], model=reply.model)
+        try:
+            out = model_run.parse_output(reply.structured)
+            # Saved at the time of saving: the model fetched its evidence after the run started.
+            ref, revision, paths = model_run.save_output(kb=kb, output=out, task=task, target=target, host=host,
+                                                         now=now + timedelta(seconds=time.monotonic() - t0))
+        except model_run.RunRefused as exc:
+            problem = f"output refused: {exc}"
+        else:
+            written += paths
+            return {**base, "result": out.status, "research": ref, "revision": revision,
+                    "evidence_saved": len(out.evidence), **({"reason": out.reason} if out.reason else {}),
+                    "duration_s": round(time.monotonic() - t0, 1)}, written
+    try:  # fallback: the day's data without the model (owner decision: never a made-up briefing)
+        rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=INVOKERS[invoked_by],
+                             task_id=task.id, now=now)
+    except Exception as exc:  # noqa: BLE001 - recorded as the run's failure
+        return {**base, "result": "FAILED", "duration_s": round(time.monotonic() - t0, 1),
+                "error": f"model: {problem}; follow-up: {type(exc).__name__}: {exc}"[:800]}, written
+    written += [path, path.parent / "LATEST.md",
+                *(kb.base / "evidence" / f"{s.split(':', 1)[1]}.json" for s in rec.sources)]
+    return {**base, "result": "INCOMPLETE", "followup": rec.id, "duration_s": round(time.monotonic() - t0, 1),
+            "reason": f"sin resultado del modelo ({problem}); se guardaron los datos del día ({rec.status})"[:800]}, \
+        written
+
+
 def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None = None,
         followup: Callable[..., tuple[FollowupRecord, Path]] = run_followup, commit: bool = True,
-        invoked_by: str = "manual") -> dict:
+        invoked_by: str = "manual", client: model_run.ModelClient | None = None) -> dict:
     """What the scheduler invokes. Never raises for a failed run: the failure is the recorded result.
 
     `invoked_by` is "scheduler" only from tools/task_runner.py (the registered command); then the Scheduler's own
@@ -512,6 +665,29 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
                     task = task.model_copy(update={"local_time": local, "updated_at": now})
                     _save(kb, task)
                     _append(kb, task_id, "local_time_resynced", now, local_time=local)
+        try:
+            entry = schedulable_entry(task.kind)       # again at every run: the catalog may have changed
+        except TaskError as exc:
+            ev = _event(kb, task_id, "run_failed", datetime.now(UTC), error=f"not run: {exc}")
+            if commit:
+                _commit_knowledge(kb, written, f"task {task_id}: run failed")
+            return {"status": "FAILED", **ev}
+        if entry.schedulable.runs == "model":
+            outcome, paths = _run_model(kb=kb, task=task, entry=entry, now=now, invoked_by=invoked_by,
+                                        client=client or model_run.ClaudeCodeClient(), followup=followup)
+            latest = d / "LATEST.md"
+            _write_latest(latest, task, outcome, now)
+            if invoked_by == "scheduler":
+                _mark_validity(latest, task, now)
+            ev = _event(kb, task_id, "run_failed" if outcome["result"] == "FAILED" else "run_finished",
+                        datetime.now(UTC), **outcome)
+            written += [latest, *paths]
+            summary = outcome.get("research") or outcome.get("followup") or outcome.get("error", "")[:60]
+            committed = (_commit_knowledge(kb, written, f"task {task_id}: {outcome['result']} {summary}")
+                         if commit else "skipped")
+            if committed.startswith("commit failed"):
+                _event(kb, task_id, "commit_failed", datetime.now(UTC), error=committed)
+            return {"status": outcome["result"], "knowledge": committed, **ev}
         try:
             rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=INVOKERS[invoked_by],
                                  task_id=task_id, now=now)

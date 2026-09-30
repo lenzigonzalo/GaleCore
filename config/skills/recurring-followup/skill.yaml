@@ -1,10 +1,11 @@
 skill_id: recurring_followup
-version: "0.1.0"
+version: "0.2.0"
 display_name: Seguimiento recurrente delegado desde la conversación
 description: >
   Turns a follow-up the owner found useful into a small recurring task run by the Windows Task Scheduler of the
   owner's PC, and manages it from the conversation: status and history, change frequency, pause, resume, cancel.
-  Each run is the read-only strategy follow-up, tied to the strategy version it evaluated, with its sources.
+  A task runs one capability the catalog declares schedulable (`catalog`: `schedulable`): the strategy follow-up
+  (code) or, through the model with read commands only, the daily briefing (daily_attention).
 
 output_contract: galecore_ai.contracts.task.TaskDefinition
 
@@ -18,10 +19,15 @@ system_prompt: >
      timezone (propose after the US close, e.g. 17:05 America/New_York, for a daily follow-up), sources (GaleCore
      Dev API; the knowledge base) and the expected result (a follow-up record + LATEST.md). Say what it depends on:
      the PC on and the user logged on, GaleCore Dev's API up, its development credentials; no Claude session needed.
+  2b. Which capability: the one the owner asked for, if the catalog declares it schedulable (`--capability <id>`;
+     default strategy_followup). A model run has a turn cap and a time cap; say that a run the model cannot finish
+     keeps the day's data and is INCOMPLETE with the reason, never a made-up result. `task create` refuses a
+     capability that is not schedulable: say so, do not work around it.
   3. Create with `task create`; show `task status` (scheduler registered, next run). Changes only on request:
      `task set-frequency`, `task pause`, `task resume`, `task cancel`, each with the owner's words as --prompt.
   4. "Show me the last result and the history": `task status <id>` and `task history <id>`; present the latest
-     follow-up record (attention first) and point to knowledge/followups/<strategy>/LATEST.md. Report failed or
+     result (attention first), the last run's outcome, duration and turns (`last_run`) and the readable file
+     `latest_readable` (a model task: knowledge/tasks/<id>/LATEST.md; the follow-up: knowledge/followups/<strategy>/LATEST.md). Report failed or
      skipped runs plainly; never hide them.
-  5. A task may only run the read-only follow-up. It never approves, deploys, stops, changes a strategy or trades.
+  5. A task may only run a read-only capability declared schedulable. It never approves, deploys, stops, changes a strategy or trades.
      If the owner wants any of that, it is a separate, explicit decision outside the task.

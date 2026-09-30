@@ -91,13 +91,27 @@ datos del día y un resultado `INCOMPLETE` que dice qué faltó. Nunca un briefi
   (`catalog`), `--max-turns 8` y esquema JSON: `OK`, 5 turnos, 20 s, salida validada (11 capacidades). Aprendido: con
   tope 4 falla (un turno se va en un intento con PowerShell no permitido y otro en entregar el JSON). **Falta:** la
   misma corrida con la pantalla bloqueada; se verifica con la primera corrida real de las 10:00.
-- [ ] **AC-02 — Programable por declaración:** `schedulable` en el catálogo; `catalog --check` rechaza una capacidad
+- [x] **AC-02 — Programable por declaración:** `schedulable` en el catálogo; `catalog --check` rechaza una capacidad
   programable que escribe fuera de su resultado; `task create` rechaza una no programable.
+  **Evidencia 30/09:** `harness/catalog.py` (`Schedulable`: `runs: code|model`, `max_turns`, `timeout_minutes` ≤ 25),
+  `application/catalog_check.py` (`_schedule_problems`: sólo lecturas + su propio resultado; `research save|revise`
+  con `--capability <id>`; scripts de lectura listados). Declaradas: `strategy_followup` (código) y
+  `daily_attention` (modelo, 40 turnos, 20 min). `task create --capability` rechaza una no programable o inexistente,
+  y la corrida lo vuelve a chequear. Tests: `tests/unit/test_catalog_check.py` (programables),
+  `tests/unit/test_model_tasks.py`.
 - [ ] **AC-03 — Corrida con modelo:** una tarea de `daily_attention` corre por horario desde `main`, sin sesión, y guarda
   una revisión válida con versión de skill y perfil, evidencia y `invoked_by=scheduler`.
+  **Avance 30/09:** tarea `atencion-diaria-spy` creada (L–V 10:00 America/Argentina/Buenos_Aires, desde el worktree;
+  se mueve a `main` con `task rebind` al mergear). Corrida manual 5: revisión 5 guardada con skill, perfil y 3
+  evidencias (`docs/evidence/gc-ai-0017/manual_runs_2026-09-30.md`). **Falta:** la corrida por horario (1/10 10:00).
 - [ ] **AC-04 — Tope:** cada corrida respeta su tope de turnos y registra la duración; `task status` la muestra.
+  **Avance 30/09:** `--max-turns` y tope de tiempo del catálogo; la ronda de corrección cuenta dentro del tope;
+  `run_finished` guarda `turns`, `max_turns`, `duration_s`; `task status` → `last_run`. Tests en `test_model_tasks.py`.
 - [ ] **AC-05 — Fallas:** sin datos o sin modelo → `INCOMPLETE`/`FAILED` con motivo, sin resultado inventado; `LATEST.md`
   dice que no se pudo.
+  **Avance 30/09:** corridas manuales 1–4 reales: sin resultado válido del modelo quedaron `INCOMPLETE` con motivo y
+  los datos del día; tests de `FAILED` (sin modelo ni datos) y de salida rechazada. **Falta:** la prueba con la API
+  de Dev apagada en una corrida real.
 - [ ] **AC-06 — Pausa, reanudación y cancelación desde el chat**, con efecto en la corrida siguiente.
 - [ ] **AC-07 — Demostración** del recorrido de arriba con tu briefing real.
 - [ ] **AC-08 — Revisión:** interna y Codex (toca controles); utilidad y cierre, vos.
@@ -118,6 +132,21 @@ despliegues o perfil, y las órdenes.
 **Recorte para no descartar trabajo en producción (30/09):** se reusa el Programador de Windows de 0009 tal cual (en el
 VPS será un cron); la llamada al modelo queda en un solo punto intercambiable; fuera el aviso de Windows y la estimación
 de costo. El tope por corrida queda sólo como protección del cupo (`--max-turns`), no como presupuesto en dólares.
+
+## Cómo quedó la corrida con modelo (implementación, 30/09)
+
+- **El modelo sólo lee.** `application/model_run.py`: Claude Code con `--restricted --strict-mcp-config
+  --tools Bash,Read` (sin la configuración del usuario ni conectores) y `--allowedTools` = los prefijos de los
+  comandos de lectura del flujo (más `followup run` y los scripts de lectura). No puede correr `evidence add` ni
+  `research save|revise`: devuelve el contenido y la evidencia como JSON y **el runner valida y guarda** por las mismas
+  funciones de una sesión (`save_evidence`, `revise_research`), con host `windows-task-scheduler+claude-code` y el
+  modelo real. Prueba de aislamiento: `docs/evidence/gc-ai-0017/isolation_probe.md`.
+- **Un solo punto intercambiable:** `ModelClient` (hoy `ClaudeCodeClient`; en producción, la API).
+- **Fallas:** si el modelo no responde, se pasa del tope o su salida no valida, la corrida guarda igual los datos
+  del día (`followup run` por código) y queda `INCOMPLETE` con el motivo; `FAILED` si tampoco hay datos. Nunca
+  guarda un briefing que no pasó los validadores. `LATEST.md` de la tarea dice qué pasó.
+- El pedido va por stdin: `claude` es un `.CMD` (límite de 8191 caracteres); lo encontró la primera corrida
+  manual, que quedó `INCOMPLETE` con los datos del día guardados (prueba de falla real, 30/09 21:55 UTC).
 
 ## Requirement-to-evidence matrix
 
