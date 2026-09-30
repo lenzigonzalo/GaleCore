@@ -159,6 +159,12 @@ registro es inmutable: la aclaración vive acá.
 resultados de empresas: se usaron los guardados (los conectores FMP y Alpha Vantage no estaban en la sesión). La tabla
 de eventos la arma el host: no se verifica que esté completa (control «Not checked» del catálogo).
 
+**Corrida con 0.2.1 (30/09 14:47–14:55Z, sesión nueva):** r4 de la misma investigación, cita `profile:v4`; trae régimen
+de GaleCore Dev (GEX negativo, spot en el zero gamma, VIX/VVIX/skew) con la clave en el entorno, FRED y el FOMC (28/10,
+antes de la salida de la v2) en eventos × posiciones; ningún límite roto con v4 (456 vs 500). Transcripción:
+`transcripts/r4-corre-0.2.1.md`; `knowledge` `b9a272b`. Observado: faltan evaluaciones del runtime a las 13:57, 14:19 y
+14:41Z (causa no verificada; se registra, no se investiga en este item).
+
 ## Revisión interna 1 (`reviewer`, 30/09) — CHANGES_REQUESTED → corregido
 
 | Hallazgo | Resolución |
