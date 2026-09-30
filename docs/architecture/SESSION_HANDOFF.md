@@ -1,22 +1,43 @@
 # GaleCore-AI — Session Handoff
 
-**Actualizado:** 2026-09-29, reconciliación documental.
-**Único plan:** [roadmap §4](../../../roadmap/README.md#4-plan-de-construcción).
+**Actualizado:** 2026-09-29 noche (23:00 AST).
+**Único plan:** [roadmap](../../../roadmap/README.md) — arriba, «Estado en tres partes»; detalle en §4.
 GC-AI-0012 (mapa de fuentes), GC-AI-0013 (tu perfil) y GC-AI-0014 (orden de fuentes) están cerrados y mergeados a
 `main` (tags `gc-ai-0012-closed`, `gc-ai-0013-closed`, `gc-ai-0014-closed`). Activo: según `ACTIVE_WORK_ITEM` del workspace.
 
-## Próxima sesión — punto de entrada
+## Retomar 30/09 — punto de entrada (una sola sesión)
 
-Retomar el paso 0 de §4. La evidencia más reciente de 0008/0009 está en el worktree de 0009:
+El owner cerró la otra sesión: todo sigue desde una sola. Orden:
+
+1. **GC-AI-0015 (entrega 3), Codex.** Rama `feature/GC-AI-0015` (worktree `.worktrees/galecore-ai/GC-AI-0015`, HEAD
+   `f944256`), READY_FOR_REVIEW, revisión interna corregida, 910 tests. Codex no corrió el 29/09 por límite de uso
+   (habilitado desde 30/09 00:07): lanzar `/review-codex` con `--base main` en ese worktree, corregir, recheck acotado;
+   el cierre es del owner. El `ACTIVE_WORK_ITEM` del workspace apunta a 0015 hasta su cierre.
+2. **GC-AI-0016 (entrega 4), código.** Rama `feature/GC-AI-0016` desde la de 0015 (worktree
+   `.worktrees/galecore-ai/GC-AI-0016`); su propio `docs/engineering/ACTIVE_WORK_ITEM` ya apunta a 0016. Hay acuerdo,
+   criterios y el **comentario real del owner** para la demo (método: «qué evento macro viene y cómo afecta mis
+   posiciones»). Sin código aún. Lo que falta: registro `feedback:<id>` (patrón de `evidence`), cita desde revisión /
+   perfil / historial de la skill, `catalog --check` exige historial de versión, `feedback list`, guía en
+   `capability_builder`; después `daily_attention` 0.2.0 y la demo desde sesión nueva. Si Codex cambia 0015, mergear
+   esa rama en 0016 antes de revisar 0016.
+3. **0008/0009:** corrida automática por horario desde main (PC prendida); verificar artefactos antes de otra prueba.
+
+Contexto nuevo del 29/09: la sesión de ideas del owner quedó completa en BL-008 (`ba61b7d`). Dónde entra cada idea:
+roadmap, «Estado en tres partes» y §4. Reportar al owner siempre en tres partes (qué y para qué, trabas, próximos pasos
+con para qué), corto y sin tecnicismos. SHADOW arrancó tarde el 28 y 29/09 (probable PC suspendida; no verificado): el
+owner deja la PC prendida el 30/09; si igual arranca tarde, es bug de GaleCore.
+
+### Antecedente (paso 0, sigue vigente)
+
+La evidencia más reciente de 0008/0009 está en el worktree de 0009:
 [review del 28/09](../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md)
 y [matriz/handoff del item](../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/work-items/GC-AI-0009-seguimiento-recurrente.md).
 No repetir AC-06 de 0008 ni el arreglo de `every_minutes`: ya están respaldados.
 Completar evidencia por horario desde main, recheck acotado de pendientes y consolidación hacia
 main antes de presentar cierres. Verificar los artefactos existentes antes de programar otra prueba.
 
-La próxima construcción es completar la cobertura del registro de fuentes (GaleCore y FRED) y después la entrega 3 de §4, con atención diaria **SHADOW**, work item y
-rama/worktree propios. Durante esperas se permite trabajo independiente autorizado. Los pasos
-posteriores y la cuenta real se ordenan exclusivamente en el roadmap.
+Durante esperas se permite trabajo independiente autorizado. Los pasos posteriores y la cuenta real se ordenan
+exclusivamente en el roadmap.
 
 
 **Workspace tooling (29/09):** hooks del workspace corregidos — `settings.json` tenía `"command": "python"`
