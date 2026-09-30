@@ -34,7 +34,8 @@ mergeados a `main` (tags `gc-ai-0012-closed` … `gc-ai-0015-closed`). Activo: s
      **La versión a aprobar es la 1.0.5** (la 1.0.4 queda guardada sin aprobar), hash
      `sha256:01cdc4d76af8bb1a4ba16d02abcec09d500019e05e10094c9750735925be0475`. Paquete
      `C:\tmp\galecore-GC-0005-shadow-espaciado-20260930.bundle` (sha256 `1d5184a3…`, probado en clon limpio) + addendum.
-     **Falta:** aprobación por hash → verificar 18:05 y cerrar 0008/0009 → levantar la API Dev desde la rama GC-0005
+     **Aprobada por hash el 30/09** (`knowledge/.../1.0.5.approval.json`); rama de GaleCore-AI mergeada a main (`2a9ff50`).
+     **Falta:** verificar 18:05 y cerrar 0008/0009 → levantar la API Dev desde la rama GC-0005
      (si corre sin GC-0005 ignora el campo) → `deploy-check` → parar la instancia 1.0.3 → deploy 1.0.5. Codex de
      GC-0005 una vez al cierre (desde el 3/10).
 3. **GC-AI-0016 (entrega 4), READY_FOR_REVIEW.** Una pasada de Codex `--base feature/GC-AI-0015` desde el 3/10 19:28
