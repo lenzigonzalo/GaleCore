@@ -141,6 +141,27 @@ public class EfShadowRuntimeRepositoryTests
     }
 
     [PostgresFact]
+    public async Task AfterRestart_TheEntrySavedInPostgres_CountsForSpacing()
+    {
+        // GC-0005: la hora de entrada vuelve de la base (UTC, precisión de microsegundos) y el espaciado la usa.
+        var repo = FreshRepository();
+        var store = Boot(repo, out _);
+        var instance = Deploy(store);
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate() with { InstanceId = instance.InstanceId }) };
+        var spec = store.SpecFor(instance)!;
+        var spaced = spec with { RiskLimits = spec.RiskLimits with { MaxConcurrentPositions = 10, MinMinutesBetweenEntries = 1440 } };
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, spaced, "SPY", Now, default);
+
+        var after = Boot(new EfShadowRuntimeRepository(() => new GaleCoreDbContext(Options())), out _);
+
+        Assert.Equal(DateTimeKind.Utc, after.LastEntryAt(instance.InstanceId)!.Value.Kind);
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.TooSoon,
+            await ShadowRuntimeEngine.EvaluateEntryAsync(after, data, instance, spaced, "SPY", Now.AddMinutes(1439), default));
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened,
+            await ShadowRuntimeEngine.EvaluateEntryAsync(after, data, instance, spaced, "SPY", Now.AddMinutes(1440), default));
+    }
+
+    [PostgresFact]
     public async Task OpenedPosition_AndItsEvent_AreOneTransaction()
     {
         var repo = FreshRepository();

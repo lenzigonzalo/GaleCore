@@ -55,7 +55,9 @@ todas el mismo día; con un mínimo de minutos entre entradas se forma una escal
 - [x] **AC-03 — Sin el campo, igual que antes:** `Spacing_WithoutTheField_BehavesAsBefore` y la suite
   completa sin cambios en los tests existentes.
 - [x] **AC-04 — Reinicio:** la entrada recuperada de la base cuenta para el espaciado.
-  Evidencia: `ShadowRuntimePersistenceTests.AfterRestart_SpacingCountsTheRecoveredEntry`.
+  Evidencia: `ShadowRuntimePersistenceTests.AfterRestart_SpacingCountsTheRecoveredEntry` (repositorio en memoria) y
+  `EfShadowRuntimeRepositoryTests.AfterRestart_TheEntrySavedInPostgres_CountsForSpacing` (Postgres real: la hora vuelve
+  en UTC; a 1439 min se saltea, a 1440 entra).
 - [ ] **AC-05 — Revisión:** Codex (una vez, al cierre) y cierre.
 
 - [x] **AC-06 — Spec 1.0.5:** `spy_prima_varianza_30_45d.json` pasa a 1.0.5: `max_concurrent_positions` 10,
@@ -67,7 +69,8 @@ todas el mismo día; con un mínimo de minutos entre entradas se forma una escal
 ## Evidencia
 
 `dotnet test DataFeed.sln` en el worktree `.worktrees/galecore/GC-0005` (30/09): **447 passed, 0 failed,
-6 skipped** (los 6 de `EfShadowRuntimeRepositoryTests` requieren base; igual que en la base `85f1c2c`).
+7 skipped** (los 7 de `EfShadowRuntimeRepositoryTests` requieren base). Con base
+(`python dev/galecore_dev.py test`, base de test de GaleCore Dev): **454 passed, 0 failed, 0 skipped**.
 
 ## Handoff
 
