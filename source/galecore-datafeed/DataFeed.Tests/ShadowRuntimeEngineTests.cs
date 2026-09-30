@@ -43,13 +43,19 @@ public class ShadowRuntimeEngineTests
             => Task.FromResult(Quotes.GetValueOrDefault(streamerSymbol));
     }
 
-    internal static StrategySpec Spec()
+    internal static string SpecPath()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir != null && !Directory.Exists(Path.Combine(dir.FullName, "DataFeed.Api", "Files", "Runtime")))
             dir = dir.Parent;
-        var path = Path.Combine(dir!.FullName, "DataFeed.Api", "Files", "Runtime", "shadow_runtime_test_v1.json");
-        var result = StrategySpecLoader.LoadFromFile(path);
+        return Path.Combine(dir!.FullName, "DataFeed.Api", "Files", "Runtime", "shadow_runtime_test_v1.json");
+    }
+
+    internal static string SpecJson() => File.ReadAllText(SpecPath());
+
+    internal static StrategySpec Spec()
+    {
+        var result = StrategySpecLoader.LoadFromFile(SpecPath());
         Assert.True(result.Success, string.Join("; ", result.Errors));
         return result.Spec!;
     }
@@ -204,6 +210,113 @@ public class ShadowRuntimeEngineTests
         Assert.Equal(ShadowRuntimeEngine.Outcomes.MaxPositions, outcome);
         Assert.Single(store.AllPositions());
         Assert.Contains("ENTRY_SKIPPED", EventTypes(store));
+    }
+
+    // ── GC-0005: espaciado entre entradas ──────────────────────────
+
+    internal static StrategySpec SpacedSpec(int maxPositions = 10, int? minMinutes = 1440)
+    {
+        var spec = Spec();
+        return spec with { RiskLimits = spec.RiskLimits with { MaxConcurrentPositions = maxPositions, MinMinutesBetweenEntries = minMinutes } };
+    }
+
+    private static FakeData FreshCandidates() => new()
+    {
+        Build = () => CandidateBuildResult.Built(RealCandidate() with { CandidateId = Guid.NewGuid().ToString() }),
+    };
+
+    [Fact]
+    public async Task Spacing_SecondEntryTooSoon_SkipsWithReasonAndNextAllowedTime()
+    {
+        var (store, instance) = NewRuntime();
+        var data = FreshCandidates();
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(), "SPY", Now, default);
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(), "SPY", Now.AddMinutes(90), default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.TooSoon, outcome);
+        Assert.Single(store.AllPositions());
+        Assert.Equal(1, data.BuildCalls);   // ni siquiera pide la cadena
+        var skipped = store.GetEvents("i-1").Last(e => e.EventType == "ENTRY_SKIPPED");
+        Assert.Contains("espaciado entre entradas", (string)skipped.Payload["reason"]!);
+        Assert.Equal(Now.AddMinutes(1440).ToString("o"), skipped.Payload["next_entry_allowed_at"]);
+    }
+
+    [Fact]
+    public async Task Spacing_AfterTheInterval_EntersAgain_BuildingALadder()
+    {
+        var (store, instance) = NewRuntime();
+        var data = FreshCandidates();
+
+        for (int day = 0; day < 3; day++)
+            Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, await ShadowRuntimeEngine.EvaluateEntryAsync(
+                store, data, instance, SpacedSpec(), "SPY", Now.AddMinutes(1440 * day), default));
+
+        Assert.Equal(3, store.OpenPositionCount("i-1"));
+    }
+
+    [Fact]
+    public async Task Spacing_ExactlyAtTheLimit_Enters()
+    {
+        var (store, instance) = NewRuntime();
+        var data = FreshCandidates();
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(minMinutes: 60), "SPY", Now, default);
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(minMinutes: 60), "SPY", Now.AddMinutes(60), default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, outcome);
+    }
+
+    [Fact]
+    public async Task Spacing_CountsClosedPositions_AQuickCloseDoesNotAllowAnotherEntrySameDay()
+    {
+        var (store, instance) = NewRuntime();
+        var data = FreshCandidates();
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(), "SPY", Now, default);
+        var pos = store.AllPositions().Single();
+        store.UpdatePosition(pos with { Status = "CLOSED", ExitAt = Now.AddMinutes(30) });
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(), "SPY", Now.AddMinutes(120), default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.TooSoon, outcome);
+        Assert.Equal(0, store.OpenPositionCount("i-1"));
+    }
+
+    [Fact]
+    public async Task Spacing_OnlyTheInstanceOwnEntriesCount()
+    {
+        var (store, instance) = NewRuntime();
+        var data = FreshCandidates();
+        store.AddPosition(ShadowFillSimulator.Fill(RealCandidate() with { InstanceId = "otra", CandidateId = "c-otra" }, Now));
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(), "SPY", Now.AddMinutes(5), default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, outcome);
+    }
+
+    [Fact]
+    public async Task Spacing_WithoutTheField_BehavesAsBefore()
+    {
+        var (store, instance) = NewRuntime();
+        var data = FreshCandidates();
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(minMinutes: null), "SPY", Now, default);
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(minMinutes: null), "SPY", Now.AddMinutes(1), default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, outcome);
+        Assert.Equal(2, store.OpenPositionCount("i-1"));
+    }
+
+    [Fact]
+    public async Task Spacing_MaxPositionsIsCheckedFirst()
+    {
+        var (store, instance) = NewRuntime();
+        var data = FreshCandidates();
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(maxPositions: 1), "SPY", Now, default);
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(maxPositions: 1), "SPY", Now.AddMinutes(5), default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.MaxPositions, outcome);
     }
 
     // ── AC-05: historial de evaluaciones ───────────────────────────

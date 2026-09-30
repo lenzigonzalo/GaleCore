@@ -265,6 +265,11 @@ namespace DataFeed.Application.App.Runtime
         public int OpenPositionCount(string instanceId)
             => _positions.Values.Count(p => p.Status == "OPEN" && p.InstanceId == instanceId);
 
+        /// <summary>Hora de la última entrada de la instancia (abierta o cerrada); null si nunca entró.</summary>
+        public DateTime? LastEntryAt(string instanceId)
+            => _positions.Values.Where(p => p.InstanceId == instanceId)
+                .Select(p => (DateTime?)p.EntryAt).Max();
+
         // ── Evaluations ──
 
         /// <summary>Registra una evaluación en el historial de su instancia.</summary>

@@ -191,6 +191,11 @@ namespace DataFeed.Application.App.Runtime.Contracts
     public record SpecRiskLimits
     {
         public int? MaxConcurrentPositions { get; init; }
+        /// <summary>
+        /// Minutos mínimos entre dos entradas de la misma instancia (GC-0005). Escalona las posiciones:
+        /// 1440 = como mucho una por día. null = sin espaciado (comportamiento anterior).
+        /// </summary>
+        public int? MinMinutesBetweenEntries { get; init; }
         public double? MaxPortfolioHeatPct { get; init; }
         public double? MaxRiskPerTradePct { get; init; }
         public double? MaxLossPerTradeUsd { get; init; }

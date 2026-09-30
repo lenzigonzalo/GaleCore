@@ -74,6 +74,28 @@ public class StrategySpecValidatorTests
         Assert.Empty(result.Errors);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void NonPositiveMinMinutesBetweenEntries_Fails(int minutes)
+    {
+        var spec = ValidSpec() with { RiskLimits = ValidSpec().RiskLimits with { MinMinutesBetweenEntries = minutes } };
+        var result = StrategySpecValidator.Validate(spec);
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("risk_limits.min_minutes_between_entries"));
+    }
+
+    [Fact]
+    public void MinMinutesBetweenEntries_LoadsFromSnakeCaseJson_AndPasses()
+    {
+        var json = ShadowRuntimeEngineTests.SpecJson()
+            .Replace("\"max_concurrent_positions\": 1", "\"max_concurrent_positions\": 10, \"min_minutes_between_entries\": 1440");
+        var loaded = StrategySpecLoader.LoadFromJson(json);
+        Assert.True(loaded.Success, string.Join("; ", loaded.Errors));
+        Assert.Equal(1440, loaded.Spec!.RiskLimits.MinMinutesBetweenEntries);
+        Assert.True(StrategySpecValidator.Validate(loaded.Spec).IsValid);
+    }
+
     [Fact]
     public void MissingIdentityId_Fails()
     {

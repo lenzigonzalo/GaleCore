@@ -329,6 +329,22 @@ public class ShadowRuntimePersistenceTests
     }
 
     [Fact]
+    public async Task AfterRestart_SpacingCountsTheRecoveredEntry()
+    {
+        var (store, repo, instance) = DurableRuntime();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(CandidateFor(instance)) };
+        var spec = store.SpecFor(instance)!;
+        var spaced = spec with { RiskLimits = spec.RiskLimits with { MaxConcurrentPositions = 10, MinMinutesBetweenEntries = 1440 } };
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, spaced, "SPY", Now, default);
+        var (after, _) = Restart(repo);
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(after, data, instance, spaced, "SPY", Now.AddHours(3), default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.TooSoon, outcome);
+        Assert.Single(repo.Positions);
+    }
+
+    [Fact]
     public void RecoveringTwice_DuplicatesNothing()
     {
         var (store, repo, instance) = DurableRuntime();

@@ -83,6 +83,8 @@ namespace DataFeed.Application.App.Runtime
                 errors.Add("risk_limits.max_risk_per_trade_pct must be positive");
             if (spec.RiskLimits.MaxConcurrentPositions.HasValue && spec.RiskLimits.MaxConcurrentPositions.Value <= 0)
                 errors.Add("risk_limits.max_concurrent_positions must be positive");
+            if (spec.RiskLimits.MinMinutesBetweenEntries.HasValue && spec.RiskLimits.MinMinutesBetweenEntries.Value <= 0)
+                errors.Add("risk_limits.min_minutes_between_entries must be positive");
 
             // ── Operational ──
             if (string.IsNullOrWhiteSpace(spec.Operational.Timezone))

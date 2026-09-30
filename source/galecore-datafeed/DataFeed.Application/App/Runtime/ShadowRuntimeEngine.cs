@@ -20,6 +20,7 @@ namespace DataFeed.Application.App.Runtime
         {
             public const string GatesNotPassed = "GATES_NOT_PASSED";
             public const string MaxPositions = "MAX_POSITIONS";
+            public const string TooSoon = "TOO_SOON";
             public const string NoCandidate = "NO_CANDIDATE";
             public const string RiskRejected = "RISK_REJECTED";
             public const string Opened = "OPENED";
@@ -87,6 +88,19 @@ namespace DataFeed.Application.App.Runtime
                 AddEvent(store, instance, "ENTRY_SKIPPED", symbol, nowUtc,
                     ("reason", $"máximo de posiciones abiertas alcanzado ({openCount}/{max})"));
                 return Outcomes.MaxPositions;
+            }
+
+            // 3b. Espaciado entre entradas (GC-0005): cuenta la última entrada de la instancia, abierta o
+            // cerrada, así un cierre rápido no habilita otra entrada el mismo día.
+            if (spec.RiskLimits.MinMinutesBetweenEntries is int minMinutes
+                && store.LastEntryAt(instance.InstanceId) is DateTime lastEntry
+                && nowUtc - lastEntry < TimeSpan.FromMinutes(minMinutes))
+            {
+                var next = lastEntry.AddMinutes(minMinutes);
+                AddEvent(store, instance, "ENTRY_SKIPPED", symbol, nowUtc,
+                    ("reason", $"espaciado entre entradas: la última fue hace {(int)(nowUtc - lastEntry).TotalMinutes} min (mínimo {minMinutes})"),
+                    ("last_entry_at", lastEntry.ToString("o")), ("next_entry_allowed_at", next.ToString("o")));
+                return Outcomes.TooSoon;
             }
 
             // 4. Candidato real, o la razón por la que no hay.
