@@ -1,95 +1,92 @@
 # GaleCore-AI — Session Handoff
 
-**Actualizado:** 2026-09-30 tarde.
-**Único plan:** [roadmap](../../../roadmap/README.md) — arriba, «Estado en tres partes»; detalle en §4.
-GC-AI-0012 (mapa de fuentes), GC-AI-0013 (tu perfil) y GC-AI-0014 (orden de fuentes) y GC-AI-0015 (molde) están cerrados y
-mergeados a `main` (tags `gc-ai-0012-closed` … `gc-ai-0015-closed`). Activo: según `ACTIVE_WORK_ITEM` del workspace.
+**Actualizado:** 2026-09-30 noche.
+**Único plan:** [roadmap](../../../roadmap/README.md) — arriba, «Estado en tres partes»; detalle en §4, sección
+**«Entregable 1 — listo para usar»** (aprobado el 30/09: qué entra, qué no y en qué orden).
+Cerrados y en `main`: GC-AI-0008 y GC-AI-0009 (30/09, tags `gc-ai-0008-closed`, `gc-ai-0009-closed`), GC-AI-0012 … 0015.
+Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
 
 ## Retomar — punto de entrada (próxima sesión, en este orden)
 
-1. **0008/0009: verificar la corrida automática de las 18:05 del 30/09** (tarea `GaleCore-AI\seguimiento-spy-prima-varianza`,
-   corre desde `main`): `schtasks /query /tn ... /v`, el registro nuevo en `knowledge/followups/spy_prima_varianza_30_45d/`
-   con `invoked_by=scheduler`, y `knowledge/tasks/<id>/events.jsonl`. Si está bien: recheck interno acotado de los
-   pendientes y cierre del owner (evidencia vigente en el worktree de 0009, ver «Antecedente»).
-2. **Espaciado de entradas en SHADOW + estrategia 1.0.4 (acordado con el owner el 30/09).** Para qué: generar data
-   operando muchas posiciones escalonadas en vez de una sola (hoy E1 = máximo 1 abierta, 264 evaluaciones salteadas).
-   - GaleCore: rama nueva `feature/GC-0005-shadow-espaciado` **desde `85f1c2c`** (punta de
-     `feature/GC-AI-0008-estrategia-shadow`, tal como se traspasó el 28/09; no modificar esa rama). Campo de spec
-     `risk_limits.min_minutes_between_entries` + chequeo en `ShadowRuntimeEngine` (después del máximo de posiciones:
-     si la última entrada de la instancia fue hace menos de N minutos, `ENTRY_SKIPPED` con motivo) + validador + tests.
-     Work item GC-0005 en `GaleCore/docs/engineering/work-items/`. Sin push.
-   - GaleCore-AI: `strategy check` tiene que conocer el campo nuevo (clasificación en `application/strategy.py`).
-   - Estrategia `spy_prima_varianza_30_45d` **1.0.4**: `max_concurrent_positions` 10 (≈50 % de 10.000 a 456 de riesgo
-     por spread; `profile:v5` asigna 50 % sumado = 5.000 a pedido del owner), `min_minutes_between_entries` 1440 (una
-     por día). Flujo:
-     `strategy check` → `save` → **aprobación del owner por hash** → `deploy-check` → deploy en Dev.
-   - Entrega a quien lleva GaleCore: **paquete incremental** (`git bundle create <archivo> 85f1c2c..feature/GC-0005-shadow-espaciado`)
-     + addendum «Cambios posteriores al traspaso» en `docs/engineering/HANDOFF-GALECORE-SHADOW.md` del workspace (qué,
-     para qué, ejemplo de spec, tests). El owner le avisa antes por si tocó `ShadowRuntimeEngine.cs`.
-   - Roll: después, con data de la escalera y una definición del owner (cuándo y a qué se rolea).
-   - **Hecho 30/09 tarde (sin desplegar):** GaleCore `feature/GC-0005-shadow-espaciado` (`f86877e` runtime, `32e7cd0`
-     spec 1.0.4, `f7a2e2e` spec 1.0.5), worktree `.worktrees/galecore/GC-0005`, suite 447/0/6. GaleCore-AI
-     `feature/espaciado-1.0.4` (worktree `.worktrees/galecore-ai/espaciado-1.0.4`, 915 passed): `strategy check` conoce
-     el campo; sin mergear a main. Revisión interna hecha (CHANGES_REQUESTED por las notas de la spec → corregido).
-     **La versión a aprobar es la 1.0.5** (la 1.0.4 queda guardada sin aprobar), hash
-     `sha256:01cdc4d76af8bb1a4ba16d02abcec09d500019e05e10094c9750735925be0475`. Paquete
-     `C:\tmp\galecore-GC-0005-shadow-espaciado-20260930.bundle` (sha256 `1d5184a3…`, probado en clon limpio) + addendum.
-     **Aprobada por hash el 30/09** (`knowledge/.../1.0.5.approval.json`); rama de GaleCore-AI mergeada a main (`2a9ff50`).
-     **Falta:** verificar 18:05 y cerrar 0008/0009 → levantar la API Dev desde la rama GC-0005
-     (si corre sin GC-0005 ignora el campo) → `deploy-check` → parar la instancia 1.0.3 → deploy 1.0.5. Codex de
-     GC-0005 una vez al cierre (desde el 3/10).
-3. **GC-AI-0016 (entrega 4), READY_FOR_REVIEW.** Una pasada de Codex `--base feature/GC-AI-0015` desde el 3/10 19:28
-   (regla del 30/09: una vez, al cierre, sin rechecks) y cierre del owner.
-4. **Entrega 5 (programar el briefing):** abrir work item con acuerdo y criterios para aprobar antes del código.
-   Decisión de arquitectura a presentar: cómo una corrida programada invoca al host sin sesión abierta.
+1. **Comprobar SHADOW (1 minuto).** La estrategia `spy_prima_varianza_30_45d` **1.0.5** (escalera: hasta 10 posiciones,
+   una entrada cada 1440 min) corre en GaleCore Dev desde el 30/09 (instancia `2ad19390…`); la 1.0.3 quedó STOPPED y su
+   posición abierta se sigue valuando. La primera entrada posible es en la sesión del 1/10.
+   - **La API Dev corre desde el worktree de GaleCore GC-0005**, no desde el checkout principal:
+     `cd .worktrees/galecore/GC-0005; python dev/galecore_dev.py api` (log de la sesión del 30/09 en
+     `dev/.local/api-20260930.log`). **Si se levanta desde `GaleCore/` (checkout en `85f1c2c`), el runtime ignora
+     `min_minutes_between_entries` y abriría las 10 posiciones el mismo día.** El worktree tiene copia de `dev/.local/` y
+     de los archivos de estado fuera de git (`platform_services_switch_state.json` = switch del runtime ENCENDIDO,
+     `skew25_history.json`); si se vuelve al checkout principal, copiarlos de vuelta.
+   - Verificar: `python dev/galecore_dev.py runtime-report --spec spy_prima_varianza_30_45d` (desde el worktree) y el
+     seguimiento de las 18:05 (ahora sigue a 1.0.5).
+2. **Entrega 5 — GC-AI-0017, IN_PROGRESS** (worktree `.worktrees/galecore-ai/GC-AI-0017`, rama desde `feature/GC-AI-0016`).
+   Decidido por el owner el 30/09: el modelo corre con el plan de Claude Code (`claude -p`, sin gasto aparte; la API de
+   Anthropic se decide al pasar a producción); el briefing llega **leído por el modelo**; **lunes a viernes 10:00 local**;
+   se reusa el Programador de 0009 tal cual; la llamada al modelo queda en un solo punto intercambiable; sin aviso de
+   Windows ni costo en USD (sólo tope de turnos). Vale para cualquier capacidad de lectura declarada programable.
+   - **AC-01 hecho en parte:** `claude -p` lanzado por el Programador corre (5 turnos, 20 s, salida validada;
+     `docs/evidence/gc-ai-0017/probe_runs.jsonl`). Con `--max-turns 4` falla; usar 8. Falta con la pantalla bloqueada.
+   - **Siguiente:** AC-02 (`schedulable` en el catálogo + `catalog --check` + `task create` rechaza no programables),
+     `KINDS` abierto, runner con modelo que valida contra el contrato y guarda por `research revise` con
+     `invoked_by=scheduler`, `INCOMPLETE`/`FAILED` con motivo, `LATEST.md`. Después crear la tarea real de
+     `daily_attention` L–V 10:00 y demostrar (AC-07). La tarea de las 10:00 **todavía no existe**.
+3. **Entrega 4 — GC-AI-0016, READY_FOR_REVIEW.** Una pasada de Codex `--base feature/GC-AI-0015` desde el **3/10 19:28**
+   (regla del 30/09: una vez, al cierre, sin rechecks) y cierre del owner. Si Codex cambia algo, mergearlo a GC-AI-0017.
+4. **GaleCore GC-0005 (espaciado), READY_FOR_REVIEW:** una pasada de Codex al cierre (desde el 3/10). Paquete para quien
+   lleva GaleCore: `C:\tmp\galecore-GC-0005-shadow-espaciado-20260930.bundle` (sha256 `70fbd46d…`, 4 commits sobre
+   `85f1c2c`, probado en clon limpio) + addendum «Cambios posteriores al traspaso» en
+   `docs/engineering/HANDOFF-GALECORE-SHADOW.md`. El owner se lo pasa; avisarle antes por si tocó `ShadowRuntimeEngine.cs`.
+5. **Después, en el orden del entregable 1 (roadmap §4):** buzón de ideas → pack de datos (GaleCore completo, SEC EDGAR,
+   Tesoro Fiscal Data, BLS, CBOE: acceso probado el 30/09, gratis y sin clave; receta «sumar una fuente») → entrega 6
+   (+ estrategia como proyecto, perfil al iniciar) → supervisor de posiciones → curador → vistas del front.
 
-Claves locales: `GALECORE_API_KEY` y `GALECORE_BASE_URL` (:7001) están en HKCU\Environment desde el 30/09 (una clave
-local nunca frena: resolver y seguir). Perfil vigente `profile:v5` (límites de testing usados como reales: 5 % por operación, 50 % sumado).
+Claves locales: `GALECORE_API_KEY` y `GALECORE_BASE_URL` (:7001) en HKCU\Environment (una clave local nunca frena:
+resolver y seguir). Perfil vigente `profile:v5` (límites de testing: 5 % por operación, 50 % sumado = 5.000 USD).
 
 Reportar al owner siempre en tres partes (qué y para qué, trabas, próximos pasos con para qué), corto y sin
-tecnicismos. Ideas del 29/09: completas en BL-008 (`ba61b7d`).
-
-### Antecedente (paso 0, sigue vigente)
-
-La evidencia más reciente de 0008/0009 está en el worktree de 0009:
-[review del 28/09](../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md)
-y [matriz/handoff del item](../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/work-items/GC-AI-0009-seguimiento-recurrente.md).
-No repetir AC-06 de 0008 ni el arreglo de `every_minutes`: ya están respaldados.
-Completar evidencia por horario desde main, recheck acotado de pendientes y consolidación hacia
-main antes de presentar cierres. Verificar los artefactos existentes antes de programar otra prueba.
+tecnicismos. Ideas del 30/09 (tableros, estrategia como proyecto, front como configuración, host en la interfaz):
+addenda en BL-005 y BL-007.
 
 Durante esperas se permite trabajo independiente autorizado. Los pasos posteriores y la cuenta real se ordenan
 exclusivamente en el roadmap.
 
-
-**Workspace tooling (29/09):** hooks del workspace corregidos — `settings.json` tenía `"command": "python"`
-sin path de script; los tres hooks (SessionStart, PostToolUse ruff, PreToolUse guard_git) ahora tienen
-el path completo con `${CLAUDE_PROJECT_DIR}`. Verificado: ruff bloquea correctamente edits con errores F401.
+**Workspace tooling:** el hook `guard_git` bloquea commits con `git -C /c/...` (ruta estilo Git Bash), con varios `-C`
+en la misma línea o con `cd` antes; usar un solo `git -C C:/Users/...` por comando.
 
 **No olvidar:**
 - `FRED_API_KEY` en el entorno del usuario (HKCU); nunca mostrarla ni commitearla.
-- GaleCore: rama local `feature/GC-AI-0008-estrategia-shadow`, sin push. No borrar worktrees de 0009 hasta que la tarea esté en `main` estable.
+- GaleCore: sin push. Ramas locales `feature/GC-AI-0008-estrategia-shadow` (traspasada) y `feature/GC-0005-shadow-espaciado`.
 - `knowledge/` commitear tras cada sesión que escriba en él.
-- Perfil vigente: `profile:v3` en `knowledge/profile/`; campos marcados `provisional`.
+- Estrategia: versiones 1.0.0–1.0.2 y 1.0.4 guardadas sin aprobar (1.0.4: sus notas remitían a 1.0.3); 1.0.3 y 1.0.5 aprobadas.
+- El worktree de 0009 ya no hace falta (la tarea corre desde `main`); se puede borrar cuando el owner quiera.
 - C (GC-AI-0010) y B (GC-AI-0011) suspendidos; su material se conserva.
 
 **Del usuario:** mensajes cortos, en español. No confirmar pasos operativos; sólo parar ante decisiones de producto o arquitectura.
 
 **Reglas de esta sesión que valen para seguir:**
-- Tono de equipo en todo lo que lea el padre: nada de «owner», nada de lenguaje de permisos; repartir esfuerzo.
+- Tono de equipo en todo lo que lea quien lleva GaleCore: nada de «owner», nada de lenguaje de permisos; repartir esfuerzo.
 - Informes para el usuario: tablas y gráficos primero, texto mínimo (memoria `feedback-informes-practicos`).
-- No crear repos, cambiar remotos ni pushear sin pedido explícito. Estructura: GaleCore, GaleCore-AI y workspace (repo
-  de convenciones); `knowledge/` local, sin repo remoto (el `galecore-knowledge` que se creó en GitHub queda para que lo
-  archiven o borren; el remoto `origin` local sigue configurado: no pushear ahí).
-- La API de GaleCore Dev tiene que estar levantada en horario de mercado (`python GaleCore/dev/galecore_dev.py api`).
+- No crear repos, cambiar remotos ni pushear sin pedido explícito. `knowledge/` local, sin repo remoto.
+- La API de GaleCore Dev tiene que estar levantada en horario de mercado (desde el worktree GC-0005, ver paso 1).
 
 **Páginas publicadas:** producto https://claude.ai/artifact/9goVMriibtrQeQZWwRSNWE · vista de la cartera
-https://claude.ai/artifact/G7L8oniVGHvQfFupAQzS8R. **Temporales ya innecesarios:** `C:	mp	raspaso-galecore-20260928*` y
-el zip del Escritorio (los borra el usuario si quiere).
+https://claude.ai/artifact/G7L8oniVGHvQfFupAQzS8R.
 
 ## Historial de sesiones — no ejecutar como instrucciones vigentes
 
 Lo que sigue conserva decisiones y evidencia de su fecha. Las instrucciones para retomar son únicamente las del bloque anterior.
+
+### Histórico (miércoles 2026-09-30) — escalera en SHADOW, cierres de 0008/0009, entrega 5 y entregable 1
+
+- GaleCore GC-0005: `risk_limits.min_minutes_between_entries` en el runtime (ENTRY_SKIPPED/TOO_SOON), validador, 12 tests
+  (uno contra Postgres real); suite 447/0/7 sin base, 454/0/0 con base. GaleCore-AI: `strategy check` conoce el campo
+  (merge `2a9ff50`). Revisión interna pidió corregir las notas de la spec 1.0.4 → versión 1.0.5, aprobada por hash
+  (`sha256:01cdc4d7…5be0475`) y desplegada tras cerrar 0008/0009.
+- Corridas automáticas por horario desde main el 29/09 y 30/09 (AC-02 de 0009); recheck interno APPROVE; cierres del
+  owner; rama de 0009 integrada (sólo docs: el código ya estaba en main).
+- Entrega 5 aprobada y en curso (decisiones en su work item); AC-01 probado desde el Programador.
+- Entregable 1 definido y escrito en el roadmap (§4). Pack de datos: EDGAR, Tesoro, BLS y CBOE probados (gratis, sin
+  clave); descartados los conectores pagos; IBKR e IoL con la cartera completa.
 
 ### Histórico (lunes 2026-09-28) — primera sesión de mercado de la estrategia
 
