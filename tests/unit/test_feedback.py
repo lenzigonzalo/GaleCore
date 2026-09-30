@@ -270,3 +270,10 @@ def test_cli_profile_set_cites_only_preference_feedback(kb):  # noqa: F811
                         encoding="utf-8", check=False)
     assert ok.returncode == 0, ok.stdout
     assert kb.profile.load("v1").feedback == [pref.ref]
+
+
+def test_a_profile_version_without_feedback_is_written_without_the_field(kb):  # noqa: F811
+    # Found 30/09: main (before GC-AI-0016) forbids the field and could not read a version written with "feedback": [].
+    _, path = set_profile(kb.profile, changes={"delivery_format": ["tablas"]}, note="n", prompt="p", host=HOST, now=NOW)
+    assert "feedback" not in json.loads(path.read_text(encoding="utf-8"))
+    assert kb.profile.load("v1").feedback == []

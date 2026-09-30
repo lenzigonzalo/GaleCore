@@ -77,9 +77,13 @@ class FileProfileStore:
             raise ProfileStoreError("Refusing to write a profile whose hash does not match its content")
         path = self.path_for(f"v{doc.version}")
         path.parent.mkdir(parents=True, exist_ok=True)
+        data = doc.model_dump(mode="json")
+        if not data["feedback"]:
+            # Readers from before GC-AI-0016 forbid the field: a version without feedback is written as they knew it.
+            del data["feedback"]
         try:
             with path.open("x", encoding="utf-8", newline="\n") as fh:
-                fh.write(json.dumps(doc.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n")
+                fh.write(json.dumps(data, indent=2, ensure_ascii=False) + "\n")
         except FileExistsError as exc:
             raise ProfileStoreError(f"{path.name} already exists; a change is a new version") from exc
         return path

@@ -165,6 +165,11 @@ antes de la salida de la v2) en eventos × posiciones; ningún límite roto con 
 `transcripts/r4-corre-0.2.1.md`; `knowledge` `b9a272b`. Observado: faltan evaluaciones del runtime a las 13:57, 14:19 y
 14:41Z (causa no verificada; se registra, no se investiga en este item).
 
+**Bug de compatibilidad hallado el 30/09 (corregido):** `profile:v4`, escrito con este código, llevaba `"feedback": []`; el
+código de `main` (sin el campo, `extra=forbid`) no podía leer el perfil. Corrección: una versión sin feedback se escribe
+sin el campo (`profile_store.create`, test en `test_feedback.py`) y se quitó el campo vacío de v4 (el hash lo excluía,
+no cambia). Verificado: `main` y este checkout leen v4 y v5.
+
 ## Revisión interna 1 (`reviewer`, 30/09) — CHANGES_REQUESTED → corregido
 
 | Hallazgo | Resolución |
