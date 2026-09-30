@@ -10,8 +10,8 @@ GC-AI-0012 (mapa de fuentes), GC-AI-0013 (tu perfil) y GC-AI-0014 (orden de fuen
 1. **GC-AI-0015 (entrega 3), en recheck de Codex.** Rama `feature/GC-AI-0015` (worktree
    `.worktrees/galecore-ai/GC-AI-0015`). C1 (30/09) y C2 (recheck) sin BLOCKER; resoluciones en el work item. AC-06 se
    recorrió con 0.1.2 (r2, cálculo propio quedó como hecho → control nuevo en `check_content`). El guardado E2E con ese
-   control es r3 (0.2.0, desde GC-AI-0016). Todo commiteado en `knowledge` `5597222`. Sigue: recheck C3; el cierre es
-   del owner. El `ACTIVE_WORK_ITEM` del workspace apunta a 0015 hasta su cierre.
+   control es r3 (0.2.0, desde GC-AI-0016). Todo commiteado en `knowledge` `5597222`. Sigue: recheck C3 (cortado el 30/09 por límite de uso de
+   Codex; habilitado desde el 3/10 19:28); el cierre es del owner. El `ACTIVE_WORK_ITEM` del workspace apunta a 0015 hasta su cierre.
 2. **GC-AI-0016 (entrega 4), READY_FOR_REVIEW.** Rama `feature/GC-AI-0016` desde la de 0015 (worktree
    `.worktrees/galecore-ai/GC-AI-0016`). Registro de feedback, cita desde revisión / perfil / `history.yaml`,
    `catalog --check` con historial, `capability_builder` 0.2.0, calendario FRED (alcance aprobado por el owner el 30/09).
