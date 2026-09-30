@@ -40,13 +40,18 @@ Current capabilities: `gex_interpretation` (read-only GEX), `regime_interpretati
 with an evaluable record), `research` (resumable investigation, below), `context_research` (context
 of a trading idea with GaleCore + the host's external sources; every response kept as `evidence:`),
 `strategy_design` (proposal → `strategy check` against the runtime → `strategy save` → owner's
-`strategy approve` of the exact hash → `strategy deploy-check` → deploy to SHADOW in GaleCore Dev only) and
+`strategy approve` of the exact hash → `strategy deploy-check` → deploy to SHADOW in GaleCore Dev only),
 `strategy_followup` (what a deployed version did, saved as a revision of its investigation),
-`data_sources` (which source covers a need, its cost, limits and last checked access: `sources list|query|check|declare`)
-and `user_profile` (objectives, reference capital, horizon, limits, preferred sources, format:
+`data_sources` (which source covers a need, its cost, limits and last checked access: `sources list|query|check|declare`),
+`user_profile` (objectives, reference capital, horizon, limits, preferred sources, format:
 `profile show|set|history`, versions `profile:vN` in `knowledge/profile/`; fields in `provisional` are
-placeholders). While a profile exists, `research`/`context_research` refuse to save unless an antecedent
-cites the version in force.
+placeholders), `daily_attention` (what deserves attention today about what is in SHADOW, saved as a
+revision of one investigation per strategy) and `capability_builder` (a new capability with the template:
+catalog entry + skill, data needs from the source registry, controls). While a profile exists, saving
+an investigation (`research save|revise`, whatever capability stamps it) is refused unless an antecedent
+cites the version in force. `catalog --check`
+validates every entry (skill and contract load, flow commands exist, data needs resolve or say why not,
+controls say what is not checked). The catalog is the source of truth; this list is a summary.
 
 The user's comment on a stored result is kept with `feedback add` (`knowledge/feedback/<id>.json`, words
 verbatim, tied to `research:<id>` + revision, skill and version taken from that revision, classified
