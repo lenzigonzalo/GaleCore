@@ -84,7 +84,7 @@ Sólo entran en este item las dos primeras filas. No se abre una ampliación gen
 | AC-03 | `config/skills/capability-builder/skill.yaml`; entrada `capability_builder` | `test_the_real_catalog_is_complete` | `docs/evidence/gc-ai-0015/transcripts/ac05-crea-daily-attention.md` | DONE (sin revisar) |
 | AC-04 | `config/sources.yaml`: GaleCore `shadow_runtime`; FRED tasas reales y `credit`; límite de las dos vías a GaleCore (:5000 vs Dev :7001) | consultas reales: posiciones/evaluaciones/métricas SHADOW → galecore; tasa real, spread de crédito → fred | — | DONE (sin revisar) |
 | AC-05 | `config/skills/daily-attention/skill.yaml` + entrada `daily_attention`, escritas por una sesión nueva siguiendo la guía (no por el implementador) | `catalog --check` → daily_attention complete | transcripción `ac05-crea-daily-attention.md` | DONE (sin revisar) |
-| AC-06 | — | — | `docs/evidence/gc-ai-0015/transcripts/ac06-corre-daily-attention.md`; `research:2026-09-29-atencion-diaria-spy-prima-varianza-30-45d` r1 (skill `daily_attention` 0.1.0, cita `profile:v3` con hash igual al archivo), seguimiento `20260929T232040Z`, evidencia FMP earnings (commit `e8e9e2d` de `knowledge`). **Recorrida con 0.1.2 (Codex C1):** `docs/evidence/gc-ai-0015/transcripts/ac06-r2-corre-daily-attention-0.1.2.md`; misma investigación r2 (`daily_attention` 0.1.2, cita `profile:v3`), seguimientos `20260930T132258Z` y `20260930T133423Z` con su evidencia; faltantes por posición declarados (v2 sin valor ni hora); un cálculo propio tipado como hecho → control nuevo en `check_content` (test en `test_knowledge.py`) | DONE (sin revisar) |
+| AC-06 | — | — | `docs/evidence/gc-ai-0015/transcripts/ac06-corre-daily-attention.md`; `research:2026-09-29-atencion-diaria-spy-prima-varianza-30-45d` r1 (skill `daily_attention` 0.1.0, cita `profile:v3` con hash igual al archivo), seguimiento `20260929T232040Z`, evidencia FMP earnings (commit `e8e9e2d` de `knowledge`). **Recorrida con 0.1.2 (Codex C1; r2 y r3 en commit `5597222` de `knowledge`; guardado E2E del control en r3, ver C2):** `docs/evidence/gc-ai-0015/transcripts/ac06-r2-corre-daily-attention-0.1.2.md`; misma investigación r2 (`daily_attention` 0.1.2, cita `profile:v3`), seguimientos `20260930T132258Z` y `20260930T133423Z` con su evidencia; faltantes por posición declarados (v2 sin valor ni hora); un cálculo propio tipado como hecho → control nuevo en `check_content` (test en `test_knowledge.py`) | DONE (sin revisar) |
 | AC-07 | — | — | — | PENDING |
 
 ## Implementer handoff — Increment 1 (2026-09-29)
@@ -153,5 +153,14 @@ git diff --check
 
 Dato de operación visto en r2: el 30/09 la 1.0.3 empezó a evaluar a horario (13:30:24 UTC), con la PC prendida; el
 arranque tardío del 28 y 29/09 no se repitió. Siguiente: `--recheck` acotado.
+
+**C2 (recheck) — 30/09, `docs/engineering/reviews/GC-AI-0015-20260930T134302Z.md`**, `f944256..19f660f`:
+CHANGES_REQUESTED, sin BLOCKER.
+
+| Hallazgo | Resolución |
+|---|---|
+| MAJOR (sigue) — r2 guardó el cálculo propio como `fact`; el control nuevo no tiene un guardado exitoso E2E | **Respondido con evidencia, sin otra corrida.** El control (`19f660f`) ya tiene un guardado E2E exitoso: r3 de la misma investigación (30/09 13:51Z), guardada por una sesión nueva desde el checkout de GC-AI-0016, que contiene `19f660f` por merge antes de lanzarla. En r3 el cálculo propio es `interpretation` y el guardado pasó `check_content` con el control. La skill de esa corrida es `daily_attention` 0.2.0 (entrega 4), no 0.1.2: el control es del código y vale igual para cualquier versión. Otra corrida con 0.1.2 agregaría una revisión con método viejo después de la 0.2.0 en el informe diario del owner. Si Codex o el owner la exigen igual, se corre. |
+| MAJOR (nuevo) — handoff dice pendiente la recorrida | Corregido: el handoff describe r2 (con el desvío), el control nuevo, r3 y el commit de `knowledge`. |
+| MAJOR (nuevo) — r2 y sus evidencias sin commitear en `knowledge` | Corregido: commit `5597222` de `knowledge` (r2, r3, seguimientos 13:22/13:34/13:45Z con sus evidencias, feedback y calendario FRED). La investigación es append-only con hash por revisión: r2 queda fija aunque exista r3. |
 
 Antecedente: 29/09 23:45Z el runner no pudo correr Codex por límite de uso de la cuenta.
