@@ -16,7 +16,7 @@ GC-AI-0012 (mapa de fuentes), GC-AI-0013 (tu perfil) y GC-AI-0014 (orden de fuen
    `.worktrees/galecore-ai/GC-AI-0016`). Registro de feedback, cita desde revisión / perfil / `history.yaml`,
    `catalog --check` con historial, `capability_builder` 0.2.0, calendario FRED (alcance aprobado por el owner el 30/09).
    Demo hecha con el comentario real del owner: `daily_attention` 0.2.0 y r3 con la tabla eventos × posiciones.
-   Revisión interna R1 corregida (946 tests). Sigue: Codex `--base feature/GC-AI-0015`. Si 0015 cambia, se mergea en
+   Revisión interna R1 corregida (946 tests). Sigue: Codex `--base feature/GC-AI-0015` (cortado el 30/09 por límite de uso; habilitado desde el 3/10 19:28). Si 0015 cambia, se mergea en
    0016 antes.
 3. **0008/0009:** corrida automática por horario desde main (tarea de las 18:05 local); verificar los artefactos antes
    de otra prueba. El 30/09 la API de Dev se levantó como proceso independiente (log en

@@ -167,6 +167,8 @@ de eventos la arma el host: no se verifica que esté completa (control «Not che
 
 ## Revisión independiente (Codex) — pendiente
 
+30/09 14:07Z: Codex cortó por límite de uso de la cuenta («try again at Oct 3rd, 2026 7:28 PM»); no se escribió review. Relanzar al habilitarse con el mismo comando (`--base feature/GC-AI-0015`).
+
 ## Required validation
 
 ```powershell
