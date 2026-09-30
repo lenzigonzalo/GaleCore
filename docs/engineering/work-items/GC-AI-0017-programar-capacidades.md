@@ -23,7 +23,7 @@ cambia algo, se trae con un merge antes de revisar esta. **Borrador para aprobar
   cualquier otra capacidad de sólo lectura que armes con el molde (entrega 3).
 - **Capacidad que agrega:** una tarea programada puede correr cualquier capacidad del catálogo declarada
   *programable*. Hoy sólo puede correr el seguimiento de estrategias (`contracts/task.py`, `KINDS`).
-- **Qué vas a poder pedir:** «Mandame la atención diaria de lunes a viernes a las 9:45» · «Pausala» · «¿Corrió hoy?» ·
+- **Qué vas a poder pedir:** «Mandame la atención diaria de lunes a viernes a las 10» · «Pausala» · «¿Corrió hoy?» ·
   «Cancelala».
 - **Cómo veremos que sirve:** una mañana, sin sesión abierta, aparece el briefing del día guardado, con la versión de la
   capacidad y del perfil y su evidencia. Le das feedback como a cualquier resultado (entrega 4).
@@ -65,7 +65,7 @@ datos del día y un resultado `INCOMPLETE` que dice qué faltó. Nunca un briefi
 
 ## Primera demostración
 
-1. En una sesión: «Mandame la atención diaria de lunes a viernes a las 9:45». Queda la tarea.
+1. En una sesión: «Mandame la atención diaria de lunes a viernes a las 10». Queda la tarea.
 2. Sin sesión abierta, al día hábil siguiente: aparece la revisión del día (`invoked_by=scheduler`), `LATEST.md`
    actualizado y la corrida en `task status`.
 3. En una sesión nueva: «¿Corrió hoy?» → estado y frescura; «Pausala» → no corre al día siguiente;
@@ -102,7 +102,12 @@ datos del día y un resultado `INCOMPLETE` que dice qué faltó. Nunca un briefi
 |---|---|---|
 | 1 | Cómo corre el modelo sin sesión | **Decidido (30/09):** con el plan de Claude Code actual (`claude -p`). No es gasto aparte: consume del mismo cupo que el chat. La API de Anthropic se decide al pasar a producción, sólo para las capacidades que necesitan modelo |
 | 2 | ¿Te llega ya leído por el modelo o sólo los datos? | **Decidido (30/09):** leído por el modelo. El host es local: cada uno lo corre en su PC con su propio plan |
-| 3 | Horario | Pendiente. Recomendación: lunes a viernes 9:45 (PC y API de Dev prendidas) |
+| 3 | Horario | **Decidido (30/09):** lunes a viernes a las 10:00 hora local (9:00 en Nueva York, antes de la apertura). PC y API de Dev prendidas |
+
+**Alcance general (30/09):** lo decidido vale para cualquier capacidad de sólo lectura declarada programable, no sólo
+el briefing: régimen diario, seguimiento de estrategias, investigaciones de contexto, un reporte macro creado con el
+molde y, más adelante, el briefing con la cuenta real. Quedan afuera las que escriben estrategias, aprobaciones,
+despliegues o perfil, y las órdenes.
 
 **Recorte para no descartar trabajo en producción (30/09):** se reusa el Programador de Windows de 0009 tal cual (en el
 VPS será un cron); la llamada al modelo queda en un solo punto intercambiable; fuera el aviso de Windows y la estimación
