@@ -174,11 +174,23 @@ class TestSave:
         ({"next_steps": [" "]}, r"next_steps\[0\] is blank"),
         ({"limitations": [""]}, r"limitations\[0\] is blank"),
         ({"missing": ["x", "  "]}, r"missing\[1\] is blank"),
+        # Codex C1 of GC-AI-0015: own arithmetic typed as a fact
+        ({"statements": [{"kind": "fact", "text": "Cálculo propio contra el perfil: 456 vs 200",
+                          "sources": ["file:notes/backlog.md"]}]}, "is an interpretation, not a fact"),
+        ({"statements": [{"kind": "fact", "text": "**calculo propio**: suma 912",
+                          "sources": ["file:notes/backlog.md"]}]}, "is an interpretation, not a fact"),
     ])
     def test_controls_reject(self, kb, overrides, problem):
         with pytest.raises(KnowledgeError, match=problem):
             save(kb, **overrides)
         assert kb.research.ids() == []
+
+    def test_own_arithmetic_is_accepted_as_an_interpretation(self, kb):
+        doc, _ = save(kb, statements=[{"kind": "interpretation", "text": "Cálculo propio: 456 vs 200",
+                                       "sources": ["file:notes/backlog.md"]},
+                                      {"kind": "fact", "text": "El registro no trae cálculo propio",
+                                       "sources": ["file:notes/backlog.md"]}])
+        assert doc.current.content.statements[0].kind.value == "interpretation"
 
     def test_antecedent_without_bearing_is_not_valid_content(self):
         with pytest.raises(ValueError):

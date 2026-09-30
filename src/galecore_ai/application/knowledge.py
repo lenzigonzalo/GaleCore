@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -166,6 +167,10 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
 # ── investigations ───────────────────────────────────────────────
 
 
+# A statement labelled as the host's own arithmetic (limits vs exposure, stop-loss sums) is never a fact.
+_OWN_CALCULATION = re.compile(r"^\W*c[aá]lculo propio\b", re.IGNORECASE)
+
+
 def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str | None = None) -> tuple[
     list[ResolvedRef], list[str]
 ]:
@@ -189,6 +194,9 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
     for i, s in enumerate(content.statements):
         if s.kind == StatementKind.FACT and not s.sources:
             problems.append(f"statements[{i}]: a fact must cite at least one source")
+        if s.kind == StatementKind.FACT and _OWN_CALCULATION.match(s.text):
+            # Codex C1 of GC-AI-0015: the skill said so in prose and a fresh session still typed it as a fact.
+            problems.append(f"statements[{i}]: own arithmetic ('Cálculo propio') is an interpretation, not a fact")
         for src in s.sources:
             cite(src, f"statements[{i}].sources")
     # Blank text is not content: "   " is neither a hypothesis nor a next step (Codex C1 MAJOR).
