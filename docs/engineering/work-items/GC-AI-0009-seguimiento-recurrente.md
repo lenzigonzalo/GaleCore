@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0009
 title: Seguimiento recurrente de la estrategia, creado y gestionado desde el chat
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0009 — Seguimiento recurrente acotado (roadmap §4, entrega 2)
@@ -30,18 +30,18 @@ gestor universal de agentes. La tarea no modifica la estrategia aprobada ni oper
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Descubrible y guiado:** entrada `recurring_followup` con su skill (define objetivo, frecuencia, zona
+- [x] **AC-01 — Descubrible y guiado:** entrada `recurring_followup` con su skill (define objetivo, frecuencia, zona
   horaria, fuentes, resultado; propone la recurrencia cuando aporta valor).
-- [ ] **AC-02 — Ejecución real:** ejecuciones automáticas del Programador de tareas, sin sesión de Claude, cada una con
+- [x] **AC-02 — Ejecución real:** ejecuciones automáticas del Programador de tareas, sin sesión de Claude, cada una con
   estrategia, versión, hash, método, commit y fuentes. Incluir una automática posterior al fix de procedencia y otra
   desde el checkout estable después del traslado auditable con `task rebind`, conservando identidad e historial.
-- [ ] **AC-03 — Persistencia e historial:** cada resultado queda (registro de seguimiento con hash + evidencia +
+- [x] **AC-03 — Persistencia e historial:** cada resultado queda (registro de seguimiento con hash + evidencia +
   eventos encadenados) y se consulta desde otra sesión (`task status/history`, `LATEST.md`).
-- [ ] **AC-04 — Control:** cambiar frecuencia, pausar, reanudar y cancelar desde el chat, con efecto verificado en el
+- [x] **AC-04 — Control:** cambiar frecuencia, pausar, reanudar y cancelar desde el chat, con efecto verificado en el
   Programador; una tarea pausada o cancelada no corre.
-- [ ] **AC-05 — Robustez:** sin ejecuciones solapadas; errores registrados y visibles; zona horaria convertida.
-- [ ] **AC-06 — Límites:** la tarea sólo corre el seguimiento de sólo lectura.
-- [ ] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
+- [x] **AC-05 — Robustez:** sin ejecuciones solapadas; errores registrados y visibles; zona horaria convertida.
+- [x] **AC-06 — Límites:** la tarea sólo corre el seguimiento de sólo lectura.
+- [x] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
 
 ## Requirement-to-evidence matrix
 
@@ -53,7 +53,7 @@ gestor universal de agentes. La tarea no modifica la estrategia aprobada ni oper
 | AC-04 | `tasks.set_frequency/pause/resume/cancel`, CLI `task` | `test_paused_or_cancelled_tasks_do_not_run`, `test_changing_frequency_recreates_the_schedule_and_keeps_pause`, `test_a_paused_rebind_that_cannot_disable_again_stays_consistent` | `scheduler-20260928-controles.txt`: pausa → Disabled/N/A; reanudar → Ready; frecuencia → Weekly L–V 18:10 y vuelta a Daily 18:05; cancelar → la tarea ya no existe y `task run` → SKIPPED | Verificado en el Programador |
 | AC-05 | lock exclusivo, `run_failed`, `local_time_for` + resync | `test_overlapping_runs_are_skipped_and_stale_locks_broken`, `test_a_failed_run_is_recorded_not_raised`, `test_timezone_is_converted_to_this_pc` | ERROR real del 28/09 18:05 registrado y visible en `task status` | Verificado local |
 | AC-06 | `TaskDefinition.kind` sólo `strategy_followup`; el runner sólo llama `run_followup` | `test_a_followup_never_writes_strategy_versions_or_approvals` | — | Implementado |
-| AC-07 | — | — | — | Pendiente |
+| AC-07 | — | recheck interno 30/09 (APPROVE) | revisión Codex 28/09 + triage; cierre del owner 30/09 | Cerrado |
 
 ## Required validation
 
@@ -185,5 +185,16 @@ Review: `docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md`.
 |---|---|---|
 | C4-B1 | DISPUTED: la aprobación está transcripta | Sin cambios |
 | C4-M2 | STILL OPEN: faltaba evidencia real de pausa, reanudación, frecuencia y cancelación | Corregido: `docs/evidence/gc-ai-0009/scheduler-20260928-controles.txt` (comando, estado y exit code de cada paso contra el Programador). Un primer intento del script de captura aplicó la pausa y falló antes de guardar la salida; se reanudó y se repitió la secuencia entera |
-| NEW MAJOR | La automática desde el checkout estable fue lanzada a demanda | Aceptado: se captura la automática por horario del 29/09 17:05 NY desde main |
+| NEW MAJOR | La automática desde el checkout estable fue lanzada a demanda | Resuelto: automáticas por horario desde main el 29/09 y el 30/09 (`docs/evidence/gc-ai-0009/scheduler-20260930-main.txt`) |
 | NEW MAJOR | `rebind` de una tarea pausada: si volver a deshabilitar falla, estado y Programador divergen | Corregido como en `set_frequency`: guarda el nuevo `code_path`, sigue `paused` (sus corridas se saltean), evento `code_path_changed` con `scheduler_left_enabled` y error pidiendo repetir `task pause`. Test `test_a_paused_rebind_that_cannot_disable_again_stays_consistent` |
+
+## Cierre (30/09/2026)
+
+- **Recheck interno acotado (agente `reviewer`, 30/09): APPROVE.** Los tres hallazgos de Codex del 28/09 quedaron
+  resueltos (C4-M2 controles, automática por horario desde main, `rebind` de tarea pausada); C4-B1 sigue disputado sin
+  novedades. 28 tests de tareas y seguimiento pasan. No hubo recheck de Codex: desde el 30/09 Codex revisa una vez por
+  entrega, sin rechecks (`ENGINEERING.md` §3); su último veredicto (28/09) fue CHANGES_REQUESTED y queda resuelto por
+  este triage.
+- **Cierre del owner (30/09):** «ok, dale», en respuesta a la presentación del cierre de 0008 y 0009 con la evidencia
+  de las corridas automáticas.
+- El código de los arreglos ya estaba en main (`ee039a4`, `3208918`); se integra la documentación de esta rama.
