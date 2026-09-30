@@ -30,9 +30,12 @@ sources:
       - category: options_state
         description: GEX (compute.gamma_exposure, compute.gex_analysis) y put skew 25Δ (compute.put_skew), por símbolo
         any_symbol: true
+      - category: shadow_runtime
+        description: runtime SHADOW de GaleCore Dev — estado, instancias, evaluaciones, descartes, posiciones (con su riesgo máximo) y métricas por versión de estrategia (App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics; se lee con `followup run`)
     limits:
-      - "Sólo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES): no expone cadenas de opciones, IV rank ni implied volatility por esta vía, aunque existan rutas en el dispatcher — no están habilitadas"
+      - "Por las capabilities del harness sólo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES): no expone cadenas de opciones, IV rank ni implied volatility por esa vía, aunque existan rutas en GaleCore; el runtime SHADOW se lee aparte con `followup run`"
       - "No expone históricos ni volatilidad realizada por esta vía"
+      - "Dos vías con dirección distinta: `sources check`, `prepare` y las capabilities usan GALECORE_BASE_URL (por defecto :5000, sin clave); GaleCore Dev corre en :7001 y el runtime SHADOW se lee con `followup run` (galecore_dev.py, con su autenticación). Un `down` del probe sin GALECORE_BASE_URL/GALECORE_API_KEY apuntando a Dev no dice que GaleCore Dev esté caída (29/09: probe down mientras Dev respondía en :7001)"
     probe:
       description: GET de bajo costo (market_data.trade de SPY) evaluando el código de estado HTTP
       command: python -B -m galecore_ai.adapters.cli sources check --source galecore
@@ -45,7 +48,9 @@ sources:
     preference: 10
     covers:
       - category: rates_curve
-        description: tasas del Tesoro (curva), fed funds rate y otras series de tasas
+        description: tasas del Tesoro (curva), fed funds rate, tasas reales (TIPS, DFII10) y otras series de tasas
+      - category: credit
+        description: spreads de crédito (high yield BAMLH0A0HYM2, investment grade BAMLC0A0CM)
       - category: inflation
         description: CPI y breakevens de inflación
       - category: activity_employment

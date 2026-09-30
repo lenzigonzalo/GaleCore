@@ -14,6 +14,8 @@ entries:
     skill: skills/gex-analysis/skill.yaml
     output_contract: galecore_ai.contracts.gex_analysis.GexInterpretation
     galecore_capabilities: [compute.gex_analysis]
+    data_needs:
+      - need: GEX
     prepare_skill: gex
     flow:
       - prepare --symbol <SYMBOL> --skill gex
@@ -26,6 +28,7 @@ entries:
       - Evidence paths resolve (entailment is not checked)
       - No explicit trading recommendation (pattern-based, D-6)
       - Snapshot integrity and freshness, fail-closed
+      - Not checked - that the interpretation follows from the facts beyond numbers and evidence paths (entailment)
     guide: docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md
 
   - id: regime_interpretation
@@ -37,6 +40,11 @@ entries:
     skill: skills/regime-analysis/skill.yaml
     output_contract: galecore_ai.contracts.regime_analysis.RegimeInterpretation
     galecore_capabilities: [compute.gex_analysis, compute.put_skew, market_data.trade]
+    data_needs:
+      - need: GEX de SPY
+      - need: put skew de SPY
+      - need: VIX
+      - need: VVIX
     prepare_skill: regime
     flow:
       - prepare --symbol <SYMBOL> --skill regime
@@ -50,6 +58,7 @@ entries:
       - Record entry hashed at acceptance; outcomes and reviews appended, never rewritten
       - The review verdict is the owner's (F-6)
       - Daily records only after the cash session (F-2)
+      - Not checked - that the regime reading anticipates what happens next; outcomes and reviews exist to judge that
     guide: docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md
 
   - id: data_sources
@@ -64,6 +73,7 @@ entries:
     skill: skills/data-sources/skill.yaml
     output_contract: galecore_ai.contracts.sources.SourceQueryResult
     galecore_capabilities: []
+    data_needs: []
     flow:
       - sources list
       - sources query --need "<qué dato hace falta>"
@@ -93,6 +103,7 @@ entries:
     skill: skills/user-profile/skill.yaml
     output_contract: galecore_ai.contracts.profile.ProfileVersion
     galecore_capabilities: []
+    data_needs: []
     flow:
       - profile show
       - 'profile set --note "<qué cambia>" --prompt "<tus palabras>" --host-model <model> < {"changes": {...}}'
@@ -105,8 +116,33 @@ entries:
       - Refuses text that looks like a key or token (heuristic, English and Spanish labels plus common key prefixes); a refused value is not echoed back
       - Missing fields are declared, never defaulted; placeholders the user asked for are listed in `provisional` and reported as such
       - "While a profile exists, research and context_research refuse to save unless an antecedent cites the version in force (profile:v<N>), so the stored revision records the version (hash) used"
-      - "Consumers today: research and context_research only; GEX, regime, strategy and follow-up outputs do not read the profile yet"
+      - "Consumers today: research, context_research, strategy_followup and daily_attention; GEX, regime, strategy design and tasks do not read the profile yet"
       - Not checked - whether the declared objectives or limits are sensible
+
+  - id: capability_builder
+    kind: harness
+    serves: >-
+      Crear una capacidad nueva con el molde: qué pedido atiende, qué datos necesita y de qué fuentes
+      registradas salen, qué entrega y dónde se guarda, con qué comandos corre y qué controles tiene,
+      y declarar lo que no se pudo completar.
+    example_requests:
+      - Quiero una capacidad que me diga qué merece mi atención hoy.
+      - Armá una skill de reporte macro para ver los eventos de la semana.
+    skill: skills/capability-builder/skill.yaml
+    output_contract: galecore_ai.harness.catalog.CatalogEntry
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - catalog
+      - sources query --need "<dato>"
+      - profile show
+      - catalog --check
+    stored_as: none
+    controls:
+      - "catalog --check rejects an entry whose skill or contract does not load, whose flow names a command this CLI does not have (or a script not in the workspace), whose data need no registered source covers without a declared reason, or whose controls do not say what is not checked"
+      - A result stored as research must cite the profile in force (enforced when saving)
+      - Not checked - that the capability is useful or that its method is right; that is judged by running it
+      - Not checked - the options and arguments of each flow line (only the command and subcommand)
 
   - id: research
     kind: investigation
@@ -120,6 +156,7 @@ entries:
     skill: skills/research/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: []
+    data_needs: []
     flow:
       - kb search --text "<términos>" [--kind research|regime] [--status unfinished]
       - kb show <ref>
@@ -148,6 +185,15 @@ entries:
     skill: skills/context-research/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: []
+    data_needs:
+      - need: curva de tasas
+      - need: tasa real
+      - need: inflacion
+      - need: spread de credito
+      - need: calendario de earnings
+      - need: VIX
+      - need: fecha del FOMC
+        missing: "ninguna fuente registrada la sirve (economics-calendar de FMP denegado por plan)"
     flow:
       - kb search --text "<idea, instrumento>" [--kind research|evidence] [--status unfinished]
       - evidence add --slug <fuente-serie> --prompt "<pedido del usuario>" < {content, host_provider, host_model}
@@ -175,6 +221,13 @@ entries:
     skill: skills/strategy-design/skill.yaml
     output_contract: galecore_ai.contracts.strategy.ProposalContent
     galecore_capabilities: [App/Runtime/Specs, App/Runtime/Deploy]
+    data_needs:
+      - need: cotizaciones de SPY
+      - need: posiciones SHADOW
+      - need: historicos de SPY con disponibilidad point-in-time
+        missing: "ninguna fuente registrada los sirve por el harness (GaleCore tiene velas por una ruta que el código no llama; el backtest GC-AI-0011 está suspendido)"
+      - need: volatilidad implicita de SPY
+        missing: "GaleCore la calcula (App.Analytics/ImpliedVolatility, IVRank) pero el harness no la llama; el piloto GC-AI-0006 la leyó a mano en :7001"
     flow:
       - kb search --text "<idea>" [--kind research|evidence|strategy]
       - research save --slug <slug> --prompt "<pedido>" < {content, host_provider, host_model}   # si la estrategia no tiene investigación propia
@@ -206,6 +259,10 @@ entries:
     skill: skills/strategy-followup/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics]
+    data_needs:
+      - need: posiciones SHADOW
+      - need: evaluaciones SHADOW
+      - need: metricas SHADOW
     flow:
       - followup run --strategy <name> --prompt "<pedido>" --host-model <model>   # lee GaleCore por API; guarda evidencia y registro con hash
       - followup history --strategy <name>
@@ -216,6 +273,57 @@ entries:
       - Only data of the instance whose version hash equals the approved spec hash
       - Operation, SHADOW results and economic evidence are reported separately; simulated fills are never executions
       - Not checked - that the interpretation of the results is right
+
+  - id: daily_attention
+    kind: investigation
+    serves: >-
+      Decir qué merece tu atención hoy sobre lo que tenés en SHADOW: exposición de las posiciones frente a
+      los límites de tu perfil, qué dicen las reglas de la estrategia aprobada, qué cambió desde la última
+      revisión, el contexto de mercado que importa y qué falta, con fuentes, y guardarlo como revisión de
+      una investigación de atención diaria por estrategia.
+    example_requests:
+      - ¿Qué merece mi atención hoy sobre lo que tengo en SHADOW?
+      - ¿Cómo está la exposición y qué dicen las reglas de la estrategia sobre las posiciones abiertas?
+      - ¿Qué cambió desde la última revisión y qué contexto importa hoy?
+    skill: skills/daily-attention/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics, compute.gex_analysis, compute.put_skew, market_data.trade]
+    data_needs:
+      - need: posiciones SHADOW
+      - need: evaluaciones SHADOW
+      - need: metricas SHADOW
+      - need: GEX de SPY
+      - need: put skew de SPY
+      - need: VIX
+      - need: VVIX
+      - need: calendario de earnings
+      - need: griegas de posiciones SHADOW
+        missing: "ninguna fuente registrada las sirve (GaleCore no expone griegas de posiciones SHADOW por el harness)"
+      - need: riesgo maximo de posiciones SHADOW
+      - need: fecha del FOMC
+        missing: "ninguna fuente registrada la sirve (economics-calendar de FMP denegado por plan)"
+      - need: calendario de eventos macro
+        missing: "ninguna fuente registrada lo sirve"
+    flow:
+      - profile show
+      - kb search --kind strategy
+      - kb show strategy:<name>/<version>
+      - kb search --kind research --text "atencion diaria <strategy>"
+      - followup history --strategy <name>
+      - followup run --strategy <name> --prompt "<pedido>" --host-model <model>
+      - prepare --symbol SPY --skill regime   # contexto GaleCore, sólo lectura
+      - sources query --need "<dato>"
+      - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research save --capability daily_attention --slug atencion-diaria-<strategy> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability daily_attention --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - The research, evidence and strategy_followup controls; the runtime report is kept verbatim as evidence
+      - Only data of the instance whose version hash equals the approved spec hash
+      - A save must cite the profile in force (profile:v<N>); each revision records this skill's version and hash
+      - A data need no registered source covers is declared missing, never estimated
+      - "Not checked - that exposure is compared against the right limits, that the rules were applied correctly to each position, or that the attention points are the right ones"
+      - "Not checked - that a scheduled run covers this capability: recurring_followup runs only the strategy follow-up"
 
   - id: recurring_followup
     kind: task
@@ -231,6 +339,10 @@ entries:
     skill: skills/recurring-followup/skill.yaml
     output_contract: galecore_ai.contracts.task.TaskDefinition
     galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics]
+    data_needs:
+      - need: posiciones SHADOW
+      - need: evaluaciones SHADOW
+      - need: metricas SHADOW
     flow:
       - task create --id <id> --strategy <name> --objective "<qué querés saber>" --expected "<resultado>" --source "<fuente>" --frequency daily --time 17:05 --timezone America/New_York --prompt "<pedido>"
       - task status <id>

@@ -15,7 +15,7 @@ from __future__ import annotations
 from importlib import import_module
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from galecore_ai.harness.assets import asset_root, definition_hash, load_asset
 from galecore_ai.harness.definitions import SkillDefinition
@@ -28,6 +28,22 @@ class CatalogError(Exception):
     """The catalog or one of the assets it names is missing or inconsistent."""
 
 
+class DataNeed(BaseModel):
+    """A datum the capability needs, resolved against the source registry (config/sources.yaml)."""
+
+    model_config = {"extra": "forbid"}
+
+    need: str                            # in the terms `sources query --need` understands
+    missing: str | None = None           # why no source covers it today; required when the registry has none
+
+    @field_validator("need", "missing")
+    @classmethod
+    def _not_blank(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("must not be blank")
+        return v
+
+
 class CatalogEntry(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -38,6 +54,7 @@ class CatalogEntry(BaseModel):
     skill: str                           # skill asset path, relative to config/
     output_contract: str                 # module.Class of the output the host must produce
     galecore_capabilities: list[str] = Field(default_factory=list)
+    data_needs: list[DataNeed]           # every datum it needs; [] only when it reads no market or source data
     prepare_skill: str | None = None     # value of `prepare --skill` when the flow starts from a fact snapshot
     flow: list[str]                      # CLI commands, in order
     stored_as: str                       # none | regime | research | strategy | task | profile
