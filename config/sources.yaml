@@ -55,7 +55,14 @@ sources:
         description: CPI y breakevens de inflación
       - category: activity_employment
         description: nonfarm payroll, desempleo y otras series de actividad
-    limits: []
+      - category: macro_calendar
+        description: >-
+          calendario de publicaciones macro programadas (empleo / nonfarm payroll, CPI, PPI, PIB, ingresos y
+          gasto personal, ventas minoristas) con fred/releases/dates; se consulta con
+          `python tools/fred_query.py <dir> --releases <desde> <hasta> [<release_id> ...]`
+    limits:
+      - "Calendario de publicaciones: no trae el día de reunión del comité de la Fed; «FOMC Press Release» (release 101) figura todos los días porque publica series diarias (verificado el 30/09, GC-AI-0016)"
+      - "Calendario de publicaciones: fechas programadas por la agencia; se pueden mover (cierre de gobierno, reprogramación) y FRED lo refleja cuando la agencia lo publica"
     probe:
       description: GET a fred/series para una serie liviana (metadatos, sin observaciones históricas)
       command: python -B -m galecore_ai.adapters.cli sources check --source fred
