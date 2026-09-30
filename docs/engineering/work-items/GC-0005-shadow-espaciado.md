@@ -41,7 +41,7 @@ todas el mismo día; con un mínimo de minutos entre entradas se forma una escal
 
 - Roll de posiciones (queda para después, con data de la escalera y una definición de cuándo y a qué se rolea).
 - Cambiar gates, umbrales, sizing o el cálculo de riesgo.
-- Desplegar la spec 1.0.4: el archivo viaja en esta rama, pero se despliega sólo con su aprobación registrada
+- Desplegar la spec 1.0.5: el archivo viaja en esta rama, pero se despliega sólo con su aprobación registrada
   por hash (`strategy approve` → `strategy deploy-check` en GaleCore-AI) y después de integrar este cambio.
 
 ## Acceptance criteria
@@ -58,10 +58,11 @@ todas el mismo día; con un mínimo de minutos entre entradas se forma una escal
   Evidencia: `ShadowRuntimePersistenceTests.AfterRestart_SpacingCountsTheRecoveredEntry`.
 - [ ] **AC-05 — Revisión:** Codex (una vez, al cierre) y cierre.
 
-- [x] **AC-06 — Spec 1.0.4:** `spy_prima_varianza_30_45d.json` pasa a 1.0.4 (`max_concurrent_positions` 10,
-  `min_minutes_between_entries` 1440, `parent_version_hash` = hash de 1.0.3; nada más cambia). GaleCore la
-  carga, la valida y su hash es `sha256:e5654e45ff27afa94459b2ce7d45708b9f9ec6472d530ebf8be5d6ee2e021472`,
-  igual al que calcula GaleCore-AI. Evidencia: `StrategySpecVersionTests.LoadsValidatesAndHashesAsSubmitted`.
+- [x] **AC-06 — Spec 1.0.5:** `spy_prima_varianza_30_45d.json` pasa a 1.0.5: `max_concurrent_positions` 10,
+  `min_minutes_between_entries` 1440, `parent_version_hash` = hash de 1.0.3, `identity.created_at` 2026-09-30 y
+  `metadata.notes` apuntando a la propuesta 1.0.5; nada más cambia. GaleCore la carga, la valida y su hash es
+  `sha256:01cdc4d76af8bb1a4ba16d02abcec09d500019e05e10094c9750735925be0475`, igual al que calcula GaleCore-AI.
+  (La 1.0.4 quedó guardada sin aprobar: la revisión interna encontró que sus notas remitían a 1.0.3.) Evidencia: `StrategySpecVersionTests.LoadsValidatesAndHashesAsSubmitted`.
 
 ## Evidencia
 
@@ -73,5 +74,5 @@ todas el mismo día; con un mínimo de minutos entre entradas se forma una escal
 - Para quien lleva GaleCore: addendum «Cambios posteriores al traspaso» en
   `docs/engineering/HANDOFF-GALECORE-SHADOW.md` del workspace. Si tocó `ShadowRuntimeEngine.cs` después del
   28/09, el conflicto posible está en el bloque «3b. Espaciado entre entradas».
-- Orden de despliegue: primero GaleCore con este cambio corriendo; recién después la spec 1.0.4. Un runtime
+- Orden de despliegue: primero GaleCore con este cambio corriendo; recién después la spec 1.0.5. Un runtime
   sin GC-0005 ignoraría el campo en silencio y abriría hasta 10 posiciones el mismo día.
