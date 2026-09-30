@@ -1,7 +1,7 @@
 ---
 id: GC-AI-0017
 title: Programar cualquier capacidad de sólo lectura — el briefing te llega solo (base del harness, entrega 5)
-status: DRAFT
+status: IN_PROGRESS
 implementer: claude-code
 reviewer: codex
 approver: user
@@ -15,7 +15,8 @@ approval_result: PENDING
 
 Roadmap §4, Parte 1, entrega 5 («Secuencia autorizada», owner 29/09). Mismo caso que las entregas 3 y 4: «¿Qué merece
 mi atención hoy?» (`daily_attention`). Rama desde `feature/GC-AI-0016` (entrega 4 en espera de Codex); si esa revisión
-cambia algo, se trae con un merge antes de revisar esta. **Borrador para aprobar antes de escribir código.**
+cambia algo, se trae con un merge antes de revisar esta. **Aprobado por el owner el 30/09** («dale con la entrega 5»); se
+empieza por AC-01.
 
 ## Acuerdo breve
 
