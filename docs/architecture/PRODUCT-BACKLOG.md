@@ -1261,6 +1261,24 @@ SHADOW). Lo que implica, medido en el código al cierre de I3 (rama `feature/GC-
 con la prohibición de posiciones long direccionales de `GaleCore/CLAUDE.md`; requeriría una decisión explícita) y
 una multi-ticker de spreads. Toca GaleCore.
 
+**Addendum 2026-09-30 — caso de uso del owner: «tengo 5.000 USD, ¿qué hago con esto?»:** conversación sobre
+la versión de la estrategia SHADOW que opera muchas posiciones. El owner: «imaginate que tengo 5000 usd ahora y digo
+bueno que hago con esto... ahí debería haber un gestor de portafolios, un gestor de riesgos, sino diría che qué es lo
+más rentable y le meto los 5000 usd a 1 sola posición total en ese momento es la óptima». Lo que el ítem tiene que
+resolver con este caso:
+
+- **Gestor de riesgo:** cuánto se puede perder por operación y en total, y cuánta reserva se deja para ajustes,
+  rolls y oportunidades (hoy: `profile:v4`, 5 % por operación, 15 % sumado; usados como reales en testing).
+- **Gestor de portafolio:** dónde y cuándo se pone ese riesgo. En el tiempo (escalera de entradas y vencimientos), entre
+  estrategias y subyacentes poco correlacionados, y rebalanceo según resultados. Diez PCS de SPY diversifican el tiempo,
+  no el mercado.
+- **Por qué no «todo a la óptima»:** la óptima es una estimación ruidosa; vender prima tiene cola negativa (muchas
+  ganancias chicas, pérdidas grandes raras) y la concentración expone todo el capital a un solo evento o momento.
+- **Insumo:** la escalera SHADOW de `spy_prima_varianza_30_45d` 1.0.4 (hasta 10 posiciones, una entrada por día,
+  30/09) genera la data para calibrar con números (frecuencia de stops, peso de eventos macro, reserva usada).
+- **Resultado esperado del ítem:** ante «tengo X USD», una propuesta de reparto con límites, reserva y justificación,
+  que cita perfil, estrategias vigentes y evidencia; nunca una orden. Cruza con BL-008 (cartera integral).
+
 ---
 
 ## BL-008 — Gestión integral del portfolio y espacio financiero personal y compartido
