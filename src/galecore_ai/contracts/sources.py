@@ -35,6 +35,7 @@ class AccessType(str, Enum):
     GALECORE_API = "galecore_api"      # GaleCore's own API
     API_KEY = "api_key"                # this repo's code calls it directly with a key from the environment
     HOST_CONNECTOR = "host_connector"  # an MCP tool or similar the host has; this repo's code cannot call it
+    PUBLIC = "public"                  # a public page or file this repo's code reads directly, no key (GC-AI-0016)
 
 
 class Usage(str, Enum):

@@ -1,6 +1,14 @@
 # Qué cambió en cada versión de daily_attention y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: daily_attention
 versions:
+  - version: "0.2.1"
+    date: 2026-09-30
+    changes: >
+      Las reuniones del FOMC entran en la tabla eventos x posiciones desde el calendario oficial de la Fed
+      (fuente registrada `fed`, tools/fed_calendar.py), marcando las que traen proyecciones; dejan de ser
+      faltante. Completa el comentario del owner (qué evento macro viene): la 0.2.0 no tenía fuente para el
+      FOMC. Aclara las rutas de tools/ desde el checkout y desde la raíz del workspace.
+    feedback: [feedback:2026-09-30-briefing-eventos-macro-vs-posiciones]
   - version: "0.2.0"
     date: 2026-09-30
     changes: >

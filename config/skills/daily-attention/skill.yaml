@@ -1,5 +1,5 @@
 skill_id: daily_attention
-version: "0.2.0"
+version: "0.2.1"
 display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
 description: >
   Answers "what deserves my attention today about what I have in SHADOW?": exposure of the open SHADOW
@@ -52,9 +52,12 @@ system_prompt: >
      from FRED's release calendar, the registered source for it (`sources query --need "calendario
      macro"`): `python tools/fred_query.py <dir> --releases <today> <latest expiry of the open
      positions> [<release_id> ...]` (FRED_API_KEY in the environment), the response kept with
-     `evidence add` and cited. Release dates are scheduled and can move: say so. The FOMC meeting
-     date has no registered source (FRED does not carry it): write it under `missing`, never from
-     memory or the web; the same for any event no registered source covers.
+     `evidence add` and cited. Release dates are scheduled and can move: say so. FOMC meetings from
+     the Fed's official calendar, the registered source for them (`sources query --need "reuniones del
+     FOMC"`): `python tools/fed_calendar.py <dir>` (no key), `fomc.meetings.json` kept with `evidence
+     add` and cited; mark the meetings with economic projections («*»). Any event no registered source
+     covers goes under `missing`, never from memory or the web. Paths: `tools/...` from the GaleCore-AI
+     checkout (the catalog writes them from the workspace root as `GaleCore-AI/tools/...`).
   7b. Always, even if nothing else changed: events against positions. A table with one row per
      scheduled event (macro release or earnings) that falls between today and the latest expiry of the
      open positions: event, date, days from today, and for each open position whether it falls before
@@ -90,11 +93,11 @@ instructions: |
   sources query --need "<dato>"                  # antes de usar una fuente externa
   python tools/fred_query.py <dir> --releases <hoy> <último vencimiento> 50 10 46 53 54 9
                                                  # calendario de publicaciones macro (FRED); evidence add
+  python tools/fed_calendar.py <dir>             # reuniones del FOMC (página oficial de la Fed); evidence add
   # siempre: tabla eventos x posiciones (antes / después del vencimiento y de la salida por tiempo)
   evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
   research save|revise --capability daily_attention ...
 
-  Missing by registry (declare, never estimate): griegas de posiciones SHADOW,
-  fecha de reunión del FOMC.
+  Missing by registry (declare, never estimate): griegas de posiciones SHADOW.
 
 examples: []

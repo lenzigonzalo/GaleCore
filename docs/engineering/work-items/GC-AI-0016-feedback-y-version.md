@@ -90,7 +90,15 @@ eligió y la derivó a este item (29/09).
 Calendario de publicaciones macro desde FRED. Pregunta del 30/09: «¿Lo sumo dentro de GC-AI-0016?». Respuesta del
 owner: «Sí, sumar FRED». Sin eso, la versión 2 sólo podía declarar el calendario como faltante. Queda: cobertura
 `macro_calendar` en `config/sources.yaml` (con límites: no trae la reunión del FOMC, fechas que pueden moverse) y
-`tools/fred_query.py --releases` (paginado, extracto por publicación). La fecha del FOMC sigue sin fuente.
+`tools/fred_query.py --releases` (paginado, extracto por publicación).
+
+Segunda ampliación (owner, 30/09, opción A de las propuestas para el FOMC: «andá con la A»): fuente `fed` (página
+oficial del calendario del FOMC, gratis y sin clave) con `tools/fed_calendar.py`, tipo de acceso nuevo `public` en
+`contracts/sources.py`, `daily_attention` 0.2.1 (el FOMC entra en eventos × posiciones y deja de ser faltante;
+historial cita el mismo feedback), `catalog --check` resuelve `GaleCore-AI/...` contra el checkout propio (antes un
+script nuevo de un worktree fallaba hasta el merge). Perfil `profile:v4` (knowledge): límites de testing usados como
+reales a pedido del owner («usalo como si fueran reales por ahora… pone los valores razonables»): 5 % por operación
+medido por riesgo máximo, 15 % sumado, drawdown 15 %; sin campos provisorios.
 
 ## Non-goals
 

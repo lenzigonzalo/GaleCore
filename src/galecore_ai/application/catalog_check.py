@@ -35,6 +35,16 @@ def cli_commands(parser: argparse.ArgumentParser) -> dict[str, set[str]]:
     return {name: set(subcommands(child)) for name, child in subcommands(parser).items()}
 
 
+CHECKOUT = Path(__file__).resolve().parents[3]  # the GaleCore-AI checkout this code runs from (also a worktree)
+
+
+def _script_path(script: str, workspace: Path) -> Path:
+    """A flow script: ``GaleCore-AI/...`` is this checkout's own file (a worktree's new script counts before
+    it is merged); anything else is relative to the workspace root."""
+    head, _, rest = script.partition("/")
+    return CHECKOUT / rest if head == "GaleCore-AI" and rest else workspace / script
+
+
 def _flow_problems(entry: CatalogEntry, commands: dict[str, set[str]], workspace: Path) -> list[str]:
     problems = [] if entry.flow else ["flow: empty; a capability says which commands run it"]
     for line in entry.flow:
@@ -43,7 +53,7 @@ def _flow_problems(entry: CatalogEntry, commands: dict[str, set[str]], workspace
             problems.append("flow: blank line")
             continue
         if tokens[0] == "python":
-            if len(tokens) < 2 or not tokens[1].endswith(".py") or not (workspace / tokens[1]).is_file():
+            if len(tokens) < 2 or not tokens[1].endswith(".py") or not _script_path(tokens[1], workspace).is_file():
                 problems.append(f"flow: script not found in the workspace: {line!r}")
             continue
         if tokens[0] not in commands:

@@ -67,6 +67,24 @@ sources:
       description: GET a fred/series para una serie liviana (metadatos, sin observaciones históricas)
       command: python -B -m galecore_ai.adapters.cli sources check --source fred
 
+  - id: fed
+    display_name: Federal Reserve (calendario del FOMC)
+    access_type: public
+    cost: gratis, sin clave (página pública de la Fed)
+    usage: free
+    preference: 10
+    covers:
+      - category: macro_calendar
+        description: >-
+          fechas de las reuniones del FOMC (comité de la Fed) programadas, con las que traen proyecciones económicas, del año en
+          curso y el siguiente; se consulta con `python tools/fed_calendar.py <dir> [<año> ...]`
+    limits:
+      - "Lee la página HTML de la Fed (fomccalendars.htm): si cambia su forma, la herramienta falla en vez de devolver una lista vacía (verificado el 30/09, GC-AI-0016)"
+      - "Sólo reuniones programadas; una reunión o decisión fuera de calendario aparece cuando la Fed la publica"
+    probe:
+      description: GET a la página del calendario y lectura del año en curso
+      command: python tools/fed_calendar.py <dir>
+
   - id: alpha_vantage
     display_name: Alpha Vantage
     access_type: host_connector

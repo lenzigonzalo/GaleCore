@@ -78,7 +78,7 @@ def test_an_incomplete_entry_is_rejected_with_the_reason(tmp_path, overrides, ex
 
 
 def test_a_need_without_source_passes_when_its_absence_is_declared(tmp_path):
-    ok = entry(data_needs=[{"need": "fecha del FOMC", "missing": "economics-calendar de FMP denegado por plan"}])
+    ok = entry(data_needs=[{"need": "griegas de posiciones SHADOW", "missing": "ninguna fuente registrada las sirve"}])
     assert run(ok, tmp_path=tmp_path)["complete"]
 
 
@@ -90,4 +90,4 @@ def test_cli_commands_know_nested_subcommands():
 
 def test_a_blank_missing_reason_is_refused():
     with pytest.raises(ValidationError, match="must not be blank"):
-        entry(data_needs=[{"need": "fecha del FOMC", "missing": "  "}])
+        entry(data_needs=[{"need": "griegas de posiciones SHADOW", "missing": "  "}])

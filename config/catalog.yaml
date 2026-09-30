@@ -200,7 +200,6 @@ entries:
       - need: calendario de earnings
       - need: VIX
       - need: fecha del FOMC
-        missing: "ninguna fuente registrada la sirve (economics-calendar de FMP denegado por plan)"
     flow:
       - kb search --text "<idea, instrumento>" [--kind research|evidence] [--status unfinished]
       - evidence add --slug <fuente-serie> --prompt "<pedido del usuario>" < {content, host_provider, host_model}
@@ -309,8 +308,7 @@ entries:
       - need: griegas de posiciones SHADOW
         missing: "ninguna fuente registrada las sirve (GaleCore no expone griegas de posiciones SHADOW por el harness)"
       - need: riesgo maximo de posiciones SHADOW
-      - need: fecha del FOMC
-        missing: "ninguna fuente registrada la sirve (economics-calendar de FMP denegado por plan; el calendario de FRED no trae la reunión del comité)"
+      - need: reuniones del FOMC
       - need: calendario macro
     flow:
       - profile show
@@ -322,6 +320,7 @@ entries:
       - prepare --symbol SPY --skill regime   # contexto GaleCore, sólo lectura
       - sources query --need "<dato>"
       - python GaleCore-AI/tools/fred_query.py <dir> --releases <hoy> <último vencimiento> [<release_id> ...]
+      - python GaleCore-AI/tools/fed_calendar.py <dir>
       - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
       - research save --capability daily_attention --slug atencion-diaria-<strategy> --prompt "<pedido>" < {content, host_provider, host_model}
       - research revise --capability daily_attention --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
