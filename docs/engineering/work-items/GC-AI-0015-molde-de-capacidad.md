@@ -163,6 +163,15 @@ CHANGES_REQUESTED, sin BLOCKER.
 | MAJOR (nuevo) — handoff dice pendiente la recorrida | Corregido: el handoff describe r2 (con el desvío), el control nuevo, r3 y el commit de `knowledge`. |
 | MAJOR (nuevo) — r2 y sus evidencias sin commitear en `knowledge` | Corregido: commit `5597222` de `knowledge` (r2, r3, seguimientos 13:22/13:34/13:45Z con sus evidencias, feedback y calendario FRED). La investigación es append-only con hash por revisión: r2 queda fija aunque exista r3. |
 
-**C3 (recheck) — pendiente.** 30/09 14:07Z: Codex cortó por límite de uso de la cuenta («try again at Oct 3rd, 2026 7:28 PM»); no se escribió review. Relanzar al habilitarse con el mismo comando (`--recheck docs/engineering/reviews/GC-AI-0015-20260930T134302Z.md`).
+**C3 — no corresponde.** Regla del owner del 30/09 (ENGINEERING.md §3): Codex revisa una vez por entrega, sin
+rechecks; sus hallazgos se corrigen y las correcciones las verifica el reviewer interno. (El C3 que se lanzó el 30/09
+cortó por límite de uso de Codex y no escribió review.)
+
+**Recheck interno de las correcciones de C1/C2 (`reviewer`, Sonnet, 30/09): APPROVE.** Verificó cada hallazgo: el
+disputado, con los tiempos (`19f660f` 13:42Z, merge en 0016 13:43Z, r3 guardada 13:51Z con el cálculo propio como
+`interpretation`) y el commit `5597222` de `knowledge`. Suite 913 passed, gate PASS. Dos MINOR: referencias a «recheck
+C3» (corregidas) y la celda de AC-06 que mezcla r1–r3 (se deja: correcta, sólo densa).
+
+**Estado: técnicamente listo; utilidad y cierre, del owner.**
 
 Antecedente: 29/09 23:45Z el runner no pudo correr Codex por límite de uso de la cuenta.
