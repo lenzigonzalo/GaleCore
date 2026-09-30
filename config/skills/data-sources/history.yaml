@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de data_sources y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: data_sources
+versions:
+  - version: "1.1.0"
+    date: 2026-09-29
+    changes: >
+      Orden de fuentes por tipo de uso; cotizaciones de SPY por GaleCore y FMP (GC-AI-0014). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

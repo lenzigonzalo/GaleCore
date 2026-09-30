@@ -105,6 +105,7 @@ class ProfileVersion(BaseModel):
     prompt: str      # the user's words that asked for it
     host: RecordHost
     content: ProfileContent
+    feedback: list[str] = Field(default_factory=list)  # feedback:<id> this version applies (GC-AI-0016)
     content_hash: str
 
     @field_validator("schema_version")
@@ -151,4 +152,6 @@ class ProfileVersion(BaseModel):
         data.pop("content_hash", None)
         if not data["content"]["provisional"]:
             del data["content"]["provisional"]  # versions written before the field existed keep their hash
+        if not data["feedback"]:
+            del data["feedback"]  # same for versions written before feedback could be cited
         return data

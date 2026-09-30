@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de strategy_followup y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: strategy_followup
+versions:
+  - version: "0.4.0"
+    date: 2026-09-29
+    changes: >
+      Necesidades de datos declaradas en el catálogo (GC-AI-0015). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

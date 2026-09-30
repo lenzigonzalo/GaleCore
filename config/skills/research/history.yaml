@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: research
+versions:
+  - version: "1.3.0"
+    date: 2026-09-29
+    changes: >
+      Lee y cita el perfil vigente; fuentes por tipo de uso (GC-AI-0013, GC-AI-0014). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

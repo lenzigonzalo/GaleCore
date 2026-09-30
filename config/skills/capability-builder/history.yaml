@@ -1,0 +1,15 @@
+# Qué cambió en cada versión de capability_builder y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: capability_builder
+versions:
+  - version: "0.2.0"
+    date: 2026-09-30
+    changes: >
+      Suma el recorrido «corregir una capacidad desde tu feedback»: guardar el comentario atado al resultado,
+      clasificarlo (caso, preferencia, método) y aplicarlo donde corresponde citándolo; history.yaml al crear
+      una capacidad (GC-AI-0016, AC-05). Viene del acuerdo del work item, no de un comentario sobre un resultado.
+    feedback: []
+  - version: "0.1.1"
+    date: 2026-09-29
+    changes: >
+      Guía para crear una capacidad con el molde: necesidades de datos por entrada, catalog --check, slug documentado (GC-AI-0015). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

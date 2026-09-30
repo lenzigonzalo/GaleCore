@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de context_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: context_research
+versions:
+  - version: "0.4.0"
+    date: 2026-09-29
+    changes: >
+      Fuentes ordenadas por tipo de uso (gratis, propia, cupo diario, plan) y aviso de cupo (GC-AI-0014). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

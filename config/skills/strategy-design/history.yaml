@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: strategy_design
+versions:
+  - version: "0.3.1"
+    date: 2026-09-27
+    changes: >
+      Correcciones de Codex C1: campos de semántica única, gates por hoja, deploy atado a la aprobación (GC-AI-0008). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

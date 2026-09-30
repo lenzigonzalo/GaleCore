@@ -2,19 +2,26 @@
 
 A capability is complete when its skill and output contract load (``describe``), every
 flow line is a command this CLI actually has (or a script that exists in the workspace),
-every data need resolves to a source of the registry or says why none covers it, and its
-controls say what is NOT checked. What fails is listed per entry; nothing is fixed here.
+every data need resolves to a source of the registry or says why none covers it, its
+controls say what is NOT checked, and its skill history says what the version in force
+changed and cites resolvable ``method`` feedback about that skill (GC-AI-0016). What fails
+is listed per entry; nothing is fixed here.
 """
 
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from pathlib import Path
 
 from galecore_ai.adapters.source_status_store import FileSourceStatusStore
 from galecore_ai.application.source_query import query_sources
 from galecore_ai.contracts.sources import SourceRegistry
 from galecore_ai.harness.catalog import Catalog, CatalogEntry, describe
+from galecore_ai.harness.skill_history import SkillHistoryError, load_skill_history
+
+# (feedback refs, skill id, version that applies them) → problems; None when the knowledge base is unavailable.
+FeedbackCheck = Callable[[list[str], str, str], list[str]]
 
 
 def cli_commands(parser: argparse.ArgumentParser) -> dict[str, set[str]]:
@@ -61,22 +68,46 @@ def _data_problems(entry: CatalogEntry, registry: SourceRegistry, status_store: 
     return problems
 
 
+def _history_problems(entry: CatalogEntry, described: dict, feedback_check: FeedbackCheck | None) -> list[str]:
+    try:
+        history = load_skill_history(entry.skill)
+    except SkillHistoryError as exc:
+        return [f"history: {exc}"]
+    problems = [] if history.skill_id == entry.id else [f"history: declares skill_id {history.skill_id!r}"]
+    versions = [v.version for v in history.versions]
+    problems += [f"history: version {v} appears more than once" for v in sorted(set(versions)) if versions.count(v) > 1]
+    in_force = (described.get("skill_asset") or {}).get("version")
+    if in_force and history.get(in_force) is None:
+        problems.append(f"history: no entry for the version in force {in_force}; say what it changed")
+    for note in history.versions:
+        if not note.feedback:
+            continue
+        if feedback_check is None:
+            problems.append(f"history {note.version}: cites feedback but the knowledge base is not available")
+            continue
+        problems += [f"history {note.version}: {p}" for p in feedback_check(note.feedback, entry.id, note.version)]
+    return problems
+
+
 def check_entry(entry: CatalogEntry, described: dict, *, commands: dict[str, set[str]], workspace: Path,
-                registry: SourceRegistry, status_store: FileSourceStatusStore) -> list[str]:
+                registry: SourceRegistry, status_store: FileSourceStatusStore,
+                feedback_check: FeedbackCheck | None = None) -> list[str]:
     problems = [] if described.get("available") else [f"skill or contract: {described.get('error')}"]
     problems += _flow_problems(entry, commands, workspace)
     problems += _data_problems(entry, registry, status_store)
     if not any(c.lower().startswith("not checked") and c[len("not checked"):].strip(" -–:") for c in entry.controls):
         problems.append("controls: none says what is NOT checked")
+    problems += _history_problems(entry, described, feedback_check)
     return problems
 
 
 def check_catalog(catalog: Catalog, *, commands: dict[str, set[str]], workspace: Path,
-                  registry: SourceRegistry, status_store: FileSourceStatusStore) -> dict:
+                  registry: SourceRegistry, status_store: FileSourceStatusStore,
+                  feedback_check: FeedbackCheck | None = None) -> dict:
     described = {d["id"]: d for d in describe(catalog)}
     results = []
     for entry in catalog.entries:
         problems = check_entry(entry, described[entry.id], commands=commands, workspace=workspace,
-                               registry=registry, status_store=status_store)
+                               registry=registry, status_store=status_store, feedback_check=feedback_check)
         results.append({"id": entry.id, "complete": not problems, "problems": problems})
     return {"complete": all(r["complete"] for r in results), "entries": results}

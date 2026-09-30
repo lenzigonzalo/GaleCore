@@ -10,6 +10,7 @@ repository has checked out:
         evidence/<id>.json                source responses with provenance (evidence_store)
         strategies/<name>/<version>.*.json  strategy proposals and approvals (strategy_store)
         profile/v<N>.json                 the user profile, one file per version (profile_store)
+        feedback/<id>.json                the user's comments on a result (feedback_store)
 
 ``GALECORE_KNOWLEDGE_DIR`` overrides the location. Without it, the directory is
 found by walking up from this checkout to the workspace root (the directory that
@@ -24,6 +25,7 @@ References are how one piece of work cites another:
     evidence:<id>              a source response kept with its provenance
     strategy:<name>/<version>  a strategy proposal version (with its spec and approval)
     profile:v<N>               a version of the user profile
+    feedback:<id>              the user's comment on a result
     file:<path>                a local file, relative to the workspace root
 
 ``file:`` paths resolve against the parent of the knowledge directory, which is
@@ -41,7 +43,7 @@ KNOWLEDGE_DIR_ENV = "GALECORE_KNOWLEDGE_DIR"
 
 _REGIME_KEY_RE = re.compile(r"^(?P<symbol>[A-Za-z0-9.\-]{1,12})/(?P<date>\d{4}-\d{2}-\d{2})$")
 RESEARCH_ID_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$")
-REF_KINDS = ("regime", "research", "evidence", "strategy", "profile", "file")
+REF_KINDS = ("regime", "research", "evidence", "strategy", "profile", "feedback", "file")
 _STRATEGY_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}/\d+\.\d+\.\d+$")
 _PROFILE_KEY_RE = re.compile(r"^v[1-9]\d*$")
 
@@ -92,7 +94,7 @@ def parse_ref(text: str) -> Ref:
     if not sep or kind not in REF_KINDS or not key:
         raise KnowledgeBaseError(
             f"Malformed reference {text!r}: expected regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, "
-            "evidence:<id>, strategy:<name>/<version>, profile:v<N> or file:<path>"
+            "evidence:<id>, strategy:<name>/<version>, profile:v<N>, feedback:<id> or file:<path>"
         )
     if kind == "regime":
         m = _REGIME_KEY_RE.fullmatch(key)
@@ -107,6 +109,10 @@ def parse_ref(text: str) -> Ref:
         if not RESEARCH_ID_RE.fullmatch(key):
             raise KnowledgeBaseError(f"Malformed evidence reference {text!r}: expected evidence:<YYYY-MM-DD-slug>")
         return Ref("evidence", key)
+    if kind == "feedback":
+        if not RESEARCH_ID_RE.fullmatch(key):
+            raise KnowledgeBaseError(f"Malformed feedback reference {text!r}: expected feedback:<YYYY-MM-DD-slug>")
+        return Ref("feedback", key)
     if kind == "strategy":
         if not _STRATEGY_KEY_RE.fullmatch(key):
             raise KnowledgeBaseError(f"Malformed strategy reference {text!r}: expected strategy:<name>/<MAJOR.MINOR.PATCH>")
@@ -135,4 +141,6 @@ def ref_path(ref: Ref, base: Path) -> Path:
         return base / "strategies" / name / f"{version}.proposal.json"
     if ref.kind == "profile":
         return base / "profile" / f"{ref.key}.json"
+    if ref.kind == "feedback":
+        return base / "feedback" / f"{ref.key}.json"
     return (base.parent / ref.key).resolve()

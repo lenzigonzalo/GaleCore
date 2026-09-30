@@ -128,6 +128,8 @@ entries:
     example_requests:
       - Quiero una capacidad que me diga qué merece mi atención hoy.
       - Armá una skill de reporte macro para ver los eventos de la semana.
+      - Le faltó el calendario de la Fed.
+      - ¿Qué feedback quedó pendiente?
     skill: skills/capability-builder/skill.yaml
     output_contract: galecore_ai.harness.catalog.CatalogEntry
     galecore_capabilities: []
@@ -137,10 +139,15 @@ entries:
       - sources query --need "<dato>"
       - profile show
       - catalog --check
+      - feedback add --research research:<id> --revision <N> --classification <kind> --slug <slug> --prompt "<pedido>"
+      - feedback list
     stored_as: none
     controls:
       - "catalog --check rejects an entry whose skill or contract does not load, whose flow names a command this CLI does not have (or a script not in the workspace), whose data need no registered source covers without a declared reason, or whose controls do not say what is not checked"
       - A result stored as research must cite the profile in force (enforced when saving)
+      - "feedback add rejects a result or revision that does not exist and takes the skill and version from that revision; written once, hashed"
+      - "A profile version or skill history may only cite feedback of its kind (preference / method), and a skill version only feedback about an earlier version of that skill; feedback list counts as applied only a citation where its kind belongs"
+      - Not checked - that the classification is right or that the correction does what the comment asked; the next run shows it
       - Not checked - that the capability is useful or that its method is right; that is judged by running it
       - Not checked - the options and arguments of each flow line (only the command and subcommand)
 

@@ -23,6 +23,11 @@ from galecore_ai.adapters.evidence_store import (
     EvidenceStoreError,
     FileEvidenceStore,
 )
+from galecore_ai.adapters.feedback_store import (
+    FeedbackIntegrityError,
+    FeedbackStoreError,
+    FileFeedbackStore,
+)
 from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, Ref, parse_ref, ref_path
 from galecore_ai.adapters.profile_store import (
     FileProfileStore,
@@ -45,6 +50,13 @@ from galecore_ai.adapters.strategy_store import (
     StrategyStoreError,
 )
 from galecore_ai.contracts.evidence import EvidenceContent, EvidenceDocument, compute_evidence_hash
+from galecore_ai.contracts.feedback import (
+    APPLIED_BY,
+    FeedbackDocument,
+    FeedbackKind,
+    FeedbackTarget,
+    compute_feedback_hash,
+)
 from galecore_ai.contracts.prepared_analysis import AssetEntry
 from galecore_ai.contracts.regime_record import RecordHost
 from galecore_ai.contracts.research import (
@@ -60,6 +72,7 @@ from galecore_ai.contracts.research import (
 from galecore_ai.harness.assets import definition_hash, load_asset
 from galecore_ai.harness.catalog import CatalogError, load_catalog
 from galecore_ai.harness.definitions import SkillDefinition
+from galecore_ai.harness.skill_history import SkillHistoryError, load_skill_history
 
 
 class KnowledgeError(Exception):
@@ -91,6 +104,10 @@ class KnowledgeBase:
     @property
     def profile(self) -> FileProfileStore:
         return FileProfileStore(self.base)
+
+    @property
+    def feedback(self) -> FileFeedbackStore:
+        return FileFeedbackStore(self.base)
 
 
 def _sha256_file(path: Path) -> str:
@@ -152,12 +169,15 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
         except (ProfileIntegrityError, ProfileStoreError) as exc:
             raise KnowledgeError(f"{ref}: not usable ({exc})") from exc
         path = kb.profile.path_for(ref.key)
+    elif ref.kind == "feedback":
+        load_feedback(kb, str(ref))
+        path = kb.feedback.path_for(ref.key)
     else:
         path = ref_path(ref, kb.base)
         if path.is_relative_to(kb.base.resolve()):
             # Knowledge items are cited by kind so their integrity (and self-citation) is checked.
             raise KnowledgeError(f"{ref}: points inside the knowledge base; cite it as regime:, research:, "
-                                 "evidence:, strategy: or profile:")
+                                 "evidence:, strategy:, profile: or feedback:")
         if not path.is_relative_to(kb.workspace.resolve()) or not path.is_file():
             raise KnowledgeError(f"{ref}: no such file inside the workspace")
     return ResolvedRef(ref=str(ref), path=_display_path(path, kb), content_hash=_sha256_file(path))
@@ -350,6 +370,176 @@ def _evidence_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, s
     return items
 
 
+# ── feedback ─────────────────────────────────────────────────────
+
+
+def load_feedback(kb: KnowledgeBase, ref_text: str) -> FeedbackDocument:
+    """An intact feedback item, or KnowledgeError."""
+    try:
+        ref = parse_ref(ref_text)
+    except KnowledgeBaseError as exc:
+        raise KnowledgeError(str(exc)) from exc
+    if ref.kind != "feedback":
+        raise KnowledgeError(f"{ref}: not a feedback reference (expected feedback:<id>)")
+    try:
+        doc = kb.feedback.load(ref.key)
+    except (FeedbackIntegrityError, FeedbackStoreError) as exc:
+        raise KnowledgeError(f"{ref}: not usable ({exc})") from exc
+    if doc is None:
+        raise KnowledgeError(f"{ref}: no such feedback")
+    return doc
+
+
+def check_feedback_citations(kb: KnowledgeBase, refs: list[str], *, kind: FeedbackKind,
+                             skill_id: str | None = None, applied_version: str | None = None) -> list[str]:
+    """Problems with citing ``refs`` where a feedback of ``kind`` is applied (profile or skill history).
+
+    For a skill, the feedback must be about that skill and about an earlier result: a
+    version cannot be the correction of a result it produced itself.
+    """
+    problems = []
+    for text in refs:
+        try:
+            doc = load_feedback(kb, text)
+        except KnowledgeError as exc:
+            problems.append(str(exc))
+            continue
+        if doc.classification != kind:
+            problems.append(f"{doc.ref} is classified as {doc.classification.value}; it is applied in "
+                            f"{APPLIED_BY[doc.classification]}, not here")
+        elif skill_id is not None and doc.target.skill.asset_id != skill_id:
+            problems.append(f"{doc.ref} is about skill {doc.target.skill.asset_id}, not {skill_id}")
+        elif applied_version is not None and doc.target.skill.version == applied_version:
+            problems.append(f"{doc.ref} is about a result of version {applied_version} itself; "
+                            "the version that applies it is a new one")
+    return problems
+
+
+def save_feedback(*, kb: KnowledgeBase, slug: str, words: str, classification: FeedbackKind, research: str,
+                  revision: int, prompt: str, host: RecordHost, formulation: str = "",
+                  now: datetime | None = None) -> tuple[FeedbackDocument, Path]:
+    """Keep the user's comment tied to one stored revision; skill and version come from that revision."""
+    now = now or datetime.now(UTC)
+    feedback_id = f"{now.date().isoformat()}-{slug}"
+    try:
+        ref = parse_ref(research)
+    except KnowledgeBaseError as exc:
+        raise KnowledgeError("Refusing to save", [str(exc)]) from exc
+    if ref.kind != "research":
+        raise KnowledgeError("Refusing to save", [f"{ref}: feedback is about a stored result (research:<id>)"])
+    try:
+        doc = kb.research.load(ref.key)
+    except (ResearchIntegrityError, ResearchStoreError) as exc:
+        raise KnowledgeError("Refusing to save", [f"{ref}: not usable ({exc})"]) from exc
+    if doc is None:
+        raise KnowledgeError("Refusing to save", [f"{ref}: no such investigation"])
+    rev = next((r for r in doc.revisions if r.revision == revision), None)
+    if rev is None:
+        raise KnowledgeError("Refusing to save", [f"{ref} has no revision {revision} (it has {len(doc.revisions)})"])
+    target = FeedbackTarget(research=str(ref), revision=rev.revision, revision_hash=rev.content_hash,
+                            skill=rev.skill)
+    try:
+        draft = FeedbackDocument(id=feedback_id, recorded_at=now, host=host, words=words, formulation=formulation,
+                                 classification=classification, target=target, prompt=prompt, content_hash="")
+    except ValidationError as exc:
+        # loc + msg only: the rejected text may carry a credential.
+        raise KnowledgeError("Refusing to save", [f"{'.'.join(map(str, e['loc']))}: {e['msg']}"
+                                                  for e in exc.errors()]) from exc
+    document = draft.model_copy(update={"content_hash": compute_feedback_hash(draft.hashable_content())})
+    try:
+        path = kb.feedback.create(document)
+    except FeedbackStoreError as exc:
+        raise KnowledgeError("Refusing to save", [str(exc)]) from exc
+    return document, path
+
+
+def _skill_citations(failed: list[dict]) -> dict[str, list[dict]]:
+    """feedback:<id> → skill versions whose history cites it."""
+    out: dict[str, list[dict]] = {}
+    try:
+        entries = load_catalog().entries
+    except CatalogError as exc:
+        failed.append({"ref": "catalog", "status": "UNUSABLE", "problems": [str(exc)]})
+        return out
+    for entry in entries:
+        try:
+            history = load_skill_history(entry.skill)
+        except SkillHistoryError:
+            continue  # catalog --check reports a missing history; here there is simply nothing cited
+        for note in history.versions:
+            for ref in note.feedback:
+                out.setdefault(ref, []).append({"where": "skill", "skill": history.skill_id,
+                                                "version": note.version, "changes": note.changes})
+    return out
+
+
+def feedback_status(kb: KnowledgeBase) -> dict:
+    """Every feedback item: applied or pending, and where it was cited.
+
+    Applied means cited where its classification is applied: a revision of the same
+    investigation (case), a profile version (preference) or the history of the skill
+    that produced the result (method). A citation elsewhere is listed but does not count.
+    """
+    failed: list[dict] = []
+    citations: dict[str, list[dict]] = _skill_citations(failed)
+    for key in kb.profile.versions():
+        try:
+            pv = kb.profile.load(key)
+        except (ProfileIntegrityError, ProfileStoreError) as exc:
+            failed.append({"ref": f"profile:{key}", "status": "INTEGRITY_FAILED", "problems": [str(exc)]})
+            continue
+        for ref in pv.feedback if pv else []:
+            citations.setdefault(ref, []).append({"where": "profile", "ref": pv.ref, "note": pv.note})
+    for summary, _, doc in _research_items(kb, failed):
+        for rev in doc.revisions:
+            for r in rev.resolved_refs:
+                if r.ref.startswith("feedback:"):
+                    citations.setdefault(r.ref, []).append({"where": "research", "ref": summary["ref"],
+                                                            "revision": rev.revision, "note": rev.note})
+    items = []
+    for fid in kb.feedback.ids():
+        try:
+            fb = kb.feedback.load(fid)
+        except (FeedbackIntegrityError, FeedbackStoreError) as exc:
+            failed.append({"ref": f"feedback:{fid}", "status": "INTEGRITY_FAILED", "problems": [str(exc)]})
+            continue
+        if fb is None:
+            continue
+        cited = citations.get(fb.ref, [])
+        applied_in = [c for c in cited if c["where"] == APPLIED_BY[fb.classification] and (
+            c["where"] == "profile"
+            or (c["where"] == "research" and c["ref"] == fb.target.research)
+            or (c["where"] == "skill" and c["skill"] == fb.target.skill.asset_id))]
+        items.append({"ref": fb.ref, "classification": fb.classification.value, "words": fb.words,
+                      "formulation": fb.formulation, "about": f"{fb.target.research} r{fb.target.revision}",
+                      "skill": f"{fb.target.skill.asset_id} {fb.target.skill.version}",
+                      "status": "applied" if applied_in else "pending", "applied_in": applied_in,
+                      "cited_elsewhere": [c for c in cited if c not in applied_in],
+                      "recorded_at": fb.recorded_at.isoformat()})
+    return {"count": len(items), "pending": sum(i["status"] == "pending" for i in items), "feedback": items,
+            "integrity_failed": failed}
+
+
+def _feedback_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, str]]:
+    items = []
+    for fid in kb.feedback.ids():
+        try:
+            fb = kb.feedback.load(fid)
+        except (FeedbackIntegrityError, FeedbackStoreError) as exc:
+            failed.append({"ref": f"feedback:{fid}", "status": "INTEGRITY_FAILED", "problems": [str(exc)]})
+            continue
+        if fb is None:
+            continue
+        summary = {"ref": fb.ref, "kind": "feedback", "title": f"Feedback ({fb.classification.value}): {fb.words}",
+                   "about": f"{fb.target.research} r{fb.target.revision}",
+                   "skill": f"{fb.target.skill.asset_id} {fb.target.skill.version}",
+                   "updated_at": fb.recorded_at.isoformat(), "path": _display_path(kb.feedback.path_for(fid), kb)}
+        text = (f"feedback comentario {fb.words} {fb.formulation} {fb.classification.value} "
+                f"{fb.target.research} {fb.target.skill.asset_id}")
+        items.append((summary, text))
+    return items
+
+
 # ── search and show ──────────────────────────────────────────────
 
 
@@ -485,6 +675,8 @@ def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status
         candidates += _strategy_items(kb, failed)
     if kind in (None, "profile") and status is None:
         candidates += _profile_items(kb, failed)
+    if kind in (None, "feedback") and status is None:
+        candidates += _feedback_items(kb, failed)
     results = []
     for summary, body in candidates:
         lowered = body.lower()
@@ -579,6 +771,17 @@ def show(kb: KnowledgeBase, ref_text: str) -> dict:
             raise KnowledgeError(f"{ref}: no such profile version")
         return {"ref": str(ref), "kind": "profile", "path": _display_path(kb.profile.path_for(ref.key), kb),
                 **doc.model_dump(mode="json"), "missing": doc.content.missing(), "cited_by": cited_by(kb, ref)}
+    if ref.kind == "feedback":
+        try:
+            doc = kb.feedback.load(ref.key)
+        except (FeedbackIntegrityError, FeedbackStoreError) as exc:
+            raise KnowledgeError(f"{ref}: INTEGRITY_FAILED", [str(exc)]) from exc
+        if doc is None:
+            raise KnowledgeError(f"{ref}: no such feedback")
+        state = next((i for i in feedback_status(kb)["feedback"] if i["ref"] == str(ref)), {})
+        return {"ref": str(ref), "kind": "feedback", "path": _display_path(kb.feedback.path_for(ref.key), kb),
+                **doc.model_dump(mode="json"), "status": state.get("status"),
+                "applied_in": state.get("applied_in", []), "cited_by": cited_by(kb, ref)}
     resolved = resolve_ref(str(ref), kb)
     return {"ref": str(ref), "kind": "file", "path": resolved.path, "content_hash": resolved.content_hash,
             "cited_by": cited_by(kb, ref)}

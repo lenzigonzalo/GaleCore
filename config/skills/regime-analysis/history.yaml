@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de regime_interpretation y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: regime_interpretation
+versions:
+  - version: "1.1.0"
+    date: 2026-09-21
+    changes: >
+      Régimen diario con GEX, skew 25Δ y VIX/VVIX y registro evaluable (GC-AI-0002). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

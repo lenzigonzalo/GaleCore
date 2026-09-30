@@ -83,7 +83,7 @@ def history(store: FileProfileStore) -> list[dict]:
             out.append({"ref": f"profile:{key}", "status": "INTEGRITY_FAILED", "problems": [str(exc)]})
             continue
         out.append({"ref": doc.ref, "recorded_at": doc.recorded_at.isoformat(), "note": doc.note,
-                    "prompt": doc.prompt, "content_hash": doc.content_hash})
+                    "prompt": doc.prompt, "feedback": doc.feedback, "content_hash": doc.content_hash})
     return out
 
 
@@ -96,8 +96,12 @@ def _check_sources(ids: list[str]) -> list[str]:
 
 
 def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: str, host: RecordHost,
-                now: datetime | None = None) -> tuple[ProfileVersion, Path | None]:
-    """New version with ``changes`` applied; (current, None) when nothing actually changes."""
+                now: datetime | None = None, feedback: list[str] | None = None) -> tuple[ProfileVersion, Path | None]:
+    """New version with ``changes`` applied; (current, None) when nothing actually changes.
+
+    ``feedback`` lists the ``feedback:<id>`` this version applies; the caller has already
+    resolved them (they live in the knowledge base, not in this store).
+    """
     unknown = sorted(set(changes) - set(ProfileContent.model_fields))
     if unknown:
         raise ProfileError("Refusing to change the profile", [f"unknown fields: {', '.join(map(_safe, unknown))}"])
@@ -111,7 +115,8 @@ def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: st
         raise ProfileError("Refusing to change the profile", _errors(exc)) from exc
     try:
         draft = ProfileVersion(version=(current.version + 1) if current else 1, recorded_at=now or datetime.now(UTC),
-                               note=note, prompt=prompt, host=host, content=content, content_hash="")
+                               note=note, prompt=prompt, host=host, content=content,
+                               feedback=list(feedback or []), content_hash="")
     except ValidationError as exc:
         raise ProfileError("Refusing to change the profile", _errors(exc)) from exc
     problems = _check_sources(content.preferred_sources)

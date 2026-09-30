@@ -24,8 +24,8 @@ The host executes the model. GaleCore-AI teaches it how to work and verifies the
 
 ```bash
 python -B -m galecore_ai.adapters.cli catalog      # what can be asked: capability, skill (version+hash), contract, flow, controls
-python -B -m galecore_ai.adapters.cli kb search --text "<terms>" [--kind research|regime|evidence|strategy|profile] [--status unfinished]
-python -B -m galecore_ai.adapters.cli kb show <ref>   # regime:SPY/2026-09-23 · research:<id> · profile:v3 · file:<path from the workspace root>
+python -B -m galecore_ai.adapters.cli kb search --text "<terms>" [--kind research|regime|evidence|strategy|profile|feedback] [--status unfinished]
+python -B -m galecore_ai.adapters.cli kb show <ref>   # regime:SPY/2026-09-23 · research:<id> · profile:v3 · feedback:<id> · file:<path from the workspace root>
 python -B -m galecore_ai.adapters.cli profile show     # the user's profile in force: apply it, cite it, report what is missing or provisional
 ```
 
@@ -47,6 +47,13 @@ and `user_profile` (objectives, reference capital, horizon, limits, preferred so
 `profile show|set|history`, versions `profile:vN` in `knowledge/profile/`; fields in `provisional` are
 placeholders). While a profile exists, `research`/`context_research` refuse to save unless an antecedent
 cites the version in force.
+
+The user's comment on a stored result is kept with `feedback add` (`knowledge/feedback/<id>.json`, words
+verbatim, tied to `research:<id>` + revision, skill and version taken from that revision, classified
+`case | preference | method`) and applied where its kind belongs, citing `feedback:<id>`: a `research
+revise` of that result, `profile set --feedback`, or a new skill version whose `history.yaml` cites it
+(`catalog --check` requires a history entry for every skill's version in force). `feedback list` says
+what is applied and what is pending. Method: `capability_builder` rules 9–13.
 
 Common environment (GaleCore on `localhost:5000`; the ApiKey comes from GaleCore's user-secrets and is never written anywhere):
 

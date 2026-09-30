@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de user_profile y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: user_profile
+versions:
+  - version: "1.0.0"
+    date: 2026-09-29
+    changes: >
+      Perfil versionado y citable, sin eco de valores rechazados (GC-AI-0013). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

@@ -192,10 +192,10 @@ class TestSave:
     def test_file_ref_into_the_knowledge_base_is_refused(self, kb, regime_record):
         # Review R1 MAJOR: file: paths skipped the self-citation and integrity checks.
         day = regime_record.rsplit("/", 1)[1]
-        with pytest.raises(KnowledgeError, match="cite it as regime:, research:, evidence:, strategy: or profile:"):
+        with pytest.raises(KnowledgeError, match="cite it as regime:, research:, evidence:, strategy:, profile: or feedback:"):
             save(kb, antecedents=[{"ref": f"file:knowledge/regime/SPY/{day}.md", "summary": "s", "bearing": "b"}])
         first, _ = save(kb)
-        with pytest.raises(KnowledgeError, match="cite it as regime:, research:, evidence:, strategy: or profile:"):
+        with pytest.raises(KnowledgeError, match="cite it as regime:, research:, evidence:, strategy:, profile: or feedback:"):
             revise_research(kb=kb, research_id=first.id, reason=RevisionReason.CONTINUATION, note="n",
                             prompt="p", host=HOST,
                             content=content(statements=[{"kind": "fact", "text": "t",

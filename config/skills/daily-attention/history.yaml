@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de daily_attention y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: daily_attention
+versions:
+  - version: "0.1.2"
+    date: 2026-09-29
+    changes: >
+      Necesidades honestas (históricos e IV faltantes), check más estricto (revisión interna R1 de GC-AI-0015). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

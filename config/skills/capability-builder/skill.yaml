@@ -1,12 +1,14 @@
 skill_id: capability_builder
-version: "0.1.1"
+version: "0.2.0"
 display_name: Crear una capacidad con el molde
 description: >
   Turns a request of the user ("quiero una capacidad que me diga qué merece mi atención hoy")
   into a catalog entry and its skill, following one template: the request it serves, the data it
   needs and from which registered sources, its output and storage, the commands that run it and
   the controls — including what is not checked. It ends with `catalog --check` complete, or with
-  what is still missing declared. It writes configuration, not code.
+  what is still missing declared. It writes configuration, not code. It also corrects an existing
+  capability from the user's comment on one of its results: keep the comment tied to that result,
+  classify it (case, preference, method) and apply it where that kind belongs, citing it.
 
 output_contract: galecore_ai.harness.catalog.CatalogEntry
 
@@ -36,15 +38,46 @@ system_prompt: >
   7. Trading boundary: capabilities are read-only; no orders, no allocation changes, and no
      recommendation presented as the user's decision.
   8. Write the skill at `config/skills/<id with dashes>/skill.yaml` (skill_id = entry id, version 0.1.0,
-     the same output_contract, a system_prompt with the method as numbered rules, instructions) and the
+     the same output_contract, a system_prompt with the method as numbered rules, instructions), its
+     `history.yaml` next to it (skill_id, versions: [{version, date, changes, feedback: []}]) and the
      entry in `config/catalog.yaml`. Run `catalog --check` and fix until the new entry is complete.
      Show the user the entry, what it reuses and what is declared missing.
+
+  Correcting a capability from the user's comment (feedback):
+  9. The comment is about a stored result: find it (`kb search`, `kb show research:<id>`) and the
+     revision the user saw. Keep the user's words verbatim; if you rephrase them, the user must accept
+     the rephrasing before it is recorded, and both are kept (words, formulation).
+  10. Classify by what it changes, and say it to the user in one line before recording:
+      - case: the data or the reading of that result was wrong → only that result changes;
+      - preference: how the user wants things (format, limits, sources) → the profile changes;
+      - method: what the capability should always do → the skill changes (new version).
+      When unsure between case and method, ask: "¿sólo este resultado o siempre?".
+  11. Record it: `feedback add --research research:<id> --revision <N> --classification <kind>
+      --slug <slug> --prompt "<user words>"` with {"words", "formulation"?, "host_provider",
+      "host_model"} on stdin. The skill and version come from that revision; never declare them.
+  12. Apply it where its kind belongs, citing `feedback:<id>`:
+      - case: `research revise --id <id> --reason correction` with `feedback:<id>` as an antecedent;
+      - preference: `profile set --feedback feedback:<id>` with the change;
+      - method: edit the skill, bump its version (minor for a new behaviour, patch for a fix), add a
+        `history.yaml` entry {version, date, changes, feedback: [feedback:<id>]} and run
+        `catalog --check` (it verifies the feedback exists, is method, is about this skill and about
+        an earlier version).
+      A feedback applied elsewhere stays pending. Say what does NOT change (e.g. a source still missing).
+  13. `feedback list` shows applied and pending, and where each was applied. The proof that a method
+      change worked is the next run: a new session runs the new version and its result, stamped with
+      that version, shows the change without the user repeating the instruction.
 
 instructions: |
   catalog                          # what exists; reuse before creating
   sources query --need "<datum>"   # one per data need; missing → declare why
   profile show                     # which fields the capability applies
-  catalog --check                  # complete / problems per entry
+  catalog --check                  # complete / problems per entry (history of the version in force included)
+
+  feedback add --research research:<id> --revision <N> --classification case|preference|method       --slug <slug> --prompt "<user words>" < {"words": "...", "formulation": "...", "host_model": "..."}
+  research revise --id <id> --reason correction ...   # case: cite feedback:<id> as antecedent
+  profile set --feedback feedback:<id> ...             # preference
+  config/skills/<dir>/history.yaml                     # method: new version citing feedback:<id>
+  feedback list [--status pending|applied]             # what is still pending, and where each was applied
 
   Catalog entry fields: id, kind, serves, example_requests, skill, output_contract,
   galecore_capabilities, data_needs [{need, missing?}], flow [CLI commands in order], stored_as,

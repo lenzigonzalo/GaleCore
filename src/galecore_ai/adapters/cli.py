@@ -8,11 +8,13 @@ Usage:
         --verdict agree|partial|disagree --comment "..."
     python -m galecore_ai.adapters.cli query --symbol SPY --since YYYY-MM-DD [--until YYYY-MM-DD]
     python -m galecore_ai.adapters.cli catalog
-    python -m galecore_ai.adapters.cli kb search [--text "..."] [--kind research|regime|evidence] [--status S] [--symbol SPY]
+    python -m galecore_ai.adapters.cli kb search [--text "..."] [--kind research|regime|evidence|strategy|profile|feedback]         [--status S] [--symbol SPY]
     python -m galecore_ai.adapters.cli kb show <ref>
     python -m galecore_ai.adapters.cli research save --slug SLUG --prompt "..." [--capability C] < request.json
     python -m galecore_ai.adapters.cli research revise --id ID --reason R --note "..." --prompt "..."         [--capability C] < request.json
     python -m galecore_ai.adapters.cli evidence add --slug SLUG --prompt "..." < request.json
+    python -m galecore_ai.adapters.cli feedback add --research research:ID --revision N --classification case|preference|method         --slug SLUG --prompt "..." < request.json
+    python -m galecore_ai.adapters.cli feedback list [--status pending|applied]
     python -m galecore_ai.adapters.cli sources list
     python -m galecore_ai.adapters.cli sources query --need "TEXT"
     python -m galecore_ai.adapters.cli sources check [--source galecore|fred]
@@ -73,9 +75,12 @@ from galecore_ai.application.catalog_check import check_catalog, cli_commands
 from galecore_ai.application.knowledge import (
     KnowledgeBase,
     KnowledgeError,
+    check_feedback_citations,
+    feedback_status,
     resolve_ref,
     revise_research,
     save_evidence,
+    save_feedback,
     save_research,
 )
 from galecore_ai.application.knowledge import search as kb_search
@@ -109,6 +114,7 @@ from galecore_ai.capabilities.dispatcher import CapabilityDispatcher
 from galecore_ai.capabilities.registry import CapabilityRegistry
 from galecore_ai.contracts.agent_run import RunStatus
 from galecore_ai.contracts.evidence import EvidenceContent
+from galecore_ai.contracts.feedback import FeedbackKind
 from galecore_ai.contracts.prepared_analysis import AcceptanceRequest
 from galecore_ai.contracts.regime_record import RecordHost, ReviewVerdict
 from galecore_ai.contracts.research import ResearchContent, ResearchStatus, RevisionReason
@@ -457,8 +463,16 @@ async def _cmd_catalog(args: argparse.Namespace) -> None:
         except (SourceRegistryError, KnowledgeBaseError) as exc:
             _error_out(str(exc), exit_code=_EXIT_INTERNAL_ERROR)
             return
+        feedback_check = None
+        if kb_status["available"]:
+            kb = _build_knowledge_base()
+
+            def feedback_check(refs: list[str], skill_id: str, version: str) -> list[str]:
+                return check_feedback_citations(kb, refs, kind=FeedbackKind.METHOD, skill_id=skill_id,
+                                                applied_version=version)
         result = check_catalog(catalog, commands=cli_commands(build_parser()), workspace=workspace,
-                               registry=registry, status_store=_build_source_status_store())
+                               registry=registry, status_store=_build_source_status_store(),
+                               feedback_check=feedback_check)
         _json_out(result, exit_code=_EXIT_SUCCESS if result["complete"] else _EXIT_VALIDATION_ERROR)
         return
     entries = describe(catalog)
@@ -528,8 +542,38 @@ async def _cmd_evidence_add(args: argparse.Namespace) -> None:
                "provenance": document.provenance, "content_hash": document.content_hash})
 
 
+async def _cmd_feedback(args: argparse.Namespace) -> None:
+    kb = _build_knowledge_base()
+    if args.feedback_command == "list":
+        result = feedback_status(kb)
+        if args.status:
+            result["feedback"] = [i for i in result["feedback"] if i["status"] == args.status]
+        _json_out(result, exit_code=_EXIT_VALIDATION_ERROR if result["integrity_failed"] else _EXIT_SUCCESS)
+        return
+    try:
+        payload = json.loads(_read_stdin())
+    except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
+        _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        raise AssertionError("unreachable") from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("words"), str):
+        _error_out("Input must be a JSON object with the user's 'words' (and optionally 'formulation')",
+                   exit_code=_EXIT_VALIDATION_ERROR)
+    try:
+        document, path = save_feedback(
+            kb=kb, slug=args.slug, words=payload["words"], formulation=str(payload.get("formulation") or ""),
+            classification=FeedbackKind(args.classification), research=args.research, revision=args.revision,
+            prompt=args.prompt, host=RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model")))
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+        return
+    _json_out({"status": "RECORDED", "ref": document.ref, "path": str(path),
+               "classification": document.classification.value, "target": document.target.model_dump(mode="json"),
+               "content_hash": document.content_hash})
+
+
 async def _cmd_profile(args: argparse.Namespace) -> None:
-    store = _build_knowledge_base().profile
+    kb = _build_knowledge_base()
+    store = kb.profile
     try:
         if args.profile_command == "show":
             _json_out(profile_show(store))
@@ -544,8 +588,12 @@ async def _cmd_profile(args: argparse.Namespace) -> None:
             if not isinstance(payload, dict) or not isinstance(payload.get("changes"), dict) or not payload["changes"]:
                 _error_out("Input must be a JSON object with a non-empty 'changes' object",
                            exit_code=_EXIT_VALIDATION_ERROR)
+            problems = check_feedback_citations(kb, args.feedback, kind=FeedbackKind.PREFERENCE)
+            if problems:
+                raise ProfileError("Refusing to change the profile", problems)
             doc, path = set_profile(store, changes=payload["changes"], note=args.note, prompt=args.prompt,
-                                    host=RecordHost(provider=args.host_provider, model=args.host_model))
+                                    host=RecordHost(provider=args.host_provider, model=args.host_model),
+                                    feedback=args.feedback)
             if path is None:
                 _json_out({"status": "UNCHANGED", "ref": doc.ref, "missing": doc.content.missing()})
             else:
@@ -820,13 +868,13 @@ def build_parser() -> _JsonArgumentParser:
     kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)
     p_search = kb_sub.add_parser("search", help="Items matching the terms, best first")
     p_search.add_argument("--text", help="Terms to look for (empty lists everything)")
-    p_search.add_argument("--kind", choices=["research", "regime", "evidence", "strategy", "profile"])
+    p_search.add_argument("--kind", choices=["research", "regime", "evidence", "strategy", "profile", "feedback"])
     p_search.add_argument("--status", choices=["unfinished", *[s.value for s in ResearchStatus]],
                           help="unfinished = open or test_planned")
     p_search.add_argument("--symbol")
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
     p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id>, "
-                                    "strategy:<name>/<version>, profile:v<N> or file:<path>")
+                                    "strategy:<name>/<version>, profile:v<N>, feedback:<id> or file:<path>")
 
     p_profile = sub.add_parser("profile", help="Your profile: objectives, capital, horizon, limits, format")
     prof_sub = p_profile.add_subparsers(dest="profile_command", required=True)
@@ -837,6 +885,20 @@ def build_parser() -> _JsonArgumentParser:
     p_prof_set.add_argument("--prompt", required=True, help="The user's words that asked for it")
     p_prof_set.add_argument("--host-provider", dest="host_provider", default="claude-code")
     p_prof_set.add_argument("--host-model", dest="host_model", required=True)
+    p_prof_set.add_argument("--feedback", action="append", default=[],
+                            help="feedback:<id> (classified preference) that this version applies; repeatable")
+
+    p_feedback = sub.add_parser("feedback", help="Your comment on a stored result, and whether it was applied")
+    fb_sub = p_feedback.add_subparsers(dest="feedback_command", required=True)
+    p_fb_add = fb_sub.add_parser("add", help="Keep a comment ({\"words\": ...} on stdin) tied to one revision")
+    p_fb_add.add_argument("--research", required=True, help="research:<id> the comment is about")
+    p_fb_add.add_argument("--revision", required=True, type=int, help="the revision the comment is about")
+    p_fb_add.add_argument("--classification", required=True, choices=[k.value for k in FeedbackKind],
+                          help="case: fix that result · preference: new profile version · method: new skill version")
+    p_fb_add.add_argument("--slug", required=True, help="Short name; the id is <date>-<slug>")
+    p_fb_add.add_argument("--prompt", required=True, help="What the user asked")
+    p_fb_list = fb_sub.add_parser("list", help="Every comment, applied or pending, and where it was applied")
+    p_fb_list.add_argument("--status", choices=["pending", "applied"])
 
     p_fu = sub.add_parser("followup", help="What a strategy did in GaleCore, tied to its version (read-only)")
     fu_sub = p_fu.add_subparsers(dest="followup_command", required=True)
@@ -982,6 +1044,8 @@ def main() -> None:
             asyncio.run(_cmd_sources(args))
         elif args.command == "profile":
             asyncio.run(_cmd_profile(args))
+        elif args.command == "feedback":
+            asyncio.run(_cmd_feedback(args))
         elif args.command == "strategy":
             asyncio.run(_cmd_strategy(args))
         elif args.command == "followup":

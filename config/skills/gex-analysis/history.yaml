@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de gex_interpretation y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: gex_interpretation
+versions:
+  - version: "1.3.0"
+    date: 2026-09-16
+    changes: >
+      Afirmaciones cuantitativas estructuradas y near_zero siempre rechazado (Phase 3, incremento 4). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

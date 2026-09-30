@@ -1,0 +1,8 @@
+# Qué cambió en cada versión de recurring_followup y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: recurring_followup
+versions:
+  - version: "0.1.0"
+    date: 2026-09-27
+    changes: >
+      Primera versión: seguimiento recurrente desde el chat con el Programador de tareas (GC-AI-0009). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []
