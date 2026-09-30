@@ -42,7 +42,8 @@ from galecore_ai.contracts.strategy import (
 )
 
 RUNTIME_REFERENCE = (
-    "GaleCore feature/GC-0004-shadow-durable @ bc62f22: DataFeed.Application/App/Runtime "
+    "GaleCore feature/GC-0004-shadow-durable @ bc62f22 + feature/GC-0005-shadow-espaciado @ f86877e "
+    "(min_minutes_between_entries): DataFeed.Application/App/Runtime "
     "(ShadowRuntimeEngine, GenericGateEvaluator, MetricResolver, PcsCandidateBuilder, ShadowRiskValidator, "
     "ShadowFillSimulator.EvaluateExits, ShadowRuntimeTick, StrategySpecHasher)"
 )
@@ -137,6 +138,9 @@ EXECUTED = {
     "candidate_construction.constraints.max_dte": "DTE máximo del vencimiento elegido",
     "candidate_construction.constraints.min_credit": "crédito mínimo a mid; menos → sin candidato",
     "risk_limits.max_concurrent_positions": "posiciones abiertas máximas → ENTRY_SKIPPED",
+    "risk_limits.min_minutes_between_entries": ("minutos mínimos desde la última entrada de la instancia, abierta "
+                                                "o cerrada → ENTRY_SKIPPED (GaleCore GC-0005; un runtime anterior "
+                                                "lo ignora)"),
     "risk_limits.max_loss_per_trade_usd": "riesgo máximo por operación (ancho − crédito) × 100",
     "exits.deterministic.stop_loss.pct_of_credit": "cierra si pérdida ≥ pct × crédito (precedencia 1)",
     "exits.deterministic.take_profit.pct_of_credit": "cierra si valor ≤ (1 − pct) × crédito (precedencia 2)",
