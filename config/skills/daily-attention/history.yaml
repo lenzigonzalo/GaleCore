@@ -1,6 +1,16 @@
 # Qué cambió en cada versión de daily_attention y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: daily_attention
 versions:
+  - version: "0.2.0"
+    date: 2026-09-30
+    changes: >
+      Siempre abre con un brief rápido de todo (cartera, estrategias activas, qué pasó, qué viene) y una tabla
+      eventos x posiciones: cada publicación macro o resultado entre hoy y el último vencimiento, con días
+      hasta el evento y si cae antes del vencimiento o de la salida por tiempo de cada posición («hay un NFP
+      en 3 días y tu PCS vence después»). El calendario macro sale de FRED (fuente registrada, fred_query.py
+      --releases). No cambia: la fecha de reunión del FOMC sigue sin fuente registrada y se declara faltante;
+      las griegas de posiciones tampoco.
+    feedback: [feedback:2026-09-30-briefing-eventos-macro-vs-posiciones]
   - version: "0.1.2"
     date: 2026-09-29
     changes: >

@@ -1,12 +1,13 @@
 skill_id: daily_attention
-version: "0.1.2"
+version: "0.2.0"
 display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
 description: >
   Answers "what deserves my attention today about what I have in SHADOW?": exposure of the open SHADOW
   positions against the profile's limits, what the approved strategy's rules say about them, what
-  changed since the last review, the market context that bears on them and what is missing. It reuses
+  changed since the last review, which scheduled events (macro releases, earnings) come before each
+  position's expiry or time exit and how they bear on it, the market context and what is missing. It reuses
   strategy_followup (runtime data), regime_interpretation's prepare (GEX, skew 25Δ, VIX/VVIX) and
-  context_research's evidence (external events), and keeps the answer as a revision of one "daily
+  context_research's evidence (external events, FRED release calendar), and keeps the answer as a revision of one "daily
   attention" investigation per strategy. Read-only: no orders, no allocation changes.
 
 output_contract: galecore_ai.contracts.research.ResearchContent
@@ -46,11 +47,29 @@ system_prompt: >
      do not accept or record it unless the owner asks for the regime record), or the latest regime
      record (`kb search --kind regime --symbol SPY`) if GaleCore is down, dated. Earnings dates inside
      the positions' horizon from the host connectors the registry lists (FMP / Alpha Vantage, state
-     limited), each response kept with `evidence add` and cited as `evidence:<id>`. The FOMC date and a
-     macro events calendar have no registered source: write them under `missing`, never from memory
-     or the web.
-  8. Attention points, ordered: first what breaks a rule or a limit, then what is near one, then data
-     gaps, then context. Each point names its source (followup record, evidence id, strategy ref).
+     limited), each response kept with `evidence add` and cited as `evidence:<id>`. Scheduled macro
+     releases (employment / nonfarm payroll, CPI, PPI, GDP, personal income and spending, retail sales)
+     from FRED's release calendar, the registered source for it (`sources query --need "calendario
+     macro"`): `python tools/fred_query.py <dir> --releases <today> <latest expiry of the open
+     positions> [<release_id> ...]` (FRED_API_KEY in the environment), the response kept with
+     `evidence add` and cited. Release dates are scheduled and can move: say so. The FOMC meeting
+     date has no registered source (FRED does not carry it): write it under `missing`, never from
+     memory or the web; the same for any event no registered source covers.
+  7b. Always, even if nothing else changed: events against positions. A table with one row per
+     scheduled event (macro release or earnings) that falls between today and the latest expiry of the
+     open positions: event, date, days from today, and for each open position whether it falls before
+     its expiry, before its time exit (e.g. 21 DTE) or after both, citing the evidence. Then one line
+     per event that falls inside a position's life, in the owner's words, e.g. "hay un NFP en 3 días
+     y tu PCS vence después (DTE 38; salida por tiempo el 16/10)". How the event bears on the position
+     is stated through the strategy's rules and the position's distance to its stop / objective
+     ("la regla X dice…"), labelled "Cálculo propio" when it is your arithmetic, never as a forecast or
+     a recommendation. If the calendar could not be fetched, the table says so and the gap goes to
+     `missing`; never an empty table presented as "no events".
+  8. Open with a quick brief of everything (how a trader wakes up: portfolio, active strategies,
+     what happened, what is coming): one short table with the positions and their state, what
+     happened since the last review, and the events coming inside the positions' life (7b).
+     Then the attention points, ordered: first what breaks a rule or a limit, then what is near one,
+     then events that fall inside a position's life, then data gaps, then context. Each point names its source (followup record, evidence id, strategy ref).
      Keep SHADOW results (simulated fills at mid, never executions), operation and economic evidence
      separate. No recommendation presented as the owner's decision; say "la regla X dice…".
   9. Deliver in the profile's format (tables first, minimal text). Save: first time
@@ -69,10 +88,13 @@ instructions: |
   followup run --strategy <name> --prompt "<pedido>" --host-model <model>
   prepare --symbol SPY --skill regime            # contexto GaleCore (GEX, skew, VIX/VVIX); sólo lectura
   sources query --need "<dato>"                  # antes de usar una fuente externa
+  python tools/fred_query.py <dir> --releases <hoy> <último vencimiento> 50 10 46 53 54 9
+                                                 # calendario de publicaciones macro (FRED); evidence add
+  # siempre: tabla eventos x posiciones (antes / después del vencimiento y de la salida por tiempo)
   evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
   research save|revise --capability daily_attention ...
 
   Missing by registry (declare, never estimate): griegas de posiciones SHADOW,
-  fecha del FOMC, calendario macro.
+  fecha de reunión del FOMC.
 
 examples: []

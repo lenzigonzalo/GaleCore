@@ -286,12 +286,14 @@ entries:
     serves: >-
       Decir qué merece tu atención hoy sobre lo que tenés en SHADOW: exposición de las posiciones frente a
       los límites de tu perfil, qué dicen las reglas de la estrategia aprobada, qué cambió desde la última
-      revisión, el contexto de mercado que importa y qué falta, con fuentes, y guardarlo como revisión de
-      una investigación de atención diaria por estrategia.
+      revisión, qué eventos (datos macro, resultados) vienen antes de que venza o salga cada posición, el
+      contexto de mercado que importa y qué falta, con fuentes, y guardarlo como revisión de una
+      investigación de atención diaria por estrategia.
     example_requests:
       - ¿Qué merece mi atención hoy sobre lo que tengo en SHADOW?
       - ¿Cómo está la exposición y qué dicen las reglas de la estrategia sobre las posiciones abiertas?
       - ¿Qué cambió desde la última revisión y qué contexto importa hoy?
+      - ¿Qué evento macro viene y cómo afecta mis posiciones?
     skill: skills/daily-attention/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics, compute.gex_analysis, compute.put_skew, market_data.trade]
@@ -308,9 +310,8 @@ entries:
         missing: "ninguna fuente registrada las sirve (GaleCore no expone griegas de posiciones SHADOW por el harness)"
       - need: riesgo maximo de posiciones SHADOW
       - need: fecha del FOMC
-        missing: "ninguna fuente registrada la sirve (economics-calendar de FMP denegado por plan)"
-      - need: calendario de eventos macro
-        missing: "ninguna fuente registrada lo sirve"
+        missing: "ninguna fuente registrada la sirve (economics-calendar de FMP denegado por plan; el calendario de FRED no trae la reunión del comité)"
+      - need: calendario macro
     flow:
       - profile show
       - kb search --kind strategy
@@ -320,6 +321,7 @@ entries:
       - followup run --strategy <name> --prompt "<pedido>" --host-model <model>
       - prepare --symbol SPY --skill regime   # contexto GaleCore, sólo lectura
       - sources query --need "<dato>"
+      - python GaleCore-AI/tools/fred_query.py <dir> --releases <hoy> <último vencimiento> [<release_id> ...]
       - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
       - research save --capability daily_attention --slug atencion-diaria-<strategy> --prompt "<pedido>" < {content, host_provider, host_model}
       - research revise --capability daily_attention --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
@@ -330,6 +332,7 @@ entries:
       - A save must cite the profile in force (profile:v<N>); each revision records this skill's version and hash
       - A data need no registered source covers is declared missing, never estimated
       - "Not checked - that exposure is compared against the right limits, that the rules were applied correctly to each position, or that the attention points are the right ones"
+      - Not checked - that the events x positions table is present, complete for the range, or reads each event's bearing right; the next run shows it
       - "Not checked - that a scheduled run covers this capability: recurring_followup runs only the strategy follow-up"
 
   - id: recurring_followup
