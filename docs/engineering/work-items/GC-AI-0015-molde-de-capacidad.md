@@ -84,7 +84,7 @@ Sólo entran en este item las dos primeras filas. No se abre una ampliación gen
 | AC-03 | `config/skills/capability-builder/skill.yaml`; entrada `capability_builder` | `test_the_real_catalog_is_complete` | `docs/evidence/gc-ai-0015/transcripts/ac05-crea-daily-attention.md` | DONE (sin revisar) |
 | AC-04 | `config/sources.yaml`: GaleCore `shadow_runtime`; FRED tasas reales y `credit`; límite de las dos vías a GaleCore (:5000 vs Dev :7001) | consultas reales: posiciones/evaluaciones/métricas SHADOW → galecore; tasa real, spread de crédito → fred | — | DONE (sin revisar) |
 | AC-05 | `config/skills/daily-attention/skill.yaml` + entrada `daily_attention`, escritas por una sesión nueva siguiendo la guía (no por el implementador) | `catalog --check` → daily_attention complete | transcripción `ac05-crea-daily-attention.md` | DONE (sin revisar) |
-| AC-06 | — | — | `docs/evidence/gc-ai-0015/transcripts/ac06-corre-daily-attention.md`; `research:2026-09-29-atencion-diaria-spy-prima-varianza-30-45d` r1 (skill `daily_attention` 0.1.0, cita `profile:v3` con hash igual al archivo), seguimiento `20260929T232040Z`, evidencia FMP earnings (commit `e8e9e2d` de `knowledge`) | DONE (sin revisar) |
+| AC-06 | — | — | `docs/evidence/gc-ai-0015/transcripts/ac06-corre-daily-attention.md`; `research:2026-09-29-atencion-diaria-spy-prima-varianza-30-45d` r1 (skill `daily_attention` 0.1.0, cita `profile:v3` con hash igual al archivo), seguimiento `20260929T232040Z`, evidencia FMP earnings (commit `e8e9e2d` de `knowledge`). **Recorrida con 0.1.2 (Codex C1):** `docs/evidence/gc-ai-0015/transcripts/ac06-r2-corre-daily-attention-0.1.2.md`; misma investigación r2 (`daily_attention` 0.1.2, cita `profile:v3`), seguimientos `20260930T132258Z` y `20260930T133423Z` con su evidencia; faltantes por posición declarados (v2 sin valor ni hora); un cálculo propio tipado como hecho → control nuevo en `check_content` (test en `test_knowledge.py`) | DONE (sin revisar) |
 | AC-07 | — | — | — | PENDING |
 
 ## Implementer handoff — Increment 1 (2026-09-29)
@@ -140,8 +140,18 @@ git diff --check
 - **Traza de FRED (tasas reales, crédito):** la consume `context_research` (sus `data_needs`), no `daily_attention`;
   entra por AC-01 (declaración honesta de las entradas existentes), no por el caso.
 
-## Revisión independiente (Codex) — pendiente
+## Revisión independiente (Codex)
 
-29/09 23:45Z: el runner no pudo correr Codex por límite de uso de la cuenta («try again at Sep 30th, 2026 12:07 AM»);
-no se escribió review. Se re-lanza `--base main` al habilitarse. La rama mergeó `main` (BL-008 de otra sesión) para que
-el rango revisado sea sólo el de este item.
+**C1 — 30/09, `docs/engineering/reviews/GC-AI-0015-20260930T121330Z.md`**, modo `base`,
+`e2630e0..f944256`, esfuerzo high: **CHANGES_REQUESTED**, sin BLOCKER.
+
+| Hallazgo | Resolución |
+|---|---|
+| MAJOR — AC-06 validado con 0.1.0, no con la 0.1.2 revisada | Corregido: sesión nueva con el mismo pedido corrió 0.1.2 contra GaleCore Dev (30/09 13:22–13:40Z) y agregó r2 (transcripción archivada). Verificado en r2: la v2 sin valor ni hora quedó en `missing`, no se completó con otro día; las fechas macro citadas vienen de evidencia guardada. **Desvío:** el cálculo propio contra los límites quedó como `fact`. Como la regla estaba sólo en la skill, ahora es control: `check_content` rechaza un `fact` que empieza con «Cálculo propio» (vale para toda investigación). r2 queda como está (append-only); la próxima corrida ya no puede guardarlo así. |
+| MAJOR — handoff desactualizado | Corregido: `SESSION_HANDOFF.md` con el estado real (C1, correcciones, recheck) tras mergear `main`. |
+| MINOR — inventario de `CLAUDE.md` sin `daily_attention` ni `capability_builder` | Corregido: inventario, `catalog --check` y la regla de cita del perfil para toda investigación guardada. |
+
+Dato de operación visto en r2: el 30/09 la 1.0.3 empezó a evaluar a horario (13:30:24 UTC), con la PC prendida; el
+arranque tardío del 28 y 29/09 no se repitió. Siguiente: `--recheck` acotado.
+
+Antecedente: 29/09 23:45Z el runner no pudo correr Codex por límite de uso de la cuenta.
