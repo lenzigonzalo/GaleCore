@@ -27,6 +27,14 @@ mergeados a `main` (tags `gc-ai-0012-closed` … `gc-ai-0015-closed`). Activo: s
      + addendum «Cambios posteriores al traspaso» en `docs/engineering/HANDOFF-GALECORE-SHADOW.md` del workspace (qué,
      para qué, ejemplo de spec, tests). El owner le avisa antes por si tocó `ShadowRuntimeEngine.cs`.
    - Roll: después, con data de la escalera y una definición del owner (cuándo y a qué se rolea).
+   - **Hecho 30/09 tarde (sin desplegar):** GaleCore `feature/GC-0005-shadow-espaciado` (`f86877e` runtime + `32e7cd0`
+     spec 1.0.4), worktree `.worktrees/galecore/GC-0005`, suite 447/0/6. GaleCore-AI `feature/espaciado-1.0.4`
+     (worktree `.worktrees/galecore-ai/espaciado-1.0.4`, 915 passed): `strategy check` conoce el campo; sin mergear a main.
+     `strategy:spy_prima_varianza_30_45d/1.0.4` guardada (VALID_WITH_DECLARED_GAPS), hash
+     `sha256:e5654e45ff27afa94459b2ce7d45708b9f9ec6472d530ebf8be5d6ee2e021472`. Paquete
+     `C:\tmp\galecore-GC-0005-shadow-espaciado-20260930.bundle` (probado en clon limpio) + addendum en el traspaso.
+     **Falta:** aprobación por hash → verificar 18:05 y cerrar 0008/0009 → levantar la API Dev desde la rama GC-0005
+     (si corre sin GC-0005 ignora el campo) → `deploy-check` → parar la instancia 1.0.3 → deploy 1.0.4.
 3. **GC-AI-0016 (entrega 4), READY_FOR_REVIEW.** Una pasada de Codex `--base feature/GC-AI-0015` desde el 3/10 19:28
    (regla del 30/09: una vez, al cierre, sin rechecks) y cierre del owner.
 4. **Entrega 5 (programar el briefing):** abrir work item con acuerdo y criterios para aprobar antes del código.
