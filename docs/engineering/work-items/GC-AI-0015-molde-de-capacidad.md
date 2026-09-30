@@ -163,4 +163,6 @@ CHANGES_REQUESTED, sin BLOCKER.
 | MAJOR (nuevo) — handoff dice pendiente la recorrida | Corregido: el handoff describe r2 (con el desvío), el control nuevo, r3 y el commit de `knowledge`. |
 | MAJOR (nuevo) — r2 y sus evidencias sin commitear en `knowledge` | Corregido: commit `5597222` de `knowledge` (r2, r3, seguimientos 13:22/13:34/13:45Z con sus evidencias, feedback y calendario FRED). La investigación es append-only con hash por revisión: r2 queda fija aunque exista r3. |
 
+**C3 (recheck) — pendiente.** 30/09 14:07Z: Codex cortó por límite de uso de la cuenta («try again at Oct 3rd, 2026 7:28 PM»); no se escribió review. Relanzar al habilitarse con el mismo comando (`--recheck docs/engineering/reviews/GC-AI-0015-20260930T134302Z.md`).
+
 Antecedente: 29/09 23:45Z el runner no pudo correr Codex por límite de uso de la cuenta.
