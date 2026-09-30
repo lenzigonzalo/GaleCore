@@ -819,6 +819,28 @@ con Claude Code. La idea es **abaratar y agilizar** ese proceso con una skill de
 Así se gastan menos tokens por tablero y el resultado es más consistente. **No se prioriza:** queda como idea. El owner
 prioriza lo que lo haga mejor trader y más rentable, empezando por los agentes especializados (roadmap §4, Parte 2).
 
+
+### Addendum 2026-09-30 — el front como interfaz de configuración y conocimiento; el host en la interfaz
+
+Idea del owner (sólo local por ahora): que el monitor muestre también lo de GaleCore-AI:
+- perfil;
+- skills y sus versiones;
+- análisis guardados;
+- feedback pendiente;
+- estrategias como proyecto (addendum de BL-007).
+
+El patrón existe: el adaptador local de registros + la pestaña Inteligencia (GC-0001). Primero **sólo lectura**; editar
+desde la interfaz pasa por los mismos comandos versionados del CLI, nunca por un segundo camino. «Compartido» entre
+personas depende de BL-008 (hoy `knowledge/` es local de cada uno). Toca el monitor de GaleCore: se coordina con quien lo
+lleva (rama + paquete, como GC-0005).
+
+**Meta final del owner:** que el host viva en la interfaz. Opciones y costo:
+- terminal de Claude Code embebida, local, con el plan: bajo;
+- chat propio con el SDK de agentes: medio-alto; en producción con varios usuarios, API pagada por uso;
+- host completo en la nube: alto.
+
+Recomendación: primero las vistas, después el host. Sin prioridad en el plan.
+
 ---
 
 ## BL-006 — Federación MCP, trust y routing de tools externas
@@ -1289,6 +1311,23 @@ resolver con este caso:
   30/09) genera la data para calibrar con números (frecuencia de stops, peso de eventos macro, reserva usada).
 - **Resultado esperado del ítem:** ante «tengo X USD», una propuesta de reparto con límites, reserva y justificación,
   que cita perfil, estrategias vigentes y evidencia; nunca una orden. Cruza con BL-008 (cartera integral).
+
+
+### Addendum 2026-09-30 — la estrategia como «proyecto»
+
+Idea del owner: que cada estrategia sea un objeto con todo lo suyo:
+- versiones y decisiones (aprobaciones por hash);
+- investigación, análisis y evidencia;
+- seguimiento y memoria de lo que pasó;
+- métricas por versión (GaleCore);
+- spec y tests (GaleCore);
+- feedback;
+- convenciones o instrucciones propias.
+
+Y poder «entrar en su contexto» para hablar de ella. Casi todas las piezas existen, dispersas en `knowledge/strategies/`,
+`research:`, `followups/`, `evidence:` y `feedback:`. Faltan un índice que las agrupe bajo el nombre de la estrategia y
+un paso que cargue ese contexto en la sesión. Encaje posible: la entrega 6 (pedir sin nombrar, con antecedentes);
+«hablemos de la estrategia X» es un caso de ese pedido. Decisión de alcance pendiente del owner; no cambia el plan.
 
 ---
 
