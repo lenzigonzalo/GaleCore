@@ -808,6 +808,17 @@ de claude.ai no alcanza `localhost`). Iterarlo con un chat dentro de la interfaz
 plan. Dentro de la secuencia activa sólo entra la vista generada por script de la skill del paso 3 y del reporte del
 paso 4 (roadmap §4); actualizarla por la tarea programada requiere ampliar el scheduler (hoy sólo `strategy_followup`).
 
+### Addendum 2026-09-30 — guía para armar tableros (idea, sin prioridad)
+
+Aclaración del owner: no pide un sistema para crear paneles desde el chat. Hoy ya se puede editar el front de GaleCore
+con Claude Code. La idea es **abaratar y agilizar** ese proceso con una skill de «armar un tablero» que:
+- parta de los datos que ya están declarados (mapa de fuentes, API de GaleCore);
+- oriente sobre qué conviene (gráfico, tabla o número suelto, y qué tipo de gráfico);
+- discuta el para qué, antes de construir.
+
+Así se gastan menos tokens por tablero y el resultado es más consistente. **No se prioriza:** queda como idea. El owner
+prioriza lo que lo haga mejor trader y más rentable, empezando por los agentes especializados (roadmap §4, Parte 2).
+
 ---
 
 ## BL-006 — Federación MCP, trust y routing de tools externas
