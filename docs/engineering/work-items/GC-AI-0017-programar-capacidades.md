@@ -101,7 +101,7 @@ datos del día y un resultado `INCOMPLETE` que dice qué faltó. Nunca un briefi
 | # | Pregunta | Estado |
 |---|---|---|
 | 1 | Cómo corre el modelo sin sesión | **Decidido (30/09):** con el plan de Claude Code actual (`claude -p`). No es gasto aparte: consume del mismo cupo que el chat. La API de Anthropic se decide al pasar a producción, sólo para las capacidades que necesitan modelo |
-| 2 | ¿Te llega ya leído por el modelo o sólo los datos? | Pendiente. Recomendación: leído, porque demuestra que la capacidad corre sola |
+| 2 | ¿Te llega ya leído por el modelo o sólo los datos? | **Decidido (30/09):** leído por el modelo. El host es local: cada uno lo corre en su PC con su propio plan |
 | 3 | Horario | Pendiente. Recomendación: lunes a viernes 9:45 (PC y API de Dev prendidas) |
 
 **Recorte para no descartar trabajo en producción (30/09):** se reusa el Programador de Windows de 0009 tal cual (en el
