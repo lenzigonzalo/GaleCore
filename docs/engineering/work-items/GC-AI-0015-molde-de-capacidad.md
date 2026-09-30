@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0015
 title: Molde de capacidad y guía para crearla (base del harness, entrega 3)
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0015 — Molde de capacidad y guía para crearla
@@ -73,7 +73,7 @@ Sólo entran en este item las dos primeras filas. No se abre una ampliación gen
   SHADOW, reglas de la estrategia, cambios desde la última revisión, contexto y faltantes; perfil citado.
 - [x] **AC-06 — Demostración:** sesión nueva corre la capacidad con datos reales (GaleCore Dev arriba) y guarda el
   resultado; transcripción archivada.
-- [ ] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
+- [x] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
 
 ## Requirement-to-evidence matrix
 
@@ -85,7 +85,7 @@ Sólo entran en este item las dos primeras filas. No se abre una ampliación gen
 | AC-04 | `config/sources.yaml`: GaleCore `shadow_runtime`; FRED tasas reales y `credit`; límite de las dos vías a GaleCore (:5000 vs Dev :7001) | consultas reales: posiciones/evaluaciones/métricas SHADOW → galecore; tasa real, spread de crédito → fred | — | DONE (sin revisar) |
 | AC-05 | `config/skills/daily-attention/skill.yaml` + entrada `daily_attention`, escritas por una sesión nueva siguiendo la guía (no por el implementador) | `catalog --check` → daily_attention complete | transcripción `ac05-crea-daily-attention.md` | DONE (sin revisar) |
 | AC-06 | — | — | `docs/evidence/gc-ai-0015/transcripts/ac06-corre-daily-attention.md`; `research:2026-09-29-atencion-diaria-spy-prima-varianza-30-45d` r1 (skill `daily_attention` 0.1.0, cita `profile:v3` con hash igual al archivo), seguimiento `20260929T232040Z`, evidencia FMP earnings (commit `e8e9e2d` de `knowledge`). **Recorrida con 0.1.2 (Codex C1; r2 y r3 en commit `5597222` de `knowledge`; guardado E2E del control en r3, ver C2):** `docs/evidence/gc-ai-0015/transcripts/ac06-r2-corre-daily-attention-0.1.2.md`; misma investigación r2 (`daily_attention` 0.1.2, cita `profile:v3`), seguimientos `20260930T132258Z` y `20260930T133423Z` con su evidencia; faltantes por posición declarados (v2 sin valor ni hora); un cálculo propio tipado como hecho → control nuevo en `check_content` (test en `test_knowledge.py`) | DONE (sin revisar) |
-| AC-07 | — | — | — | PENDING |
+| AC-07 | — | — | Codex C1/C2 (`docs/engineering/reviews/`), recheck interno APPROVE, cierre del owner 30/09 | DONE |
 
 ## Implementer handoff — Increment 1 (2026-09-29)
 
@@ -175,3 +175,10 @@ C3» (corregidas) y la celda de AC-06 que mezcla r1–r3 (se deja: correcta, só
 **Estado: técnicamente listo; utilidad y cierre, del owner.**
 
 Antecedente: 29/09 23:45Z el runner no pudo correr Codex por límite de uso de la cuenta.
+
+## Cierre (2026-09-30)
+
+CLOSED por decisión del owner: ante «¿Cerramos la entrega 3?» respondió «sí, cerrá la 3 y mergeala a main». Codex C1 y
+C2 (CHANGES_REQUESTED, sin BLOCKER) corregidos o respondidos con evidencia; sin C3 por la regla del owner del 30/09
+(Codex una vez por entrega, sin rechecks); correcciones aprobadas por el reviewer interno. Tag `gc-ai-0015-closed`.
+Sigue: GC-AI-0016 (entrega 4), una pasada de Codex desde el 3/10 19:28 y cierre del owner.
