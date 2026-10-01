@@ -149,3 +149,9 @@ def test_code_runs_exist_only_for_the_followup(tmp_path):
 def test_the_real_catalog_declares_the_briefing_and_the_followup_schedulable():
     declared = {e.id: e.schedulable.runs for e in load_catalog().entries if e.schedulable}
     assert declared == {"strategy_followup": "code", "daily_attention": "model"}
+
+
+
+def test_the_own_capability_is_an_exact_argument(tmp_path):
+    e = scheduled(flow=["research save --capability daily_attention_evil --slug s --prompt p"])
+    assert any("--capability daily_attention" in p for p in schedule_problems(e, tmp_path))

@@ -12,6 +12,7 @@ reconoce un año pedido, sale con error en vez de devolver una lista vacía.
 
 import hashlib
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -28,6 +29,18 @@ _PANEL = re.compile(r'<h4><a id="\d+">(\d{4}) FOMC Meetings</a></h4>(.*?)(?=<h4>
                     re.DOTALL)
 _MEETING = re.compile(r'fomc-meeting__month[^>]*><strong>([^<]+)</strong>.*?fomc-meeting__date[^>]*>([^<]+)<', re.DOTALL)
 _DAYS = re.compile(r"^(\d{1,2})(?:-(\d{1,2}))?(\*)?\s*(\(.*\))?$")
+
+
+RUN_DIR_ENV = "GALECORE_AI_RUN_DIR"   # set by a scheduled run (GC-AI-0017): files may only go under it
+
+
+def output_dir(out_dir: str) -> Path:
+    """The directory to write to; under a scheduled run it must be inside that run's scratch directory."""
+    out = Path(out_dir).resolve()
+    confine = os.environ.get(RUN_DIR_ENV)
+    if confine and not out.is_relative_to(Path(confine).resolve()):
+        sys.exit(f"{out} está fuera del directorio de la corrida ({confine}): no se escribe")
+    return out
 
 
 def _month_numbers(text: str) -> tuple[int, int]:
@@ -57,6 +70,7 @@ def parse(html: str) -> dict[int, list[dict]]:
 
 
 def main(out_dir: str, years: list[int]) -> int:
+    out = output_dir(out_dir)              # checked before any request
     utc = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     request = urllib.request.Request(URL, headers={"User-Agent": "GaleCore-AI fed_calendar (read-only)"})
     try:
@@ -66,7 +80,6 @@ def main(out_dir: str, years: list[int]) -> int:
         status, body = err.code, err.read()
     except (urllib.error.URLError, TimeoutError) as err:
         status, body = 0, str(err).encode()
-    out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     meta = {"method": "GET", "url": URL, "utc": utc, "status": status, "bytes": len(body),
             "sha256": "sha256:" + hashlib.sha256(body).hexdigest()}

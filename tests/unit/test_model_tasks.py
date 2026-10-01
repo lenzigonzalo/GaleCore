@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
+import time
 from datetime import timedelta
 from pathlib import Path
 
@@ -90,10 +92,11 @@ def test_a_code_task_file_stays_readable_by_the_previous_code(env):
 def test_the_model_gets_only_the_read_commands_of_the_flow():
     entry = load_catalog().get("daily_attention")
     rules = mr.allowed_tools(entry, cli_commands(build_parser()))
-    assert f"Bash({mr.CLI} profile show:*)" in rules and f"Bash({mr.CLI} followup run:*)" in rules
+    assert f"Bash({mr.CLI} profile show:*)" in rules and f"Bash({mr.CLI} followup history:*)" in rules
     assert "Bash(python -B tools/fred_query.py:*)" in rules and "Read" in rules
     joined = " ".join(rules)
-    for forbidden in ("research save", "research revise", "evidence add", "strategy", "profile set", "task "):
+    for forbidden in ("followup run", "research save", "research revise", "evidence add", "strategy", "profile set",
+                      "task "):
         assert forbidden not in joined, forbidden
 
 
@@ -302,14 +305,69 @@ def test_the_repair_call_has_no_tools():
     assert cmd[cmd.index("--tools") + 1] == "" and "--allowedTools" not in cmd and "--add-dir" not in cmd
 
 
-def test_what_the_models_followup_left_is_committed_with_the_run(briefing, monkeypatch):
+def test_the_runner_runs_the_followup_and_commits_it_with_the_run(briefing, monkeypatch):
+    # Internal review 30/09: the model could run `followup run` for another task or strategy. Now the runner does it.
     kb, _, follow = briefing
     committed = []
     monkeypatch.setattr(t, "_commit_knowledge", lambda kb_, paths, msg: committed.extend(paths) or "committed")
-
-    class RunsFollowup(FakeModel):
-        def run(self, **kw):
-            follow(kb=kb, strategy=NAME, prompt="p", host=t.MANUAL_HOST, task_id="atencion-diaria", now=LATER)
-            return super().run(**kw)
-    t.run(kb=kb, task_id="atencion-diaria", followup=follow, now=LATER, client=RunsFollowup(model_ok(output()).reply))
+    model = model_ok(output())
+    result = t.run(kb=kb, task_id="atencion-diaria", followup=follow, now=LATER, client=model)
+    assert result["followup"] and result["followup"] in model.calls[0]["prompt"]
     assert any(p.parent.name == "evidence" and "shadow" in p.name for p in committed)
+    assert not any("followup run" in r for r in model.calls[0]["allowed"])
+
+
+def test_an_unexpected_error_is_still_a_recorded_failure(briefing):
+    # Internal review 30/09: an exception left run_started without an outcome and LATEST.md unchanged.
+    kb, _, follow = briefing
+
+    class Broken(FakeModel):
+        def run(self, **kw):
+            raise FileNotFoundError("C:/nope/claude.exe")
+    result = run(kb, follow, Broken(None))
+    assert result["status"] == "FAILED" and "FileNotFoundError" in result["error"]
+    assert t.events(kb, "atencion-diaria")[-1]["event"] == "run_failed"
+    assert "No hay resultado" in (kb.base / "tasks" / "atencion-diaria" / "LATEST.md").read_text("utf-8")
+
+
+def test_evidence_from_the_future_is_refused_before_anything_is_saved(briefing):
+    kb, _, follow = briefing
+    ok = {"slug": "fred", "content": evidence().model_dump(mode="json")}
+    future = {"slug": "fed", "content": evidence(retrieved_at=LATER + timedelta(days=2)).model_dump(mode="json")}
+    model = model_ok(output(ev=[ok, future], antecedents=[{"ref": "evidence:@fred", "summary": "s", "bearing": "b"},
+                                                          {"ref": "evidence:@fed", "summary": "s", "bearing": "b"}]))
+    result = run(kb, follow, model)
+    assert result["status"] == "INCOMPLETE" and "after the save time" in result["reason"]
+    assert not [i for i in kb.evidence.ids() if "atencion-diaria-" in i]
+
+
+def test_evidence_returned_but_not_cited_is_not_kept(briefing):
+    kb, _, follow = briefing
+    ev = [{"slug": "fred", "content": evidence().model_dump(mode="json")},
+          {"slug": "sobra", "content": evidence().model_dump(mode="json")}]
+    model = model_ok(output(ev=ev, antecedents=[{"ref": "evidence:@fred", "summary": "s", "bearing": "b"}]))
+    assert run(kb, follow, model)["evidence_saved"] == 1
+    assert not [i for i in kb.evidence.ids() if i.endswith("-sobra")]
+
+
+def test_the_cmd_shim_is_replaced_by_the_real_executable(tmp_path):
+    shim = tmp_path / "claude.CMD"
+    shim.write_text("@echo off", encoding="utf-8")
+    exe = tmp_path / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
+    exe.parent.mkdir(parents=True)
+    exe.write_bytes(b"")
+    assert mr.ClaudeCodeClient(binary=str(shim)).binary == str(exe)
+    assert mr.ClaudeCodeClient(binary="/usr/bin/claude").binary == "/usr/bin/claude"
+
+
+def test_a_timed_out_model_is_stopped_with_its_children(tmp_path, monkeypatch):
+    # Internal review 30/09: subprocess.run killed only cmd.exe and then waited for claude.exe.
+    script = tmp_path / "slow.py"
+    script.write_text("import subprocess, sys, time\n"
+                      "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+                      "time.sleep(60)\n", encoding="utf-8")
+    client = mr.ClaudeCodeClient(binary="x")
+    monkeypatch.setattr(client, "command", lambda **kw: [sys.executable, str(script)])
+    t0 = time.monotonic()
+    reply = client.run(prompt="p", allowed=[], max_turns=1, schema={}, cwd=tmp_path, timeout_s=2, add_dir=tmp_path)
+    assert not reply.ok and "time cap" in reply.error and time.monotonic() - t0 < 30

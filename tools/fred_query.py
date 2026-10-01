@@ -36,6 +36,18 @@ TIMEOUT_S = 20
 SERIES_RE = re.compile(r"^[A-Z0-9]{1,30}$")
 
 
+RUN_DIR_ENV = "GALECORE_AI_RUN_DIR"   # set by a scheduled run (GC-AI-0017): files may only go under it
+
+
+def output_dir(out_dir: str) -> Path:
+    """The directory to write to; under a scheduled run it must be inside that run's scratch directory."""
+    out = Path(out_dir).resolve()
+    confine = os.environ.get(RUN_DIR_ENV)
+    if confine and not out.is_relative_to(Path(confine).resolve()):
+        sys.exit(f"{out} está fuera del directorio de la corrida ({confine}): no se escribe")
+    return out
+
+
 def get(endpoint: str, params: dict, key: str) -> tuple[int, bytes, str]:
     query = urllib.parse.urlencode({**params, "file_type": "json"})
     public_url = f"{BASE}{endpoint}?{query}"
@@ -61,7 +73,7 @@ def releases(out_dir: str, start: str, end: str, ids: list[str]) -> int:
         sys.exit(f"rango inválido: {start!r}..{end!r}")
     if not all(i.isdigit() for i in ids):
         sys.exit(f"release_id inválidos: {ids!r}")
-    out = Path(out_dir)
+    out = output_dir(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     meta: dict = {"calls": []}
     pages: list[dict] = []
@@ -108,7 +120,7 @@ def main(out_dir: str, specs: list[str]) -> int:
         sys.exit("sin clave: definir FRED_API_KEY en el entorno (nunca en un archivo del repo)")
     if len(specs) > MAX_SERIES:
         sys.exit(f"presupuesto: {len(specs)} series > {MAX_SERIES}")
-    out = Path(out_dir)
+    out = output_dir(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     failures = 0
     for spec in specs:

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+from itertools import pairwise
 from pathlib import Path
 
 from galecore_ai.adapters.source_status_store import FileSourceStatusStore
@@ -104,7 +105,8 @@ def _schedule_problems(entry: CatalogEntry, commands: dict[str, set[str]]) -> li
             continue
         if key not in SCHEDULED_RESULT_WRITES:
             problems.append(f"schedulable: {' '.join(tokens[:2])!r} writes beyond the capability's own result")
-        elif key[0] == "research" and f"--capability {entry.id}" not in " ".join(tokens):
+        elif key[0] == "research" and not any(a == "--capability" and b == entry.id
+                                              for a, b in pairwise(tokens)):
             problems.append(f"schedulable: {' '.join(tokens[:2])!r} must keep its own result "
                             f"(--capability {entry.id})")
     return problems

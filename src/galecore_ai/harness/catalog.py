@@ -64,8 +64,9 @@ class Schedulable(BaseModel):
     @field_validator("timeout_minutes")
     @classmethod
     def _timeout(cls, v: int) -> int:
-        if not 1 <= v <= 25:   # under the task's stale-lock age (30 min, application/tasks.py)
-            raise ValueError("timeout_minutes is between 1 and 25")
+        # Model + correction round (4 min) + follow-up stay under the task's stale-lock age (30 min, tasks.py).
+        if not 1 <= v <= 20:
+            raise ValueError("timeout_minutes is between 1 and 20")
         return v
 
     @model_validator(mode="after")

@@ -40,3 +40,22 @@ def test_flow_scripts_under_galecore_ai_resolve_to_this_checkout(tmp_path):
     assert _script_path("GaleCore-AI/tools/fed_calendar.py", tmp_path) == CHECKOUT / "tools" / "fed_calendar.py"
     assert _script_path("GaleCore/dev/galecore_dev.py", tmp_path) == tmp_path / "GaleCore/dev/galecore_dev.py"
     assert _script_path("GaleCore-AI/tools/fed_calendar.py", tmp_path).is_file()
+
+
+
+def test_under_a_scheduled_run_the_scripts_write_only_in_its_directory(tmp_path, monkeypatch):
+    # Internal review 30/09: the model chose <dir>, so a script could write anywhere (e.g. into src/ or knowledge/).
+    from tools import fred_query
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv(fed_calendar.RUN_DIR_ENV, str(run_dir))
+    for script in (fed_calendar, fred_query):
+        assert script.output_dir(str(run_dir / "fomc")) == (run_dir / "fomc").resolve()
+        for outside in (tmp_path / "elsewhere", run_dir / ".." / "elsewhere"):
+            with pytest.raises(SystemExit, match="fuera del directorio"):
+                script.output_dir(str(outside))
+    with pytest.raises(SystemExit, match="fuera del directorio"):
+        fed_calendar.main(str(tmp_path / "elsewhere"), [2026])    # refused before any request
+    assert not (tmp_path / "elsewhere").exists()
+    monkeypatch.delenv(fed_calendar.RUN_DIR_ENV)
+    assert fed_calendar.output_dir(str(tmp_path / "elsewhere")) == (tmp_path / "elsewhere").resolve()

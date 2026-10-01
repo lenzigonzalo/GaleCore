@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -47,8 +48,7 @@ CLI = "python -B -m galecore_ai.adapters.cli"
 EVIDENCE_REF = re.compile(r"evidence:(@?)([a-z0-9]+(?:-[a-z0-9]+)*)")
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){0,11}$")
 PENDING = "9999-12-31-pending-"   # id prefix of evidence not saved yet, during the dry check
-# What the model's `followup run` may add to the flow line (it keeps the runtime report; read-only for GaleCore).
-MODEL_WRITES = {("followup", "run")}
+RUN_DIR_ENV = "GALECORE_AI_RUN_DIR"   # tools/fred_query.py and tools/fed_calendar.py refuse to write outside it
 
 
 class ModelEvidence(BaseModel):
@@ -107,12 +107,30 @@ class ModelClient(Protocol):
             timeout_s: int, add_dir: Path) -> ModelReply: ...
 
 
+def _real_binary(found: str | None) -> str | None:
+    """npm installs `claude.cmd`, which starts `claude.exe` as a grandchild: a timeout would kill only cmd.exe and the
+    8191-character limit of cmd.exe would apply. Use the executable it points to when it is there."""
+    if found and found.lower().endswith(".cmd"):
+        exe = Path(found).parent / "node_modules" / "@anthropic-ai" / "claude-code" / "bin" / "claude.exe"
+        if exe.is_file():
+            return str(exe)
+    return found
+
+
+def _kill_tree(proc: subprocess.Popen) -> None:
+    if sys.platform == "win32":
+        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, check=False)
+    else:
+        proc.kill()
+
+
 class ClaudeCodeClient:
     """Claude Code in print mode, isolated: no user/project settings or MCP servers, only Bash and Read, and Bash
     only for the allowed command prefixes (anything else is denied: nobody is there to approve it)."""
 
     def __init__(self, binary: str | None = None) -> None:
-        self.binary = binary or os.environ.get("CLAUDE_BIN") or shutil.which("claude") or shutil.which("claude.cmd")
+        self.binary = _real_binary(binary or os.environ.get("CLAUDE_BIN") or shutil.which("claude")
+                                   or shutil.which("claude.cmd"))
 
     def command(self, *, allowed: list[str], max_turns: int, schema: dict, add_dir: Path) -> list[str]:
         # The prompt goes on stdin: as an argument it would exceed the command-line limit.
@@ -125,24 +143,29 @@ class ClaudeCodeClient:
             timeout_s: int, add_dir: Path) -> ModelReply:
         if not self.binary:
             return ModelReply(ok=False, error="claude not found on PATH")
-        env = {**os.environ, "PYTHONPATH": str(cwd / "src")}
+        env = {**os.environ, "PYTHONPATH": str(cwd / "src"), RUN_DIR_ENV: str(add_dir)}
         t0 = time.monotonic()
+        cmd = self.command(allowed=allowed, max_turns=max_turns, schema=schema, add_dir=add_dir)
         try:
-            cmd = self.command(allowed=allowed, max_turns=max_turns, schema=schema, add_dir=add_dir)
-            proc = subprocess.run(cmd, input=prompt,
-                                  cwd=cwd, env=env, capture_output=True, text=True, encoding="utf-8",
-                                  timeout=timeout_s, check=False)
+            proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+        except OSError as exc:
+            return ModelReply(ok=False, error=f"cannot start {cmd[0]}: {exc}")
+        try:
+            stdout, stderr = proc.communicate(prompt, timeout=timeout_s)
         except subprocess.TimeoutExpired:
+            _kill_tree(proc)                       # the whole tree: a model still working is stopped, not waited for
+            proc.communicate()
             return ModelReply(ok=False, duration_s=round(time.monotonic() - t0, 1),
                               error=f"time cap reached ({timeout_s // 60} min)")
         wall = round(time.monotonic() - t0, 1)
         try:
-            out = json.loads(proc.stdout)
+            out = json.loads(stdout)
         except json.JSONDecodeError:
             return ModelReply(ok=False, duration_s=wall,
-                              error=f"exit {proc.returncode}, output is not JSON: {(proc.stderr or proc.stdout)[-300:]}")
+                              error=f"exit {proc.returncode}, output is not JSON: {(stderr or stdout)[-300:]}")
         turns, model = out.get("num_turns"), next(iter(out.get("modelUsage") or {}), None)
-        if proc.returncode != 0 or out.get("is_error") or not isinstance(out.get("structured_output"), dict):
+        if proc.returncode != 0 or not isinstance(out, dict) or out.get("is_error") or not isinstance(out.get("structured_output"), dict):
             why = out.get("subtype") or "error"
             if why == "error_max_turns":
                 why = f"turn cap reached ({max_turns})"
@@ -163,13 +186,13 @@ def allowed_tools(entry: CatalogEntry, commands: dict[str, set[str]]) -> list[st
                 rules.append(f"Bash(python -B {tokens[1].partition('/')[2]}:*)")
             continue
         key = flow_key(tokens, commands)
-        if key in SCHEDULED_READS or key in MODEL_WRITES:
+        if key in SCHEDULED_READS:   # never a write: the runner runs the follow-up and saves the result
             rules.append(f"Bash({CLI} {' '.join(k for k in key if k)}:*)")
     return list(dict.fromkeys(rules))
 
 
 def build_prompt(*, entry: CatalogEntry, task, target: str | None, run_dir: Path, now: datetime,
-                 allowed: list[str]) -> str:
+                 allowed: list[str], followup_note: str = "") -> str:
     skill = load_asset(entry.skill, SkillDefinition)
     save = f"a revision of {target}" if target else f"a new investigation (slug {task.result_slug})"
     tools = "\n".join(f"  - {r}" for r in allowed)
@@ -178,12 +201,12 @@ Nobody is present; do not ask questions. Task objective, in the owner's words: {
 Strategy: {task.strategy}. Now: {now.isoformat()} (UTC).
 
 Follow the method below ({entry.id}, skill {skill.version}). Run the CLI exactly as `{CLI} <command> ...` from the
-current directory and scripts as `python -B tools/<script>.py ...`; write any file a script fetches under
-{run_dir} (use it as <dir>). These are your only tools; anything else is denied:
+current directory and scripts as `python -B tools/<script>.py ...`; a script writes only under {run_dir} (use it as
+<dir>; any other directory is refused). Commands outside this list that change anything are denied:
 {tools}
-For `followup run` add `--task {task.id} --host-provider scheduled-claude-code --host-model <your model id>`.
+{followup_note}
 
-You cannot run `evidence add`, `research save` or `research revise`. Return, as the structured output:
+You cannot run `followup run`, `evidence add`, `research save` or `research revise`. Return, as the structured output:
 - `evidence`: every source response you used that is not already a stored ref, as {{slug, content}} (EvidenceContent,
   payload verbatim; slug: lowercase words with hyphens, no date, e.g. `fred-releases`). Cite it in `content` exactly
   as `evidence:@<slug>`: the runner stores it and replaces the reference with the stored id. Do not invent ids.
@@ -223,10 +246,20 @@ def _strings(value):
             yield from _strings(v)
 
 
-def check_refs(kb: KnowledgeBase, output: ModelOutput, target: str | None) -> list[str]:
+def cited_slugs(output: ModelOutput) -> set[str]:
+    names: set[str] = set()
+    _map_refs(output.content.model_dump(mode="json"), lambda name, whole: names.add(name) or whole)
+    return names
+
+
+def check_refs(kb: KnowledgeBase, output: ModelOutput, target: str | None,
+               save_at: datetime | None = None) -> list[str]:
     """What would make the save fail, found before anything is written (no orphan evidence)."""
     slugs = [e.slug for e in output.evidence]
     problems = [f"evidence slugs repeat: {slugs}"] if len(slugs) != len(set(slugs)) else []
+    if save_at is not None:
+        problems += [f"evidence {e.slug}: retrieved_at {e.content.retrieved_at.isoformat()} is after the save time"
+                     for e in output.evidence if e.content.retrieved_at > save_at]
     data = output.content.model_dump(mode="json")
     unknown: set[str] = set()
     stored = set(kb.evidence.ids())
@@ -258,10 +291,11 @@ def save_output(*, kb: KnowledgeBase, output: ModelOutput, task, target: str | N
     """Evidence first, then the research revision; returns (research ref, revision, written paths)."""
     written: list[Path] = []
     refs: dict[str, str] = {}
-    if problems := check_refs(kb, output, target):
+    if problems := check_refs(kb, output, target, save_at=now):
         raise RunRefused("; ".join(problems))
     stamp = now.strftime("%H%M")
-    for ev in output.evidence:
+    cited = cited_slugs(output)
+    for ev in (e for e in output.evidence if e.slug in cited):   # returned but never cited: not kept
         slug = f"{task.id}-{stamp}-{ev.slug}"
         try:
             doc, path = save_evidence(kb=kb, slug=slug, prompt=task.objective, host=host, content=ev.content, now=now)

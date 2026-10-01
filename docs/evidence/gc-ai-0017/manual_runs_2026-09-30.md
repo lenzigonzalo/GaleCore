@@ -22,9 +22,9 @@ fallo de GaleCore; quedan en la base (create-only) sin investigación que las ci
 
 | Prueba | UTC | Resultado |
 |---|---|---|
-| AC-06 pausa | 23:45 | `task pause` → Programador `Disabled`; `task run` → `SKIPPED (task is paused)`; `task status` → `PAUSED` |
-| AC-06 reanudación | 23:45 | `task resume` → `Ready`, próxima corrida 01/10 10:00 |
-| AC-06 cancelación (tarea descartable `prueba-cancelacion-0017`) | 23:46 | `task cancel` → borrada del Programador (`schtasks /query`: no existe); `task run` → `SKIPPED (task is cancelled)` |
+| AC-06 pausa | 23:48:28 (`paused`), 23:48:30 (`run_skipped`) | `task pause` → el CLI devolvió `scheduler.status: Disabled`, `next_run: N/A`; `task run` → `SKIPPED (task is paused)`; `task status` → `PAUSED` |
+| AC-06 reanudación | 23:48:33 (`resumed`) | `task resume` → `scheduler.status: Ready`, `next_run: 01/10/2026 10:00:00 AM` |
+| AC-06 cancelación (tarea descartable `prueba-cancelacion-0017`) | 23:48:44 (`created`), 23:48:45 (`cancelled`), 23:48:47 (`run_skipped`) | `task cancel` → `scheduler: {registered: false}`; `schtasks /query /tn GaleCore-AI\prueba-cancelacion-0017` → «ERROR: The system cannot find the file specified.»; `task run` → `SKIPPED (task is cancelled)` |
 | 6 — AC-05 con la API de GaleCore Dev **apagada** (procesos detenidos) | 23:50 | **INCOMPLETE**, rev 6 guardada: el motivo nombra la conexión rechazada al seguimiento (registro `20260930T235009Z`, ERROR) y a `prepare`, y qué sí se obtuvo (FRED, FOMC); ningún valor del runtime inventado |
 | API levantada otra vez desde `.worktrees/galecore/GC-0005` | 23:55 | Recuperó 4 instancias, 2 posiciones abiertas, la 1.0.5 con su hash |
 | 7 — corrida completa con la API arriba | 23:55 | **OK**, rev 7, 21/40 turnos, 342 s, 3 evidencias. Faltantes declarados: contexto de GaleCore fuera de sesión (VIX viejo), resultados sin conector, griegas, y las posiciones abiertas de la 1.0.3 y la v2 que el registro de seguimiento no muestra (ver hallazgo) |
@@ -32,3 +32,12 @@ fallo de GaleCore; quedan en la base (create-only) sin investigación que las ci
 **Hallazgo de la corrida 7:** `runtime-report` muestra abiertas una posición de la 1.0.3 y una de la v2, pero el registro de
 seguimiento (`followup run`) sólo trae la instancia de la versión aprobada más reciente (1.0.5). El briefing lo marcó
 como «posible regla incumplida, no verificable». Es un límite del seguimiento (GC-AI-0009), no de esta entrega.
+
+Horas de AC-06 tomadas de `knowledge/tasks/<id>/events.jsonl` (revisión interna: la primera versión de esta tabla las
+tenía redondeadas). El estado del Programador es lo que devolvió `schtasks /query` a través del CLI.
+
+## Después de los arreglos de la revisión interna
+
+| # | UTC | Resultado | Turnos | Duración | Qué muestra |
+|---|---|---|---|---|---|
+| 8 | 01/10 00:24 | **OK**, rev 8, 3 evidencias | 29/40 | 378 s | El runner corrió el seguimiento (`20261001T002416Z`, con los reportes de las otras specs, los tres con exit 0) antes del modelo; el briefing incluye las dos posiciones abiertas de instancias STOPPED (1.0.3 y v2). Faltantes declarados: contexto de GaleCore fuera de sesión, resultados sin conector, griegas, reglas de la v2, feriados de NYSE |

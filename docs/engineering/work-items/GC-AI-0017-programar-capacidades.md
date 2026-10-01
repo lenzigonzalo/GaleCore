@@ -115,7 +115,7 @@ datos del día y un resultado `INCOMPLETE` que dice qué faltó. Nunca un briefi
 - [x] **AC-06 — Pausa, reanudación y cancelación desde el chat**, con efecto en la corrida siguiente.
   **Evidencia 30/09:** pausa → Programador deshabilitado y corrida `SKIPPED`; reanudación → `Ready` para el 01/10
   10:00; cancelación (tarea descartable) → borrada del Programador y corrida `SKIPPED`
-  (`docs/evidence/gc-ai-0017/manual_runs_2026-09-30.md`).
+  (`docs/evidence/gc-ai-0017/manual_runs_2026-09-30.md`, horas de `events.jsonl`).
 - [ ] **AC-07 — Demostración** del recorrido de arriba con tu briefing real.
 - [ ] **AC-08 — Revisión:** interna y Codex (toca controles); utilidad y cierre, vos.
 
@@ -138,9 +138,10 @@ de costo. El tope por corrida queda sólo como protección del cupo (`--max-turn
 
 ## Cómo quedó la corrida con modelo (implementación, 30/09)
 
-- **El modelo sólo lee.** `application/model_run.py`: Claude Code con `--restricted --strict-mcp-config
-  --tools Bash,Read` (sin la configuración del usuario ni conectores) y `--allowedTools` = los prefijos de los
-  comandos de lectura del flujo (más `followup run` y los scripts de lectura). No puede correr `evidence add` ni
+- **El modelo sólo lee.** `application/model_run.py`: Claude Code (`claude.exe`) con `--restricted
+  --strict-mcp-config --tools Bash,Read` (sin la configuración del usuario ni conectores) y `--allowedTools` = los
+  prefijos de los comandos de lectura del flujo y los scripts de lectura, que sólo escriben en el directorio de la
+  corrida. El seguimiento del día lo corre el runner antes del modelo. No puede correr `evidence add` ni
   `research save|revise`: devuelve el contenido y la evidencia como JSON y **el runner valida y guarda** por las mismas
   funciones de una sesión (`save_evidence`, `revise_research`), con host `windows-task-scheduler+claude-code` y el
   modelo real. Prueba de aislamiento: `docs/evidence/gc-ai-0017/isolation_probe.md`.
@@ -160,11 +161,37 @@ sólo lectura, y lo guarda como evidencia). Si un reporte no se puede leer, lo d
 `daily_attention` 0.2.3 las suma a la exposición. Verificado contra GaleCore Dev el 01/10 00:15 UTC: aparecen la 1.0.3
 (d533f033) y la v2 (0bbd904a). Tests: `tests/unit/test_followup.py` (las dos últimas).
 
+## Revisión interna (30/09, CHANGES_REQUESTED) y arreglos
+
+| Hallazgo | Arreglo | Verificación |
+|---|---|---|
+| MAJOR 1: los scripts escribían en cualquier `<dir>` | El runner pasa `GALECORE_AI_RUN_DIR`; `fred_query.py` y `fed_calendar.py` rechazan un directorio que, ya resuelto, quede fuera (también con `..`) | `test_fed_calendar.py::test_under_a_scheduled_run_the_scripts_write_only_in_its_directory`; `isolation_probe.py` |
+| MAJOR 2: el tope de tiempo no cortaba en Windows | Se llama directo a `claude.exe` (no al `.CMD`); `Popen` + `taskkill /T /F` al vencer; `timeout_minutes` ≤ 20 y corrección ≤ 240 s, por debajo del lock de 30 min | `test_a_timed_out_model_is_stopped_with_its_children`, `test_the_cmd_shim_is_replaced_by_the_real_executable` |
+| MAJOR 3: `task list` desde `main` falla mientras exista una tarea de modelo | **Limitación transitoria hasta el merge** (ver abajo); la corrida de 0009 desde `main` no se afecta (lee sólo su `task.json`) | Verificado por la revisión |
+| MAJOR 4: una excepción dejaba la corrida sin registrar | `run()` envuelve la corrida con modelo: cualquier excepción es `run_failed` con el motivo y `LATEST.md` lo dice | `test_an_unexpected_error_is_still_a_recorded_failure` |
+| MINOR: el modelo podía correr `followup run` con otra tarea o estrategia | El runner corre el seguimiento **antes** del modelo y le pasa el registro; `followup run` sale de sus herramientas | `test_the_runner_runs_the_followup_and_commits_it_with_the_run`; `isolation_probe.py` |
+| MINOR: evidencia huérfana por `retrieved_at` futuro; evidencia no citada se guardaba | Chequeo previo de la hora; sólo se guarda la evidencia citada | `test_evidence_from_the_future_is_refused_before_anything_is_saved`, `test_evidence_returned_but_not_cited_is_not_kept` |
+| MINOR: prueba de aislamiento no reproducible | `isolation_probe.py` + `isolation_probe_runs.jsonl` con comprobaciones del sistema de archivos | Corrida del 01/10 |
+| MINOR: lectura auto-aprobada fuera del checkout | Texto del pedido corregido; límite documentado en `isolation_probe.md` (no cerrado) | — |
+| MINOR: horas de AC-06, matriz vacía, `ACTIVE_WORK_ITEM` en 0016 | Corregidos | este archivo |
+| NIT: `--capability` por subcadena; scratch sin `LOCALAPPDATA`; catálogo cargado dos veces; `git add` del directorio de seguimientos | Argumento exacto; `tempfile`; una carga; rutas exactas | `test_the_own_capability_is_an_exact_argument` |
+
+**Limitación transitoria (MAJOR 3):** hasta mergear 0016 → 0017 a `main`, una sesión que corre desde `main` no puede
+hacer `task list` (rechaza la tarea `atencion-diaria-spy`). `task status <id>` y las corridas de cada tarea funcionan.
+Para el chat: usar el CLI del worktree (`PYTHONPATH=src`) o `task status`.
+
 ## Requirement-to-evidence matrix
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 … AC-08 | PENDING | PENDING | PENDING | PENDING |
+| AC-01 sin sesión, pantalla bloqueada | Programador → `tools/task_runner.py` → `ClaudeCodeClient` | — | `probe_runs.jsonl` (desde el Programador, sin bloqueo) | Parcial: falta la corrida de las 10:00 con la pantalla bloqueada |
+| AC-02 programable por declaración | `harness/catalog.py` `Schedulable`; `catalog_check._schedule_problems`; `tasks.schedulable_entry` | `test_catalog_check.py` (programables), `test_model_tasks.py::test_only_schedulable_capabilities_can_be_scheduled`, `test_a_capability_no_longer_schedulable_does_not_run` | `catalog --check` del catálogo real: completo | Hecho |
+| AC-03 corrida con modelo por horario desde `main` | `tasks._run_model`, `model_run.save_output` | `test_an_ok_run_saves_evidence_then_the_research`, `test_the_next_run_revises_the_same_investigation` | Corridas manuales 5 y 7 (rev 5 y 7) | Parcial: falta la corrida por horario y el `rebind` a `main` |
+| AC-04 tope de turnos y duración | `--max-turns`, tope de tiempo con corte del árbol, ronda de corrección dentro del tope; `last_run` en `task status` | `test_no_correction_round_beyond_the_turn_cap`, `test_a_timed_out_model_is_stopped_with_its_children` | Eventos de las corridas 2–7 (`turns`, `max_turns`, `duration_s`) | Hecho en código; se confirma en la corrida por horario |
+| AC-05 fallas | INCOMPLETE con los datos del día; FAILED con motivo; excepciones registradas | `test_without_a_valid_briefing_*`, `test_no_model_and_no_data_is_failed`, `test_an_unexpected_error_is_still_a_recorded_failure` | Corridas 1–4 y 6 (API apagada) | Hecho |
+| AC-06 pausa, reanudación, cancelación | `tasks.pause/resume/cancel` (de 0009) con tareas de modelo | `test_a_paused_model_task_does_not_call_the_model` | `manual_runs_2026-09-30.md` (eventos 23:48) | Hecho |
+| AC-07 demostración | — | — | — | Pendiente |
+| AC-08 revisión | Interna: CHANGES_REQUESTED → arreglos de arriba | Recheck interno pendiente | — | En curso |
 
 ## Required validation
 
