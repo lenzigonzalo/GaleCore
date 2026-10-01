@@ -16,6 +16,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -120,8 +121,8 @@ def _real_binary(found: str | None) -> str | None:
 def _kill_tree(proc: subprocess.Popen) -> None:
     if sys.platform == "win32":
         subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, check=False)
-    else:
-        proc.kill()
+    else:                                   # started in its own session: the group is the whole tree
+        os.killpg(proc.pid, signal.SIGKILL)
 
 
 class ClaudeCodeClient:
@@ -148,7 +149,8 @@ class ClaudeCodeClient:
         cmd = self.command(allowed=allowed, max_turns=max_turns, schema=schema, add_dir=add_dir)
         try:
             proc = subprocess.Popen(cmd, cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+                                    stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace",
+                                    start_new_session=sys.platform != "win32")
         except OSError as exc:
             return ModelReply(ok=False, error=f"cannot start {cmd[0]}: {exc}")
         try:
@@ -164,8 +166,10 @@ class ClaudeCodeClient:
         except json.JSONDecodeError:
             return ModelReply(ok=False, duration_s=wall,
                               error=f"exit {proc.returncode}, output is not JSON: {(stderr or stdout)[-300:]}")
+        if not isinstance(out, dict):
+            return ModelReply(ok=False, duration_s=wall, error=f"exit {proc.returncode}, output is not a JSON object")
         turns, model = out.get("num_turns"), next(iter(out.get("modelUsage") or {}), None)
-        if proc.returncode != 0 or not isinstance(out, dict) or out.get("is_error") or not isinstance(out.get("structured_output"), dict):
+        if proc.returncode != 0 or out.get("is_error") or not isinstance(out.get("structured_output"), dict):
             why = out.get("subtype") or "error"
             if why == "error_max_turns":
                 why = f"turn cap reached ({max_turns})"

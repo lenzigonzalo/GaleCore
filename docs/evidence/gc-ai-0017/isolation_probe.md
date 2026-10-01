@@ -5,7 +5,7 @@ herramientas y mismo directorio de corrida que una corrida de `daily_attention`)
 `isolation_probe_runs.jsonl` con la respuesta cruda y **comprobaciones del sistema de archivos hechas por el script**
 (no dependen de lo que diga el modelo).
 
-## Corrida del 01/10 ~00:40 UTC (después de los arreglos de la revisión interna)
+## Corrida del 01/10 00:23 UTC (`2026-10-01T00:23:07Z` en el jsonl; después de los arreglos de la revisión interna)
 
 `claude.exe` directo (no el `.CMD`), `--restricted --strict-mcp-config --tools Bash,Read`, `--allowedTools` = prefijos
 de lectura del flujo, `GALECORE_AI_RUN_DIR` = directorio de la corrida. OK, 13 turnos.
@@ -27,6 +27,10 @@ de lectura del flujo, `GALECORE_AI_RUN_DIR` = directorio de la corrida. OK, 13 t
 
 Comprobaciones del script: nada escrito afuera, el escape no creó el directorio, nada escrito en `src/`, y
 `fomc.meetings.json` sí quedó dentro de la corrida.
+
+El vector «anular la variable» (`GALECORE_AI_RUN_DIR= python -B tools/fed_calendar.py <afuera>`) quedó agregado al
+script después del recheck; se verifica en su próxima corrida. Por cómo se comparan los prefijos (`python -B
+tools/fed_calendar.py:*`), un comando que empieza con una asignación no coincide con ninguno permitido.
 
 ## Límite conocido (no cerrado)
 

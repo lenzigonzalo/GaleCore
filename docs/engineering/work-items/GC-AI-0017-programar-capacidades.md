@@ -176,6 +176,13 @@ sólo lectura, y lo guarda como evidencia). Si un reporte no se puede leer, lo d
 | MINOR: horas de AC-06, matriz vacía, `ACTIVE_WORK_ITEM` en 0016 | Corregidos | este archivo |
 | NIT: `--capability` por subcadena; scratch sin `LOCALAPPDATA`; catálogo cargado dos veces; `git add` del directorio de seguimientos | Argumento exacto; `tempfile`; una carga; rutas exactas | `test_the_own_capability_is_an_exact_argument` |
 
+**Recheck interno (30/09): APPROVE.** Menores del recheck, también arreglados: el modelo recibe como tope lo que queda
+bajo el lock después del seguimiento (si no queda tiempo, `FAILED` con motivo y los datos del día commiteados;
+`test_a_slow_followup_leaves_the_model_no_time_beyond_the_lock`, `test_the_model_cap_never_exceeds_the_lock`); lo
+guardado antes de una excepción se commitea igual; corte del árbol también en POSIX (`start_new_session` + `killpg`,
+para el VPS); un reporte de otra spec que no es de esa spec queda «no verificado»; hora de la sonda copiada del jsonl;
+el vector «anular `GALECORE_AI_RUN_DIR`» agregado a la sonda (se verifica en su próxima corrida).
+
 **Limitación transitoria (MAJOR 3):** hasta mergear 0016 → 0017 a `main`, una sesión que corre desde `main` no puede
 hacer `task list` (rechaza la tarea `atencion-diaria-spy`). `task status <id>` y las corridas de cada tarea funcionan.
 Para el chat: usar el CLI del worktree (`PYTHONPATH=src`) o `task status`.
@@ -191,7 +198,7 @@ Para el chat: usar el CLI del worktree (`PYTHONPATH=src`) o `task status`.
 | AC-05 fallas | INCOMPLETE con los datos del día; FAILED con motivo; excepciones registradas | `test_without_a_valid_briefing_*`, `test_no_model_and_no_data_is_failed`, `test_an_unexpected_error_is_still_a_recorded_failure` | Corridas 1–4 y 6 (API apagada) | Hecho |
 | AC-06 pausa, reanudación, cancelación | `tasks.pause/resume/cancel` (de 0009) con tareas de modelo | `test_a_paused_model_task_does_not_call_the_model` | `manual_runs_2026-09-30.md` (eventos 23:48) | Hecho |
 | AC-07 demostración | — | — | — | Pendiente |
-| AC-08 revisión | Interna: CHANGES_REQUESTED → arreglos de arriba | Recheck interno pendiente | — | En curso |
+| AC-08 revisión | Interna: CHANGES_REQUESTED → arreglos → recheck APPROVE (30/09) | Codex al cierre | — | En curso: falta Codex |
 
 ## Required validation
 

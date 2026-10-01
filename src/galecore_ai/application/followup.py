@@ -217,6 +217,10 @@ def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime
         if other is None:
             attention.append(f"No se pudo leer el reporte de {spec}: sus posiciones abiertas no están verificadas")
             continue
+        if other.get("spec_name") not in (None, spec):
+            attention.append(f"El reporte pedido para {spec} es de {other.get('spec_name')}: sus posiciones abiertas "
+                             "no están verificadas")
+            continue
         for item in other.get("instances", []):
             if item.get("instance", {}).get("specName") == spec:
                 _other_positions(item, spec, others, attention)
@@ -327,6 +331,7 @@ def run_followup(*, kb: KnowledgeBase, strategy: str, prompt: str, host: RecordH
         # An injected report command (tests, another runner) answers for the other specs too: never the real API.
         command_for = other_report_command or ((lambda _spec: report_command) if report_command else
                                                (lambda spec: default_report_command(kb.workspace, spec)))
+        # (an injected command answers with this strategy's report: its other specs then read as "not verified")
         other_reports, other_sources = _other_specs(kb, report, strategy, prompt, host, now, command_for)
         sources += other_sources
         parts = analyse(report, doc, approved, since, now, _research_state(kb, doc), other_reports)

@@ -371,3 +371,23 @@ def test_a_timed_out_model_is_stopped_with_its_children(tmp_path, monkeypatch):
     t0 = time.monotonic()
     reply = client.run(prompt="p", allowed=[], max_turns=1, schema={}, cwd=tmp_path, timeout_s=2, add_dir=tmp_path)
     assert not reply.ok and "time cap" in reply.error and time.monotonic() - t0 < 30
+
+
+def test_a_slow_followup_leaves_the_model_no_time_beyond_the_lock(briefing, monkeypatch):
+    # Internal recheck 30/09: follow-up (up to 3 min per report) + model + correction could outlive the 30-min lock.
+    kb, _, follow = briefing
+    committed = []
+    monkeypatch.setattr(t, "_commit_knowledge", lambda kb_, paths, msg: committed.extend(paths) or "committed")
+    ticks = __import__("itertools").count(0.0, 1500.0)         # every reading of the clock: 25 minutes later
+    monkeypatch.setattr(t.time, "monotonic", lambda: next(ticks))
+    model = model_ok(output())
+    result = t.run(kb=kb, task_id="atencion-diaria", followup=follow, now=LATER, client=model)
+    assert result["status"] == "FAILED" and "no time left" in result["error"] and model.calls == []
+    assert any(p.parent.name == "evidence" and "shadow" in p.name for p in committed)   # the day's data is kept
+
+
+def test_the_model_cap_never_exceeds_the_lock(briefing):
+    kb, _, follow = briefing
+    model = model_ok(output())
+    run(kb, follow, model)
+    assert model.calls[0]["timeout_s"] + t.REPAIR_SECONDS + t.LOCK_MARGIN_SECONDS <= t.LOCK_STALE_MINUTES * 60

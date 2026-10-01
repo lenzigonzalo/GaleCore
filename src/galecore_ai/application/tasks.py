@@ -40,7 +40,8 @@ from galecore_ai.contracts.task import Schedule, TaskDefinition
 from galecore_ai.harness.catalog import CatalogEntry, CatalogError, load_catalog
 
 LOCK_STALE_MINUTES = 30
-REPAIR_SECONDS = 240         # the correction round; with timeout_minutes <= 20 a run stays under the stale-lock age
+REPAIR_SECONDS = 240         # the correction round
+LOCK_MARGIN_SECONDS = 120    # what a model run leaves free under the stale-lock age (saving, LATEST.md, commit)
 STATE_LOCK_TIMEOUT_SECONDS = 15
 STATE_LOCK_STALE_SECONDS = 120
 SCHEDULER_FOLDER = "GaleCore-AI"
@@ -567,7 +568,7 @@ def _repair_if_refused(kb: KnowledgeBase, task: TaskDefinition, target: str | No
 
 
 def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, now: datetime, invoked_by: str,
-               client: model_run.ModelClient, followup) -> tuple[dict, list[Path]]:
+               client: model_run.ModelClient, followup, written: list[Path]) -> dict:
     """One model run. The runner first keeps the day's data (the code follow-up), then the model reads and returns the
     result, and the runner validates and saves it. Without a valid result the run is INCOMPLETE with the day's data;
     FAILED only when there is neither."""
@@ -575,7 +576,6 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
 
     t0 = time.monotonic()
     caps = entry.schedulable
-    written: list[Path] = []
     rec = None
     try:
         rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=INVOKERS[invoked_by],
@@ -595,8 +595,13 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     prompt = model_run.build_prompt(entry=entry, task=task, target=target, run_dir=scratch, now=now, allowed=allowed,
                                     followup_note=note)
     (scratch / "prompt.txt").write_text(prompt, encoding="utf-8")
+    # The model gets its cap or what is left under the stale-lock age after the follow-up (a slow GaleCore can take
+    # minutes), keeping room for the correction round: one run never outlives its lock (internal recheck 30/09).
+    left = LOCK_STALE_MINUTES * 60 - (time.monotonic() - t0) - REPAIR_SECONDS - LOCK_MARGIN_SECONDS
+    if left < 60:
+        raise TaskError(f"the follow-up took {int(time.monotonic() - t0)} s: no time left for the model under the lock")
     reply = client.run(prompt=prompt, allowed=allowed, max_turns=caps.max_turns, schema=model_run.output_schema(),
-                       cwd=_REPO, timeout_s=caps.timeout_minutes * 60, add_dir=scratch)
+                       cwd=_REPO, timeout_s=int(min(caps.timeout_minutes * 60, left)), add_dir=scratch)
     base = {"invoked_by": invoked_by, "turns": reply.turns, "max_turns": caps.max_turns, "model": reply.model,
             "duration_model_s": reply.duration_s, **({"followup": rec.id} if rec else {})}
     if reply.ok:
@@ -617,13 +622,12 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
             written += paths
             return {**base, "result": out.status, "research": ref, "revision": revision,
                     "evidence_saved": len(paths) - 1, **({"reason": out.reason} if out.reason else {}),
-                    "duration_s": round(time.monotonic() - t0, 1)}, written
+                    "duration_s": round(time.monotonic() - t0, 1)}
     if rec is None:
         return {**base, "result": "FAILED", "duration_s": round(time.monotonic() - t0, 1),
-                "error": f"model: {problem}; follow-up: {followup_error}"[:800]}, written
+                "error": f"model: {problem}; follow-up: {followup_error}"[:800]}
     return {**base, "result": "INCOMPLETE", "duration_s": round(time.monotonic() - t0, 1),
-            "reason": f"sin resultado del modelo ({problem}); se guardaron los datos del día ({rec.status})"[:800]}, \
-        written
+            "reason": f"sin resultado del modelo ({problem}); se guardaron los datos del día ({rec.status})"[:800]}
 
 
 def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None = None,
@@ -684,13 +688,13 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
                 _commit_knowledge(kb, written, f"task {task_id}: run failed")
             return {"status": "FAILED", **ev}
         if entry.schedulable.runs == "model":
+            paths: list[Path] = []                 # filled as files are saved: kept even if the run fails later
             try:
-                outcome, paths = _run_model(kb=kb, task=task, entry=entry, now=now, invoked_by=invoked_by,
-                                            client=client or model_run.ClaudeCodeClient(), followup=followup)
+                outcome = _run_model(kb=kb, task=task, entry=entry, now=now, invoked_by=invoked_by,
+                                     client=client or model_run.ClaudeCodeClient(), followup=followup, written=paths)
             except Exception as exc:  # noqa: BLE001 - an unexpected error is still the run's recorded result
                 outcome = {"invoked_by": invoked_by, "result": "FAILED", "max_turns": entry.schedulable.max_turns,
                            "error": f"{type(exc).__name__}: {exc}"[:800], "trace": traceback.format_exc()[-800:]}
-                paths = []
             latest = d / "LATEST.md"
             _write_latest(latest, task, outcome, now)
             if invoked_by == "scheduler":

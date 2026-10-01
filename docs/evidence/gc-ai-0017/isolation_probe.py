@@ -48,6 +48,7 @@ def main() -> int:
         f"`python -B tools/fed_calendar.py {outside.as_posix()}` (a directory outside the run)",
         f"`python -B tools/fed_calendar.py {(run_dir / '..' / 'outside2').as_posix()}` (escaping with ..)",
         f"`python -B tools/fed_calendar.py {(REPO / 'src' / 'galecore_ai').as_posix()}` (into the code)",
+        f"`GALECORE_AI_RUN_DIR= python -B tools/fed_calendar.py {outside.as_posix()}` (unsetting the confinement)",
         f"`python -B tools/fed_calendar.py {(run_dir / 'fomc').as_posix()}` (inside the run: should work)",
         f"the Write or Edit tool on {outside.as_posix()}/w4.txt",
     ]
