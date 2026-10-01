@@ -54,10 +54,16 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
 
 - [ ] **AC-01 — Guardar sin desviar:** «anotá esto» en una sesión deja la idea con tus palabras textuales en
   `knowledge/inbox/`, y la conversación sigue con lo que estaba.
-- [ ] **AC-02 — Ver y resolver:** `inbox list|show|resolve`; un destino inexistente se rechaza; la historia queda y
-  nada se borra.
-- [ ] **AC-03 — Aviso al iniciar:** si hay ideas pendientes, el inicio de sesión lo dice.
-- [ ] **AC-04 — Regla actualizada:** `ENGINEERING.md` §1 y `/donde-va` mandan al buzón lo que pedís anotar.
+- [x] **AC-02 — Ver y resolver:** `inbox list|show|resolve`; un destino inexistente se rechaza; la historia queda y
+  nada se borra. **Evidencia 30/09:** `application/inbox.py`, `contracts/inbox.py`, CLI `inbox`; tests
+  `tests/unit/test_inbox.py`; prueba de punta a punta con una base temporal (destino `backlog:BL-999` rechazado,
+  `discarded` resuelto, pendientes 2 → 1).
+- [x] **AC-03 — Aviso al iniciar:** si hay ideas pendientes, el inicio de sesión lo dice.
+  **Evidencia 30/09:** `inbox_note()` en `.claude/hooks/session_start.py` del workspace: «[buzón] N idea(s) del owner
+  por revisar» con las primeras tres, por orden de anotación; corre antes del trabajo activo (también sin ítem activo).
+- [x] **AC-04 — Regla actualizada:** `ENGINEERING.md` §1 y `/donde-va` mandan al buzón lo que pedís anotar.
+  **Evidencia 30/09:** fila nueva en «Lo que surge mientras se trabaja» y la excepción en «Ideas nuevas y el plan»;
+  paso 0 de `/donde-va`. Hasta mergear, `inbox` corre desde este worktree (`PYTHONPATH=src`).
 - [ ] **AC-05 — Demostración:** 2 o 3 ideas reales anotadas en una sesión y revisadas después.
 - [ ] **AC-06 — Revisión:** interna; Codex al cierre (toca una regla de trabajo); utilidad y cierre, vos.
 
@@ -65,7 +71,12 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 … AC-06 | PENDING | PENDING | PENDING | PENDING |
+| AC-01 guardar sin desviar | `inbox add`; skill `idea_inbox` regla 1 | `test_an_idea_is_kept_verbatim_and_pending`, `test_noting_never_writes_outside_the_inbox` | Demo con ideas reales | Pendiente: demo |
+| AC-02 ver y resolver | `inbox list|show|resolve`, `destination_exists` | `test_inbox.py` (destinos, historia, integridad, orden) | Prueba con base temporal (30/09) | Hecho |
+| AC-03 aviso al iniciar | `inbox_note()` del hook del workspace | Prueba con base temporal (30/09) | Salida del hook | Hecho |
+| AC-04 regla | `ENGINEERING.md` §1, `/donde-va` | — | Commit del workspace | Hecho |
+| AC-05 demostración | — | — | — | Pendiente |
+| AC-06 revisión | — | — | — | Pendiente: interna en curso, Codex al cierre |
 
 ## Required validation
 

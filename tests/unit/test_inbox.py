@@ -89,3 +89,11 @@ def test_noting_never_writes_outside_the_inbox(kb):  # noqa: F811
     note(kb)
     after = {p for p in kb.base.rglob("*") if p.is_file()}
     assert {p.parent.name for p in after - before} == {"inbox"}
+
+
+def test_ideas_are_listed_in_the_order_they_were_noted(kb):  # noqa: F811
+    late, _ = note(kb, words="zeta: la segunda idea", now=NOW + timedelta(hours=1))
+    early, _ = note(kb, words="alfa: la primera idea", now=NOW)
+    assert [i.id for i in inbox.items(kb)] == [early.id, late.id]
+    late2, _ = note(kb, words="alfa también, pero después", now=NOW + timedelta(hours=2))
+    assert inbox.items(kb)[-1].id == late2.id

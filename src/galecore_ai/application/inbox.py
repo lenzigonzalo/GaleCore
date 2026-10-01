@@ -86,7 +86,7 @@ def add(*, kb: KnowledgeBase, words: str, prompt: str, context: str = "", refs: 
 def items(kb: KnowledgeBase, status: str | None = None) -> list[InboxItem]:
     """Oldest first. `status`: pending | resolved | a destination."""
     base = _dir(kb)
-    out = [load(kb, p.stem) for p in sorted(base.glob("*.json"))] if base.is_dir() else []
+    out = sorted((load(kb, p.stem) for p in base.glob("*.json")), key=lambda i: i.recorded_at)         if base.is_dir() else []
     if status == "resolved":
         return [i for i in out if i.status != "pending"]
     return [i for i in out if i.status == status] if status else out
