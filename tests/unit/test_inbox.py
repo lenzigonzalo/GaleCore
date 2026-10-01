@@ -99,7 +99,6 @@ def test_ideas_are_listed_in_the_order_they_were_noted(kb):  # noqa: F811
     assert inbox.items(kb)[0][-1].id == late2.id
 
 
-
 # ── internal review 30/09 ────────────────────────────────────────
 
 
@@ -146,5 +145,6 @@ def test_an_unreadable_file_is_reported_and_the_rest_is_listed(kb):  # noqa: F81
     found, broken = inbox.items(kb)
     assert [i.id for i in found] == [item.id]
     assert sorted(b["file"] for b in broken) == ["2026-09-24-lista.json", "2026-09-24-rota.json"]
-    with pytest.raises(KnowledgeError, match="status is pending"):
-        inbox.items(kb, "pendiente")
+    for bad in ("pendiente", "backlog:foo"):
+        with pytest.raises(KnowledgeError, match="status is pending"):
+            inbox.items(kb, bad)

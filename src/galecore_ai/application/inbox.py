@@ -16,7 +16,13 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError, resolve_ref
-from galecore_ai.contracts.inbox import INBOX_ID_RE, InboxItem, Resolution, compute_inbox_hash
+from galecore_ai.contracts.inbox import (
+    DESTINATION_RE,
+    INBOX_ID_RE,
+    InboxItem,
+    Resolution,
+    compute_inbox_hash,
+)
 
 BACKLOG = Path("GaleCore-AI") / "docs" / "architecture" / "PRODUCT-BACKLOG.md"
 WORK_ITEM_DIRS = ("GaleCore-AI/docs/engineering/work-items", "GaleCore/docs/engineering/work-items",
@@ -92,8 +98,7 @@ STATUSES = ("pending", "resolved")
 def items(kb: KnowledgeBase, status: str | None = None) -> tuple[list[InboxItem], list[dict]]:
     """Ideas oldest first, and the files that could not be read (reported, never skipped silently).
     `status`: pending | resolved | a destination."""
-    if status and status not in STATUSES and status not in ("roadmap", "done", "discarded") \
-            and not status.startswith(("backlog:", "work-item:")):
+    if status and status not in STATUSES and not DESTINATION_RE.fullmatch(status):
         raise KnowledgeError(f"status is pending, resolved or a destination, got {status!r}")
     base = _dir(kb)
     found, broken = [], []
