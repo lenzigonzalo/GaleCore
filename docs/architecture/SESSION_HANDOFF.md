@@ -40,14 +40,17 @@ Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
    `.worktrees/galecore-ai/GC-AI-0018`, rama desde `feature/GC-AI-0017`; aprobado por el owner el 30/09).
    Hecho: `inbox add|list|show|resolve`, capacidad `idea_inbox`, aviso de pendientes al iniciar sesión (hook del
    workspace), regla en `ENGINEERING.md` §1 y `/donde-va`. AC-02/03/04 con evidencia; 1008 tests, gate PASS.
-   - **Revisión interna lanzada al cerrar la sesión del 30/09; su resultado no llegó a esta sesión:** volver a
-     correrla (agente `reviewer` sobre `feature/GC-AI-0017...HEAD` + el commit del workspace del buzón) y arreglar.
+   - **Revisión interna (30/09, CHANGES_REQUESTED) llegó y está arreglada:** revisiones encadenadas por hash, filtro
+     de claves en todos los campos, aviso de inicio que nunca corta la sesión, ids validados (tabla en el work item).
+     **Falta un recheck acotado** de esos arreglos.
    - **Falta:** demo con 2–3 ideas reales del owner («anotá esto: …») y su revisión (AC-01, AC-05); Codex al cierre.
      Hasta el merge, `inbox` corre desde este worktree (`PYTHONPATH=src`).
    - **01/10 (sesión galecore-9a):** otra sesión (galecore-02) seguía trabajando en 0018 y commiteó los arreglos
      (`6e262b3`). Se le mandó una revisión interna nueva: CHANGES_REQUESTED sólo porque faltaba commitear; el árbol
      estaba bien. Menores pendientes: `hook_check.py` con `parents[5]` (se rompe tras el merge), el hook cuenta los
-     ilegibles como ideas, AC-02 e2e sin artefacto y varios NIT. Verificar en el work item si galecore-02 los resolvió.
+     ilegibles como ideas, AC-02 e2e sin artefacto y varios NIT. **Resueltos por galecore-02 el 01/10** (`hook_check.py`
+     busca el workspace hacia arriba, ilegibles contados aparte, una línea por idea, `--status` validado); queda AC-02
+     e2e sólo en tests (sin artefacto aparte).
 2c. **Pack de datos — GC-AI-0019, DRAFT (abierto con el «dale» del owner el 01/10).** Worktree
    `.worktrees/galecore-ai/GC-AI-0019`, rama `feature/GC-AI-0019` desde `feature/GC-AI-0018` (commit `ceea6de`).
    Work item: acuerdo, lo encontrado al abrir, propuesta y **dos decisiones del owner pendientes**: (1) cerrar el lado de
