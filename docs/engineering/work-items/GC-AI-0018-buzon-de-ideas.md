@@ -84,14 +84,14 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
 
 ## Requirement-to-evidence matrix
 
-| Criterion | Implementation | Automated verification | Reproducible artifact | Status |
-|---|---|---|---|---|
-| AC-01 guardar sin desviar | `inbox add`; skill `idea_inbox` regla 1 | `test_an_idea_is_kept_verbatim_and_pending`, `test_noting_never_writes_outside_the_inbox` | Demo con ideas reales | Pendiente: demo |
-| AC-02 ver y resolver | `inbox list|show|resolve`, `destination_exists` | `test_inbox.py` (destinos, historia, integridad, orden) | Prueba con base temporal (30/09) | Hecho |
-| AC-03 aviso al iniciar | `inbox_note()` del hook del workspace | `docs/evidence/gc-ai-0018/hook_check.py` (pendiente, revisada, corrupta, `[]`; exit 0) | `hook_check_runs.jsonl` | Hecho |
-| AC-04 regla | `ENGINEERING.md` §1, `/donde-va` | — | Commit del workspace | Hecho |
-| AC-05 demostración | — | — | — | Pendiente |
-| AC-06 revisión | Interna: CHANGES_REQUESTED → arreglos de arriba | Recheck interno | — | En curso; Codex al cierre |
+| Criterion | Implementation | Automated verification | Reproducible artifact | Provenance | Status |
+|---|---|---|---|---|---|
+| AC-01 guardar sin desviar | `inbox add`; skill `idea_inbox` regla 1 | `test_an_idea_is_kept_verbatim_and_pending`, `test_noting_never_writes_outside_the_inbox` | Demo con ideas reales | pending | Pending demo |
+| AC-02 ver y resolver | `src/galecore_ai/application/inbox.py` (load, list, resolve); `src/galecore_ai/contracts/inbox.py` (destination_exists) | `tests/unit/test_inbox.py` (25 tests: destinos, historia, integridad, orden) | `tests/unit/test_inbox.py::test_inbox` (1012 tests en suite, 0 fallos) | verified locally | Implemented |
+| AC-03 aviso al iniciar | `.claude/hooks/session_start.py` inbox_note() | `docs/evidence/gc-ai-0018/hook_check.py` (exit 0, 6 checks) | `docs/evidence/gc-ai-0018/hook_check_runs.jsonl` (2 corridas: 2026-10-01T01:54:40Z, 2026-10-01T20:12:41Z) | verified locally | Implemented |
+| AC-04 regla | `ENGINEERING.md` §1 («Ideas nuevas y el plan»), `/donde-va` paso 0 | — | Commits 058f995, ec64e56, c1552df del workspace main | implemented | Implemented |
+| AC-05 demostración | — | — | — | pending | Pending owner ideas |
+| AC-06 revisión interna | Arreglos: encadenamiento de revisiones, filtro de claves (words, context, prompt, note, review note), ids validados, ilegibles informados | `tests/unit/test_inbox.py::test_a_rewritten_or_dropped_review_is_integrity_failed`, `test_no_field_keeps_a_credential`, `test_ids_are_checked_and_a_renamed_copy_is_refused`, `test_an_unreadable_file_is_reported_and_the_rest_is_listed` | Commit fd0171c, hook_check.py runs | verified locally | CHANGES_REQUESTED arreglos aplicados → recheck pendiente + Codex |
 
 ## Required validation
 
@@ -101,3 +101,68 @@ python -B -m pytest -q -p no:cacheprovider
 python -B -m ruff check --no-cache .
 git diff --check
 ```
+
+## Implementer handoff
+
+**State:** IN_PROGRESS — AC-02/03/04 con evidencia; AC-01/05 esperan la demo con ideas reales del owner; AC-06 abierto (falta el recheck interno de los arreglos y Codex al cierre). No se reporta READY_FOR_REVIEW.
+
+**Timestamp:** 2026-10-01T20:12:41Z
+
+### Files changed
+
+**GC-AI-0018 worktree (commits 96c32c4..fd0171c sobre feature/GC-AI-0017):**
+- `src/galecore_ai/application/inbox.py` — lógica de persistencia (add, load, list, resolve)
+- `src/galecore_ai/contracts/inbox.py` — esquema y validación (Idea, Review, destinos válidos)
+- `src/galecore_ai/adapters/cli.py` — comandos `inbox add|list|show|resolve`
+- `config/catalog.yaml` — entrada `idea_inbox` con skill 1.0.0, flow, storage y controls
+- `config/skills/idea-inbox/skill.yaml` — instrucciones, contrato y ejemplos
+- `tests/unit/test_inbox.py` — 25 tests (carga/validación/integridad/destinos/orden/ilegibles)
+- `docs/evidence/gc-ai-0018/hook_check.py` — validador reproducible para AC-03
+- `docs/evidence/gc-ai-0018/hook_check_runs.jsonl` — corridas (línea nueva: 2026-10-01T20:12:41Z)
+
+**Workspace (commits c1552df, ec64e56, 058f995 en rama main):**
+- `.claude/hooks/session_start.py` — `inbox_note()` con manejo de JSON inválido, archivos ilegibles, límite de 3 ideas
+- `ENGINEERING.md` §1 — regla actualizada: lo que el owner pide anotar va al buzón
+- `/donde-va` paso 0 — referencia al buzón para ideas del owner
+
+### Criteria claimed complete
+
+- **AC-02 — Ver y resolver:** `implemented`, verificado con tests locales (destinos validados, historia encadenada, integridad por hash, orden por hora)
+- **AC-03 — Aviso al iniciar:** `verified locally`, corridas del hook en `hook_check_runs.jsonl` (2 corridas, casos: 3 pendientes con ilegibles → 2 pendientes, avisos de no-cortador de sesión)
+- **AC-04 — Regla actualizada:** `implemented`, visible en commits del workspace (§1 nombra destinos reales, paso 0 de `/donde-va`)
+
+### Commands and exact results
+
+```powershell
+# Desde C:/Users/lenzi/OneDrive/Escritorio/GaleCore/.worktrees/galecore-ai/GC-AI-0018
+# PYTHONPATH=src
+
+python tools/engineering_gate.py
+# Result: PASS (Engineering gate: GC-AI-0018, Status: IN_PROGRESS, WARNING: 3 acceptance criteria remain open)
+
+python -B -m pytest -q -p no:cacheprovider
+# Result: PASS (1012 passed, 1 warning in 161.45s)
+
+python -B -m ruff check --no-cache .
+# Result: PASS (All checks passed!)
+
+git diff --check
+# Result: PASS (no output)
+
+python docs/evidence/gc-ai-0018/hook_check.py
+# Result: PASS (exit code 0, all checks: exit_code_0=true, one_line_per_idea=true, counts_2_pending=true, reviewed_not_listed=true, unreadable_named=true, active_item_still_shown=true)
+```
+
+### Known gaps and risks
+
+- **AC-01 — Guardar sin desviar:** pendiente demostración con 2–3 ideas reales anotadas en sesión; implementación disponible (`inbox add`), regla en skill, tests unitarios pasan. Sin bloqueador técnico.
+- **AC-05 — Demostración:** pendiente revisión con owner de ideas reales después de ser anotadas; depende de que el owner aporte ideas durante trabajo.
+- **AC-06 — Revisión interna completa + Codex:** arreglos aplicados, recheck interno hace falta, Codex al cierre (pieza h es de utilidad/aceptación del owner, requiere aprobación).
+
+### Provenance
+
+- Implementer: Claude Code (Haiku 4.5)
+- Verification: automated gates (ruff, pytest, git, engineering_gate); reproducible artifact (hook_check.py)
+- Evidence sources: test suite, hook_check_runs.jsonl, commits sobre feature/GC-AI-0017, workspace commits (c1552df, ec64e56, 058f995)
+
+Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
