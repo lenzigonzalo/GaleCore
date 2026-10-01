@@ -554,9 +554,11 @@ async def _cmd_inbox(args: argparse.Namespace) -> None:
                                    refs=args.ref or [], host_model=args.host_model)
             _json_out({"status": "NOTED", "ref": f"inbox:{item.id}", "path": str(path), "words": item.words})
         elif c == "list":
-            listed = inbox.items(kb, args.status)
-            _json_out({"pending": sum(1 for i in inbox.items(kb) if i.status == "pending"),
-                       "items": [inbox.summary(i) for i in listed]})
+            every, broken = inbox.items(kb)
+            listed, _ = inbox.items(kb, args.status) if args.status else (every, broken)
+            _json_out({"pending": sum(1 for i in every if i.status == "pending"),
+                       "items": [inbox.summary(i) for i in listed], "unreadable": broken},
+                      exit_code=_EXIT_VALIDATION_ERROR if broken else _EXIT_SUCCESS)
         elif c == "show":
             item = inbox.load(kb, args.id)
             _json_out(item.model_dump(mode="json") | {"status": item.status})

@@ -36,7 +36,8 @@ def _no_credentials(value: str) -> str:
 
 
 class Resolution(BaseModel):
-    """Where the idea went when it was reviewed."""
+    """Where the idea went when it was reviewed. Chained: each one hashes the previous link (the idea's
+    content_hash for the first), so rewriting or dropping a review is INTEGRITY_FAILED (internal review 30/09)."""
 
     model_config = {"extra": "forbid"}
 
@@ -44,8 +45,14 @@ class Resolution(BaseModel):
     to: str                  # see DESTINATION_RE
     note: str                # why: what the review decided, in plain words
     prompt: str              # the owner's words in the review
+    prev: str                # hash of the previous link
+    hash: str = ""           # sha256 over the fields above
 
     check_not_blank = field_validator("note", "prompt")(_non_blank)
+    check_credentials = field_validator("note", "prompt")(_no_credentials)
+
+    def hashable(self) -> dict:
+        return self.model_dump(mode="json", exclude={"hash"})
 
     @field_validator("to")
     @classmethod
@@ -71,7 +78,7 @@ class InboxItem(BaseModel):
     resolutions: list[Resolution] = Field(default_factory=list)  # appended in reviews; the last one is current
 
     check_not_blank = field_validator("words", "prompt")(_non_blank)
-    check_credentials = field_validator("words", "context")(_no_credentials)
+    check_credentials = field_validator("words", "context", "prompt")(_no_credentials)
 
     @field_validator("id")
     @classmethod
@@ -87,6 +94,17 @@ class InboxItem(BaseModel):
 
     def hashable_content(self) -> dict:
         return self.model_dump(mode="json", exclude={"content_hash", "resolutions"})
+
+    def chain_problems(self) -> list[str]:
+        """Where the noted part or the review chain does not match its hashes."""
+        problems = [] if compute_inbox_hash(self.hashable_content()) == self.content_hash else [
+            "the noted idea was edited"]
+        prev = self.content_hash
+        for n, r in enumerate(self.resolutions, 1):
+            if r.prev != prev or compute_inbox_hash(r.hashable()) != r.hash:
+                problems.append(f"review {n} was edited, reordered or a previous one removed")
+            prev = r.hash
+        return problems
 
 
 def compute_inbox_hash(content: dict) -> str:

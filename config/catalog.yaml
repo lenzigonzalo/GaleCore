@@ -394,4 +394,7 @@ entries:
       - The idea is kept verbatim with when and what we were doing; the noted part is hashed and an edit is INTEGRITY_FAILED
       - References must resolve; text that looks like a key or token is refused
       - A review appends where the idea went and why; a backlog item or work item must exist; nothing is deleted
+      - Reviews are hash-chained to the idea; rewriting one or removing an earlier one is INTEGRITY_FAILED
+      - Text that looks like a key or token is refused in every field (words, context, request, review note)
+      - "Not checked - that the most recent reviews were not removed by hand: the file alone cannot show it; the knowledge base's git history does"
       - "Not checked - that the idea is good or that the destination chosen in the review is the right one"

@@ -16,7 +16,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError, resolve_ref
-from galecore_ai.contracts.inbox import InboxItem, Resolution, compute_inbox_hash
+from galecore_ai.contracts.inbox import INBOX_ID_RE, InboxItem, Resolution, compute_inbox_hash
 
 BACKLOG = Path("GaleCore-AI") / "docs" / "architecture" / "PRODUCT-BACKLOG.md"
 WORK_ITEM_DIRS = ("GaleCore-AI/docs/engineering/work-items", "GaleCore/docs/engineering/work-items",
@@ -37,15 +37,18 @@ def slug_of(words: str) -> str:
 
 
 def load(kb: KnowledgeBase, item_id: str) -> InboxItem:
+    if not INBOX_ID_RE.fullmatch(item_id):
+        raise KnowledgeError(f"{item_id!r} is not an inbox id (<YYYY-MM-DD>-<slug>)")
     path = _dir(kb) / f"{item_id}.json"
     if not path.is_file():
         raise KnowledgeError(f"no idea {item_id} in the inbox")
     try:
         item = InboxItem.model_validate(json.loads(path.read_text(encoding="utf-8")))
-    except (ValidationError, json.JSONDecodeError) as exc:
+    except (ValidationError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise KnowledgeError(f"inbox {item_id} is not readable", [str(exc)[:300]]) from exc
-    if compute_inbox_hash(item.hashable_content()) != item.content_hash:
-        raise KnowledgeError(f"inbox {item_id}: the noted idea was edited (INTEGRITY_FAILED)")
+    problems = item.chain_problems() + ([] if item.id == item_id else [f"the file holds idea {item.id}"])
+    if problems:
+        raise KnowledgeError(f"inbox {item_id}: INTEGRITY_FAILED", problems)
     return item
 
 
@@ -83,13 +86,28 @@ def add(*, kb: KnowledgeBase, words: str, prompt: str, context: str = "", refs: 
     return item, _write(kb, item)
 
 
-def items(kb: KnowledgeBase, status: str | None = None) -> list[InboxItem]:
-    """Oldest first. `status`: pending | resolved | a destination."""
+STATUSES = ("pending", "resolved")
+
+
+def items(kb: KnowledgeBase, status: str | None = None) -> tuple[list[InboxItem], list[dict]]:
+    """Ideas oldest first, and the files that could not be read (reported, never skipped silently).
+    `status`: pending | resolved | a destination."""
+    if status and status not in STATUSES and status not in ("roadmap", "done", "discarded") \
+            and not status.startswith(("backlog:", "work-item:")):
+        raise KnowledgeError(f"status is pending, resolved or a destination, got {status!r}")
     base = _dir(kb)
-    out = sorted((load(kb, p.stem) for p in base.glob("*.json")), key=lambda i: i.recorded_at)         if base.is_dir() else []
+    found, broken = [], []
+    for path in base.glob("*.json") if base.is_dir() else []:
+        try:
+            found.append(load(kb, path.stem))
+        except KnowledgeError as exc:
+            broken.append({"file": path.name, "error": str(exc), "problems": exc.problems})
+    found.sort(key=lambda i: i.recorded_at)
     if status == "resolved":
-        return [i for i in out if i.status != "pending"]
-    return [i for i in out if i.status == status] if status else out
+        found = [i for i in found if i.status != "pending"]
+    elif status:
+        found = [i for i in found if i.status == status]
+    return found, broken
 
 
 def destination_exists(workspace: Path, to: str) -> str | None:
@@ -114,10 +132,12 @@ def resolve(*, kb: KnowledgeBase, item_id: str, to: str, note: str, prompt: str,
     """Append where the idea went. A later review can move it again; the history stays."""
     now = now or datetime.now(UTC)
     item = load(kb, item_id)
+    prev = item.resolutions[-1].hash if item.resolutions else item.content_hash
     try:
-        resolution = Resolution(at=now, to=to, note=note, prompt=prompt)
+        draft = Resolution(at=now, to=to, note=note, prompt=prompt, prev=prev)
     except ValidationError as exc:
         raise KnowledgeError("Refusing to resolve", [e["msg"] for e in exc.errors()]) from exc
+    resolution = draft.model_copy(update={"hash": compute_inbox_hash(draft.hashable())})
     if why := destination_exists(kb.workspace, to):
         raise KnowledgeError("Refusing to resolve", [why])
     item = item.model_copy(update={"resolutions": [*item.resolutions, resolution]})

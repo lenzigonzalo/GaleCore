@@ -67,16 +67,31 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
 - [ ] **AC-05 — Demostración:** 2 o 3 ideas reales anotadas en una sesión y revisadas después.
 - [ ] **AC-06 — Revisión:** interna; Codex al cierre (toca una regla de trabajo); utilidad y cierre, vos.
 
+## Revisión interna (30/09, CHANGES_REQUESTED) y arreglos
+
+| Hallazgo | Arreglo | Verificación |
+|---|---|---|
+| MAJOR: el aviso de inicio se rompía con un JSON que no es objeto (y se perdía el aviso del trabajo activo) | Un archivo que no es objeto cuenta como «(unreadable)»; `inbox_note()` envuelto: nunca corta el inicio | `docs/evidence/gc-ai-0018/hook_check.py` + `hook_check_runs.jsonl` |
+| MAJOR: el filtro de claves cubría sólo `words` y `context` | También `prompt` de la idea y `note`/`prompt` de cada revisión | `test_no_field_keeps_a_credential` |
+| MAJOR: las revisiones estaban fuera del hash | Cada revisión encadena el hash anterior (el de la idea para la primera); reescribir una o borrar una anterior es `INTEGRITY_FAILED`. Borrar las últimas no se ve desde el archivo: declarado en `controls` (lo muestra el git de `knowledge/`) | `test_a_rewritten_or_dropped_review_is_integrity_failed` |
+| MINOR: `load` sin validar el id ni que el contenido coincida | Id validado y debe coincidir con el contenido | `test_ids_are_checked_and_a_renamed_copy_is_refused` |
+| MINOR: un archivo ilegible bloqueaba `inbox list` | Se lista el resto y los ilegibles se informan (`unreadable`, salida 3) | `test_an_unreadable_file_is_reported_and_the_rest_is_listed` |
+| MINOR: §1 decía «hacia una de las filas de abajo» | El texto nombra los destinos reales; una decisión se registra como ADR y la idea queda `done` citándola | `ENGINEERING.md` §1 |
+| MINOR: `roadmap` sin referencia | La sección va en `--note` (dicho en §1 y en la skill) | — |
+| MINOR: AC-03 sin evidencia reproducible | `hook_check.py` | corrida del 30/09 |
+| NIT: línea larga, doble carga en `list`, `--status` desconocido | Corregidos (`--status` desconocido se rechaza) | — |
+| MINOR fuera de alcance: el filtro de claves no detecta claves con prefijo sin `key=` | Regex compartido con `evidence.py`: va al backlog, no se arregla acá | — |
+
 ## Requirement-to-evidence matrix
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
 | AC-01 guardar sin desviar | `inbox add`; skill `idea_inbox` regla 1 | `test_an_idea_is_kept_verbatim_and_pending`, `test_noting_never_writes_outside_the_inbox` | Demo con ideas reales | Pendiente: demo |
 | AC-02 ver y resolver | `inbox list|show|resolve`, `destination_exists` | `test_inbox.py` (destinos, historia, integridad, orden) | Prueba con base temporal (30/09) | Hecho |
-| AC-03 aviso al iniciar | `inbox_note()` del hook del workspace | Prueba con base temporal (30/09) | Salida del hook | Hecho |
+| AC-03 aviso al iniciar | `inbox_note()` del hook del workspace | `docs/evidence/gc-ai-0018/hook_check.py` (pendiente, revisada, corrupta, `[]`; exit 0) | `hook_check_runs.jsonl` | Hecho |
 | AC-04 regla | `ENGINEERING.md` §1, `/donde-va` | — | Commit del workspace | Hecho |
 | AC-05 demostración | — | — | — | Pendiente |
-| AC-06 revisión | — | — | — | Pendiente: interna en curso, Codex al cierre |
+| AC-06 revisión | Interna: CHANGES_REQUESTED → arreglos de arriba | Recheck interno | — | En curso; Codex al cierre |
 
 ## Required validation
 

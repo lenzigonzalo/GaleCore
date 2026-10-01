@@ -34,13 +34,13 @@ def test_an_idea_is_kept_verbatim_and_pending(kb):  # noqa: F811
     item, path = note(kb, context="revisando el briefing de la entrega 5")
     assert item.id == "2026-09-23-probar-la-estrategia-con-acciones-en" and item.words == IDEA
     assert item.status == "pending" and path == kb.base / "inbox" / f"{item.id}.json"
-    assert [i.id for i in inbox.items(kb, "pending")] == [item.id]
+    assert [i.id for i in inbox.items(kb, "pending")[0]] == [item.id]
 
 
 def test_the_same_idea_twice_is_two_items(kb):  # noqa: F811
     first, _ = note(kb)
     second, _ = note(kb)
-    assert second.id == f"{first.id}-2" and len(inbox.items(kb)) == 2
+    assert second.id == f"{first.id}-2" and len(inbox.items(kb)[0]) == 2
 
 
 def test_refs_must_resolve_and_credentials_are_refused(kb):  # noqa: F811
@@ -66,7 +66,7 @@ def test_a_review_needs_an_existing_destination_and_keeps_the_history(workspace)
                              prompt="ahora es trabajo", now=NOW + timedelta(days=2))
     assert moved.status == "work-item:GC-AI-0019" and [r.to for r in moved.resolutions] == [
         "backlog:BL-007", "work-item:GC-AI-0019"]
-    assert inbox.items(kb, "pending") == [] and len(inbox.items(kb, "resolved")) == 1
+    assert inbox.items(kb, "pending")[0] == [] and len(inbox.items(kb, "resolved")[0]) == 1
 
 
 def test_a_review_needs_a_reason_and_the_owners_words(workspace):
@@ -94,6 +94,57 @@ def test_noting_never_writes_outside_the_inbox(kb):  # noqa: F811
 def test_ideas_are_listed_in_the_order_they_were_noted(kb):  # noqa: F811
     late, _ = note(kb, words="zeta: la segunda idea", now=NOW + timedelta(hours=1))
     early, _ = note(kb, words="alfa: la primera idea", now=NOW)
-    assert [i.id for i in inbox.items(kb)] == [early.id, late.id]
+    assert [i.id for i in inbox.items(kb)[0]] == [early.id, late.id]
     late2, _ = note(kb, words="alfa también, pero después", now=NOW + timedelta(hours=2))
-    assert inbox.items(kb)[-1].id == late2.id
+    assert inbox.items(kb)[0][-1].id == late2.id
+
+
+
+# ── internal review 30/09 ────────────────────────────────────────
+
+
+def test_no_field_keeps_a_credential(workspace):
+    with pytest.raises(KnowledgeError, match="credential"):
+        inbox.add(kb=workspace, words="idea limpia", prompt="anotá esto, api_key=abcd1234efgh5678", now=NOW)
+    item, _ = note(workspace)
+    for field in ("note", "prompt"):
+        args = {"note": "n", "prompt": "p", field: "password=hunter2hunter2"}
+        with pytest.raises(KnowledgeError, match="credential"):
+            inbox.resolve(kb=workspace, item_id=item.id, to="discarded", now=NOW, **args)
+
+
+def test_a_rewritten_or_dropped_review_is_integrity_failed(workspace):
+    # Dropping the most recent reviews is not detectable from the file alone (declared in the catalog controls;
+    # the knowledge base's git history shows it).
+    kb = workspace  # noqa: F811
+    item, path = note(kb)
+    inbox.resolve(kb=kb, item_id=item.id, to="backlog:BL-007", note="al backlog", prompt="mandala", now=NOW)
+    inbox.resolve(kb=kb, item_id=item.id, to="discarded", note="ya no", prompt="descartala", now=NOW)
+    good = path.read_text(encoding="utf-8")
+    for tamper in (lambda d: d["resolutions"][0].update(prompt="el owner nunca dijo esto"),
+                   lambda d: d["resolutions"].pop(0)):
+        data = json.loads(good)
+        tamper(data)
+        path.write_text(json.dumps(data), encoding="utf-8")
+        with pytest.raises(KnowledgeError, match="INTEGRITY_FAILED"):
+            inbox.load(kb, item.id)
+
+
+def test_ids_are_checked_and_a_renamed_copy_is_refused(kb):  # noqa: F811
+    item, path = note(kb)
+    with pytest.raises(KnowledgeError, match="not an inbox id"):
+        inbox.load(kb, f"../inbox/{item.id}")
+    (path.parent / "2026-09-24-copia.json").write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    with pytest.raises(KnowledgeError, match="the file holds idea"):
+        inbox.load(kb, "2026-09-24-copia")
+
+
+def test_an_unreadable_file_is_reported_and_the_rest_is_listed(kb):  # noqa: F811
+    item, path = note(kb)
+    (path.parent / "2026-09-24-rota.json").write_text("{bad", encoding="utf-8")
+    (path.parent / "2026-09-24-lista.json").write_text("[]", encoding="utf-8")
+    found, broken = inbox.items(kb)
+    assert [i.id for i in found] == [item.id]
+    assert sorted(b["file"] for b in broken) == ["2026-09-24-lista.json", "2026-09-24-rota.json"]
+    with pytest.raises(KnowledgeError, match="status is pending"):
+        inbox.items(kb, "pendiente")
