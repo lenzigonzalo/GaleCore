@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -155,8 +156,28 @@ def _ts(value: str | None) -> datetime | None:
 # ── the analysis (deterministic) ─────────────────────────────────
 
 
+def _other_positions(item: dict, label: str, others: list[str], attention: list[str]) -> None:
+    """Open positions of an instance that is not the version followed: still valued, they count in the exposure."""
+    inst = item.get("instance", {})
+    where = f"{label} (instancia {inst.get('instanceId', '')[:8]}, {inst.get('lifecycleState')})"
+    detail = item.get("detail", {})
+    if not isinstance(detail.get("body"), dict):
+        attention.append(f"{where}: GaleCore no devolvió sus posiciones (HTTP {detail.get('http')}); no verificadas")
+        return
+    for p in detail["body"].get("positions") or []:
+        if p.get("status") != "OPEN":
+            continue
+        desc = (f"Posición abierta de {where}: crédito {p.get('entryCredit')}, valor {p.get('lastSpreadValue')}, "
+                f"P&L simulado {p.get('unrealizedPnl')} USD, DTE {p.get('currentDte')}, riesgo máx. {p.get('maxRisk')}, "
+                f"valuada {p.get('lastValuedAt')}")
+        others.append(desc)
+        attention.append(desc + " — se sigue valuando y cuenta en la exposición SHADOW")
+
+
 def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime | None,
-            now: datetime, research_state: str | None = None) -> dict[str, list[str]]:
+            now: datetime, research_state: str | None = None,
+            other_reports: dict[str, dict | None] | None = None) -> dict[str, list[str]]:
+    """`other_reports`: the runtime report of every other spec with instances (None when it could not be read)."""
     op, shadow, hyp, others, attention = [], [], [], [], []
     ref = f"strategy:{doc.name}/{doc.version}"
     if not approved:
@@ -187,6 +208,18 @@ def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime
             if not any(i.get("instance", {}).get("lifecycleState") == "RUNNING" for i in mine):
                 attention.append(f"{inst.get('specName')} ocupa el único lugar RUNNING del runtime: desplegar {ref} "
                                  "requiere pararla (decisión tuya; su posición abierta se sigue valuando)")
+    # Earlier versions of this strategy and other specs (GC-AI-0017, run 7 of 30/09: a STOPPED instance's open
+    # position was left out of the record, so the briefing reported zero exposure).
+    for item in report.get("instances", []):
+        if item.get("instance", {}).get("versionHash") != doc.spec_hash:
+            _other_positions(item, f"{doc.name}, otra versión", others, attention)
+    for spec, other in sorted((other_reports or {}).items()):
+        if other is None:
+            attention.append(f"No se pudo leer el reporte de {spec}: sus posiciones abiertas no están verificadas")
+            continue
+        for item in other.get("instances", []):
+            if item.get("instance", {}).get("specName") == spec:
+                _other_positions(item, spec, others, attention)
     if not mine:
         op.append(f"{ref} no tiene instancia en GaleCore: no está desplegada")
         if approved:
@@ -236,8 +269,42 @@ def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime
 # ── the run ──────────────────────────────────────────────────────
 
 
+def _evidence_of(report_out: str, err: str, code: int, ok: bool, spec: str, now: datetime) -> EvidenceContent:
+    return EvidenceContent(
+        source="galecore", tool="GaleCore/dev/galecore_dev.py runtime-report (GET App/Runtime/*, GaleCore Dev)",
+        params={"spec": spec, "exit_code": code}, retrieved_at=now,
+        series=[{"name": "estado del runtime SHADOW (status, instancias, posiciones, evaluaciones, eventos, métricas)"
+                 if ok else "error al leer GaleCore", "unit": "n/a", "frequency": "snapshot",
+                 "observation_dates": now.isoformat()}],
+        payload=report_out if ok else (err or report_out or f"exit {code} sin salida"), payload_scope="full",
+        access_notes=["Captura directa de la salida del comando (no transcripta por el host)"] +
+                     ([] if ok else [f"exit code {code}: GaleCore no respondió o el reporte falló"]))
+
+
+def _other_specs(kb: KnowledgeBase, report: dict, strategy: str, prompt: str, host: RecordHost, now: datetime,
+                 command_for: Callable[[str], list[str]]) -> tuple[dict[str, dict | None], list[str]]:
+    """The report of every other spec that has instances in GaleCore, each kept verbatim as evidence."""
+    body = (report.get("status") or {}).get("body") or {}
+    specs = sorted({i.get("specName") for i in body.get("instances", []) if isinstance(i, dict)
+                    and i.get("specName") and i.get("specName") != strategy})
+    reports: dict[str, dict | None] = {}
+    sources: list[str] = []
+    stamp = now.strftime("%Y%m%dT%H%M%SZ").lower()
+    for spec in specs:
+        code, out, err = _run_report(command_for(spec))
+        try:
+            reports[spec] = json.loads(out) if code == 0 else None
+        except json.JSONDecodeError:
+            reports[spec] = None
+        ev, _ = save_evidence(kb=kb, slug=f"{spec.replace('_', '-')}-shadow-{stamp}", prompt=prompt, host=host,
+                              content=_evidence_of(out, err, code, reports[spec] is not None, spec, now), now=now)
+        sources.append(f"evidence:{ev.id}")
+    return reports, sources
+
+
 def run_followup(*, kb: KnowledgeBase, strategy: str, prompt: str, host: RecordHost, task_id: str | None = None,
-                 report_command: list[str] | None = None, now: datetime | None = None) -> tuple[FollowupRecord, Path]:
+                 report_command: list[str] | None = None, now: datetime | None = None,
+                 other_report_command: Callable[[str], list[str]] | None = None) -> tuple[FollowupRecord, Path]:
     now = now or datetime.now(UTC)
     doc, approved = _versions(kb, strategy)
     # An ERROR run read nothing from GaleCore: anchoring on it would hide what happened before it.
@@ -252,19 +319,17 @@ def run_followup(*, kb: KnowledgeBase, strategy: str, prompt: str, host: RecordH
         except json.JSONDecodeError:
             report = None
     ok = report is not None
-    evidence = EvidenceContent(
-        source="galecore", tool="GaleCore/dev/galecore_dev.py runtime-report (GET App/Runtime/*, GaleCore Dev)",
-        params={"spec": strategy, "exit_code": code}, retrieved_at=now,
-        series=[{"name": "estado del runtime SHADOW (status, instancias, posiciones, evaluaciones, eventos, métricas)"
-                 if ok else "error al leer GaleCore", "unit": "n/a", "frequency": "snapshot",
-                 "observation_dates": now.isoformat()}],
-        payload=out if ok else (err or out or f"exit {code} sin salida"), payload_scope="full",
-        access_notes=["Captura directa de la salida del comando (no transcripta por el host)"] +
-                     ([] if ok else [f"exit code {code}: GaleCore no respondió o el reporte falló"]))
     ev_doc, _ = save_evidence(kb=kb, slug=f"{strategy.replace('_', '-')}-shadow-{stamp.lower()}", prompt=prompt,
-                              host=host, content=evidence, now=now)
+                              host=host, content=_evidence_of(out, err, code, ok, strategy, now),
+                              now=now)
+    sources = [f"evidence:{ev_doc.id}"]
     if ok:
-        parts = analyse(report, doc, approved, since, now, _research_state(kb, doc))
+        # An injected report command (tests, another runner) answers for the other specs too: never the real API.
+        command_for = other_report_command or ((lambda _spec: report_command) if report_command else
+                                               (lambda spec: default_report_command(kb.workspace, spec)))
+        other_reports, other_sources = _other_specs(kb, report, strategy, prompt, host, now, command_for)
+        sources += other_sources
+        parts = analyse(report, doc, approved, since, now, _research_state(kb, doc), other_reports)
         status = "DEGRADED" if parts["attention"] else "OK"
     else:
         parts = {"operation": [f"No se pudo leer GaleCore (exit {code}): {(err or out).strip()[:300]}"],
@@ -279,6 +344,6 @@ def run_followup(*, kb: KnowledgeBase, strategy: str, prompt: str, host: RecordH
         research_ref=next((r for r in doc.content.research_refs), None), recorded_at=now, since=since,
         task_id=task_id, prompt=prompt, host=host,
         method=FollowupMethod(runner=RUNNER, skill=SKILL, code_commit=_commit()),
-        sources=[f"evidence:{ev_doc.id}"], status=status, content_hash="pending", **parts)
+        sources=sources, status=status, content_hash="pending", **parts)
     rec = draft.model_copy(update={"content_hash": compute_document_hash(draft.hashable_content())})
     return rec, _write(kb, rec)

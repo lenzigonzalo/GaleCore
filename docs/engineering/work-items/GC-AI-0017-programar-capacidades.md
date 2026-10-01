@@ -151,6 +151,15 @@ de costo. El tope por corrida queda sólo como protección del cupo (`--max-turn
 - El pedido va por stdin: `claude` es un `.CMD` (límite de 8191 caracteres); lo encontró la primera corrida
   manual, que quedó `INCOMPLETE` con los datos del día guardados (prueba de falla real, 30/09 21:55 UTC).
 
+## Cambio de alcance (30/09, aprobado en el chat): posiciones fuera de la versión seguida
+
+La corrida 7 del briefing informó exposición 0 USD con dos spreads abiertos: el seguimiento (`application/followup.py`,
+de GC-AI-0009) sólo leía la instancia de la versión aprobada más reciente. Ahora también lista, y marca como atención,
+las posiciones abiertas de versiones anteriores de la estrategia y de otras specs con instancias (pide su reporte,
+sólo lectura, y lo guarda como evidencia). Si un reporte no se puede leer, lo dice, sin asumir que la posición cerró.
+`daily_attention` 0.2.3 las suma a la exposición. Verificado contra GaleCore Dev el 01/10 00:15 UTC: aparecen la 1.0.3
+(d533f033) y la v2 (0bbd904a). Tests: `tests/unit/test_followup.py` (las dos últimas).
+
 ## Requirement-to-evidence matrix
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |

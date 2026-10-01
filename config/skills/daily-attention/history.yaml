@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de daily_attention y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: daily_attention
 versions:
+  - version: "0.2.3"
+    date: 2026-09-30
+    changes: >
+      La exposición suma las posiciones abiertas de versiones anteriores y de otras specs que el seguimiento ahora
+      trae (other_versions). La corrida 7 del 30/09 informó 0 USD con dos spreads abiertos (1.0.3 y v2) porque el
+      seguimiento sólo leía la versión aprobada más reciente. Una spec que no se pudo leer es «no verificada», nunca cero.
+    feedback: []
   - version: "0.2.2"
     date: 2026-09-30
     changes: >

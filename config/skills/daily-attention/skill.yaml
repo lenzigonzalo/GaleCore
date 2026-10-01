@@ -1,5 +1,5 @@
 skill_id: daily_attention
-version: "0.2.2"
+version: "0.2.3"
 display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
 description: >
   Answers "what deserves my attention today about what I have in SHADOW?": exposure of the open SHADOW
@@ -30,7 +30,9 @@ system_prompt: >
      output verbatim as evidence, hashed record). Present its numbers; do not re-derive them. If GaleCore
      did not answer, that is the first attention point and the rest is marked as not refreshed.
   4. Exposure: per open position and summed, only what the follow-up record carries (positions,
-     valuations, simulated P&L, max risk per position). If the record lacks a value for a position,
+     valuations, simulated P&L, max risk per position), including the open positions of earlier versions
+     and other specs that it lists under other_versions: they are still valued and count in the
+     exposure. A spec whose report could not be read is "not verified", never zero. If the record lacks a value for a position,
      that value is `missing` for that position — never fill it from another day or instance without
      saying so. Greeks are NOT served by any registered source: write them under `missing`.
      Comparing exposure with the profile's limits (and any stop-loss arithmetic) is your own

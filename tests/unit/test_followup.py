@@ -132,3 +132,52 @@ def test_an_edited_record_is_integrity_failed(kb, research_ref, tmp_path):  # no
     path.write_text(path.read_text(encoding="utf-8").replace("DEGRADED", "OK"), encoding="utf-8")
     with pytest.raises(KnowledgeError, match="INTEGRITY_FAILED"):
         history(kb, NAME)
+
+
+# ── GC-AI-0017: open positions outside the version followed (run 7 of 30/09) ─────────
+
+
+OPEN_POS = {"status": "OPEN", "entryCredit": 0.44, "lastSpreadValue": 0.365, "unrealizedPnl": 7.5, "currentDte": 37,
+            "maxRisk": 456.0, "lastValuedAt": "2026-09-30T14:47:00Z"}
+
+
+def with_old_version(payload: dict) -> dict:
+    """A STOPPED earlier version of the same strategy, with an open position, in the report's instances."""
+    old = {"instanceId": "d533f033-old", "versionHash": "sha256:" + "d" * 64, "lifecycleState": "STOPPED",
+           "schedulerState": "STOPPED", "specName": NAME}
+    payload["instances"].append({"instance": old, "detail": {"http": 200, "body": {"instance": old,
+                                 "positions": [OPEN_POS, {"status": "CLOSED"}]}},
+                                 "evaluations": {"http": 200, "body": []}, "events": {"http": 200, "body": []}})
+    payload["status"]["body"]["instances"].append(old)
+    return payload
+
+
+def other_spec_report(positions) -> dict:
+    inst = {"instanceId": "0bbd904a-v2", "versionHash": OTHER_HASH, "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED", "specName": "shadow_runtime_test_v2"}
+    return {"spec_name": inst["specName"], "instances": [{"instance": inst, "detail": {"http": 200, "body": {
+        "instance": inst, "positions": list(positions)}}}]}
+
+
+def test_open_positions_of_earlier_versions_and_other_specs_are_in_the_record(kb, research_ref, tmp_path):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    (tmp_path / "o").mkdir()
+    other = stub(tmp_path / "o", other_spec_report([OPEN_POS]))
+    rec, _ = run_followup(kb=kb, strategy=NAME, prompt="p", host=HOST, now=NOW,
+                          report_command=stub(tmp_path, with_old_version(report(doc.spec_hash, mine=True))),
+                          other_report_command=lambda spec: other)
+    opened = [a for a in rec.attention if a.startswith("Posición abierta")]
+    assert len(opened) == 2, rec.attention                      # the closed one is not an attention point
+    assert any(f"{NAME}, otra versión (instancia d533f033, STOPPED)" in a and "riesgo máx. 456.0" in a for a in opened)
+    assert any("shadow_runtime_test_v2 (instancia 0bbd904a, STOPPED)" in a for a in opened)
+    assert len(rec.sources) == 2                                # each report kept as evidence
+
+
+def test_an_unreadable_other_spec_is_said_not_assumed_closed(kb, research_ref, tmp_path):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    (tmp_path / "o").mkdir()
+    broken = stub(tmp_path / "o", None, exit_code=1)
+    rec, _ = run_followup(kb=kb, strategy=NAME, prompt="p", host=HOST, now=NOW,
+                          report_command=stub(tmp_path, report(doc.spec_hash, mine=True)),
+                          other_report_command=lambda spec: broken)
+    assert any("No se pudo leer el reporte de shadow_runtime_test_v2" in a for a in rec.attention)
