@@ -107,12 +107,15 @@ datos del día y un resultado `INCOMPLETE` que dice qué faltó. Nunca un briefi
 - [ ] **AC-04 — Tope:** cada corrida respeta su tope de turnos y registra la duración; `task status` la muestra.
   **Avance 30/09:** `--max-turns` y tope de tiempo del catálogo; la ronda de corrección cuenta dentro del tope;
   `run_finished` guarda `turns`, `max_turns`, `duration_s`; `task status` → `last_run`. Tests en `test_model_tasks.py`.
-- [ ] **AC-05 — Fallas:** sin datos o sin modelo → `INCOMPLETE`/`FAILED` con motivo, sin resultado inventado; `LATEST.md`
+- [x] **AC-05 — Fallas:** sin datos o sin modelo → `INCOMPLETE`/`FAILED` con motivo, sin resultado inventado; `LATEST.md`
   dice que no se pudo.
   **Avance 30/09:** corridas manuales 1–4 reales: sin resultado válido del modelo quedaron `INCOMPLETE` con motivo y
-  los datos del día; tests de `FAILED` (sin modelo ni datos) y de salida rechazada. **Falta:** la prueba con la API
-  de Dev apagada en una corrida real.
-- [ ] **AC-06 — Pausa, reanudación y cancelación desde el chat**, con efecto en la corrida siguiente.
+  los datos del día; tests de `FAILED` (sin modelo ni datos) y de salida rechazada. Con la API de Dev **apagada**
+  (corrida 6, 23:50 UTC): `INCOMPLETE` con el motivo y sin valores del runtime; `LATEST.md` lo dice.
+- [x] **AC-06 — Pausa, reanudación y cancelación desde el chat**, con efecto en la corrida siguiente.
+  **Evidencia 30/09:** pausa → Programador deshabilitado y corrida `SKIPPED`; reanudación → `Ready` para el 01/10
+  10:00; cancelación (tarea descartable) → borrada del Programador y corrida `SKIPPED`
+  (`docs/evidence/gc-ai-0017/manual_runs_2026-09-30.md`).
 - [ ] **AC-07 — Demostración** del recorrido de arriba con tu briefing real.
 - [ ] **AC-08 — Revisión:** interna y Codex (toca controles); utilidad y cierre, vos.
 
