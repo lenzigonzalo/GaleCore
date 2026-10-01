@@ -1,6 +1,6 @@
 # GaleCore-AI — Session Handoff
 
-**Actualizado:** 2026-09-30 noche.
+**Actualizado:** 2026-10-01 madrugada (SHADOW verificado: 1.0.5 RUNNING, switch encendido, API Dev arriba).
 **Único plan:** [roadmap](../../../roadmap/README.md) — arriba, «Estado en tres partes»; detalle en §4, sección
 **«Entregable 1 — listo para usar»** (aprobado el 30/09: qué entra, qué no y en qué orden).
 Cerrados y en `main`: GC-AI-0008 y GC-AI-0009 (30/09, tags `gc-ai-0008-closed`, `gc-ai-0009-closed`), GC-AI-0012 … 0015.
@@ -44,10 +44,20 @@ Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
      correrla (agente `reviewer` sobre `feature/GC-AI-0017...HEAD` + el commit del workspace del buzón) y arreglar.
    - **Falta:** demo con 2–3 ideas reales del owner («anotá esto: …») y su revisión (AC-01, AC-05); Codex al cierre.
      Hasta el merge, `inbox` corre desde este worktree (`PYTHONPATH=src`).
-2c. **Siguiente pieza del plan: e — pack de datos (GC-AI-0019, por abrir).** Del lado de GaleCore-AI: inventario
-   real de lo conectado con su estado probado, «GaleCore completo» (declarar cadenas, IV rank, IV y velas como
-   fuentes) y la receta «sumar una fuente». Lo de GaleCore (EDGAR, Tesoro, BLS, CBOE, mudar FRED y Fed) ya está pedido
-   en `docs/engineering/HANDOFF-GALECORE-FUENTES.md` del workspace. Abrir con su acuerdo y esperar el «dale».
+   - **01/10 (sesión galecore-9a):** otra sesión (galecore-02) seguía trabajando en 0018 y commiteó los arreglos
+     (`6e262b3`). Se le mandó una revisión interna nueva: CHANGES_REQUESTED sólo porque faltaba commitear; el árbol
+     estaba bien. Menores pendientes: `hook_check.py` con `parents[5]` (se rompe tras el merge), el hook cuenta los
+     ilegibles como ideas, AC-02 e2e sin artefacto y varios NIT. Verificar en el work item si galecore-02 los resolvió.
+2c. **Pack de datos — GC-AI-0019, DRAFT (abierto con el «dale» del owner el 01/10).** Worktree
+   `.worktrees/galecore-ai/GC-AI-0019`, rama `feature/GC-AI-0019` desde `feature/GC-AI-0018` (commit `ceea6de`).
+   Work item: acuerdo, lo encontrado al abrir, propuesta y **dos decisiones del owner pendientes**: (1) cerrar el lado de
+   GaleCore-AI sin esperar las fuentes nuevas de GaleCore, que quedan como «pedidas» (recomendado: sí); (2) caso de
+   ejemplo de la receta: velas o IV rank de GaleCore (recomendado) frente a CBOE, que depende de GaleCore.
+   Hallazgo: cadenas, IV rank e IV ya tienen ruta en `capabilities/dispatcher.py`, pero no están en `KNOWN_CAPABILITIES`;
+   velas (`Tastytrade/MarketData/Candle`) y `Market-metrics/VolatilityData` no están en el harness. Casi todas las
+   fuentes del registro no tienen estado observado.
+   - **Siguiente:** que el owner apruebe las dos decisiones → pasar a IN_PROGRESS → recién ahí cambiar el
+     `ACTIVE_WORK_ITEM` del workspace (hoy dice 0018; no se tocó para no pisar a galecore-02) → implementar.
 3. **Entrega 4 — GC-AI-0016, READY_FOR_REVIEW.** Una pasada de Codex `--base feature/GC-AI-0015` desde el **3/10 19:28**
    (regla del 30/09: una vez, al cierre, sin rechecks) y cierre del owner. Si Codex cambia algo, mergearlo a GC-AI-0017.
 4. **GaleCore GC-0005 (espaciado), READY_FOR_REVIEW:** una pasada de Codex al cierre (desde el 3/10). Paquete para quien
