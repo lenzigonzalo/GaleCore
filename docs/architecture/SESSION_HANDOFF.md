@@ -12,8 +12,8 @@ Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
    una entrada cada 1440 min) corre en GaleCore Dev desde el 30/09 (instancia `2ad19390…`); la 1.0.3 quedó STOPPED y su
    posición abierta se sigue valuando. La primera entrada posible es en la sesión del 1/10.
    - **La API Dev corre desde el worktree de GaleCore GC-0005**, no desde el checkout principal:
-     `cd .worktrees/galecore/GC-0005; python dev/galecore_dev.py api` (log de la sesión del 30/09 en
-     `dev/.local/api-20260930.log`). **Si se levanta desde `GaleCore/` (checkout en `85f1c2c`), el runtime ignora
+     `cd .worktrees/galecore/GC-0005; python dev/galecore_dev.py api` (reiniciada el 30/09 23:55 UTC para la prueba de API apagada;
+     log en `dev/.local/api-20260930-restart.log`). **Si se levanta desde `GaleCore/` (checkout en `85f1c2c`), el runtime ignora
      `min_minutes_between_entries` y abriría las 10 posiciones el mismo día.** El worktree tiene copia de `dev/.local/` y
      de los archivos de estado fuera de git (`platform_services_switch_state.json` = switch del runtime ENCENDIDO,
      `skew25_history.json`); si se vuelve al checkout principal, copiarlos de vuelta.
@@ -28,7 +28,7 @@ Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
      con modelo: el runner corre el seguimiento, el modelo sólo lee (`claude.exe --restricted`, scripts confinados a la
      carpeta de la corrida) y el runner valida y guarda. El seguimiento ahora trae las posiciones abiertas de versiones
      anteriores y otras specs (la 1.0.3 y la v2 siguen abiertas). Revisión interna: CHANGES_REQUESTED → arreglada
-     (tabla en el work item); recheck en curso al cerrar la sesión. Corrida 8 manual: OK (rev 8). Evidencia:
+     → **recheck APPROVE** (menores también arreglados; tabla en el work item). 1000 tests, gate PASS. Corrida 8 manual: OK (rev 8). Evidencia:
      `docs/evidence/gc-ai-0017/`. **Tarea `atencion-diaria-spy` L–V 10:00 (Buenos Aires), corre desde el worktree.**
    - **Siguiente (1/10):** mirar la corrida de las 10:00 (`task status atencion-diaria-spy` desde el worktree con
      `PYTHONPATH=src`; debe decir `invoked_by=scheduler`) → AC-01 y AC-03. Después: demo (AC-07) y Codex al cierre
