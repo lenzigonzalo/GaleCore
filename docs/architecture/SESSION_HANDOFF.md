@@ -24,17 +24,18 @@ Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
    Anthropic se decide al pasar a producción); el briefing llega **leído por el modelo**; **lunes a viernes 10:00 local**;
    se reusa el Programador de 0009 tal cual; la llamada al modelo queda en un solo punto intercambiable; sin aviso de
    Windows ni costo en USD (sólo tope de turnos). Vale para cualquier capacidad de lectura declarada programable.
-   - **Hecho el 30/09 (commits `6239a39` y siguiente en el worktree):** AC-02 (`schedulable` en el catálogo,
-     `catalog --check`, `task create --capability`) y la corrida con modelo (`application/model_run.py`: el modelo
-     sólo lee con `--restricted`, el runner valida y guarda; ronda de corrección; datos del día + `INCOMPLETE` si
-     falla). **Tarea real `atencion-diaria-spy` creada: L–V 10:00 (Buenos Aires), corre desde el worktree.** La
-     corrida manual 5 guardó el briefing (research `2026-09-29-atencion-diaria-spy-prima-varianza-30-45d` rev 5).
-     Evidencia: `docs/evidence/gc-ai-0017/`.
-   - **Siguiente (1/10):** mirar la corrida de las 10:00 (`task status atencion-diaria-spy`; debe decir
-     `invoked_by=scheduler`) → cierra AC-01 (pantalla bloqueada) y AC-03. Después: prueba con la API apagada
-     (AC-05), pausa/reanudación desde el chat (AC-06), demo (AC-07), revisión interna + Codex (AC-08); al mergear,
-     `task rebind atencion-diaria-spy --code-path <main>`. En esta sesión el CLI necesita `PYTHONPATH=src` en el
-     worktree (sin eso toma el paquete instalado de main).
+   - **Hecho el 30/09:** AC-02, AC-05 (API apagada, corrida real) y AC-06 (pausa, reanudación, cancelación). Corrida
+     con modelo: el runner corre el seguimiento, el modelo sólo lee (`claude.exe --restricted`, scripts confinados a la
+     carpeta de la corrida) y el runner valida y guarda. El seguimiento ahora trae las posiciones abiertas de versiones
+     anteriores y otras specs (la 1.0.3 y la v2 siguen abiertas). Revisión interna: CHANGES_REQUESTED → arreglada
+     (tabla en el work item); recheck en curso al cerrar la sesión. Corrida 8 manual: OK (rev 8). Evidencia:
+     `docs/evidence/gc-ai-0017/`. **Tarea `atencion-diaria-spy` L–V 10:00 (Buenos Aires), corre desde el worktree.**
+   - **Siguiente (1/10):** mirar la corrida de las 10:00 (`task status atencion-diaria-spy` desde el worktree con
+     `PYTHONPATH=src`; debe decir `invoked_by=scheduler`) → AC-01 y AC-03. Después: demo (AC-07) y Codex al cierre
+     (AC-08). Limitación hasta el merge: `task list` desde `main` falla por la tarea nueva (usar el worktree o
+     `task status`). Al mergear: `task rebind atencion-diaria-spy --code-path <main>`.
+   - **Fuentes externas → GaleCore** (decidido 30/09): traspaso `docs/engineering/HANDOFF-GALECORE-FUENTES.md` del
+     workspace; `fred_query.py` y `fed_calendar.py` quedan como transitorios.
 3. **Entrega 4 — GC-AI-0016, READY_FOR_REVIEW.** Una pasada de Codex `--base feature/GC-AI-0015` desde el **3/10 19:28**
    (regla del 30/09: una vez, al cierre, sin rechecks) y cierre del owner. Si Codex cambia algo, mergearlo a GC-AI-0017.
 4. **GaleCore GC-0005 (espaciado), READY_FOR_REVIEW:** una pasada de Codex al cierre (desde el 3/10). Paquete para quien
