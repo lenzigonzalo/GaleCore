@@ -36,6 +36,18 @@ Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
      `task status`). Al mergear: `task rebind atencion-diaria-spy --code-path <main>`.
    - **Fuentes externas → GaleCore** (decidido 30/09): traspaso `docs/engineering/HANDOFF-GALECORE-FUENTES.md` del
      workspace; `fred_query.py` y `fed_calendar.py` quedan como transitorios.
+2b. **Buzón de ideas — GC-AI-0018, IN_PROGRESS (trabajo activo del workspace)** (worktree
+   `.worktrees/galecore-ai/GC-AI-0018`, rama desde `feature/GC-AI-0017`; aprobado por el owner el 30/09).
+   Hecho: `inbox add|list|show|resolve`, capacidad `idea_inbox`, aviso de pendientes al iniciar sesión (hook del
+   workspace), regla en `ENGINEERING.md` §1 y `/donde-va`. AC-02/03/04 con evidencia; 1008 tests, gate PASS.
+   - **Revisión interna lanzada al cerrar la sesión del 30/09; su resultado no llegó a esta sesión:** volver a
+     correrla (agente `reviewer` sobre `feature/GC-AI-0017...HEAD` + el commit del workspace del buzón) y arreglar.
+   - **Falta:** demo con 2–3 ideas reales del owner («anotá esto: …») y su revisión (AC-01, AC-05); Codex al cierre.
+     Hasta el merge, `inbox` corre desde este worktree (`PYTHONPATH=src`).
+2c. **Siguiente pieza del plan: e — pack de datos (GC-AI-0019, por abrir).** Del lado de GaleCore-AI: inventario
+   real de lo conectado con su estado probado, «GaleCore completo» (declarar cadenas, IV rank, IV y velas como
+   fuentes) y la receta «sumar una fuente». Lo de GaleCore (EDGAR, Tesoro, BLS, CBOE, mudar FRED y Fed) ya está pedido
+   en `docs/engineering/HANDOFF-GALECORE-FUENTES.md` del workspace. Abrir con su acuerdo y esperar el «dale».
 3. **Entrega 4 — GC-AI-0016, READY_FOR_REVIEW.** Una pasada de Codex `--base feature/GC-AI-0015` desde el **3/10 19:28**
    (regla del 30/09: una vez, al cierre, sin rechecks) y cierre del owner. Si Codex cambia algo, mergearlo a GC-AI-0017.
 4. **GaleCore GC-0005 (espaciado), READY_FOR_REVIEW:** una pasada de Codex al cierre (desde el 3/10). Paquete para quien
