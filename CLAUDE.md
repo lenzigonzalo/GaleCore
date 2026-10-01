@@ -46,8 +46,10 @@ of a trading idea with GaleCore + the host's external sources; every response ke
 `user_profile` (objectives, reference capital, horizon, limits, preferred sources, format:
 `profile show|set|history`, versions `profile:vN` in `knowledge/profile/`; fields in `provisional` are
 placeholders), `daily_attention` (what deserves attention today about what is in SHADOW, saved as a
-revision of one investigation per strategy) and `capability_builder` (a new capability with the template:
-catalog entry + skill, data needs from the source registry, controls). While a profile exists, saving
+revision of one investigation per strategy), `capability_builder` (a new capability with the template:
+catalog entry + skill, data needs from the source registry, controls) and `idea_inbox` (the owner's "anotá esto":
+`inbox add --text "<words verbatim>"` into `knowledge/inbox/`, not evaluated then; reviewed later with `inbox list`
+and `inbox resolve <id> --to roadmap|backlog:BL-NNN|work-item:<id>|done|discarded`). While a profile exists, saving
 an investigation (`research save|revise`, whatever capability stamps it) is refused unless an antecedent
 cites the version in force. `catalog --check`
 validates every entry (skill and contract load, flow commands exist, data needs resolve or say why not,

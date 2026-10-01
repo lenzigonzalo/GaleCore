@@ -26,6 +26,8 @@ Usage:
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
+    python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
+    python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
     python -m galecore_ai.adapters.cli task set-frequency ID --frequency ... [--time HH:MM | --minutes N] --timezone TZ --prompt "..."
@@ -542,6 +544,30 @@ async def _cmd_evidence_add(args: argparse.Namespace) -> None:
                "provenance": document.provenance, "content_hash": document.content_hash})
 
 
+async def _cmd_inbox(args: argparse.Namespace) -> None:
+    from galecore_ai.application import inbox
+    kb = _build_knowledge_base()
+    c = args.inbox_command
+    try:
+        if c == "add":
+            item, path = inbox.add(kb=kb, words=args.text, prompt=args.prompt or args.text, context=args.context or "",
+                                   refs=args.ref or [], host_model=args.host_model)
+            _json_out({"status": "NOTED", "ref": f"inbox:{item.id}", "path": str(path), "words": item.words})
+        elif c == "list":
+            listed = inbox.items(kb, args.status)
+            _json_out({"pending": sum(1 for i in inbox.items(kb) if i.status == "pending"),
+                       "items": [inbox.summary(i) for i in listed]})
+        elif c == "show":
+            item = inbox.load(kb, args.id)
+            _json_out(item.model_dump(mode="json") | {"status": item.status})
+        else:
+            item, path = inbox.resolve(kb=kb, item_id=args.id, to=args.to, note=args.note, prompt=args.prompt)
+            _json_out({"status": "RESOLVED", "ref": f"inbox:{item.id}", "to": item.status, "path": str(path),
+                       "history": [r.model_dump(mode="json") for r in item.resolutions]})
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+
+
 async def _cmd_feedback(args: argparse.Namespace) -> None:
     kb = _build_knowledge_base()
     if args.feedback_command == "list":
@@ -898,6 +924,23 @@ def build_parser() -> _JsonArgumentParser:
                           help="case: fix that result · preference: new profile version · method: new skill version")
     p_fb_add.add_argument("--slug", required=True, help="Short name; the id is <date>-<slug>")
     p_fb_add.add_argument("--prompt", required=True, help="What the user asked")
+    p_inbox = sub.add_parser("inbox", help="Idea inbox: note the owner's idea now, review it later (GC-AI-0018)")
+    in_sub = p_inbox.add_subparsers(dest="inbox_command", required=True)
+    p_in_add = in_sub.add_parser("add", help="Note an idea with the owner's words, verbatim; it is not evaluated")
+    p_in_add.add_argument("--text", required=True, help="The idea, in the owner's words")
+    p_in_add.add_argument("--context", help="What we were doing when it came up")
+    p_in_add.add_argument("--ref", action="append", help="A resolvable reference (research:, strategy:, …)")
+    p_in_add.add_argument("--prompt", help="The owner's request (default: the idea itself)")
+    p_in_add.add_argument("--host-model", dest="host_model")
+    p_in_list = in_sub.add_parser("list", help="Ideas, oldest first")
+    p_in_list.add_argument("--status", help="pending | resolved | a destination (roadmap, backlog:BL-NNN, …)")
+    in_sub.add_parser("show", help="One idea with its review history").add_argument("id")
+    p_in_res = in_sub.add_parser("resolve", help="Where the idea went: roadmap, backlog:BL-NNN, work-item:<id>, "
+                                                 "done or discarded")
+    p_in_res.add_argument("id")
+    p_in_res.add_argument("--to", required=True)
+    p_in_res.add_argument("--note", required=True, help="Why, in plain words")
+    p_in_res.add_argument("--prompt", required=True, help="The owner's words in the review")
     p_fb_list = fb_sub.add_parser("list", help="Every comment, applied or pending, and where it was applied")
     p_fb_list.add_argument("--status", choices=["pending", "applied"])
 
@@ -1050,6 +1093,8 @@ def main() -> None:
             asyncio.run(_cmd_profile(args))
         elif args.command == "feedback":
             asyncio.run(_cmd_feedback(args))
+        elif args.command == "inbox":
+            asyncio.run(_cmd_inbox(args))
         elif args.command == "strategy":
             asyncio.run(_cmd_strategy(args))
         elif args.command == "followup":

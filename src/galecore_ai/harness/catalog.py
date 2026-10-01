@@ -21,7 +21,7 @@ from galecore_ai.harness.assets import asset_root, definition_hash, load_asset
 from galecore_ai.harness.definitions import SkillDefinition
 
 CATALOG_PATH = "catalog.yaml"
-STORED_AS = ("none", "regime", "research", "strategy", "task", "profile")
+STORED_AS = ("none", "regime", "research", "strategy", "task", "profile", "inbox")
 RUNNERS = ("code", "model")
 
 
@@ -91,7 +91,7 @@ class CatalogEntry(BaseModel):
     data_needs: list[DataNeed]           # every datum it needs; [] only when it reads no market or source data
     prepare_skill: str | None = None     # value of `prepare --skill` when the flow starts from a fact snapshot
     flow: list[str]                      # CLI commands, in order
-    stored_as: str                       # none | regime | research | strategy | task | profile
+    stored_as: str                       # none | regime | research | strategy | task | profile | inbox
     controls: list[str]                  # what the validator checks for this kind of work (and what it does not)
     guide: str | None = None             # longer guide in docs/, if any
     schedulable: Schedulable | None = None  # a recurring task may run it (read-only; `catalog --check` enforces it)

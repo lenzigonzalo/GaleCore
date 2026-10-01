@@ -1,7 +1,7 @@
 ---
 id: GC-AI-0018
 title: Buzón de ideas — «anotá esto» desde el chat, por revisar después (entregable 1, pieza h)
-status: DRAFT
+status: IN_PROGRESS
 implementer: claude-code
 reviewer: codex
 approver: user
@@ -15,7 +15,7 @@ approval_result: PENDING
 
 Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el orden del entregable va después de b
 (entrega 5, que espera la corrida por horario del 1/10) y de a (entrega 4, que espera a Codex el 3/10). Rama desde
-`feature/GC-AI-0017`.
+`feature/GC-AI-0017`. **Aprobado por el owner el 30/09** («dale»), con las dos recomendaciones de abajo.
 
 ## Acuerdo breve
 
@@ -41,8 +41,8 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
 
 | # | Pregunta | Recomendación |
 |---|---|---|
-| 1 | ¿Cuándo se revisa el buzón? | **Al empezar cada sesión, si hay pendientes:** el aviso de inicio dice «N ideas en el buzón» y vos elegís si las revisamos ahora o después. Más adelante lo hace el curador (pieza f) |
-| 2 | ¿Qué entra? | **Sólo lo que vos pedís anotar.** Lo que yo encuentro trabajando sigue la regla actual (backlog o work item), así el buzón queda como tuyo |
+| 1 | ¿Cuándo se revisa el buzón? | **Decidido (30/09):** **al empezar cada sesión, si hay pendientes:** el aviso de inicio dice «N ideas en el buzón» y vos elegís si las revisamos ahora o después. Más adelante lo hace el curador (pieza f) |
+| 2 | ¿Qué entra? | **Decidido (30/09):** **sólo lo que vos pedís anotar.** Lo que yo encuentro trabajando sigue la regla actual (backlog o work item), así el buzón queda como tuyo |
 
 ## Non-goals
 

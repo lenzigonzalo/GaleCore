@@ -369,3 +369,29 @@ entries:
       - Every change and run is appended to a hash-chained events log; each run leaves a hashed follow-up record naming the task, the strategy version and its sources
       - Runs depend on the PC on, the user logged on, GaleCore Dev's API up and its credentials; failures are recorded, never silent
       - Not checked - that the schedule suits the owner, or the interpretation of each result
+
+  - id: idea_inbox
+    kind: harness
+    serves: >-
+      Anotar una idea tuya en el momento, con tus palabras, sin cortar lo que estamos haciendo ni evaluarla, y
+      revisarla después: cada idea termina en el roadmap, en el backlog, en un work item, hecha o descartada, con el
+      motivo.
+    example_requests:
+      - "Anotá esto: probar la estrategia con acciones en vez de opciones."
+      - ¿Qué hay en el buzón?
+      - Revisemos el buzón.
+    skill: skills/idea-inbox/skill.yaml
+    output_contract: galecore_ai.contracts.inbox.InboxItem
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - inbox add --text "<tus palabras>" [--context "<qué estábamos haciendo>"] [--ref <ref>]
+      - inbox list [--status pending]
+      - inbox show <id>
+      - inbox resolve <id> --to roadmap|backlog:BL-NNN|work-item:<id>|done|discarded --note "<por qué>" --prompt "<tus palabras>"
+    stored_as: inbox
+    controls:
+      - The idea is kept verbatim with when and what we were doing; the noted part is hashed and an edit is INTEGRITY_FAILED
+      - References must resolve; text that looks like a key or token is refused
+      - A review appends where the idea went and why; a backlog item or work item must exist; nothing is deleted
+      - "Not checked - that the idea is good or that the destination chosen in the review is the right one"
