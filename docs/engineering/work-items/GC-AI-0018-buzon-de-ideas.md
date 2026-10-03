@@ -52,8 +52,11 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Guardar sin desviar:** «anotá esto» en una sesión deja la idea con tus palabras textuales en
+- [x] **AC-01 — Guardar sin desviar:** «anotá esto» en una sesión deja la idea con tus palabras textuales en
   `knowledge/inbox/`, y la conversación sigue con lo que estaba.
+  **Evidencia 03/10 (ejemplo interno, regla de demos ágiles del owner):** en medio de la sesión de replanificación,
+  `inbox add` con `GALECORE_KNOWLEDGE_DIR` en una carpeta temporal guardó la idea textual (`NOTED`,
+  `inbox:2026-10-03-que-el-supervisor-avise-por-whatsapp`) y la sesión siguió con lo que estaba.
 - [x] **AC-02 — Ver y resolver:** `inbox list|show|resolve`; un destino inexistente se rechaza; la historia queda y
   nada se borra. **Evidencia 30/09:** `application/inbox.py`, `contracts/inbox.py`, CLI `inbox`; tests
   `tests/unit/test_inbox.py`; prueba de punta a punta con una base temporal (destino `backlog:BL-999` rechazado,
@@ -64,8 +67,13 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
 - [x] **AC-04 — Regla actualizada:** `ENGINEERING.md` §1 y `/donde-va` mandan al buzón lo que pedís anotar.
   **Evidencia 30/09:** fila nueva en «Lo que surge mientras se trabaja» y la excepción en «Ideas nuevas y el plan»;
   paso 0 de `/donde-va`. Hasta mergear, `inbox` corre desde este worktree (`PYTHONPATH=src`).
-- [ ] **AC-05 — Demostración:** 2 o 3 ideas reales anotadas en una sesión y revisadas después.
-- [ ] **AC-06 — Revisión:** interna; Codex al cierre (toca una regla de trabajo); utilidad y cierre, vos.
+- [x] **AC-05 — Demostración:** ~~2 o 3 ideas reales anotadas en una sesión y revisadas después.~~ Reemplazado por
+  el owner el 03/10: «si lo del buzón ya quedó operativo genial, después cuando lo usemos lo pondremos en práctica»;
+  basta un ejemplo interno. **Evidencia 03/10:** anotar → `inbox list` (1 pendiente) → `inbox resolve --to roadmap`
+  (`RESOLVED`) → `inbox list --status pending` vacío. Un destino `backlog:` en la carpeta temporal se rechaza porque
+  valida contra el backlog real (comportamiento esperado).
+- [ ] **AC-06 — Revisión:** interna (hecha; arreglos commiteados el 01/10); Codex en **una pasada conjunta de
+  0016 + 0017 + 0018** contra `main` (regla del 03/10: sólo cambios grandes o importantes); utilidad y cierre, vos.
 
 ## Revisión interna (30/09, CHANGES_REQUESTED) y arreglos
 
@@ -86,11 +94,11 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Provenance | Status |
 |---|---|---|---|---|---|
-| AC-01 guardar sin desviar | `inbox add`; skill `idea_inbox` regla 1 | `test_an_idea_is_kept_verbatim_and_pending`, `test_noting_never_writes_outside_the_inbox` | Demo con ideas reales | pending | Pending demo |
+| AC-01 guardar sin desviar | `inbox add`; skill `idea_inbox` regla 1 | `test_an_idea_is_kept_verbatim_and_pending`, `test_noting_never_writes_outside_the_inbox` | Ejemplo interno 03/10 (carpeta temporal) | verified locally | Implemented |
 | AC-02 ver y resolver | `src/galecore_ai/application/inbox.py` (load, list, resolve); `src/galecore_ai/contracts/inbox.py` (destination_exists) | `tests/unit/test_inbox.py` (25 tests: destinos, historia, integridad, orden) | `tests/unit/test_inbox.py::test_inbox` (1012 tests en suite, 0 fallos) | verified locally | Implemented |
 | AC-03 aviso al iniciar | `.claude/hooks/session_start.py` inbox_note() | `docs/evidence/gc-ai-0018/hook_check.py` (exit 0, 6 checks) | `docs/evidence/gc-ai-0018/hook_check_runs.jsonl` (2 corridas: 2026-10-01T01:54:40Z, 2026-10-01T20:12:41Z) | verified locally | Implemented |
 | AC-04 regla | `ENGINEERING.md` §1 («Ideas nuevas y el plan»), `/donde-va` paso 0 | — | Commits 058f995, ec64e56, c1552df del workspace main | implemented | Implemented |
-| AC-05 demostración | — | — | — | pending | Pending owner ideas |
+| AC-05 demostración | — | — | Ejemplo interno 03/10: add → list → resolve → pendientes 0 | verified locally | Reemplazado por ejemplo interno (owner 03/10) |
 | AC-06 revisión interna | Arreglos: encadenamiento de revisiones, filtro de claves (words, context, prompt, note, review note), ids validados, ilegibles informados | `tests/unit/test_inbox.py::test_a_rewritten_or_dropped_review_is_integrity_failed`, `test_no_field_keeps_a_credential`, `test_ids_are_checked_and_a_renamed_copy_is_refused`, `test_an_unreadable_file_is_reported_and_the_rest_is_listed` | Commit fd0171c, hook_check.py runs | verified locally | CHANGES_REQUESTED arreglos aplicados → recheck pendiente + Codex |
 
 ## Required validation
@@ -104,7 +112,8 @@ git diff --check
 
 ## Implementer handoff
 
-**State:** IN_PROGRESS — AC-02/03/04 con evidencia; AC-01/05 esperan la demo con ideas reales del owner; AC-06 abierto (falta el recheck interno de los arreglos y Codex al cierre). No se reporta READY_FOR_REVIEW.
+**State (03/10):** AC-01..05 con evidencia (AC-01/05 por ejemplo interno, regla de demos ágiles). Falta AC-06: la
+pasada conjunta de Codex sobre 0016 + 0017 + 0018 antes del merge a `main`; después, cierre en lote del owner.
 
 **Timestamp:** 2026-10-01T20:12:41Z
 
