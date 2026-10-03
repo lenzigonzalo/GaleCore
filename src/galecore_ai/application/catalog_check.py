@@ -72,7 +72,8 @@ def _flow_problems(entry: CatalogEntry, commands: dict[str, set[str]], workspace
 # deploy, profile set, sources declare|check, feedback add, task changes, regime records, other scripts) is refused.
 SCHEDULED_READS = {("catalog", None), ("kb", "search"), ("kb", "show"), ("profile", "show"), ("profile", "history"),
                    ("sources", "list"), ("sources", "query"), ("followup", "history"), ("feedback", "list"),
-                   ("query", None), ("prepare", None)}
+                   ("query", None), ("prepare", None),
+                   ("galecore", "list"), ("galecore", "get")}
 SCHEDULED_RESULT_WRITES = {("followup", "run"), ("evidence", "add"), ("research", "save"), ("research", "revise")}
 SCHEDULED_SCRIPTS = {"GaleCore-AI/tools/fred_query.py", "GaleCore-AI/tools/fed_calendar.py"}  # fetch into a scratch dir
 CODE_RUNNERS = ("strategy_followup",)   # capabilities a task runs without the model (application/tasks.py)

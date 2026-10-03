@@ -45,6 +45,7 @@ from galecore_ai.contracts.sources import (
     SourceQueryResult,
     SourceRegistry,
     SourceStatusView,
+    Usage,
 )
 
 # Words that only scaffold the question ("¿de dónde saco los datos de X?", "what
@@ -156,7 +157,8 @@ def query_sources(need: str, registry: SourceRegistry, status_store: FileSourceS
             hits = [c for c in source.covers if _matches_coverage(terms, c)]
             if hits:
                 matches.append(_to_match(source, status_store, matched_coverage=hits))
-    return SourceQueryResult(need=need, matches=matches, missing=not matches)
+    # A need only requested sources cover is still missing: they say who brings it, not where to get it today.
+    return SourceQueryResult(need=need, matches=matches, missing=all(m.usage is Usage.REQUESTED for m in matches))
 
 
 def catalog_summary(registry: SourceRegistry, status_store: FileSourceStatusStore) -> SourceCatalogSummary:

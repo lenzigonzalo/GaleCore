@@ -26,6 +26,7 @@ Usage:
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
+    python -m galecore_ai.adapters.cli galecore list | get CAPABILITY --symbol SYM [--param k=v ...] [--out FILE]
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
@@ -544,6 +545,39 @@ async def _cmd_evidence_add(args: argparse.Namespace) -> None:
                "provenance": document.provenance, "content_hash": document.content_hash})
 
 
+async def _cmd_galecore(args: argparse.Namespace) -> None:
+    """Read-only GaleCore data the harness declares (GC-AI-0019): `list` what can be asked, `get` one capability."""
+    if args.galecore_command == "list":
+        _json_out({"capabilities": [{"id": c.capability_id, "kind": c.semantic_class.value, "what": c.description,
+                                     "params": [p.name for p in c.parameters], "returns": c.returns}
+                                    for c in KNOWN_CAPABILITIES]})
+        return
+    params: dict = {"symbol": args.symbol}
+    for item in args.param or []:
+        key, sep, value = item.partition("=")
+        if not sep or not key:
+            _error_out(f"--param must be key=value: {item!r}", exit_code=_EXIT_VALIDATION_ERROR)
+        params[key] = value
+    result = await _build_dispatcher().invoke(args.capability, params)
+    if not result.ok:
+        _json_out({"capability": args.capability, "ok": False, "error": result.error,
+                   "latency_ms": result.latency_ms}, exit_code=1)
+        return
+    body = {"capability": args.capability, "ok": True, "params": params, "latency_ms": result.latency_ms,
+            "source": "GALECORE_VERIFIED", "retrieved_at": datetime.now(UTC).isoformat()}
+    if args.out:   # big answers (a chain is ~1 MB) go to a file; the host reads only what it needs
+        out = Path(args.out).resolve()
+        run_dir = os.environ.get("GALECORE_AI_RUN_DIR")   # a scheduled run writes only inside its own directory
+        if run_dir and not out.is_relative_to(Path(run_dir).resolve()):
+            _error_out(f"--out must be inside {run_dir} in a scheduled run", exit_code=_EXIT_VALIDATION_ERROR)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(result.data, ensure_ascii=False), encoding="utf-8")
+        keys = list(result.data) if isinstance(result.data, dict) else None
+        _json_out({**body, "out": str(out), "bytes": out.stat().st_size, "top_level_keys": keys})
+    else:
+        _json_out({**body, "data": result.data})
+
+
 async def _cmd_inbox(args: argparse.Namespace) -> None:
     from galecore_ai.application import inbox
     kb = _build_knowledge_base()
@@ -926,6 +960,15 @@ def build_parser() -> _JsonArgumentParser:
                           help="case: fix that result · preference: new profile version · method: new skill version")
     p_fb_add.add_argument("--slug", required=True, help="Short name; the id is <date>-<slug>")
     p_fb_add.add_argument("--prompt", required=True, help="What the user asked")
+    p_gc = sub.add_parser("galecore", help="Read-only GaleCore data: what can be asked and one answer (GC-AI-0019)")
+    gc_sub = p_gc.add_subparsers(dest="galecore_command", required=True)
+    gc_sub.add_parser("list", help="Every GaleCore capability the harness can ask for, with its parameters")
+    p_gc_get = gc_sub.add_parser("get", help="Ask one capability; JSON on stdout, or the payload to --out")
+    p_gc_get.add_argument("capability", choices=[c.capability_id for c in KNOWN_CAPABILITIES])
+    p_gc_get.add_argument("--symbol", required=True, help="Symbol (an OCC option symbol for option_greeks)")
+    p_gc_get.add_argument("--param", action="append", help="Extra parameter key=value (e.g. interval=1d)")
+    p_gc_get.add_argument("--out", help="Write the payload to this file and print only a summary")
+
     p_inbox = sub.add_parser("inbox", help="Idea inbox: note the owner's idea now, review it later (GC-AI-0018)")
     in_sub = p_inbox.add_subparsers(dest="inbox_command", required=True)
     p_in_add = in_sub.add_parser("add", help="Note an idea with the owner's words, verbatim; it is not evaluated")
@@ -1069,6 +1112,8 @@ def main() -> None:
     try:
         if args.command == "prepare":
             asyncio.run(_cmd_prepare(args))
+        elif args.command == "galecore":
+            asyncio.run(_cmd_galecore(args))
         elif args.command == "accept":
             asyncio.run(_cmd_accept(args))
         elif args.command == "record" and args.record_command == "outcome":

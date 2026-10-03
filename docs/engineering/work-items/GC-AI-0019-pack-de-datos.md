@@ -1,7 +1,7 @@
 ---
 id: GC-AI-0019
 title: Pack de datos — inventario real, GaleCore completo y receta «sumar una fuente» (entregable 1, pieza e)
-status: DRAFT
+status: IN_PROGRESS
 implementer: claude-code
 reviewer: codex
 approver: user
@@ -50,10 +50,10 @@ Registro de fuentes: `galecore`, `fred`, `fed`, `alpha_vantage`, `fmp`; **sin es
 
 ## Decisiones tuyas antes del código
 
-| # | Pregunta | Recomendación |
+| # | Pregunta | Decisión (owner, 03/10: «dale… arrancá con el mapa de datos») |
 |---|---|---|
-| 1 | ¿Este ítem espera a que GaleCore exponga las fuentes nuevas? | **No.** Cierra el lado de GaleCore-AI con las cuatro como «pedidas». Cada endpoint que llegue se conecta después con la receta (traspaso §8), en un ítem chico por tanda |
-| 2 | ¿Qué caso de ejemplo para la receta? | **Velas de GaleCore** (o IV rank): se puede probar ya, sin esperar a nadie. CBOE (historia de VIX/VVIX/SKEW) sería el más útil, pero depende de GaleCore |
+| 1 | ¿Este ítem espera a que GaleCore exponga las fuentes nuevas? | **No.** Este ítem es la fase 1a del Producto 1; las fuentes externas quedan «pedidas» y las implementamos nosotros en GaleCore en la fase 1b (sin traspaso) |
+| 2 | ¿Qué caso de ejemplo para la receta? | Velas e IV rank de GaleCore, probados en vivo |
 
 ## Non-goals
 
@@ -65,15 +65,26 @@ Registro de fuentes: `galecore`, `fred`, `fed`, `alpha_vantage`, `fmp`; **sin es
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Inventario probado:** cada fuente registrada tiene estado observado con fecha; la tabla se puede leer
-  en una respuesta y dice qué falta.
-- [ ] **AC-02 — GaleCore completo:** cadenas, IV rank, IV, velas y métricas de volatilidad se pueden pedir desde el
+- [x] **AC-01 — Inventario probado:** cada fuente registrada tiene estado observado con fecha; la tabla se puede leer
+  en una respuesta y dice qué falta. **Evidencia 03/10:** `sources check` → galecore y fred `available`; alpha_vantage
+  `limited` (27/09), fmp `denied` (28/09); `fed` sin sonda propia (la usa el briefing cada día); 5 pedidas sin estado
+  (no existen todavía). `sources list` da la tabla.
+- [x] **AC-02 — GaleCore completo:** cadenas, IV rank, IV, velas y métricas de volatilidad se pueden pedir desde el
   harness como sólo lectura, cada una probada contra GaleCore Dev y declarada en el registro; `catalog --check` pasa.
-- [ ] **AC-03 — Pedidas a GaleCore:** las fuentes del traspaso aparecen como pedidas; una necesidad que sólo ellas
-  cubren responde que falta y quién la trae.
-- [ ] **AC-04 — Receta:** «sumar una fuente» escrita como paso de la capacidad y aplicada a un caso real de punta a punta.
-- [ ] **AC-05 — Demostración:** un análisis real que usa un dato de GaleCore que hoy no se puede pedir.
-- [ ] **AC-06 — Revisión:** interna; Codex al cierre (toca el cliente de GaleCore); utilidad y cierre, vos.
+  **Evidencia 03/10:** 6 capacidades nuevas en `capabilities/contracts.py` + rutas; `galecore list|get` en el CLI
+  (`--out` para la cadena; en una corrida programada sólo dentro de su carpeta). Probadas en vivo contra :7001:
+  cadena SPY, IV rank SPY (16,39), estructura de IV, métricas de SPY y QQQ, velas diarias, griegas de
+  `SPY   261008P00775000`. Límites declarados: historia de IV desde el 21/09, velas en formato DXLink.
+- [x] **AC-03 — Pedidas a GaleCore:** las fuentes del traspaso aparecen como pedidas; una necesidad que sólo ellas
+  cubren responde que falta y quién la trae. **Evidencia:** `AccessType/Usage.REQUESTED`; «fundamentales de NVDA» →
+  `missing` con `sec_edgar` «pedida a GaleCore»; `tests/unit/test_data_map.py`.
+- [x] **AC-04 — Receta:** «sumar una fuente» escrita como paso de la capacidad y aplicada a un caso real de punta a punta.
+  **Evidencia:** skill `data_sources` 1.2.0 (receta en 4 pasos); aplicada a velas e IV rank (mapa → prueba en vivo →
+  `strategy_design` las usa en `data_needs` → consulta real).
+- [x] **AC-05 — Demostración:** un análisis real que usa un dato de GaleCore que hoy no se puede pedir.
+  **Ejemplo interno 03/10 (demos ágiles):** «¿IV rank de NVDA?» → `sources query` apunta a galecore → `galecore get
+  compute.iv_rank` responde con `GALECORE_VERIFIED`; antes respondía «faltante».
+- [ ] **AC-06 — Revisión:** interna (cambio chico y de lectura: sin Codex, regla del 03/10); utilidad y cierre, vos.
 
 ## Requirement-to-evidence matrix
 

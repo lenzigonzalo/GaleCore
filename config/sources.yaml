@@ -30,11 +30,21 @@ sources:
       - category: options_state
         description: GEX (compute.gamma_exposure, compute.gex_analysis) y put skew 25Δ (compute.put_skew), por símbolo
         any_symbol: true
+      - category: options_chain
+        description: cadena de opciones de un subyacente con vencimientos, strikes y símbolos OCC (market_data.option_chains) y griegas de un contrato por su símbolo OCC (market_data.option_greeks); `galecore get ... --out <archivo>` porque la cadena de SPY pesa ~1 MB
+        any_symbol: true
+      - category: volatility
+        description: IV rank e IV percentile (compute.iv_rank), estructura temporal de IV30 y movimiento diario esperado (compute.implied_volatility), índice de IV, percentil, HV, beta y fecha de resultados por símbolo (market_data.volatility_metrics)
+        any_symbol: true
+      - category: price_history
+        description: velas OHLCV históricas e intradía por intervalo (1d, 1h, 5m…) desde una fecha (market_data.candles con interval y fromTime)
+        any_symbol: true
       - category: shadow_runtime
         description: runtime SHADOW de GaleCore Dev — estado, instancias, evaluaciones, descartes, posiciones (con su riesgo máximo) y métricas por versión de estrategia (App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics; se lee con `followup run`)
     limits:
-      - "Por las capabilities del harness sólo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES): no expone cadenas de opciones, IV rank ni implied volatility por esa vía, aunque existan rutas en GaleCore; el runtime SHADOW se lee aparte con `followup run`"
-      - "No expone históricos ni volatilidad realizada por esta vía"
+      - "Sólo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES), que se pide con `galecore list|get`; el runtime SHADOW se lee aparte con `followup run`"
+      - "IV rank: la historia de IV que guarda GaleCore empieza el 21/09/2026, así que el rango es corto y highIV/lowIV vienen en 0 (observado el 03/10)"
+      - "Velas: formato DXLink crudo (FEED_DATA con eventos Candle); griegas: sólo de un contrato por su símbolo OCC, no de un subyacente"
       - "Dos vías con dirección distinta: `sources check`, `prepare` y las capabilities usan GALECORE_BASE_URL (por defecto :5000, sin clave); GaleCore Dev corre en :7001 y el runtime SHADOW se lee con `followup run` (galecore_dev.py, con su autenticación). Un `down` del probe sin GALECORE_BASE_URL/GALECORE_API_KEY apuntando a Dev no dice que GaleCore Dev esté caída (29/09: probe down mientras Dev respondía en :7001)"
     probe:
       description: GET de bajo costo (market_data.trade de SPY) evaluando el código de estado HTTP
@@ -136,3 +146,73 @@ sources:
     probe:
       description: sin comando propio; el host prueba con la llamada mínima del dato que necesita y declara el resultado (sources declare)
       command: null
+
+  # ── Pedidas a GaleCore (roadmap §4, Producto 1, fase 1b; contrato en docs/engineering/HANDOFF-GALECORE-FUENTES.md
+  # del workspace). Acceso a la fuente original probado el 30/09; todavía no se pueden pedir. Al quedar cada endpoint en
+  # GaleCore, pasa a covers de `galecore` y se borra de acá.
+  - id: galecore_macro_calendar
+    display_name: Calendario macro y reuniones de la Fed (en GaleCore, pedido)
+    access_type: requested
+    cost: gratis (FRED con clave gratuita; página pública de la Fed)
+    usage: requested
+    preference: 90
+    covers:
+      - category: macro_calendar
+        description: publicaciones macro programadas (empleo, CPI, PPI, PIB, ventas minoristas) y reuniones del FOMC servidas por la API de GaleCore, para el briefing, el supervisor y reglas por evento del runtime
+    limits:
+      - "Hasta que exista, el calendario sale de los scripts transitorios fred_query.py y fed_calendar.py (fuentes fred y fed)"
+    probe:
+      description: sin sonda hasta que GaleCore exponga el endpoint
+  - id: cboe
+    display_name: CBOE — historia diaria de VIX, VVIX y SKEW (en GaleCore, pedido)
+    access_type: requested
+    cost: gratis, sin clave (CSV públicos de CBOE)
+    usage: requested
+    preference: 90
+    covers:
+      - category: volatility_history
+        description: historia diaria larga de VIX, VVIX y SKEW para percentiles de régimen, tail_score y backtests
+    limits:
+      - "Acceso a los CSV probado el 30/09; falta el endpoint en GaleCore"
+    probe:
+      description: sin sonda hasta que GaleCore exponga el endpoint
+  - id: treasury
+    display_name: Tesoro de EE. UU. — Fiscal Data y curva diaria (en GaleCore, pedido)
+    access_type: requested
+    cost: gratis, sin clave
+    usage: requested
+    preference: 90
+    covers:
+      - category: rates_curve
+        description: curva diaria oficial del Tesoro (tasa libre de riesgo por plazo) y calendario y resultados de subastas
+    limits:
+      - "Acceso probado el 30/09; hasta que exista, la curva sale de FRED"
+    probe:
+      description: sin sonda hasta que GaleCore exponga el endpoint
+  - id: sec_edgar
+    display_name: SEC EDGAR — presentaciones y fundamentales XBRL (en GaleCore, pedido)
+    access_type: requested
+    cost: gratis, sin clave (requiere User-Agent identificado)
+    usage: requested
+    preference: 90
+    covers:
+      - category: filings_fundamentals
+        description: presentaciones de empresas (8-K, 10-Q, 10-K) y fundamentales XBRL por empresa (ingresos, márgenes, deuda), para análisis fundamental y estrategias de acciones
+        any_symbol: true
+    limits:
+      - "Acceso probado el 30/09; falta el endpoint en GaleCore (User-Agent y caché)"
+    probe:
+      description: sin sonda hasta que GaleCore exponga el endpoint
+  - id: bls
+    display_name: BLS — empleo, CPI y PPI de la fuente oficial (en GaleCore, pedido)
+    access_type: requested
+    cost: gratis (mejor con clave gratuita)
+    usage: requested
+    preference: 90
+    covers:
+      - category: activity_employment
+        description: valores oficiales del BLS de empleo, CPI y PPI con su detalle por componente
+    limits:
+      - "Acceso probado el 30/09; complementa lo que ya da FRED"
+    probe:
+      description: sin sonda hasta que GaleCore exponga el endpoint

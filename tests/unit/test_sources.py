@@ -137,7 +137,7 @@ def test_generic_symbol_matches_a_coverage_that_serves_any_symbol(status_store):
     registry = load_source_registry()
     for need in ("cotizaciones de QQQ", "GEX de QQQ"):
         assert "galecore" in {m.id for m in query_sources(need, registry, status_store).matches}, need
-    for need in ("CPI", "IV", "QQQ"):
+    for need in ("CPI", "QQQ"):   # "IV" is GaleCore's own vocabulary since GC-AI-0019 (IV rank, IV30)
         assert "galecore" not in {m.id for m in query_sources(need, registry, status_store).matches}, need
     assert query_sources("datos de CPI", registry, status_store).matches[0].id == "fred"
 

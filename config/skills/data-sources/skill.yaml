@@ -1,5 +1,5 @@
 skill_id: data_sources
-version: "1.1.0"
+version: "1.2.0"
 display_name: Registro de fuentes de datos
 description: >
   Answers what data the harness has available and where to get it, from the
@@ -44,5 +44,19 @@ instructions: |
   happens to run. --category ties the observation to one coverage entry (e.g. a
   source with several endpoints, only one of them denied); omit it only when the
   finding is genuinely about the whole source.
+
+  Getting GaleCore data (GC-AI-0019) — after `sources query` points at galecore:
+  galecore list                               # every capability, its parameters and what it returns
+  galecore get <capability> --symbol <sym> [--param key=value ...] [--out <file>]
+      # e.g. compute.iv_rank --symbol NVDA · market_data.candles --symbol QQQ --param interval=1d
+      #      --param fromTime=2026-09-01T00:00:00Z · market_data.option_chains --symbol SPY --out <dir>/chain.json
+  The answer carries source GALECORE_VERIFIED and retrieved_at: cite them. Big payloads (a chain) go to --out and
+  you read only what you need. A source with usage `requested` is not available yet: say the data is missing and
+  that GaleCore will bring it (roadmap §4, phase 1b); never use another route to pretend it exists.
+
+  Adding a source (recipe): (1) map it — entry in config/sources.yaml with what it covers and for whom;
+  (2) prove access — a real call, recorded with `sources check` or `sources declare`; (3) name the capabilities
+  that use it (catalog data_needs); (4) run one real case end to end. External sources are implemented in
+  GaleCore and read here through `galecore get`; until then they stay `requested`.
 
 examples: []

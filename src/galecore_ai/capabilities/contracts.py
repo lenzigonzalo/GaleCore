@@ -96,4 +96,52 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         ],
         returns="Trade events with price and epoch-millisecond time",
     ),
+    # GC-AI-0019: what GaleCore already served and the harness could not ask for (probed on GaleCore Dev, 03/10).
+    CapabilityDefinition(
+        capability_id="market_data.option_chains",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Option chain of an underlying: every expiration with its strikes and OCC symbols (~1 MB for SPY)",
+        parameters=[CapabilityParameter(name="symbol", type="string", description="Underlying symbol")],
+        returns="symbol, expirations[expirationDate, daysToExpiration, settlementType, strikes[strikePrice, call, put]]",
+    ),
+    CapabilityDefinition(
+        capability_id="compute.iv_rank",
+        semantic_class=SemanticClass.COMPUTE,
+        description="IV rank and IV percentile of an underlying over GaleCore's stored daily IV history",
+        parameters=[CapabilityParameter(name="symbol", type="string", description="Underlying symbol")],
+        returns="currentIV, ivRank, ivPercentile, tradingDays, history[date, iv]",
+    ),
+    CapabilityDefinition(
+        capability_id="compute.implied_volatility",
+        semantic_class=SemanticClass.COMPUTE,
+        description="IV term structure (IV30 at 0/5/9/30/90 days) and expected daily move of an underlying",
+        parameters=[CapabilityParameter(name="symbol", type="string", description="Underlying symbol")],
+        returns="spot, iV30_0d..iV30_90d, dailyMove, dailyMoveDollar",
+    ),
+    CapabilityDefinition(
+        capability_id="market_data.volatility_metrics",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Tastytrade market metrics: IV index and its changes, IV percentile, HV, beta, liquidity, earnings",
+        parameters=[CapabilityParameter(name="symbol", type="string", description="One or more symbols, comma-separated")],
+        returns="items[symbol, impliedVolatilityIndex, impliedVolatilityPercentile, ...]",
+    ),
+    CapabilityDefinition(
+        capability_id="market_data.candles",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="OHLCV candles of a symbol from a start time (interval e.g. 1d, 1h, 5m)",
+        parameters=[
+            CapabilityParameter(name="symbol", type="string", description="Underlying symbol"),
+            CapabilityParameter(name="interval", type="string", description="Candle period: 1d, 1h, 5m, ..."),
+            CapabilityParameter(name="fromTime", type="string", description="ISO 8601 start (UTC)"),
+            CapabilityParameter(name="toTime", type="string", required=False, description="ISO 8601 end (UTC)"),
+        ],
+        returns="DXLink FEED_DATA: data[Candle with time, open, high, low, close, volume]",
+    ),
+    CapabilityDefinition(
+        capability_id="market_data.option_greeks",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Greeks of ONE option contract (OCC symbol, 21 chars, e.g. from market_data.option_chains)",
+        parameters=[CapabilityParameter(name="symbol", type="string", description="OCC option symbol")],
+        returns="DXLink Greeks event: price, volatility, delta, gamma, theta, rho, vega",
+    ),
 ]

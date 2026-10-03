@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de data_sources y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: data_sources
 versions:
+  - version: "1.2.0"
+    date: 2026-10-03
+    changes: >
+      Datos de GaleCore que ya existían y no se podían pedir (cadenas, griegas de un contrato, IV rank, estructura de
+      IV, métricas de volatilidad, velas) con `galecore list|get`; fuentes pedidas a GaleCore (calendario macro y Fed,
+      CBOE, Tesoro, EDGAR, BLS) que responden «falta, la trae GaleCore»; receta «sumar una fuente» (GC-AI-0019).
+    feedback: []
   - version: "1.1.0"
     date: 2026-09-29
     changes: >

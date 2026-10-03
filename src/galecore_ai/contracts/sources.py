@@ -36,6 +36,7 @@ class AccessType(str, Enum):
     API_KEY = "api_key"                # this repo's code calls it directly with a key from the environment
     HOST_CONNECTOR = "host_connector"  # an MCP tool or similar the host has; this repo's code cannot call it
     PUBLIC = "public"                  # a public page or file this repo's code reads directly, no key (GC-AI-0016)
+    REQUESTED = "requested"            # not reachable yet: GaleCore will serve it (GC-AI-0019); access tested upstream
 
 
 class Usage(str, Enum):
@@ -45,10 +46,12 @@ class Usage(str, Enum):
     OWN = "own"                  # our own API: no extra cost, needs GaleCore Dev up
     DAILY_QUOTA = "daily_quota"  # a daily call budget: only when cheaper sources do not cover the need
     PLAN = "plan"                # limited by the subscription plan: only endpoints checked as available
+    REQUESTED = "requested"      # not available yet: listed so a need it covers says who brings it, never as a source
 
 
-USAGE_RANK = {Usage.FREE: 0, Usage.OWN: 1, Usage.DAILY_QUOTA: 2, Usage.PLAN: 3}
-USAGE_NOTE = {Usage.DAILY_QUOTA: "consume cupo diario: usarla sólo si las fuentes anteriores no cubren el dato"}
+USAGE_RANK = {Usage.FREE: 0, Usage.OWN: 1, Usage.DAILY_QUOTA: 2, Usage.PLAN: 3, Usage.REQUESTED: 9}
+USAGE_NOTE = {Usage.DAILY_QUOTA: "consume cupo diario: usarla sólo si las fuentes anteriores no cubren el dato",
+              Usage.REQUESTED: "todavía no disponible: pedida a GaleCore (roadmap §4, fase 1b); no usarla"}
 
 
 class SourceCoverage(BaseModel):
@@ -110,6 +113,12 @@ class DataSource(BaseModel):
         if any(not limit.strip() for limit in self.limits):
             raise ValueError(f"{self.id}: a limit must not be blank")
         has_command = self.probe.command is not None
+        if (self.access_type is AccessType.REQUESTED) != (self.usage is Usage.REQUESTED):
+            raise ValueError(f"{self.id}: access_type requested and usage requested go together")
+        if self.access_type is AccessType.REQUESTED:
+            if has_command:
+                raise ValueError(f"{self.id}: a requested source has no probe command yet")
+            return self
         if self.access_type is AccessType.HOST_CONNECTOR and has_command:
             raise ValueError(f"{self.id}: a host_connector source has no command this code can run")
         if self.access_type is not AccessType.HOST_CONNECTOR and not has_command:

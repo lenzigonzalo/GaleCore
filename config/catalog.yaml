@@ -70,6 +70,8 @@ entries:
     example_requests:
       - ¿Qué datos tengo?
       - ¿De dónde saco la cadena de opciones de SPY?
+      - ¿Cuál es el IV rank de NVDA?
+      - Traeme las velas diarias de QQQ del último mes
     skill: skills/data-sources/skill.yaml
     output_contract: galecore_ai.contracts.sources.SourceQueryResult
     galecore_capabilities: []
@@ -77,6 +79,8 @@ entries:
     flow:
       - sources list
       - sources query --need "<qué dato hace falta>"
+      - galecore list
+      - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
       - sources check [--source galecore|fred]
       - sources declare --source <id> --state available|denied|limited|down --note "..." --observed-at <ISO8601> --host-model <model> [--category <cat>] [--evidence evidence:<id>]
     stored_as: none
@@ -88,6 +92,8 @@ entries:
       - Status history is append-only; an edited or reordered source's file is reported as integrity_failed, never a crash
       - Query orders matching sources by usage (free, own/GaleCore, daily_quota, plan) then preference, flags daily-quota sources to use only when needed, and shows the most recent status that bears on the matched category, not an unrelated endpoint's; a need with no match is reported missing, never guessed
       - output_contract names SourceQueryResult, the shape `sources query` answers with (the entry's primary output); `sources list` answers with the related SourceCatalogSummary
+      - "`galecore get` reaches only capabilities in KNOWN_CAPABILITIES (PURE_QUERY/COMPUTE: read-only); a scheduled run may write --out only inside its own run directory"
+      - A need covered only by requested sources (pending in GaleCore) is reported missing, naming who brings it
       - Not checked - whether a source's own data is correct
 
   - id: user_profile
@@ -230,10 +236,10 @@ entries:
     data_needs:
       - need: cotizaciones de SPY
       - need: posiciones SHADOW
+      - need: velas de SPY
       - need: historicos de SPY con disponibilidad point-in-time
-        missing: "ninguna fuente registrada los sirve por el harness (GaleCore tiene velas por una ruta que el código no llama; el backtest GC-AI-0011 está suspendido)"
-      - need: volatilidad implicita de SPY
-        missing: "GaleCore la calcula (App.Analytics/ImpliedVolatility, IVRank) pero el harness no la llama; el piloto GC-AI-0006 la leyó a mano en :7001"
+        missing: "las velas de GaleCore (galecore get market_data.candles) son precios, no una historia point-in-time con dividendos y revisiones; el backtest GC-AI-0011 sigue suspendido"
+      - need: IV rank de SPY
     flow:
       - kb search --text "<idea>" [--kind research|evidence|strategy]
       - research save --slug <slug> --prompt "<pedido>" < {content, host_provider, host_model}   # si la estrategia no tiene investigación propia
