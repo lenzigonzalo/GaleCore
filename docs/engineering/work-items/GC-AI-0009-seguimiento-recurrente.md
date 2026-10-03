@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0009
 title: Seguimiento recurrente de la estrategia, creado y gestionado desde el chat
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0009 — Seguimiento recurrente acotado (roadmap §4, entrega 2)
@@ -16,17 +16,6 @@ approval_result: PENDING
 Origen: owner, 27/09/2026 (repriorización). Caso conductor: `spy_prima_varianza_30_45d` (GC-AI-0008). Acepta la
 dependencia de la PC encendida y los servicios locales; reutilizar el Programador de tareas de Windows; no construir un
 gestor universal de agentes. La tarea no modifica la estrategia aprobada ni opera dinero.
-
-
-## Punto de retorno documental (29/09; prevalece sobre pendientes históricos)
-
-La copia de main quedó rezagada respecto del worktree de GC-AI-0009. Consultar el
-[review del 28/09](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md)
-y la [matriz vigente de 0009](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/work-items/GC-AI-0009-seguimiento-recurrente.md).
-AC-06 de 0008 tiene respaldo y `every_minutes` está resuelto. No repetir esos trabajos.
-Pendientes: automática por horario desde main, revisión de evidencia de controles ya capturada,
-recheck del arreglo posterior de `rebind` y consolidación de referencias antes del cierre del owner.
-Esta nota no modifica estados de aceptación ni fabrica evidencia; el orden está en roadmap §4.
 
 ## Acuerdo breve
 
@@ -41,30 +30,30 @@ Esta nota no modifica estados de aceptación ni fabrica evidencia; el orden est�
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Descubrible y guiado:** entrada `recurring_followup` con su skill (define objetivo, frecuencia, zona
+- [x] **AC-01 — Descubrible y guiado:** entrada `recurring_followup` con su skill (define objetivo, frecuencia, zona
   horaria, fuentes, resultado; propone la recurrencia cuando aporta valor).
-- [ ] **AC-02 — Ejecución real:** ejecuciones automáticas del Programador de tareas, sin sesión de Claude, cada una con
+- [x] **AC-02 — Ejecución real:** ejecuciones automáticas del Programador de tareas, sin sesión de Claude, cada una con
   estrategia, versión, hash, método, commit y fuentes. Incluir una automática posterior al fix de procedencia y otra
   desde el checkout estable después del traslado auditable con `task rebind`, conservando identidad e historial.
-- [ ] **AC-03 — Persistencia e historial:** cada resultado queda (registro de seguimiento con hash + evidencia +
+- [x] **AC-03 — Persistencia e historial:** cada resultado queda (registro de seguimiento con hash + evidencia +
   eventos encadenados) y se consulta desde otra sesión (`task status/history`, `LATEST.md`).
-- [ ] **AC-04 — Control:** cambiar frecuencia, pausar, reanudar y cancelar desde el chat, con efecto verificado en el
+- [x] **AC-04 — Control:** cambiar frecuencia, pausar, reanudar y cancelar desde el chat, con efecto verificado en el
   Programador; una tarea pausada o cancelada no corre.
-- [ ] **AC-05 — Robustez:** sin ejecuciones solapadas; errores registrados y visibles; zona horaria convertida.
-- [ ] **AC-06 — Límites:** la tarea sólo corre el seguimiento de sólo lectura.
-- [ ] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
+- [x] **AC-05 — Robustez:** sin ejecuciones solapadas; errores registrados y visibles; zona horaria convertida.
+- [x] **AC-06 — Límites:** la tarea sólo corre el seguimiento de sólo lectura.
+- [x] **AC-07 — Revisión:** interna y Codex; utilidad y cierre, el owner.
 
 ## Requirement-to-evidence matrix
 
 | Criterio | Implementación | Verificación automática | Artefacto | Estado |
 |---|---|---|---|---|
 | AC-01 | `config/catalog.yaml` (`recurring_followup`), `config/skills/recurring-followup/skill.yaml`; `strategy_followup` 0.3.0 propone la recurrencia | catálogo en `test_knowledge.py` | — | Implementado |
-| AC-02 | Procedencia de ejecución y traslado a checkout estable | Tests de origen manual/scheduler | [Review del 28/09](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md): ejecución a demanda desde main no acredita horario | Pendiente: automática por horario desde main y recheck |
-| AC-03 | `contracts/task.py`, `tasks.events/status/runs`, `followup.history` | `test_an_edited_event_log_is_detected` | PENDING | Implementado |
-| AC-04 | Cambiar frecuencia, pausar, reanudar y cancelar; arreglo posterior de rebind | Tests existentes de controles y fallo parcial de rebind | [Captura del Programador](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/evidence/gc-ai-0009/scheduler-20260928-controles.txt) | Capturado; revisión de evidencia y recheck de rebind pendientes |
-| AC-05 | Lock, errores, zona horaria y detección de omisiones | Tests existentes; every_minutes resuelto en review | [Review del 28/09](../../../../.worktrees/galecore-ai/GC-AI-0009/docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md) | Respaldado en esos aspectos; rebind requiere recheck |
+| AC-02 | `application/tasks.py` (`WindowsScheduler`, `run(invoked_by=)`), `tools/task_runner.py` | `test_run_records_a_followup_tied_to_the_task`, `test_manual_and_scheduled_runs_are_told_apart` | `scheduler-20260928-post-fix.txt`: automática por horario 28/09 18:05 (`invoked_by=scheduler`, ERROR por API caída) y a demanda por el Programador desde worktree (OK) y desde main (OK, 18:23). `scheduler-20260930-main.txt`: **automáticas por horario desde main** el 29/09 y el 30/09 18:05 (`invoked_by=scheduler`, commits `9ace737` y `aa71451`, ambos en main; registros `20260929T210502Z` y `20260930T210502Z`) | Verificado en el Programador |
+| AC-03 | `contracts/task.py`, `tasks.events/status/runs`, `followup.history` | `test_an_edited_event_log_is_detected` | Registros `20260928T210502Z`/`210847Z`/`212308Z` + eventos encadenados; `task status/history` en sesión | Verificado local |
+| AC-04 | `tasks.set_frequency/pause/resume/cancel`, CLI `task` | `test_paused_or_cancelled_tasks_do_not_run`, `test_changing_frequency_recreates_the_schedule_and_keeps_pause`, `test_a_paused_rebind_that_cannot_disable_again_stays_consistent` | `scheduler-20260928-controles.txt`: pausa → Disabled/N/A; reanudar → Ready; frecuencia → Weekly L–V 18:10 y vuelta a Daily 18:05; cancelar → la tarea ya no existe y `task run` → SKIPPED | Verificado en el Programador |
+| AC-05 | lock exclusivo, `run_failed`, `local_time_for` + resync | `test_overlapping_runs_are_skipped_and_stale_locks_broken`, `test_a_failed_run_is_recorded_not_raised`, `test_timezone_is_converted_to_this_pc` | ERROR real del 28/09 18:05 registrado y visible en `task status` | Verificado local |
 | AC-06 | `TaskDefinition.kind` sólo `strategy_followup`; el runner sólo llama `run_followup` | `test_a_followup_never_writes_strategy_versions_or_approvals` | — | Implementado |
-| AC-07 | — | — | — | Pendiente |
+| AC-07 | — | recheck interno 30/09 (APPROVE) | revisión Codex 28/09 + triage; cierre del owner 30/09 | Cerrado |
 
 ## Required validation
 
@@ -72,6 +61,22 @@ Orden para completar A (alineación con roadmap, 28/09): capturar automática po
 (AC-06 de 0008); trasladar con `task rebind` ya implementado; capturar automática desde main; enlazar toda la evidencia
 aquí; ejecutar un recheck final acotado sobre fixes y hallazgos abiertos de 0008/0009. No repetir revisión completa ni
 ampliar scheduler. Handoff vigente: `GaleCore-AI/docs/architecture/SESSION_HANDOFF.md` del workspace.
+
+### Referencias operativas para los pasos 1–3 del roadmap
+
+- Tarea: `seguimiento-spy-prima-varianza`; corrida prevista 28/09 17:05 NY. Leer
+  `knowledge/tasks/seguimiento-spy-prima-varianza/events.jsonl` del workspace: inicio con `invoked_by=scheduler` y
+  `scheduler_seen`, fin y seguimiento con versión/hash de 1.0.3. Si no está, registrar el faltante, no darla por ocurrida.
+- Captura del Programador: `schtasks /query /tn "GaleCore-AI\seguimiento-spy-prima-varianza" /fo LIST /v`, guardando
+  comando, salida sanitizada y exit code; contrastar con `task status seguimiento-spy-prima-varianza` y su frescura.
+- Evaluación de 0008: desde workspace, `python GaleCore/dev/galecore_dev.py runtime-report --spec spy_prima_varianza_30_45d`.
+- Traslado con la CLI `task rebind seguimiento-spy-prima-varianza --code-path <workspace>/GaleCore-AI --prompt "..."`;
+  comprobar identidad/historial y automática posterior desde el destino, como exige AC-02.
+- Con evidencia completa: desde workspace,
+  `python .worktrees/galecore-ai/GC-AI-0009/docs/evidence/gc-ai-0009/codex_review.py --recheck docs/engineering/reviews/GC-AI-0009-20260928T155533Z.md --base 5103d50 --model gpt-5.6-sol`.
+  Incluir fixes de `every_minutes`/`rebind`, evidencia de ambos checkouts y resolución referenciada del C3 de 0008.
+
+La primera lectura útil se muestra antes de terminar ese recheck; presentar cierre requiere la evidencia completa.
 
 ```powershell
 python tools/engineering_gate.py
@@ -85,10 +90,9 @@ git diff --check
 - Corre sólo con la PC encendida y **el usuario con sesión de Windows iniciada** (modo «Interactive only», sin guardar
   contraseña); no hace falta una sesión de Claude. Necesita la API de GaleCore Dev levantada y sus credenciales de
   desarrollo; si falta, la ejecución queda registrada como ERROR.
-- El Programador ejecuta el código del checkout registrado en la tarea (`code_path`); el último registro apunta al
-  worktree GC-AI-0009. Si se mueve o borra, la tarea falla (visible en `%LOCALAPPDATA%\GaleCore-AI\task_runner.log`).
-  Se traslada a `main` con `task rebind` y se prueba la automática desde ahí antes del recheck final y del cierre.
-  No borrar el worktree durante el traspaso.
+- El Programador ejecuta el código del checkout registrado en la tarea (`code_path`); hoy es este worktree. Si se mueve o
+  borra, la tarea falla (visible en `%LOCALAPPDATA%\GaleCore-AI\task_runner.log`). Se traslada a `main` con `task rebind`
+  y se prueba la ejecución automática desde ahí antes del recheck final y del cierre. No borrar el worktree durante el traspaso.
 - Zona horaria: el horario del owner se convierte a la hora local de esta PC al crear, y se re-sincroniza en cada
   ejecución si el desfase cambió (horario de verano de EE. UU.).
 
@@ -151,3 +155,46 @@ Review: `docs/engineering/reviews/GC-AI-0009-20260928T155533Z.md` (802 passed en
 | C4-M1, C4-M3, C4-M4 | RESOLVED | — |
 | C4-M2 | STILL OPEN: falta la corrida automática posterior al arreglo | Se captura tras la corrida del 28/09 17:05 NY (evento con `invoked_by`/`scheduler_seen` + `schtasks /query` con comando, salida y exit code) |
 | R-N1 | NEW MAJOR: en `every_minutes`, `due = now − período` dejaba una omisión en `DUE_NOW` para siempre | Corregido: ancla = último inicio del Programador (o cuándo se fijó el horario) + un período. Test `test_a_prolonged_omission_of_a_minutes_task_becomes_missed` |
+
+## Paso 1 del roadmap (28/09, 18:05 local) — corrida automática post-fix y evaluación real de 1.0.3
+
+Evidencia: `docs/evidence/gc-ai-0009/scheduler-20260928-post-fix.txt` (`schtasks /query` con comando, salida y exit code;
+eventos del 28/09 de `knowledge/tasks/seguimiento-spy-prima-varianza/events.jsonl`).
+
+- **18:05:01 automática por horario** (`invoked_by=scheduler`, `scheduler_seen`, PID 12752) → `ERROR`: la API de GaleCore
+  Dev estaba caída (último evento del runtime 20:00 UTC, última valuación 20:34 UTC). El fallo quedó registrado y visible
+  (AC-05), no se omitió. Causa de la caída sin determinar; la API dependía de un proceso de sesión.
+- 18:08 API levantada (`galecore_dev.py api`, persistencia recuperó 499 evaluaciones y 2 posiciones abiertas) y **la misma
+  tarea lanzada a demanda en el Programador** (`Start-ScheduledTask`, no el horario) → `OK`, `invoked_by=scheduler`, PID 15540,
+  `Last Result 0`. Prueba el camino Programador → runner → registro con la API arriba; la automática **por horario** con
+  resultado OK queda para el 29/09 17:05 NY (o desde main, paso 2).
+- **Evaluación real de 1.0.3 (28/09, `runtime-report`):** 286 evaluaciones 10:59–15:59 ET, todas con VIX ≈ 15,8 < 30 (PASS).
+  La primera abrió un put credit spread SPY 722/717 (vence 06/11, 39 DTE, delta corta −0,16), crédito 0,44, riesgo máx. 456
+  USD; las 285 siguientes: `ENTRY_SKIPPED` «máximo de posiciones abiertas alcanzado (1/1)». Al cierre: valor 0,405, P&L
+  simulado +3,5 USD. La posición de la v2 (731/726P) sigue valuándose aparte (−11 USD). El único gate evaluado es VIX < 30.
+- **Defecto encontrado y corregido:** tras un `ERROR`, el siguiente seguimiento tomaba como «desde» la corrida fallida y
+  omitía lo ocurrido antes (el OK de 18:08 informó «eventos: ninguno» pese a la entrada del día). `run_followup` ahora ancla
+  en la última corrida que leyó GaleCore. Test `test_after_an_error_the_window_starts_at_the_last_run_that_read_galecore`;
+  805 passed, ruff OK. El registro 20260928T210847Z queda como está (hash); este párrafo lo explica.
+
+## Recheck Codex (28/09, `5103d50..1c52c39`) — CHANGES_REQUESTED
+
+Review: `docs/engineering/reviews/GC-AI-0009-20260928T221056Z.md`.
+
+| # | Estado según Codex | Triage |
+|---|---|---|
+| C4-B1 | DISPUTED: la aprobación está transcripta | Sin cambios |
+| C4-M2 | STILL OPEN: faltaba evidencia real de pausa, reanudación, frecuencia y cancelación | Corregido: `docs/evidence/gc-ai-0009/scheduler-20260928-controles.txt` (comando, estado y exit code de cada paso contra el Programador). Un primer intento del script de captura aplicó la pausa y falló antes de guardar la salida; se reanudó y se repitió la secuencia entera |
+| NEW MAJOR | La automática desde el checkout estable fue lanzada a demanda | Resuelto: automáticas por horario desde main el 29/09 y el 30/09 (`docs/evidence/gc-ai-0009/scheduler-20260930-main.txt`) |
+| NEW MAJOR | `rebind` de una tarea pausada: si volver a deshabilitar falla, estado y Programador divergen | Corregido como en `set_frequency`: guarda el nuevo `code_path`, sigue `paused` (sus corridas se saltean), evento `code_path_changed` con `scheduler_left_enabled` y error pidiendo repetir `task pause`. Test `test_a_paused_rebind_that_cannot_disable_again_stays_consistent` |
+
+## Cierre (30/09/2026)
+
+- **Recheck interno acotado (agente `reviewer`, 30/09): APPROVE.** Los tres hallazgos de Codex del 28/09 quedaron
+  resueltos (C4-M2 controles, automática por horario desde main, `rebind` de tarea pausada); C4-B1 sigue disputado sin
+  novedades. 28 tests de tareas y seguimiento pasan. No hubo recheck de Codex: desde el 30/09 Codex revisa una vez por
+  entrega, sin rechecks (`ENGINEERING.md` §3); su último veredicto (28/09) fue CHANGES_REQUESTED y queda resuelto por
+  este triage.
+- **Cierre del owner (30/09):** «ok, dale», en respuesta a la presentación del cierre de 0008 y 0009 con la evidencia
+  de las corridas automáticas.
+- El código de los arreglos ya estaba en main (`ee039a4`, `3208918`); se integra la documentación de esta rama.

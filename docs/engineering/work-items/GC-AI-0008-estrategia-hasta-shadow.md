@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0008
 title: Una estrategia completa desde la investigación hasta SHADOW, con seguimiento que vuelve a la investigación
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0008 — Estrategia completa hasta SHADOW y retroalimentación (I4, integración)
@@ -50,24 +50,24 @@ Esta nota no modifica estados de aceptación ni fabrica evidencia; el orden est�
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Recorrido descubrible:** entrada `strategy_design` en el catálogo con su skill y su flujo
+- [x] **AC-01 — Recorrido descubrible:** entrada `strategy_design` en el catálogo con su skill y su flujo
   (propuesta → chequeo → aprobación → despliegue → seguimiento).
-- [ ] **AC-02 — Propuesta completa con procedencia:** hipótesis, entrada, construcción, sizing, monitoreo,
+- [x] **AC-02 — Propuesta completa con procedencia:** hipótesis, entrada, construcción, sizing, monitoreo,
   ajustes, salidas, invalidación y plan de evaluación; cada regla dice si es fundamentada, hipótesis, parámetro
   pendiente, decisión del owner o elección de diseño, con sus fuentes.
-- [ ] **AC-03 — Regla → runtime, sin omisiones silenciosas:** cada regla declara su comportamiento en GaleCore
+- [x] **AC-03 — Regla → runtime, sin omisiones silenciosas:** cada regla declara su comportamiento en GaleCore
   (soportada con el campo que la ejecuta, no soportada, no aplica); el chequeo rechaza una regla "soportada" que
   el runtime no consume y una spec que declara comportamiento que el runtime ignora.
-- [ ] **AC-04 — Spec versionada y validada:** `StrategySpec` con el hash calculado como GaleCore (verificado
+- [x] **AC-04 — Spec versionada y validada:** `StrategySpec` con el hash calculado como GaleCore (verificado
   contra los hashes que GaleCore ya calculó) y revalidada por GaleCore al cargarla.
-- [ ] **AC-05 — Aprobación atada a la versión:** tu aprobación queda registrada (create-only) con nombre,
+- [x] **AC-05 — Aprobación atada a la versión:** tu aprobación queda registrada (create-only) con nombre,
   versión y hash exactos; el despliegue se niega si el hash que reporta GaleCore no es el aprobado.
-- [ ] **AC-06 — SHADOW de desarrollo:** desplegada en GaleCore Dev después de la aprobación; una evaluación real
+- [x] **AC-06 — SHADOW de desarrollo:** desplegada en GaleCore Dev después de la aprobación; una evaluación real
   con su resultado explicado (entrada, descarte o bloqueo legítimo; sin tocar umbrales).
-- [ ] **AC-07 — Seguimiento y retroalimentación:** el pedido «¿qué hizo esta estrategia…?» lee GaleCore, lo
+- [x] **AC-07 — Seguimiento y retroalimentación:** el pedido «¿qué hizo esta estrategia…?» lee GaleCore, lo
   vincula a la versión, separa funcionamiento operativo / resultados SHADOW / evidencia económica y se guarda
   como revisión de la investigación.
-- [ ] **AC-08 — Revisión:** interna y Codex; utilidad y cierre los decide el owner.
+- [x] **AC-08 — Revisión:** interna y Codex; utilidad y cierre los decide el owner.
 
 ## Requirement-to-evidence matrix
 
@@ -256,3 +256,15 @@ switch. Ejecutado, en este orden:
 **Corrección de un hallazgo:** RLS deshabilitado en GaleCore Dev **no** expone las tablas: `anon` y `authenticated` no tienen
 privilegios de SELECT ni INSERT sobre `accounts`, `users`, `shadow_positions`, `strategy_instances` (sólo `galecore_api`),
 consultado el 27/09. El aviso del advisor sobrestimaba; RLS sigue recomendado como defensa en profundidad antes de producción.
+
+## Cierre (30/09/2026)
+
+- **Revisión:** Codex C1–C3 (27/09) con correcciones; el recheck C4 de 0008 no corrió, pero la revisión de Codex del
+  28/09 (`GC-AI-0009-20260928T221056Z.md`, rango `76e9958..1c52c39`) cubrió el cierre de 0008 y respalda AC-06 (evaluación
+  real de 1.0.3). Único punto abierto: C4-B1, **disputado** (la aprobación del owner está transcripta por diseño,
+  HOST_DECLARED); el recheck interno del 30/09 confirmó que no hay novedades. Sin recheck de Codex por la regla del 30/09
+  (`ENGINEERING.md` §3).
+- **Cierre del owner (30/09):** «ok, dale», a la presentación del cierre de 0008 y 0009.
+- **Continuidad:** 1.0.3 detenida el 30/09 (su posición abierta se sigue valuando hasta salir); la versión 1.0.5
+  (escalera, GaleCore GC-0005) aprobada por hash y desplegada en SHADOW de GaleCore Dev el 30/09 (instancia
+  `2ad19390…`).

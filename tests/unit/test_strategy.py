@@ -170,6 +170,24 @@ def test_a_supported_rule_on_an_empty_field_is_invalid():
                for e in report.errors)
 
 
+def test_entry_spacing_is_executed_and_needs_a_supported_rule():
+    """GC-0005: the runtime skips an entry sooner than N minutes after the instance's last one."""
+    text = spec_with(**{"risk_limits.min_minutes_between_entries": 1440})
+    report = check(text=text)
+    assert any("min_minutes_between_entries = 1440" in e and "no supported rule" in e for e in report.errors)
+
+    def explain(d):
+        d["rules"].append({"id": "R9", "block": "risk", "text": "Como mucho una entrada por día.",
+                           "basis": "design_choice", "rationale": "test",
+                           "runtime": {"status": "supported",
+                                       "spec_paths": ["risk_limits.min_minutes_between_entries"]}})
+    assert check(proposal(explain), text=text).verdict != "INVALID"
+
+
+def test_entry_spacing_left_null_needs_no_rule():
+    assert check(text=spec_with(**{"risk_limits.min_minutes_between_entries": None})).verdict != "INVALID"
+
+
 def test_an_unmapped_field_fails_closed():
     report = check(text=spec_with(**{"exits.deterministic.trailing_stop": {"pct": 25}}))
     assert any("trailing_stop.pct: not in the runtime support table" in e for e in report.errors)
