@@ -1,4 +1,4 @@
-using DataFeed.Repositories.Entities;
+﻿using DataFeed.Repositories.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace DataFeed.Repositories
@@ -32,6 +32,7 @@ namespace DataFeed.Repositories
 
         public DbSet<User> Users => Set<User>();
         public DbSet<Account> Accounts => Set<Account>();
+        public DbSet<TraderSpaceItem> TraderSpaceItems => Set<TraderSpaceItem>();
 
         // ── Runtime (Trading Runtime SHADOW) ──
         public DbSet<StrategySpecEntity> StrategySpecs => Set<StrategySpecEntity>();
@@ -194,6 +195,33 @@ namespace DataFeed.Repositories
                 e.Property(x => x.Seq).UseIdentityAlwaysColumn();
                 e.HasIndex(x => new { x.InstanceId, x.Timestamp, x.Seq });
             });
+            // Espacio del trader (GC-0007): una pieza por (dueño, tipo, clave). Los tipos, la visibilidad y el formato
+            // están también en la base porque una escritura a mano contra Postgres no pasa por la app.
+            b.Entity<TraderSpaceItem>(e =>
+            {
+                e.ToTable("trader_space_items", t =>
+                {
+                    t.HasCheckConstraint("ck_trader_space_kind", "kind IN ('" + string.Join("','", TraderSpaceItem.Kinds) + "')");
+                    t.HasCheckConstraint("ck_trader_space_visibility", "visibility IN ('" + string.Join("','", TraderSpaceItem.Visibilities) + "')");
+                    t.HasCheckConstraint("ck_trader_space_format", "format IN ('" + string.Join("','", TraderSpaceItem.Formats) + "')");
+                    t.HasCheckConstraint("ck_trader_space_key", "key ~ '" + TraderSpaceItem.KeyPattern + "'");
+                });
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.Kind).HasMaxLength(20).IsRequired();
+                e.Property(x => x.Key).HasMaxLength(64).IsRequired();
+                e.Property(x => x.Title).HasMaxLength(200).IsRequired();
+                e.Property(x => x.Content).IsRequired();
+                e.Property(x => x.Format).HasMaxLength(10).HasDefaultValue("markdown");
+                e.Property(x => x.Visibility).HasMaxLength(10).HasDefaultValue("private");
+                e.Property(x => x.Version).HasDefaultValue(1);
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+                e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+                e.HasIndex(x => new { x.OwnerId, x.Kind, x.Key }).IsUnique();
+                e.HasIndex(x => x.Visibility);
+            });
+
         }
     }
 }

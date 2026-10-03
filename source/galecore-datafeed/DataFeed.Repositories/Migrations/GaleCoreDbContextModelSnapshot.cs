@@ -472,6 +472,97 @@ namespace DataFeed.Repositories.Migrations
                     b.ToTable("strategy_specs", (string)null);
                 });
 
+            modelBuilder.Entity("DataFeed.Repositories.Entities.TraderSpaceItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Format")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("markdown")
+                        .HasColumnName("format");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("version");
+
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasDefaultValue("private")
+                        .HasColumnName("visibility");
+
+                    b.HasKey("Id")
+                        .HasName("pk_trader_space_items");
+
+                    b.HasIndex("Visibility")
+                        .HasDatabaseName("ix_trader_space_items_visibility");
+
+                    b.HasIndex("OwnerId", "Kind", "Key")
+                        .IsUnique()
+                        .HasDatabaseName("ix_trader_space_items_owner_id_kind_key");
+
+                    b.ToTable("trader_space_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_trader_space_format", "format IN ('markdown','json')");
+
+                            t.HasCheckConstraint("ck_trader_space_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
+
+                            t.HasCheckConstraint("ck_trader_space_kind", "kind IN ('profile','objective','convention','memory','skill','agent','data')");
+
+                            t.HasCheckConstraint("ck_trader_space_visibility", "visibility IN ('private','shared')");
+                        });
+                });
+
             modelBuilder.Entity("DataFeed.Repositories.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -600,6 +691,18 @@ namespace DataFeed.Repositories.Migrations
                         .HasConstraintName("fk_strategy_instances_strategy_deployments_deployment_id");
 
                     b.Navigation("Deployment");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.TraderSpaceItem", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_trader_space_items_users_owner_id");
+
+                    b.Navigation("Owner");
                 });
 
             modelBuilder.Entity("DataFeed.Repositories.Entities.User", b =>

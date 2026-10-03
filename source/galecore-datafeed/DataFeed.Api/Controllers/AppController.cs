@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using System.IO;
@@ -399,6 +399,114 @@ namespace DataFeed.Controllers
                 _logger.LogInformation("Cuenta de bróker desvinculada del usuario {UserId}", userId.Value);
 
             return Ok(new { linked = false, wasSystem = eraSistema });
+        }
+
+        #endregion
+
+        #region Espacio del trader
+
+        // GC-0007: lo que GaleCore-AI necesita saber de cada trader (perfil, objetivos, convenciones, memoria, skills,
+        // agentes, datos), suyo y por usuario. Lo propio se lee y se edita; lo compartido por otros sólo se lee.
+
+        /// <summary>Lo tuyo más lo que otros compartieron. `kind` filtra por tipo.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/Space")]
+        public async Task<IActionResult> GetTraderSpaceAsync(
+            [FromQuery] string? kind,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            if (kind != null && !DataFeed.Repositories.Entities.TraderSpaceItem.Kinds.Contains(kind))
+                return BadRequest(new { error = $"kind es uno de: {string.Join(", ", DataFeed.Repositories.Entities.TraderSpaceItem.Kinds)}" });
+
+            var rows = await db.TraderSpaceItems.AsNoTracking()
+                .Where(i => (i.OwnerId == userId.Value || i.Visibility == "shared") && (kind == null || i.Kind == kind))
+                .OrderBy(i => i.Kind).ThenBy(i => i.Key)
+                .Select(i => new
+                {
+                    i.Kind, i.Key, i.Title, i.Content, i.Format, i.Visibility, i.Version, i.UpdatedAt,
+                    owner = i.Owner.Username,
+                    isOwn = i.OwnerId == userId.Value,
+                })
+                .ToListAsync(ct);
+            return Ok(new { items = rows.Where(r => r.isOwn), shared = rows.Where(r => !r.isOwn) });
+        }
+
+        /// <summary>
+        /// Crea o reemplaza una pieza TUYA. La versión sube cuando cambia el título o el contenido; cambiar sólo la
+        /// visibilidad no la sube. El dueño sale del token, nunca del body.
+        /// </summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpPut("GaleCore/Space/{kind}/{key}")]
+        public async Task<IActionResult> PutTraderSpaceItemAsync(
+            string kind, string key,
+            [FromBody] DataFeed.Api.Controllers.Dtos.TraderSpaceItemRequest body,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+
+            var format = body.Format ?? "markdown";
+            var visibility = body.Visibility ?? "private";
+            var problem = DataFeed.Repositories.Entities.TraderSpaceItem.Validate(kind, key, body.Title ?? "", body.Content ?? "", format, visibility);
+            if (problem != null) return BadRequest(new { error = problem });
+
+            await _users.EnsureUserAsync(userId.Value, currentUser.Email, ct);
+            var item = await db.TraderSpaceItems.FirstOrDefaultAsync(i => i.OwnerId == userId.Value && i.Kind == kind && i.Key == key, ct);
+            var now = DateTime.UtcNow;
+            if (item == null)
+            {
+                item = new DataFeed.Repositories.Entities.TraderSpaceItem
+                {
+                    OwnerId = userId.Value, Kind = kind, Key = key, Title = body.Title!, Content = body.Content!,
+                    Format = format, Visibility = visibility, Version = 1, CreatedAt = now, UpdatedAt = now,
+                };
+                db.TraderSpaceItems.Add(item);
+            }
+            else
+            {
+                if (item.Title != body.Title || item.Content != body.Content || item.Format != format)
+                    item.Version += 1;
+                item.Title = body.Title!;
+                item.Content = body.Content!;
+                item.Format = format;
+                item.Visibility = visibility;
+                item.UpdatedAt = now;
+            }
+            await db.SaveChangesAsync(ct);
+            return Ok(new { item.Kind, item.Key, item.Title, item.Format, item.Visibility, item.Version, item.UpdatedAt });
+        }
+
+        /// <summary>Borra una pieza TUYA. Lo compartido por otro no se puede borrar desde acá.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpDelete("GaleCore/Space/{kind}/{key}")]
+        public async Task<IActionResult> DeleteTraderSpaceItemAsync(
+            string kind, string key,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            var item = await db.TraderSpaceItems.FirstOrDefaultAsync(i => i.OwnerId == userId.Value && i.Kind == kind && i.Key == key, ct);
+            if (item == null) return NotFound();
+            db.TraderSpaceItems.Remove(item);
+            await db.SaveChangesAsync(ct);
+            return NoContent();
         }
 
         #endregion
