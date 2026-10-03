@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using DataFeed.Application.Data.Tastytrade.MarketDataByType;
@@ -12,6 +12,8 @@ using DataFeed.Application.Data.Tastytrade.AccountBalances;
 using DataFeed.Application.Data.Tastytrade.AccountPositions;
 using DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility;
 using DataFeed.Application.Data.Tastytrade.SymbolSearch;
+using DataFeed.Application.Data.Fred.ReleaseDates;
+using DataFeed.Application.Data.Fed.FomcMeetings;
 using DataFeed.Api.Controllers.Dtos;
 
 namespace DataFeed.Controllers
@@ -26,6 +28,15 @@ namespace DataFeed.Controllers
         }
 
         #region Api
+
+        // Fuentes externas (GC-0006): sólo GET, con procedencia (SourcedResponse); una fuente caída es 502.
+        [Tags("Data.Sources")]
+        [HttpGet("Fred/ReleaseDates")]
+        public async Task<IActionResult> FredReleaseDatesAsync([FromQuery] FredReleaseDatesRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Fed/FomcMeetings")]
+        public async Task<IActionResult> FomcMeetingsAsync([FromQuery] FomcMeetingsRequest request) => await Handle(request);
 
         [Tags("Data.Api")]
         [HttpGet("Tastytrade/MarketData/ByType")]
