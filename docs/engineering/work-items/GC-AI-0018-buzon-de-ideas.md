@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0018
 title: Buzón de ideas — «anotá esto» desde el chat, por revisar después (entregable 1, pieza h)
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0018 — Buzón de ideas
@@ -192,3 +192,7 @@ python docs/evidence/gc-ai-0018/hook_check.py
 - Evidence sources: test suite, hook_check_runs.jsonl, commits sobre feature/GC-AI-0017, workspace commits (c1552df, ec64e56, 058f995)
 
 Co-Authored-By: Claude Haiku 4.5 <noreply@anthropic.com>
+
+## Cierre
+
+**CLOSED por el owner el 03/10/2026** («dale, sí a todo»), en lote con 0016, 0017, 0018 y GC-0005. Revisión: interna + pasada conjunta de Codex 0016–0018 (`GC-AI-0016-0017-0018-20261003T212859Z.md`) con los arreglos chicos elegidos por el owner; límites conocidos registrados en el work item de 0018. Demos reemplazadas por ejemplos internos (regla del 03/10).
