@@ -38,6 +38,9 @@ conservar en su espacio, que después ve y edita en el monitor.
 - [x] **AC-02 — Importar sin duplicar versiones:** una segunda importación sin cambios no escribe; un cambio sube la versión.
 - [x] **AC-03 — Resumen al iniciar:** `space context` dice perfil, objetivos, agentes y lo compartido; el hook no corta
   la sesión si GaleCore no responde.
-- [ ] **AC-04 — Prueba real en GaleCore Dev:** `space import` y `space context` contra la API Dev con GC-0007
-  (requiere reiniciar la API desde `local/integracion`).
+- [x] **AC-04 — Prueba real en GaleCore Dev:** `space import` y `space context` contra la API Dev con GC-0007.
+  **Evidencia 03/10 (API Dev desde `local/integracion`):** `space import` como `demo` → 20 piezas creadas (perfil v5,
+  1 objetivo, 1 convención, 3 agentes, 14 skills); segunda corrida → 0 escritas, 20 sin cambios. `space context` da
+  perfil (capital 10.000 USD, horizonte, límites), objetivos, convenciones, agentes y skills. Arreglados en la prueba:
+  el usuario se informaba antes del login; la consola de Windows no imprimía «−».
 - [ ] **AC-05 — Revisión:** interna; utilidad y cierre, vos.

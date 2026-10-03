@@ -589,6 +589,7 @@ async def _cmd_space(args: argparse.Namespace) -> None:
     try:
         if c == "context":
             client.login()
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # the Windows console is not UTF-8
             print(space.context(client))
             return
         if c == "list":
@@ -611,7 +612,8 @@ async def _cmd_space(args: argparse.Namespace) -> None:
             _json_out({"status": "DELETED", "ref": args.ref})
         elif c == "import":
             pieces = space.local_pieces(_build_knowledge_base())
-            _json_out({"status": "SYNCED", "user": client.user, **space.sync(client, pieces)})
+            result = space.sync(client, pieces)           # logs in first: the user is known after it
+            _json_out({"status": "SYNCED", "user": client.user, "credentials": client.source, **result})
     except SpaceError as exc:
         _error_out(str(exc), exit_code=1)
 

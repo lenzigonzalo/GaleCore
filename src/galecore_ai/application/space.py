@@ -85,16 +85,20 @@ def context(client: SpaceClient, max_lines: int = 25) -> str:
     for p in by_kind.get("profile", []):
         try:
             prof = json.loads(p["content"])
-            lines.append(f"  perfil v{prof.get('version')}: capital {prof.get('reference_capital')}, "
+            cap = prof.get("reference_capital") or {}
+            capital = f"{cap.get('amount', 0):,.0f} {cap.get('currency', '')}".replace(",", ".") if cap else "sin definir"
+            lines.append(f"  perfil v{prof.get('version')}: capital {capital}, "
                          f"horizonte {prof.get('horizon')}, límites {'; '.join(prof.get('risk_limits', []))[:160]}")
         except (json.JSONDecodeError, TypeError):
             lines.append(f"  perfil: {p['title']}")
     labels = {"objective": "objetivos", "convention": "convenciones", "memory": "memoria", "agent": "agentes",
-              "skill": "skills propias", "data": "datos"}
+              "skill": "skills", "data": "datos"}
     for kind, label in labels.items():
         items = by_kind.get(kind, [])
         if items:
-            lines.append(f"  {label}: " + " · ".join(i["title"] for i in items)[:300])
+            n_shared = sum(1 for i in items if i.get("visibility") == "shared")
+            tag = f" ({n_shared} compartidas por vos)" if n_shared else ""
+            lines.append(f"  {label}{tag}: " + " · ".join(i["title"] for i in items)[:300])
     shared_kinds = sorted({i["kind"] for i in shared})
     if shared_kinds:
         lines.append("  compartido: " + ", ".join(f"{k} ({sum(1 for i in shared if i['kind'] == k)})" for k in shared_kinds))
