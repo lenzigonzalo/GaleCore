@@ -552,7 +552,7 @@ async def _cmd_galecore(args: argparse.Namespace) -> None:
                                      "params": [p.name for p in c.parameters], "returns": c.returns}
                                     for c in KNOWN_CAPABILITIES]})
         return
-    params: dict = {"symbol": args.symbol}
+    params: dict = {"symbol": args.symbol} if args.symbol else {}
     for item in args.param or []:
         key, sep, value = item.partition("=")
         if not sep or not key:
@@ -965,7 +965,7 @@ def build_parser() -> _JsonArgumentParser:
     gc_sub.add_parser("list", help="Every GaleCore capability the harness can ask for, with its parameters")
     p_gc_get = gc_sub.add_parser("get", help="Ask one capability; JSON on stdout, or the payload to --out")
     p_gc_get.add_argument("capability", choices=[c.capability_id for c in KNOWN_CAPABILITIES])
-    p_gc_get.add_argument("--symbol", required=True, help="Symbol (an OCC option symbol for option_greeks)")
+    p_gc_get.add_argument("--symbol", help="Symbol (an OCC option symbol for option_greeks); calendars take none")
     p_gc_get.add_argument("--param", action="append", help="Extra parameter key=value (e.g. interval=1d)")
     p_gc_get.add_argument("--out", help="Write the payload to this file and print only a summary")
 

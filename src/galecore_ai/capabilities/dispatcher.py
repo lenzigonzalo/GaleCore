@@ -128,6 +128,8 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
         "param_key": "symbol",
         "source_param": "symbol",
     },
+    "calendar.macro_releases": {"method": "GET", "path": "/Data/Fred/ReleaseDates", "param_key": "", "source_param": ""},
+    "calendar.fomc_meetings": {"method": "GET", "path": "/Data/Fed/FomcMeetings", "param_key": "", "source_param": ""},
     "market_data.option_greeks": {
         "method": "GET",
         "path": "/Data/Tastytrade/MarketData/Greeks",
@@ -242,7 +244,7 @@ class CapabilityDispatcher:
         source = route.get("source_param", "symbol")
         target = route.get("param_key", "symbol")
 
-        if source in parameters:
+        if source and source in parameters:
             params[target] = parameters[source]
 
         # Pass through additional params (e.g. dte for gamma_exposure)

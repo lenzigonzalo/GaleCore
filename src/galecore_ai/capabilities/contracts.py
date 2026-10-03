@@ -144,4 +144,23 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         parameters=[CapabilityParameter(name="symbol", type="string", description="OCC option symbol")],
         returns="DXLink Greeks event: price, volatility, delta, gamma, theta, rho, vega",
     ),
+    # GC-0006 (GaleCore): calendario macro y del FOMC servidos por GaleCore, con procedencia (SourcedResponse).
+    CapabilityDefinition(
+        capability_id="calendar.macro_releases",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Scheduled macro releases from FRED (NFP=50, CPI=10, PPI=46, GDP=53, income/spending=54, retail=9)",
+        parameters=[
+            CapabilityParameter(name="From", type="string", description="YYYY-MM-DD"),
+            CapabilityParameter(name="To", type="string", description="YYYY-MM-DD, at most 180 days after From"),
+            CapabilityParameter(name="ReleaseIds", type="string", required=False, description="Comma-separated ids"),
+        ],
+        returns="source, upstreamUrl, retrievedAt, notes, data[releaseId, releaseName, date]",
+    ),
+    CapabilityDefinition(
+        capability_id="calendar.fomc_meetings",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="FOMC meetings from the Fed's public calendar (start, end, projections, scheduled)",
+        parameters=[CapabilityParameter(name="Years", type="string", required=False, description="e.g. 2026,2027")],
+        returns="source, upstreamUrl, retrievedAt, sha256, notes, data[year, start, end, projections, scheduled]",
+    ),
 ]
