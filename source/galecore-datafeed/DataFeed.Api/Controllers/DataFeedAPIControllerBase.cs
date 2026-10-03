@@ -57,6 +57,12 @@ namespace DataFeed.Controllers
                     Code = BrokerCredentialInvalidException.Code,
                 });
             }
+            catch (DataFeed.Infrastructure.Providers.UpstreamSourceException ex)
+            {
+                // 502: la fuente externa (FRED, la Fed…) no respondió o cambió de forma. Se mapea acá y no sólo en el
+                // middleware porque en Development la página de errores lo atrapa antes (GC-0006).
+                return this.StatusCode(502, new ApiErrorResponse { Error = ex.Message, Code = DataFeed.Infrastructure.Providers.UpstreamSourceException.Code });
+            }
             catch (OptionChainNotFoundException ex)
             {
                 // 409 por lo mismo: el símbolo que eligió el operador no se puede analizar, y eso es
