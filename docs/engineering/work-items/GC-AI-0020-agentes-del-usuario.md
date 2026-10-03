@@ -53,6 +53,11 @@ Avisos con sonido en el monitor (fase 5); varios agentes coordinados; órdenes; 
   Programador. Tests: `tests/unit/test_market_watch.py`.
 - [x] **AC-02 — Agente sin estrategia:** se crea y corre sin seguimiento; el seguimiento de estrategias sigue exigiendo una.
 - [x] **AC-03 — Modelo por capacidad** llega al comando de `claude`.
-- [ ] **AC-04 — Ejemplo interno:** un agente real creado desde el CLI y corrido una vez a pedido, con hallazgos guardados.
+- [x] **AC-04 — Ejemplo interno:** un agente real creado desde el CLI y corrido una vez a pedido, con hallazgos guardados.
+  **Evidencia 03/10:** tarea `oportunidades` (SPY, QQQ, IWM; PCS 30–45 días con short cerca de delta 0,20 si IV rank > 30,
+  sin evento macro en 3 días hábiles y dentro del límite del perfil), creada y **pausada**. Corrida manual: `OK` en
+  92 s, 15/25 turnos, `claude-sonnet-5-5`, 5 evidencias guardadas, una ronda de corrección (dos referencias mal
+  escritas), `research:2026-10-03-market-watch-oportunidades` rev 1: ninguno cumple (IV rank < 30 en los tres); no
+  pidió cadenas porque sin IV rank no hay candidato. Costo estimado prendido: ~13 corridas/día × ~1,5 min de Sonnet.
 - [ ] **AC-05 — Revisión:** interna (no mueve plata ni toca validadores de aceptación; el modelo sin supervisión ya pasó
   por Codex en 0017); utilidad y cierre, vos.
