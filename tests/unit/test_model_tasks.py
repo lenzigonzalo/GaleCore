@@ -157,6 +157,18 @@ def test_a_trading_recommendation_is_refused(briefing):
     assert any("trading recommendation" in p for p in mr.check_refs(kb, out, None))
 
 
+@pytest.mark.parametrize("text", [
+    "Short put spreads on SPY have limited risk", "Stop-loss at 200% of credit is the rule tested in the backtest",
+    "The exit rule closes the short put when delta exceeds 0.30", "Risk-reward ratio of the structure is 1:3",
+    "Dealers add exposure to SPY as it falls", "La regla de salida cierra la posición al 50 % del crédito",
+])
+def test_describing_the_rules_is_not_a_recommendation(briefing, text):
+    # Internal recheck 03/10: the regime patterns refused ordinary briefing sentences.
+    kb, _, _ = briefing
+    out = mr.parse_output(output(hypothesis=text))
+    assert not any("trading recommendation" in p for p in mr.check_refs(kb, out, None))
+
+
 def test_the_model_gets_only_the_environment_it_needs(tmp_path, monkeypatch):
     # Codex 03/10: the unattended process received every credential of the owner's environment.
     monkeypatch.setenv("SOME_OTHER_TOKEN", "x")

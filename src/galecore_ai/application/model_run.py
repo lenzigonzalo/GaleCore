@@ -42,7 +42,6 @@ from galecore_ai.contracts.research import ResearchContent, RevisionReason
 from galecore_ai.harness.assets import load_asset
 from galecore_ai.harness.catalog import CatalogEntry
 from galecore_ai.harness.definitions import SkillDefinition
-from galecore_ai.harness.guardrails import _TRADING_REC_PATTERNS
 
 CLI = "python -B -m galecore_ai.adapters.cli"
 # An evidence reference in the model's content: `evidence:@<slug>` (asked) or `evidence:<slug-or-id>` (what a model
@@ -57,6 +56,18 @@ ENV_KEEP = {"PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC",
 ENV_KEEP_PREFIXES = ("GALECORE_", "CLAUDE_", "ANTHROPIC_")
 UNVERIFIED_NOTE = ("Escrito por el modelo en una corrida sin supervisión: los números y la evidencia que trae son "
                    "declarados por el modelo y el runner no los contrastó con los datos que trajo.")
+# Advice addressed to the reader, not descriptions of a strategy's rules (internal recheck 03/10: the regime patterns
+# refused "short put spreads", "stop-loss at 200%" or "risk-reward ratio", which a briefing about rules must say).
+_ACT = r"(?:comprar|vender|abrir|cerrar|entrar|salir|mantener|acumular|sumar|agregar|reducir|rolear|ajustar)"
+_ACT_EN = r"(?:buy|sell|short|open|close|enter|exit|hold|add|reduce|trim|roll|adjust)"
+RECOMMENDATION = [re.compile(p, re.IGNORECASE) for p in (
+    r"\b(?:te\s+)?(?:recomiendo|recomendamos|sugiero|sugerimos|aconsejo|aconsejamos)\b[^.;:!?\n]{0,40}?\b" + _ACT + r"\b",
+    r"\b(?:conviene|convendr[ií]a|deber[ií]as|ten[eé]s\s+que|habr[ií]a\s+que)\s+" + _ACT + r"\b",
+    r"\b(?:compr[aá]|vend[eé]|abr[ií]|cerr[aá]|entr[aá]|sal[ií])\s+(?:ya|ahora|hoy)\b",
+    r"\b(?:I|we)\s+(?:recommend|suggest|advise)\b[^.;:!?\n]{0,40}?\b" + _ACT_EN + r"(?:ing)?\b",
+    r"\byou\s+(?:should|must|need\s+to)\s+" + _ACT_EN + r"\b",
+    r"\b" + _ACT_EN + r"\s+(?:now|today|immediately)\b",
+)]
 RUN_DIR_ENV = "GALECORE_AI_RUN_DIR"   # tools/fred_query.py and tools/fed_calendar.py refuse to write outside it
 
 
@@ -291,7 +302,7 @@ def check_refs(kb: KnowledgeBase, output: ModelOutput, target: str | None,
     if unknown:
         problems.append(f"content cites evidence it did not return and that is not stored: {sorted(unknown)}")
     for text in _strings(data):
-        hit = next((m.group() for p in _TRADING_REC_PATTERNS if (m := p.search(text))), None)
+        hit = next((m.group() for p in RECOMMENDATION if (m := p.search(text))), None)
         if hit:
             problems.append(f"content contains a trading recommendation ('{hit}'): describe, never direct")
             break

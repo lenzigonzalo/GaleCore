@@ -97,7 +97,7 @@ El owner eligió «arreglos chicos» (03/10).
 
 | Hallazgo | Resolución |
 |---|---|
-| BLOCKER: el runner acepta evidencia escrita por el modelo (números inventados, recomendación) | **Parcial:** `check_refs` rechaza recomendaciones de trading (patrones de `harness/guardrails.py`) y cada resultado guardado lleva en `limitations` que sus números no se contrastaron. Atar cada número a los datos traídos: **límite conocido**, aceptado por el owner (briefing de lectura sobre SHADOW) |
+| BLOCKER: el runner acepta evidencia escrita por el modelo (números inventados, recomendación) | **Parcial:** `check_refs` rechaza consejos dirigidos al lector (`RECOMMENDATION` en `model_run.py`; los patrones de régimen daban falsos positivos con frases de reglas, recheck interno 03/10) y cada resultado guardado lleva en `limitations` que sus números no se contrastaron. Atar cada número a los datos traídos: **límite conocido**, aceptado por el owner (briefing de lectura sobre SHADOW) |
 | MAJOR: entorno completo + Bash general | El modelo recibe sólo las variables del flujo (`ENV_KEEP`, prefijos `GALECORE_`/`CLAUDE_`/`ANTHROPIC_`). Encerrar Bash por completo: límite conocido |
 | MAJOR: tope de tiempo sin efecto si el árbol no muere | Espera acotada (10 s) y después `kill` + cierre de pipes; el test de timeout pasa en < 30 s |
 | MAJOR: la arquitectura decía que GaleCore-AI no llama al modelo | Excepción documentada en `GaleCore-AI-arquitectura-v5.md` §7.1 |
