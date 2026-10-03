@@ -18,7 +18,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-WORKSPACE = HERE.parents[5]          # .worktrees/galecore-ai/GC-AI-0018/docs/evidence/gc-ai-0018 → workspace
+# The workspace is the first ancestor with the hook (a worktree today, GaleCore-AI/ after the merge).
+WORKSPACE = next(p for p in HERE.parents if (p / ".claude" / "hooks" / "session_start.py").is_file())
 HOOK = WORKSPACE / ".claude" / "hooks" / "session_start.py"
 
 
@@ -33,15 +34,19 @@ def main() -> int:
         encoding="utf-8")
     (inbox / "2026-09-30-rota.json").write_text("{bad", encoding="utf-8")
     (inbox / "2026-09-30-lista.json").write_text("[]", encoding="utf-8")
+    (inbox / "2026-09-30-varias-lineas.json").write_text(json.dumps(
+        {"recorded_at": "2026-09-30T23:00:00Z", "words": "una idea\nen dos líneas", "resolutions": []}),
+        encoding="utf-8")
     env = {**os.environ, "GALECORE_KNOWLEDGE_DIR": str(inbox.parent)}
     proc = subprocess.run([sys.executable, str(HOOK)], cwd=WORKSPACE, env=env, capture_output=True, text=True,
                           encoding="utf-8", check=False)
     out = proc.stdout
     checks = {
         "exit_code_0": proc.returncode == 0,
-        "counts_3_pending": "[buzón] 3 idea(s)" in out,           # the pending one + two unreadable, reported
+        "one_line_per_idea": "una idea en dos líneas" in out,
+        "counts_2_pending": "[buzón] 2 idea(s)" in out and "2 archivo(s) ilegible(s)" in out,
         "reviewed_not_listed": "Ya revisada" not in out,
-        "unreadable_reported": out.count("(unreadable)") == 2,
+        "unreadable_named": "2026-09-30-lista.json" in out and "2026-09-30-rota.json" in out,
         "active_item_still_shown": "[active work item]" in out or "NO ACTIVE WORK ITEM" in out,
     }
     record = {"at": datetime.now(UTC).isoformat(), "hook": str(HOOK), "checks": checks,

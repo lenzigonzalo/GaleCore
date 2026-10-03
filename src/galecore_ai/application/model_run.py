@@ -49,6 +49,25 @@ CLI = "python -B -m galecore_ai.adapters.cli"
 EVIDENCE_REF = re.compile(r"evidence:(@?)([a-z0-9]+(?:-[a-z0-9]+)*)")
 SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){0,11}$")
 PENDING = "9999-12-31-pending-"   # id prefix of evidence not saved yet, during the dry check
+# Codex 03/10: the unattended model gets only what its flow needs, never the rest of the owner's environment.
+ENV_KEEP = {"PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "TEMP", "TMP", "HOME", "USERPROFILE",
+            "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PROGRAMFILES", "USERNAME", "LANG",
+            "FRED_API_KEY", "MAX_STALENESS_SECONDS", "ALLOW_UNKNOWN_FRESHNESS"}
+ENV_KEEP_PREFIXES = ("GALECORE_", "CLAUDE_", "ANTHROPIC_")
+UNVERIFIED_NOTE = ("Escrito por el modelo en una corrida sin supervisión: los números y la evidencia que trae son "
+                   "declarados por el modelo y el runner no los contrastó con los datos que trajo.")
+# Advice addressed to the reader, not descriptions of a strategy's rules (internal recheck 03/10: the regime patterns
+# refused "short put spreads", "stop-loss at 200%" or "risk-reward ratio", which a briefing about rules must say).
+_ACT = r"(?:comprar|vender|abrir|cerrar|entrar|salir|mantener|acumular|sumar|agregar|reducir|rolear|ajustar)"
+_ACT_EN = r"(?:buy|sell|short|open|close|enter|exit|hold|add|reduce|trim|roll|adjust)"
+RECOMMENDATION = [re.compile(p, re.IGNORECASE) for p in (
+    r"\b(?:te\s+)?(?:recomiendo|recomendamos|sugiero|sugerimos|aconsejo|aconsejamos)\b[^.;:!?\n]{0,40}?\b" + _ACT + r"\b",
+    r"\b(?:conviene|convendr[ií]a|deber[ií]as|ten[eé]s\s+que|habr[ií]a\s+que)\s+" + _ACT + r"\b",
+    r"\b(?:compr[aá]|vend[eé]|abr[ií]|cerr[aá]|entr[aá]|sal[ií])\s+(?:ya|ahora|hoy)\b",
+    r"\b(?:I|we)\s+(?:recommend|suggest|advise)\b[^.;:!?\n]{0,40}?\b" + _ACT_EN + r"(?:ing)?\b",
+    r"\byou\s+(?:should|must|need\s+to)\s+" + _ACT_EN + r"\b",
+    r"\b" + _ACT_EN + r"\s+(?:now|today|immediately)\b",
+)]
 RUN_DIR_ENV = "GALECORE_AI_RUN_DIR"   # tools/fred_query.py and tools/fed_calendar.py refuse to write outside it
 
 
@@ -144,7 +163,8 @@ class ClaudeCodeClient:
             timeout_s: int, add_dir: Path) -> ModelReply:
         if not self.binary:
             return ModelReply(ok=False, error="claude not found on PATH")
-        env = {**os.environ, "PYTHONPATH": str(cwd / "src"), RUN_DIR_ENV: str(add_dir)}
+        env = {k: v for k, v in os.environ.items() if k.upper() in ENV_KEEP or k.upper().startswith(ENV_KEEP_PREFIXES)}
+        env |= {"PYTHONPATH": str(cwd / "src"), RUN_DIR_ENV: str(add_dir)}
         t0 = time.monotonic()
         cmd = self.command(allowed=allowed, max_turns=max_turns, schema=schema, add_dir=add_dir)
         try:
@@ -157,7 +177,13 @@ class ClaudeCodeClient:
             stdout, stderr = proc.communicate(prompt, timeout=timeout_s)
         except subprocess.TimeoutExpired:
             _kill_tree(proc)                       # the whole tree: a model still working is stopped, not waited for
-            proc.communicate()
+            try:
+                proc.communicate(timeout=10)
+            except subprocess.TimeoutExpired:      # a grandchild still holds the pipes: close them, do not wait
+                proc.kill()
+                for pipe in (proc.stdin, proc.stdout, proc.stderr):
+                    if pipe:
+                        pipe.close()
             return ModelReply(ok=False, duration_s=round(time.monotonic() - t0, 1),
                               error=f"time cap reached ({timeout_s // 60} min)")
         wall = round(time.monotonic() - t0, 1)
@@ -275,6 +301,11 @@ def check_refs(kb: KnowledgeBase, output: ModelOutput, target: str | None,
     _map_refs(data, seen)
     if unknown:
         problems.append(f"content cites evidence it did not return and that is not stored: {sorted(unknown)}")
+    for text in _strings(data):
+        hit = next((m.group() for p in RECOMMENDATION if (m := p.search(text))), None)
+        if hit:
+            problems.append(f"content contains a trading recommendation ('{hit}'): describe, never direct")
+            break
     if target and any(target == s.strip() for s in _strings(data)):
         problems.append(f"content cites {target}, the investigation being revised (the revision chain links it)")
     if problems:
@@ -309,6 +340,8 @@ def save_output(*, kb: KnowledgeBase, output: ModelOutput, task, target: str | N
         written.append(path)
     content = ResearchContent.model_validate(
         _map_refs(output.content.model_dump(mode="json"), lambda name, whole: refs.get(name, whole)))
+    if UNVERIFIED_NOTE not in content.limitations:
+        content = content.model_copy(update={"limitations": [*content.limitations, UNVERIFIED_NOTE]})
     try:
         if target:
             doc, path = revise_research(kb=kb, research_id=target.removeprefix("research:"),
