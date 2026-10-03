@@ -191,6 +191,8 @@ def api_env(env: dict) -> dict:
         "Supabase__Issuer": env["supabase_url"] + "/auth/v1",
         "Supabase__AnonKey": env["anon_key"],
         "Runtime__Persistence__Enabled": "true",
+        # La clave de FRED del entorno del usuario (calendario macro, GC-0006); nunca se escribe en un archivo.
+        **({"FredApi__Key": os.environ["FRED_API_KEY"]} if os.environ.get("FRED_API_KEY") else {}),
     }
 
 
