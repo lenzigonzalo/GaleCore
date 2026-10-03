@@ -1,14 +1,14 @@
 ---
 id: GC-0005
 title: SHADOW — espaciado mínimo entre entradas de una instancia (escalera de posiciones)
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-0005 — Espaciado entre entradas en SHADOW
@@ -79,3 +79,7 @@ todas el mismo día; con un mínimo de minutos entre entradas se forma una escal
   28/09, el conflicto posible está en el bloque «3b. Espaciado entre entradas».
 - Orden de despliegue: primero GaleCore con este cambio corriendo; recién después la spec 1.0.5. Un runtime
   sin GC-0005 ignoraría el campo en silencio y abriría hasta 10 posiciones el mismo día.
+
+## Cierre
+
+**CLOSED por el owner el 03/10/2026** (cierre en lote). Sin Codex (regla del 03/10: cambio chico, sólo SHADOW); revisión interna y 454 tests con Postgres. Integrado en `local/integracion` (sin traspaso).
