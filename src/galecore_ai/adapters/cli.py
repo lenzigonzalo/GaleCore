@@ -27,6 +27,7 @@ Usage:
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
     python -m galecore_ai.adapters.cli galecore list | get CAPABILITY --symbol SYM [--param k=v ...] [--out FILE]
+    python -m galecore_ai.adapters.cli space context | list [--kind K] | show K/KEY | put K/KEY --title T [--visibility V] [--format F] < content | delete K/KEY | import
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
@@ -578,6 +579,43 @@ async def _cmd_galecore(args: argparse.Namespace) -> None:
         _json_out({**body, "data": result.data})
 
 
+async def _cmd_space(args: argparse.Namespace) -> None:
+    """The trader's space in GaleCore (GC-AI-0021): read it as the trader, write their pieces, bring the local ones."""
+    from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+    from galecore_ai.application import space
+
+    client = SpaceClient()
+    c = args.space_command
+    try:
+        if c == "context":
+            client.login()
+            print(space.context(client))
+            return
+        if c == "list":
+            _json_out(client.items(args.kind))
+        elif c == "show":
+            kind, _, key = args.ref.partition("/")
+            data = client.items(kind)
+            found = [i for i in data["items"] + data["shared"] if i["key"] == key]
+            if not found:
+                _error_out(f"no piece {args.ref}", exit_code=_EXIT_VALIDATION_ERROR)
+            _json_out({"pieces": found})
+        elif c == "put":
+            kind, _, key = args.ref.partition("/")
+            content = sys.stdin.read()
+            _json_out({"status": "SAVED", **client.put(kind, key, title=args.title, content=content, fmt=args.format,
+                                                         visibility=args.visibility)})
+        elif c == "delete":
+            kind, _, key = args.ref.partition("/")
+            client.delete(kind, key)
+            _json_out({"status": "DELETED", "ref": args.ref})
+        elif c == "import":
+            pieces = space.local_pieces(_build_knowledge_base())
+            _json_out({"status": "SYNCED", "user": client.user, **space.sync(client, pieces)})
+    except SpaceError as exc:
+        _error_out(str(exc), exit_code=1)
+
+
 async def _cmd_inbox(args: argparse.Namespace) -> None:
     from galecore_ai.application import inbox
     kb = _build_knowledge_base()
@@ -969,6 +1007,21 @@ def build_parser() -> _JsonArgumentParser:
     p_gc_get.add_argument("--param", action="append", help="Extra parameter key=value (e.g. interval=1d)")
     p_gc_get.add_argument("--out", help="Write the payload to this file and print only a summary")
 
+    p_space = sub.add_parser("space", help="Your space in GaleCore: profile, objectives, conventions, memory, skills, "
+                                           "agents, data; own or shared (GC-AI-0021)")
+    sp_sub = p_space.add_subparsers(dest="space_command", required=True)
+    sp_sub.add_parser("context", help="Short summary to start a session with")
+    p_sp_list = sp_sub.add_parser("list", help="Your pieces and the ones shared with you")
+    p_sp_list.add_argument("--kind", choices=["profile", "objective", "convention", "memory", "skill", "agent", "data"])
+    sp_sub.add_parser("show", help="One piece").add_argument("ref", help="kind/key, e.g. agent/oportunidades")
+    p_sp_put = sp_sub.add_parser("put", help="Create or replace one of your pieces (content on stdin)")
+    p_sp_put.add_argument("ref", help="kind/key")
+    p_sp_put.add_argument("--title", required=True)
+    p_sp_put.add_argument("--format", default="markdown", choices=["markdown", "json"])
+    p_sp_put.add_argument("--visibility", default="private", choices=["private", "shared"])
+    sp_sub.add_parser("delete", help="Delete one of your pieces").add_argument("ref", help="kind/key")
+    sp_sub.add_parser("import", help="Bring the local profile, objectives, conventions, agents and skills (only changes)")
+
     p_inbox = sub.add_parser("inbox", help="Idea inbox: note the owner's idea now, review it later (GC-AI-0018)")
     in_sub = p_inbox.add_subparsers(dest="inbox_command", required=True)
     p_in_add = in_sub.add_parser("add", help="Note an idea with the owner's words, verbatim; it is not evaluated")
@@ -1115,6 +1168,8 @@ def main() -> None:
             asyncio.run(_cmd_prepare(args))
         elif args.command == "galecore":
             asyncio.run(_cmd_galecore(args))
+        elif args.command == "space":
+            asyncio.run(_cmd_space(args))
         elif args.command == "accept":
             asyncio.run(_cmd_accept(args))
         elif args.command == "record" and args.record_command == "outcome":

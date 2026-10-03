@@ -96,6 +96,35 @@ entries:
       - A need covered only by requested sources (pending in GaleCore) is reported missing, naming who brings it
       - Not checked - whether a source's own data is correct
 
+  - id: trader_space
+    kind: harness
+    serves: >-
+      Tu espacio de trader en GaleCore: perfil, objetivos, convenciones, memoria, skills, agentes y datos, propios o
+      compartidos con el equipo. GaleCore-AI lo carga al empezar cada sesión para responder según tus objetivos y
+      límites, y guarda lo que le pedís conservar.
+    example_requests:
+      - ¿Qué sabés de mí y de mis objetivos?
+      - Guardá como convención que opero sólo spreads de riesgo definido
+      - Acordate de que el NFP me sacó de una posición la semana pasada
+      - Compartí con el equipo mi agente de oportunidades
+    skill: skills/trader-space/skill.yaml
+    output_contract: galecore_ai.contracts.sources.SourceQueryResult
+    galecore_capabilities: [App/GaleCore/Space]
+    data_needs: []
+    flow:
+      - space context
+      - space list [--kind <tipo>]
+      - space show <tipo>/<clave>
+      - space put <tipo>/<clave> --title "<título>" [--visibility private|shared] < contenido
+      - space delete <tipo>/<clave>
+      - space import
+    stored_as: none
+    controls:
+      - "GaleCore keeps it per user: the owner comes from the login token, never from the request; shared pieces from others are read-only"
+      - The login comes from GALECORE_USERNAME/GALECORE_PASSWORD or, on GaleCore Dev only, the demo user; no credential is stored by GaleCore-AI
+      - A piece's version goes up only when its content changes; `space import` writes only what changed
+      - "Not checked - that a piece's content is true or current; it is what the trader (or an import) wrote"
+
   - id: user_profile
     kind: harness
     serves: >-
