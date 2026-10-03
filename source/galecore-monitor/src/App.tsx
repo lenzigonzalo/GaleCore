@@ -12,6 +12,7 @@ import { Monitor } from './pages/Monitor';
 import { Rpf } from './pages/Rpf';
 import { Gex } from './pages/Gex';
 import { Shadow } from './pages/Shadow';
+import { Inteligencia } from './pages/Inteligencia';
 import { useMarketSocket, ConnectionStatus } from './socket/useMarketSocket';
 import { useAppConfigStore } from './store/useAppConfigStore';
 import { useAccountStore } from './store/useAccountStore';
@@ -96,6 +97,8 @@ function Dashboard({ onLogout }: DashboardProps) {
           {tab === 'gex' && <Gex subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
           {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
           {tab === 'shadow' && <Shadow />}
+          {/* Inteligencia se monta al entrar: lee el adapter local de GaleCore-AI, no la API. */}
+          {tab === 'inteligencia' && <Inteligencia />}
         </main>
       </div>
     </div>

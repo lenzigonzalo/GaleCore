@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Activity, Zap, BarChart3, Shield, FlaskConical } from 'lucide-react';
+import { LayoutDashboard, Activity, Zap, BarChart3, Shield, FlaskConical, Brain } from 'lucide-react';
 import { AccountMenu } from './AccountMenu';
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 
@@ -7,7 +7,7 @@ import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 // del config de la app: las cards de Main navegan por ese valor.
 //
 // 'cuenta' es una pestaña sin botón en la barra: se llega desde el menú Mi Cuenta.
-export type Tab = 'inicio' | 'monitor' | 'rpf' | 'gex' | 'shadow' | 'admin' | 'cuenta';
+export type Tab = 'inicio' | 'monitor' | 'rpf' | 'gex' | 'shadow' | 'inteligencia' | 'admin' | 'cuenta';
 
 interface Props {
   active: Tab;
@@ -26,6 +26,9 @@ const TABS: { id: Tab; label: string; Icon: React.ComponentType<{ size?: number 
   { id: 'rpf',             label: 'RPF',               Icon: Zap             },
   // Runtime SHADOW (GC-0004): simulación con datos reales, no es una estrategia.
   { id: 'shadow',          label: 'SHADOW',            Icon: FlaskConical    },
+  // Inteligencia va después de las estrategias: no es mercado en vivo sino lo que la IA interpretó
+  // y cómo se evaluó después (registros de régimen, review humano).
+  { id: 'inteligencia',    label: 'Inteligencia',      Icon: Brain           },
 ];
 
 // Admin va a la DERECHA, pegada a Mi Cuenta, y no con las del tablero: no es una pantalla de
