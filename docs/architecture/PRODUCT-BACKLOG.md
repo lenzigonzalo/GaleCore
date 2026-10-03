@@ -2050,3 +2050,43 @@ varias instancias o versiones, la pantalla muestra sólo la RUNNING (ver addendu
 siguen calculándose en la API (el front no calcula).
 
 **Entry gate:** GC-0004 cerrado y lista de mejoras del owner. Toca GaleCore (monitor).
+
+## BL-017 — Fuentes externas pendientes en GaleCore: CBOE, EDGAR, Tesoro, series de FRED y BLS
+
+**Estado:** `CAPTURED` (owner, 2026-10-03: «dejá detallado cómo retomar lo de CBOE y EDGAR después»)
+
+**Origen:** Producto 1, fase 1b (roadmap §4). El calendario macro y el de la Fed ya están en GaleCore (GC-0006,
+`Data/Fred/ReleaseDates` y `Data/Fed/FomcMeetings`). Las otras fuentes se postergan hasta que un caso real las pida, para
+seguir con los agentes del usuario (fase 2).
+
+**Qué falta y para qué:**
+
+| Fuente | Para qué | Tamaño | Endpoint propuesto |
+|---|---|---|---|
+| **CBOE**: historia diaria de VIX, VVIX y SKEW | Percentiles de régimen, `tail_score` con historia propia, backtests | Chico (3 CSV con el mismo formato) | `Data/Cboe/History?index=VIX\|VVIX\|SKEW&from=` |
+| **SEC EDGAR**: presentaciones (8-K, 10-Q, 10-K) y fundamentales XBRL | Análisis fundamental (NVDA y otras), estrategias de acciones, curador | Medio (3 endpoints, User-Agent obligatorio, ≤10 req/s, de ticker a CIK) | `Data/Sec/Filings?ticker=`, `Data/Sec/Facts?ticker=&concept=` |
+| **Tesoro** (Fiscal Data y curva diaria) | Tasa libre de riesgo oficial; subastas en la tabla de eventos | Chico a medio | `Data/Treasury/YieldCurve?from=`, `Data/Treasury/Auctions?from=&to=` |
+| **Series de FRED** | Investigación de contexto (tasas reales, breakevens, spreads de crédito) | Chico (`FredApiProvider` ya tiene series y observaciones) | `Data/Fred/Series/{id}`, `Data/Fred/Series/{id}/Observations?from=` |
+| **BLS** | Empleo, CPI y PPI de la fuente oficial, con detalle por componente | Chico (mejor con clave gratuita) | `Data/Bls/Series?ids=&from=` |
+
+**Cómo retomar (la receta ya se probó con GC-0006):**
+1. **Rama desde `master` de GaleCore**, una por fuente (`feature/GC-00NN-<fuente>`), en un worktree
+   `.worktrees/galecore/GC-00NN`. Es aditivo: no toca endpoints existentes y puede subir con un PR chico.
+2. **Proveedor** en `DataFeed.Infrastructure/Providers/<Fuente>/`, siguiendo el modelo de `Fed/FedCalendarProvider.cs` y
+   `Fred/FredApiProvider.GetReleaseDatesAsync`. Una fuente caída o que cambió de forma lanza `UpstreamSourceException`,
+   que el middleware devuelve como 502 `UPSTREAM_SOURCE_UNAVAILABLE`; nunca una lista vacía. La URL de procedencia va
+   sin clave. Las claves y el User-Agent van en la configuración, nunca en el código.
+3. **Handler** en `DataFeed.Application/Data/<Fuente>/...`, que devuelve `SourcedResponse<T>` (source, upstreamUrl,
+   retrievedAt, asOf, sha256, notes, data). **Endpoint** en `DataController` con el tag `Data.Sources`.
+4. **Tests** con respuestas grabadas (`MacroCalendarSourcesTests.cs` es el modelo), incluido el caso «cambió de forma»,
+   y una prueba en vivo opt-in (`GALECORE_LIVE_SOURCES=1`).
+5. **Merge a `local/integracion`**, `dotnet test` y reinicio de la API Dev desde `GaleCore/` (lo hace el owner).
+6. **En GaleCore-AI:** capacidad en `capabilities/contracts.py` y en la ruta de `dispatcher.py`; en `config/sources.yaml`,
+   pasar la entrada `requested` (`cboe`, `sec_edgar`, `treasury`, `bls`) a `covers` de `galecore` y borrarla; actualizar
+   los `data_needs` del catálogo que la nombren; `catalog --check` y `tests/unit/test_data_map.py`.
+7. **Caso real** que la use de punta a punta (por ejemplo, un análisis de NVDA para EDGAR o un percentil de VIX para CBOE).
+
+Contrato completo y acceso probado el 30/09: `docs/engineering/HANDOFF-GALECORE-FUENTES.md` del workspace (§3, §5, §7).
+
+**Entry gate:** un caso concreto que necesite la fuente (una skill, un agente o una estrategia), o tiempo libre entre
+entregas. No requiere decisión nueva del owner: el alcance ya está aprobado (Producto 1, fase 1b).
