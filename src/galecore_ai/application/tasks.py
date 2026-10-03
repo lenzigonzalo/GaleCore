@@ -36,7 +36,7 @@ from galecore_ai.application.followup import run_followup
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.followup import FollowupRecord
 from galecore_ai.contracts.regime_record import RecordHost
-from galecore_ai.contracts.task import Schedule, TaskDefinition
+from galecore_ai.contracts.task import MARKET_CLOSE, MARKET_OPEN, Schedule, TaskDefinition
 from galecore_ai.harness.catalog import CatalogEntry, CatalogError, load_catalog
 
 LOCK_STALE_MINUTES = 30
@@ -74,6 +74,9 @@ class WindowsScheduler:
         tr = subprocess.list2cmdline(command)
         if schedule.frequency == "every_minutes":
             sc = ["/sc", "minute", "/mo", str(schedule.minutes)]
+        elif schedule.frequency == "market_hours":     # repeats every N minutes for the length of the session
+            sc = ["/sc", "weekly", "/d", "MON,TUE,WED,THU,FRI", "/st", local_time, "/ri", str(schedule.minutes),
+                  "/du", _session_length()]
         elif schedule.frequency == "weekdays":
             sc = ["/sc", "weekly", "/d", "MON,TUE,WED,THU,FRI", "/st", local_time]
         else:
@@ -183,22 +186,29 @@ def _append(kb: KnowledgeBase, task_id: str, kind: str, now: datetime, **data) -
 # ── schedule helpers ─────────────────────────────────────────────
 
 
+def _session_length() -> str:
+    o, c = (datetime.strptime(x, "%H:%M") for x in (MARKET_OPEN, MARKET_CLOSE))
+    minutes = int((c - o).total_seconds() // 60)
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
 def local_time_for(schedule: Schedule, now: datetime) -> str | None:
     """The owner's HH:MM in their timezone, as this PC's local HH:MM for the next occurrence.
 
     A weekdays schedule whose conversion lands on another local calendar day would need a shifted day set; that is
     not supported, so it is refused instead of firing on the wrong days.
     """
-    if schedule.time is None:
+    start = MARKET_OPEN if schedule.frequency == "market_hours" else schedule.time
+    if start is None:
         return None
     tz = ZoneInfo(schedule.timezone)
-    hh, mm = (int(x) for x in schedule.time.split(":"))
+    hh, mm = (int(x) for x in start.split(":"))
     day = now.astimezone(tz).date()
     target = datetime(day.year, day.month, day.day, hh, mm, tzinfo=tz)
     if target <= now:
         target += timedelta(days=1)
     local = target.astimezone()
-    if schedule.frequency == "weekdays" and local.date() != target.date():
+    if schedule.frequency in ("weekdays", "market_hours") and local.date() != target.date():
         raise TaskError(f"{schedule.time} {schedule.timezone} is another calendar day on this PC "
                         f"({local:%a %H:%M}); a weekdays schedule would fire on the wrong days. Use daily or another time")
     return local.strftime("%H:%M")
@@ -217,6 +227,22 @@ def _fires_on(schedule: Schedule, day) -> bool:
     return schedule.frequency == "daily" or day.weekday() < 5
 
 
+def _slots(schedule: Schedule, day) -> list[datetime]:
+    """When the schedule fires on `day`: one time, or every N minutes of the session (market_hours)."""
+    if not _fires_on(schedule, day):
+        return []
+    if schedule.frequency != "market_hours":
+        return [_occurrence(schedule, day)]
+    tz = ZoneInfo(schedule.timezone)
+    (oh, om), (ch, cm) = ((int(x) for x in t.split(":")) for t in (MARKET_OPEN, MARKET_CLOSE))
+    at, close = (datetime(day.year, day.month, day.day, h, m, tzinfo=tz) for h, m in ((oh, om), (ch, cm)))
+    out = []
+    while at < close:
+        out.append(at)
+        at += timedelta(minutes=schedule.minutes)
+    return out
+
+
 def _occurrence(schedule: Schedule, day) -> datetime:
     hh, mm = (int(x) for x in schedule.time.split(":"))
     return datetime(day.year, day.month, day.day, hh, mm, tzinfo=ZoneInfo(schedule.timezone))
@@ -224,13 +250,13 @@ def _occurrence(schedule: Schedule, day) -> datetime:
 
 def last_due(schedule: Schedule, now: datetime) -> datetime | None:
     """The most recent time the schedule should have fired at or before `now` (UTC); None for every_minutes."""
-    if schedule.time is None:
+    if schedule.frequency == "every_minutes":
         return None
     day = now.astimezone(ZoneInfo(schedule.timezone)).date()
     for back in range(8):
-        d = day - timedelta(days=back)
-        if _fires_on(schedule, d) and (at := _occurrence(schedule, d)) <= now:
-            return at.astimezone(UTC)
+        past = [at for at in _slots(schedule, day - timedelta(days=back)) if at <= now]
+        if past:
+            return past[-1].astimezone(UTC)
     return None
 
 
@@ -240,9 +266,9 @@ def next_due(schedule: Schedule, now: datetime) -> datetime | None:
         return (now + timedelta(minutes=schedule.minutes)).astimezone(UTC)
     day = now.astimezone(ZoneInfo(schedule.timezone)).date()
     for ahead in range(8):
-        d = day + timedelta(days=ahead)
-        if _fires_on(schedule, d) and (at := _occurrence(schedule, d)) > now:
-            return at.astimezone(UTC)
+        future = [at for at in _slots(schedule, day + timedelta(days=ahead)) if at > now]
+        if future:
+            return future[0].astimezone(UTC)
     return None
 
 
@@ -306,7 +332,7 @@ def schedulable_entry(capability: str) -> CatalogEntry:
     return entry
 
 
-def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str, objective: str, expected_result: str,
+def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str | None, objective: str, expected_result: str,
            sources: list[str], schedule: Schedule, prompt: str, code_path: Path | None = None,
            now: datetime | None = None, capability: str = "strategy_followup",
            result_slug: str | None = None) -> TaskDefinition:
@@ -314,12 +340,14 @@ def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str, objecti
     if (_dir(kb, task_id) / "task.json").exists():
         raise TaskError(f"task {task_id} already exists (a cancelled task keeps its id and history)")
     entry = schedulable_entry(capability)
-    if not any(k.split("/")[0] == strategy for k in kb.strategies.versions()):
+    if strategy is None and entry.schedulable.runs == "code":
+        raise TaskError(f"{capability} follows one strategy: --strategy is required")
+    if strategy is not None and not any(k.split("/")[0] == strategy for k in kb.strategies.versions()):
         raise TaskError(f"no strategy named {strategy} in the knowledge base")
     code_path = code_path or _REPO
     extra: dict = {}
     if entry.schedulable.runs == "model":
-        extra = {"result_slug": result_slug or f"{capability}-{strategy}".replace("_", "-"),
+        extra = {"result_slug": result_slug or f"{capability}-{strategy or task_id}".replace("_", "-"),
                  "allowed": [(f"{capability} por el modelo: sólo comandos de lectura de su flujo, hasta "
                               f"{entry.schedulable.max_turns} turnos y {entry.schedulable.timeout_minutes} min; "
                               "guarda su resultado y la evidencia que usó")]}
@@ -530,7 +558,7 @@ def _write_latest(path: Path, task: TaskDefinition, outcome: dict, now: datetime
     if outcome.get("revision"):
         saved += f" rev {outcome['revision']}"
     lines = [f"# {task.objective}", "",
-             f"Tarea `{task.id}` · capacidad `{task.kind}` · estrategia `{task.strategy}` · {task.schedule.describe()}",
+             f"Tarea `{task.id}` · capacidad `{task.kind}` · estrategia `{task.strategy or '—'}` · {task.schedule.describe()}",
              "", "| Corrida | Resultado | Guardado | Duración | Turnos |", "|---|---|---|---|---|",
              (f"| {now:%Y-%m-%d %H:%M} UTC ({outcome.get('invoked_by')}) | **{outcome['result']}** | {saved} | "
               f"{outcome.get('duration_s', '—')} s | {outcome.get('turns') or '—'} de {outcome.get('max_turns')} |"), ""]
@@ -576,8 +604,12 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
 
     t0 = time.monotonic()
     caps = entry.schedulable
+    if caps.model and isinstance(client, model_run.ClaudeCodeClient):
+        client.model = caps.model
     rec = None
     try:
+        if task.strategy is None:   # an agent that watches the market: no strategy, no runtime follow-up (GC-AI-0020)
+            raise LookupError("this agent follows no strategy")
         rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=INVOKERS[invoked_by],
                              task_id=task.id, now=now)
         written += [path, path.parent / "LATEST.md",
@@ -585,6 +617,9 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
         note = (f"The runner already ran the follow-up for today: record {rec.id} (status {rec.status}); read it with "
                 f"`followup history --strategy {task.strategy}` and use it as the runtime data of step 3.")
         followup_error = None
+    except LookupError:
+        followup_error = "sin estrategia: no hay seguimiento"
+        note = "This agent follows no strategy: there is no runtime follow-up; read the market with your commands."
     except Exception as exc:  # noqa: BLE001 - recorded; the model still reads what it can
         followup_error = f"{type(exc).__name__}: {exc}"
         note = f"The runner could not run the follow-up today ({followup_error[:200]}): runtime data is missing."

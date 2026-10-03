@@ -148,7 +148,8 @@ class ClaudeCodeClient:
     """Claude Code in print mode, isolated: no user/project settings or MCP servers, only Bash and Read, and Bash
     only for the allowed command prefixes (anything else is denied: nobody is there to approve it)."""
 
-    def __init__(self, binary: str | None = None) -> None:
+    def __init__(self, binary: str | None = None, model: str | None = None) -> None:
+        self.model = model                 # the capability's model (catalog schedulable.model); None = host default
         self.binary = _real_binary(binary or os.environ.get("CLAUDE_BIN") or shutil.which("claude")
                                    or shutil.which("claude.cmd"))
 
@@ -157,7 +158,8 @@ class ClaudeCodeClient:
         tools = ["--tools", "Bash,Read", "--add-dir", str(add_dir)] if allowed else ["--tools", ""]
         return [self.binary or "claude", "-p", "--output-format", "json", "--max-turns", str(max_turns),
                 "--no-session-persistence", "--restricted", "--strict-mcp-config", *tools,
-                "--json-schema", json.dumps(schema), *(["--allowedTools", *allowed] if allowed else [])]
+                "--json-schema", json.dumps(schema), *(["--model", self.model] if self.model else []),
+                *(["--allowedTools", *allowed] if allowed else [])]
 
     def run(self, *, prompt: str, allowed: list[str], max_turns: int, schema: dict, cwd: Path,
             timeout_s: int, add_dir: Path) -> ModelReply:
@@ -228,7 +230,7 @@ def build_prompt(*, entry: CatalogEntry, task, target: str | None, run_dir: Path
     tools = "\n".join(f"  - {r}" for r in allowed)
     return f"""You are running unattended: the Windows Task Scheduler started task `{task.id}` ({task.schedule.describe()}).
 Nobody is present; do not ask questions. Task objective, in the owner's words: {task.objective}
-Strategy: {task.strategy}. Now: {now.isoformat()} (UTC).
+Strategy: {task.strategy or 'none: this agent watches the market'}. Now: {now.isoformat()} (UTC).
 
 Follow the method below ({entry.id}, skill {skill.version}). Run the CLI exactly as `{CLI} <command> ...` from the
 current directory and scripts as `python -B tools/<script>.py ...`; a script writes only under {run_dir} (use it as

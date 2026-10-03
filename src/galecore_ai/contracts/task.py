@@ -20,7 +20,9 @@ TASK_SCHEMA_VERSION = "1"
 TASK_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){0,7}$")
 KIND_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")  # a catalog id; that it is schedulable is checked when creating and running
 STATUSES = ("active", "paused", "cancelled")
-FREQUENCIES = ("daily", "weekdays", "every_minutes")
+FREQUENCIES = ("daily", "weekdays", "every_minutes", "market_hours")
+# market_hours (GC-AI-0020): every N minutes, Monday to Friday, inside the US cash session only.
+MARKET_TZ, MARKET_OPEN, MARKET_CLOSE = "America/New_York", "09:30", "16:00"
 
 
 class Schedule(BaseModel):
@@ -44,7 +46,12 @@ class Schedule(BaseModel):
     def _shape(self) -> Schedule:
         if self.frequency not in FREQUENCIES:
             raise ValueError(f"frequency is one of {FREQUENCIES}")
-        if self.frequency == "every_minutes":
+        if self.frequency == "market_hours":
+            if self.minutes is None or not 15 <= self.minutes <= 240 or self.time is not None:
+                raise ValueError("market_hours needs minutes between 15 and 240 and no time")
+            if self.timezone != MARKET_TZ:
+                raise ValueError(f"market_hours runs on the US session: timezone is {MARKET_TZ}")
+        elif self.frequency == "every_minutes":
             if self.minutes is None or not 15 <= self.minutes <= 1440 or self.time is not None:
                 raise ValueError("every_minutes needs minutes between 15 and 1440 and no time")
         elif self.time is None or not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", self.time) or self.minutes is not None:
@@ -54,6 +61,8 @@ class Schedule(BaseModel):
     def describe(self) -> str:
         if self.frequency == "every_minutes":
             return f"cada {self.minutes} minutos"
+        if self.frequency == "market_hours":
+            return f"cada {self.minutes} minutos en horario de mercado (L–V {MARKET_OPEN}–{MARKET_CLOSE} Nueva York)"
         return f"{'todos los días' if self.frequency == 'daily' else 'de lunes a viernes'} a las {self.time} ({self.timezone})"
 
 
@@ -64,7 +73,8 @@ class TaskDefinition(BaseModel):
     kind: str
     id: str
     objective: str                          # what the owner wants to know
-    strategy: str                           # the strategy followed (its approved version is resolved at each run)
+    strategy: str | None = None             # the strategy followed (its approved version is resolved at each run);
+                                            # None for an agent that watches the market, not one strategy (GC-AI-0020)
     sources: list[str]                      # where the data comes from
     expected_result: str                    # what each run must leave
     schedule: Schedule

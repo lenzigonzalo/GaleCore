@@ -53,6 +53,7 @@ class Schedulable(BaseModel):
     runs: str                            # code | model
     max_turns: int | None = None         # model: turns per run (protects the plan's quota)
     timeout_minutes: int = 20            # wall-clock cap per run
+    model: str | None = None             # model: which one runs it (e.g. sonnet); None = the host's default (GC-AI-0020)
 
     @field_validator("runs")
     @classmethod

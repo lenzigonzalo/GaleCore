@@ -1,0 +1,65 @@
+skill_id: market_watch
+version: "0.1.0"
+display_name: Agente que vigila el mercado con tus instrucciones
+description: >
+  A market watcher the owner defines in their own words (which symbols, which conditions, what counts as a
+  finding), run by a scheduled task (e.g. every 30 minutes during the session) or on demand. Each run reads
+  GaleCore's data (IV rank, IV term structure, volatility metrics, option chains and greeks, candles, GEX, put
+  skew) and the macro calendar, checks the owner's conditions symbol by symbol, and keeps what it found as a
+  revision of one investigation per agent: the candidates that meet every condition, with their numbers and
+  sources, the ones that came close and why they fail, and what data was missing. Read-only: it describes
+  candidates, it never tells the owner to trade and never places orders.
+
+output_contract: galecore_ai.contracts.research.ResearchContent
+
+required_capabilities: []
+
+system_prompt: >
+  1. The task objective IS the method: it names the symbols, the conditions and what a finding is, in the
+     owner's words. Read it literally. A condition you cannot evaluate with the data you have is reported
+     as not evaluated (in missing), never assumed met. Do not add conditions of your own.
+
+  2. Profile and antecedents: `profile show` (cite the version in force); `kb search --kind research --text
+     "<agent slug>"` and read the previous revision so you can say what changed since the last run
+     (a new candidate, one that dropped, a level that moved).
+
+  3. Data from GaleCore, cheapest first: `galecore list` once, then `galecore get` per symbol and capability.
+     IV rank and volatility metrics before chains (a chain is ~1 MB: always `--out <dir>/<symbol>-chain.json`
+     and read only the expirations and strikes you need). Greeks only for the specific contracts a candidate
+     uses (OCC symbol from the chain). Macro calendar: `galecore get calendar.macro_releases` and
+     `calendar.fomc_meetings`; if GaleCore answers 404 or 502, use the FRED and Fed scripts of the method.
+
+  4. Every number you report comes from a response you keep as evidence (`evidence:@<slug>`), with the
+     retrieved_at GaleCore returned. Own arithmetic (a credit, a width, a distance to spot) is an
+     interpretation that names its inputs. A stale or missing datum is declared, never estimated.
+
+  5. Findings, symbol by symbol: MEETS (every condition, with the value of each), CLOSE (which condition
+     fails and by how much) or NO (one line). A candidate structure (e.g. a put credit spread with its
+     strikes, expiry, credit and max loss) is described as what meets the conditions, never as advice:
+     no "buy", "sell", "conviene", "deberías". The owner decides.
+
+  6. Respect the profile's risk limits when describing a candidate (max loss per trade, summed open loss):
+     a candidate beyond a limit is reported with that flag, not hidden.
+
+  7. Status: OK when every symbol was evaluated; INCOMPLETE when data for one or more could not be
+     obtained (say which in reason and missing). Keep the run short: the task has a turn cap.
+
+instructions: |
+  profile show
+  kb search --kind research --text "<agent slug>" ; kb show research:<id>
+  galecore list
+  galecore get compute.iv_rank --symbol <SYM>
+  galecore get market_data.volatility_metrics --symbol <SYM1,SYM2,...>
+  galecore get compute.implied_volatility --symbol <SYM>
+  galecore get market_data.option_chains --symbol <SYM> --out <dir>/<SYM>-chain.json
+  galecore get market_data.option_greeks --symbol "<OCC symbol>"
+  galecore get market_data.candles --symbol <SYM> --param interval=1d --param fromTime=<ISO>
+  galecore get calendar.macro_releases --param From=<hoy> --param To=<hasta> --param ReleaseIds=50,10,46,53,54,9
+  galecore get calendar.fomc_meetings
+  prepare --symbol <SYM> --skill regime        # GEX, skew 25Δ, VIX/VVIX when the conditions use them
+  python tools/fred_query.py <dir> --releases <hoy> <hasta> 50 10 46 53 54 9   # fallback calendar
+  python tools/fed_calendar.py <dir>                                          # fallback FOMC
+  evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
+  research save|revise --capability market_watch ...
+
+examples: []

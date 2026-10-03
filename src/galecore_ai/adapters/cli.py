@@ -1005,9 +1005,10 @@ def build_parser() -> _JsonArgumentParser:
     t_sub = p_task.add_subparsers(dest="task_command", required=True)
 
     def schedule_args(p):
-        p.add_argument("--frequency", required=True, choices=["daily", "weekdays", "every_minutes"])
+        p.add_argument("--frequency", required=True, choices=["daily", "weekdays", "every_minutes", "market_hours"])
         p.add_argument("--time", help="HH:MM in --timezone (daily, weekdays)")
-        p.add_argument("--minutes", type=int, help="period for every_minutes (15..1440)")
+        p.add_argument("--minutes", type=int, help="period for every_minutes (15..1440) or market_hours (15..240, "
+                                                   "Mon-Fri 09:30-16:00 America/New_York)")
         p.add_argument("--timezone", required=True, help="IANA name, e.g. America/New_York")
         p.add_argument("--prompt", required=True, help="What the user asked")
     p_tc = t_sub.add_parser("create", help="Create and schedule a task that runs a schedulable capability")
@@ -1015,7 +1016,7 @@ def build_parser() -> _JsonArgumentParser:
     p_tc.add_argument("--capability", default="strategy_followup", help="Catalog id declared schedulable")
     p_tc.add_argument("--result-slug", dest="result_slug",
                       help="Model runs: the investigation each run revises (default <capability>-<strategy>)")
-    p_tc.add_argument("--strategy", required=True)
+    p_tc.add_argument("--strategy", help="Strategy followed; an agent that watches the market has none")
     p_tc.add_argument("--objective", required=True)
     p_tc.add_argument("--expected", required=True, help="What each run must leave")
     p_tc.add_argument("--source", action="append", required=True)

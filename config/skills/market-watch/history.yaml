@@ -1,0 +1,10 @@
+# Qué cambió en cada versión de market_watch y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: market_watch
+versions:
+  - version: "0.1.0"
+    date: 2026-10-03
+    changes: >
+      Primera versión (GC-AI-0020, fase 2 del Producto 1): un agente que vigila el mercado con las instrucciones del
+      owner (símbolos, condiciones, qué es un hallazgo), con los datos de GaleCore pedidos por `galecore get`, y que
+      guarda los hallazgos como revisiones de una investigación por agente.
+    feedback: []
