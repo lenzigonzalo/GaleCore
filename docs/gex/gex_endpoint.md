@@ -259,8 +259,15 @@ vieja pedida. Antes, dos requests concurrentes del mismo símbolo (ej. IVRank y 
 - Mantener el **batching de Candle** (límite de DXLink). No suscribir todos de una.
 - Mantener `EnsureConnectedAsync` (evita el AUTH timeout intermitente).
 - Mantener el **log de ERROR de DXLink** (no volver al `catch {}` vacío).
-- Los caches (`_chainCache`, `_oiCache`) son **por día UTC**; el OI es el settled del día previo y no
-  cambia intradía, por eso es seguro cachearlo. Si se necesita refresco intradía de OI, invalidar por tiempo.
+- Los caches (`_chainCache`, `_oiCache`) son **por día UTC**; el OI es el del candle diario más reciente
+  que lo trae y no cambia intradía, por eso es seguro cachearlo. Si se necesita refresco intradía de OI,
+  invalidar por tiempo.
+- **El OI se busca en los últimos `OiLookbackDays` (30) días de candles.** DXLink sólo publica el candle de
+  un día si el contrato operó; con la ventana anterior de 2 días, un strike sin operaciones recientes
+  entraba al GEX con OI 0 aunque tuviera contratos abiertos (2026-09-24, SPY 2026-11-20: call 515 con OI
+  97 y call 550 con OI 25 entraban con 0). El OI del candle es el de ese día, así que si el contrato no
+  volvió a operar puede diferir en lo que se operó ese último día. El **cierre previo** sigue tomándose
+  sólo de candles de los últimos 2 días (lo usa RPF).
 - **El símbolo que no se puede analizar es un 409, no un 500.** Los tres casos —no lista opciones,
   todas las expiraciones vencidas, ninguna dentro de `MaxDTE`— salen como
   `OptionChainNotFoundException` con `code: "option_chain_not_found"`, que
