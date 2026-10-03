@@ -422,6 +422,17 @@ User
 
 El host aporta el modelo y el loop. GaleCore-AI no debe volver a llamarlo.
 
+**Excepción decidida por el owner (30/09, GC-AI-0017): corridas programadas.** Para una capacidad de sólo lectura
+declarada programable, el runner de tareas lanza el host sin sesión (`claude -p`, con el plan de Claude Code) desde un
+único punto intercambiable (`application/model_run.py`). Límites:
+- el modelo sólo tiene `Read` y los comandos de lectura del flujo;
+- recibe sólo las variables de entorno que el flujo necesita;
+- la ejecución tiene tope de turnos y de tiempo, y si se pasa, se corta el árbol de procesos;
+- el runner trae los datos, valida la salida (refs, contrato, sin recomendaciones de trading) y guarda el resultado.
+
+Lo que **no** garantiza: los números que escribe el modelo no se contrastan con los datos traídos. El resultado lo
+declara en sus limitaciones (Codex, 03/10). La API de Anthropic, o un runtime propio, se decide al pasar a producción.
+
 ### 7.2 ChatGPT Work Mode — integración por validar
 
 Conceptualmente es equivalente al modo interactivo, pero no se asume que Work consuma un repositorio local igual que Claude Code o Codex. La integración puede requerir Workspace Skill, plugin, MCP, servicio u otra interfaz soportada. Debe validarse antes de implementarse.

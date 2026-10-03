@@ -72,8 +72,8 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
   basta un ejemplo interno. **Evidencia 03/10:** anotar → `inbox list` (1 pendiente) → `inbox resolve --to roadmap`
   (`RESOLVED`) → `inbox list --status pending` vacío. Un destino `backlog:` en la carpeta temporal se rechaza porque
   valida contra el backlog real (comportamiento esperado).
-- [ ] **AC-06 — Revisión:** interna (hecha; arreglos commiteados el 01/10); Codex en **una pasada conjunta de
-  0016 + 0017 + 0018** contra `main` (regla del 03/10: sólo cambios grandes o importantes); utilidad y cierre, vos.
+- [x] **AC-06 — Revisión:** interna (hecha; arreglos commiteados el 01/10); Codex en una pasada conjunta de
+  0016 + 0017 + 0018 (03/10, CHANGES_REQUESTED → arreglos chicos, ver abajo); utilidad y cierre, vos.
 
 ## Revisión interna (30/09, CHANGES_REQUESTED) y arreglos
 
@@ -89,6 +89,23 @@ Roadmap §4, entregable 1, pieza **h** (ajuste 4, aprobado el 30/09). Según el 
 | MINOR: AC-03 sin evidencia reproducible | `hook_check.py` | corrida del 30/09 |
 | NIT: línea larga, doble carga en `list`, `--status` desconocido | Corregidos (`--status` desconocido se rechaza) | — |
 | MINOR fuera de alcance: el filtro de claves no detecta claves con prefijo sin `key=` | Regex compartido con `evidence.py`: va al backlog, no se arregla acá | — |
+
+## Revisión independiente conjunta 0016 + 0017 + 0018 (Codex, 03/10)
+
+`docs/engineering/reviews/GC-AI-0016-0017-0018-20261003T212859Z.md`, modo `base`, `3a37a6c..cc0311c`: **CHANGES_REQUESTED**.
+El owner eligió «arreglos chicos» (03/10).
+
+| Hallazgo | Resolución |
+|---|---|
+| BLOCKER: el runner acepta evidencia escrita por el modelo (números inventados, recomendación) | **Parcial:** `check_refs` rechaza recomendaciones de trading (patrones de `harness/guardrails.py`) y cada resultado guardado lleva en `limitations` que sus números no se contrastaron. Atar cada número a los datos traídos: **límite conocido**, aceptado por el owner (briefing de lectura sobre SHADOW) |
+| MAJOR: entorno completo + Bash general | El modelo recibe sólo las variables del flujo (`ENV_KEEP`, prefijos `GALECORE_`/`CLAUDE_`/`ANTHROPIC_`). Encerrar Bash por completo: límite conocido |
+| MAJOR: tope de tiempo sin efecto si el árbol no muere | Espera acotada (10 s) y después `kill` + cierre de pipes; el test de timeout pasa en < 30 s |
+| MAJOR: la arquitectura decía que GaleCore-AI no llama al modelo | Excepción documentada en `GaleCore-AI-arquitectura-v5.md` §7.1 |
+| MINOR: prompt de la demo de 0016 escrito por el implementer | Registrado, sin cambio (el work item de 0016 ya lo declara) |
+| MINOR: handoff desactualizado | Se reescribe con el handoff de la sesión |
+
+Tests: `test_a_saved_run_says_its_numbers_were_not_verified`, `test_a_trading_recommendation_is_refused`,
+`test_the_model_gets_only_the_environment_it_needs` (`tests/unit/test_model_tasks.py`, 35 pasan).
 
 ## Requirement-to-evidence matrix
 

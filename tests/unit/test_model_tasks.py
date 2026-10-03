@@ -143,6 +143,35 @@ def test_an_ok_run_saves_evidence_then_the_research(briefing):
     assert status["last_run"]["turns"] == 12 and status["last_run"]["result"] == "OK"
 
 
+def test_a_saved_run_says_its_numbers_were_not_verified(briefing):
+    # Codex 03/10: the model's evidence is its own; the stored result says so.
+    kb, _, follow = briefing
+    run(kb, follow, model_ok(output()))
+    assert mr.UNVERIFIED_NOTE in kb.research.load("2026-09-23-atencion-diaria-spy").current.content.limitations
+
+
+def test_a_trading_recommendation_is_refused(briefing):
+    # Codex 03/10: a probe with «comprar calls ahora» was accepted.
+    kb, _, _ = briefing
+    out = mr.parse_output(output(hypothesis="Conviene comprar calls de SPY ahora"))
+    assert any("trading recommendation" in p for p in mr.check_refs(kb, out, None))
+
+
+def test_the_model_gets_only_the_environment_it_needs(tmp_path, monkeypatch):
+    # Codex 03/10: the unattended process received every credential of the owner's environment.
+    monkeypatch.setenv("SOME_OTHER_TOKEN", "x")
+    monkeypatch.setenv("GALECORE_BASE_URL", "http://localhost:7001")
+    seen = {}
+
+    def fake_popen(cmd, **kw):
+        seen.update(kw["env"])
+        raise OSError("stop here")
+    monkeypatch.setattr(mr.subprocess, "Popen", fake_popen)
+    mr.ClaudeCodeClient(binary="x").run(prompt="p", allowed=[], max_turns=1, schema={}, cwd=tmp_path,
+                                        timeout_s=2, add_dir=tmp_path)
+    assert "SOME_OTHER_TOKEN" not in seen and seen["GALECORE_BASE_URL"] == "http://localhost:7001"
+
+
 def test_the_next_run_revises_the_same_investigation(briefing):
     kb, _, follow = briefing
     run(kb, follow, model_ok(output()))
