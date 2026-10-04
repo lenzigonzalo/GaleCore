@@ -49,8 +49,8 @@ def test_the_scheduler_repeats_for_the_length_of_the_session(monkeypatch):
     assert args[args.index("/du") + 1] == "06:30" and args[args.index("/st") + 1] == "10:30"
 
 
-def test_an_agent_needs_no_strategy_but_a_follow_up_does(env):
-    kb, sch, _ = env
+def test_an_agent_needs_no_strategy_but_a_follow_up_does(env):  # noqa: F811
+    kb, sch, _ = env  # noqa: F811
     task = make(kb, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET,
                 objective="Revisá SPY, QQQ e IWM: IV rank > 30 y sin evento macro en 3 días")
     assert task.strategy is None and task.result_slug == "market-watch-oportunidades"
@@ -58,8 +58,8 @@ def test_an_agent_needs_no_strategy_but_a_follow_up_does(env):
         make(kb, sch, task_id="seguimiento-sin", strategy=None)
 
 
-def test_an_agent_runs_without_a_follow_up_and_with_its_model(env):
-    kb, sch, _ = env
+def test_an_agent_runs_without_a_follow_up_and_with_its_model(env):  # noqa: F811
+    kb, sch, _ = env  # noqa: F811
     make(kb, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET,
          objective="Revisá SPY: IV rank > 30")
     called = []
@@ -94,9 +94,9 @@ def test_the_unattended_model_never_gets_the_traders_login(tmp_path, monkeypatch
     assert "GALECORE_PASSWORD" not in seen and "GALECORE_USERNAME" not in seen and seen["GALECORE_API_KEY"] == "k"
 
 
-def test_a_scheduled_market_hours_run_outside_the_session_is_skipped(env):
+def test_a_scheduled_market_hours_run_outside_the_session_is_skipped(env):  # noqa: F811
     # Internal review 03/10: a PC clock without New York's DST would fire an hour off.
-    kb, sch, _ = env
+    kb, sch, _ = env  # noqa: F811
     make(kb, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
     saturday = datetime(2026, 10, 3, 15, 0, tzinfo=UTC)
     out = t.run(kb=kb, task_id="oportunidades", now=saturday, invoked_by="scheduler", commit=False,

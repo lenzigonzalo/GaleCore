@@ -187,8 +187,8 @@ def _append(kb: KnowledgeBase, task_id: str, kind: str, now: datetime, **data) -
 
 
 def _session_length() -> str:
-    o, c = (datetime.strptime(x, "%H:%M") for x in (MARKET_OPEN, MARKET_CLOSE))
-    minutes = int((c - o).total_seconds() // 60)
+    o, c = ((int(h) * 60 + int(m)) for h, m in (t.split(":") for t in (MARKET_OPEN, MARKET_CLOSE)))
+    minutes = c - o
     return f"{minutes // 60:02d}:{minutes % 60:02d}"
 
 

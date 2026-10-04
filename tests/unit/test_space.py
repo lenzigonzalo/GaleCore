@@ -9,6 +9,9 @@ import pytest
 
 from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
 from galecore_ai.application import space
+from tests.unit.test_knowledge import kb  # noqa: F401  (fixture)
+from tests.unit.test_strategy import research_ref  # noqa: F401  (fixture)
+from tests.unit.test_tasks import env  # noqa: F401  (fixture)
 
 
 class FakeGaleCore:
@@ -100,32 +103,29 @@ def test_a_wrong_login_is_an_error_without_the_password(monkeypatch):
 
 
 def test_local_pieces_bring_profile_objectives_conventions_agents_and_skills(env):  # noqa: F811
-    kb, sch, _ = env
+    kb_, sch, _ = env
     from galecore_ai.application import tasks as t
     from tests.unit.test_market_watch import MARKET
     from tests.unit.test_tasks import make
-    make(kb, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
-    make(kb, sch, task_id="vieja", strategy=None, capability="market_watch", schedule=MARKET)
-    t.cancel(kb=kb, scheduler=sch, task_id="vieja", prompt="ya no")
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    make(kb_, sch, task_id="vieja", strategy=None, capability="market_watch", schedule=MARKET)
+    t.cancel(kb=kb_, scheduler=sch, task_id="vieja", prompt="ya no")
     kinds = {}
-    for p in space.local_pieces(kb):
+    for p in space.local_pieces(kb_):
         kinds.setdefault(p["kind"], []).append(p)
     assert [p["key"] for p in kinds["agent"]] == ["oportunidades"]          # the cancelled one is history
     assert kinds["convention"][0]["visibility"] == "shared"
     assert all(p["visibility"] == "shared" for p in kinds["skill"]) and len(kinds["skill"]) > 5
 
 
-from tests.unit.test_knowledge import kb  # noqa: E402,F401  (fixture)
-from tests.unit.test_strategy import research_ref  # noqa: E402,F401  (fixture)
-from tests.unit.test_tasks import env  # noqa: E402,F401  (fixture)
 
 
 def test_two_long_objectives_with_the_same_start_keep_two_keys(env):  # noqa: F811
-    kb, _, _ = env
+    kb_, _, _ = env
     from galecore_ai.application.profile import set_profile
     from galecore_ai.contracts.regime_record import RecordHost
     start = "retorno anual buscado de diez a quince por ciento sobre el capital de referencia "
-    set_profile(kb.profile, changes={"objectives": [start + "en SPY", start + "en QQQ"]}, note="dos objetivos",
+    set_profile(kb_.profile, changes={"objectives": [start + "en SPY", start + "en QQQ"]}, note="dos objetivos",
                 prompt="probar", host=RecordHost(provider="test", model="test"))
-    keys = [p["key"] for p in space.local_pieces(kb) if p["kind"] == "objective"]
+    keys = [p["key"] for p in space.local_pieces(kb_) if p["kind"] == "objective"]
     assert len(keys) == 2 and len(set(keys)) == 2

@@ -6,7 +6,29 @@
 Cerrados y en `main`: GC-AI-0008 y GC-AI-0009 (30/09, tags `gc-ai-0008-closed`, `gc-ai-0009-closed`), GC-AI-0012 … 0015.
 Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
 
-## Retomar — punto de entrada (próxima sesión, en este orden)
+## Retomar — punto de entrada (vigente desde el 03/10 noche)
+
+**Plan:** `roadmap/README.md` §4 «Producto 1». Una sesión por entrega; arrancar acá y en el estado del roadmap.
+
+**Estado:**
+- GaleCore-AI `main` (pusheado): mapa de datos (0019), agentes del usuario `market_watch` (0020), espacio del trader en
+  GaleCore (0021), pedir sin nombrar `catalog --match` (0022). 0016–0018 CLOSED con tags. **0019–0022 esperan tu
+  cierre en lote** (revisión interna hecha, 3 MAJOR arreglados).
+- GaleCore `local/integracion` (checkout `GaleCore/`, sin push): SHADOW + espaciado GC-0005 (CLOSED), calendario macro y
+  FOMC (GC-0006), espacio del trader + **Configuración** en el monitor (GC-0007), fix del GEX, pestaña Inteligencia.
+  GC-0006 y GC-0007 son ramas desde `master`, listas para PR cuando decidas.
+- API Dev y monitor corren desde `GaleCore/` (`python dev/galecore_dev.py api|monitor`, :7001 y :3039). La migración
+  `AddTraderSpace` ya está aplicada en GaleCore Dev (`dev/galecore_dev.py migrate`).
+- Agente `oportunidades` PAUSADO por pedido del owner. Briefing L–V 10:00 corre desde `main`.
+- Pendientes de fuentes: BL-017 (CBOE, EDGAR, Tesoro, series FRED, BLS) con la receta.
+
+**Próximas sesiones (una por entrega):**
+1. Pantalla **Agentes** de trabajo en el monitor (estado, última corrida, hallazgos, prender/apagar) y reordenar la barra
+   (Estrategias ▾, Inteligencia). Verificar con tsc/build; navegador sólo para la revisión final.
+2. Cierres en lote de 0019–0022 y GC-0006/GC-0007; decidir PR a producción de GC-0006/GC-0007.
+3. Chat en el monitor: decidir cómo corre el modelo en producción (API vs. host en servidor) antes de construir.
+
+## Retomar anterior (30/09, historia)
 
 1. **Comprobar SHADOW (1 minuto).** La estrategia `spy_prima_varianza_30_45d` **1.0.5** (escalera: hasta 10 posiciones,
    una entrada cada 1440 min) corre en GaleCore Dev desde el 30/09 (instancia `2ad19390…`); la 1.0.3 quedó STOPPED y su

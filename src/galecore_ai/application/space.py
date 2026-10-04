@@ -28,7 +28,7 @@ def _slug(text: str, limit: int = 48) -> str:
 
 def local_pieces(kb: KnowledgeBase) -> list[dict]:
     """Every piece the local sources hold today, as {kind, key, title, content, format, visibility}."""
-    from galecore_ai.application import tasks as t   # lazy: tasks imports the CLI side lazily too
+    from galecore_ai.application import tasks as t  # lazy: tasks imports the CLI side lazily too
 
     pieces: list[dict] = []
     profile = kb.profile.latest()
