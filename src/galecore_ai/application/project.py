@@ -66,6 +66,15 @@ def load_log(kb: KnowledgeBase, name: str) -> ProjectLog:
     return log
 
 
+def _safe_log(kb: KnowledgeBase, name: str, broken: list[dict]) -> ProjectLog:
+    """The log, or an empty one with the problem reported: a damaged log never hides the rest of the view."""
+    try:
+        return load_log(kb, name)
+    except KnowledgeError as exc:
+        broken.append({"ref": f"project:{name}", "problems": exc.problems or [str(exc)]})
+        return ProjectLog(name=name)
+
+
 def _strategy_names(kb: KnowledgeBase) -> list[str]:
     return sorted({k.split("/")[0] for k in kb.strategies.versions()})
 
@@ -114,15 +123,22 @@ def add(*, kb: KnowledgeBase, name: str, kind: str, words: str, prompt: str, ref
     return entry, path
 
 
-def _entry_view(e: ProjectEntry) -> dict:
+def _entry_view(e: ProjectEntry, kb: KnowledgeBase | None = None) -> dict:
+    gone = []
+    for ref in e.refs if kb is not None else []:
+        try:
+            resolve_ref(ref, kb)
+        except KnowledgeError:
+            gone.append(ref)
     return {"at": e.at.isoformat(), "kind": e.kind.value, "words": e.words, "refs": e.refs,
+            **({"refs_not_resolving": gone} if gone else {}),
             "hash": e.hash[:19], **({"closes": e.closes[:19]} if e.closes else {})}
 
 
-def _log_view(log: ProjectLog) -> dict:
-    by = {k: [_entry_view(e) for e in log.entries if e.kind == k] for k in EntryKind}
+def _log_view(log: ProjectLog, kb: KnowledgeBase) -> dict:
+    by = {k: [_entry_view(e, kb) for e in log.entries if e.kind == k] for k in EntryKind}
     return {"thesis": by[EntryKind.THESIS], "story": by[EntryKind.STORY], "decisions": by[EntryKind.DECISION],
-            "open": [_entry_view(e) for e in log.open_items()], "closed": by[EntryKind.DONE]}
+            "open": [_entry_view(e, kb) for e in log.open_items()], "closed": by[EntryKind.DONE]}
 
 
 # ── strategy project ─────────────────────────────────────────────
@@ -149,9 +165,13 @@ def _related_research(kb: KnowledgeBase, name: str, versions: list[dict], broken
     refs: list[str] = []
     for v in versions:
         refs += [r for r in v["doc"].content.research_refs if r.startswith("research:")]
-        refs += cited_by(kb, parse_ref(v["ref"]))
+        try:
+            refs += cited_by(kb, parse_ref(v["ref"]))
+        except Exception as exc:  # noqa: BLE001 - a damaged store is reported, the view goes on
+            broken.append({"ref": v["ref"], "problems": [f"cited_by: {str(exc)[:200]}"]})
     slug = name.replace("_", "-")
-    refs += [f"research:{rid}" for rid in kb.research.ids() if rid.split("-", 3)[-1].endswith(slug)]
+    tails = ((rid, rid.split("-", 3)[-1]) for rid in kb.research.ids())
+    refs += [f"research:{rid}" for rid, tail in tails if tail == slug or tail.endswith("-" + slug)]
     seen, out = set(), []
     for r in refs:
         if r not in seen:
@@ -197,10 +217,10 @@ def strategy_project(kb: KnowledgeBase, name: str) -> dict:
     if not versions and not broken:
         raise KnowledgeError(f"no strategy named {name} in the knowledge base",
                              [f"strategies: {', '.join(_strategy_names(kb)) or 'none'}"])
-    log = load_log(kb, name)
+    log = _safe_log(kb, name, broken)
     approved = [v for v in versions if v["approval"] is not None]
     current = approved[-1] if approved else (versions[-1] if versions else None)
-    view: dict = {"project": f"strategy:{name}", "log": _log_view(log)}
+    view: dict = {"project": f"strategy:{name}", "log": _log_view(log, kb)}
     if current:
         c = current["doc"].content
         view["current"] = {
@@ -222,7 +242,11 @@ def strategy_project(kb: KnowledgeBase, name: str) -> dict:
     view["last_followup"] = _followup_view(kb, name, broken)
     research_refs = _related_research(kb, name, versions, broken)
     view["research"] = [r for r in (_research_view(kb, ref, broken) for ref in research_refs) if r]
-    fb = feedback_status(kb)["feedback"]
+    try:
+        fb = feedback_status(kb)["feedback"]
+    except Exception as exc:  # noqa: BLE001 - a damaged store is reported, the view goes on
+        broken.append({"ref": "feedback", "problems": [str(exc)[:200]]})
+        fb = []
     view["feedback"] = [{"ref": f["ref"], "status": f["status"], "words": f["words"], "about": f["about"]}
                         for f in fb if f["about"].rsplit(" r", 1)[0] in research_refs]
     view["missing"] = _missing(view)
@@ -268,10 +292,9 @@ def portfolio_project(kb: KnowledgeBase, space_state: dict | None = None, space_
         versions = _versions(kb, name, broken)
         approved = [v for v in versions if v["approval"] is not None]
         fu = _followup_view(kb, name, broken)
-        try:
-            open_items = len(load_log(kb, name).open_items())
-        except KnowledgeError as exc:
-            broken.append({"ref": f"project:{name}", "problems": [str(exc)]})
+        n_broken = len(broken)
+        open_items = len(_safe_log(kb, name, broken).open_items())
+        if len(broken) > n_broken:
             open_items = None
         strategies.append({
             "name": name, "approved": approved[-1]["ref"] if approved else None,
@@ -289,7 +312,7 @@ def portfolio_project(kb: KnowledgeBase, space_state: dict | None = None, space_
             if space_state["state"] == "coherent":
                 profile["source"] = "galecore (igual a la versión local)"
     view = {"project": "portfolio", "strategies": strategies, "profile": profile,
-            "log": _log_view(load_log(kb, PORTFOLIO))}
+            "log": _log_view(_safe_log(kb, PORTFOLIO, broken), kb)}
     missing = []
     if profile is None:
         missing.append("sin perfil: límites y capital de referencia no se pueden contrastar")

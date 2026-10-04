@@ -75,7 +75,7 @@ def test_an_edited_log_is_integrity_failed(kb, research_ref):  # noqa: F811
     data["entries"][0]["words"] = "Operar siempre"
     path.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(KnowledgeError, match="INTEGRITY_FAILED"):
-        project.strategy_project(kb, NAME)
+        project.load_log(kb, NAME)
     assert any(f["ref"] == f"project:{NAME}" for f in search(kb, text="vix")["integrity_failed"])
 
 
@@ -125,3 +125,32 @@ def test_a_local_version_not_imported_yet_is_local_newer(kb, galecore):  # noqa:
     state = space.profile_state(client, kb)
     assert state["state"] == "local_newer" and state["ref"] == "profile:v2"
     assert space.guard_profile(client, kb, space.local_pieces(kb))[1] == []
+
+
+def test_a_damaged_log_does_not_hide_the_rest_of_the_view(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    for name in (NAME, "portfolio"):
+        _, path = add(kb, "decision", "No operar con VIX arriba de 30", name=name)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["entries"][0]["words"] = "Operar siempre"
+        path.write_text(json.dumps(data), encoding="utf-8")
+    view = project.strategy_project(kb, NAME)
+    assert view["current"]["ref"] == f"strategy:{KEY}" and view["log"]["decisions"] == []
+    assert view["integrity_failed"][0]["ref"] == f"project:{NAME}"
+    pf = project.portfolio_project(kb, None, "sin red")
+    assert {f["ref"] for f in pf["integrity_failed"]} == {f"project:{NAME}", "project:portfolio"}
+    assert pf["strategies"][0]["open_items"] is None
+
+
+def test_a_field_removed_in_the_monitor_is_removed_when_pulled(kb, galecore):  # noqa: F811
+    fake, client = galecore
+    set_profile(kb.profile, changes={"horizon": "30 a 45 días"}, note="v1", prompt="p", host=HOST)
+    space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] == "profile"])
+    row = fake.rows[("profile", "perfil")]
+    content = json.loads(row["content"])
+    content.pop("horizon")
+    row["content"] = json.dumps(content)
+    assert space.pull_profile(client, kb, HOST)["status"] == "PULLED"
+    assert kb.profile.latest().content.horizon != "30 a 45 días"
+    space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] == "profile"])
+    assert space.profile_state(client, kb)["state"] == "coherent"

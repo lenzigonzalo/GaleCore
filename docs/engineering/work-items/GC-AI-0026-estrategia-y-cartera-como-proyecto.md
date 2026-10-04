@@ -85,10 +85,10 @@ Aprobado con las propuestas (a) de D-1, D-2 y D-3: «Sobre lo demás AVANCEMOS c
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
 | AC-01 | `application/project.py` (`strategy_project`), CLI `project show strategy:<name>` | `tests/unit/test_project.py` (vista con referencias, aprobada vigente, faltantes declarados) | real 04/10: `spy_prima_varianza_30_45d` → 1.0.5 aprobada, 24 reglas, 3 decisiones, 4 investigaciones, 1 feedback, seguimiento 03/10 OK; falta tesis e historia | DONE |
-| AC-02 | `portfolio_project`, CLI `project show portfolio` | `test_portfolio_without_galecore_declares_the_profile_unconfirmed` | real 04/10: 1 estrategia, `profile:v5` coherente con GaleCore Dev; riesgo en vivo declarado como no consultado | DONE |
-| AC-03 | `contracts/project.py` (encadenado), `project add`, `kb search --kind project` | `test_owner_entries_are_kept_verbatim_and_open_items_close`, `test_bad_entries_are_refused`, `test_an_edited_log_is_integrity_failed`, `test_kb_search_finds_project_entries` | — | DONE |
+| AC-02 | `portfolio_project`, CLI `project show portfolio` | `test_portfolio_without_galecore_declares_the_profile_unconfirmed` | real 04/10: 1 estrategia, `profile:v5` coherente con GaleCore Dev; riesgo en vivo declarado como no consultado | PARTIAL — el contraste límites × riesgo abierto en vivo pasa a la pieza 4 (supervisor), recomendada por la revisión; acá se muestra el último seguimiento con fecha |
+| AC-03 | `contracts/project.py` (encadenado), `project add`, `kb search --kind project` | `test_owner_entries_are_kept_verbatim_and_open_items_close`, `test_bad_entries_are_refused`, `test_an_edited_log_is_integrity_failed`, `test_kb_search_finds_project_entries`, `test_a_damaged_log_does_not_hide_the_rest_of_the_view` | — | DONE |
 | AC-04 | `config/catalog.yaml` `strategy_project`, `skills/strategy-project/` | `test_knowledge.py::TestCatalog`, `test_route.py` | `catalog --check` complete; `catalog --match "Estemos en la estrategia…"` y `"Abrí mi cartera"` → `strategy_project` primero | DONE |
-| AC-05 | `space.py` `profile_state`, `guard_profile`, `pull_profile`; CLI `space import` y `space pull-profile` | `test_a_monitor_edit_is_not_overwritten_and_is_pulled`, `test_a_local_version_not_imported_yet_is_local_newer` | contra GaleCore Dev 04/10: `coherent` (v5) | DONE |
+| AC-05 | `space.py` `profile_state`, `guard_profile`, `pull_profile`; CLI `space import` y `space pull-profile` | `test_a_monitor_edit_is_not_overwritten_and_is_pulled`, `test_a_local_version_not_imported_yet_is_local_newer`, `test_a_field_removed_in_the_monitor_is_removed_when_pulled` | contra GaleCore Dev 04/10: `coherent` (v5) | DONE |
 | AC-06 | demostración con datos reales (salidas arriba) | — | sesión del 04/10; la de una sesión nueva la hace el owner con `claude -n GC-AI-0026` | PARTIAL |
 
 ## Required validation
@@ -113,5 +113,17 @@ git diff --check
 
 ## Independent review
 
-**Reviewer:** PENDING
-**Review result:** PENDING
+**Reviewer:** internal (subagente `reviewer`, Sonnet), 04/10
+**Review result:** REQUEST_CHANGES → arreglado (ver tabla); 85 tests + ruff + gate PASS en la revisión.
+
+| Hallazgo | Severidad | Resolución |
+|---|---|---|
+| Un log alterado rompía `project show` entero | MAJOR | arreglado: se reporta en `integrity_failed` y la vista sigue (test) |
+| AC-02 marcado DONE sin contraste con el riesgo abierto | MAJOR | AC-02 PARTIAL; el contraste en vivo pasa a la pieza 4 |
+| `feedback_status`/`cited_by` podían romper la vista; slug con `endswith` laxo | MINOR | arreglado: capturados; slug anclado a `-<slug>` |
+| Refs de entradas no se re-resolvían en la vista | MINOR | arreglado: `refs_not_resolving` |
+| `pull_profile` hacía merge: un campo borrado en el monitor no se borraba | MINOR | arreglado: se trae el contenido completo (test) |
+| Pieza del perfil ilegible no frenaba `import` | MINOR | arreglado: también se retiene |
+| Edición del monitor no detectada si el local ya avanzó de versión | MINOR | sin cambio: límite documentado |
+| AC-01 «versión en SHADOW» sólo vía `last_followup` | MINOR | sin cambio: el seguimiento es la fuente de lo desplegado |
+| Uso de `project` en el docstring del CLI | NIT | arreglado |

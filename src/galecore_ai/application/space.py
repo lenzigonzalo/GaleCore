@@ -147,21 +147,29 @@ def profile_state(client: SpaceClient, kb: KnowledgeBase) -> dict:
 def pull_profile(client: SpaceClient, kb: KnowledgeBase, host) -> dict:
     """Bring the monitor's edit as a new local version, so methods and monitor use the same content."""
     from galecore_ai.application.profile import set_profile
+    from galecore_ai.contracts.profile import ProfileContent
 
     state = profile_state(client, kb)
     if state["state"] != "edited_in_monitor":
         return {"status": "NOTHING_TO_PULL", **{k: v for k, v in state.items() if k != "remote"}}
-    doc, path = set_profile(kb.profile, changes=state["remote"], note="edición del perfil hecha en el monitor",
+    try:   # the whole content, defaults included: a field removed in the monitor is removed here too
+        full = ProfileContent.model_validate(state["remote"]).model_dump(mode="json")
+    except ValueError as exc:
+        return {"status": "REFUSED", "detail": f"el perfil del monitor no es válido: {str(exc)[:300]}"}
+    doc, path = set_profile(kb.profile, changes=full, note="edición del perfil hecha en el monitor",
                             prompt=f"space pull-profile ({client.user})", host=host)
     return {"status": "PULLED" if path else "UNCHANGED", "ref": doc.ref, "path": str(path) if path else None}
 
 
 def guard_profile(client: SpaceClient, kb: KnowledgeBase, pieces: list[dict]) -> tuple[list[dict], list[str]]:
     """Drop the profile and objective pieces from an import while the monitor holds an edit not pulled yet."""
-    if profile_state(client, kb)["state"] != "edited_in_monitor":
+    state = profile_state(client, kb)["state"]
+    if state not in ("edited_in_monitor", "unreadable"):
         return pieces, []
     kept = [p for p in pieces if p["kind"] not in ("profile", "objective")]
-    return kept, ["profile/perfil y objetivos: el monitor tiene una edición sin traer; correr `space pull-profile`"]
+    why = ("el monitor tiene una edición sin traer; correr `space pull-profile`" if state == "edited_in_monitor"
+           else "la pieza del perfil en GaleCore no se puede leer; revisarla antes de pisarla")
+    return kept, [f"profile/perfil y objetivos: {why}"]
 
 
 def sync(client: SpaceClient, pieces: list[dict], seen: dict[tuple, int] | None = None) -> dict:
