@@ -517,7 +517,7 @@ def status(*, kb: KnowledgeBase, scheduler, task_id: str, now: datetime | None =
         "scheduler": scheduler.query(task.scheduler_name) if task.status != "cancelled" else {"registered": False},
         "last_result": last_result,
         "last_run": ({k: outcomes[-1].get(k) for k in ("at", "event", "result", "invoked_by", "duration_s", "turns",
-                                                       "max_turns", "model", "tokens", "reason", "error")
+                                                       "max_turns", "model", "route", "tokens", "reason", "error")
                       if k in outcomes[-1]}
                      if outcomes else None),
         "runs": sum(1 for e in log if e["event"] == "run_finished"),
@@ -657,8 +657,8 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
 
     t0 = time.monotonic()
     caps = entry.schedulable
-    if caps.model and isinstance(client, model_run.ClaudeCodeClient):
-        client.model = caps.model
+    if isinstance(client, model_run.ClaudeCodeClient):
+        client.model = caps.model                # always the policy's model (GC-AI-0025), never a fallback
     rec = kept = None
     followup_error = None
     try:
@@ -696,6 +696,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     reply = client.run(prompt=prompt, allowed=allowed, max_turns=caps.max_turns, schema=model_run.output_schema(),
                        cwd=_REPO, timeout_s=int(min(caps.timeout_minutes * 60, left)), add_dir=scratch)
     base = {"invoked_by": invoked_by, "turns": reply.turns, "max_turns": caps.max_turns, "model": reply.model,
+            "route": caps.route_reason(),
             "duration_model_s": reply.duration_s, **_tokens(reply.tokens), **({"followup": rec.id} if rec else {}),
             **({"pack": kept} if kept else {})}
     if reply.ok:
@@ -792,7 +793,7 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
                                      client=client or model_run.ClaudeCodeClient(), followup=followup, written=paths)
             except Exception as exc:  # noqa: BLE001 - an unexpected error is still the run's recorded result
                 outcome = {"invoked_by": invoked_by, "result": "FAILED", "max_turns": entry.schedulable.max_turns,
-                           "error": f"{type(exc).__name__}: {exc}"[:800], "trace": traceback.format_exc()[-800:]}
+                           "route": entry.schedulable.route_reason(), "error": f"{type(exc).__name__}: {exc}"[:800], "trace": traceback.format_exc()[-800:]}
             latest = d / "LATEST.md"
             _write_latest(latest, task, outcome, now)
             if invoked_by == "scheduler":

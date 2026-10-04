@@ -108,3 +108,14 @@ def test_repository_active_work_item_is_consistent():
     result = evaluate_repository(repository_root)
 
     assert result.passed, "\n".join(result.errors)
+
+
+def test_an_item_without_que_y_para_que_warns_and_one_with_it_does_not(tmp_path):
+    _write_work_item(tmp_path, status="IN_PROGRESS", blocked=True)
+    result = evaluate_repository(tmp_path)
+    assert result.passed and any("Qué y para qué" in w for w in result.warnings)
+
+    item = tmp_path / "docs" / "engineering" / "work-items" / "item.md"
+    item.write_text(item.read_text(encoding="utf-8").replace(
+        "## Acceptance criteria", "## Qué y para qué\n\n- Qué: x.\n\n## Acceptance criteria"), encoding="utf-8")
+    assert not any("Qué y para qué" in w for w in evaluate_repository(tmp_path).warnings)

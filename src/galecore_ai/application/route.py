@@ -43,7 +43,15 @@ def match(request: str, catalog: Catalog, limit: int = 3) -> dict:
             ranked.append((score, e.id, sorted(hits), e))
     ranked.sort(key=lambda r: (-r[0], r[1]))
     best = [{"capability": cid, "score": score, "matched": hits, "serves": e.serves.strip(), "flow": e.flow,
-             "skill": e.skill} for score, cid, hits, e in ranked[:limit]]
+             "skill": e.skill, "model": _model(e)} for score, cid, hits, e in ranked[:limit]]
     return {"request": request, "matches": best, "missing": not best,
             "next": ("Seguí el flow de la primera (o la que mejor sirva) y su skill; empezá por `space context`."
                      if best else "Ninguna capacidad lo cubre: ofrecé crearla con capability_builder; no improvises.")}
+
+
+def _model(e) -> str:
+    """Which model the work needs (GC-AI-0025): the host uses it when it delegates; it never renames the chat's."""
+    s = e.schedulable
+    if s is None:
+        return "el de la sesión (en sesión)"
+    return "código, sin modelo" if s.runs == "code" else s.route_reason()

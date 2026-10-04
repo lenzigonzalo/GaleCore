@@ -101,7 +101,7 @@ def scheduled(**overrides) -> CatalogEntry:
             "flow": ["profile show", "kb search --kind strategy", "followup run --strategy x --prompt p",
                      "python GaleCore-AI/tools/fed_calendar.py <dir>", "evidence add --slug s --prompt p",
                      "research save --capability daily_attention --slug s --prompt p"],
-            "schedulable": {"runs": "model", "max_turns": 30}}
+            "schedulable": {"runs": "model", "work": "reading", "max_turns": 30}}
     base.update(overrides)
     return entry(**base)
 
@@ -133,7 +133,7 @@ def test_a_scheduled_research_save_must_be_its_own(tmp_path):
 
 def test_schedulable_shape():
     with pytest.raises(ValidationError, match="max_turns"):
-        scheduled(schedulable={"runs": "model"})
+        scheduled(schedulable={"runs": "model", "work": "reading"})
     with pytest.raises(ValidationError, match="runs is one of"):
         scheduled(schedulable={"runs": "cron"})
     with pytest.raises(ValidationError, match="no max_turns"):

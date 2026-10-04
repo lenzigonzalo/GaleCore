@@ -154,6 +154,11 @@ def evaluate_repository(root: Path) -> GateResult:
     if _is_true(metadata.get("feature_freeze")):
         result.warnings.append("feature freeze is active; only the active work item is authorized")
 
+    # Owner 04/10 (GC-AI-0025): every item says in 3-4 lines what it does and what for; a warning, not a failure.
+    if not re.search(r"^## Qué y para qué\s*$", body, flags=re.MULTILINE):
+        result.warnings.append("missing section '## Qué y para qué' (qué hacemos, para qué, cómo veremos que sirve, "
+                               "qué queda fuera)")
+
     return result
 
 
