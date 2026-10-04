@@ -35,6 +35,8 @@ de decisión; sesiones nuevas y gestor de modelos). Cerrados en lote 0019–0024
 (qué hacemos, para qué / qué podrá hacer el owner, cómo veremos que sirve, qué queda fuera; 3–4 líneas) en
 `docs/engineering/work-items/WORK-ITEM-TEMPLATE.md`, y que `tools/engineering_gate.py` avise si el item activo no la tiene. **Hecho 04/10 (sesión de la 1b):** GaleCore GC-0001, GC-0005…0009 CLOSED con tags `gc-000N-closed`; `local/integracion` = GC-0009 + skill del frontend (GC-0008-skill), tsc OK, checkout `GaleCore/` en `local/integracion`. Las copias sueltas de la skill quedaron en `git stash` (idénticas a `bc0f275`). Addendum del front integral movido al final de BL-005.
 
+**04/10 (tarde): pieza 1b hecha — GC-AI-0025 en `main`** (revisión interna APPROVE, minors arreglados; espera tu cierre). Presupuesto por work item en el workspace (`.claude/budget.json`: 250 llamadas / 200k salida, aviso 80 %, freno al 100 % salvo guardar); modelo por tipo de trabajo en el catálogo (`work: simple|reading|interpretation` → Haiku/Sonnet/Opus; `daily_attention` pasa a Sonnet); «Qué y para qué» en la plantilla y el gate. **Siguiente: pieza 2, estrategia y cartera como proyecto**, en sesión nueva: `claude -n GC-AI-0026 "retoma el handoff"`.
+
 **Plan vigente: roadmap §4 «Plan para cerrar el harness» (owner 04/10). No se cambia hasta cerrarlo.** Una sesión por pieza:
 1. **La historia del mercado** — siguiente. Arranca con el inventario de tools y conectores (qué hay y para qué, incluidos
    los MCP del host) y modelo + consumo por capacidad; después la capacidad que lee qué se está priceando y detecta el
