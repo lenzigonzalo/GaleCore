@@ -75,13 +75,13 @@ nunca sube de modelo.
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 | PENDING | PENDING | PENDING | PENDING |
-| AC-02 | PENDING | PENDING | PENDING | PENDING |
-| AC-03 | PENDING | PENDING | PENDING | PENDING |
-| AC-04 | PENDING | PENDING | PENDING | PENDING |
-| AC-05 | PENDING | PENDING | PENDING | PENDING |
-| AC-06 | PENDING | PENDING | PENDING | PENDING |
-| AC-07 | PENDING | PENDING | PENDING | PENDING |
+| AC-01 | workspace `.claude/hooks/budget.py` (`session-start`), `.claude/budget.json` | workspace `tests/test_budget.py` (sesión + subagentes, sesiones sumadas, sesión vista a mitad) | estado en vivo `.engineering-state/budget/GC-AI-0025.json` (esta sesión: 8 llamadas al registrarse) | DONE |
+| AC-02 | `budget.py pre-tool` (aviso una vez; exit 2 salvo Read/Grep/Glob/AskUserQuestion/ToolSearch y Edit/Write del item o `SESSION_HANDOFF.md`) | `tests/test_budget.py` (aviso, freno, guardar permitido, límite por item, config rota no frena) | — | DONE |
+| AC-03 | `.claude/agents/reviewer.md` sonnet/medium; `autorun/SKILL.md` paso 6 | revisión del diff | — | DONE |
+| AC-04 | workspace `tools/work_item.py` (`session:` en `start`), `ENGINEERING.md` §5 | `tests/test_work_item.py::test_start_leaves_the_items_session_command_ready` | — | DONE |
+| AC-05 | `harness/catalog.py` (`WORK_MODELS`, `Schedulable.work`), `config/catalog.yaml` | `tests/unit/test_model_routing.py`, `test_catalog_check.py` | `catalog --check` | DONE |
+| AC-06 | `application/tasks.py` (`route` en la corrida y en `task status`), `inventory.py`, `route.py` (`model` en `--match`) | `tests/unit/test_model_routing.py::test_match_says_which_model_the_work_needs` | — | DONE |
+| AC-07 | `WORK-ITEM-TEMPLATE.md`, `tools/engineering_gate.py` | `tests/unit/test_engineering_gate.py::test_an_item_without_que_y_para_que_warns_and_one_with_it_does_not` | — | DONE |
 
 ## Required validation
 
@@ -94,7 +94,13 @@ git diff --check
 
 ## Implementer handoff
 
-**State:** PENDING
+**State:** DONE (04/10)
+
+- GaleCore-AI `feature/GC-AI-0025`: 1093 tests (sesión completa) + gate PASS, ruff limpio.
+- Workspace `main`: gate PASS (pytest + ruff + diff --check).
+- Cambio de comportamiento: `daily_attention` pasa del modelo del host (Opus) a Sonnet (`work: reading`).
+- Límites conocidos: el freno cuenta lo que el transcript registra (no es un tope del host); la sesión que estaba
+  activa antes de abrir el item se cobra desde que el hook la vio; `--max-budget-usd` no se usa (USD de API).
 
 ## Independent review
 
