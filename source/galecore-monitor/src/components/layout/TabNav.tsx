@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Activity, Zap, BarChart3, Shield, FlaskConical, Brain } from 'lucide-react';
+import { LayoutDashboard, Activity, Zap, BarChart3, Shield, FlaskConical, Brain, BookUser } from 'lucide-react';
 import { AccountMenu } from './AccountMenu';
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 
@@ -7,7 +7,7 @@ import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 // del config de la app: las cards de Main navegan por ese valor.
 //
 // 'cuenta' es una pestaña sin botón en la barra: se llega desde el menú Mi Cuenta.
-export type Tab = 'inicio' | 'monitor' | 'rpf' | 'gex' | 'shadow' | 'inteligencia' | 'admin' | 'cuenta';
+export type Tab = 'inicio' | 'monitor' | 'rpf' | 'gex' | 'shadow' | 'inteligencia' | 'espacio' | 'admin' | 'cuenta';
 
 interface Props {
   active: Tab;
@@ -29,6 +29,9 @@ const TABS: { id: Tab; label: string; Icon: React.ComponentType<{ size?: number 
   // Inteligencia va después de las estrategias: no es mercado en vivo sino lo que la IA interpretó
   // y cómo se evaluó después (registros de régimen, review humano).
   { id: 'inteligencia',    label: 'Inteligencia',      Icon: Brain           },
+  // Mi espacio (GC-0007): lo que GaleCore-AI sabe del trader. Es de trabajo —se mira y se ajusta mientras se
+  // opera—, por eso va con las del tablero y no a la derecha con la administración.
+  { id: 'espacio',         label: 'Mi espacio',        Icon: BookUser        },
 ];
 
 // Admin va a la DERECHA, pegada a Mi Cuenta, y no con las del tablero: no es una pantalla de
