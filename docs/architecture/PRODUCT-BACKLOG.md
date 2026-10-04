@@ -1434,6 +1434,34 @@ un paso que cargue ese contexto en la sesión. Encaje posible: la entrega 6 (ped
 
 ---
 
+### Addendum 2026-10-04 — Mejoras propuestas a la skill de diseño de estrategias (`strategy_design` 0.3.1)
+
+**Origen:** owner, 04/10, durante GC-AI-0026: «la skill hoy está muy pobre, requiere mejoras; si ves mejoras en
+estrategia, diseño, parámetros, proponelas». Propuesta de Claude, sin aprobar; orden sugerido por valor.
+**Observado:** la skill es un procedimiento (proponer → check → save → approve → deploy) más que un método de diseño;
+`spy_prima_varianza_30_45d` 1.0.5 tiene 24 reglas pero sus pendientes siguen siendo «sizing por riesgo y kill switch»
+y la reproducción; no hay vista de parámetros ni dice en qué contexto se prende.
+
+1. **Tabla de parámetros aparte de las reglas:** cada parámetro con valor, unidad, rango razonable, de qué depende,
+   qué dato lo fundaría y su estado (fundado / hipótesis / decisión del owner). Es lo primero que el owner mira.
+2. **Contexto de aplicación («en qué historia funciona»):** condiciones de prender/no prender en términos de la
+   historia del mercado (gamma, skew, VIX/VVIX, eventos del calendario), enlazadas al proyecto (`project add --kind
+   story`) y evaluables por la pieza 3.
+3. **Riesgo contra el perfil:** pérdida máxima por operación ((ancho − crédito) × 100) contra el límite del perfil
+   (500 USD), suma con lo abierto, número máximo de posiciones y kill switch explícito, antes de cualquier SHADOW nuevo.
+4. **Escenarios sin backtest:** payoff y griegas al entrar, qué pasa con gap de −3 % / −5 % y con salto de vol,
+   probabilidad implícita de tocar el strike, desde la cadena de GaleCore (no web).
+5. **Árbol de gestión:** objetivo, stop, tiempo (DTE), roll/ajuste como decisiones con disparador y acción, no prosa.
+6. **Por qué esta estructura:** comparación corta con alternativas (PCS / CCS / iron condor / no operar) para la misma
+   tesis; prepara la estructura nueva de la pieza 3.
+7. **Diff entre versiones:** al guardar una versión, qué cambió respecto de la aprobada y por qué (cita la decisión).
+8. **Por qué falla:** criterios de apagado y revisión por operación cerrada (alimenta la pieza 5).
+9. **Separar método y despliegue:** la skill de diseño (método, 1–8) y el procedimiento de SHADOW (pasos 7–10 de hoy)
+   en dos partes; la ficha de una página para el owner (tabla) como salida estándar.
+
+**Límites:** no cambia el plan; entra pieza por pieza (2, 3 y 5 del roadmap §4) o como versión nueva de la skill con
+su `history.yaml`.
+
 ## BL-008 — Gestión integral del portfolio y espacio financiero personal y compartido
 
 **Estado:** `CAPTURED`
