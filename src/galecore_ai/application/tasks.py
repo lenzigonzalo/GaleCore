@@ -45,6 +45,9 @@ LOCK_MARGIN_SECONDS = 120    # what a model run leaves free under the stale-lock
 STATE_LOCK_TIMEOUT_SECONDS = 15
 STATE_LOCK_STALE_SECONDS = 120
 SCHEDULER_FOLDER = "GaleCore-AI"
+# GC-AI-0023: the task that applies the monitor's on/off requests and publishes the agents' state to GaleCore.
+SYNC_TASK = f"{SCHEDULER_FOLDER}\\espacio-agentes"
+SYNC_MINUTES = 5
 _REPO = Path(__file__).resolve().parents[3]
 RUNNER_HOST = RecordHost(provider="windows-task-scheduler", model="deterministic-runner")
 # A run started by hand (`task run`) is the same code but must never pass for an automatic one (Codex C4 MAJOR).
@@ -82,6 +85,11 @@ class WindowsScheduler:
         else:
             sc = ["/sc", "daily", "/st", local_time]
         self._run(["/create", "/tn", name, "/tr", tr, *sc, "/f"])
+
+    def create_every(self, name: str, command: list[str], minutes: int) -> None:
+        """A plain every-N-minutes task (the space sync): no Schedule, it follows no market or timezone."""
+        self._run(["/create", "/tn", name, "/tr", subprocess.list2cmdline(command), "/sc", "minute", "/mo", str(minutes),
+                   "/f"])
 
     def delete(self, name: str) -> None:
         self._run(["/delete", "/tn", name, "/f"])
@@ -214,9 +222,17 @@ def local_time_for(schedule: Schedule, now: datetime) -> str | None:
     return local.strftime("%H:%M")
 
 
-def runner_command(code_path: Path, task_id: str) -> list[str]:
+def _pythonw() -> str:
     pyw = Path(sys.executable).with_name("pythonw.exe")
-    return [str(pyw if pyw.exists() else sys.executable), "-B", str(code_path / "tools" / "task_runner.py"), task_id]
+    return str(pyw if pyw.exists() else sys.executable)
+
+
+def runner_command(code_path: Path, task_id: str) -> list[str]:
+    return [_pythonw(), "-B", str(code_path / "tools" / "task_runner.py"), task_id]
+
+
+def sync_command(code_path: Path = _REPO) -> list[str]:
+    return [_pythonw(), "-B", str(code_path / "tools" / "space_sync.py")]
 
 
 # How long after a due time a run may still be starting or in progress before it counts as missed.

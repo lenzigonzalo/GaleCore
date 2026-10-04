@@ -615,9 +615,25 @@ async def _cmd_space(args: argparse.Namespace) -> None:
             client.delete(kind, key)
             _json_out({"status": "DELETED", "ref": args.ref})
         elif c == "import":
-            pieces = space.local_pieces(_build_knowledge_base())
-            result = space.sync(client, pieces)           # logs in first: the user is known after it
-            _json_out({"status": "SYNCED", "user": client.user, "credentials": client.source, **result})
+            from galecore_ai.application.tasks import WindowsScheduler
+            kb = _build_knowledge_base()
+            requests = space.apply_requests(client, kb, WindowsScheduler())   # before the pieces overwrite them
+            result = space.sync(client, space.local_pieces(kb))
+            _json_out({"status": "SYNCED", "user": client.user, "credentials": client.source, "requests": requests,
+                       **result})
+        elif c == "agents":
+            from galecore_ai.application.tasks import (
+                SYNC_MINUTES,
+                SYNC_TASK,
+                WindowsScheduler,
+                sync_command,
+            )
+            if args.install:
+                WindowsScheduler().create_every(SYNC_TASK, sync_command(), SYNC_MINUTES)
+                _json_out({"status": "INSTALLED", "task": SYNC_TASK, "every_minutes": SYNC_MINUTES})
+                return
+            result = space.publish_agents(client, _build_knowledge_base(), WindowsScheduler())
+            _json_out({"status": "PUBLISHED", "user": client.user, **result})
     except SpaceError as exc:
         _error_out(str(exc), exit_code=1)
 
@@ -1029,6 +1045,10 @@ def build_parser() -> _JsonArgumentParser:
     p_sp_put.add_argument("--visibility", default="private", choices=["private", "shared"])
     sp_sub.add_parser("delete", help="Delete one of your pieces").add_argument("ref", help="kind/key")
     sp_sub.add_parser("import", help="Bring the local profile, objectives, conventions, agents and skills (only changes)")
+    p_sp_agents = sp_sub.add_parser("agents", help="Apply the monitor's on/off requests and publish each agent's state, "
+                                                   "last run and findings (GC-AI-0023)")
+    p_sp_agents.add_argument("--install", action="store_true",
+                             help="Register the Windows task that does it every 5 minutes")
 
     p_inbox = sub.add_parser("inbox", help="Idea inbox: note the owner's idea now, review it later (GC-AI-0018)")
     in_sub = p_inbox.add_subparsers(dest="inbox_command", required=True)

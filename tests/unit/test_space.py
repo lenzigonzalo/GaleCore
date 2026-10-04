@@ -129,3 +129,83 @@ def test_two_long_objectives_with_the_same_start_keep_two_keys(env):  # noqa: F8
                 prompt="probar", host=RecordHost(provider="test", model="test"))
     keys = [p["key"] for p in space.local_pieces(kb_) if p["kind"] == "objective"]
     assert len(keys) == 2 and len(set(keys)) == 2
+
+
+# ── GC-AI-0023: the monitor's Agentes screen ─────────────────────
+
+
+def _agent(fake, key="oportunidades"):
+    return json.loads(fake.rows[("agent", key)]["content"])
+
+
+def test_an_agent_is_published_with_its_last_run_and_findings(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_model_tasks import LATER, model_ok, output
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET,
+         objective="Revisá SPY: IV rank > 30")
+    first = space.publish_agents(client, kb_, sch, now=LATER)
+    assert first["created"] == ["agent/oportunidades"] and _agent(fake)["last_run"] is None
+    t_run = __import__("galecore_ai.application.tasks", fromlist=["run"]).run
+    t_run(kb=kb_, task_id="oportunidades", commit=False, now=LATER, client=model_ok(output()),
+          followup=lambda **kw: None)
+    space.publish_agents(client, kb_, sch, now=LATER)
+    a = _agent(fake)
+    assert a["id"] == "oportunidades" and a["status"] == "active" and a["runs"] == 1
+    assert a["last_run"]["result"] == "OK" and a["last_run"]["failed"] is False
+    assert a["findings"].startswith("**") and a["result_ref"].startswith("research:")
+    again = space.publish_agents(client, kb_, sch, now=LATER)
+    assert again["updated"] == [] and again["unchanged"] == ["agent/oportunidades"]   # nothing new: no version bump
+
+
+def test_the_monitor_turns_an_agent_off_and_on(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    space.publish_agents(client, kb_, sch)
+    # What the monitor writes: the piece as it was, plus the request.
+    client.put("agent", "oportunidades", title="oportunidades (market_watch)",
+               content=json.dumps({**_agent(fake), "request": {"status": "paused", "at": "2026-10-04T12:00:00Z"}}),
+               fmt="json")
+    out = space.publish_agents(client, kb_, sch)
+    assert out["requests"] == [{"agent": "oportunidades", "status": "paused", "result": "applied"}]
+    assert t.load(kb_, "oportunidades").status == "paused" and sch.tasks[t.SCHEDULER_FOLDER + r"\oportunidades"][
+        "enabled"] is False
+    paused = [e for e in t.events(kb_, "oportunidades") if e["event"] == "paused"][-1]
+    assert "monitor" in paused["prompt"] and "demo" in paused["prompt"]
+    assert _agent(fake)["status"] == "paused" and "request" not in _agent(fake)    # applied: the request is gone
+    client.put("agent", "oportunidades", title="x", fmt="json",
+               content=json.dumps({**_agent(fake), "request": {"status": "active"}}))
+    space.publish_agents(client, kb_, sch)
+    assert t.load(kb_, "oportunidades").status == "active" and _agent(fake)["status"] == "active"
+
+
+def test_a_request_that_cannot_be_applied_says_why(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    _, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    t.cancel(kb=kb_, scheduler=sch, task_id="oportunidades", prompt="ya no")
+    client.put("agent", "oportunidades", title="x", fmt="json",
+               content=json.dumps({"id": "oportunidades", "request": {"status": "active"}}))
+    out = space.publish_agents(client, kb_, sch)
+    assert out["requests"][0]["result"] == "refused" and "cancelled" in out["requests"][0]["error"]
+    assert t.load(kb_, "oportunidades").status == "cancelled"
+
+
+def test_the_sync_task_runs_every_five_minutes(monkeypatch):
+    from galecore_ai.application import tasks as t
+    seen = {}
+    monkeypatch.setattr(t.WindowsScheduler, "_run", lambda self, args: seen.setdefault("args", args) or "")
+    t.WindowsScheduler().create_every(t.SYNC_TASK, t.sync_command(), t.SYNC_MINUTES)
+    args = seen["args"]
+    assert args[args.index("/tn") + 1] == r"GaleCore-AI\espacio-agentes"
+    assert args[args.index("/sc") + 1] == "minute" and args[args.index("/mo") + 1] == "5"
+    assert args[args.index("/tr") + 1].endswith("space_sync.py")

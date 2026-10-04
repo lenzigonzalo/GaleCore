@@ -33,6 +33,9 @@ python -B -m galecore_ai.adapters.cli profile show     # the user's profile in f
 conventions, agents; GC-AI-0021). For a request in the user's words, `catalog --match "<pedido>"` returns the
 capabilities that serve it with their flow (GC-AI-0022): use the first unless another fits better, say which one,
 and when none matches offer `capability_builder` instead of improvising. The user never has to name a skill.
+The monitor's Agentes screen (GaleCore GC-0009) reads the agent pieces of the space: `space agents` applies the on/off
+requests made there and publishes each agent's state, last run and findings; the `GaleCore-AI\espacio-agentes` task
+does it every 5 minutes (`space agents --install`, GC-AI-0023).
 
 Pick the capability for the user's request from `catalog` (no routing table here), follow its `flow`,
 and read its `skill` asset for the method. Before new work, **retrieve**: `kb search` for antecedents

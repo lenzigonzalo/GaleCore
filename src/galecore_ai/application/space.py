@@ -3,6 +3,11 @@
 `local_pieces` turns the local sources into pieces of the space: the profile in force (and each objective), the
 conventions, the scheduled agents (tasks) and the catalog's skills (shared: they are the team's methods). `sync` writes
 only what changed (the version in GaleCore goes up only then). `context` is the short summary a session starts with.
+
+Agents (GC-AI-0023): each agent piece also carries what the monitor's Agentes screen shows: whether its latest
+result is current, the last run and its findings. The monitor cannot reach this PC, so turning an agent on or off
+there is a request written into the piece (`request: {status, at}`); `apply_requests` carries it out here (pause or
+resume through the scheduler, recorded in the task's events) before the pieces are published again.
 """
 
 from __future__ import annotations
@@ -10,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -26,7 +32,53 @@ def _slug(text: str, limit: int = 48) -> str:
     return (s[:limit].rstrip("-") or "x")
 
 
-def local_pieces(kb: KnowledgeBase) -> list[dict]:
+FINDINGS_LIMIT = 12_000          # characters of the latest result shown in the monitor; the full one stays here
+
+
+def _research_findings(kb: KnowledgeBase, ref: str) -> str | None:
+    """A research result as short markdown for the monitor: what was found, what is missing, what follows."""
+    doc = kb.research.load(ref.removeprefix("research:"))
+    if doc is None:
+        return None
+    c = doc.current.content
+    lines = [f"**{c.title}**", "", *(f"- {s.text}" for s in c.statements)]
+    for title, items in (("Falta", c.missing), ("Próximos pasos", c.next_steps), ("Límites", c.limitations)):
+        if items:
+            lines += ["", f"**{title}**", "", *(f"- {i}" for i in items)]
+    return "\n".join(lines)
+
+
+def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) -> dict:
+    """What the Agentes screen shows of one agent: definition, freshness, last run and its findings."""
+    from galecore_ai.application import tasks as t  # lazy: tasks imports the CLI side lazily too
+
+    task = t.load(kb, task_id)
+    log = t.events(kb, task_id)
+    fresh = t.freshness(task, log, now or datetime.now(UTC))
+    outcomes = [e for e in log if e["event"] in ("run_finished", "run_failed")]
+    last = outcomes[-1] if outcomes else None
+    findings = None
+    if task.kind in t.CODE_RUNNERS and task.strategy:
+        latest = kb.base / "followups" / task.strategy / "LATEST.md"
+        findings = latest.read_text(encoding="utf-8") if latest.is_file() else None
+    else:
+        done = next((e for e in reversed(log) if e["event"] == "run_finished" and e.get("research")), None)
+        findings = _research_findings(kb, done["research"]) if done else None
+    if findings and len(findings) > FINDINGS_LIMIT:
+        findings = findings[:FINDINGS_LIMIT].rstrip() + "\n\n… (recortado: el resultado completo queda en GaleCore-AI)"
+    return {
+        "capability": task.kind, "status": task.status, "schedule": task.schedule.describe(),
+        "strategy": task.strategy, "objective": task.objective,
+        "state": fresh["state"], "state_detail": fresh.get("detail"), "next_expected_at": fresh.get("next_expected_at"),
+        "last_run": ({k: last[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error")
+                      if last.get(k) is not None} | {"failed": last["event"] == "run_failed"}) if last else None,
+        "runs": sum(1 for e in log if e["event"] == "run_finished"),
+        "findings": findings,
+        "result_ref": ((last or {}).get("research") or (last or {}).get("followup")),
+    }
+
+
+def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
     """Every piece the local sources hold today, as {kind, key, title, content, format, visibility}."""
     from galecore_ai.application import tasks as t  # lazy: tasks imports the CLI side lazily too
 
@@ -51,9 +103,8 @@ def local_pieces(kb: KnowledgeBase) -> list[dict]:
                        "format": "json", "visibility": "shared"})
     for task in (x for x in t.list_tasks(kb) if x["status"] != "cancelled"):   # a cancelled task is history
         pieces.append({"kind": "agent", "key": _slug(task["id"]), "title": f"{task['id']} ({task['capability']})",
-                       "content": json.dumps({"capability": task["capability"], "status": task["status"],
-                                              "schedule": task["schedule"], "strategy": task["strategy"],
-                                              "objective": task["objective"]}, ensure_ascii=False),
+                       "content": json.dumps({"id": task["id"], **agent_state(kb, task["id"], now)},
+                                             ensure_ascii=False),
                        "format": "json", "visibility": "private"})
     for entry in load_catalog().entries:
         lines = [entry.serves.strip(), "", "Pedidos de ejemplo:", *(f"- {r}" for r in entry.example_requests)]
@@ -76,6 +127,45 @@ def sync(client: SpaceClient, pieces: list[dict]) -> dict:
                    visibility=p["visibility"])
         out["created" if before is None else "updated"].append(f"{p['kind']}/{p['key']}")
     return out
+
+
+def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None) -> list[dict]:
+    """Carry out the on/off requests the monitor wrote into the agent pieces; return what was done or refused."""
+    from galecore_ai.application import tasks as t
+
+    done = []
+    for item in client.items("agent")["items"]:
+        try:
+            content = json.loads(item["content"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+        req = content.get("request") or {}
+        wanted, task_id = req.get("status"), content.get("id")
+        if wanted not in ("active", "paused") or not task_id:
+            continue
+        try:
+            if t.load(kb, task_id).status == wanted:
+                done.append({"agent": task_id, "status": wanted, "result": "already"})
+                continue
+            prompt = f"Pedido desde el monitor por {client.user} ({req.get('at', 'sin hora')})"
+            change = t.resume if wanted == "active" else t.pause
+            change(kb=kb, scheduler=scheduler, task_id=task_id, prompt=prompt, now=now)
+            done.append({"agent": task_id, "status": wanted, "result": "applied"})
+        except (t.TaskError, OSError, ValueError) as exc:
+            done.append({"agent": task_id, "status": wanted, "result": "refused", "error": str(exc)[:300]})
+    return done
+
+
+def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None) -> dict:
+    """Apply the monitor's requests, then publish every agent's state (only the ones that changed are written)."""
+    requests = apply_requests(client, kb, scheduler, now)
+    refused = {r["agent"]: r["error"] for r in requests if r["result"] == "refused"}
+    pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent"]
+    for p in pieces:
+        content = json.loads(p["content"])
+        if content["id"] in refused:            # the monitor shows why it did not happen
+            p["content"] = json.dumps({**content, "request_error": refused[content["id"]]}, ensure_ascii=False)
+    return {"requests": requests, **sync(client, pieces)}
 
 
 def context(client: SpaceClient, max_lines: int = 25) -> str:
