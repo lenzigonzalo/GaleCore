@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, KeyRound, Lock, LogOut, User } from 'lucide-react';
+import { ChevronDown, Lock, LogOut, Settings, User } from 'lucide-react';
 import { Modal } from '../common/Modal';
 import { MyPasswordCard } from '../account/MyPasswordCard';
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 
 interface Props {
-  /** Abre la pestaña de la cuenta de bróker. */
-  onOpenBrokerAccount: () => void;
+  /** Abre Configuración (GC-0007): cuenta, bróker, perfil, objetivos, memoria, skills, agentes. */
+  onOpenSettings: () => void;
   /** Cierra la sesión. Si no viene, el menú no ofrece "Salir". */
   onLogout?: () => void;
   /** La pestaña de la cuenta está activa: el botón del menú se marca como las demás pestañas. */
@@ -34,7 +34,7 @@ const itemStyle: React.CSSProperties = {
  * pantalla con estado (lee la cuenta vinculada, se vuelve a ella) y la segunda es un formulario de
  * dos campos que se completa y se cierra.
  */
-export function AccountMenu({ onOpenBrokerAccount, onLogout, active = false }: Props) {
+export function AccountMenu({ onOpenSettings, onLogout, active = false }: Props) {
   const [open, setOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -113,13 +113,13 @@ export function AccountMenu({ onOpenBrokerAccount, onLogout, active = false }: P
 
           <button
             role="menuitem"
-            onClick={() => { setOpen(false); onOpenBrokerAccount(); }}
+            onClick={() => { setOpen(false); onOpenSettings(); }}
             style={itemStyle}
             onMouseEnter={hoverOn}
             onMouseLeave={hoverOff('var(--text-secondary)')}
           >
-            <KeyRound size={12} style={{ flexShrink: 0 }} />
-            Cuenta de bróker
+            <Settings size={12} style={{ flexShrink: 0 }} />
+            Configuración
           </button>
 
           <button
