@@ -121,6 +121,24 @@ class ModelReply:
     duration_s: float | None = None
     model: str | None = None
     error: str | None = None
+    tokens: dict | None = None     # input, output, cache_read, cache_write (GC-AI-0024: consumption per capability)
+
+
+def usage_of(out: dict) -> dict | None:
+    """The tokens a print-mode run reports (`usage`), named for the inventory; None when it reports none."""
+    u = out.get("usage")
+    if not isinstance(u, dict):
+        return None
+    names = {"input": "input_tokens", "output": "output_tokens", "cache_read": "cache_read_input_tokens",
+             "cache_write": "cache_creation_input_tokens"}
+    got = {k: u[v] for k, v in names.items() if isinstance(u.get(v), int)}
+    return got or None
+
+
+def add_tokens(a: dict | None, b: dict | None) -> dict | None:
+    if not a or not b:
+        return a or b
+    return {k: a.get(k, 0) + b.get(k, 0) for k in {**a, **b}}
 
 
 class ModelClient(Protocol):
@@ -198,14 +216,15 @@ class ClaudeCodeClient:
                               error=f"exit {proc.returncode}, output is not JSON: {(stderr or stdout)[-300:]}")
         if not isinstance(out, dict):
             return ModelReply(ok=False, duration_s=wall, error=f"exit {proc.returncode}, output is not a JSON object")
-        turns, model = out.get("num_turns"), next(iter(out.get("modelUsage") or {}), None)
+        turns, model, tokens = out.get("num_turns"), next(iter(out.get("modelUsage") or {}), None), usage_of(out)
         if proc.returncode != 0 or out.get("is_error") or not isinstance(out.get("structured_output"), dict):
             why = out.get("subtype") or "error"
             if why == "error_max_turns":
                 why = f"turn cap reached ({max_turns})"
-            return ModelReply(ok=False, turns=turns, duration_s=wall, model=model,
+            return ModelReply(ok=False, turns=turns, duration_s=wall, model=model, tokens=tokens,
                               error=f"{why}: {str(out.get('result') or '')[:300]}".rstrip(": "))
-        return ModelReply(ok=True, structured=out["structured_output"], turns=turns, duration_s=wall, model=model)
+        return ModelReply(ok=True, structured=out["structured_output"], turns=turns, duration_s=wall, model=model,
+                          tokens=tokens)
 
 
 def allowed_tools(entry: CatalogEntry, commands: dict[str, set[str]]) -> list[str]:

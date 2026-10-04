@@ -1,0 +1,17 @@
+# Qué cambió en cada versión de market_story y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: market_story
+versions:
+  - version: "0.1.1"
+    date: 2026-10-04
+    changes: >
+      Primera corrida real (r2 de research:2026-10-04-historia-del-mercado-spy): atribuyó la baja de la volatilidad
+      corta al «dato de empleo» del viernes, que no estaba en el paquete. El paquete trae ahora las publicaciones de
+      la última semana (recent_releases) y el método sólo deja nombrar eventos que estén en su calendario.
+    feedback: []
+  - version: "0.1.0"
+    date: 2026-10-04
+    changes: >
+      Primera versión (GC-AI-0024, pieza 1 del plan para cerrar el harness): la historia que está priceando el
+      mercado con el paquete del día que junta el código (`story pack`), sus pilares con evidencia, qué se le ofrece
+      al retail según las opciones, la historia competidora y si cambió frente a la lectura anterior.
+    feedback: []

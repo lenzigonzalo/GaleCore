@@ -432,3 +432,37 @@ def test_the_model_cap_never_exceeds_the_lock(briefing):
     model = model_ok(output())
     run(kb, follow, model)
     assert model.calls[0]["timeout_s"] + t.REPAIR_SECONDS + t.LOCK_MARGIN_SECONDS <= t.LOCK_STALE_MINUTES * 60
+
+
+# ── consumption (GC-AI-0024) ────────────────────────────────────
+
+
+def test_the_client_keeps_the_tokens_the_run_reports(tmp_path, monkeypatch):
+    out = {"num_turns": 3, "modelUsage": {"claude-sonnet": {}}, "structured_output": {"status": "OK"},
+           "usage": {"input_tokens": 120, "output_tokens": 900, "cache_read_input_tokens": 40000,
+                     "cache_creation_input_tokens": 5000, "server_tool_use": {}}}
+    script = tmp_path / "fake.py"
+    script.write_text(f"import sys; sys.stdin.read(); print({json.dumps(json.dumps(out))})", encoding="utf-8")
+    client = mr.ClaudeCodeClient(binary="x")
+    monkeypatch.setattr(client, "command", lambda **kw: [sys.executable, str(script)])
+    reply = client.run(prompt="p", allowed=[], max_turns=5, schema={}, cwd=tmp_path, timeout_s=30, add_dir=tmp_path)
+    assert reply.ok and reply.tokens == {"input": 120, "output": 900, "cache_read": 40000, "cache_write": 5000}
+
+
+def test_a_run_without_usage_has_no_tokens():
+    assert mr.usage_of({"num_turns": 1}) is None and mr.usage_of({"usage": {"foo": 1}}) is None
+
+
+def test_the_run_records_its_tokens_including_the_correction_round(briefing):
+    kb, _, follow = briefing
+    ev = [{"slug": "fred", "content": evidence().model_dump(mode="json")}]
+    bad = output(ev=ev, statements=[FACT_WITHOUT_SOURCE],
+                 antecedents=[{"ref": "evidence:@fred", "summary": "s", "bearing": "b"}])
+    good = output(ev=ev, statements=[{"kind": "interpretation", "text": "El VIX subió"}],
+                  antecedents=[{"ref": "evidence:@fred", "summary": "s", "bearing": "b"}])
+    model = Sequence(mr.ModelReply(ok=True, structured=bad, turns=30, model="m", tokens={"input": 10, "output": 100}),
+                     mr.ModelReply(ok=True, structured=good, turns=1, model="m", tokens={"input": 2, "output": 20}))
+    result = run(kb, follow, model)
+    assert result["tokens"] == {"input": 12, "output": 120}
+    status = t.status(kb=kb, scheduler=FakeScheduler(), task_id="atencion-diaria", now=LATER)
+    assert status["last_run"]["tokens"] == {"input": 12, "output": 120}
