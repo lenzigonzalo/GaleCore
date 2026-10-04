@@ -54,6 +54,7 @@ ENV_KEEP = {"PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC",
             "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PROGRAMFILES", "USERNAME", "LANG",
             "FRED_API_KEY", "MAX_STALENESS_SECONDS", "ALLOW_UNKNOWN_FRESHNESS"}
 ENV_KEEP_PREFIXES = ("GALECORE_", "CLAUDE_", "ANTHROPIC_")
+ENV_DROP = {"GALECORE_USERNAME", "GALECORE_PASSWORD"}   # the trader's login (GC-AI-0021): no flow of a run needs it
 UNVERIFIED_NOTE = ("Escrito por el modelo en una corrida sin supervisión: los números y la evidencia que trae son "
                    "declarados por el modelo y el runner no los contrastó con los datos que trajo.")
 # Advice addressed to the reader, not descriptions of a strategy's rules (internal recheck 03/10: the regime patterns
@@ -165,7 +166,8 @@ class ClaudeCodeClient:
             timeout_s: int, add_dir: Path) -> ModelReply:
         if not self.binary:
             return ModelReply(ok=False, error="claude not found on PATH")
-        env = {k: v for k, v in os.environ.items() if k.upper() in ENV_KEEP or k.upper().startswith(ENV_KEEP_PREFIXES)}
+        env = {k: v for k, v in os.environ.items()
+               if (k.upper() in ENV_KEEP or k.upper().startswith(ENV_KEEP_PREFIXES)) and k.upper() not in ENV_DROP}
         env |= {"PYTHONPATH": str(cwd / "src"), RUN_DIR_ENV: str(add_dir)}
         t0 = time.monotonic()
         cmd = self.command(allowed=allowed, max_turns=max_turns, schema=schema, add_dir=add_dir)

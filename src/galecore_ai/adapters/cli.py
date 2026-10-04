@@ -454,6 +454,10 @@ async def _cmd_catalog(args: argparse.Namespace) -> None:
     except CatalogError as exc:
         _error_out(str(exc), exit_code=_EXIT_INTERNAL_ERROR)
         return
+    if getattr(args, "match", None):
+        from galecore_ai.application.route import match
+        _json_out(match(args.match, catalog))
+        return
     try:
         kb_status = {"path": str(knowledge_dir()), "available": True}
     except KnowledgeBaseError as exc:
@@ -966,6 +970,8 @@ def build_parser() -> _JsonArgumentParser:
     p_catalog = sub.add_parser("catalog", help="What the host can ask for: capabilities, skills, flows, controls")
     p_catalog.add_argument("--check", action="store_true",
                            help="Validate every entry: skill, contract, flow commands, data needs, controls")
+    p_catalog.add_argument("--match", metavar="PEDIDO",
+                           help="Which capabilities serve this request, in the user's words (GC-AI-0022)")
 
     p_kb = sub.add_parser("kb", help="Search and read the knowledge base (no model call)")
     kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)

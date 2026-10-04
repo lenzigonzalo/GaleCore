@@ -118,3 +118,14 @@ def test_local_pieces_bring_profile_objectives_conventions_agents_and_skills(env
 from tests.unit.test_knowledge import kb  # noqa: E402,F401  (fixture)
 from tests.unit.test_strategy import research_ref  # noqa: E402,F401  (fixture)
 from tests.unit.test_tasks import env  # noqa: E402,F401  (fixture)
+
+
+def test_two_long_objectives_with_the_same_start_keep_two_keys(env):  # noqa: F811
+    kb, _, _ = env
+    from galecore_ai.application.profile import set_profile
+    from galecore_ai.contracts.regime_record import RecordHost
+    start = "retorno anual buscado de diez a quince por ciento sobre el capital de referencia "
+    set_profile(kb.profile, changes={"objectives": [start + "en SPY", start + "en QQQ"]}, note="dos objetivos",
+                prompt="probar", host=RecordHost(provider="test", model="test"))
+    keys = [p["key"] for p in space.local_pieces(kb) if p["kind"] == "objective"]
+    assert len(keys) == 2 and len(set(keys)) == 2

@@ -29,6 +29,11 @@ python -B -m galecore_ai.adapters.cli kb show <ref>   # regime:SPY/2026-09-23 ·
 python -B -m galecore_ai.adapters.cli profile show     # the user's profile in force: apply it, cite it, report what is missing or provisional
 ```
 
+**Every session starts from the trader:** the SessionStart hook prints `space context` (profile, objectives,
+conventions, agents; GC-AI-0021). For a request in the user's words, `catalog --match "<pedido>"` returns the
+capabilities that serve it with their flow (GC-AI-0022): use the first unless another fits better, say which one,
+and when none matches offer `capability_builder` instead of improvising. The user never has to name a skill.
+
 Pick the capability for the user's request from `catalog` (no routing table here), follow its `flow`,
 and read its `skill` asset for the method. Before new work, **retrieve**: `kb search` for antecedents
 and unfinished investigations. The knowledge base is `<workspace>/knowledge/` (outside every code

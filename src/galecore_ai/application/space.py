@@ -7,6 +7,7 @@ only what changed (the version in GaleCore goes up only then). `context` is the 
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -37,7 +38,10 @@ def local_pieces(kb: KnowledgeBase) -> list[dict]:
                        "content": json.dumps({"version": profile.version, **content}, ensure_ascii=False, indent=1),
                        "format": "json", "visibility": "private"})
         for text in profile.content.objectives:
-            pieces.append({"kind": "objective", "key": _slug(text), "title": text[:200], "content": text,
+            key = _slug(text)
+            if len(_slug(text, 200)) > len(key):          # truncated: the full text's hash keeps it unique and stable
+                key = f"{key[:40]}-{hashlib.sha256(text.encode()).hexdigest()[:7]}"
+            pieces.append({"kind": "objective", "key": key, "title": text[:200], "content": text,
                            "format": "markdown", "visibility": "private"})
     for path in sorted(CONVENTIONS.glob("*.yaml")):
         doc = yaml.safe_load(path.read_text(encoding="utf-8"))

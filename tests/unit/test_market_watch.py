@@ -76,3 +76,30 @@ def test_the_capability_model_reaches_the_command():
     assert cmd[cmd.index("--model") + 1] == "sonnet"
     assert "--model" not in mr.ClaudeCodeClient(binary="claude").command(allowed=[], max_turns=5, schema={},
                                                                            add_dir=__import__("pathlib").Path("."))
+
+
+def test_the_unattended_model_never_gets_the_traders_login(tmp_path, monkeypatch):
+    # Internal review 03/10: GALECORE_* kept GALECORE_USERNAME/PASSWORD for the claude subprocess.
+    monkeypatch.setenv("GALECORE_PASSWORD", "secreto")
+    monkeypatch.setenv("GALECORE_USERNAME", "yo")
+    monkeypatch.setenv("GALECORE_API_KEY", "k")
+    seen = {}
+
+    def fake_popen(cmd, **kw):
+        seen.update(kw["env"])
+        raise OSError("stop")
+    monkeypatch.setattr(mr.subprocess, "Popen", fake_popen)
+    mr.ClaudeCodeClient(binary="x").run(prompt="p", allowed=[], max_turns=1, schema={}, cwd=tmp_path, timeout_s=2,
+                                        add_dir=tmp_path)
+    assert "GALECORE_PASSWORD" not in seen and "GALECORE_USERNAME" not in seen and seen["GALECORE_API_KEY"] == "k"
+
+
+def test_a_scheduled_market_hours_run_outside_the_session_is_skipped(env):
+    # Internal review 03/10: a PC clock without New York's DST would fire an hour off.
+    kb, sch, _ = env
+    make(kb, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    saturday = datetime(2026, 10, 3, 15, 0, tzinfo=UTC)
+    out = t.run(kb=kb, task_id="oportunidades", now=saturday, invoked_by="scheduler", commit=False,
+                client=model_ok(output()))
+    assert out["status"] == "SKIPPED" and "outside the US session" in out["reason"]
+    assert t.in_session(MARKET, datetime(2026, 10, 2, 15, 0, tzinfo=UTC))          # Friday 11:00 New York

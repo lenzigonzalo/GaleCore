@@ -259,6 +259,8 @@ entries:
     example_requests:
       - Desarrollá esta estrategia hasta SHADOW.
       - ¿Qué le falta a esta estrategia para correr en SHADOW y qué reglas no soporta GaleCore?
+      - Quiero probar una estrategia de put credit spreads en SHADOW
+      - Tengo una idea de estrategia, armala y ponela a prueba
     skill: skills/strategy-design/skill.yaml
     output_contract: galecore_ai.contracts.strategy.ProposalContent
     galecore_capabilities: [App/Runtime/Specs, App/Runtime/Deploy]
@@ -295,6 +297,8 @@ entries:
       descartes, posiciones) y qué merece atención, con datos de GaleCore atados a la versión exacta, y
       guardarlo como registro de seguimiento y revisión de su investigación.
     example_requests:
+      - ¿Cómo le fue a mi estrategia en SHADOW?
+      - ¿Qué hizo la versión aprobada desde que la desplegamos?
       - Mostrame mi estrategia, qué está ejecutando, qué pasó desde la última revisión y qué merece mi atención.
       - ¿Qué hizo esta estrategia desde la última revisión, por qué entró o no entró, cómo evolucionaron sus posiciones y qué cambia en nuestra hipótesis?
     skill: skills/strategy-followup/skill.yaml
@@ -384,6 +388,8 @@ entries:
       - Armame un agente que cada 30 minutos revise SPY, QQQ e IWM y me anote candidatos para put credit spreads cuando el IV rank esté alto
       - Vigilá el mercado y avisame qué símbolos cumplen mis condiciones
       - ¿Qué encontró hoy mi agente de oportunidades?
+      - ¿Hay algo para vender prima esta semana en SPY o QQQ?
+      - ¿Dónde hay una oportunidad de put credit spread hoy?
     skill: skills/market-watch/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [compute.iv_rank, compute.implied_volatility, market_data.volatility_metrics, market_data.option_chains, market_data.option_greeks, market_data.candles, calendar.macro_releases, calendar.fomc_meetings, compute.gex_analysis, compute.put_skew]

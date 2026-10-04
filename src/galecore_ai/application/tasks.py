@@ -243,6 +243,12 @@ def _slots(schedule: Schedule, day) -> list[datetime]:
     return out
 
 
+def in_session(schedule: Schedule, now: datetime) -> bool:
+    """Inside 09:30-16:00 New York on a weekday (holidays are not known: a declared limit)."""
+    ny = now.astimezone(ZoneInfo(schedule.timezone))
+    return ny.weekday() < 5 and MARKET_OPEN <= ny.strftime("%H:%M") < MARKET_CLOSE
+
+
 def _occurrence(schedule: Schedule, day) -> datetime:
     hh, mm = (int(x) for x in schedule.time.split(":"))
     return datetime(day.year, day.month, day.day, hh, mm, tzinfo=ZoneInfo(schedule.timezone))
@@ -681,6 +687,9 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
         task = load(kb, task_id)
         if task.status != "active":
             ev = _append(kb, task_id, "run_skipped", now, reason=f"task is {task.status}")
+            return {"status": "SKIPPED", **ev}
+        if invoked_by == "scheduler" and task.schedule.frequency == "market_hours" and not in_session(task.schedule, now):
+            ev = _append(kb, task_id, "run_skipped", now, reason="outside the US session (09:30-16:00 New York, Mon-Fri)")
             return {"status": "SKIPPED", **ev}
     lock = d / "run.lock"
     note = None
