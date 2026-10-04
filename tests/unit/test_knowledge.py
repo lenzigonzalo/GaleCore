@@ -134,7 +134,8 @@ class TestCatalog:
         entries = describe(load_catalog())
         assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "data_sources",
                                               "user_profile", "capability_builder", "research", "context_research", "strategy_design", "strategy_followup",
-                                              "daily_attention", "recurring_followup", "idea_inbox"}
+                                              "daily_attention", "recurring_followup", "idea_inbox", "market_watch",
+                                              "trader_space"}
         assert all(e["available"] for e in entries), entries
 
     def test_prepare_skills_have_code_behind_them(self):
@@ -323,8 +324,9 @@ class TestCli:
         code, data = self._run("catalog", env={KNOWLEDGE_DIR_ENV: str(kb.base)})
         assert code == 0 and data["knowledge_base"]["available"]
         assert [e["id"] for e in data["entries"]] == ["gex_interpretation", "regime_interpretation", "data_sources",
-                                                    "user_profile", "capability_builder", "research", "context_research", "strategy_design",
-                                                    "strategy_followup", "daily_attention", "recurring_followup",
+                                                    "trader_space", "user_profile", "capability_builder", "research",
+                                                    "context_research", "strategy_design", "strategy_followup",
+                                                    "daily_attention", "market_watch", "recurring_followup",
                                                     "idea_inbox"]
 
     def test_save_search_show_revise(self, kb):
