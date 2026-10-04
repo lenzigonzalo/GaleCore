@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0025
 title: Routing y presupuesto de modelos (desarrollo y producto) — pieza 1b
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: APPROVED
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-AI-0025 — Routing y presupuesto de modelos
@@ -58,18 +58,18 @@ nunca sube de modelo.
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Presupuesto visible:** al iniciar la sesión y en cada aviso se ve llamadas y salida del item activo
+- [x] **AC-01 — Presupuesto visible:** al iniciar la sesión y en cada aviso se ve llamadas y salida del item activo
   contra su límite, sumando sesiones anteriores y subagentes.
-- [ ] **AC-02 — Aviso y freno:** al 80 % avisa una vez; al 100 % bloquea herramientas salvo leer y escribir el
+- [x] **AC-02 — Aviso y freno:** al 80 % avisa una vez; al 100 % bloquea herramientas salvo leer y escribir el
   work item / handoff, y explica cómo subir el límite.
-- [ ] **AC-03 — Agentes alineados:** `reviewer` y `autorun` siguen `ENGINEERING.md` §5 (Sonnet; Opus sólo al cierre).
-- [ ] **AC-04 — Sesión por trabajo:** `work_item.py start` y el handoff dejan el comando `claude -n <id> "retoma el
+- [x] **AC-03 — Agentes alineados:** `reviewer` y `autorun` siguen `ENGINEERING.md` §5 (Sonnet; Opus sólo al cierre).
+- [x] **AC-04 — Sesión por trabajo:** `work_item.py start` y el handoff dejan el comando `claude -n <id> "retoma el
   handoff"` listo.
-- [ ] **AC-05 — Routing de producto:** toda capacidad programable por modelo declara su trabajo; el modelo sale de la
+- [x] **AC-05 — Routing de producto:** toda capacidad programable por modelo declara su trabajo; el modelo sale de la
   política; un modelo que no corresponde se rechaza en `catalog --check`; nunca hay modelo de respaldo.
-- [ ] **AC-06 — Elección registrada:** cada corrida guarda modelo y motivo; `inventory` y `catalog --match` lo muestran.
-- [ ] **AC-07 — Qué y para qué:** la plantilla tiene la sección y el gate avisa si el item activo no la tiene.
-- [ ] **AC-08 — Cierre:** owner.
+- [x] **AC-06 — Elección registrada:** cada corrida guarda modelo y motivo; `inventory` y `catalog --match` lo muestran.
+- [x] **AC-07 — Qué y para qué:** la plantilla tiene la sección y el gate avisa si el item activo no la tiene.
+- [x] **AC-08 — Cierre:** owner, 04/10.
 
 ## Requirement-to-evidence matrix
 
@@ -115,3 +115,7 @@ transcripts reales (dedupe, offsets, subagentes), ~0,2 s por herramienta.
 | Sesión reanudada/compactada se cobra entera al item | MINOR | arreglado: sólo `source=startup` cuenta desde el inicio; volver a un item dejado sobreestima (documentado) |
 | AC-04 sin evidencia del lado del handoff | MINOR | arreglado: `.claude/agents/handoff.md` termina con el comando |
 | `warned` no se rearma al subir el límite; textos/largo de línea; `<synthetic>` | NIT | sin cambio |
+
+## Cierre
+
+CLOSED por el owner el 2026-10-04 («cerremos esto»), en `main`.
