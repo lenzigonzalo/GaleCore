@@ -8,6 +8,7 @@ import { TabNav, Tab } from './components/layout/TabNav';
 import { Home } from './pages/Home';
 import { Admin } from './pages/Admin';
 import { MyAccount } from './pages/MyAccount';
+import { MySpace } from './pages/MySpace';
 import { Monitor } from './pages/Monitor';
 import { Rpf } from './pages/Rpf';
 import { Gex } from './pages/Gex';
@@ -89,6 +90,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {/* Se montan recién al entrar: leen la cuenta de bróker y la lista de usuarios — nada de
               eso tiene sentido traerlo en cada arranque del tablero. */}
           {tab === 'cuenta' && <MyAccount />}
+          {tab === 'espacio' && <MySpace />}
           {tab === 'admin' && <Admin />}
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}
