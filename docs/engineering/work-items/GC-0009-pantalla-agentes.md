@@ -52,3 +52,6 @@ CHANGES_REQUESTED conjunta con GC-AI-0023. De esta pantalla: con la PC apagada n
 con una «Próxima» vencida. Ahora, si un agente prendido pasó su próxima corrida esperada + 40 min sin publicar nada
 nuevo, dice «Sin noticias de tu PC» y desde cuándo, y el detalle muestra la fecha de publicación. También se corrigió la
 sangría del árbol de pages en `claude.md`. `tsc --noEmit` y `CI=true npm run build` exit 0 después del arreglo.
+
+Recheck interno 04/10: **APPROVE**. Arreglado después: Configuración > Agentes ya no lista los cancelados como «Pausado».
+Queda (MINOR): la fecha de publicación usa `updatedAt`, que también cambia con el pedido del propio usuario.

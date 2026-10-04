@@ -129,6 +129,9 @@ function ProfileView({ item }: { item: SpaceItem }) {
   );
 }
 
+// Un agente cancelado queda publicado como historia (GC-AI-0023): no se lista como si estuviera pausado.
+const liveAgents = (items: SpaceItem[]) => items.filter((i) => parse(i.content)?.status !== 'cancelled');
+
 function AgentView({ item }: { item: SpaceItem }) {
   const a = parse(item.content) ?? {};
   const what: Record<string, string> = { market_watch: 'Vigila el mercado', daily_attention: 'Briefing diario',
@@ -332,7 +335,7 @@ export function Settings({ initial = 'usuario' }: { initial?: Section }) {
   } else if (section === 'skills') {
     body = <SkillsView items={own} onChanged={load} />;
   } else if (section === 'agentes') {
-    body = own.length ? <div style={{ display: 'grid', gap: 10 }}>{own.map((i) => <AgentView key={i.key} item={i} />)}</div>
+    body = liveAgents(own).length ? <div style={{ display: 'grid', gap: 10 }}>{liveAgents(own).map((i) => <AgentView key={i.key} item={i} />)}</div>
       : <div style={muted}>Todavía no tenés agentes. Pedíselo a GaleCore-AI: «armame un agente que…».</div>;
   } else if (section === 'compartido') {
     body = shared.length ? (
