@@ -26,6 +26,13 @@ Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
 probada) y GaleCore GC-0009 en `feature/GC-0009-agentes` (sale de GC-0008 tema carbón; se integra a `local/integracion`
 cuando el owner cierre GC-0008). El chat en el monitor **no** se hace (el host es Claude Code; queda en BL-005).
 
+**04/10 (tarde): pieza 1 hecha — GC-AI-0024 «La historia del mercado» en `main`** (revisión interna con 2 MAJOR
+arreglados; espera tu cierre). `story pack` junta en código el paquete del día desde GaleCore (en fin de semana no pide
+el GEX, que no llega); `market_story` lo interpreta con Opus (~5,6 k tokens de salida, 3–4 turnos); tarea
+`historia-del-mercado` L–V 17:15 ET desde `main`; `inventory` muestra modelo y consumo por capacidad, fuentes y
+conectores. Primera historia: `research:2026-10-04-historia-del-mercado-spy`. Buzón: 2 ideas pendientes (Jev/modelo
+de decisión; sesiones nuevas y gestor de modelos). **Siguiente: pieza 2, estrategia y cartera como proyecto.**
+
 **Plan vigente: roadmap §4 «Plan para cerrar el harness» (owner 04/10). No se cambia hasta cerrarlo.** Una sesión por pieza:
 1. **La historia del mercado** — siguiente. Arranca con el inventario de tools y conectores (qué hay y para qué, incluidos
    los MCP del host) y modelo + consumo por capacidad; después la capacidad que lee qué se está priceando y detecta el
