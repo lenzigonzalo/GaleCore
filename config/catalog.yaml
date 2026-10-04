@@ -374,7 +374,7 @@ entries:
       - Not checked - that the events x positions table is present, complete for the range, or reads each event's bearing right; the next run shows it
       - "A scheduled run (recurring_followup) calls the model with only the read commands of this flow and a turn cap; the model returns the content and the evidence, and the runner validates and saves them (invoked_by=scheduler)"
       - "Not checked - that a scheduled briefing is as complete as one made in a session; the run's status (OK, INCOMPLETE, FAILED) says what was missing"
-    schedulable: {runs: model, max_turns: 40, timeout_minutes: 20}
+    schedulable: {runs: model, work: reading, max_turns: 40, timeout_minutes: 20}
 
   - id: market_watch
     kind: investigation
@@ -418,7 +418,7 @@ entries:
       - A condition that cannot be evaluated with the data available is declared not evaluated, never assumed met
       - "A scheduled run calls the model (sonnet) with only the read commands of this flow and a turn cap; the runner validates and saves the result"
       - "Not checked - that the owner's conditions were applied correctly or that a candidate is a good trade"
-    schedulable: {runs: model, max_turns: 25, timeout_minutes: 12, model: sonnet}
+    schedulable: {runs: model, work: reading, max_turns: 25, timeout_minutes: 12}
 
   - id: market_story
     kind: investigation
@@ -461,7 +461,7 @@ entries:
       - "A scheduled run: the runner gathers the pack, then the model (opus) reads it with only read commands and a turn cap; the runner validates and saves"
       - "Read-only: describes, never advises (the runner refuses advice addressed to the reader); no orders"
       - "Not checked - that the story is right or anticipates anything; the next readings and the owner's feedback exist to judge that"
-    schedulable: {runs: model, max_turns: 12, timeout_minutes: 15, model: opus}
+    schedulable: {runs: model, work: interpretation, max_turns: 12, timeout_minutes: 15}
 
   - id: recurring_followup
     kind: task

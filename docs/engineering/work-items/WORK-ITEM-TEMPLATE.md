@@ -13,6 +13,13 @@ approval_result: PENDING
 
 # GC-AI-NNNN — Short title
 
+## Qué y para qué
+
+- **Qué hacemos:** una línea.
+- **Para qué:** qué podrá hacer el owner cuando esté.
+- **Cómo veremos que sirve:** lo que se ve funcionando.
+- **Qué queda fuera:** lo que no entra.
+
 ## Objective
 
 State one observable outcome.

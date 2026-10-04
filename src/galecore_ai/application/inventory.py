@@ -87,7 +87,8 @@ def build(*, catalog: Catalog, registry, status_store, kb: KnowledgeBase | None)
         s = e.schedulable
         caps.append({"id": e.id, "kind": e.kind, "serves": e.serves,
                      "runs": ("modelo" if s and s.runs == "model" else "código") if s else "en sesión",
-                     "model": (s.model or "el del host") if s and s.runs == "model" else None,
+                     "model": s.model if s and s.runs == "model" else None,
+                     "route": s.route_reason() if s else None,
                      "max_turns": s.max_turns if s else None, "consumption": used.get(e.id)})
     summary = catalog_summary(registry, status_store)
     sources = [{"id": m.id, "name": m.display_name, "usage": m.usage.value, "cost": m.cost,

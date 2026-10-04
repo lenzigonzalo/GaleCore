@@ -23,6 +23,9 @@ from galecore_ai.harness.definitions import SkillDefinition
 CATALOG_PATH = "catalog.yaml"
 STORED_AS = ("none", "regime", "research", "strategy", "task", "profile", "inbox")
 RUNNERS = ("code", "model")
+# Routing by the kind of work (owner 04/10, GC-AI-0025): gathering is code; the model runs only what needs it, at the
+# lowest tier that does it. A provider failure or missing quota never moves a capability to a costlier model.
+WORK_MODELS = {"simple": "haiku", "reading": "sonnet", "interpretation": "opus"}
 
 
 class CatalogError(Exception):
@@ -53,7 +56,8 @@ class Schedulable(BaseModel):
     runs: str                            # code | model
     max_turns: int | None = None         # model: turns per run (protects the plan's quota)
     timeout_minutes: int = 20            # wall-clock cap per run
-    model: str | None = None             # model: which one runs it (e.g. sonnet); None = the host's default (GC-AI-0020)
+    work: str | None = None              # model: simple | reading | interpretation; picks the model (GC-AI-0025)
+    model: str | None = None             # model: set by the policy from `work`; declaring another one is refused
 
     @field_validator("runs")
     @classmethod
@@ -76,7 +80,20 @@ class Schedulable(BaseModel):
             raise ValueError("a model run needs max_turns between 1 and 100")
         if self.runs == "code" and self.max_turns is not None:
             raise ValueError("a code run has no max_turns")
+        if self.runs == "code" and (self.work or self.model):
+            raise ValueError("a code run has no work or model: it calls no model")
+        if self.runs == "model":
+            if self.work not in WORK_MODELS:
+                raise ValueError(f"a model run declares its work, one of {tuple(WORK_MODELS)}")
+            policy = WORK_MODELS[self.work]
+            if self.model not in (None, policy):
+                raise ValueError(f"model {self.model} does not match the policy: {self.work} work runs on {policy}")
+            self.model = policy
         return self
+
+    def route_reason(self) -> str | None:
+        """Why this model: the record of the choice kept with every run."""
+        return f"{self.work} → {self.model} (política GC-AI-0025)" if self.runs == "model" else None
 
 
 class CatalogEntry(BaseModel):
