@@ -52,7 +52,7 @@ export function Monitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol, unsubsc
               icon={<KeyRound size={20} />}
               title="Sin cuenta de bróker"
               detail="El Monitor muestra las posiciones de tu cuenta, y todavía no vinculaste ninguna: no hay balances, ni posiciones, ni Greeks que seguir."
-              hint="Vinculala en Mi Cuenta › Cuenta de bróker, con tu número de cuenta y el refresh token de Tastytrade."
+              hint="Vinculala en Mi Cuenta › Configuración › Cuenta de bróker, con tu número de cuenta y el refresh token de Tastytrade."
             />
           ) : (
             <NoticePanel
@@ -60,7 +60,7 @@ export function Monitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol, unsubsc
               icon={<KeyRound size={20} />}
               title="Credencial de bróker rechazada"
               detail="Tu cuenta está vinculada, pero Tastytrade no acepta su credencial: no se pueden leer balances ni posiciones. La causa más común es que el refresh token y el client secret sean de aplicaciones OAuth distintas."
-              hint="Revisalos en Mi Cuenta › Cuenta de bróker: los dos tienen que ser de la misma aplicación OAuth, y el token tiene que seguir vigente."
+              hint="Revisalos en Mi Cuenta › Configuración › Cuenta de bróker: los dos tienen que ser de la misma aplicación OAuth, y el token tiene que seguir vigente."
             />
           )}
         </div>
