@@ -31,7 +31,9 @@ arreglados; espera tu cierre). `story pack` junta en código el paquete del día
 el GEX, que no llega); `market_story` lo interpreta con Opus (~5,6 k tokens de salida, 3–4 turnos); tarea
 `historia-del-mercado` L–V 17:15 ET desde `main`; `inventory` muestra modelo y consumo por capacidad, fuentes y
 conectores. Primera historia: `research:2026-10-04-historia-del-mercado-spy`. Buzón: 2 ideas pendientes (Jev/modelo
-de decisión; sesiones nuevas y gestor de modelos). Cerrados en lote 0019–0024 (tags). **Siguiente: pieza 1b, routing y presupuesto de modelos y sesiones por trabajo** (roadmap §4; BL-001 addendum 04/10), después la pieza 2. **Pendiente antes (owner dijo «cerrá el lote» el 04/10):** cerrar
+de decisión; sesiones nuevas y gestor de modelos). Cerrados en lote 0019–0024 (tags). **Siguiente: pieza 1b, routing y presupuesto de modelos y sesiones por trabajo** (roadmap §4; BL-001 addendum 04/10), después la pieza 2. **Incluir en la 1b (owner 04/10):** sección «Qué y para qué»
+(qué hacemos, para qué / qué podrá hacer el owner, cómo veremos que sirve, qué queda fuera; 3–4 líneas) en
+`docs/engineering/work-items/WORK-ITEM-TEMPLATE.md`, y que `tools/engineering_gate.py` avise si el item activo no la tiene. **Pendiente antes (owner dijo «cerrá el lote» el 04/10):** cerrar
 GaleCore GC-0001, GC-0006…0009. Frenado porque el checkout `GaleCore/` estaba en `feature/GC-0008-tema-carbon` con
 cambios sin commitear de otra sesión (work item de GC-0008, `.agents/`, revisión GC-0008-skill, `AGENTS.md` del
 monitor, `pcs_spy_16d_v1.json`). Primero confirmar con el owner si esa sesión terminó; después integrar GC-0008 y
