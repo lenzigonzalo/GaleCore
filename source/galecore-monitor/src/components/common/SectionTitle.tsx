@@ -26,11 +26,11 @@ interface Props {
 export function SectionTitle({ title, badge, accent = '#a3d86c', children, style }: Props) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, ...style }}>
-      <span style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
+      <span style={{ fontSize: 24, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</span>
 
       {badge && (
         <span style={{
-          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
+          fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
           color: accent, backgroundColor: tint(accent, 13), border: `1px solid ${tint(accent, 30)}`,
           fontFamily: 'var(--font-sans)',
         }}>

@@ -137,24 +137,24 @@ export function RegimeTab() {
     <div style={{ padding: '12px 18px 32px' }}>
       {/* Barra de consulta */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-        <label style={{ ...SANS, fontSize: 10.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label style={{ ...SANS, fontSize: 12.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
           Símbolo
           <select value={symbol} onChange={(e) => { setSelected(null); setReviewOk(null); setReviewError(null); load(e.target.value, days); }} disabled={!symbols.length}
-            style={{ ...SANS, fontSize: 11.5, padding: '4px 8px', borderRadius: 6, background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
+            style={{ ...SANS, fontSize: 13.5, padding: '4px 8px', borderRadius: 6, background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
             {symbols.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
-        <label style={{ ...SANS, fontSize: 10.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label style={{ ...SANS, fontSize: 12.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
           Últimos
           <select value={days} onChange={(e) => { const d = Number(e.target.value); setDays(d); load(symbol, d); }}
-            style={{ ...SANS, fontSize: 11.5, padding: '4px 8px', borderRadius: 6, background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
+            style={{ ...SANS, fontSize: 13.5, padding: '4px 8px', borderRadius: 6, background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}>
             {RANGES.map((r) => <option key={r} value={r}>{r} días</option>)}
           </select>
         </label>
         <button className="btn" onClick={() => load(symbol, days)} disabled={loading}>
           <RefreshCw size={11} /> Actualizar
         </button>
-        <span style={{ ...SANS, fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+        <span style={{ ...SANS, fontSize: 12.5, color: 'var(--text-muted)', marginLeft: 'auto' }}>
           {records ? <>Consulta <Mono muted>{records.queried_at}</Mono> · registros en <Mono muted>{records.records_dir}</Mono></> : null}
         </span>
       </div>
@@ -178,7 +178,7 @@ export function RegimeTab() {
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 320px) minmax(0, 1fr)', gap: 16 }}>
           <div>
             <RegimeToday today={today} loading={loading} onSelectRun={(date, runId) => setSelected({ symbol, date, runId })} />
-            <div style={{ ...SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '4px 0 6px' }}>
+            <div style={{ ...SANS, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '4px 0 6px' }}>
               Historial
             </div>
             {loading && !records ? <span className="spinner" /> : (
@@ -197,11 +197,11 @@ export function RegimeTab() {
                   enabled={meta?.reviews_enabled ?? false} submitting={reviewBusy} onSubmit={submitReview}
                   error={reviewError && reviewError.symbol === symbol && reviewError.date === selectedRecord.date
                     && reviewError.runId === selectedEntry.run_id ? reviewError.message : null} />
-                {reviewOk && <div role="status" style={{ ...SANS, fontSize: 11, color: 'var(--green)' }}>{reviewOk}</div>}
+                {reviewOk && <div role="status" style={{ ...SANS, fontSize: 13, color: 'var(--green)' }}>{reviewOk}</div>}
               </>
             )}
             {!selectedRecord && records && records.records.length > 0 && (
-              <div style={{ ...SANS, fontSize: 11.5, color: 'var(--text-muted)' }}>Elegí un día del historial.</div>
+              <div style={{ ...SANS, fontSize: 13.5, color: 'var(--text-muted)' }}>Elegí un día del historial.</div>
             )}
           </div>
         </div>

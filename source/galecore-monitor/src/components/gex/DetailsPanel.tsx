@@ -330,13 +330,13 @@ function GroupLabel({ label, hint }: { label: string; hint?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
       <span style={{
-        fontSize: 9, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
+        fontSize: 13, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
         color: '#a78bfa', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap',
       }}>
         {label}
       </span>
       {hint && (
-        <span style={{ fontSize: 8.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
           {hint}
         </span>
       )}
@@ -374,13 +374,13 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
           {cell.tooltip.map((r) => (
             <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <span style={{
-                fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
+                fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
                 fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em',
               }}>
                 {r.label}
               </span>
               <span className="tabular-nums" style={{
-                fontSize: 10, color: 'var(--text-primary)',
+                fontSize: 12, color: 'var(--text-primary)',
                 fontFamily: 'JetBrains Mono, monospace', fontWeight: 600,
               }}>
                 {r.value}
@@ -391,17 +391,17 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
       )}
 
       <span style={{
-        fontSize: 8.5, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase',
+        fontSize: 12, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase',
         color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        overflowWrap: 'anywhere',
       }}>
         {label}
       </span>
 
       <span className="tabular-nums" style={{
-        fontSize: 14, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1,
+        fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1,
         color: cell.color ?? 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace',
-        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        overflowWrap: 'anywhere',
       }}>
         {cell.value}
       </span>
@@ -410,7 +410,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
           cortarla con puntos suspensivos ("put wall domina —…") deja justo la parte que no dice
           nada. El tile crece un renglón; el que no lo necesita no lo usa. */}
       <span style={{
-        fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.25,
+        fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.25,
       }}>
         {cell.reference}
       </span>
@@ -445,14 +445,14 @@ export function DetailsPanel({ data, groups, subtitle }: Props) {
     <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       {subtitle && (
         <span style={{
-          fontSize: 8.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.3,
+          fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.3,
         }}>
           {subtitle}
         </span>
       )}
 
       {!data ? (
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', padding: '6px 0' }}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>
           Sin barrido todavia.
         </span>
       ) : (
@@ -473,10 +473,7 @@ export function DetailsPanel({ data, groups, subtitle }: Props) {
            `stretch` (y no `start`) para que todas midan lo mismo — con columnas de alto propio, la
            línea más larga se lee como si ese grupo pesara más. */
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: rendered.length
-            ? rendered.map((g) => `minmax(0, ${g.cells.length}fr)`).join(' ')
-            : 'minmax(0, 1fr)',
+          display: 'flex', flexWrap: 'wrap',
           gap: 12,
           alignItems: 'stretch',
         }}>
@@ -486,7 +483,8 @@ export function DetailsPanel({ data, groups, subtitle }: Props) {
               <div
                 key={group.id}
                 style={{
-                  display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0,
+                  display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0,
+                  flex: `${cells.length} 1 ${cells.length * 150}px`,
                   borderRight: separa ? '1px solid var(--border-dark)' : undefined,
                   paddingRight: separa ? 12 : undefined,
                 }}
@@ -494,7 +492,7 @@ export function DetailsPanel({ data, groups, subtitle }: Props) {
                 <GroupLabel label={group.label} hint={group.hint} />
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: `repeat(${cells.length}, minmax(0, 1fr))`,
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))',
                   gap: 5,
                 }}>
                   {cells.map(({ label, cell }) => (

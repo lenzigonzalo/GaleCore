@@ -112,7 +112,7 @@ export function Shadow() {
     <div style={{ padding: '16px 18px 40px', fontFamily: 'var(--font-sans)' }}>
       <SectionTitle title="GaleCore SHADOW" badge="simulación con datos reales · no mueve plata" accent="#38bdf8">
         <button onClick={load} disabled={loading} title="Actualizar"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)',
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)',
             background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
           <RefreshCw size={12} /> {loading ? 'Cargando…' : 'Actualizar'}
         </button>
@@ -125,7 +125,7 @@ export function Shadow() {
 
       {/* Si el último refresco falló, el cartel reemplaza a los datos: números viejos se leen como vigentes. */}
       {data && !error && <Content data={data} />}
-      {!data && !error && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 16 }}>Cargando…</div>}
+      {!data && !error && <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 16 }}>Cargando…</div>}
     </div>
   );
 }
@@ -218,11 +218,11 @@ function MetricsCard({ m }: { m: SpecVersionMetrics }) {
   const discardEntries = Object.entries(m.discards);
   return (
     <div data-testid="shadow-metrics" style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, marginBottom: 10, background: 'var(--bg-secondary)' }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8 }}>
         {m.specName} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>v{m.specVersion} · <span style={mono}>{shortHash(m.contentHash)}</span> · {m.instances} instancia(s)</span>
       </div>
       {m.noTrades && (
-        <div style={{ fontSize: 12, color: 'var(--yellow-gc)', marginBottom: 8 }}>
+        <div style={{ fontSize: 14, color: 'var(--yellow-gc)', marginBottom: 8 }}>
           Esta versión todavía no abrió operaciones: P&amp;L, acierto y drawdown no existen aún.
         </div>
       )}
@@ -238,7 +238,7 @@ function MetricsCard({ m }: { m: SpecVersionMetrics }) {
         <Stat label="Período" value={m.lastEvaluationAt ? when(m.lastEvaluationAt) : '—'} sub={m.firstEvaluationAt ? `desde ${when(m.firstEvaluationAt)}` : 'sin evaluaciones'} />
       </div>
       {discardEntries.length > 0 && (
-        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 8 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
           Descartes por motivo: {discardEntries.map(([k, v]) => `${DISCARD_LABELS[k] ?? k} ${v}`).join(' · ')}
         </div>
       )}
@@ -313,7 +313,7 @@ function EvaluationsTable({ evaluations }: { evaluations: ShadowEvaluation[] }) 
 function Block({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
     <section style={{ marginTop: 20 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
         {title} {note && <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>· {note}</span>}
       </div>
       {children}
@@ -324,38 +324,38 @@ function Block({ title, note, children }: { title: string; note?: string; childr
 function Card({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 12, background: 'var(--bg-secondary)' }}>
-      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--text-muted)', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--text-muted)', marginBottom: 6 }}>{label}</div>
       {children}
     </div>
   );
 }
 
 function Value({ children, color = 'var(--text-primary)' }: { children: React.ReactNode; color?: string }) {
-  return <div style={{ fontSize: 15, fontWeight: 700, color, marginBottom: 4 }}>{children}</div>;
+  return <div style={{ fontSize: 22, fontWeight: 700, color, marginBottom: 4 }}>{children}</div>;
 }
 
 function Small({ children, color = 'var(--text-secondary)' }: { children: React.ReactNode; color?: string }) {
-  return <div style={{ fontSize: 11, color, lineHeight: 1.5 }}>{children}</div>;
+  return <div style={{ fontSize: 13, color, lineHeight: 1.5 }}>{children}</div>;
 }
 
 function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
     <div>
-      <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', ...mono }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{sub}</div>}
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', ...mono }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{sub}</div>}
     </div>
   );
 }
 
 function Empty({ text }: { text: string }) {
-  return <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>{text}</div>;
+  return <div style={{ fontSize: 14, color: 'var(--text-muted)', padding: '6px 0' }}>{text}</div>;
 }
 
 function Table({ head, children }: { head: string[]; children: React.ReactNode }) {
   return (
     <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
         <thead>
           <tr style={{ background: 'var(--bg-tertiary)' }}>
             {head.map((h) => (

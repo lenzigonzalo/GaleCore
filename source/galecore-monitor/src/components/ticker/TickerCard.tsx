@@ -24,7 +24,7 @@ function MarketStatusBadge({ extendedTradingHours }: { extendedTradingHours: boo
     : { color: '#f59e0b', bg: 'var(--yellow-muted)', border: 'var(--yellow-border)', label: '—' };
   return (
     <span style={{
-      fontSize: 9, fontWeight: 700, letterSpacing: '0.08em',
+      fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
       padding: '3px 8px', borderRadius: 20,
       color: cfg.color, backgroundColor: cfg.bg, border: `1px solid ${cfg.border}`,
       fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', lineHeight: 1.4,
@@ -59,7 +59,7 @@ export function TickerCard({ ticker, selected, onClick, onRemove }: Props) {
     >
       {/* Symbol + Signal */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <span style={{ color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 13, letterSpacing: '0.05em' }}>
+        <span style={{ color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15, letterSpacing: '0.05em' }}>
           {ticker.symbol}
         </span>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -84,7 +84,7 @@ export function TickerCard({ ticker, selected, onClick, onRemove }: Props) {
         <div style={{ marginBottom: 12 }}>
           <div className="flex items-center justify-between">
             <div className="tabular-nums" style={{
-              fontSize: 24, fontWeight: 700,
+              fontSize: 30, fontWeight: 700,
               color: 'var(--text-primary)',
               fontFamily: 'JetBrains Mono, monospace',
               lineHeight: 1.1,
@@ -93,12 +93,12 @@ export function TickerCard({ ticker, selected, onClick, onRemove }: Props) {
               {fmtPrice(ticker.price)}
             </div>
           </div>
-          <div className="tabular-nums" style={{ fontSize: 12, fontWeight: 500, color: changeColor, fontFamily: 'JetBrains Mono, monospace', marginTop: 2 }}>
+          <div className="tabular-nums" style={{ fontSize: 14, fontWeight: 500, color: changeColor, fontFamily: 'JetBrains Mono, monospace', marginTop: 2 }}>
             {positive ? '+' : ''}{fmtPrice(changeAbs, 2)}{' '}
             <span style={{ opacity: 0.85 }}>({fmtPct(changePct)})</span>
           </div>
           {/* Bid / Ask / Volume */}
-          <div className="flex items-center gap-3 tabular-nums" style={{ marginTop: 5, fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }}>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tabular-nums" style={{ marginTop: 5, fontSize: 13, fontFamily: 'JetBrains Mono, monospace' }}>
             <span>
               <span style={{ color: 'var(--text-muted)' }}>Bid </span>
               <span style={{ color: 'var(--blue-gc)' }}>
@@ -128,7 +128,7 @@ export function TickerCard({ ticker, selected, onClick, onRemove }: Props) {
       )}
 
       {/* Timestamp */}
-      <div style={{ textAlign: 'right', marginTop: 10, fontSize: 9, fontFamily: 'JetBrains Mono, monospace', color: stale ? 'var(--yellow-gc)' : 'var(--text-muted)' }}>
+      <div style={{ textAlign: 'right', marginTop: 10, fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: stale ? 'var(--yellow-gc)' : 'var(--text-muted)' }}>
         {ticker.lastUpdate ? fmtTime(ticker.lastUpdate) : 'Sin datos'}
         {!ticker.isStreaming && ticker.price > 0 && <span style={{ color: 'var(--yellow-gc)', marginLeft: 4 }}>⚠ REST</span>}
       </div>

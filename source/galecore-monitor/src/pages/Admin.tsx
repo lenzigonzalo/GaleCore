@@ -9,12 +9,12 @@ import { tint } from '../utils/formatters';
 const ACCENT = '#a78bfa';
 
 const thStyle: React.CSSProperties = {
-  padding: '7px 10px', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+  padding: '7px 10px', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
   color: 'var(--text-muted)', textAlign: 'left', fontFamily: 'var(--font-sans)',
   borderBottom: '1px solid var(--border-dark)', whiteSpace: 'nowrap', backgroundColor: 'var(--bg-tertiary)',
 };
 const tdStyle: React.CSSProperties = {
-  padding: '10px', fontFamily: 'JetBrains Mono, monospace', fontSize: 12,
+  padding: '10px', fontFamily: 'JetBrains Mono, monospace', fontSize: 14,
   color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-dark)', verticalAlign: 'middle',
 };
 
@@ -22,7 +22,7 @@ const Pill = ({ children, color, title }: { children: React.ReactNode; color: st
   <span
     title={title}
     style={{
-      fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
       padding: '2px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace',
       color, backgroundColor: tint(color, 13), border: `1px solid ${tint(color, 30)}`,
     }}
@@ -139,7 +139,7 @@ export function Admin() {
           el rol puede cambiar con la pantalla abierta —un admin sacándose el permiso a sí mismo—,
           así que el guard se queda. El gate real es el 403 del endpoint. */}
       {!isAdmin ? (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
           Esta pantalla es para administradores.
         </div>
       ) : (
@@ -163,7 +163,7 @@ export function Admin() {
         </button>
       </SectionTitle>
 
-      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 16, maxWidth: 760 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 16, maxWidth: 760 }}>
         El alta crea la identidad en Supabase y la fila de la plataforma juntas, con una contraseña
         inicial que el operador cambia desde su pantalla apenas entra.{' '}
         <strong style={{ color: 'var(--text-secondary)' }}>Admin</strong> habilita prender y apagar
@@ -191,10 +191,10 @@ export function Admin() {
         </div>
       )}
 
-      {loading && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando usuarios…</div>}
+      {loading && <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Cargando usuarios…</div>}
 
       {!loading && users.length === 0 && !error && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
           No hay usuarios en la base todavía.
         </div>
       )}
@@ -228,10 +228,10 @@ export function Admin() {
                           <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{u.username}</span>
                           {soyYo && <Pill color="var(--blue-gc)">vos</Pill>}
                           {u.displayName && (
-                            <span style={{ color: 'var(--text-muted)', fontSize: 10.5 }}>{u.displayName}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 12.5 }}>{u.displayName}</span>
                           )}
                         </div>
-                        <div style={{ color: 'var(--text-muted)', fontSize: 10.5, marginTop: 3, marginLeft: 20 }}>
+                        <div style={{ color: 'var(--text-muted)', fontSize: 12.5, marginTop: 3, marginLeft: 20 }}>
                           {u.email}
                         </div>
                       </td>
@@ -249,7 +249,7 @@ export function Admin() {
                           <span style={{ color: 'var(--text-muted)' }}>—</span>
                         )}
                       </td>
-                      <td style={{ ...tdStyle, color: 'var(--text-muted)', fontSize: 11 }}>
+                      <td style={{ ...tdStyle, color: 'var(--text-muted)', fontSize: 13 }}>
                         {new Date(u.createdAt).toLocaleDateString()}
                       </td>
                       <td style={{ ...tdStyle, textAlign: 'right' }}>
@@ -266,7 +266,7 @@ export function Admin() {
                             border: `1px solid ${tint(u.isAdmin ? ACCENT : 'var(--text-muted)', 30)}`,
                             color: u.isAdmin ? ACCENT : 'var(--text-muted)',
                             cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
-                            fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+                            fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',
                             fontFamily: 'JetBrains Mono, monospace',
                           }}
                         >
@@ -288,7 +288,7 @@ export function Admin() {
                       <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {confirmandoBaja === u.id ? (
                           <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                            <span style={{ fontSize: 10, color: 'var(--red-gc)', fontFamily: 'var(--font-sans)' }}>
+                            <span style={{ fontSize: 12, color: 'var(--red-gc)', fontFamily: 'var(--font-sans)' }}>
                               {u.hasBrokerAccount ? '¿Borrar? Se va con su cuenta de bróker.' : '¿Borrar?'}
                             </span>
                             <button

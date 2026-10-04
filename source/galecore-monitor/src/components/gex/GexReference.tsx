@@ -30,7 +30,7 @@ export function GexReference() {
   }, [loadRules]);
 
   if (!rules) {
-    return <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>Cargando reglas de GEX…</div>;
+    return <div style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>Cargando reglas de GEX…</div>;
   }
 
   const meta = rules._meta ?? {};
@@ -58,13 +58,13 @@ export function GexReference() {
           <Stat label="Vencimientos" value={(gex.expiration_types ?? []).join(' · ') || '—'} />
         </div>
         {meta.purpose && (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>{meta.purpose}</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>{meta.purpose}</div>
         )}
       </Card>
 
       {/* B · Macro régimen — lectura, no gate */}
       <CollapsibleCard title={`B · Macro régimen (${checks.length} checks · lectura)`} titleColor="#a78bfa" defaultOpen>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
           En GEX el régimen es contexto, no un gate: ningún check bloquea nada porque no hay trade
           (<span style={{ fontFamily: 'JetBrains Mono, monospace' }}>on_fail: {regimeOnFail}</span>).
         </div>
@@ -99,7 +99,7 @@ export function GexReference() {
       {/* C.2 · La banda de gamma — lo único que la pantalla dibuja sin nombrar */}
       {(band.width_em != null || band.money_zone_em != null) && (
         <CollapsibleCard title="C.2 · Banda de gamma (el sombreado)" titleColor="var(--blue-gc)" defaultOpen>
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
             La zona sombreada a cada lado del gráfico: la ventana que junta más gamma de su lado,
             fuera de la zona del dinero. Es <strong>dónde está apilado el open interest</strong>.
             Se dibuja sin etiqueta a propósito — el nivel con nombre y valor es el muro; la banda
@@ -121,7 +121,7 @@ export function GexReference() {
           {/* La advertencia es la razón de ser de esta tarjeta: un sombreado sobre un gráfico de
               precios invita justo a la lectura que la medición descarta. */}
           <div style={{
-            fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5,
+            fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5,
             marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border-dark)',
           }}>
             <strong style={{ color: 'var(--text-secondary)' }}>No predice que el precio frene ahí.</strong>{' '}
@@ -134,7 +134,7 @@ export function GexReference() {
 
       {/* D · Umbral por símbolo — decide qué se evalúa */}
       <CollapsibleCard title="D · Umbral de GEX por símbolo" titleColor="var(--green)" defaultOpen>
-        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
           Este umbral decide qué símbolos se evalúan: el que no figura no se valida (celda gris "sin
           umbral", no roja). Sumar un símbolo al universo no alcanza — hay que declararle el umbral.
         </div>
@@ -160,13 +160,13 @@ export function GexReference() {
       {/* E · Alcance — estructuras prohibidas */}
       {forbidden.length > 0 && (
         <CollapsibleCard title="E · Alcance" titleColor="var(--red-gc)">
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
             {scope.note ?? 'Estrategia informativa: no selecciona ni sugiere estructura alguna.'}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {forbidden.map((f) => (
               <span key={f} style={{
-                padding: '3px 8px', borderRadius: 4, fontSize: 10, fontFamily: 'JetBrains Mono, monospace',
+                padding: '3px 8px', borderRadius: 4, fontSize: 12, fontFamily: 'JetBrains Mono, monospace',
                 backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-dark)', color: 'var(--text-muted)',
                 textDecoration: 'line-through',
               }}>

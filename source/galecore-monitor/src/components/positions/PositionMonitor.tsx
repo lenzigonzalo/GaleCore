@@ -148,7 +148,7 @@ export function PositionMonitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol,
         style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
       >
         {spreads.length === 0 && (
-          <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, paddingTop: 40 }}>
+          <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14, paddingTop: 40 }}>
             {positions.length === 0
               ? 'Sin posiciones en la cuenta · Usá ↻ Actualizar para recargar'
               : 'Posiciones en cuenta no reconocidas como spreads (PUT_CS / CALL_CS / IC)'}

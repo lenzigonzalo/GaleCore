@@ -104,11 +104,11 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
 
         {/* Heat gauge */}
         <div className="flex flex-col gap-1">
-          <span style={{ color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
             Portfolio Heat
           </span>
           <div className="flex items-center gap-2">
-            <span style={{ color: heatColor, fontSize: 18, fontWeight: 700 }}>
+            <span style={{ color: heatColor, fontSize: 22, fontWeight: 700 }}>
               {(heatPct * 100).toFixed(1)}%
             </span>
             <div style={{ width: 72, height: 6, borderRadius: 3, backgroundColor: 'var(--bg-tertiary)', overflow: 'hidden' }}>
@@ -119,7 +119,7 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
                 transition: 'width 0.3s ease',
               }} />
             </div>
-            <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>/{(heatMaxPct * 100).toFixed(0)}%</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13 }}>/{(heatMaxPct * 100).toFixed(0)}%</span>
           </div>
         </div>
 
@@ -141,7 +141,7 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
               color: refreshing ? 'var(--text-muted)' : 'var(--text-secondary)',
               border: '1px solid var(--border-dark)',
               cursor: refreshing ? 'default' : 'pointer',
-              fontSize: 12,
+              fontSize: 14,
             }}
           >
             {refreshing ? '…' : '↻ Refresh'}
@@ -155,13 +155,13 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
 function MetricBlock({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) {
   return (
     <div className="flex flex-col gap-1" style={{ minWidth: 110 }}>
-      <span style={{ color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, whiteSpace: 'nowrap' }}>
+      <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, whiteSpace: 'nowrap' }}>
         {label}
       </span>
-      <span style={{ color: color ?? 'var(--text-primary)', fontSize: 18, fontWeight: 700, lineHeight: 1.1 }}>
+      <span style={{ color: color ?? 'var(--text-primary)', fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>
         {value}
       </span>
-      {sub && <span style={{ color: color ?? 'var(--text-secondary)', fontSize: 11 }}>{sub}</span>}
+      {sub && <span style={{ color: color ?? 'var(--text-secondary)', fontSize: 13 }}>{sub}</span>}
     </div>
   );
 }

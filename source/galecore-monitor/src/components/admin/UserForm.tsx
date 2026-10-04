@@ -8,7 +8,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 12,
   fontWeight: 600,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
@@ -109,7 +109,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
       }}
     >
       <div style={{
-        fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 13,
+        fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15,
         color: 'var(--text-primary)', letterSpacing: '0.05em',
       }}>
         {esAlta ? 'Nuevo operador' : `Editar ${user!.username}`}
@@ -133,7 +133,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
             autoFocus
           />
           <div style={{
-            fontSize: 10, marginTop: 4, fontFamily: 'var(--font-sans)',
+            fontSize: 12, marginTop: 4, fontFamily: 'var(--font-sans)',
             color: username.length > 0 && !usernameValido ? 'var(--red-gc)' : 'var(--text-muted)',
           }}>
             Minúscula, 3 a 32, letras, números, punto, guion y guion bajo. Con esto entra al tablero.
@@ -153,7 +153,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
             autoComplete="off"
             spellCheck={false}
           />
-          <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
+          <div style={{ fontSize: 12, marginTop: 4, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
             Real y único: es la identidad en Supabase, la que recibe el reset de contraseña.
           </div>
         </div>
@@ -185,7 +185,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
             placeholder="••••••••••••"
             autoComplete="new-password"
           />
-          <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
+          <div style={{ fontSize: 12, marginTop: 4, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
             {esAlta
               ? 'Se la pasás una vez; la cambia desde su pantalla en cuanto entre.'
               : 'Vacío = no se toca. Solo para rescatar a alguien que perdió el acceso.'}
@@ -195,7 +195,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
 
       {esAlta && (
         <label style={{
-          display: 'flex', alignItems: 'center', gap: 8, fontSize: 11,
+          display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
           color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', cursor: 'pointer',
         }}>
           <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />

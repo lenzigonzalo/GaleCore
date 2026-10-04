@@ -70,7 +70,7 @@ const panelStyle: React.CSSProperties = {
 
 // Sub-etiqueta de sección dentro de un panel (ej: "Macro · capa 1", "Prima y cola").
 const subLabelStyle: React.CSSProperties = {
-  fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '0 0 2px',
+  fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '0 0 2px',
 };
 
 const fmt = (n: number | null | undefined, d = 2) =>
@@ -88,14 +88,14 @@ function LiveDot() {
 
 // ── Celdas de la tabla del candidato (look Main · Setup candidato) ──
 const thStyle: React.CSSProperties = {
-  padding: '6px 8px', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+  padding: '6px 8px', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
   color: 'var(--text-muted)', textAlign: 'center', fontFamily: 'var(--font-sans)',
   borderBottom: '1px solid var(--border-dark)', borderRight: '1px solid rgba(255,255,255,0.04)',
   whiteSpace: 'nowrap', verticalAlign: 'middle', backgroundColor: 'var(--bg-tertiary)',
 };
 const tdStyle: React.CSSProperties = {
   padding: '10px 8px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle',
-  fontFamily: 'JetBrains Mono, monospace', fontVariantNumeric: 'tabular-nums', fontSize: 13,
+  fontFamily: 'JetBrains Mono, monospace', fontVariantNumeric: 'tabular-nums', fontSize: 15,
   borderRight: '1px solid rgba(255,255,255,0.03)',
 };
 const Th = ({ children, colSpan, rowSpan }: { children: React.ReactNode; colSpan?: number; rowSpan?: number }) =>
@@ -110,7 +110,7 @@ function StrikeMeta({ meta }: { meta: LegMeta | null | undefined }) {
   if (meta.openInterest != null) parts.push(`OI ${fmtOI(meta.openInterest)}`);
   if (meta.prevClose != null) parts.push(fmtPrice(meta.prevClose, 2));
   return (
-    <span style={{ display: 'block', fontSize: 9, color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace',
+    <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace',
       fontVariantNumeric: 'tabular-nums', marginTop: 2, whiteSpace: 'nowrap' }}>
       {parts.join(' · ')}
     </span>
@@ -166,12 +166,12 @@ function CheckRow({ c }: { c: RpfCheck }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-dark)' }}>
       <StatusIcon status={c.status} />
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{c.label}</div>
+        <div style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{c.label}</div>
         {showDetail && (
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{c.detail}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{c.detail}</div>
         )}
       </div>
-      <span className="tabular-nums" style={{ fontSize: 11, color: c.status === 'fail' ? color : 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>{valTxt}</span>
+      <span className="tabular-nums" style={{ fontSize: 13, color: c.status === 'fail' ? color : 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>{valTxt}</span>
     </div>
   );
 }
@@ -186,10 +186,10 @@ function DisparaRow({ label, hint, value, status }: {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border-dark)' }}>
       <StatusIcon status={status} />
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{label}</div>
-        {hint && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{hint}</div>}
+        <div style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{label}</div>
+        {hint && <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{hint}</div>}
       </div>
-      <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, fontFamily: 'JetBrains Mono, monospace', color: valColor }}>{value}</span>
+      <span className="tabular-nums" style={{ fontSize: 14, fontWeight: 600, fontFamily: 'JetBrains Mono, monospace', color: valColor }}>{value}</span>
     </div>
   );
 }
@@ -197,8 +197,8 @@ function DisparaRow({ label, hint, value, status }: {
 function PanelHeader({ title, right, rightColor }: { title: string; right: string; rightColor: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>{title}</span>
-      <span style={{ fontSize: 11, fontWeight: 700, color: rightColor, fontFamily: 'JetBrains Mono, monospace' }}>{right}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>{title}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: rightColor, fontFamily: 'JetBrains Mono, monospace' }}>{right}</span>
     </div>
   );
 }
@@ -207,7 +207,7 @@ function PanelHeader({ title, right, rightColor }: { title: string; right: strin
 function Connector({ label }: { label?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, margin: '7px 0' }}>
-      {label && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{label}</span>}
+      {label && <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{label}</span>}
       <ChevronDown size={14} style={{ color: 'var(--text-disabled)' }} />
     </div>
   );
@@ -219,12 +219,12 @@ function MotorStrip({ online, lastTick }: { online: boolean; lastTick: string | 
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 8, ...panelStyle, padding: '10px 14px', width: '60%', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <RefreshCw size={15} style={{ color: online ? 'var(--green)' : 'var(--text-muted)' }} />
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>MOTOR</span>
+        <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>MOTOR</span>
       </div>
-      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
+      <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
         corre la cascada de 4 capas cada tick y la reparte en los dos ejes
       </span>
-      <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: online ? 'var(--green)' : 'var(--text-muted)' }}>
+      <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontFamily: 'JetBrains Mono, monospace', color: online ? 'var(--green)' : 'var(--text-muted)' }}>
         <span className={online ? 'pulse-dot' : ''} style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: online ? 'var(--green)' : 'var(--text-muted)' }} />
         {online ? 'tick vivo' : 'sin tick'}{lastTick ? ` · ${lastTick}` : ''}
       </span>
@@ -249,13 +249,13 @@ function ArmaPanel({ st, armed, vetoed }: { st: RpfStateUpdate; armed: boolean; 
           <div style={subLabelStyle}>Macro · capa 1</div>
           {macro.length > 0
             ? macro.map((c) => <CheckRow key={c.id} c={c} />)
-            : <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 0' }}>Macro no evaluado.</div>}
+            : <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '6px 0' }}>Macro no evaluado.</div>}
         </div>
         <div style={{ paddingLeft: 22, borderLeft: '1px solid var(--border-dark)' }}>
           <div style={subLabelStyle}>Prima y cola</div>
           {gates.length > 0
             ? gates.map((c) => <CheckRow key={c.id} c={c} />)
-            : <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '6px 0' }}>No evaluado — la cascada cortó en macro.</div>}
+            : <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '6px 0' }}>No evaluado — la cascada cortó en macro.</div>}
         </div>
       </div>
     </div>
@@ -279,7 +279,7 @@ function DisparaPanel({ st, active }: { st: RpfStateUpdate; active: boolean }) {
     <div style={{ ...panelStyle, opacity: active ? 1 : 0.55 }}>
       <PanelHeader title="Dispara · ¿la prima paga?" right={active ? 'ACTIVO' : 'EN ESPERA'} rightColor={active ? 'var(--green)' : 'var(--text-muted)'} />
       {!active && (
-        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, fontFamily: 'var(--font-sans)' }}>
+        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 6, fontFamily: 'var(--font-sans)' }}>
           eje no evaluado hasta que el entorno arme
         </div>
       )}
@@ -316,11 +316,11 @@ function StateResolution({ state }: { state: RpfStateName }) {
           <Icon size={22} style={{ color: meta.color }} />
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono, monospace', color: meta.color, letterSpacing: '0.08em' }}>{state}</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{meta.es}</div>
+          <div style={{ fontSize: 12.5, fontFamily: 'JetBrains Mono, monospace', color: meta.color, letterSpacing: '0.08em' }}>{state}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{meta.es}</div>
         </div>
       </div>
-      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 10, fontFamily: 'var(--font-sans)' }}>
+      <div style={{ fontSize: 14.5, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 10, fontFamily: 'var(--font-sans)' }}>
         {STATE_EXPLAIN[state]}
       </div>
     </div>
@@ -348,8 +348,8 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
 
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>Candidato PCS · primas en vivo</span>
-      <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{note}</span>
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>Candidato PCS · primas en vivo</span>
+      <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{note}</span>
     </div>
   );
 
@@ -357,7 +357,7 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
     return (
       <div style={panelStyle}>
         {header}
-        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>El motor no propuso una posición candidata.</div>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>El motor no propuso una posición candidata.</div>
       </div>
     );
   }
@@ -419,14 +419,14 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
           </thead>
           <tbody>
             <tr>
-              <Td color="var(--text-primary)"><span style={{ fontWeight: 700, fontSize: 15, letterSpacing: '0.05em' }}>{symbol}</span></Td>
+              <Td color="var(--text-primary)"><span style={{ fontWeight: 700, fontSize: 17, letterSpacing: '0.05em' }}>{symbol}</span></Td>
               <Td>
                 {cand.dte ? <span style={{ color: 'var(--text-muted)' }}>{cand.dte}d</span> : '—'}
-                {cand.expiration && <span style={{ display: 'block', fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 3 }}>{fmtExpiry(cand.expiration)}</span>}
+                {cand.expiration && <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 3 }}>{fmtExpiry(cand.expiration)}</span>}
               </Td>
               <Td color="var(--text-primary)">{price != null && price > 0 ? fmtPrice(price) : '—'}</Td>
               <Td>
-                <span style={{ fontSize: 12, fontWeight: 700, padding: '3px 5px', borderRadius: 4, color: 'var(--green)',
+                <span style={{ fontSize: 14, fontWeight: 700, padding: '3px 5px', borderRadius: 4, color: 'var(--green)',
                   backgroundColor: tint('var(--green)', 9), border: `1px solid ${tint('var(--green)', 19)}` }}>PCS</span>
               </Td>
               {/* Strikes */}
@@ -435,7 +435,7 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
                 <StrikeMeta meta={cand.legMeta?.longPut} />
               </Td>
               <Td color="var(--red-gc)">
-                <div>{fmtPrice(cand.shortPutStrike, 0)}{cand.shortPutDelta != null && <span style={{ color: 'var(--text-muted)', fontSize: 10, marginLeft: 4 }}>Δ{Math.abs(cand.shortPutDelta).toFixed(2)}</span>}</div>
+                <div>{fmtPrice(cand.shortPutStrike, 0)}{cand.shortPutDelta != null && <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 4 }}>Δ{Math.abs(cand.shortPutDelta).toFixed(2)}</span>}</div>
                 <StrikeMeta meta={cand.legMeta?.shortPut} />
               </Td>
               {/* Premium live */}
@@ -482,10 +482,10 @@ function SymbolPanel({ symbol, st, suggestion, onAccept, onDismiss, subscribeLeg
     <div style={{ marginBottom: 22 }}>
       {/* Cabecera del símbolo: scan rápido (badge) + frescura */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{symbol}</span>
+        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{symbol}</span>
         <RpfStateBadge state={state} />
         {st && st.cascadeOk === false && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 'auto', fontSize: 10, color: 'var(--yellow-gc)', fontFamily: 'JetBrains Mono, monospace' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 'auto', fontSize: 12, color: 'var(--yellow-gc)', fontFamily: 'JetBrains Mono, monospace' }}>
             <AlertTriangle size={11} /> sin datos de cascada
           </span>
         )}
@@ -570,8 +570,8 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
     <div style={{ padding: '14px 18px 40px', height: '100%', overflowY: 'auto', fontFamily: 'var(--font-sans)' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>GaleCore RPF</span>
-        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
+        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>GaleCore RPF</span>
+        <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
           color: '#a78bfa', backgroundColor: tint('#a78bfa', 13), border: `1px solid ${tint('#a78bfa', 30)}`, fontFamily: 'JetBrains Mono, monospace' }}>
           Disparo por prima real · paper
         </span>
@@ -582,7 +582,7 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6,
               background: 'none', border: '1px solid var(--border)', cursor: 'pointer',
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+              fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
               color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)',
             }}
           >
@@ -592,7 +592,7 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
             endpoint={switchEndpoint}
             title="Prender / apagar la estrategia RPF. En OFF el loop no corre y el tablero se vacía, para todos los operadores; solo lo pueden tocar los admin."
           />
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
             color: loopOnline ? 'var(--green)' : 'var(--text-muted)' }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: loopOnline ? 'var(--green)' : 'var(--text-muted)' }} />
             {loopOnline ? 'LOOP ONLINE' : 'LOOP OFFLINE'}
@@ -630,10 +630,10 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
             ? <Ban size={16} style={{ color: 'var(--red-gc)', flexShrink: 0, marginTop: 1 }} />
             : <WifiOff size={16} style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: 1 }} />}
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: switchOff ? 'var(--red-gc)' : 'var(--text-secondary)', marginBottom: 3 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: switchOff ? 'var(--red-gc)' : 'var(--text-secondary)', marginBottom: 3 }}>
               {switchOff ? 'Estrategia apagada' : 'Loop offline'}
             </div>
-            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
               {switchOff
                 ? <>El loop está parado a propósito: no corre la cascada ni emite. El tablero vuelve a llenarse al prender el switch.</>
                 : <>El backend no está empujando por el grupo <code style={{ fontFamily: 'JetBrains Mono, monospace' }}>rpf</code>. El tablero se llena en cuanto el loop emite.
@@ -658,7 +658,7 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
       ))}
 
       {loopOnline && symbols.length === 0 && (
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', padding: '10px 12px', marginTop: 8, border: '1px dashed var(--border-dark)', borderRadius: 8 }}>
+        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '10px 12px', marginTop: 8, border: '1px dashed var(--border-dark)', borderRadius: 8 }}>
           Loop conectado — esperando el primer estado del universo RPF (SPY).
         </div>
       )}

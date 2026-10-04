@@ -60,7 +60,7 @@ export function AccountPositionsList() {
               <span className="text-xs font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
                 {g.underlyingSymbol}
               </span>
-              <span className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+              <span className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                 {g.typeLabel} · {g.legCount}L
               </span>
             </div>

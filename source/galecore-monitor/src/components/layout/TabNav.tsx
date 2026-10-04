@@ -62,7 +62,7 @@ export function TabNav({ active, onChange, onLogout }: Props) {
           fontFamily: 'var(--font-sans)',
           fontWeight: isActive ? 600 : 400,
           borderRadius: 9,
-          height: 34,
+          height: 40,
           whiteSpace: 'nowrap',
         }}
       >
@@ -80,7 +80,7 @@ export function TabNav({ active, onChange, onLogout }: Props) {
         borderBottom: '1px solid var(--border-dark)',
         paddingLeft: 8,
         paddingRight: 12,
-        height: 52,
+        height: 60,
       }}
     >
       {TABS.map(renderTab)}

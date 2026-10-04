@@ -243,9 +243,9 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
     <div className="flex flex-col">
       {/* Header — mismo formato que RPF: nombre de la estrategia + badge con su descripción. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 0' }}>
-        <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>GaleCore GEX</span>
+        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>GaleCore GEX</span>
         <span style={{
-          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
+          fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
           color: '#a78bfa', backgroundColor: tint('#a78bfa', 13), border: `1px solid ${tint('#a78bfa', 30)}`,
           fontFamily: 'JetBrains Mono, monospace',
         }}>
@@ -258,7 +258,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6,
               background: 'none', border: '1px solid var(--border)', cursor: 'pointer',
-              fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+              fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
               color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)',
             }}
           >
@@ -335,7 +335,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
               borderBottom: '1px solid var(--border-dark)',
             }}>
               <span style={{
-                fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
                 color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
               }}>
                 {active} · Details
@@ -343,7 +343,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className="tabular-nums" style={{
-                  fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
+                  fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
                 }}>
                   {/* Solo la COBERTURA del barrido. El GEX global se fue de acá: es una métrica y
                       vive en su celda del cuadro (grupo "Estructura gamma"), donde tiene su
@@ -359,7 +359,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                   <span
                     title={updated ? `Último barrido: ${fmtTime(updated)}` : 'Sin barrido en esta sesión'}
                     style={{
-                      fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
                       padding: '2px 6px', borderRadius: 20,
                       color: 'var(--red-gc)',
                       backgroundColor: tint('var(--red-gc)', 10),
@@ -376,7 +376,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                   <span
                     title="Simbolo pineado con el buscador: no entra al auto-refresh del universo. Se rebarre con Reload."
                     style={{
-                      fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
                       padding: '2px 6px', borderRadius: 20,
                       color: 'var(--text-muted)',
                       border: '1px solid var(--border)',
@@ -391,7 +391,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                     title={`Faltaron ${(data!.gex.global.expirationsRequested - data!.gex.global.expirationsIncluded)} vencimientos · cobertura ${data!.gex.global.coveragePct}% de los símbolos`}
                     className="tabular-nums"
                     style={{
-                      fontSize: 9, fontWeight: 700, letterSpacing: '0.06em',
+                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
                       padding: '2px 6px', borderRadius: 20,
                       color: 'var(--yellow-gc)',
                       backgroundColor: 'var(--yellow-muted)',
@@ -404,7 +404,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                 )}
                 {updated && (
                   <span className="tabular-nums" style={{
-                    fontSize: 10, fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 12, fontFamily: 'JetBrains Mono, monospace',
                     color: stale ? 'var(--yellow-gc)' : 'var(--text-muted)',
                   }}>
                     {fmtTime(updated)}
@@ -428,12 +428,12 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                  rojo de error, que acá mandaría el mensaje equivocado — no hay nada que arreglar,
                  hay otro símbolo que elegir. */
               <div style={{
-                padding: 16, fontSize: 12, lineHeight: 1.5,
+                padding: 16, fontSize: 14, lineHeight: 1.5,
                 color: chainMissing ? 'var(--text-secondary)' : 'var(--red-gc)',
               }}>
                 {chainMissing ? err : `Error cargando GEX: ${err}`}
                 {chainMissing && (
-                  <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                  <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>
                     El buscador matchea tambien la descripcion, asi que devuelve ETFs sobre el
                     simbolo que no tienen cadena propia. Elegi otro.
                   </div>
@@ -465,7 +465,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
               backgroundColor: 'var(--bg-tertiary)',
             }}>
               <span style={{
-                fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 13,
+                fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15,
                 color: 'var(--text-primary)', letterSpacing: '0.04em',
               }}>
                 {active} · Graph ({isGlobalScope ? 'GEX Global — toda la cadena' : 'GEX by Expiry'})
@@ -496,7 +496,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                   <Crosshair size={11} />
                 </button>
                 <span className="tabular-nums" style={{
-                  fontSize: 10, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
+                  fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
                 }}>
                   Spot {fmtPrice(ticker?.price || data?.spotPrice || 0)}
                 </span>
@@ -533,14 +533,14 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                 {isLoading && !chartData ? (
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    height: '100%', gap: 8, fontSize: 12, color: 'var(--text-muted)',
+                    height: '100%', gap: 8, fontSize: 14, color: 'var(--text-muted)',
                   }}>
                     <span className="spinner" /> Barriendo la cadena…
                   </div>
                 ) : !chartData ? (
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    height: '100%', fontSize: 12, color: 'var(--text-muted)',
+                    height: '100%', fontSize: 14, color: 'var(--text-muted)',
                   }}>
                     No GEX data
                   </div>

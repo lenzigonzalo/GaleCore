@@ -17,7 +17,7 @@ export function RegimeHistory({ data, selected, onSelect, onSelectFailed }: Prop
   if (!data) return null;
   if (data.records.length === 0) {
     return (
-      <div style={{ ...SANS, fontSize: 11.5, color: 'var(--text-muted)', padding: '8px 2px' }}>
+      <div style={{ ...SANS, fontSize: 13.5, color: 'var(--text-muted)', padding: '8px 2px' }}>
         Sin registros de <b>{data.symbol}</b> entre <Mono>{data.since}</Mono> y <Mono>{data.until ?? 'hoy'}</Mono>.
       </div>
     );
@@ -27,12 +27,12 @@ export function RegimeHistory({ data, selected, onSelect, onSelectFailed }: Prop
   return (
     <div>
       {data.integrity_failed.length > 0 && (
-        <div style={{ ...SANS, fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6 }}>
+        <div style={{ ...SANS, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
           <Badge color={BAD}>Integridad fallida</Badge> {data.integrity_failed.length} día(s) rechazado(s) por <Mono muted>query</Mono>.
         </div>
       )}
       {data.read_inconsistent.length > 0 && (
-        <div style={{ ...SANS, fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6 }}>
+        <div style={{ ...SANS, fontSize: 13, color: 'var(--text-secondary)', marginBottom: 6 }}>
           <Badge color={BAD}>Lectura inconsistente</Badge> {data.read_inconsistent.length} día(s) cambiaron mientras se leían; reintentá.
         </div>
       )}
@@ -54,8 +54,8 @@ export function RegimeHistory({ data, selected, onSelect, onSelectFailed }: Prop
             <button key={e.run_id} className="card-interactive" onClick={() => onSelect(rec.date, e.run_id)} style={rowStyle(active)}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                 <Mono>{rec.date}</Mono>
-                {rec.entries.length > 1 && <span style={{ ...SANS, fontSize: 10, color: 'var(--text-muted)' }}>entrada {i + 1}/{rec.entries.length}</span>}
-                <span style={{ ...SANS, fontSize: 10.5, color: 'var(--text-secondary)', marginLeft: 'auto' }}>
+                {rec.entries.length > 1 && <span style={{ ...SANS, fontSize: 12, color: 'var(--text-muted)' }}>entrada {i + 1}/{rec.entries.length}</span>}
+                <span style={{ ...SANS, fontSize: 12.5, color: 'var(--text-secondary)', marginLeft: 'auto' }}>
                   {e.accepted_payload.gamma_regime} · {e.accepted_payload.tail_pricing}
                 </span>
               </div>

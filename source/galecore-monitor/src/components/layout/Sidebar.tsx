@@ -10,7 +10,7 @@ interface Props {
 export function Sidebar({ onLogoClick }: Props) {
   return (
     <aside className="dashboard-sidebar" style={{
-      width: 220,
+      width: 270,
       flexShrink: 0,
       display: 'flex',
       flexDirection: 'column',
@@ -19,13 +19,13 @@ export function Sidebar({ onLogoClick }: Props) {
       height: '100%',
       overflow: 'hidden',
     }}>
-      {/* Logo — height matches StatusBar + TabNav (36 + 52 = 88px) */}
+      {/* Logo — height matches StatusBar + TabNav (40 + 60 = 100px) */}
       <div
         onClick={onLogoClick}
         title={onLogoClick ? 'Ir a Main' : undefined}
         role={onLogoClick ? 'button' : undefined}
         style={{
-          height: 88,
+          height: 100,
           padding: '0 10px',
           borderBottom: '1px solid var(--border-dark)',
           display: 'flex',

@@ -49,6 +49,8 @@
 /* ── Base ── */
 body {
   margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -122,7 +124,7 @@ body {
   gap: 4px;
   padding: 4px 10px;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 14px;
   font-family: var(--font-sans);
   font-weight: 500;
   cursor: pointer;
@@ -145,7 +147,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .dashboard-main > div { scrollbar-gutter: stable; }
 .dashboard-nav button:hover { background-color: var(--bg-tertiary); }
 @media (max-width: 900px) {
-  .dashboard-sidebar { width: 180px !important; }
+  .dashboard-sidebar { width: 220px !important; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pulse-dot, .skeleton { animation: none; }

@@ -26,17 +26,17 @@ function Leg({ action, strike, delta, streamerSymbol }: TradeSuggestion['legs'][
   const color = isSell ? 'var(--green)' : 'var(--text-secondary)';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-      <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.05em', color, fontFamily: 'JetBrains Mono, monospace', width: 42 }}>
+      <span style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em', color, fontFamily: 'JetBrains Mono, monospace', width: 42 }}>
         {isSell ? 'SELL' : 'BUY'}
       </span>
-      <span className="tabular-nums" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>
+      <span className="tabular-nums" style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>
         {strike}
       </span>
       {delta != null && (
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>Δ {Math.abs(delta).toFixed(2)}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>Δ {Math.abs(delta).toFixed(2)}</span>
       )}
       {streamerSymbol && (
-        <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>{streamerSymbol}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>{streamerSymbol}</span>
       )}
     </div>
   );
@@ -45,8 +45,8 @@ function Leg({ action, strike, delta, streamerSymbol }: TradeSuggestion['legs'][
 function Metric({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={{ padding: '6px 8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: 6 }}>
-      <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
-      <div className="tabular-nums" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+      <div className="tabular-nums" style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
     </div>
   );
 }
@@ -69,16 +69,16 @@ export function RpfSuggestionCard({ suggestion: s, onAccept, onDismiss }: Props)
     }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: accent, letterSpacing: '0.04em' }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: accent, letterSpacing: '0.04em' }}>
           {s.symbol} · PUT CREDIT SPREAD
         </span>
         {s.highRisk && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 9, fontWeight: 700, color: 'var(--red-gc)',
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 700, color: 'var(--red-gc)',
             backgroundColor: tint('var(--red-gc)', 15), border: `1px solid ${tint('var(--red-gc)', 40)}`, borderRadius: 4, padding: '2px 6px', letterSpacing: '0.05em' }}>
             <AlertTriangle size={10} /> HIGH RISK
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
+        <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, fontFamily: 'JetBrains Mono, monospace',
           color: ttl <= 10 ? 'var(--red-gc)' : 'var(--text-muted)' }}>
           TTL {ttl}s
         </span>
@@ -102,13 +102,13 @@ export function RpfSuggestionCard({ suggestion: s, onAccept, onDismiss }: Props)
       </div>
 
       {/* Aviso: sugiere, nunca ejecuta */}
-      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', marginBottom: 10 }}>
+      <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', marginBottom: 10 }}>
         El sistema sugiere, nunca ejecuta. <b>Aceptar</b> confirma la intención y arranca el cooldown — la apertura del spread es manual.
       </div>
 
       {/* Confirmación reforzada high_risk */}
       {s.highRisk && confirmHighRisk && (
-        <div style={{ fontSize: 10.5, color: 'var(--red-gc)', fontFamily: 'var(--font-sans)', marginBottom: 8,
+        <div style={{ fontSize: 12.5, color: 'var(--red-gc)', fontFamily: 'var(--font-sans)', marginBottom: 8,
           padding: '6px 10px', borderRadius: 6, backgroundColor: tint('var(--red-gc)', 11), border: `1px solid ${tint('var(--red-gc)', 33)}` }}>
           ⚠ Banda high_risk (riesgo/trade 5–8%). Confirmá de nuevo para aceptar.
         </div>
@@ -119,7 +119,7 @@ export function RpfSuggestionCard({ suggestion: s, onAccept, onDismiss }: Props)
         <button
           onClick={handleAccept}
           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 6,
-            cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 700,
             color: 'var(--bg-primary)', backgroundColor: accent, border: 'none' }}
         >
           <Check size={13} /> {s.highRisk && confirmHighRisk ? 'Confirmar aceptación' : 'Aceptar'}
@@ -127,7 +127,7 @@ export function RpfSuggestionCard({ suggestion: s, onAccept, onDismiss }: Props)
         <button
           onClick={() => onDismiss(s.id)}
           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 6,
-            cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 14, fontWeight: 700,
             color: 'var(--text-secondary)', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border)' }}
         >
           <X size={13} /> Descartar

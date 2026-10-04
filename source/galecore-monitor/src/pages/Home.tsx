@@ -25,17 +25,17 @@ export function Home({ onNavigate }: Props) {
       <SectionTitle title="GaleCore Strategies" badge="switches de estrategia" style={{ marginBottom: 16 }} />
 
       {loading && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando configuración…</div>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Cargando configuración…</div>
       )}
 
       {error && (
-        <div style={{ fontSize: 12, color: 'var(--red-gc)', fontFamily: 'JetBrains Mono, monospace' }}>
+        <div style={{ fontSize: 14, color: 'var(--red-gc)', fontFamily: 'JetBrains Mono, monospace' }}>
           ⚠ Error cargando la configuración de la app: {error}
         </div>
       )}
 
       {!loading && !error && strategies.length === 0 && (
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
           No hay estrategias declaradas en <code>strategies[]</code> del config de la app.
         </div>
       )}

@@ -40,7 +40,7 @@ export function AccountSummary() {
       style={{
         backgroundColor: 'var(--bg-secondary)',
         border: '1px solid var(--border-dark)',
-        minWidth: 200,
+        minWidth: 0,
       }}
     >
       {/* Header */}
@@ -60,7 +60,7 @@ export function AccountSummary() {
           }}
           title="Refrescar"
         >
-          <RefreshCw size={10} className={loadingBalances ? 'animate-spin' : ''} />
+          <RefreshCw size={14} className={loadingBalances ? 'animate-spin' : ''} />
         </button>
       </div>
 
@@ -105,13 +105,13 @@ export function AccountSummary() {
 
 function Row({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-2">
+    <div className={highlight ? "flex flex-col gap-1 mb-3" : "flex items-center justify-between gap-2"}>
       <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
         {label}
       </span>
       <span
         className="font-mono text-sm"
-        style={{ color: highlight ? 'var(--text-primary)' : 'var(--text-primary)', fontWeight: highlight ? 600 : 400 }}
+        style={{ color: highlight ? 'var(--text-primary)' : 'var(--text-primary)', fontWeight: highlight ? 700 : 500, fontSize: highlight ? 28 : 16, lineHeight: 1.3, overflowWrap: 'anywhere' }}
       >
         {value}
       </span>

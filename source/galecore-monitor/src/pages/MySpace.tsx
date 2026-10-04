@@ -17,21 +17,21 @@ const box: React.CSSProperties = {
   backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 14, padding: 18,
 };
 const chip = (on: boolean, color = 'var(--accent)'): React.CSSProperties => ({
-  fontSize: 11, padding: '3px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'var(--font-sans)',
+  fontSize: 13, padding: '3px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'var(--font-sans)',
   border: `1px solid ${on ? color : 'var(--border-dark)'}`, color: on ? 'var(--text-primary)' : 'var(--text-muted)',
   backgroundColor: on ? 'var(--bg-elevated)' : 'transparent',
 });
 const badge = (shared: boolean): React.CSSProperties => ({
-  fontSize: 10, padding: '1px 7px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: 0.5,
+  fontSize: 12, padding: '1px 7px', borderRadius: 4, textTransform: 'uppercase', letterSpacing: 0.5,
   color: shared ? 'var(--green)' : 'var(--text-secondary)',
   border: `1px solid ${shared ? 'var(--green-border)' : 'var(--border-dark)'}`,
 });
 const input: React.CSSProperties = {
   width: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)',
-  border: '1px solid var(--border-dark)', borderRadius: 4, padding: '6px 8px', fontSize: 12, fontFamily: 'inherit',
+  border: '1px solid var(--border-dark)', borderRadius: 4, padding: '6px 8px', fontSize: 14, fontFamily: 'inherit',
 };
 const button = (primary = false): React.CSSProperties => ({
-  fontSize: 12, padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
+  fontSize: 14, padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
   border: `1px solid ${primary ? 'var(--accent)' : 'var(--border-dark)'}`,
   backgroundColor: primary ? 'var(--accent)' : 'transparent', color: primary ? 'var(--accent-ink)' : 'var(--text-secondary)',
 });
@@ -72,7 +72,7 @@ function Editor({ draft, onCancel, onSaved }: { draft: Draft; onCancel: () => vo
         placeholder="Contenido, en tus palabras" value={d.content}
         onChange={(e) => setD({ ...d, content: e.target.value })} />
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Visibilidad</span>
+        <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Visibilidad</span>
         <button style={chip(d.visibility === 'private')} onClick={() => setD({ ...d, visibility: 'private' })}>Sólo yo</button>
         <button style={chip(d.visibility === 'shared', 'var(--green)')} onClick={() => setD({ ...d, visibility: 'shared' })}>Compartida con el equipo</button>
         <span style={{ flex: 1 }} />
@@ -81,7 +81,7 @@ function Editor({ draft, onCancel, onSaved }: { draft: Draft; onCancel: () => vo
           {saving ? 'Guardando…' : 'Guardar'}
         </button>
       </div>
-      {error && <div style={{ fontSize: 11, color: 'var(--red-gc)' }}>{error}</div>}
+      {error && <div style={{ fontSize: 13, color: 'var(--red-gc)' }}>{error}</div>}
     </div>
   );
 }
@@ -97,18 +97,18 @@ function ItemCard({ item, onChanged }: { item: SpaceItem; onChanged: () => void 
   };
   return (
     <div style={box}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setOpen(!open)}>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', minWidth: 86, textTransform: 'uppercase' }}>{label(item.kind)}</span>
-        <span style={{ fontSize: 14, color: 'var(--text-primary)', flex: 1 }}>{item.title}</span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', cursor: 'pointer' }} onClick={() => setOpen(!open)}>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', minWidth: 86, textTransform: 'uppercase' }}>{label(item.kind)}</span>
+        <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>{item.title}</span>
         <span style={badge(shared)}>{item.isOwn ? (shared ? 'compartida' : 'sólo yo') : `de ${item.owner}`}</span>
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>v{item.version}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>v{item.version}</span>
       </div>
       {open && !editing && (
         <>
-          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: 'var(--text-secondary)', margin: '10px 0 0',
+          <pre style={{ whiteSpace: 'pre-wrap', fontSize: 14, color: 'var(--text-secondary)', margin: '10px 0 0',
             fontFamily: item.format === 'json' ? 'monospace' : 'var(--font-sans)' }}>{pretty(item)}</pre>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
               actualizada {new Date(item.updatedAt).toLocaleString()}
             </span>
             <span style={{ flex: 1 }} />
@@ -156,9 +156,9 @@ export function MySpace() {
   const count = (k: SpaceKind) => items.filter((i) => i.kind === k).length;
 
   return (
-    <div style={{ padding: '28px 28px 40px', fontFamily: 'var(--font-sans)', maxWidth: 980 }}>
+    <div style={{ padding: '28px 28px 40px', fontFamily: 'var(--font-sans)', maxWidth: 1180 }}>
       <SectionTitle title="Mi espacio" badge="lo que GaleCore-AI sabe de vos" style={{ marginBottom: 8 }} />
-      <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px' }}>
+      <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '0 0 14px' }}>
         GaleCore-AI lo carga al empezar cada sesión para responder según tus objetivos y límites. Lo que le pedís
         guardar desde el chat aparece acá; lo que cambiás acá, lo usa la próxima vez.
       </p>
@@ -184,15 +184,15 @@ export function MySpace() {
         </div>
       )}
 
-      {error && <div style={{ ...box, color: 'var(--red-gc)', fontSize: 12, marginBottom: 12 }}>{error}</div>}
-      {loading && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Cargando…</div>}
+      {error && <div style={{ ...box, color: 'var(--red-gc)', fontSize: 14, marginBottom: 12 }}>{error}</div>}
+      {loading && <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Cargando…</div>}
 
       {!loading && !error && (
         <>
           <div style={{ display: 'grid', gap: 10 }}>
             {visible.map((i) => <ItemCard key={`${i.kind}/${i.key}`} item={i} onChanged={load} />)}
             {visible.length === 0 && (
-              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
                 Nada acá todavía. Podés crearlo con «+ Nueva» o pedírselo a GaleCore-AI en el chat.
               </div>
             )}

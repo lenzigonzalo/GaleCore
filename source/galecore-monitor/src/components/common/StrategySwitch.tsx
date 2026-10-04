@@ -61,7 +61,7 @@ export function StrategySwitch({ endpoint, title }: Props) {
         padding: '3px 9px', borderRadius: 20,
         backgroundColor: tint(color, 10), border: `1px solid ${tint(color, 30)}`,
         color, cursor: busy || locked ? 'default' : 'pointer',
-        fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
+        fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',
         fontFamily: 'JetBrains Mono, monospace', opacity: busy || locked ? 0.6 : 1,
       }}
     >

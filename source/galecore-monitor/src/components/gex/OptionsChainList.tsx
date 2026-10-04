@@ -39,7 +39,7 @@ export function OptionsChainList({
         gap: 6,
       }}>
         <span style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
           color: '#a78bfa', fontFamily: 'var(--font-sans)',
         }}>
           {label}
@@ -65,7 +65,7 @@ export function OptionsChainList({
             }}
           >
             <span className="tabular-nums" style={{
-              fontSize: 10.5,
+              fontSize: 12.5,
               fontFamily: 'JetBrains Mono, monospace',
               fontWeight: 700,
               color: '#a78bfa',
@@ -74,7 +74,7 @@ export function OptionsChainList({
               {globalLabel}
             </span>
             <span className="tabular-nums" style={{
-              fontSize: 9,
+              fontSize: 11,
               fontFamily: 'JetBrains Mono, monospace',
               color: 'var(--text-muted)',
               whiteSpace: 'nowrap',
@@ -85,7 +85,7 @@ export function OptionsChainList({
         )}
 
         {!expiries.length ? (
-          <span style={{ fontSize: 10, color: 'var(--text-muted)', padding: '4px 0' }}>Sin vencimientos.</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '4px 0' }}>Sin vencimientos.</span>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 190, overflowY: 'auto' }}>
             {expiries.map((e) => {
@@ -114,7 +114,7 @@ export function OptionsChainList({
                 >
                   <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
                     <span className="tabular-nums" style={{
-                      fontSize: 10.5,
+                      fontSize: 12.5,
                       fontFamily: 'JetBrains Mono, monospace',
                       fontWeight: isRegular || isActive ? 700 : 400,
                       color: isRegular || isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
@@ -125,7 +125,7 @@ export function OptionsChainList({
                     <span
                       title={isRegular ? 'Regular (mensual)' : 'Weekly'}
                       style={{
-                        fontSize: 8.5,
+                        fontSize: 10.5,
                         fontFamily: 'JetBrains Mono, monospace',
                         fontWeight: 700,
                         color: isRegular ? 'var(--green)' : 'var(--text-muted)',
@@ -136,7 +136,7 @@ export function OptionsChainList({
                     </span>
                   </span>
                   <span className="tabular-nums" style={{
-                    fontSize: 9,
+                    fontSize: 11,
                     fontFamily: 'JetBrains Mono, monospace',
                     color: e.dte === 0 ? 'var(--yellow-gc)' : 'var(--text-muted)',
                     whiteSpace: 'nowrap',

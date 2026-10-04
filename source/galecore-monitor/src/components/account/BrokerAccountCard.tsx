@@ -12,7 +12,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 12,
   fontWeight: 600,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
@@ -123,7 +123,7 @@ export function BrokerAccountCard() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <KeyRound size={13} style={{ color: ACCENT }} />
         <span style={{
-          fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 14,
+          fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 16,
           color: 'var(--text-primary)', letterSpacing: '0.05em',
         }}>
           Cuenta de bróker
@@ -131,7 +131,7 @@ export function BrokerAccountCard() {
 
         {state?.linked && state.broker && (
           <span style={{
-            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
             padding: '2px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace',
             color: ACCENT, backgroundColor: tint(ACCENT, 13), border: `1px solid ${tint(ACCENT, 30)}`,
           }}>
@@ -143,7 +143,7 @@ export function BrokerAccountCard() {
           <span
             title="Es la cuenta con la que los procesos de fondo piden datos de mercado."
             style={{
-              fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+              fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
               padding: '2px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace',
               color: '#a78bfa', backgroundColor: tint('#a78bfa', 13), border: `1px solid ${tint('#a78bfa', 30)}`,
             }}
@@ -165,7 +165,7 @@ export function BrokerAccountCard() {
       </div>
 
       {/* Estado actual */}
-      <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>
         {loading && 'Leyendo…'}
         {!loading && state?.linked && (
           <>
@@ -187,7 +187,7 @@ export function BrokerAccountCard() {
         )}
       </div>
 
-      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
         El refresh token se guarda cifrado y no vuelve a salir por HTTP. Cargalo cada vez que lo
         rotes en Tastytrade: hasta que lo hagas, la plataforma sigue intentando con el anterior.
         <span style={{ display: 'block', marginTop: 4 }}>
@@ -251,7 +251,7 @@ export function BrokerAccountCard() {
           {state?.hasOwnClientSecret && !clientSecret && (
             // Dejarlo vacío BORRA el que está guardado — el POST reemplaza la credencial entera —
             // así que hay que decirlo donde se decide, no en la doc del endpoint.
-            <div style={{ fontSize: 10, color: 'var(--yellow-gc)', marginTop: 4, fontFamily: 'var(--font-sans)', lineHeight: 1.4 }}>
+            <div style={{ fontSize: 12, color: 'var(--yellow-gc)', marginTop: 4, fontFamily: 'var(--font-sans)', lineHeight: 1.4 }}>
               Esta cuenta hoy usa tu propia aplicación OAuth. Si guardás con este campo vacío, pasa a
               usar la de GaleCore.
             </div>
@@ -301,7 +301,7 @@ export function BrokerAccountCard() {
             </button>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
                 Se borra la cuenta <strong>{state.accountNumber}</strong> y su refresh token cifrado.
                 Para volver atrás hay que pegar un token nuevo de Tastytrade.
                 {state.isSystem && (

@@ -19,7 +19,7 @@ export function RegimeDetail({ date, symbol, entry }: { date: string; symbol: st
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        <span style={{ ...SANS, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{date} · {symbol}</span>
+        <span style={{ ...SANS, fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>{date} · {symbol}</span>
         <Badge color={OK}>Integridad OK</Badge>
         {entry.states.outcome_pending ? <Badge color={WARN}>Outcome pendiente</Badge> : <Badge color={OK}>{entry.outcomes.length} outcome{entry.outcomes.length === 1 ? '' : 's'}</Badge>}
         {entry.states.review_pending ? <Badge color={WARN}>Review pendiente</Badge> : <Badge color={OK}>Review: {lastReview.verdict}</Badge>}
@@ -28,9 +28,9 @@ export function RegimeDetail({ date, symbol, entry }: { date: string; symbol: st
 
       {entry.annotation && (
         <Card title="Anotación del owner (no forma parte del registro)" color={NOTE}>
-          <div style={{ ...SANS, fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{entry.annotation.label}</div>
-          <div style={{ ...SANS, fontSize: 11.5, color: 'var(--text-primary)', margin: '4px 0' }}>{entry.annotation.note}</div>
-          <div style={{ ...SANS, fontSize: 10.5, color: 'var(--text-muted)' }}>
+          <div style={{ ...SANS, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{entry.annotation.label}</div>
+          <div style={{ ...SANS, fontSize: 13.5, color: 'var(--text-primary)', margin: '4px 0' }}>{entry.annotation.note}</div>
+          <div style={{ ...SANS, fontSize: 12.5, color: 'var(--text-muted)' }}>
             Fuente: {entry.annotation.source} · decidido {entry.annotation.decided_on} · ligada a <Mono muted wrap>{entry.annotation.entry_hash}</Mono>
           </div>
         </Card>
@@ -51,19 +51,19 @@ export function RegimeDetail({ date, symbol, entry }: { date: string; symbol: st
             rows={Object.entries(sources).map(([k, s]) => [
               <b key="k">{k}</b>,
               <><Mono>{s.capability_id}</Mono><br /><Mono muted>{s.endpoint}</Mono></>,
-              <><Badge color={s.freshness_status === 'VALID' ? OK : WARN}>{s.freshness_status}</Badge><br /><span style={{ ...SANS, fontSize: 10, color: 'var(--text-muted)' }}>{s.freshness_basis}</span></>,
+              <><Badge color={s.freshness_status === 'VALID' ? OK : WARN}>{s.freshness_status}</Badge><br /><span style={{ ...SANS, fontSize: 12, color: 'var(--text-muted)' }}>{s.freshness_basis}</span></>,
               <Mono>{s.market_data_as_of ?? '—'}</Mono>,
               <Mono>{s.response_received_at ?? '—'}</Mono>,
             ])}
           />
-          <div style={{ ...SANS, fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>
+          <div style={{ ...SANS, fontSize: 12.5, color: 'var(--text-muted)', marginTop: 4 }}>
             Timestamps tal como quedaron en el registro (UTC). Procedencia de los facts: <b>{entry.trace.facts_provenance}</b>. Datos históricos, no actuales.
           </div>
         </div>
       </Card>
 
       <Card title="Interpretación aceptada">
-        <div style={{ ...SANS, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+        <div style={{ ...SANS, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
           Régimen gamma: {p.gamma_regime} · Tail pricing: {p.tail_pricing}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
@@ -92,13 +92,13 @@ export function RegimeDetail({ date, symbol, entry }: { date: string; symbol: st
       {entry.states.outcome_pending ? (
         <Card title="Qué pasó después">
           <Badge color={WARN}>Outcome pendiente</Badge>
-          <span style={{ ...SANS, fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>
+          <span style={{ ...SANS, fontSize: 13, color: 'var(--text-secondary)', marginLeft: 8 }}>
             Todavía no se registró un outcome para esta entrada (<Mono muted>record outcome</Mono> desde el host). No hay nada que comparar.
           </span>
         </Card>
       ) : (
         <Card title="Qué pasó después — interpretación vs. outcome">
-          <div style={{ ...SANS, fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6 }}>
+          <div style={{ ...SANS, fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 6 }}>
             Valores al aceptar y valores observados después, con su diferencia. Es una comparación de datos, no una calificación de acierto: eso lo decide el review humano.
           </div>
           {entry.comparisons.map((c, k) => (
@@ -108,7 +108,7 @@ export function RegimeDetail({ date, symbol, entry }: { date: string; symbol: st
                 head={['Métrica', { label: 'Al aceptar', num: true }, { label: 'Observado', num: true }, { label: 'Δ', num: true }]}
                 rows={c.rows.map((r) => [r.metric, fmtVal(r.before), fmtVal(r.after), fmtDelta(r.delta)])}
               />
-              <div style={{ ...SANS, fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4 }}>facts_hash del outcome: <Mono muted wrap>{entry.outcomes[k]?.facts_hash}</Mono></div>
+              <div style={{ ...SANS, fontSize: 12.5, color: 'var(--text-muted)', marginTop: 4 }}>facts_hash del outcome: <Mono muted wrap>{entry.outcomes[k]?.facts_hash}</Mono></div>
             </div>
           ))}
         </Card>
@@ -116,12 +116,12 @@ export function RegimeDetail({ date, symbol, entry }: { date: string; symbol: st
 
       <Card title="Review humano">
         {entry.human_reviews.length === 0
-          ? <><Badge color={WARN}>Review pendiente</Badge><span style={{ ...SANS, fontSize: 11, color: 'var(--text-secondary)', marginLeft: 8 }}>Todavía no dejaste un veredicto para este run_id.</span></>
+          ? <><Badge color={WARN}>Review pendiente</Badge><span style={{ ...SANS, fontSize: 13, color: 'var(--text-secondary)', marginLeft: 8 }}>Todavía no dejaste un veredicto para este run_id.</span></>
           : entry.human_reviews.map((r, i) => (
             <div key={i} style={{ marginBottom: 6 }}>
               <Badge color={r.verdict === 'agree' ? OK : r.verdict === 'disagree' ? BAD : WARN}>{r.verdict}</Badge>
               <Mono muted> {r.reviewed_at}</Mono>
-              <div style={{ ...SANS, fontSize: 11.5, color: 'var(--text-primary)', marginTop: 3 }}>{r.comment}</div>
+              <div style={{ ...SANS, fontSize: 13.5, color: 'var(--text-primary)', marginTop: 3 }}>{r.comment}</div>
             </div>
           ))}
       </Card>
@@ -165,11 +165,11 @@ export function RegimeFailedDetail({ symbol, record }: { symbol: string; record:
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-        <span style={{ ...SANS, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{record.date} · {symbol}</span>
+        <span style={{ ...SANS, fontSize: 17, fontWeight: 700, color: 'var(--text-primary)' }}>{record.date} · {symbol}</span>
         <Badge color={BAD}>{inconsistent ? 'Lectura inconsistente' : 'Integridad fallida'}</Badge>
       </div>
       <Card title={inconsistent ? 'El registro cambió mientras se leía' : 'query rechazó este archivo'} color={BAD}>
-        <div style={{ ...SANS, fontSize: 11.5, color: 'var(--text-primary)', marginBottom: 6 }}>
+        <div style={{ ...SANS, fontSize: 13.5, color: 'var(--text-primary)', marginBottom: 6 }}>
           {inconsistent
             ? 'Lo que query devolvió y la lectura de detalle no coinciden tras varios reintentos; no se muestra ninguna versión. Volvé a consultar.'
             : 'Las verificaciones de integridad de query fallaron. Nada de lo que hay en el archivo puede tomarse como registro válido, y no se puede dejar un review sobre él.'}

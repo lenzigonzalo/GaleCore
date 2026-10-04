@@ -45,12 +45,12 @@ export function ReviewForm({ date, symbol, entry, enabled, submitting, error, on
 
   return (
     <Card title={entry.human_reviews.length ? 'Agregar otro review' : 'Dejar mi review'}>
-      <div style={{ ...SANS, fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+      <div style={{ ...SANS, fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
         Sobre <Mono>{entry.run_id}</Mono> ({date}). Evaluá la calidad de la lectura con la información disponible; el
         resultado posterior se mira aparte.
       </div>
       {!enabled && (
-        <div style={{ ...SANS, fontSize: 11, color: WARN, marginBottom: 8 }}>
+        <div style={{ ...SANS, fontSize: 13, color: WARN, marginBottom: 8 }}>
           El adapter corre sin reviews (<Mono muted>--no-reviews</Mono>); reinicialo sin ese flag para escribir.
         </div>
       )}
@@ -69,7 +69,7 @@ export function ReviewForm({ date, symbol, entry, enabled, submitting, error, on
         value={comment} onChange={(e) => setComment(e.target.value)} disabled={!enabled}
         placeholder="Comentario (obligatorio): qué se sostuvo, qué no, qué faltó ver…"
         rows={3} aria-label="Comentario del review"
-        style={{ ...SANS, width: '100%', fontSize: 11.5, padding: 8, borderRadius: 6, resize: 'vertical',
+        style={{ ...SANS, width: '100%', fontSize: 13.5, padding: 8, borderRadius: 6, resize: 'vertical',
           background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
       />
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
@@ -77,7 +77,7 @@ export function ReviewForm({ date, symbol, entry, enabled, submitting, error, on
           type="password" value={token} onChange={(e) => setToken(e.target.value)} disabled={!enabled}
           placeholder="Token de review (lo imprime el adapter al arrancar)" aria-label="Token de review"
           autoComplete="off"
-          style={{ ...SANS, flex: '1 1 260px', fontSize: 11, padding: '6px 8px', borderRadius: 6,
+          style={{ ...SANS, flex: '1 1 260px', fontSize: 13, padding: '6px 8px', borderRadius: 6,
             background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
         />
         <button type="button" className="btn" disabled={!canSubmit} onClick={submit}
@@ -85,7 +85,7 @@ export function ReviewForm({ date, symbol, entry, enabled, submitting, error, on
           {submitting ? <span className="spinner" /> : 'Guardar review'}
         </button>
       </div>
-      {error && <div role="alert" style={{ ...SANS, fontSize: 11, color: BAD, marginTop: 6 }}>{error}</div>}
+      {error && <div role="alert" style={{ ...SANS, fontSize: 13, color: BAD, marginTop: 6 }}>{error}</div>}
     </Card>
   );
 }

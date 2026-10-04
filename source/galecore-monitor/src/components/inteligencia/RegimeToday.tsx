@@ -22,7 +22,7 @@ export function RegimeToday({ today, loading, onSelectRun }: Props) {
   if (!today) return null;
 
   const dateLine = (
-    <span style={{ ...SANS, fontSize: 11, color: 'var(--text-muted)' }}>
+    <span style={{ ...SANS, fontSize: 13, color: 'var(--text-muted)' }}>
       {today.symbol} · <Mono>{today.date}</Mono> ({today.timezone})
     </span>
   );
@@ -33,7 +33,7 @@ export function RegimeToday({ today, loading, onSelectRun }: Props) {
         {dateLine}
         <div style={{ marginTop: 8, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <Badge color={WARN}>Sin análisis de hoy</Badge>
-          <span style={{ ...SANS, fontSize: 11, color: 'var(--text-secondary)' }}>
+          <span style={{ ...SANS, fontSize: 13, color: 'var(--text-secondary)' }}>
             Todavía no se registró un análisis para esta fecha. El análisis se pide desde el host (Claude Code) con
             <Mono muted> accept --record</Mono>; después de la sesión de contado.
           </span>
@@ -48,7 +48,7 @@ export function RegimeToday({ today, loading, onSelectRun }: Props) {
         {dateLine}
         <div style={{ marginTop: 8 }}>
           <Badge color={BAD}>{today.record.status === 'INTEGRITY_FAILED' ? 'Integridad fallida' : 'Lectura inconsistente'}</Badge>
-          <ul style={{ ...SANS, fontSize: 11, color: 'var(--text-secondary)', margin: '6px 0 0', paddingLeft: 18 }}>
+          <ul style={{ ...SANS, fontSize: 13, color: 'var(--text-secondary)', margin: '6px 0 0', paddingLeft: 18 }}>
             {today.record.problems.map((p, i) => <li key={i}>{p}</li>)}
           </ul>
         </div>
@@ -69,7 +69,7 @@ export function RegimeToday({ today, loading, onSelectRun }: Props) {
           {e.states.review_pending
             ? <Badge color={WARN}>Review pendiente</Badge>
             : <Badge color={OK}>Review: {e.human_reviews[e.human_reviews.length - 1].verdict}</Badge>}
-          <span style={{ ...SANS, fontSize: 11, color: 'var(--text-muted)' }}>
+          <span style={{ ...SANS, fontSize: 13, color: 'var(--text-muted)' }}>
             {e.accepted_payload.gamma_regime} · tail {e.accepted_payload.tail_pricing}
           </span>
           {onSelectRun && (

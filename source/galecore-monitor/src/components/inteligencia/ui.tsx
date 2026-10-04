@@ -19,7 +19,7 @@ export const SANS: React.CSSProperties = { fontFamily: 'var(--font-sans)' };
 export function Badge({ color, children, title }: { color: string; children: React.ReactNode; title?: string }) {
   return (
     <span title={title} style={{
-      ...SANS, display: 'inline-block', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.05em',
+      ...SANS, display: 'inline-block', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.05em',
       textTransform: 'uppercase', padding: '2px 7px', borderRadius: 999, whiteSpace: 'nowrap',
       color, backgroundColor: tint(color, 12), border: `1px solid ${tint(color, 35)}`,
     }}>
@@ -39,7 +39,7 @@ export function Card({ title, color, children, style }: {
     }}>
       {title && (
         <div style={{
-          ...SANS, fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+          ...SANS, fontSize: 12, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
           color: color ?? 'var(--text-muted)', marginBottom: 8,
         }}>
           {title}
@@ -51,12 +51,12 @@ export function Card({ title, color, children, style }: {
 }
 
 export function H3({ children }: { children: React.ReactNode }) {
-  return <div style={{ ...SANS, fontSize: 11.5, fontWeight: 700, color: 'var(--text-primary)', margin: '10px 0 4px' }}>{children}</div>;
+  return <div style={{ ...SANS, fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', margin: '10px 0 4px' }}>{children}</div>;
 }
 
 export function KV({ rows }: { rows: { k: string; v: React.ReactNode }[] }) {
   return (
-    <dl style={{ display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', gap: '3px 14px', margin: 0, fontSize: 11.5, ...SANS }}>
+    <dl style={{ display: 'grid', gridTemplateColumns: 'max-content minmax(0, 1fr)', gap: '3px 14px', margin: 0, fontSize: 13.5, ...SANS }}>
       {rows.map(({ k, v }) => (
         <React.Fragment key={k}>
           <dt style={{ color: 'var(--text-muted)' }}>{k}</dt>
@@ -70,7 +70,7 @@ export function KV({ rows }: { rows: { k: string; v: React.ReactNode }[] }) {
 export function Mono({ children, muted, wrap }: { children: React.ReactNode; muted?: boolean; wrap?: boolean }) {
   return (
     <span style={{
-      ...MONO, fontSize: 11, color: muted ? 'var(--text-muted)' : 'var(--text-primary)',
+      ...MONO, fontSize: 13, color: muted ? 'var(--text-muted)' : 'var(--text-primary)',
       whiteSpace: wrap ? 'normal' : 'nowrap', overflowWrap: wrap ? 'anywhere' : undefined,
     }}>
       {children}
@@ -80,14 +80,14 @@ export function Mono({ children, muted, wrap }: { children: React.ReactNode; mut
 
 export function Bullets({ items }: { items: string[] }) {
   return (
-    <ul style={{ ...SANS, margin: '2px 0 0', paddingLeft: 18, fontSize: 11.5, color: 'var(--text-primary)', lineHeight: 1.5 }}>
+    <ul style={{ ...SANS, margin: '2px 0 0', paddingLeft: 18, fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.5 }}>
       {items.map((it, i) => <li key={i}>{it}</li>)}
     </ul>
   );
 }
 
-const TH: React.CSSProperties = { ...SANS, textAlign: 'left', fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, padding: '4px 6px', borderBottom: '1px solid var(--border)' };
-const TD: React.CSSProperties = { ...SANS, fontSize: 11.5, padding: '4px 6px', borderBottom: '1px solid var(--border-dark)', verticalAlign: 'top', color: 'var(--text-primary)' };
+const TH: React.CSSProperties = { ...SANS, textAlign: 'left', fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, padding: '4px 6px', borderBottom: '1px solid var(--border)' };
+const TD: React.CSSProperties = { ...SANS, fontSize: 13.5, padding: '4px 6px', borderBottom: '1px solid var(--border-dark)', verticalAlign: 'top', color: 'var(--text-primary)' };
 
 export function Table({ head, rows }: { head: (string | { label: string; num?: boolean })[]; rows: React.ReactNode[][] }) {
   const cols = head.map((h) => (typeof h === 'string' ? { label: h, num: false } : { num: false, ...h }));

@@ -30,13 +30,13 @@ function ListRow({ label, value, hint }: { label: string; value: string; hint?: 
       }}
     >
       <span style={{
-        fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
+        fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
         fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em',
       }}>
         {label}
       </span>
       <span className="tabular-nums" style={{
-        fontSize: 11,
+        fontSize: 16,
         color: 'var(--text-secondary)',
         fontFamily: 'JetBrains Mono, monospace',
         fontWeight: 600,
@@ -137,7 +137,7 @@ function Panel({ label, children }: { label: string; children: React.ReactNode }
         gap: 6,
       }}>
         <span style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
+          fontSize: 13, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
           color: '#a78bfa', fontFamily: 'var(--font-sans)',
         }}>
           {label}

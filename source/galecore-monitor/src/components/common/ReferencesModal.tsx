@@ -71,7 +71,7 @@ export function ReferencesModal({ open, onClose, title, accentColor = 'var(--blu
         onClick={() => setTab(id)}
         style={{
           padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer',
-          fontSize: 11, fontWeight: active ? 700 : 500, letterSpacing: '0.06em', textTransform: 'uppercase',
+          fontSize: 13, fontWeight: active ? 700 : 500, letterSpacing: '0.06em', textTransform: 'uppercase',
           fontFamily: 'var(--font-sans)',
           color: active ? 'var(--text-primary)' : 'var(--text-muted)',
           borderBottom: active ? `2px solid ${accentColor}` : '2px solid transparent',
@@ -108,7 +108,7 @@ export function ReferencesModal({ open, onClose, title, accentColor = 'var(--blu
           padding: '12px 16px', borderBottom: '1px solid var(--border-dark)',
           backgroundColor: 'var(--bg-secondary)', flexShrink: 0,
         }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{title}</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{title}</span>
           <span style={{ marginLeft: 'auto' }} />
           <button
             onClick={onClose}
@@ -133,7 +133,7 @@ export function ReferencesModal({ open, onClose, title, accentColor = 'var(--blu
                 marginLeft: 'auto', marginRight: 10, display: 'inline-flex', alignItems: 'center', gap: 5,
                 padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
                 background: 'none', border: '1px solid var(--border-dark)',
-                fontSize: 10, fontWeight: 600, letterSpacing: '0.04em',
+                fontSize: 12, fontWeight: 600, letterSpacing: '0.04em',
                 color: copied ? 'var(--green)' : 'var(--text-muted)', fontFamily: 'var(--font-sans)',
               }}
             >
@@ -148,11 +148,11 @@ export function ReferencesModal({ open, onClose, title, accentColor = 'var(--blu
           {tab === 'definiciones' && definitions}
           {tab === 'json' && (
             <>
-              {jsonLoading && <div style={{ padding: 18, fontSize: 12, color: 'var(--text-muted)' }}>Cargando JSON…</div>}
-              {jsonErr && <div style={{ padding: 18, fontSize: 12, color: 'var(--red-gc)', fontFamily: 'JetBrains Mono, monospace' }}>⚠ {jsonErr}</div>}
+              {jsonLoading && <div style={{ padding: 18, fontSize: 14, color: 'var(--text-muted)' }}>Cargando JSON…</div>}
+              {jsonErr && <div style={{ padding: 18, fontSize: 14, color: 'var(--red-gc)', fontFamily: 'JetBrains Mono, monospace' }}>⚠ {jsonErr}</div>}
               {json && (
                 <pre style={{
-                  margin: 0, padding: '14px 16px', fontSize: 11.5, lineHeight: 1.55,
+                  margin: 0, padding: '14px 16px', fontSize: 13.5, lineHeight: 1.55,
                   fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-secondary)',
                   whiteSpace: 'pre', tabSize: 2,
                 }}>

@@ -12,7 +12,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 10,
+  fontSize: 12,
   fontWeight: 600,
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
@@ -98,7 +98,7 @@ export function MyPasswordCard({ embedded = false }: Props = {}) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Lock size={13} style={{ color: ACCENT }} />
           <span style={{
-            fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 14,
+            fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 16,
             color: 'var(--text-primary)', letterSpacing: '0.05em',
           }}>
             Mi contraseña
@@ -106,12 +106,12 @@ export function MyPasswordCard({ embedded = false }: Props = {}) {
         </div>
       )}
 
-      <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>
         {username || '—'}
         {email && <span style={{ color: 'var(--text-muted)' }}>{' · '}{email}</span>}
       </div>
 
-      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
+      <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
         Si entraste con una contraseña que te dio un admin, cambiala acá: mientras no lo hagas, la
         saben dos personas.
       </div>
@@ -151,7 +151,7 @@ export function MyPasswordCard({ embedded = false }: Props = {}) {
             placeholder="••••••••••••"
           />
           {repetida.length > 0 && !coinciden && (
-            <div style={{ fontSize: 10, color: 'var(--red-gc)', marginTop: 4, fontFamily: 'var(--font-sans)' }}>
+            <div style={{ fontSize: 12, color: 'var(--red-gc)', marginTop: 4, fontFamily: 'var(--font-sans)' }}>
               No coinciden.
             </div>
           )}

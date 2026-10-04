@@ -138,12 +138,12 @@ export function PositionCard({ spread: s, gexData }: Props) {
       >
         <div className="flex items-center gap-6 flex-wrap">
           <div className="flex items-center gap-2.5">
-            <span style={{ color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 19 }}>
+            <span style={{ color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 23 }}>
               {s.underlyingSymbol}
             </span>
             <span
               className="px-2 py-0.5 rounded"
-              style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--blue-gc)', fontSize: 12, fontWeight: 700, letterSpacing: '0.05em' }}
+              style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--blue-gc)', fontSize: 14, fontWeight: 700, letterSpacing: '0.05em' }}
             >
               {TYPE_LABELS[s.type] ?? s.type}
             </span>
@@ -162,7 +162,7 @@ export function PositionCard({ spread: s, gexData }: Props) {
           {!s.hasLiveQuote && (
             <span
               className="px-2 py-0.5 rounded"
-              style={{ color: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em' }}
+              style={{ color: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}
               title="No live option quotes (after-hours or stream down). Values use the previous close."
             >
               STALE · PREV CLOSE
@@ -173,7 +173,7 @@ export function PositionCard({ spread: s, gexData }: Props) {
         {alertCfg && (
           <span
             className="px-2.5 py-1 rounded font-bold uppercase tracking-wide ml-2 flex-shrink-0"
-            style={{ backgroundColor: alertCfg.bg, color: alertCfg.text, fontSize: 12 }}
+            style={{ backgroundColor: alertCfg.bg, color: alertCfg.text, fontSize: 14 }}
           >
             {alertCfg.label}
           </span>
@@ -199,7 +199,7 @@ export function PositionCard({ spread: s, gexData }: Props) {
             without live option quotes the P&L below can be wrong. Don't pretend. */}
         {!s.hasLiveQuote && (
           <div className="rounded px-3 py-2" style={{ backgroundColor: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)' }}>
-            <span style={{ color: '#f59e0b', fontSize: 12 }}>
+            <span style={{ color: '#f59e0b', fontSize: 14 }}>
               No live option quotes (after-hours or stream down). P&amp;L and live metrics use the <strong>previous close</strong> and may not reflect the current position.
             </span>
           </div>
@@ -208,7 +208,7 @@ export function PositionCard({ spread: s, gexData }: Props) {
         {/* ── Stat cards (left, 3 rows) + Management triggers (right) ─────── */}
         <div className="flex items-start gap-8 flex-wrap">
           {/* All metrics as uniform cards — rows: money / greeks / probabilities */}
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(4, 116px)' }}>
+          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(4, minmax(136px, 1fr))' }}>
             {/* Row 1 — money */}
             <StatCard label="Credit"     value={`$${fmtPrice(s.initialCredit * 100, 0)}`}
               sub={s.contracts > 1 ? `$${fmtPrice(s.initialPremium, 0)} total` : undefined} />
@@ -231,7 +231,7 @@ export function PositionCard({ spread: s, gexData }: Props) {
 
           {/* Management triggers — progress bars, top-aligned to the first card row */}
           <div className="flex-1 flex flex-col gap-2.5" style={{ minWidth: 300 }}>
-            <span style={{ color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
               Management triggers
             </span>
             {triggers.map(t => (
@@ -252,10 +252,10 @@ export function PositionCard({ spread: s, gexData }: Props) {
 function HeaderField({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
   return (
     <div className="flex flex-col" style={{ lineHeight: 1.15 }}>
-      <span style={{ color: 'var(--text-secondary)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+      <span style={{ color: 'var(--text-secondary)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
         {label}
       </span>
-      <span style={{ color: valueColor ?? 'var(--text-secondary)', fontSize: 14, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>
+      <span style={{ color: valueColor ?? 'var(--text-secondary)', fontSize: 20, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>
         {value}
       </span>
     </div>
@@ -268,13 +268,13 @@ function TriggerBar({ label, pct, marker, color }: {
   const filled = clampPct(pct * 100);
   return (
     <div className="flex items-center gap-3">
-      <span style={{ width: 168, flexShrink: 0, color: 'var(--text-secondary)', fontSize: 12.5, whiteSpace: 'nowrap' }}>
+      <span style={{ width: 168, flexShrink: 0, color: 'var(--text-secondary)', fontSize: 14.5, whiteSpace: 'nowrap' }}>
         {label}
       </span>
       <div className="flex-1" style={{ height: 14, backgroundColor: 'var(--bg-tertiary)', borderRadius: 5, overflow: 'hidden', border: '1px solid var(--border-dark)' }}>
         <div style={{ width: `${filled}%`, height: '100%', backgroundColor: color, borderRadius: 5, transition: 'width 0.3s ease' }} />
       </div>
-      <span style={{ width: 52, flexShrink: 0, textAlign: 'right', color, fontSize: 13.5, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}>
+      <span style={{ width: 52, flexShrink: 0, textAlign: 'right', color, fontSize: 15.5, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}>
         {marker}
       </span>
     </div>
@@ -286,13 +286,13 @@ function StatCard({ label, value, sub, valueColor }: {
 }) {
   return (
     <div className="rounded px-2.5 py-2" style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-dark)' }}>
-      <div style={{ color: 'var(--text-secondary)', fontSize: 11, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <div style={{ color: 'var(--text-secondary)', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {label}
       </div>
-      <div style={{ color: valueColor ?? 'var(--text-primary)', fontSize: 18, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, lineHeight: 1.2 }}>
+      <div style={{ color: valueColor ?? 'var(--text-primary)', fontSize: 22, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, lineHeight: 1.2 }}>
         {value}
       </div>
-      {sub && <div style={{ color: 'var(--text-muted)', fontSize: 10 }}>{sub}</div>}
+      {sub && <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{sub}</div>}
     </div>
   );
 }
@@ -308,7 +308,7 @@ function LegDetails({ spread: s, tickers }: { spread: LiveSpread; tickers: Recor
 
   return (
     <div style={{ borderTop: '1px solid var(--border-dark)', paddingTop: 10 }}>
-      <span style={{ color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
+      <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
         Legs
       </span>
       <div className="grid gap-2 mt-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
@@ -326,26 +326,26 @@ function LegDetails({ spread: s, tickers }: { spread: LiveSpread; tickers: Recor
               style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-dark)' }}
             >
               <div className="flex items-center justify-between">
-                <span style={{ color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                   {r.role}
                 </span>
-                <span style={{ color: dirColor, fontSize: 10, fontWeight: 700, letterSpacing: '0.04em' }}>
+                <span style={{ color: dirColor, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>
                   {r.dir === 'Short' ? '−1' : '+1'}
                 </span>
               </div>
-              <div style={{ color: 'var(--text-primary)', fontSize: 16, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, marginTop: 2 }}>
+              <div style={{ color: 'var(--text-primary)', fontSize: 20, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, marginTop: 2 }}>
                 ${fmtPrice(r.strike, 0)}
               </div>
               <div className="flex items-baseline justify-between mt-1">
-                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
                   entry {r.entry != null ? `$${fmtPrice(r.entry, 2)}` : '—'}
                 </span>
-                <span style={{ color: 'var(--text-secondary)', fontSize: 12, fontFamily: 'JetBrains Mono, monospace' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 14, fontFamily: 'JetBrains Mono, monospace' }}>
                   {cur != null ? `$${fmtPrice(cur, 2)}` : '—'}
                 </span>
               </div>
               {chgPct != null && (
-                <div style={{ color: chgColor, fontSize: 11, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, textAlign: 'right' }}>
+                <div style={{ color: chgColor, fontSize: 13, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, textAlign: 'right' }}>
                   {chgPct >= 0 ? '+' : ''}{chgPct.toFixed(1)}%
                 </div>
               )}

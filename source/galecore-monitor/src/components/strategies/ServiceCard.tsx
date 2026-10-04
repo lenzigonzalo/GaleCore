@@ -36,13 +36,13 @@ export function ServiceCard({ service }: Props) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 13,
+          fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15,
           color: 'var(--text-primary)', letterSpacing: '0.04em',
         }}>
           {service.label}
         </span>
         <span style={{
-          fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+          fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
           padding: '2px 7px', borderRadius: 4,
           color: 'var(--text-muted)', border: '1px solid var(--border)',
           fontFamily: 'JetBrains Mono, monospace',
@@ -53,7 +53,7 @@ export function ServiceCard({ service }: Props) {
 
       {service.name && (
         <div style={{
-          fontSize: 10.5, color: 'var(--text-secondary)',
+          fontSize: 12.5, color: 'var(--text-secondary)',
           fontFamily: 'JetBrains Mono, monospace', marginTop: -4,
         }}>
           {service.name}
@@ -61,7 +61,7 @@ export function ServiceCard({ service }: Props) {
       )}
 
       {service.description && (
-        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
           {service.description}
         </div>
       )}

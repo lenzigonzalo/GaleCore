@@ -40,3 +40,19 @@ Fuera de alcance: copiar el dashboard financiero de la referencia, cambiar estra
 - Un JSON Runtime preexistente y no trackeado queda fuera del cambio.
 - Uso: recargar `http://localhost:3039` (Ctrl+F5 si hay CSS en caché), revisar Main y Mi espacio. Si el servidor sirve `build/`, la compilación lo actualiza; si usa el servidor de desarrollo, toma los fuentes.
 - Cierre y conformidad visual pendientes del owner. No se modifican estados VALIDATED/CLOSED.
+
+## Segunda entrega — legibilidad
+
+Pedido del owner: texto y números más grandes, con más tamaño para lo importante.
+Se aumenta la escala tipográfica compartida y los estilos inline; precios, balances y métricas
+reciben mayor jerarquía. El balance principal se separa de las filas secundarias, la barra lateral
+crece y las métricas GEX se distribuyen en grupos que pueden envolver para evitar recortes.
+Se conserva la identidad y proporción de los grupos; no cambian datos ni reglas.
+Primera comprobación: compilar y revisar el diff; recorrido visual pendiente por falta de navegador conectado.
+Compilación final de esta entrega: `CI=true npm run build`, exit 0, Compiled successfully.
+`git diff --check` exit 0.
+Revisión interna [APPROVE](../reviews/GC-0008-legibilidad-internal.md) tras corregir la fila
+Bid/Ask/Volume para permitir envolver. La revisión es estática; no se afirma QA visual.
+Texto general 14–16 px, títulos de pantalla 24 px, precios 30 px, balance principal 28 px
+y métricas de riesgo 22 px. Valores de GEX 20 px con etiquetas y referencias separadas.
+Sin cierre ni aprobación del owner.

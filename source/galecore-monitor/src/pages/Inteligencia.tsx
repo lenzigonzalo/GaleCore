@@ -29,7 +29,7 @@ export function Inteligencia() {
           const active = t.id === sub;
           return (
             <button key={t.id} onClick={() => setSub(t.id)} style={{
-              fontFamily: 'var(--font-sans)', fontSize: 11, fontWeight: active ? 600 : 400, letterSpacing: '0.04em',
+              fontFamily: 'var(--font-sans)', fontSize: 13, fontWeight: active ? 600 : 400, letterSpacing: '0.04em',
               textTransform: 'uppercase', padding: '6px 12px', background: 'none', border: 'none', cursor: 'pointer',
               color: active ? 'var(--text-primary)' : 'var(--text-muted)',
               borderBottom: active ? `2px solid ${INTELIGENCIA_ACCENT}` : '2px solid transparent',

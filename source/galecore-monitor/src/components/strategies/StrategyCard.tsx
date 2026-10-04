@@ -65,14 +65,14 @@ export function StrategyCard({ strategy, onOpen }: Props) {
       {/* Identidad */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 14,
+          fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 16,
           color: 'var(--text-primary)', letterSpacing: '0.05em',
         }}>
           {strategy.label}
         </span>
         {strategy.kind && (
           <span style={{
-            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
             padding: '2px 7px', borderRadius: 4,
             color: accent, backgroundColor: tint(accent, 13), border: `1px solid ${tint(accent, 30)}`,
             fontFamily: 'JetBrains Mono, monospace',
@@ -83,13 +83,13 @@ export function StrategyCard({ strategy, onOpen }: Props) {
       </div>
 
       {strategy.name && (
-        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', marginTop: -6 }}>
+        <div style={{ fontSize: 13.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', marginTop: -6 }}>
           {strategy.name}
         </div>
       )}
 
       {strategy.description && (
-        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
           {strategy.description}
         </div>
       )}

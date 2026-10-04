@@ -3,6 +3,14 @@ module.exports = {
   content: ['./src/**/*.{js,jsx,ts,tsx}'],
   theme: {
     extend: {
+      fontSize: {
+        xs: ['14px', '20px'],
+        sm: ['16px', '24px'],
+        base: ['16px', '24px'],
+        lg: ['20px', '28px'],
+        xl: ['24px', '32px'],
+        '2xl': ['30px', '36px'],
+      },
       colors: {
         'bg-primary':   'var(--bg-primary)',
         'bg-secondary': 'var(--bg-secondary)',

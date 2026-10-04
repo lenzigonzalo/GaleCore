@@ -288,7 +288,7 @@ export function GexChart({
         background: { type: ColorType.Solid, color: '#090909' },
         textColor: '#b6b6b0',
         fontFamily: getComputedStyle(el).getPropertyValue('--font-sans').trim(),
-        fontSize: 11,
+        fontSize: 13,
         attributionLogo: false,
       },
       grid: {
