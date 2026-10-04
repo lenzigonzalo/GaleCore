@@ -65,3 +65,8 @@ viejo que deshacía una decisión posterior; pantalla que mostraba «Al día» c
 «Sin noticias de tu PC» y fecha de publicación); id sin validar; pedido pisado durante la publicación; `request_error`
 efímero; puntero `ACTIVE_WORK_ITEM` en 0019; sangría en el `claude.md` de GaleCore. Todos arreglados salvo el filtro de
 secretos (límite declarado). Suite: `pytest tests/unit` 1060+ y ruff limpios (se repite al integrar).
+
+Recheck interno 04/10: **APPROVE**. De sus MINOR se arreglaron: `space import` publica los agentes con `publish_agents`
+(no pierde pedidos ni `request_error`); una pieza `agent` con contenido roto ya no queda postergada para siempre; un
+pedido con hora futura (reloj adelantado) se rechaza; tests de la postergación y de la pieza rota. Queda: la fecha de
+publicación que muestra el monitor también cambia con el clic del propio usuario (MINOR, GC-0009).

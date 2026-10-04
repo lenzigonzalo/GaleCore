@@ -617,10 +617,12 @@ async def _cmd_space(args: argparse.Namespace) -> None:
         elif c == "import":
             from galecore_ai.application.tasks import WindowsScheduler
             kb = _build_knowledge_base()
-            requests = space.apply_requests(client, kb, WindowsScheduler())   # before the pieces overwrite them
-            result = space.sync(client, space.local_pieces(kb))
-            _json_out({"status": "SYNCED", "user": client.user, "credentials": client.source, "requests": requests,
-                       **result})
+            result = space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] != "agent"])
+            agents = space.publish_agents(client, kb, WindowsScheduler())   # agents keep the monitor's requests
+            for k in ("created", "updated", "unchanged", "deferred"):
+                result[k] = result.get(k, []) + agents[k]
+            _json_out({"status": "SYNCED", "user": client.user, "credentials": client.source,
+                       "requests": agents["requests"], **result})
         elif c == "agents":
             from galecore_ai.application.tasks import (
                 SYNC_MINUTES,

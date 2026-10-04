@@ -15,7 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import yaml
@@ -184,6 +184,10 @@ def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
         if task.status == wanted:
             done.append({"agent": item["key"], "status": wanted, "result": "already"})
             continue
+        if at > datetime.now(UTC) + timedelta(minutes=10):
+            done.append({"agent": item["key"], "status": wanted, "result": "refused",
+                         "error": "pedido con hora futura (¿reloj del navegador adelantado?)"})
+            continue
         if at < task.updated_at:
             done.append({"agent": item["key"], "status": wanted, "result": "refused",
                          "error": f"superado por un cambio posterior ({task.updated_at:%Y-%m-%d %H:%M} UTC)"})
@@ -205,7 +209,8 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     from this PC is published as cancelled, so the monitor stops showing it as running.
     """
     items = _agent_items(client)
-    seen = {("agent", i["key"]): i["version"] for i, _ in items}
+    # Every agent piece, readable or not: one with broken content must not stay deferred forever.
+    seen = {("agent", i["key"]): i["version"] for i in client.items("agent")["items"]}
     requests = apply_requests(client, kb, scheduler, now, items)
     refused = {r["agent"]: r["error"] for r in requests if r["result"] == "refused"}
     kept = {i["key"]: c["request_error"] for i, c in items if c.get("request_error") and not c.get("request")}

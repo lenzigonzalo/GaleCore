@@ -175,7 +175,7 @@ def test_the_monitor_turns_an_agent_off_and_on(env, galecore):  # noqa: F811
     space.publish_agents(client, kb_, sch)
     # What the monitor writes: the piece as it was, plus the request.
     client.put("agent", "oportunidades", title="oportunidades (market_watch)",
-               content=json.dumps({**_agent(fake), "request": {"status": "paused", "at": "2026-10-04T12:00:00Z"}}),
+               content=json.dumps({**_agent(fake), "request": {"status": "paused", "at": _now()}}),
                fmt="json")
     out = space.publish_agents(client, kb_, sch)
     assert out["requests"] == [{"agent": "oportunidades", "status": "paused", "result": "applied"}]
@@ -226,6 +226,45 @@ def test_an_old_request_does_not_undo_a_later_decision(env, galecore):  # noqa: 
     client.put("agent", "oportunidades", title="x", fmt="json",
                content=json.dumps({**_agent(fake), "request": {"status": "paused"}}))      # no time: refused
     assert space.publish_agents(client, kb_, sch)["requests"][0]["error"] == "pedido sin hora válida"
+    client.put("agent", "oportunidades", title="x", fmt="json",
+               content=json.dumps({**_agent(fake), "request": {"status": "paused", "at": "2999-01-01T00:00:00Z"}}))
+    assert "futura" in space.publish_agents(client, kb_, sch)["requests"][0]["error"]
+    assert t.load(kb_, "oportunidades").status == "active"
+
+
+def test_a_piece_changed_while_publishing_is_left_for_the_next_pass(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    space.publish_agents(client, kb_, sch)
+    real_sync = space.sync
+
+    def monitor_writes_meanwhile(c, pieces, seen=None):
+        c.put("agent", "oportunidades", title="x", fmt="json",
+              content=json.dumps({**_agent(fake), "request": {"status": "paused", "at": _now()}}))
+        return real_sync(c, pieces, seen)
+    space.sync = monitor_writes_meanwhile
+    try:
+        out = space.publish_agents(client, kb_, sch)
+    finally:
+        space.sync = real_sync
+    assert out["deferred"] == ["agent/oportunidades"] and _agent(fake)["request"]["status"] == "paused"
+    space.publish_agents(client, kb_, sch)
+    assert t.load(kb_, "oportunidades").status == "paused"
+
+
+def test_a_broken_agent_piece_does_not_block_publishing(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    client.put("agent", "oportunidades", title="x", fmt="json", content="no es json")
+    assert space.publish_agents(client, kb_, sch)["updated"] == ["agent/oportunidades"]
+    assert _agent(fake)["id"] == "oportunidades"
 
 
 def test_a_piece_whose_id_is_not_its_agent_is_refused(env, galecore):  # noqa: F811
