@@ -7,7 +7,7 @@ reviewer: internal
 approver: user
 feature_freeze: false
 closure_blocked: true
-review_result: PENDING
+review_result: APPROVED
 approval_result: PENDING
 ---
 
@@ -104,5 +104,14 @@ git diff --check
 
 ## Independent review
 
-**Reviewer:** PENDING
-**Review result:** PENDING
+**Reviewer:** internal (subagente `reviewer`, Sonnet), 04/10
+**Review result:** APPROVE — sin BLOCKER ni MAJOR; 97 tests reejecutados, gate y ruff PASS; conteo verificado contra
+transcripts reales (dedupe, offsets, subagentes), ~0,2 s por herramienta.
+
+| Hallazgo | Severidad | Resolución |
+|---|---|---|
+| Estado corrupto deja el freno apagado sin aviso | MINOR | arreglado: se aparta como `.bad` y el conteo sigue (test) |
+| Config con forma inválida o límite 0 rompe con traceback | MINOR | arreglado: se capturan `TypeError`/`AttributeError`/`ZeroDivisionError` (test) |
+| Sesión reanudada/compactada se cobra entera al item | MINOR | arreglado: sólo `source=startup` cuenta desde el inicio; volver a un item dejado sobreestima (documentado) |
+| AC-04 sin evidencia del lado del handoff | MINOR | arreglado: `.claude/agents/handoff.md` termina con el comando |
+| `warned` no se rearma al subir el límite; textos/largo de línea; `<synthetic>` | NIT | sin cambio |
