@@ -22,11 +22,18 @@ Activo: **GC-AI-0017** (entrega 5), según `ACTIVE_WORK_ITEM` del workspace.
 - Agente `oportunidades` PAUSADO por pedido del owner. Briefing L–V 10:00 corre desde `main`.
 - Pendientes de fuentes: BL-017 (CBOE, EDGAR, Tesoro, series FRED, BLS) con la receta.
 
-**Próximas sesiones (una por entrega):**
-1. Pantalla **Agentes** de trabajo en el monitor (estado, última corrida, hallazgos, prender/apagar) y reordenar la barra
-   (Estrategias ▾, Inteligencia). Verificar con tsc/build; navegador sólo para la revisión final.
-2. Cierres en lote de 0019–0022 y GC-0006/GC-0007; decidir PR a producción de GC-0006/GC-0007.
-3. Chat en el monitor: decidir cómo corre el modelo en producción (API vs. host en servidor) antes de construir.
+**04/10:** pantalla Agentes hecha — GC-AI-0023 en `main` (tarea `GaleCore-AI\espacio-agentes` cada 5 min instalada y
+probada) y GaleCore GC-0009 en `feature/GC-0009-agentes` (sale de GC-0008 tema carbón; se integra a `local/integracion`
+cuando el owner cierre GC-0008). El chat en el monitor **no** se hace (el host es Claude Code; queda en BL-005).
+
+**Plan vigente: roadmap §4 «Plan para cerrar el harness» (owner 04/10). No se cambia hasta cerrarlo.** Una sesión por pieza:
+1. **La historia del mercado** — siguiente. Arranca con el inventario de tools y conectores (qué hay y para qué, incluidos
+   los MCP del host) y modelo + consumo por capacidad; después la capacidad que lee qué se está priceando y detecta el
+   cambio de historia. Usar lo que hay; lo que falte se declara (buzón/BL-017), sin buscar en la web.
+2. Estrategia y cartera como proyecto. 3. Contraste diario y prender/apagar por contexto (+ una estructura más en
+SHADOW). 4. Supervisor de posiciones. 5. Performance. 6. Curador.
+
+Cierres pendientes del owner (en lote): GC-AI-0019…0023; GaleCore GC-0001, GC-0006…0009. Backtest (GC-AI-0011) descartado.
 
 ## Retomar anterior (30/09, historia)
 
