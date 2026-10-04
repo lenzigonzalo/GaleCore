@@ -57,7 +57,11 @@ placeholders), `daily_attention` (what deserves attention today about what is in
 revision of one investigation per strategy), `capability_builder` (a new capability with the template:
 catalog entry + skill, data needs from the source registry, controls) and `idea_inbox` (the owner's "anotá esto":
 `inbox add --text "<words verbatim>"` into `knowledge/inbox/`, not evaluated then; reviewed later with `inbox list`
-and `inbox resolve <id> --to roadmap|backlog:BL-NNN|work-item:<id>|done|discarded`). While a profile exists, saving
+and `inbox resolve <id> --to roadmap|backlog:BL-NNN|work-item:<id>|done|discarded`). `strategy_project` (GC-AI-0026): "en la estrategia X" / "mi cartera" →
+`project show strategy:<name>|portfolio` (versions, approval, rules, last follow-up, investigations, feedback, the
+owner's log, what is missing) and `project add <name>|portfolio --kind thesis|story|decision|pending|done` (owner's
+words, hash-chained in `knowledge/projects/`). The profile in force is the space's in GaleCore: `space import` does not
+overwrite a profile edited in the monitor; `space pull-profile` brings it as a new local version. While a profile exists, saving
 an investigation (`research save|revise`, whatever capability stamps it) is refused unless an antecedent
 cites the version in force. `catalog --check`
 validates every entry (skill and contract load, flow commands exist, data needs resolve or say why not,

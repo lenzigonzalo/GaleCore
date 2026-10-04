@@ -84,12 +84,12 @@ Aprobado con las propuestas (a) de D-1, D-2 y D-3: «Sobre lo demás AVANCEMOS c
 
 | Criterion | Implementation | Automated verification | Reproducible artifact | Status |
 |---|---|---|---|---|
-| AC-01 | PENDING | PENDING | PENDING | PENDING |
-| AC-02 | PENDING | PENDING | PENDING | PENDING |
-| AC-03 | PENDING | PENDING | PENDING | PENDING |
-| AC-04 | PENDING | PENDING | PENDING | PENDING |
-| AC-05 | PENDING | PENDING | PENDING | PENDING |
-| AC-06 | PENDING | PENDING | PENDING | PENDING |
+| AC-01 | `application/project.py` (`strategy_project`), CLI `project show strategy:<name>` | `tests/unit/test_project.py` (vista con referencias, aprobada vigente, faltantes declarados) | real 04/10: `spy_prima_varianza_30_45d` → 1.0.5 aprobada, 24 reglas, 3 decisiones, 4 investigaciones, 1 feedback, seguimiento 03/10 OK; falta tesis e historia | DONE |
+| AC-02 | `portfolio_project`, CLI `project show portfolio` | `test_portfolio_without_galecore_declares_the_profile_unconfirmed` | real 04/10: 1 estrategia, `profile:v5` coherente con GaleCore Dev; riesgo en vivo declarado como no consultado | DONE |
+| AC-03 | `contracts/project.py` (encadenado), `project add`, `kb search --kind project` | `test_owner_entries_are_kept_verbatim_and_open_items_close`, `test_bad_entries_are_refused`, `test_an_edited_log_is_integrity_failed`, `test_kb_search_finds_project_entries` | — | DONE |
+| AC-04 | `config/catalog.yaml` `strategy_project`, `skills/strategy-project/` | `test_knowledge.py::TestCatalog`, `test_route.py` | `catalog --check` complete; `catalog --match "Estemos en la estrategia…"` y `"Abrí mi cartera"` → `strategy_project` primero | DONE |
+| AC-05 | `space.py` `profile_state`, `guard_profile`, `pull_profile`; CLI `space import` y `space pull-profile` | `test_a_monitor_edit_is_not_overwritten_and_is_pulled`, `test_a_local_version_not_imported_yet_is_local_newer` | contra GaleCore Dev 04/10: `coherent` (v5) | DONE |
+| AC-06 | demostración con datos reales (salidas arriba) | — | sesión del 04/10; la de una sesión nueva la hace el owner con `claude -n GC-AI-0026` | PARTIAL |
 
 ## Required validation
 
@@ -102,7 +102,14 @@ git diff --check
 
 ## Implementer handoff
 
-**State:** IN_PROGRESS (04/10)
+**State:** DONE (04/10)
+
+- 1103 tests (suite completa) + ruff + gate PASS en `feature/GC-AI-0026`.
+- Decisiones aplicadas: D-1 (a) `knowledge/projects/<name>.json`; D-2 (a) manda el espacio; D-3 (a) texto del owner + referencias.
+- Límites: el riesgo abierto en vivo no se consulta (se muestra el último seguimiento con fecha); la edición del perfil
+  en el monitor se detecta por contenido distinto con versión no menor a la local; las tesis e historias reales las
+  escribe el owner (no se inventaron).
+- Mejoras de `strategy_design` propuestas en BL-007 (addendum 04/10), fuera de este item.
 
 ## Independent review
 
