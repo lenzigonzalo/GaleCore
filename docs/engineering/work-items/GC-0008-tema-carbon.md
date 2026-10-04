@@ -1,12 +1,12 @@
 ---
 id: GC-0008
 title: Tema carbón del monitor inspirado en la referencia del owner
-status: IN_PROGRESS
+status: CLOSED
 implementer: codex
 reviewer: internal
 approver: user
 review_result: APPROVED
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-0008 — Tema carbón
@@ -70,3 +70,7 @@ Mientras se trabajaba apareció un merge ajeno con conflicto en TabNav en el ár
 Esta entrega se guarda por separado en `feature/GC-0008-skill`, worktree
 `.worktrees/galecore/GC-0008-skill`, base `5bc3749`; sus archivos permanecen disponibles
 también en el monitor original. Integración del commit pendiente de resolver el merge ajeno.
+
+## Cierre
+
+CLOSED por el owner el 2026-10-04 («cerrá el lote»), integrado en `local/integracion`. Sin push.

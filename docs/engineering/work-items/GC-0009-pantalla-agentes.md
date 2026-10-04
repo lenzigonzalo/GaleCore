@@ -1,12 +1,12 @@
 ---
 id: GC-0009
 title: Pantalla Agentes y barra reordenada
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: internal
 approver: user
-review_result: PENDING
-approval_result: PENDING
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-0009 — Pantalla Agentes
@@ -55,3 +55,7 @@ sangría del árbol de pages en `claude.md`. `tsc --noEmit` y `CI=true npm run b
 
 Recheck interno 04/10: **APPROVE**. Arreglado después: Configuración > Agentes ya no lista los cancelados como «Pausado».
 Queda (MINOR): la fecha de publicación usa `updatedAt`, que también cambia con el pedido del propio usuario.
+
+## Cierre
+
+CLOSED por el owner el 2026-10-04 («cerrá el lote»), integrado en `local/integracion`. Sin push.

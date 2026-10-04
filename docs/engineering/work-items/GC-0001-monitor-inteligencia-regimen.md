@@ -1,14 +1,14 @@
 ---
 id: GC-0001
 title: Monitor — sección Inteligencia, pestaña Régimen (consulta y review de registros)
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: APPROVED
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-0001 — Monitor: sección "Inteligencia", pestaña "Régimen"
@@ -206,3 +206,7 @@ Tres MINORs nuevos, corregidos en este incremento:
   solo transcribe el veredicto del reviewer. Pendiente de esta mitad: login real con la API .NET
   levantada (validado con sesión simulada) y la medición de utilidad frente a la alternativa de
   terminal.
+
+## Cierre
+
+CLOSED por el owner el 2026-10-04 («cerrá el lote»), integrado en `local/integracion`. Sin push.
