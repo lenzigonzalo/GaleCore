@@ -656,7 +656,7 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   │   ├── layout/
   │   │   ├── Sidebar.tsx         # Barra lateral con AccountSummary
   │   │   ├── StatusBar.tsx       # Barra superior: estado sistema, estado mercado, hora
-  │   │   ├── TabNav.tsx          # Tabs: Main / Monitor / GEX / RPF · a la derecha Admin (solo isAdmin) + AccountMenu
+  │   │   ├── TabNav.tsx          # Tabs: Main / Monitor / Estrategias ▾ (GEX, RPF, SHADOW) / Inteligencia / Agentes · a la derecha Admin (solo isAdmin) + AccountMenu
   │   │   └── AccountMenu.tsx     # Menú Mi Cuenta: cuenta de bróker (pestaña), contraseña (modal), separador, salir. Para todos
   │   ├── common/
   │   │   ├── StrategySwitch.tsx   # Switch ON/OFF reusable: recibe fetchState/setState, no conoce la estrategia
@@ -702,7 +702,8 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   │   ├── Monitor.tsx         # Tab Monitor: wrapper de PositionMonitor. Sin cuenta vinculada se reduce al encabezado + NoticePanel
   │   ├── MyAccount.tsx       # Pestaña `cuenta`: la cuenta de bróker propia. Se llega solo desde el menú Mi Cuenta
   │   ├── Admin.tsx           # Tab Admin: ABM de usuarios y permisos. Solo admin — lo propio del operador se fue a Mi Cuenta
-  │   ├── Rpf.tsx             # Tab RPF: tablero de orquestación (motor→ejes→estados→candidato→sugerencia) por SignalR
+  │   ├── Agentes.tsx         # Tab Agentes (GC-0009): agentes del trader desde su espacio (piezas `agent` que publica GaleCore-AI); prender/apagar = pedido en la pieza, lo aplica la PC
+│   ├── Rpf.tsx             # Tab RPF: tablero de orquestación (motor→ejes→estados→candidato→sugerencia) por SignalR
   │   └── Gex.tsx             # Tab GEX: universo + Details (checks + diagnóstico, GEX global) +
   │                           #   Graph (Options Chain + Expiry Engine + velas 1h×100 + barras del vencimiento).
   │                           #   Se monta recién al entrar a la pestaña (el barrido es caro).

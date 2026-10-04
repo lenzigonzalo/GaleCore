@@ -54,7 +54,7 @@ const INTRO: Partial<Record<Section, string>> = {
   convenciones: 'Cómo trabajás y qué no se hace. Valen para todo lo que GaleCore-AI arma para vos.',
   memoria: 'Lo que GaleCore-AI tiene que recordar entre sesiones. También se agrega desde el chat («acordate de…»).',
   skills: 'Los métodos que GaleCore-AI sabe aplicar. Se leen en texto y se pueden ajustar en markdown.',
-  agentes: 'Lo que corre solo con tus instrucciones. Se crean y se prenden o apagan desde el chat.',
+  agentes: 'Lo que corre solo con tus instrucciones. Se crean desde el chat; cómo van y el botón para prenderlos o apagarlos, en la pestaña Agentes.',
   datos: 'Fuentes que ponés a disposición de GaleCore-AI.',
   compartido: 'Lo que otros del equipo compartieron. Se lee, no se edita.',
 };
