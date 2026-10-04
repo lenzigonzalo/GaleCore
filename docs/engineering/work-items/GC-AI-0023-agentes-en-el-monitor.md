@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0023
 title: Agentes en el monitor (estado, hallazgos y prender/apagar)
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0023 — Agentes en el monitor
@@ -48,7 +48,7 @@ Que la pantalla Agentes del monitor muestre de cada agente si está prendido, si
 - [x] **AC-03 — Tarea cada 5 minutos:** `test_the_sync_task_runs_every_five_minutes`. Se instala desde `main` con
   `space agents --install` al integrar.
 - [x] **AC-04 — Suite:** `pytest tests/unit` y `ruff check src tests tools` limpios.
-- [ ] **AC-05 — Cierre:** owner.
+- [x] **AC-05 — Cierre:** owner, 04/10 (ver «Cierre»).
 
 ## Límites
 
@@ -70,3 +70,9 @@ Recheck interno 04/10: **APPROVE**. De sus MINOR se arreglaron: `space import` p
 (no pierde pedidos ni `request_error`); una pieza `agent` con contenido roto ya no queda postergada para siempre; un
 pedido con hora futura (reloj adelantado) se rechaza; tests de la postergación y de la pieza rota. Queda: la fecha de
 publicación que muestra el monitor también cambia con el clic del propio usuario (MINOR, GC-0009).
+
+## Cierre
+
+**CLOSED por el owner el 04/10/2026** («ok, cerrá GC-AI-0024 y el lote pendiente»), en lote con GC-AI-0019…0024.
+Revisión: interna (con sus arreglos registrados arriba); sin Codex. Demos reemplazadas por ejemplos internos y corridas
+reales (regla del 03/10).

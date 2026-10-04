@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0022
 title: Pedir sin nombrar skills (Producto 1, fase 3)
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0022 — Pedir sin nombrar skills
@@ -41,4 +41,10 @@ correcta, parta de su espacio (perfil, objetivos) y use los datos de GaleCore, s
   el CPI; candidato de referencia QQQ PCS 705/701 13/11 (short delta 0,20, 5,9 % abajo del spot, pérdida máxima
   ≈ 342 USD), con precios teóricos del feed y no bid/ask.
 - [x] **AC-03 — Arreglos de la revisión interna** con tests (`test_market_watch.py`, `test_space.py`).
-- [ ] **AC-04 — Cierre:** vos.
+- [x] **AC-04 — Cierre:** vos, 04/10 (ver «Cierre»).
+
+## Cierre
+
+**CLOSED por el owner el 04/10/2026** («ok, cerrá GC-AI-0024 y el lote pendiente»), en lote con GC-AI-0019…0024.
+Revisión: interna (con sus arreglos registrados arriba); sin Codex. Demos reemplazadas por ejemplos internos y corridas
+reales (regla del 03/10).

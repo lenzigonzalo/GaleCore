@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0019
 title: Pack de datos — inventario real, GaleCore completo y receta «sumar una fuente» (entregable 1, pieza e)
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0019 — Pack de datos
@@ -84,7 +84,7 @@ Registro de fuentes: `galecore`, `fred`, `fed`, `alpha_vantage`, `fmp`; **sin es
 - [x] **AC-05 — Demostración:** un análisis real que usa un dato de GaleCore que hoy no se puede pedir.
   **Ejemplo interno 03/10 (demos ágiles):** «¿IV rank de NVDA?» → `sources query` apunta a galecore → `galecore get
   compute.iv_rank` responde con `GALECORE_VERIFIED`; antes respondía «faltante».
-- [ ] **AC-06 — Revisión:** interna (cambio chico y de lectura: sin Codex, regla del 03/10); utilidad y cierre, vos.
+- [x] **AC-06 — Revisión:** interna (cambio chico y de lectura: sin Codex, regla del 03/10); utilidad y cierre, vos.
 
 ## Requirement-to-evidence matrix
 
@@ -100,3 +100,9 @@ python -B -m pytest -q -p no:cacheprovider
 python -B -m ruff check --no-cache .
 git diff --check
 ```
+
+## Cierre
+
+**CLOSED por el owner el 04/10/2026** («ok, cerrá GC-AI-0024 y el lote pendiente»), en lote con GC-AI-0019…0024.
+Revisión: interna (con sus arreglos registrados arriba); sin Codex. Demos reemplazadas por ejemplos internos y corridas
+reales (regla del 03/10).

@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0024
 title: La historia del mercado (+ inventario de tools y consumo por capacidad)
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0024 — La historia del mercado
@@ -55,7 +55,7 @@ Pieza 1 del plan vigente (roadmap §4 «Plan para cerrar el harness», owner 04/
   antes del modelo (que no puede escribirlo) y se lo pasa en el prompt. Bug real arreglado: dentro de `task run` el
   paquete no se juntaba (event loop ya corriendo; test que lo reproduce). Se reapunta a `main` al integrar.
 - [x] **AC-06 — Suite y revisión interna:** `pytest tests/unit` 1014 y ruff limpios; revisión interna abajo.
-- [ ] **AC-07 — Cierre:** owner.
+- [x] **AC-07 — Cierre:** owner, 04/10 (ver «Cierre»).
 
 ## Límites
 
@@ -72,3 +72,9 @@ MINOR arreglados: sin paquete no se llama al modelo (FAILED, sin gastar la corri
 cierre antes de las 16:15 ET; cero no cuenta como cambio de signo; el tope HTTP del dispatcher (120 s por defecto)
 queda documentado junto al de 240 s. Quedan como límites: `history` del IV rank se asume ascendente (así lo devuelve
 GaleCore); estados de conectores fijos al 04/10. Recheck acotado: no corrido (correcciones chicas, cubiertas por tests).
+
+## Cierre
+
+**CLOSED por el owner el 04/10/2026** («ok, cerrá GC-AI-0024 y el lote pendiente»), en lote con GC-AI-0019…0024.
+Revisión: interna (con sus arreglos registrados arriba); sin Codex. Demos reemplazadas por ejemplos internos y corridas
+reales (regla del 03/10).

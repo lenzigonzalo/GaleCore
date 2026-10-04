@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0020
 title: Agentes que crea el usuario — primero, el de oportunidades (Producto 1, fase 2)
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0020 — Agentes que crea el usuario
@@ -59,5 +59,11 @@ Avisos con sonido en el monitor (fase 5); varios agentes coordinados; órdenes; 
   92 s, 15/25 turnos, `claude-sonnet-5-5`, 5 evidencias guardadas, una ronda de corrección (dos referencias mal
   escritas), `research:2026-10-03-market-watch-oportunidades` rev 1: ninguno cumple (IV rank < 30 en los tres); no
   pidió cadenas porque sin IV rank no hay candidato. Costo estimado prendido: ~13 corridas/día × ~1,5 min de Sonnet.
-- [ ] **AC-05 — Revisión:** interna (no mueve plata ni toca validadores de aceptación; el modelo sin supervisión ya pasó
+- [x] **AC-05 — Revisión:** interna (no mueve plata ni toca validadores de aceptación; el modelo sin supervisión ya pasó
   por Codex en 0017); utilidad y cierre, vos.
+
+## Cierre
+
+**CLOSED por el owner el 04/10/2026** («ok, cerrá GC-AI-0024 y el lote pendiente»), en lote con GC-AI-0019…0024.
+Revisión: interna (con sus arreglos registrados arriba); sin Codex. Demos reemplazadas por ejemplos internos y corridas
+reales (regla del 03/10).

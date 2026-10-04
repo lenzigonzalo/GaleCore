@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0021
 title: El espacio del trader en GaleCore, usado por GaleCore-AI (Producto 1, fase 3b)
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0021 — El espacio del trader, del lado de GaleCore-AI
@@ -43,4 +43,10 @@ conservar en su espacio, que después ve y edita en el monitor.
   1 objetivo, 1 convención, 3 agentes, 14 skills); segunda corrida → 0 escritas, 20 sin cambios. `space context` da
   perfil (capital 10.000 USD, horizonte, límites), objetivos, convenciones, agentes y skills. Arreglados en la prueba:
   el usuario se informaba antes del login; la consola de Windows no imprimía «−».
-- [ ] **AC-05 — Revisión:** interna; utilidad y cierre, vos.
+- [x] **AC-05 — Revisión:** interna; utilidad y cierre, vos.
+
+## Cierre
+
+**CLOSED por el owner el 04/10/2026** («ok, cerrá GC-AI-0024 y el lote pendiente»), en lote con GC-AI-0019…0024.
+Revisión: interna (con sus arreglos registrados arriba); sin Codex. Demos reemplazadas por ejemplos internos y corridas
+reales (regla del 03/10).
