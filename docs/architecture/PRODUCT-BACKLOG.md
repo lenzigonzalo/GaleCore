@@ -911,6 +911,22 @@ lleva (rama + paquete, como GC-0005).
 
 Recomendación: primero las vistas, después el host. Sin prioridad en el plan.
 
+### Addendum 2026-10-03 — propuesta de front integral para trading y GaleCore-AI
+
+**Origen:** el owner pide una propuesta completa para una web con chat, configuración y memoria de IA,
+gráficos interactivos, estrategias SHADOW/LIVE, métricas de pruebas y cartera, agentes y sus flows.
+Usa TradingView para precios y Tastytrade para operar; tiene poco tiempo y prioriza cruces de información.
+
+Propuesta para analizar: [Front integral de GaleCore](../../../roadmap/proposals/FRONT-GALECORE-INTEGRAL.md).
+**Clasificación:** `BACKLOG_CANDIDATE`, `ALIGNED_WITH_PREREQUISITE`; extiende este BL y relaciona BL-007/BL-008.
+La UI reutiliza monitor, Settings/space, métricas y eventos SHADOW y capacidades de GaleCore-AI.
+Chat integrado necesita un host/proveedor comprobado; flows necesitan instrumentación real; performance
+de cartera requiere historia/flujos/costos; LIVE gestionado requiere órdenes y reconciliación.
+Primer vertical sugerido: atención diaria → detalle de estrategia/instancia → métricas y descartes reales;
+prueba temprana y separada de un pedido desde el chat integrado. Borrador, sin fechas ni prioridad aprobadas.
+Preserva identidad de versiones, aislamiento de cuentas, permisos y separación de SHADOW/cuenta real/LIVE.
+No se cambia el roadmap, el item activo ni se autoriza implementación o ejecución financiera.
+
 ---
 
 ## BL-006 — Federación MCP, trust y routing de tools externas
