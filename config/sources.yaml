@@ -39,6 +39,8 @@ sources:
       - category: price_history
         description: velas OHLCV históricas e intradía por intervalo (1d, 1h, 5m…) desde una fecha (market_data.candles con interval y fromTime)
         any_symbol: true
+      - category: macro_calendar
+        description: calendario macro, sólo fechas de publicación programadas según FRED (empleo, precios al consumidor y al productor, PIB, ingresos y gastos, ventas minoristas; calendar.macro_releases) y reuniones del FOMC de la página de la Fed (calendar.fomc_meetings), servidos por GaleCore desde GC-0006
       - category: shadow_runtime
         description: runtime SHADOW de GaleCore Dev — estado, instancias, evaluaciones, descartes, posiciones (con su riesgo máximo) y métricas por versión de estrategia (App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics; se lee con `followup run`)
     limits:
@@ -150,19 +152,6 @@ sources:
   # ── Pedidas a GaleCore (roadmap §4, Producto 1, fase 1b; contrato en docs/engineering/HANDOFF-GALECORE-FUENTES.md
   # del workspace). Acceso a la fuente original probado el 30/09; todavía no se pueden pedir. Al quedar cada endpoint en
   # GaleCore, pasa a covers de `galecore` y se borra de acá.
-  - id: galecore_macro_calendar
-    display_name: Calendario macro y reuniones de la Fed (en GaleCore, pedido)
-    access_type: requested
-    cost: gratis (FRED con clave gratuita; página pública de la Fed)
-    usage: requested
-    preference: 90
-    covers:
-      - category: macro_calendar
-        description: publicaciones macro programadas (empleo, CPI, PPI, PIB, ventas minoristas) y reuniones del FOMC servidas por la API de GaleCore, para el briefing, el supervisor y reglas por evento del runtime
-    limits:
-      - "Hasta que exista, el calendario sale de los scripts transitorios fred_query.py y fed_calendar.py (fuentes fred y fed)"
-    probe:
-      description: sin sonda hasta que GaleCore exponga el endpoint
   - id: cboe
     display_name: CBOE — historia diaria de VIX, VVIX y SKEW (en GaleCore, pedido)
     access_type: requested

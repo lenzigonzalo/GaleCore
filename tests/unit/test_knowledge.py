@@ -134,7 +134,7 @@ class TestCatalog:
         entries = describe(load_catalog())
         assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "data_sources",
                                               "user_profile", "capability_builder", "research", "context_research", "strategy_design", "strategy_followup",
-                                              "daily_attention", "recurring_followup", "idea_inbox", "market_watch",
+                                              "daily_attention", "recurring_followup", "idea_inbox", "market_watch", "market_story",
                                               "trader_space"}
         assert all(e["available"] for e in entries), entries
 
@@ -326,7 +326,7 @@ class TestCli:
         assert [e["id"] for e in data["entries"]] == ["gex_interpretation", "regime_interpretation", "data_sources",
                                                     "trader_space", "user_profile", "capability_builder", "research",
                                                     "context_research", "strategy_design", "strategy_followup",
-                                                    "daily_attention", "market_watch", "recurring_followup",
+                                                    "daily_attention", "market_watch", "market_story", "recurring_followup",
                                                     "idea_inbox"]
 
     def test_save_search_show_revise(self, kb):

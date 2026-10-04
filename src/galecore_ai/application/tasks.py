@@ -13,6 +13,7 @@ application/model_run.py). The catalog is checked again at every run.
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import hashlib
 import io
@@ -24,6 +25,7 @@ import tempfile
 import time
 import traceback
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -515,7 +517,8 @@ def status(*, kb: KnowledgeBase, scheduler, task_id: str, now: datetime | None =
         "scheduler": scheduler.query(task.scheduler_name) if task.status != "cancelled" else {"registered": False},
         "last_result": last_result,
         "last_run": ({k: outcomes[-1].get(k) for k in ("at", "event", "result", "invoked_by", "duration_s", "turns",
-                                                       "max_turns", "model", "reason", "error") if k in outcomes[-1]}
+                                                       "max_turns", "model", "tokens", "reason", "error")
+                      if k in outcomes[-1]}
                      if outcomes else None),
         "runs": sum(1 for e in log if e["event"] == "run_finished"),
         "recent_problems": problems, "recent_events": log[-5:],
@@ -611,10 +614,38 @@ def _repair_if_refused(kb: KnowledgeBase, task: TaskDefinition, target: str | No
     (scratch / "repair.json").write_text(json.dumps({"problems": problems, "reply": vars(fixed)}, ensure_ascii=False,
                                                     indent=1, default=str), encoding="utf-8")
     base = {**base, "turns": (reply.turns or 0) + (fixed.turns or 0), "repaired": problems[:5],
-            "duration_model_s": round((reply.duration_s or 0) + (fixed.duration_s or 0), 1)}
+            "duration_model_s": round((reply.duration_s or 0) + (fixed.duration_s or 0), 1),
+            **_tokens(model_run.add_tokens(reply.tokens, fixed.tokens))}
     if not fixed.ok:
         fixed.error = f"correction round failed ({fixed.error}) after: {'; '.join(problems)[:400]}"
     return fixed, base
+
+
+def _tokens(tokens: dict | None) -> dict:
+    return {"tokens": tokens} if tokens else {}
+
+
+def _story_pack(kb: KnowledgeBase, invoked_by: str, now: datetime) -> tuple[str, str]:
+    """Gather and keep the day's market pack; the model gets it in the prompt and cites its ref."""
+    from galecore_ai.adapters.cli import _build_dispatcher  # lazy: the CLI imports this module
+    from galecore_ai.application import story
+
+    coro = story.gather(_build_dispatcher(), today=now.date())
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:                       # the Scheduler's runner: no loop yet
+        pack = asyncio.run(coro)
+    else:                                      # `task run` from the CLI already runs inside a loop
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pack = pool.submit(asyncio.run, coro).result()
+    if not pack["prices"] and not pack["options"]:
+        raise RuntimeError(f"GaleCore did not answer: {'; '.join(pack['missing'])[:300]}")
+    ref, pack = story.save_pack(kb, pack, prompt=f"Tarea {invoked_by}: historia del mercado",
+                                host=RecordHost(provider=f"{INVOKERS[invoked_by]} story pack", model=None))
+    note = (f"The runner already gathered today's market pack from GaleCore and stored it as {ref} (cite it with that "
+            f"exact ref; do not fetch these data again). The pack, verbatim:\n```json\n"
+            f"{json.dumps(pack, ensure_ascii=False)}\n```")
+    return ref, note
 
 
 def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, now: datetime, invoked_by: str,
@@ -628,23 +659,25 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     caps = entry.schedulable
     if caps.model and isinstance(client, model_run.ClaudeCodeClient):
         client.model = caps.model
-    rec = None
+    rec = kept = None
+    followup_error = None
     try:
-        if task.strategy is None:   # an agent that watches the market: no strategy, no runtime follow-up (GC-AI-0020)
-            raise LookupError("this agent follows no strategy")
-        rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=INVOKERS[invoked_by],
-                             task_id=task.id, now=now)
-        written += [path, path.parent / "LATEST.md",
-                    *(kb.base / "evidence" / f"{s.split(':', 1)[1]}.json" for s in rec.sources)]
-        note = (f"The runner already ran the follow-up for today: record {rec.id} (status {rec.status}); read it with "
-                f"`followup history --strategy {task.strategy}` and use it as the runtime data of step 3.")
-        followup_error = None
-    except LookupError:
-        followup_error = "sin estrategia: no hay seguimiento"
-        note = "This agent follows no strategy: there is no runtime follow-up; read the market with your commands."
+        if entry.id == "market_story":       # the day's market pack, gathered by code before the model (GC-AI-0024)
+            kept, note = _story_pack(kb, invoked_by, now)
+            written.append(kb.evidence.path_for(kept.removeprefix("evidence:")))
+        elif task.strategy is None:  # an agent that watches the market: no strategy, no runtime follow-up (GC-AI-0020)
+            followup_error = "sin estrategia: no hay seguimiento"
+            note = "This agent follows no strategy: there is no runtime follow-up; read the market with your commands."
+        else:
+            rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=INVOKERS[invoked_by],
+                                 task_id=task.id, now=now)
+            written += [path, path.parent / "LATEST.md",
+                        *(kb.base / "evidence" / f"{s.split(':', 1)[1]}.json" for s in rec.sources)]
+            note = (f"The runner already ran the follow-up for today: record {rec.id} (status {rec.status}); read it "
+                    f"with `followup history --strategy {task.strategy}` and use it as the runtime data of step 3.")
     except Exception as exc:  # noqa: BLE001 - recorded; the model still reads what it can
         followup_error = f"{type(exc).__name__}: {exc}"
-        note = f"The runner could not run the follow-up today ({followup_error[:200]}): runtime data is missing."
+        note = f"The runner could not gather today's data ({followup_error[:200]}): that data is missing."
     target = _latest_research(kb, task)
     scratch = _scratch(task.id, now)
     scratch.mkdir(parents=True, exist_ok=True)
@@ -660,7 +693,8 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     reply = client.run(prompt=prompt, allowed=allowed, max_turns=caps.max_turns, schema=model_run.output_schema(),
                        cwd=_REPO, timeout_s=int(min(caps.timeout_minutes * 60, left)), add_dir=scratch)
     base = {"invoked_by": invoked_by, "turns": reply.turns, "max_turns": caps.max_turns, "model": reply.model,
-            "duration_model_s": reply.duration_s, **({"followup": rec.id} if rec else {})}
+            "duration_model_s": reply.duration_s, **_tokens(reply.tokens), **({"followup": rec.id} if rec else {}),
+            **({"pack": kept} if kept else {})}
     if reply.ok:
         reply, base = _repair_if_refused(kb, task, target, reply, base, client, scratch)
     (scratch / "reply.json").write_text(json.dumps(vars(reply), ensure_ascii=False, indent=1, default=str),
@@ -680,11 +714,12 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
             return {**base, "result": out.status, "research": ref, "revision": revision,
                     "evidence_saved": len(paths) - 1, **({"reason": out.reason} if out.reason else {}),
                     "duration_s": round(time.monotonic() - t0, 1)}
-    if rec is None:
+    if rec is None and kept is None:
         return {**base, "result": "FAILED", "duration_s": round(time.monotonic() - t0, 1),
                 "error": f"model: {problem}; follow-up: {followup_error}"[:800]}
     return {**base, "result": "INCOMPLETE", "duration_s": round(time.monotonic() - t0, 1),
-            "reason": f"sin resultado del modelo ({problem}); se guardaron los datos del día ({rec.status})"[:800]}
+            "reason": f"sin resultado del modelo ({problem}); se guardaron los datos del día "
+                      f"({rec.status if rec else kept})"[:800]}
 
 
 def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None = None,
