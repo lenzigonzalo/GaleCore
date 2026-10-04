@@ -15,7 +15,7 @@ import { SectionTitle } from '../components/common/SectionTitle';
  */
 export function MyAccount() {
   return (
-    <div style={{ padding: '16px 18px 40px', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ padding: '16px 18px 40px', fontFamily: 'var(--font-sans)' }}>
       <SectionTitle
         title="GaleCore Account"
         badge="credenciales del operador"

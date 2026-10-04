@@ -331,12 +331,12 @@ function GroupLabel({ label, hint }: { label: string; hint?: string }) {
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
       <span style={{
         fontSize: 9, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
-        color: '#a78bfa', fontFamily: 'Inter, sans-serif', whiteSpace: 'nowrap',
+        color: '#a78bfa', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap',
       }}>
         {label}
       </span>
       {hint && (
-        <span style={{ fontSize: 8.5, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
+        <span style={{ fontSize: 8.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
           {hint}
         </span>
       )}
@@ -374,7 +374,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
           {cell.tooltip.map((r) => (
             <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <span style={{
-                fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif',
+                fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
                 fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em',
               }}>
                 {r.label}
@@ -392,7 +392,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
 
       <span style={{
         fontSize: 8.5, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase',
-        color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif',
+        color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
       }}>
         {label}
@@ -410,7 +410,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
           cortarla con puntos suspensivos ("put wall domina —…") deja justo la parte que no dice
           nada. El tile crece un renglón; el que no lo necesita no lo usa. */}
       <span style={{
-        fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif', lineHeight: 1.25,
+        fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.25,
       }}>
         {cell.reference}
       </span>
@@ -445,7 +445,7 @@ export function DetailsPanel({ data, groups, subtitle }: Props) {
     <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       {subtitle && (
         <span style={{
-          fontSize: 8.5, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif', lineHeight: 1.3,
+          fontSize: 8.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.3,
         }}>
           {subtitle}
         </span>

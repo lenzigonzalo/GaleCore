@@ -83,13 +83,13 @@ export function StrategyCard({ strategy, onOpen }: Props) {
       </div>
 
       {strategy.name && (
-        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif', marginTop: -6 }}>
+        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', marginTop: -6 }}>
           {strategy.name}
         </div>
       )}
 
       {strategy.description && (
-        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
           {strategy.description}
         </div>
       )}

@@ -30,7 +30,7 @@ function ListRow({ label, value, hint }: { label: string; value: string; hint?: 
       }}
     >
       <span style={{
-        fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif',
+        fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
         fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em',
       }}>
         {label}
@@ -138,7 +138,7 @@ function Panel({ label, children }: { label: string; children: React.ReactNode }
       }}>
         <span style={{
           fontSize: 9, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
-          color: '#a78bfa', fontFamily: 'Inter, sans-serif',
+          color: '#a78bfa', fontFamily: 'var(--font-sans)',
         }}>
           {label}
         </span>

@@ -45,7 +45,7 @@ function Leg({ action, strike, delta, streamerSymbol }: TradeSuggestion['legs'][
 function Metric({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div style={{ padding: '6px 8px', backgroundColor: 'var(--bg-tertiary)', borderRadius: 6 }}>
-      <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
+      <div style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
       <div className="tabular-nums" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{value}</div>
     </div>
   );
@@ -102,13 +102,13 @@ export function RpfSuggestionCard({ suggestion: s, onAccept, onDismiss }: Props)
       </div>
 
       {/* Aviso: sugiere, nunca ejecuta */}
-      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif', marginBottom: 10 }}>
+      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', marginBottom: 10 }}>
         El sistema sugiere, nunca ejecuta. <b>Aceptar</b> confirma la intención y arranca el cooldown — la apertura del spread es manual.
       </div>
 
       {/* Confirmación reforzada high_risk */}
       {s.highRisk && confirmHighRisk && (
-        <div style={{ fontSize: 10.5, color: 'var(--red-gc)', fontFamily: 'Inter, sans-serif', marginBottom: 8,
+        <div style={{ fontSize: 10.5, color: 'var(--red-gc)', fontFamily: 'var(--font-sans)', marginBottom: 8,
           padding: '6px 10px', borderRadius: 6, backgroundColor: tint('var(--red-gc)', 11), border: `1px solid ${tint('var(--red-gc)', 33)}` }}>
           ⚠ Banda high_risk (riesgo/trade 5–8%). Confirmá de nuevo para aceptar.
         </div>
@@ -119,7 +119,7 @@ export function RpfSuggestionCard({ suggestion: s, onAccept, onDismiss }: Props)
         <button
           onClick={handleAccept}
           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 6,
-            cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 700,
             color: 'var(--bg-primary)', backgroundColor: accent, border: 'none' }}
         >
           <Check size={13} /> {s.highRisk && confirmHighRisk ? 'Confirmar aceptación' : 'Aceptar'}
@@ -127,7 +127,7 @@ export function RpfSuggestionCard({ suggestion: s, onAccept, onDismiss }: Props)
         <button
           onClick={() => onDismiss(s.id)}
           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 6,
-            cursor: 'pointer', fontFamily: 'Inter, sans-serif', fontSize: 12, fontWeight: 700,
+            cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: 12, fontWeight: 700,
             color: 'var(--text-secondary)', backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border)' }}
         >
           <X size={13} /> Descartar

@@ -59,7 +59,7 @@ export function Modal({ open, onClose, title, icon, width = 520, children }: Pro
           backgroundColor: 'var(--bg-secondary)', flexShrink: 0,
         }}>
           {icon}
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>
             {title}
           </span>
           <button

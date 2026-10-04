@@ -187,7 +187,7 @@ export function BrokerAccountCard() {
         )}
       </div>
 
-      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}>
+      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
         El refresh token se guarda cifrado y no vuelve a salir por HTTP. Cargalo cada vez que lo
         rotes en Tastytrade: hasta que lo hagas, la plataforma sigue intentando con el anterior.
         <span style={{ display: 'block', marginTop: 4 }}>
@@ -251,7 +251,7 @@ export function BrokerAccountCard() {
           {state?.hasOwnClientSecret && !clientSecret && (
             // Dejarlo vacío BORRA el que está guardado — el POST reemplaza la credencial entera —
             // así que hay que decirlo donde se decide, no en la doc del endpoint.
-            <div style={{ fontSize: 10, color: 'var(--yellow-gc)', marginTop: 4, fontFamily: 'Inter, sans-serif', lineHeight: 1.4 }}>
+            <div style={{ fontSize: 10, color: 'var(--yellow-gc)', marginTop: 4, fontFamily: 'var(--font-sans)', lineHeight: 1.4 }}>
               Esta cuenta hoy usa tu propia aplicación OAuth. Si guardás con este campo vacío, pasa a
               usar la de GaleCore.
             </div>
@@ -301,7 +301,7 @@ export function BrokerAccountCard() {
             </button>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}>
+              <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
                 Se borra la cuenta <strong>{state.accountNumber}</strong> y su refresh token cifrado.
                 Para volver atrás hay que pegar un token nuevo de Tastytrade.
                 {state.isSystem && (

@@ -35,14 +35,14 @@ export function NoticePanel({ title, detail, hint, icon, color }: Props) {
     }}>
       <span style={{ color, flexShrink: 0, marginTop: 1, display: 'inline-flex' }}>{icon}</span>
       <div>
-        <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 4, fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color, marginBottom: 4, fontFamily: 'var(--font-sans)' }}>
           {title}
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.5, fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', lineHeight: 1.5, fontFamily: 'var(--font-sans)' }}>
           {detail}
         </div>
         {hint && (
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, fontFamily: 'Inter, sans-serif' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, fontFamily: 'var(--font-sans)' }}>
             {hint}
           </div>
         )}

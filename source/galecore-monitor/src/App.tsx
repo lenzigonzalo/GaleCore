@@ -77,7 +77,7 @@ function Dashboard({ onLogout }: DashboardProps) {
       <div className="flex flex-col flex-1 min-w-0">
         <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />
         <TabNav active={tab} onChange={setTab} onLogout={onLogout} />
-        <main className="flex-1 overflow-auto" style={{ position: 'relative' }}>
+        <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
           <div style={{ display: tab === 'inicio' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
           </div>

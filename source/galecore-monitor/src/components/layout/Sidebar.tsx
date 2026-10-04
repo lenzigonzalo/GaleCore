@@ -9,23 +9,23 @@ interface Props {
 
 export function Sidebar({ onLogoClick }: Props) {
   return (
-    <aside style={{
+    <aside className="dashboard-sidebar" style={{
       width: 220,
       flexShrink: 0,
       display: 'flex',
       flexDirection: 'column',
-      backgroundColor: '#060b18',
+      backgroundColor: 'var(--bg-primary)',
       borderRight: '1px solid var(--border-dark)',
       height: '100%',
       overflow: 'hidden',
     }}>
-      {/* Logo — height matches StatusBar + TabNav (36 + 36 = 72px) */}
+      {/* Logo — height matches StatusBar + TabNav (36 + 52 = 88px) */}
       <div
         onClick={onLogoClick}
         title={onLogoClick ? 'Ir a Main' : undefined}
         role={onLogoClick ? 'button' : undefined}
         style={{
-          height: 72,
+          height: 88,
           padding: '0 10px',
           borderBottom: '1px solid var(--border-dark)',
           display: 'flex',

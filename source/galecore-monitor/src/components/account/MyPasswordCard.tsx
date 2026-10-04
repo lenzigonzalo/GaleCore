@@ -111,7 +111,7 @@ export function MyPasswordCard({ embedded = false }: Props = {}) {
         {email && <span style={{ color: 'var(--text-muted)' }}>{' · '}{email}</span>}
       </div>
 
-      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}>
+      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
         Si entraste con una contraseña que te dio un admin, cambiala acá: mientras no lo hagas, la
         saben dos personas.
       </div>
@@ -151,7 +151,7 @@ export function MyPasswordCard({ embedded = false }: Props = {}) {
             placeholder="••••••••••••"
           />
           {repetida.length > 0 && !coinciden && (
-            <div style={{ fontSize: 10, color: 'var(--red-gc)', marginTop: 4, fontFamily: 'Inter, sans-serif' }}>
+            <div style={{ fontSize: 10, color: 'var(--red-gc)', marginTop: 4, fontFamily: 'var(--font-sans)' }}>
               No coinciden.
             </div>
           )}

@@ -89,7 +89,7 @@ function LiveDot() {
 // ── Celdas de la tabla del candidato (look Main · Setup candidato) ──
 const thStyle: React.CSSProperties = {
   padding: '6px 8px', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-  color: 'var(--text-muted)', textAlign: 'center', fontFamily: 'Inter, sans-serif',
+  color: 'var(--text-muted)', textAlign: 'center', fontFamily: 'var(--font-sans)',
   borderBottom: '1px solid var(--border-dark)', borderRight: '1px solid rgba(255,255,255,0.04)',
   whiteSpace: 'nowrap', verticalAlign: 'middle', backgroundColor: 'var(--bg-tertiary)',
 };
@@ -166,9 +166,9 @@ function CheckRow({ c }: { c: RpfCheck }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-dark)' }}>
       <StatusIcon status={c.status} />
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>{c.label}</div>
+        <div style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{c.label}</div>
         {showDetail && (
-          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>{c.detail}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{c.detail}</div>
         )}
       </div>
       <span className="tabular-nums" style={{ fontSize: 11, color: c.status === 'fail' ? color : 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>{valTxt}</span>
@@ -186,8 +186,8 @@ function DisparaRow({ label, hint, value, status }: {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border-dark)' }}>
       <StatusIcon status={status} />
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>{label}</div>
-        {hint && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>{hint}</div>}
+        <div style={{ fontSize: 12, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{label}</div>
+        {hint && <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{hint}</div>}
       </div>
       <span className="tabular-nums" style={{ fontSize: 12, fontWeight: 600, fontFamily: 'JetBrains Mono, monospace', color: valColor }}>{value}</span>
     </div>
@@ -197,7 +197,7 @@ function DisparaRow({ label, hint, value, status }: {
 function PanelHeader({ title, right, rightColor }: { title: string; right: string; rightColor: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>{title}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>{title}</span>
       <span style={{ fontSize: 11, fontWeight: 700, color: rightColor, fontFamily: 'JetBrains Mono, monospace' }}>{right}</span>
     </div>
   );
@@ -207,7 +207,7 @@ function PanelHeader({ title, right, rightColor }: { title: string; right: strin
 function Connector({ label }: { label?: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, margin: '7px 0' }}>
-      {label && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>{label}</span>}
+      {label && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{label}</span>}
       <ChevronDown size={14} style={{ color: 'var(--text-disabled)' }} />
     </div>
   );
@@ -219,9 +219,9 @@ function MotorStrip({ online, lastTick }: { online: boolean; lastTick: string | 
     <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 8, ...panelStyle, padding: '10px 14px', width: '60%', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <RefreshCw size={15} style={{ color: online ? 'var(--green)' : 'var(--text-muted)' }} />
-        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>MOTOR</span>
+        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>MOTOR</span>
       </div>
-      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
+      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
         corre la cascada de 4 capas cada tick y la reparte en los dos ejes
       </span>
       <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'JetBrains Mono, monospace', color: online ? 'var(--green)' : 'var(--text-muted)' }}>
@@ -279,7 +279,7 @@ function DisparaPanel({ st, active }: { st: RpfStateUpdate; active: boolean }) {
     <div style={{ ...panelStyle, opacity: active ? 1 : 0.55 }}>
       <PanelHeader title="Dispara · ¿la prima paga?" right={active ? 'ACTIVO' : 'EN ESPERA'} rightColor={active ? 'var(--green)' : 'var(--text-muted)'} />
       {!active && (
-        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, fontFamily: 'Inter, sans-serif' }}>
+        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6, fontFamily: 'var(--font-sans)' }}>
           eje no evaluado hasta que el entorno arme
         </div>
       )}
@@ -317,10 +317,10 @@ function StateResolution({ state }: { state: RpfStateName }) {
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 10.5, fontFamily: 'JetBrains Mono, monospace', color: meta.color, letterSpacing: '0.08em' }}>{state}</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>{meta.es}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{meta.es}</div>
         </div>
       </div>
-      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 10, fontFamily: 'Inter, sans-serif' }}>
+      <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 10, fontFamily: 'var(--font-sans)' }}>
         {STATE_EXPLAIN[state]}
       </div>
     </div>
@@ -348,8 +348,8 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
 
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
-      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif' }}>Candidato PCS · primas en vivo</span>
-      <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>{note}</span>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>Candidato PCS · primas en vivo</span>
+      <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{note}</span>
     </div>
   );
 
@@ -567,7 +567,7 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
   const loopOnline = !switchOff && fresh;
 
   return (
-    <div style={{ padding: '14px 18px 40px', height: '100%', overflowY: 'auto', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ padding: '14px 18px 40px', height: '100%', overflowY: 'auto', fontFamily: 'var(--font-sans)' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
         <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>GaleCore RPF</span>
@@ -583,7 +583,7 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
               display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6,
               background: 'none', border: '1px solid var(--border)', cursor: 'pointer',
               fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-              color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif',
+              color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)',
             }}
           >
             <BookOpen size={12} /> References

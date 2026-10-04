@@ -10,7 +10,7 @@ const ACCENT = '#a78bfa';
 
 const thStyle: React.CSSProperties = {
   padding: '7px 10px', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-  color: 'var(--text-muted)', textAlign: 'left', fontFamily: 'Inter, sans-serif',
+  color: 'var(--text-muted)', textAlign: 'left', fontFamily: 'var(--font-sans)',
   borderBottom: '1px solid var(--border-dark)', whiteSpace: 'nowrap', backgroundColor: 'var(--bg-tertiary)',
 };
 const tdStyle: React.CSSProperties = {
@@ -134,7 +134,7 @@ export function Admin() {
   };
 
   return (
-    <div style={{ padding: '16px 18px 40px', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ padding: '16px 18px 40px', fontFamily: 'var(--font-sans)' }}>
       {/* Sin permiso no se renderiza la tabla. La pestaña ya no se le ofrece a un no-admin, pero
           el rol puede cambiar con la pantalla abierta —un admin sacándose el permiso a sí mismo—,
           así que el guard se queda. El gate real es el 403 del endpoint. */}
@@ -288,7 +288,7 @@ export function Admin() {
                       <td style={{ ...tdStyle, textAlign: 'right', whiteSpace: 'nowrap' }}>
                         {confirmandoBaja === u.id ? (
                           <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                            <span style={{ fontSize: 10, color: 'var(--red-gc)', fontFamily: 'Inter, sans-serif' }}>
+                            <span style={{ fontSize: 10, color: 'var(--red-gc)', fontFamily: 'var(--font-sans)' }}>
                               {u.hasBrokerAccount ? '¿Borrar? Se va con su cuenta de bróker.' : '¿Borrar?'}
                             </span>
                             <button

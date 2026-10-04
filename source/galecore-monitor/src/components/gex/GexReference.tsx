@@ -30,7 +30,7 @@ export function GexReference() {
   }, [loadRules]);
 
   if (!rules) {
-    return <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>Cargando reglas de GEX…</div>;
+    return <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>Cargando reglas de GEX…</div>;
   }
 
   const meta = rules._meta ?? {};
@@ -46,7 +46,7 @@ export function GexReference() {
   const thrValues: Record<string, number> = thr.values ?? {};
 
   return (
-    <div style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ fontFamily: 'var(--font-sans)' }}>
       {/* A · Definición */}
       <SectionTitle>A · Definición</SectionTitle>
       <Card>

@@ -16,7 +16,7 @@ interface Props {
 const itemStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 9, width: '100%',
   padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer',
-  fontSize: 11.5, fontFamily: 'Inter, sans-serif', color: 'var(--text-secondary)',
+  fontSize: 11.5, fontFamily: 'var(--font-sans)', color: 'var(--text-secondary)',
   textAlign: 'left', whiteSpace: 'nowrap',
 };
 
@@ -78,7 +78,7 @@ export function AccountMenu({ onOpenBrokerAccount, onLogout, active = false }: P
           border: 'none',
           color: open || active ? 'var(--text-primary)' : 'var(--text-muted)',
           cursor: 'pointer',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: 'var(--font-sans)',
           fontWeight: active ? 600 : 400,
           borderBottom: active ? '2px solid var(--blue-gc)' : '2px solid transparent',
           whiteSpace: 'nowrap',

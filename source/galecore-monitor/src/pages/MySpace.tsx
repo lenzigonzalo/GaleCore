@@ -14,10 +14,10 @@ import {
 const label = (kind: SpaceKind) => SPACE_KINDS.find((k) => k.id === kind)?.label ?? kind;
 
 const box: React.CSSProperties = {
-  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 6, padding: 12,
+  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 14, padding: 18,
 };
-const chip = (on: boolean, color = 'var(--blue-gc)'): React.CSSProperties => ({
-  fontSize: 11, padding: '3px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+const chip = (on: boolean, color = 'var(--accent)'): React.CSSProperties => ({
+  fontSize: 11, padding: '3px 9px', borderRadius: 999, cursor: 'pointer', fontFamily: 'var(--font-sans)',
   border: `1px solid ${on ? color : 'var(--border-dark)'}`, color: on ? 'var(--text-primary)' : 'var(--text-muted)',
   backgroundColor: on ? 'var(--bg-elevated)' : 'transparent',
 });
@@ -31,9 +31,9 @@ const input: React.CSSProperties = {
   border: '1px solid var(--border-dark)', borderRadius: 4, padding: '6px 8px', fontSize: 12, fontFamily: 'inherit',
 };
 const button = (primary = false): React.CSSProperties => ({
-  fontSize: 11, padding: '4px 12px', borderRadius: 4, cursor: 'pointer',
-  border: `1px solid ${primary ? 'var(--blue-gc)' : 'var(--border-dark)'}`,
-  backgroundColor: primary ? 'var(--blue-gc)' : 'transparent', color: primary ? '#fff' : 'var(--text-secondary)',
+  fontSize: 12, padding: '8px 16px', borderRadius: 8, cursor: 'pointer',
+  border: `1px solid ${primary ? 'var(--accent)' : 'var(--border-dark)'}`,
+  backgroundColor: primary ? 'var(--accent)' : 'transparent', color: primary ? 'var(--accent-ink)' : 'var(--text-secondary)',
 });
 
 function pretty(item: { content: string; format: SpaceFormat }) {
@@ -61,7 +61,7 @@ function Editor({ draft, onCancel, onSaved }: { draft: Draft; onCancel: () => vo
     }
   };
   return (
-    <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+    <div style={{ display: 'grid', gap: 10, marginTop: 8 }}>
       {d.isNew && (
         <select style={input} value={d.kind} onChange={(e) => setD({ ...d, kind: e.target.value as SpaceKind })}>
           {SPACE_KINDS.map((k) => <option key={k.id} value={k.id}>{k.label} — {k.hint}</option>)}
@@ -99,14 +99,14 @@ function ItemCard({ item, onChanged }: { item: SpaceItem; onChanged: () => void 
     <div style={box}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => setOpen(!open)}>
         <span style={{ fontSize: 10, color: 'var(--text-muted)', minWidth: 86, textTransform: 'uppercase' }}>{label(item.kind)}</span>
-        <span style={{ fontSize: 13, color: 'var(--text-primary)', flex: 1 }}>{item.title}</span>
+        <span style={{ fontSize: 14, color: 'var(--text-primary)', flex: 1 }}>{item.title}</span>
         <span style={badge(shared)}>{item.isOwn ? (shared ? 'compartida' : 'sólo yo') : `de ${item.owner}`}</span>
         <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>v{item.version}</span>
       </div>
       {open && !editing && (
         <>
           <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: 'var(--text-secondary)', margin: '10px 0 0',
-            fontFamily: item.format === 'json' ? 'monospace' : 'Inter, sans-serif' }}>{pretty(item)}</pre>
+            fontFamily: item.format === 'json' ? 'monospace' : 'var(--font-sans)' }}>{pretty(item)}</pre>
           <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center' }}>
             <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
               actualizada {new Date(item.updatedAt).toLocaleString()}
@@ -156,7 +156,7 @@ export function MySpace() {
   const count = (k: SpaceKind) => items.filter((i) => i.kind === k).length;
 
   return (
-    <div style={{ padding: '16px 18px 40px', fontFamily: 'Inter, sans-serif', maxWidth: 980 }}>
+    <div style={{ padding: '28px 28px 40px', fontFamily: 'var(--font-sans)', maxWidth: 980 }}>
       <SectionTitle title="Mi espacio" badge="lo que GaleCore-AI sabe de vos" style={{ marginBottom: 8 }} />
       <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '0 0 14px' }}>
         GaleCore-AI lo carga al empezar cada sesión para responder según tus objetivos y límites. Lo que le pedís
@@ -189,7 +189,7 @@ export function MySpace() {
 
       {!loading && !error && (
         <>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div style={{ display: 'grid', gap: 10 }}>
             {visible.map((i) => <ItemCard key={`${i.kind}/${i.key}`} item={i} onChanged={load} />)}
             {visible.length === 0 && (
               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
@@ -201,7 +201,7 @@ export function MySpace() {
             <>
               <SectionTitle title="Compartido por el equipo" badge="sólo lectura" accent="#34d399"
                 style={{ margin: '22px 0 10px' }} />
-              <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ display: 'grid', gap: 10 }}>
                 {visibleShared.map((i) => <ItemCard key={`${i.owner}/${i.kind}/${i.key}`} item={i} onChanged={load} />)}
               </div>
             </>

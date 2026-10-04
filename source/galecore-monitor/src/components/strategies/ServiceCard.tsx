@@ -61,7 +61,7 @@ export function ServiceCard({ service }: Props) {
       )}
 
       {service.description && (
-        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif', lineHeight: 1.5 }}>
+        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.5 }}>
           {service.description}
         </div>
       )}

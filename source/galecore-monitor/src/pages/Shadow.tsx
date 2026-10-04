@@ -109,7 +109,7 @@ export function Shadow() {
   }, [load]);
 
   return (
-    <div style={{ padding: '16px 18px 40px', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ padding: '16px 18px 40px', fontFamily: 'var(--font-sans)' }}>
       <SectionTitle title="GaleCore SHADOW" badge="simulación con datos reales · no mueve plata" accent="#38bdf8">
         <button onClick={load} disabled={loading} title="Actualizar"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)',

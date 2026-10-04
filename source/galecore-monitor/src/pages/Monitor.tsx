@@ -37,7 +37,7 @@ export function Monitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol, unsubsc
   const brokerAccountIssue = useAccountStore((s) => s.brokerAccountIssue);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: 'var(--font-sans)' }}>
       <SectionTitle
         title="GaleCore Monitor"
         badge="Positions Manager"

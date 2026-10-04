@@ -285,9 +285,9 @@ export function GexChart({
 
     const chart = createChart(el, {
       layout: {
-        background: { type: ColorType.Solid, color: '#080d1b' },
-        textColor: '#8da5cc',
-        fontFamily: 'Inter, sans-serif',
+        background: { type: ColorType.Solid, color: '#090909' },
+        textColor: '#b6b6b0',
+        fontFamily: getComputedStyle(el).getPropertyValue('--font-sans').trim(),
         fontSize: 11,
         attributionLogo: false,
       },
@@ -297,17 +297,17 @@ export function GexChart({
       },
       crosshair: {
         mode: CrosshairMode.Normal,
-        vertLine: { color: '#2d4571', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#1a2844' },
-        horzLine: { color: '#2d4571', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#1a2844' },
+        vertLine: { color: '#484848', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#292929' },
+        horzLine: { color: '#484848', width: 1, style: LineStyle.Dashed, labelBackgroundColor: '#292929' },
       },
       rightPriceScale: {
-        borderColor: '#1c2f4a', textColor: '#8da5cc',
+        borderColor: '#333333', textColor: '#b6b6b0',
         scaleMargins: { top: SCALE_MARGIN, bottom: SCALE_MARGIN },
       },
       // rightOffset mantiene el aire a la derecha cuando el usuario scrollea; fitView lo aplica al
       // encuadre inicial. Sin los dos, el padding se pierde en cuanto el chart se reajusta.
       timeScale: {
-        borderColor: '#1c2f4a', timeVisible: true, secondsVisible: false, fixLeftEdge: true,
+        borderColor: '#333333', timeVisible: true, secondsVisible: false, fixLeftEdge: true,
         rightOffset: rightPadBars,
       },
       width:  el.clientWidth,
@@ -614,7 +614,7 @@ export function GexChart({
  *
  * **Va POR ENCIMA del canvas y no puede ir por debajo**, que es la diferencia con el panel de
  * barras —ahí el sombreado es fondo y las barras se leen arriba—. lightweight-charts pinta sobre
- * canvas con `z-index` 1 y 2 y fondo opaco (`#080d1b`), así que un overlay sin `z-index` queda
+ * canvas con `z-index` 1 y 2 y fondo opaco (`#090909`), así que un overlay sin `z-index` queda
  * tapado y no se ve nada. Con 0.10 de alpha, tintar las velas en vez de quedar detrás es
  * indistinguible a ojo y las deja perfectamente legibles.
  *

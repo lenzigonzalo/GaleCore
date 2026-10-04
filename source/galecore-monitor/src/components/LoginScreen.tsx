@@ -61,7 +61,7 @@ export function LoginScreen({ onAuthenticated }: Props) {
         <div className="text-center mb-8">
           <div
             className="text-2xl font-bold tracking-widest mb-1"
-            style={{ color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}
+            style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}
           >
             GALECORE
           </div>

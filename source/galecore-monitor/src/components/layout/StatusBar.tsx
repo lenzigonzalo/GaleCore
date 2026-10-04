@@ -37,7 +37,7 @@ export function StatusBar({ connectionStatus, lastUpdate }: Props) {
       padding: '0 20px',
       height: 36,
       flexShrink: 0,
-      backgroundColor: '#060b18',
+      backgroundColor: 'var(--bg-primary)',
       borderBottom: '1px solid var(--border-dark)',
       fontFamily: 'JetBrains Mono, monospace',
       fontSize: 11,

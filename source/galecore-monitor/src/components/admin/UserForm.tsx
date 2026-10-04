@@ -133,7 +133,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
             autoFocus
           />
           <div style={{
-            fontSize: 10, marginTop: 4, fontFamily: 'Inter, sans-serif',
+            fontSize: 10, marginTop: 4, fontFamily: 'var(--font-sans)',
             color: username.length > 0 && !usernameValido ? 'var(--red-gc)' : 'var(--text-muted)',
           }}>
             Minúscula, 3 a 32, letras, números, punto, guion y guion bajo. Con esto entra al tablero.
@@ -153,7 +153,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
             autoComplete="off"
             spellCheck={false}
           />
-          <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
+          <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
             Real y único: es la identidad en Supabase, la que recibe el reset de contraseña.
           </div>
         </div>
@@ -185,7 +185,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
             placeholder="••••••••••••"
             autoComplete="new-password"
           />
-          <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
+          <div style={{ fontSize: 10, marginTop: 4, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
             {esAlta
               ? 'Se la pasás una vez; la cambia desde su pantalla en cuanto entre.'
               : 'Vacío = no se toca. Solo para rescatar a alguien que perdió el acceso.'}
@@ -196,7 +196,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
       {esAlta && (
         <label style={{
           display: 'flex', alignItems: 'center', gap: 8, fontSize: 11,
-          color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif', cursor: 'pointer',
+          color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)', cursor: 'pointer',
         }}>
           <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
           Admin — puede administrar usuarios y prender o apagar estrategias para todos.

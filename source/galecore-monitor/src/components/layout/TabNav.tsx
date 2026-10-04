@@ -53,19 +53,20 @@ export function TabNav({ active, onChange, onLogout }: Props) {
       <button
         key={id}
         onClick={() => onChange(id)}
-        className="flex items-center gap-1.5 px-4 h-full text-xs uppercase tracking-wider transition-colors relative"
+        className="flex items-center gap-1.5 px-4 h-full text-xs tracking-wide transition-colors relative"
         style={{
-          color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
-          background: 'none',
+          color: isActive ? 'var(--bg-primary)' : 'var(--text-secondary)',
+          background: isActive ? 'var(--text-primary)' : 'none',
           border: 'none',
           cursor: 'pointer',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: 'var(--font-sans)',
           fontWeight: isActive ? 600 : 400,
-          borderBottom: isActive ? '2px solid var(--blue-gc)' : '2px solid transparent',
+          borderRadius: 9,
+          height: 34,
           whiteSpace: 'nowrap',
         }}
       >
-        <Icon size={12} />
+        <Icon size={14} />
         {label}
       </button>
     );
@@ -73,13 +74,13 @@ export function TabNav({ active, onChange, onLogout }: Props) {
 
   return (
     <nav
-      className="flex items-center shrink-0"
+      className="dashboard-nav flex items-center shrink-0 gap-1"
       style={{
         backgroundColor: 'var(--bg-secondary)',
         borderBottom: '1px solid var(--border-dark)',
         paddingLeft: 8,
         paddingRight: 12,
-        height: 36,
+        height: 52,
       }}
     >
       {TABS.map(renderTab)}

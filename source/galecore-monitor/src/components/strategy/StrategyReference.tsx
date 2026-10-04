@@ -43,8 +43,8 @@ export function StrategyReference({ embedded = false }: { embedded?: boolean }) 
 
   return (
     <div style={embedded
-      ? { fontFamily: 'Inter, sans-serif' }
-      : { padding: '14px 18px 40px', height: '100%', overflowY: 'auto', fontFamily: 'Inter, sans-serif' }}>
+      ? { fontFamily: 'var(--font-sans)' }
+      : { padding: '14px 18px 40px', height: '100%', overflowY: 'auto', fontFamily: 'var(--font-sans)' }}>
       {/* Header — solo como página suelta; dentro del modal lo pone el modal. */}
       {!embedded && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>

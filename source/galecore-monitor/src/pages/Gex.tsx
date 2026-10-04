@@ -259,7 +259,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
               display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6,
               background: 'none', border: '1px solid var(--border)', cursor: 'pointer',
               fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-              color: 'var(--text-secondary)', fontFamily: 'Inter, sans-serif',
+              color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)',
             }}
           >
             <BookOpen size={12} /> References
@@ -336,7 +336,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
             }}>
               <span style={{
                 fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-                color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif',
+                color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
               }}>
                 {active} · Details
               </span>

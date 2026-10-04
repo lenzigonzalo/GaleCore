@@ -40,7 +40,7 @@ export function OptionsChainList({
       }}>
         <span style={{
           fontSize: 9, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
-          color: '#a78bfa', fontFamily: 'Inter, sans-serif',
+          color: '#a78bfa', fontFamily: 'var(--font-sans)',
         }}>
           {label}
         </span>

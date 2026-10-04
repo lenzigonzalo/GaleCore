@@ -72,7 +72,7 @@ export function ReferencesModal({ open, onClose, title, accentColor = 'var(--blu
         style={{
           padding: '8px 16px', background: 'none', border: 'none', cursor: 'pointer',
           fontSize: 11, fontWeight: active ? 700 : 500, letterSpacing: '0.06em', textTransform: 'uppercase',
-          fontFamily: 'Inter, sans-serif',
+          fontFamily: 'var(--font-sans)',
           color: active ? 'var(--text-primary)' : 'var(--text-muted)',
           borderBottom: active ? `2px solid ${accentColor}` : '2px solid transparent',
         }}
@@ -108,7 +108,7 @@ export function ReferencesModal({ open, onClose, title, accentColor = 'var(--blu
           padding: '12px 16px', borderBottom: '1px solid var(--border-dark)',
           backgroundColor: 'var(--bg-secondary)', flexShrink: 0,
         }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'Inter, sans-serif' }}>{title}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{title}</span>
           <span style={{ marginLeft: 'auto' }} />
           <button
             onClick={onClose}
@@ -134,7 +134,7 @@ export function ReferencesModal({ open, onClose, title, accentColor = 'var(--blu
                 padding: '3px 9px', borderRadius: 6, cursor: 'pointer',
                 background: 'none', border: '1px solid var(--border-dark)',
                 fontSize: 10, fontWeight: 600, letterSpacing: '0.04em',
-                color: copied ? 'var(--green)' : 'var(--text-muted)', fontFamily: 'Inter, sans-serif',
+                color: copied ? 'var(--green)' : 'var(--text-muted)', fontFamily: 'var(--font-sans)',
               }}
             >
               {copied ? <Check size={11} /> : <Copy size={11} />}

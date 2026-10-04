@@ -21,7 +21,7 @@ export function Home({ onNavigate }: Props) {
   const { strategies, services, loading, error } = useAppConfigStore();
 
   return (
-    <div style={{ padding: '16px 18px 40px', fontFamily: 'Inter, sans-serif' }}>
+    <div style={{ padding: '16px 18px 40px', fontFamily: 'var(--font-sans)' }}>
       <SectionTitle title="GaleCore Strategies" badge="switches de estrategia" style={{ marginBottom: 16 }} />
 
       {loading && (

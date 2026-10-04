@@ -106,7 +106,7 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
         <Plus size={14} style={{ color: 'var(--text-muted)' }} />
         <span style={{
           fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-          color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif',
+          color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
         }}>
           Buscar símbolo
         </span>
@@ -146,19 +146,19 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
 
       <div style={{ maxHeight: 180, overflowY: 'auto', margin: '0 -6px' }}>
         {loading && (
-          <div style={{ padding: '6px', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
+          <div style={{ padding: '6px', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
             Buscando…
           </div>
         )}
 
         {!loading && error && (
-          <div style={{ padding: '6px', fontSize: 10, color: 'var(--red-gc)', fontFamily: 'Inter, sans-serif' }}>
+          <div style={{ padding: '6px', fontSize: 10, color: 'var(--red-gc)', fontFamily: 'var(--font-sans)' }}>
             {error}
           </div>
         )}
 
         {!loading && !error && searched && !results.length && (
-          <div style={{ padding: '6px', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif' }}>
+          <div style={{ padding: '6px', fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
             Sin resultados
           </div>
         )}
@@ -182,7 +182,7 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
               {r.symbol}
             </span>
             <span style={{
-              fontSize: 10, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif',
+              fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {r.description}
@@ -197,7 +197,7 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
       {!loading && !error && results.length > 1 && (
         <div style={{
           marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border-dark)',
-          fontSize: 9, color: 'var(--text-muted)', fontFamily: 'Inter, sans-serif', lineHeight: 1.4,
+          fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.4,
         }}>
           Matchea símbolo y descripción. No todos tienen cadena de opciones.
         </div>
