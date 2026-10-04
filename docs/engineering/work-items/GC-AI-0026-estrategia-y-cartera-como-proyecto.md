@@ -1,13 +1,13 @@
 ---
 id: GC-AI-0026
 title: Estrategia y cartera como proyecto — pieza 2
-status: IN_PROGRESS
+status: READY_FOR_REVIEW
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
 closure_blocked: true
-review_result: PENDING
+review_result: APPROVED
 approval_result: APPROVED
 ---
 
@@ -114,7 +114,7 @@ git diff --check
 ## Independent review
 
 **Reviewer:** internal (subagente `reviewer`, Sonnet), 04/10
-**Review result:** REQUEST_CHANGES → arreglado (ver tabla); 85 tests + ruff + gate PASS en la revisión.
+**Review result:** APPROVE (04/10, tras arreglos; recheck: 24 tests + ruff). AC-02 y AC-06 PARTIAL; cierre del owner.
 
 | Hallazgo | Severidad | Resolución |
 |---|---|---|
