@@ -134,6 +134,11 @@ def test_two_long_objectives_with_the_same_start_keep_two_keys(env):  # noqa: F8
 # ── GC-AI-0023: the monitor's Agentes screen ─────────────────────
 
 
+def _now() -> str:
+    from datetime import UTC, datetime, timedelta
+    return (datetime.now(UTC) + timedelta(seconds=1)).isoformat()
+
+
 def _agent(fake, key="oportunidades"):
     return json.loads(fake.rows[("agent", key)]["content"])
 
@@ -180,24 +185,60 @@ def test_the_monitor_turns_an_agent_off_and_on(env, galecore):  # noqa: F811
     assert "monitor" in paused["prompt"] and "demo" in paused["prompt"]
     assert _agent(fake)["status"] == "paused" and "request" not in _agent(fake)    # applied: the request is gone
     client.put("agent", "oportunidades", title="x", fmt="json",
-               content=json.dumps({**_agent(fake), "request": {"status": "active"}}))
+               content=json.dumps({**_agent(fake), "request": {"status": "active", "at": _now()}}))
     space.publish_agents(client, kb_, sch)
     assert t.load(kb_, "oportunidades").status == "active" and _agent(fake)["status"] == "active"
 
 
 def test_a_request_that_cannot_be_applied_says_why(env, galecore):  # noqa: F811
     kb_, sch, _ = env
-    _, client = galecore
+    fake, client = galecore
     from galecore_ai.application import tasks as t
     from tests.unit.test_market_watch import MARKET
     from tests.unit.test_tasks import make
     make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
     t.cancel(kb=kb_, scheduler=sch, task_id="oportunidades", prompt="ya no")
     client.put("agent", "oportunidades", title="x", fmt="json",
-               content=json.dumps({"id": "oportunidades", "request": {"status": "active"}}))
+               content=json.dumps({"id": "oportunidades", "status": "active", "request": {"status": "active", "at": _now()}}))
     out = space.publish_agents(client, kb_, sch)
-    assert out["requests"][0]["result"] == "refused" and "cancelled" in out["requests"][0]["error"]
+    assert out["requests"][0]["result"] == "refused" and "cancelado" in out["requests"][0]["error"]
     assert t.load(kb_, "oportunidades").status == "cancelled"
+    row = _agent(fake)          # what the monitor reads: no longer running, and why the request did not happen
+    assert row["status"] == "cancelled" and "request" not in row and "cancelado" in row["request_error"]
+
+
+def test_an_old_request_does_not_undo_a_later_decision(env, galecore):  # noqa: F811
+    # Internal review 04/10: a «Prender» from Monday applied on Thursday over the owner's Wednesday pause.
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    space.publish_agents(client, kb_, sch)
+    client.put("agent", "oportunidades", title="x", fmt="json",
+               content=json.dumps({**_agent(fake), "request": {"status": "paused", "at": "2020-01-01T00:00:00Z"}}))
+    out = space.publish_agents(client, kb_, sch)
+    assert out["requests"][0]["result"] == "refused" and "posterior" in out["requests"][0]["error"]
+    assert t.load(kb_, "oportunidades").status == "active" and "posterior" in _agent(fake)["request_error"]
+    space.publish_agents(client, kb_, sch)
+    assert "posterior" in _agent(fake)["request_error"]       # stays until the next request
+    client.put("agent", "oportunidades", title="x", fmt="json",
+               content=json.dumps({**_agent(fake), "request": {"status": "paused"}}))      # no time: refused
+    assert space.publish_agents(client, kb_, sch)["requests"][0]["error"] == "pedido sin hora válida"
+
+
+def test_a_piece_whose_id_is_not_its_agent_is_refused(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    _, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    client.put("agent", "otra", title="x", fmt="json",
+               content=json.dumps({"id": "oportunidades", "request": {"status": "paused", "at": _now()}}))
+    out = space.apply_requests(client, kb_, sch)
+    assert out[0]["result"] == "refused" and t.load(kb_, "oportunidades").status == "active"
 
 
 def test_the_sync_task_runs_every_five_minutes(monkeypatch):

@@ -28,7 +28,10 @@ Que la pantalla Agentes del monitor muestre de cada agente si está prendido, si
   La pieza `agent` del espacio lleva eso además de lo que ya tenía.
 - Prender/apagar: el monitor no llega a esta PC, así que escribe `request: {status, at}` en la pieza.
   `apply_requests` lo aplica con `task pause|resume` (Programador + evento «Pedido desde el monitor por <usuario>»)
-  antes de volver a publicar; un pedido imposible (agente cancelado) se publica como `request_error`.
+  antes de volver a publicar. Se rechaza, con el motivo en `request_error` (queda hasta el próximo pedido): un pedido
+  sin hora, uno anterior al último cambio del agente (el owner decidió algo después), una pieza cuyo id no es el agente
+  de su clave, y un agente cancelado (la pieza se publica como cancelada). Una pieza que el monitor cambió mientras se
+  publicaba no se pisa: queda para la pasada siguiente.
   `publish_agents` = aplicar pedidos + publicar sólo lo que cambió. `space import` también aplica los pedidos antes de
   escribir (si no, los pisaría).
 - `space agents [--install]` y `tools/space_sync.py`: la tarea `GaleCore-AI\espacio-agentes` lo hace cada 5 minutos
@@ -39,8 +42,9 @@ Que la pantalla Agentes del monitor muestre de cada agente si está prendido, si
 - [x] **AC-01 — Estado publicado:** test `test_an_agent_is_published_with_its_last_run_and_findings`; en vivo (04/10)
   `space agents` publicó los 3 agentes del usuario demo en GaleCore Dev (atencion-diaria-spy MISSED, seguimiento
   CURRENT, oportunidades PAUSED) y GC-0009 los muestra.
-- [x] **AC-02 — Prender/apagar desde el monitor:** tests `test_the_monitor_turns_an_agent_off_and_on` y
-  `test_a_request_that_cannot_be_applied_says_why`. Sin prueba en vivo sobre agentes reales (no se cambió ninguno).
+- [x] **AC-02 — Prender/apagar desde el monitor:** tests `test_the_monitor_turns_an_agent_off_and_on`,
+  `test_a_request_that_cannot_be_applied_says_why` (mira la fila en GaleCore), `test_an_old_request_does_not_undo_a_later_decision`
+  y `test_a_piece_whose_id_is_not_its_agent_is_refused`. Sin prueba en vivo sobre agentes reales (no se cambió ninguno).
 - [x] **AC-03 — Tarea cada 5 minutos:** `test_the_sync_task_runs_every_five_minutes`. Se instala desde `main` con
   `space agents --install` al integrar.
 - [x] **AC-04 — Suite:** `pytest tests/unit` y `ruff check src tests tools` limpios.
@@ -49,5 +53,15 @@ Que la pantalla Agentes del monitor muestre de cada agente si está prendido, si
 ## Límites
 
 - El cambio tarda hasta 5 minutos y necesita la PC prendida con sesión iniciada, como cualquier agente.
-- El monitor escribe la pieza entera (el `PUT` reemplaza): si GaleCore-AI publica en el mismo instante, gana el último;
-  el pedido perdido se ve porque el botón vuelve a su estado y se puede repetir.
+- El monitor escribe la pieza entera desde lo que leyó (≤ 60 s antes): puede tapar una publicación más nueva hasta la
+  pasada siguiente.
+- `findings`, `reason` y `error` salen de la PC a GaleCore sin el filtro de secretos de `evidence` (hoy ningún camino
+  conocido mete una clave ahí).
+
+## Revisión interna (04/10)
+
+CHANGES_REQUESTED (1 BLOCKER, 2 MAJOR, MINOR): agente cancelado que seguía «prendido» y sin `request_error`; pedido
+viejo que deshacía una decisión posterior; pantalla que mostraba «Al día» con la PC apagada (arreglado en GC-0009:
+«Sin noticias de tu PC» y fecha de publicación); id sin validar; pedido pisado durante la publicación; `request_error`
+efímero; puntero `ACTIVE_WORK_ITEM` en 0019; sangría en el `claude.md` de GaleCore. Todos arreglados salvo el filtro de
+secretos (límite declarado). Suite: `pytest tests/unit` 1060+ y ruff limpios (se repite al integrar).

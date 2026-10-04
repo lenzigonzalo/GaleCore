@@ -113,15 +113,22 @@ def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
     return pieces
 
 
-def sync(client: SpaceClient, pieces: list[dict]) -> dict:
-    """Write the pieces that are new or changed; return what was created, updated and left alone."""
+def sync(client: SpaceClient, pieces: list[dict], seen: dict[tuple, int] | None = None) -> dict:
+    """Write the pieces that are new or changed; return what was created, updated and left alone.
+
+    `seen` (kind, key) -> version read before deciding: a piece whose version moved since (the monitor wrote a new
+    request meanwhile) is not overwritten; the next pass picks it up.
+    """
     current = {(i["kind"], i["key"]): i for i in client.items()["items"]}
-    out = {"created": [], "updated": [], "unchanged": []}
+    out = {"created": [], "updated": [], "unchanged": [], "deferred": []}
     for p in pieces:
         before = current.get((p["kind"], p["key"]))
         same = before is not None and all(before.get(k) == p[k] for k in ("title", "content", "format", "visibility"))
         if same:
             out["unchanged"].append(f"{p['kind']}/{p['key']}")
+            continue
+        if seen is not None and before is not None and before.get("version") != seen.get((p["kind"], p["key"])):
+            out["deferred"].append(f"{p['kind']}/{p['key']}")
             continue
         client.put(p["kind"], p["key"], title=p["title"], content=p["content"], fmt=p["format"],
                    visibility=p["visibility"])
@@ -129,43 +136,93 @@ def sync(client: SpaceClient, pieces: list[dict]) -> dict:
     return out
 
 
-def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None) -> list[dict]:
-    """Carry out the on/off requests the monitor wrote into the agent pieces; return what was done or refused."""
-    from galecore_ai.application import tasks as t
-
-    done = []
+def _agent_items(client: SpaceClient) -> list[tuple[dict, dict]]:
+    out = []
     for item in client.items("agent")["items"]:
         try:
             content = json.loads(item["content"])
         except (json.JSONDecodeError, TypeError):
             continue
+        if isinstance(content, dict):
+            out.append((item, content))
+    return out
+
+
+def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None,
+                   items: list[tuple[dict, dict]] | None = None) -> list[dict]:
+    """Carry out the on/off requests the monitor wrote into the agent pieces; return what was done or refused.
+
+    Only an agent of this PC whose slug is the piece's key is touched (the id comes from GaleCore). A request older
+    than the agent's last change is refused: the owner decided something later (on this PC or by chat).
+    """
+    from galecore_ai.application import tasks as t
+
+    known = {_slug(x["id"]): x["id"] for x in t.list_tasks(kb)}
+    done = []
+    for item, content in (items if items is not None else _agent_items(client)):
         req = content.get("request") or {}
-        wanted, task_id = req.get("status"), content.get("id")
-        if wanted not in ("active", "paused") or not task_id:
+        wanted = req.get("status")
+        if wanted not in ("active", "paused"):
+            continue
+        task_id = known.get(item["key"])
+        if task_id is None or task_id != content.get("id"):
+            done.append({"agent": item["key"], "status": wanted, "result": "refused",
+                         "error": "este agente no existe en la PC donde corren los agentes"})
             continue
         try:
-            if t.load(kb, task_id).status == wanted:
-                done.append({"agent": task_id, "status": wanted, "result": "already"})
-                continue
-            prompt = f"Pedido desde el monitor por {client.user} ({req.get('at', 'sin hora')})"
+            task = t.load(kb, task_id)
+            at = datetime.fromisoformat(str(req.get("at", "")))
+            if at.tzinfo is None:
+                raise ValueError("naive")
+        except ValueError:
+            done.append({"agent": item["key"], "status": wanted, "result": "refused", "error": "pedido sin hora válida"})
+            continue
+        if task.status == "cancelled":
+            done.append({"agent": item["key"], "status": wanted, "result": "refused",
+                         "error": "el agente está cancelado; se vuelve a crear desde el chat"})
+            continue
+        if task.status == wanted:
+            done.append({"agent": item["key"], "status": wanted, "result": "already"})
+            continue
+        if at < task.updated_at:
+            done.append({"agent": item["key"], "status": wanted, "result": "refused",
+                         "error": f"superado por un cambio posterior ({task.updated_at:%Y-%m-%d %H:%M} UTC)"})
+            continue
+        try:
             change = t.resume if wanted == "active" else t.pause
-            change(kb=kb, scheduler=scheduler, task_id=task_id, prompt=prompt, now=now)
-            done.append({"agent": task_id, "status": wanted, "result": "applied"})
-        except (t.TaskError, OSError, ValueError) as exc:
-            done.append({"agent": task_id, "status": wanted, "result": "refused", "error": str(exc)[:300]})
+            change(kb=kb, scheduler=scheduler, task_id=task_id, now=now,
+                   prompt=f"Pedido desde el monitor por {client.user} ({req['at']})")
+            done.append({"agent": item["key"], "status": wanted, "result": "applied"})
+        except (t.TaskError, OSError) as exc:
+            done.append({"agent": item["key"], "status": wanted, "result": "refused", "error": str(exc)[:300]})
     return done
 
 
 def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None) -> dict:
-    """Apply the monitor's requests, then publish every agent's state (only the ones that changed are written)."""
-    requests = apply_requests(client, kb, scheduler, now)
+    """Apply the monitor's requests, then publish every agent's state (only the ones that changed are written).
+
+    A refusal stays in the piece (`request_error`) until the next request. A piece whose agent is cancelled or gone
+    from this PC is published as cancelled, so the monitor stops showing it as running.
+    """
+    items = _agent_items(client)
+    seen = {("agent", i["key"]): i["version"] for i, _ in items}
+    requests = apply_requests(client, kb, scheduler, now, items)
     refused = {r["agent"]: r["error"] for r in requests if r["result"] == "refused"}
+    kept = {i["key"]: c["request_error"] for i, c in items if c.get("request_error") and not c.get("request")}
     pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent"]
     for p in pieces:
-        content = json.loads(p["content"])
-        if content["id"] in refused:            # the monitor shows why it did not happen
-            p["content"] = json.dumps({**content, "request_error": refused[content["id"]]}, ensure_ascii=False)
-    return {"requests": requests, **sync(client, pieces)}
+        error = refused.get(p["key"]) or kept.get(p["key"])
+        if error:                                # the monitor shows why it did not happen
+            p["content"] = json.dumps({**json.loads(p["content"]), "request_error": error}, ensure_ascii=False)
+    live = {p["key"] for p in pieces}
+    for item, content in items:
+        if item["key"] not in live and content.get("status") != "cancelled":
+            gone = {k: content[k] for k in ("id", "capability", "schedule", "strategy", "objective") if k in content}
+            pieces.append({"kind": "agent", "key": item["key"], "title": item["title"], "format": "json",
+                           "visibility": item.get("visibility", "private"),
+                           "content": json.dumps({**gone, "status": "cancelled", "state": "CANCELLED",
+                                                  "request_error": refused.get(item["key"])}, ensure_ascii=False)})
+    return {"requests": requests, **sync(client, pieces, seen)}
 
 
 def context(client: SpaceClient, max_lines: int = 25) -> str:
