@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0017
 title: Programar cualquier capacidad de sólo lectura — el briefing te llega solo (base del harness, entrega 5)
-status: IN_PROGRESS
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
-review_result: PENDING
-approval_result: PENDING
+closure_blocked: false
+review_result: APPROVED
+approval_result: APPROVED
 ---
 
 # GC-AI-0017 — Programar cualquier capacidad de sólo lectura
@@ -208,3 +208,7 @@ python -B -m pytest -q -p no:cacheprovider
 python -B -m ruff check --no-cache .
 git diff --check
 ```
+
+## Cierre
+
+**CLOSED por el owner el 03/10/2026** («dale, sí a todo»), en lote con 0016, 0017, 0018 y GC-0005. Revisión: interna + pasada conjunta de Codex 0016–0018 (`GC-AI-0016-0017-0018-20261003T212859Z.md`) con los arreglos chicos elegidos por el owner; límites conocidos registrados en el work item de 0018. Demos reemplazadas por ejemplos internos (regla del 03/10).
