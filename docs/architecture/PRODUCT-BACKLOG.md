@@ -374,6 +374,23 @@ alternativas: `SKILL.md` con frontmatter como fuente única, o `skill.yaml` que 
 `SKILL.md`. No implementar registry, UI ni proposals antes de elegir el bundle mínimo mediante
 esas dos Skills reales.
 
+### Addendum 2026-10-04 — `work_item.py start` no deja el item activo
+
+**Origen:** owner, 04/10, al abrir la pieza 2 («anotalo en el backlog del tooling pq nos hace perder tiempo»).
+**Observado:** `tools/work_item.py start galecore-ai GC-AI-0026` creó rama, worktree y claim e imprimió el comando de
+sesión, pero no tocó `ACTIVE_WORK_ITEM` del workspace ni el del repo. Al abrir `claude -n GC-AI-0026 "retoma el
+handoff"`, el hook `SessionStart` mostró el item anterior (GC-AI-0025, desde la copia de su worktree, en
+`IN_PROGRESS` aunque en `main` estaba `CLOSED`) y la sesión retomó lo que no era. Se corrigió a mano.
+**Mejora acotada:** `start` escribe los dos punteros (o lo dice si no hay archivo del item todavía) y crea el borrador
+desde `WORK-ITEM-TEMPLATE.md`; el hook avisa si el puntero apunta a un item `CLOSED` en `main`.
+**Límites:** tooling del workspace; no cambia el ciclo de estados ni quién cierra.
+
+### Addendum 2026-10-04 — Jev (modelo de decisión): más adelante
+
+**Origen:** buzón `2026-10-04-ahora-esta-de-moda-jev-y` (owner, 04/10). **Decisión del owner (reiterada 04/10):** se
+ve más adelante porque es pago. Cuando se abra: comparar contra Haiku con salida estructurada en el routing (pieza 1b
+ya hecha) y en prender/apagar por contexto (pieza 3). No instalar el plugin sin decidir.
+
 ---
 
 ## BL-002 — Metadata de unidades/escala en el contrato GEX de GaleCore
