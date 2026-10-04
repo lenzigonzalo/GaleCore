@@ -185,7 +185,7 @@ def test_without_galecore_the_story_run_says_so(env, monkeypatch):
     model = FakeModel(mr.ModelReply(ok=False, error="claude not found on PATH"))
     result = t.run(kb=kb, task_id="historia", followup=follow, commit=False, now=LATER, client=model)
     assert result["status"] == "FAILED" and "GaleCore did not answer" in result["error"]
-    assert "could not gather today's data" in model.calls[0]["prompt"]
+    assert model.calls == []                                   # internal review: no pack, no model run
 
 
 def test_the_pack_is_gathered_when_the_run_starts_inside_an_event_loop(env, monkeypatch):
@@ -209,3 +209,17 @@ def test_on_a_weekend_the_gex_is_not_asked():
     pack = asyncio.run(story.gather(d, today=date(2026, 10, 4)))     # a Sunday
     assert "compute.gex_analysis" not in [c for c, _ in d.calls] and "gex" not in pack["options"]
     assert any("mercado cerrado" in m for m in pack["missing"])
+
+
+def test_a_change_over_a_negative_base_keeps_its_sign():
+    # Internal review: net GEX -2 → -1 rose; (a/b - 1) over a negative base said -50 %.
+    before = {"options": {"gex": {"net_gex": -2.0}}}
+    now = {"options": {"gex": {"net_gex": -1.0}}}
+    move = story.compare(now, before)["moves"]["gex.net_gex"]
+    assert move["change"] == 1.0 and "change_pct" not in move
+    assert story.compare({"options": {"gex": {"net_gex": 0.0}}}, before)["sign_flips"] == {}
+
+
+def test_an_empty_gex_answer_is_missing_not_zeros():
+    pack = gather(gex={"symbol": "SPY", "gex": {}})
+    assert "gex" not in pack["options"] and any("sin datos globales" in m for m in pack["missing"])

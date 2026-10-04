@@ -678,6 +678,9 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     except Exception as exc:  # noqa: BLE001 - recorded; the model still reads what it can
         followup_error = f"{type(exc).__name__}: {exc}"
         note = f"The runner could not gather today's data ({followup_error[:200]}): that data is missing."
+    if entry.id == "market_story" and kept is None:   # no pack: no data to read, the model is not called
+        return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "result": "FAILED",
+                "duration_s": round(time.monotonic() - t0, 1), "error": f"sin paquete del día: {followup_error}"[:800]}
     target = _latest_research(kb, task)
     scratch = _scratch(task.id, now)
     scratch.mkdir(parents=True, exist_ok=True)

@@ -54,7 +54,7 @@ Pieza 1 del plan vigente (roadmap §4 «Plan para cerrar el harness», owner 04/
 - [x] **AC-05 — Corre sola:** tarea `historia-del-mercado` L–V 17:15 America/New_York; el runner junta el paquete
   antes del modelo (que no puede escribirlo) y se lo pasa en el prompt. Bug real arreglado: dentro de `task run` el
   paquete no se juntaba (event loop ya corriendo; test que lo reproduce). Se reapunta a `main` al integrar.
-- [ ] **AC-06 — Suite y revisión interna.**
+- [x] **AC-06 — Suite y revisión interna:** `pytest tests/unit` 1014 y ruff limpios; revisión interna abajo.
 - [ ] **AC-07 — Cierre:** owner.
 
 ## Límites
@@ -63,3 +63,12 @@ Pieza 1 del plan vigente (roadmap §4 «Plan para cerrar el harness», owner 04/
 - Rendimientos y spreads de crédito se leen por ETFs (TLT, HYG); IV rank con historia desde el 21/09.
 - GEX: depende de que GaleCore lo calcule a tiempo (240 s); en fin de semana no se pide (no llega).
 - El estado de los conectores es el que mostró el host el 04/10, no una comprobación en vivo.
+
+## Revisión interna (04/10)
+
+CHANGES_REQUESTED (0 BLOCKER, 2 MAJOR). Arreglados con test: el % de cambio frente al paquete anterior invertía el
+signo sobre una base negativa (net GEX) y ahora se omite; un GEX vacío entraba como ceros y ahora va a `missing`.
+MINOR arreglados: sin paquete no se llama al modelo (FAILED, sin gastar la corrida); la vela del día no cuenta como
+cierre antes de las 16:15 ET; cero no cuenta como cambio de signo; el tope HTTP del dispatcher (120 s por defecto)
+queda documentado junto al de 240 s. Quedan como límites: `history` del IV rank se asume ascendente (así lo devuelve
+GaleCore); estados de conectores fijos al 04/10. Recheck acotado: no corrido (correcciones chicas, cubiertas por tests).

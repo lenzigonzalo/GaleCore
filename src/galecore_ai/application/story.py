@@ -14,6 +14,7 @@ import asyncio
 import json
 import math
 from datetime import UTC, date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from galecore_ai.application.knowledge import KnowledgeBase, save_evidence
 from galecore_ai.capabilities.galecore_dtos import GaleCoreGexAnalysisResponse
@@ -31,17 +32,21 @@ MACRO_RELEASES = "50,10,46,53,54,9"
 CALENDAR_DAYS = 14
 RECENT_DAYS = 7             # releases of the last week: what the last sessions already reacted to
 HISTORY_DAYS = 45           # calendar days of daily candles: covers 20 sessions with holidays
-GEX_TIMEOUT_S = 240         # a cold global GEX can take minutes; past this it is declared missing
+GEX_TIMEOUT_S = 240         # a cold global GEX can take minutes; past this it is declared missing. The dispatcher's
+                            # own HTTP cap (GALECORE_TIMEOUT_SECONDS, 120 s by default) applies first when lower
 SLUG_PREFIX = "historia"
+NEW_YORK = ZoneInfo("America/New_York")
 
 
-def _closes(raw) -> list[tuple[str, float]]:
-    """Daily closes, oldest first, one per date, from GaleCore's raw DXLink candles."""
+def _closes(raw, exclude: str | None = None) -> list[tuple[str, float]]:
+    """Daily closes, oldest first, one per date, from GaleCore's raw DXLink candles; `exclude` is a date whose candle
+    is still open (today, before the close)."""
     events = (raw or {}).get("data") if isinstance(raw, dict) else None
     by_day: dict[str, float] = {}
     for e in events or []:
         stamp, close = e.get("timeStamp"), e.get("close")
-        if isinstance(stamp, str) and isinstance(close, int | float) and math.isfinite(close) and close > 0:
+        if (isinstance(stamp, str) and stamp[:10] != exclude and isinstance(close, int | float)
+                and math.isfinite(close) and close > 0):
             by_day[stamp[:10]] = float(close)
     return sorted(by_day.items())
 
@@ -69,6 +74,8 @@ def price_view(closes: list[tuple[str, float]]) -> dict | None:
 def _gex_view(raw) -> dict:
     dto = GaleCoreGexAnalysisResponse.model_validate(raw)
     g = dto.gex.global_scope
+    if g.spot <= 0 or g.coverage_pct <= 0:   # the DTO's defaults are zeros: an empty answer is not data
+        raise ValueError(f"sin datos globales (spot {g.spot}, cobertura {g.coverage_pct})")
     out = {"spot": g.spot, "net_gex": g.net_gex, "gamma_zero_level": g.gamma_zero_level, "call_wall": g.call_wall,
            "put_wall": g.put_wall, "coverage_pct": g.coverage_pct,
            "as_of": dto.timestamp.isoformat() if dto.timestamp else None,
@@ -117,12 +124,15 @@ async def gather(dispatcher, *, symbol: str = "SPY", today: date | None = None) 
     async def skip_gex():
         missing.append(f"compute.gex_analysis {symbol}: no se pide con el mercado cerrado (fin de semana)")
 
+    et = datetime.now(UTC).astimezone(NEW_YORK)
+    open_day = today.isoformat() if et.date() == today and (et.hour, et.minute) < (16, 15) else None
+
     symbols = list(dict.fromkeys([symbol, *CROSS_ASSET]))
     candles = await asyncio.gather(*(ask("market_data.candles", {"symbol": s, "interval": "1d", "fromTime": start})
                                      for s in [*symbols, *VOL_INDICES]))
     prices, vol = {}, {}
     for s, raw in zip([*symbols, *VOL_INDICES], candles, strict=True):
-        view = price_view(_closes(raw)) if raw is not None else None
+        view = price_view(_closes(raw, exclude=open_day)) if raw is not None else None
         if raw is not None and view is None:
             missing.append(f"market_data.candles {s}: menos de dos cierres diarios")
         if view:
@@ -203,10 +213,10 @@ def compare(pack: dict, previous: dict | None) -> dict | None:
     for k in sorted(now.keys() & before.keys()):
         a, b = now[k], before[k]
         moves[k] = {"before": b, "now": a, "change": round(a - b, 4),
-                    **({"change_pct": _pct(a, b)} if b not in (0, 0.0) else {})}
+                    **({"change_pct": _pct(a, b)} if b > 0 else {})}   # over a negative base the sign lies
     signs = {}
     for k in ("gex.net_gex", "gex.spot_vs_zero_gamma_pct"):
-        if k in now and k in before and (now[k] > 0) != (before[k] > 0):
+        if k in now and k in before and now[k] * before[k] < 0:
             signs[k] = "cambió de signo"
     return {"previous_gathered_at": previous.get("gathered_at"), "moves": moves, "sign_flips": signs}
 
