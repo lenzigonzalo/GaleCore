@@ -56,3 +56,17 @@ Bid/Ask/Volume para permitir envolver. La revisión es estática; no se afirma Q
 Texto general 14–16 px, títulos de pantalla 24 px, precios 30 px, balance principal 28 px
 y métricas de riesgo 22 px. Valores de GEX 20 px con etiquetas y referencias separadas.
 Sin cierre ni aprobación del owner.
+
+## Skill del frontend
+
+Pedido del owner: guardar la lógica visual como skill para todo el front.
+Se registra en `.agents/skills/galecore-frontend/SKILL.md`, con routing en
+`source/galecore-monitor/AGENTS.md`. Reutiliza CSS y Tailwind como fuentes canónicas,
+documenta jerarquía, significado de colores y manejo de espacio. No cambia el frontend.
+`quick_validate.py`: Skill is valid, exit 0; todos los enlaces de skill y routing resuelven.
+Check de diff acotado a esta entrega: exit 0.
+Revisión interna [APPROVE](../reviews/GC-0008-skill-internal.md), sin cierre del owner.
+Mientras se trabajaba apareció un merge ajeno con conflicto en TabNav en el árbol compartido.
+Esta entrega se guarda por separado en `feature/GC-0008-skill`, worktree
+`.worktrees/galecore/GC-0008-skill`, base `5bc3749`; sus archivos permanecen disponibles
+también en el monitor original. Integración del commit pendiente de resolver el merge ajeno.
