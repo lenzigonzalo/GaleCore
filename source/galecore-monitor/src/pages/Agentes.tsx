@@ -70,7 +70,22 @@ function Pill({ text, color, border }: { text: string; color: string; border: st
   );
 }
 
+// Margen para que una corrida programada arranque y se publique (GaleCore-AI publica cada 5 min).
+const SILENCE_MS = 40 * 60_000;
+
+/**
+ * El estado lo calcula la PC al publicar: con la PC apagada no se publica nada y lo guardado se vuelve viejo
+ * (un «Al día» del viernes sigue ahí el lunes). Si ya pasó la próxima corrida esperada y no llegó nada nuevo,
+ * se dice eso en vez del estado guardado.
+ */
+function silent(a: Agent): boolean {
+  if (a.status !== 'active' || !a.next_expected_at) return false;
+  const next = new Date(a.next_expected_at).getTime();
+  return !Number.isNaN(next) && Date.now() > next + SILENCE_MS;
+}
+
 function StatePill({ a }: { a: Agent }) {
+  if (silent(a)) return <Pill text="Sin noticias de tu PC" color="var(--yellow-gc)" border="var(--yellow-border)" />;
   const s = STATE[a.state] ?? { label: a.state, color: 'var(--text-muted)', border: 'var(--border-dark)' };
   return <Pill text={s.label} color={s.color} border={s.border} />;
 }
@@ -104,8 +119,8 @@ function Toggle({ a, onRequest, busy }: { a: Agent; onRequest: (status: 'active'
   );
 }
 
-function AgentCard({ a, selected, onSelect, onRequest, busy }: {
-  a: Agent; selected: boolean; onSelect: () => void; onRequest: (s: 'active' | 'paused') => void; busy: boolean;
+function AgentCard({ a, publishedAt, selected, onSelect, onRequest, busy }: {
+  a: Agent; publishedAt: string; selected: boolean; onSelect: () => void; onRequest: (s: 'active' | 'paused') => void; busy: boolean;
 }) {
   const on = a.status === 'active';
   const last = a.last_run;
@@ -126,6 +141,11 @@ function AgentCard({ a, selected, onSelect, onRequest, busy }: {
         <Toggle a={a} onRequest={onRequest} busy={busy} />
       </div>
       <div style={{ ...muted, marginTop: 8 }}>{a.schedule}{a.strategy ? ` · ${a.strategy}` : ''}</div>
+      {silent(a) && (
+        <div style={{ fontSize: 13, color: 'var(--yellow-gc)', marginTop: 6 }}>
+          Tu PC no publica desde {when(publishedAt)}: la próxima corrida ya tendría que haber pasado. Lo de abajo es de ese momento.
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 24, marginTop: 10, flexWrap: 'wrap' }}>
         <div>
           <div style={label}>Última corrida</div>
@@ -136,7 +156,7 @@ function AgentCard({ a, selected, onSelect, onRequest, busy }: {
         <div>
           <div style={label}>Próxima</div>
           <div style={{ fontSize: 14, color: 'var(--text-primary)' }} className="tabular-nums">
-            {on ? when(a.next_expected_at) : '—'}
+            {on && !silent(a) ? when(a.next_expected_at) : '—'}
           </div>
         </div>
         <div>
@@ -151,7 +171,7 @@ function AgentCard({ a, selected, onSelect, onRequest, busy }: {
   );
 }
 
-function AgentDetail({ a }: { a: Agent }) {
+function AgentDetail({ a, publishedAt }: { a: Agent; publishedAt: string }) {
   const last = a.last_run;
   return (
     <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
@@ -181,7 +201,9 @@ function AgentDetail({ a }: { a: Agent }) {
         </div>
       )}
       <div style={card}>
-        <div style={{ ...label, marginBottom: 8 }}>Qué encontró{a.result_ref ? ` · ${a.result_ref}` : ''}</div>
+        <div style={{ ...label, marginBottom: 8 }}>
+          Qué encontró{a.result_ref ? ` · ${a.result_ref}` : ''} · publicado {when(publishedAt)}
+        </div>
         {a.findings
           ? <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.55 }}><Markdown text={a.findings} /></div>
           : <div style={muted}>Todavía no hay un resultado guardado.</div>}
@@ -256,11 +278,11 @@ export function Agentes() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 16, alignItems: 'start' }}>
           <div style={{ display: 'grid', gap: 10 }}>
             {agents.map(({ item, a }) => (
-              <AgentCard key={item.key} a={a} selected={item.key === current.item.key} busy={busy === item.key}
+              <AgentCard key={item.key} a={a} publishedAt={item.updatedAt} selected={item.key === current.item.key} busy={busy === item.key}
                 onSelect={() => setSelected(item.key)} onRequest={(s) => request(item, a, s)} />
             ))}
           </div>
-          <AgentDetail a={current.a} />
+          <AgentDetail a={current.a} publishedAt={current.item.updatedAt} />
         </div>
       )}
     </div>

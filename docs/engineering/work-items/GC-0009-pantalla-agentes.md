@@ -45,3 +45,10 @@ encontró, y prenderlo o apagarlo sin abrir la consola.
   Programador, evento con «Pedido desde el monitor por demo»); no se tocó ningún agente real. Lo prueba el owner
   con `oportunidades` (hoy pausado a pedido suyo) cuando quiera prenderlo.
 - [ ] **AC-05 — Cierre:** owner.
+
+## Revisión interna (04/10)
+
+CHANGES_REQUESTED conjunta con GC-AI-0023. De esta pantalla: con la PC apagada no se publica nada y quedaba «Al día»
+con una «Próxima» vencida. Ahora, si un agente prendido pasó su próxima corrida esperada + 40 min sin publicar nada
+nuevo, dice «Sin noticias de tu PC» y desde cuándo, y el detalle muestra la fecha de publicación. También se corrigió la
+sangría del árbol de pages en `claude.md`. `tsc --noEmit` y `CI=true npm run build` exit 0 después del arreglo.
