@@ -1,14 +1,14 @@
 ---
 id: GC-AI-0026
 title: Estrategia y cartera como proyecto — pieza 2
-status: DRAFT
+status: IN_PROGRESS
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
 closure_blocked: true
 review_result: PENDING
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-AI-0026 — Estrategia y cartera como proyecto
@@ -52,7 +52,9 @@ versión efectiva del perfil que el monitor.
   no tiene dónde vivir (tesis, en qué historia funciona, decisiones, pendientes), con referencias a lo existente.
 - Coherencia del perfil (BL-008, addendum 04/10) según la decisión D-2.
 
-## Decisiones del owner antes de implementar
+## Decisiones del owner (04/10)
+
+Aprobado con las propuestas (a) de D-1, D-2 y D-3: «Sobre lo demás AVANCEMOS con el work item» (owner, 04/10).
 
 - **D-1 — Dónde vive el proyecto:** (a, propuesta) `knowledge/projects/<name>.json` append-only, que referencia lo
   existente y no lo copia; (b) como pieza del espacio en GaleCore, visible en el monitor.
@@ -100,7 +102,7 @@ git diff --check
 
 ## Implementer handoff
 
-**State:** PENDING — borrador 04/10, espera aprobación y D-1/D-2/D-3.
+**State:** IN_PROGRESS (04/10)
 
 ## Independent review
 

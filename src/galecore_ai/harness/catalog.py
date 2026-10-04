@@ -21,7 +21,7 @@ from galecore_ai.harness.assets import asset_root, definition_hash, load_asset
 from galecore_ai.harness.definitions import SkillDefinition
 
 CATALOG_PATH = "catalog.yaml"
-STORED_AS = ("none", "regime", "research", "strategy", "task", "profile", "inbox")
+STORED_AS = ("none", "regime", "research", "strategy", "task", "profile", "inbox", "project")
 RUNNERS = ("code", "model")
 # Routing by the kind of work (owner 04/10, GC-AI-0025): gathering is code; the model runs only what needs it, at the
 # lowest tier that does it. A provider failure or missing quota never moves a capability to a costlier model.

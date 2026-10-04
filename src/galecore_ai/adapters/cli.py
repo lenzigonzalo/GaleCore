@@ -29,6 +29,8 @@ Usage:
     python -m galecore_ai.adapters.cli galecore list | get CAPABILITY --symbol SYM [--param k=v ...] [--out FILE]
     python -m galecore_ai.adapters.cli space context | list [--kind K] | show K/KEY | put K/KEY --title T [--visibility V] [--format F] < content | delete K/KEY | import
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
+    python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
+    python -m galecore_ai.adapters.cli project add NAME|portfolio --kind thesis|story|decision|pending|done --text "..." [--ref REF] [--closes HASH] --prompt "..."
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
@@ -657,12 +659,17 @@ async def _cmd_space(args: argparse.Namespace) -> None:
         elif c == "import":
             from galecore_ai.application.tasks import WindowsScheduler
             kb = _build_knowledge_base()
-            result = space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] != "agent"])
+            pieces, held = space.guard_profile(client, kb, [p for p in space.local_pieces(kb) if p["kind"] != "agent"])
+            result = space.sync(client, pieces)
+            result["deferred"] = result.get("deferred", []) + held
             agents = space.publish_agents(client, kb, WindowsScheduler())   # agents keep the monitor's requests
             for k in ("created", "updated", "unchanged", "deferred"):
                 result[k] = result.get(k, []) + agents[k]
             _json_out({"status": "SYNCED", "user": client.user, "credentials": client.source,
                        "requests": agents["requests"], **result})
+        elif c == "pull-profile":
+            _json_out(space.pull_profile(client, _build_knowledge_base(),
+                                        RecordHost(provider="claude-code", model=args.host_model)))
         elif c == "agents":
             from galecore_ai.application.tasks import (
                 SYNC_MINUTES,
@@ -702,6 +709,35 @@ async def _cmd_inbox(args: argparse.Namespace) -> None:
             item, path = inbox.resolve(kb=kb, item_id=args.id, to=args.to, note=args.note, prompt=args.prompt)
             _json_out({"status": "RESOLVED", "ref": f"inbox:{item.id}", "to": item.status, "path": str(path),
                        "history": [r.model_dump(mode="json") for r in item.resolutions]})
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+
+
+async def _cmd_project(args: argparse.Namespace) -> None:
+    from galecore_ai.application import project
+    kb = _build_knowledge_base()
+    try:
+        if args.project_command == "show":
+            target = args.target
+            if target == "portfolio":
+                state, error = None, None
+                try:
+                    from galecore_ai.adapters.galecore_space import SpaceClient
+                    from galecore_ai.application.space import profile_state
+                    state = profile_state(SpaceClient(), kb)
+                except Exception as exc:  # noqa: BLE001 - any failure reaching GaleCore is declared, not fatal
+                    error = f"{type(exc).__name__}: {str(exc)[:200]}"
+                view = project.portfolio_project(kb, state, error)
+            elif target.startswith("strategy:"):
+                view = project.strategy_project(kb, target.split(":", 1)[1])
+            else:
+                raise KnowledgeError(f"{target!r}: use strategy:<name> or portfolio")
+            _json_out(view, exit_code=_EXIT_VALIDATION_ERROR if view["integrity_failed"] else _EXIT_SUCCESS)
+        else:
+            entry, path = project.add(kb=kb, name=args.name, kind=args.kind, words=args.text, prompt=args.prompt,
+                                      refs=args.ref or [], closes=args.closes or "", host_model=args.host_model)
+            _json_out({"status": "RECORDED", "project": args.name, "kind": entry.kind.value,
+                       "hash": entry.hash, "path": str(path)})
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
 
@@ -1046,7 +1082,8 @@ def build_parser() -> _JsonArgumentParser:
     kb_sub = p_kb.add_subparsers(dest="kb_command", required=True)
     p_search = kb_sub.add_parser("search", help="Items matching the terms, best first")
     p_search.add_argument("--text", help="Terms to look for (empty lists everything)")
-    p_search.add_argument("--kind", choices=["research", "regime", "evidence", "strategy", "profile", "feedback"])
+    p_search.add_argument("--kind", choices=["research", "regime", "evidence", "strategy", "profile", "feedback",
+                                             "project"])
     p_search.add_argument("--status", choices=["unfinished", *[s.value for s in ResearchStatus]],
                           help="unfinished = open or test_planned")
     p_search.add_argument("--symbol")
@@ -1098,10 +1135,26 @@ def build_parser() -> _JsonArgumentParser:
     p_sp_put.add_argument("--visibility", default="private", choices=["private", "shared"])
     sp_sub.add_parser("delete", help="Delete one of your pieces").add_argument("ref", help="kind/key")
     sp_sub.add_parser("import", help="Bring the local profile, objectives, conventions, agents and skills (only changes)")
+    p_sp_pull = sp_sub.add_parser("pull-profile", help="Bring a profile edited in the monitor as a new local version "
+                                                       "(GC-AI-0026: the space rules)")
+    p_sp_pull.add_argument("--host-model", dest="host_model")
     p_sp_agents = sp_sub.add_parser("agents", help="Apply the monitor's on/off requests and publish each agent's state, "
                                                    "last run and findings (GC-AI-0023)")
     p_sp_agents.add_argument("--install", action="store_true",
                              help="Register the Windows task that does it every 5 minutes")
+
+    p_project = sub.add_parser("project", help="A strategy or the portfolio as a project: everything in one view "
+                                               "and the owner's log (GC-AI-0026)")
+    pj_sub = p_project.add_subparsers(dest="project_command", required=True)
+    pj_sub.add_parser("show", help="strategy:<name> or portfolio").add_argument("target")
+    p_pj_add = pj_sub.add_parser("add", help="Append the owner's words: thesis, story, decision, pending or done")
+    p_pj_add.add_argument("name", help="Strategy name or portfolio")
+    p_pj_add.add_argument("--kind", required=True, choices=["thesis", "story", "decision", "pending", "done"])
+    p_pj_add.add_argument("--text", required=True, help="The owner's words, verbatim")
+    p_pj_add.add_argument("--ref", action="append", help="A resolvable reference (regime:, research:, …)")
+    p_pj_add.add_argument("--closes", help="done only: hash (or unique prefix) of the open item it closes")
+    p_pj_add.add_argument("--prompt", required=True, help="The owner's request")
+    p_pj_add.add_argument("--host-model", dest="host_model")
 
     p_inbox = sub.add_parser("inbox", help="Idea inbox: note the owner's idea now, review it later (GC-AI-0018)")
     in_sub = p_inbox.add_subparsers(dest="inbox_command", required=True)
@@ -1283,6 +1336,8 @@ def main() -> None:
             asyncio.run(_cmd_feedback(args))
         elif args.command == "inbox":
             asyncio.run(_cmd_inbox(args))
+        elif args.command == "project":
+            asyncio.run(_cmd_project(args))
         elif args.command == "strategy":
             asyncio.run(_cmd_strategy(args))
         elif args.command == "followup":

@@ -113,6 +113,57 @@ def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
     return pieces
 
 
+def profile_state(client: SpaceClient, kb: KnowledgeBase) -> dict:
+    """Which profile is in force (GC-AI-0026, owner decision D-2: GaleCore's space rules).
+
+    coherent: the space and the local version hold the same content. edited_in_monitor: the space differs and is not
+    older than the local version (someone edited it there): `space pull-profile` brings it as a new local version and
+    `import` does not overwrite it. local_newer: a local version not yet imported. not_published: nothing in the space.
+    """
+    local = kb.profile.latest()
+    piece = next((i for i in client.items("profile")["items"] if i["key"] == "perfil"), None)
+    out = {"local_ref": local.ref if local else None, "source": "galecore"}
+    if piece is None:
+        return {**out, "state": "not_published", "source": "knowledge (local)", "ref": out["local_ref"]}
+    try:
+        remote = json.loads(piece["content"])
+        if not isinstance(remote, dict):
+            raise TypeError("not an object")
+    except (json.JSONDecodeError, TypeError) as exc:
+        return {**out, "state": "unreadable", "ref": None, "detail": f"la pieza del perfil no es JSON válido ({exc})"}
+    version = remote.pop("version", None)
+    out |= {"space_version": version, "space_piece_version": piece.get("version")}
+    if local is None:
+        return {**out, "state": "edited_in_monitor", "ref": None, "remote": remote}
+    if remote == local.content.model_dump(mode="json"):
+        return {**out, "state": "coherent", "ref": local.ref}
+    if isinstance(version, int) and version < local.version:
+        return {**out, "state": "local_newer", "ref": local.ref,
+                "detail": f"profile:v{local.version} todavía no se importó al espacio (`space import`)"}
+    return {**out, "state": "edited_in_monitor", "ref": None, "remote": remote,
+            "detail": "el perfil se editó en el monitor; `space pull-profile` lo trae como versión nueva"}
+
+
+def pull_profile(client: SpaceClient, kb: KnowledgeBase, host) -> dict:
+    """Bring the monitor's edit as a new local version, so methods and monitor use the same content."""
+    from galecore_ai.application.profile import set_profile
+
+    state = profile_state(client, kb)
+    if state["state"] != "edited_in_monitor":
+        return {"status": "NOTHING_TO_PULL", **{k: v for k, v in state.items() if k != "remote"}}
+    doc, path = set_profile(kb.profile, changes=state["remote"], note="edición del perfil hecha en el monitor",
+                            prompt=f"space pull-profile ({client.user})", host=host)
+    return {"status": "PULLED" if path else "UNCHANGED", "ref": doc.ref, "path": str(path) if path else None}
+
+
+def guard_profile(client: SpaceClient, kb: KnowledgeBase, pieces: list[dict]) -> tuple[list[dict], list[str]]:
+    """Drop the profile and objective pieces from an import while the monitor holds an edit not pulled yet."""
+    if profile_state(client, kb)["state"] != "edited_in_monitor":
+        return pieces, []
+    kept = [p for p in pieces if p["kind"] not in ("profile", "objective")]
+    return kept, ["profile/perfil y objetivos: el monitor tiene una edición sin traer; correr `space pull-profile`"]
+
+
 def sync(client: SpaceClient, pieces: list[dict], seen: dict[tuple, int] | None = None) -> dict:
     """Write the pieces that are new or changed; return what was created, updated and left alone.
 

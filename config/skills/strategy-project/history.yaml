@@ -1,0 +1,9 @@
+# Qué cambió en cada versión de strategy_project y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: strategy_project
+versions:
+  - version: "1.0.0"
+    date: 2026-10-04
+    changes: >
+      Primera versión (GC-AI-0026, pieza 2): la estrategia y la cartera como proyecto, con todo cargado y el registro
+      del owner (tesis, historia, decisiones, pendientes).
+    feedback: []

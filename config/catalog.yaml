@@ -524,3 +524,35 @@ entries:
       - Text that looks like a key or token is refused in every field (words, context, request, review note)
       - "Not checked - that the most recent reviews were not removed by hand: the file alone cannot show it; the knowledge base's git history does"
       - "Not checked - that the idea is good or that the destination chosen in the review is the right one"
+
+  - id: strategy_project
+    kind: harness
+    serves: >-
+      Trabajar «en la estrategia X» o «en mi cartera» con todo cargado: tesis, reglas y parámetros de la versión
+      vigente, versiones y aprobaciones, último seguimiento, investigaciones con sus pendientes, decisiones, feedback y
+      en qué historia del mercado funciona; y guardar en tus palabras lo que no tenía lugar (tesis, historia,
+      decisiones, pendientes). La cartera suma el perfil vigente (el del espacio en GaleCore) y el estado de cada
+      estrategia.
+    example_requests:
+      - Estemos en la estrategia spy_prima_varianza.
+      - Abrí mi cartera.
+      - ¿Qué tengo pendiente en la estrategia de prima de varianza?
+      - "Decisión para la estrategia: no operar con VIX arriba de 30."
+      - ¿En qué historia del mercado funciona esta estrategia?
+    skill: skills/strategy-project/skill.yaml
+    output_contract: galecore_ai.contracts.project.ProjectLog
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - project show strategy:<name>
+      - project show portfolio
+      - project add <name>|portfolio --kind thesis|story|decision|pending|done --text "<tus palabras>" [--ref <ref>] [--closes <hash>] --prompt "<pedido>"
+      - space pull-profile
+    stored_as: project
+    controls:
+      - Every item of the view carries its reference; nothing is copied, what is missing is declared
+      - The owner's entries are kept verbatim, hash-chained and append-only; an edit is INTEGRITY_FAILED
+      - References must resolve; a strategy project needs the strategy to exist; done must close an open item
+      - The portfolio's profile is the space's (GaleCore rules); an edit made in the monitor is not overwritten by an import and is declared until pulled; without GaleCore the local profile is shown as unconfirmed
+      - "Not checked - live open risk: the view shows what the last follow-up reported, with its date"
+      - "Not checked - that the thesis or the story is right"

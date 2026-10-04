@@ -699,6 +699,9 @@ def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status
         candidates += _profile_items(kb, failed)
     if kind in (None, "feedback") and status is None:
         candidates += _feedback_items(kb, failed)
+    if kind in (None, "project") and status is None:
+        from galecore_ai.application.project import search_items  # project builds on this module
+        candidates += search_items(kb, failed)
     results = []
     for summary, body in candidates:
         lowered = body.lower()
