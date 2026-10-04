@@ -33,12 +33,7 @@ el GEX, que no llega); `market_story` lo interpreta con Opus (~5,6 k tokens de s
 conectores. Primera historia: `research:2026-10-04-historia-del-mercado-spy`. Buzón: 2 ideas pendientes (Jev/modelo
 de decisión; sesiones nuevas y gestor de modelos). Cerrados en lote 0019–0024 (tags). **Siguiente: pieza 1b, routing y presupuesto de modelos y sesiones por trabajo** (roadmap §4; BL-001 addendum 04/10), después la pieza 2. **Incluir en la 1b (owner 04/10):** sección «Qué y para qué»
 (qué hacemos, para qué / qué podrá hacer el owner, cómo veremos que sirve, qué queda fuera; 3–4 líneas) en
-`docs/engineering/work-items/WORK-ITEM-TEMPLATE.md`, y que `tools/engineering_gate.py` avise si el item activo no la tiene. **Pendiente antes (owner dijo «cerrá el lote» el 04/10):** cerrar
-GaleCore GC-0001, GC-0006…0009. Frenado porque el checkout `GaleCore/` estaba en `feature/GC-0008-tema-carbon` con
-cambios sin commitear de otra sesión (work item de GC-0008, `.agents/`, revisión GC-0008-skill, `AGENTS.md` del
-monitor, `pcs_spy_16d_v1.json`). Primero confirmar con el owner si esa sesión terminó; después integrar GC-0008 y
-GC-0009 a `local/integracion` y marcar los cierres (GC-0006/0007 no tienen archivo de work item). En el backlog de
-GaleCore-AI queda sin commitear el addendum del front integral del 03/10 (BL-005, ajeno, mal ubicado): preguntar.
+`docs/engineering/work-items/WORK-ITEM-TEMPLATE.md`, y que `tools/engineering_gate.py` avise si el item activo no la tiene. **Hecho 04/10 (sesión de la 1b):** GaleCore GC-0001, GC-0005…0009 CLOSED con tags `gc-000N-closed`; `local/integracion` = GC-0009 + skill del frontend (GC-0008-skill), tsc OK, checkout `GaleCore/` en `local/integracion`. Las copias sueltas de la skill quedaron en `git stash` (idénticas a `bc0f275`). Addendum del front integral movido al final de BL-005.
 
 **Plan vigente: roadmap §4 «Plan para cerrar el harness» (owner 04/10). No se cambia hasta cerrarlo.** Una sesión por pieza:
 1. **La historia del mercado** — siguiente. Arranca con el inventario de tools y conectores (qué hay y para qué, incluidos
@@ -47,7 +42,7 @@ GaleCore-AI queda sin commitear el addendum del front integral del 03/10 (BL-005
 2. Estrategia y cartera como proyecto. 3. Contraste diario y prender/apagar por contexto (+ una estructura más en
 SHADOW). 4. Supervisor de posiciones. 5. Performance. 6. Curador.
 
-Cierres pendientes del owner (en lote): GC-AI-0019…0023; GaleCore GC-0001, GC-0006…0009. Backtest (GC-AI-0011) descartado.
+Cierres en lote hechos el 04/10 (GC-AI-0019…0024; GaleCore GC-0001, GC-0005…0009). Backtest (GC-AI-0011) descartado.
 
 ## Retomar anterior (30/09, historia)
 
