@@ -85,6 +85,71 @@ Esta aclaración registra una necesidad central del producto. Los targets histó
 allí explícitamente. Este registro no cambia `ACTIVE_WORK_ITEM` ni declara implementadas o
 validadas estas capacidades.
 
+### Addendum 2026-10-04 — Routing y presupuesto visibles para desarrollo y producto
+
+**Origen y prioridad:** el owner pide incorporar al pipeline para analizar e implementar cuanto antes, sin alterar
+la sesión que trabaja en GC-AI-0024. **Clasificación:** `ROADMAP_DECISION` para la prioridad y
+`ARCHITECTURE_DECISION_NEEDED` para el mecanismo. Es el siguiente trabajo tras la entrega en curso, antes de la
+pieza 2; no cambia `ACTIVE_WORK_ITEM`, no abre otra sesión ni autoriza editar el worktree activo. Amplía el routing
+ya capturado en BL-001; no adelanta todo el lifecycle de skills.
+
+**Problema y resultado buscado:** evitar que el desarrollo autónomo consuma cuota en exploración, contexto o rondas
+de revisión sin visibilidad; para el trader, resolver consultas simples con código o un modelo económico y usar uno
+más capaz cuando la tarea lo justifique, sin pedirle que nombre modelos. Mostrar elección, motivo, presupuesto y
+consumo; una instrucción de ahorrar tokens no equivale a un límite ejecutable.
+
+**Base observada el 04/10 (inspección, sin pruebas nuevas):**
+- Workspace: `ENGINEERING.md` §5 define modelos por tarea, presupuesto declarado para corridas largas y una sesión
+  por entrega. `.claude/agents/reviewer.md` sigue con Opus/high y `autorun/SKILL.md` repite esa elección. Los hooks
+  versionados controlan inicio, lint y git, no un presupuesto acumulado del ciclo. `handoff` ya usa Haiku.
+- GaleCore-AI: `config/catalog.yaml` y `harness/catalog.py` permiten `schedulable.model`, turnos y timeout;
+  `application/tasks.py` pasa el modelo a `application/model_run.py`. `market_watch` fija Sonnet; `daily_attention`
+  hereda el predeterminado del host. `application/route.py` selecciona capacidades, no un modelo por complejidad.
+- GC-AI-0024 está desarrollando inventario y registro de tokens por corrida. Consumir su resultado al terminar;
+  no duplicar ni modificar ese trabajo desde esta iniciativa. Medición posterior no implica estimación ni freno.
+
+**Encaje:** `ALIGNED_WITH_PREREQUISITE`. Reutilizar catálogo, runner, eventos, hooks y agentes; verificar primero qué
+controla realmente el host. Dos entregas pequeñas, con responsabilidades separadas:
+
+1. **Desarrollo (workspace):** alinear autorun/agentes con la política vigente; establecer modelo y esfuerzo por
+   tarea, alcance y presupuesto visible al inicio. Acumular el gasto de la tarea, subagentes y reintentos; limitar
+   rondas y exploración sin progreso. Al agotar el presupuesto, guardar avance y explicar qué falta antes de seguir
+   gastando. Retomar en otra sesión no reinicia el presupuesto ni vuelve a cargar todo el historial. Analizar cuándo
+   conviene una sesión nueva frente a delegación, sin crear subagentes por defecto.
+2. **Producto (GaleCore-AI + adapter del host):** política de selección por capacidad, complejidad y riesgo; código
+   para consultas determinísticas cuando alcance; modelo económico para trabajo simple y escalamiento justificado
+   para análisis difícil. Mantener una sola frontera de invocación y conservar contratos/validaciones. El usuario
+   pide el trabajo; el sistema aplica la política y registra la elección, también en las corridas programadas.
+
+**Análisis previo acotado (primera entrega):** comprobar con el host instalado qué permite elegir modelo/esfuerzo,
+delegar, observar tokens durante la ejecución y cancelar. Distinguir la sesión interactiva principal de procesos
+controlados por el runner: no prometer cambiar o detener el modelo del chat si el host no lo permite. Comparar el
+control nativo disponible con un wrapper mínimo; proponer el camino más simple y su limitación. Estimar consumo
+como rango según contexto, llamadas y corridas previas, declarando incertidumbre; nunca inventar una cifra exacta.
+
+**Decisiones a concretar al abrir el trabajo:** unidad y valores de presupuesto (tokens, tiempo, turnos, llamadas;
+USD sólo con tarifas verificadas y facturación aplicable), modelos disponibles, condiciones de escalamiento,
+umbral de aviso y de detención, y alcance por tarea/sesión/día. Una suscripción también consume cuota aunque no se
+facture cada llamada. Si sólo se observa consumo al terminar, declararlo: usar límites soportados y no afirmar un
+tope duro de tokens. Una caída de proveedor o falta de cuota no habilita un modelo más caro sin política previa.
+
+**Demostraciones y aceptación:**
+- Desarrollo: tarea pequeña con modelo explícito y consumo visible; repetición o exceso de presupuesto provocado
+  de forma acotada se detiene y deja un handoff recuperable. Sin lanzar una corrida costosa para probar el freno.
+- Producto: pedido simple y pedido complejo en lenguaje normal eligen rutas distintas por la política, sin que el
+  usuario nombre modelos; comprobar calidad del resultado, no sólo menor consumo. Mostrar un escalamiento y un
+  presupuesto agotado; registrar modelo efectivo, motivo, duración, tokens disponibles y reintentos, incluidos
+  fallos. Si una medición no está disponible, indicar desconocido, nunca cero ni ahorro supuesto.
+- Recuperación: nueva sesión retoma el trabajo y su presupuesto restante sin repetir investigación ya guardada.
+- Separar evidencia de configuración, ejecución real y limitaciones del host. Conservar revisiones proporcionales
+  al riesgo y aprobación del owner; abaratar no elimina controles financieros ni autoriza nuevas acciones.
+
+**Entry gate:** terminar la entrega activa y leer lo que GC-AI-0024 dejó implementado/revisado; abrir entonces el
+work item correspondiente y registrar la solución viable antes de ampliar. La prioridad está aprobada por este
+pedido; los umbrales y mecanismos todavía no. **Fuera:** nuevo host, plataforma multiagente general, cambios en
+GaleCore o producción, compra de planes/proveedores y rediseño del front. Políticas de ingeniería viven en el
+workspace; políticas de producto y su ejecución en GaleCore-AI/host; GaleCore conserva datos, riesgo y ejecución.
+
 ### Addendum 2026-09-28 — harness que amplía capacidades y aprende del uso
 
 **Origen:** el owner pide entender y tradear mejor, hacer más rápido el trabajo, crear skills y
@@ -1751,6 +1816,43 @@ Un «sí» textual aislado no reemplaza aprobación de una propuesta identificad
 idempotencia de ejecución. No se añaden proveedores pagos ni se asume acceso ilimitado.
 
 ---
+
+### Addendum 2026-10-04 — Coherencia entre el espacio del trader y los registros locales
+
+**Origen:** revisión conversada con el owner sobre si la base de ingeniería alcanza para avanzar por verticales;
+pedido de dejar detalladas las conexiones pendientes para no omitirlas. Captura, no aprobación de una migración.
+**Clasificación:** `ARCHITECTURE_DECISION_NEEDED`; encaje `ALIGNED_WITH_PREREQUISITE`.
+**Target propuesto:** pieza 2 del plan vigente (estrategia y cartera como proyecto), antes de ampliar los consumidores
+de perfil, objetivos y memoria. Toca GaleCore y GaleCore-AI; el workspace conserva el plan y las decisiones comunes.
+
+**Observado en código y evidencia existente (sin nueva prueba en vivo):**
+- GC-AI-0021 documenta escritura y lectura reales del espacio en GaleCore Dev: 20 piezas importadas y una segunda
+  importación sin escrituras. GaleCore tiene entidad, migración y endpoints autenticados de `TraderSpaceItem`.
+- `src/galecore_ai/application/space.py`: `local_pieces` toma el perfil local; `sync` publica contenido diferente en
+  GaleCore; `context` lee el espacio remoto. `adapters/cli.py` conecta esos caminos con `space import`.
+- `application/knowledge.py` (`KnowledgeBase.profile`) y `adapters/profile_store.py` siguen usando
+  `knowledge/profile/v<N>.json`; guardar una investigación comprueba el perfil local vigente.
+- Los resultados completos, evidencias, feedback e historial de tareas siguen en `knowledge/`; publicar piezas o
+  resúmenes en el espacio no equivale a migrarlos ni a sincronizar todo el conocimiento.
+
+**Riesgo inferido, todavía no reproducido:** editar el perfil en el monitor puede dejar al inicio de sesión y a los
+métodos leyendo versiones distintas; una importación posterior puede volver a publicar el perfil local sobre la
+edición remota. La protección específica de pedidos de agentes no demuestra coherencia del perfil.
+
+**Próximo paso acotado y decisión pendiente:** reproducir edición desde el monitor → lectura desde una sesión nueva →
+uso por un método → nueva importación, con un usuario/dato de prueba. Definir qué fuente manda por tipo de objeto,
+quién escribe y qué ocurre ante conflicto o falta de conexión. Reutilizar el cliente, los endpoints y los stores
+existentes; no asumir que hace falta otra base ni una migración general. Registrar la decisión en el ADR que
+corresponda según `ENGINEERING.md` §1; BL-009 conserva la taxonomía general de conocimiento, sin duplicarla acá.
+
+**Resultado esperado del incremento que lo aborde:** monitor y método consumen la misma versión efectiva del perfil;
+una importación no revierte silenciosamente una edición; el resultado conserva la referencia usada y se recupera
+desde otra sesión. Si la fuente autoritativa no está disponible, se declara el estado y no se usa silenciosamente
+una copia distinta. Se preservan las referencias, hashes e historia existentes.
+
+**Límites:** no cambia prioridades, no abre un work item, no migra datos, no habilita cuenta real ni declara resuelto
+el aislamiento multiusuario. Las fuentes faltantes siguen en BL-017; unidades/cortes/frescura en BL-002, BL-011 y
+BL-013; la cobertura del OI y su medición en BL-014. Cada vertical aborda sólo lo que afecta su resultado.
 
 ## BL-009 — Taxonomía de conocimiento entre GaleCore y GaleCore-AI, y skill de ruteo
 
