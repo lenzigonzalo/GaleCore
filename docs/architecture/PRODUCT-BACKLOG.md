@@ -116,6 +116,11 @@ controla realmente el host. Dos entregas pequeñas, con responsabilidades separa
    rondas y exploración sin progreso. Al agotar el presupuesto, guardar avance y explicar qué falta antes de seguir
    gastando. Retomar en otra sesión no reinicia el presupuesto ni vuelve a cargar todo el historial. Analizar cuándo
    conviene una sesión nueva frente a delegación, sin crear subagentes por defecto.
+   **Sesiones por trabajo (owner, 04/10):** una sesión por work item o entrega, nombrada con el trabajo, abierta al
+   terminar la anterior a partir de su handoff para no arrastrar contexto. Comprobar primero qué permite el host
+   (sesión interactiva nueva y su nombre, corrida sin interfaz por work item, sesión en la nube) y quién la abre:
+   automática sólo si el host la soporta y se ve en qué sesión está cada trabajo; si no, el agente deja el
+   comando listo para que la abra el owner.
 2. **Producto (GaleCore-AI + adapter del host):** política de selección por capacidad, complejidad y riesgo; código
    para consultas determinísticas cuando alcance; modelo económico para trabajo simple y escalamiento justificado
    para análisis difícil. Mantener una sola frontera de invocación y conservar contratos/validaciones. El usuario

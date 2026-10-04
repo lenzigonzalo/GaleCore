@@ -31,7 +31,7 @@ arreglados; espera tu cierre). `story pack` junta en código el paquete del día
 el GEX, que no llega); `market_story` lo interpreta con Opus (~5,6 k tokens de salida, 3–4 turnos); tarea
 `historia-del-mercado` L–V 17:15 ET desde `main`; `inventory` muestra modelo y consumo por capacidad, fuentes y
 conectores. Primera historia: `research:2026-10-04-historia-del-mercado-spy`. Buzón: 2 ideas pendientes (Jev/modelo
-de decisión; sesiones nuevas y gestor de modelos). **Siguiente: pieza 2, estrategia y cartera como proyecto.**
+de decisión; sesiones nuevas y gestor de modelos). Cerrados en lote 0019–0024 (tags). **Siguiente: pieza 1b, routing y presupuesto de modelos y sesiones por trabajo** (roadmap §4; BL-001 addendum 04/10), después la pieza 2.
 
 **Plan vigente: roadmap §4 «Plan para cerrar el harness» (owner 04/10). No se cambia hasta cerrarlo.** Una sesión por pieza:
 1. **La historia del mercado** — siguiente. Arranca con el inventario de tools y conectores (qué hay y para qué, incluidos
