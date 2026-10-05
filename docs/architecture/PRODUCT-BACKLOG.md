@@ -25,7 +25,15 @@ para reutilizar código existente, ni esconder una reescritura bajo lenguaje de 
 
 ---
 
+## Destino de los ítems (05/10/2026)
+
+Con la propuesta única aprobada, cada `BL-` lleva bajo su título la fila del catálogo (U-xx, `roadmap/README.md`
+§1.4) y la pieza del plan donde entra; lo ya hecho figura como «resuelto». El índice está en `roadmap/README.md` §5. Las citas «roadmap §4» dentro de los ítems son del roadmap anterior al 05/10
+(está en git) y no indican el plan vigente.
+
 ## BL-001 — Skill bundles, lifecycle y experiencia de evolución
+
+> **Destino (propuesta única, 05/10/2026):** en parte resuelto (GC-AI-0015–0017, 0020, 0022, 0025; U-47, U-49, U-50, U-55) · U-16, U-48, U-51 → P1-09 · addendum `work_item.py start` → F0-2 · Jev → U-64, P1-A0 · lifecycle con evals: Después. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED`
 
@@ -395,6 +403,8 @@ ya hecha) y en prender/apagar por contexto (pieza 3). No instalar el plugin sin 
 
 ## BL-002 — Metadata de unidades/escala en el contrato GEX de GaleCore
 
+> **Destino (propuesta única, 05/10/2026):** U-01, U-09 (calidad del dato) → P1-D1. Índice: `roadmap/README.md` §5.
+
 **Estado:** `CAPTURED`
 
 **Target:** después del cierre de GC-AI-0001; requiere un work item propio y un cambio en GaleCore.
@@ -457,6 +467,8 @@ ni con el agregado de las 20:32 UTC.
 ---
 
 ## BL-003 — Onboarding de mercados, proveedores y conectores
+
+> **Destino (propuesta única, 05/10/2026):** U-60 → Después. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED`
 
@@ -601,6 +613,8 @@ Principios propuestos:
 ---
 
 ## BL-004 — Historia point-in-time y datasets reproducibles de mercado
+
+> **Destino (propuesta única, 05/10/2026):** U-46 → Después (backtest descartado 04/10). Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED`
 
@@ -751,6 +765,8 @@ aprueba todavía PostgreSQL, object storage, Parquet ni un servicio concreto.
 ---
 
 ## BL-005 — Dashboards declarativos y artifacts interactivos en vivo
+
+> **Destino (propuesta única, 05/10/2026):** U-52, U-56, U-57 → P1-10 · U-53, U-58 → Después · skill «armar tablero»: Después. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED`
 
@@ -947,6 +963,8 @@ No se cambia el roadmap, el item activo ni se autoriza implementación o ejecuci
 ---
 
 ## BL-006 — Federación MCP, trust y routing de tools externas
+
+> **Destino (propuesta única, 05/10/2026):** U-61 → Después. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED`
 
@@ -1172,6 +1190,8 @@ precios. Riesgo y ejecución automáticos conservan la autoridad de GaleCore.
 ---
 
 ## BL-007 — Portfolio de estrategias, adecuación contextual y asignación adaptativa
+
+> **Destino (propuesta única, 05/10/2026):** estrategia como proyecto resuelta (GC-AI-0026, U-29) · 9 mejoras de `strategy_design` (U-21…U-24, U-30) → P1-06 · «qué mueve hoy» (U-03) → P1-05 · «tengo 5.000 USD» (U-34, U-35) → P1-04 · multiinstancia (U-27) → P1-07 · políticas automáticas (U-63) → Después. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED`
 
@@ -1475,6 +1495,8 @@ datos), para distinguir prima sobrepagada en entorno neutro de prima alta por ri
 **Límites:** no abre item; el owner decide si va antes o después de la pieza 4.
 
 ## BL-008 — Gestión integral del portfolio y espacio financiero personal y compartido
+
+> **Destino (propuesta única, 05/10/2026):** briefing resuelto (U-11) · supervisor de posiciones (U-31, U-32) → P1-01 · capital (U-17, U-34) → P1-04 · U-36, U-59, U-61 → Después · coherencia del perfil: se verifica en C0. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED`
 
@@ -1934,6 +1956,8 @@ BL-013; la cobertura del OI y su medición en BL-014. Cada vertical aborda sólo
 
 ## BL-009 — Taxonomía de conocimiento entre GaleCore y GaleCore-AI, y skill de ruteo
 
+> **Destino (propuesta única, 05/10/2026):** Después (caso concreto). Índice: `roadmap/README.md` §5.
+
 **Estado:** `CAPTURED`
 
 **Target:** después de cerrar GC-AI-0002; primero un ADR de taxonomía, después la skill.
@@ -2000,6 +2024,8 @@ Cuando el ADR se apruebe, se agrega como filas de §1; la skill no cambia.
 
 ## BL-010 — Procedencia de hechos como asset versionado
 
+> **Destino (propuesta única, 05/10/2026):** en parte en roadmap §1.5 (fuente, fecha, supuestos); el resto Después. Índice: `roadmap/README.md` §5.
+
 **Estado:** `CAPTURED`
 
 **Target:** primer incremento después de GC-AI-0002; depende del ADR de BL-009.
@@ -2053,6 +2079,8 @@ GC-AI-0002 cerrado y el ADR de BL-009 aprobado (define dónde vive la medición 
 ---
 
 ## BL-011 — Recetas de corte versionadas para los hechos de mercado
+
+> **Destino (propuesta única, 05/10/2026):** U-01, U-09 → P1-D1. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED`
 
@@ -2120,6 +2148,8 @@ ya existe en `GammaExposureRequest`). No se aplica a la serie AC-08 en curso (ve
 
 ## BL-012 — Acceso del host a GaleCore por MCP
 
+> **Destino (propuesta única, 05/10/2026):** Después. Índice: `roadmap/README.md` §5.
+
 **Estado:** `CAPTURED` (pedido del owner, 2026-09-24)
 
 **Origen:** el owner notó que el host consulta GaleCore "a mano" (CLI de GaleCore-AI, `curl`, scripts)
@@ -2147,6 +2177,8 @@ datos, con GaleCore-AI validando lo que se afirma? Se decide al contrastar con e
 
 ## BL-013 — Hora de bid/ask en las cotizaciones de DXLink
 
+> **Destino (propuesta única, 05/10/2026):** P1-D1. Índice: `roadmap/README.md` §5.
+
 **Estado:** `CAPTURED` (decisión del owner en GC-0002, 2026-09-24)
 
 **Origen:** Codex C1 de GC-0002 pidió rechazar las cotizaciones de opciones sin hora del proveedor.
@@ -2165,6 +2197,8 @@ cambio transversal y necesita verificar que ningún consumidor dependa del forma
 **Entry gate:** GC-0002 cerrado y decisión del owner de abrirlo como work item de GaleCore.
 
 ## BL-014 — Cobertura del OI en el GEX (¿falta o es cero?)
+
+> **Destino (propuesta única, 05/10/2026):** P1-D1 (medir el efecto + PR del fix con ok del owner). Índice: `roadmap/README.md` §5.
 
 **Estado:** `DIAGNOSED` (24/09, mismo día). Dos causas: (1) **bug**: la ventana de 2 días de candles
 dejaba sin OI a strikes sin operaciones recientes (call 515 OI 97 → 0); fix listo en GaleCore
@@ -2191,6 +2225,8 @@ consumidor del GEX de GaleCore, no sólo al runtime.
 **Entry gate:** GC-0002 cerrado y decisión del owner.
 
 ## BL-015 — 403 de Tastytrade en los endpoints de cuenta que llama `RpfLoopService`
+
+> **Destino (propuesta única, 05/10/2026):** P1-D1 (diagnóstico); arreglo con la cuenta real. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED` (owner, 2026-09-25; observado en GC-0004)
 
@@ -2219,6 +2255,8 @@ lo informe como estado esperado en vez de error por tick.
 
 ## BL-016 — Mejoras visuales de la pestaña SHADOW del monitor
 
+> **Destino (propuesta única, 05/10/2026):** P1-10. Índice: `roadmap/README.md` §5.
+
 **Estado:** `CAPTURED` (owner, 2026-09-25)
 
 **Origen:** recorrido del owner de la pestaña SHADOW (GC-0004, I3) contra GaleCore Dev: "requiere mejoras
@@ -2232,6 +2270,8 @@ siguen calculándose en la API (el front no calcula).
 **Entry gate:** GC-0004 cerrado y lista de mejoras del owner. Toca GaleCore (monitor).
 
 ## BL-017 — Fuentes externas pendientes en GaleCore: CBOE, EDGAR, Tesoro, series de FRED y BLS
+
+> **Destino (propuesta única, 05/10/2026):** U-04, U-07, U-68 → P1-D2 · U-06 (noticias) → Después. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED` (owner, 2026-10-03: «dejá detallado cómo retomar lo de CBOE y EDGAR después»)
 
@@ -2274,6 +2314,8 @@ entregas. No requiere decisión nueva del owner: el alcance ya está aprobado (P
 ---
 
 ## BL-018 — Orden de los tres repos pensando en la forma de trabajo final
+
+> **Destino (propuesta única, 05/10/2026):** Después de Producto 1. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED` (owner, 2026-10-04: «habría que rever todo eso en algún momento para dejarlo también ordenado»)
 

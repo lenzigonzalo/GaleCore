@@ -17,12 +17,7 @@ ACTIVE_STATES = {
 }
 FINAL_STATES = {"VALIDATED", "CLOSED"}
 ALL_STATES = ACTIVE_STATES | FINAL_STATES
-CANONICAL_STATUS_DOCS = (
-    "docs/architecture/GaleCore-AI-arquitectura-v5.md",
-    "docs/architecture/PHASE3-ALIGNMENT.md",
-    "docs/architecture/SESSION_HANDOFF.md",
-    "docs/architecture/ARCHITECTURE-EXECUTIVE-SUMMARY.md",
-)
+CANONICAL_STATUS_DOCS = ("docs/architecture/GaleCore-AI-arquitectura-v5.md",)  # the rest went to docs/archive/ (F0-1)
 PHASE_IN_TITLE = re.compile(r"phase\s+(\d+)", re.IGNORECASE)
 
 

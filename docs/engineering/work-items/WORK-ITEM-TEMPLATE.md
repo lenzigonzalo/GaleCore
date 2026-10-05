@@ -19,6 +19,7 @@ approval_result: PENDING
 - **Para qué:** qué podrá hacer el owner cuando esté.
 - **Cómo veremos que sirve:** lo que se ve funcionando.
 - **Qué queda fuera:** lo que no entra.
+- **Filas del catálogo:** U-xx (`roadmap/README.md` §1.4) y pieza del plan (§3).
 
 ## Objective
 
@@ -88,3 +89,8 @@ git diff --check
 ### Product-owner decision
 
 - PENDING
+
+## Para retomar
+
+≤ 30 líneas, al cerrar cada sesión: dónde quedó, qué sigue, qué falta comprobar y el comando para abrir la
+sesión siguiente (`claude -n <id> "retoma"`). Reemplaza a `SESSION_HANDOFF.md` (archivado el 05/10/2026).

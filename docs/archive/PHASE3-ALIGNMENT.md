@@ -1,3 +1,7 @@
+> **HISTÓRICO — no se sigue.** Archivado el 05/10/2026 (F0-1, WS-0003). Objetivo y plan vigentes:
+> `roadmap/README.md` del workspace; forma de trabajo: `ENGINEERING.md` del workspace; estado para retomar:
+> «Para retomar» de cada work item.
+
 # Phase 3 — Alignment y primer incremento
 
 **Fecha:** 2026-09-15

@@ -1,3 +1,7 @@
+> **HISTÓRICO — no se sigue.** Archivado el 05/10/2026 (F0-1, WS-0003). Objetivo y plan vigentes:
+> `roadmap/README.md` del workspace; forma de trabajo: `ENGINEERING.md` del workspace; estado para retomar:
+> «Para retomar» de cada work item.
+
 # GaleCore-AI agentic engineering operating model
 
 > **Superseded (2026-09-16):** the operating model of the whole ecosystem now lives in the workspace repo, `../ENGINEERING.md` (github.com/lenzigonzalo/galecore-workspace). This file is kept because the engineering gate, `AGENTS.md` and the work items reference it; its content below is the GaleCore-AI-specific view and must not diverge from `ENGINEERING.md`. When in doubt, `ENGINEERING.md` wins.

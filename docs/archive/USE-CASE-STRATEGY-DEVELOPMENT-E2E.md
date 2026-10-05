@@ -1,3 +1,7 @@
+> **HISTÓRICO — no se sigue.** Archivado el 05/10/2026 (F0-1, WS-0003). Objetivo y plan vigentes:
+> `roadmap/README.md` del workspace; forma de trabajo: `ENGINEERING.md` del workspace; estado para retomar:
+> «Para retomar» de cada work item.
+
 # Caso de uso E2E — Desarrollar una estrategia de opciones sobre SPY
 
 > **Status under architecture v5:** `TARGET_APPROVED` as a long-term product direction and `DEFERRED` for implementation. This use case does not belong to Phase 3, does not define the current host adapter and cannot override `GaleCore-AI-arquitectura-v5.md` or `P0-CONTRACTS.md`.

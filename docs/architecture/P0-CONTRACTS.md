@@ -1,5 +1,10 @@
 # P0-CONTRACTS — Fronteras contractuales ejecutables
 
+> **Referencia técnica (desde el 05/10/2026, F0-1).** Vale por sus contratos y límites. El objetivo, el plan y el
+> estado vigentes están en `roadmap/README.md` del workspace; donde este texto hable de fases, estado u objetivo,
+> manda el roadmap. Los documentos de estado que cita (`PHASE3/4-ALIGNMENT.md`, `SESSION_HANDOFF.md`,
+> `ARCHITECTURE-EXECUTIVE-SUMMARY.md`) están en `docs/archive/` y no se siguen.
+
 **Fuente de verdad contractual:** este documento, bajo la arquitectura v5 (`GaleCore-AI-arquitectura-v5.md`).
 **Origen histórico:** Architecture Constitution v4.
 **Prerrequisitos:** `GaleCore-AI-arquitectura-v5.md`, `SESSION_HANDOFF.md`, `ARCHITECTURE-EXECUTIVE-SUMMARY.md`.

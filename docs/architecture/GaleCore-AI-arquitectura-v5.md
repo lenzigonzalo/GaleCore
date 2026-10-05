@@ -1,8 +1,13 @@
 # GaleCore-AI — Arquitectura v5
 
+> **Referencia técnica (desde el 05/10/2026, F0-1).** Vale por sus contratos y límites. El objetivo, el plan y el
+> estado vigentes están en `roadmap/README.md` del workspace; donde este texto hable de fases, estado u objetivo,
+> manda el roadmap. Los documentos de estado que cita (`PHASE3/4-ALIGNMENT.md`, `SESSION_HANDOFF.md`,
+> `ARCHITECTURE-EXECUTIVE-SUMMARY.md`) están en `docs/archive/` y no se siguen.
+
 **Fecha:** 2026-09-15
 
-**Estado:** cierre de Phase 3 bloqueado por revisión independiente. Ver `docs/engineering/ACTIVE_WORK_ITEM`; no iniciar nuevas features mientras el work item activo mantenga `feature_freeze: true`.
+**Estado (histórico, 15/09/2026):** al redactarse, Phase 3 estaba en cierre; Phase 3 y 4 ya están cerradas. El estado vigente está en `roadmap/README.md` del workspace.
 
 **Reemplaza:** las definiciones de host, Harness y Cognitive Runtime de la arquitectura v4
 
@@ -772,6 +777,8 @@ No considerar `python -c` una invocación directa in-process: crea otro proceso 
 ---
 
 ## 17. Roadmap corregido
+
+> **HISTÓRICO — no se sigue.** Secuencia de septiembre de 2026; el plan vigente es `roadmap/README.md` §3 del workspace.
 
 ### Phase 0 — Architecture and contracts
 

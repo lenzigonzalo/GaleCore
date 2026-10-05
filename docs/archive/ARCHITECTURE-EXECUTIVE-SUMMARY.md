@@ -1,3 +1,7 @@
+> **HISTÓRICO — no se sigue.** Archivado el 05/10/2026 (F0-1, WS-0003). Objetivo y plan vigentes:
+> `roadmap/README.md` del workspace; forma de trabajo: `ENGINEERING.md` del workspace; estado para retomar:
+> «Para retomar» de cada work item.
+
 # GaleCore + GaleCore-AI — Architecture Executive Summary
 
 **Source of truth:** `GaleCore-AI-arquitectura-v5.md`

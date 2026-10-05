@@ -52,7 +52,7 @@ def test_blocked_item_rejects_phase_closure_claim(tmp_path):
     _write_work_item(tmp_path, status="CHANGES_REQUESTED", blocked=True)
     architecture = tmp_path / "docs" / "architecture"
     architecture.mkdir()
-    (architecture / "SESSION_HANDOFF.md").write_text("Phase 3 cerrada", encoding="utf-8")
+    (architecture / "GaleCore-AI-arquitectura-v5.md").write_text("Phase 3 cerrada", encoding="utf-8")
 
     result = evaluate_repository(tmp_path)
 
@@ -64,7 +64,7 @@ def test_blocked_item_ignores_closure_claim_of_an_earlier_phase(tmp_path):
     _write_work_item(tmp_path, status="IN_PROGRESS", blocked=True, title="Phase 4 — harness")
     architecture = tmp_path / "docs" / "architecture"
     architecture.mkdir()
-    (architecture / "SESSION_HANDOFF.md").write_text(
+    (architecture / "GaleCore-AI-arquitectura-v5.md").write_text(
         "Phase 3 cerrada. Phase 4 en curso.", encoding="utf-8"
     )
 
@@ -77,7 +77,7 @@ def test_blocked_item_rejects_closure_claim_of_its_own_phase(tmp_path):
     _write_work_item(tmp_path, status="IN_PROGRESS", blocked=True, title="Phase 4 — harness")
     architecture = tmp_path / "docs" / "architecture"
     architecture.mkdir()
-    (architecture / "SESSION_HANDOFF.md").write_text("Phase 4 closed", encoding="utf-8")
+    (architecture / "GaleCore-AI-arquitectura-v5.md").write_text("Phase 4 closed", encoding="utf-8")
 
     result = evaluate_repository(tmp_path)
 
