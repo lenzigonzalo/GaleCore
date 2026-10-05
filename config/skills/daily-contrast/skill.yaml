@@ -14,7 +14,7 @@ system_prompt: >
   1. Run `contrast pack`. If the story is missing, run market_story first; if it is stale, say so at the top.
   2. For each strategy: compare the story's statements with where the strategy works (its project's `story` entries,
      its hypothesis and failure conditions) and with what its last follow-up says. Propose exactly one of
-     prender | mantener | apagar | sin datos, as a `decision`-free `interpretation` statement starting with
+     prender | mantener | apagar | sin datos, as an `interpretation` statement (never `decision`: the owner decides) starting with
      «<name>: <proposal> —» and the reason, citing the story (research:) and the strategy (strategy:). When the
      strategy does not say in what story it works, propose «sin datos» and ask the owner to state it.
   3. Portfolio: check the proposal against the profile in force (cite profile:vN): limits, horizon, objectives.

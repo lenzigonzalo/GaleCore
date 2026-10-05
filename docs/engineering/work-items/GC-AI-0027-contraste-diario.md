@@ -1,13 +1,13 @@
 ---
 id: GC-AI-0027
 title: Contraste diario y prender/apagar por contexto — pieza 3
-status: IN_PROGRESS
+status: READY_FOR_REVIEW
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
 closure_blocked: true
-review_result: PENDING
+review_result: APPROVED
 approval_result: APPROVED
 ---
 
@@ -85,5 +85,12 @@ git diff --check
 
 ## Independent review
 
-**Reviewer:** PENDING
-**Review result:** PENDING
+**Reviewer:** internal (subagente `reviewer`, Sonnet), 04/10
+**Review result:** APPROVE con menores (66 tests + ruff + gate PASS). Cierre del owner.
+
+| Hallazgo | Severidad | Resolución |
+|---|---|---|
+| Caminos de error del pack (research ilegible, GaleCore caído) sin test | MINOR | sin cambio: el código los captura; test pendiente |
+| Exit 2 con `integrity_failed` aunque imprime el pack | MINOR | sin cambio: igual que `project show` |
+| Antigüedad negativa (reloj adelantado) no avisa | MINOR | sin cambio: marginal |
+| Redacción «`decision`-free» en la skill | MINOR | arreglado |
