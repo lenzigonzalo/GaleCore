@@ -530,5 +530,10 @@ de Phase 3; actualizar su estado cuando se cumpla el entry gate.
 **04/10 (noche): piezas 2 y 3 CLOSED (owner: «cerralo como está»)** — GC-AI-0026 y GC-AI-0027 en `main`. Primer contraste
 real: mantener `spy_prima_varianza_30_45d`. La historia en la que funciona la estrategia quedó en su proyecto con las
 palabras del owner. Pruebas del owner y casos de uso en `roadmap/README.md` §4. Idea «qué mueve hoy a este instrumento»
-en el backlog (addendum 04/10 noche). **Siguiente: pieza 4, supervisor de posiciones (GC-AI-0028, borrador abierto)**:
+en el backlog (addendum 04/10 noche). **Siguiente (owner 04/10 noche): pieza 3b «qué mueve hoy a
+cada instrumento» (GC-AI-0028)**, antes del supervisor, que pasa a GC-AI-0029. Retomar desde el borrador del work item
+(`.worktrees/galecore-ai/GC-AI-0028/docs/engineering/work-items/GC-AI-0028-que-mueve-hoy.md`): confirmar D-1..D-3 con
+recomendados, ver qué da GaleCore para velas en días de datos y la IV previa (calendario `calendar.macro_releases`,
+`market_data.candles`, `compute.implied_volatility`), escribir criterios, implementar en `story` y `contrast pack`.
+Criterio del owner: `project show strategy:spy_prima_varianza_30_45d` (story 04/10). Sesión:
 `claude -n GC-AI-0028 "retoma el handoff"`.
