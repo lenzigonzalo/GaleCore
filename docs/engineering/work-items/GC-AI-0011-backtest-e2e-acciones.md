@@ -1,17 +1,19 @@
 ---
 id: GC-AI-0011
 title: Una idea evaluada de punta a punta - datos, backtest y reporte (acciones), luego SHADOW
-status: DRAFT
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: PENDING
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-AI-0011 — Backtest de punta a punta con acciones (roadmap §4, recorrido B posterior)
+
+> **Cerrado 05/10/2026 como descartado** (F0-3, WS-0005, ok del owner): el plan vigente no incluye backtest (visión del trader 04/10). Sin trabajo pendiente en la rama.
 
 Origen: owner, 28/09/2026 — «agregar estrategias simples y estándar de acciones (buy & hold, reversión a la media) para
 aplicar backtesting en el flujo… el fin es más testear que el andamiaje funcione e2e que los resultados de la estrategia».

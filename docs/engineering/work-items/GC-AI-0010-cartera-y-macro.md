@@ -1,17 +1,19 @@
 ---
 id: GC-AI-0010
 title: Contexto de cartera de sólo lectura y análisis macro útil para decisiones reales
-status: DRAFT
+status: CLOSED
 implementer: claude-code
 reviewer: codex
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: PENDING
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-AI-0010 — Método de contexto de exposición SHADOW (roadmap §4, recorrido C)
+
+> **Cerrado 05/10/2026 como absorbido** (F0-3, WS-0005, ok del owner): su alcance quedó cubierto por las piezas posteriores del roadmap. Sin trabajo pendiente en la rama.
 
 Origen: owner, 27/09/2026 — «Vamos con tus recomendaciones, y usa tastytrade via galecore. IBKR e IOL todavía no».
 Alcance vigente tras la reorientación del 27/09 y la revisión aplicada el 28/09: **exposición SHADOW vía GaleCore**,
