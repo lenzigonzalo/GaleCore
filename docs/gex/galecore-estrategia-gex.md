@@ -324,4 +324,4 @@ Congelado por `GammaExposureBandTests.cs` y `GexRulesJsonTests.cs`.
 - [`gex_endpoint.md`](gex_endpoint.md) — referencia del endpoint `/App.Analytics/GammaExposure`
   (GEX de **un solo** vencimiento): fórmula, ZGL, muros, arquitectura interna. Es el motor de cálculo
   sobre el que se apoya esta estrategia, no la estrategia.
-- [`../../CLAUDE.md`](../../CLAUDE.md) — contrato de arquitectura de la plataforma.
+- [`../REFERENCIA-DESARROLLO.md`](../REFERENCIA-DESARROLLO.md) — contrato de arquitectura de la plataforma.

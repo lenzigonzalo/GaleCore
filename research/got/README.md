@@ -7,7 +7,7 @@ la compensación con un crédito requerido dinámico en vez de un mínimo fijo.
 **Todavía no está implementada en la plataforma**: no tiene prefijo en `strategies[]` de
 `galecore_rules_core.json`, ni JSON de reglas, ni endpoints, ni pestaña. Por eso vive acá y no en
 `docs/`. Cuando se implemente, [`galecore-estrategia-got.md`](galecore-estrategia-got.md) se muda
-tal cual a `docs/got/` y se sigue el checklist de "Estrategias — convención" del `CLAUDE.md`.
+tal cual a `docs/got/` y se sigue el checklist de "Estrategias — convención" de `docs/REFERENCIA-DESARROLLO.md`.
 
 ## Alcance del trabajo — el modo estudio se agotó (2026-08-25)
 
