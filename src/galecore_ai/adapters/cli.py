@@ -30,6 +30,7 @@ Usage:
     python -m galecore_ai.adapters.cli space context | list [--kind K] | show K/KEY | put K/KEY --title T [--visibility V] [--format F] < content | delete K/KEY | import
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
+    python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
     python -m galecore_ai.adapters.cli project add NAME|portfolio --kind thesis|story|decision|pending|done --text "..." [--ref REF] [--closes HASH] --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
@@ -742,6 +743,24 @@ async def _cmd_project(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+async def _cmd_contrast(args: argparse.Namespace) -> None:
+    from galecore_ai.application import contrast
+    kb = _build_knowledge_base()
+    state, error = None, None
+    try:
+        from galecore_ai.adapters.galecore_space import SpaceClient
+        from galecore_ai.application.space import profile_state
+        state = profile_state(SpaceClient(), kb)
+    except Exception as exc:  # noqa: BLE001 - any failure reaching GaleCore is declared, not fatal
+        error = f"{type(exc).__name__}: {str(exc)[:200]}"
+    try:
+        view = contrast.pack(kb, symbol=args.symbol, space_state=state, space_error=error)
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+        return
+    _json_out(view, exit_code=_EXIT_VALIDATION_ERROR if view["integrity_failed"] else _EXIT_SUCCESS)
+
+
 async def _cmd_feedback(args: argparse.Namespace) -> None:
     kb = _build_knowledge_base()
     if args.feedback_command == "list":
@@ -1156,6 +1175,11 @@ def build_parser() -> _JsonArgumentParser:
     p_pj_add.add_argument("--prompt", required=True, help="The owner's request")
     p_pj_add.add_argument("--host-model", dest="host_model")
 
+    p_contrast = sub.add_parser("contrast", help="Today's market story against each strategy and the portfolio "
+                                                 "(GC-AI-0027)")
+    ct_sub = p_contrast.add_subparsers(dest="contrast_command", required=True)
+    ct_sub.add_parser("pack", help="Gather the contrast by code: story, strategies as projects, profile")         .add_argument("--symbol", default="SPY")
+
     p_inbox = sub.add_parser("inbox", help="Idea inbox: note the owner's idea now, review it later (GC-AI-0018)")
     in_sub = p_inbox.add_subparsers(dest="inbox_command", required=True)
     p_in_add = in_sub.add_parser("add", help="Note an idea with the owner's words, verbatim; it is not evaluated")
@@ -1338,6 +1362,8 @@ def main() -> None:
             asyncio.run(_cmd_inbox(args))
         elif args.command == "project":
             asyncio.run(_cmd_project(args))
+        elif args.command == "contrast":
+            asyncio.run(_cmd_contrast(args))
         elif args.command == "strategy":
             asyncio.run(_cmd_strategy(args))
         elif args.command == "followup":
