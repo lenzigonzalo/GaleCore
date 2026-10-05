@@ -526,3 +526,9 @@ Mantener secretos fuera de código, logs, fixtures, docs y traces. Una credencia
 `BL-001` define la dirección para bundles declarativos de Skills, lifecycle basado en evidencia,
 drafts, evals, revisión humana y experiencia de administración. No implementarlo durante el cierre
 de Phase 3; actualizar su estado cuando se cumpla el entry gate.
+
+**04/10 (noche): piezas 2 y 3 CLOSED (owner: «cerralo como está»)** — GC-AI-0026 y GC-AI-0027 en `main`. Primer contraste
+real: mantener `spy_prima_varianza_30_45d`. La historia en la que funciona la estrategia quedó en su proyecto con las
+palabras del owner. Pruebas del owner y casos de uso en `roadmap/README.md` §4. Idea «qué mueve hoy a este instrumento»
+en el backlog (addendum 04/10 noche). **Siguiente: pieza 4, supervisor de posiciones (GC-AI-0028, borrador abierto)**:
+`claude -n GC-AI-0028 "retoma el handoff"`.
