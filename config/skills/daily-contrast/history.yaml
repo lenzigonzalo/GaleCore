@@ -1,0 +1,9 @@
+# Qué cambió en cada versión de daily_contrast y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: daily_contrast
+versions:
+  - version: "1.0.0"
+    date: 2026-10-04
+    changes: >
+      Primera versión (GC-AI-0027, pieza 3): historia de hoy × cada estrategia y la cartera; propuesta prender /
+      mantener / apagar por estrategia, con motivo; decide el owner.
+    feedback: []

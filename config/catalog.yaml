@@ -556,3 +556,30 @@ entries:
       - The portfolio's profile is the space's (GaleCore rules); an edit made in the monitor is not overwritten by an import and is declared until pulled; without GaleCore the local profile is shown as unconfirmed
       - "Not checked - live open risk: the view shows what the last follow-up reported, with its date"
       - "Not checked - that the thesis or the story is right"
+
+  - id: daily_contrast
+    kind: investigation
+    serves: >-
+      Cruzar la historia que pricea hoy el mercado con cada estrategia (en qué historia funciona, tus decisiones, su
+      estado en SHADOW) y con la cartera (perfil y límites): qué conviene prender, mantener o apagar en SHADOW y por
+      qué, e ideas nuevas. Propone; decidís vos. Junta los datos el código y lo interpreta el modelo.
+    example_requests:
+      - ¿Prendo o apago algo hoy?
+      - ¿Mis estrategias encajan con la historia de hoy?
+      - Contrastá la historia del mercado con mi cartera.
+      - ¿Qué conviene prender o apagar en SHADOW según el contexto?
+    skill: skills/daily-contrast/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - contrast pack [--symbol SPY]
+      - research save --capability daily_contrast --slug contraste-diario --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability daily_contrast --id <investigación> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {...}
+      - project add <name> --kind decision --text "<tu decisión>" --prompt "<pedido>"
+    stored_as: research
+    controls:
+      - The pack is built by code from stored items, each with its reference; a stale story or a strategy without its story is declared
+      - The research controls apply to the reading (cited refs resolve, facts cite a source, the profile in force is cited)
+      - Proposals only; nothing is deployed, paused or changed here; the owner's decision is kept in the strategy's project
+      - "Not checked - that the proposal is right; that the story read is still the market's"
