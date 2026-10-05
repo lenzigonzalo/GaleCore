@@ -2270,3 +2270,36 @@ Contrato completo y acceso probado el 30/09: `docs/engineering/HANDOFF-GALECORE-
 
 **Entry gate:** un caso concreto que necesite la fuente (una skill, un agente o una estrategia), o tiempo libre entre
 entregas. No requiere decisión nueva del owner: el alcance ya está aprobado (Producto 1, fase 1b).
+
+---
+
+## BL-018 — Orden de los tres repos pensando en la forma de trabajo final
+
+**Estado:** `CAPTURED` (owner, 2026-10-04: «habría que rever todo eso en algún momento para dejarlo también ordenado»)
+
+**Origen:** al armar el inventario del 04/10, el owner notó que la estructura misma nos frena: desarrollamos el
+ecosistema GaleCore (GaleCore-AI + GaleCore back/front) con la forma de trabajo de `galecore-workspace`, y ninguno de los
+tres está ordenado para cómo vamos a trabajar al final. Según el owner, eso afecta los resultados: no avanzamos de forma
+óptima.
+
+**Qué revisar:**
+- **GaleCore (back/front):** tiene archivos, markdowns y piezas de IA que no le corresponden. A primera vista: `agentes/`,
+  `catalogo/`, `memoria/`, `estrategias/`, `research/`, `claude.md` y las skills `gc-*` en la raíz del repo, junto a
+  `source/`. Decidir qué es de la plataforma, qué es de GaleCore-AI y qué es historia.
+- **galecore-workspace:** cosas desordenadas (`archive/`, `docs/`, `INICIO.md`, `tests/`, `tools/` en la raíz junto al
+  roadmap y las decisiones). Faltan lógica, ingeniería y arquitectura del propio proyecto: qué vive en el workspace y qué
+  en cada repo, cómo se coordinan, cómo se trabaja con agentes. `ENGINEERING.md` §1 tiene la regla de ubicación, pero
+  no se aplicó a lo que ya existía.
+- **GaleCore-AI:** se está reordenando con el inventario (objetivo, plan de Producto 1 y backlog); tiene que quedar con
+  sus propios documentos de repo (README, arquitectura, cómo correrlo) coherentes con eso.
+
+**Resultado buscado:** cada cosa en el repo más chico que la contiene; cada repo con un README que diga qué es y cómo se
+trabaja; una sola fuente por tema; nada se pierde (lo viejo pasa a historia con enlace, no se borra sin revisar).
+
+**Entry gate:** después de fijar el objetivo y el plan de Producto 1 (inventario del 04/10,
+`roadmap/proposals/INVENTARIO-2026-10-04.md`), para ordenar contra la forma de trabajo final y no contra la de hoy.
+Tocar GaleCore se hace en `local/integracion`, sin push.
+
+**Aceptación:** un mapa de cada repo (qué hay, a qué repo pertenece, qué se mueve, qué queda como historia), aprobado
+por el owner antes de mover archivos; después del movimiento, los tests de los repos pasan y los enlaces de los
+documentos vigentes resuelven.
