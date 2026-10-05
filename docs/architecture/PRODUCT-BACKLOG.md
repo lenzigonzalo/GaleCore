@@ -1462,6 +1462,18 @@ y la reproducción; no hay vista de parámetros ni dice en qué contexto se pren
 **Límites:** no cambia el plan; entra pieza por pieza (2, 3 y 5 del roadmap §4) o como versión nueva de la skill con
 su `history.yaml`.
 
+### Addendum 2026-10-04 (noche) — «Qué mueve hoy a este instrumento»
+
+**Origen:** owner, 04/10, al definir en qué historia funciona la venta de prima (guardado verbatim en
+`project:spy_prima_varianza_30_45d`, kind story): «hay que dimensionar si hay una historia que el mercado esté
+priorizando por sobre datos que van a salir y el mercado no suele reaccionar … hoy qué mueve a este ticker, a este ETF,
+a esta empresa, a este mercado, a esta economía … eso es lo que tenemos que agilizar y entender».
+**Propuesta:** que la historia del mercado (pieza 1) y el contraste (pieza 3) digan, por instrumento, qué lo mueve hoy
+(el driver que el mercado prioriza) y a qué datos del calendario reacciona o no (reacción observada en los últimos
+datos), para distinguir prima sobrepagada en entorno neutro de prima alta por riesgo latente. Encaja como mejora de
+`market_story` + `daily_contrast` y como punto 2 de las mejoras de `strategy_design` (arriba).
+**Límites:** no abre item; el owner decide si va antes o después de la pieza 4.
+
 ## BL-008 — Gestión integral del portfolio y espacio financiero personal y compartido
 
 **Estado:** `CAPTURED`

@@ -1,12 +1,12 @@
 ---
 id: GC-AI-0026
 title: Estrategia y cartera como proyecto — pieza 2
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: APPROVED
 approval_result: APPROVED
 ---
@@ -66,19 +66,19 @@ Aprobado con las propuestas (a) de D-1, D-2 y D-3: «Sobre lo demás AVANCEMOS c
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Proyecto de estrategia:** `project show strategy:<name>` devuelve tesis, reglas de la versión vigente,
+- [x] **AC-01 — Proyecto de estrategia:** `project show strategy:<name>` devuelve tesis, reglas de la versión vigente,
   versiones y aprobaciones, versión desplegada en SHADOW, último seguimiento, investigaciones, pendientes abiertos,
   decisiones y feedback, cada uno con su referencia resoluble; lo que falta se declara.
 - [ ] **AC-02 — Proyecto de cartera:** `project show portfolio` lista las estrategias con su estado, el perfil vigente
   (versión y fuente) y los límites del perfil contra el riesgo abierto que informa GaleCore.
-- [ ] **AC-03 — Registrar decisiones y pendientes:** `project add` guarda tesis, decisión, pendiente o «historia en la
+- [x] **AC-03 — Registrar decisiones y pendientes:** `project add` guarda tesis, decisión, pendiente o «historia en la
   que funciona» con las palabras del owner, append-only y con hash; `kb search` los encuentra.
-- [ ] **AC-04 — Pedido sin nombrar:** «en la estrategia X» / «en mi cartera» resuelven a `strategy_project` por
+- [x] **AC-04 — Pedido sin nombrar:** «en la estrategia X» / «en mi cartera» resuelven a `strategy_project` por
   `catalog --match`; `catalog --check` valida la entrada.
-- [ ] **AC-05 — Perfil coherente:** según D-2, monitor y métodos usan la misma versión efectiva; una importación no
+- [x] **AC-05 — Perfil coherente:** según D-2, monitor y métodos usan la misma versión efectiva; una importación no
   revierte una edición; sin la fuente que manda se declara el estado (reproducido con un dato de prueba).
 - [ ] **AC-06 — Demostración:** sesión nueva con spy_prima_varianza_30_45d y con la cartera, guardada como evidencia.
-- [ ] **AC-07 — Cierre:** owner.
+- [x] **AC-07 — Cierre:** owner.
 
 ## Requirement-to-evidence matrix
 
@@ -127,3 +127,7 @@ git diff --check
 | Edición del monitor no detectada si el local ya avanzó de versión | MINOR | sin cambio: límite documentado |
 | AC-01 «versión en SHADOW» sólo vía `last_followup` | MINOR | sin cambio: el seguimiento es la fuente de lo desplegado |
 | Uso de `project` en el docstring del CLI | NIT | arreglado |
+
+### Product-owner decision
+
+CLOSED 04/10 — «Cerralo como está (owner, 04/10)». Pruebas del owner pendientes en `roadmap/README.md` §4 (Pruebas del owner).

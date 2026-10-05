@@ -1,12 +1,12 @@
 ---
 id: GC-AI-0027
 title: Contraste diario y prender/apagar por contexto — pieza 3
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: claude-code
 reviewer: internal
 approver: user
 feature_freeze: false
-closure_blocked: true
+closure_blocked: false
 review_result: APPROVED
 approval_result: APPROVED
 ---
@@ -49,13 +49,13 @@ el proyecto de estrategia (GC-AI-0026).
 
 ## Acceptance criteria
 
-- [ ] **AC-01 — Pack del contraste:** `contrast pack` devuelve la última historia (ref, fecha, antigüedad), cada
+- [x] **AC-01 — Pack del contraste:** `contrast pack` devuelve la última historia (ref, fecha, antigüedad), cada
   estrategia con su proyecto (historia en la que funciona, decisiones, pendientes, último seguimiento) y el perfil;
   lo que falta se declara.
-- [ ] **AC-02 — Propuesta guardada:** la lectura se guarda como revisión de la investigación de contraste citando el
+- [x] **AC-02 — Propuesta guardada:** la lectura se guarda como revisión de la investigación de contraste citando el
   pack, con una propuesta por estrategia y su motivo.
-- [ ] **AC-03 — Pedido sin nombrar:** «¿prendo o apago algo hoy?» resuelve a `daily_contrast`; `catalog --check` OK.
-- [ ] **AC-04 — Cierre:** owner.
+- [x] **AC-03 — Pedido sin nombrar:** «¿prendo o apago algo hoy?» resuelve a `daily_contrast`; `catalog --check` OK.
+- [x] **AC-04 — Cierre:** owner.
 
 ## Requirement-to-evidence matrix
 
@@ -94,3 +94,7 @@ git diff --check
 | Exit 2 con `integrity_failed` aunque imprime el pack | MINOR | sin cambio: igual que `project show` |
 | Antigüedad negativa (reloj adelantado) no avisa | MINOR | sin cambio: marginal |
 | Redacción «`decision`-free» en la skill | MINOR | arreglado |
+
+### Product-owner decision
+
+CLOSED 04/10 — «Cerralo como está (owner, 04/10)». Pruebas del owner pendientes en `roadmap/README.md` §4 (Pruebas del owner).
