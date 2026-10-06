@@ -95,6 +95,14 @@ namespace DataFeed.Tests
             Assert.Contains("503", ex.Message);
         }
 
+        [Fact]
+        public async Task Handler_TimeoutDeLaFuenteEs502NoUn500()
+        {
+            var handler = new CboeIndexHistoryHandler(new Factory(new Recorded(_ => throw new TaskCanceledException("timeout"))));
+            var ex = await Assert.ThrowsAsync<UpstreamSourceException>(() => handler.Handle(new CboeIndexHistoryRequest { Index = "VIX" }, default));
+            Assert.Contains("sin respuesta", ex.Message);
+        }
+
         [Theory]
         [InlineData("SPX", null, null)]
         [InlineData(null, null, null)]

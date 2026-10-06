@@ -83,7 +83,7 @@ namespace DataFeed.Infrastructure.Providers.Fred
                     body = await JsonSerializer.DeserializeAsync<FredReleaseDatesResponseModel>(
                         await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
                 }
-                catch (HttpRequestException ex)
+                catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
                 {
                     throw new UpstreamSourceException("fred", $"sin respuesta ({ex.Message})");
                 }
@@ -158,7 +158,7 @@ namespace DataFeed.Infrastructure.Providers.Fred
                         + (await ErrorMessage(response, cancellationToken) is { } m ? $": {m}" : ""));
                 return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
             {
                 throw new UpstreamSourceException("fred", $"sin respuesta ({ex.Message})");
             }

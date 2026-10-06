@@ -59,7 +59,7 @@ namespace DataFeed.Infrastructure.Providers.Bls
                     throw new UpstreamSourceException("bls", $"timeseries respondió {(int)response.StatusCode}");
                 json = await response.Content.ReadAsStringAsync(cancellationToken);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
             {
                 throw new UpstreamSourceException("bls", $"sin respuesta ({ex.Message})");
             }
