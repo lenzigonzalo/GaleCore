@@ -1607,6 +1607,34 @@ namespace DataFeed.Controllers
             return Ok(repository.LoadMetricsInputs().Select(DataFeed.Application.App.Runtime.ShadowMetrics.Compute));
         }
 
+        /// <summary>
+        /// Performance SHADOW (P1-03): por estrategia, versión y regla de salida; la cartera contra el capital
+        /// de referencia; y la revisión de cada operación cerrada contra lo que su regla planeaba.
+        /// `spec` (repetible) limita a esas estrategias; `referenceCapital` en USD habilita los retornos en %.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Performance")]
+        public IActionResult RuntimePerformance([FromQuery] string[]? spec, [FromQuery] double? referenceCapital)
+        {
+            var repository = _runtimePersistence.Repository;
+            if (!_runtimePersistence.Available || repository == null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+                {
+                    error = "SHADOW sin persistencia: no hay operaciones guardadas.",
+                    reason = _runtimePersistence.Reason,
+                });
+            var records = repository.LoadMetricsInputs()
+                .Where(r => spec == null || spec.Length == 0 || spec.Contains(r.SpecName)).ToList();
+            var exits = new Dictionary<string, DataFeed.Application.App.Runtime.Contracts.DeterministicExits>();
+            foreach (var hash in records.Select(r => r.ContentHash).Distinct())
+            {
+                var json = repository.GetSpecJson(hash);
+                var loaded = json == null ? null : DataFeed.Application.App.Runtime.StrategySpecLoader.LoadFromJson(json);
+                if (loaded is { Success: true, Spec: not null }) exits[hash] = loaded.Spec.Exits.Deterministic;
+            }
+            return Ok(DataFeed.Application.App.Runtime.ShadowPerformance.Compute(records, exits, referenceCapital, DateTime.UtcNow));
+        }
+
         // El switch del runtime usa el endpoint genérico de servicios de plataforma:
         // GET/POST /App/GaleCore/Services/runtime/Switch — ya existe en PlatformServiceSwitch.
         // No se duplica acá. El loop lee via RuntimeStrategySwitch que delega a PlatformServiceSwitch.
