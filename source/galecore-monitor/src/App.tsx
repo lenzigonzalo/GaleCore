@@ -5,6 +5,7 @@ import { supabase, getSession, signOut } from './auth/supabase';
 import { StatusBar } from './components/layout/StatusBar';
 import { Sidebar } from './components/layout/Sidebar';
 import { TabNav, Tab } from './components/layout/TabNav';
+import { SupervisorAlerts } from './components/layout/SupervisorAlerts';
 import { Home } from './pages/Home';
 import { Admin } from './pages/Admin';
 import { Settings } from './pages/Settings';
@@ -103,6 +104,8 @@ function Dashboard({ onLogout }: DashboardProps) {
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
         </main>
+        {/* Avisos del supervisor de SHADOW (WS-0007): en todas las pestañas, con sonido. */}
+        <SupervisorAlerts />
       </div>
     </div>
   );
