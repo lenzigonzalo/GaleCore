@@ -1610,11 +1610,13 @@ namespace DataFeed.Controllers
         /// <summary>
         /// Performance SHADOW (P1-03): por estrategia, versión y regla de salida; la cartera contra el capital
         /// de referencia; y la revisión de cada operación cerrada contra lo que su regla planeaba.
-        /// `spec` (repetible) limita a esas estrategias; `referenceCapital` en USD habilita los retornos en %.
+        /// `spec` (repetible) limita a esas estrategias; `referenceCapital` en USD habilita los retornos en %;
+        /// `from` (UTC) agrega la ventana (lo cerrado desde esa fecha) y recorta las operaciones.
         /// </summary>
         [Tags("App.Runtime")]
         [HttpGet("Runtime/Performance")]
-        public IActionResult RuntimePerformance([FromQuery] string[]? spec, [FromQuery] double? referenceCapital)
+        public IActionResult RuntimePerformance([FromQuery] string[]? spec, [FromQuery] double? referenceCapital,
+            [FromQuery] DateTime? from)
         {
             var repository = _runtimePersistence.Repository;
             if (!_runtimePersistence.Available || repository == null)
@@ -1632,7 +1634,8 @@ namespace DataFeed.Controllers
                 var loaded = json == null ? null : DataFeed.Application.App.Runtime.StrategySpecLoader.LoadFromJson(json);
                 if (loaded is { Success: true, Spec: not null }) exits[hash] = loaded.Spec.Exits.Deterministic;
             }
-            return Ok(DataFeed.Application.App.Runtime.ShadowPerformance.Compute(records, exits, referenceCapital, DateTime.UtcNow));
+            return Ok(DataFeed.Application.App.Runtime.ShadowPerformance.Compute(records, exits, referenceCapital, DateTime.UtcNow,
+                from == null ? null : DateTime.SpecifyKind(from.Value.ToUniversalTime(), DateTimeKind.Utc)));
         }
 
         // El switch del runtime usa el endpoint genérico de servicios de plataforma:

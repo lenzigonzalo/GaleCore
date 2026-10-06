@@ -14,9 +14,13 @@ namespace DataFeed.Application.App.Runtime
         public DateTime AsOf { get; init; }
         public double? ReferenceCapital { get; init; }
         public PortfolioPerformance Portfolio { get; init; } = new();
+        /// <summary>Desde cuándo se recortó (`from`): sólo los cierres desde esa fecha. null = todo.</summary>
+        public DateTime? From { get; init; }
+        /// <summary>Lo cerrado en la ventana (`from`), todas las estrategias pedidas. null sin `from`.</summary>
+        public GroupPerformance? Window { get; init; }
         public List<GroupPerformance> Strategies { get; init; } = new();
         public List<GroupPerformance> Versions { get; init; } = new();
-        /// <summary>Operaciones cerradas, la más reciente primero.</summary>
+        /// <summary>Operaciones cerradas (desde `from` si se pidió), la más reciente primero.</summary>
         public List<TradeReview> Trades { get; init; } = new();
     }
 
@@ -30,6 +34,8 @@ namespace DataFeed.Application.App.Runtime
         public double? MaxDrawdown { get; init; }
         /// <summary>Riesgo máximo sumado de las abiertas (USD).</summary>
         public double OpenMaxRisk { get; init; }
+        /// <summary>Abiertas sin valuación con precios reales: su P&L no está en UnrealizedPnl.</summary>
+        public int OpenNotValued { get; init; }
         /// <summary>Primera entrada: desde cuándo se mide.</summary>
         public DateTime? Since { get; init; }
         public double? DaysElapsed { get; init; }
@@ -107,7 +113,8 @@ namespace DataFeed.Application.App.Runtime
     public static class ShadowPerformance
     {
         public static PerformanceReport Compute(IEnumerable<SpecVersionRecord> records,
-            IReadOnlyDictionary<string, DeterministicExits> exitsByHash, double? referenceCapital, DateTime now)
+            IReadOnlyDictionary<string, DeterministicExits> exitsByHash, double? referenceCapital, DateTime now,
+            DateTime? from = null)
         {
             var list = records.ToList();
             var trades = new List<TradeReview>();
@@ -124,14 +131,17 @@ namespace DataFeed.Application.App.Runtime
                 g.SelectMany(r => r.Positions).ToList(),
                 trades.Where(t => t.SpecName == g.Key).ToList())).ToList();
 
+            var inWindow = from == null ? trades : trades.Where(t => t.ExitAt >= from).ToList();
             return new PerformanceReport
             {
                 AsOf = now,
                 ReferenceCapital = referenceCapital,
+                From = from,
+                Window = from == null ? null : Group("(ventana)", null, null, Array.Empty<ShadowPosition>(), inWindow),
                 Portfolio = Portfolio(list.SelectMany(r => r.Positions).ToList(), referenceCapital, now),
                 Strategies = strategies,
                 Versions = versions,
-                Trades = trades.OrderByDescending(t => t.ExitAt).ToList(),
+                Trades = inWindow.OrderByDescending(t => t.ExitAt).ToList(),
             };
         }
 
@@ -243,6 +253,7 @@ namespace DataFeed.Application.App.Runtime
                 MaxDrawdown = closed.Count == 0 ? null : ShadowMetrics.MaxDrawdown(closed.GroupBy(p => p.ExitAt)
                     .OrderBy(g => g.Key ?? DateTime.MaxValue).Select(g => g.Sum(p => p.RealizedPnl!.Value))),
                 OpenMaxRisk = Math.Round(open.Sum(p => p.MaxRisk), 2),
+                OpenNotValued = open.Count - valued.Count,
                 Since = since,
                 DaysElapsed = days,
                 RealizedReturnPct = hasCapital && realized != null ? Math.Round(realized.Value / capital!.Value * 100, 3) : null,

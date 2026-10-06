@@ -102,6 +102,22 @@ public class ShadowPerformanceTests
     }
 
     [Fact]
+    public void From_GivesTheWindow_AndCutsTheTrades_ButNotTheAccumulatedPortfolio()
+    {
+        var v = Version("a", "1", Closed(0.44, 0.22, "TAKE_PROFIT", 2), Closed(0.44, 1.50, "STOP_LOSS", 9),
+            Closed(0.40, 0.20, "TAKE_PROFIT", 10));
+        var rep = ShadowPerformance.Compute(new[] { v }, AllExits(v), 10000, T0.AddDays(12), from: T0.AddDays(7));
+
+        Assert.Equal(T0.AddDays(7), rep.From);
+        Assert.Equal(2, rep.Window!.PositionsClosed);
+        Assert.Equal(-86, rep.Window.RealizedPnl);            // −106 + 20
+        Assert.Equal(2, rep.Window.ByExitRule.Count);
+        Assert.Equal(2, rep.Trades.Count);
+        Assert.Equal(3, rep.Portfolio.PositionsClosed);         // la cartera sigue siendo el acumulado
+        Assert.Null(ShadowPerformance.Compute(new[] { v }, AllExits(v), null, T0).Window);
+    }
+
+    [Fact]
     public void WithoutSpec_TheTradeHasNoPlan_ButIsStillReviewed()
     {
         var v = Version("a", "1", Closed(0.44, 0.22, "TAKE_PROFIT", 10));
