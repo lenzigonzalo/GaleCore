@@ -422,6 +422,7 @@ entries:
       - "Read-only: a candidate is described, never advised (the runner refuses advice addressed to the reader); no orders"
       - A condition that cannot be evaluated with the data available is declared not evaluated, never assumed met
       - "A scheduled run calls the model (sonnet) with only the read commands of this flow and a turn cap; the runner validates and saves the result"
+      - "With a screen (`task set-scan`), each run first checks by code the IV rank of each symbol and the quiet window of releases; the model is called only with a finding, and a screen that could not run never calls it (P1-05)"
       - "Not checked - that the owner's conditions were applied correctly or that a candidate is a good trade"
     schedulable: {runs: model, work: reading, max_turns: 25, timeout_minutes: 12}
 

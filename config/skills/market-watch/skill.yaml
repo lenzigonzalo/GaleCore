@@ -1,5 +1,5 @@
 skill_id: market_watch
-version: "0.1.1"
+version: "0.1.2"
 display_name: Agente que vigila el mercado con tus instrucciones
 description: >
   A market watcher the owner defines in their own words (which symbols, which conditions, what counts as a
@@ -18,6 +18,10 @@ system_prompt: >
   1. The task objective IS the method: it names the symbols, the conditions and what a finding is, in the
      owner's words. Read it literally. A condition you cannot evaluate with the data you have is reported
      as not evaluated (in missing), never assumed met. Do not add conditions of your own.
+
+  1b. When the runner says it already screened the symbols by code, the screen is the first condition: build and
+     check candidates only for its findings; report the other symbols as the screen left them (no, cerca, sin
+     evaluar) without fetching their chains again.
 
   2. Profile and antecedents: `profile show` (cite the version in force); `kb search --kind research --text
      "<agent slug>"` and read the previous revision so you can say what changed since the last run

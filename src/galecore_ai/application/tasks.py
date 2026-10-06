@@ -38,7 +38,7 @@ from galecore_ai.application.followup import run_followup
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.followup import FollowupRecord
 from galecore_ai.contracts.regime_record import RecordHost
-from galecore_ai.contracts.task import MARKET_CLOSE, MARKET_OPEN, Schedule, TaskDefinition
+from galecore_ai.contracts.task import MARKET_CLOSE, MARKET_OPEN, ScanRule, Schedule, TaskDefinition
 from galecore_ai.harness.catalog import CatalogEntry, CatalogError, load_catalog
 
 LOCK_STALE_MINUTES = 30
@@ -131,7 +131,9 @@ def _save(kb: KnowledgeBase, task: TaskDefinition) -> None:
     path = _dir(kb, task.id) / "task.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
-    data = task.model_dump(mode="json", exclude={"result_slug"} if task.result_slug is None else None)
+    # Absent optional fields stay out of the file: a checkout that predates them still reads the task.
+    drop = {f for f in ("result_slug", "scan") if getattr(task, f) is None}
+    data = task.model_dump(mode="json", exclude=drop or None)
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, path)
 
@@ -428,6 +430,24 @@ def set_frequency(*, kb: KnowledgeBase, scheduler, task_id: str, schedule: Sched
     return task
 
 
+def set_scan(*, kb: KnowledgeBase, task_id: str, rule: ScanRule | None, prompt: str,
+             now: datetime | None = None) -> TaskDefinition:
+    """Give a market agent its screen by code (P1-05), or take it away (None). The status is not touched."""
+    now = now or datetime.now(UTC)
+    with _state_lock(kb, task_id):
+        task = load(kb, task_id)
+        if task.status == "cancelled":
+            raise TaskError(f"task {task_id} is cancelled; create a new one")
+        if task.strategy is not None:
+            raise TaskError("a screen is for an agent that watches the market (no strategy)")
+        before = task.scan.model_dump() if task.scan else None
+        task = task.model_copy(update={"scan": rule, "updated_at": now})
+        _save(kb, task)
+        _append(kb, task_id, "scan_changed", now, before=before, after=rule.model_dump() if rule else None,
+                prompt=prompt)
+    return task
+
+
 def rebind(*, kb: KnowledgeBase, scheduler, task_id: str, code_path: Path, prompt: str,
            now: datetime | None = None) -> TaskDefinition:
     """Point the task at another checkout (e.g. from a work-item worktree to the stable one), keeping id and history.
@@ -587,7 +607,9 @@ def _write_latest(path: Path, task: TaskDefinition, outcome: dict, now: datetime
              "", "| Corrida | Resultado | Guardado | Duración | Turnos |", "|---|---|---|---|---|",
              (f"| {now:%Y-%m-%d %H:%M} UTC ({outcome.get('invoked_by')}) | **{outcome['result']}** | {saved} | "
               f"{outcome.get('duration_s', '—')} s | {outcome.get('turns') or '—'} de {outcome.get('max_turns')} |"), ""]
-    if outcome["result"] != "OK":
+    if outcome.get("scan"):
+        lines += ["Escaneo por código (sin modelo): " + (outcome.get("reason") or "—"), ""]
+    elif outcome["result"] != "OK":
         lines += ["**No se pudo completar.** Motivo: " + (outcome.get("reason") or outcome.get("error") or "—"), ""]
     if outcome["result"] == "FAILED":
         lines += ["No hay resultado de esta corrida; el último guardado sigue siendo el anterior.", ""]
@@ -648,6 +670,20 @@ def _story_pack(kb: KnowledgeBase, invoked_by: str, now: datetime) -> tuple[str,
     return ref, note
 
 
+def _screen(task: TaskDefinition, now: datetime) -> dict:
+    """The agent's screen by code (P1-05): IV rank per symbol and the quiet window, no model."""
+    from galecore_ai.adapters.cli import _build_dispatcher  # lazy: the CLI imports this module
+    from galecore_ai.application import scan
+
+    coro = scan.screen(_build_dispatcher(), task.scan, now.date())
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
+
+
 def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, now: datetime, invoked_by: str,
                client: model_run.ModelClient, followup, written: list[Path]) -> dict:
     """One model run. The runner first keeps the day's data (the code follow-up), then the model reads and returns the
@@ -659,12 +695,26 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     caps = entry.schedulable
     if isinstance(client, model_run.ClaudeCodeClient):
         client.model = caps.model                # always the policy's model (GC-AI-0025), never a fallback
-    rec = kept = None
+    rec = kept = screened = None
     followup_error = None
     try:
         if entry.id == "market_story":       # the day's market pack, gathered by code before the model (GC-AI-0024)
             kept, note = _story_pack(kb, invoked_by, now)
             written.append(kb.evidence.path_for(kept.removeprefix("evidence:")))
+        elif task.scan is not None:  # screened by code first; the model only with a finding (P1-05)
+            from galecore_ai.application import scan
+            screened = _screen(task, now)
+            if not screened["findings"]:
+                evaluated = [c for c in screened["checked"] if c["result"] != "sin evaluar"]
+                return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None,
+                        "result": "OK" if evaluated and len(evaluated) == len(screened["checked"]) else "INCOMPLETE",
+                        "reason": f"escaneo por código sin hallazgo, sin modelo: {scan.summary(screened)}"[:800],
+                        "scan": screened, "duration_s": round(time.monotonic() - t0, 1)}
+            note = ("The runner screened the symbols by code (IV rank and the quiet window of releases). Only these "
+                    f"are findings: {', '.join(screened['findings'])}; build and check the candidate only for them, "
+                    "and report the others as the screen left them. The screen, verbatim:\n```json\n"
+                    f"{json.dumps(screened, ensure_ascii=False)}\n```")
+            followup_error = "sin estrategia: no hay seguimiento"
         elif task.strategy is None:  # an agent that watches the market: no strategy, no runtime follow-up (GC-AI-0020)
             followup_error = "sin estrategia: no hay seguimiento"
             note = "This agent follows no strategy: there is no runtime follow-up; read the market with your commands."
@@ -678,6 +728,10 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     except Exception as exc:  # noqa: BLE001 - recorded; the model still reads what it can
         followup_error = f"{type(exc).__name__}: {exc}"
         note = f"The runner could not gather today's data ({followup_error[:200]}): that data is missing."
+    if task.scan is not None and screened is None:   # the screen itself failed: no finding, so no model
+        return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None, "result": "INCOMPLETE",
+                "duration_s": round(time.monotonic() - t0, 1),
+                "reason": f"el escaneo por código no corrió ({followup_error}); sin modelo"[:800]}
     if entry.id == "market_story" and kept is None:   # no pack: no data to read, the model is not called
         return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "result": "FAILED",
                 "duration_s": round(time.monotonic() - t0, 1), "error": f"sin paquete del día: {followup_error}"[:800]}

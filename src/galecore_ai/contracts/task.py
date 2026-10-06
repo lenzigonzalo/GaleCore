@@ -66,6 +66,27 @@ class Schedule(BaseModel):
         return f"{'todos los días' if self.frequency == 'daily' else 'de lunes a viernes'} a las {self.time} ({self.timezone})"
 
 
+class ScanRule(BaseModel):
+    """A market agent's screen run by code before the model (P1-05): the model is called only with a finding.
+
+    A symbol is a finding when its IV rank is at least `iv_rank_min` and none of `releases` falls within the next
+    `quiet_business_days` business days. What the screen cannot evaluate is never a finding."""
+    model_config = {"extra": "forbid"}
+
+    symbols: list[str] = Field(min_length=1, max_length=10)
+    iv_rank_min: float = Field(ge=0, le=100)
+    quiet_business_days: int = Field(default=3, ge=0, le=10)
+    releases: list[str] = Field(default_factory=lambda: ["Empleo (NFP)", "CPI", "FOMC"])
+
+    @field_validator("symbols")
+    @classmethod
+    def _symbols(cls, v: list[str]) -> list[str]:
+        out = [s.strip().upper() for s in v if s.strip()]
+        if not out or any(not re.fullmatch(r"[A-Z][A-Z0-9.]{0,9}", s) for s in out):
+            raise ValueError("symbols are tickers like SPY, QQQ")
+        return out
+
+
 class TaskDefinition(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -87,6 +108,7 @@ class TaskDefinition(BaseModel):
     code_path: str                          # checkout whose code the scheduler runs
     allowed: list[str] = Field(default_factory=lambda: ["followup run (read-only)"])
     result_slug: str | None = None          # model runs: the investigation each run revises (research:<date>-<slug>)
+    scan: ScanRule | None = None            # market agents: screened by code; the model only with a finding (P1-05)
 
     @field_validator("id")
     @classmethod
