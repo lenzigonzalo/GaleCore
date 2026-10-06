@@ -779,12 +779,9 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
             _json_out({"status": "CANCELLED", "rule": mark.rule})
         elif c == "analyze":
             from galecore_ai.application import alert_analysis, model_run
-            try:
-                requested = _dt.fromisoformat(args.requested_at) if args.requested_at else _dt.now(UTC)
-                a = alert_analysis.analyze(kb, args.alert, supervisor.api_reader(), model_run.ClaudeCodeClient(),
-                                           requested_at=requested, requested_by=args.source, prompt=args.prompt)
-            finally:
-                alert_analysis.finish(kb, args.alert)
+            requested = _dt.fromisoformat(args.requested_at) if args.requested_at else _dt.now(UTC)
+            a = alert_analysis.analyze(kb, args.alert, supervisor.api_reader(), model_run.ClaudeCodeClient(),
+                                       requested_at=requested, requested_by=args.source, prompt=args.prompt)
             _json_out({"status": a.status.value.upper(), "alert": a.alert, "summary": a.summary, "detail": a.detail,
                        "missing": a.missing, "model": a.model, "route": a.route, "tokens": a.tokens,
                        "error": a.error}, exit_code=_EXIT_SUCCESS if a.error is None else _EXIT_INTERNAL_ERROR)

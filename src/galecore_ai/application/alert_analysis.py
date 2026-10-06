@@ -1,27 +1,25 @@
-"""«Analizá este aviso» (WS-0008, P1-01b, U-70): one model run from an alert, its result back under the alert.
+"""«Analizá este aviso» (U-70): the alert's context by code, and the one-shot model run of WS-0008.
 
-The owner taps the button on an alert in the monitor; the monitor writes ``analysis_requests[<alert>]`` in the
-supervisor's piece and the next pass of the space (every 5 minutes) starts the run in the background, so the pass
-keeps watching. The code gathers the context — the alert and its decision, the position if it has one, the
+Since P1-01c the monitor's button opens Claude Code in its terminal with the request; the session reads the context
+with `supervise context <alert>` (`gather`, no model) and goes on by chat. The background run started from the
+monitor (WS-0008) was retired; `supervise analyze` stays as a one-shot run from a session. The code gathers the context — the alert and its decision, the position if it has one, the
 strategy's exits and limit, and the current numbers from GaleCore — and the model, with no tools, says in a few lines
 what the alert means now. The policy picks the model from the kind of work (GC-AI-0025: reading → sonnet). The
 runner refuses advice addressed to the reader with the same patterns as a scheduled run, gives the model one
 correction round, and stores the result create-only and hashed; the next pass shows it in the monitor.
 
 One done analysis per alert (asking again shows the same one, no new run); a failed one says why and can be asked
-again. A run that dies leaves its marker: after ``RUNNING_STALE_MINUTES`` it shows as failed and can be asked again.
+again. Analyses already stored still show under their alert in the monitor.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import subprocess
-import sys
 import tempfile
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 from galecore_ai.application import model_run, watch
@@ -42,11 +40,9 @@ SKILL = "skills/alert-analysis/skill.yaml"
 # The policy's model for reading work (the code gathers the data; the model only reads it). No tools: 2 turns are
 # enough for the structured answer; the correction round has its own.
 RUN = Schedulable(runs="model", work="reading", max_turns=3, timeout_minutes=5)
-RUNNING_STALE_MINUTES = 15
 SUMMARY_MAX = 200
 DETAIL_MAX = 1200
 _REPO = Path(__file__).resolve().parents[3]
-CLI = [sys.executable, "-B", "-m", "galecore_ai.adapters.cli"]
 
 SCHEMA = {"type": "object", "additionalProperties": False, "required": ["summary", "detail", "missing"],
           "properties": {"summary": {"type": "string"}, "detail": {"type": "string"},
@@ -91,26 +87,6 @@ def _write(kb: KnowledgeBase, analysis: AlertAnalysis) -> Path:
 
 
 # ── running marker ───────────────────────────────────────────────
-
-
-def _marker(kb: KnowledgeBase, alert_id: str) -> Path:
-    return _dir(kb) / f"{alert_id}.running"
-
-
-def _read_mark(kb: KnowledgeBase, alert_id: str) -> tuple[dict, datetime] | None:
-    try:
-        mark = json.loads(_marker(kb, alert_id).read_text(encoding="utf-8"))
-        return mark, datetime.fromisoformat(mark["started_at"])
-    except (OSError, ValueError, KeyError, TypeError):
-        return None
-
-
-def running(kb: KnowledgeBase, alert_id: str, now: datetime | None = None) -> dict | None:
-    """The marker of a run in progress ({requested_at, started_at, ...}), None if none or stale."""
-    got = _read_mark(kb, alert_id)
-    if got is None or (now or datetime.now(UTC)) - got[1] > timedelta(minutes=RUNNING_STALE_MINUTES):
-        return None
-    return got[0]
 
 
 # ── context (code, no model) ─────────────────────────────────────
@@ -282,103 +258,16 @@ def analyze(kb: KnowledgeBase, alert_id: str, read: Reader, client: model_run.Mo
     return analysis
 
 
-# ── from the monitor ─────────────────────────────────────────────
-
-
-def spawn_run(alert_id: str, requested_at: str, user: str | None) -> None:
-    """Start `supervise analyze` detached: the pass of the space does not wait for the model."""
-    cmd = [*CLI, "supervise", "analyze", alert_id, "--requested-at", requested_at, "--source", "monitor",
-           "--prompt", f"«Analizá este aviso» desde el monitor por {user or 'el owner'} ({requested_at})"]
-    env = {**os.environ, "PYTHONPATH": str(_REPO / "src")}
-    flags = 0
-    if sys.platform == "win32":
-        flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-
-    def popen(extra: int) -> None:
-        subprocess.Popen(cmd, cwd=_REPO, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, creationflags=flags | extra,
-                         start_new_session=sys.platform != "win32")
-
-    if sys.platform != "win32":
-        popen(0)
-        return
-    try:                       # out of the Task Scheduler's job: it may end the tree when the pass ends (review 06/10)
-        popen(subprocess.CREATE_BREAKAWAY_FROM_JOB)
-    except OSError:            # a job that forbids breakaway: started inside it
-        popen(0)
-
-
-def start(kb: KnowledgeBase, alert_id: str, requested_at: str, user: str | None, now: datetime,
-          spawn: Callable[[str, str, str | None], None] = spawn_run) -> str:
-    """Start one requested run: "started", "done" (already analysed) or "running". Raises if it cannot start."""
-    from galecore_ai.application import supervisor as sv
-
-    sv.load_alert(kb, alert_id)                          # an unknown alert raises
-    have = latest(kb).get(alert_id)
-    if have is not None and have.status == AnalysisStatus.DONE:
-        return "done"
-    if running(kb, alert_id, now) is not None:
-        return "running"
-    if have is not None and have.finished_at >= _aware(requested_at):
-        return "done"                                    # this request was already answered (a failed run)
-    path = _marker(kb, alert_id)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"requested_at": requested_at, "by": user, "started_at": now.isoformat()}),
-                    encoding="utf-8")
-    try:
-        spawn(alert_id, requested_at, user)
-    except OSError:
-        path.unlink(missing_ok=True)
-        raise
-    return "started"
-
-
-def _aware(at: str) -> datetime:
-    """An ISO datetime from the monitor; one without a zone is UTC (the monitor writes toISOString, with Z)."""
-    d = datetime.fromisoformat(at)
-    return d if d.tzinfo else d.replace(tzinfo=UTC)
-
-
-def apply_requests(kb: KnowledgeBase, content: dict, user: str | None, now: datetime,
-                   spawn: Callable[[str, str, str | None], None] = spawn_run) -> tuple[list[dict], dict[str, str]]:
-    """Start the runs the owner asked for in the monitor; return (what was done, alert id -> why it did not start)."""
-    done, errors = [], {}
-    asked = content.get("analysis_requests")
-    if not isinstance(asked, dict):                      # the piece is editable from outside: never break the pass
-        return done, ({"analysis_requests": "no es un objeto"} if asked else {})
-    for alert_id, r in asked.items():
-        at = r.get("at") if isinstance(r, dict) else None
-        try:
-            result = start(kb, str(alert_id), _aware(str(at)).isoformat(), user, now, spawn)
-            done.append({"alert": alert_id, "analysis": result})
-        except (KnowledgeError, ValueError, TypeError, OSError) as exc:
-            errors[alert_id] = str(exc)[:300]
-            done.append({"alert": alert_id, "analysis": "refused", "error": errors[alert_id]})
-    return done, errors
-
-
 def view(kb: KnowledgeBase, alert_ids: list[str], now: datetime | None = None) -> dict[str, dict]:
-    """alert id -> what the monitor shows under it: running, done (with the text) or failed (with why)."""
-    now = now or datetime.now(UTC)
+    """alert id -> what the monitor shows under it: done (with the text) or failed (with why)."""
     have = latest(kb)
     out = {}
     for alert_id in alert_ids:
         a = have.get(alert_id)
-        mark = running(kb, alert_id, now)
         if a is not None and a.status == AnalysisStatus.DONE:
             out[alert_id] = {"status": "done", "at": a.finished_at.isoformat(), "summary": a.summary,
                              "detail": a.detail, "missing": a.missing, "model": a.model, "route": a.route,
                              "tokens": a.tokens, "duration_s": a.duration_s}
-        elif mark is not None:
-            out[alert_id] = {"status": "running", "at": mark["started_at"]}
-        elif (stale := _read_mark(kb, alert_id)) is not None and (a is None or a.finished_at < stale[1]):
-            out[alert_id] = {"status": "failed", "at": stale[1].isoformat(),   # the run died without a result
-                             "error": f"la corrida no terminó en {RUNNING_STALE_MINUTES} min; podés pedirla de nuevo"}
         elif a is not None:
             out[alert_id] = {"status": "failed", "at": a.finished_at.isoformat(), "error": a.error, "model": a.model}
     return out
-
-
-def finish(kb: KnowledgeBase, alert_id: str) -> None:
-    """Remove the marker once the run stored its result."""
-    _marker(kb, alert_id).unlink(missing_ok=True)

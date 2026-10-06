@@ -266,13 +266,13 @@ ALERTS_SHOWN = 20
 
 
 def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, str] | None = None,
-                     analysis_errors: dict[str, str] | None = None, now: datetime | None = None) -> dict:
+                     now: datetime | None = None) -> dict:
     """The supervisor (WS-0007) as an agent piece: its last pass and the latest alerts with their decision.
 
     The monitor sounds for an alert it has not seen and shows its options; the owner's answer comes back in
     ``responses`` (alert id -> {choice, words, expected, review_by, at}) and `apply_responses` records it.
-    «Analizá este aviso» (U-70) comes back in ``analysis_requests`` (alert id -> {at}); ``analyses`` says how each run
-    is going (running, done with its text, failed with why).
+    ``analyses`` carries the stored analyses of the shown alerts (WS-0008); «Analizá este aviso» opens Claude Code in
+    the monitor since P1-01c, so nothing comes back from the button.
     """
     from galecore_ai.application import alert_analysis
     from galecore_ai.application import supervisor as sv
@@ -297,7 +297,6 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
         "runs": 0, "findings": "\n".join(lines), "result_ref": None,
         "alerts": shown, "analyses": analyses,
         **({"response_errors": response_errors} if response_errors else {}),
-        **({"analysis_errors": analysis_errors} if analysis_errors else {}),
     }
     return {"kind": "agent", "key": SUPERVISOR_KEY, "title": "Supervisor de SHADOW (avisos y decisiones)",
             "content": json.dumps(content, ensure_ascii=False), "format": "json", "visibility": "private"}
@@ -325,7 +324,7 @@ def apply_responses(kb: KnowledgeBase, content: dict, user: str | None) -> tuple
 
 
 def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None,
-                   supervise=None, spawn=None) -> dict:
+                   supervise=None) -> dict:
     """Apply the monitor's requests, then publish every agent's state (only the ones that changed are written).
 
     A refusal stays in the piece (`request_error`) until the next request. A piece whose agent is cancelled or gone
@@ -340,24 +339,20 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent"]
     responses: list[dict] = []
     if supervise is not None:                    # WS-0007: answers first, then a pass, then the piece
-        from galecore_ai.application import alert_analysis
         from galecore_ai.application import supervisor as sv
 
         mine = next((c for i, c in items if i["key"] == SUPERVISOR_KEY), {})
         at = (now or datetime.now(UTC)).isoformat()
         try:
             responses, errors = apply_responses(kb, mine, client.user)
-            started, refused_runs = alert_analysis.apply_requests(kb, mine, client.user, now or datetime.now(UTC),
-                                                                  **({"spawn": spawn} if spawn else {}))
-            responses += started
             try:
                 scan = sv.scan(kb, supervise, now)
             except sv.SupervisorError as exc:
                 scan = {"at": at, "error": str(exc)}
-            pieces.append(supervisor_piece(kb, scan, errors, refused_runs, now))
+            pieces.append(supervisor_piece(kb, scan, errors, now))
         except (KnowledgeError, ValueError) as exc:   # a damaged alert or log: the other agents still publish
             responses = [{"result": "refused", "error": str(exc)[:300]}]
-            keep = {k: mine[k] for k in ("alerts", "responses", "analyses", "analysis_requests") if k in mine}
+            keep = {k: mine[k] for k in ("alerts", "responses", "analyses") if k in mine}
             pieces.append({"kind": "agent", "key": SUPERVISOR_KEY, "title": "Supervisor de SHADOW (avisos y decisiones)",
                            "format": "json", "visibility": "private",
                            "content": json.dumps({**mine, **keep, "id": SUPERVISOR_KEY, "capability": "supervisor",

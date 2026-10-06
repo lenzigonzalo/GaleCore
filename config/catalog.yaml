@@ -529,10 +529,10 @@ entries:
   - id: alert_analysis
     kind: harness
     serves: >-
-      «Analizá este aviso»: desde un aviso del supervisor en el monitor (o en la sesión), una corrida del modelo con su
-      contexto — el aviso y su regla, la posición si la hay, las salidas y el límite de la estrategia y los números de
-      ahora en GaleCore — que dice en pocas líneas qué significa el aviso ahora, sin aconsejar. El resultado vuelve
-      debajo del mismo aviso en el monitor, sin chat.
+      «Analizá este aviso»: desde un aviso del supervisor, el botón del monitor abre Claude Code en su terminal con el
+      pedido (P1-01c) y se sigue por chat. El código arma el contexto — el aviso y su regla, la posición si la hay, las
+      salidas y el límite de la estrategia y los números de ahora en GaleCore — y la sesión dice qué significa el aviso
+      ahora, sin aconsejar. `supervise analyze` queda como corrida suelta que guarda el análisis.
     example_requests:
       - Analizá este aviso.
       - ¿Qué significa el aviso de SPY que me llegó?
@@ -546,6 +546,7 @@ entries:
       - need: IV rank de SPY
     flow:
       - supervise list
+      - supervise context <alert id>
       - supervise analyze <alert id> --prompt "<pedido>"
       - supervise analyses
     stored_as: supervision
