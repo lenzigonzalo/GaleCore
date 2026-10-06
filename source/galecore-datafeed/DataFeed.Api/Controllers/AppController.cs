@@ -1638,6 +1638,75 @@ namespace DataFeed.Controllers
                 from == null ? null : DateTime.SpecifyKind(from.Value.ToUniversalTime(), DateTimeKind.Utc)));
         }
 
+        /// <summary>
+        /// Exposición SHADOW (P1-04): lo abierto sumado por apuesta (subyacente + dirección + semana de vencimiento),
+        /// subyacente, estrategia y vencimiento, contra los límites como % de `capital`; cuánto riesgo nuevo entra hoy.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Exposure")]
+        public IActionResult RuntimeExposure([FromQuery] double capital, [FromQuery] double reservePct,
+            [FromQuery] double maxRiskPerTradePct, [FromQuery] double maxOpenRiskPct, [FromQuery] double maxBetPct)
+        {
+            var limits = new DataFeed.Application.App.Runtime.CapitalLimits
+            {
+                Capital = capital, ReservePct = reservePct, MaxRiskPerTradePct = maxRiskPerTradePct,
+                MaxOpenRiskPct = maxOpenRiskPct, MaxBetPct = maxBetPct,
+            };
+            if (limits.Problem() is { } problem) return BadRequest(new { error = problem });
+            var repository = _runtimePersistence.Repository;
+            if (!_runtimePersistence.Available || repository == null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+                {
+                    error = "SHADOW sin persistencia: no hay posiciones guardadas.",
+                    reason = _runtimePersistence.Reason,
+                });
+            return Ok(DataFeed.Application.App.Runtime.ShadowCapital.Exposure(repository.LoadMetricsInputs(), limits, DateTime.UtcNow));
+        }
+
+        /// <summary>
+        /// Reparto de un capital (P1-04, «tengo X USD»): reserva, presupuesto de riesgo, contratos y posiciones por
+        /// estrategia según su versión más reciente, tope por apuesta y escalera de entradas al ritmo de la spec.
+        /// `spec` (repetible) elige las estrategias; sin `spec`, las que tienen instancias. Calcula, no ordena.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Allocation")]
+        public IActionResult RuntimeAllocation([FromQuery] double capital, [FromQuery] double reservePct,
+            [FromQuery] double maxRiskPerTradePct, [FromQuery] double maxOpenRiskPct, [FromQuery] double maxBetPct,
+            [FromQuery] string[]? spec)
+        {
+            var limits = new DataFeed.Application.App.Runtime.CapitalLimits
+            {
+                Capital = capital, ReservePct = reservePct, MaxRiskPerTradePct = maxRiskPerTradePct,
+                MaxOpenRiskPct = maxOpenRiskPct, MaxBetPct = maxBetPct,
+            };
+            if (limits.Problem() is { } problem) return BadRequest(new { error = problem });
+            var repository = _runtimePersistence.Repository;
+            if (!_runtimePersistence.Available || repository == null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+                {
+                    error = "SHADOW sin persistencia: no hay estrategias guardadas.",
+                    reason = _runtimePersistence.Reason,
+                });
+            var records = repository.LoadMetricsInputs();
+            var names = spec is { Length: > 0 } ? spec.Distinct().ToList()
+                : records.Where(r => r.Instances > 0).Select(r => r.SpecName).Distinct().OrderBy(n => n).ToList();
+            var terms = new List<DataFeed.Application.App.Runtime.StrategyTerms>();
+            var missing = new List<string>();
+            foreach (var name in names)
+            {
+                var ofStrategy = records.Where(r => r.SpecName == name).ToList();
+                // La versión más reciente evaluada es la que opera.
+                var latest = ofStrategy.OrderByDescending(r => r.LastEvaluationAt ?? DateTime.MinValue).FirstOrDefault();
+                var json = latest == null ? null : repository.GetSpecJson(latest.ContentHash);
+                var loaded = json == null ? null : DataFeed.Application.App.Runtime.StrategySpecLoader.LoadFromJson(json);
+                if (loaded is { Success: true, Spec: not null })
+                    terms.Add(DataFeed.Application.App.Runtime.ShadowCapital.Terms(loaded.Spec, ofStrategy));
+                else missing.Add(name);
+            }
+            return Ok(DataFeed.Application.App.Runtime.ShadowCapital.Allocate(terms, limits, DateTime.UtcNow)
+                with { StrategiesNotFound = missing });
+        }
+
         // El switch del runtime usa el endpoint genérico de servicios de plataforma:
         // GET/POST /App/GaleCore/Services/runtime/Switch — ya existe en PlatformServiceSwitch.
         // No se duplica acá. El loop lee via RuntimeStrategySwitch que delega a PlatformServiceSwitch.
