@@ -777,6 +777,22 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
             from galecore_ai.application import watch
             mark = watch.cancel(kb, args.rule, words=args.text or "", prompt=args.prompt)
             _json_out({"status": "CANCELLED", "rule": mark.rule})
+        elif c == "analyze":
+            from galecore_ai.application import alert_analysis, model_run
+            try:
+                requested = _dt.fromisoformat(args.requested_at) if args.requested_at else _dt.now(UTC)
+                a = alert_analysis.analyze(kb, args.alert, supervisor.api_reader(), model_run.ClaudeCodeClient(),
+                                           requested_at=requested, requested_by=args.source, prompt=args.prompt)
+            finally:
+                alert_analysis.finish(kb, args.alert)
+            _json_out({"status": a.status.value.upper(), "alert": a.alert, "summary": a.summary, "detail": a.detail,
+                       "missing": a.missing, "model": a.model, "route": a.route, "tokens": a.tokens,
+                       "error": a.error}, exit_code=_EXIT_SUCCESS if a.error is None else _EXIT_INTERNAL_ERROR)
+        elif c == "analyses":
+            from galecore_ai.application import alert_analysis
+            _json_out({"analyses": [{"alert": a.alert, "status": a.status.value, "at": a.finished_at.isoformat(),
+                                     "summary": a.summary, "model": a.model, "error": a.error}
+                                    for a in alert_analysis.analyses(kb)]})
         else:
             out = supervisor.decide(kb=kb, alert_id=args.alert, choice=args.choice, words=args.text or "",
                                     expected=args.expected or "",
@@ -1249,6 +1265,13 @@ def build_parser() -> _JsonArgumentParser:
     p_sv_unwatch.add_argument("rule", help="Rule id (supervise watches)")
     p_sv_unwatch.add_argument("--text", help="The owner's words, verbatim")
     p_sv_unwatch.add_argument("--prompt", required=True, help="The owner's request")
+    p_sv_analyze = sv_sub.add_parser("analyze", help="«Analizá este aviso»: one model run (the policy's model, no "
+                                                     "tools) with the alert's context from GaleCore (P1-01b, U-70)")
+    p_sv_analyze.add_argument("alert", help="Alert id (supervise list)")
+    p_sv_analyze.add_argument("--prompt", required=True, help="The owner's request")
+    p_sv_analyze.add_argument("--source", default="session", choices=["session", "monitor"])
+    p_sv_analyze.add_argument("--requested-at", dest="requested_at", help="ISO datetime of the request (monitor)")
+    sv_sub.add_parser("analyses", help="Analyses of alerts, newest first (done or failed, with why)")
 
     p_contrast = sub.add_parser("contrast", help="Today's market story against each strategy and the portfolio "
                                                  "(GC-AI-0027)")

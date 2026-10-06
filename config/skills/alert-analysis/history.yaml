@@ -1,0 +1,10 @@
+# Qué cambió en cada versión de alert_analysis y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: alert_analysis
+versions:
+  - version: "1.0.0"
+    date: 2026-10-06
+    changes: >
+      Primera versión (WS-0008, P1-01b, U-70): «analizá este aviso» desde el monitor; el código junta el aviso, la
+      posición y los números actuales de GaleCore y el modelo (sonnet, trabajo de lectura) dice qué significa, sin
+      aconsejar; el resultado vuelve debajo del aviso.
+    feedback: []
