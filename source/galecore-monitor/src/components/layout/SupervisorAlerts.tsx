@@ -20,7 +20,7 @@ interface Alert {
 interface Response { choice: string; words: string; expected: string; review_by: string | null; at: string }
 interface Piece {
   alerts?: Alert[]; responses?: Record<string, Response>; response_errors?: Record<string, string>;
-  last_run?: { at: string; result: string; failed: boolean };
+  last_run?: { at: string; result: string; failed: boolean }; state_detail?: string | null;
 }
 
 const KEY = 'supervisor';
@@ -204,6 +204,7 @@ export function SupervisorAlerts() {
 
   const alerts = piece.alerts ?? [];
   const pending = alerts.filter(a => !a.decision && !piece.responses?.[a.id]).length;
+  const failed = !!piece.last_run?.failed;          // lo decide GaleCore-AI: la última revisión no leyó todo
   if (!item) return null;
 
   return (
@@ -218,7 +219,8 @@ export function SupervisorAlerts() {
               style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>×</button>
           </div>
           <div style={muted}>
-            Última revisión: {when(piece.last_run?.at)}{piece.last_run?.failed ? ` · falló: ${piece.last_run.result}` : ''}
+            Última revisión: {when(piece.last_run?.at)}
+            {failed ? ` · falló: ${piece.state_detail || piece.last_run?.result}` : ''}
           </div>
           {error && <div style={{ fontSize: 12, color: 'var(--red-gc)' }}>{error}</div>}
           {alerts.length === 0 && <div style={{ ...muted, padding: '12px 0' }}>Sin avisos.</div>}
@@ -231,9 +233,11 @@ export function SupervisorAlerts() {
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button onClick={() => setOpen(o => !o)}
           style={{ fontSize: 13, padding: '8px 14px', borderRadius: 999, cursor: 'pointer',
-            backgroundColor: 'var(--bg-secondary)', color: pending ? 'var(--yellow-gc)' : 'var(--text-secondary)',
-            border: `1px solid ${pending ? 'var(--yellow-border)' : 'var(--border-dark)'}` }}>
+            backgroundColor: 'var(--bg-secondary)',
+            color: failed ? 'var(--red-gc)' : pending ? 'var(--yellow-gc)' : 'var(--text-secondary)',
+            border: `1px solid ${failed ? 'var(--red-border)' : pending ? 'var(--yellow-border)' : 'var(--border-dark)'}` }}>
           {pending ? `${pending} aviso${pending > 1 ? 's' : ''} sin respuesta` : 'Avisos'}
+          {failed ? ' · la última revisión falló' : ''}
         </button>
       </div>
     </div>
