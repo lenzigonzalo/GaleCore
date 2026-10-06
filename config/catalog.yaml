@@ -564,6 +564,35 @@ entries:
       - "A close's diagnosis separates observado (rule of the profile not respected, fill worse than its rule's level beyond max(2 USD, 10 % of the credit)) from hipotesis (a loss inside the plan: thesis to review only if it repeats)"
       - "Not checked - costs (SHADOW fills at mid, no commissions), comparison against cash (no risk-free rate in the report), positions closed before persistence existed"
 
+  - id: capital_risk
+    kind: investigation
+    serves: >-
+      Decir qué capital tenés disponible u ocioso sobre el capital de referencia, si estás concentrado (varias
+      posiciones chicas del mismo subyacente, dirección y semana de vencimiento son una sola apuesta) contra tus
+      límites, y cómo repartir un capital («tengo X USD»): reserva, riesgo por operación, riesgo abierto máximo,
+      tope por apuesta, escalera de entradas y diversificación, justificado y nunca como orden.
+    example_requests:
+      - Tengo 5.000 USD, ¿qué hago?
+      - ¿Cómo reparto 10.000 USD entre mis estrategias?
+      - ¿Qué capital tengo disponible u ocioso?
+      - ¿Estoy concentrado?
+      - ¿Varias posiciones chicas son una sola apuesta?
+      - ¿Cuánto riesgo tengo abierto contra mis límites?
+    skill: skills/capital-risk/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [App/Runtime/Exposure, App/Runtime/Allocation]
+    data_needs:
+      - need: exposición y reparto SHADOW
+    flow:
+      - capital [--amount <USD>] [--strategy <name>]   # GaleCore calcula; el código le pasa los % del perfil
+      - profile show
+    stored_as: none
+    controls:
+      - "Numbers come from GaleCore App/Runtime/Exposure and App/Runtime/Allocation; the limits are the profile's percentages, read from its words (a missing one stops with MISSING_LIMITS, never guessed); with another capital the same percentages apply to it (owner, 06/10)"
+      - "A bet is same underlying, direction and ISO expiry week; one bet is capped at the profile's % of the allowed open risk, and the ladder keeps each week under it"
+      - "The split is never an order: a narrower width is a new version with approval; waiting in cash is always an alternative"
+      - "Not checked - real account (no broker: on the reference capital), correlation between underlyings, costs, holidays in the ladder"
+
   - id: alert_analysis
     kind: harness
     serves: >-

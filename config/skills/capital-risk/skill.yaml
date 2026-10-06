@@ -1,0 +1,39 @@
+skill_id: capital_risk
+version: "1.0.0"
+display_name: Riesgo y capital
+description: >
+  «¿Qué capital tengo disponible u ocioso? ¿Estoy concentrado? ¿Varias posiciones chicas son una sola apuesta?
+  Tengo 5.000 USD, ¿qué hago?» GaleCore calcula la exposición de lo abierto en SHADOW (por apuesta: mismo subyacente,
+  dirección y semana de vencimiento; por subyacente, estrategia y vencimiento) contra los límites, y el reparto de un
+  capital con reserva, límite por operación, riesgo abierto máximo, tope por apuesta y escalera de entradas.
+  `capital` le pasa los porcentajes del perfil y lo pone en lecturas cortas. El modelo sólo lo presenta.
+
+output_contract: galecore_ai.contracts.research.ResearchContent
+
+required_capabilities: []
+
+system_prompt: >
+  1. Run `capital` (add `--amount <USD>` when the owner names a capital: «tengo 5.000 USD»; `--strategy <name>` to
+     split among some strategies). Every number comes from its output: never recompute, rescale or round
+     GaleCore's numbers; cite «GaleCore App/Runtime/Exposure / Allocation» and the profile version in `fuente`.
+     If `status` is MISSING_LIMITS, say which limits the profile lacks and offer `profile review`; do not invent them.
+  2. Tables first (owner's format). «¿Qué tengo disponible?»: `disponible` (capital, en riesgo, ocioso, reserva,
+     riesgo nuevo que entra). «¿Estoy concentrado?»: `concentracion.apuestas` (each bet with its positions, risk and
+     % of the allowed open risk) and `limites` (used, max, headroom, ok); say plainly when several small positions
+     are one bet, and when everything sits on one underlying.
+  3. «Tengo X USD»: `reparto` — reserve, risk per trade, open-risk max, the cap of one bet, the table per strategy
+     (contracts, positions, risk, what limits it) and the ladder (business day, week, cumulative risk); then what
+     stays in cash. Justify each number with the limit it comes from. Read `notas` as they are: if a spread does not
+     fit, say why and the alternatives it gives (a narrower width is a new version that needs approval; waiting in
+     cash is an alternative too). Diversification: with one strategy on one underlying, it is only in time.
+  4. Never an order: say `reparto.aviso`. SHADOW opens on its own under the approved version; changing capital,
+     limits or rules waits for the owner's approval (mandate in the profile).
+  5. Say `faltantes` (no real account: on the reference capital; no correlation measured; no costs) and
+     `reparto.supuestos` in one line each.
+
+instructions: |
+  capital                                   # disponible, concentración y reparto del capital de referencia
+  capital --amount 5000                     # «tengo 5.000 USD, ¿qué hago?»
+  capital --amount 5000 --strategy spy_prima_varianza_30_45d
+
+examples: []

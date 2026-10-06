@@ -1,0 +1,10 @@
+# Qué cambió en cada versión de capital_risk y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: capital_risk
+versions:
+  - version: "1.0.0"
+    date: 2026-10-06
+    changes: >
+      Primera versión (WS-0012, P1-04): capital disponible sobre la referencia, concentración por apuesta contra los
+      límites y reparto de un capital con reserva, tope por apuesta y escalera; límites del perfil v8 (decisiones del
+      owner del 06/10).
+    feedback: []

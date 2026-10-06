@@ -762,6 +762,18 @@ async def _cmd_performance(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+async def _cmd_capital(args: argparse.Namespace) -> None:
+    from galecore_ai.application import capital, supervisor
+    kb = _build_knowledge_base()
+    try:
+        out = capital.report(kb, supervisor.api_reader(), capital=args.amount, strategies=args.strategy)
+        _json_out(out, exit_code=_EXIT_INSUFFICIENT_DATA if out.get("status") == "MISSING_LIMITS" else 0)
+    except supervisor.SupervisorError as exc:
+        _json_out({"status": "ERROR", "error": str(exc)}, exit_code=_EXIT_INTERNAL_ERROR)
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+
+
 async def _cmd_supervise(args: argparse.Namespace) -> None:
     from datetime import date as _date
     from datetime import datetime as _dt
@@ -1267,6 +1279,11 @@ def build_parser() -> _JsonArgumentParser:
     p_perf.add_argument("--strategy", action="append", help="Limit to this strategy (repeatable); default: all known")
     p_perf.add_argument("--since", help="Only closes (and their review) from this ISO date on, e.g. the week")
 
+    p_cap = sub.add_parser("capital", help="«¿Qué capital tengo disponible? ¿Estoy concentrado? Tengo X USD, ¿qué "
+                                           "hago?» Exposición contra límites y reparto con reserva y escalera (P1-04)")
+    p_cap.add_argument("--amount", type=float, help="Capital to split (USD); default: the profile's reference capital")
+    p_cap.add_argument("--strategy", action="append", help="Split among these strategies (repeatable); default: all known")
+
     p_supervise = sub.add_parser("supervise", help="Supervisor of SHADOW: alerts on existing rules and the owner's "
                                                    "decisions with their context (WS-0007)")
     sv_sub = p_supervise.add_subparsers(dest="supervise_command", required=True)
@@ -1499,6 +1516,8 @@ def main() -> None:
             asyncio.run(_cmd_supervise(args))
         elif args.command == "performance":
             asyncio.run(_cmd_performance(args))
+        elif args.command == "capital":
+            asyncio.run(_cmd_capital(args))
         elif args.command == "contrast":
             asyncio.run(_cmd_contrast(args))
         elif args.command == "strategy":
