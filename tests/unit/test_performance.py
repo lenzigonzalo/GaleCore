@@ -63,9 +63,10 @@ def test_the_return_is_placed_against_minimum_and_objective_and_warns_on_short_w
         return performance.against_objective({"annualizedReturnPct": annual, "daysElapsed": days,
                                               "positionsClosed": closed, "maxDrawdown": 300.0}, CRIT,
                                              sample_ok=closed >= 30)["lectura"]
-    assert "en o por encima del objetivo" in read(25.0) and "ruido" in read(25.0)
+    assert "en o por encima del objetivo" in read(25.0, 95, 31)
+    assert read(25.0).startswith("Muestra corta") and "objetivo" not in read(25.0).split("ruido")[0]
     assert "entre la utilidad mínima y el objetivo" in read(9.0, 95, 31) and "ruido" not in read(9.0, 95, 31)
-    assert "por debajo de la utilidad mínima" in read(3.0)
+    assert "por debajo de la utilidad mínima" in read(3.0, 95, 31)
     out = performance.against_objective({"maxDrawdown": 300.0}, CRIT, sample_ok=False)
     assert out["drawdown_usado_pct"] == 20.0 and "Sin retorno medible" in out["lectura"]
 
@@ -95,6 +96,8 @@ def test_a_rule_of_the_profile_not_respected_is_rules_observed():
     manual = performance.review_trade(trade(exitReason="MANUAL", gapToPlan=None), CRIT, None, [], date(2026, 10, 6))
     assert big["diagnostico"] == "reglas" and "500 USD" in big["observado"][0]
     assert manual["diagnostico"] == "reglas" and "MANUAL" in manual["observado"][0]
+    kill = performance.review_trade(trade(exitReason="KILL_SWITCH", gapToPlan=None), CRIT, None, [], date(2026, 10, 6))
+    assert kill["diagnostico"] == "todavia_nada" and "no un incumplimiento" in kill["observado"][0]
 
 
 def test_the_decision_is_set_against_what_happened_and_a_due_review_is_flagged():
@@ -120,14 +123,17 @@ def test_report_reads_galecore_and_links_each_close_to_its_alert_and_decision(kb
 
     def read(path):
         asked.append(path)
-        return {"asOf": IN_SESSION.isoformat(), "portfolio": {"positionsClosed": 1, "daysElapsed": 5.0},
+        return {"asOf": IN_SESSION.isoformat(), "from": "w", "window": {"positionsClosed": 1, "realizedPnl": 23.0},
+                "portfolio": {"positionsClosed": 3, "daysElapsed": 50.0, "openNotValued": 1},
                 "strategies": [], "versions": [],
-                "trades": [trade(positionId=closed["positionId"], exitAt=closed["exitAt"]),
-                           trade(positionId="old", exitAt="2026-01-01T00:00:00Z")]}
+                "trades": [trade(positionId=closed["positionId"], exitAt=closed["exitAt"])]}
 
     out = performance.report(kb, read, since=IN_SESSION - timedelta(days=7), now=IN_SESSION)
-    assert asked[0].startswith("/App/Runtime/Performance?spec=")
-    [op] = out["operaciones"]                       # the January close is outside the week
+    assert asked[0].startswith("/App/Runtime/Performance?spec=") and "&from=" in asked[0]
+    assert out["ventana"]["realizedPnl"] == 23.0 and "acumulado" in out["alcance"] and "cierres desde" in out["alcance"]
+    assert any("sin valuación" in f for f in out["faltantes"])
+    assert any("no tiene operaciones" in f for f in out["faltantes"])   # the kb's strategy is not in GaleCore's answer
+    [op] = out["operaciones"]
     assert op["avisos"] == [alert.id] and op["decision"]["esperado"] == "cobrar la mitad del crédito"
     assert out["edge"]["muestra_suficiente"] is False
     assert any("efectivo" in f for f in out["faltantes"]) and "antes de costos" in out["costos"]

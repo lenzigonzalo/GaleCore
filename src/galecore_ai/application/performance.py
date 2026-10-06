@@ -26,6 +26,7 @@ from galecore_ai.contracts.profile import ProfileContent
 
 QUARTER_DAYS = 90
 RULE_EXITS = ("TAKE_PROFIT", "STOP_LOSS", "TIME_EXIT")
+SAFETY_EXITS = ("KILL_SWITCH",)  # the system's own safety rule (R2): observed, not a breach by the owner
 GAP_TOLERANCE_USD = 2.0          # a close within 2 USD (or 10 % of the credit) of its rule's level is on plan
 GAP_TOLERANCE_OF_CREDIT = 0.10
 COSTS_NOTE = "SHADOW llena al mid y sin comisiones: el resultado es antes de costos."
@@ -113,6 +114,9 @@ def against_objective(portfolio: dict, crit: dict, sample_ok: bool) -> dict:
     goal, minimum = crit["objetivo_anual_pct"], crit["minimo_anual_pct"]
     if annual is None:
         reading = "Sin retorno medible todavía (sin cierres ni valuación, o sin capital de referencia)."
+    elif not sample_ok:
+        reading = (f"Muestra corta ({portfolio.get('daysElapsed') or 0:g} días, {portfolio.get('positionsClosed') or 0}"
+                   f" cierres): el anualizado de {annual:g} % es ruido y todavía no se compara con el objetivo.")
     else:
         if goal and annual >= goal[0]:
             where = "en o por encima del objetivo"
@@ -123,9 +127,6 @@ def against_objective(portfolio: dict, crit: dict, sample_ok: bool) -> dict:
         else:
             where = "sin utilidad mínima declarada para comparar"
         reading = f"Anualizado {annual:g} %: {where}."
-        if not sample_ok:
-            reading += (f" Con {portfolio.get('daysElapsed') or 0:g} días y {portfolio.get('positionsClosed') or 0}"
-                        " cierres, anualizar amplifica el ruido: no es una tendencia.")
     dd, dd_max = portfolio.get("maxDrawdown"), crit["drawdown_max_usd"]
     return {"retorno_total_pct": portfolio.get("totalReturnPct"), "retorno_anualizado_pct": annual,
             "objetivo_anual_pct": goal, "minimo_anual_pct": minimum, "lectura": reading,
@@ -146,7 +147,9 @@ def review_trade(trade: dict, crit: dict, decision: dict | None, alert_ids: list
     if limit is not None and (trade.get("maxRisk") or 0) > limit:
         observed.append(f"riesgo máximo {trade['maxRisk']:g} USD por encima del límite por operación ({limit:g} USD)")
         label = "reglas"
-    if reason not in RULE_EXITS:
+    if reason in SAFETY_EXITS:
+        observed.append(f"cerró por {reason}: regla de seguridad del sistema (límite de la cartera), no un incumplimiento")
+    elif reason not in RULE_EXITS:
         observed.append(f"cerró por {reason or 'motivo desconocido'}, fuera de las salidas automáticas de la spec")
         label = "reglas"
     if gap is not None and gap < -_tolerance(trade):
@@ -193,6 +196,8 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
     query = [("spec", n) for n in names]
     if crit["capital"]:
         query.append(("referenceCapital", crit["capital"]))
+    if since:
+        query.append(("from", since.astimezone(UTC).isoformat()))
     perf = read("/App/Runtime/Performance?" + urlencode(query))
     if not isinstance(perf, dict):
         raise supervisor.SupervisorError("GaleCore devolvió algo que no es el informe de performance")
@@ -204,10 +209,7 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
             by_position.setdefault(a.position_id, []).append(a.id)
     today = now.date()
     trades = []
-    for t in perf.get("trades", []):
-        exit_at = supervisor._ts(t.get("exitAt"))
-        if since and (exit_at is None or exit_at < since):
-            continue
+    for t in perf.get("trades", []):            # GaleCore already cut them to `from`
         ids = by_position.get(t.get("positionId") or "", [])
         decision = next((decisions[i] for i in ids if i in decisions), None)
         trades.append(review_trade(t, crit, decision, ids, today))
@@ -216,8 +218,16 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
     verdict = edge(portfolio, crit)
     missing = [f"perfil: no pude leer {x}" for x in crit["no_leidos"]]
     missing.append("comparación contra el efectivo: GaleCore no expone la tasa libre de riesgo en este informe")
+    missing.append("drawdown: es del P&L realizado; las pérdidas abiertas no cuentan hasta cerrar")
+    if not_valued := portfolio.get("openNotValued"):
+        missing.append(f"{not_valued} abierta(s) sin valuación: su P&L no está en el retorno total")
+    seen = {g.get("specName") for g in perf.get("strategies", [])}
+    missing += [f"estrategia {n}: GaleCore no tiene operaciones ni instancias con ese nombre" for n in names
+                if n not in seen]
+    scope = ("cartera, contra_objetivo, edge, por_estrategia y por_version: acumulado desde la primera entrada"
+             + (f"; ventana y operaciones: cierres desde {since.date().isoformat()}" if since else ""))
     return {"al": perf.get("asOf"), "estrategias_pedidas": names, "desde": since.isoformat() if since else None,
-            "criterios": crit, "cartera": portfolio,
+            "alcance": scope, "ventana": perf.get("window"), "criterios": crit, "cartera": portfolio,
             "contra_objetivo": against_objective(portfolio, crit, verdict["muestra_suficiente"]),
             "edge": verdict, "por_estrategia": perf.get("strategies", []), "por_version": perf.get("versions", []),
             "operaciones": trades, "decisiones_a_revisar": pending_reviews(decisions, today),

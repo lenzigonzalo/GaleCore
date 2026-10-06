@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de performance_review y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: performance_review
 versions:
+  - version: "1.0.1"
+    date: 2026-10-06
+    changes: >
+      Revisión interna: la semana sale de `ventana` (GaleCore la calcula con `from`) y la skill dice qué es
+      acumulado y qué es de la semana (`alcance`).
+    feedback: []
   - version: "1.0.0"
     date: 2026-10-06
     changes: >
