@@ -130,9 +130,13 @@ entries:
     serves: >-
       Tus objetivos, capital de referencia, horizonte, drawdown y límites de riesgo,
       fuentes preferidas y formato de entrega, versionados, para que cada capacidad los
-      aplique sin que los repitas y deje registrado qué versión usó.
+      aplique sin que los repitas y deje registrado qué versión usó. También tus criterios
+      y tu mandato: utilidad mínima, cuándo es edge y no suerte, qué pasa al tocar un
+      límite y qué hace solo el sistema y qué te pide aprobar; te los discute y los deja medibles.
     example_requests:
       - ¿Qué perfil tengo?
+      - Revisemos mis objetivos, ¿qué está vago o falta?
+      - ¿Qué puede hacer el sistema solo y qué necesita mi aprobación?
       - Mi capital de referencia es 10.000 USD
       - Los informes, tablas y gráficos primero
     skill: skills/user-profile/skill.yaml
@@ -141,6 +145,7 @@ entries:
     data_needs: []
     flow:
       - profile show
+      - profile review
       - 'profile set --note "<qué cambia>" --prompt "<tus palabras>" --host-model <model> < {"changes": {...}}'
       - profile history
     stored_as: profile
@@ -150,6 +155,8 @@ entries:
       - Unknown fields, blank values and sources outside config/sources.yaml are refused
       - Refuses text that looks like a key or token (heuristic, English and Spanish labels plus common key prefixes); a refused value is not echoed back
       - Missing fields are declared, never defaulted; placeholders the user asked for are listed in `provisional` and reported as such
+      - "`profile review` flags criteria that are missing, have no number (objectives, drawdown, limits, minimum return, edge) or are provisional, and lists each strategy's pending parameters and owner decisions; it proposes nothing by code, the user decides"
+      - Fields added later stay out of the hash while empty, so earlier versions keep verifying
       - "While a profile exists, research and context_research refuse to save unless an antecedent cites the version in force (profile:v<N>), so the stored revision records the version (hash) used"
       - "Consumers today: research, context_research, strategy_followup and daily_attention; GEX, regime, strategy design and tasks do not read the profile yet"
       - Not checked - whether the declared objectives or limits are sensible

@@ -12,9 +12,11 @@ of a trading idea with GaleCore + the host's external sources; every response ke
 `strategy approve` of the exact hash → `strategy deploy-check` → deploy to SHADOW in GaleCore Dev only),
 `strategy_followup` (what a deployed version did, saved as a revision of its investigation),
 `data_sources` (which source covers a need, its cost, limits and last checked access: `sources list|query|check|declare`),
-`user_profile` (objectives, reference capital, horizon, limits, preferred sources, format:
-`profile show|set|history`, versions `profile:vN` in `knowledge/profile/`; fields in `provisional` are
-placeholders), `daily_attention` (what deserves attention today about what is in SHADOW, saved as a
+`user_profile` (objectives, reference capital, horizon, limits, preferred sources, format, and since 1.1.0
+the criteria and mandate: minimum return, edge criterion, exit rule, what the system does alone and what needs
+approval: `profile show|set|history|review`, versions `profile:vN` in `knowledge/profile/`; fields in
+`provisional` are placeholders; `profile review` lists what is missing, has no number or is provisional, plus
+each strategy's pending parameters and owner decisions, for a guided conversation where the user decides), `daily_attention` (what deserves attention today about what is in SHADOW, saved as a
 revision of one investigation per strategy), `capability_builder` (a new capability with the template:
 catalog entry + skill, data needs from the source registry, controls) and `idea_inbox` (the owner's "anotá esto":
 `inbox add --text "<words verbatim>"` into `knowledge/inbox/`, not evaluated then; reviewed later with `inbox list`

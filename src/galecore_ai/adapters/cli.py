@@ -28,6 +28,7 @@ Usage:
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
     python -m galecore_ai.adapters.cli galecore list | get CAPABILITY --symbol SYM [--param k=v ...] [--out FILE]
     python -m galecore_ai.adapters.cli space context | list [--kind K] | show K/KEY | put K/KEY --title T [--visibility V] [--format F] < content | delete K/KEY | import
+    python -m galecore_ai.adapters.cli profile review
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
@@ -96,6 +97,7 @@ from galecore_ai.application.prepare_gex import PrepareError, prepare_gex_snapsh
 from galecore_ai.application.prepare_regime import fetch_regime_facts, prepare_regime_snapshot
 from galecore_ai.application.profile import ProfileError, ProfileUnusable, set_profile
 from galecore_ai.application.profile import history as profile_history
+from galecore_ai.application.profile import review as profile_review
 from galecore_ai.application.profile import show as profile_show
 from galecore_ai.application.record_regime import (
     RecordError,
@@ -861,6 +863,8 @@ async def _cmd_profile(args: argparse.Namespace) -> None:
             _json_out(profile_show(store))
         elif args.profile_command == "history":
             _json_out({"versions": profile_history(store)})
+        elif args.profile_command == "review":
+            _json_out(profile_review(kb))
         else:
             try:
                 payload = json.loads(_read_stdin())
@@ -1177,6 +1181,8 @@ def build_parser() -> _JsonArgumentParser:
     prof_sub = p_profile.add_subparsers(dest="profile_command", required=True)
     prof_sub.add_parser("show", help="Current version and what is still missing")
     prof_sub.add_parser("history", help="All versions, newest first")
+    prof_sub.add_parser("review", help="What is missing, vague or provisional in your criteria and mandate, "
+                                       "and what your strategies leave open")
     p_prof_set = prof_sub.add_parser("set", help="Change fields ({\"changes\": {...}} on stdin); a new version")
     p_prof_set.add_argument("--note", required=True, help="What this version changes")
     p_prof_set.add_argument("--prompt", required=True, help="The user's words that asked for it")

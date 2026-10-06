@@ -6,6 +6,12 @@ missing; a missing field is declared, never filled with a guess. The profile hol
 preferences and declared limits in the user's own words — no code computes risk or
 sizing from it — and never credentials (a heuristic check, not a guarantee).
 
+Criteria and mandate (P1-02, WS-0010) live here too, in the user's words: the minimum
+return below which a strategy is not worth its risk, what counts as edge rather than
+luck, what happens when a limit is hit, and what the system does alone versus what
+needs the user's approval. Fields added later are left out of the hash while empty, so
+versions written before them keep verifying.
+
 A value the user asked to be filled with a placeholder is listed by field name in
 ``provisional``: capabilities use it but label what depends on it as provisional,
 never as the user's decision.
@@ -24,6 +30,10 @@ from galecore_ai.contracts.regime_record import RecordHost
 
 PROFILE_SCHEMA_VERSION = "1"
 PROFILE_VERSION_RE = re.compile(r"^v([1-9]\d*)$")
+
+# Fields added after the first versions: dropped from the hash while empty (older versions keep their hash).
+LATER_FIELDS = ("provisional", "minimum_return", "edge_criterion", "exit_rule", "mandate_autonomous",
+                "mandate_needs_approval")
 
 compute_profile_hash = compute_evidence_hash  # same canonical-JSON sha256
 
@@ -54,9 +64,15 @@ class ProfileContent(BaseModel):
     preferred_sources: list[str] = Field(default_factory=list)  # source ids of config/sources.yaml, in order
     delivery_format: list[str] = Field(default_factory=list)    # e.g. "tablas y gráficos primero, texto mínimo"
     language: str | None = None
+    minimum_return: str | None = None                      # e.g. "8 % anual; por debajo, no vale el riesgo"
+    edge_criterion: str | None = None                      # e.g. "30 cierres y resultado neto > 0 después de costos"
+    exit_rule: str | None = None                           # e.g. "al tocar el drawdown: no abrir más y revisar"
+    mandate_autonomous: list[str] = Field(default_factory=list)      # what the system does on its own
+    mandate_needs_approval: list[str] = Field(default_factory=list)  # what waits for the user's ok
     provisional: list[str] = Field(default_factory=list)  # field names holding placeholders, not the user's values
 
-    @field_validator("objectives", "risk_limits", "delivery_format", "preferred_sources", mode="before")
+    @field_validator("objectives", "risk_limits", "delivery_format", "preferred_sources", "mandate_autonomous",
+                     "mandate_needs_approval", mode="before")
     @classmethod
     def _clean_items(cls, value: object) -> object:
         if value is None:
@@ -70,7 +86,8 @@ class ProfileContent(BaseModel):
             return items
         return value
 
-    @field_validator("max_drawdown", "horizon", "language", mode="before")
+    @field_validator("max_drawdown", "horizon", "language", "minimum_return", "edge_criterion", "exit_rule",
+                     mode="before")
     @classmethod
     def _clean_text(cls, value: object) -> object:
         if isinstance(value, str):
@@ -150,8 +167,9 @@ class ProfileVersion(BaseModel):
     def hashable_content(self) -> dict:
         data = self.model_dump(mode="json")
         data.pop("content_hash", None)
-        if not data["content"]["provisional"]:
-            del data["content"]["provisional"]  # versions written before the field existed keep their hash
+        for name in LATER_FIELDS:
+            if data["content"][name] in (None, []):
+                del data["content"][name]  # versions written before the field existed keep their hash
         if not data["feedback"]:
             del data["feedback"]  # same for versions written before feedback could be cited
         return data

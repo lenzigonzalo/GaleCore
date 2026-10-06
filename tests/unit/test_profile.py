@@ -82,7 +82,8 @@ class TestSetAndShow:
         assert doc.ref == "profile:v1" and path.name == "v1.json"
         view = show(kb.profile)
         assert view["ref"] == "profile:v1"
-        assert set(view["missing"]) == {"objectives", "max_drawdown", "horizon", "risk_limits"}
+        assert set(view["missing"]) == {"objectives", "max_drawdown", "horizon", "risk_limits", "minimum_return",
+                                        "edge_criterion", "exit_rule", "mandate_autonomous", "mandate_needs_approval"}
 
     def test_partial_change_keeps_the_rest_and_makes_a_new_version(self, kb):
         put(kb.profile, SEED)
@@ -268,3 +269,92 @@ def test_no_rejection_path_echoes_the_value(kb, changes):
     with pytest.raises(ProfileError) as exc:
         put(kb.profile, changes)
     assert "SYNTHETIC_SECRET_123456" not in str(exc.value)
+
+
+class TestCriteriaAndMandate:
+    """P1-02 (WS-0010): criteria and mandate in the profile, and the review behind the guided conversation."""
+
+    @staticmethod
+    def fake_kb(store, strategies=()):
+        from types import SimpleNamespace
+
+        from galecore_ai.contracts.strategy import Basis
+
+        docs = {key: SimpleNamespace(content=SimpleNamespace(display_name=key, rules=[
+            SimpleNamespace(id="R1", basis=Basis.PENDING_PARAMETER, parameter="500 USD", text="riesgo por operación"),
+            SimpleNamespace(id="R2", basis=Basis.OWNER_DECISION, parameter="", text="kill switch"),
+            SimpleNamespace(id="E1", basis=Basis.DESIGN_CHOICE, parameter="", text="ciclo"),
+        ])) for key, _ in strategies}
+        approved = {key for key, ok in strategies if ok}
+        fake = SimpleNamespace(versions=lambda: sorted(docs), load=docs.get,
+                               load_approval=lambda key: object() if key in approved else None)
+        return SimpleNamespace(profile=store, strategies=fake)
+
+    def test_new_fields_round_trip_and_blank_is_refused(self, kb):
+        doc, _ = put(kb.profile, {"minimum_return": "8 % anual", "edge_criterion": "30 cierres con neto > 0",
+                                  "exit_rule": "al tocar el drawdown no se abre más",
+                                  "mandate_autonomous": ["abrir en SHADOW dentro de las reglas aprobadas"],
+                                  "mandate_needs_approval": ["cambiar una regla", "pasar a real"]})
+        assert doc.content.mandate_needs_approval == ["cambiar una regla", "pasar a real"]
+        assert kb.profile.load("v1").content_hash == doc.content_hash
+        with pytest.raises(ProfileError):
+            put(kb.profile, {"exit_rule": "  "})
+
+    def test_versions_written_before_the_new_fields_keep_their_hash(self, kb):
+        doc, _ = put(kb.profile, SEED)
+        hashed = doc.hashable_content()["content"]
+        assert not {"minimum_return", "edge_criterion", "exit_rule", "mandate_autonomous",
+                    "mandate_needs_approval"} & set(hashed)
+        doc2, _ = put(kb.profile, {"mandate_autonomous": ["avisar"]})
+        assert doc2.hashable_content()["content"]["mandate_autonomous"] == ["avisar"]
+
+    def test_review_of_an_empty_profile_asks_for_every_criterion(self, kb):
+        from galecore_ai.application.profile import review
+
+        out = review(self.fake_kb(kb.profile))
+        assert out["ref"] is None and out["measurable"] == [] and out["strategies"] == []
+        assert {f["issue"] for f in out["findings"]} == {"missing"}
+        assert all(f["ask"].strip() for f in out["findings"])
+
+    def test_review_flags_what_has_no_number_and_what_is_provisional(self, kb):
+        from galecore_ai.application.profile import review
+
+        put(kb.profile, {"max_drawdown": "lo que aguante", "minimum_return": "8 % anual",
+                         "risk_limits": ["2 % por operación", "poco"], "exit_rule": "no abrir más",
+                         "provisional": ["minimum_return"]})
+        out = review(self.fake_kb(kb.profile))
+        by = {(f["field"], f["issue"]): f for f in out["findings"]}
+        assert by[("max_drawdown", "not_measurable")]["says"] == ["lo que aguante"]
+        assert by[("risk_limits", "not_measurable")]["says"] == ["poco"]
+        assert ("minimum_return", "provisional") in by and ("minimum_return", "not_measurable") not in by
+        assert "exit_rule" in out["measurable"]  # qualitative: no number required
+
+    def test_review_lists_the_latest_version_of_each_strategy(self, kb):
+        from galecore_ai.application.profile import review
+
+        fake = self.fake_kb(kb.profile, [("spy/1.0.9", True), ("spy/1.0.10", False), ("gld/1.0.0", True)])
+        out = review(fake)
+        assert [(s["ref"], s["approved"]) for s in out["strategies"]] == [
+            ("strategy:gld/1.0.0", True), ("strategy:spy/1.0.10", False)]
+        spy = out["strategies"][1]
+        assert [p["rule"] for p in spy["pending_parameters"]] == ["R1"]
+        assert [p["rule"] for p in spy["owner_decisions"]] == ["R2"]
+
+    def test_a_space_piece_published_before_the_new_fields_is_not_an_edit(self, kb):
+        from galecore_ai.application.space import _same_profile
+
+        doc, _ = put(kb.profile, SEED)
+        old = {k: v for k, v in doc.content.model_dump(mode="json").items()
+               if k not in ("minimum_return", "edge_criterion", "exit_rule", "mandate_autonomous",
+                            "mandate_needs_approval")}
+        assert _same_profile(old, doc.content)
+        assert not _same_profile({**old, "language": "inglés"}, doc.content)
+        assert not _same_profile({"nope": 1}, doc.content)
+
+    def test_cli_review_runs(self, kb):
+        put(kb.profile, SEED)
+        r = subprocess.run([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "profile", "review"],
+                           capture_output=True, text=True, encoding="utf-8", check=False)
+        assert r.returncode == 0, r.stderr
+        out = json.loads(r.stdout)
+        assert out["ref"] == "profile:v1" and any(f["field"] == "edge_criterion" for f in out["findings"])

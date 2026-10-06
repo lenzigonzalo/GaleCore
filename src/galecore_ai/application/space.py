@@ -113,6 +113,15 @@ def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
     return pieces
 
 
+def _same_profile(remote: dict, local) -> bool:
+    """Same content once both carry every field: a piece published before a field existed is not an edit."""
+    from galecore_ai.contracts.profile import ProfileContent
+    try:
+        return ProfileContent.model_validate(remote) == local
+    except ValueError:
+        return False
+
+
 def profile_state(client: SpaceClient, kb: KnowledgeBase) -> dict:
     """Which profile is in force (GC-AI-0026, owner decision D-2: GaleCore's space rules).
 
@@ -135,7 +144,7 @@ def profile_state(client: SpaceClient, kb: KnowledgeBase) -> dict:
     out |= {"space_version": version, "space_piece_version": piece.get("version")}
     if local is None:
         return {**out, "state": "edited_in_monitor", "ref": None, "remote": remote}
-    if remote == local.content.model_dump(mode="json"):
+    if _same_profile(remote, local.content):
         return {**out, "state": "coherent", "ref": local.ref}
     if isinstance(version, int) and version < local.version:
         return {**out, "state": "local_newer", "ref": local.ref,

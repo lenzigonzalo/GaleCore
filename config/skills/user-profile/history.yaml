@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de user_profile y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: user_profile
 versions:
+  - version: "1.1.0"
+    date: 2026-10-06
+    changes: >
+      Criterios y mandato en el perfil (utilidad mínima, edge contra suerte, regla al tocar un límite, qué hace solo
+      el sistema y qué pide aprobación) y conversación guiada con `profile review` (P1-02, WS-0010).
+    feedback: []
   - version: "1.0.0"
     date: 2026-09-29
     changes: >

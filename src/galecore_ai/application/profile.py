@@ -6,6 +6,11 @@ declared"). No real change, no new version. Preferred sources must exist in the
 source registry (GC-AI-0012), so the profile never points at a source the harness
 does not know. A field the user sets again stops being provisional unless the same
 change says otherwise.
+
+``review`` (P1-02, WS-0010) is the checklist behind the guided conversation: which
+criteria are missing, which have no number to measure them, which are placeholders, and
+which strategy parameters still wait for a foundation or an owner decision. It flags; the
+user decides the values and ``set_profile`` records them.
 """
 
 from __future__ import annotations
@@ -24,6 +29,7 @@ from galecore_ai.adapters.profile_store import (
 from galecore_ai.adapters.source_registry_store import SourceRegistryError, load_source_registry
 from galecore_ai.contracts.profile import ProfileContent, ProfileVersion, compute_profile_hash
 from galecore_ai.contracts.regime_record import RecordHost
+from galecore_ai.contracts.strategy import Basis
 
 
 class ProfileError(Exception):
@@ -130,3 +136,70 @@ def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: st
         return doc, store.create(doc)
     except ProfileStoreError as exc:
         raise ProfileError("Refusing to change the profile", [str(exc)]) from exc
+
+
+# What the conversation asks for each criterion, in the user's terms (P1-02).
+_ASK = {
+    "objectives": "¿Qué retorno buscás y sobre qué capital, en qué plazo?",
+    "max_drawdown": "¿Cuánto podés perder desde el máximo antes de frenar todo, en % y en USD?",
+    "risk_limits": "¿Cuánto podés perder por operación y cuánto sumando lo abierto?",
+    "minimum_return": "¿Por debajo de qué retorno anual una estrategia no vale el riesgo (frente a dejar el efectivo)?",
+    "edge_criterion": "¿Cuántas operaciones cerradas y qué resultado necesitás para creer que es edge y no suerte?",
+    "exit_rule": "Cuando se toca un límite (drawdown o riesgo sumado), ¿qué pasa: no abrir más, cerrar, revisar?",
+    "mandate_autonomous": "¿Qué puede hacer el sistema solo, sin preguntarte?",
+    "mandate_needs_approval": "¿Qué tiene que esperar tu aprobación?",
+}
+# Criteria that only count as measurable with a number in them.
+_NEEDS_NUMBER = ("objectives", "max_drawdown", "risk_limits", "minimum_return", "edge_criterion")
+_NUMBER = re.compile(r"\d")
+
+
+def _latest_strategies(kb) -> list[dict]:
+    """Latest version of each strategy: approval and the rules still waiting for a foundation or an owner value."""
+    def number(key: str) -> tuple[int, ...]:
+        return tuple(int(p) if p.isdigit() else -1 for p in key.split("/")[1].split("."))
+
+    latest: dict[str, str] = {}
+    for key in sorted(kb.strategies.versions(), key=number):  # numeric: 1.0.10 comes after 1.0.9
+        latest[key.split("/")[0]] = key
+    out = []
+    for _, key in sorted(latest.items()):  # by name: a stable order
+        try:
+            doc = kb.strategies.load(key)
+            approved = kb.strategies.load_approval(key) is not None
+        except Exception as exc:  # noqa: BLE001 - an unreadable strategy is reported, not fatal to the review
+            out.append({"ref": f"strategy:{key}", "status": "UNREADABLE", "problems": [str(exc)[:200]]})
+            continue
+        if doc is None:
+            continue
+        rules = doc.content.rules
+        out.append({
+            "ref": f"strategy:{key}", "title": doc.content.display_name, "approved": approved,
+            "pending_parameters": [{"rule": r.id, "parameter": r.parameter, "text": r.text}
+                                   for r in rules if r.basis == Basis.PENDING_PARAMETER],
+            "owner_decisions": [{"rule": r.id, "parameter": r.parameter, "text": r.text}
+                                for r in rules if r.basis == Basis.OWNER_DECISION],
+        })
+    return out
+
+
+def review(kb) -> dict:
+    """Checklist for the guided conversation: what is missing, vague or provisional, and what strategies leave open."""
+    doc = _current(kb.profile)
+    content = doc.content if doc else ProfileContent()
+    findings = []
+    for name, ask in _ASK.items():
+        value = getattr(content, name)
+        if value in (None, []):
+            findings.append({"field": name, "issue": "missing", "says": None, "ask": ask})
+            continue
+        items = value if isinstance(value, list) else [value]
+        vague = [v for v in items if name in _NEEDS_NUMBER and not _NUMBER.search(v)]
+        if vague:
+            findings.append({"field": name, "issue": "not_measurable", "says": vague, "ask": ask})
+        if name in content.provisional:
+            findings.append({"field": name, "issue": "provisional", "says": value, "ask": ask})
+    flagged = {f["field"] for f in findings}
+    return {"ref": doc.ref if doc else None, "findings": findings,
+            "measurable": [n for n in _ASK if n not in flagged],
+            "strategies": _latest_strategies(kb)}
