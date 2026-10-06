@@ -172,7 +172,9 @@ namespace DataFeed.Application.App.GammaExposure
         /// El que vence HOY también se descarta pasado el cierre (16:00 ET, el mismo corte de
         /// <see cref="CascadeUtils.YearsToExpiry"/>). Antes sobrevivía hasta la medianoche ET, y una
         /// lectura del GEX a la tarde —la que se usa para preparar el día siguiente— sumaba la gamma
-        /// de contratos que ya habían liquidado: una foto que no existe (BL-011).
+        /// de contratos que ya habían liquidado: una foto que no existe (BL-011). Limitación declarada:
+        /// sin calendario de mercado, en los días de cierre anticipado (13:00 ET) el 0DTE sigue
+        /// entrando hasta las 16:00.
         /// </summary>
         public static List<Expiration> NormalizeExpirations(
             IEnumerable<Expiration> expirations, DateTimeOffset? nowUtc = null)

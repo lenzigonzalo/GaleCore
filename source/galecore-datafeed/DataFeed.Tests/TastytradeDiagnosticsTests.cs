@@ -51,6 +51,32 @@ public class TastytradeDiagnosticsTests
     }
 
     [Fact]
+    public void ElErrorSoloMuestraCodigoYMensaje_NuncaElCuerpoCrudo()
+    {
+        Assert.Equal("not_permitted \"User not permitted access\"", TastytradeApiProvider.BrokerErrorSummary(NotPermitted));
+
+        var conExtra = "{\"error\":{\"code\":\"x\",\"message\":\"y\"},\"token\":\"SECRETO\",\"account\":\"5WT00001\"}";
+        var resumen = TastytradeApiProvider.BrokerErrorSummary(conExtra);
+        Assert.DoesNotContain("SECRETO", resumen);
+        Assert.DoesNotContain("5WT00001", resumen);
+
+        Assert.DoesNotContain("SECRETO", TastytradeApiProvider.BrokerErrorSummary("Bearer SECRETO"));
+    }
+
+    [Fact]
+    public void UnQuoteConHorasSeDeserializaConEllas()
+    {
+        var item = Newtonsoft.Json.Linq.JObject.Parse(
+            "{\"eventType\":\"Quote\",\"eventSymbol\":\"SPY\",\"eventTime\":0,\"bidTime\":1791316800000,\"askTime\":1791316801000,\"bidPrice\":779.5,\"askPrice\":779.6}");
+
+        var q = item.ToObject<DataFeed.Infrastructure.Providers.Tastytrade.Models.QuoteEvent>()!;
+
+        Assert.Equal(1791316800000, q.BidTime);
+        Assert.Equal(1791316801000, q.AskTime);
+        Assert.Equal(0, q.EventTime);
+    }
+
+    [Fact]
     public void ElFeedSetupPideLasHorasDelQuote_YConservaLosCamposQueYaSeUsaban()
     {
         var json = JsonConvert.SerializeObject(DxLinkHandshake.FeedSetup);
