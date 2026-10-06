@@ -31,7 +31,9 @@ namespace DataFeed.Infrastructure.Providers.Sec
         public const string TickersUrl = "https://www.sec.gov/files/company_tickers.json";
         public static readonly TimeSpan TickersCacheFor = TimeSpan.FromHours(24);
 
-        private static (DateTime RetrievedAt, Dictionary<string, SecCompany> ByTicker)? _tickers;
+        // Una referencia a un objeto inmutable: se lee y se reemplaza entera, sin lecturas a medias entre requests.
+        private sealed record TickerList(DateTime RetrievedAt, Dictionary<string, SecCompany> ByTicker);
+        private static volatile TickerList? _tickers;
         private static readonly SemaphoreSlim OneAtATime = new(1, 1);
 
         private readonly HttpClient _httpClient;
@@ -53,10 +55,11 @@ namespace DataFeed.Infrastructure.Providers.Sec
 
         public async Task<SecCompany?> FindTickerAsync(string ticker, CancellationToken cancellationToken)
         {
-            if (_tickers is not { } cached || DateTime.UtcNow - cached.RetrievedAt >= TickersCacheFor)
+            var cached = _tickers;
+            if (cached is null || DateTime.UtcNow - cached.RetrievedAt >= TickersCacheFor)
             {
                 var json = await GetAsync(TickersUrl, "company_tickers", cancellationToken);
-                cached = (DateTime.UtcNow, ParseTickers(json));
+                cached = new TickerList(DateTime.UtcNow, ParseTickers(json));
                 _tickers = cached;
             }
             return cached.ByTicker.GetValueOrDefault(ticker.ToUpperInvariant());
@@ -155,7 +158,7 @@ namespace DataFeed.Infrastructure.Providers.Sec
                     throw new UpstreamSourceException("sec", $"{what} respondió {(int)response.StatusCode}");
                 return await response.Content.ReadAsStringAsync(cancellationToken);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
             {
                 throw new UpstreamSourceException("sec", $"{what}: sin respuesta ({ex.Message})");
             }

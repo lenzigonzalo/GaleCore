@@ -43,8 +43,10 @@ namespace DataFeed.Infrastructure.Providers.Treasury
             if (CurveCache.TryGetValue(year, out var cached) && DateTime.UtcNow - cached.RetrievedAt < CacheFor)
                 return (cached.Days, cached.Sha256, cached.RetrievedAt, true);
             var csv = await GetAsync(CurveUrl(year), $"curva {year}", cancellationToken);
-            // Al empezar el año el CSV del año en curso llega vacío hasta la primera publicación; en un año pasado es error.
-            var days = string.IsNullOrWhiteSpace(csv) && year == DateTime.UtcNow.Year ? new List<TreasuryCurveDay>() : ParseCurve(csv);
+            // El CSV del año en curso llega vacío sólo en los primeros días hábiles de enero, antes de la primera publicación;
+            // en cualquier otro momento un cuerpo vacío es la fuente fallando, no «sin datos».
+            var now = DateTime.UtcNow;
+            var days = string.IsNullOrWhiteSpace(csv) && year == now.Year && now.DayOfYear <= 7 ? new List<TreasuryCurveDay>() : ParseCurve(csv);
             var entry = (DateTime.UtcNow, Sha(csv), days);
             CurveCache[year] = entry;
             return (days, entry.Item2, entry.Item1, false);
@@ -138,7 +140,7 @@ namespace DataFeed.Infrastructure.Providers.Treasury
                     throw new UpstreamSourceException("treasury", $"{what} respondió {(int)response.StatusCode}");
                 return await response.Content.ReadAsStringAsync(cancellationToken);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
             {
                 throw new UpstreamSourceException("treasury", $"{what}: sin respuesta ({ex.Message})");
             }

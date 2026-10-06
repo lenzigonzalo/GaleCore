@@ -118,10 +118,10 @@ namespace DataFeed.Tests
         }
 
         [Fact]
-        public async Task TickerQueLaSecNoListaEsUpstreamNoVacio()
+        public async Task TickerQueLaSecNoListaEsErrorDelPedidoNoVacio()
         {
             var handler = new SecFilingsHandler(Config(), new Factory(Edgar()));
-            var ex = await Assert.ThrowsAsync<UpstreamSourceException>(() => handler.Handle(new SecFilingsRequest { Ticker = "ZZZZ" }, default));
+            var ex = await Assert.ThrowsAsync<ValidationException>(() => handler.Handle(new SecFilingsRequest { Ticker = "ZZZZ" }, default));
             Assert.Contains("ZZZZ", ex.Message);
         }
 

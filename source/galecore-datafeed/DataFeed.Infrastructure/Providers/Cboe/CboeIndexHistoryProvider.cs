@@ -48,7 +48,7 @@ namespace DataFeed.Infrastructure.Providers.Cboe
                     throw new UpstreamSourceException("cboe", $"{index}_History.csv respondió {(int)response.StatusCode}");
                 csv = await response.Content.ReadAsStringAsync(cancellationToken);
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
             {
                 throw new UpstreamSourceException("cboe", $"sin respuesta ({ex.Message})");
             }

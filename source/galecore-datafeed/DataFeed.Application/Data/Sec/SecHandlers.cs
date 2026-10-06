@@ -64,7 +64,7 @@ namespace DataFeed.Application.Data.Sec
             if (!Ticker.IsMatch(ticker))
                 throw new ValidationException($"Ticker o Cik requerido (Ticker inválido: '{q.Ticker}')");
             var company = await provider.FindTickerAsync(ticker, ct)
-                ?? throw new UpstreamSourceException("sec", $"la SEC no lista el ticker {ticker} en company_tickers.json");
+                ?? throw new ValidationException($"La SEC no lista el ticker {ticker} (las clases van con guion: BRK-B); probá con Cik.");
             return (company.Cik, company);
         }
     }
