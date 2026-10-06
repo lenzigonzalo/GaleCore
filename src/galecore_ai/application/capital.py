@@ -45,7 +45,9 @@ def limits(content: ProfileContent | None) -> dict:
     for key, label, words in _LIMITS:
         line = next((x for x in content.risk_limits if any(w in x.lower() for w in words)), None)
         m = re.search(_PCT, line) if line else None
-        out[key] = float(m.group(1).replace(",", ".")) if m else None
+        value = float(m.group(1).replace(",", ".")) if m else None
+        floor_ok = value is not None and (value >= 0 if key == "reservePct" else value > 0)
+        out[key] = value if floor_ok and value <= 100 else None   # out of range is not a limit: listed, not used
         if out[key] is None:
             out["no_leidos"].append(label)
     if out["capital_referencia"] is None:
@@ -87,9 +89,10 @@ def available(exp: dict) -> dict:
 def concentration(exp: dict) -> dict:
     """U-35: aggregated exposure against the limits; several small positions that are one bet, said as one."""
     broken = [c for c in exp["checks"] if not c["ok"]]
+    ok_by_bet = {c["limit"][4:]: c["ok"] for c in exp["checks"] if c["limit"].startswith("bet:")}
     bets = [{"apuesta": b["key"], "posiciones": b["positions"], "riesgo_usd": b["maxRisk"],
              "pct_del_maximo_abierto": b["pctOfMaxOpenRisk"], "vencimientos": b["expirations"],
-             "dentro_del_tope": b["maxRisk"] <= exp["maxBetUsd"] + 1e-9} for b in exp["bets"]]
+             "dentro_del_tope": ok_by_bet.get(b["key"])} for b in exp["bets"]]
     if not bets:
         reading = "Nada abierto en SHADOW: no hay concentración."
     else:
@@ -131,13 +134,16 @@ def split(plan: dict, capital: float) -> dict:
     for a in plan["strategies"]:
         rows.append({"estrategia": a["specName"], "version": a["specVersion"], "subyacente": a["symbol"],
                      "ancho": a.get("width"), "riesgo_por_contrato_usd": a.get("riskPerContract"),
-                     "riesgo_de": "observado en SHADOW" if a["riskSource"] == "observed" else "ancho completo (sin crédito)",
+                     "riesgo_de": (f"promedio de {a.get('observedPositions', 0)} posiciones en SHADOW"
+                                   if a["riskSource"] == "observed" else "ancho completo (sin crédito)"),
+                     "dte_entrada": a.get("entryDte"),
                      "contratos_por_posicion": a["contractsPerPosition"], "posiciones": a["positions"],
                      "riesgo_usd": a["riskUsd"], "por_semana_max": a["positionsPerWeek"],
                      "limita": BINDING.get(a["bindingLimit"], a["bindingLimit"]), "entra": a["fits"]})
         if not a["fits"] and a["bindingLimit"] == "per_trade":
-            alt = (f"un spread de ancho {a['maxWidthThatFits']:g} sí entraría — es una versión nueva de la estrategia "
-                   "y necesita tu aprobación" if a.get("maxWidthThatFits") else "ningún ancho entero entra")
+            alt = (f"un spread de ancho {a['maxWidthThatFits']:g} entraría si cobrara el mismo crédito relativo "
+                   "(estimación) — es una versión nueva de la estrategia y necesita tu aprobación"
+                   if a.get("maxWidthThatFits") else "ningún ancho entero entra")
             notes.append(f"{a['specName']}: con {_usd(capital)} USD un contrato de ancho {a.get('width'):g} arriesga "
                          f"{_usd(a.get('riskPerContract'))} y el máximo por operación es {_usd(a['maxRiskPerTradeUsd'])}: "
                          f"no entra; {alt}. Alternativa: esperar y dejar el capital en efectivo.")
@@ -146,13 +152,14 @@ def split(plan: dict, capital: float) -> dict:
         notes.append("Una sola estrategia en un subyacente: la diversificación posible es en el tiempo (escalera de "
                      "vencimientos), no entre activos; para eso hace falta otra estrategia.")
     weeks = max((s["week"] for s in plan["ladder"]), default=0)
-    ladder = [{"dia_habil": s["day"], "semana": s["week"], "estrategia": s["specName"], "contratos": s["contracts"],
+    ladder = [{"dia_habil": s["day"], "semana": s["week"], "semana_vencimiento": s.get("expiryWeek"),
+               "estrategia": s["specName"], "contratos": s["contracts"],
                "riesgo_usd": s["riskUsd"], "acumulado_usd": s["cumulativeRiskUsd"]} for s in plan["ladder"]]
     if ladder:
         reading = (f"Con {_usd(capital)} USD: reserva {_usd(plan['reserveUsd'])}, riesgo máximo abierto "
                    f"{_usd(plan['maxOpenRiskUsd'])}, por operación {_usd(plan['maxRiskPerTradeUsd'])}. Entran "
                    f"{len(ladder)} posiciones por {_usd(plan['allocatedRiskUsd'])} USD de riesgo, en {weeks} semanas "
-                   f"(a lo sumo {_usd(plan['maxBetUsd'])} por semana de vencimiento); quedan "
+                   f"(a lo sumo {_usd(plan['maxBetUsd'])} por apuesta, con el vencimiento estimado); quedan "
                    f"{_usd(plan['cashUsd'])} sin riesgo.")
     else:
         reading = (f"Con {_usd(capital)} USD no entra ninguna posición con los límites de hoy: queda todo en "
@@ -189,7 +196,10 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None 
                "costos: el riesgo es el máximo del spread, sin comisiones"]
     if exp.get("openNotValued"):
         missing.append(f"{exp['openNotValued']} abierta(s) sin valuación: su no realizado no está")
-    if capital is not None and capital != ref:
+    if capital is None or capital == ref:
+        missing.append(f"el reparto no descuenta lo ya abierto ({_usd(exp['openMaxRisk'])} en riesgo): hoy entra riesgo "
+                       f"nuevo por {_usd(exp['availableForNewRiskUsd'])}, y cada apuesta abierta ya usa parte de su tope")
+    else:
         missing.append(f"el reparto de {_usd(capital)} es aparte de lo abierto en SHADOW (que va contra la referencia "
                        f"de {_usd(ref)})")
     return {"al": exp.get("asOf"), "limites": lim, "disponible": available(exp), "concentracion": concentration(exp),

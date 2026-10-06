@@ -59,6 +59,8 @@ def test_a_limit_the_profile_does_not_declare_is_listed_not_guessed():
     assert lim["reservePct"] is None and "reserva para ajustes" in lim["no_leidos"]
     assert "tope de una apuesta" in lim["no_leidos"] and "capital de referencia" in lim["no_leidos"]
     assert capital.limits(None)["no_leidos"] == ["perfil: no hay perfil"]
+    odd = capital.limits(ProfileContent(risk_limits=[*LIMITS[:3], "una apuesta no pasa el 130 % del riesgo"]))
+    assert odd["maxBetPct"] is None and "tope de una apuesta" in odd["no_leidos"]
 
 
 def test_small_positions_of_the_same_week_are_said_as_one_bet():
@@ -71,6 +73,7 @@ def test_small_positions_of_the_same_week_are_said_as_one_bet():
 def test_a_broken_limit_is_said_with_its_numbers():
     broken = {"limit": "bet:SPY bullish 2026-W47", "used": 1968.0, "max": 1500.0, "headroom": -468.0, "ok": False}
     out = capital.concentration(exposure(checks=[broken]))
+    assert out["apuestas"][0]["dentro_del_tope"] is False      # GaleCore's check, not recomputed
     assert out["fuera_de_limite"] == 1 and "Fuera de límite: apuesta SPY bullish 2026-W47 1.968 de 1.500" in out["lectura"]
 
 
@@ -97,7 +100,7 @@ def test_split_that_does_not_fit_says_why_and_the_alternatives():
     assert out["escalera"] == [] and "no entra ninguna posición" in out["lectura"]
     [note] = [n for n in out["notas"] if "no entra" in n]
     assert "arriesga 456" in note and "máximo por operación es 250" in note
-    assert "ancho 2" in note and "aprobación" in note and "esperar" in note
+    assert "ancho 2 entraría si cobrara el mismo crédito relativo" in note and "aprobación" in note and "esperar" in note
 
 
 def test_report_passes_the_profile_percentages_and_the_amount(kb):  # noqa: F811
@@ -115,6 +118,8 @@ def test_report_passes_the_profile_percentages_and_the_amount(kb):  # noqa: F811
     assert asked[1].startswith("/App/Runtime/Allocation?capital=5000.0&") and asked[1].endswith("&spec=spy_pcs")
     assert out["reparto"]["capital"] == 5000.0 and out["disponible"]["capital"] == 10000.0
     assert any("aparte de lo abierto" in f for f in out["faltantes"]) and "profile:v1" in out["fuente"]
+    same = capital.report(kb, read)
+    assert any("no descuenta lo ya abierto (1.368 en riesgo)" in f for f in same["faltantes"])
 
 
 def test_report_without_limits_says_which_and_does_not_call_galecore(kb):  # noqa: F811
