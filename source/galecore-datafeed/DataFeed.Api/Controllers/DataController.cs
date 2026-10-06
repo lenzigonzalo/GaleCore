@@ -14,6 +14,7 @@ using DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility;
 using DataFeed.Application.Data.Tastytrade.SymbolSearch;
 using DataFeed.Application.Data.Fred.ReleaseDates;
 using DataFeed.Application.Data.Fed.FomcMeetings;
+using DataFeed.Application.Data.Cboe.IndexHistory;
 using DataFeed.Api.Controllers.Dtos;
 
 namespace DataFeed.Controllers
@@ -37,6 +38,10 @@ namespace DataFeed.Controllers
         [Tags("Data.Sources")]
         [HttpGet("Fed/FomcMeetings")]
         public async Task<IActionResult> FomcMeetingsAsync([FromQuery] FomcMeetingsRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Cboe/IndexHistory")]
+        public async Task<IActionResult> CboeIndexHistoryAsync([FromQuery] CboeIndexHistoryRequest request) => await Handle(request);
 
         [Tags("Data.Api")]
         [HttpGet("Tastytrade/MarketData/ByType")]
