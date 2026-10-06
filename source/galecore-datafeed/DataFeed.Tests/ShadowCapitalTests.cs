@@ -41,7 +41,7 @@ public class ShadowCapitalTests
     [Fact]
     public void Exposure_SmallPositionsSameWeekAreOneBet()
     {
-        // Tres de 456 que vencen el mismo semana (lun, mié, vie) = una apuesta de 1.368; otra la semana siguiente.
+        // Tres de 456 que vencen la misma semana (lun, mié, vie) = una apuesta de 1.368; otra la semana siguiente.
         var v = Version("spy_pcs", Open("2026-11-16"), Open("2026-11-18"), Open("2026-11-20"), Open("2026-11-23"));
         var rep = ShadowCapital.Exposure(new[] { v }, Limits(10000), T0);
 
@@ -109,10 +109,12 @@ public class ShadowCapitalTests
         Assert.Equal(4560, plan.AllocatedRiskUsd);
         Assert.Equal(440, plan.UnallocatedRiskUsd);
         Assert.Equal(5440, plan.CashUsd);
-        // Una por día, tres por semana: días 1-3, 6-8, 11-13, 16.
-        Assert.Equal(new[] { 1, 2, 3, 6, 7, 8, 11, 12, 13, 16 }, plan.Ladder.Select(s => s.Day));
+        // Una por día; vencimiento = entrada + 40 días corridos; a lo sumo 3 (1.368) por semana de vencimiento.
+        Assert.Equal(40, a.EntryDte);
+        Assert.Equal(new[] { 1, 2, 3, 4, 5, 8, 9, 10, 13, 14 }, plan.Ladder.Select(s => s.Day));
+        Assert.Equal(new[] { 6, 6, 7, 7, 7, 8, 8, 8, 9, 9 }, plan.Ladder.Select(s => s.ExpiryWeek));
         Assert.Equal(4560, plan.Ladder.Last().CumulativeRiskUsd);
-        Assert.All(plan.Ladder.GroupBy(s => s.Week), g => Assert.True(g.Sum(s => s.RiskUsd) <= plan.MaxBetUsd));
+        Assert.All(plan.Ladder.GroupBy(s => s.ExpiryWeek), g => Assert.True(g.Sum(s => s.RiskUsd) <= plan.MaxBetUsd));
     }
 
     [Fact]
@@ -152,6 +154,38 @@ public class ShadowCapitalTests
             Limits(10000), T0);
         Assert.All(plan.Strategies, a => Assert.Equal(2500, a.BudgetUsd));
         Assert.All(plan.Strategies, a => Assert.Equal(5, a.Positions));
+        // Las dos son put credit en SPY: comparten la apuesta de cada semana de vencimiento (tope 1.500 = 3 de 456).
+        Assert.All(plan.Ladder.GroupBy(s => s.ExpiryWeek), g => Assert.True(g.Sum(s => s.RiskUsd) <= plan.MaxBetUsd));
+        Assert.Equal(2, plan.Ladder.Count(s => s.Day == 1));   // 912 en la semana de vencimiento 6
+        Assert.Equal(1, plan.Ladder.Count(s => s.Day == 2));   // la segunda pasaría 1.500: espera
+    }
+
+    [Fact]
+    public void Allocate_BetCapThatCannotBeMet_ProposesNothing()
+    {
+        // Tope de una apuesta 5 % de 5.000 = 250 < 456: ni una posición entra en una apuesta.
+        var plan = ShadowCapital.Allocate(new[] { Spy(Open("2026-11-16")) }, Limits(10000) with { MaxBetPct = 5 }, T0);
+        var a = plan.Strategies.Single();
+        Assert.False(a.Fits);
+        Assert.Equal("bet", a.BindingLimit);
+        Assert.Empty(plan.Ladder);
+    }
+
+    [Fact]
+    public void Allocate_EdgeCases_NoWidthAndNoBudget()
+    {
+        var noWidth = ShadowCapital.Allocate(new[] { Spy() with { Width = null } }, Limits(10000), T0).Strategies.Single();
+        Assert.Equal("no_width", noWidth.BindingLimit);
+        Assert.False(noWidth.Fits);
+
+        var plan = ShadowCapital.Allocate(new[] { Spy(Open("2026-11-16")) }, Limits(10000) with { ReservePct = 100 }, T0);
+        Assert.Equal(0, plan.RiskBudgetUsd);
+        Assert.Equal(0, plan.Strategies.Single().Positions);
+        Assert.Empty(plan.Ladder);
+
+        var tiny = ShadowCapital.Allocate(new[] { Spy(Open("2026-11-16")) }, Limits(500), T0).Strategies.Single();
+        Assert.False(tiny.Fits);                            // 5 % de 500 = 25: ningún ancho entero entra
+        Assert.Null(tiny.MaxWidthThatFits);
     }
 
     [Theory]

@@ -123,13 +123,15 @@ namespace DataFeed.Application.App.Runtime
         public string RiskSource { get; init; } = "";
         public int ObservedPositions { get; init; }
         public double? AvgCredit { get; init; }
+        /// <summary>DTE de entrada para estimar el vencimiento: promedio observado, o el punto medio de la spec.</summary>
+        public int? EntryDte { get; init; }
         public double BudgetUsd { get; init; }
         /// <summary>Límite por operación que aplica: el menor entre el del capital y el de la spec.</summary>
         public double MaxRiskPerTradeUsd { get; init; }
         public int ContractsPerPosition { get; init; }
         public int Positions { get; init; }
         public double RiskUsd { get; init; }
-        /// <summary>Posiciones por semana de vencimiento sin pasar el tope de una apuesta.</summary>
+        /// <summary>Posiciones de esta estrategia que entran solas en una apuesta (el tope se comparte en la escalera).</summary>
         public int PositionsPerWeek { get; init; }
         /// <summary>Qué limita la cantidad: per_trade, budget, max_concurrent o no_width.</summary>
         public string BindingLimit { get; init; } = "";
@@ -143,6 +145,8 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Día hábil desde el inicio (1 = la primera entrada). No es una fecha: no conoce feriados.</summary>
         public int Day { get; init; }
         public int Week { get; init; }
+        /// <summary>Semana estimada de vencimiento, contada desde la semana de inicio (1 = la del inicio).</summary>
+        public int ExpiryWeek { get; init; }
         public string SpecName { get; init; } = "";
         public int Contracts { get; init; }
         public double RiskUsd { get; init; }
@@ -278,7 +282,18 @@ namespace DataFeed.Application.App.Runtime
             double budget = Math.Max(0, limits.RiskBudgetUsd);
             double share = strategies.Count == 0 ? 0 : budget / strategies.Count;
             var allocations = strategies.Select(s => AllocateOne(s, share, limits)).ToList();
-            var ladder = Ladder(strategies, allocations);
+            var ladder = Ladder(strategies, allocations, limits.MaxBetUsd);
+            // Lo que la escalera no pudo ubicar sin pasar el tope de una apuesta no se propone.
+            allocations = allocations.Select(a =>
+            {
+                int placed = ladder.Count(st => st.SpecName == a.SpecName);
+                if (!a.Fits || placed == a.Positions) return a;
+                return a with
+                {
+                    Positions = placed, RiskUsd = Math.Round(ladder.Where(st => st.SpecName == a.SpecName).Sum(st => st.RiskUsd), 2),
+                    BindingLimit = "bet", Fits = placed > 0,
+                };
+            }).ToList();
             double allocated = Math.Round(allocations.Sum(a => a.RiskUsd), 2);
             return new AllocationPlan
             {
@@ -299,7 +314,8 @@ namespace DataFeed.Application.App.Runtime
                     "El riesgo es el máximo del spread ((ancho − crédito) × 100); el stop de la estrategia puede cortar antes.",
                     "El presupuesto de riesgo se reparte en partes iguales entre las estrategias pedidas.",
                     "Escalera en días hábiles desde el inicio, al ritmo de la spec (min_minutes_between_entries); sin feriados.",
-                    "Las entradas de una misma semana vencen la misma semana: por eso se topan por semana con el máximo de una apuesta.",
+                    "Vencimiento estimado = día de entrada + DTE de entrada (promedio observado o punto medio de la spec), arrancando un lunes; el runtime elige el vencimiento real dentro de la ventana de la spec.",
+                    "El tope de una apuesta se comparte entre estrategias del mismo subyacente y dirección.",
                     "El reparto es para el capital pedido, aparte de lo que ya está abierto en SHADOW.",
                 },
             };
@@ -318,6 +334,8 @@ namespace DataFeed.Application.App.Runtime
                 SpecName = s.SpecName, SpecVersion = s.SpecVersion, Symbol = s.Symbol, Structure = s.Structure,
                 Width = s.Width, RiskPerContract = rpc, RiskSource = observed.Count > 0 ? "observed" : "width",
                 ObservedPositions = observed.Count, AvgCredit = avgCredit,
+                EntryDte = observed.Count > 0 ? (int)Math.Round(observed.Average(p => p.EntryDte))
+                    : s.MinDte != null && s.MaxDte != null ? (s.MinDte + s.MaxDte) / 2 : s.MinDte ?? s.MaxDte,
                 BudgetUsd = Math.Round(budget, 2), MaxRiskPerTradeUsd = perTrade,
             };
             if (rpc is not > 0) return baseAlloc with { BindingLimit = "no_width", RiskSource = "none" };
@@ -349,35 +367,46 @@ namespace DataFeed.Application.App.Runtime
             };
         }
 
+        /// <summary>Horizonte de la escalera: si en este plazo no entra una posición, no se propone.</summary>
+        public const int LadderHorizonDays = 260;
+
         /// <summary>
-        /// Las entradas de cada estrategia al ritmo de su spec, con a lo sumo PositionsPerWeek por semana (tope de una
-        /// apuesta); cuando la semana se llena, la siguiente entrada pasa al primer día de la semana que viene.
+        /// Escalera compartida entre estrategias: cada día hábil, cada estrategia que todavía tiene posiciones y a la
+        /// que su ritmo (min_minutes_between_entries) le permite entrar, entra si la apuesta de su vencimiento
+        /// (subyacente + dirección + semana de vencimiento) no pasa el tope. El vencimiento se estima como el día de
+        /// entrada + el DTE de entrada (observado, o el punto medio de la spec), en días corridos desde un lunes.
         /// </summary>
-        private static List<LadderStep> Ladder(IReadOnlyList<StrategyTerms> strategies, List<StrategyAllocation> allocations)
+        private static List<LadderStep> Ladder(IReadOnlyList<StrategyTerms> strategies, List<StrategyAllocation> allocations,
+            double maxBet)
         {
             var steps = new List<LadderStep>();
-            for (int i = 0; i < allocations.Count; i++)
+            var betRisk = new Dictionary<(string, string, int), double>();
+            var left = allocations.Select(a => a.Fits ? a.Positions : 0).ToArray();
+            var nextDay = allocations.Select(_ => 1).ToArray();
+            for (int day = 1; day <= LadderHorizonDays && left.Any(n => n > 0); day++)
             {
-                var a = allocations[i];
-                if (!a.Fits) continue;
-                int cadence = Math.Max(1, (int)Math.Ceiling((strategies[i].MinMinutesBetweenEntries ?? 1440) / 1440.0));
-                int day = 1, inWeek = 0, week = 1;
-                for (int n = 0; n < a.Positions; n++)
+                int week = (day - 1) / TradingDaysPerWeek, calendar = week * 7 + (day - 1) % TradingDaysPerWeek;
+                for (int i = 0; i < allocations.Count; i++)
                 {
-                    int w = (day - 1) / TradingDaysPerWeek + 1;
-                    if (w != week) { week = w; inWeek = 0; }
-                    if (inWeek >= a.PositionsPerWeek) { week++; inWeek = 0; day = (week - 1) * TradingDaysPerWeek + 1; }
+                    var a = allocations[i];
+                    if (left[i] == 0 || day < nextDay[i]) continue;
+                    double risk = Math.Round(a.ContractsPerPosition * a.RiskPerContract!.Value, 2);
+                    int expiryWeek = (calendar + (a.EntryDte ?? 0)) / 7;
+                    var key = (a.Symbol, Direction(a.Structure), expiryWeek);
+                    double used = betRisk.GetValueOrDefault(key);
+                    if (used + risk > maxBet + 1e-9) continue;
+                    betRisk[key] = used + risk;
                     steps.Add(new LadderStep
                     {
-                        Day = day, Week = week, SpecName = a.SpecName, Contracts = a.ContractsPerPosition,
-                        RiskUsd = Math.Round(a.ContractsPerPosition * a.RiskPerContract!.Value, 2),
+                        Day = day, Week = week + 1, ExpiryWeek = expiryWeek + 1, SpecName = a.SpecName,
+                        Contracts = a.ContractsPerPosition, RiskUsd = risk,
                     });
-                    inWeek++;
-                    day += cadence;
+                    left[i]--;
+                    nextDay[i] = day + Math.Max(1, (int)Math.Ceiling((strategies[i].MinMinutesBetweenEntries ?? 1440) / 1440.0));
                 }
             }
             double cumulative = 0;
-            return steps.OrderBy(s => s.Day).ThenBy(s => s.SpecName).Select(s =>
+            return steps.Select(s =>
             {
                 cumulative += s.RiskUsd;
                 return s with { CumulativeRiskUsd = Math.Round(cumulative, 2) };
