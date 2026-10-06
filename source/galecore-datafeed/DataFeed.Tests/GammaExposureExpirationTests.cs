@@ -64,15 +64,41 @@ public class GammaExposureExpirationTests
     }
 
     /// <summary>
-    /// A las 20:00 ET del 25 en Nueva York ya es el 26 en UTC. Si la referencia fuera UTC, el
-    /// vencimiento de hoy se declararía vencido con el mercado recién cerrado.
+    /// A las 20:30 ET del 25 en Nueva York ya es el 26 en UTC. Si la referencia fuera UTC, el
+    /// vencimiento del 26 se contaría como 0DTE con el mercado de mañana todavía sin abrir.
     /// </summary>
     [Fact]
     public void LaReferenciaEsLaFechaDeNuevaYork_NoLaUtc()
     {
         var nocheEnEt = new DateTimeOffset(2026, 8, 26, 0, 30, 0, TimeSpan.Zero); // 20:30 ET del 25
 
-        var vivas = GammaExposureHandler.NormalizeExpirations(new[] { E("2026-08-25", 0) }, nocheEnEt);
+        var vivas = GammaExposureHandler.NormalizeExpirations(new[] { E("2026-08-26", 0) }, nocheEnEt);
+
+        Assert.Equal(1, Assert.Single(vivas).DaysToExpiration);
+    }
+
+    /// <summary>
+    /// BL-011: pasado el cierre (16:00 ET) el que vence hoy ya liquidó. Antes sobrevivía hasta la
+    /// medianoche ET y la lectura de la tarde sumaba su gamma muerta al agregado.
+    /// </summary>
+    [Fact]
+    public void PasadoElCierre_ElQueVenceHoyYaNoEntra()
+    {
+        var chain = new[] { E("2026-08-25", 0), E("2026-08-26", 1) };
+        var cierre = new DateTimeOffset(2026, 8, 25, 20, 0, 0, TimeSpan.Zero);    // 16:00 ET
+        var tarde = new DateTimeOffset(2026, 8, 25, 22, 30, 0, TimeSpan.Zero);    // 18:30 ET
+
+        Assert.Equal("2026-08-26", Assert.Single(GammaExposureHandler.NormalizeExpirations(chain, cierre)).ExpirationDate);
+        Assert.Equal(1, Assert.Single(GammaExposureHandler.NormalizeExpirations(chain, tarde)).DaysToExpiration);
+    }
+
+    /// <summary>Un minuto antes del cierre el 0DTE sigue vivo: el corte es el cierre, no la tarde.</summary>
+    [Fact]
+    public void UnMinutoAntesDelCierre_ElCeroDteSigue()
+    {
+        var casiCierre = new DateTimeOffset(2026, 8, 25, 19, 59, 0, TimeSpan.Zero); // 15:59 ET
+
+        var vivas = GammaExposureHandler.NormalizeExpirations(new[] { E("2026-08-25", 0) }, casiCierre);
 
         Assert.Equal(0, Assert.Single(vivas).DaysToExpiration);
     }

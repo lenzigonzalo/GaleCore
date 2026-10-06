@@ -54,6 +54,9 @@ namespace DataFeed.Application.App.Gex
 
         /// <summary>Parámetros efectivos del barrido, tal como salieron del nodo `gex` del JSON.</summary>
         public GexScanConfig Config { get; set; } = new();
+
+        /// <summary>Escala de CallGex/PutGex/NetGex de Global, ByExpiry y sus strikes (BL-002).</summary>
+        public GexUnits Units => GexUnits.Current;
     }
 
     public class GexScope
