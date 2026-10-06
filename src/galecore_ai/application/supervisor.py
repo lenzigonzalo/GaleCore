@@ -33,6 +33,9 @@ from galecore_ai.contracts.supervision import NEEDS_DECISION, OPTIONS, Alert, Al
 
 NEAR_STOP_MULTIPLE = 1.0        # loss at mid >= 1x credit: half way to the 2x stop (owner 05/10)
 NO_PRICE_MINUTES = 10           # in session, without a valuation for longer than this (owner 05/10)
+EVENT_BUSINESS_DAYS = 2         # an event before expiration is announced this many business days ahead (owner 05/10)
+# FRED releases GaleCore's calendar knows (same set as the market story): employment, CPI, PPI, GDP, PCE, retail.
+MACRO_RELEASES = "50,10,46,53,54,9"
 NEW_YORK = ZoneInfo("America/New_York")
 SESSION = ((9, 30), (16, 0))
 
@@ -41,6 +44,9 @@ Reader = Callable[[str], object]    # GET <path> on GaleCore's API -> parsed JSO
 
 class SupervisorError(Exception):
     """GaleCore could not be read: the pass did not happen (never reported as «nothing to report»)."""
+
+
+CALENDAR_TIMEOUT_S = 120.0      # GaleCore asks FRED on a cold cache (observed > 20 s on 06/10); later calls are cached
 
 
 def api_reader(base_url: str | None = None, api_key: str | None = None, timeout: float = 20.0) -> Reader:
@@ -53,7 +59,8 @@ def api_reader(base_url: str | None = None, api_key: str | None = None, timeout:
 
     def get(path: str):
         try:
-            r = httpx.get(base + path, headers=headers, timeout=timeout)
+            r = httpx.get(base + path, headers=headers,
+                          timeout=CALENDAR_TIMEOUT_S if path.startswith("/Data/") else timeout)
         except httpx.HTTPError as exc:
             raise SupervisorError(f"GaleCore no respondió en {base}: {type(exc).__name__}") from exc
         if r.status_code != 200:
@@ -129,7 +136,28 @@ def _spec(kb: KnowledgeBase, version_hash: str) -> tuple[str | None, dict]:
     return None, {}
 
 
-def evaluate(position: dict, *, strategy: str, strategy_ref: str | None, spec: dict, now: datetime) -> list[dict]:
+def _business_days(start: date, end: date) -> int:
+    """Weekdays after ``start`` up to and including ``end`` (NYSE holidays not known)."""
+    n, d = 0, start
+    while d < end:
+        d += timedelta(days=1)
+        n += d.weekday() < 5
+    return n
+
+
+def calendar(read: Reader, today: date) -> list[tuple[date, str]]:
+    """Macro releases and FOMC decisions from today on (the window covers a 45-day position). Raises on failure."""
+    end = today + timedelta(days=60)
+    rel = read(f"/Data/Fred/ReleaseDates?From={today.isoformat()}&To={end.isoformat()}&ReleaseIds={MACRO_RELEASES}")
+    fomc = read(f"/Data/Fed/FomcMeetings?Years={today.year},{end.year}")
+    events = [(date.fromisoformat(r["date"]), r["releaseName"]) for r in (rel or {}).get("data") or []]
+    events += [(date.fromisoformat(m["end"]), "Decisión del FOMC") for m in (fomc or {}).get("data") or []
+               if m.get("end") and m["end"] >= today.isoformat()]
+    return sorted(set(events))
+
+
+def evaluate(position: dict, *, strategy: str, strategy_ref: str | None, spec: dict, now: datetime,
+             events: list[tuple[date, str]] | None = None) -> list[dict]:
     """The conditions this position meets now, as alert drafts (no id or hash yet). Pure: no I/O."""
     exits = (spec.get("exits") or {}).get("deterministic") or {}
     max_loss = (spec.get("risk_limits") or {}).get("max_loss_per_trade_usd")
@@ -179,6 +207,22 @@ def evaluate(position: dict, *, strategy: str, strategy_ref: str | None, spec: d
                              "problems": "; ".join(position.get("valuationProblems") or []) or None},
                     "regla": f"Más de {NO_PRICE_MINUTES} min sin precio en sesión: las salidas no se evalúan",
                     "propuesta": "Revisar la conexión de datos de GaleCore."})
+    expiration = next((leg.get("expiration") for leg in legs if leg.get("expiration")), None)
+    today = now.astimezone(NEW_YORK).date()
+    for day, name in events or []:
+        if not expiration or not (today <= day <= date.fromisoformat(expiration)):
+            continue
+        ahead = _business_days(today, day)
+        if ahead > EVENT_BUSINESS_DAYS:
+            continue
+        when = "hoy" if ahead == 0 else ("mañana" if ahead == 1 else f"en {ahead} días hábiles")
+        out.append({**base, "key": f"event:{pid}:{day.isoformat()}:{name}", "kind": AlertKind.EVENT,
+                    "motivo": f"{label}: {name} {when} ({day:%d/%m}), antes del vencimiento.",
+                    "dato": {"event": name, "event_date": day.isoformat(), "business_days": ahead,
+                             "dte": position.get("currentDte"), "unrealized_pnl_usd": position.get("unrealizedPnl")},
+                    "regla": f"E4 de la estrategia: datos macro y FOMC antes del vencimiento, aviso a "
+                             f"{EVENT_BUSINESS_DAYS} días hábiles (calendario de GaleCore; sin feriados ni balances)",
+                    "propuesta": "Tener presente el dato; las salidas siguen siendo las de la regla."})
     risk = position.get("maxRisk")
     if isinstance(max_loss, int | float) and isinstance(risk, int | float) and risk > max_loss:
         out.append({**base, "key": f"risk_limit:{pid}", "kind": AlertKind.RISK_LIMIT,
@@ -203,6 +247,7 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
         raise SupervisorError(f"GaleCore no se pudo leer: {type(exc).__name__}") from exc
     known = {a.key for a in alerts(kb)}
     new, checked, problems = [], 0, []
+    events: list[tuple[date, str]] | None = None
     if not isinstance(instances, list):
         raise SupervisorError("GaleCore devolvió instancias sin forma de lista")
     for inst in instances:
@@ -220,8 +265,15 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
         strategy_ref, spec = _spec(kb, inst.get("versionHash", ""))
         for pos in positions:                # a stopped instance's open positions still exit (observed 05/10)
             checked += 1
+            if events is None and pos.get("status") == "OPEN":
+                try:
+                    events = calendar(read, now.astimezone(NEW_YORK).date())
+                except Exception as exc:  # noqa: BLE001 - without calendar the other rules still run; declared
+                    events = []
+                    problems.append(f"calendario: {str(exc)[:160]}")
             try:
-                drafts = evaluate(pos, strategy=inst.get("specName", ""), strategy_ref=strategy_ref, spec=spec, now=now)
+                drafts = evaluate(pos, strategy=inst.get("specName", ""), strategy_ref=strategy_ref, spec=spec, now=now,
+                                  events=events if pos.get("status") == "OPEN" else None)
             except (TypeError, ValueError, KeyError) as exc:   # a position GaleCore sent in another shape
                 problems.append(f"posición {str(pos.get('positionId'))[:8]}: no se pudo leer ({str(exc)[:120]})")
                 continue
