@@ -7,7 +7,8 @@ import { fetchSpace, saveSpaceItem, SpaceItem } from '../../api/space';
  *
  * GaleCore-AI publica la pieza `agent/supervisor` cada 5 minutos desde la PC donde corre. Trae los últimos avisos
  * con el motivo, el dato, la regla, la propuesta, las opciones y la decisión, si ya la hay. Todo viene calculado:
- * acá sólo se muestra. Responder escribe `responses[<aviso>]` en la pieza y GaleCore-AI lo guarda como decisión en
+ * acá sólo se muestra. Lo informativo es una línea (el detalle, con un click); sólo lo que pide decisión trae
+ * botones, sin campos de texto (owner 06/10). Responder escribe `responses[<aviso>]` en la pieza y GaleCore-AI lo guarda como decisión en
  * el proyecto de la estrategia en la próxima pasada. En SHADOW no ejecuta nada.
  */
 
@@ -15,7 +16,7 @@ interface Decision { choice: string; words: string; expected: string; review_by:
 interface Alert {
   id: string; kind: string; strategy: string; strategy_ref: string | null; detected_at: string; motivo: string;
   dato: Record<string, string | number | null>; regla: string; propuesta: string; options: string[];
-  decision: Decision | null;
+  needs_decision: boolean; decision: Decision | null;
 }
 interface Response { choice: string; words: string; expected: string; review_by: string | null; at: string }
 interface Piece {
@@ -27,9 +28,6 @@ const KEY = 'supervisor';
 const REFRESH_MS = 60_000;
 const SEEN = 'galecore.supervisor.seen';
 
-const KIND: Record<string, string> = {
-  closed: 'Cierre de SHADOW', near_stop: 'Cerca del stop', no_price: 'Sin precio', risk_limit: 'Límite de riesgo',
-};
 const DATO: Record<string, string> = {
   exit_reason: 'Motivo de salida', entry_credit: 'Crédito', exit_debit: 'Débito de salida',
   realized_pnl_usd: 'Resultado (USD)', dte: 'DTE', exit_at: 'Salida', spread_value: 'Valor del spread',
@@ -70,84 +68,50 @@ function when(iso?: string | null): string {
 }
 
 const muted: React.CSSProperties = { fontSize: 12, color: 'var(--text-muted)' };
-const input: React.CSSProperties = {
-  width: '100%', fontSize: 13, padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border-dark)',
-  backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)',
-};
 
+/** Una línea: qué pasó. Click: el detalle. Sólo lo que pide decisión trae botones (un click, sin texto). */
 function AlertCard({ alert, sent, error, onAnswer }: {
   alert: Alert; sent?: Response; error?: string; onAnswer: (r: Omit<Response, 'at'>) => Promise<void>;
 }) {
-  const [choice, setChoice] = useState<string | null>(null);
-  const [words, setWords] = useState('');
-  const [expected, setExpected] = useState('');
-  const [reviewBy, setReviewBy] = useState('');
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const done = alert.decision;
+  const ask = alert.needs_decision && !done && !sent;
 
   return (
-    <div style={{ borderTop: '1px solid var(--border-dark)', padding: '12px 0' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: 12, color: 'var(--yellow-gc)' }}>{KIND[alert.kind] ?? alert.kind}</span>
+    <div style={{ borderTop: '1px solid var(--border-dark)', padding: '8px 0' }}>
+      <div onClick={() => setOpen(o => !o)} style={{ cursor: 'pointer', display: 'flex', gap: 8, alignItems: 'baseline' }}>
+        <span style={{ fontSize: 13, color: ask ? 'var(--yellow-gc)' : 'var(--text-primary)', flex: 1 }}>{alert.motivo}</span>
         <span style={muted}>{when(alert.detected_at)}</span>
       </div>
-      <div style={{ fontSize: 14, color: 'var(--text-primary)', margin: '4px 0' }}>{alert.motivo}</div>
-      <table style={{ fontSize: 12, borderCollapse: 'collapse', margin: '4px 0 6px' }}>
-        <tbody>
-          {Object.entries(alert.dato).filter(([, v]) => v !== null && v !== '').map(([k, v]) => (
-            <tr key={k}>
-              <td style={{ color: 'var(--text-muted)', paddingRight: 12 }}>{DATO[k] ?? k}</td>
-              <td style={{ color: 'var(--text-secondary)' }}>{k.endsWith('_at') ? when(String(v)) : String(v)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <div style={muted}>Regla: {alert.regla}</div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '4px 0 8px' }}>{alert.propuesta}</div>
-
-      {done ? (
-        <div style={{ fontSize: 13, color: 'var(--green)' }}>
-          Decidido: <b>{done.choice}</b>{done.words && done.words !== done.choice ? ` — «${done.words}»` : ''}
-          {done.review_by ? ` · revisar el ${done.review_by}` : ''}
+      {open && (
+        <div style={{ ...muted, margin: '4px 0' }}>
+          {Object.entries(alert.dato).filter(([, v]) => v !== null && v !== '')
+            .map(([k, v]) => `${DATO[k] ?? k}: ${k.endsWith('_at') ? when(String(v)) : String(v)}`).join(' · ')}
+          <div>Regla: {alert.regla}</div>
         </div>
-      ) : sent ? (
-        <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-          Respuesta enviada (<b>{sent.choice}</b>). Se guarda en el proyecto en la próxima pasada (hasta 5 min).
-        </div>
-      ) : (
-        <>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
-            {alert.options.map(o => (
-              <button key={o} onClick={() => setChoice(o)}
-                style={{ fontSize: 12, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
-                  border: `1px solid ${choice === o ? 'var(--blue-gc)' : 'var(--border-dark)'}`,
-                  color: choice === o ? 'var(--blue-gc)' : 'var(--text-secondary)', background: 'transparent' }}>
-                {o}
-              </button>
-            ))}
-          </div>
-          {choice && (
-            <div style={{ display: 'grid', gap: 6 }}>
-              <input style={input} placeholder="Por qué (tus palabras)" value={words} onChange={e => setWords(e.target.value)} />
-              <input style={input} placeholder="Qué esperás que pase" value={expected} onChange={e => setExpected(e.target.value)} />
-              <label style={muted}>Revisar el
-                <input type="date" style={{ ...input, width: 'auto', marginLeft: 8 }} value={reviewBy}
-                  onChange={e => setReviewBy(e.target.value)} />
-              </label>
-              <button disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try { await onAnswer({ choice, words, expected, review_by: reviewBy || null }); } finally { setBusy(false); }
-                }}
-                style={{ justifySelf: 'start', fontSize: 13, padding: '6px 14px', borderRadius: 6, cursor: 'pointer',
-                  border: '1px solid var(--blue-gc)', color: 'var(--blue-gc)', background: 'transparent' }}>
-                {busy ? 'Guardando…' : 'Guardar decisión'}
-              </button>
-            </div>
-          )}
-        </>
       )}
-      {error && <div style={{ fontSize: 12, color: 'var(--red-gc)', marginTop: 6 }}>No se guardó: {error}</div>}
+      {ask && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+          {alert.options.map(o => (
+            <button key={o} disabled={busy}
+              onClick={async () => {
+                setBusy(true);
+                try { await onAnswer({ choice: o, words: '', expected: '', review_by: null }); } finally { setBusy(false); }
+              }}
+              style={{ fontSize: 12, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
+                border: '1px solid var(--border-dark)', color: 'var(--text-secondary)', background: 'transparent' }}>
+              {o}
+            </button>
+          ))}
+        </div>
+      )}
+      {alert.needs_decision && (done || sent) && (
+        <div style={{ ...muted, marginTop: 4 }}>
+          {done ? `Decidido: ${done.choice}` : `Enviado: ${sent!.choice} (se guarda en ≤ 5 min)`}
+        </div>
+      )}
+      {error && <div style={{ fontSize: 12, color: 'var(--red-gc)', marginTop: 4 }}>No se guardó: {error}</div>}
     </div>
   );
 }
@@ -166,7 +130,7 @@ export function SupervisorAlerts() {
       let p: Piece = {};
       try { p = it ? JSON.parse(it.content) : {}; } catch { p = {}; }
       setItem(it); setPiece(p); setError(null);
-      const fresh = (p.alerts ?? []).filter(a => !a.decision && !seen.current.has(a.id));
+      const fresh = (p.alerts ?? []).filter(a => !a.decision && !seen.current.has(a.id));  // todo aviso nuevo suena una vez
       if (fresh.length) {
         chime(); setOpen(true);
         fresh.forEach(a => seen.current.add(a.id)); writeSeen(seen.current);
@@ -203,7 +167,7 @@ export function SupervisorAlerts() {
   };
 
   const alerts = piece.alerts ?? [];
-  const pending = alerts.filter(a => !a.decision && !piece.responses?.[a.id]).length;
+  const pending = alerts.filter(a => a.needs_decision && !a.decision && !piece.responses?.[a.id]).length;
   const failed = !!piece.last_run?.failed;          // lo decide GaleCore-AI: la última revisión no leyó todo
   if (!item) return null;
 
@@ -236,7 +200,7 @@ export function SupervisorAlerts() {
             backgroundColor: 'var(--bg-secondary)',
             color: failed ? 'var(--red-gc)' : pending ? 'var(--yellow-gc)' : 'var(--text-secondary)',
             border: `1px solid ${failed ? 'var(--red-border)' : pending ? 'var(--yellow-border)' : 'var(--border-dark)'}` }}>
-          {pending ? `${pending} aviso${pending > 1 ? 's' : ''} sin respuesta` : 'Avisos'}
+          {pending ? `${pending} para decidir` : 'Avisos'}
           {failed ? ' · la última revisión falló' : ''}
         </button>
       </div>
