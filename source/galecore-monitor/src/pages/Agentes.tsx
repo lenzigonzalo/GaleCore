@@ -26,7 +26,7 @@ interface Agent {
 const REFRESH_MS = 60_000;
 
 const WHAT: Record<string, string> = {
-  market_watch: 'Vigila el mercado', daily_attention: 'Briefing diario', strategy_followup: 'Seguimiento de estrategia',
+  supervisor: 'Supervisor de SHADOW', market_watch: 'Vigila el mercado', daily_attention: 'Briefing diario', strategy_followup: 'Seguimiento de estrategia',
 };
 
 // Estado del último resultado (freshness de GaleCore-AI) en palabras del trader.
@@ -93,6 +93,8 @@ function StatePill({ a }: { a: Agent }) {
 /** El botón de prender/apagar, o el pedido que espera aplicarse en la PC. */
 function Toggle({ a, onRequest, busy }: { a: Agent; onRequest: (status: 'active' | 'paused') => void; busy: boolean }) {
   if (a.status === 'cancelled') return <span style={muted}>Cancelado</span>;
+  // El supervisor (WS-0007) corre con la publicación de cada 5 minutos: no es una tarea que se prenda o apague.
+  if (a.capability === 'supervisor') return <span style={muted}>Siempre activo</span>;
   const pending = a.request && a.request.status !== a.status ? a.request.status : null;
   if (pending) {
     return (
