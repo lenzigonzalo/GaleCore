@@ -34,6 +34,7 @@ const DATO: Record<string, string> = {
   loss_multiple: 'Pérdida / crédito', unrealized_pnl_usd: 'P&L abierto (USD)', valued_at: 'Valuado',
   last_valued_at: 'Última valuación', problems: 'Problemas', max_risk_usd: 'Riesgo máximo (USD)',
   limit_usd: 'Límite (USD)', event: 'Dato', event_date: 'Fecha', business_days: 'Días hábiles',
+  symbol: 'Símbolo', metric: 'Medida', value: 'Valor', threshold: 'Umbral', condition: 'Condición',
 };
 
 function readSeen(): Set<string> {
