@@ -22,6 +22,7 @@ class AlertKind(str, Enum):
     NEAR_STOP = "near_stop"      # loss at mid >= 1x the credit: half way to the 2x stop
     NO_PRICE = "no_price"        # in session, the position could not be valued for more than 10 minutes
     RISK_LIMIT = "risk_limit"    # the position's max risk is above the spec's max loss per trade
+    EVENT = "event"              # a macro release or FOMC decision before expiration, 2 business days ahead (E4)
 
 
 # What the owner can answer to each kind of alert. The first one is what the rules already do.
@@ -30,6 +31,7 @@ OPTIONS: dict[AlertKind, list[str]] = {
     AlertKind.NEAR_STOP: ["dejar que decida la regla", "cerrar ahora"],
     AlertKind.NO_PRICE: ["esperar", "revisar GaleCore"],
     AlertKind.RISK_LIMIT: ["aceptar", "revisar el tamaño"],
+    AlertKind.EVENT: ["mantener", "cerrar antes del dato"],
 }
 
 

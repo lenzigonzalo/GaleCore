@@ -31,10 +31,16 @@ def position(pid="aaaaaaaa-1", **kw):
     return {**base, **kw}
 
 
-def reader(spec_hash, positions, *, fail=False):
+def reader(spec_hash, positions, *, fail=False, releases=(), fomc=(), calendar_fails=False):
     def read(path):
         if fail:
             raise supervisor.SupervisorError("GaleCore no respondió")
+        if path.startswith("/Data/"):
+            if calendar_fails:
+                raise supervisor.SupervisorError("GET calendario -> HTTP 502")
+            if path.startswith("/Data/Fred/ReleaseDates"):
+                return {"data": [{"date": d, "releaseName": n} for d, n in releases]}
+            return {"data": [{"start": d, "end": d} for d in fomc]}
         if path == "/App/Runtime/Instances":
             return [{"instanceId": IID, "mode": "SHADOW", "lifecycleState": "RUNNING", "specName": NAME,
                      "versionHash": spec_hash}]
@@ -245,3 +251,42 @@ def test_a_damaged_alert_fails_the_supervisor_not_the_other_agents(kb, research_
     piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
     assert piece["state"] == "FAILED" and "dañado" in piece["state_detail"] and len(piece["alerts"]) == 1
     assert out["responses"][0]["result"] == "refused"
+
+
+# ── E4: a data release or FOMC before expiration (IN_SESSION is Wednesday 23/09) ─
+
+
+def test_a_release_two_business_days_ahead_is_one_informative_line(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    rd = reader(doc.spec_hash, [position()], releases=[("2026-09-25", "Consumer Price Index")])
+    out = supervisor.scan(kb, rd, IN_SESSION)
+    [alert] = supervisor.alerts(kb)
+    assert out["new"] == [alert.id] and alert.kind.value == "event" and "en 2 días hábiles (25/09)" in alert.motivo
+    assert supervisor.view(kb)[0]["needs_decision"] is False
+    later = IN_SESSION + timedelta(hours=3)
+    fresh = position(lastValuedAt=later.isoformat())
+    rd = reader(doc.spec_hash, [fresh], releases=[("2026-09-25", "Consumer Price Index")])
+    assert supervisor.scan(kb, rd, later)["new"] == []                                     # once per event
+
+
+def test_events_too_far_or_after_expiration_are_quiet(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    rd = reader(doc.spec_hash, [position()], releases=[("2026-09-28", "Consumer Price Index")],   # 3 business days
+                fomc=["2026-11-20"])                                                          # after 13/11
+    assert supervisor.scan(kb, rd, IN_SESSION)["new"] == []
+
+
+def test_fomc_over_a_weekend_counts_business_days(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    friday = IN_SESSION + timedelta(days=2)
+    pos = position(lastValuedAt=friday.isoformat())
+    supervisor.scan(kb, reader(doc.spec_hash, [pos], fomc=["2026-09-28"]), friday)                   # next Monday
+    [alert] = supervisor.alerts(kb)
+    assert "Decisión del FOMC mañana" in alert.motivo
+
+
+def test_without_calendar_the_other_rules_still_run_and_the_pass_is_partial(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    out = supervisor.scan(kb, reader(doc.spec_hash, [position(maxRisk=960.0)], calendar_fails=True), IN_SESSION)
+    assert [a.kind.value for a in supervisor.alerts(kb)] == ["risk_limit"]
+    assert out["problems"] and out["problems"][0].startswith("calendario")
