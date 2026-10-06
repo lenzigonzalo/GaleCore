@@ -274,9 +274,9 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
     from galecore_ai.application import supervisor as sv
 
     shown = sv.view(kb, ALERTS_SHOWN)
-    pending = [a for a in shown if a["decision"] is None]
+    pending = [a for a in shown if a["decision"] is None and a["needs_decision"]]
     failed = "error" in scan or bool(scan.get("problems"))
-    lines = [f"**{len(pending)} aviso(s) sin respuesta.**" if pending else "Sin avisos pendientes.", ""]
+    lines = [f"**{len(pending)} aviso(s) para decidir.**" if pending else "Nada para decidir.", ""]
     lines += [f"- {a['motivo']} — {a['propuesta']}" for a in pending]
     content = {
         "id": SUPERVISOR_KEY, "capability": "supervisor", "status": "active", "schedule": "cada 5 minutos",
