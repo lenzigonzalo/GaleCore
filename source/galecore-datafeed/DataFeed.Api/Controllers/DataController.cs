@@ -15,6 +15,7 @@ using DataFeed.Application.Data.Tastytrade.SymbolSearch;
 using DataFeed.Application.Data.Fred.ReleaseDates;
 using DataFeed.Application.Data.Fed.FomcMeetings;
 using DataFeed.Application.Data.Cboe.IndexHistory;
+using DataFeed.Application.Data.Treasury;
 using DataFeed.Api.Controllers.Dtos;
 
 namespace DataFeed.Controllers
@@ -42,6 +43,14 @@ namespace DataFeed.Controllers
         [Tags("Data.Sources")]
         [HttpGet("Cboe/IndexHistory")]
         public async Task<IActionResult> CboeIndexHistoryAsync([FromQuery] CboeIndexHistoryRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Treasury/YieldCurve")]
+        public async Task<IActionResult> TreasuryYieldCurveAsync([FromQuery] TreasuryYieldCurveRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Treasury/Auctions/Upcoming")]
+        public async Task<IActionResult> TreasuryUpcomingAuctionsAsync() => await Handle(new TreasuryUpcomingAuctionsRequest());
 
         [Tags("Data.Api")]
         [HttpGet("Tastytrade/MarketData/ByType")]
