@@ -26,6 +26,7 @@ Usage:
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
+    python -m galecore_ai.adapters.cli analyze pack --kind macro|technical|fundamental|flow [--symbol SYM] --prompt "..."
     python -m galecore_ai.adapters.cli galecore list | get CAPABILITY --symbol SYM [--param k=v ...] [--out FILE]
     python -m galecore_ai.adapters.cli space context | list [--kind K] | show K/KEY | put K/KEY --title T [--visibility V] [--format F] < content | delete K/KEY | import
     python -m galecore_ai.adapters.cli profile review
@@ -465,6 +466,24 @@ async def _cmd_story(args: argparse.Namespace) -> None:
     try:
         ref, pack = story.save_pack(kb, pack, prompt=args.prompt,
                                     host=RecordHost(provider="galecore-ai story pack", model=None))
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+        return
+    _json_out({"status": "RECORDED", "ref": ref, "pack": pack})
+
+
+async def _cmd_analyze(args: argparse.Namespace) -> None:
+    """An on-demand analysis pack (P1-05): macro, technical, fundamental or flow, from GaleCore, kept as evidence."""
+    from galecore_ai.application import analysis
+
+    kb = _build_knowledge_base()
+    pack = await analysis.gather(_build_dispatcher(), args.kind, symbol=args.symbol.upper())
+    if not analysis.has_data(pack):
+        _json_out({"status": "INSUFFICIENT_DATA", "missing": pack["missing"]}, exit_code=_EXIT_INSUFFICIENT_DATA)
+        return
+    try:
+        ref, pack = analysis.save_pack(kb, pack, prompt=args.prompt,
+                                       host=RecordHost(provider="galecore-ai analyze pack", model=None))
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
         return
@@ -1183,6 +1202,14 @@ def build_parser() -> _JsonArgumentParser:
     p_catalog.add_argument("--match", metavar="PEDIDO",
                            help="Which capabilities serve this request, in the user's words (GC-AI-0022)")
 
+    p_an = sub.add_parser("analyze", help="On-demand analysis: macro, technical, fundamental or flow (P1-05)")
+    an_sub = p_an.add_subparsers(dest="analyze_command", required=True)
+    p_an_pack = an_sub.add_parser("pack", help="Gather the analysis from GaleCore (code, no model) and keep it as "
+                                               "evidence")
+    p_an_pack.add_argument("--kind", required=True, choices=["macro", "technical", "fundamental", "flow"])
+    p_an_pack.add_argument("--symbol", default="SPY", help="Ignored for macro")
+    p_an_pack.add_argument("--prompt", required=True, help="The user's request, verbatim")
+
     p_story = sub.add_parser("story", help="The market story (GC-AI-0024)")
     st_sub = p_story.add_subparsers(dest="story_command", required=True)
     p_st_pack = st_sub.add_parser("pack", help="Gather the day's market pack from GaleCore (code, no model), compare "
@@ -1491,6 +1518,8 @@ def main() -> None:
             asyncio.run(_cmd_catalog(args))
         elif args.command == "story":
             asyncio.run(_cmd_story(args))
+        elif args.command == "analyze":
+            asyncio.run(_cmd_analyze(args))
         elif args.command == "inventory":
             asyncio.run(_cmd_inventory(args))
         elif args.command == "kb" and args.kb_command == "search":
