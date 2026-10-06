@@ -53,6 +53,16 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade.Models
         [JsonProperty("askExchangeCode")]
         public string AskExchangeCode { get; set; }
 
+        /// <summary>
+        /// Hora (epoch ms) del último cambio del bid / del ask, según DXLink; 0 = no vino. Es la hora
+        /// del último CAMBIO: una cotización quieta no está vieja (BL-013).
+        /// </summary>
+        [JsonProperty("bidTime")]
+        public long BidTime { get; set; }
+
+        [JsonProperty("askTime")]
+        public long AskTime { get; set; }
+
         // Campo calculado para el precio medio (Mid)
         public double MidPrice => (BidPrice + AskPrice) / 2;
     }

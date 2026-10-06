@@ -13,6 +13,28 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
         private const int TimeoutMs = 10_000;
 
         /// <summary>
+        /// Campos del Quote que se piden. Con el set por defecto DXLink mandaba el Quote sin hora
+        /// (eventTime 0, verificado el 24/09 y el 06/10). Se listan los que ya se usaban más las dos
+        /// horas (BL-013). El resto de los eventos queda con su set por defecto.
+        /// </summary>
+        public static readonly string[] QuoteFields =
+        {
+            "eventType", "eventSymbol", "eventTime", "sequence",
+            "bidTime", "bidExchangeCode", "bidPrice", "bidSize",
+            "askTime", "askExchangeCode", "askPrice", "askSize",
+        };
+
+        /// <summary>FEED_SETUP único para las dos conexiones (la persistente y la de snapshot).</summary>
+        public static object FeedSetup => new
+        {
+            type = "FEED_SETUP",
+            channel = 3,
+            acceptDataFormat = "FULL",
+            acceptEventFields = new Dictionary<string, string[]> { ["Quote"] = QuoteFields },
+            parameters = new { },
+        };
+
+        /// <summary>
         /// Performs the DxLink handshake on an already-started WebsocketClient.
         /// Subscribes to MessageReceived internally; caller should subscribe AFTER this returns.
         /// Returns an IDisposable that unsubscribes the handshake handler.
@@ -64,7 +86,7 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                 throw new TimeoutException("DxLink handshake: CHANNEL_OPENED timeout");
 
             // Step 4: FEED_SETUP
-            Send(new { type = "FEED_SETUP", channel = 3, acceptDataFormat = "FULL", parameters = new { } });
+            Send(FeedSetup);
         }
 
         /// <summary>

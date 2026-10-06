@@ -7,7 +7,7 @@ namespace DataFeed.Application.App.Runtime
     /// el capital de referencia, y la revisión de cada operación cerrada contra lo que su regla planeaba.
     ///
     /// Describe lo que pasó, en USD por contrato. No dice si es edge ni si alcanza el objetivo: eso lo
-    /// interpreta GaleCore-AI con el perfil (criterio de edge, utilidad mínima). Lo que no existe es null.
+    /// interpreta el consumidor con el perfil (criterio de edge, utilidad mínima). Lo que no existe es null.
     /// </summary>
     public record PerformanceReport
     {
