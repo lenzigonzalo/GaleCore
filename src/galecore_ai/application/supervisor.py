@@ -207,10 +207,14 @@ def evaluate(position: dict, *, strategy: str, strategy_ref: str | None, spec: d
                              "problems": "; ".join(position.get("valuationProblems") or []) or None},
                     "regla": f"Más de {NO_PRICE_MINUTES} min sin precio en sesión: las salidas no se evalúan",
                     "propuesta": "Revisar la conexión de datos de GaleCore."})
-    expiration = next((leg.get("expiration") for leg in legs if leg.get("expiration")), None)
+    raw_exp = next((leg.get("expiration") for leg in legs if leg.get("expiration")), None)
+    try:                                       # a strange expiration skips E4 only, never the other rules
+        expiration = date.fromisoformat(str(raw_exp)[:10]) if raw_exp else None
+    except ValueError:
+        expiration = None
     today = now.astimezone(NEW_YORK).date()
     for day, name in events or []:
-        if not expiration or not (today <= day <= date.fromisoformat(expiration)):
+        if not expiration or not (today <= day <= expiration):
             continue
         ahead = _business_days(today, day)
         if ahead > EVENT_BUSINESS_DAYS:
