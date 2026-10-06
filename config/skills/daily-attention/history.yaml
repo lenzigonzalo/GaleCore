@@ -1,6 +1,14 @@
 # Qué cambió en cada versión de daily_attention y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: daily_attention
 versions:
+  - version: "0.2.4"
+    date: 2026-10-06
+    changes: >
+      El calendario macro (FRED), las reuniones del FOMC y las subastas del Tesoro salen de GaleCore
+      (`galecore get calendar.*`, WS-0014) y no de los scripts tools/fred_query.py y tools/fed_calendar.py, que se
+      borran. Suma las subastas de notes y bonds a la tabla eventos x posiciones y, como contexto opcional, la curva
+      oficial del Tesoro y la historia de VIX/VVIX/SKEW de CBOE. Un 502 de GaleCore va a faltantes con el motivo.
+    feedback: []
   - version: "0.2.3"
     date: 2026-09-30
     changes: >

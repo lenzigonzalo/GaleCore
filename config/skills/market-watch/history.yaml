@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de market_watch y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: market_watch
 versions:
+  - version: "0.1.1"
+    date: 2026-10-06
+    changes: >
+      Sin respaldo por scripts: si GaleCore no sirve el calendario, va a faltantes (tools/fred_query.py y
+      tools/fed_calendar.py se borran, WS-0014). Suma la historia de CBOE y la curva del Tesoro como contexto.
+    feedback: []
   - version: "0.1.0"
     date: 2026-10-03
     changes: >

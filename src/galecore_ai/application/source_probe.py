@@ -1,4 +1,4 @@
-"""Minimal-call probes this repo's code can run: GaleCore and FRED (GC-AI-0012, AC-03).
+"""Minimal-call probes this repo's code can run: GaleCore and FRED through GaleCore (GC-AI-0012, AC-03; WS-0014).
 
 Alpha Vantage and FMP have no probe here: they are reached only through the
 host's own connectors (MCP tools), which this repo's code cannot call — the
@@ -13,10 +13,6 @@ it does not write it; the CLI command decides where and when.
 
 from __future__ import annotations
 
-import os
-import urllib.error
-import urllib.parse
-import urllib.request
 from datetime import UTC, datetime
 
 from galecore_ai.capabilities.dispatcher import CapabilityDispatcher
@@ -26,9 +22,7 @@ from galecore_ai.contracts.source_status import (
     SourceStatusObservation,
 )
 
-FRED_BASE = "https://api.stlouisfed.org/fred/"
-FRED_PROBE_SERIES = "DGS10"  # 10-Year Treasury: stable, low-volume metadata call
-_TIMEOUT_S = 20
+FRED_PROBE_SERIES = "DGS10"  # 10-Year Treasury: stable and light
 
 
 def _observation(state: AccessState, note: str) -> SourceStatusObservation:
@@ -53,25 +47,18 @@ async def probe_galecore(dispatcher: CapabilityDispatcher) -> SourceStatusObserv
     return _observation(AccessState.DOWN, f"market_data.trade SPY: {error or 'sin respuesta'}")
 
 
-def probe_fred() -> SourceStatusObservation:
-    """GET fred/series metadata for one stable series; the key never leaves this function."""
-    key = os.environ.get("FRED_API_KEY")
-    if not key:
-        return _observation(AccessState.DENIED, "FRED_API_KEY no está configurada en este entorno")
-    query = urllib.parse.urlencode({"series_id": FRED_PROBE_SERIES, "file_type": "json"})
-    public_url = f"{FRED_BASE}series?{query}"
-    try:
-        with urllib.request.urlopen(f"{public_url}&api_key={key}", timeout=_TIMEOUT_S) as resp:
-            status = resp.status
-    except urllib.error.HTTPError as exc:
-        status = exc.code
-    except (urllib.error.URLError, TimeoutError) as exc:
-        return _observation(AccessState.DOWN, f"fred/series {FRED_PROBE_SERIES}: {exc} ({public_url})")
-    if status == 200:
-        return _observation(AccessState.AVAILABLE, f"fred/series {FRED_PROBE_SERIES} respondió 200 ({public_url})")
-    if status in (400, 401, 403):
-        # FRED returns 400 (not 401/403) for a malformed or invalid api_key.
-        return _observation(AccessState.DENIED, f"fred/series {FRED_PROBE_SERIES}: HTTP {status} ({public_url})")
-    if status == 429:
-        return _observation(AccessState.LIMITED, f"fred/series {FRED_PROBE_SERIES}: HTTP {status} ({public_url})")
-    return _observation(AccessState.DOWN, f"fred/series {FRED_PROBE_SERIES}: HTTP {status} ({public_url})")
+async def probe_fred(dispatcher: CapabilityDispatcher) -> SourceStatusObservation:
+    """FRED as GaleCore serves it (macro.fred_series, WS-0014): this code no longer calls FRED nor needs its key."""
+    today = datetime.now(UTC).date()
+    params = {"SeriesId": FRED_PROBE_SERIES, "From": today.replace(day=1).isoformat()}
+    result = await dispatcher.invoke("macro.fred_series", params)
+    what = f"macro.fred_series {FRED_PROBE_SERIES} (GaleCore)"
+    if result.ok:
+        return _observation(AccessState.AVAILABLE, f"{what} respondió en {result.latency_ms} ms")
+    error = result.error or ""
+    if "HTTP 401" in error or "HTTP 403" in error:
+        return _observation(AccessState.DENIED, f"{what}: {error}")
+    if "HTTP 429" in error:
+        return _observation(AccessState.LIMITED, f"{what}: {error}")
+    # 502 = GaleCore responde pero FRED no (o falta FredApi:Key en GaleCore); 404 = GaleCore sin WS-0014.
+    return _observation(AccessState.DOWN, f"{what}: {error or 'sin respuesta'}")

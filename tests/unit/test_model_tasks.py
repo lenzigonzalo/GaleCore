@@ -93,7 +93,8 @@ def test_the_model_gets_only_the_read_commands_of_the_flow():
     entry = load_catalog().get("daily_attention")
     rules = mr.allowed_tools(entry, cli_commands(build_parser()))
     assert f"Bash({mr.CLI} profile show:*)" in rules and f"Bash({mr.CLI} followup history:*)" in rules
-    assert "Bash(python -B tools/fred_query.py:*)" in rules and "Read" in rules
+    assert f"Bash({mr.CLI} galecore get:*)" in rules and "Read" in rules
+    assert not [r for r in rules if "python -B tools/" in r]   # no script since WS-0014
     joined = " ".join(rules)
     for forbidden in ("followup run", "research save", "research revise", "evidence add", "strategy", "profile set",
                       "task "):

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -137,9 +139,9 @@ def test_generic_symbol_matches_a_coverage_that_serves_any_symbol(status_store):
     registry = load_source_registry()
     for need in ("cotizaciones de QQQ", "GEX de QQQ"):
         assert "galecore" in {m.id for m in query_sources(need, registry, status_store).matches}, need
-    for need in ("CPI", "QQQ"):   # "IV" is GaleCore's own vocabulary since GC-AI-0019 (IV rank, IV30)
-        assert "galecore" not in {m.id for m in query_sources(need, registry, status_store).matches}, need
-    assert query_sources("datos de CPI", registry, status_store).matches[0].id == "fred"
+    # "IV" is GaleCore's own vocabulary since GC-AI-0019 (IV rank, IV30), and CPI since WS-0014 (FRED and BLS by GaleCore)
+    assert "galecore" not in {m.id for m in query_sources("QQQ", registry, status_store).matches}
+    assert [m.id for m in query_sources("datos de CPI", registry, status_store).matches][:2] == ["galecore", "fred"]
 
 
 # ── contracts.source_status ─────────────────────────────────────────
@@ -359,14 +361,29 @@ class TestQuery:
 
 
 class TestProbeFred:
-    def test_missing_key_is_denied(self, monkeypatch):
+    # WS-0014: FRED se sondea a través de GaleCore (macro.fred_series); este código ya no usa FRED_API_KEY.
+    class _Dispatcher:
+        def __init__(self, ok, error=None):
+            self.ok, self.error, self.calls = ok, error, []
+
+        async def invoke(self, capability_id, parameters):
+            self.calls.append((capability_id, parameters))
+            return SimpleNamespace(ok=self.ok, error=self.error, latency_ms=12)
+
+    def test_goes_through_galecore(self, monkeypatch):
         from galecore_ai.application.source_probe import probe_fred
 
         monkeypatch.delenv("FRED_API_KEY", raising=False)
-        obs = probe_fred()
-        assert obs.state == AccessState.DENIED
-        assert obs.origin == ObservationOrigin.CODE_PROBE
-        assert "FRED_API_KEY" in obs.note
+        d = self._Dispatcher(ok=True)
+        obs = asyncio.run(probe_fred(d))
+        assert obs.state == AccessState.AVAILABLE and obs.origin == ObservationOrigin.CODE_PROBE
+        assert d.calls[0][0] == "macro.fred_series" and d.calls[0][1]["SeriesId"] == "DGS10"
+
+    def test_upstream_down_is_down(self):
+        from galecore_ai.application.source_probe import probe_fred
+
+        obs = asyncio.run(probe_fred(self._Dispatcher(ok=False, error="HTTP 502: fred: falta FredApi:Key")))
+        assert obs.state == AccessState.DOWN and "FredApi:Key" in obs.note
 
 
 # ── CLI ───────────────────────────────────────────────────────────
@@ -503,7 +520,7 @@ def test_free_before_own_before_quota_before_plan_then_preference(status_store):
 def test_real_registry_follows_the_owners_rule(status_store):
     registry = load_source_registry()
     assert [m.id for m in query_sources("curva de tasas", registry, status_store).matches] == [
-        "fred", "alpha_vantage", "fmp"]
+        "galecore", "fred", "alpha_vantage", "fmp"]
     assert [m.id for m in query_sources("cotizaciones de SPY", registry, status_store).matches] == [
         "galecore", "fmp"]
     assert [m.id for m in query_sources("GEX de SPY", registry, status_store).matches] == ["galecore"]

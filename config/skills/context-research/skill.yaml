@@ -1,5 +1,5 @@
 skill_id: context_research
-version: "0.4.0"
+version: "0.4.1"
 display_name: Investigación contextual de una idea de trading
 description: >
   Builds the market context an idea needs, for its instrument and horizon: which
@@ -104,9 +104,15 @@ instructions: |
 
   Source access (GC-AI-0012): what each known source covers, its cost, its known limits
   and its last checked status live in the registry, not here — `sources list` / `sources
-  query --need "..."`. FRED has no registered MCP server; with FRED_API_KEY in the
-  environment (never in a file), `python tools/fred_query.py <out_dir> <SERIES>:<start> ...`
-  saves metadata and observations with their vintage for `evidence add`.
+  query --need "..."`. Public official data comes through GaleCore (WS-0014), each response with
+  its provenance for `evidence add`: any FRED series with metadata and vintage (`galecore get
+  macro.fred_series --param SeriesId=DFII10 --param From=<YYYY-MM-DD>`), official BLS values
+  (`macro.bls_series --param Ids=CUUR0000SA0,LNS14000000`), the Treasury par curve
+  (`rates.treasury_curve`) and upcoming auctions (`calendar.treasury_auctions`), CBOE daily history
+  of VIX, VVIX and SKEW (`history.index_daily --param Index=SKEW --param From=...`) and a company's
+  SEC filings and reported XBRL values (`filings.sec_filings --param Ticker=NVDA --param
+  Forms=8-K,10-Q`, `filings.sec_facts --param Ticker=NVDA --param Tag=Revenues`). A 502 means the
+  upstream source failed: declare it, do not fall back to the web.
 
   For turning the context into a complete strategy proposal, continue with the strategy
   pilot method (docs/engineering/pilots/strategy-design/SKILL.md); this skill does not

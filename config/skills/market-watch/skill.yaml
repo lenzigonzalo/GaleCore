@@ -1,5 +1,5 @@
 skill_id: market_watch
-version: "0.1.0"
+version: "0.1.1"
 display_name: Agente que vigila el mercado con tus instrucciones
 description: >
   A market watcher the owner defines in their own words (which symbols, which conditions, what counts as a
@@ -27,7 +27,9 @@ system_prompt: >
      IV rank and volatility metrics before chains (a chain is ~1 MB: always `--out <dir>/<symbol>-chain.json`
      and read only the expirations and strikes you need). Greeks only for the specific contracts a candidate
      uses (OCC symbol from the chain). Macro calendar: `galecore get calendar.macro_releases` and
-     `calendar.fomc_meetings`; if GaleCore answers 404 or 502, use the FRED and Fed scripts of the method.
+     `calendar.fomc_meetings`; if GaleCore answers 404 or 502, the calendar goes under missing with the error.
+     Context when a condition uses it: CBOE history (`history.index_daily`) for a VIX/VVIX/SKEW percentile,
+     the Treasury curve (`rates.treasury_curve`) for rates.
 
   4. Every number you report comes from a response you keep as evidence (`evidence:@<slug>`), with the
      retrieved_at GaleCore returned. Own arithmetic (a credit, a width, a distance to spot) is an
@@ -57,8 +59,8 @@ instructions: |
   galecore get calendar.macro_releases --param From=<hoy> --param To=<hasta> --param ReleaseIds=50,10,46,53,54,9
   galecore get calendar.fomc_meetings
   prepare --symbol <SYM> --skill regime        # GEX, skew 25Δ, VIX/VVIX when the conditions use them
-  python tools/fred_query.py <dir> --releases <hoy> <hasta> 50 10 46 53 54 9   # fallback calendar
-  python tools/fed_calendar.py <dir>                                          # fallback FOMC
+  galecore get history.index_daily --param Index=VIX --param From=<YYYY-MM-DD>   # percentil de VIX/VVIX/SKEW
+  galecore get rates.treasury_curve
   evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
   research save|revise --capability market_watch ...
 

@@ -163,4 +163,92 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         parameters=[CapabilityParameter(name="Years", type="string", required=False, description="e.g. 2026,2027")],
         returns="source, upstreamUrl, retrievedAt, sha256, notes, data[year, start, end, projections, scheduled]",
     ),
+    # WS-0014 (GaleCore): fuentes públicas servidas por GaleCore con la misma procedencia (SourcedResponse); una fuente
+    # caída o que cambió de forma es 502, nunca una lista vacía.
+    CapabilityDefinition(
+        capability_id="history.index_daily",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Official CBOE daily history of VIX (since 1990, OHLC), VVIX (since 2006) and SKEW (since 1990, close only)",
+        parameters=[
+            CapabilityParameter(name="Index", type="string", description="VIX, VVIX or SKEW"),
+            CapabilityParameter(name="From", type="string", required=False, description="YYYY-MM-DD; default one year before To"),
+            CapabilityParameter(name="To", type="string", required=False, description="YYYY-MM-DD; default today"),
+        ],
+        returns="source=cboe, upstreamUrl, asOf (last published day), sha256, notes, data[date, open, high, low, close]",
+    ),
+    CapabilityDefinition(
+        capability_id="rates.treasury_curve",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Official daily Treasury par yield curve, % by tenor (1M, 1.5M, 2M, 3M, 4M, 6M, 1Y ... 30Y)",
+        parameters=[
+            CapabilityParameter(name="From", type="string", required=False, description="YYYY-MM-DD; default 30 days before To"),
+            CapabilityParameter(name="To", type="string", required=False, description="YYYY-MM-DD, at most today"),
+        ],
+        returns="source=treasury, asOf, sha256 per year, notes, data[date, rates{tenor: percent}]",
+    ),
+    CapabilityDefinition(
+        capability_id="calendar.treasury_auctions",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Announced upcoming Treasury auctions (bills, notes, bonds) from Fiscal Data",
+        parameters=[],
+        returns="source=treasury, asOf (record date), notes, data[securityType, securityTerm, auctionDate, issueDate, "
+        "announcementDate, offeringAmount (USD, null until announced), cusip, reopening]",
+    ),
+    CapabilityDefinition(
+        capability_id="macro.fred_series",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Any FRED series with metadata and the vintage read (e.g. DGS10, DFII10, T10YIE, BAMLH0A0HYM2, CPIAUCSL)",
+        parameters=[
+            CapabilityParameter(name="SeriesId", type="string", description="FRED series id"),
+            CapabilityParameter(name="From", type="string", required=False, description="YYYY-MM-DD; default one year before To"),
+            CapabilityParameter(name="To", type="string", required=False, description="YYYY-MM-DD; default today"),
+        ],
+        returns="source=fred, upstreamUrl (no key), asOf (last observation with value), notes, data[id, title, units, "
+        "frequency, seasonalAdjustment, lastUpdated, realtimeStart, realtimeEnd, observations[date, value|null]]",
+    ),
+    CapabilityDefinition(
+        capability_id="macro.bls_series",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Official BLS values (e.g. CPI CUUR0000SA0/CUSR0000SA0, unemployment LNS14000000, payrolls CES0000000001)",
+        parameters=[
+            CapabilityParameter(name="Ids", type="string", description="Comma-separated BLS series ids, up to 25"),
+            CapabilityParameter(name="StartYear", type="string", required=False, description="default the year before EndYear"),
+            CapabilityParameter(name="EndYear", type="string", required=False, description="default this year; at most 10 years"),
+        ],
+        returns="source=bls, asOf (year-period), notes, data[seriesId, observations[year, period, periodName, value, latest, footnotes]]",
+    ),
+    CapabilityDefinition(
+        capability_id="filings.sec_company",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="SEC company by ticker: CIK and name",
+        parameters=[CapabilityParameter(name="Ticker", type="string", description="e.g. AAPL")],
+        returns="source=sec, data[cik, ticker, name]",
+    ),
+    CapabilityDefinition(
+        capability_id="filings.sec_filings",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Recent SEC filings of a company (8-K items: 2.02 = earnings release), with document URLs",
+        parameters=[
+            CapabilityParameter(name="Ticker", type="string", required=False, description="Ticker or Cik"),
+            CapabilityParameter(name="Cik", type="string", required=False, description="Ticker or Cik"),
+            CapabilityParameter(name="Forms", type="string", required=False, description="e.g. 8-K,10-Q,10-K; default all"),
+            CapabilityParameter(name="Since", type="string", required=False, description="YYYY-MM-DD; default 90 days ago"),
+        ],
+        returns="source=sec, asOf, notes, data[cik, name, sic, tickers, filings[form, filingDate, reportDate, "
+        "acceptanceDateTime, accessionNumber, url, items]]",
+    ),
+    CapabilityDefinition(
+        capability_id="filings.sec_facts",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Reported XBRL values of one concept for a company (e.g. Revenues, NetIncomeLoss, EarningsPerShareDiluted)",
+        parameters=[
+            CapabilityParameter(name="Ticker", type="string", required=False, description="Ticker or Cik"),
+            CapabilityParameter(name="Cik", type="string", required=False, description="Ticker or Cik"),
+            CapabilityParameter(name="Tag", type="string", description="XBRL concept"),
+            CapabilityParameter(name="Taxonomy", type="string", required=False, description="default us-gaap"),
+            CapabilityParameter(name="Since", type="string", required=False, description="period end from YYYY-MM-DD"),
+        ],
+        returns="source=sec, asOf (last filed), notes, data[cik, entityName, label, facts[unit, start, end, value, form, "
+        "fiscalYear, fiscalPeriod, filed, frame, accession]]",
+    ),
 ]

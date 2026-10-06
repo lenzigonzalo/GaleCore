@@ -81,12 +81,12 @@ entries:
       - sources query --need "<qué dato hace falta>"
       - galecore list
       - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
-      - sources check [--source galecore|fred]
+      - sources check [--source galecore|fred]   # FRED por GaleCore desde WS-0014
       - sources declare --source <id> --state available|denied|limited|down --note "..." --observed-at <ISO8601> --host-model <model> [--category <cat>] [--evidence evidence:<id>]
     stored_as: none
     controls:
       - The registry (config/sources.yaml) rejects a source missing coverage, cost or a probe where one is required
-      - GaleCore and FRED are checked with a minimal call this code runs; other sources are HOST_DECLARED only
+      - GaleCore and FRED (through GaleCore) are checked with a minimal call this code runs; other sources are HOST_DECLARED only
       - "declare requires --observed-at (the moment the access was actually observed, e.g. an evidence item's retrieved_at); it is never the time the command ran"
       - A declared observation never carries a key or token; a cited evidence ref must resolve
       - Status history is append-only; an edited or reordered source's file is reported as integrity_failed, never a crash
@@ -342,7 +342,7 @@ entries:
       - ¿Qué evento macro viene y cómo afecta mis posiciones?
     skill: skills/daily-attention/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
-    galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics, compute.gex_analysis, compute.put_skew, market_data.trade]
+    galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics, compute.gex_analysis, compute.put_skew, market_data.trade, calendar.macro_releases, calendar.fomc_meetings, calendar.treasury_auctions, rates.treasury_curve, history.index_daily]
     data_needs:
       - need: posiciones SHADOW
       - need: evaluaciones SHADOW
@@ -366,8 +366,7 @@ entries:
       - followup run --strategy <name> --prompt "<pedido>" --host-model <model>
       - prepare --symbol SPY --skill regime   # contexto GaleCore, sólo lectura
       - sources query --need "<dato>"
-      - python GaleCore-AI/tools/fred_query.py <dir> --releases <hoy> <último vencimiento> [<release_id> ...]
-      - python GaleCore-AI/tools/fed_calendar.py <dir>
+      - galecore get <capability> [--param clave=valor] [--out <archivo>]   # calendar.*, rates.treasury_curve, history.index_daily
       - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
       - research save --capability daily_attention --slug atencion-diaria-<strategy> --prompt "<pedido>" < {content, host_provider, host_model}
       - research revise --capability daily_attention --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
@@ -399,7 +398,7 @@ entries:
       - ¿Dónde hay una oportunidad de put credit spread hoy?
     skill: skills/market-watch/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
-    galecore_capabilities: [compute.iv_rank, compute.implied_volatility, market_data.volatility_metrics, market_data.option_chains, market_data.option_greeks, market_data.candles, calendar.macro_releases, calendar.fomc_meetings, compute.gex_analysis, compute.put_skew]
+    galecore_capabilities: [compute.iv_rank, compute.implied_volatility, market_data.volatility_metrics, market_data.option_chains, market_data.option_greeks, market_data.candles, calendar.macro_releases, calendar.fomc_meetings, compute.gex_analysis, compute.put_skew, history.index_daily, rates.treasury_curve]
     data_needs:
       - need: IV rank de SPY
       - need: cadena de opciones de SPY
@@ -412,8 +411,6 @@ entries:
       - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
       - prepare --symbol <símbolo> --skill regime
       - sources query --need "<dato>"
-      - python GaleCore-AI/tools/fred_query.py <dir> --releases <hoy> <hasta> [<release_id> ...]
-      - python GaleCore-AI/tools/fed_calendar.py <dir>
       - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
       - research save --capability market_watch --slug <agent slug> --prompt "<pedido>" < {content, host_provider, host_model}
       - research revise --capability market_watch --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}

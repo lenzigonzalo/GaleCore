@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de context_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: context_research
 versions:
+  - version: "0.4.1"
+    date: 2026-10-06
+    changes: >
+      Las series de FRED, los valores del BLS, la curva y las subastas del Tesoro, la historia de VIX/VVIX/SKEW y las
+      presentaciones y fundamentales de la SEC se piden a GaleCore (`galecore get`, WS-0014); se borra
+      tools/fred_query.py y este código deja de usar FRED_API_KEY.
+    feedback: []
   - version: "0.4.0"
     date: 2026-09-29
     changes: >
