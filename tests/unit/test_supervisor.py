@@ -290,3 +290,11 @@ def test_without_calendar_the_other_rules_still_run_and_the_pass_is_partial(kb, 
     out = supervisor.scan(kb, reader(doc.spec_hash, [position(maxRisk=960.0)], calendar_fails=True), IN_SESSION)
     assert [a.kind.value for a in supervisor.alerts(kb)] == ["risk_limit"]
     assert out["problems"] and out["problems"][0].startswith("calendario")
+
+
+def test_a_strange_expiration_skips_e4_not_the_other_rules(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    odd = position(maxRisk=960.0, legs=[{"side": "SELL", "strike": 733.0, "expiration": "13/11/2026"}])
+    out = supervisor.scan(kb, reader(doc.spec_hash, [odd], releases=[("2026-09-25", "Consumer Price Index")]),
+                          IN_SESSION)
+    assert out["problems"] == [] and [a.kind.value for a in supervisor.alerts(kb)] == ["risk_limit"]
