@@ -172,6 +172,19 @@ public class ShadowCapitalTests
     }
 
     [Fact]
+    public void Allocate_MissingDteIsNotInvented_AndNoSpacingEntersSameDay()
+    {
+        var noDte = ShadowCapital.Allocate(new[] { Spy() with { MinDte = null, MaxDte = null } }, Limits(10000), T0);
+        Assert.Equal("missing_dte", noDte.Strategies.Single().BindingLimit);
+        Assert.Empty(noDte.Ladder);
+
+        var noSpacing = ShadowCapital.Allocate(new[] { Spy(Open("2026-11-16")) with { MinMinutesBetweenEntries = null } },
+            Limits(10000), T0);
+        Assert.Equal(3, noSpacing.Ladder.Count(s => s.Day == 1));   // sin espaciado: hasta el tope de la apuesta
+        Assert.All(noSpacing.Ladder.GroupBy(s => s.ExpiryWeek), g => Assert.True(g.Sum(s => s.RiskUsd) <= noSpacing.MaxBetUsd));
+    }
+
+    [Fact]
     public void Allocate_EdgeCases_NoWidthAndNoBudget()
     {
         var noWidth = ShadowCapital.Allocate(new[] { Spy() with { Width = null } }, Limits(10000), T0).Strategies.Single();

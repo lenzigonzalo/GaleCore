@@ -133,7 +133,7 @@ namespace DataFeed.Application.App.Runtime
         public double RiskUsd { get; init; }
         /// <summary>Posiciones de esta estrategia que entran solas en una apuesta (el tope se comparte en la escalera).</summary>
         public int PositionsPerWeek { get; init; }
-        /// <summary>Qué limita la cantidad: per_trade, budget, max_concurrent o no_width.</summary>
+        /// <summary>Qué limita la cantidad: per_trade, budget, max_concurrent, bet, no_width o missing_dte.</summary>
         public string BindingLimit { get; init; } = "";
         public bool Fits { get; init; }
         /// <summary>Si no entra un contrato: el ancho mayor que sí entraría (strikes de a 1 USD, mismo crédito relativo).</summary>
@@ -313,7 +313,8 @@ namespace DataFeed.Application.App.Runtime
                 {
                     "El riesgo es el máximo del spread ((ancho − crédito) × 100); el stop de la estrategia puede cortar antes.",
                     "El presupuesto de riesgo se reparte en partes iguales entre las estrategias pedidas.",
-                    "Escalera en días hábiles desde el inicio, al ritmo de la spec (min_minutes_between_entries); sin feriados.",
+                    "Escalera en días hábiles desde el inicio, al ritmo de la spec (min_minutes_between_entries; sin valor = sin espaciado, como el runtime); sin feriados.",
+                    "Con tope compartido, cada día entra primero la estrategia que va antes en la lista pedida.",
                     "Vencimiento estimado = día de entrada + DTE de entrada (promedio observado o punto medio de la spec), arrancando un lunes; el runtime elige el vencimiento real dentro de la ventana de la spec.",
                     "El tope de una apuesta se comparte entre estrategias del mismo subyacente y dirección.",
                     "El reparto es para el capital pedido, aparte de lo que ya está abierto en SHADOW.",
@@ -339,6 +340,8 @@ namespace DataFeed.Application.App.Runtime
                 BudgetUsd = Math.Round(budget, 2), MaxRiskPerTradeUsd = perTrade,
             };
             if (rpc is not > 0) return baseAlloc with { BindingLimit = "no_width", RiskSource = "none" };
+            // Sin DTE no se puede estimar el vencimiento ni, por lo tanto, la apuesta: no se inventa.
+            if (baseAlloc.EntryDte == null) return baseAlloc with { BindingLimit = "missing_dte" };
 
             int contracts = (int)Math.Floor(perTrade / rpc.Value + 1e-9);
             if (contracts < 1)
@@ -389,20 +392,25 @@ namespace DataFeed.Application.App.Runtime
                 for (int i = 0; i < allocations.Count; i++)
                 {
                     var a = allocations[i];
-                    if (left[i] == 0 || day < nextDay[i]) continue;
-                    double risk = Math.Round(a.ContractsPerPosition * a.RiskPerContract!.Value, 2);
-                    int expiryWeek = (calendar + (a.EntryDte ?? 0)) / 7;
-                    var key = (a.Symbol, Direction(a.Structure), expiryWeek);
-                    double used = betRisk.GetValueOrDefault(key);
-                    if (used + risk > maxBet + 1e-9) continue;
-                    betRisk[key] = used + risk;
-                    steps.Add(new LadderStep
+                    // null = sin espaciado (como en el runtime): puede entrar varias veces el mismo día.
+                    int? minutes = strategies[i].MinMinutesBetweenEntries;
+                    int cadence = minutes is > 0 ? Math.Max(1, (int)Math.Ceiling(minutes.Value / 1440.0)) : 0;
+                    while (left[i] > 0 && day >= nextDay[i])
                     {
-                        Day = day, Week = week + 1, ExpiryWeek = expiryWeek + 1, SpecName = a.SpecName,
-                        Contracts = a.ContractsPerPosition, RiskUsd = risk,
-                    });
-                    left[i]--;
-                    nextDay[i] = day + Math.Max(1, (int)Math.Ceiling((strategies[i].MinMinutesBetweenEntries ?? 1440) / 1440.0));
+                        double risk = Math.Round(a.ContractsPerPosition * a.RiskPerContract!.Value, 2);
+                        int expiryWeek = (calendar + a.EntryDte!.Value) / 7;
+                        var key = (a.Symbol, Direction(a.Structure), expiryWeek);
+                        double used = betRisk.GetValueOrDefault(key);
+                        if (used + risk > maxBet + 1e-9) break;
+                        betRisk[key] = used + risk;
+                        steps.Add(new LadderStep
+                        {
+                            Day = day, Week = week + 1, ExpiryWeek = expiryWeek + 1, SpecName = a.SpecName,
+                            Contracts = a.ContractsPerPosition, RiskUsd = risk,
+                        });
+                        left[i]--;
+                        if (cadence > 0) { nextDay[i] = day + cadence; break; }
+                    }
                 }
             }
             double cumulative = 0;
