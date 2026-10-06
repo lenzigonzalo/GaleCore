@@ -1,0 +1,10 @@
+# Qué cambió en cada versión de performance_review y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: performance_review
+versions:
+  - version: "1.0.0"
+    date: 2026-10-06
+    changes: >
+      Primera versión (WS-0011, P1-03): performance por estrategia, versión y regla, la cartera contra el objetivo,
+      edge o suerte con el criterio del perfil, revisión de cada cierre (observado / hipótesis) y decisiones
+      esperado contra ocurrido; resumen semanal con las piezas existentes.
+    feedback: []

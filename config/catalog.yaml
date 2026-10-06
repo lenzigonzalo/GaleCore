@@ -533,6 +533,37 @@ entries:
       - A number GaleCore cannot give (no quote, NaN, a cold GEX past the timeout) is a problem of the pass, never «not met»
       - "Not checked - NYSE holidays (a holiday has no quotes: the pass reports a problem); prices between two 5-minute passes"
 
+  - id: performance_review
+    kind: investigation
+    serves: >-
+      Decir cómo viene cada estrategia y la cartera contra tu objetivo: performance por estrategia, versión y regla de
+      salida, retorno contra el capital de referencia, la utilidad mínima y el objetivo, si es edge o suerte según tu
+      criterio, la revisión de cada operación cerrada (qué regla actuó, planeado contra ocurrido, diagnóstico observado
+      o hipótesis) y tus decisiones (qué esperábamos y qué pasó). También el resumen de la semana de la cartera.
+    example_requests:
+      - ¿Cómo viene la estrategia? ¿Dónde falla y por qué?
+      - ¿Cuánto rinde mi cartera contra mi objetivo?
+      - ¿Esto es edge o suerte?
+      - ¿Qué aprendemos de la última operación cerrada?
+      - ¿Qué esperábamos cuando decidimos, qué ocurrió y qué corresponde revisar?
+      - Resumime la semana de mi cartera.
+    skill: skills/performance-review/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [App/Runtime/Performance]
+    data_needs:
+      - need: performance SHADOW
+    flow:
+      - performance [--strategy <name>] [--since <YYYY-MM-DD>]   # GaleCore calcula; el código lo pone contra el perfil y las decisiones
+      - supervise list
+      - story pack
+      - profile show
+    stored_as: none
+    controls:
+      - "Numbers come from GaleCore App/Runtime/Performance; the code only compares them with the profile's numbers, read from its words (what cannot be read is listed in criterios.no_leidos, never guessed)"
+      - "Edge: below the profile's sample (closes and days) the conclusion is «sin edge demostrado» whatever the result"
+      - "A close's diagnosis separates observado (rule of the profile not respected, fill worse than its rule's level beyond max(2 USD, 10 % of the credit)) from hipotesis (a loss inside the plan: thesis to review only if it repeats)"
+      - "Not checked - costs (SHADOW fills at mid, no commissions), comparison against cash (no risk-free rate in the report), positions closed before persistence existed"
+
   - id: alert_analysis
     kind: harness
     serves: >-

@@ -745,6 +745,23 @@ async def _cmd_project(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+async def _cmd_performance(args: argparse.Namespace) -> None:
+    from galecore_ai.application import performance, supervisor
+    kb = _build_knowledge_base()
+    try:
+        try:
+            since = datetime.fromisoformat(args.since) if args.since else None
+        except ValueError as exc:
+            raise KnowledgeError(f"--since {args.since!r}: an ISO date such as 2026-09-29") from exc
+        if since and since.tzinfo is None:
+            since = since.replace(tzinfo=UTC)
+        _json_out(performance.report(kb, supervisor.api_reader(), strategies=args.strategy, since=since))
+    except supervisor.SupervisorError as exc:
+        _json_out({"status": "ERROR", "error": str(exc)}, exit_code=_EXIT_INTERNAL_ERROR)
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+
+
 async def _cmd_supervise(args: argparse.Namespace) -> None:
     from datetime import date as _date
     from datetime import datetime as _dt
@@ -1244,6 +1261,12 @@ def build_parser() -> _JsonArgumentParser:
     p_pj_add.add_argument("--prompt", required=True, help="The owner's request")
     p_pj_add.add_argument("--host-model", dest="host_model")
 
+    p_perf = sub.add_parser("performance", help="«¿Cómo viene la estrategia / mi cartera contra el objetivo? ¿Edge o "
+                                                "suerte?» Performance por estrategia, versión y regla, y revisión de "
+                                                "cada cierre con su decisión (P1-03)")
+    p_perf.add_argument("--strategy", action="append", help="Limit to this strategy (repeatable); default: all known")
+    p_perf.add_argument("--since", help="Only closes (and their review) from this ISO date on, e.g. the week")
+
     p_supervise = sub.add_parser("supervise", help="Supervisor of SHADOW: alerts on existing rules and the owner's "
                                                    "decisions with their context (WS-0007)")
     sv_sub = p_supervise.add_subparsers(dest="supervise_command", required=True)
@@ -1474,6 +1497,8 @@ def main() -> None:
             asyncio.run(_cmd_project(args))
         elif args.command == "supervise":
             asyncio.run(_cmd_supervise(args))
+        elif args.command == "performance":
+            asyncio.run(_cmd_performance(args))
         elif args.command == "contrast":
             asyncio.run(_cmd_contrast(args))
         elif args.command == "strategy":
