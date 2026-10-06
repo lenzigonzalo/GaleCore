@@ -78,7 +78,8 @@ def test_the_pack_has_prices_changes_volatility_options_and_calendar():
     assert opts["gex"]["net_gex"] == 2.0 and opts["gex"]["spot_vs_zero_gamma_pct"] == round((770 / 760 - 1) * 100, 2)
     assert pack["calendar"]["macro_releases"] == [{"date": "2026-10-14", "name": "Consumer Price Index"}]
     assert [m["start"] for m in pack["calendar"]["next_fomc"]] == ["2026-10-27"]     # a past meeting is left out
-    assert pack["missing"] == []
+    # The fixture's candles carry no IV and 22 sessions: drivers declares what it could not measure, nothing else.
+    assert all(m.startswith("drivers: ") for m in pack["missing"]) and len(pack["missing"]) == 2
 
 
 def test_the_calendar_asks_for_the_releases_that_matter_in_the_window():
@@ -86,7 +87,10 @@ def test_the_calendar_asks_for_the_releases_that_matter_in_the_window():
     asyncio.run(story.gather(d, today=TODAY))
     asked = [p for c, p in d.calls if c == "calendar.macro_releases"]
     assert {"From": "2026-10-02", "To": "2026-10-16", "ReleaseIds": story.MACRO_RELEASES} in asked
-    assert {"From": "2026-09-25", "To": "2026-10-01", "ReleaseIds": story.MACRO_RELEASES} in asked   # the last week
+    # The past months, for the reaction to the releases; the last week is taken from them.
+    assert {"From": "2026-04-05", "To": "2026-10-01", "ReleaseIds": story.MACRO_RELEASES} in asked
+    fomc = [p for c, p in d.calls if c == "calendar.fomc_meetings"]
+    assert fomc == [{"Years": "2025,2026,2027"}]
 
 
 def test_what_fails_is_declared_missing_never_filled():

@@ -16,6 +16,7 @@ import math
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from galecore_ai.application import drivers
 from galecore_ai.application.knowledge import KnowledgeBase, save_evidence
 from galecore_ai.capabilities.galecore_dtos import GaleCoreGexAnalysisResponse
 from galecore_ai.contracts.evidence import EvidenceContent, EvidenceSeries, PayloadScope
@@ -31,7 +32,7 @@ VOL_INDICES = {"VIX9D": "volatilidad implícita del S&P a 9 días", "VIX": "a 30
 MACRO_RELEASES = "50,10,46,53,54,9"
 CALENDAR_DAYS = 14
 RECENT_DAYS = 7             # releases of the last week: what the last sessions already reacted to
-HISTORY_DAYS = 45           # calendar days of daily candles: covers 20 sessions with holidays
+HISTORY_DAYS = 75           # calendar days of daily candles: two windows of 20 sessions with holidays (drivers)
 GEX_TIMEOUT_S = 240         # a cold global GEX can take minutes; past this it is declared missing. The dispatcher's
                             # own HTTP cap (GALECORE_TIMEOUT_SECONDS, 120 s by default) applies first when lower
 SLUG_PREFIX = "historia"
@@ -128,11 +129,16 @@ async def gather(dispatcher, *, symbol: str = "SPY", today: date | None = None) 
     open_day = today.isoformat() if et.date() == today and (et.hour, et.minute) < (16, 15) else None
 
     symbols = list(dict.fromkeys([symbol, *CROSS_ASSET]))
-    candles = await asyncio.gather(*(ask("market_data.candles", {"symbol": s, "interval": "1d", "fromTime": start})
+    # The symbol goes back REACTION_DAYS: its reaction to the releases of the last months (drivers).
+    reaction_start = (today - timedelta(days=drivers.REACTION_DAYS)).isoformat()
+    candles = await asyncio.gather(*(ask("market_data.candles", {"symbol": s, "interval": "1d",
+                                                                 "fromTime": reaction_start if s == symbol else start})
                                      for s in [*symbols, *VOL_INDICES]))
-    prices, vol = {}, {}
+    prices, vol, closes = {}, {}, {}
+    raw_symbol = candles[0]
     for s, raw in zip([*symbols, *VOL_INDICES], candles, strict=True):
-        view = price_view(_closes(raw, exclude=open_day)) if raw is not None else None
+        closes[s] = _closes(raw, exclude=open_day) if raw is not None else []
+        view = price_view(closes[s]) if raw is not None else None
         if raw is not None and view is None:
             missing.append(f"market_data.candles {s}: menos de dos cierres diarios")
         if view:
@@ -143,7 +149,7 @@ async def gather(dispatcher, *, symbol: str = "SPY", today: date | None = None) 
             if other in vol:
                 term[f"{other}_over_VIX"] = round(vol[other]["close"] / vol["VIX"]["close"], 3)
 
-    skew, ivterm, ivrank, metrics, gex, releases, recent, fomc = await asyncio.gather(
+    skew, ivterm, ivrank, metrics, gex, releases, past, fomc = await asyncio.gather(
         ask("compute.put_skew", {"symbol": symbol}),
         ask("compute.implied_volatility", {"symbol": symbol}),
         ask("compute.iv_rank", {"symbol": symbol}),
@@ -152,10 +158,9 @@ async def gather(dispatcher, *, symbol: str = "SPY", today: date | None = None) 
         ask("calendar.macro_releases", {"From": today.isoformat(),
                                         "To": (today + timedelta(days=CALENDAR_DAYS)).isoformat(),
                                         "ReleaseIds": MACRO_RELEASES}),
-        ask("calendar.macro_releases", {"From": (today - timedelta(days=RECENT_DAYS)).isoformat(),
-                                        "To": (today - timedelta(days=1)).isoformat(),
+        ask("calendar.macro_releases", {"From": reaction_start, "To": (today - timedelta(days=1)).isoformat(),
                                         "ReleaseIds": MACRO_RELEASES}),
-        ask("calendar.fomc_meetings", {"Years": f"{today.year},{today.year + 1}"}))
+        ask("calendar.fomc_meetings", {"Years": f"{today.year - 1},{today.year},{today.year + 1}"}))
     options: dict = {}
     if skew:
         options["put_skew"] = {k: skew.get(k) for k in ("expiration", "dte", "atmIV", "put25DeltaIV", "putSkew25d",
@@ -175,15 +180,41 @@ async def gather(dispatcher, *, symbol: str = "SPY", today: date | None = None) 
     if releases is not None:
         calendar["macro_releases"] = [{"date": r.get("date"), "name": r.get("releaseName")}
                                       for r in (releases.get("data") or [])]
-    if recent is not None:
+    if past is not None:
+        week_ago = (today - timedelta(days=RECENT_DAYS)).isoformat()
         calendar["recent_releases"] = [{"date": r.get("date"), "name": r.get("releaseName")}
-                                       for r in (recent.get("data") or [])]
+                                       for r in (past.get("data") or []) if (r.get("date") or "") >= week_ago]
     if fomc is not None:
         upcoming = [m for m in fomc.get("data") or [] if (m.get("end") or "") >= today.isoformat()]
         calendar["next_fomc"] = upcoming[:2]
-    return {"symbol": symbol, "gathered_at": datetime.now(UTC).isoformat(), "prices": prices,
+    pack = {"symbol": symbol, "gathered_at": datetime.now(UTC).isoformat(), "prices": prices,
             "volatility": {**vol, **({"term": term} if term else {})}, "options": options, "calendar": calendar,
             "missing": missing}
+    pack["drivers"] = drivers_view(symbol, raw_symbol, closes, past, releases, fomc, today, open_day, missing)
+    return pack
+
+
+def drivers_view(symbol, raw_symbol, closes, past, releases, fomc, today, open_day, missing) -> dict:
+    """What moves the symbol today (P1-05): reaction to the releases, co-movement and what the IV pays ahead."""
+    out: dict = {}
+    bars = drivers.daily_bars(raw_symbol, exclude=open_day)
+    if past is None or fomc is None or not bars:
+        missing.append("drivers: sin calendario pasado, FOMC o velas del símbolo; no se mide la reacción a los datos")
+    else:
+        if all(iv is None for _, _, iv in bars):
+            missing.append(f"drivers: las velas de {symbol} no traen IV; no se compara contra el implícito")
+        events = drivers.release_events((past.get("data") or []) + ((releases or {}).get("data") or []),
+                                        fomc.get("data") or [])
+        out["reaction"] = drivers.reactions(bars, events, today)
+        out["reaction"]["from"] = bars[0][0]
+        out["upcoming"] = drivers.upcoming(events, out["reaction"]["by_release"], bars, today, CALENDAR_DAYS)
+    labels = {**CROSS_ASSET, **VOL_INDICES}
+    co = drivers.co_movement({s: c for s, c in closes.items() if c}, symbol, labels)
+    if co is None:
+        missing.append(f"drivers: menos de {drivers.WINDOW + 3} sesiones de {symbol}; sin co-movimiento")
+    else:
+        out["co_movement"] = co
+    return out
 
 
 # Scalars compared with the previous pack: the ones whose move can change the story.
@@ -262,11 +293,17 @@ def save_pack(kb: KnowledgeBase, pack: dict, *, prompt: str, host: RecordHost,
                                unit="iv decimal / percent / usd", frequency="snapshot",
                                observation_dates=pack["gathered_at"]),
                 EvidenceSeries(name="calendario macro y FOMC", unit="date", frequency="scheduled",
-                               observation_dates=f"{gathered.date()}..{gathered.date() + timedelta(days=CALENDAR_DAYS)}")],
+                               observation_dates=f"{gathered.date()}..{gathered.date() + timedelta(days=CALENDAR_DAYS)}"),
+                EvidenceSeries(name="qué lo mueve: reacción a cada dato contra la IV previa y co-movimiento de 20 "
+                                    "sesiones (drivers)", unit="percent / ratio / correlation", frequency="daily",
+                               observation_dates=((pack.get("drivers") or {}).get("reaction") or {}).get("from", "—")
+                               + f"..{gathered.date()}")],
         payload=json.dumps(pack, ensure_ascii=False), payload_scope=PayloadScope.EXCERPT,
         excerpt_note=("Resumen calculado por código de las respuestas de GaleCore: último cierre y variaciones a 1, 5 y "
                       "20 sesiones, distancia al máximo y mínimo de 20 sesiones, cocientes VIX9D/VIX y VIX3M/VIX, "
-                      "campos elegidos de cada capacidad y la diferencia con el paquete anterior; se dejan afuera las "
+                      "campos elegidos de cada capacidad, qué lo mueve (movimiento del símbolo en cada publicación macro "
+                      "y FOMC de los últimos meses contra la IV de la víspera, y correlación y beta con cada activo en "
+                      "20 sesiones contra las 20 anteriores) y la diferencia con el paquete anterior; se dejan afuera las "
                       "velas completas, la cadena y los vencimientos uno por uno."),
         access_notes=pack["missing"])
     stamp = gathered.strftime("%H%M")

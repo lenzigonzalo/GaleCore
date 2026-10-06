@@ -1,6 +1,14 @@
 # Qué cambió en cada versión de market_story y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: market_story
 versions:
+  - version: "0.2.0"
+    date: 2026-10-06
+    changes: >
+      P1-05 (WS-0015), «qué mueve hoy»: el paquete trae `drivers` — movimiento de SPY en cada publicación macro y FOMC
+      de los últimos seis meses contra la IV de la víspera (por tipo, contra los días sin dato), correlación y beta con
+      cada activo en 20 sesiones contra las 20 anteriores, y lo que paga hoy la IV para los datos que vienen. El método
+      suma el pilar [qué lo mueve] con los cuatro tipos de dato, la historia competidora y qué la refutaría.
+    feedback: []
   - version: "0.1.1"
     date: 2026-10-04
     changes: >
