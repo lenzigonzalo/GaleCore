@@ -7,6 +7,13 @@ using DataFeed.Infrastructure.Providers.Fred.Models;
 
 namespace DataFeed.Infrastructure.Providers.Fred
 {
+    /// <summary>Una observación de FRED; Value null = sin dato («.» en FRED).</summary>
+    public record FredObservation(string Date, decimal? Value);
+
+    /// <summary>Serie de FRED con metadatos y el vintage leído (RealtimeStart/RealtimeEnd).</summary>
+    public record FredSeriesData(string Id, string Title, string Units, string Frequency, string SeasonalAdjustment,
+        string LastUpdated, string RealtimeStart, string RealtimeEnd, List<FredObservation> Observations);
+
     public class FredApiProvider : ApiProviderBase, IFredApiProvider
     {
         private readonly string _apiKey;
@@ -91,6 +98,87 @@ namespace DataFeed.Infrastructure.Providers.Fred
                     return (rows, baseUrl);
             }
             throw new UpstreamSourceException("fred", $"el rango pide más de {maxPages * pageSize} filas: acortalo");
+        }
+
+        /// <summary>
+        /// Metadatos de una serie (fred/series) y sus observaciones en [from, to] (fred/series/observations), con el vintage
+        /// leído (realtime_start/realtime_end) y las URLs consultadas SIN la clave. «.» de FRED (sin dato) sale como null.
+        /// Una falla, una serie que no existe o un JSON que cambió de forma es <see cref="UpstreamSourceException"/>.
+        /// </summary>
+        public async Task<(FredSeriesData Series, string UpstreamUrl, string Sha256)> GetSeriesObservationsAsync(
+            string seriesId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+        {
+            const int maxRows = 10000;
+            if (string.IsNullOrWhiteSpace(_apiKey))
+                throw new UpstreamSourceException("fred", "falta FredApi:Key en la configuración");
+            var seriesUrl = $"https://api.stlouisfed.org/fred/series?series_id={seriesId}&file_type=json";
+            var obsUrl = $"https://api.stlouisfed.org/fred/series/observations?series_id={seriesId}"
+                + $"&observation_start={from:yyyy-MM-dd}&observation_end={to:yyyy-MM-dd}&limit={maxRows}&file_type=json";
+
+            var meta = await GetJsonAsync(seriesUrl, "series", cancellationToken);
+            var obs = await GetJsonAsync(obsUrl, "series/observations", cancellationToken);
+            try
+            {
+                var s = meta.RootElement.GetProperty("seriess")[0];
+                string Text(JsonElement e, string name) => e.GetProperty(name).GetString() ?? "";
+                var root = obs.RootElement;
+                if (root.GetProperty("count").GetInt32() > maxRows)
+                    throw new UpstreamSourceException("fred", $"el rango pide más de {maxRows} observaciones: acortalo");
+                var observations = root.GetProperty("observations").EnumerateArray().Select(o =>
+                {
+                    var value = Text(o, "value");
+                    return new FredObservation(Text(o, "date"),
+                        value == "." ? null : decimal.Parse(value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture));
+                }).ToList();
+                var data = new FredSeriesData(Text(s, "id"), Text(s, "title"), Text(s, "units"), Text(s, "frequency"),
+                    Text(s, "seasonal_adjustment"), Text(s, "last_updated"), Text(root, "realtime_start"), Text(root, "realtime_end"), observations);
+                var sha = "sha256:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(meta.RootElement.GetRawText() + obs.RootElement.GetRawText()))).ToLowerInvariant();
+                return (data, obsUrl, sha);
+            }
+            catch (Exception ex) when (ex is KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException or FormatException)
+            {
+                throw new UpstreamSourceException("fred", $"la serie {seriesId} cambió de forma ({ex.GetType().Name})");
+            }
+            finally
+            {
+                meta.Dispose();
+                obs.Dispose();
+            }
+        }
+
+        private async Task<JsonDocument> GetJsonAsync(string url, string what, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync($"{url}&api_key={_apiKey}", cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                    // FRED responde 400 cuando la serie no existe: el motivo viene en error_message, sin la clave.
+                    throw new UpstreamSourceException("fred", $"{what} respondió {(int)response.StatusCode}"
+                        + (await ErrorMessage(response, cancellationToken) is { } m ? $": {m}" : ""));
+                return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            }
+            catch (HttpRequestException ex)
+            {
+                throw new UpstreamSourceException("fred", $"sin respuesta ({ex.Message})");
+            }
+            catch (JsonException)
+            {
+                throw new UpstreamSourceException("fred", $"{what} cambió de forma (JSON no reconocido)");
+            }
+        }
+
+        private static async Task<string?> ErrorMessage(HttpResponseMessage response, CancellationToken cancellationToken)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+                return doc.RootElement.TryGetProperty("error_message", out var m) ? m.GetString() : null;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
         }
     }
 }

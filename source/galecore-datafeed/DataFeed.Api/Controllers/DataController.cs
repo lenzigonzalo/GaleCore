@@ -13,7 +13,12 @@ using DataFeed.Application.Data.Tastytrade.AccountPositions;
 using DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility;
 using DataFeed.Application.Data.Tastytrade.SymbolSearch;
 using DataFeed.Application.Data.Fred.ReleaseDates;
+using DataFeed.Application.Data.Fred.Series;
 using DataFeed.Application.Data.Fed.FomcMeetings;
+using DataFeed.Application.Data.Cboe.IndexHistory;
+using DataFeed.Application.Data.Treasury;
+using DataFeed.Application.Data.Sec;
+using DataFeed.Application.Data.Bls.Series;
 using DataFeed.Api.Controllers.Dtos;
 
 namespace DataFeed.Controllers
@@ -35,8 +40,40 @@ namespace DataFeed.Controllers
         public async Task<IActionResult> FredReleaseDatesAsync([FromQuery] FredReleaseDatesRequest request) => await Handle(request);
 
         [Tags("Data.Sources")]
+        [HttpGet("Fred/Series")]
+        public async Task<IActionResult> FredSeriesAsync([FromQuery] FredSeriesRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
         [HttpGet("Fed/FomcMeetings")]
         public async Task<IActionResult> FomcMeetingsAsync([FromQuery] FomcMeetingsRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Cboe/IndexHistory")]
+        public async Task<IActionResult> CboeIndexHistoryAsync([FromQuery] CboeIndexHistoryRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Treasury/YieldCurve")]
+        public async Task<IActionResult> TreasuryYieldCurveAsync([FromQuery] TreasuryYieldCurveRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Treasury/Auctions/Upcoming")]
+        public async Task<IActionResult> TreasuryUpcomingAuctionsAsync() => await Handle(new TreasuryUpcomingAuctionsRequest());
+
+        [Tags("Data.Sources")]
+        [HttpGet("Sec/Company")]
+        public async Task<IActionResult> SecCompanyAsync([FromQuery] SecCompanyRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Sec/Filings")]
+        public async Task<IActionResult> SecFilingsAsync([FromQuery] SecFilingsRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Sec/Facts")]
+        public async Task<IActionResult> SecFactsAsync([FromQuery] SecFactsRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Bls/Series")]
+        public async Task<IActionResult> BlsSeriesAsync([FromQuery] BlsSeriesRequest request) => await Handle(request);
 
         [Tags("Data.Api")]
         [HttpGet("Tastytrade/MarketData/ByType")]

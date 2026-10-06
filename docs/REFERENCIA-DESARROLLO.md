@@ -281,6 +281,23 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   resultado no existe no es una falla del servidor. Aplica a `/App/Gex/Analysis` y a
   `/App.Analytics/GammaExposure`, que comparten handler, y dejó de ser un caso de laboratorio con el
   buscador de símbolos: el operador puede elegir cualquier cosa que Tastytrade conozca.
+  * `Data.Sources` — fuentes externas públicas (GC-0006, WS-0014), sólo `GET`. Responden `SourcedResponse`
+    (`source`, `upstreamUrl` sin clave, `retrievedAt`, `fromCache`, `asOf`, `sha256`, `notes`, `data`); una fuente caída
+    o que cambió de forma es `502` con `code: UPSTREAM_SOURCE_UNAVAILABLE`, nunca una lista vacía. Proveedor en
+    `Infrastructure/Providers/<Fuente>`, handler en `Application/Data/<Fuente>`, tests con respuestas grabadas.
+
+    | Ruta | Fuente | Configuración |
+    |---|---|---|
+    | `Fred/ReleaseDates?From&To&ReleaseIds` · `Fred/Series?SeriesId&From&To` | FRED: calendario de publicaciones; serie con metadatos y vintage | `FredApi:Key` |
+    | `Fed/FomcMeetings?Years` | página del calendario del FOMC | — |
+    | `Cboe/IndexHistory?Index&From&To` | CSV diarios de VIX, VVIX, SKEW (caché 6 h) | — |
+    | `Treasury/YieldCurve?From&To` · `Treasury/Auctions/Upcoming` | curva par diaria (CSV por año) y subastas (Fiscal Data) | — |
+    | `Sec/Company?Ticker` · `Sec/Filings?Ticker\|Cik&Forms&Since` · `Sec/Facts?Ticker\|Cik&Taxonomy&Tag&Since` | SEC EDGAR | `SecEdgar:UserAgent` (nombre y correo, lo exige la SEC) |
+    | `Bls/Series?Ids&StartYear&EndYear` | BLS API v2 (caché 6 h por el cupo diario) | `Bls:Key` opcional |
+
+    Sumar una fuente: ver si es gratis y qué cubre → probar el acceso → proveedor + handler + ruta con este contrato y
+    sus tests (respuesta grabada, forma cambiada, fuente caída) → declararla en GaleCore-AI (receta completa en
+    `../docs/engineering/HANDOFF-GALECORE-FUENTES.md` §10).
   Hoy el proveedor (`Tastytrade`) vive en la **ruta**, no en el tag: los tags son planos (`Data.Api`),
   no `Data.Api.<Cuenta>`. El sub-prefijo por cuenta recién hace falta cuando se sume un segundo bróker.
 
