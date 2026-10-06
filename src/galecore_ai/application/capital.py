@@ -20,7 +20,7 @@ from galecore_ai.application import supervisor
 from galecore_ai.application.knowledge import KnowledgeBase
 from galecore_ai.contracts.profile import ProfileContent
 
-_PCT = r"(\d+(?:[.,]\d+)?)\s*%"
+_PCT = r"([-+−]?\s*\d+(?:[.,]\d+)?)\s*%"
 # Which profile line declares each limit (words of risk_limits), and the GaleCore parameter it feeds.
 _LIMITS = (
     ("maxRiskPerTradePct", "pérdida máxima por operación", ("por operaci",)),
@@ -32,7 +32,11 @@ NOT_AN_ORDER = ("Es un reparto para pensar, no una orden: SHADOW abre y cierra s
                 "un cambio de capital o de reglas pasa por tu aprobación.")
 RULE_LABELS = {"open_risk": "riesgo abierto", "reserve": "reserva intacta"}
 BINDING = {"budget": "presupuesto de riesgo", "max_concurrent": "máximo de posiciones de la spec",
-           "per_trade": "pérdida máxima por operación", "bet": "tope de una apuesta", "no_width": "la spec no fija ancho"}
+           "per_trade": "pérdida máxima por operación", "bet": "tope de una apuesta", "no_width": "la spec no fija ancho",
+           "missing_dte": "la spec no fija DTE"}
+RISK_SOURCE = {"width": "ancho completo (sin crédito)", "none": "no calculable"}
+MISSING_INPUT = {"no_width": "la spec no fija el ancho del spread: no se puede calcular el riesgo",
+                 "missing_dte": "la spec no fija el DTE: no se puede estimar el vencimiento ni la apuesta"}
 
 
 def limits(content: ProfileContent | None) -> dict:
@@ -45,7 +49,7 @@ def limits(content: ProfileContent | None) -> dict:
     for key, label, words in _LIMITS:
         line = next((x for x in content.risk_limits if any(w in x.lower() for w in words)), None)
         m = re.search(_PCT, line) if line else None
-        value = float(m.group(1).replace(",", ".")) if m else None
+        value = float(re.sub(r"\s", "", m.group(1)).replace("−", "-").replace(",", ".")) if m else None
         floor_ok = value is not None and (value >= 0 if key == "reservePct" else value > 0)
         out[key] = value if floor_ok and value <= 100 else None   # out of range is not a limit: listed, not used
         if out[key] is None:
@@ -135,11 +139,13 @@ def split(plan: dict, capital: float) -> dict:
         rows.append({"estrategia": a["specName"], "version": a["specVersion"], "subyacente": a["symbol"],
                      "ancho": a.get("width"), "riesgo_por_contrato_usd": a.get("riskPerContract"),
                      "riesgo_de": (f"promedio de {a.get('observedPositions', 0)} posiciones en SHADOW"
-                                   if a["riskSource"] == "observed" else "ancho completo (sin crédito)"),
+                                   if a["riskSource"] == "observed" else RISK_SOURCE.get(a["riskSource"], a["riskSource"])),
                      "dte_entrada": a.get("entryDte"),
                      "contratos_por_posicion": a["contractsPerPosition"], "posiciones": a["positions"],
-                     "riesgo_usd": a["riskUsd"], "por_semana_max": a["positionsPerWeek"],
+                     "riesgo_usd": a["riskUsd"], "max_por_apuesta_si_fuera_sola": a["positionsPerWeek"],
                      "limita": BINDING.get(a["bindingLimit"], a["bindingLimit"]), "entra": a["fits"]})
+        if a["bindingLimit"] in MISSING_INPUT:
+            notes.append(f"{a['specName']}: falta un dato, no es un límite — {MISSING_INPUT[a['bindingLimit']]}.")
         if not a["fits"] and a["bindingLimit"] == "per_trade":
             alt = (f"un spread de ancho {a['maxWidthThatFits']:g} entraría si cobrara el mismo crédito relativo "
                    "(estimación) — es una versión nueva de la estrategia y necesita tu aprobación"
@@ -161,6 +167,12 @@ def split(plan: dict, capital: float) -> dict:
                    f"{len(ladder)} posiciones por {_usd(plan['allocatedRiskUsd'])} USD de riesgo, en {weeks} semanas "
                    f"(a lo sumo {_usd(plan['maxBetUsd'])} por apuesta, con el vencimiento estimado); quedan "
                    f"{_usd(plan['cashUsd'])} sin riesgo.")
+    elif not plan["strategies"]:
+        reading = ("No hay estrategias calculables" + (": GaleCore no encontró " + ", ".join(plan["strategiesNotFound"])
+                                                      if plan.get("strategiesNotFound") else "")
+                   + ". No se puede repartir; no es por los límites.")
+    elif all(a["bindingLimit"] in MISSING_INPUT for a in plan["strategies"] if not a["fits"]):
+        reading = f"Con {_usd(capital)} USD no se puede calcular el reparto: faltan datos de la spec (ver notas)."
     else:
         reading = (f"Con {_usd(capital)} USD no entra ninguna posición con los límites de hoy: queda todo en "
                    "efectivo (ver notas).")

@@ -61,6 +61,8 @@ def test_a_limit_the_profile_does_not_declare_is_listed_not_guessed():
     assert capital.limits(None)["no_leidos"] == ["perfil: no hay perfil"]
     odd = capital.limits(ProfileContent(risk_limits=[*LIMITS[:3], "una apuesta no pasa el 130 % del riesgo"]))
     assert odd["maxBetPct"] is None and "tope de una apuesta" in odd["no_leidos"]
+    neg = capital.limits(ProfileContent(risk_limits=[*LIMITS[:2], "reserva para ajustes −10 %", LIMITS[3]]))
+    assert neg["reservePct"] is None and "reserva para ajustes" in neg["no_leidos"]
 
 
 def test_small_positions_of_the_same_week_are_said_as_one_bet():
@@ -137,3 +139,13 @@ def test_report_refuses_what_is_not_exposure(kb):  # noqa: F811
         assert "no es exposición" in str(exc)
     else:
         raise AssertionError("a list is not an exposure")
+
+
+def test_missing_spec_data_is_not_said_as_a_limit():
+    plan = allocation(fits=False)
+    plan["strategies"][0].update(riskSource="none", bindingLimit="no_width", riskPerContract=None, maxWidthThatFits=None)
+    out = capital.split(plan, 10000.0)
+    assert out["por_estrategia"][0]["riesgo_de"] == "no calculable"
+    assert "faltan datos de la spec" in out["lectura"] and any("falta un dato, no es un límite" in n for n in out["notas"])
+    none = capital.split({**allocation(fits=False), "strategies": [], "strategiesNotFound": ["spy_pcs"]}, 10000.0)
+    assert "no encontró spy_pcs" in none["lectura"] and "no es por los límites" in none["lectura"]
