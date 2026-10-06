@@ -60,6 +60,8 @@ def test_bad_symbols_and_the_same_active_rule_are_refused(kb):  # noqa: F811
         add(kb, symbol="spy; rm")
     with pytest.raises(KnowledgeError):
         add(kb, metric="net_gex")
+    with pytest.raises(KnowledgeError, match="finite"):
+        add(kb, threshold=float("nan"))
     with pytest.raises(KnowledgeError, match="past"):
         add(kb, until=NOW - timedelta(days=1))
 
@@ -131,3 +133,21 @@ def test_the_alert_is_shown_like_the_others_and_its_answer_goes_to_the_portfolio
     assert shown["kind"] == "watch" and shown["needs_decision"] is False and shown["strategy"] == "Alerta SPY"
     out = supervisor.decide(kb=kb, alert_id=shown["id"], choice="visto", words="", prompt="visto", now=IN_SESSION)
     assert out["project"] == "portfolio"
+
+
+@pytest.mark.parametrize("payload", [[1], {"gex": "s"}, {"data": "x"}, {"data": [1]}, None])
+def test_a_payload_in_another_shape_is_a_problem_not_a_crash(kb, payload):  # noqa: F811
+    add(kb)
+    add(kb, metric="gamma_zero", condition="above", threshold=770.0)
+    out = supervisor.scan(kb, lambda path: [] if path == "/App/Runtime/Instances" else payload, IN_SESSION)
+    assert out["new"] == [] and len(out["problems"]) == 2
+
+
+def test_a_bad_until_is_a_json_error(kb, capsys, monkeypatch):  # noqa: F811
+    from galecore_ai.adapters import cli
+    monkeypatch.setattr(cli, "_build_knowledge_base", lambda: kb)
+    monkeypatch.setattr("sys.argv", ["galecore-ai", "supervise", "watch", "--symbol", "SPY", "--below", "760",
+                                     "--until", "31/10", "--text", "x", "--prompt", "x"])
+    with pytest.raises(SystemExit):
+        cli.main()
+    assert "--until" in capsys.readouterr().out

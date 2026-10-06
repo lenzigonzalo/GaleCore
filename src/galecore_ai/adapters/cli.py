@@ -760,7 +760,10 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
             _json_out({"alerts": supervisor.view(kb, args.limit)})
         elif c == "watch":
             from galecore_ai.application import watch
-            until = _dt.fromisoformat(args.until) if args.until else None
+            try:
+                until = _dt.fromisoformat(args.until) if args.until else None
+            except ValueError as exc:
+                raise KnowledgeError(f"--until {args.until!r}: an ISO date such as 2026-10-31") from exc
             rule = watch.add(kb, symbol=args.symbol, metric=args.metric,
                              condition="below" if args.below is not None else "above",
                              threshold=args.below if args.below is not None else args.above, words=args.text,

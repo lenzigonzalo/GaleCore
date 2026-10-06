@@ -59,14 +59,17 @@ def _number(value) -> float | None:
 
 
 def read_metric(payload, metric: WatchMetric) -> float | None:
-    """The number of ``metric`` in a GaleCore payload, or None when it is not there (NaN counts as absent)."""
+    """The number of ``metric`` in a GaleCore payload, or None when it is not there (NaN or another shape count as
+    absent: a payload GaleCore sends in another shape is a problem of the pass, never a crash of the supervisor)."""
+    def get(obj, key):
+        return obj.get(key) if isinstance(obj, dict) else None
+
     if metric == WatchMetric.PRICE:
-        rows = (payload or {}).get("data") or []
-        return _number(rows[0].get("midPrice")) if rows and isinstance(rows[0], dict) else None
+        rows = get(payload, "data")
+        return _number(get(rows[0], "midPrice")) if isinstance(rows, list) and rows else None
     if metric == WatchMetric.IV_RANK:
-        return _number((payload or {}).get("ivRank"))
-    scope = (((payload or {}).get("gex") or {}).get("global")) or {}
-    return _number(scope.get(GEX_FIELDS[metric]))
+        return _number(get(payload, "ivRank"))
+    return _number(get(get(get(payload, "gex"), "global"), GEX_FIELDS[metric]))
 
 
 # ── store ────────────────────────────────────────────────────────
@@ -83,6 +86,8 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
     symbol = symbol.strip().upper()
     if not SYMBOL.match(symbol):
         raise KnowledgeError(f"symbol {symbol!r}: a ticker such as SPY")
+    if not math.isfinite(threshold):
+        raise KnowledgeError("the level is a finite number")
     if not words.strip() or not prompt.strip():
         raise KnowledgeError("a rule keeps the owner's words and request (--text, --prompt)")
     if until is not None and until.tzinfo is None:
