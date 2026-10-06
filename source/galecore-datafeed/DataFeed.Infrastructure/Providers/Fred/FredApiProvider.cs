@@ -101,6 +101,34 @@ namespace DataFeed.Infrastructure.Providers.Fred
         }
 
         /// <summary>
+        /// Fechas de UNA publicación en [from, to] (fred/release/dates) con su nombre (fred/release). Para pocas
+        /// publicaciones es mucho más liviano que <see cref="GetReleaseDatesAsync"/>, que trae todas (las diarias suman
+        /// cientos por semana) y FRED corta con 504 en rangos de meses. Devuelve la URL de las fechas SIN la clave.
+        /// </summary>
+        public async Task<(List<FredReleaseDate> Rows, string UpstreamUrl)> GetReleaseDatesAsync(int releaseId, DateOnly from, DateOnly to, CancellationToken cancellationToken)
+        {
+            if (string.IsNullOrWhiteSpace(_apiKey))
+                throw new UpstreamSourceException("fred", "falta FredApi:Key en la configuración");
+            var datesUrl = $"https://api.stlouisfed.org/fred/release/dates?release_id={releaseId}"
+                + $"&realtime_start={from:yyyy-MM-dd}&realtime_end={to:yyyy-MM-dd}"
+                + "&include_release_dates_with_no_data=true&sort_order=asc&limit=10000&file_type=json";
+            using var meta = await GetJsonAsync($"https://api.stlouisfed.org/fred/release?release_id={releaseId}&file_type=json", "release", cancellationToken);
+            using var dates = await GetJsonAsync(datesUrl, "release/dates", cancellationToken);
+            try
+            {
+                var name = meta.RootElement.GetProperty("releases")[0].GetProperty("name").GetString() ?? "";
+                var rows = dates.RootElement.GetProperty("release_dates").EnumerateArray()
+                    .Select(d => new FredReleaseDate { ReleaseId = releaseId, ReleaseName = name, Date = d.GetProperty("date").GetString() ?? "" })
+                    .ToList();
+                return (rows, datesUrl);
+            }
+            catch (Exception ex) when (ex is KeyNotFoundException || ex is InvalidOperationException || ex is IndexOutOfRangeException)
+            {
+                throw new UpstreamSourceException("fred", "release/dates cambió de forma (JSON no reconocido)");
+            }
+        }
+
+        /// <summary>
         /// Metadatos de una serie (fred/series) y sus observaciones en [from, to] (fred/series/observations), con el vintage
         /// leído (realtime_start/realtime_end) y las URLs consultadas SIN la clave. «.» de FRED (sin dato) sale como null.
         /// Una falla, una serie que no existe o un JSON que cambió de forma es <see cref="UpstreamSourceException"/>.
