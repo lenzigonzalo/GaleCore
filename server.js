@@ -23,6 +23,10 @@ const ORIGINS = (process.env.GALECORE_TERMINAL_ORIGINS || 'http://localhost:3039
   .split(',').map(s => s.trim()).filter(Boolean);
 const WORKSPACE = path.resolve(__dirname, '..', '..');
 const STRATEGIES = path.join(WORKSPACE, 'knowledge', 'strategies');
+const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];   // contra DNS rebinding: el nombre tiene que ser local
+const MAX_SESSIONS = 4;
+const MAX_PROMPT = 2000;
+let sessions = 0;
 
 function claudeBin() {
   if (process.env.GALECORE_CLAUDE_BIN) return process.env.GALECORE_CLAUDE_BIN;
@@ -44,17 +48,19 @@ function folders() {
 function cleanEnv() {
   const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' };
   for (const k of Object.keys(env)) {
-    if (k === 'CLAUDECODE' || k.startsWith('CLAUDE_CODE_') || k === 'ANTHROPIC_API_KEY') delete env[k];
+    // CLAUDE_CODE_OAUTH_TOKEN es la sesión del plan: se deja.
+    if (k === 'CLAUDECODE' || (k.startsWith('CLAUDE_CODE_') && k !== 'CLAUDE_CODE_OAUTH_TOKEN') || k === 'ANTHROPIC_API_KEY') delete env[k];
   }
   return env;
 }
 
 const allowed = origin => !!origin && ORIGINS.includes(origin);
+const localHost = req => HOSTS.includes(String(req.headers.host || '').toLowerCase());
 const clamp = (v, lo, hi, dflt) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : dflt; };
 
 const server = http.createServer((req, res) => {
   const origin = req.headers.origin;
-  if (origin && !allowed(origin)) { res.writeHead(403).end(); return; }
+  if (!localHost(req) || (origin && !allowed(origin))) { res.writeHead(403).end(); return; }
   if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
   const url = new URL(req.url, 'http://127.0.0.1');
   if (req.method === 'GET' && url.pathname === '/folders') {
@@ -65,10 +71,10 @@ const server = http.createServer((req, res) => {
   res.writeHead(404).end();
 });
 
-const wss = new WebSocketServer({ noServer: true });
+const wss = new WebSocketServer({ noServer: true, maxPayload: 64 * 1024 });
 server.on('upgrade', (req, socket, head) => {
   const url = new URL(req.url, 'http://127.0.0.1');
-  if (url.pathname !== '/pty' || !allowed(req.headers.origin)) { socket.destroy(); return; }
+  if (url.pathname !== '/pty' || !localHost(req) || !allowed(req.headers.origin)) { socket.destroy(); return; }
   wss.handleUpgrade(req, socket, head, ws => open(ws, url.searchParams));
 });
 
@@ -76,6 +82,12 @@ function open(ws, params) {
   const folder = folders().find(f => f.key === (params.get('folder') || 'workspace'));
   if (!folder) { ws.close(4004, 'carpeta desconocida'); return; }
   const prompt = (params.get('prompt') || '').trim();
+  // Un pedido que empieza con «-» claude lo tomaría como opción (p. ej. saltear permisos): no se acepta.
+  if (prompt.startsWith('-') || prompt.length > MAX_PROMPT) { ws.close(4000, 'pedido no válido'); return; }
+  if (sessions >= MAX_SESSIONS) { ws.send(`
+Ya hay ${MAX_SESSIONS} sesiones abiertas: cerrá una.
+`); ws.close(); return; }
+  ws.on('error', () => { /* frame inválido o corte: se cierra y se mata la pty en «close» */ });
   let term;
   try {
     term = pty.spawn(claudeBin(), prompt ? [prompt] : [], {
@@ -85,6 +97,7 @@ function open(ws, params) {
   } catch (e) {
     ws.send(`\r\nNo se pudo abrir claude: ${e.message}\r\n`); ws.close(); return;
   }
+  sessions += 1;
   console.log(`[terminal] ${new Date().toISOString()} abre ${folder.key} pid=${term.pid}${prompt ? ' con pedido' : ''}`);
   term.onData(d => { if (ws.readyState === ws.OPEN) ws.send(d); });
   term.onExit(({ exitCode }) => {
@@ -92,10 +105,12 @@ function open(ws, params) {
   });
   ws.on('message', raw => {
     let m; try { m = JSON.parse(String(raw)); } catch { return; }
-    if (m.type === 'input' && typeof m.data === 'string') term.write(m.data);
-    else if (m.type === 'resize') term.resize(clamp(m.cols, 20, 400, 100), clamp(m.rows, 5, 200, 30));
+    try {
+      if (m.type === 'input' && typeof m.data === 'string') term.write(m.data);
+      else if (m.type === 'resize') term.resize(clamp(m.cols, 20, 400, 100), clamp(m.rows, 5, 200, 30));
+    } catch { /* claude ya terminó */ }
   });
-  ws.on('close', () => { try { term.kill(); } catch { /* ya terminó */ } });
+  ws.on('close', () => { sessions -= 1; try { term.kill(); } catch { /* ya terminó */ } });
 }
 
 server.listen(PORT, '127.0.0.1', () => console.log(`[terminal] http://127.0.0.1:${PORT} · claude=${claudeBin()} · origins=${ORIGINS.join(' ')}`));
