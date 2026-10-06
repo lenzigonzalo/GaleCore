@@ -13,6 +13,7 @@ using DataFeed.Application.Data.Tastytrade.AccountPositions;
 using DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility;
 using DataFeed.Application.Data.Tastytrade.SymbolSearch;
 using DataFeed.Application.Data.Fred.ReleaseDates;
+using DataFeed.Application.Data.Fred.Series;
 using DataFeed.Application.Data.Fed.FomcMeetings;
 using DataFeed.Application.Data.Cboe.IndexHistory;
 using DataFeed.Application.Data.Treasury;
@@ -35,6 +36,10 @@ namespace DataFeed.Controllers
         [Tags("Data.Sources")]
         [HttpGet("Fred/ReleaseDates")]
         public async Task<IActionResult> FredReleaseDatesAsync([FromQuery] FredReleaseDatesRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Fred/Series")]
+        public async Task<IActionResult> FredSeriesAsync([FromQuery] FredSeriesRequest request) => await Handle(request);
 
         [Tags("Data.Sources")]
         [HttpGet("Fed/FomcMeetings")]
