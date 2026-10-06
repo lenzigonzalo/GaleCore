@@ -17,6 +17,7 @@ using DataFeed.Application.Data.Fred.Series;
 using DataFeed.Application.Data.Fed.FomcMeetings;
 using DataFeed.Application.Data.Cboe.IndexHistory;
 using DataFeed.Application.Data.Treasury;
+using DataFeed.Application.Data.Sec;
 using DataFeed.Api.Controllers.Dtos;
 
 namespace DataFeed.Controllers
@@ -56,6 +57,18 @@ namespace DataFeed.Controllers
         [Tags("Data.Sources")]
         [HttpGet("Treasury/Auctions/Upcoming")]
         public async Task<IActionResult> TreasuryUpcomingAuctionsAsync() => await Handle(new TreasuryUpcomingAuctionsRequest());
+
+        [Tags("Data.Sources")]
+        [HttpGet("Sec/Company")]
+        public async Task<IActionResult> SecCompanyAsync([FromQuery] SecCompanyRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Sec/Filings")]
+        public async Task<IActionResult> SecFilingsAsync([FromQuery] SecFilingsRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Sec/Facts")]
+        public async Task<IActionResult> SecFactsAsync([FromQuery] SecFactsRequest request) => await Handle(request);
 
         [Tags("Data.Api")]
         [HttpGet("Tastytrade/MarketData/ByType")]
