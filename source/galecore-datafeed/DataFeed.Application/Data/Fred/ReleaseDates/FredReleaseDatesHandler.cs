@@ -1,5 +1,6 @@
 using DataFeed.Application.Shared;
 using DataFeed.Infrastructure.Providers.Fred;
+using DataFeed.Infrastructure.Providers.Fred.Models;
 using MediatR;
 using Microsoft.Extensions.Configuration;
 
@@ -41,7 +42,24 @@ namespace DataFeed.Application.Data.Fred.ReleaseDates
             var ids = ParseIds(request.ReleaseIds);
 
             var provider = new FredApiProvider(_config, _client.CreateClient());
-            var (rows, upstreamUrl) = await provider.GetReleaseDatesAsync(from, to, cancellationToken);
+            // Con ReleaseIds se piden sólo esas publicaciones: el listado de todas tarda ~35 s por dos meses y FRED
+            // corta con 504 en rangos más largos (WS-0015, historia de reacción a los datos).
+            List<FredReleaseDate> rows;
+            string upstreamUrl;
+            if (ids.Count == 0)
+                (rows, upstreamUrl) = await provider.GetReleaseDatesAsync(from, to, cancellationToken);
+            else
+            {
+                rows = new();
+                var urls = new List<string>();
+                foreach (var id in ids.OrderBy(i => i))
+                {
+                    var (part, url) = await provider.GetReleaseDatesAsync(id, from, to, cancellationToken);
+                    rows.AddRange(part);
+                    urls.Add(url);
+                }
+                upstreamUrl = string.Join(" ", urls);
+            }
             var data = rows
                 .Where(r => ids.Count == 0 || ids.Contains(r.ReleaseId))
                 .Select(r => new FredReleaseDateDto(r.ReleaseId, r.ReleaseName, r.Date))

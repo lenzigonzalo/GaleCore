@@ -14,5 +14,7 @@ namespace DataFeed.Infrastructure.Providers.Fred
         Task<FredObservationResponseModel?> GetObservationsAsync(string observationId, DateTime? fromTime, DateTime? toTime, CancellationToken cancellationToken);
 
         Task<(List<FredReleaseDate> Rows, string UpstreamUrl)> GetReleaseDatesAsync(DateOnly from, DateOnly to, CancellationToken cancellationToken);
+
+        Task<(List<FredReleaseDate> Rows, string UpstreamUrl)> GetReleaseDatesAsync(int releaseId, DateOnly from, DateOnly to, CancellationToken cancellationToken);
     }
 }

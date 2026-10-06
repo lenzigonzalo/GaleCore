@@ -93,6 +93,28 @@ namespace DataFeed.Tests
         }
 
         [Fact]
+        public async Task Fred_UnaPublicacionTraeSusFechasConNombreYSinClave()
+        {
+            var handler = new Recorded(r => r.RequestUri!.AbsolutePath.EndsWith("/release/dates")
+                ? Json("{\"release_dates\":[{\"release_id\":10,\"date\":\"2026-09-11\"},{\"release_id\":10,\"date\":\"2026-10-14\"}]}")
+                : Json("{\"releases\":[{\"id\":10,\"name\":\"Consumer Price Index\"}]}"));
+            var provider = new FredApiProvider(Config(), new HttpClient(handler));
+            var (rows, upstream) = await provider.GetReleaseDatesAsync(10, new DateOnly(2026, 9, 1), new DateOnly(2026, 10, 31), default);
+            Assert.Equal(new[] { "2026-09-11", "2026-10-14" }, rows.Select(r => r.Date));
+            Assert.All(rows, r => Assert.Equal("Consumer Price Index", r.ReleaseName));
+            Assert.All(handler.Urls, u => Assert.Contains("release_id=10", u));
+            Assert.DoesNotContain("api_key", upstream);
+        }
+
+        [Fact]
+        public async Task Fred_UnaPublicacionConOtraFormaEsUpstream()
+        {
+            var provider = new FredApiProvider(Config(), new HttpClient(new Recorded(_ => Json("{\"otra\":1}"))));
+            await Assert.ThrowsAsync<UpstreamSourceException>(
+                () => provider.GetReleaseDatesAsync(10, new DateOnly(2026, 9, 1), new DateOnly(2026, 10, 31), default));
+        }
+
+        [Fact]
         public async Task Fred_ErrorDeLaFuenteEsUpstreamNoVacio()
         {
             var provider = new FredApiProvider(Config(), new HttpClient(new Recorded(_ => Json("{}", HttpStatusCode.InternalServerError))));
@@ -119,6 +141,11 @@ namespace DataFeed.Tests
             var fred = new FredApiProvider(Config(Environment.GetEnvironmentVariable("FRED_API_KEY")), http);
             var (rows, _) = await fred.GetReleaseDatesAsync(new DateOnly(2026, 10, 1), new DateOnly(2026, 11, 15), default);
             Assert.Contains(rows, r => r.ReleaseId == 50);
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var (cpi, _) = await fred.GetReleaseDatesAsync(10, new DateOnly(2025, 10, 1), new DateOnly(2026, 3, 30), default);
+            Assert.InRange(cpi.Count, 4, 8);
+            Assert.All(cpi, r => Assert.Equal("Consumer Price Index", r.ReleaseName));
+            Console.WriteLine($"CPI 6 meses: {string.Join(",", cpi.Select(r => r.Date))} en {watch.ElapsedMilliseconds} ms");
             var (years, sha) = await new FedCalendarProvider(http).GetMeetingsAsync(new[] { 2026, 2027 }, default);
             Assert.NotEmpty(years[2026]);
             Assert.StartsWith("sha256:", sha);
