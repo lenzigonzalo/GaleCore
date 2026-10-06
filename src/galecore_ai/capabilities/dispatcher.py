@@ -4,7 +4,7 @@ Maps capability_id to GaleCore REST endpoints and returns structured results.
 Phase 3: read-only (PURE_QUERY and COMPUTE only).
 
 Endpoint mapping (from GaleCore controllers):
-  market_data.quote         → GET /Data/Tastytrade/MarketData/Quote?symbols={symbol}
+  market_data.quote         → GET /Data/Tastytrade/MarketData/Quote?symbol={symbol}  (GaleCore requires Symbol; 400 with symbols, 06/10)
   compute.gamma_exposure    → GET /App.Analytics/GammaExposure?symbol={symbol}[&dte={dte}]
   compute.iv_rank           → GET /App.Analytics/IVRank?symbol={symbol}
   compute.implied_volatility → GET /App.Analytics/ImpliedVolatility?symbol={symbol}
@@ -71,7 +71,7 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
     "market_data.quote": {
         "method": "GET",
         "path": "/Data/Tastytrade/MarketData/Quote",
-        "param_key": "symbols",
+        "param_key": "symbol",
         "source_param": "symbol",
     },
     "market_data.option_chains": {

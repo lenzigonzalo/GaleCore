@@ -52,7 +52,7 @@ def reader(spec_hash, positions, *, fail=False, releases=(), fomc=(), calendar_f
 def test_a_healthy_position_raises_nothing(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
     out = supervisor.scan(kb, reader(doc.spec_hash, [position()]), IN_SESSION)
-    assert out == {"at": IN_SESSION.isoformat(), "new": [], "checked": 1, "problems": []}
+    assert out == {"at": IN_SESSION.isoformat(), "new": [], "checked": 1, "watched": 0, "problems": []}
 
 
 def test_a_close_by_shadow_is_one_alert_with_its_data_and_never_repeats(kb, research_ref):  # noqa: F811

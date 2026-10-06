@@ -745,6 +745,7 @@ async def _cmd_project(args: argparse.Namespace) -> None:
 
 async def _cmd_supervise(args: argparse.Namespace) -> None:
     from datetime import date as _date
+    from datetime import datetime as _dt
 
     from galecore_ai.application import supervisor
     kb = _build_knowledge_base()
@@ -757,6 +758,22 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
                 _json_out({"status": "ERROR", "error": str(exc)}, exit_code=_EXIT_INTERNAL_ERROR)
         elif c == "list":
             _json_out({"alerts": supervisor.view(kb, args.limit)})
+        elif c == "watch":
+            from galecore_ai.application import watch
+            until = _dt.fromisoformat(args.until) if args.until else None
+            rule = watch.add(kb, symbol=args.symbol, metric=args.metric,
+                             condition="below" if args.below is not None else "above",
+                             threshold=args.below if args.below is not None else args.above, words=args.text,
+                             prompt=args.prompt, until=until, host_model=args.host_model)
+            _json_out({"status": "WATCHING", "rule": rule.id, "watches": watch.describe(rule),
+                       "note": "El supervisor la revisa cada 5 minutos en la sesión regular y avisa una vez en el monitor."})
+        elif c == "watches":
+            from galecore_ai.application import watch
+            _json_out({"rules": watch.view(kb)})
+        elif c == "unwatch":
+            from galecore_ai.application import watch
+            mark = watch.cancel(kb, args.rule, words=args.text or "", prompt=args.prompt)
+            _json_out({"status": "CANCELLED", "rule": mark.rule})
         else:
             out = supervisor.decide(kb=kb, alert_id=args.alert, choice=args.choice, words=args.text or "",
                                     expected=args.expected or "",
@@ -1212,6 +1229,23 @@ def build_parser() -> _JsonArgumentParser:
     p_sv_decide.add_argument("--review-by", dest="review_by", help="YYYY-MM-DD: when to look at it again")
     p_sv_decide.add_argument("--prompt", required=True, help="The owner's request")
     p_sv_decide.add_argument("--host-model", dest="host_model")
+    p_sv_watch = sv_sub.add_parser("watch", help="«Avisame si SPY baja a 760»: store a rule the supervisor checks "
+                                                 "every 5 minutes in session and alerts once (P1-01b)")
+    p_sv_watch.add_argument("--symbol", required=True, help="Ticker, e.g. SPY")
+    p_sv_watch.add_argument("--metric", default="price", choices=["price", "gamma_zero", "call_wall", "put_wall",
+                                                                   "iv_rank"])
+    side = p_sv_watch.add_mutually_exclusive_group(required=True)
+    side.add_argument("--below", type=float, help="Alert when the number is at or below this")
+    side.add_argument("--above", type=float, help="Alert when the number is at or above this")
+    p_sv_watch.add_argument("--until", help="ISO date or datetime after which it is no longer watched")
+    p_sv_watch.add_argument("--text", required=True, help="The owner's words, verbatim")
+    p_sv_watch.add_argument("--prompt", required=True, help="The owner's request")
+    p_sv_watch.add_argument("--host-model", dest="host_model")
+    sv_sub.add_parser("watches", help="The owner's rules and their state (active, met, cancelled, expired)")
+    p_sv_unwatch = sv_sub.add_parser("unwatch", help="Cancel an active rule")
+    p_sv_unwatch.add_argument("rule", help="Rule id (supervise watches)")
+    p_sv_unwatch.add_argument("--text", help="The owner's words, verbatim")
+    p_sv_unwatch.add_argument("--prompt", required=True, help="The owner's request")
 
     p_contrast = sub.add_parser("contrast", help="Today's market story against each strategy and the portfolio "
                                                  "(GC-AI-0027)")
