@@ -21,7 +21,7 @@ catalog entry + skill, data needs from the source registry, controls) and `idea_
 and `inbox resolve <id> --to roadmap|backlog:BL-NNN|work-item:<id>|done|discarded`). `strategy_project` (GC-AI-0026): "en la estrategia X" / "mi cartera" →
 `project show strategy:<name>|portfolio` (versions, approval, rules, last follow-up, investigations, feedback, the
 owner's log, what is missing) and `project add <name>|portfolio --kind thesis|story|decision|pending|done` (owner's
-words, hash-chained in `knowledge/projects/`). The profile in force is the space's in GaleCore: `space import` does not
+words, hash-chained in `knowledge/projects/`). `watch_alerts` (P1-01b): "avisame si SPY baja a 760" → `supervise watch --symbol SPY --below 760 --text "<words>" --prompt "<request>"` stores a rule in `knowledge/supervision/rules/`; the supervisor (code, every 5 minutes, regular session) reads the number from GaleCore and alerts once in the monitor. The host never watches; `supervise watches|unwatch <id>`. The profile in force is the space's in GaleCore: `space import` does not
 overwrite a profile edited in the monitor; `space pull-profile` brings it as a new local version. While a profile exists, saving
 an investigation (`research save|revise`, whatever capability stamps it) is refused unless an antecedent
 cites the version in force. `catalog --check`

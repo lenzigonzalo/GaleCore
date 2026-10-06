@@ -496,6 +496,36 @@ entries:
       - Runs depend on the PC on, the user logged on, GaleCore Dev's API up and its credentials; failures are recorded, never silent
       - Not checked - that the schedule suits the owner, or the interpretation of each result
 
+  - id: watch_alerts
+    kind: harness
+    serves: >-
+      Dejar una alerta pedida en tus palabras («avisame si SPY baja a 760», «si cruza el gamma cero») que el
+      supervisor revisa por código cada 5 minutos en la sesión regular y avisa una vez, con sonido, en el monitor. El
+      modelo sólo traduce el pedido y guarda la regla; nunca vigila. Ver y cancelar las alertas.
+    example_requests:
+      - Avisame si SPY baja a 760.
+      - Seteame una alerta si el SPY pasa 790.
+      - Alertame si SPY cruza para abajo el nivel gamma cero de 771.
+      - ¿Qué alertas tengo?
+      - Sacá la alerta de SPY.
+    skill: skills/watch-alerts/skill.yaml
+    output_contract: galecore_ai.contracts.supervision.WatchRule
+    galecore_capabilities: [Data/Tastytrade/MarketData/Quote, App/Gex/Analysis, App.Analytics/IVRank]
+    data_needs:
+      - need: cotizacion
+      - need: GEX de SPY
+      - need: IV rank de SPY
+    flow:
+      - supervise watch --symbol <SYM> [--metric price|gamma_zero|call_wall|put_wall|iv_rank] --below|--above <nivel> --text "<tus palabras>" --prompt "<pedido>"
+      - supervise watches
+      - supervise unwatch <id> --prompt "<pedido>"
+    stored_as: supervision
+    controls:
+      - The rule keeps the owner's words and request; it is create-only and hashed, an edited one is INTEGRITY_FAILED and stops the pass
+      - Evaluated by code in the supervisor's pass, only in the regular session; it alerts once (key watch:<rule>) and then is met
+      - A number GaleCore cannot give (no quote, NaN, a cold GEX past the timeout) is a problem of the pass, never «not met»
+      - "Not checked - NYSE holidays (a holiday has no quotes: the pass reports a problem); prices between two 5-minute passes"
+
   - id: idea_inbox
     kind: harness
     serves: >-

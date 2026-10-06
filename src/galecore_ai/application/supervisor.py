@@ -46,7 +46,8 @@ class SupervisorError(Exception):
     """GaleCore could not be read: the pass did not happen (never reported as «nothing to report»)."""
 
 
-CALENDAR_TIMEOUT_S = 120.0      # GaleCore asks FRED on a cold cache (observed > 20 s on 06/10); later calls are cached
+CALENDAR_TIMEOUT_S = 120.0      # GaleCore asks FRED on a cold cache (observed > 20 s on 06/10); later calls are cached.
+                                # Also quotes and a GEX for a rule (P1-01b): a cold GEX past this is a problem of the pass
 
 
 def api_reader(base_url: str | None = None, api_key: str | None = None, timeout: float = 20.0) -> Reader:
@@ -60,7 +61,7 @@ def api_reader(base_url: str | None = None, api_key: str | None = None, timeout:
     def get(path: str):
         try:
             r = httpx.get(base + path, headers=headers,
-                          timeout=CALENDAR_TIMEOUT_S if path.startswith("/Data/") else timeout)
+                          timeout=CALENDAR_TIMEOUT_S if path.startswith(("/Data/", "/App/Gex/")) else timeout)
         except httpx.HTTPError as exc:
             raise SupervisorError(f"GaleCore no respondió en {base}: {type(exc).__name__}") from exc
         if r.status_code != 200:
@@ -295,7 +296,18 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
                 _write(kb, alert)
                 known.add(alert.key)
                 new.append(alert)
-    return {"at": now.isoformat(), "new": [a.id for a in new], "checked": checked, "problems": problems}
+    watched = 0
+    if _in_session(now):                         # P1-01b: the owner's rules, only in the regular session
+        from galecore_ai.application import watch
+        drafts, watch_problems, watched = watch.evaluate(kb, read, now)
+        problems.extend(watch_problems)
+        for alert in drafts:
+            if alert.key not in known:
+                _write(kb, alert)
+                known.add(alert.key)
+                new.append(alert)
+    return {"at": now.isoformat(), "new": [a.id for a in new], "checked": checked, "watched": watched,
+            "problems": problems}
 
 
 CLOSED_NEWS_DAYS = 3        # a close older than this when first seen is history, not news (first pass, downtime)

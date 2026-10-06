@@ -88,7 +88,7 @@ class TestDispatcherHTTP:
         # Patch the invoke to use our mock transport
         async with httpx.AsyncClient(transport=transport) as client:
             url = f"{d._base_url}/Data/Tastytrade/MarketData/Quote"
-            response = await client.get(url, params={"symbols": "SPY"})
+            response = await client.get(url, params={"symbol": "SPY"})
             assert response.status_code == 200
             data = response.json()
             assert data["symbol"] == "SPY"
@@ -103,12 +103,12 @@ class TestDispatcherHTTP:
         assert params["dte"] == 30
 
     @pytest.mark.asyncio
-    async def test_query_params_quote_uses_symbols_key(self):
-        """market_data.quote maps 'symbol' to 'symbols' query param."""
+    async def test_query_params_quote_uses_symbol_key(self):
+        """market_data.quote sends 'symbol': GaleCore answers 400 «The Symbol field is required» to 'symbols' (06/10)."""
         d = _dispatcher()
         route = _ROUTE_TABLE["market_data.quote"]
         params = d._build_query_params(route, {"symbol": "VIX"})
-        assert params["symbols"] == "VIX"
+        assert params == {"symbol": "VIX"}
 
     @pytest.mark.asyncio
     async def test_headers_include_api_key(self):
