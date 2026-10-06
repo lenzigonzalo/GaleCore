@@ -743,6 +743,30 @@ async def _cmd_project(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+async def _cmd_supervise(args: argparse.Namespace) -> None:
+    from datetime import date as _date
+
+    from galecore_ai.application import supervisor
+    kb = _build_knowledge_base()
+    try:
+        c = args.supervise_command
+        if c == "scan":
+            try:
+                _json_out(supervisor.scan(kb, supervisor.api_reader()))
+            except supervisor.SupervisorError as exc:
+                _json_out({"status": "ERROR", "error": str(exc)}, exit_code=_EXIT_INTERNAL_ERROR)
+        elif c == "list":
+            _json_out({"alerts": supervisor.view(kb, args.limit)})
+        else:
+            out = supervisor.decide(kb=kb, alert_id=args.alert, choice=args.choice, words=args.text or "",
+                                    expected=args.expected or "",
+                                    review_by=_date.fromisoformat(args.review_by) if args.review_by else None,
+                                    source="session", prompt=args.prompt, host_model=args.host_model)
+            _json_out({"status": "RECORDED", **out})
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+
+
 async def _cmd_contrast(args: argparse.Namespace) -> None:
     from galecore_ai.application import contrast
     kb = _build_knowledge_base()
@@ -1175,6 +1199,20 @@ def build_parser() -> _JsonArgumentParser:
     p_pj_add.add_argument("--prompt", required=True, help="The owner's request")
     p_pj_add.add_argument("--host-model", dest="host_model")
 
+    p_supervise = sub.add_parser("supervise", help="Supervisor of SHADOW: alerts on existing rules and the owner's "
+                                                   "decisions with their context (WS-0007)")
+    sv_sub = p_supervise.add_subparsers(dest="supervise_command", required=True)
+    sv_sub.add_parser("scan", help="Read GaleCore's runtime and raise the new alerts (the 5-minute task does it)")
+    sv_sub.add_parser("list", help="Latest alerts with their decision").add_argument("--limit", type=int, default=20)
+    p_sv_decide = sv_sub.add_parser("decide", help="Record the owner's answer to an alert in the strategy's project")
+    p_sv_decide.add_argument("--alert", required=True, help="Alert id (supervise list)")
+    p_sv_decide.add_argument("--choice", required=True, help="One of the alert's options")
+    p_sv_decide.add_argument("--text", help="The owner's words, verbatim")
+    p_sv_decide.add_argument("--expected", help="What the owner expects, in their words")
+    p_sv_decide.add_argument("--review-by", dest="review_by", help="YYYY-MM-DD: when to look at it again")
+    p_sv_decide.add_argument("--prompt", required=True, help="The owner's request")
+    p_sv_decide.add_argument("--host-model", dest="host_model")
+
     p_contrast = sub.add_parser("contrast", help="Today's market story against each strategy and the portfolio "
                                                  "(GC-AI-0027)")
     ct_sub = p_contrast.add_subparsers(dest="contrast_command", required=True)
@@ -1362,6 +1400,8 @@ def main() -> None:
             asyncio.run(_cmd_inbox(args))
         elif args.command == "project":
             asyncio.run(_cmd_project(args))
+        elif args.command == "supervise":
+            asyncio.run(_cmd_supervise(args))
         elif args.command == "contrast":
             asyncio.run(_cmd_contrast(args))
         elif args.command == "strategy":

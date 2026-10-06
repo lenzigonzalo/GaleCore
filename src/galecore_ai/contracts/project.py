@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
@@ -49,6 +49,22 @@ def _no_credentials(value: str) -> str:
     return value
 
 
+class DecisionContext(BaseModel):
+    """The context of a decision taken on a supervisor alert: what it answered, what was chosen and expected."""
+
+    model_config = {"extra": "forbid"}
+
+    alert: str                                     # id of the supervisor alert it answers
+    alert_hash: str                                # content_hash of that alert when the decision was taken
+    options: list[str]                             # what could be chosen
+    choice: str                                    # what was chosen (one of options)
+    expected: str = ""                             # what the owner expects, in their words
+    review_by: date | None = None                  # when to look at it again
+    source: str = ""                               # where the decision was taken (monitor, session)
+
+    check_choice = field_validator("choice")(_non_blank)
+
+
 class ProjectEntry(BaseModel):
     model_config = {"extra": "forbid"}
 
@@ -57,6 +73,7 @@ class ProjectEntry(BaseModel):
     words: str                                     # the owner's words, verbatim
     refs: list[str] = Field(default_factory=list)  # resolvable references (regime:, research:, strategy:, …)
     closes: str = ""                               # DONE only: hash of the pending entry it closes
+    context: DecisionContext | None = None         # DECISION only: what it answered and what was expected (WS-0007)
     prompt: str                                    # the owner's request that recorded it
     host_model: str | None = None
     prev: str                                      # hash of the previous entry ("" for the first)
@@ -66,7 +83,8 @@ class ProjectEntry(BaseModel):
     check_credentials = field_validator("words", "prompt")(_no_credentials)
 
     def hashable(self) -> dict:
-        return self.model_dump(mode="json", exclude={"hash"})
+        # An entry without context hashes as before the field existed: older logs keep verifying.
+        return self.model_dump(mode="json", exclude={"hash"} | ({"context"} if self.context is None else set()))
 
 
 class ProjectLog(BaseModel):
