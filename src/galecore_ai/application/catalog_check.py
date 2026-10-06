@@ -76,7 +76,7 @@ SCHEDULED_READS = {("catalog", None), ("kb", "search"), ("kb", "show"), ("profil
                    ("galecore", "list"), ("galecore", "get")}
 SCHEDULED_RESULT_WRITES = {("followup", "run"), ("evidence", "add"), ("research", "save"), ("research", "revise"),
                            ("story", "pack")}   # the runner gathers the market pack before the model (GC-AI-0024)
-SCHEDULED_SCRIPTS = {"GaleCore-AI/tools/fred_query.py", "GaleCore-AI/tools/fed_calendar.py"}  # fetch into a scratch dir
+SCHEDULED_SCRIPTS: set[str] = set()  # read-only scripts a run may call; none since WS-0014 (FRED and Fed by GaleCore)
 CODE_RUNNERS = ("strategy_followup",)   # capabilities a task runs without the model (application/tasks.py)
 
 

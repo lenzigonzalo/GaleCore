@@ -52,7 +52,7 @@ PENDING = "9999-12-31-pending-"   # id prefix of evidence not saved yet, during 
 # Codex 03/10: the unattended model gets only what its flow needs, never the rest of the owner's environment.
 ENV_KEEP = {"PATH", "PATHEXT", "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "TEMP", "TMP", "HOME", "USERPROFILE",
             "HOMEDRIVE", "HOMEPATH", "APPDATA", "LOCALAPPDATA", "PROGRAMDATA", "PROGRAMFILES", "USERNAME", "LANG",
-            "FRED_API_KEY", "MAX_STALENESS_SECONDS", "ALLOW_UNKNOWN_FRESHNESS"}
+            "MAX_STALENESS_SECONDS", "ALLOW_UNKNOWN_FRESHNESS"}   # FRED_API_KEY left with WS-0014: FRED by GaleCore
 ENV_KEEP_PREFIXES = ("GALECORE_", "CLAUDE_", "ANTHROPIC_")
 ENV_DROP = {"GALECORE_USERNAME", "GALECORE_PASSWORD"}   # the trader's login (GC-AI-0021): no flow of a run needs it
 UNVERIFIED_NOTE = ("Escrito por el modelo en una corrida sin supervisión: los números y la evidencia que trae son "
@@ -69,7 +69,7 @@ RECOMMENDATION = [re.compile(p, re.IGNORECASE) for p in (
     r"\byou\s+(?:should|must|need\s+to)\s+" + _ACT_EN + r"\b",
     r"\b" + _ACT_EN + r"\s+(?:now|today|immediately)\b",
 )]
-RUN_DIR_ENV = "GALECORE_AI_RUN_DIR"   # tools/fred_query.py and tools/fed_calendar.py refuse to write outside it
+RUN_DIR_ENV = "GALECORE_AI_RUN_DIR"   # a scheduled script must not write outside it (SCHEDULED_SCRIPTS)
 
 
 class ModelEvidence(BaseModel):

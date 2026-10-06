@@ -40,11 +40,12 @@ def test_galecore_data_that_existed_is_now_found(status_store, need):
     assert not result.missing and result.matches[0].id == "galecore", need
 
 
-@pytest.mark.parametrize("need,source", [("fundamentales de NVDA", "sec_edgar"), ("historia del VIX", "cboe")])
-def test_a_need_only_a_requested_source_covers_is_missing_and_says_who_brings_it(status_store, need, source):
+@pytest.mark.parametrize("need", ["fundamentales de NVDA", "historia del VIX", "curva del Tesoro", "subastas del Tesoro"])
+def test_what_was_requested_to_galecore_is_now_served_by_it(status_store, need):
+    # WS-0014: CBOE, Tesoro, SEC EDGAR y BLS dejaron de ser fuentes pedidas; las sirve GaleCore.
     result = query_sources(need, load_source_registry(), status_store)
-    assert result.missing and [m.id for m in result.matches] == [source]
-    assert "GaleCore" in result.matches[0].usage_note
+    assert not result.missing and result.matches[0].id == "galecore"
+    assert not [s for s in load_source_registry().sources if s.access_type is AccessType.REQUESTED]
 
 
 def test_requested_goes_with_requested_usage_and_no_probe():

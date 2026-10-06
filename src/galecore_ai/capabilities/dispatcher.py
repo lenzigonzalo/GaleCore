@@ -130,6 +130,15 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
     },
     "calendar.macro_releases": {"method": "GET", "path": "/Data/Fred/ReleaseDates", "param_key": "", "source_param": ""},
     "calendar.fomc_meetings": {"method": "GET", "path": "/Data/Fed/FomcMeetings", "param_key": "", "source_param": ""},
+    # WS-0014: fuentes públicas servidas por GaleCore (Data.Sources).
+    "history.index_daily": {"method": "GET", "path": "/Data/Cboe/IndexHistory", "param_key": "", "source_param": ""},
+    "rates.treasury_curve": {"method": "GET", "path": "/Data/Treasury/YieldCurve", "param_key": "", "source_param": ""},
+    "calendar.treasury_auctions": {"method": "GET", "path": "/Data/Treasury/Auctions/Upcoming", "param_key": "", "source_param": ""},
+    "macro.fred_series": {"method": "GET", "path": "/Data/Fred/Series", "param_key": "", "source_param": ""},
+    "macro.bls_series": {"method": "GET", "path": "/Data/Bls/Series", "param_key": "", "source_param": ""},
+    "filings.sec_company": {"method": "GET", "path": "/Data/Sec/Company", "param_key": "", "source_param": ""},
+    "filings.sec_filings": {"method": "GET", "path": "/Data/Sec/Filings", "param_key": "", "source_param": ""},
+    "filings.sec_facts": {"method": "GET", "path": "/Data/Sec/Facts", "param_key": "", "source_param": ""},
     "market_data.option_greeks": {
         "method": "GET",
         "path": "/Data/Tastytrade/MarketData/Greeks",

@@ -1,5 +1,5 @@
 skill_id: daily_attention
-version: "0.2.3"
+version: "0.2.4"
 display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
 description: >
   Answers "what deserves my attention today about what I have in SHADOW?": exposure of the open SHADOW
@@ -7,7 +7,7 @@ description: >
   changed since the last review, which scheduled events (macro releases, earnings) come before each
   position's expiry or time exit and how they bear on it, the market context and what is missing. It reuses
   strategy_followup (runtime data), regime_interpretation's prepare (GEX, skew 25Δ, VIX/VVIX) and
-  context_research's evidence (external events, FRED release calendar), and keeps the answer as a revision of one "daily
+  context_research's evidence (external events) and GaleCore's calendars (FRED releases, FOMC, Treasury auctions), and keeps the answer as a revision of one "daily
   attention" investigation per strategy. Read-only: no orders, no allocation changes.
 
 output_contract: galecore_ai.contracts.research.ResearchContent
@@ -51,15 +51,16 @@ system_prompt: >
      the positions' horizon from the host connectors the registry lists (FMP / Alpha Vantage, state
      limited), each response kept with `evidence add` and cited as `evidence:<id>`. Scheduled macro
      releases (employment / nonfarm payroll, CPI, PPI, GDP, personal income and spending, retail sales)
-     from FRED's release calendar, the registered source for it (`sources query --need "calendario
-     macro"`): `python tools/fred_query.py <dir> --releases <today> <latest expiry of the open
-     positions> [<release_id> ...]` (FRED_API_KEY in the environment), the response kept with
-     `evidence add` and cited. Release dates are scheduled and can move: say so. FOMC meetings from
-     the Fed's official calendar, the registered source for them (`sources query --need "reuniones del
-     FOMC"`): `python tools/fed_calendar.py <dir>` (no key), `fomc.meetings.json` kept with `evidence
-     add` and cited; mark the meetings with economic projections («*»). Any event no registered source
-     covers goes under `missing`, never from memory or the web. Paths: `tools/...` from the GaleCore-AI
-     checkout (the catalog writes them from the workspace root as `GaleCore-AI/tools/...`).
+     from FRED's release calendar as GaleCore serves it: `galecore get calendar.macro_releases --param
+     From=<today> --param To=<latest expiry of the open positions> --param ReleaseIds=50,10,46,53,54,9`.
+     FOMC meetings from the Fed's official calendar, also by GaleCore: `galecore get
+     calendar.fomc_meetings`; mark the meetings with economic projections (`projections: true`).
+     Upcoming Treasury auctions (`galecore get calendar.treasury_auctions`) go in the table only for
+     notes and bonds (2Y and longer), which move rates; bills are not events. Each response kept with
+     `evidence add` (its `source`, `upstreamUrl`, `retrievedAt` and `notes` included) and cited.
+     Release dates are scheduled and can move: say so. If GaleCore answers 502 (the upstream source
+     is down or changed) or 404, the gap goes to `missing` with the error; there is no other route.
+     Any event no registered source covers goes under `missing`, never from memory or the web.
   7b. Always, even if nothing else changed: events against positions. A table with one row per
      scheduled event (macro release or earnings) that falls between today and the latest expiry of the
      open positions: event, date, days from today, and for each open position whether it falls before
@@ -95,9 +96,11 @@ instructions: |
   followup run --strategy <name> --prompt "<pedido>" --host-model <model>
   prepare --symbol SPY --skill regime            # contexto GaleCore (GEX, skew, VIX/VVIX); sólo lectura
   sources query --need "<dato>"                  # antes de usar una fuente externa
-  python tools/fred_query.py <dir> --releases <hoy> <último vencimiento> 50 10 46 53 54 9
-                                                 # calendario de publicaciones macro (FRED); evidence add
-  python tools/fed_calendar.py <dir>             # reuniones del FOMC (página oficial de la Fed); evidence add
+  galecore get calendar.macro_releases --param From=<hoy> --param To=<último vencimiento> --param ReleaseIds=50,10,46,53,54,9
+  galecore get calendar.fomc_meetings            # reuniones del FOMC (calendario oficial de la Fed, por GaleCore)
+  galecore get calendar.treasury_auctions        # subastas próximas; sólo notes y bonds van a la tabla
+  galecore get rates.treasury_curve              # contexto de tasas (curva oficial), si hace falta
+  galecore get history.index_daily --param Index=VIX   # percentil del VIX/VVIX/SKEW de hoy, si hace falta
   # siempre: tabla eventos x posiciones (antes / después del vencimiento y de la salida por tiempo)
   evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
   research save|revise --capability daily_attention ...

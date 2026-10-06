@@ -971,7 +971,8 @@ async def _cmd_sources(args: argparse.Namespace) -> None:
                 _error_out(f"{source_id}: not a source this code can probe; use 'sources declare'",
                           exit_code=_EXIT_VALIDATION_ERROR)
                 return
-            observation = await probe_galecore(_build_dispatcher()) if source_id == "galecore" else probe_fred()
+            probe = probe_galecore if source_id == "galecore" else probe_fred
+            observation = await probe(_build_dispatcher())
             try:
                 path = _append_observation(status_store, source_id, observation)
             except (SourceStatusStoreError, SourceStatusIntegrityError) as exc:

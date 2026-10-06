@@ -99,7 +99,7 @@ def test_a_blank_missing_reason_is_refused():
 def scheduled(**overrides) -> CatalogEntry:
     base = {"id": "daily_attention", "skill": "skills/daily-attention/skill.yaml", "data_needs": [],
             "flow": ["profile show", "kb search --kind strategy", "followup run --strategy x --prompt p",
-                     "python GaleCore-AI/tools/fed_calendar.py <dir>", "evidence add --slug s --prompt p",
+                     "galecore get calendar.fomc_meetings", "evidence add --slug s --prompt p",
                      "research save --capability daily_attention --slug s --prompt p"],
             "schedulable": {"runs": "model", "work": "reading", "max_turns": 30}}
     base.update(overrides)
