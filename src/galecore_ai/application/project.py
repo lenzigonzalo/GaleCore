@@ -30,6 +30,7 @@ from galecore_ai.application.knowledge import (
 )
 from galecore_ai.contracts.project import (
     PORTFOLIO,
+    DecisionContext,
     EntryKind,
     ProjectEntry,
     ProjectLog,
@@ -80,7 +81,8 @@ def _strategy_names(kb: KnowledgeBase) -> list[str]:
 
 
 def add(*, kb: KnowledgeBase, name: str, kind: str, words: str, prompt: str, refs: list[str] | None = None,
-        closes: str = "", host_model: str | None = None, now: datetime | None = None) -> tuple[ProjectEntry, Path]:
+        closes: str = "", host_model: str | None = None, now: datetime | None = None,
+        context: DecisionContext | None = None) -> tuple[ProjectEntry, Path]:
     """Append one entry in the owner's words. Refs must resolve; a strategy project needs the strategy to exist."""
     now = now or datetime.now(UTC)
     if name != PORTFOLIO and name not in _strategy_names(kb):
@@ -105,12 +107,14 @@ def add(*, kb: KnowledgeBase, name: str, kind: str, words: str, prompt: str, ref
             closes = target[0].hash
     elif closes:
         problems.append("--closes is only for done")
+    if context is not None and entry_kind != EntryKind.DECISION:
+        problems.append("a decision context is only for decision entries")
     if problems:
         raise KnowledgeError("Refusing to record", problems)
     prev = log.entries[-1].hash if log.entries else ""
     try:
         draft = ProjectEntry(at=now, kind=entry_kind, words=words, refs=list(refs or []), closes=closes,
-                             prompt=prompt, host_model=host_model, prev=prev)
+                             context=context, prompt=prompt, host_model=host_model, prev=prev)
     except ValidationError as exc:
         raise KnowledgeError("Refusing to record", [e["msg"] for e in exc.errors()]) from exc
     entry = draft.model_copy(update={"hash": compute_project_hash(draft.hashable())})
@@ -132,7 +136,8 @@ def _entry_view(e: ProjectEntry, kb: KnowledgeBase | None = None) -> dict:
             gone.append(ref)
     return {"at": e.at.isoformat(), "kind": e.kind.value, "words": e.words, "refs": e.refs,
             **({"refs_not_resolving": gone} if gone else {}),
-            "hash": e.hash[:19], **({"closes": e.closes[:19]} if e.closes else {})}
+            "hash": e.hash[:19], **({"closes": e.closes[:19]} if e.closes else {}),
+            **({"context": e.context.model_dump(mode="json")} if e.context else {})}
 
 
 def _log_view(log: ProjectLog, kb: KnowledgeBase) -> dict:

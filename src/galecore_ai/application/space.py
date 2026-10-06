@@ -15,13 +15,13 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import yaml
 
 from galecore_ai.adapters.galecore_space import SpaceClient
-from galecore_ai.application.knowledge import KnowledgeBase
+from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.harness.catalog import load_catalog
 
 CONVENTIONS = Path(__file__).resolve().parents[3] / "config" / "conventions"
@@ -261,7 +261,63 @@ def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     return done
 
 
-def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None) -> dict:
+SUPERVISOR_KEY = "supervisor"
+ALERTS_SHOWN = 20
+
+
+def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, str] | None = None) -> dict:
+    """The supervisor (WS-0007) as an agent piece: its last pass and the latest alerts with their decision.
+
+    The monitor sounds for an alert it has not seen and shows its options; the owner's answer comes back in
+    ``responses`` (alert id -> {choice, words, expected, review_by, at}) and `apply_responses` records it.
+    """
+    from galecore_ai.application import supervisor as sv
+
+    shown = sv.view(kb, ALERTS_SHOWN)
+    pending = [a for a in shown if a["decision"] is None]
+    failed = "error" in scan
+    lines = [f"**{len(pending)} aviso(s) sin respuesta.**" if pending else "Sin avisos pendientes.", ""]
+    lines += [f"- {a['motivo']} — {a['propuesta']}" for a in pending]
+    content = {
+        "id": SUPERVISOR_KEY, "capability": "supervisor", "status": "active", "schedule": "cada 5 minutos",
+        "strategy": None,
+        "objective": "Vigilar las reglas de lo abierto en SHADOW (stop, cierres, precio, límite) y guardar tus decisiones",
+        "state": "FAILED" if failed else "CURRENT", "state_detail": scan.get("error"),
+        "next_expected_at": None,
+        "last_run": {"at": scan["at"], "result": scan.get("error") or
+                     f"{scan.get('checked', 0)} posición(es) revisadas, {len(scan.get('new', []))} aviso(s) nuevo(s)",
+                     "invoked_by": "espacio-agentes", "failed": failed},
+        "runs": 0, "findings": "\n".join(lines), "result_ref": None,
+        "alerts": shown,
+        **({"response_errors": response_errors} if response_errors else {}),
+    }
+    return {"kind": "agent", "key": SUPERVISOR_KEY, "title": "Supervisor de SHADOW (avisos y decisiones)",
+            "content": json.dumps(content, ensure_ascii=False), "format": "json", "visibility": "private"}
+
+
+def apply_responses(kb: KnowledgeBase, content: dict, user: str | None) -> tuple[list[dict], dict[str, str]]:
+    """Record the answers the owner gave in the monitor; return (what was done, alert id -> why it was refused)."""
+    from galecore_ai.application import supervisor as sv
+
+    done, errors = [], {}
+    answered = sv.decisions(kb)
+    for alert_id, r in (content.get("responses") or {}).items():
+        if alert_id in answered or not isinstance(r, dict):
+            continue
+        try:
+            review_by = date.fromisoformat(r["review_by"]) if r.get("review_by") else None
+            sv.decide(kb=kb, alert_id=alert_id, choice=str(r.get("choice", "")), words=str(r.get("words") or ""),
+                      expected=str(r.get("expected") or ""), review_by=review_by, source="monitor",
+                      prompt=f"Respuesta desde el monitor por {user} ({r.get('at', 'sin hora')})")
+            done.append({"alert": alert_id, "result": "recorded"})
+        except (KnowledgeError, ValueError) as exc:
+            errors[alert_id] = str(exc)[:300]
+            done.append({"alert": alert_id, "result": "refused", "error": errors[alert_id]})
+    return done, errors
+
+
+def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None,
+                   supervise=None) -> dict:
     """Apply the monitor's requests, then publish every agent's state (only the ones that changed are written).
 
     A refusal stays in the piece (`request_error`) until the next request. A piece whose agent is cancelled or gone
@@ -274,6 +330,17 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     refused = {r["agent"]: r["error"] for r in requests if r["result"] == "refused"}
     kept = {i["key"]: c["request_error"] for i, c in items if c.get("request_error") and not c.get("request")}
     pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent"]
+    responses: list[dict] = []
+    if supervise is not None:                    # WS-0007: answers first, then a pass, then the piece
+        from galecore_ai.application import supervisor as sv
+
+        mine = next((c for i, c in items if i["key"] == SUPERVISOR_KEY), {})
+        responses, errors = apply_responses(kb, mine, client.user)
+        try:
+            scan = sv.scan(kb, supervise, now)
+        except sv.SupervisorError as exc:
+            scan = {"at": (now or datetime.now(UTC)).isoformat(), "error": str(exc)}
+        pieces.append(supervisor_piece(kb, scan, errors))
     for p in pieces:
         error = refused.get(p["key"]) or kept.get(p["key"])
         if error:                                # the monitor shows why it did not happen
@@ -286,7 +353,7 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
                            "visibility": item.get("visibility", "private"),
                            "content": json.dumps({**gone, "status": "cancelled", "state": "CANCELLED",
                                                   "request_error": refused.get(item["key"])}, ensure_ascii=False)})
-    return {"requests": requests, **sync(client, pieces, seen)}
+    return {"requests": requests, "responses": responses, **sync(client, pieces, seen)}
 
 
 def context(client: SpaceClient, max_lines: int = 25) -> str:
