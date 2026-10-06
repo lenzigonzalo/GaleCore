@@ -33,6 +33,18 @@ public class TastytradeDiagnosticsTests
     }
 
     [Fact]
+    public async Task UnGzipRoto_NoTapaElStatus()
+    {
+        var content = new ByteArrayContent(Encoding.UTF8.GetBytes("no es gzip"));
+        content.Headers.ContentEncoding.Add("gzip");
+        var response = new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = content, ReasonPhrase = "Forbidden" };
+
+        var ex = await Assert.ThrowsAsync<HttpRequestException>(() => TastytradeApiProvider.EnsureAccountSuccessAsync(response));
+
+        Assert.Equal(HttpStatusCode.Forbidden, ex.StatusCode);
+    }
+
+    [Fact]
     public async Task UnaRespuestaOkNoTira()
     {
         await TastytradeApiProvider.EnsureAccountSuccessAsync(new HttpResponseMessage(HttpStatusCode.OK));

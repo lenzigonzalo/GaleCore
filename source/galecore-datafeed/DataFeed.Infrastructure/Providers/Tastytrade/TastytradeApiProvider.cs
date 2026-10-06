@@ -108,10 +108,18 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                 var bytes = await response.Content.ReadAsByteArrayAsync();
                 if (response.Content.Headers.ContentEncoding.Contains("gzip"))
                 {
-                    using var gz = new System.IO.Compression.GZipStream(new MemoryStream(bytes), System.IO.Compression.CompressionMode.Decompress);
-                    using var plain = new MemoryStream();
-                    await gz.CopyToAsync(plain);
-                    bytes = plain.ToArray();
+                    try
+                    {
+                        using var gz = new System.IO.Compression.GZipStream(new MemoryStream(bytes), System.IO.Compression.CompressionMode.Decompress);
+                        using var plain = new MemoryStream();
+                        await gz.CopyToAsync(plain);
+                        bytes = plain.ToArray();
+                    }
+                    catch (InvalidDataException)
+                    {
+                        // Un gzip roto no puede tapar el status que se quería diagnosticar.
+                        bytes = Array.Empty<byte>();
+                    }
                 }
                 body = System.Text.Encoding.UTF8.GetString(bytes);
             }
