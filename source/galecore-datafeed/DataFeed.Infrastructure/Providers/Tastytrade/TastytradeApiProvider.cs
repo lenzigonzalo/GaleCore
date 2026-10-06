@@ -94,6 +94,29 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
         }
 
         /// <summary>
+        /// Sólo <c>error.code</c> y <c>error.message</c> del cuerpo, sin caracteres de control y recortados.
+        /// El cuerpo crudo no se reenvía: termina en logs y en la respuesta de la API, y no se controla
+        /// qué puede traer (Codex, WS-0013).
+        /// </summary>
+        public static string BrokerErrorSummary(string body)
+        {
+            static string Clean(string? s) =>
+                new string((s ?? "").Where(c => !char.IsControl(c)).Take(120).ToArray());
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                if (doc.RootElement.TryGetProperty("error", out var err) && err.ValueKind == JsonValueKind.Object)
+                {
+                    var code = err.TryGetProperty("code", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null;
+                    var msg = err.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+                    if (code != null || msg != null) return $"{Clean(code)} \"{Clean(msg)}\"";
+                }
+            }
+            catch (JsonException) { }
+            return $"(cuerpo sin error reconocible, {body.Length} caracteres)";
+        }
+
+        /// <summary>
         /// Como EnsureSuccessStatusCode, pero el error lleva lo que contestó Tastytrade (recortado). Sin
         /// eso un 403 de cuenta era indiagnosticable: el cuerpo dice si es la cuenta, el permiso del
         /// token o la sesión (BL-015). El cuerpo es el error del broker; no lleva el token.
@@ -123,9 +146,8 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                 }
                 body = System.Text.Encoding.UTF8.GetString(bytes);
             }
-            if (body.Length > 300) body = body[..300] + "…";
             throw new HttpRequestException(
-                $"Response status code does not indicate success: {(int)response.StatusCode} ({response.ReasonPhrase}). Tastytrade: {body}",
+                $"Response status code does not indicate success: {(int)response.StatusCode} ({response.ReasonPhrase}). Tastytrade: {BrokerErrorSummary(body)}",
                 null, response.StatusCode);
         }
 
