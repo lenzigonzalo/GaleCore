@@ -686,8 +686,9 @@ entries:
     kind: investigation
     serves: >-
       Cruzar la historia que pricea hoy el mercado con cada estrategia (en qué historia funciona, tus decisiones, su
-      estado en SHADOW) y con la cartera (perfil y límites): qué conviene prender, mantener o apagar en SHADOW y por
-      qué, e ideas nuevas. Propone; decidís vos. Junta los datos el código y lo interpreta el modelo.
+      estado en SHADOW), con qué mueve hoy al subyacente (datos que vienen y lo que paga la IV) y con la cartera
+      (perfil y límites): qué conviene prender, mantener, esperar o apagar en SHADOW, por qué y qué lo cambiaría, e
+      ideas nuevas. Propone; decidís vos. Junta los datos el código y lo interpreta el modelo.
     example_requests:
       - ¿Prendo o apago algo hoy?
       - ¿Mis estrategias encajan con la historia de hoy?
@@ -699,6 +700,7 @@ entries:
     data_needs: []
     flow:
       - contrast pack [--symbol SPY]
+      - capital
       - research save --capability daily_contrast --slug contraste-diario --prompt "<pedido>" < {content, host_provider, host_model}
       - research revise --capability daily_contrast --id <investigación> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {...}
       - project add <name> --kind decision --text "<tu decisión>" --prompt "<pedido>"
@@ -706,5 +708,6 @@ entries:
     controls:
       - The pack is built by code from stored items, each with its reference; a stale story or a strategy without its story is declared
       - The research controls apply to the reading (cited refs resolve, facts cite a source, the profile in force is cited)
+      - Each proposal is one of prender | mantener | esperar | apagar | sin datos and says «qué la cambiaría» (refused otherwise)
       - Proposals only; nothing is deployed, paused or changed here; the owner's decision is kept in the strategy's project
       - "Not checked - that the proposal is right; that the story read is still the market's"

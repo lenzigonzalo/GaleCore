@@ -602,7 +602,7 @@ def _repair_if_refused(kb: KnowledgeBase, task: TaskDefinition, target: str | No
                        scratch: Path):
     """When the validators would refuse the output, one correction round without tools, inside the turn cap."""
     try:
-        problems = model_run.check_refs(kb, model_run.parse_output(reply.structured), target)
+        problems = model_run.check_refs(kb, model_run.parse_output(reply.structured), target, capability=task.kind)
     except model_run.RunRefused as exc:
         problems = [str(exc)]
     left = base["max_turns"] - (reply.turns or 0)

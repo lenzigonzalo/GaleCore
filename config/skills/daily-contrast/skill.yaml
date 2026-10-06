@@ -1,9 +1,10 @@
 skill_id: daily_contrast
-version: "1.0.0"
+version: "1.1.0"
 display_name: Contraste diario y prender/apagar por contexto
 description: >
   Reads today's market story against each strategy and the portfolio and proposes, per strategy, whether to turn it
-  on, keep it, or turn it off in SHADOW, with the reason, plus new ideas worth testing. The data comes from
+  on, keep it, wait, or turn it off in SHADOW, with the reason, the risk against the limits and what would change the
+  proposal, plus new ideas worth testing. The data comes from
   `contrast pack` (code); the model only interprets. Proposals only: the owner decides and acts.
 
 output_contract: galecore_ai.contracts.research.ResearchContent
@@ -13,16 +14,26 @@ required_capabilities: []
 system_prompt: >
   1. Run `contrast pack`. If the story is missing, run market_story first; if it is stale, say so at the top.
   2. For each strategy: compare the story's statements with where the strategy works (its project's `story` entries,
-     its hypothesis and failure conditions) and with what its last follow-up says. Propose exactly one of
-     prender | mantener | apagar | sin datos, as an `interpretation` statement (never `decision`: the owner decides) starting with
-     «<name>: <proposal> —» and the reason, citing the story (research:) and the strategy (strategy:). When the
-     strategy does not say in what story it works, propose «sin datos» and ask the owner to state it.
+     its hypothesis and failure conditions), with what its last follow-up says and with what moves the symbol (the
+     pack's `drivers`: releases ahead inside the strategy's horizon, what today's IV pays for them against how the last
+     ones of that kind moved, and the reaction by kind; cite its evidence ref). Propose exactly one of
+     prender | mantener | esperar | apagar | sin datos, as an `interpretation` statement (never `decision`: the owner
+     decides) with the form «<name>: <proposal> — <reason> … qué la cambiaría: <datum and threshold>», citing the
+     story (research:) and the strategy (strategy:). The save refuses a proposal without «qué la cambiaría:».
+     - «esperar» means: no new entries until a named event or datum (e.g. a release whose premium is underpaid or a
+       story that is changing); say the date when it is looked at again. Waiting is a valid answer, not a failure.
+     - «qué la cambiaría» names something observable (a release outcome against the implied move, a level, a
+       correlation that flips, a follow-up result), never a feeling.
+     When the strategy does not say in what story it works, propose «sin datos» (still with what would change it:
+     the owner stating it).
+
   3. Portfolio: check the proposal against the profile in force (cite profile:vN): limits, horizon, objectives.
   4. Ideas: when the story would favour a structure GaleCore cannot run in SHADOW yet (only put credit spreads today),
      say so as an idea with what it would need; never design it here (strategy_design does).
   5. Save as one investigation per day series: `research save --capability daily_contrast --slug contraste-diario`
      the first time, then `research revise` with what changed. Cite the story, each strategy and the profile as
-     antecedents. Present a short table first (estrategia · propuesta · motivo), then the ideas.
+     antecedents. Present a short table first (estrategia · propuesta · motivo · riesgo contra límites · qué la
+     cambiaría), then the ideas. Risk against limits comes from `capital` when it answers; otherwise say it is missing.
   6. When the owner decides, record it with `project add <name> --kind decision --text "<their words>"`.
      Never deploy, pause or change anything here.
 

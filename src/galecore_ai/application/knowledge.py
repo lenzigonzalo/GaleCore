@@ -191,10 +191,33 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
 _OWN_CALCULATION = re.compile(r"^\W*c[aá]lculo propio\b", re.IGNORECASE)
 
 
-def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str | None = None) -> tuple[
-    list[ResolvedRef], list[str]
-]:
-    """Resolve every cited reference and apply the investigation's controls."""
+# The daily contrast's proposal per strategy (U-28, P1-05): «<name>: <proposal> — <reason> … qué la cambiaría: …».
+CONTRAST_PROPOSALS = ("prender", "mantener", "esperar", "apagar", "sin datos")
+_CONTRAST_LINE = re.compile(r"^\s*([\w.\-]+)\s*:\s*([^—]+?)\s*—", re.IGNORECASE)
+_WOULD_CHANGE = re.compile(r"qu[eé] la cambiar[ií]a\s*:", re.IGNORECASE)
+
+
+def _contrast_problems(content: ResearchContent) -> list[str]:
+    """Each proposal is one of CONTRAST_PROPOSALS and says what would change it; at least one proposal."""
+    problems, seen = [], 0
+    for i, s in enumerate(content.statements):
+        if s.kind != StatementKind.INTERPRETATION or s.text.lstrip().startswith("["):
+            continue
+        m = _CONTRAST_LINE.match(s.text)
+        if not m or m.group(2).strip().lower() not in CONTRAST_PROPOSALS:
+            continue
+        seen += 1
+        if not _WOULD_CHANGE.search(s.text):
+            problems.append(f"statements[{i}]: the proposal for {m.group(1)} must say «qué la cambiaría: …»")
+    if not seen:
+        problems.append("the daily contrast needs one proposal per strategy: «<nombre>: "
+                        + " | ".join(CONTRAST_PROPOSALS) + " — <motivo> … qué la cambiaría: <dato>»")
+    return problems
+
+
+def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str | None = None,
+                  capability: str | None = None) -> tuple[list[ResolvedRef], list[str]]:
+    """Resolve every cited reference and apply the investigation's controls (and the capability's own, if any)."""
     problems: list[str] = []
     resolved: dict[str, ResolvedRef] = {}
 
@@ -236,6 +259,8 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
     if not content.limitations:
         problems.append("at least one limitation is required")
     problems += _profile_problems(kb, set(resolved))
+    if capability == "daily_contrast":
+        problems += _contrast_problems(content)
     return list(resolved.values()), problems
 
 
@@ -288,7 +313,7 @@ def save_research(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost
         kb.research.path_for(research_id)
     except ResearchStoreError as exc:
         raise KnowledgeError("Refusing to save", [str(exc)]) from exc
-    resolved, problems = check_content(content, kb, self_id=research_id)
+    resolved, problems = check_content(content, kb, self_id=research_id, capability=capability)
     if problems:
         raise KnowledgeError("Refusing to save", problems)
     revision = _revision(number=1, reason=RevisionReason.INITIAL, note="", prompt=prompt, host=host,
@@ -318,7 +343,7 @@ def revise_research(*, kb: KnowledgeBase, research_id: str, reason: RevisionReas
         raise KnowledgeError(f"research:{research_id} is not usable", [str(exc)]) from exc
     if current is None:
         raise KnowledgeError(f"research:{research_id} does not exist")
-    resolved, content_problems = check_content(content, kb, self_id=research_id)
+    resolved, content_problems = check_content(content, kb, self_id=research_id, capability=capability)
     problems += content_problems
     if problems:
         raise KnowledgeError("Refusing to revise", problems)
