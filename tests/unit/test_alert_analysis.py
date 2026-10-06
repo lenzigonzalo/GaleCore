@@ -191,3 +191,28 @@ def test_a_request_for_an_unknown_alert_is_refused_and_shown(kb):  # noqa: F811
                                                  "demo", NOW, lambda *a: None)
     assert "no alert no-such" in errors["no-such"] and "bad" in errors
     assert all(d["analysis"] == "refused" for d in done)
+
+
+def test_a_malformed_request_never_breaks_the_pass(kb):  # noqa: F811
+    alert = watch_alert(kb)
+    naive = IN_SESSION.replace(tzinfo=None).isoformat()          # no zone: read as UTC, not a TypeError
+    done, errors = alert_analysis.apply_requests(kb, {"analysis_requests": {alert.id: {"at": naive}}}, "demo",
+                                                 IN_SESSION, lambda *a: None)
+    assert done == [{"alert": alert.id, "analysis": "started"}] and errors == {}
+    assert alert_analysis.apply_requests(kb, {"analysis_requests": ["x"]}, "demo", IN_SESSION, lambda *a: None)[1]
+
+
+def test_advice_in_missing_is_refused_too(kb):  # noqa: F811
+    assert alert_analysis.problems_of({**GOOD, "missing": ["Deberías cerrar la posición"]})
+
+
+def test_an_unexpected_error_is_stored_as_a_failed_analysis(kb):  # noqa: F811
+    alert = watch_alert(kb)
+
+    class Broken:
+        def run(self, **kw):
+            raise RuntimeError("se cortó")
+
+    a = run(kb, alert.id, Broken())
+    assert a.status.value == "failed" and "RuntimeError: se cortó" in a.error
+    assert alert_analysis.view(kb, [alert.id], IN_SESSION + timedelta(minutes=3))[alert.id]["status"] == "failed"

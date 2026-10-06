@@ -146,6 +146,9 @@ def gather(kb: KnowledgeBase, alert: Alert, read: Reader, decision: dict | None 
         return payload
 
     symbol = str(alert.dato.get("symbol") or "SPY")
+    if not watch.SYMBOL.match(symbol):                   # it goes into a GaleCore path
+        missing.append(f"símbolo no válido en el aviso: {symbol[:20]!r}")
+        symbol = "SPY"
     now_numbers: dict = {}
     cache: dict[str, object] = {}                        # one read per source (the GEX gives three levels)
     for metric, sym in ((WatchMetric.PRICE, symbol), (WatchMetric.IV_RANK, symbol), (WatchMetric.GAMMA_ZERO, "SPY"),
@@ -207,7 +210,7 @@ def problems_of(structured: dict) -> list[str]:
         out.append(f"detail has {len(detail)} characters; at most {DETAIL_MAX}")
     if not isinstance(structured.get("missing"), list) or not all(isinstance(m, str) for m in structured["missing"]):
         out.append("missing must be a list of strings")
-    text = f"{summary or ''}\n{detail or ''}"
+    text = "\n".join([summary or "", detail or "", *[m for m in structured.get("missing") or [] if isinstance(m, str)]])
     for pattern in model_run.RECOMMENDATION:
         if m := pattern.search(text):
             out.append(f"advice addressed to the reader is not allowed: «{m.group(0)}»; describe, the decision is "
@@ -236,15 +239,22 @@ def analyze(kb: KnowledgeBase, alert_id: str, read: Reader, client: model_run.Mo
     if have is not None and have.status == AnalysisStatus.DONE:
         raise KnowledgeError(f"alert {alert_id} already has an analysis ({have.finished_at:%d/%m %H:%M})")
     t0 = time.monotonic()
-    ctx, sources, missing = gather(kb, alert, read, sv.decisions(kb).get(alert_id))
-    if isinstance(client, model_run.ClaudeCodeClient):
-        client.model = RUN.model                         # always the policy's model, never a fallback
-    scratch = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "GaleCore-AI" / "analyses" / alert_id
-    scratch.mkdir(parents=True, exist_ok=True)
-    text = build_prompt(ctx)
-    (scratch / "prompt.txt").write_text(text, encoding="utf-8")
-    reply = client.run(prompt=text, allowed=[], max_turns=RUN.max_turns, schema=SCHEMA, cwd=_REPO,
-                       timeout_s=RUN.timeout_minutes * 60, add_dir=scratch)
+    ctx: dict = {}
+    sources: list[str] = []
+    missing: list[str] = []
+    reply = model_run.ModelReply(ok=False)
+    try:
+        ctx, sources, missing = gather(kb, alert, read, sv.decisions(kb).get(alert_id))
+        if isinstance(client, model_run.ClaudeCodeClient):
+            client.model = RUN.model                     # always the policy's model, never a fallback
+        scratch = Path(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir()) / "GaleCore-AI" / "analyses" / alert_id
+        scratch.mkdir(parents=True, exist_ok=True)
+        text = build_prompt(ctx)
+        (scratch / "prompt.txt").write_text(text, encoding="utf-8")
+        reply = client.run(prompt=text, allowed=[], max_turns=RUN.max_turns, schema=SCHEMA, cwd=_REPO,
+                           timeout_s=RUN.timeout_minutes * 60, add_dir=scratch)
+    except Exception as exc:  # noqa: BLE001 - stored as a failed analysis: the monitor shows why (review 06/10)
+        reply = model_run.ModelReply(ok=False, error=f"{type(exc).__name__}: {exc}"[:300])
     tokens, error, out = reply.tokens, reply.error, None
     if reply.ok:
         problems = problems_of(reply.structured or {})
@@ -283,8 +293,19 @@ def spawn_run(alert_id: str, requested_at: str, user: str | None) -> None:
     flags = 0
     if sys.platform == "win32":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-    subprocess.Popen(cmd, cwd=_REPO, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                     stderr=subprocess.DEVNULL, creationflags=flags, start_new_session=sys.platform != "win32")
+
+    def popen(extra: int) -> None:
+        subprocess.Popen(cmd, cwd=_REPO, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                         stderr=subprocess.DEVNULL, creationflags=flags | extra,
+                         start_new_session=sys.platform != "win32")
+
+    if sys.platform != "win32":
+        popen(0)
+        return
+    try:                       # out of the Task Scheduler's job: it may end the tree when the pass ends (review 06/10)
+        popen(subprocess.CREATE_BREAKAWAY_FROM_JOB)
+    except OSError:            # a job that forbids breakaway: started inside it
+        popen(0)
 
 
 def start(kb: KnowledgeBase, alert_id: str, requested_at: str, user: str | None, now: datetime,
@@ -298,7 +319,7 @@ def start(kb: KnowledgeBase, alert_id: str, requested_at: str, user: str | None,
         return "done"
     if running(kb, alert_id, now) is not None:
         return "running"
-    if have is not None and have.finished_at >= datetime.fromisoformat(requested_at):
+    if have is not None and have.finished_at >= _aware(requested_at):
         return "done"                                    # this request was already answered (a failed run)
     path = _marker(kb, alert_id)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -312,17 +333,25 @@ def start(kb: KnowledgeBase, alert_id: str, requested_at: str, user: str | None,
     return "started"
 
 
+def _aware(at: str) -> datetime:
+    """An ISO datetime from the monitor; one without a zone is UTC (the monitor writes toISOString, with Z)."""
+    d = datetime.fromisoformat(at)
+    return d if d.tzinfo else d.replace(tzinfo=UTC)
+
+
 def apply_requests(kb: KnowledgeBase, content: dict, user: str | None, now: datetime,
                    spawn: Callable[[str, str, str | None], None] = spawn_run) -> tuple[list[dict], dict[str, str]]:
     """Start the runs the owner asked for in the monitor; return (what was done, alert id -> why it did not start)."""
     done, errors = [], {}
-    for alert_id, r in (content.get("analysis_requests") or {}).items():
+    asked = content.get("analysis_requests")
+    if not isinstance(asked, dict):                      # the piece is editable from outside: never break the pass
+        return done, ({"analysis_requests": "no es un objeto"} if asked else {})
+    for alert_id, r in asked.items():
         at = r.get("at") if isinstance(r, dict) else None
         try:
-            datetime.fromisoformat(str(at))
-            result = start(kb, alert_id, str(at), user, now, spawn)
+            result = start(kb, str(alert_id), _aware(str(at)).isoformat(), user, now, spawn)
             done.append({"alert": alert_id, "analysis": result})
-        except (KnowledgeError, ValueError, OSError) as exc:
+        except (KnowledgeError, ValueError, TypeError, OSError) as exc:
             errors[alert_id] = str(exc)[:300]
             done.append({"alert": alert_id, "analysis": "refused", "error": errors[alert_id]})
     return done, errors
