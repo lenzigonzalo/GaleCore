@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchSpace, saveSpaceItem, SpaceItem } from '../../api/space';
+import { useTerminalStore } from '../../store/useTerminalStore';
 
 /**
  * Avisos del supervisor de SHADOW (WS-0007): está en todas las pestañas, suena cuando llega un aviso nuevo y deja
@@ -11,8 +12,9 @@ import { fetchSpace, saveSpaceItem, SpaceItem } from '../../api/space';
  * botones, sin campos de texto (owner 06/10). Responder escribe `responses[<aviso>]` en la pieza y GaleCore-AI lo guarda como decisión en
  * el proyecto de la estrategia en la próxima pasada. En SHADOW no ejecuta nada.
  *
- * «Analizá este aviso» (WS-0008, U-70) escribe `analysis_requests[<aviso>]`; la próxima pasada lanza la corrida del
- * modelo y `analyses[<aviso>]` trae cómo va (corriendo, hecho con su texto, falló con el motivo). Sin chat.
+ * «Analizá este aviso» (U-70, P1-01c) abre Claude Code en el panel de la derecha con el pedido ya enviado: se sigue
+ * por chat, sin esperar a la próxima pasada. La sesión arma el contexto con `supervise context <aviso>`. Los análisis
+ * que dejó la corrida en segundo plano de WS-0008 (`analyses[<aviso>]`) se siguen mostrando.
  */
 
 interface Decision { choice: string; words: string; expected: string; review_by: string | null; at: string }
@@ -28,8 +30,7 @@ interface Analysis {
 }
 interface Piece {
   alerts?: Alert[]; responses?: Record<string, Response>; response_errors?: Record<string, string>;
-  analyses?: Record<string, Analysis>; analysis_requests?: Record<string, { at: string }>;
-  analysis_errors?: Record<string, string>;
+  analyses?: Record<string, Analysis>;
   last_run?: { at: string; result: string; failed: boolean }; state_detail?: string | null;
 }
 
@@ -81,54 +82,39 @@ const muted: React.CSSProperties = { fontSize: 12, color: 'var(--text-muted)' };
 const chip: React.CSSProperties = { fontSize: 12, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
   border: '1px solid var(--border-dark)', color: 'var(--text-secondary)', background: 'transparent' };
 
-/** El análisis del aviso: lo que trae GaleCore-AI, tal cual. Una línea; el detalle, con un click. */
-function AnalysisView({ analysis, asked, error, onAsk }: {
-  analysis?: Analysis; asked: boolean; error?: string; onAsk: () => Promise<void>;
-}) {
+/** Un análisis anterior (corrida en segundo plano de WS-0008), tal cual. Una línea; el detalle, con un click. */
+function AnalysisView({ analysis }: { analysis: Analysis }) {
   const [more, setMore] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const ask = async (e: React.MouseEvent) => {
-    e.stopPropagation(); setBusy(true);
-    try { await onAsk(); } finally { setBusy(false); }
-  };
-  if (analysis?.status === 'done') {
-    const meta = [analysis.model, analysis.tokens?.output != null ? `${analysis.tokens.output} tokens` : null,
-      analysis.duration_s != null ? `${analysis.duration_s} s` : null].filter(Boolean).join(' · ');
-    return (
-      <div style={{ marginTop: 6, paddingLeft: 8, borderLeft: '2px solid var(--border-dark)' }}>
-        <div onClick={() => setMore(m => !m)} style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-          {analysis.summary}
-        </div>
-        {more && (
-          <div style={{ ...muted, whiteSpace: 'pre-wrap', marginTop: 4 }}>
-            {analysis.detail}
-            {analysis.missing && analysis.missing.length > 0 && <div>Faltó: {analysis.missing.join('; ')}</div>}
-          </div>
-        )}
-        <div style={{ ...muted, fontSize: 11, marginTop: 2 }}>Análisis {when(analysis.at)}{meta ? ` · ${meta}` : ''}</div>
-      </div>
-    );
-  }
-  if (analysis?.status === 'running') {
-    return <div style={{ ...muted, marginTop: 6 }}>Analizando… (desde {when(analysis.at)})</div>;
-  }
-  if (asked) return <div style={{ ...muted, marginTop: 6 }}>Pedido · se analiza en ≤ 5 min</div>;
-  const failed = analysis?.status === 'failed' ? analysis.error : null;
+  const meta = [analysis.model, analysis.tokens?.output != null ? `${analysis.tokens.output} tokens` : null,
+    analysis.duration_s != null ? `${analysis.duration_s} s` : null].filter(Boolean).join(' · ');
   return (
-    <div style={{ marginTop: 6 }}>
-      {(failed || error) && (
-        <div style={{ fontSize: 12, color: 'var(--red-gc)', marginBottom: 4 }}>El análisis falló: {failed || error}</div>
+    <div style={{ marginTop: 6, paddingLeft: 8, borderLeft: '2px solid var(--border-dark)' }}>
+      <div onClick={() => setMore(m => !m)} style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+        {analysis.summary}
+      </div>
+      {more && (
+        <div style={{ ...muted, whiteSpace: 'pre-wrap', marginTop: 4 }}>
+          {analysis.detail}
+          {analysis.missing && analysis.missing.length > 0 && <div>Faltó: {analysis.missing.join('; ')}</div>}
+        </div>
       )}
-      <button disabled={busy} onClick={ask} style={chip}>{failed || error ? 'Pedir de nuevo' : 'Analizá este aviso'}</button>
+      <div style={{ ...muted, fontSize: 11, marginTop: 2 }}>Análisis {when(analysis.at)}{meta ? ` · ${meta}` : ''}</div>
     </div>
   );
 }
 
+/** El pedido que recibe Claude Code: el aviso y de dónde sale su contexto. */
+function analysisPrompt(alert: Alert): string {
+  return `Analizá el aviso ${alert.id} del supervisor de SHADOW («${alert.motivo}»). `
+    + `El contexto (aviso, posición, reglas de la estrategia, números de hoy) lo arma, desde GaleCore-AI, \`python -B -m galecore_ai.adapters.cli supervise context ${alert.id}\`.`;
+}
+
 /** Una línea: qué pasó. Click: el detalle. Sólo lo que pide decisión trae botones (un click, sin texto). */
-function AlertCard({ alert, sent, error, analysis, asked, analysisError, onAnswer, onAnalyze }: {
-  alert: Alert; sent?: Response; error?: string; analysis?: Analysis; asked: boolean; analysisError?: string;
-  onAnswer: (r: Omit<Response, 'at'>) => Promise<void>; onAnalyze: () => Promise<void>;
+function AlertCard({ alert, sent, error, analysis, onAnswer }: {
+  alert: Alert; sent?: Response; error?: string; analysis?: Analysis;
+  onAnswer: (r: Omit<Response, 'at'>) => Promise<void>;
 }) {
+  const startTerminal = useTerminalStore(t => t.start);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const done = alert.decision;
@@ -147,8 +133,14 @@ function AlertCard({ alert, sent, error, analysis, asked, analysisError, onAnswe
           <div>Regla: {alert.regla}</div>
         </div>
       )}
-      {(open || analysis || asked) && (
-        <AnalysisView analysis={analysis} asked={asked && !analysis} error={analysisError} onAsk={onAnalyze} />
+      {analysis?.status === 'done' && <AnalysisView analysis={analysis} />}
+      {open && (
+        <div style={{ marginTop: 6 }}>
+          <button onClick={e => { e.stopPropagation(); startTerminal('workspace', analysisPrompt(alert)); }} style={chip}
+            title="Abre Claude Code a la derecha con el pedido enviado">
+            Analizá este aviso
+          </button>
+        </div>
       )}
       {ask && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
@@ -226,20 +218,13 @@ export function SupervisorAlerts() {
     return { ...rest, responses: { ...(current.responses ?? {}), [alertId]: { ...r, at: new Date().toISOString() } } };
   }, 'No se pudo guardar la decisión. Probá de nuevo.');
 
-  const analyze = (alertId: string) => write(current => {
-    const { [alertId]: _old, ...errors } = current.analysis_errors ?? {};
-    const { [alertId]: _prev, ...analyses } = current.analyses ?? {};   // un fallo anterior deja de mostrarse
-    return { ...current, analyses, analysis_errors: errors,
-      analysis_requests: { ...(current.analysis_requests ?? {}), [alertId]: { at: new Date().toISOString() } } };
-  }, 'No se pudo pedir el análisis. Probá de nuevo.');
-
   const alerts = piece.alerts ?? [];
   const pending = alerts.filter(a => a.needs_decision && !a.decision && !piece.responses?.[a.id]).length;
   const failed = !!piece.last_run?.failed;          // lo decide GaleCore-AI: la última revisión no leyó todo
   if (!item) return null;
 
   return (
-    <div style={{ position: 'fixed', right: 16, bottom: 16, zIndex: 50, maxWidth: 'calc(100vw - 32px)' }}>
+    <div style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 50, maxWidth: 'calc(100% - 32px)' }}>
       {open && (
         <div style={{ width: 420, maxWidth: '100%', maxHeight: '70vh', overflow: 'auto', marginBottom: 8,
           backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 12,
@@ -257,9 +242,7 @@ export function SupervisorAlerts() {
           {alerts.length === 0 && <div style={{ ...muted, padding: '12px 0' }}>Sin avisos.</div>}
           {alerts.map(a => (
             <AlertCard key={a.id} alert={a} sent={piece.responses?.[a.id]} error={piece.response_errors?.[a.id]}
-              analysis={piece.analyses?.[a.id]} asked={!!piece.analysis_requests?.[a.id]}
-              analysisError={piece.analysis_errors?.[a.id]}
-              onAnswer={r => answer(a.id, r)} onAnalyze={() => analyze(a.id)} />
+              analysis={piece.analyses?.[a.id]} onAnswer={r => answer(a.id, r)} />
           ))}
         </div>
       )}
