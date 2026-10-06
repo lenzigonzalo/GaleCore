@@ -168,11 +168,17 @@ namespace DataFeed.Application.App.GammaExposure
         /// El DTE es una cuenta de calendario contra la fecha del vencimiento: se hace acá una vez y
         /// todo lo de abajo queda consistente. La fecha viene como `yyyy-MM-dd`; una que no parsea se
         /// descarta, porque sin fecha no hay forma de saber si el contrato existe todavía.
+        ///
+        /// El que vence HOY también se descarta pasado el cierre (16:00 ET, el mismo corte de
+        /// <see cref="CascadeUtils.YearsToExpiry"/>). Antes sobrevivía hasta la medianoche ET, y una
+        /// lectura del GEX a la tarde —la que se usa para preparar el día siguiente— sumaba la gamma
+        /// de contratos que ya habían liquidado: una foto que no existe (BL-011).
         /// </summary>
         public static List<Expiration> NormalizeExpirations(
             IEnumerable<Expiration> expirations, DateTimeOffset? nowUtc = null)
         {
             var today = CascadeUtils.TodayEt(nowUtc);
+            bool ceroDteVencido = CascadeUtils.YearsToExpiry(0, nowUtc) == null;
             var vivas = new List<Expiration>();
 
             foreach (var e in expirations ?? Enumerable.Empty<Expiration>())
@@ -183,7 +189,7 @@ namespace DataFeed.Application.App.GammaExposure
                     continue;
 
                 int dte = (int)(fecha.Date - today).TotalDays;
-                if (dte < 0) continue;
+                if (dte < 0 || (dte == 0 && ceroDteVencido)) continue;
 
                 e.DaysToExpiration = dte;
                 vivas.Add(e);

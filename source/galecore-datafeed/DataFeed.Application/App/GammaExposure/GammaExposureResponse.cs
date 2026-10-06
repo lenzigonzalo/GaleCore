@@ -117,6 +117,40 @@ namespace DataFeed.Application.App.GammaExposure
                 return Math.Round((CallGEX + PutGEX) / 1000, 1);
             }
         }
+
+        /// <summary>Escala de los campos de GEX de esta respuesta (BL-002).</summary>
+        public GexUnits Units => GexUnits.Current;
+    }
+
+    /// <summary>
+    /// La escala del GEX, declarada en el contrato. Antes sólo se sabía leyendo este archivo: los
+    /// GEX de strike y de lado salen en millones de USD y el neto en billones (miles de millones),
+    /// y un consumidor que los sumaba entre sí mezclaba escalas sin enterarse (BL-002).
+    ///
+    /// Es descriptivo: cambiar un número acá no reescala nada. Si cambia la fórmula o una división
+    /// del handler, se cambia esto en el mismo commit (lo congela GexUnitsTests).
+    /// </summary>
+    public sealed class GexUnits
+    {
+        public static readonly GexUnits Current = new();
+
+        /// <summary>CallGEX / PutGEX / NetGEX de cada strike.</summary>
+        public string Strike { get; } = "USD_MILLIONS";
+
+        /// <summary>CallGEX / PutGEX sumados (raíz, vencimiento, global).</summary>
+        public string Side { get; } = "USD_MILLIONS";
+
+        /// <summary>NetGEX agregado (raíz, vencimiento, global) = (CallGEX + PutGEX) / 1000.</summary>
+        public string Net { get; } = "USD_BILLIONS";
+
+        /// <summary>
+        /// Qué mide: cambio del delta de los dealers, en USD, ante un movimiento de 100% del spot
+        /// (gamma × OI × 100 × spot²). Para "por 1%" se multiplica por 0.01.
+        /// </summary>
+        public string Basis { get; } = "gamma*oi*100*spot^2 (USD delta change per 100% spot move; x0.01 for 1%)";
+
+        /// <summary>Signo: supuesto de dealers largos en calls (+) y cortos en puts (−).</summary>
+        public string Sign { get; } = "dealer: calls positive, puts negative";
     }
 
     /// <summary>
