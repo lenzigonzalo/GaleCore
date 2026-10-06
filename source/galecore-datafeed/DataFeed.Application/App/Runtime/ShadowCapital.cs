@@ -7,7 +7,7 @@ namespace DataFeed.Application.App.Runtime
     /// Riesgo y capital SHADOW (P1-04): la exposición agregada de lo abierto contra los límites, y el reparto de un
     /// capital («tengo X USD») con reserva, límite por operación, riesgo abierto máximo, tope por apuesta y escalera.
     ///
-    /// Los límites llegan como porcentajes del capital (los declara el perfil; GaleCore-AI los lee y los pasa). Una
+    /// Los límites llegan como porcentajes del capital (los declara el perfil del usuario y llegan en el pedido). Una
     /// «apuesta» agrupa las posiciones del mismo subyacente y dirección que vencen la misma semana ISO: varias chicas
     /// así son una sola. El riesgo es el máximo del spread ((ancho − crédito) × 100), como lo mide el perfil.
     /// Describe y calcula; no recomienda ni ordena. Función pura: sin I/O.

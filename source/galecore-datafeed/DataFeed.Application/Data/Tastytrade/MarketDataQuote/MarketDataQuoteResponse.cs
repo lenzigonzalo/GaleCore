@@ -28,6 +28,10 @@ namespace DataFeed.Application.Data.Tastytrade.MarketDataQuote
         public string BidExchangeCode { get; set; }
         public string AskExchangeCode { get; set; }
 
+        /// <summary>Hora (epoch ms) del último cambio del bid / del ask; 0 = no vino (BL-013).</summary>
+        public long BidTime { get; set; }
+        public long AskTime { get; set; }
+
         // Campo calculado para el precio medio (Mid)
         public double MidPrice => (BidPrice + AskPrice) / 2;
     }

@@ -93,6 +93,34 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
             });
         }
 
+        /// <summary>
+        /// Como EnsureSuccessStatusCode, pero el error lleva lo que contestó Tastytrade (recortado). Sin
+        /// eso un 403 de cuenta era indiagnosticable: el cuerpo dice si es la cuenta, el permiso del
+        /// token o la sesión (BL-015). El cuerpo es el error del broker; no lleva el token.
+        /// </summary>
+        public static async Task EnsureAccountSuccessAsync(HttpResponseMessage response)
+        {
+            if (response.IsSuccessStatusCode) return;
+            var body = "";
+            if (response.Content != null)
+            {
+                // El cliente pide gzip pero no descomprime solo: sin esto el error se lee como binario.
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                if (response.Content.Headers.ContentEncoding.Contains("gzip"))
+                {
+                    using var gz = new System.IO.Compression.GZipStream(new MemoryStream(bytes), System.IO.Compression.CompressionMode.Decompress);
+                    using var plain = new MemoryStream();
+                    await gz.CopyToAsync(plain);
+                    bytes = plain.ToArray();
+                }
+                body = System.Text.Encoding.UTF8.GetString(bytes);
+            }
+            if (body.Length > 300) body = body[..300] + "…";
+            throw new HttpRequestException(
+                $"Response status code does not indicate success: {(int)response.StatusCode} ({response.ReasonPhrase}). Tastytrade: {body}",
+                null, response.StatusCode);
+        }
+
         /// <param name="credential">
         /// Credencial con la que se pide. Los datos de cuenta son POR USUARIO: pedirlos con la
         /// credencial equivocada devuelve, sin error visible, las posiciones de otra persona. Si
@@ -106,7 +134,7 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                 ? await _auth.CreateOAuthApiRequestAsync($"/accounts/{accountNumber}/balances")
                 : await _auth.CreateOAuthApiRequestAsync($"/accounts/{accountNumber}/balances", credential);
             var response = await _client.SendAsync(request);
-            response.EnsureSuccessStatusCode();
+            await EnsureAccountSuccessAsync(response);
 
             var content = await response.Content.ReadAsStringAsync();
             var options = new JsonSerializerOptions
@@ -126,7 +154,7 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                 ? await _auth.CreateOAuthApiRequestAsync($"/accounts/{accountNumber}/positions")
                 : await _auth.CreateOAuthApiRequestAsync($"/accounts/{accountNumber}/positions", credential);
             var response = await _client.SendAsync(request);
-            response.EnsureSuccessStatusCode();
+            await EnsureAccountSuccessAsync(response);
 
             var content = await response.Content.ReadAsStringAsync();
             var options = new JsonSerializerOptions

@@ -303,7 +303,7 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
             _logger.LogInformation("DxLink: CHANNEL OK");
 
             // Step 4: FEED_SETUP
-            Send(new { type = "FEED_SETUP", channel = 3, acceptDataFormat = "FULL", parameters = new { } });
+            Send(DxLinkHandshake.FeedSetup);
 
             _handshakeComplete = true;
             _logger.LogInformation("DxLink handshake completo — listo para suscripciones");
@@ -528,6 +528,13 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
 
                     case "ERROR":
                         _logger.LogError("DxLink ERROR: {Message}", message.Text);
+                        return;
+
+                    case "FEED_CONFIG":
+                        // Qué campos aceptó DXLink de verdad para el Quote (BL-013): si no lista
+                        // bidTime/askTime, el feed no los da y no hay hora que mapear.
+                        _logger.LogInformation("DxLink FEED_CONFIG Quote: {Fields}",
+                            json["eventFields"]?["Quote"]?.ToString(Newtonsoft.Json.Formatting.None) ?? "(sin eventFields)");
                         return;
 
                     default:
