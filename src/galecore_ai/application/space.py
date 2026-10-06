@@ -275,17 +275,19 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
 
     shown = sv.view(kb, ALERTS_SHOWN)
     pending = [a for a in shown if a["decision"] is None]
-    failed = "error" in scan
+    failed = "error" in scan or bool(scan.get("problems"))
     lines = [f"**{len(pending)} aviso(s) sin respuesta.**" if pending else "Sin avisos pendientes.", ""]
     lines += [f"- {a['motivo']} — {a['propuesta']}" for a in pending]
     content = {
         "id": SUPERVISOR_KEY, "capability": "supervisor", "status": "active", "schedule": "cada 5 minutos",
         "strategy": None,
         "objective": "Vigilar las reglas de lo abierto en SHADOW (stop, cierres, precio, límite) y guardar tus decisiones",
-        "state": "FAILED" if failed else "CURRENT", "state_detail": scan.get("error"),
+        "state": "FAILED" if failed else "CURRENT",
+        "state_detail": scan.get("error") or ("; ".join(scan["problems"]) if scan.get("problems") else None),
         "next_expected_at": None,
         "last_run": {"at": scan["at"], "result": scan.get("error") or
-                     f"{scan.get('checked', 0)} posición(es) revisadas, {len(scan.get('new', []))} aviso(s) nuevo(s)",
+                     (f"{scan.get('checked', 0)} posición(es) revisadas, {len(scan.get('new', []))} aviso(s) nuevo(s)"
+                      + (f"; sin leer: {'; '.join(scan['problems'])}" if scan.get("problems") else "")),
                      "invoked_by": "espacio-agentes", "failed": failed},
         "runs": 0, "findings": "\n".join(lines), "result_ref": None,
         "alerts": shown,
@@ -335,18 +337,32 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
         from galecore_ai.application import supervisor as sv
 
         mine = next((c for i, c in items if i["key"] == SUPERVISOR_KEY), {})
-        responses, errors = apply_responses(kb, mine, client.user)
+        at = (now or datetime.now(UTC)).isoformat()
         try:
-            scan = sv.scan(kb, supervise, now)
-        except sv.SupervisorError as exc:
-            scan = {"at": (now or datetime.now(UTC)).isoformat(), "error": str(exc)}
-        pieces.append(supervisor_piece(kb, scan, errors))
+            responses, errors = apply_responses(kb, mine, client.user)
+            try:
+                scan = sv.scan(kb, supervise, now)
+            except sv.SupervisorError as exc:
+                scan = {"at": at, "error": str(exc)}
+            pieces.append(supervisor_piece(kb, scan, errors))
+        except (KnowledgeError, ValueError) as exc:   # a damaged alert or log: the other agents still publish
+            responses = [{"result": "refused", "error": str(exc)[:300]}]
+            keep = {k: mine[k] for k in ("alerts", "responses") if k in mine}
+            pieces.append({"kind": "agent", "key": SUPERVISOR_KEY, "title": "Supervisor de SHADOW (avisos y decisiones)",
+                           "format": "json", "visibility": "private",
+                           "content": json.dumps({**mine, **keep, "id": SUPERVISOR_KEY, "capability": "supervisor",
+                                                  "status": "active", "state": "FAILED",
+                                                  "state_detail": f"registro de avisos dañado: {str(exc)[:200]}",
+                                                  "last_run": {"at": at, "result": "falló", "failed": True}},
+                                                 ensure_ascii=False)})
     for p in pieces:
         error = refused.get(p["key"]) or kept.get(p["key"])
         if error:                                # the monitor shows why it did not happen
             p["content"] = json.dumps({**json.loads(p["content"]), "request_error": error}, ensure_ascii=False)
     live = {p["key"] for p in pieces}
     for item, content in items:
+        if item["key"] == SUPERVISOR_KEY:          # not a task: only a pass with `supervise` rewrites it
+            continue
         if item["key"] not in live and content.get("status") != "cancelled":
             gone = {k: content[k] for k in ("id", "capability", "schedule", "strategy", "objective") if k in content}
             pieces.append({"kind": "agent", "key": item["key"], "title": item["title"], "format": "json",

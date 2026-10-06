@@ -196,3 +196,52 @@ def test_a_refused_answer_is_shown_and_galecore_down_is_a_failure(kb, research_r
     piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
     assert "choice is one of" in piece["response_errors"][alert_id]
     assert piece["state"] == "FAILED" and piece["last_run"]["failed"] and "no respondió" in piece["state_detail"]
+
+
+def test_a_partial_read_is_a_failure_not_a_quiet_pass(kb, research_ref, galecore):  # noqa: F811
+    from galecore_ai.application import space
+
+    doc, _ = stored(kb, research_ref)
+    fake, client = galecore
+    space.publish_agents(client, kb, None, now=IN_SESSION, supervise=reader(doc.spec_hash, None))
+    piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
+    assert piece["state"] == "FAILED" and piece["last_run"]["failed"] and "sin forma de lista" in piece["state_detail"]
+
+
+def test_a_naive_galecore_timestamp_is_utc(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    naive = position(lastValuedAt=(IN_SESSION - timedelta(minutes=30)).replace(tzinfo=None).isoformat())
+    out = supervisor.scan(kb, reader(doc.spec_hash, [naive]), IN_SESSION)
+    assert out["problems"] == [] and [a.kind.value for a in supervisor.alerts(kb)] == ["no_price"]
+
+
+def test_no_price_does_not_count_yesterday_before_the_open(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    yesterday = position(lastValuedAt=(IN_SESSION - timedelta(days=1)).isoformat())
+    just_open = IN_SESSION.replace(hour=13, minute=35)        # 9:35 New York
+    assert supervisor.scan(kb, reader(doc.spec_hash, [yesterday]), just_open)["new"] == []
+
+
+def test_a_publish_without_the_supervisor_leaves_its_alerts(kb, research_ref, galecore):  # noqa: F811
+    from galecore_ai.application import space
+
+    doc, _ = stored(kb, research_ref)
+    fake, client = galecore
+    space.publish_agents(client, kb, None, now=IN_SESSION, supervise=reader(doc.spec_hash, [position(maxRisk=960.0)]))
+    space.publish_agents(client, kb, None, now=IN_SESSION)
+    piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
+    assert piece["status"] == "active" and len(piece["alerts"]) == 1
+
+
+def test_a_damaged_alert_fails_the_supervisor_not_the_other_agents(kb, research_ref, galecore):  # noqa: F811
+    from galecore_ai.application import space
+
+    doc, _ = stored(kb, research_ref)
+    fake, client = galecore
+    space.publish_agents(client, kb, None, now=IN_SESSION, supervise=reader(doc.spec_hash, [position(maxRisk=960.0)]))
+    path = next((kb.base / "supervision" / "alerts").glob("*.json"))
+    path.write_text("{}", encoding="utf-8")
+    out = space.publish_agents(client, kb, None, now=IN_SESSION, supervise=reader(doc.spec_hash, []))
+    piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
+    assert piece["state"] == "FAILED" and "dañado" in piece["state_detail"] and len(piece["alerts"]) == 1
+    assert out["responses"][0]["result"] == "refused"

@@ -106,7 +106,16 @@ def _write(kb: KnowledgeBase, alert: Alert) -> Path:
 # ── rules ────────────────────────────────────────────────────────
 
 
+def _ts(value: str | None) -> datetime | None:
+    """A GaleCore timestamp; one without offset is UTC (GaleCore stores UTC)."""
+    if not value:
+        return None
+    t = datetime.fromisoformat(value)
+    return t if t.tzinfo else t.replace(tzinfo=UTC)
+
+
 def _in_session(now: datetime) -> bool:
+    # NYSE holidays are not known here: on one, a position without price may alert (declared limitation).
     et = now.astimezone(NEW_YORK)
     return et.weekday() < 5 and SESSION[0] <= (et.hour, et.minute) < SESSION[1]
 
@@ -157,9 +166,12 @@ def evaluate(position: dict, *, strategy: str, strategy_ref: str | None, spec: d
                         "regla": f"Aviso a {NEAR_STOP_MULTIPLE:g}× el crédito; {stop} ({strategy_ref or 'spec sin versión'})",
                         "propuesta": "Revisar si se deja que decida el stop o se cierra antes."})
     valued_at = position.get("lastValuedAt")
-    last = datetime.fromisoformat(valued_at) if valued_at else None
-    since = last or (datetime.fromisoformat(position["entryAt"])
+    last = _ts(valued_at)
+    since = last or (_ts(position["entryAt"])
                      if position.get("entryAt") else None)
+    if since is not None:                     # yesterday's last valuation does not count before today's open
+        et = now.astimezone(NEW_YORK)
+        since = max(since, et.replace(hour=SESSION[0][0], minute=SESSION[0][1], second=0, microsecond=0))
     if _in_session(now) and since is not None and now - since > timedelta(minutes=NO_PRICE_MINUTES):
         out.append({**base, "key": f"no_price:{pid}:{valued_at or 'never'}", "kind": AlertKind.NO_PRICE,
                     "motivo": f"{label}: sin valuación desde hace {int((now - since).total_seconds() // 60)} min en sesión.",
@@ -191,20 +203,29 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
         raise SupervisorError(f"GaleCore no se pudo leer: {type(exc).__name__}") from exc
     known = {a.key for a in alerts(kb)}
     new, checked, problems = [], 0, []
-    for inst in instances or []:
+    if not isinstance(instances, list):
+        raise SupervisorError("GaleCore devolvió instancias sin forma de lista")
+    for inst in instances:
         if inst.get("mode") != "SHADOW":
             continue
         iid = inst.get("instanceId", "")
         path = f"/App/Runtime/Instances/{iid}/Positions"
         try:
             positions = read(path)
+            if not isinstance(positions, list):
+                raise SupervisorError("posiciones sin forma de lista")
         except Exception as exc:  # noqa: BLE001 - one instance unread is reported, the rest still checked
             problems.append(f"{inst.get('specName')}: {str(exc)[:160]}")
             continue
         strategy_ref, spec = _spec(kb, inst.get("versionHash", ""))
-        for pos in positions or []:          # a stopped instance's open positions still exit (observed 05/10)
+        for pos in positions:                # a stopped instance's open positions still exit (observed 05/10)
             checked += 1
-            for draft in evaluate(pos, strategy=inst.get("specName", ""), strategy_ref=strategy_ref, spec=spec, now=now):
+            try:
+                drafts = evaluate(pos, strategy=inst.get("specName", ""), strategy_ref=strategy_ref, spec=spec, now=now)
+            except (TypeError, ValueError, KeyError) as exc:   # a position GaleCore sent in another shape
+                problems.append(f"posición {str(pos.get('positionId'))[:8]}: no se pudo leer ({str(exc)[:120]})")
+                continue
+            for draft in drafts:
                 if draft["key"] in known:
                     continue
                 if draft["kind"] == AlertKind.CLOSED and not _recent_close(pos, now):
@@ -226,7 +247,7 @@ CLOSED_NEWS_DAYS = 3        # a close older than this when first seen is history
 
 def _recent_close(position: dict, now: datetime) -> bool:
     exit_at = position.get("exitAt")
-    return bool(exit_at) and datetime.fromisoformat(exit_at) >= now - timedelta(days=CLOSED_NEWS_DAYS)
+    return bool(exit_at) and _ts(exit_at) >= now - timedelta(days=CLOSED_NEWS_DAYS)
 
 
 # ── the owner's answer ───────────────────────────────────────────
@@ -237,10 +258,7 @@ def decisions(kb: KnowledgeBase) -> dict[str, dict]:
     out = {}
     names = sorted({k.split("/")[0] for k in kb.strategies.versions()}) + [PORTFOLIO]
     for name in names:
-        try:
-            log = project.load_log(kb, name)
-        except KnowledgeError:
-            continue
+        log = project.load_log(kb, name)       # a damaged log raises: its alerts must not look unanswered
         for e in log.entries:
             if e.context is not None:
                 out[e.context.alert] = {"project": name, "at": e.at.isoformat(), "choice": e.context.choice,
