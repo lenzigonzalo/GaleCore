@@ -6,6 +6,8 @@ import { StatusBar } from './components/layout/StatusBar';
 import { Sidebar } from './components/layout/Sidebar';
 import { TabNav, Tab } from './components/layout/TabNav';
 import { SupervisorAlerts } from './components/layout/SupervisorAlerts';
+import { ClaudeTerminal } from './components/layout/ClaudeTerminal';
+import { useTerminalStore } from './store/useTerminalStore';
 import { Home } from './pages/Home';
 import { Admin } from './pages/Admin';
 import { Settings } from './pages/Settings';
@@ -69,13 +71,16 @@ function Dashboard({ onLogout }: DashboardProps) {
       .finally(() => setLoadingPositions(false));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const terminalOpen = useTerminalStore((t) => t.open);
+  const setTerminalOpen = useTerminalStore((t) => t.setOpen);
+
   const { status, subscribeSymbol, unsubscribeSymbol, subscribeLeg, unsubscribeLeg, acceptSuggestion, dismissSuggestion } = useMarketSocket(tickers);
   useEffect(() => { setSocketStatus(status); }, [status]);
 
   return (
     <div className="flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       <Sidebar onLogoClick={() => setTab('inicio')} />
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
         <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />
         <TabNav active={tab} onChange={setTab} onLogout={onLogout} />
         <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
@@ -106,7 +111,17 @@ function Dashboard({ onLogout }: DashboardProps) {
         </main>
         {/* Avisos del supervisor de SHADOW (WS-0007): en todas las pestañas, con sonido. */}
         <SupervisorAlerts />
+        {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
+        {!terminalOpen && (
+          <button onClick={() => setTerminalOpen(true)}
+            style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 50, fontSize: 13, padding: '8px 14px',
+              borderRadius: 999, cursor: 'pointer', backgroundColor: 'var(--bg-secondary)',
+              color: 'var(--text-secondary)', border: '1px solid var(--border-dark)' }}>
+            Claude Code
+          </button>
+        )}
       </div>
+      <ClaudeTerminal />
     </div>
   );
 }
