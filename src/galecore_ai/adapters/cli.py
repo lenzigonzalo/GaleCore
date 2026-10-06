@@ -788,6 +788,12 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
             _json_out({"status": a.status.value.upper(), "alert": a.alert, "summary": a.summary, "detail": a.detail,
                        "missing": a.missing, "model": a.model, "route": a.route, "tokens": a.tokens,
                        "error": a.error}, exit_code=_EXIT_SUCCESS if a.error is None else _EXIT_INTERNAL_ERROR)
+        elif c == "context":
+            from galecore_ai.application import alert_analysis
+            alert = supervisor.load_alert(kb, args.alert)
+            ctx, sources, missing = alert_analysis.gather(kb, alert, supervisor.api_reader(),
+                                                          supervisor.decisions(kb).get(args.alert))
+            _json_out({"alert": args.alert, "context": ctx, "sources": sources, "missing": missing})
         elif c == "analyses":
             from galecore_ai.application import alert_analysis
             _json_out({"analyses": [{"alert": a.alert, "status": a.status.value, "at": a.finished_at.isoformat(),
@@ -1272,6 +1278,9 @@ def build_parser() -> _JsonArgumentParser:
     p_sv_analyze.add_argument("--source", default="session", choices=["session", "monitor"])
     p_sv_analyze.add_argument("--requested-at", dest="requested_at", help="ISO datetime of the request (monitor)")
     sv_sub.add_parser("analyses", help="Analyses of alerts, newest first (done or failed, with why)")
+    sv_sub.add_parser("context", help="The alert's context, by code and without a model: the alert, the position, "
+                                      "the strategy's exits and limit, today's numbers (P1-01c: the monitor's "
+                                      "terminal)").add_argument("alert", help="Alert id (supervise list)")
 
     p_contrast = sub.add_parser("contrast", help="Today's market story against each strategy and the portfolio "
                                                  "(GC-AI-0027)")
