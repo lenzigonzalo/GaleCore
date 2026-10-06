@@ -130,3 +130,46 @@ class WatchCancel(BaseModel):
     at: datetime
     words: str
     prompt: str
+
+
+# ── «analizá este aviso» (P1-01b, U-70) ──────────────────────────
+#
+# From the alert in the monitor, one model run with its context: the code gathers the alert, the position and the
+# current numbers from GaleCore; the model (the policy's model for reading work) only describes what they mean. One
+# file per run, create-only and hashed, in ``<knowledge>/supervision/analyses/<alert id>~<UTC stamp>.json``; a done
+# one answers the alert for good, a failed one says why and can be asked again.
+
+
+class AnalysisStatus(str, Enum):
+    DONE = "done"
+    FAILED = "failed"
+
+
+class AlertAnalysis(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    schema_version: str = SUPERVISION_SCHEMA_VERSION
+    kind_of_record: str = "alert_analysis"
+    alert: str                           # the alert id
+    alert_hash: str                      # the alert's content_hash when it was analysed
+    requested_at: datetime
+    requested_by: str                    # monitor | session
+    prompt: str
+    finished_at: datetime
+    status: AnalysisStatus
+    summary: str = ""                    # one line: what the alert means now
+    detail: str = ""                     # a few short paragraphs, the numbers it read
+    missing: list[str] = Field(default_factory=list)   # what GaleCore did not give
+    context: dict = Field(default_factory=dict)        # exactly what the model received
+    sources: list[str] = Field(default_factory=list)   # GaleCore endpoints read
+    model: str | None = None
+    route: str | None = None             # why this model (policy GC-AI-0025)
+    tokens: dict | None = None
+    duration_s: float | None = None
+    error: str | None = None
+    content_hash: str = ""
+
+    def hashable_content(self) -> dict:
+        data = self.model_dump(mode="json")
+        data.pop("content_hash", None)
+        return data

@@ -526,6 +526,36 @@ entries:
       - A number GaleCore cannot give (no quote, NaN, a cold GEX past the timeout) is a problem of the pass, never «not met»
       - "Not checked - NYSE holidays (a holiday has no quotes: the pass reports a problem); prices between two 5-minute passes"
 
+  - id: alert_analysis
+    kind: harness
+    serves: >-
+      «Analizá este aviso»: desde un aviso del supervisor en el monitor (o en la sesión), una corrida del modelo con su
+      contexto — el aviso y su regla, la posición si la hay, las salidas y el límite de la estrategia y los números de
+      ahora en GaleCore — que dice en pocas líneas qué significa el aviso ahora, sin aconsejar. El resultado vuelve
+      debajo del mismo aviso en el monitor, sin chat.
+    example_requests:
+      - Analizá este aviso.
+      - ¿Qué significa el aviso de SPY que me llegó?
+      - Explicame el aviso de la posición cerca del stop.
+    skill: skills/alert-analysis/skill.yaml
+    output_contract: galecore_ai.contracts.supervision.AlertAnalysis
+    galecore_capabilities: [Data/Tastytrade/MarketData/Quote, App/Gex/Analysis, App.Analytics/IVRank, App/Runtime/Instances]
+    data_needs:
+      - need: cotizacion
+      - need: GEX de SPY
+      - need: IV rank de SPY
+    flow:
+      - supervise list
+      - supervise analyze <alert id> --prompt "<pedido>"
+      - supervise analyses
+    stored_as: supervision
+    controls:
+      - The code gathers the context (no model); a source GaleCore does not give is listed as missing, never filled in
+      - "The model runs with no tools, on the policy's model for reading work (sonnet, GC-AI-0025), with a turn and time cap"
+      - The runner refuses advice addressed to the reader (same patterns as a scheduled run) after one correction round
+      - One done analysis per alert, create-only and hashed; a failed one says why and can be asked again
+      - "Not checked - that the reading is right; it describes what the numbers say, the decision is the owner's"
+
   - id: idea_inbox
     kind: harness
     serves: >-
