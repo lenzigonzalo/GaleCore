@@ -29,7 +29,7 @@ from galecore_ai.application import project
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.project import PORTFOLIO, DecisionContext
 from galecore_ai.contracts.strategy import compute_document_hash
-from galecore_ai.contracts.supervision import OPTIONS, Alert, AlertKind
+from galecore_ai.contracts.supervision import NEEDS_DECISION, OPTIONS, Alert, AlertKind
 
 NEAR_STOP_MULTIPLE = 1.0        # loss at mid >= 1x credit: half way to the 2x stop (owner 05/10)
 NO_PRICE_MINUTES = 10           # in session, without a valuation for longer than this (owner 05/10)
@@ -297,5 +297,6 @@ def view(kb: KnowledgeBase, limit: int = 20) -> list[dict]:
         out.append({"id": a.id, "kind": a.kind.value, "strategy": a.strategy, "strategy_ref": a.strategy_ref,
                     "position_id": a.position_id,
                     "detected_at": a.detected_at.isoformat(), "motivo": a.motivo, "dato": a.dato, "regla": a.regla,
-                    "propuesta": a.propuesta, "options": a.options, "decision": answered.get(a.id)})
+                    "propuesta": a.propuesta, "options": a.options, "needs_decision": a.kind in NEEDS_DECISION,
+                    "decision": answered.get(a.id)})
     return out

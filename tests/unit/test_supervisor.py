@@ -167,7 +167,7 @@ def test_the_monitor_shows_the_alert_and_its_answer_becomes_a_decision(kb, resea
     piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
     [shown] = piece["alerts"]
     assert shown["kind"] == "closed" and shown["decision"] is None and piece["state"] == "CURRENT"
-    assert "1 aviso(s) sin respuesta" in piece["findings"]
+    assert "Nada para decidir" in piece["findings"] and shown["needs_decision"] is False
     # What the monitor writes: the piece as it was, plus the answer.
     answer = {"choice": "conforme", "words": "Salió por objetivo, como se esperaba", "expected": "",
               "review_by": "2026-09-30", "at": IN_SESSION.isoformat()}
@@ -179,7 +179,7 @@ def test_the_monitor_shows_the_alert_and_its_answer_becomes_a_decision(kb, resea
     assert entry.context.choice == "conforme" and entry.context.source == "monitor" and "demo" in entry.prompt
     piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
     assert piece["alerts"][0]["decision"]["choice"] == "conforme" and "responses" not in piece
-    assert "Sin avisos pendientes" in piece["findings"]
+    assert "Nada para decidir" in piece["findings"]
 
 
 def test_a_refused_answer_is_shown_and_galecore_down_is_a_failure(kb, research_ref, galecore):  # noqa: F811

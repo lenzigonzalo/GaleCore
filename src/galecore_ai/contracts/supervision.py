@@ -33,6 +33,11 @@ OPTIONS: dict[AlertKind, list[str]] = {
 }
 
 
+# Only these ask the owner for a decision; the rest inform and are recorded as they are (owner 06/10: «son cosas muy
+# extensas, además requiere mi input»).
+NEEDS_DECISION = {AlertKind.NEAR_STOP, AlertKind.RISK_LIMIT}
+
+
 class Alert(BaseModel):
     model_config = {"extra": "forbid"}
 
