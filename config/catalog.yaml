@@ -269,6 +269,7 @@ entries:
       - ¿Qué le falta a esta estrategia para correr en SHADOW y qué reglas no soporta GaleCore?
       - Quiero probar una estrategia de put credit spreads en SHADOW
       - Tengo una idea de estrategia, armala y ponela a prueba
+      - ¿Qué cambió entre versiones y por qué?
       - ¿Está bien esta idea? ¿Qué le falta y por qué no?
     skill: skills/strategy-design/skill.yaml
     output_contract: galecore_ai.contracts.strategy.ProposalContent
@@ -288,6 +289,7 @@ entries:
       - strategy save --spec <file> --prompt "<pedido>" < {content, host_provider, host_model}
       - strategy critique --ref strategy:<name>/<version> < {content, host_provider, host_model}   # el crítico, antes de pedir la aprobación
       - strategy sheet --ref strategy:<name>/<version>   # la ficha de una página para el owner, con el riesgo contra el perfil
+      - strategy diff --from strategy:<name>/<anterior> --ref strategy:<name>/<version>   # qué cambió y por qué
       - strategy approve --ref strategy:<name>/<version> --spec-hash <hash> --owner-words "<owner>" --host-model <model>
       - strategy deploy-check --ref strategy:<name>/<version> --galecore-hash <hash de App/Runtime/Specs/<name>>
       - python GaleCore/dev/galecore_dev.py deploy --spec <name> --approval knowledge/strategies/<name>/<version>.approval.json   # sólo GaleCore Dev
@@ -301,6 +303,7 @@ entries:
       - The spec hash is GaleCore's (JCS + SHA-256, verified against hashes GaleCore computed); versions and approvals are create-only and hashed
       - Deploy (dev tool) reads the approval file, re-checks the approval's and the proposal's hashes and requires the hash GaleCore loaded; scope SHADOW in GaleCore Dev. GaleCore's Deploy endpoint itself does not check approvals (admin-only, D-0003)
       - A version is saved only with its parameter table (every rule with a parameter in a row) and its management tree (every exit and adjustment rule as a trigger -> action step)
+      - After the first version, a new one is saved only with `change` (the stored version it changes, the reason, and refs that resolve or a decision hash of the strategy's project)
       - A version is approved only with a critique of that exact proposal document, and never with the verdict «descartar»; critiques are create-only and hashed
       - Not checked - that the hypothesis is right, that parameters are good, that the critique is sharp, or that the strategy is profitable
 

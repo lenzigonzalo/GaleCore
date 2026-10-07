@@ -24,6 +24,7 @@ Usage:
     python -m galecore_ai.adapters.cli strategy approve --ref strategy:NAME/VERSION --spec-hash sha256:...         --owner-words "..." --host-model MODEL
     python -m galecore_ai.adapters.cli strategy critique --ref strategy:NAME/VERSION < critique.json
     python -m galecore_ai.adapters.cli strategy sheet --ref strategy:NAME/VERSION
+    python -m galecore_ai.adapters.cli strategy diff --from strategy:NAME/OLD --ref strategy:NAME/NEW
     python -m galecore_ai.adapters.cli strategy deploy-check --ref strategy:NAME/VERSION --galecore-hash sha256:...
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
@@ -1121,6 +1122,9 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
             from galecore_ai.application import supervisor
             from galecore_ai.application.strategy_sheet import sheet
             _json_out(sheet(kb, key, None if args.offline else supervisor.api_reader()))
+        if args.strategy_command == "diff":
+            from galecore_ai.application.strategy_sheet import diff
+            _json_out(diff(kb, strategy_key(args.from_ref), key))
         if args.strategy_command == "deploy-check":
             _json_out(deploy_check(kb=kb, key=key, galecore_hash=args.galecore_hash))
     except KnowledgeError as exc:
@@ -1490,6 +1494,9 @@ def build_parser() -> _JsonArgumentParser:
     p_st_sheet = st_sub.add_parser("sheet", help="One-page sheet: parameters, management, gaps, decisions, critique")
     p_st_sheet.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_sheet.add_argument("--offline", action="store_true", help="do not ask GaleCore what is open in SHADOW")
+    p_st_diff = st_sub.add_parser("diff", help="What changed between two versions and why (by code)")
+    p_st_diff.add_argument("--from", dest="from_ref", required=True, help="strategy:<name>/<older version>")
+    p_st_diff.add_argument("--ref", required=True, help="strategy:<name>/<newer version>")
     p_st_deploy = st_sub.add_parser("deploy-check", help="Allow a deploy only with an approval of GaleCore's hash")
     p_st_deploy.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", required=True,

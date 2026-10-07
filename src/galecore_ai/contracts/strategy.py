@@ -199,6 +199,32 @@ class Parameter(BaseModel):
         return self
 
 
+class VersionChange(BaseModel):
+    """Why this version exists (WS-0016, U-30): the version it changes and the decision or finding behind it."""
+
+    model_config = {"extra": "forbid"}
+
+    from_version: str
+    reason: str
+    refs: list[str]              # research:, evidence:, feedback:, strategy: refs or decision:<hash> of the project
+
+    check_not_blank = field_validator("reason")(_non_blank)
+
+    @field_validator("from_version")
+    @classmethod
+    def _version(cls, v: str) -> str:
+        if not STRATEGY_VERSION_RE.fullmatch(v):
+            raise ValueError("from_version is MAJOR.MINOR.PATCH")
+        return v
+
+    @field_validator("refs")
+    @classmethod
+    def _some_ref(cls, v: list[str]) -> list[str]:
+        if not [x for x in v if x.strip()]:
+            raise ValueError("a change cites the decision, feedback or finding that originated it")
+        return v
+
+
 class ManagementKind(str, Enum):
     TARGET = "target"
     STOP = "stop"
@@ -231,7 +257,7 @@ class ManagementStep(BaseModel):
 
 
 MANAGED_BLOCKS = (Block.EXIT, Block.ADJUSTMENT)
-PROPOSAL_FIELDS_ADDED = ("parameters", "management")  # WS-0016
+PROPOSAL_FIELDS_ADDED = ("parameters", "management", "change")  # WS-0016
 
 
 def design_gaps(content: ProposalContent) -> list[str]:
@@ -282,6 +308,7 @@ class ProposalContent(BaseModel):
     limitations: list[str] = Field(default_factory=list)
     parameters: list[Parameter] = Field(default_factory=list)   # WS-0016; required at save (design_gaps)
     management: list[ManagementStep] = Field(default_factory=list)
+    change: VersionChange | None = None                         # WS-0016; required at save after the first version
 
     check_not_blank = field_validator("display_name", "purpose")(_non_blank)
 

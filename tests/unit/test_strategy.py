@@ -22,8 +22,13 @@ from galecore_ai.application.strategy import (
     galecore_spec_hash,
     save_proposal,
 )
-from galecore_ai.application.strategy_sheet import sheet
-from galecore_ai.contracts.strategy import CritiqueContent, ProposalContent, design_gaps
+from galecore_ai.application.strategy_sheet import diff, sheet
+from galecore_ai.contracts.strategy import (
+    CritiqueContent,
+    ProposalContent,
+    VersionChange,
+    design_gaps,
+)
 from galecore_ai.harness.catalog import load_catalog
 from tests.unit.test_evidence import evidence
 from tests.unit.test_knowledge import HOST, NOW, content, kb, save  # noqa: F401  (kb is a fixture)
@@ -438,7 +443,7 @@ def test_versions_stored_without_the_new_fields_keep_their_hash(kb, research_ref
     """1.0.0–1.0.5 were stored before WS-0016: adding the fields must not make them INTEGRITY_FAILED."""
     _, path = stored(kb, research_ref, criticised=False)
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    del data["content"]["parameters"], data["content"]["management"]
+    del data["content"]["parameters"], data["content"]["management"], data["content"]["change"]
     old = {k: v for k, v in data.items() if k != "content_hash"}
     from galecore_ai.contracts.strategy import compute_document_hash
     data["content_hash"] = compute_document_hash(old)   # the hash as the old contract computed it
@@ -689,3 +694,49 @@ def test_without_a_cap_the_full_width_bounds_the_loss(kb, research_ref):  # noqa
                                      "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
     row = risk(kb, doc.model_copy(update={"spec_json": json.dumps(spec)}))["rows"][0]
     assert row[1].startswith(f"{width * 100:g} USD (ancho completo × 100")
+
+
+def _next_version(kb, research_ref, change):  # noqa: F811
+    spec = json.loads(spec_text())
+    spec["identity"]["version"] = "1.0.4"
+    spec["risk_limits"]["max_concurrent_positions"] = 3
+
+    def bump(d):
+        d["version"] = "1.0.4"
+        d["owner_decisions"] = []
+        for r in d["rules"]:
+            if r["id"] == "E1":
+                r["text"] += " Hasta 3 posiciones."
+        if change is not None:
+            d["change"] = change
+    return save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(bump, research_ref=research_ref),
+                         spec_json=json.dumps(spec, indent=2), spec_file=f"{NAME}.json", now=NOW)
+
+
+def test_a_new_version_says_what_it_changes_and_why(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    with pytest.raises(KnowledgeError) as exc:
+        _next_version(kb, research_ref, None)
+    assert any("says what it changes and why" in p for p in exc.value.problems)
+    with pytest.raises(KnowledgeError) as exc:
+        _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "más posiciones",
+                                         "refs": ["decision:sha256:000000000000"]})
+    assert any("no entry with that hash" in p for p in exc.value.problems)
+    with pytest.raises(KnowledgeError) as exc:
+        _next_version(kb, research_ref, {"from_version": "1.0.9", "reason": "más posiciones", "refs": [research_ref]})
+    assert any("is not a stored version" in p for p in exc.value.problems)
+    _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "más posiciones para generar data",
+                                     "refs": [research_ref]})
+    out = diff(kb, KEY, f"{NAME}/1.0.4")
+    assert out["change"]["reason"] == "más posiciones para generar data"
+    assert {"path": "risk_limits.max_concurrent_positions", "from": 1, "to": 3} in out["spec"]
+    assert not any(d["path"] == "identity.version" for d in out["spec"])
+    assert {"rule": "E1", "change": "changed", "fields": ["text"]} in out["rules"]
+    assert "**Motivo:** más posiciones para generar data" in out["markdown"]
+
+
+def test_a_change_needs_a_reason_and_what_originated_it():
+    with pytest.raises(ValidationError, match="cites the decision"):
+        VersionChange(from_version="1.0.3", reason="x", refs=[])
+    with pytest.raises(ValidationError):
+        VersionChange(from_version="1.0.3", reason="  ", refs=["research:x"])

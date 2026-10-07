@@ -176,3 +176,69 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
     return {"strategy": f"strategy:{key}", "spec_hash": doc.spec_hash, "check": doc.check.verdict, "risk": r,
             "critique": review.content.verdict.value if review_ok else None, "approved": approval is not None,
             "markdown": "\n".join(lines) + "\n"}
+
+
+def _flat(node, path: str = "") -> dict:
+    if isinstance(node, dict) and node:
+        out: dict = {}
+        for k, v in node.items():
+            out.update(_flat(v, f"{path}.{k}" if path else k))
+        return out
+    if isinstance(node, list) and node and all(isinstance(x, dict) for x in node):
+        out = {}
+        for i, x in enumerate(node):
+            tag = x.get("id") or f"{x.get('side', '')}_{x.get('type', '')}".lower().strip("_") or str(i)
+            out.update(_flat(x, f"{path}[{tag}]"))
+        return out
+    return {path: node}
+
+
+_SPEC_SAME = ("identity.version", "content_hash")
+_RULE_FIELDS = ("block", "text", "basis", "parameter", "rationale", "sources")
+
+
+def diff(kb: KnowledgeBase, from_key: str, to_key: str) -> dict:
+    """What changed between two versions (U-30), by code: spec fields, rules, parameters, management, and the
+    reason and refs the newer version recorded. Nothing is inferred: a version without `change` says so."""
+    old, new = load_proposal(kb, from_key), load_proposal(kb, to_key)
+    a, b = _flat(json.loads(old.spec_json)), _flat(json.loads(new.spec_json))
+    spec = [{"path": k, "from": a.get(k), "to": b.get(k)} for k in sorted(set(a) | set(b))
+            if a.get(k) != b.get(k) and k not in _SPEC_SAME]
+    ra, rb = {r.id: r for r in old.content.rules}, {r.id: r for r in new.content.rules}
+    rules = [{"rule": i, "change": "added", "text": rb[i].text} for i in rb if i not in ra]
+    rules += [{"rule": i, "change": "removed", "text": ra[i].text} for i in ra if i not in rb]
+    for i in (i for i in ra if i in rb):
+        x, y = ra[i].model_dump(mode="json"), rb[i].model_dump(mode="json")
+        fields = [f for f in _RULE_FIELDS if x[f] != y[f]] + (["runtime"] if x["runtime"] != y["runtime"] else [])
+        if fields:
+            rules.append({"rule": i, "change": "changed", "fields": fields,
+                          **({"parameter": {"from": x["parameter"], "to": y["parameter"]}}
+                             if "parameter" in fields else {})})
+    pa, pb = {p.name: p.value for p in old.content.parameters}, {p.name: p.value for p in new.content.parameters}
+    params = [{"name": n, "from": pa.get(n), "to": pb.get(n)} for n in sorted(set(pa) | set(pb))
+              if pa.get(n) != pb.get(n)]
+    ma = {s.id: (s.trigger, s.action) for s in old.content.management}
+    mb = {s.id: (s.trigger, s.action) for s in new.content.management}
+    management = [{"step": i, "from": ma.get(i), "to": mb.get(i)} for i in sorted(set(ma) | set(mb))
+                  if ma.get(i) != mb.get(i)]
+    change = new.content.change
+    lines = [f"# {new.name}: {old.version} → {new.version}", ""]
+    if change is None:
+        lines += ["**Motivo:** no registrado (la versión se guardó antes de que fuera obligatorio).", ""]
+    else:
+        lines += [f"**Motivo:** {_cell(change.reason)}", "", f"**Lo originó:** {', '.join(change.refs)}", ""]
+        if change.from_version != old.version:
+            lines += [f"Nota: {new.version} dice venir de {change.from_version}, no de {old.version}.", ""]
+    lines += ["## Spec", ""]
+    lines += [f"- `{d['path']}`: {d['from']!r} → {d['to']!r}" for d in spec] or ["- Sin cambios."]
+    lines += ["", "## Reglas", ""]
+    lines += [f"- {r['rule']} {r['change']}" + (f": {', '.join(r['fields'])}" if r.get("fields") else "")
+              + (f" ({_cell(r['parameter']['from'])} → {_cell(r['parameter']['to'])})" if r.get("parameter") else "")
+              for r in rules] or ["- Sin cambios."]
+    if params:
+        lines += ["", "## Parámetros", ""] + [f"- {p['name']}: {p['from']} → {p['to']}" for p in params]
+    if management:
+        lines += ["", "## Gestión", ""] + [f"- {m['step']}: {m['from']} → {m['to']}" for m in management]
+    return {"from": f"strategy:{from_key}", "to": f"strategy:{to_key}",
+            "change": change.model_dump(mode="json") if change else None, "spec": spec, "rules": rules,
+            "parameters": params, "management": management, "markdown": "\n".join(lines) + "\n"}

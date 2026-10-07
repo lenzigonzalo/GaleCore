@@ -45,7 +45,9 @@ system_prompt: >
       positions, sample sufficiency, support / refutation / inconclusive criteria, point-in-time data, and what
       each execution source proves (SHADOW fills are simulated at mid; they are not executions).
   A8. `strategy check` until VALID or VALID_WITH_DECLARED_GAPS with empty design_gaps (what it reports is what
-      `strategy save` refuses); then `strategy save`. A change is a new version.
+      `strategy save` refuses); then `strategy save`. A change is a new version, and it says in `change` which
+      version it changes, why, and what originated it (research:, evidence:, feedback: or decision:<hash> from
+      `project show`); show it with `strategy diff --from <old> --ref <new>`.
   A9. Critic. Change role: read the saved version as someone who wants it NOT to run. Say what is missing to
       judge it, the biases (recency, a period without crises, a story fitted after the fact), an alternative
       explanation that would produce the same expected result, the strongest reasons not to run it, the

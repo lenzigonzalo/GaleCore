@@ -24,3 +24,9 @@ Contexto del instrumento: el método pide `story pack --symbol` o el pack del d�
 Corrección a la crítica de la copia (`ac06-critica-1.0.6.json`): heredó de la 1.0.5 «drawdown del perfil 1.500 USD».
 El perfil vigente dice que 1.500 USD es el tope de **una apuesta** (mismo subyacente, dirección y semana), no un
 drawdown; el riesgo sumado permitido es 5.000 USD. La ficha nueva lo muestra con los números del perfil.
+
+**AC-05 (07/10), sobre el conocimiento real (sólo lectura):** `strategy diff --from .../1.0.3 --ref .../1.0.5` →
+spec: `risk_limits.max_concurrent_positions` 1 → 10, `min_minutes_between_entries` null → 1440 (más fechas y notas);
+reglas: R3 y R4 agregadas, E1 cambia texto, fundamento y runtime, S1 fundamento. Motivo: «no registrado» (versiones
+anteriores a la regla). Desde ahora `strategy save` de una versión nueva exige `change` (versión de origen guardada,
+motivo y refs que resuelven o `decision:<hash>` del proyecto). Suite 1228 passed.

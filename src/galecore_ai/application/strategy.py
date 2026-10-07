@@ -390,11 +390,39 @@ def _check_refs(content: ProposalContent, kb: KnowledgeBase) -> list[str]:
     return problems
 
 
+def _change_problems(content: ProposalContent, kb: KnowledgeBase) -> list[str]:
+    """After the first version, a new one says which version it changes, why, and what originated it (U-30)."""
+    earlier = [k.split("/")[1] for k in kb.strategies.versions()
+               if k.split("/")[0] == content.name and k.split("/")[1] != content.version]
+    if not earlier:
+        return []
+    if content.change is None:
+        return [f"{content.name} already has versions {earlier}: the proposal says what it changes and why (change)"]
+    problems = []
+    if content.change.from_version not in earlier:
+        problems.append(f"change.from_version {content.change.from_version} is not a stored version of {content.name}")
+    decisions = None
+    for ref in content.change.refs:
+        if ref.startswith("decision:"):
+            if decisions is None:
+                from galecore_ai.application.project import strategy_project
+                log = strategy_project(kb, content.name).get("log", {})
+                decisions = {e.get("hash") for kind in log.values() if isinstance(kind, list) for e in kind}
+            if ref.removeprefix("decision:") not in decisions:
+                problems.append(f"{ref}: no entry with that hash in the project of {content.name}")
+            continue
+        try:
+            resolve_ref(ref, kb)
+        except KnowledgeError as exc:
+            problems.append(str(exc))
+    return problems
+
+
 def save_proposal(*, kb: KnowledgeBase, prompt: str, host: RecordHost, content: ProposalContent,
                   spec_json: str, spec_file: str, now: datetime | None = None) -> tuple[StrategyDocument, str]:
     """Check and store a version. An INVALID check, an unresolved reference or a version without its parameter
     table and management tree is refused, not stored."""
-    problems = _check_refs(content, kb) + design_gaps(content)
+    problems = _check_refs(content, kb) + design_gaps(content) + _change_problems(content, kb)
     report = check_proposal(content, spec_json, spec_file)
     if report.verdict == "INVALID" or problems:
         raise KnowledgeError("proposal refused", problems + report.errors)
