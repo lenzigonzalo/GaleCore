@@ -78,6 +78,14 @@ class ScanRule(BaseModel):
     quiet_business_days: int = Field(default=3, ge=0, le=10)
     releases: list[str] = Field(default_factory=lambda: ["Empleo (NFP)", "CPI", "FOMC"])
 
+    @field_validator("releases")
+    @classmethod
+    def _releases(cls, v: list[str]) -> list[str]:
+        known = {"Empleo (NFP)", "CPI", "PPI", "PIB", "Ingresos y gastos (PCE)", "Ventas minoristas", "FOMC"}
+        if unknown := [r for r in v if r not in known]:
+            raise ValueError(f"unknown releases {unknown}: use {sorted(known)}")
+        return v
+
     @field_validator("symbols")
     @classmethod
     def _symbols(cls, v: list[str]) -> list[str]:

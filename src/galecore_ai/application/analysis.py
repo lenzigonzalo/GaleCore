@@ -76,6 +76,13 @@ def _months(series: dict) -> list[tuple[str, float, bool]]:
     return sorted(out)
 
 
+def _month_back(y: int, mo: int, k: int) -> str:
+    mm = mo - k
+    while mm <= 0:
+        y, mm = y - 1, mm + 12
+    return f"{y}-{mm:02d}"
+
+
 def _bls_view(series_id: str, months: list[tuple[str, float, bool]]) -> dict | None:
     if not months:
         return None
@@ -107,7 +114,7 @@ def _bls_view(series_id: str, months: list[tuple[str, float, bool]]) -> dict | N
             view["chg_3m_pts"] = _round(last - m3)
         if (m12 := back(12)) is not None:
             view["chg_12m_pts"] = _round(last - m12)
-    gaps = [m for m in (f"{y - 1}-{k:02d}" for k in range(1, 13)) if m not in by and m < last_m]
+    gaps = [m for m in (_month_back(y, mo, k) for k in range(12, 0, -1)) if m not in by]   # the last 12 months
     if gaps:
         view["months_without_value"] = gaps                # e.g. a shutdown month the agency never published
     return view
@@ -195,7 +202,7 @@ async def _technical(ask, symbol: str, today: date, missing: list[str]) -> dict:
     raw = await ask("market_data.candles", {"symbol": symbol, "interval": "1d",
                                             "fromTime": (today - timedelta(days=400)).isoformat()})
     from galecore_ai.application import drivers
-    view = technical_view(drivers.daily_bars(raw)) if raw is not None else None
+    view = technical_view(drivers.daily_bars(raw, exclude=story.open_session_day(today))) if raw is not None else None
     if raw is not None and view is None:
         missing.append(f"market_data.candles {symbol}: menos de 21 cierres diarios")
     return {"technical": view} if view else {}
@@ -220,6 +227,7 @@ def _quarters(facts: list[dict]) -> list[dict]:
                 by_end[end] = f
         elif 350 <= days <= 380:
             annual.append(f)
+    annual.sort(key=lambda f: f.get("filed") or "", reverse=True)   # the latest filing of each year first
     for y in annual:
         if y["end"] in by_end:
             continue
@@ -259,6 +267,9 @@ def fundamental_view(facts_by_tag: dict[str, list[dict]], price: float | None) -
     eps = out.get("EarningsPerShareDiluted", {}).get("last_4_quarters")
     if price and eps and eps > 0:
         out["pe_trailing"] = round(price / eps, 1)          # cálculo: last close over the last four diluted EPS
+    elif eps is not None and eps <= 0:
+        out["pe_trailing"] = None
+        out["pe_note"] = "sin P/E: el EPS de los últimos cuatro trimestres no es positivo"
     return out
 
 

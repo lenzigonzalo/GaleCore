@@ -53,7 +53,8 @@ def test_reaction_against_the_implied_of_the_evening_before_and_against_days_wit
     r = drivers.reactions(bars, events, TODAY)
     cpi = r["by_release"]["CPI"]
     assert cpi["n"] == 4 and cpi["median_ratio"] == 0.1 and cpi["exceeded_implied"] == 0
-    assert cpi["premium"].startswith("la IV pagó de más: 0 de 4")
+    # No day without data exceeded the IV either: no release exceeding it is in line, not «overpaid».
+    assert cpi["premium"].startswith("en línea con un día sin dato: 0 de 4")
     assert cpi["vs_days_without_data"].startswith("como un día sin dato")   # the fixture's other days move 0.1 % too
     assert r["days_without_data"]["median_ratio"] == round(0.001 / implied, 2)
     assert r["days_without_data"]["exceeded_implied"] == 0
@@ -70,8 +71,11 @@ def test_vs_days_without_data_and_premium_conventions():
     assert drivers._vs_normal(0.3, 0.5).startswith("mueve menos")
     assert drivers._vs_normal(0.5, 0.5).startswith("como un día sin dato")
     assert drivers._vs_normal(None, 0.5) is None
-    assert drivers._premium(3, 5).startswith("la IV pagó de menos")
-    assert drivers._premium(2, 6).startswith("en línea")
+    # Against the days without data: 10 of 100 exceed the implied (10 %).
+    assert drivers._premium(0, 6, 10, 100).startswith("la IV pagó de más que en un día sin dato: 0 de 6")
+    assert drivers._premium(1, 6, 10, 100).startswith("en línea")          # 17 % against 10 %: one release is not enough
+    assert drivers._premium(2, 6, 10, 100).startswith("la IV pagó de menos")   # 33 % against 10 %: more than twice
+    assert drivers._premium(1, 3, 10, 100) == "sin veredicto: 3 datos"
 
 
 def test_without_iv_the_ratio_is_none_and_not_counted():
@@ -103,7 +107,16 @@ def test_co_movement_ranks_by_correlation_now_and_shows_the_change():
     assert {first["asset"], second["asset"]} == {"TLT", "GLD"}
     by = {a["asset"]: a for a in co["assets"]}
     assert by["GLD"]["corr_last"] == -1.0 and by["GLD"]["corr_change"] == 0.0
+    assert by["GLD"]["beta_symbol_on_asset_last"] == -1.0
     assert by["TLT"]["corr_last"] == 1.0 and by["TLT"]["corr_change"] > 0.5 and by["TLT"]["what"] == "bonos largos"
+
+
+def test_too_few_common_sessions_give_no_correlation():
+    days = [(date(2026, 8, 1) + timedelta(days=i)).isoformat() for i in range(45)]
+    spy = [(d, 100.0 + (i % 3)) for i, d in enumerate(days)]
+    sparse = [(d, 50.0 + (i % 2)) for i, d in enumerate(days) if i % 3 == 0]       # one day in three
+    co = drivers.co_movement({"SPY": spy, "TLT": sparse}, "SPY", {})
+    assert co["assets"] == []
 
 
 def test_co_movement_needs_enough_sessions():
@@ -113,10 +126,10 @@ def test_co_movement_needs_enough_sessions():
 
 def test_upcoming_says_what_today_iv_pays_and_what_the_past_ones_moved():
     bars = [("2026-10-05", 670.0, 0.1587)]
-    by_release = {"CPI": {"n": 7, "median_move_pct": 0.25, "premium": "la IV pagó de más: 1 de 7 …"}}
+    by_release = {"CPI": {"n": 7, "median_move_pct": 0.25, "premium": "la IV pagó de más que en un día sin dato …"}}
     events = {"2026-10-14": ["CPI"], "2026-10-28": ["FOMC"], "2026-10-01": ["PPI"]}
     up = drivers.upcoming(events, by_release, bars, TODAY, 14)
     assert up == [{"date": "2026-10-14", "release": "CPI", "implied_today_pct": round(0.1587 / SQ * 100, 2),
                    "implied_today_usd": round(670 * 0.1587 / SQ, 2), "past_median_move_pct": 0.25, "past_n": 7,
-                   "past_premium": "la IV pagó de más: 1 de 7 …"}]
+                   "past_premium": "la IV pagó de más que en un día sin dato …"}]
     assert drivers.upcoming(events, by_release, [("2026-10-05", 670.0, None)], TODAY, 14) == []

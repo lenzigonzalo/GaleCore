@@ -61,22 +61,29 @@ def proposal(text: str) -> dict:
     return {"kind": "interpretation", "text": text}
 
 
-def test_each_proposal_says_what_would_change_it(kb):  # noqa: F811
-    ok = content(statements=[FACT, proposal("spy_pcs: esperar — el CPI del 14/10 cae dentro del vencimiento; "
-                                            "qué la cambiaría: que el CPI salga sin mover a SPY más que la IV")])
-    assert check_content(ok, kb, capability="daily_contrast")[1] == []
-    no_change = content(statements=[FACT, proposal("spy_pcs: mantener — la historia sigue igual")])
-    assert any("qué la cambiaría" in p for p in check_content(no_change, kb, capability="daily_contrast")[1])
-    # A pillar line in brackets or another capability is not a proposal.
-    none = content(statements=[FACT, proposal("[tasas] TLT sube")])
-    assert any("one proposal per strategy" in p for p in check_content(none, kb, capability="daily_contrast")[1])
-    assert check_content(none, kb)[1] == [] and check_content(no_change, kb, capability="market_story")[1] == []
+def problems(kb, *texts, capability="daily_contrast"):  # noqa: F811
+    return check_content(content(statements=[FACT, *(proposal(x) for x in texts)]), kb, capability=capability)[1]
 
 
-def test_saving_a_contrast_without_what_would_change_it_is_refused(kb):  # noqa: F811
+def test_each_strategy_gets_one_proposal_that_says_what_would_change_it(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    ok = f"{NAME}: esperar — el CPI del 14/10 cae en el vencimiento; qué la cambiaría: el CPI sin mover a SPY más que la IV"
+    assert problems(kb, ok) == []
+    assert problems(kb, ok.replace(" — ", " - ")) == []                       # a plain hyphen is accepted
+    assert any("qué la cambiaría" in p for p in problems(kb, f"{NAME}: mantener — la historia sigue igual"))
+    assert any("qué la cambiaría" in p for p in problems(kb, f"{NAME}: mantener — igual; qué la cambiaría:   "))
+    assert any("«mantener (reducir)»" in p
+               for p in problems(kb, f"{NAME}: mantener (reducir) — x; qué la cambiaría: y"))
+    # A strategy without its proposal is refused; a line about something else is not a proposal.
+    assert any(f"no proposal for {NAME}" in p for p in problems(kb, "Nota: esperar — el mercado está quieto"))
+    assert problems(kb, "Nota: esperar — x", capability="market_story") == []
+
+
+def test_saving_a_contrast_without_what_would_change_it_is_refused(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
     with pytest.raises(KnowledgeError, match="qué la cambiaría"):
         save_research(kb=kb, slug="contraste-diario", prompt="p", host=RecordHost(provider="test"), now=NOW,
-                      content=content(statements=[FACT, proposal("spy_pcs: apagar — la historia cambió")]),
+                      content=content(statements=[FACT, proposal(f"{NAME}: apagar — la historia cambió")]),
                       capability="daily_contrast")
 
 

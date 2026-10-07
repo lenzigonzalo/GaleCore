@@ -134,3 +134,8 @@ def test_a_task_without_a_screen_is_saved_without_the_field(env):
     agent(kb, sch)
     t.set_scan(kb=kb, task_id="oportunidades", rule=None, prompt="sin escaneo")
     assert "scan" not in (kb.base / "tasks" / "oportunidades" / "task.json").read_text(encoding="utf-8")
+
+
+def test_an_unknown_release_name_is_refused():
+    with pytest.raises(ValidationError, match="unknown releases"):
+        ScanRule(symbols=["SPY"], iv_rank_min=30, releases=["NFP"])

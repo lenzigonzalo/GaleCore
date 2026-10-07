@@ -101,6 +101,12 @@ def _iv_rank_view(raw) -> dict:
     return out
 
 
+def open_session_day(today: date) -> str | None:
+    """Today, when its daily candle is still open (before 16:15 New York): that candle is not a close."""
+    et = datetime.now(UTC).astimezone(NEW_YORK)
+    return today.isoformat() if et.date() == today and (et.hour, et.minute) < (16, 15) else None
+
+
 async def gather(dispatcher, *, symbol: str = "SPY", today: date | None = None) -> dict:
     """Ask GaleCore for everything the story reads. Never raises for a failed call: it goes to `missing`."""
     today = today or datetime.now(UTC).date()
@@ -125,8 +131,7 @@ async def gather(dispatcher, *, symbol: str = "SPY", today: date | None = None) 
     async def skip_gex():
         missing.append(f"compute.gex_analysis {symbol}: no se pide con el mercado cerrado (fin de semana)")
 
-    et = datetime.now(UTC).astimezone(NEW_YORK)
-    open_day = today.isoformat() if et.date() == today and (et.hour, et.minute) < (16, 15) else None
+    open_day = open_session_day(today)
 
     symbols = list(dict.fromkeys([symbol, *CROSS_ASSET]))
     # The symbol goes back REACTION_DAYS: its reaction to the releases of the last months (drivers).

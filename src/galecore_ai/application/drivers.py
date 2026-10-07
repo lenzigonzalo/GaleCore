@@ -31,10 +31,11 @@ FOMC = "FOMC"
 REACTION_DAYS = 180         # GaleCore's calendar answers at most 180 days per call
 WINDOW = 20                 # sessions of each co-movement window
 TRADING_DAYS = 252
-# A fair 1-day implied is exceeded about 32 % of the days (|z| > 1). Below 20 % of the releases, the IV paid more
-# than the release moved; above 45 %, less. With fewer than 4 releases of a kind there is no verdict.
-FAIR_EXCEED = 0.32
-OVERPAID_BELOW, UNDERPAID_ABOVE, MIN_SAMPLE = 0.20, 0.45, 4
+# The candle's IV is a 30-day IV with its variance premium: even days without data rarely exceed it, so a release's
+# premium is judged against those days, not against a theoretical 32 %. Below half their share of days exceeding the
+# implied, the IV paid more on that release than on a normal day; above twice, less. With fewer than 4
+# releases of a kind there is no verdict.
+OVERPAID_BELOW, UNDERPAID_ABOVE, MIN_SAMPLE = 0.5, 2.0, 4
 # A kind of release moves the symbol more (less) than a day without data when its median ratio is 25 % above
 # (20 % below) the median of those days.
 MORE_THAN_NORMAL, LESS_THAN_NORMAL = 1.25, 0.80
@@ -42,7 +43,7 @@ MORE_THAN_NORMAL, LESS_THAN_NORMAL = 1.25, 0.80
 KINDS = {
     "releases": "hecho: fecha de cada publicación (FRED vía GaleCore) y cierres; cálculo: movimiento y cociente",
     "implied": "estimación: IV de la vela diaria leída como IV a 30 días; no es el straddle del día del dato",
-    "co_movement": "cálculo: correlación y beta de retornos diarios; no prueba causa",
+    "co_movement": "cálculo: correlación y beta del símbolo sobre cada activo, retornos diarios; no prueba causa",
 }
 
 
@@ -94,6 +95,7 @@ def reactions(bars, events: dict[str, list[str]], today: date) -> dict:
     per_day = _ratios(bars)
     normal = [r["ratio"] for d, r in per_day.items() if d not in events and r["ratio"] is not None]
     normal_median = _median(normal)
+    normal_exceeded = sum(1 for x in normal if x > 1)
     kinds: dict[str, dict] = {}
     for day in sorted(events):
         r = per_day.get(day)
@@ -109,26 +111,35 @@ def reactions(bars, events: dict[str, list[str]], today: date) -> dict:
         k["median_ratio"] = _median(ratios)
         k["median_move_pct"] = _median([e["move_pct"] for e in k["events"]])
         k["exceeded_implied"] = sum(1 for x in ratios if x > 1)
-        k["premium"] = _premium(k["exceeded_implied"], k["n"])
+        k["premium"] = _premium(k["exceeded_implied"], k["n"], normal_exceeded, len(normal))
         k["vs_days_without_data"] = _vs_normal(k["median_ratio"], normal_median)
     return {"kinds_of_datum": KINDS,
             "days_without_data": {"n": len(normal), "median_ratio": normal_median,
-                                  "exceeded_implied": sum(1 for x in normal if x > 1)},
+                                  "exceeded_implied": normal_exceeded},
             "by_release": kinds,
-            "conventions": {"fair_share_exceeding_implied": FAIR_EXCEED, "overpaid_below": OVERPAID_BELOW,
+            "conventions": {"premium_vs_days_without_data": "share of releases exceeding the implied over the "
+                                                            "share of days without data that exceed it",
+                            "overpaid_below": OVERPAID_BELOW,
                             "underpaid_above": UNDERPAID_ABOVE, "min_sample": MIN_SAMPLE,
                             "more_than_normal": MORE_THAN_NORMAL, "less_than_normal": LESS_THAN_NORMAL}}
 
 
-def _premium(exceeded: int, n: int) -> str:
+def _premium(exceeded: int, n: int, normal_exceeded: int, normal_n: int) -> str:
     if n < MIN_SAMPLE:
         return f"sin veredicto: {n} datos"
-    share = exceeded / n
-    if share < OVERPAID_BELOW:
-        return f"la IV pagó de más: {exceeded} de {n} superaron el implícito (justo ≈ 32 %)"
-    if share > UNDERPAID_ABOVE:
-        return f"la IV pagó de menos: {exceeded} de {n} superaron el implícito (justo ≈ 32 %)"
-    return f"en línea: {exceeded} de {n} superaron el implícito (justo ≈ 32 %)"
+    base = f"{exceeded} de {n} superaron el implícito, contra {normal_exceeded} de {normal_n} días sin dato"
+    if not normal_n:
+        return f"sin veredicto: no hay días sin dato para comparar ({base})"
+    share, normal_share = exceeded / n, normal_exceeded / normal_n
+    if normal_share == 0:
+        return (f"la IV pagó de menos que en un día sin dato: {base}" if exceeded else
+                f"en línea con un día sin dato: {base}")
+    rel = share / normal_share
+    if rel < OVERPAID_BELOW:
+        return f"la IV pagó de más que en un día sin dato: {base}"
+    if rel > UNDERPAID_ABOVE:
+        return f"la IV pagó de menos que en un día sin dato: {base}"
+    return f"en línea con un día sin dato: {base}"
 
 
 def _vs_normal(kind_median: float | None, normal_median: float | None) -> str | None:
@@ -146,8 +157,11 @@ def _returns(closes: list[tuple[str, float]]) -> dict[str, float]:
     return {d: b / a - 1 for (_, a), (d, b) in pairwise(closes)}
 
 
+MIN_COMMON = 15             # of the WINDOW sessions: fewer common days give no correlation
+
+
 def _corr_beta(xs: list[float], ys: list[float]) -> tuple[float, float] | None:
-    if len(xs) < 3:
+    if len(xs) < MIN_COMMON:
         return None
     mx, my = statistics.fmean(xs), statistics.fmean(ys)
     cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=True))
@@ -155,7 +169,7 @@ def _corr_beta(xs: list[float], ys: list[float]) -> tuple[float, float] | None:
     vy = sum((y - my) ** 2 for y in ys)
     if vx == 0 or vy == 0:
         return None
-    return cov / math.sqrt(vx * vy), cov / vx          # corr(sym, asset); beta of the symbol on the asset
+    return cov / math.sqrt(vx * vy), cov / vx          # corr(symbol, asset); beta of the symbol on the asset
 
 
 def co_movement(closes: dict[str, list[tuple[str, float]]], symbol: str, labels: dict[str, str]) -> dict | None:
@@ -176,7 +190,7 @@ def co_movement(closes: dict[str, list[tuple[str, float]]], symbol: str, labels:
             cb = _corr_beta([rets[d] for d in common], [base[d] for d in common])
             if cb:
                 row[f"corr_{name}"] = round(cb[0], 2)
-                row[f"beta_{name}"] = round(cb[1], 2)
+                row[f"beta_symbol_on_asset_{name}"] = round(cb[1], 2)
             row[f"sessions_{name}"] = len(common)
         if "corr_last" not in row:
             continue

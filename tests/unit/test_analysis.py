@@ -125,3 +125,13 @@ def test_the_pack_is_kept_as_evidence_and_points_at_the_previous_one(kb):
                                now=at + timedelta(hours=1))
     assert p2["previous"] == ref1
     assert not analysis.has_data({**first, "technical": None})
+
+
+def test_a_missing_month_of_this_year_is_listed_and_a_negative_eps_has_no_pe():
+    months = {f"2025-{m:02d}": 100.0 + m for m in range(9, 13)} | {"2026-01": 113.0, "2026-03": 114.0}
+    v = analysis._bls_view("LNS14000000", analysis._months(bls("LNS14000000", months)))
+    assert "2026-02" in v["months_without_value"] and "2025-03" in v["months_without_value"]
+    facts = [q("2025-07-28", "2025-10-26", -1.0), q("2025-10-27", "2026-01-25", -1.0),
+             q("2026-01-26", "2026-04-26", 0.5), q("2026-04-27", "2026-07-26", 0.4)]
+    view = analysis.fundamental_view({"EarningsPerShareDiluted": facts}, price=70.0)
+    assert view["pe_trailing"] is None and "no es positivo" in view["pe_note"]
