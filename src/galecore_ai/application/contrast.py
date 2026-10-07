@@ -2,8 +2,9 @@
 
 Gathered by code from what is already stored — the latest market story reading (GC-AI-0024), each strategy as a project
 (GC-AI-0026: where it works, decisions, open items, last follow-up) and the profile — so the model only interprets.
-Nothing is recomputed: a stale story is declared with its age. The proposal (turn on / keep / turn off, per strategy)
-is the model's and is saved as a revision of the contrast investigation; the owner decides and acts.
+Nothing is recomputed: a stale story is declared with its age. What moves the symbol (releases ahead, what the IV
+pays for them, the reaction to each kind) comes from the latest story pack (P1-05). The proposal (turn on / keep /
+wait / turn off, per strategy, with what would change it) is the model's and is saved as a revision of the contrast investigation; the owner decides and acts.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from datetime import UTC, datetime
 
 from galecore_ai.adapters.research_store import ResearchIntegrityError, ResearchStoreError
 from galecore_ai.application import project
+from galecore_ai.application import story as story_pack
 from galecore_ai.application.knowledge import KnowledgeBase
 
 STORY_SLUG = "historia-del-mercado-"   # market_story saves one investigation per symbol with this slug
@@ -59,6 +61,24 @@ def _strategy(kb: KnowledgeBase, name: str, broken: list[dict]) -> dict:
     }
 
 
+def _drivers(kb: KnowledgeBase, symbol: str, now: datetime) -> dict | None:
+    """What moves the symbol, from the latest story pack (P1-05): the ground for «esperar» and «qué la cambiaría»."""
+    found = story_pack.previous_pack(kb, symbol, now)
+    if not found or not (found[1].get("drivers") or {}):
+        return None
+    eid, p = found
+    d = p["drivers"]
+    reaction = d.get("reaction") or {}
+    return {
+        "ref": f"evidence:{eid}", "gathered_at": p.get("gathered_at"),
+        "upcoming": d.get("upcoming") or [],
+        "by_release": {k: {f: v.get(f) for f in ("n", "median_ratio", "premium", "vs_days_without_data")}
+                       for k, v in (reaction.get("by_release") or {}).items()},
+        "days_without_data": reaction.get("days_without_data"),
+        "co_movement": ((d.get("co_movement") or {}).get("assets") or [])[:4],
+    }
+
+
 def pack(kb: KnowledgeBase, *, symbol: str = "SPY", space_state: dict | None = None,
          space_error: str | None = None, now: datetime | None = None) -> dict:
     """Everything the contrast needs, each item with its reference; what is missing is declared."""
@@ -77,9 +97,14 @@ def pack(kb: KnowledgeBase, *, symbol: str = "SPY", space_state: dict | None = N
     missing += [f"{s['name']}: no dice en qué historia funciona (project add {s['name']} --kind story)"
                 for s in strategies if not s["where_it_works"]]
     missing += [m for m in portfolio["missing"] if not m.startswith("riesgo abierto")]
+    drivers = _drivers(kb, symbol, now)
+    if drivers is None:
+        missing.append(f"sin «qué mueve hoy» de {symbol} (story pack con drivers): «esperar» y «qué la cambiaría» "
+                       "quedan sin los datos que vienen")
     missing.append("estructuras en SHADOW: sólo put credit spread; una historia que pida otra se declara (D-1)")
     return {
-        "generated_at": now.isoformat(), "symbol": symbol, "story": story, "strategies": strategies,
+        "generated_at": now.isoformat(), "symbol": symbol, "story": story, "drivers": drivers,
+        "strategies": strategies,
         "profile": ({k: profile.get(k) for k in ("ref", "source", "content", "provisional")} if profile else None),
         "portfolio_log": portfolio["log"], "missing": missing, "integrity_failed": broken,
         "save_as": {"capability": "daily_contrast", "slug": CONTRAST_SLUG},

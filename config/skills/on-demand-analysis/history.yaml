@@ -1,0 +1,9 @@
+# Qué cambió en cada versión de on_demand_analysis y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: on_demand_analysis
+versions:
+  - version: "0.1.0"
+    date: 2026-10-06
+    changes: >
+      Primera versión (P1-05, WS-0015): macro, técnico, fundamental (mínimo, pedido del owner) y flow desde GaleCore
+      con `analyze pack`; cada lectura con los cuatro tipos de dato, alternativa e invalidación.
+    feedback: []

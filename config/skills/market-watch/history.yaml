@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de market_watch y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: market_watch
 versions:
+  - version: "0.1.2"
+    date: 2026-10-06
+    changes: >
+      P1-05 (WS-0015): con un escaneo en código (`task set-scan`) el runner llama al modelo sólo con un hallazgo y le
+      pasa el escaneo; el método arma candidatos sólo para esos símbolos.
+    feedback: []
   - version: "0.1.1"
     date: 2026-10-06
     changes: >

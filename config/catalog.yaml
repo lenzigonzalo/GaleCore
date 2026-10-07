@@ -231,6 +231,7 @@ entries:
     example_requests:
       - Quiero investigar una estrategia sobre SPY. ¿Qué contexto importa para esta idea y horizonte?
       - Retomá la investigación de contexto de SPY e incorporá lo nuevo.
+      - Analizame el contexto de mi idea (tasas, macro, eventos) antes de diseñarla.
     skill: skills/context-research/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: []
@@ -421,6 +422,7 @@ entries:
       - "Read-only: a candidate is described, never advised (the runner refuses advice addressed to the reader); no orders"
       - A condition that cannot be evaluated with the data available is declared not evaluated, never assumed met
       - "A scheduled run calls the model (sonnet) with only the read commands of this flow and a turn cap; the runner validates and saves the result"
+      - "With a screen (`task set-scan`), each run first checks by code the IV rank of each symbol and the quiet window of releases; the model is called only with a finding, and a screen that could not run never calls it (P1-05)"
       - "Not checked - that the owner's conditions were applied correctly or that a candidate is a good trade"
     schedulable: {runs: model, work: reading, max_turns: 25, timeout_minutes: 12}
 
@@ -466,6 +468,46 @@ entries:
       - "Read-only: describes, never advises (the runner refuses advice addressed to the reader); no orders"
       - "Not checked - that the story is right or anticipates anything; the next readings and the owner's feedback exist to judge that"
     schedulable: {runs: model, work: interpretation, max_turns: 12, timeout_minutes: 15}
+
+  - id: on_demand_analysis
+    kind: investigation
+    serves: >-
+      Análisis a pedido desde los datos de GaleCore: la macro (tasas, curva, tasa real y breakevens, crédito, fed funds,
+      CPI, empleo y la cadena de transmisión), el técnico de un símbolo (tendencia, niveles, volatilidad realizada
+      contra IV), el fundamental de una empresa (ingresos, resultado, EPS, crecimiento, P/E contra lo reportado,
+      últimas presentaciones a la SEC) y el flow de opciones (GEX, walls, skew, estructura de IV). Cada lectura separa
+      hecho, cálculo, estimación e hipótesis, con alternativa e invalidación; consenso y estimaciones de analistas se
+      declaran faltantes. Junta el código, interpreta el modelo.
+    example_requests:
+      - Explicame la macro
+      - ¿Cómo están las tasas largas, los breakevens y el empleo?
+      - Análisis técnico de QQQ
+      - Analizame NVDA
+      - El flow de opciones de SPY
+    skill: skills/on-demand-analysis/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [macro.fred_series, macro.bls_series, market_data.candles, filings.sec_facts, filings.sec_filings, market_data.volatility_metrics, market_data.quote, compute.put_skew, compute.implied_volatility, compute.iv_rank, compute.gex_analysis]
+    data_needs:
+      - need: curva de tasas
+      - need: inflacion
+      - need: spread de credito
+      - need: velas
+      - need: fundamentales XBRL
+      - need: consenso de datos macro
+        missing: ninguna fuente registrada trae consenso ni estimaciones de analistas
+    flow:
+      - analyze pack --kind macro|technical|fundamental|flow [--symbol SYM] --prompt "<pedido>"
+      - profile show
+      - kb search --kind research --text "<análisis, símbolo>"
+      - kb show <ref>
+      - research save --capability on_demand_analysis --slug analisis-<kind>-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability on_demand_analysis --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - "The pack is gathered by code from GaleCore (no model); descriptive numbers computed here and labelled; a failed call or a source that does not exist is declared in missing"
+      - The pack is kept as one evidence item and points at the previous one of the same kind and symbol
+      - The research controls; every reported number cites the pack; a save must cite the profile in force
+      - "Not checked - that the reading is right; consensus and estimates are missing, so surprises are not measured"
 
   - id: recurring_followup
     kind: task
@@ -686,8 +728,9 @@ entries:
     kind: investigation
     serves: >-
       Cruzar la historia que pricea hoy el mercado con cada estrategia (en qué historia funciona, tus decisiones, su
-      estado en SHADOW) y con la cartera (perfil y límites): qué conviene prender, mantener o apagar en SHADOW y por
-      qué, e ideas nuevas. Propone; decidís vos. Junta los datos el código y lo interpreta el modelo.
+      estado en SHADOW), con qué mueve hoy al subyacente (datos que vienen y lo que paga la IV) y con la cartera
+      (perfil y límites): qué conviene prender, mantener, esperar o apagar en SHADOW, por qué y qué lo cambiaría, e
+      ideas nuevas. Propone; decidís vos. Junta los datos el código y lo interpreta el modelo.
     example_requests:
       - ¿Prendo o apago algo hoy?
       - ¿Mis estrategias encajan con la historia de hoy?
@@ -699,6 +742,7 @@ entries:
     data_needs: []
     flow:
       - contrast pack [--symbol SPY]
+      - capital
       - research save --capability daily_contrast --slug contraste-diario --prompt "<pedido>" < {content, host_provider, host_model}
       - research revise --capability daily_contrast --id <investigación> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {...}
       - project add <name> --kind decision --text "<tu decisión>" --prompt "<pedido>"
@@ -706,5 +750,6 @@ entries:
     controls:
       - The pack is built by code from stored items, each with its reference; a stale story or a strategy without its story is declared
       - The research controls apply to the reading (cited refs resolve, facts cite a source, the profile in force is cited)
+      - Each proposal is one of prender | mantener | esperar | apagar | sin datos and says «qué la cambiaría» (refused otherwise)
       - Proposals only; nothing is deployed, paused or changed here; the owner's decision is kept in the strategy's project
       - "Not checked - that the proposal is right; that the story read is still the market's"

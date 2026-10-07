@@ -191,10 +191,41 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
 _OWN_CALCULATION = re.compile(r"^\W*c[aá]lculo propio\b", re.IGNORECASE)
 
 
-def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str | None = None) -> tuple[
-    list[ResolvedRef], list[str]
-]:
-    """Resolve every cited reference and apply the investigation's controls."""
+# The daily contrast's proposal per strategy (U-28, P1-05): «<name>: <proposal> — <reason> … qué la cambiaría: <x>».
+CONTRAST_PROPOSALS = ("prender", "mantener", "esperar", "apagar", "sin datos")
+_WOULD_CHANGE = re.compile(r"qu[eé] la cambiar[ií]a\s*:\s*(\S.*)", re.IGNORECASE | re.DOTALL)
+
+
+def _contrast_problems(content: ResearchContent, kb: KnowledgeBase) -> list[str]:
+    """One proposal per known strategy (its exact name), one of CONTRAST_PROPOSALS, saying what would change it."""
+    from galecore_ai.application.project import _strategy_names  # lazy: project imports this module
+
+    names = _strategy_names(kb)
+    found: dict[str, list[tuple[str, str]]] = {n: [] for n in names}
+    for s in content.statements:
+        if s.kind != StatementKind.INTERPRETATION:
+            continue
+        for n in names:
+            m = re.match(rf"\s*{re.escape(n)}\s*:\s*(.+?)\s*[—–-]\s", s.text)
+            if m:
+                found[n].append((m.group(1).strip().lower(), s.text))
+    problems = []
+    for n, hits in found.items():
+        if not hits:
+            problems.append(f"no proposal for {n}: «{n}: " + " | ".join(CONTRAST_PROPOSALS)
+                            + " — <motivo> … qué la cambiaría: <dato>»")
+            continue
+        for proposal, text in hits:
+            if proposal not in CONTRAST_PROPOSALS:
+                problems.append(f"the proposal for {n} is «{proposal}»: use one of {', '.join(CONTRAST_PROPOSALS)}")
+            if not _WOULD_CHANGE.search(text):
+                problems.append(f"the proposal for {n} must say «qué la cambiaría: <dato y umbral>»")
+    return problems
+
+
+def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str | None = None,
+                  capability: str | None = None) -> tuple[list[ResolvedRef], list[str]]:
+    """Resolve every cited reference and apply the investigation's controls (and the capability's own, if any)."""
     problems: list[str] = []
     resolved: dict[str, ResolvedRef] = {}
 
@@ -236,6 +267,8 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
     if not content.limitations:
         problems.append("at least one limitation is required")
     problems += _profile_problems(kb, set(resolved))
+    if capability == "daily_contrast":
+        problems += _contrast_problems(content, kb)
     return list(resolved.values()), problems
 
 
@@ -288,7 +321,7 @@ def save_research(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost
         kb.research.path_for(research_id)
     except ResearchStoreError as exc:
         raise KnowledgeError("Refusing to save", [str(exc)]) from exc
-    resolved, problems = check_content(content, kb, self_id=research_id)
+    resolved, problems = check_content(content, kb, self_id=research_id, capability=capability)
     if problems:
         raise KnowledgeError("Refusing to save", problems)
     revision = _revision(number=1, reason=RevisionReason.INITIAL, note="", prompt=prompt, host=host,
@@ -318,7 +351,7 @@ def revise_research(*, kb: KnowledgeBase, research_id: str, reason: RevisionReas
         raise KnowledgeError(f"research:{research_id} is not usable", [str(exc)]) from exc
     if current is None:
         raise KnowledgeError(f"research:{research_id} does not exist")
-    resolved, content_problems = check_content(content, kb, self_id=research_id)
+    resolved, content_problems = check_content(content, kb, self_id=research_id, capability=capability)
     problems += content_problems
     if problems:
         raise KnowledgeError("Refusing to revise", problems)

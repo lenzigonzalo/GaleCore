@@ -1,5 +1,5 @@
 skill_id: market_story
-version: "0.1.1"
+version: "0.2.0"
 display_name: La historia que está priceando el mercado
 description: >
   Reads which story the market is pricing today and whether it changed since the last reading. Gathering is code:
@@ -8,7 +8,8 @@ description: >
   SPY's options (25-delta put skew, IV term, IV rank, IV versus realized volatility, GEX) and the macro and FOMC
   calendar, compares it with the previous pack and keeps it as one evidence item. Interpreting is the model: the story
   in one sentence, the pillars that hold it, what options are charging for protection and paying for selling it,
-  the competing story, and whether the story changed. Saved as a revision of one investigation per symbol.
+  the competing story, what moves it today (reaction to the data against the implied move, co-movement with the
+  story's assets) and whether the story changed. Saved as a revision of one investigation per symbol.
   Read-only: it describes, it never advises a trade.
 
 output_contract: galecore_ai.contracts.research.ResearchContent
@@ -40,6 +41,23 @@ system_prompt: >
      sessions already reacted to. Name an event (a data release, a meeting, a speech) only if it is in the pack's
      calendar: anything else you remember about the news is not evidence. For each pillar one `fact` with the numbers and one `interpretation`
      saying what it adds to the story. Where pillars disagree, say it: a divergence is often the story.
+
+  4b. What moves it today (`drivers`, P1-05). One `fact` and one `interpretation` per item, each text starting with
+     [qué lo mueve]. Say the kind of each datum: «hecho» (dates, closes), «cálculo» (moves, ratios, medians,
+     correlations, with the pack's conventions), «estimación» (the implied move: the candle's IV read as a 30-day IV,
+     not the straddle of the release day — always say it), «hipótesis» (your reading).
+     - `co_movement`: which assets move with the symbol in the last 20 sessions and which correlation changed most
+       against the 20 before. The theme you propose (rates, credit, dollar, oil, growth, volatility) is a hypothesis
+       built from those numbers; give the competing theme and the observation that would refute yours. Twenty points
+       are noisy and a correlation is not a cause: say both.
+     - `reaction.by_release`: per kind of release, how many there were, the median move against the IV of the evening
+       before, how many exceeded it (compare with `days_without_data`: the IV usually pays more than the day moves)
+       and whether it moves more or less than a day without data. Several releases on one day share the move
+       (`same_day`): never attribute it to one of them. Fewer than four releases is no verdict.
+     - `upcoming`: for each release in the window, what today's IV pays for one day against what the last ones moved,
+       and whether the premium of the release looks overpaid, in line or underpaid by the pack's convention — and what
+       would change that (a surprise is not measurable: there is no consensus series; say it in `missing`).
+     If `drivers` is missing or partial, say what could not be measured; never fill it.
 
   5. What is being sold to the retail trader, from prices only: what protection costs (skew), what selling options
      pays (IV over HV), whether the calm or the fear is the expensive side. Without a news source in this run, the

@@ -306,7 +306,7 @@ def cited_slugs(output: ModelOutput) -> set[str]:
 
 
 def check_refs(kb: KnowledgeBase, output: ModelOutput, target: str | None,
-               save_at: datetime | None = None) -> list[str]:
+               save_at: datetime | None = None, capability: str | None = None) -> list[str]:
     """What would make the save fail, found before anything is written (no orphan evidence)."""
     slugs = [e.slug for e in output.evidence]
     problems = [f"evidence slugs repeat: {slugs}"] if len(slugs) != len(set(slugs)) else []
@@ -336,7 +336,8 @@ def check_refs(kb: KnowledgeBase, output: ModelOutput, target: str | None,
     # The store's own controls, with the evidence still to be saved standing in under ids that cannot exist.
     pending = _map_refs(data, lambda name, whole: f"evidence:{PENDING}{name}" if name in slugs else whole)
     _, content_problems = check_content(ResearchContent.model_validate(pending), kb,
-                                        self_id=target.removeprefix("research:") if target else None)
+                                        self_id=target.removeprefix("research:") if target else None,
+                                        capability=capability)
     return [pr for pr in content_problems if PENDING not in pr]
 
 
@@ -349,7 +350,7 @@ def save_output(*, kb: KnowledgeBase, output: ModelOutput, task, target: str | N
     """Evidence first, then the research revision; returns (research ref, revision, written paths)."""
     written: list[Path] = []
     refs: dict[str, str] = {}
-    if problems := check_refs(kb, output, target, save_at=now):
+    if problems := check_refs(kb, output, target, save_at=now, capability=task.kind):
         raise RunRefused("; ".join(problems))
     stamp = now.strftime("%H%M")
     cited = cited_slugs(output)

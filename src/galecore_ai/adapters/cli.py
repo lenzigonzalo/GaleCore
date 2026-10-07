@@ -26,6 +26,7 @@ Usage:
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
+    python -m galecore_ai.adapters.cli analyze pack --kind macro|technical|fundamental|flow [--symbol SYM] --prompt "..."
     python -m galecore_ai.adapters.cli galecore list | get CAPABILITY --symbol SYM [--param k=v ...] [--out FILE]
     python -m galecore_ai.adapters.cli space context | list [--kind K] | show K/KEY | put K/KEY --title T [--visibility V] [--format F] < content | delete K/KEY | import
     python -m galecore_ai.adapters.cli profile review
@@ -36,6 +37,7 @@ Usage:
     python -m galecore_ai.adapters.cli project add NAME|portfolio --kind thesis|story|decision|pending|done --text "..." [--ref REF] [--closes HASH] --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
+    python -m galecore_ai.adapters.cli task set-scan ID --symbols SPY,QQQ --iv-rank-min 30 [--quiet-days 3] | --off --prompt "..."
     python -m galecore_ai.adapters.cli task set-frequency ID --frequency ... [--time HH:MM | --minutes N] --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task pause|resume|cancel ID --prompt "..."
     python -m galecore_ai.adapters.cli task rebind ID --code-path CHECKOUT --prompt "..."
@@ -465,6 +467,24 @@ async def _cmd_story(args: argparse.Namespace) -> None:
     try:
         ref, pack = story.save_pack(kb, pack, prompt=args.prompt,
                                     host=RecordHost(provider="galecore-ai story pack", model=None))
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+        return
+    _json_out({"status": "RECORDED", "ref": ref, "pack": pack})
+
+
+async def _cmd_analyze(args: argparse.Namespace) -> None:
+    """An on-demand analysis pack (P1-05): macro, technical, fundamental or flow, from GaleCore, kept as evidence."""
+    from galecore_ai.application import analysis
+
+    kb = _build_knowledge_base()
+    pack = await analysis.gather(_build_dispatcher(), args.kind, symbol=args.symbol.upper())
+    if not analysis.has_data(pack):
+        _json_out({"status": "INSUFFICIENT_DATA", "missing": pack["missing"]}, exit_code=_EXIT_INSUFFICIENT_DATA)
+        return
+    try:
+        ref, pack = analysis.save_pack(kb, pack, prompt=args.prompt,
+                                       host=RecordHost(provider="galecore-ai analyze pack", model=None))
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
         return
@@ -1130,6 +1150,15 @@ async def _cmd_task(args: argparse.Namespace) -> None:
         elif c == "set-frequency":
             task = t.set_frequency(kb=kb, scheduler=sch, task_id=args.id, schedule=schedule(), prompt=args.prompt)
             _json_out({"status": "CHANGED", "schedule": task.schedule.describe(), "scheduler": sch.query(task.scheduler_name)})
+        elif c == "set-scan":
+            from galecore_ai.contracts.task import ScanRule
+            if not args.off and (not args.symbols or args.iv_rank_min is None):
+                raise ValueError("set-scan needs --symbols and --iv-rank-min (or --off)")
+            rule = None if args.off else ScanRule(symbols=args.symbols.split(","), iv_rank_min=args.iv_rank_min,
+                                                  quiet_business_days=args.quiet_days)
+            task = t.set_scan(kb=kb, task_id=args.id, rule=rule, prompt=args.prompt)
+            _json_out({"status": "CHANGED", "task": args.id, "scan": task.scan.model_dump() if task.scan else None,
+                       "task_status": task.status})
         elif c == "rebind":
             task = t.rebind(kb=kb, scheduler=sch, task_id=args.id, code_path=Path(args.code_path), prompt=args.prompt)
             _json_out({"status": "REBOUND", "code_path": task.code_path, "scheduler": sch.query(task.scheduler_name)})
@@ -1182,6 +1211,14 @@ def build_parser() -> _JsonArgumentParser:
                            help="Validate every entry: skill, contract, flow commands, data needs, controls")
     p_catalog.add_argument("--match", metavar="PEDIDO",
                            help="Which capabilities serve this request, in the user's words (GC-AI-0022)")
+
+    p_an = sub.add_parser("analyze", help="On-demand analysis: macro, technical, fundamental or flow (P1-05)")
+    an_sub = p_an.add_subparsers(dest="analyze_command", required=True)
+    p_an_pack = an_sub.add_parser("pack", help="Gather the analysis from GaleCore (code, no model) and keep it as "
+                                               "evidence")
+    p_an_pack.add_argument("--kind", required=True, choices=["macro", "technical", "fundamental", "flow"])
+    p_an_pack.add_argument("--symbol", default="SPY", help="Ignored for macro")
+    p_an_pack.add_argument("--prompt", required=True, help="The user's request, verbatim")
 
     p_story = sub.add_parser("story", help="The market story (GC-AI-0024)")
     st_sub = p_story.add_subparsers(dest="story_command", required=True)
@@ -1392,6 +1429,14 @@ def build_parser() -> _JsonArgumentParser:
     p_tf = t_sub.add_parser("set-frequency", help="Change the schedule")
     p_tf.add_argument("id")
     schedule_args(p_tf)
+    p_ts = t_sub.add_parser("set-scan", help="Screen a market agent by code; the model only with a finding (P1-05)")
+    p_ts.add_argument("id")
+    p_ts.add_argument("--symbols", help="Comma-separated tickers, e.g. SPY,QQQ,IWM")
+    p_ts.add_argument("--iv-rank-min", dest="iv_rank_min", type=float)
+    p_ts.add_argument("--quiet-days", dest="quiet_days", type=int, default=3,
+                      help="Business days ahead without employment, CPI or FOMC")
+    p_ts.add_argument("--off", action="store_true", help="Remove the screen: every run calls the model again")
+    p_ts.add_argument("--prompt", required=True)
     p_tr = t_sub.add_parser("rebind", help="Run the task from another checkout, keeping its id and history")
     p_tr.add_argument("id")
     p_tr.add_argument("--code-path", dest="code_path", required=True, help="GaleCore-AI checkout with tools/task_runner.py")
@@ -1491,6 +1536,8 @@ def main() -> None:
             asyncio.run(_cmd_catalog(args))
         elif args.command == "story":
             asyncio.run(_cmd_story(args))
+        elif args.command == "analyze":
+            asyncio.run(_cmd_analyze(args))
         elif args.command == "inventory":
             asyncio.run(_cmd_inventory(args))
         elif args.command == "kb" and args.kb_command == "search":

@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de daily_contrast y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: daily_contrast
 versions:
+  - version: "1.1.0"
+    date: 2026-10-06
+    changes: >
+      P1-05 (WS-0015, U-28): suma «esperar» como propuesta y «qué la cambiaría» obligatorio en cada una (el guardado la
+      rechaza si falta); el pack trae «qué mueve hoy» del último pack de la historia (datos que vienen, lo que paga la
+      IV, reacción por tipo); la tabla suma riesgo contra límites y qué la cambiaría.
+    feedback: []
   - version: "1.0.0"
     date: 2026-10-04
     changes: >
