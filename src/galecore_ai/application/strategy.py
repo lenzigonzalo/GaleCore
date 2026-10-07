@@ -34,10 +34,14 @@ from galecore_ai.contracts.strategy import (
     VERSION_MENTION_RE,
     ApprovalDocument,
     CheckReport,
+    CritiqueContent,
+    CritiqueDocument,
+    CritiqueVerdict,
     ProposalContent,
     RuntimeStatus,
     StrategyDocument,
     compute_document_hash,
+    design_gaps,
     other_version_mentions,
 )
 
@@ -388,8 +392,9 @@ def _check_refs(content: ProposalContent, kb: KnowledgeBase) -> list[str]:
 
 def save_proposal(*, kb: KnowledgeBase, prompt: str, host: RecordHost, content: ProposalContent,
                   spec_json: str, spec_file: str, now: datetime | None = None) -> tuple[StrategyDocument, str]:
-    """Check and store a version. An INVALID check or an unresolved reference is refused, not stored."""
-    problems = _check_refs(content, kb)
+    """Check and store a version. An INVALID check, an unresolved reference or a version without its parameter
+    table and management tree is refused, not stored."""
+    problems = _check_refs(content, kb) + design_gaps(content)
     report = check_proposal(content, spec_json, spec_file)
     if report.verdict == "INVALID" or problems:
         raise KnowledgeError("proposal refused", problems + report.errors)
@@ -426,6 +431,15 @@ def approve(*, kb: KnowledgeBase, key: str, spec_hash: str, owner_words: str, ho
         raise KnowledgeError(f"strategy:{key}: the approved hash {spec_hash} is not this version's {doc.spec_hash}")
     if doc.check.verdict == "INVALID":
         raise KnowledgeError(f"strategy:{key}: an INVALID proposal cannot be approved")
+    review = load_critique(kb, key)
+    if review is None:
+        raise KnowledgeError(f"strategy:{key}: no critique of this version; record it with `strategy critique` "
+                             "before asking for approval")
+    if review.proposal_hash != doc.content_hash:
+        raise KnowledgeError(f"strategy:{key}: the critique is for another proposal document")
+    if review.content.verdict == CritiqueVerdict.DISCARD:
+        raise KnowledgeError(f"strategy:{key}: the critique says «descartar»; a new version has to answer it",
+                             review.content.why_not)
     others = sorted({v for v in VERSION_MENTION_RE.findall(owner_words) if v != doc.version})
     if others:
         raise KnowledgeError(f"strategy:{key}: the owner's words name version(s) {others}, not {doc.version}")
@@ -442,6 +456,36 @@ def approve(*, kb: KnowledgeBase, key: str, spec_hash: str, owner_words: str, ho
     except StrategyStoreError as exc:
         raise KnowledgeError(str(exc)) from exc
     return approval, str(path)
+
+
+def load_critique(kb: KnowledgeBase, key: str) -> CritiqueDocument | None:
+    try:
+        return kb.strategies.load_critique(key)
+    except (StrategyStoreError, StrategyIntegrityError) as exc:
+        raise KnowledgeError(f"strategy:{key}: critique not usable ({exc})") from exc
+
+
+def critique(*, kb: KnowledgeBase, key: str, content: CritiqueContent, host: RecordHost,
+             now: datetime | None = None) -> tuple[CritiqueDocument, str]:
+    """Record the critic's reading of exactly this version (one per version; a change is a new version)."""
+    doc = load_proposal(kb, key)
+    problems = []
+    for ref in dict.fromkeys(content.evidence_refs):
+        try:
+            resolve_ref(ref, kb)
+        except KnowledgeError as exc:
+            problems.append(str(exc))
+    if problems:
+        raise KnowledgeError("critique refused", problems)
+    now = now or datetime.now(UTC)
+    draft = CritiqueDocument(strategy_ref=f"strategy:{key}", proposal_hash=doc.content_hash, content=content,
+                             recorded_at=now, host=host, content_hash="pending")
+    review = draft.model_copy(update={"content_hash": compute_document_hash(draft.hashable_content())})
+    try:
+        path = kb.strategies.create_critique(key, review)
+    except StrategyStoreError as exc:
+        raise KnowledgeError(str(exc)) from exc
+    return review, str(path)
 
 
 def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_spec_json: str | None = None) -> dict:

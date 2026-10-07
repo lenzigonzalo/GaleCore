@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "1.0.0"
+    date: 2026-10-06
+    changes: >
+      WS-0016 (P1-06): la skill se parte en método (parte A) y procedimiento de SHADOW (parte B); suma tabla de
+      parámetros, árbol de gestión (disparador → acción), el crítico antes de aprobar (`strategy critique`; sin
+      crítica o con «descartar» no se aprueba) y la ficha de una página (`strategy sheet`) como salida estándar.
+    feedback: []
   - version: "0.3.1"
     date: 2026-09-27
     changes: >

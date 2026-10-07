@@ -8,7 +8,8 @@ catálogo (`cli catalog`) es la fuente de verdad de las capacidades y esta pági
 Current capabilities: `gex_interpretation` (read-only GEX), `regime_interpretation` (daily regime
 with an evaluable record), `research` (resumable investigation, below), `context_research` (context
 of a trading idea with GaleCore + the host's external sources; every response kept as `evidence:`),
-`strategy_design` (proposal → `strategy check` against the runtime → `strategy save` → owner's
+`strategy_design` (proposal with parameter table and management tree → `strategy check` against the runtime →
+`strategy save` → the critic's `strategy critique` → `strategy sheet` for the owner → owner's
 `strategy approve` of the exact hash → `strategy deploy-check` → deploy to SHADOW in GaleCore Dev only),
 `strategy_followup` (what a deployed version did, saved as a revision of its investigation),
 `data_sources` (which source covers a need, its cost, limits and last checked access: `sources list|query|check|declare`),

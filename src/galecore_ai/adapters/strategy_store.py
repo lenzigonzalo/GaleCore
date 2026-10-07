@@ -1,4 +1,4 @@
-"""File store for strategies: ``<knowledge>/strategies/<name>/<version>.{proposal,approval}.json``.
+"""File store for strategies: ``<knowledge>/strategies/<name>/<version>.{proposal,critique,approval}.json``.
 
 Create-only like evidence: a version is written once; a change is a new version. Every read
 re-checks the hash, so an edited file is INTEGRITY_FAILED instead of being deployed or cited.
@@ -16,6 +16,7 @@ from galecore_ai.contracts.strategy import (
     STRATEGY_NAME_RE,
     STRATEGY_VERSION_RE,
     ApprovalDocument,
+    CritiqueDocument,
     StrategyDocument,
     compute_document_hash,
 )
@@ -86,6 +87,12 @@ class FileStrategyStore:
             raise StrategyIntegrityError(self.path_for(key, "approval"), [f"approval is for {doc.strategy_ref}"])
         return doc
 
+    def load_critique(self, key: str) -> CritiqueDocument | None:
+        doc = self._load(self.path_for(key, "critique"), CritiqueDocument)
+        if doc is not None and doc.strategy_ref != f"strategy:{key}":
+            raise StrategyIntegrityError(self.path_for(key, "critique"), [f"critique is for {doc.strategy_ref}"])
+        return doc
+
     def _create(self, path: Path, doc: BaseModel, what: str) -> Path:
         if compute_document_hash(doc.hashable_content()) != doc.content_hash:
             raise StrategyStoreError(f"Refusing to write a {what} whose hash does not match its content")
@@ -102,3 +109,6 @@ class FileStrategyStore:
 
     def create_approval(self, key: str, doc: ApprovalDocument) -> Path:
         return self._create(self.path_for(key, "approval"), doc, "approval")
+
+    def create_critique(self, key: str, doc: CritiqueDocument) -> Path:
+        return self._create(self.path_for(key, "critique"), doc, "critique")

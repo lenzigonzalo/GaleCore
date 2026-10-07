@@ -381,5 +381,162 @@
     "Cinco reglas no son ejecutables por el runtime (E3, E4, S2, R2, M2) y quedan fuera de la spec, declaradas",
     "El chequeo compara la spec con una tabla del runtime leída en código; no ejecuta GaleCore",
     "1.0.0, 1.0.1 y 1.0.2 quedaron guardadas y nunca se aprobaron: la revisión de Codex encontró reglas descritas de más (frescura, ancho), parámetros heredados marcados como decisión del owner y referencias a otra versión en la aprobación y en el plan"
+  ],
+  "parameters": [
+    {
+      "name": "VIX máximo",
+      "value": "30",
+      "unit": "puntos",
+      "reasonable_range": "25–35",
+      "depends_on": "régimen de volatilidad",
+      "would_found": "distribución del VIX en entradas SHADOW con stop",
+      "status": "pending_parameter",
+      "rules": [
+        "E2"
+      ]
+    },
+    {
+      "name": "Delta del put vendido",
+      "value": "−0,16 ± 0,04",
+      "unit": "delta",
+      "reasonable_range": "−0,10 a −0,25",
+      "depends_on": "DTE y skew",
+      "would_found": "frecuencia de toque del strike en SHADOW",
+      "status": "pending_parameter",
+      "rules": [
+        "C2"
+      ]
+    },
+    {
+      "name": "DTE",
+      "value": "30–45",
+      "unit": "días",
+      "reasonable_range": "21–60",
+      "depends_on": "theta y gamma",
+      "would_found": "resultado por tramo de DTE en SHADOW",
+      "status": "pending_parameter",
+      "rules": [
+        "C2"
+      ]
+    },
+    {
+      "name": "Ancho",
+      "value": "5",
+      "unit": "USD",
+      "reasonable_range": "2–10",
+      "depends_on": "riesgo máximo del perfil",
+      "would_found": "crédito/ancho en la cadena de GaleCore",
+      "status": "pending_parameter",
+      "rules": [
+        "C3"
+      ]
+    },
+    {
+      "name": "Crédito mínimo",
+      "value": "0,10",
+      "unit": "USD",
+      "reasonable_range": "0,10–1,00",
+      "depends_on": "ancho y comisiones",
+      "would_found": "costos reales de entrada",
+      "status": "pending_parameter",
+      "rules": [
+        "C4"
+      ]
+    },
+    {
+      "name": "Riesgo máximo por operación",
+      "value": "500",
+      "unit": "USD",
+      "reasonable_range": "hasta 500",
+      "depends_on": "perfil (5 % del capital)",
+      "would_found": "límite del perfil vigente",
+      "status": "pending_parameter",
+      "rules": [
+        "R1"
+      ]
+    },
+    {
+      "name": "Stop",
+      "value": "200",
+      "unit": "% del crédito",
+      "reasonable_range": "150–300",
+      "depends_on": "ancho y crédito",
+      "would_found": "pérdidas cerradas por stop en SHADOW",
+      "status": "pending_parameter",
+      "rules": [
+        "X1"
+      ]
+    },
+    {
+      "name": "Objetivo",
+      "value": "50",
+      "unit": "% del crédito",
+      "reasonable_range": "40–75",
+      "depends_on": "tiempo en posición",
+      "would_found": "resultado por objetivo en SHADOW",
+      "status": "pending_parameter",
+      "rules": [
+        "X2"
+      ]
+    },
+    {
+      "name": "Salida por tiempo",
+      "value": "21",
+      "unit": "DTE",
+      "reasonable_range": "14–28",
+      "depends_on": "gamma cerca del vencimiento",
+      "would_found": "pérdidas tardías en SHADOW",
+      "status": "pending_parameter",
+      "rules": [
+        "X3"
+      ]
+    }
+  ],
+  "management": [
+    {
+      "id": "G1",
+      "kind": "stop",
+      "trigger": "pérdida a mid ≥ 2× crédito, en cada ciclo",
+      "action": "cerrar la posición",
+      "rules": [
+        "X1"
+      ]
+    },
+    {
+      "id": "G2",
+      "kind": "target",
+      "trigger": "valor del spread ≤ 50 % del crédito",
+      "action": "cerrar la posición",
+      "rules": [
+        "X2"
+      ]
+    },
+    {
+      "id": "G3",
+      "kind": "time",
+      "trigger": "DTE ≤ 21",
+      "action": "cerrar la posición",
+      "rules": [
+        "X3"
+      ]
+    },
+    {
+      "id": "G4",
+      "kind": "roll",
+      "trigger": "cualquiera",
+      "action": "nada: sin ajustes ni roll",
+      "rules": [
+        "A1"
+      ]
+    },
+    {
+      "id": "G5",
+      "kind": "kill_switch",
+      "trigger": "pérdida acumulada sobre el límite del owner",
+      "action": "pausar entradas",
+      "rules": [
+        "R2"
+      ]
+    }
   ]
 }

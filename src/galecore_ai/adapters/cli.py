@@ -22,6 +22,8 @@ Usage:
     python -m galecore_ai.adapters.cli strategy check --spec PATH < proposal.json
     python -m galecore_ai.adapters.cli strategy save --spec PATH --prompt "..." < request.json
     python -m galecore_ai.adapters.cli strategy approve --ref strategy:NAME/VERSION --spec-hash sha256:...         --owner-words "..." --host-model MODEL
+    python -m galecore_ai.adapters.cli strategy critique --ref strategy:NAME/VERSION < critique.json
+    python -m galecore_ai.adapters.cli strategy sheet --ref strategy:NAME/VERSION
     python -m galecore_ai.adapters.cli strategy deploy-check --ref strategy:NAME/VERSION --galecore-hash sha256:...
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
@@ -1079,7 +1081,9 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
         content, _ = _read_proposal_request()
         text, name = _read_spec(args.spec)
         report = check_proposal(content, text, name)
-        _json_out({**report.model_dump(mode="json"), "spec_hash": galecore_spec_hash(text)},
+        from galecore_ai.contracts.strategy import design_gaps
+        _json_out({**report.model_dump(mode="json"), "spec_hash": galecore_spec_hash(text),
+                   "design_gaps": design_gaps(content)},
                   exit_code=_EXIT_VALIDATION_ERROR if report.verdict == "INVALID" else _EXIT_SUCCESS)
     kb = _build_knowledge_base()
     try:
@@ -1098,6 +1102,24 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
             _json_out({"status": "APPROVED", "ref": approval.strategy_ref, "path": path,
                        "spec_hash": approval.spec_hash, "scope": approval.scope,
                        "content_hash": approval.content_hash})
+        if args.strategy_command == "critique":
+            from galecore_ai.application.strategy import critique as strategy_critique
+            from galecore_ai.contracts.strategy import CritiqueContent
+            try:
+                payload = json.loads(_read_stdin())
+                content = CritiqueContent.model_validate(payload["content"])
+            except (json.JSONDecodeError, OSError, UnicodeDecodeError, TypeError, KeyError, ValueError) as exc:
+                _error_out(f"Invalid critique (stdin is {{content, host_provider, host_model}}): {exc}",
+                           exit_code=_EXIT_VALIDATION_ERROR)
+                raise AssertionError("unreachable") from exc
+            review, path = strategy_critique(
+                kb=kb, key=key, content=content,
+                host=RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model")))
+            _json_out({"status": "RECORDED", "ref": review.strategy_ref, "path": path,
+                       "verdict": review.content.verdict.value, "content_hash": review.content_hash})
+        if args.strategy_command == "sheet":
+            from galecore_ai.application.strategy_sheet import sheet
+            _json_out(sheet(kb, key))
         if args.strategy_command == "deploy-check":
             _json_out(deploy_check(kb=kb, key=key, galecore_hash=args.galecore_hash))
     except KnowledgeError as exc:
@@ -1462,6 +1484,10 @@ def build_parser() -> _JsonArgumentParser:
                               help="the owner's approval, verbatim")
     p_st_approve.add_argument("--host-provider", dest="host_provider", default="claude-code")
     p_st_approve.add_argument("--host-model", dest="host_model", required=True)
+    p_st_crit = st_sub.add_parser("critique", help="Record the critique of an exact version (stdin; one per version)")
+    p_st_crit.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_sheet = st_sub.add_parser("sheet", help="One-page sheet: parameters, management, gaps, decisions, critique")
+    p_st_sheet.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_deploy = st_sub.add_parser("deploy-check", help="Allow a deploy only with an approval of GaleCore's hash")
     p_st_deploy.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", required=True,
