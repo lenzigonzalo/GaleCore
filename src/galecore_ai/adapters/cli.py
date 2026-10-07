@@ -821,7 +821,8 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
             rule = watch.add(kb, symbol=args.symbol, metric=args.metric,
                              condition="below" if args.below is not None else "above",
                              threshold=args.below if args.below is not None else args.above, words=args.text,
-                             prompt=args.prompt, until=until, host_model=args.host_model)
+                             prompt=args.prompt, until=until, host_model=args.host_model,
+                             thesis=args.thesis or "", strategies=args.strategy)
             _json_out({"status": "WATCHING", "rule": rule.id, "watches": watch.describe(rule),
                        "note": "El supervisor la revisa cada 5 minutos en la sesión regular y avisa una vez en el monitor."})
         elif c == "watches":
@@ -1374,6 +1375,8 @@ def build_parser() -> _JsonArgumentParser:
     p_sv_watch.add_argument("--text", required=True, help="The owner's words, verbatim")
     p_sv_watch.add_argument("--prompt", required=True, help="The owner's request")
     p_sv_watch.add_argument("--host-model", dest="host_model")
+    p_sv_watch.add_argument("--thesis", help="The thesis this condition invalidates (U-65); needs --strategy")
+    p_sv_watch.add_argument("--strategy", action="append", help="A strategy that depends on that thesis (repeatable)")
     sv_sub.add_parser("watches", help="The owner's rules and their state (active, met, cancelled, expired)")
     p_sv_unwatch = sv_sub.add_parser("unwatch", help="Cancel an active rule")
     p_sv_unwatch.add_argument("rule", help="Rule id (supervise watches)")

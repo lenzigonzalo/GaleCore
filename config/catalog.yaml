@@ -269,6 +269,7 @@ entries:
       - ¿Qué le falta a esta estrategia para correr en SHADOW y qué reglas no soporta GaleCore?
       - Quiero probar una estrategia de put credit spreads en SHADOW
       - Tengo una idea de estrategia, armala y ponela a prueba
+      - ¿Qué tendría que pasar para que esta tesis deje de servir?
       - ¿Qué cambió entre versiones y por qué?
       - ¿Está bien esta idea? ¿Qué le falta y por qué no?
     skill: skills/strategy-design/skill.yaml
@@ -290,6 +291,7 @@ entries:
       - strategy critique --ref strategy:<name>/<version> < {content, host_provider, host_model}   # el crítico, antes de pedir la aprobación
       - strategy sheet --ref strategy:<name>/<version>   # la ficha de una página para el owner, con el riesgo contra el perfil
       - strategy diff --from strategy:<name>/<anterior> --ref strategy:<name>/<version>   # qué cambió y por qué
+      - supervise watch --symbol <SYM> --metric <m> --below|--above <nivel> --thesis "<tesis>" --strategy <name> --text "<owner>" --prompt "<pedido>"   # qué invalida la tesis; lo vigila el supervisor
       - strategy approve --ref strategy:<name>/<version> --spec-hash <hash> --owner-words "<owner>" --host-model <model>
       - strategy deploy-check --ref strategy:<name>/<version> --galecore-hash <hash de App/Runtime/Specs/<name>>
       - python GaleCore/dev/galecore_dev.py deploy --spec <name> --approval knowledge/strategies/<name>/<version>.approval.json   # sólo GaleCore Dev

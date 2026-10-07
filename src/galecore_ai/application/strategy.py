@@ -29,6 +29,8 @@ from galecore_ai.adapters.strategy_store import (
     split_key,
 )
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError, resolve_ref
+from galecore_ai.application.project import load_log
+from galecore_ai.contracts.project import EntryKind
 from galecore_ai.contracts.regime_record import RecordHost
 from galecore_ai.contracts.strategy import (
     VERSION_MENTION_RE,
@@ -404,12 +406,12 @@ def _change_problems(content: ProposalContent, kb: KnowledgeBase) -> list[str]:
     decisions = None
     for ref in content.change.refs:
         if ref.startswith("decision:"):
-            if decisions is None:
-                from galecore_ai.application.project import strategy_project
-                log = strategy_project(kb, content.name).get("log", {})
-                decisions = {e.get("hash") for kind in log.values() if isinstance(kind, list) for e in kind}
-            if ref.removeprefix("decision:") not in decisions:
-                problems.append(f"{ref}: no entry with that hash in the project of {content.name}")
+            if decisions is None:   # the raw log: full hashes, decisions only (project show prints 12 hex)
+                decisions = [e.hash for e in load_log(kb, content.name).entries if e.kind == EntryKind.DECISION]
+            given = ref.removeprefix("decision:")
+            if len(given) < len("sha256:") + 12 or not any(h.startswith(given) for h in decisions):
+                problems.append(f"{ref}: no decision of the project of {content.name} has that hash "
+                                "(full, or the 12 hex digits `project show` prints)")
             continue
         try:
             resolve_ref(ref, kb)

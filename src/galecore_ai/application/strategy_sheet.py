@@ -193,6 +193,10 @@ def _flat(node, path: str = "") -> dict:
     return {path: node}
 
 
+def _step(step: dict | None, absent: str) -> str:
+    return f"{_cell(step['trigger'])} → {_cell(step['action'])} ({step['kind']})" if step else absent
+
+
 _SPEC_SAME = ("identity.version", "content_hash")
 _RULE_FIELDS = ("block", "text", "basis", "parameter", "rationale", "sources")
 
@@ -200,6 +204,8 @@ _RULE_FIELDS = ("block", "text", "basis", "parameter", "rationale", "sources")
 def diff(kb: KnowledgeBase, from_key: str, to_key: str) -> dict:
     """What changed between two versions (U-30), by code: spec fields, rules, parameters, management, and the
     reason and refs the newer version recorded. Nothing is inferred: a version without `change` says so."""
+    if from_key.split("/")[0] != to_key.split("/")[0] or from_key == to_key:
+        raise KnowledgeError(f"diff compares two versions of one strategy, not {from_key} and {to_key}")
     old, new = load_proposal(kb, from_key), load_proposal(kb, to_key)
     a, b = _flat(json.loads(old.spec_json)), _flat(json.loads(new.spec_json))
     spec = [{"path": k, "from": a.get(k), "to": b.get(k)} for k in sorted(set(a) | set(b))
@@ -214,11 +220,16 @@ def diff(kb: KnowledgeBase, from_key: str, to_key: str) -> dict:
             rules.append({"rule": i, "change": "changed", "fields": fields,
                           **({"parameter": {"from": x["parameter"], "to": y["parameter"]}}
                              if "parameter" in fields else {})})
-    pa, pb = {p.name: p.value for p in old.content.parameters}, {p.name: p.value for p in new.content.parameters}
-    params = [{"name": n, "from": pa.get(n), "to": pb.get(n)} for n in sorted(set(pa) | set(pb))
-              if pa.get(n) != pb.get(n)]
-    ma = {s.id: (s.trigger, s.action) for s in old.content.management}
-    mb = {s.id: (s.trigger, s.action) for s in new.content.management}
+    pa = {p.name: p.model_dump(mode="json") for p in old.content.parameters}
+    pb = {p.name: p.model_dump(mode="json") for p in new.content.parameters}
+    params = []
+    for n in sorted(set(pa) | set(pb)):
+        x, y = pa.get(n) or {}, pb.get(n) or {}
+        if x != y:
+            params.append({"name": n, "fields": sorted(k for k in set(x) | set(y) if x.get(k) != y.get(k)),
+                           "from": x.get("value"), "to": y.get("value")})
+    ma = {s.id: s.model_dump(mode="json") for s in old.content.management}
+    mb = {s.id: s.model_dump(mode="json") for s in new.content.management}
     management = [{"step": i, "from": ma.get(i), "to": mb.get(i)} for i in sorted(set(ma) | set(mb))
                   if ma.get(i) != mb.get(i)]
     change = new.content.change
@@ -236,9 +247,11 @@ def diff(kb: KnowledgeBase, from_key: str, to_key: str) -> dict:
               + (f" ({_cell(r['parameter']['from'])} → {_cell(r['parameter']['to'])})" if r.get("parameter") else "")
               for r in rules] or ["- Sin cambios."]
     if params:
-        lines += ["", "## Parámetros", ""] + [f"- {p['name']}: {p['from']} → {p['to']}" for p in params]
+        lines += ["", "## Parámetros", ""] + [f"- {p['name']}: {p['from']} → {p['to']} ({', '.join(p['fields'])})"
+                                             for p in params]
     if management:
-        lines += ["", "## Gestión", ""] + [f"- {m['step']}: {m['from']} → {m['to']}" for m in management]
+        lines += ["", "## Gestión", ""] + [
+            f"- {m['step']}: {_step(m['from'], 'nuevo')} ⇒ {_step(m['to'], 'quitado')}" for m in management]
     return {"from": f"strategy:{from_key}", "to": f"strategy:{to_key}",
             "change": change.model_dump(mode="json") if change else None, "spec": spec, "rules": rules,
             "parameters": params, "management": management, "markdown": "\n".join(lines) + "\n"}

@@ -30,3 +30,10 @@ spec: `risk_limits.max_concurrent_positions` 1 → 10, `min_minutes_between_entr
 reglas: R3 y R4 agregadas, E1 cambia texto, fundamento y runtime, S1 fundamento. Motivo: «no registrado» (versiones
 anteriores a la regla). Desde ahora `strategy save` de una versión nueva exige `change` (versión de origen guardada,
 motivo y refs que resuelven o `decision:<hash>` del proyecto). Suite 1228 passed.
+
+**AC-07 (07/10):** lo que invalida una tesis es una regla del supervisor (`supervise watch`) con `--thesis` y
+`--strategy` (P1-01b reutilizado, sin mecanismo nuevo): la condición queda en el proyecto de cada estrategia (kind
+thesis) y, cuando se cumple en sesión, el aviso dice qué tesis está en duda y qué estrategias dependen. Métricas
+vigilables: precio, gamma cero, muros de calls/puts, IV rank; lo demás se declara «no vigilado». Las reglas guardadas
+antes conservan su hash. Tests (unidad, con lector simulado): 17 de `watch`. Sin regla real creada: necesita las
+palabras del owner. Suite 1231 passed.

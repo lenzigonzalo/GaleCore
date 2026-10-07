@@ -721,12 +721,18 @@ def test_a_new_version_says_what_it_changes_and_why(kb, research_ref):  # noqa: 
     with pytest.raises(KnowledgeError) as exc:
         _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "más posiciones",
                                          "refs": ["decision:sha256:000000000000"]})
-    assert any("no entry with that hash" in p for p in exc.value.problems)
+    assert any("no decision of the project" in p for p in exc.value.problems)
     with pytest.raises(KnowledgeError) as exc:
         _next_version(kb, research_ref, {"from_version": "1.0.9", "reason": "más posiciones", "refs": [research_ref]})
     assert any("is not a stored version" in p for p in exc.value.problems)
+    from galecore_ai.application import project
+    story, _ = project.add(kb=kb, name=NAME, kind="story", words="funciona en calma", prompt="p", now=NOW)
+    decided, _ = project.add(kb=kb, name=NAME, kind="decision", words="más posiciones", prompt="p", now=NOW)
+    with pytest.raises(KnowledgeError) as exc:   # a story is not a decision
+        _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "x", "refs": [f"decision:{story.hash}"]})
+    assert any("no decision of the project" in p for p in exc.value.problems)
     _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "más posiciones para generar data",
-                                     "refs": [research_ref]})
+                                     "refs": [research_ref, f"decision:{decided.hash[:19]}"]})
     out = diff(kb, KEY, f"{NAME}/1.0.4")
     assert out["change"]["reason"] == "más posiciones para generar data"
     assert {"path": "risk_limits.max_concurrent_positions", "from": 1, "to": 3} in out["spec"]
@@ -740,3 +746,16 @@ def test_a_change_needs_a_reason_and_what_originated_it():
         VersionChange(from_version="1.0.3", reason="x", refs=[])
     with pytest.raises(ValidationError):
         VersionChange(from_version="1.0.3", reason="  ", refs=["research:x"])
+
+
+
+def test_diff_compares_two_versions_of_one_strategy(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    with pytest.raises(KnowledgeError, match="two versions of one strategy"):
+        diff(kb, KEY, KEY)
+    with pytest.raises(KnowledgeError, match="two versions of one strategy"):
+        diff(kb, KEY, "otra_estrategia/1.0.4")
+    _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "más posiciones", "refs": [research_ref]})
+    code, out = _cli("strategy", "diff", "--from", f"strategy:{KEY}", "--ref", f"strategy:{NAME}/1.0.4",
+                     env={KNOWLEDGE_DIR_ENV: str(kb.base)})
+    assert code == 0 and out["change"]["reason"] == "más posiciones" and out["spec"]
