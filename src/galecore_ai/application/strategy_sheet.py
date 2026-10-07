@@ -12,7 +12,7 @@ import json
 from collections.abc import Callable
 
 from galecore_ai.adapters.strategy_store import StrategyIntegrityError, StrategyStoreError
-from galecore_ai.application import capital
+from galecore_ai.application import capital, supervisor
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.application.strategy import IMPLICIT_BEHAVIOR, load_critique, load_proposal
 from galecore_ai.contracts.strategy import Basis, ManagementKind, RuntimeStatus, StrategyDocument
@@ -51,7 +51,9 @@ def _num(v) -> float | None:
 def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object] | None = None) -> dict:
     """The version's limits against the profile (AC-02). The per-trade loss is the spec's cap, which the runtime
     enforces ((width − credit) × 100); without a cap, the full width × 100 bounds it. The sum is the worst case of
-    every allowed position at that loss. What is open now comes from GaleCore's Exposure, as it is."""
+    every allowed position at that loss. Both are per contract: a saved version always sizes one contract (the check
+    refuses any other sizing), and the profile limits are bounds computed here from its percentages. What is open
+    now comes from GaleCore's Exposure, as it is."""
     profile = kb.profile.latest()
     lim = capital.limits(profile.content if profile else None)
     spec = json.loads(doc.spec_json)
@@ -67,7 +69,7 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
     rows, missing = [], [x if x.startswith("perfil") else f"perfil: {x}" for x in lim["no_leidos"]]
     if ref is not None and lim.get("maxRiskPerTradePct") is not None and per_trade is not None:
         allowed = ref * lim["maxRiskPerTradePct"] / 100
-        rows.append(("Pérdida máxima por operación", f"{capital._usd(per_trade)} USD ({per_trade_src})",
+        rows.append(("Pérdida máxima por operación (1 contrato)", f"{capital._usd(per_trade)} USD ({per_trade_src})",
                      f"{capital._usd(allowed)} USD ({capital._pct(lim['maxRiskPerTradePct'])} %)",
                      "dentro" if per_trade <= allowed else "EXCEDE"))
     if ref is not None and lim.get("maxOpenRiskPct") is not None and per_trade is not None and positions is not None:
@@ -85,10 +87,15 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
     if read is not None and ref is not None and not lim["no_leidos"]:
         try:
             exp = read("/App/Runtime/Exposure?" + capital._query(ref, lim))
-            opened = (f"{capital._usd(exp['openMaxRisk'])} USD en riesgo en {exp['positionsOpen']} posiciones; entra "
-                      f"riesgo nuevo por {capital._usd(exp['availableForNewRiskUsd'])} USD (GaleCore, {exp.get('asOf')})")
-        except Exception as exc:  # noqa: BLE001 — any failure is a declared missing, never a guess
-            missing.append(f"lo abierto en SHADOW: GaleCore no respondió ({type(exc).__name__})")
+        except supervisor.SupervisorError as exc:
+            missing.append(f"lo abierto en SHADOW: {exc}")
+        else:
+            try:
+                opened = (f"{capital._usd(exp['openMaxRisk'])} USD en riesgo en {exp['positionsOpen']} posiciones; "
+                          f"entra riesgo nuevo por {capital._usd(exp['availableForNewRiskUsd'])} USD "
+                          f"(GaleCore, {exp.get('asOf')})")
+            except (KeyError, TypeError) as exc:
+                missing.append(f"lo abierto en SHADOW: respuesta inesperada de GaleCore ({exc!r})")
     elif read is None:
         missing.append("lo abierto en SHADOW: no se consultó GaleCore")
     return {"rows": rows, "kill_switch": kill_text, "open_now": opened, "missing": missing,
@@ -139,7 +146,7 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
     r = risk(kb, doc, read)
     lines += ["", f"## Riesgo contra el perfil ({r['profile'] or 'sin perfil'})", ""]
     if r["rows"]:
-        lines += ["| Qué | Esta versión | Límite del perfil | |", "|---|---|---|---|"]
+        lines += ["| Qué | Esta versión | Límite del perfil (% × capital) | |", "|---|---|---|---|"]
         lines += [f"| {a} | {b} | {c} | {d} |" for a, b, c, d in r["rows"]]
         lines += [""]
     lines += [f"- Kill switch: {r['kill_switch']}"]

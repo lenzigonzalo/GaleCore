@@ -628,8 +628,8 @@ def test_cli_critique_with_invalid_input_is_a_validation_error(kb, research_ref)
     assert code == 3 and "Invalid critique" in out["error"]
 
 
-
 def test_sheet_puts_the_version_against_the_profile_and_what_is_open(kb, research_ref):  # noqa: F811
+    from galecore_ai.application import supervisor
     from galecore_ai.application.profile import set_profile
     from tests.unit.test_capital import LIMITS, exposure
     stored(kb, research_ref)
@@ -648,14 +648,16 @@ def test_sheet_puts_the_version_against_the_profile_and_what_is_open(kb, researc
                       "&reservePct=10.0&maxBetPct=30.0")]
     spec = json.loads(spec_text())
     cap, n = spec["risk_limits"]["max_loss_per_trade_usd"], spec["risk_limits"]["max_concurrent_positions"]
-    assert f"| Pérdida máxima por operación | {cap:g} USD (tope de la spec; el runtime no abre por encima) | 500 USD (5 %) |" in md
+    assert f"| Pérdida máxima por operación (1 contrato) | {cap:g} USD (tope de la spec; el runtime no abre por encima) | 500 USD (5 %) |" in md
     assert f"({n:g} posiciones × pérdida máxima)" in md
     assert "- Kill switch: G5 — lo ejecuta GaleCore: no (hueco declarado)" in md
     assert "- Abierto hoy en SHADOW: 1.368 USD en riesgo en 3 posiciones; entra riesgo nuevo por 3.632 USD" in md
 
     def down(path):
-        raise RuntimeError("caída")
-    assert "- Falta: lo abierto en SHADOW: GaleCore no respondió (RuntimeError)" in sheet(kb, KEY, down)["markdown"]
+        raise supervisor.SupervisorError("GaleCore no respondió en http://localhost:7001: ConnectError")
+    assert "- Falta: lo abierto en SHADOW: GaleCore no respondió en" in sheet(kb, KEY, down)["markdown"]
+    assert "respuesta inesperada de GaleCore" in sheet(kb, KEY, lambda path: {"asOf": "x"})["markdown"]
+    assert "- Falta: lo abierto en SHADOW: no se consultó GaleCore" in sheet(kb, KEY)["markdown"]
 
 
 def test_a_cap_above_the_profile_is_flagged(kb, research_ref):  # noqa: F811
@@ -666,3 +668,24 @@ def test_a_cap_above_the_profile_is_flagged(kb, research_ref):  # noqa: F811
     stored(kb, research_ref)
     rows = sheet(kb, KEY)["risk"]["rows"]
     assert rows[0][2] == "200 USD (5 %)" and rows[0][3] == "EXCEDE"
+    lim = json.loads(spec_text())["risk_limits"]
+    worst = lim["max_loss_per_trade_usd"] * lim["max_concurrent_positions"]
+    assert rows[1][2] == "2.000 USD (50 %)" and rows[1][3] == ("EXCEDE" if worst > 2000 else "dentro")
+
+
+def test_without_a_cap_the_full_width_bounds_the_loss(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_sheet import risk
+    doc, _ = stored(kb, research_ref)
+    spec = json.loads(doc.spec_json)
+    spec["risk_limits"]["max_loss_per_trade_usd"] = None
+    width = next(leg["strike_selection"]["width"] for leg in spec["candidate_construction"]["legs"]
+                 if leg["side"].upper() == "BUY")
+    out = risk(kb, doc.model_copy(update={"spec_json": json.dumps(spec)}))
+    assert not out["rows"]   # no profile in this kb: nothing to compare, said as missing
+    assert out["missing"][0] == "perfil: no hay perfil"
+    from galecore_ai.application.profile import set_profile
+    from tests.unit.test_capital import LIMITS
+    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
+                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    row = risk(kb, doc.model_copy(update={"spec_json": json.dumps(spec)}))["rows"][0]
+    assert row[1].startswith(f"{width * 100:g} USD (ancho completo × 100")
