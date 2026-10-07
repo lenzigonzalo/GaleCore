@@ -626,3 +626,43 @@ def test_cli_critique_with_invalid_input_is_a_validation_error(kb, research_ref)
     code, out = _cli("strategy", "critique", "--ref", f"strategy:{KEY}", stdin="[1]",
                      env={KNOWLEDGE_DIR_ENV: str(kb.base)})
     assert code == 3 and "Invalid critique" in out["error"]
+
+
+
+def test_sheet_puts_the_version_against_the_profile_and_what_is_open(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.profile import set_profile
+    from tests.unit.test_capital import LIMITS, exposure
+    stored(kb, research_ref)
+    md = sheet(kb, KEY)["markdown"]
+    assert "## Riesgo contra el perfil (sin perfil)" in md and "- Falta: perfil: no hay perfil" in md
+    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
+                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    asked = []
+
+    def read(path):
+        asked.append(path)
+        return exposure()
+    out = sheet(kb, KEY, read)
+    md = out["markdown"]
+    assert asked == [("/App/Runtime/Exposure?capital=10000.0&maxRiskPerTradePct=5.0&maxOpenRiskPct=50.0"
+                      "&reservePct=10.0&maxBetPct=30.0")]
+    spec = json.loads(spec_text())
+    cap, n = spec["risk_limits"]["max_loss_per_trade_usd"], spec["risk_limits"]["max_concurrent_positions"]
+    assert f"| Pérdida máxima por operación | {cap:g} USD (tope de la spec; el runtime no abre por encima) | 500 USD (5 %) |" in md
+    assert f"({n:g} posiciones × pérdida máxima)" in md
+    assert "- Kill switch: G5 — lo ejecuta GaleCore: no (hueco declarado)" in md
+    assert "- Abierto hoy en SHADOW: 1.368 USD en riesgo en 3 posiciones; entra riesgo nuevo por 3.632 USD" in md
+
+    def down(path):
+        raise RuntimeError("caída")
+    assert "- Falta: lo abierto en SHADOW: GaleCore no respondió (RuntimeError)" in sheet(kb, KEY, down)["markdown"]
+
+
+def test_a_cap_above_the_profile_is_flagged(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.profile import set_profile
+    from tests.unit.test_capital import LIMITS
+    set_profile(kb.profile, changes={"reference_capital": {"amount": 4000.0, "currency": "USD"},
+                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    stored(kb, research_ref)
+    rows = sheet(kb, KEY)["risk"]["rows"]
+    assert rows[0][2] == "200 USD (5 %)" and rows[0][3] == "EXCEDE"

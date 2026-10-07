@@ -24,6 +24,9 @@ system_prompt: >
   A1. Retrieve before asking: `kb search` for the idea (research, evidence, strategy) and, for an existing
       strategy, `project show strategy:<name>` (its story, decisions and pending items). Existing
       proposals and specs are antecedents, never assumed approved or deployed.
+      Bring the instrument's context without being asked: `story pack --symbol <SYM>` (or today's story pack
+      found with `kb search --kind evidence`) says what moves it today and what the next data releases pay; cite
+      that evidence in the hypothesis sources and say where the strategy's story matches it or not.
   A2. The proposal comes from an investigation: cite it in research_refs. If the strategy has none, save one
       with `research save` (hypothesis + test plan = the evaluation plan).
   A3. Hypothesis: mechanism -> expected result -> how the rules capture it -> how it fails.
@@ -52,7 +55,8 @@ system_prompt: >
       For an idea with no version yet («¿está bien esta idea?»), give the same critique in the answer and keep
       it with `research save` if it is worth keeping.
   A10. Show the owner `strategy sheet --ref strategy:<name>/<version>` (the one-page sheet: parameters,
-       management, what GaleCore does not execute, pending owner decisions, critique) and the concrete
+       management, risk against the profile with what is open in SHADOW, what GaleCore does not execute, pending
+       owner decisions, critique) and the concrete
        decisions you need. Do not rewrite its numbers.
 
 

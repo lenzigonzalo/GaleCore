@@ -6,7 +6,9 @@ versions:
     changes: >
       WS-0016 (P1-06): la skill se parte en método (parte A) y procedimiento de SHADOW (parte B); suma tabla de
       parámetros, árbol de gestión (disparador → acción), el crítico antes de aprobar (`strategy critique`; sin
-      crítica o con «descartar» no se aprueba) y la ficha de una página (`strategy sheet`) como salida estándar.
+      crítica o con «descartar» no se aprueba) y la ficha de una página (`strategy sheet`) como salida estándar. La ficha
+      pone la versión contra el perfil (pérdida por operación, peor caso sumado, kill switch, lo abierto en SHADOW)
+      y el método trae el contexto del instrumento con `story pack` (AC-02).
     feedback: []
   - version: "0.3.1"
     date: 2026-09-27

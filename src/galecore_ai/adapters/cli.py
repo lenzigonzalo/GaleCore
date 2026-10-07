@@ -1118,8 +1118,9 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
             _json_out({"status": "RECORDED", "ref": review.strategy_ref, "path": path,
                        "verdict": review.content.verdict.value, "content_hash": review.content_hash})
         if args.strategy_command == "sheet":
+            from galecore_ai.application import supervisor
             from galecore_ai.application.strategy_sheet import sheet
-            _json_out(sheet(kb, key))
+            _json_out(sheet(kb, key, None if args.offline else supervisor.api_reader()))
         if args.strategy_command == "deploy-check":
             _json_out(deploy_check(kb=kb, key=key, galecore_hash=args.galecore_hash))
     except KnowledgeError as exc:
@@ -1488,6 +1489,7 @@ def build_parser() -> _JsonArgumentParser:
     p_st_crit.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_sheet = st_sub.add_parser("sheet", help="One-page sheet: parameters, management, gaps, decisions, critique")
     p_st_sheet.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_sheet.add_argument("--offline", action="store_true", help="do not ask GaleCore what is open in SHADOW")
     p_st_deploy = st_sub.add_parser("deploy-check", help="Allow a deploy only with an approval of GaleCore's hash")
     p_st_deploy.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", required=True,

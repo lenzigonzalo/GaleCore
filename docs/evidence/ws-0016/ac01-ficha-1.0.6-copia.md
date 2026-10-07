@@ -35,6 +35,16 @@ Check: VALID_WITH_DECLARED_GAPS · hash `sha256:2dee43e45ddcc0af920b556414740b38
 | G5 | kill_switch | pérdida acumulada sobre el límite del owner | pausar entradas nuevas; las abiertas siguen con G1–G3 | no (hueco declarado) |
 | G6 | review | cada operación cerrada | revisión del seguimiento: regla que cerró, resultado contra lo esperado | no aplica |
 
+## Riesgo contra el perfil (profile:v8)
+
+| Qué | Esta versión | Límite del perfil | |
+|---|---|---|---|
+| Pérdida máxima por operación | 500 USD (tope de la spec; el runtime no abre por encima) | 500 USD (5 %) | dentro |
+| Peor caso sumado | 5.000 USD (10 posiciones × pérdida máxima) | 5.000 USD (50 %) | dentro |
+
+- Kill switch: G5 — lo ejecuta GaleCore: no (hueco declarado)
+- Abierto hoy en SHADOW: 1.367 USD en riesgo en 3 posiciones; entra riesgo nuevo por 3.633 USD (GaleCore, 2026-10-07T01:21:27.7778894Z)
+
 ## Lo que GaleCore no ejecuta
 
 - E3: Entrar sólo si la implícita a 30 días supera a la realizada a 20 sesiones (IV30/RV20 > 1). — El MetricResolver sólo resuelve precio de cotización, último trade y GEX neto; no hay IV30 ni vol realizada como métrica. Queda fuera de la spec: se registra en el seguimiento y se prueba en la reproducción histórica como variante con nombre propio.

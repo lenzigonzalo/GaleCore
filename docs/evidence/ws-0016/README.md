@@ -13,3 +13,14 @@
   versiones guardadas siguen íntegras (`kb search --kind strategy`: `integrity_failed` []).
 
 La crítica la escribió el host (Claude) leyendo la versión; es `HOST_DECLARED`, no la verificó un tercero.
+
+**AC-02 (07/10 01:14 UTC), misma copia, API Dev reiniciada:** `strategy sheet` suma «Riesgo contra el perfil»
+(`profile:v8`): pérdida máxima por operación 500 USD (tope de la spec) contra 500 USD (5 %) → dentro; peor caso
+sumado 5.000 USD (10 × 500) contra 5.000 USD (50 %) → dentro; kill switch G5 → no lo ejecuta GaleCore (hueco
+declarado); abierto hoy en SHADOW 1.367 USD en 3 posiciones, entra riesgo nuevo por 3.633 USD (GaleCore Exposure).
+Contexto del instrumento: el método pide `story pack --symbol` o el pack del día
+(`evidence:2026-10-06-historia-spy-2309`, con `drivers`) y lo cita en la hipótesis; sin código nuevo.
+
+Corrección a la crítica de la copia (`ac06-critica-1.0.6.json`): heredó de la 1.0.5 «drawdown del perfil 1.500 USD».
+El perfil vigente dice que 1.500 USD es el tope de **una apuesta** (mismo subyacente, dirección y semana), no un
+drawdown; el riesgo sumado permitido es 5.000 USD. La ficha nueva lo muestra con los números del perfil.

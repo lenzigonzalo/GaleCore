@@ -283,10 +283,11 @@ entries:
     flow:
       - kb search --text "<idea>" [--kind research|evidence|strategy]
       - research save --slug <slug> --prompt "<pedido>" < {content, host_provider, host_model}   # si la estrategia no tiene investigación propia
+      - story pack --symbol <SYM>   # qué mueve hoy al instrumento (P1-05), sin que lo pidan; se cita en la hipótesis
       - strategy check --spec <GaleCore Files/Runtime/<name>.json> < {content}
       - strategy save --spec <file> --prompt "<pedido>" < {content, host_provider, host_model}
       - strategy critique --ref strategy:<name>/<version> < {content, host_provider, host_model}   # el crítico, antes de pedir la aprobación
-      - strategy sheet --ref strategy:<name>/<version>   # la ficha de una página para el owner
+      - strategy sheet --ref strategy:<name>/<version>   # la ficha de una página para el owner, con el riesgo contra el perfil
       - strategy approve --ref strategy:<name>/<version> --spec-hash <hash> --owner-words "<owner>" --host-model <model>
       - strategy deploy-check --ref strategy:<name>/<version> --galecore-hash <hash de App/Runtime/Specs/<name>>
       - python GaleCore/dev/galecore_dev.py deploy --spec <name> --approval knowledge/strategies/<name>/<version>.approval.json   # sólo GaleCore Dev
