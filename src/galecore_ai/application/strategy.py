@@ -507,6 +507,9 @@ def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_sp
             problems.append("the approval is for another proposal document")
         if approval.spec_hash != doc.spec_hash:
             problems.append("the approval is for another spec hash")
+    review = load_critique(kb, key)   # not required (versions approved before WS-0016 have none), but it can veto
+    if review is not None and review.content.verdict == CritiqueVerdict.DISCARD:
+        problems.append("the critique of this version says «descartar»")
     if galecore_hash != doc.spec_hash:
         problems.append(f"GaleCore loaded {galecore_hash}, the approved version is {doc.spec_hash}")
     if galecore_spec_json is not None and galecore_spec_hash(galecore_spec_json) != galecore_hash:

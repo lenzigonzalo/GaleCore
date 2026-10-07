@@ -482,6 +482,7 @@ def test_sheet_shows_parameters_management_gaps_and_critique(kb, research_ref): 
     assert out["critique"] == "seguir" and out["approved"] is False
     assert "| Stop | 200 | % del crédito | 150–300 |" in md
     assert "| G1 | stop |" in md and md.count("| sí |") >= 3
+    assert "| G4 | roll | cualquiera | nada: sin ajustes ni roll | sí (lo hace siempre) |" in md
     assert "| G5 | kill_switch | pérdida acumulada sobre el límite del owner | pausar entradas | no (hueco declarado) |" in md
     assert "**Por qué no:**" in md and "un gap de −5 %" in md
 
@@ -585,3 +586,42 @@ def test_cli_save_approve_deploy_check(kb, research_ref):  # noqa: F811
     code, allowed = _cli("strategy", "deploy-check", "--ref", saved["ref"], "--galecore-hash", saved["spec_hash"],
                          env=env)
     assert code == 0 and allowed["status"] == "DEPLOY_ALLOWED"
+
+
+def test_a_discarded_critique_also_blocks_the_deploy_of_an_approved_version(kb, research_ref):  # noqa: F811
+    """Versions approved before WS-0016 have no critique; one recorded later with «descartar» still vetoes."""
+    doc, _ = stored(kb, research_ref, criticised=False)
+    from galecore_ai.contracts.strategy import ApprovalDocument, compute_document_hash
+    draft = ApprovalDocument(strategy_ref=f"strategy:{KEY}", spec_hash=doc.spec_hash, proposal_hash=doc.content_hash,
+                             owner_words="Apruebo", recorded_at=NOW, host=HOST, content_hash="pending")
+    kb.strategies.create_approval(
+        KEY, draft.model_copy(update={"content_hash": compute_document_hash(draft.hashable_content())}))
+    assert deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)["status"] == "DEPLOY_ALLOWED"
+    assert "aprobada antes de que la crítica fuera obligatoria" in sheet(kb, KEY)["markdown"]
+    critique(kb=kb, key=KEY, content=critique_content("descartar"), host=HOST, now=NOW)
+    with pytest.raises(KnowledgeError) as exc:
+        deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)
+    assert "the critique of this version says «descartar»" in exc.value.problems
+
+
+def test_a_critique_citing_nothing_real_is_refused(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref, criticised=False)
+    bad = critique_content().model_copy(update={"evidence_refs": ["evidence:2026-01-01-nada"]})
+    with pytest.raises(KnowledgeError, match="critique refused"):
+        critique(kb=kb, key=KEY, content=bad, host=HOST, now=NOW)
+
+
+def test_save_refuses_a_rule_parameter_missing_from_the_table(kb, research_ref):  # noqa: F811
+    def partial(d):
+        d["parameters"] = [p for p in d["parameters"] if p["rules"] != ["X1"]]
+    with pytest.raises(KnowledgeError) as exc:
+        save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(partial, research_ref=research_ref),
+                      spec_json=spec_text(), spec_file=f"{NAME}.json", now=NOW)
+    assert any(p.startswith("rule X1 has parameter") for p in exc.value.problems)
+
+
+def test_cli_critique_with_invalid_input_is_a_validation_error(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref, criticised=False)
+    code, out = _cli("strategy", "critique", "--ref", f"strategy:{KEY}", stdin="[1]",
+                     env={KNOWLEDGE_DIR_ENV: str(kb.base)})
+    assert code == 3 and "Invalid critique" in out["error"]

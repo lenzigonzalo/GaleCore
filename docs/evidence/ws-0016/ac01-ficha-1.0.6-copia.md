@@ -31,7 +31,7 @@ Check: VALID_WITH_DECLARED_GAPS · hash `sha256:2dee43e45ddc…` · crítica: re
 | G1 | stop | en cada ciclo, pérdida a mid ≥ 2× el crédito cobrado | cerrar la posición (precedencia 1) | sí |
 | G2 | target | en cada ciclo, valor del spread ≤ 50 % del crédito | cerrar la posición (precedencia 2) | sí |
 | G3 | time | DTE ≤ 21 | cerrar la posición (precedencia 3) | sí |
-| G4 | roll | cualquier situación | nada: sin ajustes ni roll | sí |
+| G4 | roll | cualquier situación | nada: sin ajustes ni roll | sí(lo hace siempre) |
 | G5 | kill_switch | pérdida acumulada sobre el límite del owner | pausar entradas nuevas; las abiertas siguen con G1–G3 | no (hueco declarado) |
 | G6 | review | cada operación cerrada | revisión del seguimiento: regla que cerró, resultado contra lo esperado | no aplica |
 
@@ -72,4 +72,3 @@ Check: VALID_WITH_DECLARED_GAPS · hash `sha256:2dee43e45ddc…` · crítica: re
 - Volatilidad realizada de 20 sesiones por encima de la implícita a 30 días durante 5 sesiones seguidas.
 
 **Tras cada operación cerrada:** Por cada cierre: qué regla lo cerró, resultado contra lo esperado, cuánto vino de delta y cuánto de theta/vega, si atravesó un dato (CPI, FOMC, resultados) y si E3 o E4 lo hubieran filtrado.
-

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from galecore_ai.adapters.strategy_store import StrategyIntegrityError, StrategyStoreError
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
-from galecore_ai.application.strategy import load_critique, load_proposal
+from galecore_ai.application.strategy import IMPLICIT_BEHAVIOR, load_critique, load_proposal
 from galecore_ai.contracts.strategy import Basis, RuntimeStatus, StrategyDocument
 
 BASIS_LABEL = {
@@ -27,11 +27,15 @@ def _cell(text: str) -> str:
 
 def _runs(doc: StrategyDocument, rule_ids: list[str]) -> str:
     """Whether GaleCore executes a management step: every rule supported, some declared gap, or nothing to run."""
-    statuses = {r.runtime.status for r in doc.content.rules if r.id in rule_ids}
+    rules = [r for r in doc.content.rules if r.id in rule_ids]
+    statuses = {r.runtime.status for r in rules}
     if RuntimeStatus.UNSUPPORTED in statuses:
         return "no (hueco declarado)"
     if statuses == {RuntimeStatus.NOT_APPLICABLE}:
         return "no aplica"
+    paths = {p for r in rules if r.runtime.status == RuntimeStatus.SUPPORTED for p in r.runtime.spec_paths}
+    if paths and paths <= set(IMPLICIT_BEHAVIOR):
+        return "sí (lo hace siempre)"
     return "sí"
 
 
