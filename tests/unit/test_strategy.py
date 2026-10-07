@@ -480,6 +480,7 @@ def test_sheet_shows_parameters_management_gaps_and_critique(kb, research_ref): 
     out = sheet(kb, KEY)
     md = out["markdown"]
     assert out["critique"] == "seguir" and out["approved"] is False
+    assert f"hash `{out['spec_hash']}`" in md   # the owner retypes the exact hash to approve
     assert "| Stop | 200 | % del crédito | 150–300 |" in md
     assert "| G1 | stop |" in md and md.count("| sí |") >= 3
     assert "| G4 | roll | cualquiera | nada: sin ajustes ni roll | sí (lo hace siempre) |" in md

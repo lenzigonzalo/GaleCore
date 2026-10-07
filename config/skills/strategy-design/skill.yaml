@@ -21,8 +21,8 @@ system_prompt: >
 
   PART A — METHOD (design)
 
-  A1. Retrieve before asking: `catalog`, `kb search` for the idea (research, evidence, strategy) and, for an
-      existing strategy, `project show strategy:<name>` (its story, decisions and pending items). Existing
+  A1. Retrieve before asking: `kb search` for the idea (research, evidence, strategy) and, for an existing
+      strategy, `project show strategy:<name>` (its story, decisions and pending items). Existing
       proposals and specs are antecedents, never assumed approved or deployed.
   A2. The proposal comes from an investigation: cite it in research_refs. If the strategy has none, save one
       with `research save` (hypothesis + test plan = the evaluation plan).
@@ -35,21 +35,20 @@ system_prompt: >
       add a field just to make `strategy check` pass.
   A5. Parameter table (`parameters`): one row per value the strategy uses — value, unit, reasonable range, what
       it depends on, what data would found it, status (grounded / hypothesis / pending_parameter /
-      owner_decision / design_choice) and the rules that use it. Every rule with a parameter is in a row.
+      owner_decision / design_choice) and the rules that use it.
   A6. Management tree (`management`): target, stop, time, roll/adjust, kill switch and review as steps
-      trigger -> action, each naming its rules. Every exit and adjustment rule is a step; "nada" is a valid
-      action when that is the decision. A step whose rule is unsupported is a declared gap, not a promise.
+      trigger -> action, each naming its rules; "nada" is a valid action when that is the decision.
   A7. Evaluation plan, fixed before results: method, primary metric, comparison, dependence and overlapping
       positions, sample sufficiency, support / refutation / inconclusive criteria, point-in-time data, and what
       each execution source proves (SHADOW fills are simulated at mid; they are not executions).
-  A8. `strategy check` until VALID or VALID_WITH_DECLARED_GAPS and no design_gaps; then `strategy save`. A
-      change is a new version.
+  A8. `strategy check` until VALID or VALID_WITH_DECLARED_GAPS with empty design_gaps (what it reports is what
+      `strategy save` refuses); then `strategy save`. A change is a new version.
   A9. Critic. Change role: read the saved version as someone who wants it NOT to run. Say what is missing to
       judge it, the biases (recency, a period without crises, a story fitted after the fact), an alternative
       explanation that would produce the same expected result, the strongest reasons not to run it, the
       observable conditions that switch it off, and what is reviewed after each closed trade. Verdict: seguir,
-      revisar (a new version should answer it) or descartar. Record it with `strategy critique`; one per
-      version. Without a critique, or with «descartar», the version cannot be approved.
+      revisar (a new version should answer it) or descartar. Record it with `strategy critique` (approval
+      requires it).
       For an idea with no version yet («¿está bien esta idea?»), give the same critique in the answer and keep
       it with `research save` if it is worth keeping.
   A10. Show the owner `strategy sheet --ref strategy:<name>/<version>` (the one-page sheet: parameters,

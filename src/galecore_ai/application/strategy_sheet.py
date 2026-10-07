@@ -51,7 +51,7 @@ def sheet(kb: KnowledgeBase, key: str) -> dict:
     lines = [
         f"# {c.display_name} — {c.name} {c.version}",
         "",
-        (f"Check: {doc.check.verdict} · hash `{doc.spec_hash[:19]}…` · crítica: "
+        (f"Check: {doc.check.verdict} · hash `{doc.spec_hash}` · crítica: "
          f"{review.content.verdict.value if review_ok else 'sin crítica'} · aprobada: {'sí' if approval else 'no'}"),
         "",
         f"**Para qué:** {_cell(c.purpose)}",

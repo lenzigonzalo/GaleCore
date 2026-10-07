@@ -1,6 +1,6 @@
 # Cobro de prima de varianza en SPY a 30–45 días con riesgo definido — spy_prima_varianza_30_45d 1.0.6
 
-Check: VALID_WITH_DECLARED_GAPS · hash `sha256:2dee43e45ddc…` · crítica: revisar · aprobada: no
+Check: VALID_WITH_DECLARED_GAPS · hash `sha256:2dee43e45ddcc0af920b556414740b3851c869c685292fb48feaf032005864af` · crítica: revisar · aprobada: no
 
 **Para qué:** Cobrar parte de la prima de varianza de SPY vendiendo put spreads de riesgo definido escalonados en el tiempo (hasta 10 abiertos, como mucho una entrada cada 24 horas), y generar en SHADOW data de muchas posiciones reales antes de cualquier evaluación económica.
 
@@ -31,7 +31,7 @@ Check: VALID_WITH_DECLARED_GAPS · hash `sha256:2dee43e45ddc…` · crítica: re
 | G1 | stop | en cada ciclo, pérdida a mid ≥ 2× el crédito cobrado | cerrar la posición (precedencia 1) | sí |
 | G2 | target | en cada ciclo, valor del spread ≤ 50 % del crédito | cerrar la posición (precedencia 2) | sí |
 | G3 | time | DTE ≤ 21 | cerrar la posición (precedencia 3) | sí |
-| G4 | roll | cualquier situación | nada: sin ajustes ni roll | sí(lo hace siempre) |
+| G4 | roll | cualquier situación | nada: sin ajustes ni roll | sí (lo hace siempre) |
 | G5 | kill_switch | pérdida acumulada sobre el límite del owner | pausar entradas nuevas; las abiertas siguen con G1–G3 | no (hueco declarado) |
 | G6 | review | cada operación cerrada | revisión del seguimiento: regla que cerró, resultado contra lo esperado | no aplica |
 
