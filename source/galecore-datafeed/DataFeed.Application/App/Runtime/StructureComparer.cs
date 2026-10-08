@@ -1,3 +1,4 @@
+using System.Globalization;
 using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime.Contracts;
 using DataFeed.Application.App.Shared;
@@ -65,10 +66,10 @@ namespace DataFeed.Application.App.Runtime
             var spec = PcsSpec(delta, deltaTolerance, width, minDte, maxDte);
             var assumptions = new List<string>
             {
-                $"PCS: el constructor del runtime con delta {-Math.Abs(delta)} ± {deltaTolerance}, ancho {width}, DTE {minDte}-{maxDte}, sin crédito mínimo",
-                "CCS: espejo en calls (mismo vencimiento, |delta| y ancho); IC = PCS + CCS",
-                $"griegas y escenarios: Black-Scholes con la IV de cada pata, tasa 0, sin dividendos; salto de vol = +{VolJump * 100:0} puntos",
-                "probabilidad de tocar ≈ 2 × |delta| del strike vendido (en IC, la suma, tope 1)",
+                string.Create(CultureInfo.InvariantCulture, $"PCS: el constructor del runtime con delta {-Math.Abs(delta)} ± {deltaTolerance}, ancho {width}, DTE {minDte}-{maxDte}, sin crédito mínimo"),
+                "CCS: espejo en calls (mismo vencimiento, delta en valor absoluto y ancho); IC = PCS + CCS",
+                string.Create(CultureInfo.InvariantCulture, $"griegas y escenarios: Black-Scholes con la IV de cada pata, tasa 0, sin dividendos; salto de vol = +{VolJump * 100:0} puntos"),
+                "probabilidad de tocar ≈ 2 × delta (valor absoluto) del strike vendido; en IC, la suma, tope 1",
                 "montos en USD por contrato (×100)",
             };
             var wait = new StructureOption { Structure = "wait", ExecutableToday = true, Note = "no abre posición: sin crédito ni riesgo" };
@@ -113,10 +114,10 @@ namespace DataFeed.Application.App.Runtime
                 Option("put_credit_spread", true, null, pcsLegs, spot, pcs.Dte),
                 ccsLegs == null
                     ? new StructureOption { Structure = "call_credit_spread", Note = ccsError }
-                    : Option("call_credit_spread", false, "no ejecutable hoy: el runtime sólo construye PCS (P1-07)", ccsLegs, spot, pcs.Dte),
+                    : Option("call_credit_spread", false, "el runtime sólo construye PCS (P1-07)", ccsLegs, spot, pcs.Dte),
                 ccsLegs == null
                     ? new StructureOption { Structure = "iron_condor", Note = ccsError }
-                    : Option("iron_condor", false, "no ejecutable hoy: el runtime sólo construye PCS (P1-07)", pcsLegs.Concat(ccsLegs).ToList(), spot, pcs.Dte),
+                    : Option("iron_condor", false, "el runtime sólo construye PCS (P1-07)", pcsLegs.Concat(ccsLegs).ToList(), spot, pcs.Dte),
                 wait,
             };
             return new StructureComparison
@@ -157,20 +158,20 @@ namespace DataFeed.Application.App.Runtime
             if (shortCall == null)
                 return (null, "sin calls fuera del dinero con delta válido");
             if (Math.Abs(shortCall.CallDelta - target) > tolerance)
-                return (null, $"el delta de call más cercano ({shortCall.CallDelta:0.000}) está fuera de ±{tolerance} del objetivo {target}");
+                return (null, string.Create(CultureInfo.InvariantCulture, $"el delta de call más cercano ({shortCall.CallDelta:0.000}) está fuera de ±{tolerance} del objetivo {target}"));
 
             var longCall = strikes.OrderBy(s => Math.Abs(s.Strike - (shortCall.Strike + width))).First();
             if (Math.Abs(longCall.Strike - (shortCall.Strike + width)) > 1.0)
-                return (null, $"no hay strike para la call comprada cerca de {shortCall.Strike + width}");
+                return (null, FormattableString.Invariant($"no hay strike para la call comprada cerca de {shortCall.Strike + width}"));
 
             var maxAge = DataFreshness.MaxAge(spec);
             var legs = new List<PricedLeg>();
             foreach (var (side, s) in new[] { ("SELL", shortCall), ("BUY", longCall) })
             {
                 if (string.IsNullOrEmpty(s.CallStreamerSymbol))
-                    return (null, $"falta el símbolo de streamer de la call {s.Strike}");
+                    return (null, FormattableString.Invariant($"falta el símbolo de streamer de la call {s.Strike}"));
                 if (!(s.CallIV > 0))
-                    return (null, $"sin IV para la call {s.Strike}");
+                    return (null, FormattableString.Invariant($"sin IV para la call {s.Strike}"));
                 var quote = await _market.GetQuoteAsync(s.CallStreamerSymbol, ct);
                 if (quote == null)
                     return (null, $"sin cotización utilizable para la call {s.CallStreamerSymbol}");
