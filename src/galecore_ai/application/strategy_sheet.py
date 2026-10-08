@@ -234,7 +234,8 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
         lines += ["", "**Se apaga si:**"] + [f"- {_cell(x)}" for x in rc.shutdown_criteria]
         lines += ["", f"**Tras cada operación cerrada:** {_cell(rc.closed_trade_review)}"]
     else:
-        lines += ["Sin crítica de esta versión (aprobada antes de que la crítica fuera obligatoria)." if approval
+        lines += [("Sin crítica de esta versión (aprobada antes de que la crítica fuera obligatoria): para volver a "
+                   "desplegarla hace falta una crítica de esta versión.") if approval
                   else "Sin crítica de esta versión: no se puede aprobar."]
     return {"strategy": f"strategy:{key}", "spec_hash": doc.spec_hash, "check": doc.check.verdict, "risk": r,
             "structures": st, "critique": review.content.verdict.value if review_ok else None, "approved": approval is not None,

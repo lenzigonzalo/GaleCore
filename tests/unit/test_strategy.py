@@ -594,20 +594,35 @@ def test_cli_save_approve_deploy_check(kb, research_ref):  # noqa: F811
     assert code == 0 and allowed["status"] == "DEPLOY_ALLOWED"
 
 
-def test_a_discarded_critique_also_blocks_the_deploy_of_an_approved_version(kb, research_ref):  # noqa: F811
-    """Versions approved before WS-0016 have no critique; one recorded later with «descartar» still vetoes."""
+@pytest.mark.parametrize("case", ["none", "other_version", "descartar", "seguir"])
+def test_a_version_approved_before_the_critique_needs_a_valid_one_to_deploy_again(kb, research_ref, case):  # noqa: F811
+    """Owner 08/10: the old approval is kept as recorded; a new deploy needs a valid critique of this exact version."""
     doc, _ = stored(kb, research_ref, criticised=False)
-    from galecore_ai.contracts.strategy import ApprovalDocument, compute_document_hash
+    from galecore_ai.contracts.strategy import (
+        ApprovalDocument,
+        CritiqueDocument,
+        compute_document_hash,
+    )
     draft = ApprovalDocument(strategy_ref=f"strategy:{KEY}", spec_hash=doc.spec_hash, proposal_hash=doc.content_hash,
                              owner_words="Apruebo", recorded_at=NOW, host=HOST, content_hash="pending")
-    kb.strategies.create_approval(
-        KEY, draft.model_copy(update={"content_hash": compute_document_hash(draft.hashable_content())}))
-    assert deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)["status"] == "DEPLOY_ALLOWED"
-    assert "aprobada antes de que la crítica fuera obligatoria" in sheet(kb, KEY)["markdown"]
-    critique(kb=kb, key=KEY, content=critique_content("descartar"), host=HOST, now=NOW)
-    with pytest.raises(KnowledgeError) as exc:
-        deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)
-    assert "the critique of this version says «descartar»" in exc.value.problems
+    approval = draft.model_copy(update={"content_hash": compute_document_hash(draft.hashable_content())})
+    kb.strategies.create_approval(KEY, approval)
+    if case == "other_version":
+        other = CritiqueDocument(strategy_ref=f"strategy:{KEY}", proposal_hash="0" * 64, content=critique_content(),
+                                 recorded_at=NOW, host=HOST, content_hash="pending")
+        kb.strategies.create_critique(
+            KEY, other.model_copy(update={"content_hash": compute_document_hash(other.hashable_content())}))
+    elif case != "none":
+        critique(kb=kb, key=KEY, content=critique_content(case), host=HOST, now=NOW)
+    expected = {"none": "no critique of this version", "other_version": "the critique is for another proposal",
+                "descartar": "the critique says «descartar»"}
+    if case == "seguir":
+        assert deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)["status"] == "DEPLOY_ALLOWED"
+    else:
+        with pytest.raises(KnowledgeError) as exc:
+            deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)
+        assert any(p.startswith(expected[case]) for p in exc.value.problems)
+    assert kb.strategies.load_approval(KEY) == approval   # the historical approval is not touched
 
 
 def test_a_critique_citing_nothing_real_is_refused(kb, research_ref):  # noqa: F811

@@ -462,14 +462,8 @@ def approve(*, kb: KnowledgeBase, key: str, spec_hash: str, owner_words: str, ho
     if doc.check.verdict == "INVALID":
         raise KnowledgeError(f"strategy:{key}: an INVALID proposal cannot be approved")
     review = load_critique(kb, key)
-    if review is None:
-        raise KnowledgeError(f"strategy:{key}: no critique of this version; record it with `strategy critique` "
-                             "before asking for approval")
-    if review.proposal_hash != doc.content_hash:
-        raise KnowledgeError(f"strategy:{key}: the critique is for another proposal document")
-    if review.content.verdict == CritiqueVerdict.DISCARD:
-        raise KnowledgeError(f"strategy:{key}: the critique says «descartar»; a new version has to answer it",
-                             review.content.why_not)
+    if problem := critique_problem(review, doc):
+        raise KnowledgeError(f"strategy:{key}: {problem}", review.content.why_not if review else [])
     others = sorted({v for v in VERSION_MENTION_RE.findall(owner_words) if v != doc.version})
     if others:
         raise KnowledgeError(f"strategy:{key}: the owner's words name version(s) {others}, not {doc.version}")
@@ -486,6 +480,17 @@ def approve(*, kb: KnowledgeBase, key: str, spec_hash: str, owner_words: str, ho
     except StrategyStoreError as exc:
         raise KnowledgeError(str(exc)) from exc
     return approval, str(path)
+
+
+def critique_problem(review: CritiqueDocument | None, doc: StrategyDocument) -> str | None:
+    """Why this version cannot be approved or deployed for lack of a valid critique, or None (AC-06)."""
+    if review is None:
+        return "no critique of this version; record it with `strategy critique`"
+    if review.proposal_hash != doc.content_hash:
+        return "the critique is for another proposal document"
+    if review.content.verdict == CritiqueVerdict.DISCARD:
+        return "the critique says «descartar»; a new version has to answer it"
+    return None
 
 
 def load_critique(kb: KnowledgeBase, key: str) -> CritiqueDocument | None:
@@ -537,9 +542,10 @@ def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_sp
             problems.append("the approval is for another proposal document")
         if approval.spec_hash != doc.spec_hash:
             problems.append("the approval is for another spec hash")
-    review = load_critique(kb, key)   # not required (versions approved before WS-0016 have none), but it can veto
-    if review is not None and review.content.verdict == CritiqueVerdict.DISCARD:
-        problems.append("the critique of this version says «descartar»")
+    # Also for versions approved before the critique was required (owner, 08/10): the approval stays as recorded,
+    # a new deploy needs a valid critique of this exact version.
+    if problem := critique_problem(load_critique(kb, key), doc):
+        problems.append(problem)
     if galecore_hash != doc.spec_hash:
         problems.append(f"GaleCore loaded {galecore_hash}, the approved version is {doc.spec_hash}")
     if galecore_spec_json is not None and galecore_spec_hash(galecore_spec_json) != galecore_hash:
