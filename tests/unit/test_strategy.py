@@ -694,8 +694,8 @@ def test_sheet_compares_structures_with_what_galecore_returns(kb, research_ref):
     spec = json.loads(spec_text())
     sell = next(leg for leg in spec["candidate_construction"]["legs"] if leg["side"].upper() == "SELL")
     assert asked[-1].startswith("/App/Runtime/Structures?symbol=SPY&delta=" + f"{abs(sell['strike_selection']['target_delta'])}")
-    assert "| PCS | 0.46 | 454.0 | 736.54 | 0.317 | 2.11 | 0.73 | -5.35 | -143.57 | -24.45 |" in md
-    assert "| Iron condor | 1.2 | 380.0 | 735.8 / 807.2 |" in md
+    assert "| PCS | 0.46 | 454.0 | 454.0 | 736.54 | 0.317 | 2.11 | -0.08 | 0.73 | -5.35 | -143.57 | -24.45 |" in md
+    assert "| Iron condor | 1.2 | 380.0 | 380.0 | 735.8 / 807.2 |" in md
     assert "- CCS: no ejecutable hoy — sin cotización utilizable para la call .SPY261113C811" in md
     assert "- PCS: ejecutable hoy" in md and "- Iron condor: no ejecutable hoy — no ejecutable hoy: el runtime" in md
     assert "- Esperar: ejecutable hoy — no abre posición" in md

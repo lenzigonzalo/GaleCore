@@ -139,16 +139,18 @@ def _structure_lines(s: dict) -> list[str]:
     lines = []
     if data:
         lines += [(f"{data.get('symbol')} {data.get('spot')} · vencimiento {data.get('expiration')} "
-                   f"({data.get('dte')} DTE) · GaleCore {data.get('asOf')}. Montos en USD por contrato; escenarios = P&L."), ""]
+                   f"({data.get('dte')} DTE) · GaleCore {data.get('asOf')}. Crédito y breakeven por acción; el resto en USD "
+                   "por contrato; escenarios = P&L."), ""]
         priced = [x for x in data["structures"] if x.get("credit") is not None]
         if priced:
             names = [sc["name"] for sc in priced[0]["scenarios"]]
-            lines += ["| Estructura | Crédito | Riesgo máx. | Breakeven | Prob. tocar (0-1) | Δ | θ/día | Vega/punto | "
-                      + " | ".join(names) + " |", "|---" * (8 + len(names)) + "|"]
+            lines += ["| Estructura | Crédito (por acción) | Riesgo máx. | Capital | Breakeven | Prob. tocar (0-1) | Δ | Γ | θ/día | "
+                      "Vega/punto | "
+                      + " | ".join(names) + " |", "|---" * (10 + len(names)) + "|"]
             for x in priced:
                 g = x["greeks"]
-                lines += [f"| {STRUCTURE_LABEL.get(x['structure'], x['structure'])} | {x['credit']} | {x['maxRisk']} | "
-                          f"{' / '.join(str(b) for b in x['breakevens'])} | {x['touchProbability']} | {g['delta']} | "
+                lines += [f"| {STRUCTURE_LABEL.get(x['structure'], x['structure'])} | {x['credit']} | {x['maxRisk']} | {x['capital']} | "
+                          f"{' / '.join(str(b) for b in x['breakevens'])} | {x['touchProbability']} | {g['delta']} | {g['gamma']} | "
                           f"{g['thetaPerDay']} | {g['vegaPerVolPoint']} | "
                           + " | ".join(str(sc["pnl"]) for sc in x["scenarios"]) + " |"]
             lines += [""]
