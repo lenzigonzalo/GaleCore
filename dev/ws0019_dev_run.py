@@ -44,7 +44,7 @@ def get(path: str, auth: dict) -> dict:
         code, body = dev.http("GET", dev.API_URL + path, None, auth)
     except TimeoutError:
         code, body = None, "sin respuesta en 30 s (timeout del cliente)"
-    command = f"GET {dev.API_URL}{path}  (dev/galecore_dev.py:http, Bearer del usuario de prueba)"
+    command = f"GET {dev.API_URL}{path}  (dev/galecore_dev.py:http, token del usuario de prueba)"
     step = {"at": started, "command": command, "http": code, "body": body}
     steps.append(step)
     return step
@@ -89,8 +89,10 @@ doc = {
     "steps": steps,
 }
 text = json.dumps(doc, ensure_ascii=False, indent=2)
-if SECRET.search(text) or SECRET.search(api_log):
-    sys.exit("la salida o el log contienen algo que parece un secreto; no se escribe")
+suspect = [f"paso {i} ({s['command'][:60]})" for i, s in enumerate(steps)
+           if SECRET.search(json.dumps(s, ensure_ascii=False))]
+if suspect or SECRET.search(api_log):
+    sys.exit(f"algo parece un secreto ({', '.join(suspect) or 'log de la API'}); no se escribe")
 OUT.write_text(text + "\n", encoding="utf-8")
 OUT_LOG.write_text(api_log, encoding="utf-8")
 print(OUT)
