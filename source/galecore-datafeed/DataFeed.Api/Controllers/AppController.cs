@@ -1370,6 +1370,24 @@ namespace DataFeed.Controllers
         }
 
         /// <summary>
+        /// PCS, CCS, iron condor y «esperar» con la cadena real (WS-0016): crédito, riesgo, griegas al entrar,
+        /// gaps ±3/±5 %, salto de vol y probabilidad de tocar el strike vendido. El PCS es el candidato del
+        /// runtime; sólo él se ejecuta hoy. Lee datos de mercado; no despliega ni guarda nada.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Structures")]
+        public async Task<IActionResult> RuntimeStructures([FromServices] IMediator mediator,
+            [FromQuery] double delta, [FromQuery] double width, [FromQuery] int minDte, [FromQuery] int maxDte,
+            [FromQuery] string symbol = "SPY", [FromQuery] double deltaTolerance = 0.05, CancellationToken ct = default)
+        {
+            if (!(Math.Abs(delta) is > 0 and < 0.5) || !(width > 0) || minDte < 1 || maxDte < minDte || !(deltaTolerance > 0))
+                return BadRequest("delta (0-0.5), width > 0, 1 <= minDte <= maxDte y deltaTolerance > 0 son obligatorios");
+            var market = new DataFeed.Application.App.Runtime.MediatorRuntimeMarketData(mediator, _logger);
+            return Ok(await new DataFeed.Application.App.Runtime.StructureComparer(market).CompareAsync(
+                symbol.ToUpperInvariant(), delta, deltaTolerance, width, minDte, maxDte, DateTime.UtcNow, ct));
+        }
+
+        /// <summary>
         /// Deploy de un spec cargado en modo SHADOW → crea deployment + instance, guardados en la base.
         /// Sin persistencia no despliega (503 con el motivo, GC-0004). Una instancia RUNNING a la vez: si
         /// ya corre esa misma versión la devuelve (existing = true) en vez de crear otra; si corre otra

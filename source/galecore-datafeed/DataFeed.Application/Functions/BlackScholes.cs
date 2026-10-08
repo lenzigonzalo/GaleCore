@@ -79,6 +79,19 @@ namespace DataFeed.Application.Functions
             return (delta, gamma, theta, vega, rho);
         }
 
+        // Precio de una opción europea (q = 0); al vencimiento, su valor intrínseco.
+        public static double Price(bool isCall, double price, double vol, double strike, double dte, double r)
+        {
+            double T = dte / 365.0;
+            if (T <= 0 || vol <= 0)
+                return Math.Max(isCall ? price - strike : strike - price, 0);
+            double d1 = (Math.Log(price / strike) + (r + 0.5 * vol * vol) * T) / (vol * Math.Sqrt(T));
+            double d2 = d1 - vol * Math.Sqrt(T);
+            return isCall
+                ? price * CND(d1) - strike * Math.Exp(-r * T) * CND(d2)
+                : strike * Math.Exp(-r * T) * CND(-d2) - price * CND(-d1);
+        }
+
         // Función de distribución acumulada normal
         private static double CND(double x)
         {
