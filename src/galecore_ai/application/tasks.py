@@ -87,11 +87,24 @@ class WindowsScheduler:
         else:
             sc = ["/sc", "daily", "/st", local_time]
         self._run(["/create", "/tn", name, "/tr", tr, *sc, "/f"])
+        self._settings(name)
 
     def create_every(self, name: str, command: list[str], minutes: int) -> None:
         """A plain every-N-minutes task (the space sync): no Schedule, it follows no market or timezone."""
         self._run(["/create", "/tn", name, "/tr", subprocess.list2cmdline(command), "/sc", "minute", "/mo", str(minutes),
                    "/f"])
+
+    def _settings(self, name: str) -> None:
+        """What `schtasks /create` cannot set (WS-0018): a run missed while the PC slept starts when it wakes, and
+        running on battery is allowed. The defaults lost every run of 07/10 and 08/10 (PC asleep at the hour)."""
+        path, _, leaf = ("\\" + name.strip("\\")).rpartition("\\")
+        script = ("$s = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries "
+                  "-DontStopIfGoingOnBatteries -MultipleInstances IgnoreNew; "
+                  "Set-ScheduledTask -TaskPath $env:GC_TASK_PATH -TaskName $env:GC_TASK_NAME -Settings $s | Out-Null")
+        r = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", script], capture_output=True,
+                           check=False, env={**os.environ, "GC_TASK_PATH": path + "\\", "GC_TASK_NAME": leaf})
+        if r.returncode != 0:
+            raise TaskError(f"task settings for {name} failed: {(r.stdout + r.stderr).decode(errors='replace').strip()}")
 
     def delete(self, name: str) -> None:
         self._run(["/delete", "/tn", name, "/f"])
