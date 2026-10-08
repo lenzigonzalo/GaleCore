@@ -337,4 +337,17 @@ public class CreditSpreadCandidateBuilderTests
         Assert.Contains("'butterfly'", result.RejectReason);
         Assert.Null(source.LastGexRequest);
     }
+
+    [Fact]
+    public async Task WidthBelowTheStrikeStep_WouldBuyTheSameStrike_NoCandidate()
+    {
+        var spec = SpecFor(RuntimeStructures.CallCreditSpread);
+        var legs = spec.CandidateConstruction.Legs.Select(l => l.Side == "BUY"
+            ? l with { StrikeSelection = l.StrikeSelection with { Width = 0.5 } } : l).ToList();
+
+        var result = await Build(WithCallQuotes(), spec with { CandidateConstruction = spec.CandidateConstruction with { Legs = legs } });
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("no queda arriba de la vendida", result.RejectReason);
+    }
 }

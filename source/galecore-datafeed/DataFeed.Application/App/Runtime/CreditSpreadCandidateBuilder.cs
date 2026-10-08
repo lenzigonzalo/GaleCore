@@ -244,6 +244,10 @@ namespace DataFeed.Application.App.Runtime
                 return (null, isPut
                     ? $"no hay strike para la pata comprada cerca de {longStrikePrice}"
                     : $"no hay strike para la call comprada cerca de {longStrikePrice}");
+            // Con un ancho menor que el paso de strikes, el más cercano puede ser la misma pata vendida (o quedar del
+            // lado equivocado): no sería un spread de riesgo definido.
+            if (isPut ? longStrike.Strike >= shortStrike.Strike : longStrike.Strike <= shortStrike.Strike)
+                return (null, $"la pata comprada ({longStrike.Strike}) no queda {(isPut ? "debajo" : "arriba")} de la vendida ({shortStrike.Strike}); ancho {p.Width} menor que el paso de strikes");
 
             string? shortSymbol = Streamer(shortStrike);
             string? longSymbol = Streamer(longStrike);
