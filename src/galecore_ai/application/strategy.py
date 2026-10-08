@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -50,7 +51,7 @@ from galecore_ai.contracts.strategy import (
 RUNTIME_REFERENCE = (
     "GaleCore feature/GC-0004-shadow-durable @ bc62f22 + feature/GC-0005-shadow-espaciado @ f86877e "
     "(min_minutes_between_entries): DataFeed.Application/App/Runtime "
-    "+ P1-07 (WS-0019: PCS, CCS e iron condor; una instancia RUNNING por versión) "
+    "+ P1-07 (WS-0019 @ d8f82e8: PCS, CCS e iron condor; una instancia RUNNING por versión) "
     "(ShadowRuntimeEngine, GenericGateEvaluator, MetricResolver, CreditSpreadCandidateBuilder, ShadowRiskValidator, "
     "ShadowFillSimulator.EvaluateExits, ShadowRuntimeTick, StrategySpecHasher)"
 )
@@ -249,23 +250,72 @@ def _leg_key(leg: dict) -> str:
     return f"{str(leg.get('side', '')).lower()}_{str(leg.get('type', '')).lower()}"
 
 
+def _number(v: Any) -> bool:
+    return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _obj(v: Any) -> dict:
+    """A JSON object, or empty: malformed sections are reported by the checks that need them, never crash."""
+    return v if isinstance(v, dict) else {}
+
+
 def _leg_value_errors(legs: Any) -> list[str]:
-    """The same value checks as GaleCore's StrategySpecValidator: put delta < 0, call delta > 0, tolerance and width > 0."""
+    """GaleCore's StrategySpecValidator checks plus what the builder needs to build at all (fail-closed): the seller
+    needs a finite delta (put < 0, call > 0) and tolerance > 0; the buyer, a finite width > 0."""
     errors = []
     for leg in legs if isinstance(legs, list) else []:
         if not isinstance(leg, dict):
+            errors.append(f"candidate_construction.legs: a leg must be an object, got {leg!r}")
             continue
-        key, sel = _leg_key(leg), leg.get("strike_selection") or {}
+        key, sel = _leg_key(leg), leg.get("strike_selection")
         path = f"candidate_construction.legs[{key}].strike_selection"
-        delta, tol, width = sel.get("target_delta"), sel.get("delta_tolerance"), sel.get("width")
-        if key == "sell_put" and isinstance(delta, int | float) and delta >= 0:
-            errors.append(f"{path}.target_delta must be negative (put delta)")
-        if key == "sell_call" and isinstance(delta, int | float) and delta <= 0:
-            errors.append(f"{path}.target_delta must be positive (call delta)")
-        if key.startswith("sell_") and isinstance(tol, int | float) and tol <= 0:
-            errors.append(f"{path}.delta_tolerance must be positive")
-        if key.startswith("buy_") and isinstance(width, int | float) and width <= 0:
-            errors.append(f"{path}.width must be positive")
+        if not isinstance(sel, dict):
+            errors.append(f"{path} must be an object")
+            continue
+        if key.startswith("sell_"):
+            delta, tol = sel.get("target_delta"), sel.get("delta_tolerance")
+            if not _number(delta):
+                errors.append(f"{path}.target_delta must be a number, got {delta!r}")
+            elif key == "sell_put" and delta >= 0:
+                errors.append(f"{path}.target_delta must be negative (put delta)")
+            elif key == "sell_call" and delta <= 0:
+                errors.append(f"{path}.target_delta must be positive (call delta)")
+            if not _number(tol) or tol <= 0:
+                errors.append(f"{path}.delta_tolerance must be positive, got {tol!r}")
+        elif key.startswith("buy_"):
+            width = sel.get("width")
+            if not _number(width) or width <= 0:
+                errors.append(f"{path}.width must be positive, got {width!r}")
+    return errors
+
+
+def _structure_errors(spec: dict) -> list[str]:
+    """GaleCore's StrategySpecValidator on structure (P1-07): the default is allowed and not forbidden, every allowed
+    structure is one the runtime builds, nothing is both allowed and forbidden; min_credit > 0 (no zero/debit entry)."""
+    errors = []
+    structure = _obj(spec.get("structure"))
+    allowed, forbidden = structure.get("allowed_strategies"), structure.get("forbidden_strategies")
+    if not isinstance(allowed, list) or not allowed or not all(isinstance(a, str) for a in allowed):
+        errors.append(f"structure.allowed_strategies must be a non-empty list of names, got {allowed!r}")
+        allowed = []
+    if not isinstance(forbidden, list) or not all(isinstance(f, str) for f in forbidden):
+        errors.append(f"structure.forbidden_strategies must be a list of names, got {forbidden!r}")
+        forbidden = []
+    unbuilt = [a for a in allowed if a not in STRUCTURE_LEGS]
+    if unbuilt:
+        errors.append(f"structure.allowed_strategies {unbuilt} are not built by the runtime ({', '.join(STRUCTURE_LEGS)})")
+    both = sorted(set(allowed) & set(forbidden))
+    if both:
+        errors.append(f"structure: {both} are both allowed and forbidden")
+    default = structure.get("default_structure")
+    if allowed and default not in allowed:
+        errors.append(f"structure.default_structure {default!r} must be in allowed_strategies "
+                      "(otherwise the risk check rejects every candidate)")
+    if default in forbidden:
+        errors.append(f"structure.default_structure {default!r} is forbidden")
+    min_credit = _obj(_obj(spec.get("candidate_construction")).get("constraints")).get("min_credit")
+    if min_credit is not None and not (_number(min_credit) and min_credit > 0):
+        errors.append(f"candidate_construction.constraints.min_credit must be positive, got {min_credit!r}")
     return errors
 
 
@@ -330,7 +380,7 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
     if not isinstance(spec, dict):
         return CheckReport(verdict="INVALID", errors=["a StrategySpec is a JSON object"], declared_gaps=[],
                            coverage={}, runtime_reference=RUNTIME_REFERENCE)
-    ident = spec.get("identity", {}) if isinstance(spec, dict) else {}
+    ident = _obj(spec.get("identity"))
     if ident.get("name") != content.name or ident.get("version") != content.version:
         errors.append(f"spec identity {ident.get('name')}/{ident.get('version')} is not the proposal's "
                       f"{content.name}/{content.version}")
@@ -345,13 +395,14 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
                       "rules, evaluation plan and approval questions must name this exact version")
     if spec.get("content_hash") is not None:
         errors.append("content_hash must be null in the file; GaleCore computes it")
-    structure = spec.get("structure", {}).get("default_structure")
-    legs = spec.get("candidate_construction", {}).get("legs")
-    if structure not in STRUCTURE_LEGS:
+    structure = _obj(spec.get("structure")).get("default_structure")
+    legs = _obj(spec.get("candidate_construction")).get("legs")
+    if not isinstance(structure, str) or structure not in STRUCTURE_LEGS:
         errors.append(f"default_structure {structure!r} is not built by the runtime ({', '.join(STRUCTURE_LEGS)})")
     elif isinstance(legs, list) and sorted(_leg_key(x) for x in legs if isinstance(x, dict)) != STRUCTURE_LEGS[structure]:
         errors.append(f"legs must be exactly {STRUCTURE_LEGS[structure]} for {structure}")
     errors.extend(_leg_value_errors(legs))
+    errors.extend(_structure_errors(spec))
 
     leaves: dict[str, Any] = {}
     _leaves(spec, "", leaves, errors)
@@ -390,7 +441,8 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
         elif path in _FIXED:
             if value != _FIXED[path]:
                 errors.append(f"{path} = {value!r}: the runtime only has {_FIXED[path]!r} semantics (only SHADOW, "
-                              "a fixed whitelist of equity options, one PCS builder, gates with ALL/NO_TRADE)")
+                              "a fixed whitelist of equity options, one builder for PCS, CCS and iron condor, "
+                              "gates with ALL/NO_TRADE)")
         elif path in _NULL_ONLY or path.startswith(_ROLL):
             if value is not None:
                 errors.append(f"{path} = {value!r}: the runtime never reads it; it must be null")

@@ -280,8 +280,37 @@ def _iron_condor(call_delta: float = 0.16) -> dict:
     return data
 
 
-def test_call_credit_spread_and_iron_condor_are_built_since_p1_07():
-    # GaleCore P1-07: the shape passes; the call legs still need a supported rule that explains them.
+def _call_credit_spread() -> dict:
+    data = json.loads(spec_text())
+    data["structure"]["allowed_strategies"] = ["call_credit_spread"]
+    data["structure"]["default_structure"] = "call_credit_spread"
+    for leg in data["candidate_construction"]["legs"]:
+        leg["type"] = "CALL"
+    data["candidate_construction"]["legs"][0]["strike_selection"]["target_delta"] = 0.16
+    return data
+
+
+def _rules_for(sides: tuple[str, ...]):
+    """The candidate's rules, with C2/C3 explaining the legs of these sides."""
+    def mutate(d):
+        by_id = {r["id"]: r for r in d["rules"]}
+        by_id["C2"]["runtime"]["spec_paths"] = [
+            *(f"candidate_construction.legs[sell_{s}].strike_selection.{k}" for s in sides
+              for k in ("target_delta", "delta_tolerance")),
+            "candidate_construction.constraints.min_dte", "candidate_construction.constraints.max_dte"]
+        by_id["C3"]["runtime"]["spec_paths"] = [f"candidate_construction.legs[buy_{s}].strike_selection.width"
+                                                for s in sides]
+    return mutate
+
+
+@pytest.mark.parametrize("spec, sides", [(_call_credit_spread, ("call",)), (_iron_condor, ("put", "call"))])
+def test_call_credit_spread_and_iron_condor_pass_the_check_since_p1_07(spec, sides):
+    report = check(proposal(_rules_for(sides)), text=json.dumps(spec()))
+    assert report.errors == []
+    assert report.verdict == "VALID_WITH_DECLARED_GAPS"   # the candidate's declared gaps (E3, E4, ...)
+
+
+def test_call_legs_need_a_supported_rule():
     errors = check(text=json.dumps(_iron_condor())).errors
     assert not any("legs must" in e or "not built" in e or "must be positive" in e for e in errors)
     assert any("legs[sell_call].strike_selection.target_delta" in e and "no supported rule" in e for e in errors)
@@ -302,6 +331,41 @@ def test_call_credit_spread_and_iron_condor_are_built_since_p1_07():
             node = node[int(part)] if part.isdigit() else node[part]
         node[leaf] = value
         assert any(message in e for e in check(text=json.dumps(data)).errors), path
+
+
+def _set(data: dict, path: str, value) -> dict:
+    *parents, leaf = path.split(".")
+    node = data
+    for part in parents:
+        node = node[int(part)] if part.isdigit() else node[part]
+    node[leaf] = value
+    return data
+
+
+@pytest.mark.parametrize("path, value, message", [
+    ("candidate_construction.legs.0.strike_selection.target_delta", "-0.16", "target_delta must be a number"),
+    ("candidate_construction.legs.0.strike_selection.target_delta", None, "target_delta must be a number"),
+    ("candidate_construction.legs.0.strike_selection.target_delta", True, "target_delta must be a number"),
+    ("candidate_construction.legs.0.strike_selection.delta_tolerance", None, "delta_tolerance must be positive"),
+    ("candidate_construction.legs.1.strike_selection.width", "5", "width must be positive"),
+    ("candidate_construction.legs.1.strike_selection", [], "strike_selection must be an object"),
+    ("structure.allowed_strategies", ["put_credit_spread", "jade_lizard"], "not built by the runtime"),
+    ("structure.allowed_strategies", ["call_credit_spread"], "must be in allowed_strategies"),
+    ("structure.forbidden_strategies", ["put_credit_spread"], "both allowed and forbidden"),
+    ("candidate_construction.constraints.min_credit", 0, "min_credit must be positive"),
+    ("candidate_construction.constraints.min_credit", "0.10", "min_credit must be positive"),
+])
+def test_malformed_or_inconsistent_values_are_invalid_not_accepted(path, value, message):
+    report = check(text=json.dumps(_set(json.loads(spec_text()), path, value)))
+    assert report.verdict == "INVALID"
+    assert any(message in e for e in report.errors), report.errors
+
+
+@pytest.mark.parametrize("section", ["structure", "candidate_construction", "identity"])
+def test_a_section_that_is_not_an_object_is_invalid_without_crashing(section):
+    data = json.loads(spec_text())
+    data[section] = ["not", "an", "object"]
+    assert check(text=json.dumps(data)).verdict == "INVALID"
 
 
 # ── the proposal contract ────────────────────────────────────────
