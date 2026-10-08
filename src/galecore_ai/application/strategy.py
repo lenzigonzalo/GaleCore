@@ -50,7 +50,8 @@ from galecore_ai.contracts.strategy import (
 RUNTIME_REFERENCE = (
     "GaleCore feature/GC-0004-shadow-durable @ bc62f22 + feature/GC-0005-shadow-espaciado @ f86877e "
     "(min_minutes_between_entries): DataFeed.Application/App/Runtime "
-    "(ShadowRuntimeEngine, GenericGateEvaluator, MetricResolver, PcsCandidateBuilder, ShadowRiskValidator, "
+    "+ P1-07 (WS-0019: PCS, CCS e iron condor; una instancia RUNNING por versión) "
+    "(ShadowRuntimeEngine, GenericGateEvaluator, MetricResolver, CreditSpreadCandidateBuilder, ShadowRiskValidator, "
     "ShadowFillSimulator.EvaluateExits, ShadowRuntimeTick, StrategySpecHasher)"
 )
 
@@ -129,17 +130,28 @@ def galecore_spec_hash(spec_json: str) -> str:
 
 SELL_PUT = "candidate_construction.legs[sell_put]"
 BUY_PUT = "candidate_construction.legs[buy_put]"
+SELL_CALL = "candidate_construction.legs[sell_call]"
+BUY_CALL = "candidate_construction.legs[buy_call]"
 GATE = "entry_filters.gate_layer.gates"
+# What CreditSpreadCandidateBuilder builds (GaleCore P1-07): one vertical per side, same expiration.
+STRUCTURE_LEGS = {
+    "put_credit_spread": ["buy_put", "sell_put"],
+    "call_credit_spread": ["buy_call", "sell_call"],
+    "iron_condor": ["buy_call", "buy_put", "sell_call", "sell_put"],
+}
 
 # Executed by the runtime: a non-null value changes what GaleCore does, so a supported rule explains it.
 EXECUTED = {
     "universe.symbols": "cada símbolo de la lista se evalúa en cada ciclo",
     "structure.allowed_strategies": "ShadowRiskValidator rechaza estructuras fuera de la lista",
     "structure.forbidden_strategies": "ShadowRiskValidator rechaza estructuras de la lista",
-    "structure.default_structure": "PcsCandidateBuilder: sólo put_credit_spread",
+    "structure.default_structure": "CreditSpreadCandidateBuilder: put_credit_spread, call_credit_spread o iron_condor",
     f"{SELL_PUT}.strike_selection.target_delta": "delta objetivo del put vendido",
     f"{SELL_PUT}.strike_selection.delta_tolerance": "tolerancia alrededor del delta objetivo",
     f"{BUY_PUT}.strike_selection.width": "ancho del spread en dólares",
+    f"{SELL_CALL}.strike_selection.target_delta": "delta objetivo de la call vendida (positivo)",
+    f"{SELL_CALL}.strike_selection.delta_tolerance": "tolerancia alrededor del delta objetivo de la call",
+    f"{BUY_CALL}.strike_selection.width": "ancho del spread de calls en dólares",
     "candidate_construction.constraints.min_dte": "DTE mínimo del vencimiento elegido",
     "candidate_construction.constraints.max_dte": "DTE máximo del vencimiento elegido",
     "candidate_construction.constraints.min_credit": "crédito mínimo a mid; menos → sin candidato",
@@ -208,6 +220,8 @@ _FIXED: dict[str, Any] = {
     "deployment_constraints.eligible_modes": ["SHADOW"],
     f"{SELL_PUT}.strike_selection.method": "DELTA",
     f"{BUY_PUT}.strike_selection.method": "FIXED_WIDTH",
+    f"{SELL_CALL}.strike_selection.method": "DELTA",
+    f"{BUY_CALL}.strike_selection.method": "FIXED_WIDTH",
 }
 
 # Descriptive fields with no behavior in SHADOW (leg side/type are checked by the legs' shape).
@@ -215,13 +229,14 @@ _INFORMATIONAL = {
     "strategy_spec_version", "canonicalization_version", "content_hash",
     "deployment_constraints.requires_human_approval_for", "entry_filters.signal_layer.pass_rule",
     "operational.decimal_precision", "operational.currency", "operational.rounding", "operational.symbology",
-    f"{SELL_PUT}.side", f"{SELL_PUT}.type", f"{BUY_PUT}.side", f"{BUY_PUT}.type",
+    *(f"{leg}.{k}" for leg in (SELL_PUT, BUY_PUT, SELL_CALL, BUY_CALL) for k in ("side", "type")),
 }
 _INFORMATIONAL_PREFIXES = ("identity.", "metadata.")
 _ROLL = "exits.deterministic.defensive_roll."
 # Leg fields the builder never reads for that leg: only null is honest.
 _NULL_ONLY = (f"{SELL_PUT}.strike_selection.width", f"{BUY_PUT}.strike_selection.target_delta",
-              f"{BUY_PUT}.strike_selection.delta_tolerance")
+              f"{BUY_PUT}.strike_selection.delta_tolerance", f"{SELL_CALL}.strike_selection.width",
+              f"{BUY_CALL}.strike_selection.target_delta", f"{BUY_CALL}.strike_selection.delta_tolerance")
 
 _METRIC_RE = re.compile(
     r"^capability:(market_data\.quote\.[A-Z0-9.^]+\.price|market_data\.trade\.[A-Z0-9.^]+\.price|"
@@ -246,8 +261,8 @@ def _leaves(node: Any, path: str, out: dict[str, Any], errors: list[str]) -> Non
         return
     if path == "candidate_construction.legs" and isinstance(node, list):
         keys = [_leg_key(leg) if isinstance(leg, dict) else "?" for leg in node]
-        if sorted(keys) != ["buy_put", "sell_put"]:
-            errors.append(f"legs must be exactly one SELL PUT and one BUY PUT (the only builder); got {keys}")
+        if sorted(keys) not in STRUCTURE_LEGS.values():
+            errors.append(f"legs must be one SELL and one BUY per side of a credit spread or iron condor; got {keys}")
             return
         for leg in node:
             _leaves(leg, f"candidate_construction.legs[{_leg_key(leg)}]", out, errors)
@@ -310,8 +325,16 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
                       "rules, evaluation plan and approval questions must name this exact version")
     if spec.get("content_hash") is not None:
         errors.append("content_hash must be null in the file; GaleCore computes it")
-    if spec.get("structure", {}).get("default_structure") != "put_credit_spread":
-        errors.append("default_structure must be put_credit_spread (the runtime's only builder)")
+    structure = spec.get("structure", {}).get("default_structure")
+    legs = spec.get("candidate_construction", {}).get("legs")
+    if structure not in STRUCTURE_LEGS:
+        errors.append(f"default_structure {structure!r} is not built by the runtime ({', '.join(STRUCTURE_LEGS)})")
+    elif isinstance(legs, list) and sorted(_leg_key(x) for x in legs if isinstance(x, dict)) != STRUCTURE_LEGS[structure]:
+        errors.append(f"legs must be exactly {STRUCTURE_LEGS[structure]} for {structure}")
+    sell_call_delta = next((x.get("strike_selection", {}).get("target_delta") for x in legs or []
+                            if isinstance(x, dict) and _leg_key(x) == "sell_call"), None)
+    if isinstance(sell_call_delta, int | float) and sell_call_delta <= 0:
+        errors.append(f"{SELL_CALL}.strike_selection.target_delta must be positive (call delta)")
 
     leaves: dict[str, Any] = {}
     _leaves(spec, "", leaves, errors)

@@ -260,11 +260,36 @@ def test_identity_and_file_name_must_match():
     assert any("is not the proposal's" in e for e in report.errors)
 
 
-def test_only_shadow_and_put_credit_spreads():
+def test_only_shadow_and_credit_spreads_the_runtime_builds():
     assert check(text=spec_with(**{"deployment_constraints.eligible_modes": ["SHADOW", "PAPER"]})).verdict == "INVALID"
     data = json.loads(spec_text())
     data["candidate_construction"]["legs"][1]["type"] = "CALL"
-    assert any("exactly one SELL PUT and one BUY PUT" in e for e in check(text=json.dumps(data)).errors)
+    assert any("one SELL and one BUY per side" in e for e in check(text=json.dumps(data)).errors)
+    errors = check(text=spec_with(**{"structure.default_structure": "butterfly"})).errors
+    assert any("'butterfly' is not built by the runtime" in e for e in errors)
+
+
+def _iron_condor(call_delta: float = 0.16) -> dict:
+    data = json.loads(spec_text())
+    data["structure"]["allowed_strategies"] = ["iron_condor"]
+    data["structure"]["default_structure"] = "iron_condor"
+    sell, buy = (json.loads(json.dumps(leg)) for leg in data["candidate_construction"]["legs"])
+    sell["type"], buy["type"] = "CALL", "CALL"
+    sell["strike_selection"]["target_delta"] = call_delta
+    data["candidate_construction"]["legs"] += [sell, buy]
+    return data
+
+
+def test_call_credit_spread_and_iron_condor_are_built_since_p1_07():
+    # GaleCore P1-07: the shape passes; the call legs still need a supported rule that explains them.
+    errors = check(text=json.dumps(_iron_condor())).errors
+    assert not any("legs must" in e or "not built" in e or "must be positive" in e for e in errors)
+    assert any("legs[sell_call].strike_selection.target_delta" in e and "no supported rule" in e for e in errors)
+
+    pcs_legs_as_ccs = json.loads(spec_text())
+    pcs_legs_as_ccs["structure"]["default_structure"] = "call_credit_spread"
+    assert any("legs must be exactly ['buy_call', 'sell_call']" in e for e in check(text=json.dumps(pcs_legs_as_ccs)).errors)
+    assert any("must be positive" in e for e in check(text=json.dumps(_iron_condor(-0.16))).errors)
 
 
 # ── the proposal contract ────────────────────────────────────────
