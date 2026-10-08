@@ -1,43 +1,33 @@
 {
   "work_item": "WS-0019 (P1-07)",
   "what": "corrida en GaleCore Dev capturada paso a paso: migración, specs cargadas por el loader, estructuras con la cadena real, deploy de una segunda versión junto a la que corre, redeploy idempotente, tick con dos RUNNING, stop",
-  "head_sha": "d8f82e8e8f7b6dfb4fe311a09d3097ec33021311",
+  "runner": "dev/ws0019_dev_run.py, commiteado en head_sha",
+  "head_sha": "4dd382e65793cf06ed5a1311d343fd16f0436664",
   "steps": [
     {
-      "at": "2026-10-08T22:46:40Z",
+      "at": "2026-10-08T23:24:30Z",
       "command": "git rev-parse HEAD",
       "exit_code": 0,
-      "stdout": "d8f82e8e8f7b6dfb4fe311a09d3097ec33021311\n",
+      "stdout": "4dd382e65793cf06ed5a1311d343fd16f0436664\n",
       "stderr": ""
     },
     {
-      "at": "2026-10-08T22:46:40Z",
-      "command": "git status --porcelain -- source",
+      "at": "2026-10-08T23:24:30Z",
+      "command": "git status --porcelain -- source dev",
       "exit_code": 0,
       "stdout": "",
       "stderr": ""
     },
     {
-      "at": "2026-10-08T22:46:40Z",
+      "at": "2026-10-08T23:24:30Z",
       "command": "C:\\Apli\\Gonza\\python.exe dev/galecore_dev.py migrate",
       "exit_code": 0,
       "stdout": "Build started...\nBuild succeeded.\nNo migrations were applied. The database is already up to date.\nDone.\n",
       "stderr": ""
     },
     {
-      "at": "2026-10-08T22:46:55Z",
-      "command": "python dev/galecore_dev.py api  (líneas del log de arranque sobre specs/runtime)",
-      "log_excerpt": [
-        "      Runtime: spec 'shadow_runtime_test_v1' cargado (hash=sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076)",
-        "      Runtime: spec 'shadow_runtime_test_v2' cargado (hash=sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15)",
-        "      Runtime: spec 'spy_prima_varianza_30_45d' cargado (hash=sha256:01cdc4d76af8bb1a4ba16d02abcec09d500019e05e10094c9750735925be0475)",
-        "      Runtime SHADOW persistente: recuperadas 5 instancias, 4 posiciones abiertas, 2 cerradas, 2146 evaluaciones, 4326 eventos; specs reconstruidas: 1; problemas: ",
-        "      Now listening on: http://localhost:7001"
-      ]
-    },
-    {
-      "at": "2026-10-08T22:46:55Z",
-      "command": "GET http://localhost:7001/App/Runtime/Specs",
+      "at": "2026-10-08T23:24:47Z",
+      "command": "GET http://localhost:7001/App/Runtime/Specs  (dev/galecore_dev.py:http, token del usuario de prueba)",
       "http": 200,
       "body": [
         {
@@ -88,15 +78,15 @@
       ]
     },
     {
-      "at": "2026-10-08T22:46:55Z",
-      "command": "GET http://localhost:7001/App/Runtime/Structures?symbol=SPY&delta=0.16&deltaTolerance=0.04&width=5&minDte=30&maxDte=45",
+      "at": "2026-10-08T23:24:47Z",
+      "command": "GET http://localhost:7001/App/Runtime/Structures?symbol=SPY&delta=0.16&deltaTolerance=0.04&width=5&minDte=30&maxDte=45  (dev/galecore_dev.py:http, token del usuario de prueba)",
       "http": 200,
       "body": {
         "symbol": "SPY",
         "spot": 774.63,
         "expiration": "2026-11-13",
         "dte": 36,
-        "asOf": "2026-10-08T22:46:56.0003737Z",
+        "asOf": "2026-10-08T23:24:47.6261952Z",
         "error": null,
         "structures": [
           {
@@ -156,7 +146,7 @@
                 "expiration": "2026-11-13",
                 "occSymbol": "SPY   261113P00737000",
                 "streamerSymbol": ".SPY261113P737",
-                "delta": -0.16042,
+                "delta": -0.16047,
                 "bid": 3.48,
                 "ask": 3.51
               },
@@ -167,7 +157,7 @@
                 "expiration": "2026-11-13",
                 "occSymbol": "SPY   261113P00732000",
                 "streamerSymbol": ".SPY261113P732",
-                "delta": -0.13935,
+                "delta": -0.13939,
                 "bid": 3.04,
                 "ask": 3.06
               }
@@ -184,41 +174,41 @@
               804.79
             ],
             "greeks": {
-              "delta": -4.31,
-              "gamma": -0.1441,
-              "thetaPerDay": 2.03,
-              "vegaPerVolPoint": -11.23
+              "delta": -4.29,
+              "gamma": -0.1439,
+              "thetaPerDay": 2.02,
+              "vegaPerVolPoint": -11.18
             },
             "scenarios": [
               {
                 "name": "gap -5%",
                 "spot": 735.9,
                 "volShift": 0.0,
-                "pnl": 76.74
+                "pnl": 76.29
               },
               {
                 "name": "gap -3%",
                 "spot": 751.39,
                 "volShift": 0.0,
-                "pnl": 63.66
+                "pnl": 63.3
               },
               {
                 "name": "gap +3%",
                 "spot": 797.87,
                 "volShift": 0.0,
-                "pnl": -133.14
+                "pnl": -132.69
               },
               {
                 "name": "gap +5%",
                 "spot": 813.36,
                 "volShift": 0.0,
-                "pnl": -236.27
+                "pnl": -235.75
               },
               {
                 "name": "vol +5 pts",
                 "spot": 774.63,
                 "volShift": 0.05,
-                "pnl": -45.22
+                "pnl": -45.01
               }
             ],
             "touchProbability": 0.329,
@@ -230,7 +220,7 @@
                 "expiration": "2026-11-13",
                 "occSymbol": "SPY   261113C00804000",
                 "streamerSymbol": ".SPY261113C804",
-                "delta": 0.16466,
+                "delta": 0.16457,
                 "bid": 2.39,
                 "ask": 2.42
               },
@@ -241,7 +231,7 @@
                 "expiration": "2026-11-13",
                 "occSymbol": "SPY   261113C00809000",
                 "streamerSymbol": ".SPY261113C809",
-                "delta": 0.12151,
+                "delta": 0.12144,
                 "bid": 1.61,
                 "ask": 1.63
               }
@@ -259,41 +249,41 @@
               805.23
             ],
             "greeks": {
-              "delta": -2.2,
-              "gamma": -0.2201,
-              "thetaPerDay": 2.75,
-              "vegaPerVolPoint": -16.55
+              "delta": -2.18,
+              "gamma": -0.2199,
+              "thetaPerDay": 2.73,
+              "vegaPerVolPoint": -16.49
             },
             "scenarios": [
               {
                 "name": "gap -5%",
                 "spot": 735.9,
                 "volShift": 0.0,
-                "pnl": -66.67
+                "pnl": -67.12
               },
               {
                 "name": "gap -3%",
                 "spot": 751.39,
                 "volShift": 0.0,
-                "pnl": -7.85
+                "pnl": -8.22
               },
               {
                 "name": "gap +3%",
                 "spot": 797.87,
                 "volShift": 0.0,
-                "pnl": -101.35
+                "pnl": -100.9
               },
               {
                 "name": "gap +5%",
                 "spot": 813.36,
                 "volShift": 0.0,
-                "pnl": -196.49
+                "pnl": -195.98
               },
               {
                 "name": "vol +5 pts",
                 "spot": 774.63,
                 "volShift": 0.05,
-                "pnl": -69.5
+                "pnl": -69.29
               }
             ],
             "touchProbability": 0.65,
@@ -305,7 +295,7 @@
                 "expiration": "2026-11-13",
                 "occSymbol": "SPY   261113P00737000",
                 "streamerSymbol": ".SPY261113P737",
-                "delta": -0.16042,
+                "delta": -0.16047,
                 "bid": 3.48,
                 "ask": 3.51
               },
@@ -316,7 +306,7 @@
                 "expiration": "2026-11-13",
                 "occSymbol": "SPY   261113P00732000",
                 "streamerSymbol": ".SPY261113P732",
-                "delta": -0.13935,
+                "delta": -0.13939,
                 "bid": 3.04,
                 "ask": 3.06
               },
@@ -327,7 +317,7 @@
                 "expiration": "2026-11-13",
                 "occSymbol": "SPY   261113C00804000",
                 "streamerSymbol": ".SPY261113C804",
-                "delta": 0.16466,
+                "delta": 0.16457,
                 "bid": 2.39,
                 "ask": 2.42
               },
@@ -338,7 +328,7 @@
                 "expiration": "2026-11-13",
                 "occSymbol": "SPY   261113C00809000",
                 "streamerSymbol": ".SPY261113C809",
-                "delta": 0.12151,
+                "delta": 0.12144,
                 "bid": 1.61,
                 "ask": 1.63
               }
@@ -368,180 +358,20 @@
       }
     },
     {
-      "at": "2026-10-08T22:47:20Z",
-      "command": "GET http://localhost:7001/App/Runtime/Status",
+      "at": "2026-10-08T23:25:11Z",
+      "command": "GET http://localhost:7001/App/Runtime/Status  (dev/galecore_dev.py:http, token del usuario de prueba)",
       "http": 200,
       "body": {
         "persistence": {
           "available": true,
           "reason": null,
-          "recoveredAt": "2026-10-08T22:45:29.8601745Z",
+          "recoveredAt": "2026-10-08T23:12:26.5816809Z",
           "recovery": {
-            "instances": 5,
+            "instances": 6,
             "openPositions": 4,
             "closedPositions": 2,
             "evaluations": 2146,
-            "events": 4326,
-            "specsRebuilt": [
-              "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51"
-            ],
-            "problems": []
-          }
-        },
-        "switch": {
-          "enabled": false,
-          "source": "rules"
-        },
-        "instances": [
-          {
-            "instanceId": "95e58d15-0167-4c27-a2b0-c3981500df4c",
-            "deploymentId": "69861b1b-f8df-4229-8f1d-0a1d1469e4ea",
-            "versionHash": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076",
-            "lifecycleState": "STOPPED",
-            "schedulerState": "STOPPED",
-            "createdAt": "2026-09-24T22:54:09.85807Z",
-            "updatedAt": "2026-09-25T16:33:37.833411Z",
-            "specName": "shadow_runtime_test_v1",
-            "mode": "SHADOW"
-          },
-          {
-            "instanceId": "0bbd904a-baf2-44a6-b81c-166e13896cf4",
-            "deploymentId": "f2d128c2-5384-47ef-ab34-3c37511ccc4b",
-            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
-            "lifecycleState": "STOPPED",
-            "schedulerState": "STOPPED",
-            "createdAt": "2026-09-25T16:33:38.911857Z",
-            "updatedAt": "2026-09-27T23:21:13.584321Z",
-            "specName": "shadow_runtime_test_v2",
-            "mode": "SHADOW"
-          },
-          {
-            "instanceId": "d533f033-628a-4dc8-bc70-5c3d38f484d2",
-            "deploymentId": "6e7fff58-6f25-40f1-8d0a-fe86b3eeb910",
-            "versionHash": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51",
-            "lifecycleState": "STOPPED",
-            "schedulerState": "STOPPED",
-            "createdAt": "2026-09-27T23:21:21.456427Z",
-            "updatedAt": "2026-09-30T21:20:13.365477Z",
-            "specName": "spy_prima_varianza_30_45d",
-            "mode": "SHADOW"
-          },
-          {
-            "instanceId": "2ad19390-a0ff-4206-916a-fbb1f63550d8",
-            "deploymentId": "dea33a0e-b805-4dfe-9199-c3e80dcad08f",
-            "versionHash": "sha256:01cdc4d76af8bb1a4ba16d02abcec09d500019e05e10094c9750735925be0475",
-            "lifecycleState": "RUNNING",
-            "schedulerState": "PAUSED",
-            "createdAt": "2026-09-30T21:20:22.230696Z",
-            "updatedAt": "2026-10-08T17:36:27.077349Z",
-            "specName": "spy_prima_varianza_30_45d",
-            "mode": "SHADOW"
-          },
-          {
-            "instanceId": "dcd0e219-fa8c-48b2-b858-3e5f25d31f05",
-            "deploymentId": "44fb8434-32f9-4181-9a4f-3f06468a2eac",
-            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
-            "lifecycleState": "STOPPED",
-            "schedulerState": "STOPPED",
-            "createdAt": "2026-10-08T17:37:48.088121Z",
-            "updatedAt": "2026-10-08T17:38:38.353073Z",
-            "specName": "shadow_runtime_test_v2",
-            "mode": "SHADOW"
-          }
-        ]
-      }
-    },
-    {
-      "at": "2026-10-08T22:47:20Z",
-      "command": "GET http://localhost:7001/App/Runtime/Instances",
-      "http": 200,
-      "body": [
-        {
-          "instanceId": "0bbd904a-baf2-44a6-b81c-166e13896cf4",
-          "deploymentId": "f2d128c2-5384-47ef-ab34-3c37511ccc4b",
-          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
-          "lifecycleState": "STOPPED",
-          "schedulerState": "STOPPED",
-          "createdAt": "2026-09-25T16:33:38.911857Z",
-          "updatedAt": "2026-09-27T23:21:13.584321Z",
-          "specName": "shadow_runtime_test_v2",
-          "mode": "SHADOW"
-        },
-        {
-          "instanceId": "2ad19390-a0ff-4206-916a-fbb1f63550d8",
-          "deploymentId": "dea33a0e-b805-4dfe-9199-c3e80dcad08f",
-          "versionHash": "sha256:01cdc4d76af8bb1a4ba16d02abcec09d500019e05e10094c9750735925be0475",
-          "lifecycleState": "RUNNING",
-          "schedulerState": "PAUSED",
-          "createdAt": "2026-09-30T21:20:22.230696Z",
-          "updatedAt": "2026-10-08T17:36:27.077349Z",
-          "specName": "spy_prima_varianza_30_45d",
-          "mode": "SHADOW"
-        },
-        {
-          "instanceId": "dcd0e219-fa8c-48b2-b858-3e5f25d31f05",
-          "deploymentId": "44fb8434-32f9-4181-9a4f-3f06468a2eac",
-          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
-          "lifecycleState": "STOPPED",
-          "schedulerState": "STOPPED",
-          "createdAt": "2026-10-08T17:37:48.088121Z",
-          "updatedAt": "2026-10-08T17:38:38.353073Z",
-          "specName": "shadow_runtime_test_v2",
-          "mode": "SHADOW"
-        },
-        {
-          "instanceId": "d533f033-628a-4dc8-bc70-5c3d38f484d2",
-          "deploymentId": "6e7fff58-6f25-40f1-8d0a-fe86b3eeb910",
-          "versionHash": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51",
-          "lifecycleState": "STOPPED",
-          "schedulerState": "STOPPED",
-          "createdAt": "2026-09-27T23:21:21.456427Z",
-          "updatedAt": "2026-09-30T21:20:13.365477Z",
-          "specName": "spy_prima_varianza_30_45d",
-          "mode": "SHADOW"
-        },
-        {
-          "instanceId": "95e58d15-0167-4c27-a2b0-c3981500df4c",
-          "deploymentId": "69861b1b-f8df-4229-8f1d-0a1d1469e4ea",
-          "versionHash": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076",
-          "lifecycleState": "STOPPED",
-          "schedulerState": "STOPPED",
-          "createdAt": "2026-09-24T22:54:09.85807Z",
-          "updatedAt": "2026-09-25T16:33:37.833411Z",
-          "specName": "shadow_runtime_test_v1",
-          "mode": "SHADOW"
-        }
-      ]
-    },
-    {
-      "at": "2026-10-08T22:47:20Z",
-      "command": "C:\\Apli\\Gonza\\python.exe dev/galecore_dev.py deploy --spec shadow_runtime_test_v2",
-      "exit_code": 0,
-      "stdout": "deploy HTTP 200: {\"deploymentId\": \"26b75702-4c3b-4aa7-bf00-45eba8b27b24\", \"instanceId\": \"b51aa5b4-4fd5-48cc-90fa-111bc3a2cc39\", \"specName\": \"shadow_runtime_test_v2\", \"mode\": \"SHADOW\", \"lifecycleState\": \"RUNNING\", \"versionHash\": \"sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15\", \"existing\": false}\n",
-      "stderr": ""
-    },
-    {
-      "at": "2026-10-08T22:47:21Z",
-      "command": "C:\\Apli\\Gonza\\python.exe dev/galecore_dev.py deploy --spec shadow_runtime_test_v2",
-      "exit_code": 0,
-      "stdout": "deploy HTTP 200: {\"deploymentId\": \"26b75702-4c3b-4aa7-bf00-45eba8b27b24\", \"instanceId\": \"b51aa5b4-4fd5-48cc-90fa-111bc3a2cc39\", \"specName\": \"shadow_runtime_test_v2\", \"mode\": \"SHADOW\", \"lifecycleState\": \"RUNNING\", \"versionHash\": \"sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15\", \"existing\": true}\n",
-      "stderr": ""
-    },
-    {
-      "at": "2026-10-08T22:48:37Z",
-      "command": "GET http://localhost:7001/App/Runtime/Status",
-      "http": 200,
-      "body": {
-        "persistence": {
-          "available": true,
-          "reason": null,
-          "recoveredAt": "2026-10-08T22:45:29.8601745Z",
-          "recovery": {
-            "instances": 5,
-            "openPositions": 4,
-            "closedPositions": 2,
-            "evaluations": 2146,
-            "events": 4326,
+            "events": 4328,
             "specsRebuilt": [
               "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51"
             ],
@@ -612,10 +442,32 @@
             "instanceId": "b51aa5b4-4fd5-48cc-90fa-111bc3a2cc39",
             "deploymentId": "26b75702-4c3b-4aa7-bf00-45eba8b27b24",
             "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
-            "lifecycleState": "RUNNING",
-            "schedulerState": "PAUSED",
-            "createdAt": "2026-10-08T22:47:20.8198972Z",
-            "updatedAt": "2026-10-08T22:48:18.9525694Z",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T22:47:20.819897Z",
+            "updatedAt": "2026-10-08T22:48:38.787133Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "f4bbfcad-4996-4ec7-a7ee-616f0a15c1d9",
+            "deploymentId": "d5423a75-a6cd-4a31-9518-f6b8c8e97200",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T23:13:19.621378Z",
+            "updatedAt": "2026-10-08T23:14:37.4360979Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "355d0d18-52cc-4acb-ad13-0ff0304fc963",
+            "deploymentId": "d1766114-2c02-4fa8-9dff-8f98ac3895cb",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T23:15:35.4991674Z",
+            "updatedAt": "2026-10-08T23:16:53.1121861Z",
             "specName": "shadow_runtime_test_v2",
             "mode": "SHADOW"
           }
@@ -623,8 +475,8 @@
       }
     },
     {
-      "at": "2026-10-08T22:48:37Z",
-      "command": "GET http://localhost:7001/App/Runtime/Instances",
+      "at": "2026-10-08T23:25:11Z",
+      "command": "GET http://localhost:7001/App/Runtime/Instances  (dev/galecore_dev.py:http, token del usuario de prueba)",
       "http": 200,
       "body": [
         {
@@ -661,6 +513,17 @@
           "mode": "SHADOW"
         },
         {
+          "instanceId": "f4bbfcad-4996-4ec7-a7ee-616f0a15c1d9",
+          "deploymentId": "d5423a75-a6cd-4a31-9518-f6b8c8e97200",
+          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-10-08T23:13:19.621378Z",
+          "updatedAt": "2026-10-08T23:14:37.4360979Z",
+          "specName": "shadow_runtime_test_v2",
+          "mode": "SHADOW"
+        },
+        {
           "instanceId": "d533f033-628a-4dc8-bc70-5c3d38f484d2",
           "deploymentId": "6e7fff58-6f25-40f1-8d0a-fe86b3eeb910",
           "versionHash": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51",
@@ -669,16 +532,27 @@
           "createdAt": "2026-09-27T23:21:21.456427Z",
           "updatedAt": "2026-09-30T21:20:13.365477Z",
           "specName": "spy_prima_varianza_30_45d",
+          "mode": "SHADOW"
+        },
+        {
+          "instanceId": "355d0d18-52cc-4acb-ad13-0ff0304fc963",
+          "deploymentId": "d1766114-2c02-4fa8-9dff-8f98ac3895cb",
+          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-10-08T23:15:35.4991674Z",
+          "updatedAt": "2026-10-08T23:16:53.1121861Z",
+          "specName": "shadow_runtime_test_v2",
           "mode": "SHADOW"
         },
         {
           "instanceId": "b51aa5b4-4fd5-48cc-90fa-111bc3a2cc39",
           "deploymentId": "26b75702-4c3b-4aa7-bf00-45eba8b27b24",
           "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
-          "lifecycleState": "RUNNING",
-          "schedulerState": "PAUSED",
-          "createdAt": "2026-10-08T22:47:20.8198972Z",
-          "updatedAt": "2026-10-08T22:48:18.9525694Z",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-10-08T22:47:20.819897Z",
+          "updatedAt": "2026-10-08T22:48:38.787133Z",
           "specName": "shadow_runtime_test_v2",
           "mode": "SHADOW"
         },
@@ -696,27 +570,34 @@
       ]
     },
     {
-      "at": "2026-10-08T22:48:37Z",
-      "command": "C:\\Apli\\Gonza\\python.exe dev/galecore_dev.py stop --instance b51aa5b4-4fd5-48cc-90fa-111bc3a2cc39",
+      "at": "2026-10-08T23:25:11Z",
+      "command": "C:\\Apli\\Gonza\\python.exe dev/galecore_dev.py deploy --spec shadow_runtime_test_v2",
       "exit_code": 0,
-      "stdout": "stop HTTP 200: {\"instanceId\": \"b51aa5b4-4fd5-48cc-90fa-111bc3a2cc39\", \"specName\": \"shadow_runtime_test_v2\", \"lifecycleState\": \"STOPPED\", \"openPositions\": 0, \"alreadyStopped\": false}\n",
+      "stdout": "deploy HTTP 200: {\"deploymentId\": \"423822f2-d3de-481a-9beb-7718bb76e701\", \"instanceId\": \"20da3402-3d0a-4103-8f7d-c62c43b61110\", \"specName\": \"shadow_runtime_test_v2\", \"mode\": \"SHADOW\", \"lifecycleState\": \"RUNNING\", \"versionHash\": \"sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15\", \"existing\": false}\n",
       "stderr": ""
     },
     {
-      "at": "2026-10-08T22:48:39Z",
-      "command": "GET http://localhost:7001/App/Runtime/Status",
+      "at": "2026-10-08T23:25:13Z",
+      "command": "C:\\Apli\\Gonza\\python.exe dev/galecore_dev.py deploy --spec shadow_runtime_test_v2",
+      "exit_code": 0,
+      "stdout": "deploy HTTP 200: {\"deploymentId\": \"423822f2-d3de-481a-9beb-7718bb76e701\", \"instanceId\": \"20da3402-3d0a-4103-8f7d-c62c43b61110\", \"specName\": \"shadow_runtime_test_v2\", \"mode\": \"SHADOW\", \"lifecycleState\": \"RUNNING\", \"versionHash\": \"sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15\", \"existing\": true}\n",
+      "stderr": ""
+    },
+    {
+      "at": "2026-10-08T23:26:29Z",
+      "command": "GET http://localhost:7001/App/Runtime/Status  (dev/galecore_dev.py:http, token del usuario de prueba)",
       "http": 200,
       "body": {
         "persistence": {
           "available": true,
           "reason": null,
-          "recoveredAt": "2026-10-08T22:45:29.8601745Z",
+          "recoveredAt": "2026-10-08T23:12:26.5816809Z",
           "recovery": {
-            "instances": 5,
+            "instances": 6,
             "openPositions": 4,
             "closedPositions": 2,
             "evaluations": 2146,
-            "events": 4326,
+            "events": 4328,
             "specsRebuilt": [
               "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51"
             ],
@@ -789,13 +670,304 @@
             "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
             "lifecycleState": "STOPPED",
             "schedulerState": "STOPPED",
-            "createdAt": "2026-10-08T22:47:20.8198972Z",
-            "updatedAt": "2026-10-08T22:48:38.7871338Z",
+            "createdAt": "2026-10-08T22:47:20.819897Z",
+            "updatedAt": "2026-10-08T22:48:38.787133Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "f4bbfcad-4996-4ec7-a7ee-616f0a15c1d9",
+            "deploymentId": "d5423a75-a6cd-4a31-9518-f6b8c8e97200",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T23:13:19.621378Z",
+            "updatedAt": "2026-10-08T23:14:37.4360979Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "355d0d18-52cc-4acb-ad13-0ff0304fc963",
+            "deploymentId": "d1766114-2c02-4fa8-9dff-8f98ac3895cb",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T23:15:35.4991674Z",
+            "updatedAt": "2026-10-08T23:16:53.1121861Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "20da3402-3d0a-4103-8f7d-c62c43b61110",
+            "deploymentId": "423822f2-d3de-481a-9beb-7718bb76e701",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "RUNNING",
+            "schedulerState": "PAUSED",
+            "createdAt": "2026-10-08T23:25:12.1465747Z",
+            "updatedAt": "2026-10-08T23:25:15.5196388Z",
             "specName": "shadow_runtime_test_v2",
             "mode": "SHADOW"
           }
         ]
       }
+    },
+    {
+      "at": "2026-10-08T23:26:29Z",
+      "command": "GET http://localhost:7001/App/Runtime/Instances  (dev/galecore_dev.py:http, token del usuario de prueba)",
+      "http": 200,
+      "body": [
+        {
+          "instanceId": "0bbd904a-baf2-44a6-b81c-166e13896cf4",
+          "deploymentId": "f2d128c2-5384-47ef-ab34-3c37511ccc4b",
+          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-09-25T16:33:38.911857Z",
+          "updatedAt": "2026-09-27T23:21:13.584321Z",
+          "specName": "shadow_runtime_test_v2",
+          "mode": "SHADOW"
+        },
+        {
+          "instanceId": "2ad19390-a0ff-4206-916a-fbb1f63550d8",
+          "deploymentId": "dea33a0e-b805-4dfe-9199-c3e80dcad08f",
+          "versionHash": "sha256:01cdc4d76af8bb1a4ba16d02abcec09d500019e05e10094c9750735925be0475",
+          "lifecycleState": "RUNNING",
+          "schedulerState": "PAUSED",
+          "createdAt": "2026-09-30T21:20:22.230696Z",
+          "updatedAt": "2026-10-08T17:36:27.077349Z",
+          "specName": "spy_prima_varianza_30_45d",
+          "mode": "SHADOW"
+        },
+        {
+          "instanceId": "dcd0e219-fa8c-48b2-b858-3e5f25d31f05",
+          "deploymentId": "44fb8434-32f9-4181-9a4f-3f06468a2eac",
+          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-10-08T17:37:48.088121Z",
+          "updatedAt": "2026-10-08T17:38:38.353073Z",
+          "specName": "shadow_runtime_test_v2",
+          "mode": "SHADOW"
+        },
+        {
+          "instanceId": "f4bbfcad-4996-4ec7-a7ee-616f0a15c1d9",
+          "deploymentId": "d5423a75-a6cd-4a31-9518-f6b8c8e97200",
+          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-10-08T23:13:19.621378Z",
+          "updatedAt": "2026-10-08T23:14:37.4360979Z",
+          "specName": "shadow_runtime_test_v2",
+          "mode": "SHADOW"
+        },
+        {
+          "instanceId": "d533f033-628a-4dc8-bc70-5c3d38f484d2",
+          "deploymentId": "6e7fff58-6f25-40f1-8d0a-fe86b3eeb910",
+          "versionHash": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-09-27T23:21:21.456427Z",
+          "updatedAt": "2026-09-30T21:20:13.365477Z",
+          "specName": "spy_prima_varianza_30_45d",
+          "mode": "SHADOW"
+        },
+        {
+          "instanceId": "355d0d18-52cc-4acb-ad13-0ff0304fc963",
+          "deploymentId": "d1766114-2c02-4fa8-9dff-8f98ac3895cb",
+          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-10-08T23:15:35.4991674Z",
+          "updatedAt": "2026-10-08T23:16:53.1121861Z",
+          "specName": "shadow_runtime_test_v2",
+          "mode": "SHADOW"
+        },
+        {
+          "instanceId": "b51aa5b4-4fd5-48cc-90fa-111bc3a2cc39",
+          "deploymentId": "26b75702-4c3b-4aa7-bf00-45eba8b27b24",
+          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-10-08T22:47:20.819897Z",
+          "updatedAt": "2026-10-08T22:48:38.787133Z",
+          "specName": "shadow_runtime_test_v2",
+          "mode": "SHADOW"
+        },
+        {
+          "instanceId": "95e58d15-0167-4c27-a2b0-c3981500df4c",
+          "deploymentId": "69861b1b-f8df-4229-8f1d-0a1d1469e4ea",
+          "versionHash": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076",
+          "lifecycleState": "STOPPED",
+          "schedulerState": "STOPPED",
+          "createdAt": "2026-09-24T22:54:09.85807Z",
+          "updatedAt": "2026-09-25T16:33:37.833411Z",
+          "specName": "shadow_runtime_test_v1",
+          "mode": "SHADOW"
+        },
+        {
+          "instanceId": "20da3402-3d0a-4103-8f7d-c62c43b61110",
+          "deploymentId": "423822f2-d3de-481a-9beb-7718bb76e701",
+          "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+          "lifecycleState": "RUNNING",
+          "schedulerState": "PAUSED",
+          "createdAt": "2026-10-08T23:25:12.1465747Z",
+          "updatedAt": "2026-10-08T23:25:15.5196388Z",
+          "specName": "shadow_runtime_test_v2",
+          "mode": "SHADOW"
+        }
+      ]
+    },
+    {
+      "at": "2026-10-08T23:26:29Z",
+      "command": "C:\\Apli\\Gonza\\python.exe dev/galecore_dev.py stop --instance 20da3402-3d0a-4103-8f7d-c62c43b61110",
+      "exit_code": 0,
+      "stdout": "stop HTTP 200: {\"instanceId\": \"20da3402-3d0a-4103-8f7d-c62c43b61110\", \"specName\": \"shadow_runtime_test_v2\", \"lifecycleState\": \"STOPPED\", \"openPositions\": 0, \"alreadyStopped\": false}\n",
+      "stderr": ""
+    },
+    {
+      "at": "2026-10-08T23:26:31Z",
+      "command": "GET http://localhost:7001/App/Runtime/Status  (dev/galecore_dev.py:http, token del usuario de prueba)",
+      "http": 200,
+      "body": {
+        "persistence": {
+          "available": true,
+          "reason": null,
+          "recoveredAt": "2026-10-08T23:12:26.5816809Z",
+          "recovery": {
+            "instances": 6,
+            "openPositions": 4,
+            "closedPositions": 2,
+            "evaluations": 2146,
+            "events": 4328,
+            "specsRebuilt": [
+              "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51"
+            ],
+            "problems": []
+          }
+        },
+        "switch": {
+          "enabled": false,
+          "source": "rules"
+        },
+        "instances": [
+          {
+            "instanceId": "95e58d15-0167-4c27-a2b0-c3981500df4c",
+            "deploymentId": "69861b1b-f8df-4229-8f1d-0a1d1469e4ea",
+            "versionHash": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-09-24T22:54:09.85807Z",
+            "updatedAt": "2026-09-25T16:33:37.833411Z",
+            "specName": "shadow_runtime_test_v1",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "0bbd904a-baf2-44a6-b81c-166e13896cf4",
+            "deploymentId": "f2d128c2-5384-47ef-ab34-3c37511ccc4b",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-09-25T16:33:38.911857Z",
+            "updatedAt": "2026-09-27T23:21:13.584321Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "d533f033-628a-4dc8-bc70-5c3d38f484d2",
+            "deploymentId": "6e7fff58-6f25-40f1-8d0a-fe86b3eeb910",
+            "versionHash": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-09-27T23:21:21.456427Z",
+            "updatedAt": "2026-09-30T21:20:13.365477Z",
+            "specName": "spy_prima_varianza_30_45d",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "2ad19390-a0ff-4206-916a-fbb1f63550d8",
+            "deploymentId": "dea33a0e-b805-4dfe-9199-c3e80dcad08f",
+            "versionHash": "sha256:01cdc4d76af8bb1a4ba16d02abcec09d500019e05e10094c9750735925be0475",
+            "lifecycleState": "RUNNING",
+            "schedulerState": "PAUSED",
+            "createdAt": "2026-09-30T21:20:22.230696Z",
+            "updatedAt": "2026-10-08T17:36:27.077349Z",
+            "specName": "spy_prima_varianza_30_45d",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "dcd0e219-fa8c-48b2-b858-3e5f25d31f05",
+            "deploymentId": "44fb8434-32f9-4181-9a4f-3f06468a2eac",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T17:37:48.088121Z",
+            "updatedAt": "2026-10-08T17:38:38.353073Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "b51aa5b4-4fd5-48cc-90fa-111bc3a2cc39",
+            "deploymentId": "26b75702-4c3b-4aa7-bf00-45eba8b27b24",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T22:47:20.819897Z",
+            "updatedAt": "2026-10-08T22:48:38.787133Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "f4bbfcad-4996-4ec7-a7ee-616f0a15c1d9",
+            "deploymentId": "d5423a75-a6cd-4a31-9518-f6b8c8e97200",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T23:13:19.621378Z",
+            "updatedAt": "2026-10-08T23:14:37.4360979Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "355d0d18-52cc-4acb-ad13-0ff0304fc963",
+            "deploymentId": "d1766114-2c02-4fa8-9dff-8f98ac3895cb",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T23:15:35.4991674Z",
+            "updatedAt": "2026-10-08T23:16:53.1121861Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          },
+          {
+            "instanceId": "20da3402-3d0a-4103-8f7d-c62c43b61110",
+            "deploymentId": "423822f2-d3de-481a-9beb-7718bb76e701",
+            "versionHash": "sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15",
+            "lifecycleState": "STOPPED",
+            "schedulerState": "STOPPED",
+            "createdAt": "2026-10-08T23:25:12.1465747Z",
+            "updatedAt": "2026-10-08T23:26:30.012793Z",
+            "specName": "shadow_runtime_test_v2",
+            "mode": "SHADOW"
+          }
+        ]
+      }
+    },
+    {
+      "at": "2026-10-08T23:26:31Z",
+      "command": "python dev/galecore_dev.py api > <api.log> 2>&1  (sigue corriendo: sin exit code)",
+      "log_file": "WS-0019-p1-07-dev-run.api.log",
+      "loader_lines": [
+        "Runtime: spec 'shadow_runtime_test_v1' cargado (hash=sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076)",
+        "Runtime: spec 'shadow_runtime_test_v2' cargado (hash=sha256:c8b1ead18771deaff19721f32bd335183dc6a5172b7803d4a8588b5b05caad15)",
+        "Runtime: spec 'spy_prima_varianza_30_45d' cargado (hash=sha256:01cdc4d76af8bb1a4ba16d02abcec09d500019e05e10094c9750735925be0475)",
+        "Runtime SHADOW persistente: recuperadas 6 instancias, 4 posiciones abiertas, 2 cerradas, 2146 evaluaciones, 4328 eventos; specs reconstruidas: 1; problemas:",
+        "Runtime: deployed shadow_runtime_test_v2 → instance f4bbfcad-4996-4ec7-a7ee-616f0a15c1d9 (SHADOW)",
+        "Runtime: stopped instance f4bbfcad-4996-4ec7-a7ee-616f0a15c1d9 (shadow_runtime_test_v2)",
+        "Runtime: deployed shadow_runtime_test_v2 → instance 355d0d18-52cc-4acb-ad13-0ff0304fc963 (SHADOW)",
+        "Runtime: stopped instance 355d0d18-52cc-4acb-ad13-0ff0304fc963 (shadow_runtime_test_v2)",
+        "Runtime: deployed shadow_runtime_test_v2 → instance 20da3402-3d0a-4103-8f7d-c62c43b61110 (SHADOW)",
+        "Runtime: stopped instance 20da3402-3d0a-4103-8f7d-c62c43b61110 (shadow_runtime_test_v2)"
+      ]
     }
   ]
 }
