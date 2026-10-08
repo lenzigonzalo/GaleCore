@@ -290,6 +290,18 @@ def test_call_credit_spread_and_iron_condor_are_built_since_p1_07():
     pcs_legs_as_ccs["structure"]["default_structure"] = "call_credit_spread"
     assert any("legs must be exactly ['buy_call', 'sell_call']" in e for e in check(text=json.dumps(pcs_legs_as_ccs)).errors)
     assert any("must be positive" in e for e in check(text=json.dumps(_iron_condor(-0.16))).errors)
+    for path, value, message in [
+        ("candidate_construction.legs.0.strike_selection.target_delta", 0.16, "must be negative (put delta)"),
+        ("candidate_construction.legs.0.strike_selection.delta_tolerance", 0, "delta_tolerance must be positive"),
+        ("candidate_construction.legs.1.strike_selection.width", -5, "width must be positive"),
+    ]:
+        data = json.loads(spec_text())
+        *parents, leaf = path.split(".")
+        node = data
+        for part in parents:
+            node = node[int(part)] if part.isdigit() else node[part]
+        node[leaf] = value
+        assert any(message in e for e in check(text=json.dumps(data)).errors), path
 
 
 # ── the proposal contract ────────────────────────────────────────

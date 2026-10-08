@@ -249,6 +249,26 @@ def _leg_key(leg: dict) -> str:
     return f"{str(leg.get('side', '')).lower()}_{str(leg.get('type', '')).lower()}"
 
 
+def _leg_value_errors(legs: Any) -> list[str]:
+    """The same value checks as GaleCore's StrategySpecValidator: put delta < 0, call delta > 0, tolerance and width > 0."""
+    errors = []
+    for leg in legs if isinstance(legs, list) else []:
+        if not isinstance(leg, dict):
+            continue
+        key, sel = _leg_key(leg), leg.get("strike_selection") or {}
+        path = f"candidate_construction.legs[{key}].strike_selection"
+        delta, tol, width = sel.get("target_delta"), sel.get("delta_tolerance"), sel.get("width")
+        if key == "sell_put" and isinstance(delta, int | float) and delta >= 0:
+            errors.append(f"{path}.target_delta must be negative (put delta)")
+        if key == "sell_call" and isinstance(delta, int | float) and delta <= 0:
+            errors.append(f"{path}.target_delta must be positive (call delta)")
+        if key.startswith("sell_") and isinstance(tol, int | float) and tol <= 0:
+            errors.append(f"{path}.delta_tolerance must be positive")
+        if key.startswith("buy_") and isinstance(width, int | float) and width <= 0:
+            errors.append(f"{path}.width must be positive")
+    return errors
+
+
 def _leaves(node: Any, path: str, out: dict[str, Any], errors: list[str]) -> None:
     if isinstance(node, dict) and node:
         for k, v in node.items():
@@ -331,10 +351,7 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
         errors.append(f"default_structure {structure!r} is not built by the runtime ({', '.join(STRUCTURE_LEGS)})")
     elif isinstance(legs, list) and sorted(_leg_key(x) for x in legs if isinstance(x, dict)) != STRUCTURE_LEGS[structure]:
         errors.append(f"legs must be exactly {STRUCTURE_LEGS[structure]} for {structure}")
-    sell_call_delta = next((x.get("strike_selection", {}).get("target_delta") for x in legs or []
-                            if isinstance(x, dict) and _leg_key(x) == "sell_call"), None)
-    if isinstance(sell_call_delta, int | float) and sell_call_delta <= 0:
-        errors.append(f"{SELL_CALL}.strike_selection.target_delta must be positive (call delta)")
+    errors.extend(_leg_value_errors(legs))
 
     leaves: dict[str, Any] = {}
     _leaves(spec, "", leaves, errors)
