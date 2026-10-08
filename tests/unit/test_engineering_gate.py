@@ -9,7 +9,7 @@ def _write_work_item(
     engineering = root / "docs" / "engineering"
     items = engineering / "work-items"
     items.mkdir(parents=True)
-    (engineering / "ACTIVE_WORK_ITEM").write_text("item.md\n", encoding="utf-8")
+    (root / "ACTIVE_WORK_ITEM").write_text("docs/engineering/work-items/item.md\n", encoding="utf-8")
     mark = "x" if checked else " "
     pending = "" if checked else "PENDING"
     (items / "item.md").write_text(
@@ -20,7 +20,6 @@ status: {status}
 implementer: claude-code
 reviewer: codex
 approver: user
-feature_freeze: true
 closure_blocked: {str(blocked).lower()}
 review_result: {"APPROVED" if checked else "PENDING"}
 approval_result: {"APPROVED" if status == "CLOSED" and checked else "PENDING"}
@@ -45,7 +44,7 @@ def test_active_incomplete_item_passes_with_warnings(tmp_path):
 
     assert result.passed
     assert any("criteria remain open" in warning for warning in result.warnings)
-    assert any("feature freeze" in warning for warning in result.warnings)
+    assert not any("feature freeze" in warning for warning in result.warnings)   # retired rule
 
 
 def test_blocked_item_rejects_phase_closure_claim(tmp_path):
@@ -119,3 +118,15 @@ def test_an_item_without_que_y_para_que_warns_and_one_with_it_does_not(tmp_path)
     item.write_text(item.read_text(encoding="utf-8").replace(
         "## Acceptance criteria", "## Qué y para qué\n\n- Qué: x.\n\n## Acceptance criteria"), encoding="utf-8")
     assert not any("Qué y para qué" in w for w in evaluate_repository(tmp_path).warnings)
+
+
+def test_the_active_item_is_the_workspace_pointer_seen_from_a_worktree(tmp_path):
+    """WS-0018: a single pointer, at the workspace root; a checkout under .worktrees/ finds it too."""
+    _write_work_item(tmp_path, status="IN_PROGRESS", blocked=True)
+    checkout = tmp_path / ".worktrees" / "galecore-ai" / "X"
+    checkout.mkdir(parents=True)
+    result = evaluate_repository(checkout)
+    assert result.passed and result.metadata["id"] == "TEST-001"
+
+    (tmp_path / "ACTIVE_WORK_ITEM").unlink()
+    assert any("ACTIVE_WORK_ITEM" in e for e in evaluate_repository(checkout).errors)

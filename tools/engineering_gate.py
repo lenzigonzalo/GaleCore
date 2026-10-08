@@ -1,4 +1,8 @@
-"""Validate the repository's active engineering work item and closure claims."""
+"""Validate the active engineering work item and closure claims.
+
+The active item is the one in the workspace `ACTIVE_WORK_ITEM` (the first ancestor of this checkout that has one:
+the main checkout and its worktrees under `.worktrees/` share it). It is the only pointer (WS-0018).
+"""
 
 from __future__ import annotations
 
@@ -71,17 +75,17 @@ def _is_true(value: str | None) -> bool:
 
 def evaluate_repository(root: Path) -> GateResult:
     result = GateResult()
-    pointer = root / "docs" / "engineering" / "ACTIVE_WORK_ITEM"
-    if not pointer.is_file():
-        result.errors.append("missing docs/engineering/ACTIVE_WORK_ITEM")
+    pointer = next((d / "ACTIVE_WORK_ITEM" for d in (root, *root.parents) if (d / "ACTIVE_WORK_ITEM").is_file()), None)
+    if pointer is None:
+        result.errors.append("missing the workspace ACTIVE_WORK_ITEM")
         return result
 
-    filename = pointer.read_text(encoding="utf-8").strip()
-    if not filename or Path(filename).name != filename:
-        result.errors.append("ACTIVE_WORK_ITEM must contain one filename")
+    raw = pointer.read_text(encoding="utf-8").strip()
+    if not raw or len(raw.splitlines()) != 1:
+        result.errors.append("ACTIVE_WORK_ITEM must contain one path")
         return result
 
-    work_item = root / "docs" / "engineering" / "work-items" / filename
+    work_item = pointer.parent / raw
     result.work_item = work_item
     if not work_item.is_file():
         result.errors.append(f"active work item does not exist: {work_item}")
@@ -100,7 +104,6 @@ def evaluate_repository(root: Path) -> GateResult:
         "implementer",
         "reviewer",
         "approver",
-        "feature_freeze",
         "closure_blocked",
         "review_result",
         "approval_result",
@@ -145,9 +148,6 @@ def evaluate_repository(root: Path) -> GateResult:
             result.errors.append("CLOSED requires approval_result=APPROVED")
     elif unchecked:
         result.warnings.append(f"{len(unchecked)} acceptance criteria remain open")
-
-    if _is_true(metadata.get("feature_freeze")):
-        result.warnings.append("feature freeze is active; only the active work item is authorized")
 
     # Owner 04/10 (GC-AI-0025): every item says in 3-4 lines what it does and what for; a warning, not a failure.
     if not re.search(r"^## Qué y para qué\s*$", body, flags=re.MULTILINE):
