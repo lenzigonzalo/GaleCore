@@ -1,6 +1,19 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "1.0.0"
+    date: 2026-10-06
+    changes: >
+      WS-0016 (P1-06): la skill se parte en método (parte A) y procedimiento de SHADOW (parte B); suma tabla de
+      parámetros, árbol de gestión (disparador → acción), el crítico antes de aprobar (`strategy critique`; sin
+      crítica o con «descartar» no se aprueba) y la ficha de una página (`strategy sheet`) como salida estándar. La ficha
+      pone la versión contra el perfil (pérdida por operación, peor caso sumado, kill switch, lo abierto en SHADOW)
+      y el método trae el contexto del instrumento con `story pack` (AC-02). Una versión nueva dice qué cambia y por qué
+      (`change`) y `strategy diff` muestra la diferencia por código (AC-05). Lo que invalida la tesis
+      se registra como regla del supervisor con `--thesis` y sus estrategias (AC-07).
+      La ficha suma PCS / CCS / iron condor / esperar con la cadena real que calcula GaleCore
+      (`/App/Runtime/Structures`, AC-03/04); sólo el PCS se despliega hasta P1-07.
+    feedback: []
   - version: "0.3.1"
     date: 2026-09-27
     changes: >

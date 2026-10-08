@@ -17,11 +17,18 @@ from galecore_ai.application.knowledge import KnowledgeError, save_evidence, sea
 from galecore_ai.application.strategy import (
     approve,
     check_proposal,
+    critique,
     deploy_check,
     galecore_spec_hash,
     save_proposal,
 )
-from galecore_ai.contracts.strategy import ProposalContent
+from galecore_ai.application.strategy_sheet import diff, sheet
+from galecore_ai.contracts.strategy import (
+    CritiqueContent,
+    ProposalContent,
+    VersionChange,
+    design_gaps,
+)
 from galecore_ai.harness.catalog import load_catalog
 from tests.unit.test_evidence import evidence
 from tests.unit.test_knowledge import HOST, NOW, content, kb, save  # noqa: F401  (kb is a fixture)
@@ -151,6 +158,8 @@ def test_a_spec_promising_behavior_the_runtime_ignores_is_invalid(change, expect
 def test_an_executed_field_without_a_rule_is_invalid():
     def drop_x3(d):
         d["rules"] = [r for r in d["rules"] if r["id"] != "X3"]
+        d["parameters"] = [x for x in d["parameters"] if x["rules"] != ["X3"]]
+        d["management"] = [x for x in d["management"] if x["rules"] != ["X3"]]
     report = check(proposal(drop_x3))
     assert report.verdict == "INVALID"
     assert any("time_exit.max_dte" in e and "no supported rule" in e for e in report.errors)
@@ -296,10 +305,25 @@ def research_ref(kb):  # noqa: F811
     return f"research:{document.id}"
 
 
-def stored(kb, research_ref):  # noqa: F811
-    return save_proposal(kb=kb, prompt="Desarrollá la estrategia hasta SHADOW", host=HOST,
-                         content=proposal(research_ref=research_ref), spec_json=spec_text(),
-                         spec_file=f"{NAME}.json", now=NOW)
+def stored(kb, research_ref, criticised: bool = True):  # noqa: F811
+    saved = save_proposal(kb=kb, prompt="Desarrollá la estrategia hasta SHADOW", host=HOST,
+                          content=proposal(research_ref=research_ref), spec_json=spec_text(),
+                          spec_file=f"{NAME}.json", now=NOW)
+    if criticised:
+        critique(kb=kb, key=KEY, content=critique_content(), host=HOST, now=NOW)
+    return saved
+
+
+def critique_content(verdict: str = "seguir") -> CritiqueContent:
+    return CritiqueContent.model_validate({
+        "verdict": verdict,
+        "missing": ["costos reales de entrada y salida"],
+        "biases": ["la prima de varianza se midió en un período sin crisis"],
+        "alternative_explanation": "la prima cobrada paga un riesgo de cola que todavía no ocurrió",
+        "why_not": ["un gap de −5 % se lleva varios meses de crédito"],
+        "shutdown_criteria": ["dos stops seguidos con VIX < 20"],
+        "closed_trade_review": "comparar la salida con la regla que la disparó y el escenario esperado",
+    })
 
 
 def test_saved_version_keeps_the_exact_spec_and_its_hash(kb, research_ref):  # noqa: F811
@@ -318,7 +342,7 @@ def test_saved_version_keeps_the_exact_spec_and_its_hash(kb, research_ref):  # n
 def test_a_version_is_create_only(kb, research_ref):  # noqa: F811
     stored(kb, research_ref)
     with pytest.raises(KnowledgeError, match="new version"):
-        stored(kb, research_ref)
+        stored(kb, research_ref, criticised=False)
 
 
 def test_invalid_proposals_and_unresolved_refs_are_not_stored(kb, research_ref):  # noqa: F811
@@ -377,6 +401,96 @@ def test_versions_saved_before_the_rule_stay_readable(kb, research_ref):  # noqa
     Path(path).write_text(json.dumps(old.model_dump(mode="json")), encoding="utf-8")
     assert search(kb, kind="strategy")["integrity_failed"] == []
     assert show(kb, f"strategy:{KEY}")["content"]["owner_decisions"][0]["question"].endswith("1.0.0?")
+
+
+# ── WS-0016: parameter table, management tree, critique, sheet ──
+
+
+def test_save_requires_the_parameter_table_and_the_management_tree(kb, research_ref):  # noqa: F811
+    assert design_gaps(proposal()) == []
+
+    def bare(d):
+        d["parameters"], d["management"] = [], []
+    assert design_gaps(proposal(bare))[:2] == ["the proposal has no parameter table (parameters)",
+                                               "the proposal has no management tree (management)"]
+
+    def partial(d):
+        d["parameters"] = [p for p in d["parameters"] if p["rules"] != ["X1"]]
+        d["management"] = [m for m in d["management"] if m["rules"] != ["A1"]]
+    gaps = design_gaps(proposal(partial))
+    assert any(g.startswith("rule X1 has parameter") for g in gaps)
+    assert any(g.startswith("rule A1 (adjustment)") for g in gaps)
+    with pytest.raises(KnowledgeError) as exc:
+        save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(bare, research_ref=research_ref),
+                      spec_json=spec_text(), spec_file=f"{NAME}.json", now=NOW)
+    assert "the proposal has no parameter table (parameters)" in exc.value.problems
+    assert not (kb.base / "strategies").exists()
+
+
+def test_parameters_and_management_name_existing_rules():
+    def ghost(d):
+        d["management"][0]["rules"] = ["X9"]
+    with pytest.raises(ValidationError, match="do not exist"):
+        proposal(ghost)
+
+    def grounded_without_source(d):
+        d["parameters"][0]["status"] = "grounded"
+    with pytest.raises(ValidationError, match="cites at least one source"):
+        proposal(grounded_without_source)
+
+
+def test_versions_stored_without_the_new_fields_keep_their_hash(kb, research_ref):  # noqa: F811
+    """1.0.0–1.0.5 were stored before WS-0016: adding the fields must not make them INTEGRITY_FAILED."""
+    _, path = stored(kb, research_ref, criticised=False)
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    del data["content"]["parameters"], data["content"]["management"], data["content"]["change"]
+    old = {k: v for k, v in data.items() if k != "content_hash"}
+    from galecore_ai.contracts.strategy import compute_document_hash
+    data["content_hash"] = compute_document_hash(old)   # the hash as the old contract computed it
+    Path(path).write_text(json.dumps(data), encoding="utf-8")
+    assert search(kb, kind="strategy")["integrity_failed"] == []
+    assert "Sin tabla de parámetros" in sheet(kb, KEY)["markdown"]
+
+
+def test_approval_needs_a_critique_of_this_version(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref, criticised=False)
+    with pytest.raises(KnowledgeError, match="no critique"):
+        approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    critique(kb=kb, key=KEY, content=critique_content("descartar"), host=HOST, now=NOW)
+    with pytest.raises(KnowledgeError, match="descartar"):
+        approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    with pytest.raises(KnowledgeError, match="already exists"):
+        critique(kb=kb, key=KEY, content=critique_content(), host=HOST, now=NOW)
+
+
+def test_a_critique_is_not_a_critique_without_reasons(kb):  # noqa: F811
+    data = critique_content().model_dump(mode="json")
+    data["why_not"] = [" "]
+    with pytest.raises(ValidationError, match="not a critique"):
+        CritiqueContent.model_validate(data)
+    with pytest.raises(KnowledgeError, match="no such strategy version"):
+        critique(kb=kb, key=KEY, content=critique_content(), host=HOST, now=NOW)
+
+
+def test_an_edited_critique_blocks_the_approval(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    path = kb.base / "strategies" / NAME / "1.0.3.critique.json"
+    path.write_text(path.read_text(encoding="utf-8").replace("seguir", "descartar"), encoding="utf-8")
+    with pytest.raises(KnowledgeError, match="content_hash mismatch"):
+        approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+
+
+def test_sheet_shows_parameters_management_gaps_and_critique(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    out = sheet(kb, KEY)
+    md = out["markdown"]
+    assert out["critique"] == "seguir" and out["approved"] is False
+    assert f"hash `{out['spec_hash']}`" in md   # the owner retypes the exact hash to approve
+    assert "| Stop | 200 | % del crédito | 150–300 |" in md
+    assert "| G1 | stop |" in md and md.count("| sí |") >= 3
+    assert "| G4 | roll | cualquiera | nada: sin ajustes ni roll | sí (lo hace siempre) |" in md
+    assert "| G5 | kill_switch | pérdida acumulada sobre el límite del owner | pausar entradas | no (hueco declarado) |" in md
+    assert "**Por qué no:**" in md and "un gap de −5 %" in md
 
 
 def test_deploy_is_refused_without_approval_or_with_another_hash(kb, research_ref):  # noqa: F811
@@ -443,7 +557,7 @@ def _cli(*args, stdin=None, env=None):
 def test_cli_check_and_hash():
     request = json.dumps({"content": proposal_data()})
     code, report = _cli("strategy", "check", "--spec", str(SPECS / f"{NAME}.json"), stdin=request)
-    assert code == 0 and report["verdict"] == "VALID_WITH_DECLARED_GAPS"
+    assert code == 0 and report["verdict"] == "VALID_WITH_DECLARED_GAPS" and report["design_gaps"] == []
     code, out = _cli("strategy", "hash", "--spec", str(SPECS / "shadow_runtime_test_v2.json"))
     assert code == 0 and out["spec_hash"] == GALECORE_HASHES["shadow_runtime_test_v2.json"]
     bad = copy.deepcopy(proposal_data())
@@ -460,6 +574,15 @@ def test_cli_save_approve_deploy_check(kb, research_ref):  # noqa: F811
     code, saved = _cli("strategy", "save", "--spec", str(SPECS / f"{NAME}.json"), "--prompt", "Hasta SHADOW",
                        stdin=request, env=env)
     assert code == 0 and saved["status"] == "RECORDED", saved
+    code, out = _cli("strategy", "approve", "--ref", saved["ref"], "--spec-hash", saved["spec_hash"],
+                     "--owner-words", "Apruebo", "--host-model", "test", env=env)
+    assert code == 3 and "no critique" in json.dumps(out, ensure_ascii=False)
+    code, criticised = _cli("strategy", "critique", "--ref", saved["ref"], env=env,
+                            stdin=json.dumps({"content": critique_content().model_dump(mode="json"),
+                                              "host_provider": "claude-code", "host_model": "test"}))
+    assert code == 0 and criticised["verdict"] == "seguir", criticised
+    code, page = _cli("strategy", "sheet", "--ref", saved["ref"], env=env)
+    assert code == 0 and page["critique"] == "seguir" and "## Parámetros" in page["markdown"]
     code, refused = _cli("strategy", "deploy-check", "--ref", saved["ref"], "--galecore-hash", saved["spec_hash"],
                          env=env)
     assert code == 3 and refused["status"] == "REJECTED"
@@ -469,3 +592,229 @@ def test_cli_save_approve_deploy_check(kb, research_ref):  # noqa: F811
     code, allowed = _cli("strategy", "deploy-check", "--ref", saved["ref"], "--galecore-hash", saved["spec_hash"],
                          env=env)
     assert code == 0 and allowed["status"] == "DEPLOY_ALLOWED"
+
+
+@pytest.mark.parametrize("case", ["none", "other_version", "descartar", "seguir"])
+def test_a_version_approved_before_the_critique_needs_a_valid_one_to_deploy_again(kb, research_ref, case):  # noqa: F811
+    """Owner 08/10: the old approval is kept as recorded; a new deploy needs a valid critique of this exact version."""
+    doc, _ = stored(kb, research_ref, criticised=False)
+    from galecore_ai.contracts.strategy import (
+        ApprovalDocument,
+        CritiqueDocument,
+        compute_document_hash,
+    )
+    draft = ApprovalDocument(strategy_ref=f"strategy:{KEY}", spec_hash=doc.spec_hash, proposal_hash=doc.content_hash,
+                             owner_words="Apruebo", recorded_at=NOW, host=HOST, content_hash="pending")
+    approval = draft.model_copy(update={"content_hash": compute_document_hash(draft.hashable_content())})
+    kb.strategies.create_approval(KEY, approval)
+    if case == "other_version":
+        other = CritiqueDocument(strategy_ref=f"strategy:{KEY}", proposal_hash="0" * 64, content=critique_content(),
+                                 recorded_at=NOW, host=HOST, content_hash="pending")
+        kb.strategies.create_critique(
+            KEY, other.model_copy(update={"content_hash": compute_document_hash(other.hashable_content())}))
+    elif case != "none":
+        critique(kb=kb, key=KEY, content=critique_content(case), host=HOST, now=NOW)
+    expected = {"none": "no critique of this version", "other_version": "the critique is for another proposal",
+                "descartar": "the critique says «descartar»"}
+    if case == "seguir":
+        assert deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)["status"] == "DEPLOY_ALLOWED"
+    else:
+        with pytest.raises(KnowledgeError) as exc:
+            deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash)
+        assert any(p.startswith(expected[case]) for p in exc.value.problems)
+    assert kb.strategies.load_approval(KEY) == approval   # the historical approval is not touched
+
+
+def test_a_critique_citing_nothing_real_is_refused(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref, criticised=False)
+    bad = critique_content().model_copy(update={"evidence_refs": ["evidence:2026-01-01-nada"]})
+    with pytest.raises(KnowledgeError, match="critique refused"):
+        critique(kb=kb, key=KEY, content=bad, host=HOST, now=NOW)
+
+
+def test_save_refuses_a_rule_parameter_missing_from_the_table(kb, research_ref):  # noqa: F811
+    def partial(d):
+        d["parameters"] = [p for p in d["parameters"] if p["rules"] != ["X1"]]
+    with pytest.raises(KnowledgeError) as exc:
+        save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(partial, research_ref=research_ref),
+                      spec_json=spec_text(), spec_file=f"{NAME}.json", now=NOW)
+    assert any(p.startswith("rule X1 has parameter") for p in exc.value.problems)
+
+
+def test_cli_critique_with_invalid_input_is_a_validation_error(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref, criticised=False)
+    code, out = _cli("strategy", "critique", "--ref", f"strategy:{KEY}", stdin="[1]",
+                     env={KNOWLEDGE_DIR_ENV: str(kb.base)})
+    assert code == 3 and "Invalid critique" in out["error"]
+
+
+def test_sheet_puts_the_version_against_the_profile_and_what_is_open(kb, research_ref):  # noqa: F811
+    from galecore_ai.application import supervisor
+    from galecore_ai.application.profile import set_profile
+    from tests.unit.test_capital import LIMITS, exposure
+    stored(kb, research_ref)
+    md = sheet(kb, KEY)["markdown"]
+    assert "## Riesgo contra el perfil (sin perfil)" in md and "- Falta: perfil: no hay perfil" in md
+    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
+                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    asked = []
+
+    def read(path):
+        asked.append(path)
+        return exposure()
+    out = sheet(kb, KEY, read)
+    md = out["markdown"]
+    assert asked[0] == ("/App/Runtime/Exposure?capital=10000.0&maxRiskPerTradePct=5.0&maxOpenRiskPct=50.0"
+                        "&reservePct=10.0&maxBetPct=30.0")
+    spec = json.loads(spec_text())
+    cap, n = spec["risk_limits"]["max_loss_per_trade_usd"], spec["risk_limits"]["max_concurrent_positions"]
+    assert f"| Pérdida máxima por operación (1 contrato) | {cap:g} USD (tope de la spec; el runtime no abre por encima) | 500 USD (5 %) |" in md
+    assert f"({n:g} posiciones × pérdida máxima)" in md
+    assert "- Kill switch: G5 — lo ejecuta GaleCore: no (hueco declarado)" in md
+    assert "- Abierto hoy en SHADOW: 1.368 USD en riesgo en 3 posiciones; entra riesgo nuevo por 3.632 USD" in md
+
+    def down(path):
+        raise supervisor.SupervisorError("GaleCore no respondió en http://localhost:7001: ConnectError")
+    assert "- Falta: lo abierto en SHADOW: GaleCore no respondió en" in sheet(kb, KEY, down)["markdown"]
+    assert "respuesta inesperada de GaleCore" in sheet(kb, KEY, lambda path: {"asOf": "x"})["markdown"]
+    assert "- Falta: lo abierto en SHADOW: no se consultó GaleCore" in sheet(kb, KEY)["markdown"]
+
+
+def _structures_response() -> dict:
+    def priced(structure, executable, credit, risk, bes, note=None):
+        return {"structure": structure, "executableToday": executable, "note": note, "credit": credit,
+                "maxRisk": risk, "capital": risk, "breakevens": bes, "touchProbability": 0.317,
+                "greeks": {"delta": 2.11, "gamma": -0.08, "thetaPerDay": 0.73, "vegaPerVolPoint": -5.35},
+                "scenarios": [{"name": "gap -5%", "spot": 736.07, "volShift": 0, "pnl": -143.57},
+                              {"name": "vol +5 pts", "spot": 774.81, "volShift": 0.05, "pnl": -24.45}]}
+    return {"symbol": "SPY", "spot": 774.81, "expiration": "2026-11-13", "dte": 36, "asOf": "2026-10-08T15:00:00Z",
+            "error": None, "assumptions": ["montos en USD por contrato (×100)"], "structures": [
+                priced("put_credit_spread", True, 0.46, 454.0, [736.54]),
+                {"structure": "call_credit_spread", "executableToday": False,
+                 "note": "sin cotización utilizable para la call .SPY261113C811"},
+                priced("iron_condor", False, 1.2, 380.0, [735.8, 807.2], "no ejecutable hoy: el runtime sólo construye PCS (P1-07)"),
+                {"structure": "wait", "executableToday": True, "note": "no abre posición: sin crédito ni riesgo"}]}
+
+
+def test_sheet_compares_structures_with_what_galecore_returns(kb, research_ref):  # noqa: F811
+    from galecore_ai.application import supervisor
+    stored(kb, research_ref)
+    asked = []
+
+    def read(path):
+        asked.append(path)
+        return _structures_response()
+    out = sheet(kb, KEY, read)
+    md = out["markdown"]
+    spec = json.loads(spec_text())
+    sell = next(leg for leg in spec["candidate_construction"]["legs"] if leg["side"].upper() == "SELL")
+    assert asked[-1].startswith("/App/Runtime/Structures?symbol=SPY&delta=" + f"{abs(sell['strike_selection']['target_delta'])}")
+    assert "| PCS | 0.46 | 454.0 | 454.0 | 736.54 | 0.317 | 2.11 | -0.08 | 0.73 | -5.35 | -143.57 | -24.45 |" in md
+    assert "| Iron condor | 1.2 | 380.0 | 380.0 | 735.8 / 807.2 |" in md
+    assert "- CCS: no ejecutable hoy — sin cotización utilizable para la call .SPY261113C811" in md
+    assert "- PCS: ejecutable hoy" in md and "- Iron condor: no ejecutable hoy — no ejecutable hoy: el runtime" in md
+    assert "- Esperar: ejecutable hoy — no abre posición" in md
+    assert out["structures"]["data"]["dte"] == 36
+
+    def down(path):
+        raise supervisor.SupervisorError("GaleCore no respondió")
+    assert "- Falta: estructuras: GaleCore no respondió" in sheet(kb, KEY, down)["markdown"]
+    assert "- Falta: estructuras: no se consultó GaleCore" in sheet(kb, KEY)["markdown"]
+    failed = dict(_structures_response(), error="sin PCS: sin cadena de opciones para SPY", structures=[])
+    assert "- Falta: estructuras: sin PCS: sin cadena" in sheet(kb, KEY, lambda path: failed)["markdown"]
+
+
+def test_a_cap_above_the_profile_is_flagged(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.profile import set_profile
+    from tests.unit.test_capital import LIMITS
+    set_profile(kb.profile, changes={"reference_capital": {"amount": 4000.0, "currency": "USD"},
+                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    stored(kb, research_ref)
+    rows = sheet(kb, KEY)["risk"]["rows"]
+    assert rows[0][2] == "200 USD (5 %)" and rows[0][3] == "EXCEDE"
+    lim = json.loads(spec_text())["risk_limits"]
+    worst = lim["max_loss_per_trade_usd"] * lim["max_concurrent_positions"]
+    assert rows[1][2] == "2.000 USD (50 %)" and rows[1][3] == ("EXCEDE" if worst > 2000 else "dentro")
+
+
+def test_without_a_cap_the_full_width_bounds_the_loss(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.strategy_sheet import risk
+    doc, _ = stored(kb, research_ref)
+    spec = json.loads(doc.spec_json)
+    spec["risk_limits"]["max_loss_per_trade_usd"] = None
+    width = next(leg["strike_selection"]["width"] for leg in spec["candidate_construction"]["legs"]
+                 if leg["side"].upper() == "BUY")
+    out = risk(kb, doc.model_copy(update={"spec_json": json.dumps(spec)}))
+    assert not out["rows"]   # no profile in this kb: nothing to compare, said as missing
+    assert out["missing"][0] == "perfil: no hay perfil"
+    from galecore_ai.application.profile import set_profile
+    from tests.unit.test_capital import LIMITS
+    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
+                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    row = risk(kb, doc.model_copy(update={"spec_json": json.dumps(spec)}))["rows"][0]
+    assert row[1].startswith(f"{width * 100:g} USD (ancho completo × 100")
+
+
+def _next_version(kb, research_ref, change):  # noqa: F811
+    spec = json.loads(spec_text())
+    spec["identity"]["version"] = "1.0.4"
+    spec["risk_limits"]["max_concurrent_positions"] = 3
+
+    def bump(d):
+        d["version"] = "1.0.4"
+        d["owner_decisions"] = []
+        for r in d["rules"]:
+            if r["id"] == "E1":
+                r["text"] += " Hasta 3 posiciones."
+        if change is not None:
+            d["change"] = change
+    return save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(bump, research_ref=research_ref),
+                         spec_json=json.dumps(spec, indent=2), spec_file=f"{NAME}.json", now=NOW)
+
+
+def test_a_new_version_says_what_it_changes_and_why(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    with pytest.raises(KnowledgeError) as exc:
+        _next_version(kb, research_ref, None)
+    assert any("says what it changes and why" in p for p in exc.value.problems)
+    with pytest.raises(KnowledgeError) as exc:
+        _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "más posiciones",
+                                         "refs": ["decision:sha256:000000000000"]})
+    assert any("no decision of the project" in p for p in exc.value.problems)
+    with pytest.raises(KnowledgeError) as exc:
+        _next_version(kb, research_ref, {"from_version": "1.0.9", "reason": "más posiciones", "refs": [research_ref]})
+    assert any("is not a stored version" in p for p in exc.value.problems)
+    from galecore_ai.application import project
+    story, _ = project.add(kb=kb, name=NAME, kind="story", words="funciona en calma", prompt="p", now=NOW)
+    decided, _ = project.add(kb=kb, name=NAME, kind="decision", words="más posiciones", prompt="p", now=NOW)
+    with pytest.raises(KnowledgeError) as exc:   # a story is not a decision
+        _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "x", "refs": [f"decision:{story.hash}"]})
+    assert any("no decision of the project" in p for p in exc.value.problems)
+    _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "más posiciones para generar data",
+                                     "refs": [research_ref, f"decision:{decided.hash[:19]}"]})
+    out = diff(kb, KEY, f"{NAME}/1.0.4")
+    assert out["change"]["reason"] == "más posiciones para generar data"
+    assert {"path": "risk_limits.max_concurrent_positions", "from": 1, "to": 3} in out["spec"]
+    assert not any(d["path"] == "identity.version" for d in out["spec"])
+    assert {"rule": "E1", "change": "changed", "fields": ["text"]} in out["rules"]
+    assert "**Motivo:** más posiciones para generar data" in out["markdown"]
+
+
+def test_a_change_needs_a_reason_and_what_originated_it():
+    with pytest.raises(ValidationError, match="cites the decision"):
+        VersionChange(from_version="1.0.3", reason="x", refs=[])
+    with pytest.raises(ValidationError):
+        VersionChange(from_version="1.0.3", reason="  ", refs=["research:x"])
+
+
+
+def test_diff_compares_two_versions_of_one_strategy(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    with pytest.raises(KnowledgeError, match="two versions of one strategy"):
+        diff(kb, KEY, KEY)
+    with pytest.raises(KnowledgeError, match="two versions of one strategy"):
+        diff(kb, KEY, "otra_estrategia/1.0.4")
+    _next_version(kb, research_ref, {"from_version": "1.0.3", "reason": "más posiciones", "refs": [research_ref]})
+    code, out = _cli("strategy", "diff", "--from", f"strategy:{KEY}", "--ref", f"strategy:{NAME}/1.0.4",
+                     env={KNOWLEDGE_DIR_ENV: str(kb.base)})
+    assert code == 0 and out["change"]["reason"] == "más posiciones" and out["spec"]

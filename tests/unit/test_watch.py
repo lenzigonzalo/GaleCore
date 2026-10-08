@@ -11,6 +11,7 @@ from galecore_ai.application import supervisor, watch
 from galecore_ai.application.knowledge import KnowledgeError
 from galecore_ai.contracts.supervision import AlertKind
 from tests.unit.test_knowledge import NOW, kb  # noqa: F401  (kb is a fixture)
+from tests.unit.test_strategy import research_ref  # noqa: F401  (a fixture)
 
 IN_SESSION = NOW.replace(hour=15)          # 11:00 New York, a Wednesday
 PRE_MARKET = NOW.replace(hour=12)          # 08:00 New York
@@ -151,3 +152,37 @@ def test_a_bad_until_is_a_json_error(kb, capsys, monkeypatch):  # noqa: F811
     with pytest.raises(SystemExit):
         cli.main()
     assert "--until" in capsys.readouterr().out
+
+
+# ── WS-0016 (U-65): the condition that invalidates a thesis ─────
+
+
+def test_a_thesis_invalidation_names_its_strategies_and_says_so_in_the_alert(kb, research_ref):  # noqa: F811
+    from galecore_ai.application import project
+    from tests.unit.test_strategy import NAME, stored
+    with pytest.raises(KnowledgeError, match="no strategy named"):
+        add(kb, thesis="la prima de varianza paga en calma", strategies=[NAME])
+    stored(kb, research_ref)
+    with pytest.raises(KnowledgeError, match="names the thesis"):
+        add(kb, thesis="la prima de varianza paga en calma")
+    with pytest.raises(KnowledgeError, match="names the thesis"):
+        add(kb, strategies=[NAME])
+    rule = add(kb, thesis="la prima de varianza paga en calma", strategies=[NAME],
+               words="si SPY pierde 760 la calma se terminó")
+    [entry] = project.strategy_project(kb, NAME)["log"]["thesis"]
+    assert "Deja de servir «la prima de varianza paga en calma» si precio de SPY ≤ 760" in entry["words"]
+    assert rule.id in entry["words"]
+    supervisor.scan(kb, reader(mid=759.0), IN_SESSION)
+    [alert] = supervisor.alerts(kb)
+    assert alert.strategy == NAME
+    assert f"Se cumple lo que invalida «la prima de varianza paga en calma»; dependen de esa tesis: {NAME}." in alert.motivo
+    assert alert.propuesta.startswith("Revisá esas estrategias")
+
+
+def test_rules_stored_before_the_thesis_fields_keep_their_hash(kb):  # noqa: F811
+    rule = add(kb)
+    path = kb.base / "supervision" / "rules" / f"{rule.id}.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    del data["thesis"], data["strategies"]          # what a rule written before WS-0016 has
+    path.write_text(json.dumps(data), encoding="utf-8")
+    assert watch.view(kb, NOW)[0]["status"] == "active"

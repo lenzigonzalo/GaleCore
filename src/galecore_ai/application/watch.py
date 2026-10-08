@@ -19,6 +19,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from galecore_ai.application import project
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.strategy import compute_document_hash
 from galecore_ai.contracts.supervision import (
@@ -80,8 +81,13 @@ def _fmt(x: float) -> str:
 
 
 def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshold: float, words: str, prompt: str,
-        until: datetime | None = None, host_model: str | None = None, now: datetime | None = None) -> WatchRule:
-    """Store a rule. Refuses an unknown symbol shape, metric or condition, and an empty request."""
+        until: datetime | None = None, host_model: str | None = None, now: datetime | None = None,
+        thesis: str = "", strategies: list[str] | None = None) -> WatchRule:
+    """Store a rule. Refuses an unknown symbol shape, metric or condition, and an empty request.
+
+    With ``thesis`` (U-65) the rule is the observable condition that invalidates it: it names the strategies that
+    depend on it, each of which gets the condition in its project (kind thesis), and the alert says which. The project
+    entries follow the rule's write: if one fails, the rule stays stored and the error says so."""
     now = now or datetime.now(UTC)
     symbol = symbol.strip().upper()
     if not SYMBOL.match(symbol):
@@ -90,6 +96,13 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
         raise KnowledgeError("the level is a finite number")
     if not words.strip() or not prompt.strip():
         raise KnowledgeError("a rule keeps the owner's words and request (--text, --prompt)")
+    strategies = sorted(set(strategies or []))
+    if bool(thesis.strip()) != bool(strategies):
+        raise KnowledgeError("a thesis invalidation names the thesis (--thesis) and the strategies that depend on it "
+                             "(--strategy)")
+    known = {k.split("/")[0] for k in kb.strategies.versions()}
+    if unknown := [x for x in strategies if x not in known]:
+        raise KnowledgeError(f"no strategy named {unknown} in the knowledge base")
     if until is not None and until.tzinfo is None:
         until = until.replace(tzinfo=UTC)
     if until is not None and until <= now:
@@ -97,7 +110,8 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
     try:
         rule = WatchRule(id=f"{now.date().isoformat()}-{symbol.lower()}-{metric}-{condition}-{_fmt(threshold)}",
                          created_at=now, symbol=symbol, metric=WatchMetric(metric), condition=WatchCondition(condition),
-                         threshold=threshold, words=words, prompt=prompt, until=until, host_model=host_model)
+                         threshold=threshold, words=words, prompt=prompt, until=until, host_model=host_model,
+                         thesis=thesis.strip(), strategies=strategies)
     except (ValueError, ValidationError) as exc:
         raise KnowledgeError(f"Refusing to store the rule: {str(exc)[:200]}") from exc
     same = (rule.symbol, rule.metric, rule.condition, rule.threshold)
@@ -114,6 +128,11 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
     rule = rule.model_copy(update={"content_hash": compute_document_hash(rule.hashable_content())})
     with path.open("x", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(rule.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n")
+    if rule.thesis:
+        for name in rule.strategies:
+            project.add(kb=kb, name=name, kind="thesis", prompt=prompt, host_model=host_model, now=now,
+                        words=f"Deja de servir «{rule.thesis}» si {describe(rule)} (lo vigila el supervisor: regla "
+                              f"{rule.id}). Pedido: «{words}»")
     return rule
 
 
@@ -204,14 +223,19 @@ def evaluate(kb: KnowledgeBase, read, now: datetime) -> tuple[list[Alert], list[
         hit = value <= rule.threshold if rule.condition == WatchCondition.BELOW else value >= rule.threshold
         if not hit:
             continue
+        thesis = (f" Se cumple lo que invalida «{rule.thesis}»; dependen de esa tesis: {', '.join(rule.strategies)}."
+                  if rule.thesis else "")
         alert = Alert(id=f"{now.date().isoformat()}-watch-{rule.id.split('-', 3)[-1]}"[:80],
-                      key=f"watch:{rule.id}", kind=AlertKind.WATCH, strategy=f"Alerta {rule.symbol}",
+                      key=f"watch:{rule.id}", kind=AlertKind.WATCH,
+                      strategy=", ".join(rule.strategies) if rule.thesis else f"Alerta {rule.symbol}",
                       strategy_ref=None, instance_id="", position_id=rule.id, detected_at=now,
-                      motivo=f"{describe(rule)}: ahora {_fmt(value)}.",
+                      motivo=f"{describe(rule)}: ahora {_fmt(value)}.{thesis}",
                       dato={"symbol": rule.symbol, "metric": rule.metric.value, "value": value,
                             "threshold": rule.threshold, "condition": rule.condition.value},
                       regla=f"Pedido del owner: «{rule.words}» ({rule.created_at:%d/%m})",
-                      propuesta="La alerta se cumplió y deja de vigilarse; pedí otra si querés seguirla.",
+                      propuesta=("Revisá esas estrategias: prender, mantener o apagar lo decidís vos; la regla deja de "
+                                 "vigilarse." if rule.thesis else
+                                 "La alerta se cumplió y deja de vigilarse; pedí otra si querés seguirla."),
                       options=OPTIONS[AlertKind.WATCH], sources=[path.split("?")[0]])
         out.append(alert.model_copy(update={"content_hash": compute_document_hash(alert.hashable_content())}))
     return out, problems, len(active)

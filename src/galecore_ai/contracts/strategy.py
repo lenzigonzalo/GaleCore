@@ -172,6 +172,113 @@ class OwnerDecision(BaseModel):
         return self
 
 
+class Parameter(BaseModel):
+    """One row of the parameter table (WS-0016): what the owner looks at first."""
+
+    model_config = {"extra": "forbid"}
+
+    name: str
+    value: str                   # as the spec or the rule uses it
+    unit: str
+    reasonable_range: str        # what other values would still make sense
+    depends_on: str              # what the value is tied to (DTE, IV, the profile...)
+    would_found: str             # what data would ground it; for a grounded one, what grounds it
+    status: Basis
+    rules: list[str]             # ids of the rules that use it
+    sources: list[str] = Field(default_factory=list)
+
+    check_not_blank = field_validator("name", "value", "unit", "reasonable_range", "depends_on",
+                                      "would_found")(_non_blank)
+
+    @model_validator(mode="after")
+    def _grounded_cites(self) -> Parameter:
+        if self.status == Basis.GROUNDED and not self.sources:
+            raise ValueError(f"parameter {self.name}: a grounded parameter cites at least one source")
+        if not self.rules:
+            raise ValueError(f"parameter {self.name}: names the rules that use it")
+        return self
+
+
+class VersionChange(BaseModel):
+    """Why this version exists (WS-0016, U-30): the version it changes and the decision or finding behind it."""
+
+    model_config = {"extra": "forbid"}
+
+    from_version: str
+    reason: str
+    refs: list[str]              # research:, evidence:, feedback:, strategy: refs or decision:<hash> of the project
+
+    check_not_blank = field_validator("reason")(_non_blank)
+
+    @field_validator("from_version")
+    @classmethod
+    def _version(cls, v: str) -> str:
+        if not STRATEGY_VERSION_RE.fullmatch(v):
+            raise ValueError("from_version is MAJOR.MINOR.PATCH")
+        return v
+
+    @field_validator("refs")
+    @classmethod
+    def _some_ref(cls, v: list[str]) -> list[str]:
+        if not [x for x in v if x.strip()]:
+            raise ValueError("a change cites the decision, feedback or finding that originated it")
+        return v
+
+
+class ManagementKind(str, Enum):
+    TARGET = "target"
+    STOP = "stop"
+    TIME = "time"
+    ROLL = "roll"
+    ADJUST = "adjust"
+    KILL_SWITCH = "kill_switch"
+    REVIEW = "review"
+
+
+class ManagementStep(BaseModel):
+    """A management decision as trigger -> action, not prose (WS-0016)."""
+
+    model_config = {"extra": "forbid"}
+
+    id: str
+    kind: ManagementKind
+    trigger: str                 # observable condition and when it is evaluated
+    action: str                  # what is done; "nada" is an action when that is the decision
+    rules: list[str]             # ids of the rules that state it (an unsupported one is a declared gap)
+
+    check_not_blank = field_validator("id", "trigger", "action")(_non_blank)
+
+    @field_validator("rules")
+    @classmethod
+    def _some_rule(cls, v: list[str]) -> list[str]:
+        if not v:
+            raise ValueError("a management step names the rules that state it")
+        return v
+
+
+MANAGED_BLOCKS = (Block.EXIT, Block.ADJUSTMENT)
+PROPOSAL_FIELDS_ADDED = ("parameters", "management", "change")  # WS-0016
+
+
+def design_gaps(content: ProposalContent) -> list[str]:
+    """What a version saved from WS-0016 on must have: the parameter table and the management tree.
+
+    Checked when a version is saved, not when it is read: versions stored before stay readable.
+    """
+    problems = []
+    if not content.parameters:
+        problems.append("the proposal has no parameter table (parameters)")
+    if not content.management:
+        problems.append("the proposal has no management tree (management)")
+    in_table = {rid for p in content.parameters for rid in p.rules}
+    problems += [f"rule {r.id} has parameter {r.parameter!r} but no row of the parameter table uses it"
+                 for r in content.rules if r.parameter.strip() and r.id not in in_table]
+    managed = {rid for s in content.management for rid in s.rules}
+    problems += [f"rule {r.id} ({r.block.value}) is not a step of the management tree"
+                 for r in content.rules if r.block in MANAGED_BLOCKS and r.id not in managed]
+    return problems
+
+
 def other_version_mentions(content: ProposalContent) -> list[str]:
     """Versions named in what defines or evaluates this version (limitations and pending may cite history).
 
@@ -199,6 +306,9 @@ class ProposalContent(BaseModel):
     owner_decisions: list[OwnerDecision] = Field(default_factory=list)
     pending: list[str] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+    parameters: list[Parameter] = Field(default_factory=list)   # WS-0016; required at save (design_gaps)
+    management: list[ManagementStep] = Field(default_factory=list)
+    change: VersionChange | None = None                         # WS-0016; required at save after the first version
 
     check_not_blank = field_validator("display_name", "purpose")(_non_blank)
 
@@ -229,7 +339,71 @@ class ProposalContent(BaseModel):
         if missing:
             raise ValueError(f"every block needs at least one rule (an absent one is a not-applicable rule "
                              f"that says why): missing {missing}")
+        known = set(ids)
+        unknown = sorted({rid for p in self.parameters for rid in p.rules} - known)
+        unknown += sorted({rid for s in self.management for rid in s.rules} - known)
+        if unknown:
+            raise ValueError(f"parameters or management name rules that do not exist: {sorted(set(unknown))}")
+        step_ids = [s.id for s in self.management]
+        if len(step_ids) != len(set(step_ids)):
+            raise ValueError("duplicate management step ids")
         return self
+
+
+class CritiqueVerdict(str, Enum):
+    PROCEED = "seguir"           # nothing blocks asking the owner for approval
+    REVISE = "revisar"           # a new version should address it first
+    DISCARD = "descartar"        # the idea does not reach SHADOW as it is
+
+
+class CritiqueContent(BaseModel):
+    """The critic's reading of one exact version (WS-0016, U-21): why not, before anyone approves it."""
+
+    model_config = {"extra": "forbid"}
+
+    verdict: CritiqueVerdict
+    missing: list[str]               # what the proposal lacks to be judged (evidence, data, rules)
+    biases: list[str]                # e.g. recency, survivorship, a nice story fitted after the fact
+    alternative_explanation: str     # another mechanism that would produce what the hypothesis expects
+    why_not: list[str]               # the strongest reasons not to run it
+    shutdown_criteria: list[str]     # observable conditions that switch it off (feeds the supervisor)
+    closed_trade_review: str         # what is checked after each closed trade, and what it would change
+    evidence_refs: list[str] = Field(default_factory=list)
+
+    check_not_blank = field_validator("alternative_explanation", "closed_trade_review")(_non_blank)
+
+    @field_validator("missing", "biases", "why_not", "shutdown_criteria")
+    @classmethod
+    def _not_empty(cls, v: list[str]) -> list[str]:
+        if not [x for x in v if x.strip()]:
+            raise ValueError("a critique says at least one thing here (an empty list is not a critique)")
+        return v
+
+
+class CritiqueDocument(BaseModel):
+    model_config = {"extra": "forbid"}
+
+    schema_version: str = STRATEGY_SCHEMA_VERSION
+    kind: str = "strategy_critique"
+    strategy_ref: str                     # strategy:<name>/<version>
+    proposal_hash: str                    # content_hash of the proposal document criticised
+    content: CritiqueContent
+    recorded_at: datetime
+    provenance: str = STRATEGY_PROVENANCE
+    host: RecordHost
+    content_hash: str
+
+    @field_validator("kind")
+    @classmethod
+    def _kind(cls, v: str) -> str:
+        if v != "strategy_critique":
+            raise ValueError(f"kind must be 'strategy_critique', got {v!r}")
+        return v
+
+    def hashable_content(self) -> dict:
+        data = self.model_dump(mode="json")
+        data.pop("content_hash", None)
+        return data
 
 
 class CheckReport(BaseModel):
@@ -284,6 +458,9 @@ class StrategyDocument(BaseModel):
     def hashable_content(self) -> dict:
         data = self.model_dump(mode="json")
         data.pop("content_hash", None)
+        for added in PROPOSAL_FIELDS_ADDED:  # absent in versions stored before them: their hash must not change
+            if not data["content"].get(added):
+                data["content"].pop(added, None)
         return data
 
 

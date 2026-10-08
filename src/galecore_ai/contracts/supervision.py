@@ -112,11 +112,16 @@ class WatchRule(BaseModel):
     prompt: str
     until: datetime | None = None        # after this it is no longer watched (optional)
     host_model: str | None = None
+    thesis: str = ""                     # WS-0016 (U-65): the thesis this condition invalidates, when it is one
+    strategies: list[str] = Field(default_factory=list)   # the strategies that depend on that thesis
     content_hash: str = ""
 
     def hashable_content(self) -> dict:
         data = self.model_dump(mode="json")
         data.pop("content_hash", None)
+        for added in ("thesis", "strategies"):   # absent in rules stored before WS-0016: their hash must not change
+            if not data.get(added):
+                data.pop(added, None)
         return data
 
 

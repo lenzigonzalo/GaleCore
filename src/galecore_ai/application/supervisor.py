@@ -10,8 +10,9 @@ answers with one of its options. The answer is a ``decision`` entry of the strat
 the options, the choice, what the owner expects and when to review it. Nothing here opens, closes or changes a
 position: in SHADOW the runtime's exits are mechanical and a decision only records what the owner thinks.
 
-Out of scope here (owner 05/10): management proposals beyond the rule (after P1-02) and thesis invalidations (after
-P1-05/06). A failed read of GaleCore is reported as such, never as «nothing to report».
+Out of scope here (owner 05/10): management proposals beyond the rule (after P1-02). Thesis invalidations (WS-0016)
+are the owner's rules of ``watch`` with a thesis and its strategies. A failed read of GaleCore is reported as such,
+never as «nothing to report».
 """
 
 from __future__ import annotations
