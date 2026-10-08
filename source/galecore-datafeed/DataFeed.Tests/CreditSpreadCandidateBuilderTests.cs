@@ -10,7 +10,7 @@ namespace DataFeed.Tests;
 /// (vencimiento, DTE, strikes, deltas, precios) tiene que ser todo del mismo vencimiento (R1-B2), y
 /// un parámetro que la spec no declara no se completa con un default (R1-m1).
 /// </summary>
-public class PcsCandidateBuilderTests
+public class CreditSpreadCandidateBuilderTests
 {
     private static readonly DateTime Now = ShadowRuntimeEngineTests.Now; // jueves 24/09/2026, 11:00 ET
 
@@ -59,7 +59,7 @@ public class PcsCandidateBuilderTests
     private static StrategyInstance Instance() => new() { InstanceId = "i-1" };
 
     private static Task<CandidateBuildResult> Build(FakeSource source, StrategySpec? spec = null) =>
-        new PcsCandidateBuilder(source).BuildAsync(Instance(), spec ?? ShadowRuntimeEngineTests.Spec(), "SPY", 15.2, Now);
+        new CreditSpreadCandidateBuilder(source).BuildAsync(Instance(), spec ?? ShadowRuntimeEngineTests.Spec(), "SPY", 15.2, Now);
 
     [Fact]
     public async Task RealData_BuildsCandidate_AllFromTheChosenExpiration()
@@ -227,6 +227,114 @@ public class PcsCandidateBuilderTests
 
         Assert.Null(result.Candidate);
         Assert.Contains("min_credit", result.RejectReason);
+        Assert.Null(source.LastGexRequest);
+    }
+
+    // ── P1-07: call credit spread e iron condor ─────────────────────
+
+    /// <summary>La misma cadena con calls fuera del dinero: 805 (δ 0,20), 810 (δ 0,16), 815 (δ 0,13).</summary>
+    private static GammaExposureResponse WithCalls(GammaExposureResponse r, params GammaExposureStrike[] calls)
+    {
+        r.Strikes.AddRange(calls.Length > 0 ? calls : new GammaExposureStrike[]
+        {
+            new() { Strike = 805, CallDelta = 0.20, CallStreamerSymbol = ".SPY261103C805", CallOI = 10 },
+            new() { Strike = 810, CallDelta = 0.16, CallStreamerSymbol = ".SPY261103C810", CallOI = 10 },
+            new() { Strike = 815, CallDelta = 0.13, CallStreamerSymbol = ".SPY261103C815", CallOI = 10 },
+        });
+        return r;
+    }
+
+    private static FakeSource WithCallQuotes()
+    {
+        var source = new FakeSource { Gex = _ => WithCalls(Response("2026-11-03", 40)) };
+        source.Quotes[".SPY261103C810"] = new LegQuote(2.00, 2.20, Now.AddSeconds(-2));
+        source.Quotes[".SPY261103C815"] = new LegQuote(1.40, 1.60, Now.AddSeconds(-4));
+        return source;
+    }
+
+    private static StrategySpec SpecFor(string structure)
+    {
+        var spec = ShadowRuntimeEngineTests.Spec();
+        var putLegs = spec.CandidateConstruction.Legs;
+        var callLegs = new List<LegTemplate>
+        {
+            new() { Side = "SELL", Type = "CALL", StrikeSelection = new LegStrikeSelection { Method = "DELTA", TargetDelta = 0.16, DeltaTolerance = 0.04 } },
+            new() { Side = "BUY", Type = "CALL", StrikeSelection = new LegStrikeSelection { Method = "FIXED_WIDTH", Width = 5 } },
+        };
+        var legs = structure == RuntimeStructures.CallCreditSpread ? callLegs : putLegs.Concat(callLegs).ToList();
+        return spec with
+        {
+            Structure = spec.Structure with { AllowedStrategies = new() { structure }, DefaultStructure = structure },
+            CandidateConstruction = spec.CandidateConstruction with { Legs = legs },
+        };
+    }
+
+    [Fact]
+    public async Task CallCreditSpread_SellsTheCallByDelta_AndBuysTheOneAbove()
+    {
+        var result = await Build(WithCallQuotes(), SpecFor(RuntimeStructures.CallCreditSpread));
+
+        var c = Assert.IsType<TradeCandidate>(result.Candidate);
+        Assert.Equal("call_credit_spread", c.Structure);
+        Assert.Equal(new[] { ("SELL", "CALL", 810.0), ("BUY", "CALL", 815.0) }, c.Legs.Select(l => (l.Side, l.Type, l.Strike)));
+        Assert.Equal(0.6, c.Credit);         // 2.10 − 1.50
+        Assert.Equal(440, c.MaxRisk);        // (5 − 0.60) × 100
+        Assert.Equal(0.16, c.DeltaShort);
+        Assert.Equal("SPY   261103C00810000", c.Legs[0].OccSymbol);
+        Assert.All(c.Legs, l => Assert.Equal("2026-11-03", l.Expiration));
+    }
+
+    [Fact]
+    public async Task IronCondor_IsBothSides_SameExpiration_RiskOfTheWiderSide()
+    {
+        var result = await Build(WithCallQuotes(), SpecFor(RuntimeStructures.IronCondor));
+
+        var c = Assert.IsType<TradeCandidate>(result.Candidate);
+        Assert.Equal("iron_condor", c.Structure);
+        Assert.Equal(new[] { 720.0, 715.0, 810.0, 815.0 }, c.Legs.Select(l => l.Strike));
+        Assert.Equal(1.3, c.Credit);         // (4.20 − 3.50) + (2.10 − 1.50)
+        Assert.Equal(370, c.MaxRisk);        // sólo un lado pierde a la vez: (5 − 1.30) × 100
+        Assert.Equal(5, c.Width);
+        Assert.Equal(-0.17, c.DeltaShort);   // el de la put vendida, como en el PCS
+        Assert.Equal(Now.AddSeconds(-8), c.Snapshot.OldestQuoteAt);
+        Assert.Equal(0, c.Snapshot.QuotesWithoutTime);
+    }
+
+    [Fact]
+    public async Task IronCondor_WithoutAQuoteOnTheCallSide_NoCandidate()
+    {
+        var source = WithCallQuotes();
+        source.Quotes.Remove(".SPY261103C815");
+
+        var result = await Build(source, SpecFor(RuntimeStructures.IronCondor));
+
+        Assert.Null(result.Candidate);
+        Assert.Contains(".SPY261103C815", result.RejectReason);
+    }
+
+    [Fact]
+    public async Task CallSideOutsideTheDeltaTolerance_NoCandidate()
+    {
+        var source = WithCallQuotes();
+        source.Gex = _ => WithCalls(Response("2026-11-03", 40),
+            new GammaExposureStrike { Strike = 830, CallDelta = 0.05, CallStreamerSymbol = ".SPY261103C830" });
+
+        var result = await Build(source, SpecFor(RuntimeStructures.CallCreditSpread));
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("delta de call", result.RejectReason);
+    }
+
+    [Fact]
+    public async Task StructureTheRuntimeDoesNotBuild_NoCandidate_WithoutAskingTheMarket()
+    {
+        var spec = ShadowRuntimeEngineTests.Spec();
+        var source = new FakeSource();
+
+        var result = await Build(source, spec with { Structure = spec.Structure with { DefaultStructure = "butterfly" } });
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("'butterfly'", result.RejectReason);
         Assert.Null(source.LastGexRequest);
     }
 }

@@ -7,6 +7,8 @@ namespace DataFeed.Application.App.Runtime
     /// Carga, valida y hashea StrategySpecs desde archivos JSON.
     /// El hash se calcula sobre el JSON original (sin content_hash), no sobre el objeto deserializado,
     /// para garantizar que el hash sea del contenido exacto del archivo.
+    /// Un campo que el contrato no conoce, en cualquier nivel, rechaza la spec (P1-07): antes se ignoraba y la
+    /// spec se desplegaba sin esa regla, con un hash que hacía creer que corría completa.
     /// </summary>
     public class StrategySpecLoader
     {
@@ -14,7 +16,8 @@ namespace DataFeed.Application.App.Runtime
         {
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
             PropertyNameCaseInsensitive = true,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+            UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow,
         };
 
         /// <summary>

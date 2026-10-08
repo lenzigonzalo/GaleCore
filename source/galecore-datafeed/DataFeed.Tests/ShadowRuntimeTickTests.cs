@@ -55,7 +55,7 @@ public class ShadowRuntimeTickTests
 
         var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
 
-        Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, outcomes["SPY"]);
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, outcomes["i-1:SPY"]);
         Assert.Equal(ShadowRuntimeTick.SchedulerStates.Idle, store.GetInstance("i-1")!.SchedulerState);
     }
 
@@ -141,6 +141,29 @@ public class ShadowRuntimeTickTests
 
         var ev = Assert.Single(store.GetEvents("i-1"), e => e.EventType == "VALUATION_NO_DATA");
         Assert.Contains("sin spec", ((List<string>)ev.Payload["problems"]!).Single());
+    }
+
+    // ── P1-07: varias instancias ───────────────────────────────────
+
+    [Fact]
+    public async Task EntryTick_EvaluatesEveryRunningInstance_EachWithItsOwnLimit()
+    {
+        var (store, first) = RuntimeWithSpec();   // máximo 1 posición por instancia
+        var second = first with { InstanceId = "i-2", DeploymentId = "d-2", CreatedAt = Now.AddMinutes(1) };
+        store.SetInstance(second.InstanceId, second);
+        var stopped = first with { InstanceId = "i-3", DeploymentId = "d-3", LifecycleState = "STOPPED" };
+        store.SetInstance(stopped.InstanceId, stopped);
+        var data = new FakeData { BuildFor = i => CandidateBuildResult.Built(RealCandidate() with { InstanceId = i.InstanceId }) };
+
+        var firstTick = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
+        var secondTick = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
+
+        Assert.Equal(new[] { "i-1:SPY", "i-2:SPY" }, firstTick.Keys.OrderBy(k => k));
+        Assert.All(firstTick.Values, o => Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, o));
+        Assert.All(secondTick.Values, o => Assert.Equal(ShadowRuntimeEngine.Outcomes.MaxPositions, o));   // cada una, su límite
+        Assert.Equal(new[] { "i-1", "i-2" }, store.AllPositions().Select(p => p.InstanceId).OrderBy(x => x));
+        Assert.Equal(ShadowRuntimeTick.SchedulerStates.Idle, store.GetInstance("i-2")!.SchedulerState);
+        Assert.Equal("IDLE", store.GetInstance("i-3")!.SchedulerState);   // la parada no se evaluó
     }
 }
 

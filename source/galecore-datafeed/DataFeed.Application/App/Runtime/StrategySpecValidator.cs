@@ -69,6 +69,9 @@ namespace DataFeed.Application.App.Runtime
                     errors.Add($"structure.allowed_strategies contains platform-forbidden strategy: {allowed}");
             }
 
+            // ── Construcción: sólo lo que el runtime sabe construir (P1-07) ──
+            ValidateConstruction(spec, errors);
+
             // ── Selection method ──
             var validSelectionMethods = new[] { "FIXED", "RULE_BASED", "AI_RECOMMENDED" };
             if (!validSelectionMethods.Contains(spec.Structure.SelectionMethod))
@@ -97,6 +100,56 @@ namespace DataFeed.Application.App.Runtime
                 errors.Add("metadata.schema_version is required");
 
             return new SpecValidationResult(errors.Count == 0, errors);
+        }
+
+        /// <summary>
+        /// La estructura por defecto tiene que ser una que el runtime construye, y las patas, exactamente las suyas:
+        /// por lado, una SELL por DELTA (put con delta negativo, call con positivo) y una BUY a un ancho fijo. Una pata
+        /// de más o un método que el constructor no conoce se rechazan: si no, la spec se desplegaría sin esa regla.
+        /// </summary>
+        private static void ValidateConstruction(StrategySpec spec, List<string> errors)
+        {
+            var structure = spec.Structure.DefaultStructure;
+            if (string.IsNullOrWhiteSpace(structure)) return;   // ya informado arriba
+            var sides = RuntimeStructures.Sides(structure);
+            if (sides == null)
+            {
+                errors.Add($"structure.default_structure '{structure}' is not built by the runtime "
+                           + $"(supported: {string.Join(", ", RuntimeStructures.Supported)})");
+                return;
+            }
+
+            var legs = spec.CandidateConstruction.Legs;
+            var expected = sides.SelectMany(type => new[] { ("SELL", type), ("BUY", type) }).ToList();
+            var actual = legs.Select(l => (l.Side, l.Type)).ToList();
+            if (actual.Count != expected.Count || expected.Any(e => actual.Count(a => a == e) != 1))
+            {
+                errors.Add($"candidate_construction.legs must be exactly {string.Join(", ", expected.Select(e => $"{e.Item1} {e.Item2}"))} "
+                           + $"for {structure}; got {(actual.Count == 0 ? "none" : string.Join(", ", actual.Select(a => $"{a.Side} {a.Type}")))}");
+                return;
+            }
+
+            foreach (var leg in legs)
+            {
+                var name = $"candidate_construction.legs[{leg.Side} {leg.Type}]";
+                var sel = leg.StrikeSelection;
+                if (leg.Side == "SELL")
+                {
+                    if (sel.Method != "DELTA")
+                        errors.Add($"{name}.strike_selection.method must be DELTA, got '{sel.Method}'");
+                    if (sel.TargetDelta is double d && (leg.Type == "PUT" ? d >= 0 : d <= 0))
+                        errors.Add($"{name}.strike_selection.target_delta must be {(leg.Type == "PUT" ? "negative" : "positive")}, got {d}");
+                    if (sel.DeltaTolerance is double tol && tol <= 0)
+                        errors.Add($"{name}.strike_selection.delta_tolerance must be positive");
+                }
+                else
+                {
+                    if (sel.Method != "FIXED_WIDTH")
+                        errors.Add($"{name}.strike_selection.method must be FIXED_WIDTH, got '{sel.Method}'");
+                    if (sel.Width is double w && w <= 0)
+                        errors.Add($"{name}.strike_selection.width must be positive");
+                }
+            }
         }
 
         private static void ValidateGates(List<GateDefinition> gates, string prefix, List<string> errors)

@@ -61,10 +61,79 @@ public class StrategySpecValidatorTests
                 }
             }
         },
+        CandidateConstruction = new CandidateConstruction
+        {
+            Legs = new List<LegTemplate>
+            {
+                new() { Side = "SELL", Type = "PUT", StrikeSelection = new LegStrikeSelection { Method = "DELTA", TargetDelta = -0.16, DeltaTolerance = 0.04 } },
+                new() { Side = "BUY", Type = "PUT", StrikeSelection = new LegStrikeSelection { Method = "FIXED_WIDTH", Width = 5 } },
+            }
+        },
         RiskLimits = new SpecRiskLimits { MaxConcurrentPositions = 1, MaxRiskPerTradePct = 5.0 },
         Operational = new SpecOperational(),
         Metadata = new SpecMetadata { SchemaVersion = "1.0.0" }
     };
+
+    private static LegTemplate CallLeg(string side, double? delta = 0.16, string? method = null) => side == "SELL"
+        ? new() { Side = "SELL", Type = "CALL", StrikeSelection = new LegStrikeSelection { Method = method ?? "DELTA", TargetDelta = delta, DeltaTolerance = 0.04 } }
+        : new() { Side = "BUY", Type = "CALL", StrikeSelection = new LegStrikeSelection { Method = method ?? "FIXED_WIDTH", Width = 5 } };
+
+    private static StrategySpec WithStructure(string structure, params LegTemplate[] extraLegs)
+    {
+        var spec = ValidSpec();
+        var legs = (structure == RuntimeStructures.CallCreditSpread ? new List<LegTemplate>() : spec.CandidateConstruction.Legs.ToList())
+            .Concat(extraLegs).ToList();
+        return spec with
+        {
+            Structure = spec.Structure with { AllowedStrategies = new() { structure }, DefaultStructure = structure },
+            CandidateConstruction = spec.CandidateConstruction with { Legs = legs },
+        };
+    }
+
+    // ── P1-07: sólo lo que el runtime construye ──
+
+    [Fact]
+    public void CallCreditSpread_And_IronCondor_WithTheirLegs_Pass()
+    {
+        Assert.True(StrategySpecValidator.Validate(WithStructure(RuntimeStructures.CallCreditSpread, CallLeg("SELL"), CallLeg("BUY"))).IsValid);
+        Assert.True(StrategySpecValidator.Validate(WithStructure(RuntimeStructures.IronCondor, CallLeg("SELL"), CallLeg("BUY"))).IsValid);
+    }
+
+    [Fact]
+    public void StructureTheRuntimeDoesNotBuild_IsRejected()
+    {
+        var result = StrategySpecValidator.Validate(WithStructure("butterfly"));
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("'butterfly' is not built by the runtime"));
+    }
+
+    [Fact]
+    public void ALegTheStructureDoesNotUse_IsRejected_NotIgnored()
+    {
+        // Un PCS con patas de call: antes el constructor las ignoraba y la spec corría como PCS.
+        var result = StrategySpecValidator.Validate(WithStructure(RuntimeStructures.PutCreditSpread, CallLeg("SELL"), CallLeg("BUY")));
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("must be exactly SELL PUT, BUY PUT"));
+    }
+
+    [Fact]
+    public void IronCondor_WithoutTheCallSide_IsRejected()
+    {
+        var result = StrategySpecValidator.Validate(WithStructure(RuntimeStructures.IronCondor));
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("SELL PUT, BUY PUT, SELL CALL, BUY CALL"));
+    }
+
+    [Theory]
+    [InlineData("PERCENTAGE_OTM", null)]
+    [InlineData(null, -0.16)]   // delta de call negativo: el constructor nunca encontraría la pata
+    public void UnknownMethod_OrWrongDeltaSign_IsRejected(string? method, double? delta)
+    {
+        var result = StrategySpecValidator.Validate(
+            WithStructure(RuntimeStructures.CallCreditSpread, CallLeg("SELL", delta ?? 0.16, method), CallLeg("BUY")));
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains(method != null ? "method must be DELTA" : "target_delta must be positive"));
+    }
 
     [Fact]
     public void ValidSpec_Passes()
@@ -301,5 +370,33 @@ public class StrategySpecValidatorTests
         };
         var result = StrategySpecValidator.Validate(spec);
         Assert.True(result.IsValid, string.Join("; ", result.Errors));
+    }
+
+    // ── P1-07: el loader rechaza lo que no conoce (bug #6 del traspaso) ──
+
+    [Theory]
+    [InlineData("\"max_concurrent_positions\": 1", "\"max_concurrent_positions\": 1, \"max_daily_loss_usd\": 300")]   // anidado
+    [InlineData("\"canonicalization_version\"", "\"roll_rules\": {\"enabled\": true}, \"canonicalization_version\"")]   // raíz
+    public void UnknownField_RejectsTheSpec_InsteadOfIgnoringIt(string find, string replaceWith)
+    {
+        var json = ShadowRuntimeEngineTests.SpecJson();
+        Assert.Contains(find, json);
+
+        var loaded = StrategySpecLoader.LoadFromJson(json.Replace(find, replaceWith));
+
+        Assert.False(loaded.Success);
+        Assert.Null(loaded.ContentHash);
+        Assert.Contains(loaded.Errors, e => e.Contains("JSON parse error"));
+    }
+
+    [Theory]
+    [InlineData("shadow_runtime_test_v1")]
+    [InlineData("shadow_runtime_test_v2")]
+    [InlineData("spy_prima_varianza_30_45d")]
+    public void TheSpecsInTheRepo_StillLoad(string name)
+    {
+        var path = Path.Combine(Path.GetDirectoryName(ShadowRuntimeEngineTests.SpecPath())!, name + ".json");
+        var loaded = StrategySpecLoader.LoadFromFile(path);
+        Assert.True(loaded.Success, string.Join("; ", loaded.Errors));
     }
 }

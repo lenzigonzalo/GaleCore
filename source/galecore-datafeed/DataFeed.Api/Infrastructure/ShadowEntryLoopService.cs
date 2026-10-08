@@ -5,7 +5,7 @@ namespace DataFeed.Api.Infrastructure
 {
     /// <summary>
     /// Loop de entrada SHADOW. BackgroundService singleton.
-    /// Cada tick: ShadowRuntimeTick.RunEntryTickAsync (en sesión, para cada símbolo de la spec activa:
+    /// Cada tick: ShadowRuntimeTick.RunEntryTickAsync (en sesión, para cada instancia RUNNING y cada símbolo de su spec:
     /// gates con métricas reales → candidato real → riesgo duro → fill simulado al mid real).
     /// Cadencia: 60 segundos. Arranca inerte (switch OFF por defecto).
     ///
@@ -82,7 +82,7 @@ namespace DataFeed.Api.Infrastructure
             var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(
                 _store, data, () => _switch.Resolve().Enabled, DateTime.UtcNow, ct);
             foreach (var (symbol, outcome) in outcomes)
-                _logger.LogDebug("ShadowEntryLoop: {Symbol} → {Outcome}", symbol, outcome);
+                _logger.LogDebug("ShadowEntryLoop: {InstanceSymbol} → {Outcome}", symbol, outcome);
         }
     }
 }

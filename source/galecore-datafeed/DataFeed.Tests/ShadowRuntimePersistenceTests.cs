@@ -221,7 +221,7 @@ public class ShadowRuntimePersistenceTests
     }
 
     [Fact]
-    public void Deploy_SameVersionAgain_ReturnsTheRunningInstance_AndOtherVersionIsAConflict()
+    public void Deploy_SameVersionAgain_ReturnsTheRunningInstance_AndOtherVersionRunsAlongside()
     {
         var (store, repo, instance) = DurableRuntime();
 
@@ -229,13 +229,13 @@ public class ShadowRuntimePersistenceTests
         Assert.Equal(DeployResult.KindExisting, again.Kind);
         Assert.Equal(instance.InstanceId, again.Instance.InstanceId);
 
-        var other = Deploy(store, instance with { InstanceId = Guid.NewGuid().ToString(), VersionHash = "sha256:otra" });
-        Assert.Equal(DeployResult.KindConflict, other.Kind);
-        Assert.Equal(instance.InstanceId, other.Instance.InstanceId);
+        // P1-07: otra versión es otra instancia RUNNING, al lado de la primera.
+        var other = Deploy(store, instance with { InstanceId = Guid.NewGuid().ToString(), DeploymentId = Guid.NewGuid().ToString(), VersionHash = "sha256:otra" });
+        Assert.Equal(DeployResult.KindCreated, other.Kind);
 
-        Assert.Single(store.AllInstances());
-        Assert.Single(repo.Instances);
-        Assert.Single(repo.Deployments);
+        Assert.Equal(new[] { instance.InstanceId, other.Instance.InstanceId }, store.RunningInstances().Select(i => i.InstanceId));
+        Assert.Equal(2, repo.Instances.Count);
+        Assert.Equal(2, repo.Deployments.Count);
     }
 
     [Fact]
@@ -265,7 +265,7 @@ public class ShadowRuntimePersistenceTests
         var older = InstanceOf(spec, "z") with { CreatedAt = Now };
         store.SetInstance(newer.InstanceId, newer);
         store.SetInstance(older.InstanceId, older);
-        Assert.Equal("z", store.ActiveInstance()?.InstanceId);
+        Assert.Equal("z", store.RunningInstances().FirstOrDefault()?.InstanceId);
     }
 
     // ── AC-04: recuperación ────────────────────────────────────────
@@ -295,7 +295,7 @@ public class ShadowRuntimePersistenceTests
         Assert.Equal(opened, after.GetPosition(opened.PositionId));
         Assert.Equal(store.GetEvaluations(instance.InstanceId).Count, after.GetEvaluations(instance.InstanceId).Count);
         Assert.Equal(store.GetEvents(instance.InstanceId).Count, after.GetEvents(instance.InstanceId).Count);
-        Assert.Equal("RUNNING", after.ActiveInstance()?.LifecycleState);
+        Assert.Equal("RUNNING", after.RunningInstances().FirstOrDefault()?.LifecycleState);
 
         // El monitor retoma la posición con precios reales y la valuación queda guardada.
         data.Quotes[".SPY261030P720"] = new LegQuote(1.20, 1.30, Now);
@@ -376,7 +376,7 @@ public class ShadowRuntimePersistenceTests
         Assert.Equal(changed.ContentHash, after.GetSpec("shadow_runtime_test_v1")?.ContentHash);   // la vigente no cambia
 
         var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(after, new FakeData(), () => true, Now, default);
-        Assert.True(outcomes.ContainsKey("SPY"));
+        Assert.True(outcomes.ContainsKey($"{instance.InstanceId}:SPY"));
     }
 
     [Fact]
@@ -406,7 +406,7 @@ public class ShadowRuntimePersistenceTests
 
         Assert.False(store.IsDurable);
         Assert.Empty(store.AllInstances());
-        Assert.Null(store.ActiveInstance());
+        Assert.Null(store.RunningInstances().FirstOrDefault());
         Assert.Contains(instance.InstanceId, repo.Instances.Keys);
     }
 
@@ -426,10 +426,10 @@ public class ShadowRuntimePersistenceTests
         Assert.Equal("STOPPED", repo.Instances[instance.InstanceId].LifecycleState);
         Assert.Equal("STOPPED", store.GetInstance(instance.InstanceId)!.LifecycleState);
         Assert.Single(repo.Events, e => e.EventType == "INSTANCE_STOPPED");
-        Assert.Null(store.ActiveInstance());
+        Assert.Null(store.RunningInstances().FirstOrDefault());
         var other = instance with { InstanceId = "33333333-3333-3333-3333-333333333333", VersionHash = "sha256:otra-version" };
         Assert.Equal(DeployResult.KindCreated, Deploy(store, other).Kind);
-        Assert.Equal(other.InstanceId, store.ActiveInstance()!.InstanceId);
+        Assert.Equal(other.InstanceId, store.RunningInstances().FirstOrDefault()!.InstanceId);
     }
 
     [Fact]
@@ -456,7 +456,7 @@ public class ShadowRuntimePersistenceTests
         Assert.Throws<InvalidOperationException>(() => Stop(store, instance.InstanceId));
 
         Assert.Equal("RUNNING", store.GetInstance(instance.InstanceId)!.LifecycleState);
-        Assert.Equal(instance.InstanceId, store.ActiveInstance()!.InstanceId);
+        Assert.Equal(instance.InstanceId, store.RunningInstances().FirstOrDefault()!.InstanceId);
     }
 
     [Fact]
@@ -469,7 +469,7 @@ public class ShadowRuntimePersistenceTests
 
         Assert.Equal("STOPPED", store.GetInstance(instance.InstanceId)!.LifecycleState);
         Assert.Equal("STOPPED", repo.Instances[instance.InstanceId].LifecycleState);
-        Assert.Null(store.ActiveInstance());
+        Assert.Null(store.RunningInstances().FirstOrDefault());
     }
 
     [Fact]
@@ -499,7 +499,7 @@ public class ShadowRuntimePersistenceTests
         ShadowRuntimeRecovery.Recover(restarted, repo, FileSpecs());
 
         Assert.Equal("STOPPED", restarted.GetInstance(instance.InstanceId)!.LifecycleState);
-        Assert.Null(restarted.ActiveInstance());
+        Assert.Null(restarted.RunningInstances().FirstOrDefault());
         Assert.Contains(restarted.GetEvents(instance.InstanceId), e => e.EventType == "INSTANCE_STOPPED");
     }
 }

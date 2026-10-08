@@ -81,9 +81,9 @@ namespace DataFeed.Application.App.Runtime
             {
                 db.SaveChanges();
             }
-            catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505", ConstraintName: "ix_strategy_instances_single_running" })
+            catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505", ConstraintName: "ix_strategy_instances_running_version" })
             {
-                throw new ShadowRuntimeConflictException("ya hay otra instancia SHADOW RUNNING en la base", ex);
+                throw new ShadowRuntimeConflictException("ya hay una instancia SHADOW RUNNING de esta versión en la base", ex);
             }
         }
 

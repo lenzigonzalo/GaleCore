@@ -5,8 +5,8 @@ using DataFeed.Application.Data.Tastytrade.OptionChains;
 namespace DataFeed.Tests;
 
 /// <summary>
-/// WS-0016 (AC-03/04) — PCS, CCS, IC y «esperar» con una fuente de mercado falsa: el PCS es el del constructor del
-/// runtime, el CCS su espejo en calls, sólo el PCS es ejecutable y una pata sin dato deja la estructura sin números.
+/// WS-0016 (AC-03/04) — PCS, CCS, IC y «esperar» con una fuente de mercado falsa: el PCS y el CCS salen del constructor
+/// del runtime, los tres son ejecutables desde P1-07 y una pata sin dato deja la estructura sin números.
 /// </summary>
 public class StructureComparerTests
 {
@@ -48,7 +48,7 @@ public class StructureComparerTests
         new StructureComparer(source).CompareAsync("SPY", delta, 0.05, 5, 30, 45, Now);
 
     [Fact]
-    public async Task Compares_pcs_ccs_and_iron_condor_with_real_quotes_and_only_pcs_is_executable()
+    public async Task Compares_pcs_ccs_and_iron_condor_with_real_quotes_all_executable()
     {
         var result = await Compare(new FakeSource());
 
@@ -58,9 +58,8 @@ public class StructureComparerTests
         var (pcs, ccs, ic, wait) = (result.Structures[0], result.Structures[1], result.Structures[2], result.Structures[3]);
 
         Assert.True(pcs.ExecutableToday);
-        Assert.False(ccs.ExecutableToday);
-        Assert.False(ic.ExecutableToday);
-        Assert.Contains("P1-07", ccs.Note);
+        Assert.True(ccs.ExecutableToday);
+        Assert.True(ic.ExecutableToday);
 
         Assert.Equal(0.70, pcs.Credit);
         Assert.Equal(430, pcs.MaxRisk);

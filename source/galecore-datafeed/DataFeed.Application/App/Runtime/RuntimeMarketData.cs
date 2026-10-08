@@ -126,7 +126,7 @@ namespace DataFeed.Application.App.Runtime
         public Task<CandidateBuildResult> BuildCandidateAsync(
             StrategyInstance instance, StrategySpec spec, string symbol, double? vixPrice, DateTime nowUtc,
             CancellationToken ct)
-            => new PcsCandidateBuilder(this).BuildAsync(instance, spec, symbol, vixPrice, nowUtc, ct);
+            => new CreditSpreadCandidateBuilder(this).BuildAsync(instance, spec, symbol, vixPrice, nowUtc, ct);
 
         public async Task<List<Expiration>?> GetExpirationsAsync(string symbol, CancellationToken ct)
             => (await _mediator.Send(new OptionChainsRequest { Symbol = symbol }, ct))?.expirations;

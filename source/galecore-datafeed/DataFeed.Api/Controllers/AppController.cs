@@ -1389,9 +1389,10 @@ namespace DataFeed.Controllers
 
         /// <summary>
         /// Deploy de un spec cargado en modo SHADOW → crea deployment + instance, guardados en la base.
-        /// Sin persistencia no despliega (503 con el motivo, GC-0004). Una instancia RUNNING a la vez: si
-        /// ya corre esa misma versión la devuelve (existing = true) en vez de crear otra; si corre otra
-        /// versión, 409. Dos instancias evaluarían dos veces y no respetarían el máximo de posiciones.
+        /// Sin persistencia no despliega (503 con el motivo, GC-0004). Varias instancias RUNNING a la vez, una
+        /// por versión (P1-07): si ya corre esa misma versión la devuelve (existing = true) en vez de crear otra;
+        /// dos de la misma versión evaluarían dos veces y no respetarían su máximo de posiciones. 409 sólo si
+        /// otro proceso desplegó esa versión en el medio (lo impide la base).
         /// </summary>
         [Tags("App.Runtime")]
         [HttpPost("Runtime/Deploy")]
@@ -1455,7 +1456,7 @@ namespace DataFeed.Controllers
             if (result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindConflict)
                 return Conflict(new
                 {
-                    error = "Ya corre otra instancia SHADOW; el runtime evalúa una a la vez.",
+                    error = "Otro proceso desplegó esta versión al mismo tiempo; volvé a pedir el deploy para ver su instancia.",
                     running = result.Instance == null ? null
                         : new { result.Instance.InstanceId, result.Instance.SpecName, result.Instance.VersionHash },
                 });

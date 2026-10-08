@@ -127,10 +127,10 @@ namespace DataFeed.Application.App.Runtime
         private readonly object _deployGate = new();
 
         /// <summary>
-        /// Despliega, con una sola instancia RUNNING a la vez (el loop de entrada evalúa una):
-        /// si ya corre esa misma versión, devuelve esa instancia sin crear otra; si corre otra versión,
-        /// no despliega (Conflict). Chequeo y alta bajo el mismo lock: dos deploys simultáneos no crean
-        /// dos instancias. Guarda el deployment, la instancia y su evento INSTANCE_CREATED, en ese orden,
+        /// Despliega, con varias instancias RUNNING a la vez y como mucho una por versión (P1-07): si ya
+        /// corre esa misma versión, devuelve esa instancia sin crear otra (dos instancias de la misma versión
+        /// evaluarían dos veces y no respetarían su máximo de posiciones). Chequeo y alta bajo el mismo lock:
+        /// dos deploys simultáneos no crean dos instancias. Guarda el deployment, la instancia y su evento INSTANCE_CREATED, en ese orden,
         /// cada uno en su propia escritura: si una falla, lo anterior queda guardado (p. ej. una instancia
         /// sin su evento), pero en memoria nunca hay algo que no esté en la base.
         /// </summary>
@@ -138,9 +138,8 @@ namespace DataFeed.Application.App.Runtime
         {
             lock (_deployGate)
             {
-                var running = ActiveInstance();
-                if (running != null)
-                    return running.VersionHash == instance.VersionHash ? DeployResult.Existing(running) : DeployResult.Conflict(running);
+                var running = RunningInstances().FirstOrDefault(i => i.VersionHash == instance.VersionHash);
+                if (running != null) return DeployResult.Existing(running);
                 _repository?.SaveDeployment(deployment);
                 try
                 {
@@ -148,7 +147,7 @@ namespace DataFeed.Application.App.Runtime
                 }
                 catch (ShadowRuntimeConflictException)
                 {
-                    return DeployResult.Conflict(null);   // otro proceso desplegó primero; la base lo impidió
+                    return DeployResult.Conflict(null);   // otro proceso desplegó esta versión primero; la base lo impidió
                 }
                 AddEvent(created);
                 return DeployResult.Created(instance);
@@ -162,12 +161,12 @@ namespace DataFeed.Application.App.Runtime
             => _instances.Values.ToList().AsReadOnly();
 
         /// <summary>
-        /// La instancia RUNNING más vieja, o null si no hay ninguna. Determinística (GC-0004): el orden
-        /// de un ConcurrentDictionary no lo es, y tras un reinicio podría cambiar cuál evalúa.
+        /// Las instancias RUNNING, de la más vieja a la más nueva. Orden determinístico (GC-0004): el de un
+        /// ConcurrentDictionary no lo es, y tras un reinicio podría cambiar el orden en que se evalúan.
         /// </summary>
-        public StrategyInstance? ActiveInstance()
+        public IReadOnlyList<StrategyInstance> RunningInstances()
             => _instances.Values.Where(i => i.LifecycleState == "RUNNING")
-                .OrderBy(i => i.CreatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).FirstOrDefault();
+                .OrderBy(i => i.CreatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal).ToList();
 
         public void UpdateInstanceState(string instanceId, string lifecycleState, string? schedulerState = null)
         {
@@ -188,8 +187,8 @@ namespace DataFeed.Application.App.Runtime
         }
 
         /// <summary>
-        /// Para una instancia RUNNING (GC-0004): deja de evaluar entradas y libera el lugar de la única
-        /// instancia RUNNING para desplegar otra versión. Sus posiciones abiertas se siguen valuando hasta
+        /// Para una instancia RUNNING (GC-0004): deja de evaluar entradas; su versión se puede volver a
+        /// desplegar como instancia nueva. Sus posiciones abiertas se siguen valuando hasta
         /// su salida, como con el switch apagado. Idempotente: parar una instancia ya parada no hace nada.
         /// Bajo el lock del registro de posiciones: una entrada en curso no se registra después de parar.
         /// Guarda la instancia y después su evento INSTANCE_STOPPED, cada uno antes de tocar la memoria

@@ -40,12 +40,12 @@ namespace DataFeed.Application.App.Runtime
     /// <summary>
     /// PCS, CCS, iron condor y «esperar» para la misma tesis (WS-0016, AC-03/04), con la cadena real.
     ///
-    /// El PCS es el candidato del runtime (<see cref="PcsCandidateBuilder"/>, sin cambios); el CCS es su espejo en
-    /// calls (mismo vencimiento, |delta| y ancho) y el IC, la suma de los dos. Las griegas y los escenarios salen de
+    /// El PCS y el CCS son candidatos del constructor del runtime (<see cref="CreditSpreadCandidateBuilder"/>): el CCS es el
+    /// espejo del PCS en calls (mismo rango de DTE, |delta| y ancho) y el IC, la suma de los dos. Las griegas y los escenarios salen de
     /// Black-Scholes con la IV de cada pata (tasa 0): el P&amp;L de un escenario es el cambio del valor modelado, así el
     /// sesgo del modelo contra el mid se cancela. Probabilidad de tocar el strike vendido ≈ 2 × |delta|.
     /// Datos reales o nada: si falta una pata, esa estructura dice por qué y no lleva números.
-    /// Sólo el PCS se ejecuta hoy (el runtime construye PCS hasta P1-07).
+    /// Las tres se ejecutan en SHADOW desde P1-07 (<see cref="RuntimeStructures"/>): la spec elige con default_structure.
     /// </summary>
     public class StructureComparer
     {
@@ -63,7 +63,7 @@ namespace DataFeed.Application.App.Runtime
             string symbol, double delta, double deltaTolerance, double width, int minDte, int maxDte,
             DateTime nowUtc, CancellationToken ct = default)
         {
-            var spec = PcsSpec(delta, deltaTolerance, width, minDte, maxDte);
+            var spec = SideSpec(RuntimeStructures.PutCreditSpread, delta, deltaTolerance, width, minDte, maxDte);
             var assumptions = new List<string>
             {
                 string.Create(CultureInfo.InvariantCulture, $"PCS: el constructor del runtime con delta {-Math.Abs(delta)} ± {deltaTolerance}, ancho {width}, DTE {minDte}-{maxDte}, sin crédito mínimo"),
@@ -74,7 +74,7 @@ namespace DataFeed.Application.App.Runtime
             };
             var wait = new StructureOption { Structure = "wait", ExecutableToday = true, Note = "no abre posición: sin crédito ni riesgo" };
 
-            var built = await new PcsCandidateBuilder(_market).BuildAsync(
+            var built = await new CreditSpreadCandidateBuilder(_market).BuildAsync(
                 new StrategyInstance { InstanceId = "structures" }, spec, symbol, null, nowUtc, ct);
             if (built.Candidate is not TradeCandidate pcs)
                 return new StructureComparison
@@ -107,17 +107,17 @@ namespace DataFeed.Application.App.Runtime
                     Symbol = symbol, Spot = spot, Expiration = expiration, Dte = pcs.Dte, AsOf = nowUtc,
                     Error = "sin IV para una pata del PCS", Structures = { wait }, Assumptions = assumptions,
                 };
-            var (ccsLegs, ccsError) = await CallSideAsync(spec, gex.Strikes, spot, expiration, symbol, delta, deltaTolerance, width, nowUtc, ct);
+            var (ccsLegs, ccsError) = await CallSideAsync(symbol, delta, deltaTolerance, width, minDte, maxDte, expiration, gex.Strikes, nowUtc, ct);
 
             var structures = new List<StructureOption>
             {
                 Option("put_credit_spread", true, null, pcsLegs, spot, pcs.Dte),
                 ccsLegs == null
                     ? new StructureOption { Structure = "call_credit_spread", Note = ccsError }
-                    : Option("call_credit_spread", false, "el runtime sólo construye PCS (P1-07)", ccsLegs, spot, pcs.Dte),
+                    : Option("call_credit_spread", true, null, ccsLegs, spot, pcs.Dte),
                 ccsLegs == null
                     ? new StructureOption { Structure = "iron_condor", Note = ccsError }
-                    : Option("iron_condor", false, "el runtime sólo construye PCS (P1-07)", pcsLegs.Concat(ccsLegs).ToList(), spot, pcs.Dte),
+                    : Option("iron_condor", true, null, pcsLegs.Concat(ccsLegs).ToList(), spot, pcs.Dte),
                 wait,
             };
             return new StructureComparison
@@ -145,47 +145,23 @@ namespace DataFeed.Application.App.Runtime
             return priced.All(l => l.Iv > 0) ? priced : null;
         }
 
-        /// <summary>Short call por |delta| sobre el spot, long call = short + ancho; cotizaciones frescas.</summary>
+        /// <summary>
+        /// El CCS del constructor del runtime, con la IV de sus patas. Tiene que salir del mismo vencimiento que el PCS: si
+        /// no, la suma no sería un iron condor.
+        /// </summary>
         private async Task<(List<PricedLeg>? Legs, string? Error)> CallSideAsync(
-            StrategySpec spec, List<GammaExposureStrike> strikes, double spot, string expiration, string symbol,
-            double delta, double tolerance, double width, DateTime nowUtc, CancellationToken ct)
+            string symbol, double delta, double tolerance, double width, int minDte, int maxDte, string expiration,
+            List<GammaExposureStrike> strikes, DateTime nowUtc, CancellationToken ct)
         {
-            double target = Math.Abs(delta);
-            var shortCall = strikes
-                .Where(s => s.Strike > spot && s.CallDelta > 0 && s.CallDelta < 0.5)
-                .OrderBy(s => Math.Abs(s.CallDelta - target))
-                .FirstOrDefault();
-            if (shortCall == null)
-                return (null, "sin calls fuera del dinero con delta válido");
-            if (Math.Abs(shortCall.CallDelta - target) > tolerance)
-                return (null, string.Create(CultureInfo.InvariantCulture, $"el delta de call más cercano ({shortCall.CallDelta:0.000}) está fuera de ±{tolerance} del objetivo {target}"));
-
-            var longCall = strikes.OrderBy(s => Math.Abs(s.Strike - (shortCall.Strike + width))).First();
-            if (Math.Abs(longCall.Strike - (shortCall.Strike + width)) > 1.0)
-                return (null, FormattableString.Invariant($"no hay strike para la call comprada cerca de {shortCall.Strike + width}"));
-
-            var maxAge = DataFreshness.MaxAge(spec);
-            var legs = new List<PricedLeg>();
-            foreach (var (side, s) in new[] { ("SELL", shortCall), ("BUY", longCall) })
-            {
-                if (string.IsNullOrEmpty(s.CallStreamerSymbol))
-                    return (null, FormattableString.Invariant($"falta el símbolo de streamer de la call {s.Strike}"));
-                if (!(s.CallIV > 0))
-                    return (null, FormattableString.Invariant($"sin IV para la call {s.Strike}"));
-                var quote = await _market.GetQuoteAsync(s.CallStreamerSymbol, ct);
-                if (quote == null)
-                    return (null, $"sin cotización utilizable para la call {s.CallStreamerSymbol}");
-                var problem = DataFreshness.Problem(quote.AsOf, nowUtc, maxAge);
-                if (problem != null)
-                    return (null, $"cotización de la call {s.CallStreamerSymbol} no utilizable: {problem}");
-                legs.Add(new PricedLeg(new CandidateLeg
-                {
-                    Side = side, Type = "CALL", Strike = s.Strike, Expiration = expiration,
-                    OccSymbol = CascadeUtils.BuildOccSymbol(symbol, expiration, s.Strike, 'C'),
-                    StreamerSymbol = s.CallStreamerSymbol, Delta = s.CallDelta, Bid = quote.Bid, Ask = quote.Ask,
-                }, s.CallIV));
-            }
-            return (legs, null);
+            var built = await new CreditSpreadCandidateBuilder(_market).BuildAsync(
+                new StrategyInstance { InstanceId = "structures" },
+                SideSpec(RuntimeStructures.CallCreditSpread, delta, tolerance, width, minDte, maxDte), symbol, null, nowUtc, ct);
+            if (built.Candidate is not TradeCandidate ccs)
+                return (null, built.RejectReason);
+            if (ccs.Legs[0].Expiration != expiration)
+                return (null, $"el CCS salió del vencimiento {ccs.Legs[0].Expiration}, no del {expiration} del PCS");
+            var legs = WithIv(ccs.Legs, strikes);
+            return legs == null ? (null, "sin IV para una pata del CCS") : (legs, null);
         }
 
         private static StructureOption Option(string structure, bool executable, string? note, List<PricedLeg> legs, double spot, int dte)
@@ -249,18 +225,24 @@ namespace DataFeed.Application.App.Runtime
             return new StructureGreeks(Math.Round(d * 100, 2), Math.Round(g * 100, 4), Math.Round(t * 100 / 365, 2), Math.Round(v, 2));
         }
 
-        private static StrategySpec PcsSpec(double delta, double tolerance, double width, int minDte, int maxDte) => new()
+        /// <summary>Un lado (PCS o CCS) para el constructor: delta con el signo de su tipo, sin crédito mínimo.</summary>
+        private static StrategySpec SideSpec(string structure, double delta, double tolerance, double width, int minDte, int maxDte)
         {
-            Structure = new SpecStructure { DefaultStructure = "put_credit_spread" },
-            CandidateConstruction = new CandidateConstruction
+            var type = structure == RuntimeStructures.PutCreditSpread ? "PUT" : "CALL";
+            double signed = type == "PUT" ? -Math.Abs(delta) : Math.Abs(delta);
+            return new()
             {
-                Legs = new()
+                Structure = new SpecStructure { DefaultStructure = structure },
+                CandidateConstruction = new CandidateConstruction
                 {
-                    new LegTemplate { Side = "SELL", Type = "PUT", StrikeSelection = new LegStrikeSelection { TargetDelta = -Math.Abs(delta), DeltaTolerance = tolerance } },
-                    new LegTemplate { Side = "BUY", Type = "PUT", StrikeSelection = new LegStrikeSelection { Width = width } },
+                    Legs = new()
+                    {
+                        new LegTemplate { Side = "SELL", Type = type, StrikeSelection = new LegStrikeSelection { TargetDelta = signed, DeltaTolerance = tolerance } },
+                        new LegTemplate { Side = "BUY", Type = type, StrikeSelection = new LegStrikeSelection { Width = width } },
+                    },
+                    Constraints = new ConstructionConstraints { MinDte = minDte, MaxDte = maxDte, MinCredit = 0 },
                 },
-                Constraints = new ConstructionConstraints { MinDte = minDte, MaxDte = maxDte, MinCredit = 0 },
-            },
-        };
+            };
+        }
     }
 }
