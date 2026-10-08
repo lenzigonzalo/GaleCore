@@ -70,7 +70,7 @@ namespace DataFeed.Application.App.Runtime
                 "CCS: espejo en calls (mismo vencimiento, delta en valor absoluto y ancho); IC = PCS + CCS",
                 string.Create(CultureInfo.InvariantCulture, $"griegas y escenarios: Black-Scholes con la IV de cada pata, tasa 0, sin dividendos; salto de vol = +{VolJump * 100:0} puntos"),
                 "probabilidad de tocar ≈ 2 × delta (valor absoluto) del strike vendido; en IC, la suma, tope 1",
-                "montos en USD por contrato (×100)",
+                "crédito y breakevens en puntos del subyacente por acción; riesgo, capital, griegas y P&L en USD por contrato (×100)",
             };
             var wait = new StructureOption { Structure = "wait", ExecutableToday = true, Note = "no abre posición: sin crédito ni riesgo" };
 
