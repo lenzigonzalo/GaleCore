@@ -93,8 +93,8 @@ namespace DataFeed.Application.App.Runtime
             // 3b. Espaciado entre entradas (GC-0005): cuenta la última entrada de la instancia, abierta o
             // cerrada, así un cierre rápido no habilita otra entrada el mismo día. Igual que el máximo de
             // posiciones, se chequea fuera del lock de TryAddPosition: vale porque ShadowEntryLoopService es el
-            // único que abre posiciones y evalúa un tick por vez. Un segundo camino de entrada tendría que
-            // repetir estos dos chequeos bajo ese lock.
+            // único que abre posiciones y evalúa un tick por vez, con las instancias en serie (P1-07). Un segundo
+            // camino de entrada tendría que repetir estos dos chequeos bajo ese lock.
             if (spec.RiskLimits.MinMinutesBetweenEntries is int minMinutes
                 && store.LastEntryAt(instance.InstanceId) is DateTime lastEntry
                 && nowUtc - lastEntry < TimeSpan.FromMinutes(minMinutes))

@@ -128,7 +128,7 @@ public class EfShadowRuntimeRepositoryTests
         Assert.Equal(store.GetEvaluations(instance.InstanceId).Single().GateResults.Count,
                      after.GetEvaluations(instance.InstanceId).Single().GateResults.Count);
         Assert.Equal(store.GetEvents(instance.InstanceId).Select(e => e.EventType), after.GetEvents(instance.InstanceId).Select(e => e.EventType));
-        Assert.Equal(instance.InstanceId, after.ActiveInstance()?.InstanceId);
+        Assert.Equal(instance.InstanceId, after.RunningInstances().FirstOrDefault()?.InstanceId);
 
         data.Quotes[".SPY261030P720"] = new LegQuote(1.20, 1.30, Now);
         data.Quotes[".SPY261030P715"] = new LegQuote(0.60, 0.70, Now);
@@ -176,14 +176,14 @@ public class EfShadowRuntimeRepositoryTests
     }
 
     [PostgresFact]
-    public void TwoProcesses_CannotBothHaveARunningInstance()
+    public void TwoProcesses_CannotBothRunTheSameVersion()
     {
         var repo = FreshRepository();
         var first = Boot(repo, out _);
         Deploy(first);
         // Otro proceso con su propio store (no comparte el lock en memoria): la base lo frena.
         var second = Boot(new EfShadowRuntimeRepository(() => new GaleCoreDbContext(Options())), out _);
-        second.UpdateInstanceState(second.ActiveInstance()!.InstanceId, "STOPPED");   // simula un store que no la ve
+        second.UpdateInstanceState(second.RunningInstances().FirstOrDefault()!.InstanceId, "STOPPED");   // simula un store que no la ve
         var spec = second.GetSpec("shadow_runtime_test_v1")!;
         var other = new StrategyInstance
         {
@@ -201,9 +201,40 @@ public class EfShadowRuntimeRepositoryTests
             other,
             new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = other.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now });
 
-        Assert.Equal(DeployResult.KindConflict, result.Kind);
+        // Devuelve la instancia del primero y no deja nada del intento perdido (ni deployment ni evento).
+        Assert.Equal(DeployResult.KindExisting, result.Kind);
+        Assert.NotEqual(other.InstanceId, result.Instance!.InstanceId);
         using var check = new GaleCoreDbContext(Options());
         Assert.Equal(1, check.StrategyInstances.Count(i => i.LifecycleState == "RUNNING"));
+        Assert.False(check.StrategyDeployments.Any(d => d.Id == Guid.Parse(other.DeploymentId)));
+        Assert.False(check.OperationalEvents.Any(e => e.InstanceId == Guid.Parse(other.InstanceId)));
+    }
+
+    [PostgresFact]
+    public void TwoVersions_RunAtTheSameTime_AndBothComeBackAfterRestart()
+    {
+        var repo = FreshRepository();
+        var store = Boot(repo, out _);
+        var first = Deploy(store);
+        var v2 = SpecFile("shadow_runtime_test_v2");
+        repo.SaveSpec(v2.Spec!, v2.Json!);
+        var other = first with
+        {
+            InstanceId = Guid.NewGuid().ToString(), DeploymentId = Guid.NewGuid().ToString(),
+            VersionHash = v2.ContentHash!, SpecName = "shadow_runtime_test_v2",
+        };
+
+        var deployed = store.DeployOrGetRunning(
+            new StrategyDeployment { DeploymentId = other.DeploymentId, VersionHash = other.VersionHash, DeployedAt = Now },
+            other,
+            new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = other.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now });
+
+        Assert.Equal(DeployResult.KindCreated, deployed.Kind);   // el índice único es por versión (P1-07)
+        using (var check = new GaleCoreDbContext(Options()))
+            Assert.Equal(2, check.StrategyInstances.Count(i => i.LifecycleState == "RUNNING"));
+        var restarted = Boot(new EfShadowRuntimeRepository(() => new GaleCoreDbContext(Options())), out _);
+        Assert.Equal(new[] { first.InstanceId, other.InstanceId }.OrderBy(x => x),
+            restarted.RunningInstances().Select(i => i.InstanceId).OrderBy(x => x));
     }
 
     [PostgresFact]
@@ -231,7 +262,7 @@ public class EfShadowRuntimeRepositoryTests
         Assert.Equal(DeployResult.KindCreated, deployed.Kind);   // el índice único sólo cuenta las RUNNING
         var restarted = Boot(new EfShadowRuntimeRepository(() => new GaleCoreDbContext(Options())), out _);
         Assert.Equal("STOPPED", restarted.GetInstance(first.InstanceId)!.LifecycleState);
-        Assert.Equal(other.InstanceId, restarted.ActiveInstance()!.InstanceId);
+        Assert.Equal(other.InstanceId, restarted.RunningInstances().FirstOrDefault()!.InstanceId);
         Assert.Contains(restarted.GetEvents(first.InstanceId), e => e.EventType == "INSTANCE_STOPPED");
     }
 

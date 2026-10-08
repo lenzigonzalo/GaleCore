@@ -60,21 +60,30 @@ namespace DataFeed.Application.App.Runtime
         }
 
         /// <summary>
-        /// Tick de entrada. Devuelve el outcome por símbolo evaluado (vacío si no evaluó).
+        /// Tick de entrada: evalúa cada instancia RUNNING, una después de otra (P1-07). Devuelve el outcome por
+        /// «instancia:símbolo» evaluado (vacío si no evaluó ninguna).
         /// <paramref name="switchEnabled"/> se consulta al empezar y otra vez justo antes de cada
         /// fill: apagar mientras se piden datos no deja abrir una posición (Codex C1).
+        /// Las instancias se evalúan en serie, en este único loop: así el máximo de posiciones y el espaciado de
+        /// cada una siguen chequeándose fuera del lock de TryAddPosition (ver ShadowRuntimeEngine, 3b).
         /// </summary>
         public static async Task<IReadOnlyDictionary<string, string>> RunEntryTickAsync(
             ShadowRuntimeStore store, IRuntimeMarketData data, Func<bool> switchEnabled, DateTime nowUtc, CancellationToken ct)
         {
             var outcomes = new Dictionary<string, string>();
-            var instance = store.ActiveInstance();
-            if (instance == null) return outcomes;
+            foreach (var instance in store.RunningInstances())
+                await RunInstanceAsync(store, data, instance, switchEnabled, nowUtc, outcomes, ct);
+            return outcomes;
+        }
 
+        private static async Task RunInstanceAsync(
+            ShadowRuntimeStore store, IRuntimeMarketData data, StrategyInstance instance, Func<bool> switchEnabled,
+            DateTime nowUtc, Dictionary<string, string> outcomes, CancellationToken ct)
+        {
             if (!switchEnabled())
             {
                 store.UpdateInstanceState(instance.InstanceId, "RUNNING", SchedulerStates.Paused);
-                return outcomes;
+                return;
             }
 
             var spec = store.SpecFor(instance);
@@ -83,31 +92,31 @@ namespace DataFeed.Application.App.Runtime
                 // Por deploy no pasa (valida la spec); sí tras un reinicio si su versión no se pudo
                 // recuperar (GC-0004). Queda visible en la instancia, sin un evento por minuto.
                 store.UpdateInstanceState(instance.InstanceId, "RUNNING", SchedulerStates.SpecNotFound);
-                return outcomes;
+                return;
             }
 
             if (!ShadowSession.IsOpen(spec.Operational, nowUtc))
             {
                 store.UpdateInstanceState(instance.InstanceId, "RUNNING", SchedulerStates.OutsideSession);
-                return outcomes;
+                return;
             }
 
             store.UpdateInstanceState(instance.InstanceId, "RUNNING", SchedulerStates.Evaluating);
             foreach (var symbol in spec.Universe.Symbols)
             {
+                var key = $"{instance.InstanceId}:{symbol}";
                 try
                 {
-                    outcomes[symbol] = await ShadowRuntimeEngine.EvaluateEntryAsync(
+                    outcomes[key] = await ShadowRuntimeEngine.EvaluateEntryAsync(
                         store, data, instance, spec, symbol, nowUtc, ct, canOpen: switchEnabled);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
-                    outcomes[symbol] = "ERROR";
+                    outcomes[key] = "ERROR";
                     AddEvent(store, instance.InstanceId, "ERROR", symbol, nowUtc, ("error", ex.Message));
                 }
             }
             store.UpdateInstanceState(instance.InstanceId, "RUNNING", SchedulerStates.Idle);
-            return outcomes;
         }
 
         /// <summary>Tick del monitor: valúa cada posición abierta. Devuelve el outcome por posición.</summary>

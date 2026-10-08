@@ -16,6 +16,11 @@ namespace DataFeed.Application.App.Runtime
         void SaveSpec(StrategySpec spec, string specJson);
         void SaveDeployment(StrategyDeployment deployment);
         void SaveInstance(StrategyInstance instance);
+        /// <summary>
+        /// Guarda el deployment, la instancia y su evento INSTANCE_CREATED en una sola transacción. Si la base ya
+        /// tiene una instancia RUNNING de esa versión (la desplegó otro proceso), no guarda nada y devuelve esa.
+        /// </summary>
+        StrategyInstance? Deploy(StrategyDeployment deployment, StrategyInstance instance, OperationalEvent created);
         /// <summary>Guarda la posición y, si viene, su evento de ciclo de vida en la misma transacción.</summary>
         void SavePosition(ShadowPosition position, OperationalEvent? lifecycleEvent = null);
         void AddEvaluation(EvaluationResult evaluation);
@@ -72,12 +77,10 @@ namespace DataFeed.Application.App.Runtime
     /// <summary>Resultado de ShadowRuntimeStore.DeployOrGetRunning.</summary>
     public record DeployResult(string Kind, StrategyInstance? Instance)
     {
-        public const string KindCreated = "CREATED", KindExisting = "EXISTING", KindConflict = "CONFLICT";
+        public const string KindCreated = "CREATED", KindExisting = "EXISTING";
         public static DeployResult Created(StrategyInstance i) => new(KindCreated, i);
-        /// <summary>Ya corre esa misma versión: es esa instancia.</summary>
+        /// <summary>Ya corre esa misma versión (en este proceso o, según la base, en otro): es esa instancia.</summary>
         public static DeployResult Existing(StrategyInstance i) => new(KindExisting, i);
-        /// <summary>Corre otra instancia; <see cref="Instance"/> es la que corre (null si la creó otro proceso).</summary>
-        public static DeployResult Conflict(StrategyInstance? running) => new(KindConflict, running);
     }
 
     /// <summary>Resultado de ShadowRuntimeStore.Stop.</summary>

@@ -19,6 +19,8 @@ public class ShadowRuntimeEngineTests
         public Dictionary<string, double?> Metrics = new() { [VixRef] = 15.2, [GexRef] = 120.0 };
         public bool ThrowOnMetrics;
         public Func<CandidateBuildResult>? Build;
+        /// <summary>Como Build, pero con la instancia que se evalúa (varias instancias, P1-07).</summary>
+        public Func<StrategyInstance, CandidateBuildResult>? BuildFor;
         public bool ThrowOnBuild;
         public int BuildCalls;
         public Dictionary<string, LegQuote?> Quotes = new();
@@ -36,7 +38,7 @@ public class ShadowRuntimeEngineTests
         {
             BuildCalls++;
             if (ThrowOnBuild) throw new InvalidOperationException("cadena caída");
-            return Task.FromResult(Build?.Invoke() ?? CandidateBuildResult.Rejected("sin candidato"));
+            return Task.FromResult(BuildFor?.Invoke(instance) ?? Build?.Invoke() ?? CandidateBuildResult.Rejected("sin candidato"));
         }
 
         public Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
@@ -591,5 +593,57 @@ public class ShadowRuntimeEngineTests
         var history = store.GetEvaluations("i-1");
         Assert.Equal(ShadowRuntimeStore.MaxEvaluationsPerInstance, history.Count);
         Assert.Equal("e5", history.First().EvaluationId);
+    }
+
+    // ── P1-07: un iron condor sin crédito no se abre (el riesgo duro no depende del nombre "credit") ──
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-0.30)]
+    public async Task IronCondor_WithoutCredit_IsRejected_NeverOpened(double credit)
+    {
+        var (store, instance) = NewRuntime();
+        var ic = RealCandidate() with { Structure = "iron_condor", Credit = credit };
+        var spec = Spec() with { Structure = Spec().Structure with { AllowedStrategies = new() { "iron_condor" }, DefaultStructure = "iron_condor" } };
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(ic) };
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, spec, "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.RiskRejected, outcome);
+        Assert.Empty(store.AllPositions());
+    }
+
+    // ── P1-07: un iron condor se valúa y se cierra con sus cuatro patas ──
+
+    [Fact]
+    public async Task IronCondor_ValuedWithAllFourLegs_AndTakesProfitOnTheCombinedCredit()
+    {
+        var (store, instance) = NewRuntime();
+        var ic = RealCandidate() with
+        {
+            Structure = "iron_condor", Credit = 1.40, MaxRisk = 360,
+            Legs = RealCandidate().Legs.Concat(new List<CandidateLeg>
+            {
+                new() { Side = "SELL", Type = "CALL", Strike = 810, Expiration = "2026-10-30", StreamerSymbol = ".SPY261030C810", Bid = 1.10, Ask = 1.30, Delta = 0.16 },
+                new() { Side = "BUY", Type = "CALL", Strike = 815, Expiration = "2026-10-30", StreamerSymbol = ".SPY261030C815", Bid = 0.50, Ask = 0.70 },
+            }).ToList(),
+        };
+        var spec = Spec() with { Structure = Spec().Structure with { AllowedStrategies = new() { "iron_condor" }, DefaultStructure = "iron_condor" } };
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(ic) };
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, spec, "SPY", Now, default));
+        var pos = store.AllPositions().Single();
+        Assert.Equal(4, pos.Legs.Count);
+
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now);
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+        data.Quotes[".SPY261030C810"] = new LegQuote(0.40, 0.50, Now);
+        data.Quotes[".SPY261030C815"] = new LegQuote(0.10, 0.20, Now);
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(store, data, pos, spec.Exits.Deterministic, Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Closed, outcome);
+        var closed = store.GetPosition(pos.PositionId)!;
+        Assert.Equal(0.6, closed.ExitDebit);       // (0.55 − 0.25) + (0.45 − 0.15)
+        Assert.Equal(80.0, closed.RealizedPnl);    // (1.40 − 0.60) × 100
+        Assert.Equal("TAKE_PROFIT", closed.ExitReason);
     }
 }

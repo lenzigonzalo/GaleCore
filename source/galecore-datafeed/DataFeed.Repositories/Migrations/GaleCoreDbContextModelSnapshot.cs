@@ -411,9 +411,9 @@ namespace DataFeed.Repositories.Migrations
                     b.HasIndex("DeploymentId")
                         .HasDatabaseName("ix_strategy_instances_deployment_id");
 
-                    b.HasIndex("LifecycleState")
+                    b.HasIndex("VersionHash")
                         .IsUnique()
-                        .HasDatabaseName("ix_strategy_instances_single_running")
+                        .HasDatabaseName("ix_strategy_instances_running_version")
                         .HasFilter("lifecycle_state = 'RUNNING'");
 
                     b.ToTable("strategy_instances", (string)null);
