@@ -251,7 +251,13 @@ def _leg_key(leg: dict) -> str:
 
 
 def _number(v: Any) -> bool:
-    return isinstance(v, int | float) and not isinstance(v, bool) and math.isfinite(v)
+    """A finite JSON number the runtime can hold as a double (an integer like 10**400 is not)."""
+    if not isinstance(v, int | float) or isinstance(v, bool):
+        return False
+    try:
+        return math.isfinite(float(v))
+    except OverflowError:
+        return False
 
 
 def _obj(v: Any) -> dict:

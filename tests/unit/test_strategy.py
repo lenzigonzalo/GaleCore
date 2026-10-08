@@ -346,6 +346,8 @@ def _set(data: dict, path: str, value) -> dict:
     ("candidate_construction.legs.0.strike_selection.target_delta", "-0.16", "target_delta must be a number"),
     ("candidate_construction.legs.0.strike_selection.target_delta", None, "target_delta must be a number"),
     ("candidate_construction.legs.0.strike_selection.target_delta", True, "target_delta must be a number"),
+    ("candidate_construction.legs.0.strike_selection.target_delta", -(10**400), "target_delta must be a number"),
+    ("candidate_construction.constraints.min_credit", 10**400, "min_credit must be positive"),
     ("candidate_construction.legs.0.strike_selection.delta_tolerance", None, "delta_tolerance must be positive"),
     ("candidate_construction.legs.1.strike_selection.width", "5", "width must be positive"),
     ("candidate_construction.legs.1.strike_selection", [], "strike_selection must be an object"),
