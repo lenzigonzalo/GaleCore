@@ -595,6 +595,24 @@ public class ShadowRuntimeEngineTests
         Assert.Equal("e5", history.First().EvaluationId);
     }
 
+    // ── P1-07: un iron condor sin crédito no se abre (el riesgo duro no depende del nombre "credit") ──
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-0.30)]
+    public async Task IronCondor_WithoutCredit_IsRejected_NeverOpened(double credit)
+    {
+        var (store, instance) = NewRuntime();
+        var ic = RealCandidate() with { Structure = "iron_condor", Credit = credit };
+        var spec = Spec() with { Structure = Spec().Structure with { AllowedStrategies = new() { "iron_condor" }, DefaultStructure = "iron_condor" } };
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(ic) };
+
+        var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, spec, "SPY", Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.RiskRejected, outcome);
+        Assert.Empty(store.AllPositions());
+    }
+
     // ── P1-07: un iron condor se valúa y se cierra con sus cuatro patas ──
 
     [Fact]

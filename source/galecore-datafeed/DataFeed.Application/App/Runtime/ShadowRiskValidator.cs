@@ -51,7 +51,7 @@ namespace DataFeed.Application.App.Runtime
                 errors.Add("Candidate has no legs");
 
             // ── Credit debe ser positivo para credit spreads ──
-            if (candidate.Structure.Contains("credit") && candidate.Credit <= 0)
+            if ((candidate.Structure.Contains("credit") || RuntimeStructures.Sides(candidate.Structure) != null) && candidate.Credit <= 0)
                 errors.Add($"Credit spread must have positive credit, got {candidate.Credit}");
 
             // ── MaxRisk debe ser positivo ──

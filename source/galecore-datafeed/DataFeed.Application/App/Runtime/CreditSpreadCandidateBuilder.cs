@@ -170,6 +170,9 @@ namespace DataFeed.Application.App.Runtime
             if (!double.IsFinite(credit))
                 return Rejected($"crédito no finito ({credit})");
 
+            // Todas las estructuras del runtime son de crédito: cero o débito no se abre, sea cual sea el mínimo.
+            if (!(credit > 0))
+                return Rejected($"crédito {credit} no positivo");
             if (credit < minCredit)
                 return Rejected($"crédito {credit} menor al mínimo {minCredit}");
 

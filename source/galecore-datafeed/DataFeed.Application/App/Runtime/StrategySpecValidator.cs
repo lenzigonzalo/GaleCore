@@ -72,10 +72,9 @@ namespace DataFeed.Application.App.Runtime
             // ── Construcción: sólo lo que el runtime sabe construir (P1-07) ──
             ValidateConstruction(spec, errors);
 
-            // ── Selection method ──
-            var validSelectionMethods = new[] { "FIXED", "RULE_BASED", "AI_RECOMMENDED" };
-            if (!validSelectionMethods.Contains(spec.Structure.SelectionMethod))
-                errors.Add($"structure.selection_method must be one of: {string.Join(", ", validSelectionMethods)}");
+            // ── Selection method: el runtime no tiene selector, siempre arma la default_structure ──
+            if (spec.Structure.SelectionMethod != "FIXED")
+                errors.Add($"structure.selection_method must be FIXED (the runtime has no selector), got '{spec.Structure.SelectionMethod}'");
 
             // ── Entry filters — gates ──
             ValidateGates(spec.EntryFilters.GateLayer.Gates, "entry_filters.gate_layer", errors);
@@ -109,6 +108,12 @@ namespace DataFeed.Application.App.Runtime
         /// </summary>
         private static void ValidateConstruction(StrategySpec spec, List<string> errors)
         {
+            foreach (var allowed in spec.Structure.AllowedStrategies.Where(a => RuntimeStructures.Sides(a) == null))
+                errors.Add($"structure.allowed_strategies contains '{allowed}', not built by the runtime "
+                           + $"(supported: {string.Join(", ", RuntimeStructures.Supported)})");
+            if (spec.CandidateConstruction.Constraints.MinCredit is double minCredit && !(minCredit > 0))
+                errors.Add($"candidate_construction.constraints.min_credit must be positive, got {minCredit}");
+
             var structure = spec.Structure.DefaultStructure;
             if (string.IsNullOrWhiteSpace(structure)) return;   // ya informado arriba
             var sides = RuntimeStructures.Sides(structure);

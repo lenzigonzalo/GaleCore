@@ -292,6 +292,47 @@ public class StrategySpecValidatorTests
     }
 
     [Fact]
+    public void AllowedStrategyTheRuntimeDoesNotBuild_Fails()
+    {
+        var spec = ValidSpec() with
+        {
+            Structure = ValidSpec().Structure with { AllowedStrategies = new List<string> { "put_credit_spread", "jade_lizard" } }
+        };
+        var result = StrategySpecValidator.Validate(spec);
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("allowed_strategies contains 'jade_lizard'"));
+    }
+
+    [Theory]
+    [InlineData("RULE_BASED")]
+    [InlineData("AI_RECOMMENDED")]
+    public void SelectionMethodOtherThanFixed_Fails_TheRuntimeHasNoSelector(string method)
+    {
+        var spec = ValidSpec() with { Structure = ValidSpec().Structure with { SelectionMethod = method } };
+        var result = StrategySpecValidator.Validate(spec);
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("selection_method must be FIXED"));
+    }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-0.5)]
+    public void NonPositiveMinCredit_Fails(double minCredit)
+    {
+        var spec = ValidSpec();
+        spec = spec with
+        {
+            CandidateConstruction = spec.CandidateConstruction with
+            {
+                Constraints = spec.CandidateConstruction.Constraints with { MinCredit = minCredit },
+            },
+        };
+        var result = StrategySpecValidator.Validate(spec);
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("min_credit must be positive"));
+    }
+
+    [Fact]
     public void DuplicateGateId_Fails()
     {
         var gate = new GateDefinition

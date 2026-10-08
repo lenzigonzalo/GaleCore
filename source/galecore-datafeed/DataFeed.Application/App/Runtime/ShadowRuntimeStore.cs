@@ -130,9 +130,9 @@ namespace DataFeed.Application.App.Runtime
         /// Despliega, con varias instancias RUNNING a la vez y como mucho una por versión (P1-07): si ya
         /// corre esa misma versión, devuelve esa instancia sin crear otra (dos instancias de la misma versión
         /// evaluarían dos veces y no respetarían su máximo de posiciones). Chequeo y alta bajo el mismo lock:
-        /// dos deploys simultáneos no crean dos instancias. Guarda el deployment, la instancia y su evento INSTANCE_CREATED, en ese orden,
-        /// cada uno en su propia escritura: si una falla, lo anterior queda guardado (p. ej. una instancia
-        /// sin su evento), pero en memoria nunca hay algo que no esté en la base.
+        /// dos deploys simultáneos no crean dos instancias. El deployment, la instancia y su evento INSTANCE_CREATED
+        /// se guardan en una sola transacción; si la base ya tiene esa versión RUNNING (otro proceso), se devuelve
+        /// esa instancia y no queda nada de este intento. En memoria nunca hay algo que no esté en la base.
         /// </summary>
         public DeployResult DeployOrGetRunning(StrategyDeployment deployment, StrategyInstance instance, OperationalEvent created)
         {
@@ -140,16 +140,14 @@ namespace DataFeed.Application.App.Runtime
             {
                 var running = RunningInstances().FirstOrDefault(i => i.VersionHash == instance.VersionHash);
                 if (running != null) return DeployResult.Existing(running);
-                _repository?.SaveDeployment(deployment);
-                try
+                var other = _repository?.Deploy(deployment, instance, created);
+                if (other != null)
                 {
-                    SetInstance(instance.InstanceId, instance);
+                    _instances[other.InstanceId] = other;   // como al reiniciar: lo que está RUNNING en la base
+                    return DeployResult.Existing(other);
                 }
-                catch (ShadowRuntimeConflictException)
-                {
-                    return DeployResult.Conflict(null);   // otro proceso desplegó esta versión primero; la base lo impidió
-                }
-                AddEvent(created);
+                _instances[instance.InstanceId] = instance;
+                RememberEvent(created);
                 return DeployResult.Created(instance);
             }
         }

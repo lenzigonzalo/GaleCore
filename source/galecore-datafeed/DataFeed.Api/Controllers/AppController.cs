@@ -1453,13 +1453,6 @@ namespace DataFeed.Controllers
                 Timestamp = now
             });
 
-            if (result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindConflict)
-                return Conflict(new
-                {
-                    error = "Otro proceso desplegó esta versión al mismo tiempo; volvé a pedir el deploy para ver su instancia.",
-                    running = result.Instance == null ? null
-                        : new { result.Instance.InstanceId, result.Instance.SpecName, result.Instance.VersionHash },
-                });
             var shown = result.Instance!;
 
             if (result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindCreated)

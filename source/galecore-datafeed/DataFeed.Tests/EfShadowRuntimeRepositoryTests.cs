@@ -201,9 +201,13 @@ public class EfShadowRuntimeRepositoryTests
             other,
             new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = other.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now });
 
-        Assert.Equal(DeployResult.KindConflict, result.Kind);
+        // Devuelve la instancia del primero y no deja nada del intento perdido (ni deployment ni evento).
+        Assert.Equal(DeployResult.KindExisting, result.Kind);
+        Assert.NotEqual(other.InstanceId, result.Instance!.InstanceId);
         using var check = new GaleCoreDbContext(Options());
         Assert.Equal(1, check.StrategyInstances.Count(i => i.LifecycleState == "RUNNING"));
+        Assert.False(check.StrategyDeployments.Any(d => d.Id == Guid.Parse(other.DeploymentId)));
+        Assert.False(check.OperationalEvents.Any(e => e.InstanceId == Guid.Parse(other.InstanceId)));
     }
 
     [PostgresFact]

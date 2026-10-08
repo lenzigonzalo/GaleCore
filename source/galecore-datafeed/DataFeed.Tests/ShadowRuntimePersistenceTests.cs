@@ -35,6 +35,12 @@ public class ShadowRuntimePersistenceTests
         }
         public void SaveDeployment(StrategyDeployment d) { Check(); Deployments.Add(d); }
         public void SaveInstance(StrategyInstance i) { Check(); InstanceSaves++; Instances[i.InstanceId] = i; }
+        public StrategyInstance? Deploy(StrategyDeployment d, StrategyInstance i, OperationalEvent e)
+        {
+            Check();   // una transacción: los tres o nada
+            Deployments.Add(d); InstanceSaves++; Instances[i.InstanceId] = i; Events.Add(e);
+            return null;
+        }
         public void SavePosition(ShadowPosition p, OperationalEvent? e = null)
         {
             Check();   // una transacción: la posición y su evento, o nada
@@ -198,6 +204,7 @@ public class ShadowRuntimePersistenceTests
         public void SaveSpec(StrategySpec spec, string specJson) => _inner.SaveSpec(spec, specJson);
         public void SaveDeployment(StrategyDeployment d) => _inner.SaveDeployment(d);
         public void SaveInstance(StrategyInstance i) => _inner.SaveInstance(i);
+        public StrategyInstance? Deploy(StrategyDeployment d, StrategyInstance i, OperationalEvent e) => _inner.Deploy(d, i, e);
         public void SavePosition(ShadowPosition p, OperationalEvent? e = null) => throw new InvalidOperationException("base caída");
         public void AddEvaluation(EvaluationResult e) => _inner.AddEvaluation(e);
         public void AddEvent(OperationalEvent e) => _inner.AddEvent(e);

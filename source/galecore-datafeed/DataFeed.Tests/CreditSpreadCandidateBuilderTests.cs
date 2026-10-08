@@ -211,6 +211,26 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
+    public async Task ZeroCredit_NoCandidate_EvenWithMinCreditZero()
+    {
+        var spec = ShadowRuntimeEngineTests.Spec();
+        spec = spec with
+        {
+            CandidateConstruction = spec.CandidateConstruction with
+            {
+                Constraints = spec.CandidateConstruction.Constraints with { MinCredit = 0 },
+            },
+        };
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(3.40, 3.60, Now);   // mismo mid que la comprada: crédito 0
+
+        var result = await Build(source, spec);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("no positivo", result.RejectReason);
+    }
+
+    [Fact]
     public async Task SpecWithoutParameter_NoCandidate_NoDefault()
     {
         var spec = ShadowRuntimeEngineTests.Spec();

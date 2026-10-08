@@ -60,6 +60,52 @@ namespace DataFeed.Application.App.Runtime
             db.SaveChanges();
         }
 
+        public StrategyInstance? Deploy(StrategyDeployment deployment, StrategyInstance instance, OperationalEvent created)
+        {
+            using (var db = _newContext())
+            {
+                var specId = db.StrategySpecs.Where(s => s.ContentHash == deployment.VersionHash).Select(s => (Guid?)s.Id).FirstOrDefault()
+                    ?? throw new InvalidOperationException($"la spec {deployment.VersionHash} no está guardada");
+                db.StrategyDeployments.Add(new StrategyDeploymentEntity
+                {
+                    Id = Guid.Parse(deployment.DeploymentId),
+                    SpecId = specId,
+                    VersionHash = deployment.VersionHash,
+                    Mode = deployment.Mode,
+                    DeployedBy = deployment.DeployedBy,
+                    DeployedAt = Utc(deployment.DeployedAt),
+                });
+                db.StrategyInstances.Add(new StrategyInstanceEntity
+                {
+                    Id = Guid.Parse(instance.InstanceId),
+                    DeploymentId = Guid.Parse(instance.DeploymentId),
+                    VersionHash = instance.VersionHash,
+                    LifecycleState = instance.LifecycleState,
+                    SchedulerState = instance.SchedulerState,
+                    SpecName = instance.SpecName,
+                    Mode = instance.Mode,
+                    CreatedAt = Utc(instance.CreatedAt),
+                    UpdatedAt = Utc(instance.UpdatedAt),
+                });
+                db.OperationalEvents.Add(ToEntity(created));
+                try
+                {
+                    db.SaveChanges();   // una transacción: los tres o ninguno
+                    return null;
+                }
+                catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505", ConstraintName: "ix_strategy_instances_running_version" })
+                {
+                    // Otro proceso ganó: no queda nada de este intento; se devuelve la suya.
+                }
+            }
+            using var read = _newContext();
+            var running = read.StrategyInstances.AsNoTracking()
+                .FirstOrDefault(i => i.VersionHash == instance.VersionHash && i.LifecycleState == "RUNNING");
+            return running == null
+                ? throw new InvalidOperationException($"la base rechazó la instancia de {instance.VersionHash} pero no hay otra RUNNING")
+                : ToContract(running);
+        }
+
         public void SaveInstance(StrategyInstance instance)
         {
             using var db = _newContext();
