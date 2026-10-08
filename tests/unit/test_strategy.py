@@ -649,8 +649,8 @@ def test_sheet_puts_the_version_against_the_profile_and_what_is_open(kb, researc
         return exposure()
     out = sheet(kb, KEY, read)
     md = out["markdown"]
-    assert asked == [("/App/Runtime/Exposure?capital=10000.0&maxRiskPerTradePct=5.0&maxOpenRiskPct=50.0"
-                      "&reservePct=10.0&maxBetPct=30.0")]
+    assert asked[0] == ("/App/Runtime/Exposure?capital=10000.0&maxRiskPerTradePct=5.0&maxOpenRiskPct=50.0"
+                        "&reservePct=10.0&maxBetPct=30.0")
     spec = json.loads(spec_text())
     cap, n = spec["risk_limits"]["max_loss_per_trade_usd"], spec["risk_limits"]["max_concurrent_positions"]
     assert f"| Pérdida máxima por operación (1 contrato) | {cap:g} USD (tope de la spec; el runtime no abre por encima) | 500 USD (5 %) |" in md
@@ -663,6 +663,50 @@ def test_sheet_puts_the_version_against_the_profile_and_what_is_open(kb, researc
     assert "- Falta: lo abierto en SHADOW: GaleCore no respondió en" in sheet(kb, KEY, down)["markdown"]
     assert "respuesta inesperada de GaleCore" in sheet(kb, KEY, lambda path: {"asOf": "x"})["markdown"]
     assert "- Falta: lo abierto en SHADOW: no se consultó GaleCore" in sheet(kb, KEY)["markdown"]
+
+
+def _structures_response() -> dict:
+    def priced(structure, executable, credit, risk, bes, note=None):
+        return {"structure": structure, "executableToday": executable, "note": note, "credit": credit,
+                "maxRisk": risk, "capital": risk, "breakevens": bes, "touchProbability": 0.317,
+                "greeks": {"delta": 2.11, "gamma": -0.08, "thetaPerDay": 0.73, "vegaPerVolPoint": -5.35},
+                "scenarios": [{"name": "gap -5%", "spot": 736.07, "volShift": 0, "pnl": -143.57},
+                              {"name": "vol +5 pts", "spot": 774.81, "volShift": 0.05, "pnl": -24.45}]}
+    return {"symbol": "SPY", "spot": 774.81, "expiration": "2026-11-13", "dte": 36, "asOf": "2026-10-08T15:00:00Z",
+            "error": None, "assumptions": ["montos en USD por contrato (×100)"], "structures": [
+                priced("put_credit_spread", True, 0.46, 454.0, [736.54]),
+                {"structure": "call_credit_spread", "executableToday": False,
+                 "note": "sin cotización utilizable para la call .SPY261113C811"},
+                priced("iron_condor", False, 1.2, 380.0, [735.8, 807.2], "no ejecutable hoy: el runtime sólo construye PCS (P1-07)"),
+                {"structure": "wait", "executableToday": True, "note": "no abre posición: sin crédito ni riesgo"}]}
+
+
+def test_sheet_compares_structures_with_what_galecore_returns(kb, research_ref):  # noqa: F811
+    from galecore_ai.application import supervisor
+    stored(kb, research_ref)
+    asked = []
+
+    def read(path):
+        asked.append(path)
+        return _structures_response()
+    out = sheet(kb, KEY, read)
+    md = out["markdown"]
+    spec = json.loads(spec_text())
+    sell = next(leg for leg in spec["candidate_construction"]["legs"] if leg["side"].upper() == "SELL")
+    assert asked[-1].startswith("/App/Runtime/Structures?symbol=SPY&delta=" + f"{abs(sell['strike_selection']['target_delta'])}")
+    assert "| PCS | 0.46 | 454.0 | 736.54 | 0.317 | 2.11 | 0.73 | -5.35 | -143.57 | -24.45 |" in md
+    assert "| Iron condor | 1.2 | 380.0 | 735.8 / 807.2 |" in md
+    assert "- CCS: no ejecutable hoy — sin cotización utilizable para la call .SPY261113C811" in md
+    assert "- PCS: ejecutable hoy" in md and "- Iron condor: no ejecutable hoy — no ejecutable hoy: el runtime" in md
+    assert "- Esperar: ejecutable hoy — no abre posición" in md
+    assert out["structures"]["data"]["dte"] == 36
+
+    def down(path):
+        raise supervisor.SupervisorError("GaleCore no respondió")
+    assert "- Falta: estructuras: GaleCore no respondió" in sheet(kb, KEY, down)["markdown"]
+    assert "- Falta: estructuras: no se consultó GaleCore" in sheet(kb, KEY)["markdown"]
+    failed = dict(_structures_response(), error="sin PCS: sin cadena de opciones para SPY", structures=[])
+    assert "- Falta: estructuras: sin PCS: sin cadena" in sheet(kb, KEY, lambda path: failed)["markdown"]
 
 
 def test_a_cap_above_the_profile_is_flagged(kb, research_ref):  # noqa: F811

@@ -102,6 +102,65 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
             "profile": profile.ref if profile else None}
 
 
+STRUCTURE_LABEL = {"put_credit_spread": "PCS", "call_credit_spread": "CCS", "iron_condor": "Iron condor",
+                   "wait": "Esperar"}
+
+
+def structures(doc: StrategyDocument, read: Callable[[str], object] | None = None) -> dict:
+    """PCS / CCS / iron condor / esperar for this version's delta, width and DTE, as GaleCore computes them today
+    with the real chain (AC-03/04): this only lays out what `/App/Runtime/Structures` returns."""
+    spec = json.loads(doc.spec_json)
+    cc = spec.get("candidate_construction") or {}
+    legs = cc.get("legs") or []
+    sell = next((leg.get("strike_selection") or {} for leg in legs if str(leg.get("side", "")).upper() == "SELL"), {})
+    buy = next((leg.get("strike_selection") or {} for leg in legs if str(leg.get("side", "")).upper() == "BUY"), {})
+    cons = cc.get("constraints") or {}
+    symbol = ((spec.get("universe") or {}).get("symbols") or [None])[0]
+    params = {"symbol": symbol, "delta": _num(sell.get("target_delta")), "deltaTolerance": _num(sell.get("delta_tolerance")),
+              "width": _num(buy.get("width")), "minDte": _num(cons.get("min_dte")), "maxDte": _num(cons.get("max_dte"))}
+    lacking = [k for k, v in params.items() if v is None and k != "deltaTolerance"]
+    if lacking:
+        return {"data": None, "missing": [f"la spec no declara {', '.join(lacking)}: no se comparan estructuras"]}
+    if read is None:
+        return {"data": None, "missing": ["estructuras: no se consultó GaleCore"]}
+    query = "&".join(f"{k}={abs(v) if k == 'delta' else (int(v) if k.endswith('Dte') else v)}"
+                     for k, v in params.items() if v is not None)
+    try:
+        data = read("/App/Runtime/Structures?" + query)
+    except supervisor.SupervisorError as exc:
+        return {"data": None, "missing": [f"estructuras: {exc}"]}
+    if not isinstance(data, dict) or not isinstance(data.get("structures"), list):
+        return {"data": None, "missing": ["estructuras: respuesta inesperada de GaleCore"]}
+    return {"data": data, "missing": [f"estructuras: {data['error']}"] if data.get("error") else []}
+
+
+def _structure_lines(s: dict) -> list[str]:
+    data = s["data"]
+    lines = []
+    if data:
+        lines += [(f"{data.get('symbol')} {data.get('spot')} · vencimiento {data.get('expiration')} "
+                   f"({data.get('dte')} DTE) · GaleCore {data.get('asOf')}. Montos en USD por contrato; escenarios = P&L."), ""]
+        priced = [x for x in data["structures"] if x.get("credit") is not None]
+        if priced:
+            names = [sc["name"] for sc in priced[0]["scenarios"]]
+            lines += ["| Estructura | Crédito | Riesgo máx. | Breakeven | Prob. tocar (0-1) | Δ | θ/día | Vega/punto | "
+                      + " | ".join(names) + " |", "|---" * (8 + len(names)) + "|"]
+            for x in priced:
+                g = x["greeks"]
+                lines += [f"| {STRUCTURE_LABEL.get(x['structure'], x['structure'])} | {x['credit']} | {x['maxRisk']} | "
+                          f"{' / '.join(str(b) for b in x['breakevens'])} | {x['touchProbability']} | {g['delta']} | "
+                          f"{g['thetaPerDay']} | {g['vegaPerVolPoint']} | "
+                          + " | ".join(str(sc["pnl"]) for sc in x["scenarios"]) + " |"]
+            lines += [""]
+        for x in data["structures"]:
+            label = STRUCTURE_LABEL.get(x["structure"], x["structure"])
+            state = "ejecutable hoy" if x.get("executableToday") else "no ejecutable hoy"
+            lines += [f"- {label}: {state}" + (f" — {_cell(x['note'])}" if x.get("note") else "")]
+        lines += [f"- Supuesto: {_cell(a)}" for a in data.get("assumptions") or []]
+    lines += [f"- Falta: {m}" for m in s["missing"]]
+    return lines
+
+
 def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = None) -> dict:
     doc = load_proposal(kb, key)
     review = load_critique(kb, key)
@@ -153,6 +212,8 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
     if r["open_now"]:
         lines += [f"- Abierto hoy en SHADOW: {r['open_now']}"]
     lines += [f"- Falta: {m}" for m in r["missing"]]
+    st = structures(doc, read)
+    lines += ["", "## Estructuras para la misma tesis (cadena real, hoy)", ""] + _structure_lines(st)
     lines += ["", "## Lo que GaleCore no ejecuta", ""]
     lines += [f"- {_cell(g)}" for g in doc.check.declared_gaps] or ["- Nada declarado."]
     pending = [d for d in c.owner_decisions if d.status == "pending"]
@@ -174,7 +235,7 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
         lines += ["Sin crítica de esta versión (aprobada antes de que la crítica fuera obligatoria)." if approval
                   else "Sin crítica de esta versión: no se puede aprobar."]
     return {"strategy": f"strategy:{key}", "spec_hash": doc.spec_hash, "check": doc.check.verdict, "risk": r,
-            "critique": review.content.verdict.value if review_ok else None, "approved": approval is not None,
+            "structures": st, "critique": review.content.verdict.value if review_ok else None, "approved": approval is not None,
             "markdown": "\n".join(lines) + "\n"}
 
 

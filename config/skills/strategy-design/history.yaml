@@ -11,6 +11,8 @@ versions:
       y el método trae el contexto del instrumento con `story pack` (AC-02). Una versión nueva dice qué cambia y por qué
       (`change`) y `strategy diff` muestra la diferencia por código (AC-05). Lo que invalida la tesis
       se registra como regla del supervisor con `--thesis` y sus estrategias (AC-07).
+      La ficha suma PCS / CCS / iron condor / esperar con la cadena real que calcula GaleCore
+      (`/App/Runtime/Structures`, AC-03/04); sólo el PCS se despliega hasta P1-07.
     feedback: []
   - version: "0.3.1"
     date: 2026-09-27

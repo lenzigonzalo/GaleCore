@@ -86,7 +86,8 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
     """Store a rule. Refuses an unknown symbol shape, metric or condition, and an empty request.
 
     With ``thesis`` (U-65) the rule is the observable condition that invalidates it: it names the strategies that
-    depend on it, each of which gets the condition in its project (kind thesis), and the alert says which."""
+    depend on it, each of which gets the condition in its project (kind thesis), and the alert says which. The project
+    entries follow the rule's write: if one fails, the rule stays stored and the error says so."""
     now = now or datetime.now(UTC)
     symbol = symbol.strip().upper()
     if not SYMBOL.match(symbol):
