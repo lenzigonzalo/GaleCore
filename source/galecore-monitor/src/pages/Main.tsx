@@ -43,23 +43,24 @@ export function Main({ onNavigate, onConnectBroker }: { onNavigate: (tab: Tab) =
       <p className="main-source">Cuenta de bróker · instrumentos recibidos de GaleCore{positionsReadAt ? ' · lectura ' + fmtTime(positionsReadAt) + ' ET' : ''}</p>
       {loadingPositions ? <p>Leyendo posiciones…</p> : errorPositions ? <p role="alert">No se pudieron leer las posiciones. Actualizá la cuenta o revisá la conexión en Configuración.</p>
         : !positionsReadAt ? <p className="main-source">Todavía no se leyeron las posiciones.</p> : positions.length === 0 ? <p className="main-source">La última lectura no contiene posiciones abiertas.</p>
-        : <div className="main-positions">{positions.map((p, i) => <button key={p.symbol + i} onClick={() => onNavigate('monitor')}>
-          <div><strong>{p.underlyingSymbol || p.symbol}</strong><ArrowUpRight size={16} /></div>
-          <span>{p.symbol}</span><p className="main-source">Sin estrategia vinculada</p><dl><div><dt>Cantidad</dt><dd>{p.quantity} · {p.quantityDirection}</dd></div>
-          <div><dt>Precio informado</dt><dd>{fmtPrice(p.closePrice)}</dd></div></dl>
-        </button>)}</div>}
+        : <div className="main-positions"><table><thead><tr><th>Instrumento</th><th>Cantidad</th><th>Dirección</th><th>Precio informado</th><th><span className="sr-only">Detalle</span></th></tr></thead>
+          <tbody>{positions.map((p, i) => <tr key={p.symbol + i}>
+            <td><strong>{p.underlyingSymbol || p.symbol}</strong><span>{p.symbol}</span></td>
+            <td className="numeric">{p.quantity}</td><td>{p.quantityDirection}</td><td className="numeric">{fmtPrice(p.closePrice)}</td>
+            <td><button className="main-link" aria-label={'Ver ' + p.symbol + ' en Cartera'} onClick={() => onNavigate('monitor')}>Ver<ArrowUpRight size={16} /></button></td>
+          </tr>)}</tbody></table><p className="main-source">Instrumentos del bróker, sin estrategia vinculada.</p></div>}
     </section>}
     <section className="main-section" aria-labelledby="main-results">
       <div className="main-section-heading"><h2 id="main-results">Resultados de estrategias</h2>{link('shadow', 'Abrir SHADOW')}</div>
       <p className="main-source">SHADOW · ejecución simulada con datos reales · separado del saldo de tu cuenta{readAt ? ' · lectura ' + fmtTime(readAt) + ' ET' : ''}</p>
       {metricsError ? <p role="alert">No se pudieron leer los resultados SHADOW.</p> : !metrics ? <p>Leyendo resultados…</p>
         : metrics.length === 0 ? <p className="main-source">No hay métricas de estrategias desplegadas.</p>
-        : <div className="main-results-table"><table><thead><tr><th>Estrategia / versión</th><th>Abiertas</th><th>Cerradas</th><th>P&amp;L realizado</th><th>P&amp;L abierto</th></tr></thead>
+        : <details className="main-shadow-details"><summary>Ver resultados por versión <span>{metrics.length} {metrics.length === 1 ? 'versión' : 'versiones'}</span></summary><div className="main-results-table"><table><thead><tr><th>Estrategia / versión</th><th>Abiertas</th><th>Cerradas</th><th>P&amp;L realizado</th><th>P&amp;L abierto</th></tr></thead>
         <tbody>{metrics.map(m => <tr key={m.contentHash}><td><button className="main-link" onClick={() => onNavigate('shadow')}>{m.specName} · v{m.specVersion}<ArrowUpRight size={14} /></button><details className="main-history-pending"><summary>Identidad de versión</summary><code>{m.contentHash}</code></details></td>
           <td>{m.positionsOpen}</td><td>{m.positionsClosed}</td>
           <td style={{ color: m.realizedPnl == null ? undefined : m.realizedPnl >= 0 ? 'var(--green-gc)' : 'var(--red-gc)' }}>{m.realizedPnl == null ? 'Sin cierres' : fmtPnl(m.realizedPnl)}</td>
           <td style={{ color: m.unrealizedPnl == null ? undefined : m.unrealizedPnl >= 0 ? 'var(--green-gc)' : 'var(--red-gc)' }}>{m.unrealizedPnl == null ? 'Sin valuación' : fmtPnl(m.unrealizedPnl)}{m.openPositionsNotValued > 0 && <small>{m.openPositionsNotValued} sin valuar · resultado parcial</small>}</td>
-        </tr>)}</tbody></table></div>}
+        </tr>)}</tbody></table></div></details>}
       <details className="main-history-pending"><summary>Performance de la cuenta y calendario diario</summary><p>La lectura actual de la cuenta devuelve saldo y posiciones, sin una serie histórica de patrimonio ni resultados diarios completos. El calendario y los gráficos de performance quedan pendientes de ese contrato; no se reconstruyen desde el saldo actual o las métricas SHADOW.</p></details>
     </section>
     <section className="main-keys" aria-label="Claves del día"><Today onNavigate={onNavigate} /></section>

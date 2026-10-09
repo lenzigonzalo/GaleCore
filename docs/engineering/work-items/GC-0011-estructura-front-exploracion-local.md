@@ -86,15 +86,13 @@ ceros o una fecha de fuente. Se retiran logs de cuenta. Fecha de recepción perm
 
 ## Para retomar
 
-Owner rechaza la experiencia integral actual. Comparar dos composiciones Main antes de seguir aplicando cambios.
-OpenDesign 0.24.1 instalado por owner; plugin open-design@open-design 0.5.3 y MCP local habilitados/stdio comprobado.
-Modo elegido Local Codex; sesión CLI activa. No generación probada. Nueva tarea carga plugin/MCP; brief en FRONT-GALECORE-INTEGRAL §27.
+Owner pide concentrarse en una buena UI. Trabajar Main directamente en React y revisar composición en el navegador (FRONT-GALECORE-INTEGRAL §27).
 Root ACTIVE_WORK_ITEM sigue WS-0021; GC-0011 exploración CHANGES_REQUESTED, sin cierre/review de nuevo diff ni cambio de plan.
-Front actual localhost:3039, servidor loopback sirve dev/.local/main-connect-build de este worktree; datos Dev.
+Front local localhost:3039; al entregar este ajuste, servidor loopback sirve dev/.local/main-ui-final-build de este worktree; datos Dev.
 Vincular cuenta abre Settings en bróker y consolidó falta de vínculo; credenciales sólo en formulario, no copiar producción.
 Logo elegido por owner, verde #a3d86c; asset limpio pendiente, imagegen de esta sesión produjo artefactos y no se integró.
 Quedan dashboard/proyectos, builder gráfico, decisión recuperable, biblioteca/config/performance y QA visual con datos.
-No integrar/pushear exploración como entrega ni marcar VALIDATED/CLOSED. Evidencia de setup al final de este item.
+No integrar/pushear exploración como entrega ni marcar VALIDATED/CLOSED.
 
 ## Iteración solicitada por owner — 09/10/2026
 
@@ -130,21 +128,20 @@ Antes de continuar: análisis de divergencia en FRONT-GALECORE-INTEGRAL §26. Ac
 - Owner elige logo adjunto; recolor al acento #a3d86c, sin cambio de geometría. Asset final en repo, transparencia.
 - Aceptación negativa: cuenta no vinculada no genera error de posiciones repetido; falla genérica conserva diagnóstico/reintento; SHADOW no representa saldo real.
 
-### Cambio de conversación: probar OpenDesign sin eludir SmartScreen
+### Continuación de UI — 09/10/2026
 
-Owner aporta open-design.ai y repo nexu-io/open-design para mejorar revisión visual antes de implementar. Se recomienda comparar dos composiciones de Main con mismo contenido y decidir la dirección. No se instaló OpenDesign ni MCP.
-Verificado instalador Descargas open-design-0.24.1-win-x64-setup.exe, 438224539 bytes: SHA256 3a544dca7a5f078029d55f272e218278e52edac55efbfb292d56258113e8a441 coincide con digest de GitHub Releases open-design-v0.24.1. Authenticode NotSigned; owner muestra SmartScreen unrecognized app/Unknown publisher. No detección de malware inferida ni ausencia certificada. Bitdefender figura en SecurityCenter; no se ejecutó análisis antivirus. Windows 11 Home, WindowsSandbox.exe ausente. No eludir advertencia ni registrar MCP mientras owner evalúa.
-Código acotado antes de la consulta: estado de vinculación en Main sin cascada de error de posiciones; Vincular abre Settings initial=broker; guardar credencial pide releer cuenta. Sin copia de Supabase producción ni credenciales. Tests Main/account: 6 passed; build estándar bloqueó por EBUSY en asset servido; compilación alternativa dev/.local/main-connect-build: exit 0, Compiled successfully, main.a19a4dbf.js. Servidor 3039 apunta a ese directorio.
-Logo adjunto seleccionado por owner, verde #a3d86c: dos ediciones imagegen tuvieron artefactos en wordmark; no se integran como asset final. Identidad elegida, limpieza pendiente. Main completo no rediseñado aún: propuesta de comparar diseños antes de seguir cambiando páginas.
+Owner pide retirar la herramienta externa de diseño. Se eliminan sus referencias de esta exploración y de la
+propuesta; el diseño continúa directamente sobre React con galecore-frontend. Primer recorte: Main, estados
+reales y revisión visual antes de extender la composición. Sin cierre, integración ni QA visual inferidos.
 
-## OpenDesign conectado — 09/10/2026
+La compilación Main anterior y el estado de vinculación quedan registrados arriba. Asset limpio del logo y
+rediseño completo de Main siguen pendientes. ACTIVE_WORK_ITEM conserva WS-0021; GC-0011 es exploración local.
 
-Owner instaló 0.24.1, autorizó setup Codex y eligió Local Codex. Brief de prueba A/B Main en FRONT-GALECORE-INTEGRAL §27.
-- codex-cli 0.154.0. Marketplace nexu-io/open-design-agent-plugins añadido, plugin open-design@open-design 0.5.3 instalado/habilitado. No colisión ni eliminación de otros plugins/MCPs.
-- App en AppData/Local/Programs/Open Design; licencia core/plugin Apache-2.0. Templates/assets no auditados ni copiados.
-- GUI Electron y sidecars esperados en rutas instaladas; puertos observados ligados a 127.0.0.1. Sin firma digital; no escaneo antivirus ni garantía de ausencia de malware/otras instalaciones.
-- Packaged --headless --mcp-install codex primero falló por ELECTRON_RUN_AS_NODE heredado. Segundo falló por discovery: desktop no healthy daemon. No modificación MCP en esos intentos.
-- GET install-info del daemon real respondió 200. Registro con su POST /api/mcp/install/codex (operación usada por packaged/Settings) respondió ok=true. CLI get open-design verificó enabled=true/stdio, ejecutable/entry absolutos y sólo env de discovery/bootstrap/data/Electron; ningún token/key del proveedor embebido.
-- Smoke real via JSON-RPC stdio: initialize -> server open-design 0.2.0; tools/list 22, resources/list 317; list_agents sin error contiene codex. codex login status exit 0, identidad/credenciales no impresas.
-- Script diagnóstico dev/.local/open-design-setup/mcp-smoke.cjs (ignorado) y logs de intentos (ignorados). No generación ni billing; Local Codex explícito, no cambio a Cloud/BYOK.
-- Necesita nueva tarea de Codex para cargar plugin/MCP. Estado GC-0011 sigue CHANGES_REQUESTED y no se cambia WS-0021/P1-09, plan, producción ni capital.
+## Ajuste de Main y retirada de herramienta — 09/10/2026
+
+- Retiradas referencias vigentes de propuesta/work item, artefactos locales de setup y entradas de marketplace/plugin/MCP en C:/Users/lenzi/.codex/config.toml. Búsqueda de referencias en workspace, GaleCore-AI y este worktree sin coincidencias; knowledge versionado sin coincidencias. Historial git conservado.
+- Main: instrumentos en tabla comparable; resultados SHADOW por versión en detalle cerrado inicialmente. No cambia cálculos, consultas ni controles. Acción Ver con nombre accesible y área de 44 px.
+- Pruebas de Main: 4 passed, 1 suite, exit 0. Comando efectivo: CI=true npm test -- --watchAll=false --runInBand --testMatch **/Main.test.tsx (PowerShell). CRA genera glob con separadores mixtos en esta ruta; el glob explícito permitió ejecutar las pruebas.
+- Build final Dev CI=true: exit 0, Compiled successfully, main.d3f1bf4b.js y main.ae09a15d.css. HTTP localhost:3039 y asset: 200; index referencia el asset final. Servidor loopback PID 28296 sirve dev/.local/main-ui-final-build. El build sobre main-connect-build falló EBUSY; se usó carpeta nueva. Dentro del sandbox Node falló EPERM: ejecución autorizada fuera del sandbox.
+- git diff --check: exit 0 antes de guardar. Revisión independiente APPROVE con P3 corregido, sin recheck: ../reviews/GC-0011-main-tabla-20261009-codex.md.
+- CUA: apps/browsers vacíos. QA visual pendiente, sin aprobación de cierre. GC-0011 conserva CHANGES_REQUESTED por alcance integral anterior.
