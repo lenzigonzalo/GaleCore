@@ -86,9 +86,36 @@ ceros o una fecha de fuente. Se retiran logs de cuenta. Fecha de recepción perm
 
 ## Para retomar
 
-Rama feature/front-estructura-local; arranque en http://localhost:3039 con build Dev real. Copia 3040 retirada.
-Main ahora muestra cuenta/posiciones y métricas SHADOW, con Claves del día secundaria. Login real conserva sesión
-por origen; no se validó una sesión del owner. Si faltan datos, revisar respuesta concreta del endpoint, sin sustituirla.
-La composición es una iteración local pendiente de QA visual; gráficos/calendario de cuenta y atribución a estrategia
-necesitan contratos de datos. La fuente de diseño fue actualizada en roadmap/proposals/FRONT-GALECORE-INTEGRAL.md.
-ACTIVE_WORK_ITEM sigue WS-0021 y no se cambia el orden del plan. No marcado VALIDATED/CLOSED; sin push/PR.
+Rama feature/front-estructura-local; build real Dev en http://localhost:3039; no usar 127.0.0.1 como origen.
+Owner confirmó acceso/datos, pero rechazó experiencia como entrega; análisis integral en FRONT-GALECORE-INTEGRAL §26.
+Watchlist derecha con resize/contraer y + usa feed/política existentes; gráfico primero en Mercado.
+Búsqueda de secciones/símbolos arriba; Conversación sólo como acción, conserva sesión. Lab lista versiones cargadas
+sin afirmar aprobación/ejecución; Seguimiento conserva runtime. Logo final no disponible; marca textual provisional.
+Todavía faltan proyectos/dashboard, builder gráfico, decisión recuperable, biblioteca, configuración y performance.
+No cerrar GC-0011: revisión anterior no cubre nuevo diff; QA visual pendiente (CUA sin navegador).
+ACTIVE_WORK_ITEM sigue WS-0021; no se cambia el orden del plan ni se integra/pushea la exploración como entrega.
+
+## Iteración solicitada por owner — 09/10/2026
+
+Antes de continuar: análisis de divergencia en FRONT-GALECORE-INTEGRAL §26. Aceptación de esta iteración:
+- Mercado: watchlist derecha contraíble/redimensionable por mouse y teclado, mismo universo/feed/suscripciones, + abre búsqueda real y respeta ad_hoc_search; sin persistencia ficticia.
+- Encabezado: búsqueda de secciones y símbolos reales; errores visibles, no búsqueda de documentos/conversaciones sin contrato.
+- Conversación: acción del encabezado, sin falso destino de navegación; misma terminal y sesión al ocultar.
+- Sidebar legible: sin grupos confusos; marca textual hasta disponer del asset acordado.
+- Separar Lab/construcción de seguimiento de ejecuciones; no agregar comandos Deploy/Stop ni builder gráfico no soportado.
+- Menos microtexto: contexto esencial visible, procedencia/detalle secundario desplegable; conservar modo, fecha y errores.
+- Mantener origen3039/APIDev y worktree aislado; no modificar WS-0021 ni orden del plan.
+
+### Evidencia de la iteración
+
+- Build oficial Dev + CI=true: exit 0, Compiled successfully; main.4c2a64cc.js.
+- Tests del recorte: 21 passed, 8 suites; búsqueda real/fallo, destinos, resize con puntero/teclado,
+  conservación del contenido al contraer, alcance SHADOW y sesión existente al abrir Lab.
+- git diff --check: exit 0.
+- localhost:3039 y asset main.4c2a64cc.js: HTTP 200. Mismo servidor estático loopback de la iteración anterior.
+- CUA inventario: apps/browsers vacíos. No se afirma QA visual, E2E de búsqueda real ni resultado de la sesión owner.
+- Inspección: Specs y Specs/{name} del AppController; tienda GEX/política JSON, mercado/terminal y componentes.
+  Lab sólo GET Specs; no nueva mutación, aprobación ni despliegue. Feed y suscripciones conservados en TickerGrid/GEX.
+- Una falla TS por props retiradas, opcionales del contrato y warning de cleanup se corrigieron antes del build verde;
+  test heredado de nota se corrigió conservando la distinción recepción/origen en detalle.
+- Marca: pregunta al owner por variante/asset pendiente; no símbolo nuevo generado.

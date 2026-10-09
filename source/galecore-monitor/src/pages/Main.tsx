@@ -41,10 +41,9 @@ export function Main({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         : !positionsReadAt ? <p className="main-source">Todavía no se leyeron las posiciones.</p> : positions.length === 0 ? <p className="main-source">La última lectura no contiene posiciones abiertas.</p>
         : <div className="main-positions">{positions.map((p, i) => <button key={p.symbol + i} onClick={() => onNavigate('monitor')}>
           <div><strong>{p.underlyingSymbol || p.symbol}</strong><ArrowUpRight size={16} /></div>
-          <span>{p.symbol}</span><dl><div><dt>Cantidad</dt><dd>{p.quantity} · {p.quantityDirection}</dd></div>
+          <span>{p.symbol}</span><p className="main-source">Sin estrategia vinculada</p><dl><div><dt>Cantidad</dt><dd>{p.quantity} · {p.quantityDirection}</dd></div>
           <div><dt>Precio informado</dt><dd>{fmtPrice(p.closePrice)}</dd></div></dl>
         </button>)}</div>}
-      <p className="main-source">El vínculo entre posiciones del bróker y estrategias todavía no está disponible.</p>
     </section>
     <section className="main-section" aria-labelledby="main-results">
       <div className="main-section-heading"><h2 id="main-results">Resultados de estrategias</h2>{link('shadow', 'Abrir SHADOW')}</div>
@@ -52,7 +51,7 @@ export function Main({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
       {metricsError ? <p role="alert">No se pudieron leer los resultados SHADOW.</p> : !metrics ? <p>Leyendo resultados…</p>
         : metrics.length === 0 ? <p className="main-source">No hay métricas de estrategias desplegadas.</p>
         : <div className="main-results-table"><table><thead><tr><th>Estrategia / versión</th><th>Abiertas</th><th>Cerradas</th><th>P&amp;L realizado</th><th>P&amp;L abierto</th></tr></thead>
-        <tbody>{metrics.map(m => <tr key={m.contentHash}><td><button className="main-link" onClick={() => onNavigate('shadow')}>{m.specName} · v{m.specVersion}<ArrowUpRight size={14} /></button><small>{m.contentHash.replace('sha256:', '').slice(0, 12)}</small></td>
+        <tbody>{metrics.map(m => <tr key={m.contentHash}><td><button className="main-link" onClick={() => onNavigate('shadow')}>{m.specName} · v{m.specVersion}<ArrowUpRight size={14} /></button><details className="main-history-pending"><summary>Identidad de versión</summary><code>{m.contentHash}</code></details></td>
           <td>{m.positionsOpen}</td><td>{m.positionsClosed}</td>
           <td style={{ color: m.realizedPnl == null ? undefined : m.realizedPnl >= 0 ? 'var(--green-gc)' : 'var(--red-gc)' }}>{m.realizedPnl == null ? 'Sin cierres' : fmtPnl(m.realizedPnl)}</td>
           <td style={{ color: m.unrealizedPnl == null ? undefined : m.unrealizedPnl >= 0 ? 'var(--green-gc)' : 'var(--red-gc)' }}>{m.unrealizedPnl == null ? 'Sin valuación' : fmtPnl(m.unrealizedPnl)}{m.openPositionsNotValued > 0 && <small>{m.openPositionsNotValued} sin valuar · resultado parcial</small>}</td>

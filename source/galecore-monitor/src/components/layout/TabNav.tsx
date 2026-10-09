@@ -7,7 +7,7 @@ import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 // del config de la app: las cards de Main navegan por ese valor.
 //
 // 'config' es una pestaña sin botón en la barra: Configuración (GC-0007), desde el menú de la cuenta.
-export type Tab = 'estrategias' | 'inicio' | 'monitor' | 'rpf' | 'gex' | 'shadow' | 'inteligencia' | 'agentes' | 'admin' | 'config';
+export type Tab = 'lab' | 'estrategias' | 'inicio' | 'monitor' | 'rpf' | 'gex' | 'shadow' | 'inteligencia' | 'agentes' | 'admin' | 'config';
 
 interface Props {
   active: Tab;

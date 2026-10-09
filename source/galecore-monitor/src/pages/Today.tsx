@@ -57,7 +57,7 @@ export function Today({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   return (
     <div className="today-workspace">
       <div className="today-intro"><h2>Claves del día</h2>
-        <span>Lo publicado por el supervisor y los agentes. Cada resultado conserva su fecha.</span></div>
+        <span>Última revisión y resultados publicados.</span></div>
       {error && <p role="alert" className="today-error">{error} Lo anterior, si aparece, es la última lectura disponible.</p>}
       {unreadable > 0 && <p role="alert" className="today-error">Hay publicaciones que no se pudieron interpretar. Revisá el detalle en Agentes.</p>}
       <section className="today-section" aria-labelledby="today-attention">
@@ -82,7 +82,7 @@ export function Today({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
         ))}</div>
         {items && !published.some(p => p.item.key !== 'supervisor' && p.record) && <p className="today-empty">Todavía no hay trabajos legibles publicados.</p>}
       </section>
-      <div className="today-reading"><RefreshCw size={14} /><span>{reading ? 'Leyendo…' : 'La vista vuelve a consultar cada minuto; la publicación depende de los agentes.'}</span></div>
+      <div className="today-reading"><RefreshCw size={14} /><span>{reading ? 'Leyendo…' : 'Consulta cada minuto'}</span></div>
     </div>
   );
 }

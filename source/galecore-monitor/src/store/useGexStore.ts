@@ -16,6 +16,8 @@ function dropSymbols<T>(map: Record<string, T>, symbols: string[]): Record<strin
 }
 
 interface GexStore {
+  selectedSymbol: string | null;
+  setSelectedSymbol: (symbol: string | null) => void;
   /** Reglas propias de la estrategia (universo + contrato de render). */
   rules: GexRules | null;
   tickers: string[];
@@ -62,6 +64,8 @@ interface GexStore {
 }
 
 export const useGexStore = create<GexStore>((set, get) => ({
+  selectedSymbol: null,
+  setSelectedSymbol: (selectedSymbol) => set({ selectedSymbol }),
   rules: null,
   tickers: [],
   display: null,

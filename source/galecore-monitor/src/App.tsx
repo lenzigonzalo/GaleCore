@@ -6,6 +6,8 @@ import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
 import { WorkspaceNav } from './components/layout/WorkspaceNav';
 import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
+import { Lab } from './pages/Lab';
+import { useGexStore } from './store/useGexStore';
 import { Main } from './pages/Main';
 import { AccountSummary } from './components/account/AccountSummary';
 import { SupervisorAlerts } from './components/layout/SupervisorAlerts';
@@ -82,13 +84,22 @@ function Dashboard({ onLogout }: DashboardProps) {
 
   return (
     <div className="workspace-shell flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      <WorkspaceNav active={tab} onChange={setTab} onConversation={() => setTerminalOpen(true)} />
+      <WorkspaceNav active={tab} onChange={setTab} />
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
         <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />
         <WorkspaceHeader active={tab} onChange={setTab} onLogout={onLogout}
-          conversationOpen={terminalOpen} onConversation={() => setTerminalOpen(!terminalOpen)} />
+          onSymbol={async symbol => {
+            let store = useGexStore.getState();
+            if (!store.rules) { await store.loadRules(); store = useGexStore.getState(); }
+            if (store.rulesError) throw new Error('No se pudo cargar Mercado.');
+            if (!store.tickers.includes(symbol) && !store.adHocSearch?.enabled) throw new Error('La búsqueda de nuevos símbolos no está habilitada.');
+            const selected = store.pinAdHoc(symbol);
+            if (!selected) throw new Error('No se pudo abrir el símbolo.');
+            store.setSelectedSymbol(selected); setTab('gex');
+          }} conversationOpen={terminalOpen} onConversation={() => setTerminalOpen(!terminalOpen)} />
         <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
           {tab === 'inicio' && <Main onNavigate={setTab} />}
+          {tab === 'lab' && <Lab onMonitor={() => setTab('shadow')} />}
           <div style={{ display: tab === 'estrategias' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
           </div>

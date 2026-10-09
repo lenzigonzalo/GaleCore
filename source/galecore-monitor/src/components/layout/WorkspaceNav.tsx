@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, MessageSquare, ChartNoAxesCombined, Wallet, Layers, Bot, BookOpen, Settings, Shield, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LayoutDashboard, FlaskConical, ChartNoAxesCombined, Wallet, Layers, Bot, BookOpen, Settings, Shield, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { Tab } from './TabNav';
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 
-interface Props { active: Tab; onChange: (tab: Tab) => void; onConversation: () => void }
+interface Props { active: Tab; onChange: (tab: Tab) => void }
 
 /** Navegación por intención; las vistas operacionales conservan sus identidades. */
-export function WorkspaceNav({ active, onChange, onConversation }: Props) {
+export function WorkspaceNav({ active, onChange }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const isAdmin = useCurrentUserStore(s => s.user?.isAdmin ?? false);
   const selected = active === 'gex' ? 'gex' : active === 'rpf' || active === 'shadow' ? 'estrategias' : active;
@@ -19,21 +19,20 @@ export function WorkspaceNav({ active, onChange, onConversation }: Props) {
   return (
     <aside className={'workspace-navigation' + (collapsed ? ' collapsed' : '')}>
       <button className="workspace-brand" onClick={() => onChange('inicio')} aria-label="GaleCore · Main" title="GaleCore · Main">
-        <span className="workspace-monogram">G</span><span className="workspace-wordmark">GaleCore</span>
+        <span className="workspace-wordmark">GaleCore</span>
       </button>
       <nav aria-label="Navegación principal">
-        <div className="workspace-nav-group"><p>Trabajo diario</p>
+        <div className="workspace-nav-group">
           {entry('inicio', 'Main', LayoutDashboard)}
-          <button className="workspace-nav-entry" title="Conversación · Claude Code" aria-label="Abrir conversación"
-            onClick={onConversation}><MessageSquare size={19} /><span>Conversación</span></button>
           {entry('gex', 'Mercado', ChartNoAxesCombined)}
           {entry('monitor', 'Cartera', Wallet)}
         </div>
-        <div className="workspace-nav-group"><p>Construir y supervisar</p>
+        <div className="workspace-nav-group">
           {entry('estrategias', 'Estrategias', Layers)}
+          {entry('lab', 'Lab', FlaskConical)}
           {entry('agentes', 'Agentes', Bot)}
         </div>
-        <div className="workspace-nav-group"><p>Conocimiento</p>
+        <div className="workspace-nav-group">
           {entry('inteligencia', 'Biblioteca', BookOpen)}
         </div>
       </nav>

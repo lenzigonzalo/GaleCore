@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, BookOpen, Crosshair } from 'lucide-react';
+import { MarketWatchlist } from '../components/ticker/MarketWatchlist';
 import { TickerGrid } from '../components/ticker/TickerGrid';
 import { SymbolSearchCard } from '../components/ticker/SymbolSearchCard';
 import { DetailsPanel } from '../components/gex/DetailsPanel';
@@ -107,7 +108,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
   const {
     tickers, display, rulesLoading, rulesError, loadRules,
     cache, loading, error, errorCode, selectedExpiry, fetchGex, selectExpiry,
-    adHocSearch, adHocSymbols, pinAdHoc, unpinAdHoc,
+    adHocSearch, adHocSymbols, pinAdHoc, unpinAdHoc, selectedSymbol, setSelectedSymbol,
   } = useGexStore();
 
   const platformTickers = useAppConfigStore((s) => s.tickers);
@@ -116,7 +117,6 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
   const switchEndpoint = useSwitchEndpoint('gex', GEX_SWITCH_ENDPOINT);
   const switchEnabled = useSwitchEnabled(switchEndpoint);
 
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [refOpen, setRefOpen] = useState(false);
 
   // El universo del JSON más lo que el operador pineó con el buscador. Los ad-hoc van al final y no
@@ -240,17 +240,11 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
   }
 
   return (
-    <div className="flex flex-col">
+    <div className="market-workspace"><div className="market-analysis">
       {/* Header — mismo formato que RPF: nombre de la estrategia + badge con su descripción. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 0' }}>
-        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>GaleCore GEX</span>
-        <span style={{
-          fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
-          color: '#a78bfa', backgroundColor: tint('#a78bfa', 13), border: `1px solid ${tint('#a78bfa', 30)}`,
-          fontFamily: 'JetBrains Mono, monospace',
-        }}>
-          Gamma Exposure · v1.4
-        </span>
+        <span style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>{active || 'Mercado'}</span>
+        <span className="market-analysis-label">Gamma exposure</span>
         <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
           <button
             onClick={() => setRefOpen(true)}
@@ -262,7 +256,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
               color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)',
             }}
           >
-            <BookOpen size={12} /> References
+            <BookOpen size={12} /> Referencias
           </button>
           <StrategySwitch
             endpoint={switchEndpoint}
@@ -292,163 +286,10 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
         </div>
       ) : (
       <>
-      <div className="p-3">
-        <TickerGrid
-          symbols={gridSymbols}
-          selectedSymbol={active}
-          onSelect={setSelectedSymbol}
-          removableSymbols={adHocSymbols}
-          onRemoveSymbol={(symbol) => {
-            // Si se saca el que estaba abierto, la pantalla vuelve al primero del universo en vez
-            // de quedarse mostrando un símbolo que ya no está en la grilla.
-            if (active === symbol) setSelectedSymbol(null);
-            unpinAdHoc(symbol);
-          }}
-          trailing={adHocSearch?.enabled ? (
-            <SymbolSearchCard
-              minQueryLength={adHocSearch.min_query_length}
-              maxResults={adHocSearch.max_results}
-              instrumentTypes={adHocSearch.allowed_instrument_types}
-              onPick={(symbol) => {
-                const pinned = pinAdHoc(symbol);
-                if (pinned) setSelectedSymbol(pinned);
-              }}
-            />
-          ) : undefined}
-        />
-      </div>
+
 
       {active && (
         <>
-          {/* ── Cuadro Details — GEX global + contexto. Sin columna Microstructure. ── */}
-          <div style={{
-            margin: '0 12px 12px',
-            borderRadius: 10,
-            border: '1px solid var(--border)',
-            backgroundColor: 'var(--bg-secondary)',
-            boxShadow: 'var(--shadow-sm)',
-            overflow: 'hidden',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '10px 12px 8px',
-              borderBottom: '1px solid var(--border-dark)',
-            }}>
-              <span style={{
-                fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
-                color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
-              }}>
-                {active} · Details
-              </span>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span className="tabular-nums" style={{
-                  fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
-                }}>
-                  {/* Solo la COBERTURA del barrido. El GEX global se fue de acá: es una métrica y
-                      vive en su celda del cuadro (grupo "Estructura gamma"), donde tiene su
-                      referencia al lado. Repetido en el encabezado, el mismo número aparecía dos
-                      veces en la misma pantalla con dos formatos distintos. */}
-                  {data?.gex.global.expirationsIncluded ?? 0} vtos
-                  {data?.gex.config.maxDte != null && ` ≤ ${data.gex.config.maxDte} DTE`}
-                </span>
-                {/* Barrido incompleto: sin este aviso, un GEX más chico por vencimientos faltantes
-                    se lee como una caída real del gamma. */}
-                {/* Barrido detenido: el dato es de antes y no se está actualizando. */}
-                {frozen && (
-                  <span
-                    title={updated ? `Último barrido: ${fmtTime(updated)}` : 'Sin barrido en esta sesión'}
-                    style={{
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-                      padding: '2px 6px', borderRadius: 20,
-                      color: 'var(--red-gc)',
-                      backgroundColor: tint('var(--red-gc)', 10),
-                      border: `1px solid ${tint('var(--red-gc)', 30)}`,
-                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', cursor: 'help',
-                    }}
-                  >
-                    DETENIDO{data ? ' · DATO CONGELADO' : ''}
-                  </span>
-                )}
-                {/* Símbolo de paso: no lo refresca ningún intervalo, y la hora que está al lado no
-                    se va a mover sola. Sin decirlo, esa hora quieta se lee como un dato colgado. */}
-                {isAdHoc && !frozen && (
-                  <span
-                    title="Simbolo pineado con el buscador: no entra al auto-refresh del universo. Se rebarre con Reload."
-                    style={{
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-                      padding: '2px 6px', borderRadius: 20,
-                      color: 'var(--text-muted)',
-                      border: '1px solid var(--border)',
-                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', cursor: 'help',
-                    }}
-                  >
-                    MANUAL
-                  </span>
-                )}
-                {partialScan && (
-                  <span
-                    title={`Faltaron ${(data!.gex.global.expirationsRequested - data!.gex.global.expirationsIncluded)} vencimientos · cobertura ${data!.gex.global.coveragePct}% de los símbolos`}
-                    className="tabular-nums"
-                    style={{
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-                      padding: '2px 6px', borderRadius: 20,
-                      color: 'var(--yellow-gc)',
-                      backgroundColor: 'var(--yellow-muted)',
-                      border: '1px solid var(--yellow-border)',
-                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', cursor: 'help',
-                    }}
-                  >
-                    PARCIAL {data!.gex.global.expirationsIncluded}/{data!.gex.global.expirationsRequested}
-                  </span>
-                )}
-                {updated && (
-                  <span className="tabular-nums" style={{
-                    fontSize: 12, fontFamily: 'JetBrains Mono, monospace',
-                    color: stale ? 'var(--yellow-gc)' : 'var(--text-muted)',
-                  }}>
-                    {fmtTime(updated)}
-                  </span>
-                )}
-                <button
-                  onClick={() => fetchGex(active, true)}
-                  disabled={isLoading || frozen}
-                  className="btn"
-                  title={frozen ? 'Barrido detenido: prendé la estrategia para rebarrer' : 'Rebarrer la cadena'}
-                  style={frozen ? { opacity: 0.45, cursor: 'default' } : undefined}
-                >
-                  <RefreshCw size={10} className={isLoading ? 'animate-spin' : ''} />
-                  Reload
-                </button>
-              </div>
-            </div>
-
-            {err ? (
-              /* El símbolo sin cadena no es una avería: se dice con el texto de la API y sin el
-                 rojo de error, que acá mandaría el mensaje equivocado — no hay nada que arreglar,
-                 hay otro símbolo que elegir. */
-              <div style={{
-                padding: 16, fontSize: 14, lineHeight: 1.5,
-                color: chainMissing ? 'var(--text-secondary)' : 'var(--red-gc)',
-              }}>
-                {chainMissing ? err : `Error cargando GEX: ${err}`}
-                {chainMissing && (
-                  <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>
-                    El buscador matchea tambien la descripcion, asi que devuelve ETFs sobre el
-                    simbolo que no tienen cadena propia. Elegi otro.
-                  </div>
-                )}
-              </div>
-            ) : (
-              <DetailsPanel
-                data={data}
-                groups={display?.details_panel?.groups}
-                subtitle={display?.details_panel?.subtitle
-                  ?? 'Contexto de mercado — lectura informativa'}
-              />
-            )}
-          </div>
-
           {/* ── Cuadro Graph — cadena por vencimiento ── */}
           <div style={{
             margin: '0 12px 12px',
@@ -468,7 +309,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                 fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15,
                 color: 'var(--text-primary)', letterSpacing: '0.04em',
               }}>
-                {active} · Graph ({isGlobalScope ? 'GEX Global — toda la cadena' : 'GEX by Expiry'})
+                {active} · {isGlobalScope ? 'Toda la cadena' : 'Por vencimiento'}
               </span>
               {/* A la derecha, y a la izquierda del spot: encuadrar la escala en la zona gamma.
                   Es un toggle con estado a la vista —no el switch ON/OFF del proyecto, que significa
@@ -567,10 +408,165 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
               </div>
             </div>
           </div>
+          {/* ── Cuadro Details — GEX global + contexto. Sin columna Microstructure. ── */}
+          <div style={{
+            margin: '0 12px 12px',
+            borderRadius: 10,
+            border: '1px solid var(--border)',
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: 'var(--shadow-sm)',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 12px 8px',
+              borderBottom: '1px solid var(--border-dark)',
+            }}>
+              <span style={{
+                fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
+              }}>
+                Contexto y GEX global
+              </span>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span className="tabular-nums" style={{
+                  fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
+                }}>
+                  {/* Solo la COBERTURA del barrido. El GEX global se fue de acá: es una métrica y
+                      vive en su celda del cuadro (grupo "Estructura gamma"), donde tiene su
+                      referencia al lado. Repetido en el encabezado, el mismo número aparecía dos
+                      veces en la misma pantalla con dos formatos distintos. */}
+                  {data?.gex.global.expirationsIncluded ?? 0} vtos
+                  {data?.gex.config.maxDte != null && ` ≤ ${data.gex.config.maxDte} DTE`}
+                </span>
+                {/* Barrido incompleto: sin este aviso, un GEX más chico por vencimientos faltantes
+                    se lee como una caída real del gamma. */}
+                {/* Barrido detenido: el dato es de antes y no se está actualizando. */}
+                {frozen && (
+                  <span
+                    title={updated ? `Último barrido: ${fmtTime(updated)}` : 'Sin barrido en esta sesión'}
+                    style={{
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
+                      padding: '2px 6px', borderRadius: 20,
+                      color: 'var(--red-gc)',
+                      backgroundColor: tint('var(--red-gc)', 10),
+                      border: `1px solid ${tint('var(--red-gc)', 30)}`,
+                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', cursor: 'help',
+                    }}
+                  >
+                    DETENIDO{data ? ' · DATO CONGELADO' : ''}
+                  </span>
+                )}
+                {/* Símbolo de paso: no lo refresca ningún intervalo, y la hora que está al lado no
+                    se va a mover sola. Sin decirlo, esa hora quieta se lee como un dato colgado. */}
+                {isAdHoc && !frozen && (
+                  <span
+                    title="Simbolo pineado con el buscador: no entra al auto-refresh del universo. Se rebarre con Reload."
+                    style={{
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
+                      padding: '2px 6px', borderRadius: 20,
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', cursor: 'help',
+                    }}
+                  >
+                    MANUAL
+                  </span>
+                )}
+                {partialScan && (
+                  <span
+                    title={`Faltaron ${(data!.gex.global.expirationsRequested - data!.gex.global.expirationsIncluded)} vencimientos · cobertura ${data!.gex.global.coveragePct}% de los símbolos`}
+                    className="tabular-nums"
+                    style={{
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
+                      padding: '2px 6px', borderRadius: 20,
+                      color: 'var(--yellow-gc)',
+                      backgroundColor: 'var(--yellow-muted)',
+                      border: '1px solid var(--yellow-border)',
+                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', cursor: 'help',
+                    }}
+                  >
+                    PARCIAL {data!.gex.global.expirationsIncluded}/{data!.gex.global.expirationsRequested}
+                  </span>
+                )}
+                {updated && (
+                  <span className="tabular-nums" style={{
+                    fontSize: 12, fontFamily: 'JetBrains Mono, monospace',
+                    color: stale ? 'var(--yellow-gc)' : 'var(--text-muted)',
+                  }}>
+                    {fmtTime(updated)}
+                  </span>
+                )}
+                <button
+                  onClick={() => fetchGex(active, true)}
+                  disabled={isLoading || frozen}
+                  className="btn"
+                  title={frozen ? 'Barrido detenido: prendé la estrategia para rebarrer' : 'Rebarrer la cadena'}
+                  style={frozen ? { opacity: 0.45, cursor: 'default' } : undefined}
+                >
+                  <RefreshCw size={10} className={isLoading ? 'animate-spin' : ''} />
+                  Reload
+                </button>
+              </div>
+            </div>
+
+            {err ? (
+              /* El símbolo sin cadena no es una avería: se dice con el texto de la API y sin el
+                 rojo de error, que acá mandaría el mensaje equivocado — no hay nada que arreglar,
+                 hay otro símbolo que elegir. */
+              <div style={{
+                padding: 16, fontSize: 14, lineHeight: 1.5,
+                color: chainMissing ? 'var(--text-secondary)' : 'var(--red-gc)',
+              }}>
+                {chainMissing ? err : `Error cargando GEX: ${err}`}
+                {chainMissing && (
+                  <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+                    El buscador matchea tambien la descripcion, asi que devuelve ETFs sobre el
+                    simbolo que no tienen cadena propia. Elegi otro.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <DetailsPanel
+                data={data}
+                groups={display?.details_panel?.groups}
+                subtitle={display?.details_panel?.subtitle
+                  ?? 'Contexto de mercado — lectura informativa'}
+              />
+            )}
+          </div>
+
         </>
       )}
       </>
       )}
+    </div>
+    {switchEnabled !== false && (      <MarketWatchlist>
+        <TickerGrid layout="list"
+          symbols={gridSymbols}
+          selectedSymbol={active}
+          onSelect={setSelectedSymbol}
+          removableSymbols={adHocSymbols}
+          onRemoveSymbol={(symbol) => {
+            // Si se saca el que estaba abierto, la pantalla vuelve al primero del universo en vez
+            // de quedarse mostrando un símbolo que ya no está en la grilla.
+            if (active === symbol) setSelectedSymbol(null);
+            unpinAdHoc(symbol);
+          }}
+          trailing={adHocSearch?.enabled ? (
+            <SymbolSearchCard compact
+              minQueryLength={adHocSearch.min_query_length}
+              maxResults={adHocSearch.max_results}
+              instrumentTypes={adHocSearch.allowed_instrument_types}
+              onPick={(symbol) => {
+                const pinned = pinAdHoc(symbol);
+                if (pinned) setSelectedSymbol(pinned);
+              }}
+            />
+          ) : undefined}
+        />
+      </MarketWatchlist>)}
     </div>
   );
 }
