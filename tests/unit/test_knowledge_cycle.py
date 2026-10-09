@@ -161,3 +161,63 @@ def test_cli_kb_mark_then_search_leaves_it_out(kb):  # noqa: F811
     refused = subprocess.run([*cli, "kb", "mark", OTHER, "--as", "retired", "--reason", "x", "--slug", "otra-vez",
                               "--prompt", "y"], capture_output=True, text=True, encoding="utf-8", check=False)
     assert refused.returncode == 3 and "already marked" in refused.stdout
+
+
+class TestProjectRef:
+    def test_a_project_log_is_a_citable_source_and_shows(self, kb):  # noqa: F811
+        from galecore_ai.application.knowledge import resolve_ref
+        from galecore_ai.application.project import add
+        save(kb)
+        with pytest.raises(KnowledgeError, match="no entries"):
+            resolve_ref("project:portfolio", kb)
+        add(kb=kb, name="portfolio", kind="decision", words="no abro nada antes del CPI", prompt="anotalo")
+        resolved = resolve_ref("project:portfolio", kb)
+        assert resolved.path.endswith("projects/portfolio.json") and resolved.content_hash.startswith("sha256:")
+        shown = show(kb, "project:portfolio")
+        assert shown["kind"] == "project" and shown["entries"][0]["words"] == "no abro nada antes del CPI"
+        with pytest.raises(KnowledgeError, match="Malformed project"):
+            resolve_ref("project:../x", kb)
+
+
+class TestReviewFindings:
+    def test_the_profile_is_replaced_by_a_new_version_not_marked(self, kb):  # noqa: F811
+        save(kb)
+        with pytest.raises(KnowledgeError, match="profile set"):
+            mark(kb, "profile:v1")
+
+    def test_a_broken_mark_says_how_to_restore_it(self, kb):  # noqa: F811
+        save(kb)
+        _, path = mark(kb)
+        path.write_text(path.read_text(encoding="utf-8").replace("P1-D1", "P1-D2"), encoding="utf-8")
+        _, problems = check_content(content(), kb)
+        assert any("restore that file from the knowledge base's git" in p for p in problems)
+
+    def test_a_revision_that_still_cites_a_marked_item_names_the_replacement(self, kb):  # noqa: F811
+        from galecore_ai.application.knowledge import revise_research
+        from galecore_ai.contracts.research import RevisionReason
+        save(kb)
+        save(kb, slug="otro")
+        mark(kb, BACKLOG, MarkKind.SUPERSEDED, by=OTHER)
+        with pytest.raises(KnowledgeError, match=f"use {OTHER}"):
+            revise_research(kb=kb, research_id="2026-09-23-gex-0dte", reason=RevisionReason.CONTINUATION,
+                            note="sigue", prompt="seguí", host=HOST, content=content(), now=NOW + timedelta(days=2))
+
+    def test_a_marked_feedback_cannot_make_a_rule(self, kb):  # noqa: F811
+        doc, _ = save(kb)
+        save(kb, slug="otro")
+        a, _ = comment(kb, slug="a")
+        b, _ = comment(kb, slug="b", research=OTHER, words="de nuevo")
+        mark(kb, b.ref, slug="b-ya-no")
+        problems = check_feedback_citations(kb, [a.ref, b.ref], kind=FeedbackKind.METHOD,
+                                            skill_id=doc.current.skill.asset_id, applied_version="9.9.9")
+        assert any(f"{b.ref} is retired" in p for p in problems) and any("one case is not a rule" in p for p in problems)
+        assert feedback_status(kb)["feedback"][0]["same_skill_pending"] == []
+
+    def test_since_keeps_undated_items_and_the_cli_validates_the_day(self, kb):  # noqa: F811
+        from galecore_ai.application.knowledge import _item_day
+        assert _item_day({"ref": "file:x", "kind": "file"}) is None
+        assert _item_day({"ref": "regime:SPY/2026-09-23", "kind": "regime"}) == "2026-09-23"
+        cli = [sys.executable, "-B", "-m", "galecore_ai.adapters.cli"]
+        bad = subprocess.run([*cli, "kb", "search", "--since", "10/08"], capture_output=True, text=True,
+                             encoding="utf-8", check=False)
+        assert bad.returncode == 3 and "YYYY-MM-DD" in bad.stdout

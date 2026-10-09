@@ -79,7 +79,9 @@ system_prompt: >
       --reason "<why>" [--by <ref>] --slug <slug> --prompt "<owner words>"`. Nothing is deleted: the item
       stays readable with its mark, `kb search` leaves it out (`--include-marked` shows it) and a new
       result cannot cite it. A wrong rule in a skill is replaced with a new version (rule 12), not a mark.
-      Mark only on the owner's words; the curator (`knowledge_curator`) only proposes.
+      Mark only on the owner's words; the curator (`knowledge_curator`) only proposes. A profile version is
+      not marked: a new one (`profile set`) replaces it. A later revision of a result that cited the marked
+      item must cite the replacement the refusal names.
 
 instructions: |
   catalog                          # what exists; reuse before creating

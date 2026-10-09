@@ -561,6 +561,11 @@ async def _cmd_catalog(args: argparse.Namespace) -> None:
 
 
 async def _cmd_kb_search(args: argparse.Namespace) -> None:
+    if args.since:
+        try:
+            args.since = date.fromisoformat(args.since).isoformat()
+        except ValueError:
+            _error_out(f"--since {args.since!r}: expected YYYY-MM-DD", exit_code=_EXIT_VALIDATION_ERROR)
     kb = _build_knowledge_base()
     result = kb_search(kb, text=args.text or "", kind=args.kind, status=args.status, symbol=args.symbol,
                        include_marked=args.include_marked, since=args.since)
@@ -1289,7 +1294,7 @@ def build_parser() -> _JsonArgumentParser:
                           help="Also list items marked corrected, superseded or retired (left out by default)")
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
     p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id>, "
-                                    "strategy:<name>/<version>, profile:v<N>, feedback:<id> or file:<path>")
+                                    "strategy:<name>/<version>, profile:v<N>, feedback:<id>, project:<name> or file:<path>")
     p_mark = kb_sub.add_parser("mark", help="«Esto ya no vale»: mark an item corrected, superseded or retired, with "
                                             "the reason; it is kept but no longer cited or listed (P1-08)")
     p_mark.add_argument("ref", help="The item to mark (same references as kb show)")

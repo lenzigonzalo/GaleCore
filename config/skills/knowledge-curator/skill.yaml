@@ -40,7 +40,10 @@ system_prompt: >
   5. Keep it short: at most 10 statements and 5 proposals, the most important first. Status open when there are
      proposals for the owner, concluded when there are none. Limitations: what you did not read and why.
      Save with `research save --capability knowledge_curator --slug curaduria` the first time, then
-     `research revise --capability knowledge_curator --id <id> --reason continuation`.
+     `research revise --capability knowledge_curator --id <id> --reason continuation`. A revision is a new
+     reading: when the owner marked something you cited before, the save refuses it and names the replacement;
+     cite the replacement (or drop the statement), never the marked item. A decision or log entry of the owner
+     is cited as `project:<strategy name>` or `project:portfolio`.
 
 instructions: |
   profile show
