@@ -171,3 +171,15 @@ Fuera de alcance: nuevos contratos API, órdenes, builder, despliegues, cálculo
 - Login Dev existente (demo), GET /App/GaleCore/Account: linked=false. Balances y Positions: HTTP 409, code broker_account_not_linked. Admin/Users: 1 usuario, 0 cuentas vinculadas, 0 cuentas de sistema en Dev. Se imprimieron sólo metadatos, sin credenciales, identificadores de cuenta ni saldos.
 - Código: AccountBalancesHandler.GetForUser exige vínculo personal; TastytradeCredentialStore.GetSystem puede usar configuración local para el feed. Conexion abierta no acredita acceso a la cuenta personal. No se cambia ese aislamiento.
 - Config local tiene refresh token y client secret; no se tocaron ni imprimieron secretos. Vincular una cuenta al usuario Dev requiere definir explícitamente la asociación; no se copió DB ni credencial de producción.
+
+## Vinculación de cuenta Dev autorizada — 09/10/2026
+
+Owner proporcionó el número de cuenta para vincularlo a demo con OAuth local existente. POST inicial: HTTP 500. Lectura del error en memoria confirmó Falta Security:TokenProtectionKey; se imprimieron sólo indicadores, sin cuerpo/secretos.
+
+Fix dev/galecore_dev.py: genera 32 bytes aleatorios Base64 sólo cuando falta clave Dev y la conserva en dev/.local/env.json ignorado; api_env la pasa por variable de entorno. No modifica user-secrets ni producción. Review independiente APPROVE: ../reviews/GC-0011-dev-cifrado-20261009-codex.md. Ruff check: All checks passed. unittest: 2 tests PASS.
+
+Commit de sólo helper/tests 9b0f32b, integrado por cherry-pick 5ffaa4a en GaleCore local/integracion; no se integró la UI exploratoria. API Dev reiniciada por launcher PID 21996, contra mismo proyecto Dev; arranque genera/persiste clave de 32 bytes. Logs locales ignorados GaleCore/dev/.local/api-account-link.stdout.log y stderr.log, no incorporados como evidencia pública.
+
+POST /App/GaleCore/Account: linked=true, coincide con la cuenta indicada. GET Balances y Positions: HTTP 200. Campos netLiquidatingValue, derivativeBuyingPower y cashBalance presentes y compatibles con parseBalances. Lista positions vacía: 0 posiciones abiertas recibidas, no es error ni fallback. Primera salida contó el wrapper como 1; comprobación posterior contó correctamente positions=0. No se imprimieron saldos, números de cuenta, tokens ni secrets.
+
+Para verlo: recargar localhost:3039 (Ctrl+F5) para releer cuenta y limpiar el estado anterior sin vínculo. Lectura autenticada verificada por API como demo, no se afirma E2E visual. GC-0011 mantiene estado previo y QA visual pendiente.
