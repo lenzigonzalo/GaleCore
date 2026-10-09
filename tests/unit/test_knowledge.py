@@ -135,7 +135,7 @@ class TestCatalog:
         assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "data_sources",
                                               "user_profile", "capability_builder", "research", "context_research", "strategy_design", "strategy_followup",
                                               "daily_attention", "recurring_followup", "watch_alerts", "alert_analysis", "idea_inbox", "market_watch", "market_story",
-                                              "trader_space", "strategy_project", "daily_contrast", "performance_review", "capital_risk", "on_demand_analysis"}
+                                              "trader_space", "knowledge_curator", "strategy_project", "daily_contrast", "performance_review", "capital_risk", "on_demand_analysis"}
         assert all(e["available"] for e in entries), entries
 
     def test_prepare_skills_have_code_behind_them(self):
@@ -327,7 +327,7 @@ class TestCli:
                                                     "trader_space", "user_profile", "capability_builder", "research",
                                                     "context_research", "strategy_design", "strategy_followup",
                                                     "daily_attention", "market_watch", "market_story", "on_demand_analysis", "recurring_followup",
-                                                    "watch_alerts", "performance_review", "capital_risk", "alert_analysis", "idea_inbox", "strategy_project", "daily_contrast"]
+                                                    "watch_alerts", "performance_review", "capital_risk", "alert_analysis", "idea_inbox", "knowledge_curator", "strategy_project", "daily_contrast"]
 
     def test_save_search_show_revise(self, kb):
         env = {KNOWLEDGE_DIR_ENV: str(kb.base)}

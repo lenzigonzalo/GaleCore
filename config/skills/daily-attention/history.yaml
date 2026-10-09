@@ -31,6 +31,7 @@ versions:
       faltante. Completa el comentario del owner (qué evento macro viene): la 0.2.0 no tenía fuente para el
       FOMC. Aclara las rutas de tools/ desde el checkout y desde la raíz del workspace.
     feedback: [feedback:2026-09-30-briefing-eventos-macro-vs-posiciones]
+    owner_decision: "«Si tomalo como comentario» (29/09): el owner eligió que el brief lo haga siempre (GC-AI-0016, cierre aprobado)"
   - version: "0.2.0"
     date: 2026-09-30
     changes: >
@@ -41,6 +42,7 @@ versions:
       --releases). No cambia: la fecha de reunión del FOMC sigue sin fuente registrada y se declara faltante;
       las griegas de posiciones tampoco.
     feedback: [feedback:2026-09-30-briefing-eventos-macro-vs-posiciones]
+    owner_decision: "«Si tomalo como comentario» (29/09): el owner eligió que el brief lo haga siempre (GC-AI-0016, cierre aprobado)"
   - version: "0.1.2"
     date: 2026-09-29
     changes: >

@@ -1,5 +1,5 @@
 skill_id: capability_builder
-version: "0.2.0"
+version: "0.3.0"
 display_name: Crear una capacidad con el molde
 description: >
   Turns a request of the user ("quiero una capacidad que me diga qué merece mi atención hoy")
@@ -62,10 +62,24 @@ system_prompt: >
         `history.yaml` entry {version, date, changes, feedback: [feedback:<id>]} and run
         `catalog --check` (it verifies the feedback exists, is method, is about this skill and about
         an earlier version).
+      One case is not a rule: a method change needs comments on at least two different results
+      (`feedback list` shows `same_skill_pending`), or the owner's explicit decision. With a single
+      result, ask "¿sólo este resultado o siempre?"; if they say always, put their words in the entry's
+      `owner_decision`. Never write an owner_decision the owner did not say; `catalog --check` refuses a
+      method change with neither.
       A feedback applied elsewhere stays pending. Say what does NOT change (e.g. a source still missing).
   13. `feedback list` shows applied and pending, and where each was applied. The proof that a method
       change worked is the next run: a new session runs the new version and its result, stamped with
       that version, shows the change without the user repeating the instruction.
+
+  Retiring what no longer holds ("esto ya no vale", "reemplazalo"):
+  14. Find the item (`kb search`, `kb show <ref>`) and say in one line what happens to it: corrected
+      (it was wrong; name the correction), superseded (something newer replaces it; name it) or retired
+      (no longer used, nothing replaces it). Then `kb mark <ref> --as corrected|superseded|retired
+      --reason "<why>" [--by <ref>] --slug <slug> --prompt "<owner words>"`. Nothing is deleted: the item
+      stays readable with its mark, `kb search` leaves it out (`--include-marked` shows it) and a new
+      result cannot cite it. A wrong rule in a skill is replaced with a new version (rule 12), not a mark.
+      Mark only on the owner's words; the curator (`knowledge_curator`) only proposes.
 
 instructions: |
   catalog                          # what exists; reuse before creating
@@ -78,6 +92,7 @@ instructions: |
   profile set --feedback feedback:<id> ...             # preference
   config/skills/<dir>/history.yaml                     # method: new version citing feedback:<id>
   feedback list [--status pending|applied]             # what is still pending, and where each was applied
+  kb mark <ref> --as corrected|superseded|retired --reason "<why>" [--by <ref>] --slug <slug> --prompt "<owner words>"
 
   Catalog entry fields: id, kind, serves, example_requests, skill, output_contract,
   galecore_capabilities, data_needs [{need, missing?}], flow [CLI commands in order], stored_as,
