@@ -3,8 +3,12 @@ import './index.css';
 import { LoginScreen } from './components/LoginScreen';
 import { supabase, getSession, signOut } from './auth/supabase';
 import { StatusBar } from './components/layout/StatusBar';
-import { Sidebar } from './components/layout/Sidebar';
-import { TabNav, Tab } from './components/layout/TabNav';
+import type { Tab } from './components/layout/TabNav';
+import { WorkspaceNav } from './components/layout/WorkspaceNav';
+import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
+import { Today } from './pages/Today';
+import { LayoutPreview } from './pages/LayoutPreview';
+import { AccountSummary } from './components/account/AccountSummary';
 import { SupervisorAlerts } from './components/layout/SupervisorAlerts';
 import { ClaudeTerminal } from './components/layout/ClaudeTerminal';
 import { useTerminalStore } from './store/useTerminalStore';
@@ -78,16 +82,19 @@ function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => { setSocketStatus(status); }, [status]);
 
   return (
-    <div className="flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      <Sidebar onLogoClick={() => setTab('inicio')} />
+    <div className="workspace-shell flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
+      <WorkspaceNav active={tab} onChange={setTab} onConversation={() => setTerminalOpen(true)} />
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
         <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />
-        <TabNav active={tab} onChange={setTab} onLogout={onLogout} />
+        <WorkspaceHeader active={tab} onChange={setTab} onLogout={onLogout}
+          conversationOpen={terminalOpen} onConversation={() => setTerminalOpen(!terminalOpen)} />
         <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
-          <div style={{ display: tab === 'inicio' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+          {tab === 'inicio' && <Today onNavigate={setTab} />}
+          <div style={{ display: tab === 'estrategias' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
           </div>
           <div style={{ display: tab === 'monitor' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+            <div className="workspace-portfolio-summary"><AccountSummary /></div>
             <Monitor subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg}
               subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />
           </div>
@@ -112,21 +119,14 @@ function Dashboard({ onLogout }: DashboardProps) {
         {/* Avisos del supervisor de SHADOW (WS-0007): en todas las pestañas, con sonido. */}
         <SupervisorAlerts />
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
-        {!terminalOpen && (
-          <button onClick={() => setTerminalOpen(true)}
-            style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 50, fontSize: 13, padding: '8px 14px',
-              borderRadius: 999, cursor: 'pointer', backgroundColor: 'var(--bg-secondary)',
-              color: 'var(--text-secondary)', border: '1px solid var(--border-dark)' }}>
-            Claude Code
-          </button>
-        )}
+
       </div>
       <ClaudeTerminal />
     </div>
   );
 }
 
-function App() {
+function AuthenticatedApp() {
   // null = todavía no sabemos. La sesión de Supabase vive en localStorage y leerla es asincrónico,
   // así que hay un instante inicial sin respuesta. Sin este tercer estado, ese instante se
   // renderizaría como "no autenticado" y mostraría el login por un parpadeo a quien YA tiene sesión.
@@ -205,6 +205,10 @@ function App() {
   // con la sesión nueva. No es una optimización — es lo que garantiza que nada del anterior quede
   // en pantalla y que lo del nuevo llegue.
   return <Dashboard key={sessionUserId ?? 'anon'} onLogout={handleLogout} />;
+}
+
+function App() {
+  return process.env.REACT_APP_LAYOUT_PREVIEW === 'true' ? <LayoutPreview /> : <AuthenticatedApp />;
 }
 
 export default App;

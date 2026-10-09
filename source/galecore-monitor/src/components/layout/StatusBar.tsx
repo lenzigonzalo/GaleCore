@@ -20,7 +20,7 @@ export function StatusBar({ connectionStatus, lastUpdate }: Props) {
   const isConnecting = connectionStatus === 'connecting';
 
   const systemColor = isOnline ? 'var(--green)' : isConnecting ? 'var(--yellow-gc)' : 'var(--red-gc)';
-  const systemLabel = isOnline ? 'ONLINE'       : isConnecting ? 'CONECTANDO'       : 'OFFLINE';
+  const systemLabel = isOnline ? 'Conexión: abierta' : isConnecting ? 'Conexión: abriendo' : 'Conexión: cerrada';
 
   const lastUpdateStr = lastUpdate ? fmtTime(lastUpdate) : null;
 
@@ -39,7 +39,7 @@ export function StatusBar({ connectionStatus, lastUpdate }: Props) {
       flexShrink: 0,
       backgroundColor: 'var(--bg-primary)',
       borderBottom: '1px solid var(--border-dark)',
-      fontFamily: 'JetBrains Mono, monospace',
+      fontFamily: 'var(--font-sans)',
       fontSize: 13,
       letterSpacing: '0.04em',
       userSelect: 'none',
@@ -65,19 +65,19 @@ export function StatusBar({ connectionStatus, lastUpdate }: Props) {
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span
-            className={isOnline ? 'pulse-dot' : ''}
+
             style={{
               width: 6, height: 6, borderRadius: '50%',
               backgroundColor: systemColor,
               display: 'inline-block',
-              boxShadow: isOnline ? `0 0 6px ${systemColor}` : 'none',
+
             }}
           />
-          <span style={{ color: systemColor, fontWeight: 600 }}>{systemLabel}</span>
+          <span title="Conexión con GaleCore; no confirma recepción ni frescura de precios" style={{ color: systemColor, fontWeight: 600 }}>{systemLabel}</span>
         </div>
         {lastUpdateStr && (
           <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-            upd <span style={{ color: 'var(--text-secondary)' }}>{lastUpdateStr}</span>
+            Cuenta leída <span style={{ color: 'var(--text-secondary)' }}>{lastUpdateStr}</span>
           </span>
         )}
         <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{fmtTime(now)} ET</span>
