@@ -551,7 +551,9 @@ def check_feedback_citations(kb: KnowledgeBase, refs: list[str], *, kind: Feedba
     """
     problems = []
     results: set[str] = set()
-    marked = marks_index(kb, [])
+    failed_marks: list[dict] = []
+    marked = marks_index(kb, failed_marks)
+    problems += [_broken_mark_message(f) for f in failed_marks]
     for text in refs:
         try:
             doc = load_feedback(kb, text)
