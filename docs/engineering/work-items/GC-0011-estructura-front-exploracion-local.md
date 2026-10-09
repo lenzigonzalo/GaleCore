@@ -93,7 +93,7 @@ Main: cuenta real en franja financiera, posiciones y faltantes explícitos de hi
 Lab: resumen SHADOW por versión, versiones cargadas y actividad; subtabs Resumen/Estrategias/Ejecuciones SHADOW.
 Sidebar Gestión/Trabajo/Compartido; Mercado/Biblioteca compartidos. Asistente persiste al navegar.
 Supervisor emergente SHADOW sólo en Trabajo; no se habilitaron órdenes, LIVE ni nuevos cálculos.
-Preview localhost:3039 sirve dev/.local/main-demo-build; ?main=demo abre mocks; URL sin query abre cuenta real Dev.
+Preview localhost:3039 usa CRA con recarga automática (launcher local start-visual-preview.ps1, PID 13484); ?main=demo abre mocks, URL sin query cuenta real Dev.
 ACTIVE_WORK_ITEM sigue WS-0021. GC-0011 sigue exploración CHANGES_REQUESTED por revisión integral anterior.
 Pendientes: vincular cuenta en formulario existente, historia/performance/avisos reales, logo final y QA visual.
 No integrar como entrega ni pushear ni marcar VALIDATED/CLOSED sin revisión/aprobación correspondientes.
@@ -200,3 +200,12 @@ Owner permite mock data para ver Main completo y exige eliminarla después. Alca
 - Build final Dev CI=true: exit 0, Compiled successfully, main.2d748727.js y main.0e9f3fcb.css. Enlace localhost:3039/?main=demo y JS: HTTP 200, index apunta asset correcto; servidor loopback PID 29372, dev/.local/main-demo-build.
 - Review independiente APPROVE para recorte temporal, 0 BLOCKER/0 MAJOR/1 MINOR: ../reviews/GC-0011-main-demo-20261009-codex.md. Minor no bloqueante: hover de punto de gráfico sólo mouse; no se afirma control táctil/teclado de cada punto. Períodos sí accesibles. QA visual pendiente.
 - Demo no usa datos reales ni muta stores; App continúa las lecturas reales existentes para poder volver a cuenta. Los detalles demo permanecen dentro del prototipo, no enrutan posiciones ficticias hacia vistas reales. Cuenta real sigue disponible sin query o mediante Ver cuenta real.
+
+## Iteración visual compacta — feedback owner 09/10/2026
+
+Owner pide una sola marca demo discreta, sin microtextos/encabezados redundantes; capital/curva compactos, P&L diario explícito, tres avisos completos, posiciones vinculadas a proyectos de estrategia y watchlist derecha. Se reemplaza layout de demo sin alturas fijas/scroll vertical interno; todo el contenido crece visible. Cabecera global oculta sólo en demo, fixtures siguen aislados. Estrategias como workspaces/sesiones quedan para otra iteración. Se aplica excepción visual de ENGINEERING §12: preview/build necesario, sin suites/review por este ajuste. Retirada obligatoria de mocks vigente.
+
+- Preview ágil: launcher local dev/.local/start-visual-preview.ps1 usa API/Supabase Dev explícitos y HOST loopback. CRA inicial falló allowedHosts por proxy heredado a producción con host loopback; se retira proxy de package.json (sólo servidor dev; build no lo usa). Todas las consultas mantienen REACT_APP_API_BASE_URL explícita. Sin desactivar validación de host.
+
+- Preview CRA loopback: Compiled successfully, webpack compiled successfully, No issues found. Bundle HTTP 200, contiene P&L hoy y SPY Income. Primera petición index durante compilación expiró; repetición tras compilar HTTP 200. Tests ajustados a rótulos nuevos sin ejecutarlos, sin review por esta iteración visual (excepción owner ENGINEERING §12).
+- Cabecera de demo retirada; única marca Datos demo compacta. Sin alturas fijas ni overflow vertical interno. A anchos pequeños se apila y permite scroll de página para no ocultar contenido; tablas admiten desplazamiento horizontal sólo si no caben. No se afirma QA visual automatizada por navegador no conectado.

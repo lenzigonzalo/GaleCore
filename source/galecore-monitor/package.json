@@ -41,7 +41,6 @@
       "react-app/jest"
     ]
   },
-  "proxy": "https://datafeed-g5b4dkfccda5hkdh.chilecentral-01.azurewebsites.net",
   "browserslist": {
     "production": [
       ">0.2%",

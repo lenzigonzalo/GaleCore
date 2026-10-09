@@ -27,6 +27,7 @@ const PAGES: Record<Tab, { title: string; detail: string }> = {
 };
 export function WorkspaceHeader({ mainDemo = false, active, onChange, onLogout, conversationOpen, onConversation, onSymbol }: Props) {
   const { balances, errorBalances, loadingBalances, lastUpdate } = useAccountStore();
+  if (mainDemo) return null;
   const page = PAGES[active];
   const strategySection = ['lab', 'estrategias', 'rpf', 'shadow'].includes(active);
   const workSection = strategySection || active === 'agentes';

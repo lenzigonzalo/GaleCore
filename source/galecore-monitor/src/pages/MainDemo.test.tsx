@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MainDemo } from './MainDemo';
 import { useAccountStore } from '../store/useAccountStore';
 import { useGexStore } from '../store/useGexStore';
@@ -12,11 +12,10 @@ test('demo explícita conserva cuenta, selección y sesión reales al interactua
   const gex = useGexStore.getState();
   const terminal = useTerminalStore.getState();
   const exit = jest.fn(); render(<MainDemo onExit={exit} />);
-  expect(screen.getByText('DEMO VISUAL')).toBeInTheDocument();
-  expect(screen.getByText(/Todos los datos son ficticios/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'QQQ GEX negativo' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Investigar QQQ' }));
-  expect(screen.getByRole('complementary', { name: 'Detalle de demostración' })).toHaveTextContent('QQQ');
+  expect(screen.getByText('Datos demo')).toBeInTheDocument();
+  fireEvent.click(within(screen.getByRole('complementary', { name: 'Watchlist' })).getByRole('button', { name: 'QQQ' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Analizar QQQ' }));
+  expect(screen.getByRole('region', { name: 'Detalle de demostración' })).toHaveTextContent('QQQ');
   expect(useAccountStore.getState()).toBe(account);
   expect(useGexStore.getState()).toBe(gex);
   expect(useTerminalStore.getState()).toBe(terminal);
@@ -30,7 +29,7 @@ test('ventanas de gráfico y pérdidas ficticias son coherentes y explícitas', 
   expect(screen.getByText('-$185.00')).toBeInTheDocument();
   expect(demoPositions.reduce((sum, p) => sum + p.pnl, 0)).toBe(demoAccount.openPnl);
   fireEvent.click(screen.getByRole('button', { name: '1S' }));
-  expect(screen.getByText('5 sesiones de ejemplo · USD')).toBeInTheDocument();
+  expect(screen.getByText('5 sesiones')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '1S' })).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByRole('img', { name: /Curva de equity ficticia/ })).toBeInTheDocument();
 });
