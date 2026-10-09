@@ -9,8 +9,8 @@ import { fmtPnl, fmtPrice, fmtTime } from '../utils/formatters';
 import { Today } from './Today';
 
 /** Resumen de lecturas existentes. Cuenta real y ejecución SHADOW se muestran por separado. */
-export function Main({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
-  const { positions, loadingPositions, errorPositions, positionsReadAt } = useAccountStore();
+export function Main({ onNavigate, onConnectBroker }: { onNavigate: (tab: Tab) => void; onConnectBroker?: () => void }) {
+  const { positions, loadingPositions, errorPositions, positionsReadAt, brokerAccountIssue } = useAccountStore();
   const [metrics, setMetrics] = useState<SpecVersionMetrics[] | null>(null);
   const [metricsError, setMetricsError] = useState(false);
   const [readAt, setReadAt] = useState<Date | null>(null);
@@ -28,13 +28,17 @@ export function Main({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const link = (tab: Tab, label: string) => <button className="main-link" onClick={() => onNavigate(tab)}>{label}<ArrowUpRight size={16} /></button>;
   return <div className="main-dashboard">
     <div className="main-account-row">
-      <section className="main-account"><h2>Tu cuenta</h2><AccountSummary />{link('monitor', 'Ver cartera')}</section>
+      <section className="main-account"><h2>Tu cuenta</h2>{brokerAccountIssue ? <div className="broker-connect-state">
+        <h3>{brokerAccountIssue === 'not_linked' ? 'Conectá tu cuenta de Tastytrade' : 'Revisá la conexión de Tastytrade'}</h3>
+        <p>{brokerAccountIssue === 'not_linked' ? 'Vinculá la cuenta para ver tu saldo y tus posiciones.' : 'La credencial guardada fue rechazada. Actualizala para volver a leer la cuenta.'}</p>
+        <button className="btn" onClick={() => onConnectBroker ? onConnectBroker() : onNavigate('config')}>{brokerAccountIssue === 'not_linked' ? 'Vincular cuenta' : 'Revisar conexión'}</button>
+      </div> : <AccountSummary />}{link('monitor', 'Ver cartera')}</section>
       <section className="main-shortcuts"><h2>Ir al detalle</h2>
         {link('gex', 'Mercado y gráficos')}{link('estrategias', 'Estrategias')}
         {link('shadow', 'Ejecuciones SHADOW')}{link('agentes', 'Agentes y trabajos')}
       </section>
     </div>
-    <section className="main-section" aria-labelledby="main-positions">
+    {!brokerAccountIssue && <section className="main-section" aria-labelledby="main-positions">
       <div className="main-section-heading"><h2 id="main-positions">Posiciones abiertas</h2>{link('monitor', 'Ver todas en Cartera')}</div>
       <p className="main-source">Cuenta de bróker · instrumentos recibidos de GaleCore{positionsReadAt ? ' · lectura ' + fmtTime(positionsReadAt) + ' ET' : ''}</p>
       {loadingPositions ? <p>Leyendo posiciones…</p> : errorPositions ? <p role="alert">No se pudieron leer las posiciones. Actualizá la cuenta o revisá la conexión en Configuración.</p>
@@ -44,7 +48,7 @@ export function Main({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
           <span>{p.symbol}</span><p className="main-source">Sin estrategia vinculada</p><dl><div><dt>Cantidad</dt><dd>{p.quantity} · {p.quantityDirection}</dd></div>
           <div><dt>Precio informado</dt><dd>{fmtPrice(p.closePrice)}</dd></div></dl>
         </button>)}</div>}
-    </section>
+    </section>}
     <section className="main-section" aria-labelledby="main-results">
       <div className="main-section-heading"><h2 id="main-results">Resultados de estrategias</h2>{link('shadow', 'Abrir SHADOW')}</div>
       <p className="main-source">SHADOW · ejecución simulada con datos reales · separado del saldo de tu cuenta{readAt ? ' · lectura ' + fmtTime(readAt) + ' ET' : ''}</p>

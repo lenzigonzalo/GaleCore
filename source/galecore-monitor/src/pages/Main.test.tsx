@@ -32,3 +32,13 @@ test('conserva pérdidas y advierte valuación parcial sin convertir null en cer
   expect(screen.getByText('1 sin valuar · resultado parcial')).toBeInTheDocument();
   expect(screen.getByText('La última lectura no contiene posiciones abiertas.')).toBeInTheDocument();
 });
+
+test('cuenta sin vincular ofrece conexión y evita errores de posiciones duplicados', async () => {
+  useAccountStore.getState().setErrorBalances({ message: 'not linked', brokerAccountIssue: 'not_linked' });
+  useAccountStore.getState().failPositions(); load.mockResolvedValue([]);
+  const connect = jest.fn(); render(<Main onNavigate={() => {}} onConnectBroker={connect} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Vincular cuenta' })); expect(connect).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText(/No se pudieron leer las posiciones/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Posiciones abiertas' })).not.toBeInTheDocument();
+  expect(await screen.findByText('No hay métricas de estrategias desplegadas.')).toBeInTheDocument();
+});

@@ -31,7 +31,7 @@ const labelStyle: React.CSSProperties = {
  * El token se manda y se olvida: no se guarda en estado global, ni en localStorage, ni vuelve en el
  * GET. El input se limpia solo al guardar.
  */
-export function BrokerAccountCard() {
+export function BrokerAccountCard({ onLinked }: { onLinked?: () => void }) {
   const [state, setState] = useState<BrokerAccountState | null>(null);
   const [loading, setLoading] = useState(true);
   const [accountNumber, setAccountNumber] = useState('');
@@ -79,6 +79,7 @@ export function BrokerAccountCard() {
       setClientSecret('');
       setOk('Cuenta vinculada. El cambio tarda hasta un minuto en tomar efecto (la credencial se cachea 60s).');
       await load();
+      onLinked?.();
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'No se pudo vincular la cuenta');
     } finally {

@@ -306,3 +306,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (max-width: 1000px) { .workspace-account { display: none; } .workspace-heading { gap: 14px; } }
 @media (max-width: 850px) { .market-workspace { flex-direction: column-reverse; } .market-watchlist-panel { position: relative; width: 100% !important; max-height: none; border-left: 0; border-bottom: 1px solid var(--border); } .market-watchlist-panel > div:last-child { max-height: 280px; } .watchlist-resize { display: none; } .market-analysis { width: 100%; } .market-watchlist-panel.collapsed .market-watchlist-heading { justify-content: flex-end; } }
 @media (max-width: 700px) { .workspace-heading { flex-wrap: wrap; } .workspace-search { order: 3; flex-basis: 100%; max-width: none; } .workspace-brand::after { content: 'GC'; font-size: 18px; font-weight: 600; } .lab-workspace { padding: 20px 16px; } }
+
+.broker-connect-state h3 { margin: 0 0 10px; font-size: 20px; font-weight: 500; }
+.broker-connect-state p { color: var(--text-secondary); font-size: 15px; margin-bottom: 20px; }
+.broker-connect-state .btn { background: var(--accent); color: var(--accent-ink); border: 0; padding: 10px 16px; font-size: 14px; }

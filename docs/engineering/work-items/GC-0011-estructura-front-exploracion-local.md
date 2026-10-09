@@ -119,3 +119,19 @@ Antes de continuar: análisis de divergencia en FRONT-GALECORE-INTEGRAL §26. Ac
 - Una falla TS por props retiradas, opcionales del contrato y warning de cleanup se corrigieron antes del build verde;
   test heredado de nota se corrigió conservando la distinción recepción/origen en detalle.
 - Marca: pregunta al owner por variante/asset pendiente; no símbolo nuevo generado.
+
+## Iteración enfocada Main + marca — feedback owner 09/10/2026
+
+- Owner rechaza experiencia general y pide más claridad. Se limita el cambio a Main, marca elegida y acceso de vinculación de bróker. Mercado se conserva para una iteración propia.
+- Main prioriza cuenta, performance y posiciones; claves secundarias. Un estado de cuenta sin vincular es una acción de conexión, no cascada de errores ni balance cero.
+- Resultados SHADOW separados; vista inicial compacta, sin hashes ni tabla de todas las versiones en portada. Estados vacíos/parciales siguen honestos.
+- Acceso Vincular cuenta abre configuración en bróker; no copiar credenciales/DB de producción. El owner ingresa OAuth en formulario existente.
+- Owner elige logo adjunto; recolor al acento #a3d86c, sin cambio de geometría. Asset final en repo, transparencia.
+- Aceptación negativa: cuenta no vinculada no genera error de posiciones repetido; falla genérica conserva diagnóstico/reintento; SHADOW no representa saldo real.
+
+### Cambio de conversación: probar OpenDesign sin eludir SmartScreen
+
+Owner aporta open-design.ai y repo nexu-io/open-design para mejorar revisión visual antes de implementar. Se recomienda comparar dos composiciones de Main con mismo contenido y decidir la dirección. No se instaló OpenDesign ni MCP.
+Verificado instalador Descargas open-design-0.24.1-win-x64-setup.exe, 438224539 bytes: SHA256 3a544dca7a5f078029d55f272e218278e52edac55efbfb292d56258113e8a441 coincide con digest de GitHub Releases open-design-v0.24.1. Authenticode NotSigned; owner muestra SmartScreen unrecognized app/Unknown publisher. No detección de malware inferida ni ausencia certificada. Bitdefender figura en SecurityCenter; no se ejecutó análisis antivirus. Windows 11 Home, WindowsSandbox.exe ausente. No eludir advertencia ni registrar MCP mientras owner evalúa.
+Código acotado antes de la consulta: estado de vinculación en Main sin cascada de error de posiciones; Vincular abre Settings initial=broker; guardar credencial pide releer cuenta. Sin copia de Supabase producción ni credenciales. Tests Main/account: 6 passed; build estándar bloqueó por EBUSY en asset servido; compilación alternativa dev/.local/main-connect-build: exit 0, Compiled successfully, main.a19a4dbf.js. Servidor 3039 apunta a ese directorio.
+Logo adjunto seleccionado por owner, verde #a3d86c: dos ediciones imagegen tuvieron artefactos en wordmark; no se integran como asset final. Identidad elegida, limpieza pendiente. Main completo no rediseñado aún: propuesta de comparar diseños antes de seguir cambiando páginas.

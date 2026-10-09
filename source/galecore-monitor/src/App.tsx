@@ -36,11 +36,29 @@ interface DashboardProps {
 
 function Dashboard({ onLogout }: DashboardProps) {
   const [tab, setTab] = useState<Tab>('inicio');
+  const [settingsInitial, setSettingsInitial] = useState<'usuario' | 'broker'>('usuario');
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
   const { setConfig, setLoading: setConfigLoading, setError: setConfigError, tickers } = useAppConfigStore();
   const { setBalances, setPositions, setLoadingBalances, setLoadingPositions, setErrorBalances, failPositions, lastUpdate } = useAccountStore();
   const reloadCurrentUser = useCurrentUserStore((s) => s.reload);
+
+  const refreshAccount = () => {
+    // Balances
+    setLoadingBalances(true);
+    fetchBalances()
+      .then(setBalances)
+      .catch((e) => setErrorBalances(describeAccountError(e)))
+      .finally(() => setLoadingBalances(false));
+
+    // Positions. Si fallan se vacían: dejar las de la lectura anterior es mostrarle a este operador
+    // las posiciones de otro.
+    setLoadingPositions(true);
+    fetchPositions()
+      .then(setPositions)
+      .catch(failPositions)
+      .finally(() => setLoadingPositions(false));
+  };
 
   useEffect(() => {
     // Quién está logueado y qué le deja hacer la plataforma. Va primero porque de acá sale qué
@@ -60,20 +78,7 @@ function Dashboard({ onLogout }: DashboardProps) {
       .catch((e) => setConfigError(e.message ?? 'Error cargando la configuración'))
       .finally(() => setConfigLoading(false));
 
-    // Balances
-    setLoadingBalances(true);
-    fetchBalances()
-      .then(setBalances)
-      .catch((e) => setErrorBalances(describeAccountError(e)))
-      .finally(() => setLoadingBalances(false));
-
-    // Positions. Si fallan se vacían: dejar las de la lectura anterior es mostrarle a este operador
-    // las posiciones de otro.
-    setLoadingPositions(true);
-    fetchPositions()
-      .then(setPositions)
-      .catch(failPositions)
-      .finally(() => setLoadingPositions(false));
+    refreshAccount();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const terminalOpen = useTerminalStore((t) => t.open);
@@ -98,7 +103,7 @@ function Dashboard({ onLogout }: DashboardProps) {
             store.setSelectedSymbol(selected); setTab('gex');
           }} conversationOpen={terminalOpen} onConversation={() => setTerminalOpen(!terminalOpen)} />
         <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
-          {tab === 'inicio' && <Main onNavigate={setTab} />}
+          {tab === 'inicio' && <Main onNavigate={setTab} onConnectBroker={() => { setSettingsInitial('broker'); setTab('config'); }} />}
           {tab === 'lab' && <Lab onMonitor={() => setTab('shadow')} />}
           <div style={{ display: tab === 'estrategias' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
@@ -114,7 +119,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           </div>
           {/* Se montan recién al entrar: leen la cuenta de bróker y la lista de usuarios — nada de
               eso tiene sentido traerlo en cada arranque del tablero. */}
-          {tab === 'config' && <Settings />}
+          {tab === 'config' && <Settings initial={settingsInitial} onBrokerLinked={refreshAccount} />}
           {tab === 'admin' && <Admin />}
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}
