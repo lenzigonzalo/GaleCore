@@ -86,12 +86,14 @@ ceros o una fecha de fuente. Se retiran logs de cuenta. Fecha de recepción perm
 
 ## Para retomar
 
+Demo visual temporal autorizada por el owner: ?main=demo, selector local y fixtures MainDemo.*.
+RETIRADA OBLIGATORIA de archivos/flags/tests demo antes de Main final; checklist en sección Demo visual temporal autorizada.
 Primera iteración autorizada: Gestión real separada de Trabajo/Lab (D-0006).
 Main: cuenta real en franja financiera, posiciones y faltantes explícitos de historia/noticias; sin métricas o publicaciones SHADOW.
 Lab: resumen SHADOW por versión, versiones cargadas y actividad; subtabs Resumen/Estrategias/Ejecuciones SHADOW.
 Sidebar Gestión/Trabajo/Compartido; Mercado/Biblioteca compartidos. Asistente persiste al navegar.
 Supervisor emergente SHADOW sólo en Trabajo; no se habilitaron órdenes, LIVE ni nuevos cálculos.
-Preview localhost:3039 usa dev/.local/spaces-reviewed-build de este worktree al entregar; datos Dev.
+Preview localhost:3039 sirve dev/.local/main-demo-build; ?main=demo abre mocks; URL sin query abre cuenta real Dev.
 ACTIVE_WORK_ITEM sigue WS-0021. GC-0011 sigue exploración CHANGES_REQUESTED por revisión integral anterior.
 Pendientes: vincular cuenta en formulario existente, historia/performance/avisos reales, logo final y QA visual.
 No integrar como entrega ni pushear ni marcar VALIDATED/CLOSED sin revisión/aprobación correspondientes.
@@ -183,3 +185,18 @@ Commit de sólo helper/tests 9b0f32b, integrado por cherry-pick 5ffaa4a en GaleC
 POST /App/GaleCore/Account: linked=true, coincide con la cuenta indicada. GET Balances y Positions: HTTP 200. Campos netLiquidatingValue, derivativeBuyingPower y cashBalance presentes y compatibles con parseBalances. Lista positions vacía: 0 posiciones abiertas recibidas, no es error ni fallback. Primera salida contó el wrapper como 1; comprobación posterior contó correctamente positions=0. No se imprimieron saldos, números de cuenta, tokens ni secrets.
 
 Para verlo: recargar localhost:3039 (Ctrl+F5) para releer cuenta y limpiar el estado anterior sin vínculo. Lectura autenticada verificada por API como demo, no se afirma E2E visual. GC-0011 mantiene estado previo y QA visual pendiente.
+
+## Demo visual temporal autorizada — 09/10/2026
+
+Owner permite mock data para ver Main completo y exige eliminarla después. Alcance: demo local explícita con capital, atención, watchlist, posiciones y performance; fixtures aisladas, sin writes en stores/DB ni llamadas de ejecución. Alternar demo/cuenta real; detalles de demo permanecen en el prototipo. Cabecera no mezcla saldo/conexión reales con datos ficticios. Revisión y tests de aislamiento.
+
+- [ ] RETIRADA OBLIGATORIA antes de entregar Main final: borrar MainDemo.tsx, MainDemo.fixture.ts, MainDemo.css y su test; retirar flags/props/selector demo en Main, App, WorkspaceHeader y sus tests. Reusar únicamente composición aprobada con fuentes reales; comprobar búsqueda de MainDemo/mainDemo/demo fixtures sin coincidencias. No marcar Main final listo hasta completar esta retirada.
+
+### Verificación de demo temporal
+
+- CI=true npm test -- --watchAll=false --runInBand --testMatch **/Main.test.tsx **/MainDemo.test.tsx **/WorkspaceHeader.test.tsx: 9 passed, 3 suites, exit 0. Pruebas: interactions no modifican Account/GEX/Terminal stores, salida a cuenta real, pérdida visible, suma ficticia consistente y rangos cambian número de sesiones; cabecera demo sin saldo/buscador real.
+- git diff --check: exit 0. CUA: apps/browsers vacíos; QA visual pendiente. Build/review/HTTP se registran al terminar.
+
+- Build final Dev CI=true: exit 0, Compiled successfully, main.2d748727.js y main.0e9f3fcb.css. Enlace localhost:3039/?main=demo y JS: HTTP 200, index apunta asset correcto; servidor loopback PID 29372, dev/.local/main-demo-build.
+- Review independiente APPROVE para recorte temporal, 0 BLOCKER/0 MAJOR/1 MINOR: ../reviews/GC-0011-main-demo-20261009-codex.md. Minor no bloqueante: hover de punto de gráfico sólo mouse; no se afirma control táctil/teclado de cada punto. Períodos sí accesibles. QA visual pendiente.
+- Demo no usa datos reales ni muta stores; App continúa las lecturas reales existentes para poder volver a cuenta. Los detalles demo permanecen dentro del prototipo, no enrutan posiciones ficticias hacia vistas reales. Cuenta real sigue disponible sin query o mediante Ver cuenta real.

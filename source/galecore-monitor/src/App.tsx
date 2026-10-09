@@ -36,6 +36,9 @@ interface DashboardProps {
 
 function Dashboard({ onLogout }: DashboardProps) {
   const [tab, setTab] = useState<Tab>('inicio');
+  // TEMPORAL GC-0011: opt-in local, nunca modifica los stores reales.
+  const localDemo = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  const [mainDemo, setMainDemo] = useState(() => localDemo && new URLSearchParams(window.location.search).get('main') === 'demo');
   const [settingsInitial, setSettingsInitial] = useState<'usuario' | 'broker'>('usuario');
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
@@ -91,8 +94,8 @@ function Dashboard({ onLogout }: DashboardProps) {
     <div className="workspace-shell flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       <WorkspaceNav active={tab} onChange={setTab} />
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
-        <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />
-        <WorkspaceHeader active={tab} onChange={setTab} onLogout={onLogout}
+        {!(tab === 'inicio' && mainDemo) && <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />}
+        <WorkspaceHeader mainDemo={tab === 'inicio' && mainDemo} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();
             if (!store.rules) { await store.loadRules(); store = useGexStore.getState(); }
@@ -103,7 +106,7 @@ function Dashboard({ onLogout }: DashboardProps) {
             store.setSelectedSymbol(selected); setTab('gex');
           }} conversationOpen={terminalOpen} onConversation={() => setTerminalOpen(!terminalOpen)} />
         <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
-          {tab === 'inicio' && <Main onNavigate={setTab} onConnectBroker={() => { setSettingsInitial('broker'); setTab('config'); }} />}
+          {tab === 'inicio' && <Main demo={mainDemo} onDemoChange={localDemo ? setMainDemo : undefined} onNavigate={setTab} onConnectBroker={() => { setSettingsInitial('broker'); setTab('config'); }} />}
           {tab === 'lab' && <Lab onMonitor={() => setTab('shadow')} onNavigate={setTab} />}
           <div style={{ display: tab === 'estrategias' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />

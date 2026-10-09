@@ -1,4 +1,5 @@
 import React from 'react';
+import { MainDemo } from './MainDemo';
 import { ArrowUpRight } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
 import { AccountSummary } from '../components/account/AccountSummary';
@@ -6,11 +7,12 @@ import { useAccountStore } from '../store/useAccountStore';
 import { fmtPrice, fmtTime } from '../utils/formatters';
 
 /** Inicio de gestión: sólo lecturas de la cuenta real. */
-export function Main({ onNavigate, onConnectBroker }: { onNavigate: (tab: Tab) => void; onConnectBroker?: () => void }) {
+export function Main({ onNavigate, onConnectBroker, demo = false, onDemoChange }: { onNavigate: (tab: Tab) => void; onConnectBroker?: () => void; demo?: boolean; onDemoChange?: (demo: boolean) => void }) {
   const { positions, loadingPositions, errorPositions, positionsReadAt, brokerAccountIssue } = useAccountStore();
+  if (demo) return <MainDemo onExit={() => onDemoChange?.(false)} />;
   const link = (tab: Tab, label: string) => <button className="main-link" onClick={() => onNavigate(tab)}>{label}<ArrowUpRight size={16} /></button>;
   return <div className="main-dashboard">
-    <div className="workspace-scope"><span>Gestión · cuenta real</span><button className="main-link" onClick={() => onNavigate('lab')}>Ir al Lab<ArrowUpRight size={16} /></button></div>
+    <div className="workspace-scope"><span>Gestión · cuenta real</span>{onDemoChange && <button className="main-link" onClick={() => onDemoChange(true)}>Ver Main completo · demo</button>}<button className="main-link" onClick={() => onNavigate('lab')}>Ir al Lab<ArrowUpRight size={16} /></button></div>
     <div className="main-account-row main-account-only">
       <section className="main-account"><h2>Tu cuenta</h2>{brokerAccountIssue ? <div className="broker-connect-state">
         <h3>{brokerAccountIssue === 'not_linked' ? 'Conectá tu cuenta de Tastytrade' : 'Revisá la conexión de Tastytrade'}</h3>

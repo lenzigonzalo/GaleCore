@@ -22,3 +22,10 @@ test('Gestión conserva acceso a la cuenta y no ofrece subnavegación SHADOW', (
   expect(props.onChange).toHaveBeenCalledWith('monitor');
   expect(screen.queryByRole('navigation', { name: 'Vistas del Lab' })).not.toBeInTheDocument();
 });
+
+test('demo no mezcla saldo real ni buscador real en la cabecera', () => {
+  render(<WorkspaceHeader {...props} active="inicio" mainDemo />);
+  expect(screen.queryByTitle('Abrir Cartera')).not.toBeInTheDocument();
+  expect(screen.queryByRole('textbox', { name: 'Buscar' })).not.toBeInTheDocument();
+  expect(screen.getByText('Vista de diseño · datos ficticios')).toBeInTheDocument();
+});
