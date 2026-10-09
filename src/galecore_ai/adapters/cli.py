@@ -94,6 +94,7 @@ from galecore_ai.application.knowledge import (
     revise_research,
     save_evidence,
     save_feedback,
+    save_mark,
     save_research,
 )
 from galecore_ai.application.knowledge import search as kb_search
@@ -129,6 +130,7 @@ from galecore_ai.capabilities.registry import CapabilityRegistry
 from galecore_ai.contracts.agent_run import RunStatus
 from galecore_ai.contracts.evidence import EvidenceContent
 from galecore_ai.contracts.feedback import FeedbackKind
+from galecore_ai.contracts.mark import MarkKind
 from galecore_ai.contracts.prepared_analysis import AcceptanceRequest
 from galecore_ai.contracts.regime_record import RecordHost, ReviewVerdict
 from galecore_ai.contracts.research import ResearchContent, ResearchStatus, RevisionReason
@@ -543,9 +545,9 @@ async def _cmd_catalog(args: argparse.Namespace) -> None:
         if kb_status["available"]:
             kb = _build_knowledge_base()
 
-            def feedback_check(refs: list[str], skill_id: str, version: str) -> list[str]:
+            def feedback_check(refs: list[str], skill_id: str, version: str, owner_decision: str) -> list[str]:
                 return check_feedback_citations(kb, refs, kind=FeedbackKind.METHOD, skill_id=skill_id,
-                                                applied_version=version)
+                                                applied_version=version, owner_decision=owner_decision)
         result = check_catalog(catalog, commands=cli_commands(build_parser()), workspace=workspace,
                                registry=registry, status_store=_build_source_status_store(),
                                feedback_check=feedback_check)
@@ -559,11 +561,30 @@ async def _cmd_catalog(args: argparse.Namespace) -> None:
 
 
 async def _cmd_kb_search(args: argparse.Namespace) -> None:
+    if args.since:
+        try:
+            args.since = date.fromisoformat(args.since).isoformat()
+        except ValueError:
+            _error_out(f"--since {args.since!r}: expected YYYY-MM-DD", exit_code=_EXIT_VALIDATION_ERROR)
     kb = _build_knowledge_base()
-    result = kb_search(kb, text=args.text or "", kind=args.kind, status=args.status, symbol=args.symbol)
+    result = kb_search(kb, text=args.text or "", kind=args.kind, status=args.status, symbol=args.symbol,
+                       include_marked=args.include_marked, since=args.since)
     result["knowledge_base"] = str(kb.base)
     result["searched_at"] = datetime.now(UTC).isoformat()
     _json_out(result, exit_code=_EXIT_VALIDATION_ERROR if result["integrity_failed"] else _EXIT_SUCCESS)
+
+
+async def _cmd_kb_mark(args: argparse.Namespace) -> None:
+    kb = _build_knowledge_base()
+    try:
+        document, path = save_mark(kb=kb, slug=args.slug, ref=args.ref, mark=MarkKind(args.mark), reason=args.reason,
+                                   by=args.by or "", prompt=args.prompt,
+                                   host=RecordHost(provider="claude-code", model=args.host_model))
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+        return
+    _json_out({"status": "MARKED", "ref": document.ref, "mark": document.mark.value, "by": document.by or None,
+               "id": document.id, "path": str(path), "content_hash": document.content_hash})
 
 
 async def _cmd_kb_show(args: argparse.Namespace) -> None:
@@ -1268,9 +1289,21 @@ def build_parser() -> _JsonArgumentParser:
     p_search.add_argument("--status", choices=["unfinished", *[s.value for s in ResearchStatus]],
                           help="unfinished = open or test_planned")
     p_search.add_argument("--symbol")
+    p_search.add_argument("--since", help="YYYY-MM-DD: only items updated on or after that day")
+    p_search.add_argument("--include-marked", dest="include_marked", action="store_true",
+                          help="Also list items marked corrected, superseded or retired (left out by default)")
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
     p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id>, "
-                                    "strategy:<name>/<version>, profile:v<N>, feedback:<id> or file:<path>")
+                                    "strategy:<name>/<version>, profile:v<N>, feedback:<id>, project:<name> or file:<path>")
+    p_mark = kb_sub.add_parser("mark", help="«Esto ya no vale»: mark an item corrected, superseded or retired, with "
+                                            "the reason; it is kept but no longer cited or listed (P1-08)")
+    p_mark.add_argument("ref", help="The item to mark (same references as kb show)")
+    p_mark.add_argument("--as", dest="mark", required=True, choices=[k.value for k in MarkKind])
+    p_mark.add_argument("--reason", required=True, help="Why, in plain words")
+    p_mark.add_argument("--by", help="The correction or replacement (required for corrected and superseded)")
+    p_mark.add_argument("--slug", required=True, help="Short name; the id is <date>-<slug>")
+    p_mark.add_argument("--prompt", required=True, help="The owner's words that asked for it")
+    p_mark.add_argument("--host-model", dest="host_model")
 
     p_profile = sub.add_parser("profile", help="Your profile: objectives, capital, horizon, limits, format")
     prof_sub = p_profile.add_subparsers(dest="profile_command", required=True)
@@ -1582,6 +1615,8 @@ def main() -> None:
             asyncio.run(_cmd_kb_search(args))
         elif args.command == "kb" and args.kb_command == "show":
             asyncio.run(_cmd_kb_show(args))
+        elif args.command == "kb" and args.kb_command == "mark":
+            asyncio.run(_cmd_kb_mark(args))
         elif args.command == "research" and args.research_command == "save":
             asyncio.run(_cmd_research_save(args))
         elif args.command == "research" and args.research_command == "revise":

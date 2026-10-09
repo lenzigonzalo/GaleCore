@@ -43,7 +43,8 @@ KNOWLEDGE_DIR_ENV = "GALECORE_KNOWLEDGE_DIR"
 
 _REGIME_KEY_RE = re.compile(r"^(?P<symbol>[A-Za-z0-9.\-]{1,12})/(?P<date>\d{4}-\d{2}-\d{2})$")
 RESEARCH_ID_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$")
-REF_KINDS = ("regime", "research", "evidence", "strategy", "profile", "feedback", "file")
+REF_KINDS = ("regime", "research", "evidence", "strategy", "profile", "feedback", "project", "file")
+_PROJECT_KEY_RE = re.compile(r"^(portfolio|[a-z][a-z0-9_]{2,63})$")  # a strategy name or the portfolio
 _STRATEGY_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}/\d+\.\d+\.\d+$")
 _PROFILE_KEY_RE = re.compile(r"^v[1-9]\d*$")
 
@@ -94,7 +95,7 @@ def parse_ref(text: str) -> Ref:
     if not sep or kind not in REF_KINDS or not key:
         raise KnowledgeBaseError(
             f"Malformed reference {text!r}: expected regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, "
-            "evidence:<id>, strategy:<name>/<version>, profile:v<N>, feedback:<id> or file:<path>"
+            "evidence:<id>, strategy:<name>/<version>, profile:v<N>, feedback:<id>, project:<name> or file:<path>"
         )
     if kind == "regime":
         m = _REGIME_KEY_RE.fullmatch(key)
@@ -121,6 +122,10 @@ def parse_ref(text: str) -> Ref:
         if not _PROFILE_KEY_RE.fullmatch(key):
             raise KnowledgeBaseError(f"Malformed profile reference {text!r}: expected profile:v<N>")
         return Ref("profile", key)
+    if kind == "project":
+        if not _PROJECT_KEY_RE.fullmatch(key):
+            raise KnowledgeBaseError(f"Malformed project reference {text!r}: expected project:<strategy name>|portfolio")
+        return Ref("project", key)
     posix = PurePosixPath(key.replace("\\", "/"))
     if posix.is_absolute() or ".." in posix.parts or key.startswith(("/", "\\")) or ":" in key:
         raise KnowledgeBaseError(f"file reference must be a relative path inside the workspace: {text!r}")
@@ -143,4 +148,6 @@ def ref_path(ref: Ref, base: Path) -> Path:
         return base / "profile" / f"{ref.key}.json"
     if ref.kind == "feedback":
         return base / "feedback" / f"{ref.key}.json"
+    if ref.kind == "project":
+        return base / "projects" / f"{ref.key}.json"
     return (base.parent / ref.key).resolve()

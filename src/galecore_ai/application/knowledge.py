@@ -30,6 +30,7 @@ from galecore_ai.adapters.feedback_store import (
     FileFeedbackStore,
 )
 from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, Ref, parse_ref, ref_path
+from galecore_ai.adapters.mark_store import FileMarkStore, MarkIntegrityError, MarkStoreError
 from galecore_ai.adapters.profile_store import (
     FileProfileStore,
     ProfileIntegrityError,
@@ -58,6 +59,7 @@ from galecore_ai.contracts.feedback import (
     FeedbackTarget,
     compute_feedback_hash,
 )
+from galecore_ai.contracts.mark import MarkDocument, MarkKind, compute_mark_hash
 from galecore_ai.contracts.prepared_analysis import AssetEntry
 from galecore_ai.contracts.regime_record import RecordHost
 from galecore_ai.contracts.research import (
@@ -109,6 +111,10 @@ class KnowledgeBase:
     @property
     def feedback(self) -> FileFeedbackStore:
         return FileFeedbackStore(self.base)
+
+    @property
+    def marks(self) -> FileMarkStore:
+        return FileMarkStore(self.base)
 
 
 def _sha256_file(path: Path) -> str:
@@ -173,12 +179,17 @@ def resolve_ref(text: str, kb: KnowledgeBase) -> ResolvedRef:
     elif ref.kind == "feedback":
         load_feedback(kb, str(ref))
         path = kb.feedback.path_for(ref.key)
+    elif ref.kind == "project":
+        from galecore_ai.application.project import load_log  # project builds on this module
+        if not load_log(kb, ref.key).entries:
+            raise KnowledgeError(f"{ref}: no entries in that project's log")
+        path = ref_path(ref, kb.base)
     else:
         path = ref_path(ref, kb.base)
         if path.is_relative_to(kb.base.resolve()):
             # Knowledge items are cited by kind so their integrity (and self-citation) is checked.
             raise KnowledgeError(f"{ref}: points inside the knowledge base; cite it as regime:, research:, "
-                                 "evidence:, strategy:, profile: or feedback:")
+                                 "evidence:, strategy:, profile:, feedback: or project:")
         if not path.is_relative_to(kb.workspace.resolve()) or not path.is_file():
             raise KnowledgeError(f"{ref}: no such file inside the workspace")
     return ResolvedRef(ref=str(ref), path=_display_path(path, kb), content_hash=_sha256_file(path))
@@ -228,6 +239,9 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
     """Resolve every cited reference and apply the investigation's controls (and the capability's own, if any)."""
     problems: list[str] = []
     resolved: dict[str, ResolvedRef] = {}
+    failed_marks: list[dict] = []
+    marked = marks_index(kb, failed_marks)
+    problems += [_broken_mark_message(f) for f in failed_marks]
 
     def cite(text: str, where: str) -> None:
         try:
@@ -237,6 +251,9 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
             return
         if self_id and r.ref == f"research:{self_id}":
             problems.append(f"{where}: an investigation cannot cite itself")
+            return
+        if r.ref in marked:
+            problems.append(f"{where}: {_marked_message(marked[r.ref])}")
             return
         resolved.setdefault(r.ref, r)
 
@@ -411,6 +428,82 @@ def _evidence_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, s
     return items
 
 
+# ── marks: corrected, superseded, retired (P1-08) ────────────────
+
+
+def marks_index(kb: KnowledgeBase, failed: list[dict]) -> dict[str, MarkDocument]:
+    """Marked reference → its mark. A broken mark is reported in ``failed``, never ignored."""
+    out: dict[str, MarkDocument] = {}
+    for mid in kb.marks.ids():
+        try:
+            doc = kb.marks.load(mid)
+        except (MarkIntegrityError, MarkStoreError) as exc:
+            failed.append({"ref": f"mark:{mid}", "status": "INTEGRITY_FAILED", "problems": [str(exc)]})
+            continue
+        if doc is not None:
+            out.setdefault(doc.ref, doc)
+    return out
+
+
+def _broken_mark_message(failed: dict) -> str:
+    return (f"marks: {failed['ref']} is not usable ({'; '.join(failed['problems'])}); restore that file from the "
+            "knowledge base's git (git -C knowledge checkout -- marks/<id>.json): until then nothing can be checked "
+            "against the marks")
+
+
+def _marked_message(mark: MarkDocument) -> str:
+    by = f"; use {mark.by}" if mark.by else ""
+    return f"{mark.ref} is {mark.mark.value} ({mark.recorded_at.date().isoformat()}: {mark.reason}){by}"
+
+
+def _mark_summary(mark: MarkDocument) -> dict:
+    return {"mark": mark.mark.value, "reason": mark.reason, "by": mark.by or None,
+            "marked_at": mark.recorded_at.isoformat(), "id": mark.id}
+
+
+def save_mark(*, kb: KnowledgeBase, slug: str, ref: str, mark: MarkKind, reason: str, by: str, prompt: str,
+              host: RecordHost, now: datetime | None = None) -> tuple[MarkDocument, Path]:
+    """Mark an intact item as corrected, superseded or retired; it is kept but no longer cited or listed."""
+    now = now or datetime.now(UTC)
+    problems: list[str] = []
+    if ref.strip().startswith("profile:"):
+        raise KnowledgeError("Refusing to mark", [("a profile version is replaced by a new one (profile set), not "
+                                                   "marked: every result must cite the version in force")])
+    try:
+        target = resolve_ref(ref, kb)
+    except KnowledgeError as exc:
+        raise KnowledgeError("Refusing to mark", [str(exc)]) from exc
+    failed: list[dict] = []
+    marked = marks_index(kb, failed)
+    problems += [_broken_mark_message(f) for f in failed]
+    if target.ref in marked:
+        problems.append(f"{target.ref} is already marked: {_marked_message(marked[target.ref])}")
+    by_ref = ""
+    if by.strip():
+        try:
+            by_ref = resolve_ref(by, kb).ref
+        except KnowledgeError as exc:
+            problems.append(f"by: {exc}")
+        else:
+            if by_ref in marked:
+                problems.append(f"by: {_marked_message(marked[by_ref])}")
+    if problems:
+        raise KnowledgeError("Refusing to mark", problems)
+    try:
+        draft = MarkDocument(id=f"{now.date().isoformat()}-{slug}", recorded_at=now, host=host, ref=target.ref,
+                             ref_hash=target.content_hash, mark=mark, reason=reason, by=by_ref, prompt=prompt,
+                             content_hash="")
+    except ValidationError as exc:
+        raise KnowledgeError("Refusing to mark", [f"{'.'.join(map(str, e['loc'])) or 'mark'}: {e['msg']}"
+                                                  for e in exc.errors()]) from exc
+    document = draft.model_copy(update={"content_hash": compute_mark_hash(draft.hashable_content())})
+    try:
+        path = kb.marks.create(document)
+    except MarkStoreError as exc:
+        raise KnowledgeError("Refusing to mark", [str(exc)]) from exc
+    return document, path
+
+
 # ── feedback ─────────────────────────────────────────────────────
 
 
@@ -443,21 +536,33 @@ def is_later_version(applied: str, about: str) -> bool:
     return a is not None and b is not None and a > b
 
 
+MIN_CASES_FOR_A_RULE = 2  # §1.6.4: one result does not become a rule without repetition or the owner's decision
+
+
 def check_feedback_citations(kb: KnowledgeBase, refs: list[str], *, kind: FeedbackKind,
-                             skill_id: str | None = None, applied_version: str | None = None) -> list[str]:
+                             skill_id: str | None = None, applied_version: str | None = None,
+                             owner_decision: str = "") -> list[str]:
     """Problems with citing ``refs`` where a feedback of ``kind`` is applied (profile or skill history).
 
     For a skill, the feedback must be about that skill and about an earlier result: a
-    version cannot be the correction of a result it produced itself.
+    version cannot be the correction of a result it produced itself. And one case is not a
+    rule: a method change needs comments on at least MIN_CASES_FOR_A_RULE different results,
+    or the owner's explicit decision (their words) in the version note.
     """
     problems = []
+    results: set[str] = set()
+    failed_marks: list[dict] = []
+    marked = marks_index(kb, failed_marks)
+    problems += [_broken_mark_message(f) for f in failed_marks]
     for text in refs:
         try:
             doc = load_feedback(kb, text)
         except KnowledgeError as exc:
             problems.append(str(exc))
             continue
-        if doc.classification != kind:
+        if doc.ref in marked:
+            problems.append(_marked_message(marked[doc.ref]))
+        elif doc.classification != kind:
             problems.append(f"{doc.ref} is classified as {doc.classification.value}; it is applied in "
                             f"{APPLIED_BY[doc.classification]}, not here")
         elif skill_id is not None and doc.target.skill.asset_id != skill_id:
@@ -465,6 +570,11 @@ def check_feedback_citations(kb: KnowledgeBase, refs: list[str], *, kind: Feedba
         elif applied_version is not None and not is_later_version(applied_version, doc.target.skill.version):
             problems.append(f"{doc.ref} is about a result of version {doc.target.skill.version}; only a later "
                             f"version can apply it, not {applied_version}")
+        else:
+            results.add(doc.target.research)
+    if kind == FeedbackKind.METHOD and refs and len(results) < MIN_CASES_FOR_A_RULE and not owner_decision.strip():
+        problems.append(f"one case is not a rule: a method change needs feedback on at least {MIN_CASES_FOR_A_RULE} "
+                        "different results, or the owner's explicit decision (owner_decision, their words)")
     return problems
 
 
@@ -550,27 +660,42 @@ def feedback_status(kb: KnowledgeBase) -> dict:
                 if r.ref.startswith("feedback:"):
                     citations.setdefault(r.ref, []).append({"where": "research", "ref": summary["ref"],
                                                             "revision": rev.revision, "note": rev.note})
-    items = []
+    marked = marks_index(kb, failed)
+    docs = []
     for fid in kb.feedback.ids():
         try:
             fb = kb.feedback.load(fid)
         except (FeedbackIntegrityError, FeedbackStoreError) as exc:
             failed.append({"ref": f"feedback:{fid}", "status": "INTEGRITY_FAILED", "problems": [str(exc)]})
             continue
-        if fb is None:
-            continue
-        cited = citations.get(fb.ref, [])
-        applied_in = [c for c in cited if c["where"] == APPLIED_BY[fb.classification] and (
+        if fb is not None:
+            docs.append(fb)
+    def applied(fb: FeedbackDocument) -> list[dict]:
+        return [c for c in citations.get(fb.ref, []) if c["where"] == APPLIED_BY[fb.classification] and (
             c["where"] == "profile"
             or (c["where"] == "research" and c["ref"] == fb.target.research)
             or (c["where"] == "skill" and c["skill"] == fb.target.skill.asset_id
                 and is_later_version(c["version"], fb.target.skill.version)))]
-        items.append({"ref": fb.ref, "classification": fb.classification.value, "words": fb.words,
-                      "formulation": fb.formulation, "about": f"{fb.target.research} r{fb.target.revision}",
-                      "skill": f"{fb.target.skill.asset_id} {fb.target.skill.version}",
-                      "status": "applied" if applied_in else "pending", "applied_in": applied_in,
-                      "cited_elsewhere": [c for c in cited if c not in applied_in],
-                      "recorded_at": fb.recorded_at.isoformat()})
+
+    pending = {fb.ref for fb in docs if fb.ref not in marked and not applied(fb)}
+    items = []
+    for fb in docs:
+        cited = citations.get(fb.ref, [])
+        applied_in = applied(fb)
+        status = marked[fb.ref].mark.value if fb.ref in marked else "applied" if applied_in else "pending"
+        item = {"ref": fb.ref, "classification": fb.classification.value, "words": fb.words,
+                "formulation": fb.formulation, "about": f"{fb.target.research} r{fb.target.revision}",
+                "skill": f"{fb.target.skill.asset_id} {fb.target.skill.version}",
+                "status": status, "applied_in": applied_in,
+                "cited_elsewhere": [c for c in cited if c not in applied_in],
+                "recorded_at": fb.recorded_at.isoformat()}
+        if status == "pending" and fb.classification == FeedbackKind.METHOD:
+            # One case is not a rule (§1.6.4): which other pending comments on the same skill repeat it.
+            item["same_skill_pending"] = [
+                o.ref for o in docs if o.ref != fb.ref and o.ref in pending
+                and o.classification == FeedbackKind.METHOD and o.target.skill.asset_id == fb.target.skill.asset_id
+                and o.target.research != fb.target.research]
+        items.append(item)
     return {"count": len(items), "pending": sum(i["status"] == "pending" for i in items), "feedback": items,
             "integrity_failed": failed}
 
@@ -710,13 +835,25 @@ def _regime_items(kb: KnowledgeBase, failed: list[dict], symbol: str | None) -> 
 
 
 UNFINISHED = {ResearchStatus.OPEN.value, ResearchStatus.TEST_PLANNED.value}
+_DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def _item_day(summary: dict) -> str | None:
+    """YYYY-MM-DD the item was last updated (a regime record: its day); None when it has no date."""
+    text = summary.get("updated_at") or (summary["ref"].rsplit("/", 1)[-1] if summary["kind"] == "regime" else "")
+    return text[:10] if _DAY.match(text) else None
 
 
 def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status: str | None = None,
-           symbol: str | None = None) -> dict:
-    """Items whose text contains the query terms, best match first. Broken items are reported, never skipped."""
+           symbol: str | None = None, include_marked: bool = False, since: str | None = None) -> dict:
+    """Items whose text contains the query terms, best match first. Broken items are reported, never skipped.
+
+    Marked items (corrected, superseded, retired) are left out unless ``include_marked``; ``since``
+    (YYYY-MM-DD) keeps the items updated on or after that day.
+    """
     terms = [t for t in text.lower().split() if t]
     failed: list[dict] = []
+    marked = marks_index(kb, failed)
     candidates: list[tuple[dict, str]] = []
     wanted = UNFINISHED if status == "unfinished" else {status}
     if kind in (None, "research"):
@@ -736,16 +873,25 @@ def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status
         from galecore_ai.application.project import search_items  # project builds on this module
         candidates += search_items(kb, failed)
     results = []
+    left_out = 0
     for summary, body in candidates:
         lowered = body.lower()
         score = sum(1 for t in terms if t in lowered)
         if terms and score == 0:
             continue
+        if since and _item_day(summary) and _item_day(summary) < since:
+            continue
+        if summary["ref"] in marked:
+            if not include_marked:
+                left_out += 1
+                continue
+            summary = {**summary, "marked": _mark_summary(marked[summary["ref"]])}
         results.append({**summary, "matched_terms": score})
     # Most recent first (research: last revision; regime: the record's day), then best match first.
     results.sort(key=lambda r: r.get("updated_at") or r["ref"].rsplit("/", 1)[-1], reverse=True)
     results.sort(key=lambda r: -r["matched_terms"])
-    return {"query": text, "count": len(results), "results": results, "integrity_failed": failed}
+    return {"query": text, "count": len(results), "results": results, "marked_left_out": left_out,
+            "integrity_failed": failed}
 
 
 def cited_by(kb: KnowledgeBase, ref: Ref) -> list[str]:
@@ -755,6 +901,17 @@ def cited_by(kb: KnowledgeBase, ref: Ref) -> list[str]:
 
 
 def show(kb: KnowledgeBase, ref_text: str) -> dict:
+    """One item with what cites it, and its mark when it was corrected, superseded or retired."""
+    result = _show(kb, ref_text)
+    failed: list[dict] = []
+    mark = marks_index(kb, failed).get(result["ref"])
+    result["marked"] = _mark_summary(mark) if mark else None
+    if failed:
+        result["marks_integrity_failed"] = failed
+    return result
+
+
+def _show(kb: KnowledgeBase, ref_text: str) -> dict:
     try:
         ref = parse_ref(ref_text)
     except KnowledgeBaseError as exc:
@@ -840,6 +997,11 @@ def show(kb: KnowledgeBase, ref_text: str) -> dict:
         return {"ref": str(ref), "kind": "feedback", "path": _display_path(kb.feedback.path_for(ref.key), kb),
                 **doc.model_dump(mode="json"), "status": state.get("status"),
                 "applied_in": state.get("applied_in", []), "cited_by": cited_by(kb, ref)}
+    if ref.kind == "project":
+        from galecore_ai.application.project import load_log  # project builds on this module
+        log = load_log(kb, ref.key)
+        return {"ref": str(ref), "kind": "project", "path": _display_path(ref_path(ref, kb.base), kb),
+                **log.model_dump(mode="json"), "cited_by": cited_by(kb, ref)}
     resolved = resolve_ref(str(ref), kb)
     return {"ref": str(ref), "kind": "file", "path": resolved.path, "content_hash": resolved.content_hash,
             "cited_by": cited_by(kb, ref)}

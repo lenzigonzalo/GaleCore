@@ -172,6 +172,8 @@ entries:
       - Armá una skill de reporte macro para ver los eventos de la semana.
       - Le faltó el calendario de la Fed.
       - ¿Qué feedback quedó pendiente?
+      - "Esto ya no vale: reemplazalo por la investigación nueva."
+      - Retirá esa regla, ya no la uso.
     skill: skills/capability-builder/skill.yaml
     output_contract: galecore_ai.harness.catalog.CatalogEntry
     galecore_capabilities: []
@@ -183,13 +185,17 @@ entries:
       - catalog --check
       - feedback add --research research:<id> --revision <N> --classification <kind> --slug <slug> --prompt "<pedido>"
       - feedback list
+      - kb mark <ref> --as corrected|superseded|retired --reason "<motivo>" [--by <ref>] --slug <slug> --prompt "<palabras del owner>"
     stored_as: none
     controls:
       - "catalog --check rejects an entry whose skill or contract does not load, whose flow names a command this CLI does not have (or a script not in the workspace), whose data need no registered source covers without a declared reason, or whose controls do not say what is not checked"
       - A result stored as research must cite the profile in force (enforced when saving)
       - "feedback add rejects a result or revision that does not exist and takes the skill and version from that revision; written once, hashed"
       - "A profile version or skill history may only cite feedback of its kind (preference / method), and a skill version only feedback about an earlier version of that skill; feedback list counts as applied only a citation where its kind belongs"
+      - "One case is not a rule: a skill version citing method feedback needs comments on two different results or the owner's words in owner_decision (catalog --check)"
+      - "kb mark keeps the item and its history; a marked item is left out of kb search and refused as a citation in a new result; corrected and superseded name an intact replacement; one mark per item, written once, hashed"
       - Not checked - that the classification is right or that the correction does what the comment asked; the next run shows it
+      - Not checked - that an owner_decision was really said by the owner, or that a mark is deserved
       - Not checked - that the capability is useful or that its method is right; that is judged by running it
       - Not checked - the options and arguments of each flow line (only the command and subcommand)
 
@@ -702,6 +708,40 @@ entries:
       - Text that looks like a key or token is refused in every field (words, context, request, review note)
       - "Not checked - that the most recent reviews were not removed by hand: the file alone cannot show it; the knowledge base's git history does"
       - "Not checked - that the idea is good or that the destination chosen in the review is the right one"
+
+  - id: knowledge_curator
+    kind: investigation
+    serves: >-
+      Tener la memoria al día sin pedirla: un agente que lee lo que cambió en la base de conocimiento (resultados,
+      feedback, tus decisiones y la bitácora de los proyectos, versiones de estrategia y perfil) y guarda con su fuente
+      lo que importa: qué se aprendió, qué se decidió y por qué, qué contradice o reemplaza algo anterior y qué
+      comentarios de método ya se repiten. Sólo propone marcar algo corregido, reemplazado o retirado, o volver regla
+      lo repetido: lo decidís vos. Se programa como tarea diaria o se corre a pedido.
+    example_requests:
+      - ¿Qué aprendimos esta semana?
+      - Poné al día la memoria.
+      - ¿Hay algo guardado que ya no valga?
+      - ¿Qué feedback se repite y podría ser regla?
+    skill: skills/knowledge-curator/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - profile show
+      - kb search --kind research --text "curaduria"
+      - kb search --since <YYYY-MM-DD>
+      - kb show <ref>
+      - feedback list --status pending
+      - project show portfolio
+      - research save --capability knowledge_curator --slug curaduria --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability knowledge_curator --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - The research controls; every statement cites the stored item it comes from, and a marked item cannot be cited
+      - A save must cite the profile in force (profile:v<N>); each revision records this skill's version and hash
+      - "Read-only besides its own result: a scheduled run cannot mark, apply feedback or change a skill (the flow allows only reads and its research); marks and rules are proposals for the owner"
+      - "Not checked - that what it kept is what matters most, or that a proposal to mark is right; the owner decides"
+    schedulable: {runs: model, work: reading, max_turns: 20, timeout_minutes: 12}
 
   - id: strategy_project
     kind: harness

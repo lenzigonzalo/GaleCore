@@ -151,7 +151,7 @@ class TestApplied:
         assert "version" in check_feedback_citations(
             kb, [method.ref], kind=FeedbackKind.METHOD, skill_id=skill.asset_id, applied_version=skill.version)[0]
         assert check_feedback_citations(kb, [method.ref], kind=FeedbackKind.METHOD, skill_id=skill.asset_id,
-                                        applied_version="9.9.9") == []
+                                        applied_version="9.9.9", owner_decision="sí, siempre") == []
         assert "no such feedback" in check_feedback_citations(kb, ["feedback:2026-01-01-x"],
                                                               kind=FeedbackKind.METHOD)[0]
 
@@ -198,8 +198,8 @@ class TestSkillHistory:
         assert any("knowledge base is not available" in p for p in found)
         calls = []
         found = _history_problems(self._entry(), {"skill_asset": {"version": "1.3.0"}},
-                                  lambda refs, sid, ver: calls.append((refs, sid, ver)) or ["mal"])
-        assert calls == [(["feedback:2026-09-30-a"], "research", "1.3.0")] and "history 1.3.0: mal" in found
+                                  lambda refs, sid, ver, decision: calls.append((refs, sid, ver, decision)) or ["mal"])
+        assert calls == [(["feedback:2026-09-30-a"], "research", "1.3.0", "")] and "history 1.3.0: mal" in found
 
 
 def test_cli_feedback_add_and_list(kb):  # noqa: F811

@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de capability_builder y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: capability_builder
 versions:
+  - version: "0.3.0"
+    date: 2026-10-08
+    changes: >
+      P1-08 (WS-0020): un caso no es una regla (un cambio de método pide comentarios sobre dos resultados
+      distintos o la decisión explícita del owner en owner_decision) y «esto ya no vale» con `kb mark`
+      (corregido, reemplazado o retirado, con motivo; no se borra y deja de citarse y listarse).
+    feedback: []
   - version: "0.2.0"
     date: 2026-09-30
     changes: >

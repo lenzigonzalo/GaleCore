@@ -23,7 +23,7 @@ from galecore_ai.harness.catalog import Catalog, CatalogEntry, describe
 from galecore_ai.harness.skill_history import SkillHistoryError, load_skill_history
 
 # (feedback refs, skill id, version that applies them) → problems; None when the knowledge base is unavailable.
-FeedbackCheck = Callable[[list[str], str, str], list[str]]
+FeedbackCheck = Callable[[list[str], str, str, str], list[str]]  # refs, skill id, version, owner_decision
 
 
 def cli_commands(parser: argparse.ArgumentParser) -> dict[str, set[str]]:
@@ -73,7 +73,7 @@ def _flow_problems(entry: CatalogEntry, commands: dict[str, set[str]], workspace
 SCHEDULED_READS = {("catalog", None), ("kb", "search"), ("kb", "show"), ("profile", "show"), ("profile", "history"),
                    ("sources", "list"), ("sources", "query"), ("followup", "history"), ("feedback", "list"),
                    ("query", None), ("prepare", None),
-                   ("galecore", "list"), ("galecore", "get")}
+                   ("galecore", "list"), ("galecore", "get"), ("project", "show")}
 SCHEDULED_RESULT_WRITES = {("followup", "run"), ("evidence", "add"), ("research", "save"), ("research", "revise"),
                            ("story", "pack")}   # the runner gathers the market pack before the model (GC-AI-0024)
 SCHEDULED_SCRIPTS: set[str] = set()  # read-only scripts a run may call; none since WS-0014 (FRED and Fed by GaleCore)
@@ -143,7 +143,8 @@ def _history_problems(entry: CatalogEntry, described: dict, feedback_check: Feed
         if feedback_check is None:
             problems.append(f"history {note.version}: cites feedback but the knowledge base is not available")
             continue
-        problems += [f"history {note.version}: {p}" for p in feedback_check(note.feedback, entry.id, note.version)]
+        problems += [f"history {note.version}: {p}" for p in feedback_check(note.feedback, entry.id, note.version,
+                                                                          note.owner_decision)]
     return problems
 
 

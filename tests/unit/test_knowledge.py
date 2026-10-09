@@ -135,7 +135,7 @@ class TestCatalog:
         assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "data_sources",
                                               "user_profile", "capability_builder", "research", "context_research", "strategy_design", "strategy_followup",
                                               "daily_attention", "recurring_followup", "watch_alerts", "alert_analysis", "idea_inbox", "market_watch", "market_story",
-                                              "trader_space", "strategy_project", "daily_contrast", "performance_review", "capital_risk", "on_demand_analysis"}
+                                              "trader_space", "knowledge_curator", "strategy_project", "daily_contrast", "performance_review", "capital_risk", "on_demand_analysis"}
         assert all(e["available"] for e in entries), entries
 
     def test_prepare_skills_have_code_behind_them(self):
@@ -205,10 +205,10 @@ class TestSave:
     def test_file_ref_into_the_knowledge_base_is_refused(self, kb, regime_record):
         # Review R1 MAJOR: file: paths skipped the self-citation and integrity checks.
         day = regime_record.rsplit("/", 1)[1]
-        with pytest.raises(KnowledgeError, match="cite it as regime:, research:, evidence:, strategy:, profile: or feedback:"):
+        with pytest.raises(KnowledgeError, match="cite it as regime:, research:, evidence:, strategy:, profile:, feedback: or project:"):
             save(kb, antecedents=[{"ref": f"file:knowledge/regime/SPY/{day}.md", "summary": "s", "bearing": "b"}])
         first, _ = save(kb)
-        with pytest.raises(KnowledgeError, match="cite it as regime:, research:, evidence:, strategy:, profile: or feedback:"):
+        with pytest.raises(KnowledgeError, match="cite it as regime:, research:, evidence:, strategy:, profile:, feedback: or project:"):
             revise_research(kb=kb, research_id=first.id, reason=RevisionReason.CONTINUATION, note="n",
                             prompt="p", host=HOST,
                             content=content(statements=[{"kind": "fact", "text": "t",
@@ -327,7 +327,7 @@ class TestCli:
                                                     "trader_space", "user_profile", "capability_builder", "research",
                                                     "context_research", "strategy_design", "strategy_followup",
                                                     "daily_attention", "market_watch", "market_story", "on_demand_analysis", "recurring_followup",
-                                                    "watch_alerts", "performance_review", "capital_risk", "alert_analysis", "idea_inbox", "strategy_project", "daily_contrast"]
+                                                    "watch_alerts", "performance_review", "capital_risk", "alert_analysis", "idea_inbox", "knowledge_curator", "strategy_project", "daily_contrast"]
 
     def test_save_search_show_revise(self, kb):
         env = {KNOWLEDGE_DIR_ENV: str(kb.base)}

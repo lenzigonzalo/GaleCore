@@ -1,0 +1,10 @@
+# Qué cambió en cada versión de knowledge_curator y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: knowledge_curator
+versions:
+  - version: "0.1.0"
+    date: 2026-10-08
+    changes: >
+      Primera versión (P1-08, WS-0020): lee lo que cambió desde la última corrida y guarda con su fuente lo que
+      importa de resultados, feedback y decisiones; propone marcar lo corregido, reemplazado o retirado y los
+      comentarios de método que se repiten, sin aplicarlos.
+    feedback: []

@@ -25,6 +25,8 @@ class SkillVersionNote(BaseModel):
     date: date
     changes: str                                         # what this version changes, in plain words
     feedback: list[str] = Field(default_factory=list)    # feedback:<id> that originated the change
+    # The owner's words deciding that a single case becomes method (§1.6.4: one case is not a rule).
+    owner_decision: str = ""
 
     @field_validator("version", "changes")
     @classmethod
