@@ -30,6 +30,7 @@ credenciales del proyecto de desarrollo, con datos de prueba, y no se imprimen.
 from __future__ import annotations
 
 import argparse
+import base64
 import getpass
 import hashlib
 import json
@@ -191,6 +192,8 @@ def api_env(env: dict) -> dict:
         "Supabase__Issuer": env["supabase_url"] + "/auth/v1",
         "Supabase__AnonKey": env["anon_key"],
         "Runtime__Persistence__Enabled": "true",
+        **({"Security__TokenProtectionKey": env["token_protection_key"]}
+           if env.get("token_protection_key") else {}),
         # La clave de FRED del entorno del usuario (calendario macro, GC-0006); nunca se escribe en un archivo.
         **({"FredApi__Key": os.environ["FRED_API_KEY"]} if os.environ.get("FRED_API_KEY") else {}),
     }
@@ -198,6 +201,10 @@ def api_env(env: dict) -> dict:
 
 def cmd_api(_: argparse.Namespace) -> int:
     env = load_env()
+    # Clave exclusiva de Dev, persistida para poder descifrar cuentas tras reiniciar.
+    if not env.get("token_protection_key"):
+        env["token_protection_key"] = base64.b64encode(secrets.token_bytes(32)).decode("ascii")
+        save_env(env)
     sh(["dotnet", "build", str(API_CSPROJ), "-nologo", "-v", "q"])
     run = ["dotnet", "run", "--no-build", "--no-launch-profile", "--project", str(API_CSPROJ)]
     return sh(run, cwd=API_CSPROJ.parent, env=api_env(env), check=False)
