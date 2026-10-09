@@ -6,8 +6,7 @@ import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
 import { WorkspaceNav } from './components/layout/WorkspaceNav';
 import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
-import { Today } from './pages/Today';
-import { LayoutPreview } from './pages/LayoutPreview';
+import { Main } from './pages/Main';
 import { AccountSummary } from './components/account/AccountSummary';
 import { SupervisorAlerts } from './components/layout/SupervisorAlerts';
 import { ClaudeTerminal } from './components/layout/ClaudeTerminal';
@@ -89,7 +88,7 @@ function Dashboard({ onLogout }: DashboardProps) {
         <WorkspaceHeader active={tab} onChange={setTab} onLogout={onLogout}
           conversationOpen={terminalOpen} onConversation={() => setTerminalOpen(!terminalOpen)} />
         <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
-          {tab === 'inicio' && <Today onNavigate={setTab} />}
+          {tab === 'inicio' && <Main onNavigate={setTab} />}
           <div style={{ display: tab === 'estrategias' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
           </div>
@@ -126,7 +125,7 @@ function Dashboard({ onLogout }: DashboardProps) {
   );
 }
 
-function AuthenticatedApp() {
+function App() {
   // null = todavía no sabemos. La sesión de Supabase vive en localStorage y leerla es asincrónico,
   // así que hay un instante inicial sin respuesta. Sin este tercer estado, ese instante se
   // renderizaría como "no autenticado" y mostraría el login por un parpadeo a quien YA tiene sesión.
@@ -207,8 +206,5 @@ function AuthenticatedApp() {
   return <Dashboard key={sessionUserId ?? 'anon'} onLogout={handleLogout} />;
 }
 
-function App() {
-  return process.env.REACT_APP_LAYOUT_PREVIEW === 'true' ? <LayoutPreview /> : <AuthenticatedApp />;
-}
 
 export default App;

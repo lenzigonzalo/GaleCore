@@ -56,7 +56,7 @@ export function Today({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const unreadable = published.filter(p => !p.record).length;
   return (
     <div className="today-workspace">
-      <div className="today-intro"><p>Tu mesa de trabajo</p><h2>Qué merece una revisión</h2>
+      <div className="today-intro"><h2>Claves del día</h2>
         <span>Lo publicado por el supervisor y los agentes. Cada resultado conserva su fecha.</span></div>
       {error && <p role="alert" className="today-error">{error} Lo anterior, si aparece, es la última lectura disponible.</p>}
       {unreadable > 0 && <p role="alert" className="today-error">Hay publicaciones que no se pudieron interpretar. Revisá el detalle en Agentes.</p>}

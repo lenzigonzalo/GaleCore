@@ -20,7 +20,9 @@ Exploración autorizada, no cierre/entrega integral de P1-10 ni cambio de plan.
 ## Contrato
 
 - Navegación principal lateral única, contraíble y con nombres orientados al trabajo; sin pestañas globales duplicadas.
-- Hoy lee publicaciones existentes de supervisor/agentes, con fecha y faltantes; no llama al modelo ni inventa KPIs.
+- Main resume cuenta real, posiciones, métricas SHADOW separadas y accesos a secciones; Claves del día lee publicaciones.
+- Calendario/gráficos de performance de cuenta requieren historia/cálculos de GaleCore; no se dibujan series ficticias.
+- Posiciones del bróker abren Cartera; vínculo de estrategia pendiente de atribución explícita.
 - Mercado abre GEX; Estrategias reúne catálogo, RPF y SHADOW como vistas internas.
 - Cartera tiene balance y Monitor; el detalle de cuenta ya no ocupa columna permanente en otras páginas.
 - Biblioteca reutiliza registros actuales de Inteligencia; no presume biblioteca completa ni búsqueda inexistente.
@@ -34,7 +36,7 @@ Exploración autorizada, no cierre/entrega integral de P1-10 ni cambio de plan.
 
 | Antes | Ahora |
 |---|---|
-| Main | Catálogo dentro de Estrategias; Hoy es lectura de publicaciones reales |
+| Main | Dashboard de cuenta, posiciones y resultados; catálogo dentro de Estrategias |
 | Monitor + cuenta en columna fija | Cartera + cuenta en encabezado compacto |
 | GEX bajo menú Estrategias | Mercado |
 | RPF / SHADOW bajo menú global | Vistas internas de Estrategias |
@@ -59,24 +61,34 @@ Exploración autorizada, no cierre/entrega integral de P1-10 ni cambio de plan.
   conexión describe transporte y no salud del feed; saldo identifica última lectura y stale.
   Verificación visual/auth pendiente; no se modifica el informe del reviewer.
 
-## Arranque del preview
+## Corrección del owner y evidencia del 09/10/2026
 
-Se eligió compilación con configuración oficial Dev + servidor estático Python en 127.0.0.1:3040.
-El intento HOST=127.0.0.1 de CRA falló por allowedHosts vacío. Auto-review rechazó HOST=0.0.0.0
-por ampliar superficie de red fuera de localhost; no se pidió ampliar acceso ni se eludió el rechazo.
-La alternativa sirve exclusivamente en loopback y no cambia configuración de producción ni controles de host.
-La compilación usa cmd_monitor del runner oficial, reemplazando su comando npm start por npm run build,
-con CI=true y MONITOR apuntando al worktree; eso conserva API y autenticación Dev sin imprimir credenciales.
+El owner rechaza la preview vacía, el nombre Hoy y el cambio de puerto. D-0004 registra Main como inicio.
+Diagnóstico ejecutado: OPTIONS /App/GaleCore/Auth/Login devuelve 204 en tres orígenes; sólo
+http://localhost:3039 recibe access-control-allow-origin. :3040 y 127.0.0.1:3039 no están autorizados.
+No se modificó la API ni CORS. Se eliminó LayoutPreview y su flag de App, restaurando el login y consultas reales.
+
+Main reutiliza AccountSummary/store; muestra instrumentos reales recibidos y consulta Runtime/Metrics cada 30 s.
+Claves del día conserva publicaciones de supervisor/agentes. Cuenta y SHADOW permanecen separados.
+Resultados parciales sin valuación se indican; nulos no se presentan como cero. No se atribuye estrategia al bróker.
+El adaptador account valida campos numéricos y lista de posiciones: lectura incompleta falla en vez de inventar
+ceros o una fecha de fuente. Se retiran logs de cuenta. Fecha de recepción permanece en el store.
+
+- Build oficial Dev + CI=true: exit 0, Compiled successfully; main.658809c6.js.
+- Tests Main, account, Today y WorkspaceNav: 11 passed, 4 suites; fallos de lectura, campos incompletos,
+  pérdida monetaria, valuación parcial, cero real y destinos. Fixtures sintéticos sólo en tests.
+- HTTP http://localhost:3039 y asset main.658809c6.js: 200; preflight API permite ese origen.
+- Servidor estático sólo loopback, port 3039; servidor 3040 detenido. No mock/demo ni credencial nueva.
+- CUA getState: apps y browsers vacíos. Visual/auth del owner no comprobados; no se afirma recepción de su saldo.
+- La pasada independiente anterior no cubre este nuevo diff. Estado CHANGES_REQUESTED y aprobación pendiente.
+- PerformanceReport (GaleCore base) contiene portfolio, agregados y trades SHADOW; Balances/Positions no
+  exponen historia completa de patrimonio ni resultados diarios de cuenta. Calendario de cuenta queda pendiente.
 
 ## Para retomar
 
-Rama feature/front-estructura-local; diff contra local/integracion. Primer recorte es marco integral, no watchlist.
-Preview directo sin login en http://localhost:3040, con REACT_APP_LAYOUT_PREVIEW=true sólo al compilar esta copia.
-El owner pidió ver el diseño sin autenticarse (Failed to fetch reportado; no se diagnosticó el origen de ese fallo).
-LayoutPreview no monta AuthenticatedApp ni las vistas operacionales: composición con vacíos rotulados,
-sin consultas a cuenta/API, sesiones de modelo ni acciones financieras. No se creó usuario demo ni se cambiaron permisos.
-Con flag ausente el front conserva autenticación/vistas reales. La preview usa 127.0.0.1:3040 y build Dev, HTTP 200.
-Build final preview: exit 0, Compiled successfully, bundle main.dfb4b555.js servido por el monitor estático.
-Mirar navegación, jerarquía, espacio del centro y cuenta/conversación. QA visual pendiente antes de aprobar.
-Continuar afinando Hoy/Estrategias y el contenido de cada vista; watchlist lateral viene después del marco.
-No integrar ni marcar VALIDATED/CLOSED sin review y aprobación del owner. No push/PR de GaleCore.
+Rama feature/front-estructura-local; arranque en http://localhost:3039 con build Dev real. Copia 3040 retirada.
+Main ahora muestra cuenta/posiciones y métricas SHADOW, con Claves del día secundaria. Login real conserva sesión
+por origen; no se validó una sesión del owner. Si faltan datos, revisar respuesta concreta del endpoint, sin sustituirla.
+La composición es una iteración local pendiente de QA visual; gráficos/calendario de cuenta y atribución a estrategia
+necesitan contratos de datos. La fuente de diseño fue actualizada en roadmap/proposals/FRONT-GALECORE-INTEGRAL.md.
+ACTIVE_WORK_ITEM sigue WS-0021 y no se cambia el orden del plan. No marcado VALIDATED/CLOSED; sin push/PR.

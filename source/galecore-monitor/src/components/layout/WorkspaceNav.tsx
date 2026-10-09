@@ -18,12 +18,12 @@ export function WorkspaceNav({ active, onChange, onConversation }: Props) {
   );
   return (
     <aside className={'workspace-navigation' + (collapsed ? ' collapsed' : '')}>
-      <button className="workspace-brand" onClick={() => onChange('inicio')} aria-label="GaleCore · Hoy" title="GaleCore · Hoy">
+      <button className="workspace-brand" onClick={() => onChange('inicio')} aria-label="GaleCore · Main" title="GaleCore · Main">
         <span className="workspace-monogram">G</span><span className="workspace-wordmark">GaleCore</span>
       </button>
       <nav aria-label="Navegación principal">
         <div className="workspace-nav-group"><p>Trabajo diario</p>
-          {entry('inicio', 'Hoy', LayoutDashboard)}
+          {entry('inicio', 'Main', LayoutDashboard)}
           <button className="workspace-nav-entry" title="Conversación · Claude Code" aria-label="Abrir conversación"
             onClick={onConversation}><MessageSquare size={19} /><span>Conversación</span></button>
           {entry('gex', 'Mercado', ChartNoAxesCombined)}
