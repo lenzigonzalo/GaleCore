@@ -34,7 +34,7 @@ function date(value?: string): string {
 }
 
 /** Lectura de las publicaciones existentes; no genera resúmenes ni llama al modelo. */
-export function Today({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
+export function Today({ onNavigate, title = 'Claves del día' }: { onNavigate: (tab: Tab) => void; title?: string }) {
   const [items, setItems] = useState<SpaceItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
@@ -56,7 +56,7 @@ export function Today({ onNavigate }: { onNavigate: (tab: Tab) => void }) {
   const unreadable = published.filter(p => !p.record).length;
   return (
     <div className="today-workspace">
-      <div className="today-intro"><h2>Claves del día</h2>
+      <div className="today-intro"><h2>{title}</h2>
         <span>Última revisión y resultados publicados.</span></div>
       {error && <p role="alert" className="today-error">{error} Lo anterior, si aparece, es la última lectura disponible.</p>}
       {unreadable > 0 && <p role="alert" className="today-error">Hay publicaciones que no se pudieron interpretar. Revisá el detalle en Agentes.</p>}

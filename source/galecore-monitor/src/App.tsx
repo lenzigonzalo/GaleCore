@@ -104,7 +104,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           }} conversationOpen={terminalOpen} onConversation={() => setTerminalOpen(!terminalOpen)} />
         <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
           {tab === 'inicio' && <Main onNavigate={setTab} onConnectBroker={() => { setSettingsInitial('broker'); setTab('config'); }} />}
-          {tab === 'lab' && <Lab onMonitor={() => setTab('shadow')} />}
+          {tab === 'lab' && <Lab onMonitor={() => setTab('shadow')} onNavigate={setTab} />}
           <div style={{ display: tab === 'estrategias' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
           </div>
@@ -131,8 +131,8 @@ function Dashboard({ onLogout }: DashboardProps) {
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
         </main>
-        {/* Avisos del supervisor de SHADOW (WS-0007): en todas las pestañas, con sonido. */}
-        <SupervisorAlerts />
+        {/* Avisos del supervisor SHADOW: sólo en el espacio de trabajo. */}
+        {['lab', 'estrategias', 'rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>

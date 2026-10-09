@@ -9,7 +9,7 @@ interface Props { active: Tab; onChange: (tab: Tab) => void }
 export function WorkspaceNav({ active, onChange }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const isAdmin = useCurrentUserStore(s => s.user?.isAdmin ?? false);
-  const selected = active === 'gex' ? 'gex' : active === 'rpf' || active === 'shadow' ? 'estrategias' : active;
+  const selected = active === 'gex' ? 'gex' : active === 'shadow' ? 'lab' : active === 'rpf' ? 'estrategias' : active;
   const entry = (id: Tab, label: string, Icon: React.ComponentType<{ size?: number }>) => (
     <button key={id} className="workspace-nav-entry" title={label} aria-label={label}
       aria-current={selected === id ? 'page' : undefined} onClick={() => onChange(id)}>
@@ -22,17 +22,17 @@ export function WorkspaceNav({ active, onChange }: Props) {
         <span className="workspace-wordmark">GaleCore</span>
       </button>
       <nav aria-label="Navegación principal">
-        <div className="workspace-nav-group">
+        <div className="workspace-nav-group"><span className="workspace-group-label">Gestión</span>
           {entry('inicio', 'Main', LayoutDashboard)}
-          {entry('gex', 'Mercado', ChartNoAxesCombined)}
           {entry('monitor', 'Cartera', Wallet)}
         </div>
-        <div className="workspace-nav-group">
-          {entry('estrategias', 'Estrategias', Layers)}
+        <div className="workspace-nav-group"><span className="workspace-group-label">Trabajo</span>
           {entry('lab', 'Lab', FlaskConical)}
+          {entry('estrategias', 'Estrategias', Layers)}
           {entry('agentes', 'Agentes', Bot)}
         </div>
-        <div className="workspace-nav-group">
+        <div className="workspace-nav-group"><span className="workspace-group-label">Compartido</span>
+          {entry('gex', 'Mercado', ChartNoAxesCombined)}
           {entry('inteligencia', 'Biblioteca', BookOpen)}
         </div>
       </nav>

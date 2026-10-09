@@ -4,7 +4,7 @@ import { useAccountStore } from '../../store/useAccountStore';
 import { fetchBalances, fetchPositions, describeAccountError } from '../../api/account';
 import { fmtCurrency, fmtTime, isStale } from '../../utils/formatters';
 
-export function AccountSummary() {
+export function AccountSummary({ layout = 'compact' }: { layout?: 'compact' | 'strip' }) {
   const {
     balances,
     loadingBalances,
@@ -79,7 +79,7 @@ export function AccountSummary() {
           ))}
         </div>
       ) : balances ? (
-        <div className="space-y-1.5">
+        <div className={layout === 'strip' ? 'account-values-strip' : 'space-y-1.5'}>
           <Row label="Valor de la cuenta · USD" value={fmtCurrency(balances.netLiquidatingValue)} highlight />
           <Row label="Poder de compra" value={fmtCurrency(balances.buyingPower)} />
           <Row label="Efectivo" value={fmtCurrency(balances.cash)} />

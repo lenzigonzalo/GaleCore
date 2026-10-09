@@ -86,13 +86,15 @@ ceros o una fecha de fuente. Se retiran logs de cuenta. Fecha de recepción perm
 
 ## Para retomar
 
-Owner pide concentrarse en una buena UI. Trabajar Main directamente en React y revisar composición en el navegador (FRONT-GALECORE-INTEGRAL §27).
-Root ACTIVE_WORK_ITEM sigue WS-0021; GC-0011 exploración CHANGES_REQUESTED, sin cierre/review de nuevo diff ni cambio de plan.
-Front local localhost:3039; al entregar este ajuste, servidor loopback sirve dev/.local/main-ui-final-build de este worktree; datos Dev.
-Vincular cuenta abre Settings en bróker y consolidó falta de vínculo; credenciales sólo en formulario, no copiar producción.
-Logo elegido por owner, verde #a3d86c; asset limpio pendiente, imagegen de esta sesión produjo artefactos y no se integró.
-Quedan dashboard/proyectos, builder gráfico, decisión recuperable, biblioteca/config/performance y QA visual con datos.
-No integrar/pushear exploración como entrega ni marcar VALIDATED/CLOSED.
+Primera iteración autorizada: Gestión real separada de Trabajo/Lab (D-0006).
+Main: cuenta real en franja financiera, posiciones y faltantes explícitos de historia/noticias; sin métricas o publicaciones SHADOW.
+Lab: resumen SHADOW por versión, versiones cargadas y actividad; subtabs Resumen/Estrategias/Ejecuciones SHADOW.
+Sidebar Gestión/Trabajo/Compartido; Mercado/Biblioteca compartidos. Asistente persiste al navegar.
+Supervisor emergente SHADOW sólo en Trabajo; no se habilitaron órdenes, LIVE ni nuevos cálculos.
+Preview localhost:3039 usa dev/.local/spaces-reviewed-build de este worktree al entregar; datos Dev.
+ACTIVE_WORK_ITEM sigue WS-0021. GC-0011 sigue exploración CHANGES_REQUESTED por revisión integral anterior.
+Pendientes: vincular cuenta en formulario existente, historia/performance/avisos reales, logo final y QA visual.
+No integrar como entrega ni pushear ni marcar VALIDATED/CLOSED sin revisión/aprobación correspondientes.
 
 ## Iteración solicitada por owner — 09/10/2026
 
@@ -145,3 +147,21 @@ rediseño completo de Main siguen pendientes. ACTIVE_WORK_ITEM conserva WS-0021;
 - Build final Dev CI=true: exit 0, Compiled successfully, main.d3f1bf4b.js y main.ae09a15d.css. HTTP localhost:3039 y asset: 200; index referencia el asset final. Servidor loopback PID 28296 sirve dev/.local/main-ui-final-build. El build sobre main-connect-build falló EBUSY; se usó carpeta nueva. Dentro del sandbox Node falló EPERM: ejecución autorizada fuera del sandbox.
 - git diff --check: exit 0 antes de guardar. Revisión independiente APPROVE con P3 corregido, sin recheck: ../reviews/GC-0011-main-tabla-20261009-codex.md.
 - CUA: apps/browsers vacíos. QA visual pendiente, sin aprobación de cierre. GC-0011 conserva CHANGES_REQUESTED por alcance integral anterior.
+
+## Primera iteración Gestión / Trabajo — 09/10/2026
+
+Instrucción explícita del owner: Main sólo gestión real; Lab con dashboard de trabajo y seguimiento SHADOW.
+Aceptación: Main sin consultas/resultados/publicaciones SHADOW; Lab reúne versiones cargadas, métricas por versión y publicaciones existentes; sidebar distingue Gestión, Trabajo y Compartido. Seguimiento SHADOW pertenece a Lab, asistente conserva sesión al navegar. No se inventan avisos/noticias, performance histórica ni ejecución LIVE. El supervisor emergente se ofrece en Trabajo, no en Main/Cartera.
+Fuera de alcance: nuevos contratos API, órdenes, builder, despliegues, cálculos o historia de cuenta. Revisión independiente del diff y pruebas Main/Lab/navegación. Mantiene exploración local y WS-0021.
+
+### Verificación de Gestión / Trabajo
+
+- Pruebas efectivas: CI=true npm test -- --watchAll=false --runInBand --testMatch **/Main.test.tsx **/Lab.test.tsx **/ShadowOverview.test.tsx **/WorkspaceNav.test.tsx **/Today.test.tsx. 14 passed, 5 suites, exit 0. Una expectativa antigua de Main requería métricas trasladadas a Lab: corregida antes de la corrida verde.
+- Negativos: Main no consulta métricas SHADOW, error/ausencia de vínculo no implica cuenta vacía, métricas conservan pérdidas y valuación parcial, versiones no implican aprobación; conversación mantiene la sesión al abrir. Navegación SHADOW selecciona Lab.
+- Primer build Dev CI=true: exit 0. Build final, review y HTTP se completan al entregar. git diff --check: exit 0. CUA apps/browsers vacíos: QA visual pendiente.
+
+- Review independiente de una pasada: CHANGES_REQUESTED, 0 blocker/2 major, ../reviews/GC-0011-gestion-lab-20261009-codex.md. Implementer corrige saldo real en Agentes mediante condición separada workSection, agrega test de encabezado y oculta etiquetas del sidebar a <=700px. Sin recheck ni aprobación inferida; dictamen original conservado.
+
+- Corrida final tras correcciones: 16 passed, 6 suites, exit 0; mismo comando de tests incluyendo **/WorkspaceHeader.test.tsx. Verifica saldo real ausente en Lab/Agentes, subnav SHADOW ausente en Gestión y destinos de encabezado.
+
+- Build final Dev CI=true tras correcciones: exit 0, Compiled successfully, main.8c28b1a0.js y main.36e9805a.css. Preview localhost:3039 y JS: HTTP 200; index referencia asset final. Servidor Python loopback PID 10548 sirve dev/.local/spaces-reviewed-build. Sin QA visual/autenticada inferida.

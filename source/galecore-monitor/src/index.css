@@ -316,3 +316,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .broker-connect-state h3 { margin: 0 0 10px; font-size: 20px; font-weight: 500; }
 .broker-connect-state p { color: var(--text-secondary); font-size: 15px; margin-bottom: 20px; }
 .broker-connect-state .btn { background: var(--accent); color: var(--accent-ink); border: 0; padding: 10px 16px; font-size: 14px; }
+
+/* Gestión real y laboratorio: una UI, dos espacios de trabajo. */
+.workspace-group-label { display: block; padding: 6px 14px 10px; color: var(--text-muted); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.workspace-navigation.collapsed .workspace-group-label { display: none; }
+.workspace-scope { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; padding-bottom: 14px; border-bottom: 1px solid var(--border-dark); }
+.workspace-scope > span { font-size: 13px; color: var(--text-muted); }
+.main-account-only { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.main-account-only .main-account > div { max-width: none; }
+.main-context-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 36px; }
+.main-unavailable { font-size: 17px; color: var(--text-secondary); margin: 24px 0 8px; }
+.lab-workspace { max-width: 1600px; margin-inline: auto; }
+.lab-overview-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 36px; margin-top: 36px; }
+.lab-overview-grid > section { min-width: 0; }
+.lab-publications { border-left: 1px solid var(--border); padding-left: 28px; }
+.lab-publications .today-workspace { padding: 0; }
+.lab-publications .today-intro h2 { font-size: 20px; }
+.lab-publications .today-intro { margin-bottom: 20px; }
+.lab-workspace > .main-section { margin-top: 28px; }
+@media (max-width: 1000px) { .main-context-grid, .lab-overview-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; } .lab-publications { border-left: 0; border-top: 1px solid var(--border); padding: 24px 0 0; } }
+@media (max-width: 700px) { .workspace-scope, .lab-actions { align-items: flex-start; flex-wrap: wrap; } .workspace-navigation .workspace-group-label { display: none; } }
+
+.account-values-strip { display: grid; grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(0, 1fr)); gap: 28px; padding-block: 12px; }
+.account-values-strip > div { flex-direction: column; align-items: flex-start; justify-content: center; margin: 0; gap: 8px; }
+.account-values-strip > div:first-child > span:last-child { font-size: 38px !important; }
+.account-values-strip > div + div { border-left: 1px solid var(--border); padding-left: 28px; }
+@media (max-width: 700px) { .account-values-strip { grid-template-columns: minmax(0, 1fr); gap: 20px; } .account-values-strip > div + div { border-left: 0; border-top: 1px solid var(--border); padding: 20px 0 0; } }

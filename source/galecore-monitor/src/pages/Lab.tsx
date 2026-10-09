@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '../api/client';
+import { ShadowOverview } from './ShadowOverview';
+import { Today } from './Today';
+import { ArrowUpRight } from 'lucide-react';
+import type { Tab } from '../components/layout/TabNav';
 import { useTerminalStore } from '../store/useTerminalStore';
 
 interface LoadedSpec {
@@ -8,7 +12,7 @@ interface LoadedSpec {
 }
 
 /** Construcción por el host actual; esta lista no prueba aprobación ni ejecución. */
-export function Lab({ onMonitor }: { onMonitor: () => void }) {
+export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => void; onNavigate?: (tab: Tab) => void }) {
   const [specs, setSpecs] = useState<LoadedSpec[] | null>(null);
   const [error, setError] = useState(false);
   const setOpen = useTerminalStore(s => s.setOpen);
@@ -20,9 +24,11 @@ export function Lab({ onMonitor }: { onMonitor: () => void }) {
     return () => { alive = false; };
   }, []);
   return <div className="lab-workspace">
-    <div className="lab-actions"><h2>Construir una estrategia</h2><button className="btn" onClick={() => setOpen(true)}>Abrir conversación</button></div>
+    <div className="workspace-scope"><span>Trabajo · simulación SHADOW</span><button className="main-link" onClick={() => onNavigate('inicio')}>Volver a Main<ArrowUpRight size={16} /></button></div>
+    <div className="lab-actions"><h2>Tu laboratorio</h2><button className="btn" onClick={() => setOpen(true)}>Abrir conversación</button></div>
     <p>Diseñá y revisá las reglas en Claude Code. La aprobación y el despliegue siguen por ese mismo camino.</p>
-    <div className="main-section-heading"><h2>Versiones cargadas</h2><button className="main-link" onClick={onMonitor}>Ver seguimiento</button></div>
+    <ShadowOverview onMonitor={onMonitor} />
+    <div className="lab-overview-grid"><section aria-label="Versiones cargadas"><div className="main-section-heading"><h2>Versiones cargadas</h2><button className="main-link" onClick={onMonitor}>Ver seguimiento</button></div>
     <p className="main-source">Cargada no significa aprobada ni en ejecución.</p>
     {error ? <p role="alert">No se pudieron leer las versiones.</p> : !specs ? <p>Leyendo versiones…</p>
       : specs.length === 0 ? <p>No hay versiones cargadas.</p> : <div className="main-results-table"><table>
@@ -32,6 +38,6 @@ export function Lab({ onMonitor }: { onMonitor: () => void }) {
       </table></div>}
     <details className="main-history-pending"><summary>Construcción gráfica y escenarios</summary>
       <p>El builder por patas, los gráficos de posición y la actualización visual desde la conversación todavía no están integrados. Las reglas se versionan; un cambio requiere nueva aprobación y despliegue, sin reescribir el historial de la versión anterior.</p>
-    </details>
+    </details></section><section className="lab-publications" aria-label="Actividad del Lab"><Today title="Actividad del Lab" onNavigate={onNavigate} /></section></div>
   </div>;
 }
