@@ -165,3 +165,9 @@ Fuera de alcance: nuevos contratos API, órdenes, builder, despliegues, cálculo
 - Corrida final tras correcciones: 16 passed, 6 suites, exit 0; mismo comando de tests incluyendo **/WorkspaceHeader.test.tsx. Verifica saldo real ausente en Lab/Agentes, subnav SHADOW ausente en Gestión y destinos de encabezado.
 
 - Build final Dev CI=true tras correcciones: exit 0, Compiled successfully, main.8c28b1a0.js y main.36e9805a.css. Preview localhost:3039 y JS: HTTP 200; index referencia asset final. Servidor Python loopback PID 10548 sirve dev/.local/spaces-reviewed-build. Sin QA visual/autenticada inferida.
+
+## Diagnóstico de cuenta vacía — 09/10/2026
+
+- Login Dev existente (demo), GET /App/GaleCore/Account: linked=false. Balances y Positions: HTTP 409, code broker_account_not_linked. Admin/Users: 1 usuario, 0 cuentas vinculadas, 0 cuentas de sistema en Dev. Se imprimieron sólo metadatos, sin credenciales, identificadores de cuenta ni saldos.
+- Código: AccountBalancesHandler.GetForUser exige vínculo personal; TastytradeCredentialStore.GetSystem puede usar configuración local para el feed. Conexion abierta no acredita acceso a la cuenta personal. No se cambia ese aislamiento.
+- Config local tiene refresh token y client secret; no se tocaron ni imprimieron secretos. Vincular una cuenta al usuario Dev requiere definir explícitamente la asociación; no se copió DB ni credencial de producción.
