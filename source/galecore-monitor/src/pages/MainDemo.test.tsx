@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { MainDemo } from './MainDemo';
 import { useAccountStore } from '../store/useAccountStore';
 import { useGexStore } from '../store/useGexStore';
@@ -11,10 +11,10 @@ test('mercado navega con contexto sin modificar datos o sesiones reales', () => 
   const account = useAccountStore.getState();
   const gex = useGexStore.getState();
   const terminal = useTerminalStore.getState();
-  const exit = jest.fn(); render(<MainDemo onExit={exit} />);
-  fireEvent.click(within(screen.getByRole('complementary', { name: 'Watchlist' })).getByRole('button', { name: 'Analizar QQQ' }));
-  expect(screen.getByRole('heading', { name: 'QQQ · Mercado' })).toBeInTheDocument();
-  expect(screen.getByText('GEX negativo', { selector: 'strong' })).toBeInTheDocument();
+  const exit = jest.fn(); const select = jest.fn(); render(<MainDemo onExit={exit} onMarketSelect={select} marketContent={<p>Mercado real conectado</p>} />);
+  fireEvent.click(screen.getByRole('button', { name: /Inflación de EE. UU./ }));
+  expect(screen.getByRole('heading', { name: 'Mercado' })).toBeInTheDocument(); expect(select).toHaveBeenCalledWith('SPY');
+  expect(screen.getByText('Mercado real conectado')).toBeInTheDocument(); expect(screen.queryByText('P&L por sesión')).not.toBeInTheDocument();
   expect(useAccountStore.getState()).toBe(account);
   expect(useGexStore.getState()).toBe(gex);
   expect(useTerminalStore.getState()).toBe(terminal);
@@ -50,7 +50,7 @@ test('hallazgo entra a conversación con evidencia, pérdidas y períodos conser
   fireEvent.click(screen.getByRole('button', { name: '1S' }));
   expect(screen.getByText('5 sesiones')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '1S' })).toHaveAttribute('aria-pressed', 'true');
-  fireEvent.click(screen.getByRole('button', { name: /SPY Income · revisar salida/ }));
+  fireEvent.click(screen.getByRole('button', { name: /SPY Income.*2 días al vencimiento/ }));
   expect(screen.getByRole('button', { name: 'Conversación' })).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByText(/Hallazgo seleccionado/)).toBeInTheDocument();
   expect(screen.getByText(/SPY Income · v1 · SPY · 600/)).toBeInTheDocument();

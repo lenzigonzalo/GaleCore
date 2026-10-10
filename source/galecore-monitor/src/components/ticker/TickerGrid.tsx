@@ -23,6 +23,7 @@ interface Props {
 function applyMarketData(d: { symbol: string; open: number; prevClose?: number; volume: number; last: number; bid: number; ask: number }) {
   const store = useMarketStore.getState();
   store.setOpen(d.symbol, d.open, d.prevClose, d.volume);
+  if (Number.isFinite(d.last) && d.last > 0) store.setError(d.symbol, 'price', undefined);
   if (!store.tickers[d.symbol]?.price) {
     store.updatePrice(d.symbol, { price: d.last, size: 0, timestamp: new Date().toISOString() });
   }

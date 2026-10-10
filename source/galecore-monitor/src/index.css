@@ -27,9 +27,9 @@
   --text-disabled:  #62625d;
 
   /* ── Semantic ── */
-  --green:         #a3d86c;
-  --green-muted:   rgba(163, 216, 108, 0.15);
-  --green-border:  rgba(163, 216, 108, 0.35);
+  --green:         #6bd6a3;
+  --green-muted:   rgba(107, 214, 163, 0.15);
+  --green-border:  rgba(107, 214, 163, 0.35);
   --red-gc:        #ed6666;
   --red-muted:     rgba(237, 102, 102, 0.15);
   --red-border:    rgba(237, 102, 102, 0.35);

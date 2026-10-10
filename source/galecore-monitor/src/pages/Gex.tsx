@@ -102,9 +102,11 @@ interface GexProps {
   subscribeSymbol: (symbol: string) => void;
   unsubscribeSymbol: (symbol: string) => void;
   socketStatus: ConnectionStatus;
+  externalWatchlist?: boolean;
+  compact?: boolean;
 }
 
-export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexProps) {
+export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, externalWatchlist = false, compact = false }: GexProps) {
   const {
     tickers, display, rulesLoading, rulesError, loadRules,
     cache, loading, error, errorCode, selectedExpiry, fetchGex, selectExpiry,
@@ -141,7 +143,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
    */
   const [alineado, setAlineado] = useState(false);
 
-  useEffect(() => { loadRules(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!externalWatchlist) loadRules(); }, [externalWatchlist, loadRules]);
 
   // Suscribir al hub el DELTA del universo de GEX: los símbolos de su JSON que la plataforma no
   // streamea. App ya suscribe universe.tickers del config de app (SPY/QQQ); acá completamos el resto
@@ -155,11 +157,11 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
   // al despinearlo el cleanup lo desuscribe.
   const extraTickersKey = gridSymbols.filter((s) => !platformTickers.includes(s)).join(',');
   useEffect(() => {
-    if (socketStatus !== 'connected' || !switchEnabled) return;
+    if (externalWatchlist || socketStatus !== 'connected' || !switchEnabled) return;
     const extras = extraTickersKey ? extraTickersKey.split(',') : [];
     extras.forEach(subscribeSymbol);
     return () => extras.forEach(unsubscribeSymbol);
-  }, [extraTickersKey, socketStatus, switchEnabled, subscribeSymbol, unsubscribeSymbol]);
+  }, [externalWatchlist, extraTickersKey, socketStatus, switchEnabled, subscribeSymbol, unsubscribeSymbol]);
 
   // Carga inicial + auto-refresh del símbolo activo. El período sale del JSON (display_config).
   // Con el switch en OFF no se programa nada: el backend igual rechazaría el barrido, pero pedirlo
@@ -240,7 +242,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
   }
 
   return (
-    <div className="market-workspace"><div className="market-analysis">
+    <div className={'market-workspace' + (compact ? ' market-workspace-compact' : '')}><div className="market-analysis">
       {/* Header — mismo formato que RPF: nombre de la estrategia + badge con su descripción. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 0' }}>
         <span style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>{active || 'Mercado'}</span>
@@ -282,7 +284,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
           lleno de números se lee como vigente aunque diga que no lo está. */}
       {switchEnabled === false ? (
         <div className="px-3">
-          <StrategyOffPanel detail="Apagada para TODA la plataforma: no se barre la cadena, no se toca DXLink ni a pedido, y no se suscribe ningun simbolo propio de la estrategia. El estado se guarda, asi que un reinicio no la vuelve a prender sola." />
+          <StrategyOffPanel detail={externalWatchlist ? "Barrido GEX apagado. La watchlist mantiene sus cotizaciones; Gamma Exposure no se actualiza hasta activar el barrido." : "Apagada para TODA la plataforma: no se barre la cadena, no se toca DXLink ni a pedido, y no se suscribe ningun simbolo propio de la estrategia. El estado se guarda, asi que un reinicio no la vuelve a prender sola."} />
         </div>
       ) : (
       <>
@@ -344,7 +346,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
               </div>
             </div>
 
-            <div style={{ display: 'flex', height: DETAIL_HEIGHT }}>
+            <div style={{ display: 'flex', height: compact ? 350 : DETAIL_HEIGHT }}>
               {/* Izquierda: cadena + lectura numérica del vencimiento elegido */}
               <div style={{
                 width: CHAIN_COL_W,
@@ -383,7 +385,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     height: '100%', fontSize: 14, color: 'var(--text-muted)',
                   }}>
-                    No GEX data
+                    Sin datos GEX disponibles
                   </div>
                 ) : (
                   <GexChart
@@ -542,7 +544,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
       </>
       )}
     </div>
-    {switchEnabled !== false && (      <MarketWatchlist>
+    {!externalWatchlist && switchEnabled !== false && (      <MarketWatchlist>
         <TickerGrid layout="list"
           symbols={gridSymbols}
           selectedSymbol={active}

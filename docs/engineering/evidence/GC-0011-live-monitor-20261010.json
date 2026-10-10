@@ -1,0 +1,47 @@
+{
+  "recordedAt": "2026-10-10T17:45:25.034Z",
+  "scope": "Frontend UX con watchlist/GEX reales; cuenta y estrategias aún demo",
+  "tests": {
+    "command": "CI=true npm test -- --watchAll=false --runInBand --testMatch '**/LiveWatchlist.test.tsx' '**/MainDemo.test.tsx' '**/StatusBar.test.tsx' '**/TickerWatchlist.test.tsx' '**/WorkspaceHeader.test.tsx' '**/MarketWatchlist.test.tsx'",
+    "suites": 6,
+    "passed": 17,
+    "exitCode": 0,
+    "scope": "Datos sintéticos de pruebas; integración de frontend, no E2E de proveedor"
+  },
+  "build": {
+    "command": "CI=true npm run build con variables Dev existentes y BUILD_PATH ../../dev/.local/ux-live-monitor-build",
+    "exitCode": 0,
+    "result": "Compiled successfully; aviso Browserslist antiguo, no actualización de dependencias"
+  },
+  "realRead": {
+    "recordedAt": "2026-10-10T17:38:07.321Z",
+    "loginDevStatus": 200,
+    "marketDataStatus": 500,
+    "items": [],
+    "gexRulesStatus": 200,
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "AAPL"
+    ],
+    "gexSwitchStatus": 200,
+    "gexEnabled": true,
+    "gexAnalysisStatus": 500,
+    "providerFailure": "Tastytrade config authentication BadRequest",
+    "scope": "Lecturas autenticadas del usuario de prueba Dev existente; sin escribir configuración/broker ni cambiar switch."
+  },
+  "visualQA": "Pendiente: navegador CUA no conectado; no se afirma apariencia observada.",
+  "review": "Una pasada CHANGES_REQUESTED en ../reviews/GC-0011-live-monitor-20261010-codex.md; correcciones del implementer sin recheck ni APPROVE inferido.",
+  "testsAfterReview": {
+    "suites": 7,
+    "result": "19 passed / 1 failed por selector de prueba ambiguo al recuperar ambas cotizaciones; selector corregido por fila, rerun LiveWatchlist 4 passed exit0; 20 casos únicos del área cubiertos",
+    "command": "CI=true npm test -- --watchAll=false --runInBand --testMatch '**/LiveWatchlist.test.tsx' '**/MainDemo.test.tsx' '**/StatusBar.test.tsx' '**/TickerWatchlist.test.tsx' '**/WorkspaceHeader.test.tsx' '**/MarketWatchlist.test.tsx' '**/resetUserScoped.test.ts'",
+    "rerunCommand": "CI=true npm test -- --watchAll=false --runInBand --testMatch '**/LiveWatchlist.test.tsx'",
+    "rerunExitCode": 0
+  },
+  "buildAfterReview": {
+    "exitCode": 0,
+    "result": "Compiled successfully",
+    "visualAdjustmentAfterBuild": "Etiquetas HTML del eje con tamaño fijo; preview CRA en lugar de repetir build por ajuste visual."
+  }
+}

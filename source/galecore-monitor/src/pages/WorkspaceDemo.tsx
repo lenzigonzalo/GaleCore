@@ -19,8 +19,8 @@ function Curve({ values = demoEquity }: { values?: number[] }) {
     <polyline points={points} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke"/>
   </svg>;
 }
-/** TEMPORAL GC-0011. Todo efecto queda en useState; ninguna acción llama servicios. */
-export function WorkspaceDemo({ active, mode, onNavigate, onExit }: { active: Tab; mode: WorkspaceMode; onNavigate: (tab: Tab) => void; onExit: () => void }) {
+/** TEMPORAL GC-0011. Cuenta/operativa/config son de ejemplo; marketContent aporta mercado real. */
+export function WorkspaceDemo({ active, mode, onNavigate, onExit, marketContent, onMarketSelect }: { marketContent?: React.ReactNode; onMarketSelect?: (symbol:string)=>void; active: Tab; mode: WorkspaceMode; onNavigate: (tab: Tab) => void; onExit: () => void }) {
   const [selected, setSelected] = useState(0);
   const [paused, setPaused] = useState<string[]>([]);
   const [orders, setOrders] = useState(visualOrders);
@@ -36,7 +36,7 @@ export function WorkspaceDemo({ active, mode, onNavigate, onExit }: { active: Ta
 
   return <div className="workspace-demo">
     {toast && <div className="wd-toast" role="status"><Check size={16}/>{toast}<button onClick={()=>setToast('')}>Cerrar</button></div>}
-    <div hidden={!isMain}><MainDemo onExit={onExit} initialView={active === 'monitor' ? 'account' : active === 'gex' ? 'market' : 'main'} />
+    <div hidden={!isMain}><MainDemo onExit={onExit} marketContent={isMain ? marketContent : undefined} onMarketSelect={onMarketSelect} initialView={active === 'monitor' ? 'account' : active === 'gex' ? 'market' : 'main'} />
 
     </div>
 

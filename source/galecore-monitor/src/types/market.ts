@@ -9,6 +9,8 @@ export interface TickerState {
   lastUpdate: Date | null;
   isStreaming: boolean;
   extendedTradingHours?: boolean;
+  marketStatusSourceAt?: Date; // timestamp de origen del trade con señal de sesión
+  marketStatusReceivedAt?: Date; // recepción de la señal de sesión del proveedor, separada de quotes/REST
   ivRank?: number;
   iv30?: number;
   iv9d?: number;

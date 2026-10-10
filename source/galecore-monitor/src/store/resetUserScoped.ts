@@ -1,3 +1,4 @@
+import { useGexStore } from './useGexStore';
 import { useAccountStore } from './useAccountStore';
 import { useCurrentUserStore } from './useCurrentUserStore';
 
@@ -18,4 +19,5 @@ import { useCurrentUserStore } from './useCurrentUserStore';
 export function resetUserScopedStores() {
   useCurrentUserStore.getState().reset();
   useAccountStore.getState().reset();
+  useGexStore.getState().resetSession();
 }

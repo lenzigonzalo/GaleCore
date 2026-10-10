@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowLeft, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
-import { demoAccount, demoWatchlist, demoPositions } from './MainDemo.fixture';
+import { demoAccount, demoPositions } from './MainDemo.fixture';
 import { fmtPnl, fmtPrice } from '../utils/formatters';
 import './MainDemo.css';
 import { MonitorOverview } from './MonitorOverview';
@@ -9,13 +9,11 @@ type View = 'main' | 'strategies' | 'strategy' | 'market' | 'account';
 type Conversation = { draft: string; messages: string[] };
 const money = (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const Pnl = ({ value }: { value: number }) => <span className={value >= 0 ? 'demo-positive' : 'demo-negative'}>{fmtPnl(value)}</span>;
-const daily = [430, -92, 504.8];
 const objectives = ['Cobrar prima con riesgo definido sobre SPY.', 'Operar un rango con riesgo definido sobre QQQ.', 'Cobrar prima por encima del rango de IWM.'];
 /** TEMPORAL: recorrido aislado de diseño; retirar fixtures y navegación según GC-0011. */
-export function MainDemo({ onExit, initialView = 'main' }: { onExit: () => void; initialView?: View }) {
+export function MainDemo({ onExit, initialView = 'main', marketContent, onMarketSelect }: { onExit: () => void; initialView?: View; marketContent?: React.ReactNode; onMarketSelect?: (symbol:string)=>void }) {
   const [view, setView] = useState<View>(initialView);
   useEffect(() => { setView(initialView); }, [initialView]);
-  const [symbol, setSymbol] = useState('SPY');
   const [strategy, setStrategy] = useState('SPY Income');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [tab, setTab] = useState<'positions' | 'conversation' | 'activity'>('positions');
@@ -23,16 +21,12 @@ export function MainDemo({ onExit, initialView = 'main' }: { onExit: () => void;
   const [finding, setFinding] = useState(false);
   const p = demoPositions.find(item => item.strategy === strategy)!;
   const index = demoPositions.indexOf(p);
-  const active = demoWatchlist.find(item => item.symbol === symbol)!;
   const session = conversations[strategy] || { draft: '', messages: [] };
   const openStrategy = (name: string, investigate = false) => {
-    const position = demoPositions.find(item => item.strategy === name)!;
-    setStrategy(name); setSymbol(position.symbol); setView('strategy');
+    setStrategy(name); setView('strategy');
     setFinding(investigate); setTab(investigate ? 'conversation' : 'positions');
   };
   const patchSession = (next: Conversation) => setConversations(previous => ({ ...previous, [strategy]: next }));
-  const priceShape = [0.992,0.993,0.991,0.994,0.996,0.995,0.997,0.994,0.996,0.998,0.997,0.999,0.998,1];
-  const priceLine = priceShape.map((v,i) => (8+i*724/13)+','+(105-(v-.990)*9000)).join(' ');
   const positionDetail = (position: typeof p) => <div className="demo-position-detail">
     <div><strong>{position.symbol} · {position.structure}</strong><span>{position.legs}</span></div>
     <div><span>Contratos</span><strong>{position.quantity}</strong></div>
@@ -42,11 +36,11 @@ export function MainDemo({ onExit, initialView = 'main' }: { onExit: () => void;
   </div>;
   const strategyList = <section className="demo-strategies">
     <header><button className="demo-heading-link" onClick={() => setView('strategies')}>Estrategias activas <span>3</span><ArrowUpRight size={16} /></button><span className="demo-secondary">3 posiciones abiertas</span></header>
-    <div className="demo-table-wrap"><table><thead><tr><th><span className="sr-only">Desplegar</span></th><th>Estrategia / activo</th><th>Estado</th><th>Posiciones</th><th>P&L hoy</th><th>P&L abierto</th><th>Próximo venc.</th><th><span className="sr-only">Workspace</span></th></tr></thead><tbody>
-      {demoPositions.map((position, i) => <React.Fragment key={position.strategy}>
+    <div className="demo-table-wrap"><table><thead><tr><th><span className="sr-only">Desplegar</span></th><th>Estrategia / activo</th><th>Estado</th><th>Posiciones</th><th>Contratos</th><th>P&L abierto</th><th>Próximo venc.</th><th><span className="sr-only">Workspace</span></th></tr></thead><tbody>
+      {demoPositions.map((position) => <React.Fragment key={position.strategy}>
         <tr><td><button className="demo-icon" aria-label={'Ver posiciones de ' + position.strategy} aria-expanded={expanded === position.strategy} onClick={() => setExpanded(expanded === position.strategy ? null : position.strategy)}>{expanded === position.strategy ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
           <td><button className="demo-strategy-name" onClick={() => openStrategy(position.strategy)}>{position.strategy}</button><small>{position.symbol} · {position.structure}</small></td>
-          <td><span className="demo-status">Activa</span></td><td>1</td><td><Pnl value={daily[i]} /></td><td><Pnl value={position.pnl} /></td><td className={position.dte <= 2 ? 'demo-warning' : ''}>{position.dte} días</td>
+          <td><span className="demo-status">Activa</span></td><td>1</td><td>{position.quantity}</td><td><Pnl value={position.pnl} /></td><td className={position.dte <= 2 ? 'demo-warning' : ''}>{position.dte} días</td>
           <td><button className="demo-icon" aria-label={'Abrir workspace de ' + position.strategy} onClick={() => openStrategy(position.strategy)}><ArrowUpRight size={16} /></button></td></tr>
         {expanded === position.strategy && <tr className="demo-expanded"><td colSpan={8}>{positionDetail(position)}<button className="demo-text-action" onClick={() => openStrategy(position.strategy)}>Abrir workspace <ArrowUpRight size={14} /></button></td></tr>}
       </React.Fragment>)}
@@ -55,21 +49,20 @@ export function MainDemo({ onExit, initialView = 'main' }: { onExit: () => void;
   </section>;
   const holdingsList = <section className="demo-strategies"><header><h2>Posiciones abiertas</h2><span className="demo-secondary">3 posiciones · 5 contratos</span></header><div className="demo-table-wrap"><table><thead><tr><th>Activo / estructura</th><th>Contratos</th><th>Valor / spread</th><th>P&L abierto</th><th>Vencimiento</th><th><span className="sr-only">Detalle</span></th></tr></thead><tbody>{demoPositions.map(item => <tr key={item.strategy}><td style={{textAlign:"left"}}><button className="demo-strategy-name" onClick={() => openStrategy(item.strategy)}>{item.symbol} · {item.structure}</button><small>{item.legs}</small></td><td>{item.quantity}</td><td>{money(item.value)}</td><td><Pnl value={item.pnl}/></td><td className={item.dte <= 2 ? "demo-warning" : ""}>{item.dte} días</td><td><button className="demo-icon" aria-label={"Abrir posición de " + item.strategy} onClick={() => openStrategy(item.strategy)}><ArrowUpRight size={16}/></button></td></tr>)}</tbody></table></div><footer className="demo-table-footer"><span>Valuación de ejemplo · USD</span><span>Total abierto <strong><Pnl value={demoAccount.openPnl}/></strong></span></footer></section>;
   return <div className={'main-demo' + (view === 'main' || view === 'account' ? ' is-overview' : '')}>
-    <div className="demo-location"><div>{view !== initialView && <button className="demo-back" aria-label={initialView === 'account' ? 'Volver a Cartera' : undefined} onClick={() => setView(initialView)}><ArrowLeft size={16} />{initialView === 'account' ? 'Cartera' : initialView === 'market' ? 'Mercado' : 'Resumen'}</button>}<h1>{view === 'main' ? 'Hoy' : view === 'strategy' ? strategy : view === 'strategies' ? 'Estrategias activas' : view === 'market' ? symbol + ' · Mercado' : 'Cartera'}</h1>{view === 'main' && <span>Cuenta · 14:35 ET</span>}</div><div className="demo-mode"><span>Datos demo</span><button onClick={onExit}>Ver cuenta real <ArrowUpRight size={13} /></button></div></div>
-    {(view === 'main' || view === 'account') ? <MonitorOverview accountView={view === 'account'} positions={view === 'account' ? holdingsList : strategyList} onStrategy={openStrategy} onMarket={name => { setSymbol(name); setView('market'); }} /> : <>
-    <section className="demo-capital" aria-label="Resumen de cuenta">
+    <div className="demo-location"><div>{view !== initialView && <button className="demo-back" aria-label={initialView === 'account' ? 'Volver a Cartera' : undefined} onClick={() => setView(initialView)}><ArrowLeft size={16} />{initialView === 'account' ? 'Cartera' : initialView === 'market' ? 'Mercado' : 'Resumen'}</button>}<h1>{view === 'main' ? 'Hoy' : view === 'strategy' ? strategy : view === 'strategies' ? 'Estrategias activas' : view === 'market' ? 'Mercado' : 'Cartera'}</h1>{view === 'main' && <span>Cuenta de ejemplo</span>}</div><div className="demo-mode"><span>Datos demo</span><button onClick={onExit}>Ver cuenta real <ArrowUpRight size={13} /></button></div></div>
+    {(view === 'main' || view === 'account') ? <MonitorOverview accountView={view === 'account'} analysis={marketContent} positions={view === 'account' ? holdingsList : strategyList} onStrategy={openStrategy} onMarket={name => { onMarketSelect?.(name); setView('market'); }} /> : <>
+    {view !== 'market' && <section className="demo-capital" aria-label="Resumen de cuenta">
       {[
         { label: 'Patrimonio', value: money(demoAccount.netLiq) },
-        { label: 'P&L hoy', value: <Pnl value={demoAccount.dailyPnl} />, extra: '+0.66%' },
         { label: 'P&L abierto', value: <Pnl value={demoAccount.openPnl} /> },
         { label: 'Poder de compra', value: money(demoAccount.buyingPower) },
-      ].map(metric => <button key={metric.label} onClick={() => setView('account')}><span>{metric.label}</span><strong>{metric.value}</strong>{metric.extra && <small className="demo-positive">{metric.extra}</small>}</button>)}
+      ].map(metric => <button key={metric.label} onClick={() => setView('account')}><span>{metric.label}</span><strong>{metric.value}</strong></button>)}
       <button className="demo-account-link" onClick={() => setView('account')}>Cartera <ArrowUpRight size={16} /></button>
-    </section>
-    <div className="demo-grid"><main className="demo-center">
+    </section>}
+    <div className="demo-grid demo-grid-detail"><main className="demo-center">
       {view === 'strategies' && strategyList}
       {view === 'strategy' && <section className="demo-workspace">
-        <div className="demo-workspace-summary"><span className="demo-status">Activa</span><span>{p.symbol} · v1</span><span>P&L hoy <Pnl value={daily[index]} /></span><span>Abierto <Pnl value={p.pnl} /></span></div>
+        <div className="demo-workspace-summary"><span className="demo-status">Activa</span><span>{p.symbol} · v1</span><span>Vence en {p.dte} días</span><span>Abierto <Pnl value={p.pnl} /></span></div>
         <p className="demo-objective">{objectives[index]}</p>
         <nav className="demo-tabs" aria-label="Workspace de estrategia">{(['positions', 'conversation', 'activity'] as const).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{t === 'positions' ? 'Posiciones · 1' : t === 'conversation' ? 'Conversación' : 'Actividad'}</button>)}</nav>
         {tab === 'positions' && <><h2>Posición abierta</h2>{positionDetail(p)}<div className="demo-position-plan"><h3>Plan de seguimiento</h3><p>{p.note}</p><button className="demo-text-action" onClick={() => setTab('conversation')}><MessageSquare size={16} />Investigar con contexto</button></div></>}
@@ -82,12 +75,9 @@ export function MainDemo({ onExit, initialView = 'main' }: { onExit: () => void;
           <form onSubmit={event => { event.preventDefault(); if (session.draft.trim()) patchSession({ draft: '', messages: [...session.messages, session.draft.trim()] }); }}><label htmlFor="strategy-question">Consulta sobre {strategy}</label><textarea id="strategy-question" placeholder="Preguntá sobre resultados, riesgo o el plan…" value={session.draft} onChange={event => patchSession({ ...session, draft: event.target.value })} /><div><span className="demo-secondary">Sesión de trabajo · {strategy}</span><button type="submit" disabled={!session.draft.trim()}>Guardar consulta</button></div></form>
         </div>}
       </section>}
-      {view === 'market' && <section className="demo-market-view"><header><h2>{symbol} · contexto de mercado</h2><span className="demo-secondary">14:35 ET</span></header><div className="demo-market-price"><strong>{fmtPrice(active.price)}</strong><span className={active.change >= 0 ? 'demo-positive' : 'demo-negative'}>{active.change > 0 ? '+' : ''}{active.change.toFixed(2)}%</span></div><div className="demo-market-facts"><div><span>Régimen</span><strong>{active.context}</strong></div><div><span>En cartera</span><strong>{demoPositions.some(item => item.symbol === symbol) ? '1 posición abierta' : 'Sin posiciones'}</strong></div></div>
-        <div className="demo-performance"><header><h2>Precio intradiario</h2><span className="demo-secondary">Sesión de ejemplo · 09:30–14:35 ET</span></header><svg className="demo-equity" style={{ height: 210 }} viewBox="0 0 740 120" preserveAspectRatio="none" role="img" aria-label="Precio intradiario ficticio"><line x1="8" x2="732" y1="60" y2="60" stroke="var(--border-dark)" /><polyline points={priceLine} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg><footer className="demo-table-footer"><span>Bid {fmtPrice(active.price-0.01)} · Ask {fmtPrice(active.price+0.01)}</span><span>Volumen 28,4M · IV 22,6% · IV rank 38</span></footer></div><h2 style={{ marginTop: 26 }}>Estrategias vinculadas</h2>{demoPositions.filter(item => item.symbol === symbol).map(item => <button className="demo-finding" key={item.strategy} onClick={() => openStrategy(item.strategy)}><div><strong>{item.strategy}</strong><p>{item.legs} · vence en {item.dte} días</p></div><Pnl value={item.pnl} /><ArrowUpRight size={16} /></button>)}{!demoPositions.some(item => item.symbol === symbol) && <p className="demo-secondary">Este activo está en seguimiento y no tiene estrategias activas.</p>}
-        <div className="demo-position-plan"><h3>Próximo evento</h3><p>{['SPY', 'QQQ', 'IWM', 'TLT'].includes(symbol) ? 'Inflación · mañana 08:30 ET. Fuente: calendario económico.' : 'Resultados próximos. Fecha por confirmar.'}</p></div>
-      </section>}
+      {view === 'market' && <section className="demo-real-market">{marketContent || <p className="demo-secondary">Mercado requiere conexión con GaleCore.</p>}</section>}
     </main>
-    <aside className="demo-watchlist" aria-label="Watchlist"><header><h2>Watchlist</h2><button className="demo-icon" aria-label={'Abrir Mercado de ' + symbol} onClick={() => setView('market')}><ArrowUpRight size={16} /></button></header><table><thead><tr><th>Activo</th><th>Último</th><th>Cambio</th></tr></thead><tbody>{demoWatchlist.map(t => <tr key={t.symbol} className={symbol === t.symbol ? 'selected' : ''}><td><button aria-label={'Analizar ' + t.symbol} onClick={() => { setSymbol(t.symbol); setView('market'); }}>{t.symbol}</button></td><td>{fmtPrice(t.price)}</td><td className={t.change >= 0 ? 'demo-positive' : 'demo-negative'}>{t.change > 0 ? '+' : ''}{t.change.toFixed(2)}%</td></tr>)}</tbody></table><div className="demo-watchlist-note"><span>Contexto activo</span><strong>{symbol}</strong><p>{active.context}</p></div></aside>
+
     </div>
     </>}
   </div>;

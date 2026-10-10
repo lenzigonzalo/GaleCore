@@ -27,7 +27,7 @@ export function WorkspaceHeader({ mainDemo = false, mode = 'monitor', onModeChan
       </nav>
       {mainDemo ? <button className="wd-demo-user" onClick={() => onChange('config')}><span>GC</span>Trader demo</button> : <AccountMenu onOpenSettings={() => onChange('config')} onLogout={onLogout} active={active === 'config'} />}
     </div>
-    {!(mode === 'lab' && ['lab', 'estrategias'].includes(active)) && !(mainDemo && ['inicio', 'monitor', 'config', 'admin'].includes(active)) && <header className="workspace-heading">
+    {!(mode === 'lab' && ['lab', 'estrategias'].includes(active)) && !(mainDemo && ['inicio', 'monitor', 'gex', 'config', 'admin'].includes(active)) && <header className="workspace-heading">
       <div><h1>{PAGES[active]}</h1></div>
       {mainDemo ? <span className="wd-header-context">USD · Cuenta demo 01</span> : <WorkspaceSearch onNavigate={onChange} onSymbol={onSymbol} />}
       <button className="workspace-conversation" aria-label="Abrir Lab real"

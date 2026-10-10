@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './index.css';
 import { LoginScreen } from './components/LoginScreen';
 import { supabase, getSession, signOut } from './auth/supabase';
+import { LiveWatchlist } from './components/ticker/LiveWatchlist';
 import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
 import { WorkspaceDemo } from './pages/WorkspaceDemo';
@@ -60,6 +61,9 @@ function Dashboard({ onLogout }: DashboardProps) {
   const [mainDemo, setMainDemo] = useState(() => localDemo && new URLSearchParams(window.location.search).get('demo') !== 'off');
   const demoVisible = mainDemo && mode !== 'lab';
   const isLabWorkspace = mode === 'lab' && ['lab', 'estrategias'].includes(tab);
+  const marketSurface = mode !== 'lab' && ['inicio','monitor','gex'].includes(tab);
+  const [watchlistOpen,setWatchlistOpen] = useState(false);
+  useEffect(() => { if (!marketSurface) setWatchlistOpen(false); },[marketSurface]);
   const [settingsInitial, setSettingsInitial] = useState<'usuario' | 'broker'>('usuario');
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
@@ -114,7 +118,7 @@ function Dashboard({ onLogout }: DashboardProps) {
     <div className="workspace-shell flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       {!isLabWorkspace && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
-        {!demoVisible && mode !== 'lab' && <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />}
+        {mode !== 'lab' && <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} onWatchlist={marketSurface ? () => setWatchlistOpen(true) : undefined} watchlistOpen={watchlistOpen} />}
         <WorkspaceHeader mode={mode} onModeChange={changeMode} mainDemo={demoVisible} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();
@@ -125,10 +129,10 @@ function Dashboard({ onLogout }: DashboardProps) {
             if (!selected) throw new Error('No se pudo abrir el símbolo.');
             store.setSelectedSymbol(selected); setTab('gex');
           }} conversationOpen={terminalOpen} onConversation={() => setTab('lab')} />
-        {localDemo && mode !== 'lab' && <div className="wd-demo-bar"><span>{mainDemo ? 'DEMO VISUAL · datos y acciones ficticios · sesión de ejemplo 14:35 ET' : 'Datos reales · demo visual disponible'}</span><button onClick={() => setMainDemo(v => !v)}>{mainDemo ? 'Salir de la demo' : 'Ver demo completa'}</button></div>}
+        {localDemo && mode !== 'lab' && <div className="wd-demo-bar"><span>{mainDemo ? (marketSurface ? 'Cuenta y estrategias de ejemplo · Watchlist y Gamma Exposure con datos reales' : 'DEMO VISUAL · datos y acciones ficticios') : 'Datos reales · demo visual disponible'}</span><button onClick={() => setMainDemo(v => !v)}>{mainDemo ? 'Salir de la demo' : 'Ver demo completa'}</button></div>}
 
         <main className={"dashboard-main flex-1 " + (isLabWorkspace ? "lab-dashboard-main" : "overflow-auto")} style={{ position: 'relative' }}>
-          {demoVisible ? <WorkspaceDemo active={tab} mode={mode} onNavigate={setTab} onExit={() => setMainDemo(false)} /> : <>
+          {demoVisible ? <WorkspaceDemo active={tab} mode={mode} onNavigate={setTab} onExit={() => setMainDemo(false)} onMarketSelect={symbol => useGexStore.getState().setSelectedSymbol(symbol)} marketContent={marketSurface ? <Gex externalWatchlist compact={tab !== 'gex'} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus}/> : undefined} /> : <>
           {tab === 'inicio' && <Main demo={mainDemo} onDemoChange={localDemo ? setMainDemo : undefined} onNavigate={setTab} onConnectBroker={() => { setSettingsInitial('broker'); setTab('config'); }} />}
           {tab === 'operativa' && <Operations onNavigate={setTab} />}
 
@@ -150,7 +154,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {tab === 'admin' && <Admin />}
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}
-          {tab === 'gex' && <Gex subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
+          {tab === 'gex' && <Gex externalWatchlist subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
           {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
           {tab === 'shadow' && <Shadow />}
           {/* Inteligencia se monta al entrar: lee el adapter local de GaleCore-AI, no la API. */}
@@ -165,6 +169,7 @@ function Dashboard({ onLogout }: DashboardProps) {
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>
+      <LiveWatchlist open={watchlistOpen} enabled={marketSurface} onClose={() => setWatchlistOpen(false)} onSelect={() => { setTab('gex'); setWatchlistOpen(false); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
       {!demoVisible && mode !== 'lab' && <ClaudeTerminal />}
     </div>
   );
