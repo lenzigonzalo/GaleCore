@@ -8,8 +8,8 @@ export const demoWatchlist = [
   { symbol: 'TLT', price: 89.34, change: -0.32, context: 'Tasas' },
 ];
 export const demoPositions = [
-  { symbol: 'SPY', strategy: 'SPY Income', structure: 'Put credit spread', legs: '600 / 595 · PUT', dte: 2, quantity: 2, value: 0.85, pnl: 340, note: 'Revisar vencimiento cercano y plan de salida.' },
-  { symbol: 'QQQ', strategy: 'QQQ Neutral', structure: 'Iron condor', legs: '525 / 530 PUT · 570 / 575 CALL', dte: 16, quantity: 1, value: 2.1, pnl: -185, note: 'Contrastar movimiento del subyacente y exposición de la posición.' },
+  { symbol: 'SPY', strategy: 'SPY Income', structure: 'Put credit spread', legs: '600 / 595 · PUT', dte: 2, quantity: 2, value: 1.70, pnl: 340, note: 'Revisar vencimiento cercano y plan de salida.' },
+  { symbol: 'QQQ', strategy: 'QQQ Neutral', structure: 'Iron condor', legs: '525 / 530 PUT · 570 / 575 CALL', dte: 16, quantity: 1, value: 5.80, pnl: -185, note: 'Contrastar movimiento del subyacente y exposición de la posición.' },
   { symbol: 'IWM', strategy: 'IWM Range', structure: 'Call credit spread', legs: '230 / 235 · CALL', dte: 23, quantity: 2, value: 0.65, pnl: 120, note: 'Revisar valuación y condiciones del plan antes de decidir.' },
 ];
 export const demoAlerts = [

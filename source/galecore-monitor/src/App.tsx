@@ -4,6 +4,9 @@ import { LoginScreen } from './components/LoginScreen';
 import { supabase, getSession, signOut } from './auth/supabase';
 import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
+import { WorkspaceDemo } from './pages/WorkspaceDemo';
+import { Operations } from './pages/Operations';
+import type { WorkspaceMode } from './components/layout/WorkspaceNav';
 import { WorkspaceNav } from './components/layout/WorkspaceNav';
 import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
 import { Lab } from './pages/Lab';
@@ -35,10 +38,28 @@ interface DashboardProps {
 }
 
 function Dashboard({ onLogout }: DashboardProps) {
-  const [tab, setTab] = useState<Tab>('inicio');
-  // TEMPORAL GC-0011: opt-in local, nunca modifica los stores reales.
+  const [tab, setCurrentTab] = useState<Tab>('inicio');
+  const [mode, setMode] = useState<WorkspaceMode>('monitor');
+  const lastView = useRef<Record<WorkspaceMode, Tab>>({ monitor: 'inicio', operativa: 'operativa', lab: 'lab' });
+  const setTab = (next: Tab) => {
+    let target = mode;
+    if (next === 'inicio') target = 'monitor';
+    if (next === 'operativa' || next === 'rpf') target = 'operativa';
+    if (next === 'lab' || next === 'shadow' || next === 'agentes') target = 'lab';
+    lastView.current[target] = next;
+    setMode(target);
+    setCurrentTab(next);
+  };
+  const changeMode = (next: WorkspaceMode) => {
+    lastView.current[mode] = tab;
+    setMode(next);
+    setCurrentTab(lastView.current[next]);
+  };
+  // TEMPORAL GC-0011: demo integral por defecto sólo en localhost. Retirar al conectar datos reales.
   const localDemo = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
-  const [mainDemo, setMainDemo] = useState(() => localDemo && new URLSearchParams(window.location.search).get('main') === 'demo');
+  const [mainDemo, setMainDemo] = useState(() => localDemo && new URLSearchParams(window.location.search).get('demo') !== 'off');
+  const demoVisible = mainDemo && mode !== 'lab';
+  const isLabWorkspace = mode === 'lab' && ['lab', 'estrategias'].includes(tab);
   const [settingsInitial, setSettingsInitial] = useState<'usuario' | 'broker'>('usuario');
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
@@ -85,17 +106,16 @@ function Dashboard({ onLogout }: DashboardProps) {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const terminalOpen = useTerminalStore((t) => t.open);
-  const setTerminalOpen = useTerminalStore((t) => t.setOpen);
 
   const { status, subscribeSymbol, unsubscribeSymbol, subscribeLeg, unsubscribeLeg, acceptSuggestion, dismissSuggestion } = useMarketSocket(tickers);
   useEffect(() => { setSocketStatus(status); }, [status]);
 
   return (
     <div className="workspace-shell flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      <WorkspaceNav active={tab} onChange={setTab} />
+      <WorkspaceNav mode={mode} active={tab} onChange={setTab} />
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
-        {!(tab === 'inicio' && mainDemo) && <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />}
-        <WorkspaceHeader mainDemo={tab === 'inicio' && mainDemo} active={tab} onChange={setTab} onLogout={onLogout}
+        {!demoVisible && mode !== 'lab' && <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />}
+        <WorkspaceHeader mode={mode} onModeChange={changeMode} mainDemo={demoVisible} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();
             if (!store.rules) { await store.loadRules(); store = useGexStore.getState(); }
@@ -104,11 +124,15 @@ function Dashboard({ onLogout }: DashboardProps) {
             const selected = store.pinAdHoc(symbol);
             if (!selected) throw new Error('No se pudo abrir el símbolo.');
             store.setSelectedSymbol(selected); setTab('gex');
-          }} conversationOpen={terminalOpen} onConversation={() => setTerminalOpen(!terminalOpen)} />
+          }} conversationOpen={terminalOpen} onConversation={() => setTab('lab')} />
+        {localDemo && mode !== 'lab' && <div className="wd-demo-bar"><span>{mainDemo ? 'DEMO VISUAL · datos y acciones ficticios · sesión de ejemplo 14:35 ET' : 'Datos reales · demo visual disponible'}</span><button onClick={() => setMainDemo(v => !v)}>{mainDemo ? 'Salir de la demo' : 'Ver demo completa'}</button></div>}
+        {mode === 'lab' && <div className="real-lab-scope">Lab real · sesiones del usuario de esta PC · sin datos demo</div>}
         <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
+          {demoVisible ? <WorkspaceDemo active={tab} mode={mode} onNavigate={setTab} onExit={() => setMainDemo(false)} /> : <>
           {tab === 'inicio' && <Main demo={mainDemo} onDemoChange={localDemo ? setMainDemo : undefined} onNavigate={setTab} onConnectBroker={() => { setSettingsInitial('broker'); setTab('config'); }} />}
-          {tab === 'lab' && <Lab onMonitor={() => setTab('shadow')} onNavigate={setTab} />}
-          <div style={{ display: tab === 'estrategias' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+          {tab === 'operativa' && <Operations onNavigate={setTab} />}
+
+          <div style={{ display: tab === 'estrategias' && !isLabWorkspace ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
           </div>
           <div style={{ display: tab === 'monitor' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
@@ -133,13 +157,15 @@ function Dashboard({ onLogout }: DashboardProps) {
           {tab === 'inteligencia' && <Inteligencia />}
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
+          </>}
+          <div hidden={!isLabWorkspace}><Lab onMonitor={() => setTab('shadow')} onNavigate={setTab} /></div>
         </main>
         {/* Avisos del supervisor SHADOW: sólo en el espacio de trabajo. */}
-        {['lab', 'estrategias', 'rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
+        {!demoVisible && ['lab', 'estrategias', 'rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>
-      <ClaudeTerminal />
+      {!demoVisible && mode !== 'lab' && <ClaudeTerminal />}
     </div>
   );
 }

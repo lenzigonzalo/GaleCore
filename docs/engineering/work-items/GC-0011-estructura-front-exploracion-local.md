@@ -222,3 +222,34 @@ Fuera de alcance: sesión persistente del harness, respuesta AI, datos reales/at
 - Preview CRA: Compiled successfully / No issues found. HTTP localhost:3039/?main=demo: 200. Sin build de producción por excepción visual ENGINEERING §12. CUA apps/browsers vacíos: QA visual pendiente.
 
 - Review independiente acotado: 2 P2/1 P3, corregidos por implementer sin recheck: ../reviews/GC-0011-strategy-workspace-20261009-codex.md. Se quita etiqueta cuenta real en mocks, se conserva timestamp de cada hallazgo y CTA se llama Abrir workspace. Sin APPROVE inferido ni cierre.
+
+
+## Demo integral Monitor / Operativa / Lab — 09/10/2026
+
+Owner autoriza poblar TODO el front con mocks temporales para iterar como una sesión de trabajo activa; pide retirar frases de presentación. Continúa excepción de trabajo con Codex, sin tests ni build separado.
+
+- Demo integral activa por defecto sólo en localhost; ?demo=off o «Salir de la demo» muestra las vistas reales. Selector de demo visible y exclusivo en local. Autenticación existente conservada.
+- Se reutilizan MainDemo y fixtures; WorkspaceDemo agrega Operativa con posiciones/órdenes/revisión local, Lab con conversaciones y respuestas predefinidas rotuladas, SHADOW, agentes/tareas, biblioteca y configuración ficticia. Todos los efectos demo son useState; no invocan servicios, no escriben stores ni DB. App conserva sus lecturas reales de inicio, pero vistas operacionales, alertas y terminal reales no se montan en demo.
+- Selector global conserva el último destino de cada espacio; datos ficticios identificados en una barra común. Los cambios de demo se pierden al recargar.
+- Evidencia ejecutada: servidor CRA :3039 devolvió estado WebSocket ok después de los cambios; no se corrieron tests ni build de producción. QA visual pendiente por navegador no conectado; no se declara validación visual.
+
+### Retirada obligatoria ampliada
+
+- [ ] Antes de consolidar con datos reales: borrar WorkspaceDemo.tsx, WorkspaceDemo.fixture.ts, WorkspaceDemo.css, MainDemo.tsx, MainDemo.fixture.ts, MainDemo.css y tests exclusivos de mocks; retirar imports, flags locales, barra/selector demo, ramas de render y props demo de App/Main/WorkspaceHeader. Reemplazar únicamente las composiciones aprobadas con contratos reales. Buscar WorkspaceDemo, MainDemo, mainDemo y fixtures demo para confirmar que no queden referencias. No cambiar estados de aprobación/cierre por esta exploración.
+
+### Para continuar la iteración visual
+
+Abrir localhost:3039 y recargar. Recorrer Monitor → Operativa → Lab; ejemplos incluyen selección de posiciones, pausa local de entradas, revisión ficticia de orden, conversación predefinida, filtros de SHADOW, on/off de agentes, documentos y edición de perfil demo. Próximo paso: feedback del owner sobre distribución y densidad. Los tests anteriores en este archivo son históricos; no validan esta versión nueva.
+
+
+## Recuperación de la sesión interrumpida — 10/10/2026
+
+Último pedido recuperado del registro local: retirar mocks de Lab y usar los CLIs locales Codex/Claude con proyectos y memoria reales. Monitor/Operativa conservan la demo visual. No corresponde a WS-0021 ni retoma su implementación pendiente de Claude Code.
+
+- Código existente: Lab.tsx/xterm, api/lab.ts y tools/terminal/lab-server.js. Proyectos desde knowledge; sesiones separadas del socket; historial local de metadatos; contexto con archivos/commits. Preparar guardado pega un pedido revisable, no confirma un commit por sí solo.
+- Comprobado en esta recuperación: HTTP 200 en front :3039, Swagger Dev :7001, bootstrap y state del Lab :8771; state informa ambos motores instalados, 3 proyectos y 2 sesiones terminadas. Sin iniciar ni escribir en sesiones ni modificar estrategias.
+- Ajustes sólo de presentación: texto secundario de demo/Lab con mínimo de 12 px, paneles y barra demo permiten envolver, encabezado conserva selector y perfil a <=500 px. No cambian contratos, ejecución ni guardado.
+- Última compilación previa encontrada en visual-preview.stdout.log: Compiled successfully / No issues found. Edición actual: recarga CRA Compiled successfully / No issues found; preview HTTP 200 y git diff --check limpio.
+- CUA sin browsers; IAB no disponible. QA visual no ejecutada. Reviews/tests históricos no cubren el puente nuevo. No se declara Lab final validado ni cierre aprobado.
+
+Para retomar: recorrer localhost:3039, comprobar composición de Monitor/Operativa y Lab real. Pendiente funcional de consolidación del puente: revisión y caso de guardar memoria/commit/retomar, sin confundirlo con la iteración visual. Retirada de mocks Monitor/Operativa sigue pendiente antes de conectar composición final con datos reales. ACTIVE_WORK_ITEM y WS-0021 intactos.

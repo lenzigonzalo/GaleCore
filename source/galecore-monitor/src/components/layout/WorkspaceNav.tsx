@@ -1,39 +1,34 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, FlaskConical, ChartNoAxesCombined, Wallet, Layers, Bot, BookOpen, Settings, Shield, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { LayoutDashboard, FlaskConical, ChartNoAxesCombined, Wallet, Layers, Bot, BookOpen, Settings, Shield, PanelLeftClose, PanelLeftOpen, Activity, MessageSquare } from 'lucide-react';
 import type { Tab } from './TabNav';
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 
-interface Props { active: Tab; onChange: (tab: Tab) => void }
+export type WorkspaceMode = 'monitor' | 'operativa' | 'lab';
+interface Props { active: Tab; mode?: WorkspaceMode; onChange: (tab: Tab) => void }
 
-/** Navegación por intención; las vistas operacionales conservan sus identidades. */
-export function WorkspaceNav({ active, onChange }: Props) {
+export function WorkspaceNav({ active, mode = 'monitor', onChange }: Props) {
   const [collapsed, setCollapsed] = useState(false);
   const isAdmin = useCurrentUserStore(s => s.user?.isAdmin ?? false);
-  const selected = active === 'gex' ? 'gex' : active === 'shadow' ? 'lab' : active === 'rpf' ? 'estrategias' : active;
   const entry = (id: Tab, label: string, Icon: React.ComponentType<{ size?: number }>) => (
     <button key={id} className="workspace-nav-entry" title={label} aria-label={label}
-      aria-current={selected === id ? 'page' : undefined} onClick={() => onChange(id)}>
+      aria-current={active === id ? 'page' : undefined} onClick={() => onChange(id)}>
       <Icon size={19} /><span>{label}</span>
     </button>
   );
   return (
     <aside className={'workspace-navigation' + (collapsed ? ' collapsed' : '')}>
-      <button className="workspace-brand" onClick={() => onChange('inicio')} aria-label="GaleCore · Main" title="GaleCore · Main">
-        <span className="workspace-wordmark">GaleCore</span>
+      <button className="workspace-brand" onClick={() => onChange(mode === 'lab' ? 'lab' : mode === 'operativa' ? 'operativa' : 'inicio')} aria-label="Inicio de GaleCore">
+        <span className="workspace-wordmark">GaleCore<span className="workspace-brand-dot">.</span></span>
       </button>
-      <nav aria-label="Navegación principal">
-        <div className="workspace-nav-group"><span className="workspace-group-label">Gestión</span>
-          {entry('inicio', 'Main', LayoutDashboard)}
-          {entry('monitor', 'Cartera', Wallet)}
-        </div>
-        <div className="workspace-nav-group"><span className="workspace-group-label">Trabajo</span>
-          {entry('lab', 'Lab', FlaskConical)}
-          {entry('estrategias', 'Estrategias', Layers)}
-          {entry('agentes', 'Agentes', Bot)}
+      <nav aria-label="Navegación del espacio">
+        <div className="workspace-nav-group"><span className="workspace-group-label">{mode === 'monitor' ? 'Tu panorama' : mode === 'operativa' ? 'Tu operativa' : 'Tu espacio de trabajo'}</span>
+          {mode === 'monitor' && <>{entry('inicio', 'Resumen', LayoutDashboard)}{entry('monitor', 'Cartera', Wallet)}{entry('gex', 'Mercado', ChartNoAxesCombined)}</>}
+          {mode === 'operativa' && <>{entry('operativa', 'Mesa de operación', Activity)}{entry('monitor', 'Posiciones', Wallet)}{entry('estrategias', 'Estrategias', Layers)}{entry('rpf', 'Seguimiento RPF', ChartNoAxesCombined)}</>}
+          {mode === 'lab' && <>{entry('lab', 'Espacio de trabajo', MessageSquare)}{entry('estrategias', 'Proyectos de estrategia', Layers)}{entry('shadow', 'Seguimiento SHADOW', FlaskConical)}{entry('agentes', 'Agentes y tareas', Bot)}</>}
         </div>
         <div className="workspace-nav-group"><span className="workspace-group-label">Compartido</span>
-          {entry('gex', 'Mercado', ChartNoAxesCombined)}
           {entry('inteligencia', 'Biblioteca', BookOpen)}
+          {mode !== 'monitor' && entry('gex', 'Mercado', ChartNoAxesCombined)}
         </div>
       </nav>
       <div className="workspace-nav-bottom">

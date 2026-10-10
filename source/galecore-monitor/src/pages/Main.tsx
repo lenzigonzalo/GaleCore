@@ -12,7 +12,8 @@ export function Main({ onNavigate, onConnectBroker, demo = false, onDemoChange }
   if (demo) return <MainDemo onExit={() => onDemoChange?.(false)} />;
   const link = (tab: Tab, label: string) => <button className="main-link" onClick={() => onNavigate(tab)}>{label}<ArrowUpRight size={16} /></button>;
   return <div className="main-dashboard">
-    <div className="workspace-scope"><span>Gestión · cuenta real</span>{onDemoChange && <button className="main-link" onClick={() => onDemoChange(true)}>Ver Main completo · demo</button>}<button className="main-link" onClick={() => onNavigate('lab')}>Ir al Lab<ArrowUpRight size={16} /></button></div>
+    <div className="workspace-scope"><span>Monitor · cuenta real</span>{onDemoChange && <button className="main-link" onClick={() => onDemoChange(true)}>Ver ejemplo visual · demo</button>}<button className="main-link" onClick={() => onNavigate('lab')}>Abrir Lab<ArrowUpRight size={16} /></button></div>
+    <div className="space-intro"><div><span className="space-eyebrow">MONITOR</span><h2>Tu cartera, en perspectiva.</h2><p>Resultados, exposición y contexto para enfocar tu atención.</p></div></div>
     <div className="main-account-row main-account-only">
       <section className="main-account"><h2>Tu cuenta</h2>{brokerAccountIssue ? <div className="broker-connect-state">
         <h3>{brokerAccountIssue === 'not_linked' ? 'Conectá tu cuenta de Tastytrade' : 'Revisá la conexión de Tastytrade'}</h3>
@@ -33,6 +34,7 @@ export function Main({ onNavigate, onConnectBroker, demo = false, onDemoChange }
             <td><button className="main-link" aria-label={'Ver ' + p.symbol + ' en Cartera'} onClick={() => onNavigate('monitor')}>Ver<ArrowUpRight size={16} /></button></td>
           </tr>)}</tbody></table><p className="main-source">Instrumentos del bróker, sin estrategia vinculada.</p></div>}
     </section>}
+    <div className="monitor-planning-grid"><section className="space-panel"><h3>Exposición y concentración</h3><span className="space-status">Lectura agregada pendiente</span><p>Distribución por subyacente, estrategia y riesgo. La cuenta real todavía no tiene esta lectura integrada.</p></section><section className="space-panel"><h3>Agenda de tu cartera</h3><span className="space-status">Cruce con posiciones pendiente</span><p>Eventos y vencimientos relevantes para lo que tenés abierto.</p></section><section className="space-panel"><h3>Contexto de mercado</h3><span className="space-status">Resumen macro pendiente</span><p>Qué historia domina, qué cambió y qué podría afectar tu exposición.</p><button className="main-link" onClick={() => onNavigate('gex')}>Explorar mercado<ArrowUpRight size={16}/></button></section></div>
     <div className="main-context-grid">
       <section className="main-section" aria-labelledby="main-performance">
         <div className="main-section-heading"><h2 id="main-performance">Performance de tu cuenta</h2>{link('monitor', 'Ver cartera')}</div>
