@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { MainDemo } from './MainDemo';
 import { useAccountStore } from '../store/useAccountStore';
 import { useGexStore } from '../store/useGexStore';
@@ -18,7 +18,7 @@ test('mercado navega con contexto sin modificar datos o sesiones reales', () => 
   expect(useAccountStore.getState()).toBe(account);
   expect(useGexStore.getState()).toBe(gex);
   expect(useTerminalStore.getState()).toBe(terminal);
-  fireEvent.click(screen.getByRole('button', { name: 'Ver cuenta real' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Ver cuenta' }));
   expect(exit).toHaveBeenCalledTimes(1);
 });
 
@@ -50,7 +50,7 @@ test('hallazgo entra a conversación con evidencia, pérdidas y períodos conser
   fireEvent.click(screen.getByRole('button', { name: '1S' }));
   expect(screen.getByText('5 sesiones')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '1S' })).toHaveAttribute('aria-pressed', 'true');
-  fireEvent.click(screen.getByRole('button', { name: /SPY Income.*2 días al vencimiento/ }));
+  fireEvent.click(screen.getByRole('button', { name: /SPY Income.*2 DTE/ }));
   expect(screen.getByRole('button', { name: 'Conversación' })).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByText(/Hallazgo seleccionado/)).toBeInTheDocument();
   expect(screen.getByText(/SPY Income · v1 · SPY · 600/)).toBeInTheDocument();
@@ -65,4 +65,17 @@ test('Cartera muestra contratos y vuelve a su origen después de abrir un detall
   fireEvent.click(screen.getByRole('button',{name:'Volver a Cartera'}));
   expect(screen.getByRole('heading',{name:'Cartera'})).toBeInTheDocument();
   expect(screen.getByRole('heading',{name:'Posiciones abiertas'})).toBeInTheDocument();
+});
+
+test('Cartera separa acciones sin estrategia, costo y exposición; GEX se reserva a Mercado',()=>{
+  render(<MainDemo initialView="account" onExit={()=>{}} marketContent={<p>Panel Gamma real</p>}/>);
+  const row=screen.getByText('AAPL',{selector:'strong'}).closest('tr')!;
+  const cells=within(row).getAllByRole('cell');
+  expect(cells[1]).toHaveTextContent('ACC');
+  expect(cells[2]).toHaveTextContent('25');
+  expect(cells[3]).toBeEmptyDOMElement();
+  expect(cells[4]).toHaveTextContent('$214.62');
+  expect(cells[5]).toHaveTextContent('$214.62');
+  expect(screen.getByRole('heading',{name:'Distribución de cartera'})).toBeInTheDocument();
+  expect(screen.queryByText('Panel Gamma real')).not.toBeInTheDocument();
 });

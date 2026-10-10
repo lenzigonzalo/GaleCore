@@ -6,6 +6,7 @@ import { fetchMarketDataBatch } from '../../api/marketdata';
 
 interface Props {
   layout?: 'cards' | 'list';
+  sections?: {label:string; symbols:string[]}[];
   selectedSymbol: string | null;
   onSelect: (symbol: string | null) => void;
   /** Universo a mostrar. Lo pasa la estrategia dueña de la pantalla, desde su propio JSON de
@@ -32,7 +33,7 @@ function applyMarketData(d: { symbol: string; open: number; prevClose?: number; 
 
 export function TickerGrid({
   selectedSymbol, onSelect, symbols, loading, error,
-  trailing, removableSymbols, onRemoveSymbol, layout = 'cards',
+  trailing, removableSymbols, onRemoveSymbol, sections, layout = 'cards',
 }: Props) {
   // El estado de carga es el de quien pasa el universo — la grilla no lo deriva de ningún store.
   const rulesLoading = loading ?? false;
@@ -130,7 +131,7 @@ export function TickerGrid({
   }
 
   if (layout === 'list') return <>
-    <TickerWatchlist tickers={symbols.map(symbol => tickers[symbol] ?? {
+    <TickerWatchlist sections={sections} tickers={symbols.map(symbol => tickers[symbol] ?? {
       symbol, price: 0, open: 0, bid: 0, ask: 0, lastUpdate: null, isStreaming: false,
       loading: { price: true, ivRank: true, iv: true, gex: false }, error: {},
     })} selectedSymbol={selectedSymbol} onSelect={onSelect}

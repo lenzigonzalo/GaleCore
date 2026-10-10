@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowLeft, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
-import { demoAccount, demoPositions } from './MainDemo.fixture';
+import { demoAccount, demoPositions, demoHoldings } from './MainDemo.fixture';
 import { fmtPnl, fmtPrice } from '../utils/formatters';
 import './MainDemo.css';
 import { MonitorOverview } from './MonitorOverview';
@@ -8,7 +8,7 @@ import { MonitorOverview } from './MonitorOverview';
 type View = 'main' | 'strategies' | 'strategy' | 'market' | 'account';
 type Conversation = { draft: string; messages: string[] };
 const money = (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const Pnl = ({ value }: { value: number }) => <span className={value >= 0 ? 'demo-positive' : 'demo-negative'}>{fmtPnl(value)}</span>;
+const Pnl = ({ value }: { value: number }) => <span className={value === 0 ? 'demo-secondary' : value > 0 ? 'demo-positive' : 'demo-negative'}>{value === 0 ? money(0) : fmtPnl(value)}</span>;
 const objectives = ['Cobrar prima con riesgo definido sobre SPY.', 'Operar un rango con riesgo definido sobre QQQ.', 'Cobrar prima por encima del rango de IWM.'];
 /** TEMPORAL: recorrido aislado de diseño; retirar fixtures y navegación según GC-0011. */
 export function MainDemo({ onExit, initialView = 'main', marketContent, onMarketSelect }: { onExit: () => void; initialView?: View; marketContent?: React.ReactNode; onMarketSelect?: (symbol:string)=>void }) {
@@ -35,7 +35,7 @@ export function MainDemo({ onExit, initialView = 'main', marketContent, onMarket
     <div><span>P&L abierto</span><strong><Pnl value={position.pnl} /></strong></div>
   </div>;
   const strategyList = <section className="demo-strategies">
-    <header><button className="demo-heading-link" onClick={() => setView('strategies')}>Estrategias activas <span>3</span><ArrowUpRight size={16} /></button><span className="demo-secondary">3 posiciones abiertas</span></header>
+    <header><button className="demo-heading-link" onClick={() => setView('strategies')}>Estrategias activas <span>3</span><ArrowUpRight size={16} /></button></header>
     <div className="demo-table-wrap"><table><thead><tr><th><span className="sr-only">Desplegar</span></th><th>Estrategia / activo</th><th>Estado</th><th>Posiciones</th><th>Contratos</th><th>P&L abierto</th><th>Próximo venc.</th><th><span className="sr-only">Workspace</span></th></tr></thead><tbody>
       {demoPositions.map((position) => <React.Fragment key={position.strategy}>
         <tr><td><button className="demo-icon" aria-label={'Ver posiciones de ' + position.strategy} aria-expanded={expanded === position.strategy} onClick={() => setExpanded(expanded === position.strategy ? null : position.strategy)}>{expanded === position.strategy ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
@@ -45,12 +45,12 @@ export function MainDemo({ onExit, initialView = 'main', marketContent, onMarket
         {expanded === position.strategy && <tr className="demo-expanded"><td colSpan={8}>{positionDetail(position)}<button className="demo-text-action" onClick={() => openStrategy(position.strategy)}>Abrir workspace <ArrowUpRight size={14} /></button></td></tr>}
       </React.Fragment>)}
     </tbody></table></div>
-    <footer className="demo-table-footer"><span>3 estrategias · 5 contratos</span><span>Total abierto <strong><Pnl value={demoAccount.openPnl} /></strong></span></footer>
+    <footer className="demo-table-footer"><span>3 estrategias</span><span>Total abierto <strong><Pnl value={demoAccount.openPnl} /></strong></span></footer>
   </section>;
-  const holdingsList = <section className="demo-strategies"><header><h2>Posiciones abiertas</h2><span className="demo-secondary">3 posiciones · 5 contratos</span></header><div className="demo-table-wrap"><table><thead><tr><th>Activo / estructura</th><th>Contratos</th><th>Valor / spread</th><th>P&L abierto</th><th>Vencimiento</th><th><span className="sr-only">Detalle</span></th></tr></thead><tbody>{demoPositions.map(item => <tr key={item.strategy}><td style={{textAlign:"left"}}><button className="demo-strategy-name" onClick={() => openStrategy(item.strategy)}>{item.symbol} · {item.structure}</button><small>{item.legs}</small></td><td>{item.quantity}</td><td>{money(item.value)}</td><td><Pnl value={item.pnl}/></td><td className={item.dte <= 2 ? "demo-warning" : ""}>{item.dte} días</td><td><button className="demo-icon" aria-label={"Abrir posición de " + item.strategy} onClick={() => openStrategy(item.strategy)}><ArrowUpRight size={16}/></button></td></tr>)}</tbody></table></div><footer className="demo-table-footer"><span>Valuación de ejemplo · USD</span><span>Total abierto <strong><Pnl value={demoAccount.openPnl}/></strong></span></footer></section>;
+  const holdingsList = <section className="demo-strategies portfolio-positions"><header><h2>Posiciones abiertas</h2><span className="demo-secondary">USD</span></header><div className="demo-table-wrap"><table><thead><tr><th>Activo</th><th>Estructura</th><th>Cantidad</th><th>Estrategia</th><th>Valor actual</th><th>Costo / crédito</th><th>P&L abierto</th><th>Venc.</th><th/></tr></thead><tbody>{demoHoldings.map(item => <tr key={item.symbol}><td><strong>{item.symbol}</strong><small>{item.description}</small></td><td><span className="position-structure">{item.structure}</span></td><td title={item.unit}>{item.quantity}</td><td>{item.strategy && <button className="position-strategy" onClick={() => openStrategy(item.strategy!)}>{item.strategy}</button>}</td><td>{money(item.value)}</td><td title={item.costType}>{money(item.cost)}</td><td><Pnl value={item.pnl}/></td><td className={item.dte !== null && item.dte <= 2 ? "demo-warning" : ""}>{item.dte === null ? "" : item.dte + "d"}</td><td>{item.strategy && <button className="demo-icon" aria-label={"Abrir posición de " + item.strategy} onClick={() => openStrategy(item.strategy!)}><ArrowUpRight size={15}/></button>}</td></tr>)}</tbody></table></div></section>;
   return <div className={'main-demo' + (view === 'main' || view === 'account' ? ' is-overview' : '')}>
-    <div className="demo-location"><div>{view !== initialView && <button className="demo-back" aria-label={initialView === 'account' ? 'Volver a Cartera' : undefined} onClick={() => setView(initialView)}><ArrowLeft size={16} />{initialView === 'account' ? 'Cartera' : initialView === 'market' ? 'Mercado' : 'Resumen'}</button>}<h1>{view === 'main' ? 'Hoy' : view === 'strategy' ? strategy : view === 'strategies' ? 'Estrategias activas' : view === 'market' ? 'Mercado' : 'Cartera'}</h1>{view === 'main' && <span>Cuenta de ejemplo</span>}</div><div className="demo-mode"><span>Datos demo</span><button onClick={onExit}>Ver cuenta real <ArrowUpRight size={13} /></button></div></div>
-    {(view === 'main' || view === 'account') ? <MonitorOverview accountView={view === 'account'} analysis={marketContent} positions={view === 'account' ? holdingsList : strategyList} onStrategy={openStrategy} onMarket={name => { onMarketSelect?.(name); setView('market'); }} /> : <>
+    <div className="demo-location"><div>{view !== initialView && <button className="demo-back" aria-label={initialView === 'account' ? 'Volver a Cartera' : undefined} onClick={() => setView(initialView)}><ArrowLeft size={16} />{initialView === 'account' ? 'Cartera' : initialView === 'market' ? 'Mercado' : 'Resumen'}</button>}<h1>{view === 'main' ? 'Hoy' : view === 'strategy' ? strategy : view === 'strategies' ? 'Estrategias activas' : view === 'market' ? 'Mercado' : 'Cartera'}</h1></div><div className="demo-mode"><button onClick={onExit}>Ver cuenta <ArrowUpRight size={13} /></button></div></div>
+    {(view === 'main' || view === 'account') ? <MonitorOverview accountView={view === 'account'} positions={view === 'account' ? holdingsList : strategyList} onStrategy={openStrategy} onMarket={name => { onMarketSelect?.(name); setView('market'); }} /> : <>
     {view !== 'market' && <section className="demo-capital" aria-label="Resumen de cuenta">
       {[
         { label: 'Patrimonio', value: money(demoAccount.netLiq) },

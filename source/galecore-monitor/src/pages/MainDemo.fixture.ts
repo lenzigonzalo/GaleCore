@@ -18,3 +18,11 @@ export const demoAlerts = [
   { symbol: 'SPY', label: 'Evento de ejemplo', detail: 'Dato de inflación mañana, 08:30 ET.', time: '13:55 ET', tone: 'neutral' },
 ];
 export const demoEquity = [121200,121420,121080,121850,122180,122040,122610,122380,122900,123060,122640,122850,123520,123110,123760,123920,123420,124160,124440,124200,124860,124550,124880,125240,125050,125630,125310,125980,126110,125720,126300,126620,126050,126480,126930,126720,127110,126850,127300,127520,126940,127260,127810,127480,127060,127620,127890,127430,127710,127970,127540,127880,128160,127950,128340,128060,128470,128210,127608,128450.8];
+
+/** TEMPORAL GC-0011: posiciones de apoyo para revisar estructura de la tabla, sin atribución inferida. */
+export const demoHoldings = [
+  {symbol:'SPY',structure:'PCS',description:'600 / 595 PUT',quantity:2,unit:'spreads',strategy:'SPY Income',value:1.70,cost:3.40,costType:'Crédito por spread',pnl:340,dte:2},
+  {symbol:'QQQ',structure:'IC',description:'525 / 530 P · 570 / 575 C',quantity:1,unit:'spreads',strategy:'QQQ Neutral',value:5.80,cost:3.95,costType:'Crédito por spread',pnl:-185,dte:16},
+  {symbol:'IWM',structure:'CCS',description:'230 / 235 CALL',quantity:2,unit:'spreads',strategy:'IWM Range',value:0.65,cost:1.25,costType:'Crédito por spread',pnl:120,dte:23},
+  {symbol:'AAPL',structure:'ACC',description:'Acciones',quantity:25,unit:'acciones',strategy:null,value:214.62,cost:214.62,costType:'Costo por acción',pnl:0,dte:null},
+];

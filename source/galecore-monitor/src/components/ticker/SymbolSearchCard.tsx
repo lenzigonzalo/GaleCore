@@ -5,6 +5,7 @@ import { SymbolSearchResult } from '../../types/api';
 
 interface Props {
   compact?: boolean;
+  initialOpen?: boolean;
   /** El símbolo elegido. Quien la monta decide qué hacer con él (pinearlo, seleccionarlo). */
   onPick: (symbol: string) => void;
   /** Todo sale del JSON de la estrategia: la card no tiene política propia. */
@@ -23,8 +24,8 @@ const DEBOUNCE_MS = 300;
  *
  * No sabe nada de GEX: recibe sus parámetros y avisa qué eligieron.
  */
-export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, instrumentTypes, compact = false }: Props) {
-  const [open, setOpen] = useState(false);
+export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, instrumentTypes, compact = false, initialOpen = false }: Props) {
+  const [open, setOpen] = useState(initialOpen);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SymbolSearchResult[]>([]);
   const [loading, setLoading] = useState(false);

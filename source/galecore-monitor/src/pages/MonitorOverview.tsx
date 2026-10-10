@@ -4,10 +4,9 @@ import { demoAccount, demoEquity } from './MainDemo.fixture';
 import './MonitorOverview.css';
 
 const money = (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-/** TEMPORAL GC-0011: cuenta/estrategias de ejemplo; analysis aporta el componente GEX real. */
-export function MonitorOverview({ positions, onStrategy, onMarket, analysis, accountView = false }: {
+/** TEMPORAL GC-0011: cuenta/estrategias de ejemplo; GEX se muestra sólo en Mercado. */
+export function MonitorOverview({ positions, onStrategy, onMarket, accountView = false }: {
   positions: React.ReactNode;
-  analysis?: React.ReactNode;
   accountView?: boolean;
   onStrategy: (name: string, investigate?: boolean) => void;
   onMarket: (symbol: string) => void;
@@ -24,9 +23,9 @@ export function MonitorOverview({ positions, onStrategy, onMarket, analysis, acc
   const change = values[values.length - 1] - values[0];
   return <div className="mo-layout">
     <main className="mo-main">
-      <div className="mo-top">
+      {!accountView && <div className="mo-top">
         <section className="mo-panel mo-equity">
-          <header><span>{cursor === null ? 'Patrimonio total · USD' : 'Patrimonio en sesión ' + (selected + 1) + ' · USD'}</span><span className="mo-live">Cuenta de ejemplo</span></header>
+          <header><span>{cursor === null ? 'Patrimonio total · USD' : 'Patrimonio en sesión ' + (selected + 1) + ' · USD'}</span></header>
           <div className="mo-value">{money(values[selected])}</div>
           <div className="mo-return"><span className="demo-positive">+{money(change)} · +{(change / values[0] * 100).toFixed(2)}%</span><span>{period + ' sesiones'}</span></div>
           <div className="mo-chart">
@@ -48,27 +47,26 @@ export function MonitorOverview({ positions, onStrategy, onMarket, analysis, acc
         </section>
         <section className="mo-panel mo-account"><header><h2>Cuenta y distribución</h2><span>USD</span></header>
           <div className="mo-account-metrics">
-            <div><span>Patrimonio</span><strong>{money(demoAccount.netLiq)}</strong><small>Cuenta de ejemplo</small></div>
-            <div><span>P&L abierto</span><strong className="demo-positive">+{money(demoAccount.openPnl)}</strong><small>3 posiciones · 5 contratos</small></div>
+            <div><span>Patrimonio</span><strong>{money(demoAccount.netLiq)}</strong></div>
+            <div><span>P&L abierto</span><strong className="demo-positive">+{money(demoAccount.openPnl)}</strong></div>
             <div><span>Efectivo</span><strong>{money(demoAccount.cash)}</strong></div>
             <div><span>Poder de compra</span><strong>{money(demoAccount.buyingPower)}</strong></div>
           </div>
           <div className="mo-allocation"><h3>Capital asignado</h3><div className="mo-allocation-bar">{[44,31,25].map((n,i) => <i key={n} style={{width:n+'%',background:['var(--accent)','#8eaac6','#c6ae80'][i]}}/>)}</div>
             {['SPY Income','QQQ Neutral','IWM Range'].map((name,i) => <button key={name} onClick={() => onStrategy(name)}><span><i style={{background:['var(--accent)','#8eaac6','#c6ae80'][i]}}/>{name}</span><strong>{[44,31,25][i]}%</strong></button>)}
-            <small>Distribución de ejemplo sobre capital asignado.</small>
+
           </div>
         </section>
-      </div>
+      </div>}
       <div className="mo-panel mo-positions">{positions}</div>
-      {analysis && <section className="mo-real-analysis" aria-label="Gamma Exposure real">{analysis}</section>}
-      {accountView && <section className="mo-panel"><header><h2>Saldos de la cuenta</h2><span>USD · ejemplo</span></header><div className="mo-account-metrics"><div><span>Efectivo / patrimonio</span><strong>{(demoAccount.cash/demoAccount.netLiq*100).toFixed(1)}%</strong></div><div><span>Moneda base</span><strong>USD</strong></div></div></section>}
+      {accountView && <section className="mo-panel portfolio-exposure"><header><h2>Distribución de cartera</h2><span>Capital</span></header><div className="portfolio-exposure-grid"><div className="portfolio-donut-group"><div className="portfolio-donut" role="img" aria-label="Capital asignado por estrategia: SPY 44%, QQQ 31%, IWM 25%"><div><strong>3</strong><span>Estrategias</span></div></div><div className="portfolio-legend">{['SPY Income','QQQ Neutral','IWM Range'].map((name,i) => <button key={name} onClick={() => onStrategy(name)}><span><i style={{background:['var(--accent)','#8eaac6','#c6ae80'][i]}}/>{name}</span><strong>{[44,31,25][i]}%</strong></button>)}</div></div><div className="portfolio-liquidity"><h3>Liquidez</h3><strong>{(demoAccount.cash/demoAccount.netLiq*100).toFixed(1)}%<span> en efectivo</span></strong><div className="portfolio-liquidity-bar"><i style={{width:demoAccount.cash/demoAccount.netLiq*100+'%'}}/></div><dl><dt>Efectivo</dt><dd>{money(demoAccount.cash)}</dd><dt>Poder de compra</dt><dd>{money(demoAccount.buyingPower)}</dd><dt>Patrimonio</dt><dd>{money(demoAccount.netLiq)}</dd></dl></div></div></section>}
     </main>
     <aside className="mo-rail" aria-label="Seguimiento y agenda">
-      <section className="mo-panel mo-followup"><header><h2>Seguimiento</h2><span>2 posiciones · ejemplo</span></header>
-        <button className="mo-attention" onClick={() => onStrategy('SPY Income',true)}><div><strong>SPY Income</strong><span className="mo-alert-number demo-warning">2 días al vencimiento</span><p>PUT 600 / 595 · 2 contratos</p><dl><dt>P&L abierto</dt><dd className="demo-positive">+$340,00</dd></dl></div><ChevronRight size={18}/></button>
-        <button className="mo-attention" onClick={() => onStrategy('QQQ Neutral',true)}><div><strong>QQQ Neutral</strong><span className="mo-alert-number">31% del capital asignado</span><p>Iron condor · 1 contrato · 16 DTE</p><dl><dt>P&L abierto</dt><dd className="demo-negative">−$185,00</dd></dl></div><ChevronRight size={18}/></button>
+      <section className="mo-panel mo-followup"><header><h2>Alertas y seguimiento</h2><span>2</span></header>
+        <button className="mo-attention" onClick={() => onStrategy('SPY Income',true)}><div><div className="mo-alert-title"><strong>SPY Income</strong><span className="alert-badge demo-warning">2 DTE</span></div><div className="mo-alert-details"><span>PCS · 600 / 595 · ×2</span><strong className="demo-positive">+$340</strong></div><span className="mo-alert-note">Vencimiento cercano</span></div><ChevronRight size={18}/></button>
+        <button className="mo-attention" onClick={() => onStrategy('QQQ Neutral',true)}><div><div className="mo-alert-title"><strong>QQQ Neutral</strong><span className="alert-badge">31%</span></div><div className="mo-alert-details"><span>IC · 16 DTE · ×1</span><strong className="demo-negative">−$185</strong></div><span className="mo-alert-note">Capital asignado a QQQ</span></div><ChevronRight size={18}/></button>
       </section>
-      <section className="mo-panel mo-agenda"><header><h2>Agenda</h2><span>Ejemplo · ET</span></header>
+      <section className="mo-panel mo-agenda"><header><h2>Agenda</h2><span>ET</span></header>
         <button onClick={() => onMarket('SPY')}><span className="mo-agenda-time">Mañana<strong>08:30</strong></span><div><strong>Inflación de EE. UU.</strong><small>SPY · QQQ · IWM</small></div><ArrowUpRight size={16}/></button>
         <button onClick={() => onStrategy('SPY Income')}><span className="mo-agenda-time">En 2 días<strong>16:00</strong></span><div><strong>SPY Income</strong><small>Vencimiento · 2 contratos</small></div><ArrowUpRight size={16}/></button>
         <button onClick={() => onStrategy('QQQ Neutral')}><span className="mo-agenda-time">En 16 días<strong>16:00</strong></span><div><strong>QQQ Neutral</strong><small>Vencimiento · 1 contrato</small></div><ArrowUpRight size={16}/></button>

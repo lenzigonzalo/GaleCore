@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowUpRight, Check, ChevronRight, Pause, Play } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
 import type { WorkspaceMode } from '../components/layout/WorkspaceNav';
+import { MacroPreview } from './MacroPreview';
 import { MainDemo } from './MainDemo';
 import { SettingsDemo } from './SettingsDemo';
 import { demoAccount, demoPositions, demoEquity } from './MainDemo.fixture';
@@ -39,6 +40,8 @@ export function WorkspaceDemo({ active, mode, onNavigate, onExit, marketContent,
     <div hidden={!isMain}><MainDemo onExit={onExit} marketContent={isMain ? marketContent : undefined} onMarketSelect={onMarketSelect} initialView={active === 'monitor' ? 'account' : active === 'gex' ? 'market' : 'main'} />
 
     </div>
+
+    {active === 'macro' && <MacroPreview />}
 
     {(active === 'operativa' || active === 'rpf' || (active === 'estrategias' && mode !== 'lab')) && <div className="wd-content">
       <div className="wd-metrics"><div><span>Estrategias activas</span><strong>{3-paused.length}<small> / 3</small></strong></div><div><span>P&L abierto</span><strong>{pnl(demoAccount.openPnl)}</strong></div><div><span>Atención requerida</span><strong>2 <small>posiciones</small></strong></div><div><span>Próximo vencimiento</span><strong>2 <small>días · SPY</small></strong></div><div><span>Órdenes por revisar</span><strong>{orders.filter(o=>o.state==='Pendiente de revisión').length}</strong></div></div>

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { PanelRightOpen } from 'lucide-react';
 import { fmtTime, MARKET_TZ } from '../../utils/formatters';
 import { isAuthUnverified } from '../../utils/authState';
 import { ConnectionStatus } from '../../socket/useMarketSocket';
@@ -20,7 +19,7 @@ export function regularSessionLabel(now:Date, ticker:TickerState|undefined, conn
   if (!connected || !statusTime || !sourceTime || !Number.isFinite(sourceTime.getTime()) || sourceTime.getTime() > now.getTime() || now.getTime()-sourceTime.getTime() > 60000 || now.getTime()-statusTime.getTime() > 60000) return 'Apertura sin confirmar';
   return ticker?.extendedTradingHours === false ? 'Rueda regular abierta' : ticker?.extendedTradingHours === true ? 'Fuera de rueda regular' : 'Apertura sin confirmar';
 }
-export function StatusBar({ connectionStatus, lastUpdate, onWatchlist, watchlistOpen = false }: {
+export function StatusBar({ connectionStatus, lastUpdate }: {
   connectionStatus:ConnectionStatus; lastUpdate:Date|null; onWatchlist?:()=>void; watchlistOpen?:boolean;
 }) {
   const [now,setNow]=useState(new Date());
@@ -33,16 +32,9 @@ export function StatusBar({ connectionStatus, lastUpdate, onWatchlist, watchlist
   const available=!!ticker && ticker.price > 0 && !ticker.error.price && !!ticker.lastUpdate;
   const recent=available && now.getTime()-ticker!.lastUpdate!.getTime() <= 60000;
   const session=regularSessionLabel(now,ticker,connected);
-  return <header className="gc-status-bar">
-    <div className="gc-status-info">
-      {isAuthUnverified() && <span className="gc-status-warning">Clave sin validar</span>}
-      <span className={'gc-connection ' + (connected ? 'connected' : '')}><i/>{connected ? 'GaleCore conectado' : connectionStatus === 'connecting' ? 'Conectando…' : 'Sin conexión'}</span>
-      <span className="gc-market-session" title="Rueda regular de acciones de EE. UU. en ET. Dentro del horario, requiere señal reciente del proveedor; no se deducen feriados desde el reloj.">{session}</span>
-      <span className={available ? 'gc-price-status' : 'gc-status-warning'} title="Recepción en el monitor, no hora de origen ni garantía de tiempo real.">{symbol || 'Cotizaciones'} · {available ? (recent ? 'datos recibidos ' : 'última lectura ') + fmtTime(ticker!.lastUpdate!) : ticker?.error.price ? 'datos no disponibles' : 'sin cotización recibida'}</span>
-      {lastUpdate && <span className="gc-account-status">Cuenta {fmtTime(lastUpdate)}</span>}
-    </div>
-    <div className="gc-status-actions"><div className="gc-clock"><time dateTime={now.toISOString()}>{fmtTime(now)}</time><span>ET</span></div>
-      {onWatchlist && <button className="gc-watchlist-trigger" aria-expanded={watchlistOpen} aria-controls="lw-panel" onClick={onWatchlist}><PanelRightOpen size={19}/>Watchlist</button>}
-    </div>
-  </header>;
+  return <div className="gc-inline-status">
+    {isAuthUnverified() && <span className="gc-status-warning" title="La autenticación todavía no pudo validarse.">Sin validar</span>}
+    <span className={'gc-connection ' + (connected ? 'connected' : '')} title={session + ' · ' + (symbol || 'Cotizaciones') + ': ' + (available ? (recent ? 'datos recibidos ' : 'última lectura ') + fmtTime(ticker!.lastUpdate!) : 'sin datos disponibles') + (lastUpdate ? ' · Cuenta ' + fmtTime(lastUpdate) : '')}><i/>{connected ? 'Online' : connectionStatus === 'connecting' ? 'Conectando' : 'Offline'}</span>
+    <div className="gc-clock"><time dateTime={now.toISOString()}>{fmtTime(now)}</time><span>ET</span></div>
+  </div>;
 }

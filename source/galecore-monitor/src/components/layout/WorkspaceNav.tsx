@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, FlaskConical, ChartNoAxesCombined, Wallet, Layers, Bot, BookOpen, Settings, Shield, PanelLeftClose, PanelLeftOpen, Activity, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, FlaskConical, ChartNoAxesCombined, Wallet, Layers, Bot, BookOpen, Settings, Shield, PanelLeftClose, PanelLeftOpen, Activity, MessageSquare, Globe } from 'lucide-react';
 import type { Tab } from './TabNav';
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 
@@ -22,7 +22,7 @@ export function WorkspaceNav({ active, mode = 'monitor', onChange }: Props) {
       </button>
       <nav aria-label="Navegación del espacio">
         <div className="workspace-nav-group"><span className="workspace-group-label">{mode === 'monitor' ? 'Tu panorama' : mode === 'operativa' ? 'Tu operativa' : 'Tu espacio de trabajo'}</span>
-          {mode === 'monitor' && <>{entry('inicio', 'Resumen', LayoutDashboard)}{entry('monitor', 'Cartera', Wallet)}{entry('gex', 'Mercado', ChartNoAxesCombined)}</>}
+          {mode === 'monitor' && <>{entry('inicio', 'Resumen', LayoutDashboard)}{entry('monitor', 'Cartera', Wallet)}{entry('gex', 'Mercado', ChartNoAxesCombined)}{entry('macro', 'Macro', Globe)}</>}
           {mode === 'operativa' && <>{entry('operativa', 'Mesa de operación', Activity)}{entry('monitor', 'Posiciones', Wallet)}{entry('estrategias', 'Estrategias', Layers)}{entry('rpf', 'Seguimiento RPF', ChartNoAxesCombined)}</>}
           {mode === 'lab' && <>{entry('lab', 'Espacio de trabajo', MessageSquare)}{entry('estrategias', 'Proyectos de estrategia', Layers)}{entry('shadow', 'Seguimiento SHADOW', FlaskConical)}{entry('agentes', 'Agentes y tareas', Bot)}</>}
         </div>

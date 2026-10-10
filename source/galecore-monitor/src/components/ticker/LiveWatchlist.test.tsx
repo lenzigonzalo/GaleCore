@@ -41,7 +41,7 @@ test('el panel conserva la lista al cerrar, Escape cierra y errores de lectura n
   fireEvent.keyDown(document,{key:'Escape'});
   expect(props.onClose).toHaveBeenCalledTimes(1);
   rerender(<LiveWatchlist {...props} open={false}/>);
-  expect(screen.getByRole('dialog',{hidden:true})).not.toBeVisible();
+  expect(screen.getByRole('complementary',{hidden:true})).not.toBeVisible();
   expect(useGexStore.getState().tickers).toEqual(['SPY','AAPL']);
 });
 
@@ -77,4 +77,17 @@ test('una lectura posterior válida recupera el ticker tras un error REST',async
   act(() => { useMarketStore.getState().setError('SPY','price','Fallo temporal');
   useMarketStore.getState().updatePrice('SPY',{price:102,size:1,timestamp:new Date().toISOString()}); });
   expect(useMarketStore.getState().tickers.SPY.error.price).toBeUndefined();
+});
+
+test('los separadores se contraen sin sacar tickers del seguimiento',async()=>{
+  const toggle=jest.fn();
+  render(<LiveWatchlist {...props} onToggle={toggle}/>);
+  await waitFor(()=>expect(screen.getAllByText('101.00')).toHaveLength(2));
+  fireEvent.click(screen.getByRole('button',{name:'ETF'}));
+  expect(screen.queryByRole('button',{name:'SPY'})).not.toBeInTheDocument();
+  expect(useGexStore.getState().tickers).toEqual(['SPY','AAPL']);
+  fireEvent.click(screen.getByRole('button',{name:'ETF'}));
+  expect(screen.getByRole('button',{name:'SPY'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Abrir watchlist'}));
+  expect(toggle).toHaveBeenCalledTimes(1);
 });

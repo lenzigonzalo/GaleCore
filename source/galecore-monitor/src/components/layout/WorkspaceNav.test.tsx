@@ -30,3 +30,14 @@ test('contraer conserva destinos accesibles y sólo admin ve administración', (
   expect(screen.getByRole('button', { name: 'Expandir navegación' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Configuración' })).toHaveAttribute('aria-current', 'page');
 });
+
+test("Macro tiene un destino propio debajo de Mercado", () => {
+  const change = jest.fn();
+  render(<WorkspaceNav active="macro" onChange={change} />);
+  const macro = screen.getByRole("button", { name: "Macro" });
+  expect(macro).toHaveAttribute("aria-current", "page");
+  fireEvent.click(macro);
+  expect(change).toHaveBeenCalledWith("macro");
+  const buttons = screen.getAllByRole("button");
+  expect(buttons.indexOf(macro)).toBe(buttons.indexOf(screen.getByRole("button", { name: "Mercado" })) + 1);
+});
