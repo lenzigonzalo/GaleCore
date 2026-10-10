@@ -93,6 +93,7 @@ Main: cuenta real en franja financiera, posiciones y faltantes explícitos de hi
 Lab: resumen SHADOW por versión, versiones cargadas y actividad; subtabs Resumen/Estrategias/Ejecuciones SHADOW.
 Sidebar Gestión/Trabajo/Compartido; Mercado/Biblioteca compartidos. Asistente persiste al navegar.
 Supervisor emergente SHADOW sólo en Trabajo; no se habilitaron órdenes, LIVE ni nuevos cálculos.
+Iteración actual: Main centrado en Estrategias activas; expandir posiciones, abrir workspace contextual, conservar borrador/consultas por estrategia mientras la demo sigue montada. Hallazgos y agenda separados; watchlist abre vista Mercado del símbolo. Harness aún sin integrar; no respuestas simuladas.
 Preview localhost:3039 usa CRA con recarga automática (launcher local start-visual-preview.ps1, PID 13484); ?main=demo abre mocks, URL sin query cuenta real Dev.
 ACTIVE_WORK_ITEM sigue WS-0021. GC-0011 sigue exploración CHANGES_REQUESTED por revisión integral anterior.
 Pendientes: vincular cuenta en formulario existente, historia/performance/avisos reales, logo final y QA visual.
@@ -209,3 +210,15 @@ Owner pide una sola marca demo discreta, sin microtextos/encabezados redundantes
 
 - Preview CRA loopback: Compiled successfully, webpack compiled successfully, No issues found. Bundle HTTP 200, contiene P&L hoy y SPY Income. Primera petición index durante compilación expiró; repetición tras compilar HTTP 200. Tests ajustados a rótulos nuevos sin ejecutarlos, sin review por esta iteración visual (excepción owner ENGINEERING §12).
 - Cabecera de demo retirada; única marca Datos demo compacta. Sin alturas fijas ni overflow vertical interno. A anchos pequeños se apila y permite scroll de página para no ocultar contenido; tablas admiten desplazamiento horizontal sólo si no caben. No se afirma QA visual automatizada por navegador no conectado.
+
+
+## Recorrido por estrategia — 09/10/2026
+
+Owner confirma recuperar FRONT-GALECORE-INTEGRAL §§2, 7 y 14: Main → estrategia activa → posiciones → conversación contextual. Se modifica sólo el prototipo MainDemo, conservando separación real/Main y trabajo/Lab. Aceptación local: lista compacta con estado, resultado diario/abierto, posición y vencimiento; expandir posiciones; título abre listado, nombre abre workspace con Posiciones/Conversación/Actividad; borradores y consultas independientes por proyecto al volver a Main. Watchlist navega al contexto Mercado con estrategias vinculadas. Cuenta abre detalle demo. Agenda contiene eventos fechados; hallazgos muestran objeto afectado, evidencia y revisión.
+
+Fuera de alcance: sesión persistente del harness, respuesta AI, datos reales/atribución real, ejecución, órdenes, contratos API. Conversación guarda consultas en estado local y declara integración pendiente después de guardar; no fabrica respuestas del harness. Retirada obligatoria de mocks vigente.
+
+- Verificación proporcional: CI=true npm test -- --watchAll=false --runInBand --testMatch **/MainDemo.test.tsx: 3 passed, 1 suite, exit 0. Casos: aislamiento Account/GEX/Terminal, contexto de Mercado; expansión y preservación/separación de borradores entre estrategias; guardar consulta sin respuesta ficticia; hallazgo abre evidencia/conversación y conserva pérdidas/períodos.
+- Preview CRA: Compiled successfully / No issues found. HTTP localhost:3039/?main=demo: 200. Sin build de producción por excepción visual ENGINEERING §12. CUA apps/browsers vacíos: QA visual pendiente.
+
+- Review independiente acotado: 2 P2/1 P3, corregidos por implementer sin recheck: ../reviews/GC-0011-strategy-workspace-20261009-codex.md. Se quita etiqueta cuenta real en mocks, se conserva timestamp de cada hallazgo y CTA se llama Abrir workspace. Sin APPROVE inferido ni cierre.

@@ -1,48 +1,108 @@
 import React, { useState } from 'react';
-import { ArrowUpRight, ChevronRight, X } from 'lucide-react';
-import { demoAccount, demoWatchlist, demoPositions, demoAlerts, demoEquity } from './MainDemo.fixture';
+import { ArrowUpRight, ArrowLeft, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
+import { demoAccount, demoWatchlist, demoPositions, demoEquity } from './MainDemo.fixture';
 import { fmtPnl, fmtPrice } from '../utils/formatters';
 import './MainDemo.css';
 
-/** TEMPORAL: fixtures aisladas para revisar UX; retirar según GC-0011. */
+type View = 'main' | 'strategies' | 'strategy' | 'market' | 'account';
+type Conversation = { draft: string; messages: string[] };
+const money = (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const Pnl = ({ value }: { value: number }) => <span className={value >= 0 ? 'demo-positive' : 'demo-negative'}>{fmtPnl(value)}</span>;
+const daily = [430, -92, 504.8];
+const objectives = ['Cobrar prima con riesgo definido sobre SPY.', 'Operar un rango con riesgo definido sobre QQQ.', 'Cobrar prima por encima del rango de IWM.'];
+/** TEMPORAL: recorrido aislado de diseño; retirar fixtures y navegación según GC-0011. */
 export function MainDemo({ onExit }: { onExit: () => void }) {
+  const [view, setView] = useState<View>('main');
   const [symbol, setSymbol] = useState('SPY');
+  const [strategy, setStrategy] = useState('SPY Income');
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [tab, setTab] = useState<'positions' | 'conversation' | 'activity'>('positions');
+  const [conversations, setConversations] = useState<Record<string, Conversation>>({});
   const [period, setPeriod] = useState<5 | 20 | 60>(20);
-  const [detail, setDetail] = useState<{ title: string; text: string } | null>(null);
+  const [finding, setFinding] = useState(false);
+  const p = demoPositions.find(item => item.strategy === strategy)!;
+  const index = demoPositions.indexOf(p);
+  const active = demoWatchlist.find(item => item.symbol === symbol)!;
+  const session = conversations[strategy] || { draft: '', messages: [] };
+  const openStrategy = (name: string, investigate = false) => {
+    const position = demoPositions.find(item => item.strategy === name)!;
+    setStrategy(name); setSymbol(position.symbol); setView('strategy');
+    setFinding(investigate); setTab(investigate ? 'conversation' : 'positions');
+  };
+  const patchSession = (next: Conversation) => setConversations(previous => ({ ...previous, [strategy]: next }));
   const values = demoEquity.slice(-period);
   const low = Math.min(...values) - 250, high = Math.max(...values) + 250;
-  const line = values.map((v, i) => (8 + i * 724 / (values.length - 1)) + ',' + (100 - (v - low) * 90 / (high - low))).join(' ');
-  const money = (v: number) => '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const pnl = (v: number) => <span className={v >= 0 ? 'demo-positive' : 'demo-negative'}>{fmtPnl(v)}</span>;
-  const inspect = (title: string, text: string) => setDetail({ title, text });
-  const active = demoWatchlist.find(t => t.symbol === symbol)!;
-  const jump = (label: string, text: string) => <button className="demo-jump" aria-label={'Ver detalle demo de ' + label} onClick={() => inspect(label, text)}><ArrowUpRight size={16} /></button>;
+  const line = values.map((v, i) => (8 + i * 724 / (values.length - 1)) + ',' + (90 - (v - low) * 72 / (high - low))).join(' ');
+  const positionDetail = (position: typeof p) => <div className="demo-position-detail">
+    <div><strong>{position.symbol} · {position.structure}</strong><span>{position.legs}</span></div>
+    <div><span>Contratos</span><strong>{position.quantity}</strong></div>
+    <div><span>Vencimiento</span><strong className={position.dte <= 2 ? 'demo-warning' : ''}>{position.dte} días</strong></div>
+    <div><span>Valor / spread</span><strong>{fmtPrice(position.value)} USD</strong></div>
+    <div><span>P&L abierto</span><strong><Pnl value={position.pnl} /></strong></div>
+  </div>;
+  const strategyList = <section className="demo-strategies">
+    <header><button className="demo-heading-link" onClick={() => setView('strategies')}>Estrategias activas <span>3</span><ArrowUpRight size={16} /></button><span className="demo-secondary">3 posiciones abiertas</span></header>
+    <div className="demo-table-wrap"><table><thead><tr><th><span className="sr-only">Desplegar</span></th><th>Estrategia / activo</th><th>Estado</th><th>Posiciones</th><th>P&L hoy</th><th>P&L abierto</th><th>Próximo venc.</th><th><span className="sr-only">Workspace</span></th></tr></thead><tbody>
+      {demoPositions.map((position, i) => <React.Fragment key={position.strategy}>
+        <tr><td><button className="demo-icon" aria-label={'Ver posiciones de ' + position.strategy} aria-expanded={expanded === position.strategy} onClick={() => setExpanded(expanded === position.strategy ? null : position.strategy)}>{expanded === position.strategy ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></td>
+          <td><button className="demo-strategy-name" onClick={() => openStrategy(position.strategy)}>{position.strategy}</button><small>{position.symbol} · {position.structure}</small></td>
+          <td><span className="demo-status">Activa</span></td><td>1</td><td><Pnl value={daily[i]} /></td><td><Pnl value={position.pnl} /></td><td className={position.dte <= 2 ? 'demo-warning' : ''}>{position.dte} días</td>
+          <td><button className="demo-icon" aria-label={'Abrir workspace de ' + position.strategy} onClick={() => openStrategy(position.strategy)}><ArrowUpRight size={16} /></button></td></tr>
+        {expanded === position.strategy && <tr className="demo-expanded"><td colSpan={8}>{positionDetail(position)}<button className="demo-text-action" onClick={() => openStrategy(position.strategy)}>Abrir workspace <ArrowUpRight size={14} /></button></td></tr>}
+      </React.Fragment>)}
+    </tbody></table></div>
+    <footer className="demo-table-footer"><span>3 estrategias · 5 contratos</span><span>Total abierto <strong><Pnl value={demoAccount.openPnl} /></strong></span></footer>
+  </section>;
   return <div className="main-demo">
+    <div className="demo-location"><div>{view !== 'main' && <button className="demo-back" onClick={() => setView('main')}><ArrowLeft size={16} />Main</button>}<h1>{view === 'main' ? 'Hoy' : view === 'strategy' ? strategy : view === 'strategies' ? 'Estrategias activas' : view === 'market' ? symbol + ' · Mercado' : 'Cartera'}</h1>{view === 'main' && <span>Cuenta · 14:35 ET</span>}</div><div className="demo-mode"><span>Datos demo</span><button onClick={onExit}>Ver cuenta real <ArrowUpRight size={13} /></button></div></div>
     <section className="demo-capital" aria-label="Resumen de cuenta">
-      <button onClick={() => inspect('Cuenta', 'Resumen de capital, efectivo y poder de compra.')}><span>Valor de la cuenta</span><strong>{money(demoAccount.netLiq)}</strong></button>
-      <button onClick={() => inspect('P&L del día', 'Realizado: ' + money(demoAccount.realizedToday) + '. Resultado abierto: ' + money(demoAccount.openPnl) + '.')}><span>P&amp;L hoy</span><strong>{pnl(demoAccount.dailyPnl)}</strong><small className="demo-positive">+0.66%</small></button>
-      <button onClick={() => inspect('Efectivo', 'Saldo de efectivo disponible.')}><span>Efectivo</span><strong>{money(demoAccount.cash)}</strong></button>
-      <button onClick={() => inspect('Poder de compra', 'Capacidad de compra informada por la cuenta.')}><span>Poder de compra</span><strong>{money(demoAccount.buyingPower)}</strong></button>
-      <button onClick={() => inspect('P&L abierto', 'Resultado de las tres posiciones abiertas.')}><span>P&amp;L abierto</span><strong>{pnl(demoAccount.openPnl)}</strong></button>
-      <div className="demo-mode"><span>Datos demo</span><button onClick={onExit}>Ver cuenta real<ArrowUpRight size={13} /></button></div>
+      {[
+        { label: 'Patrimonio', value: money(demoAccount.netLiq) },
+        { label: 'P&L hoy', value: <Pnl value={demoAccount.dailyPnl} />, extra: '+0.66%' },
+        { label: 'P&L abierto', value: <Pnl value={demoAccount.openPnl} /> },
+        { label: 'Poder de compra', value: money(demoAccount.buyingPower) },
+      ].map(metric => <button key={metric.label} onClick={() => setView('account')}><span>{metric.label}</span><strong>{metric.value}</strong>{metric.extra && <small className="demo-positive">{metric.extra}</small>}</button>)}
+      <button className="demo-account-link" onClick={() => setView('account')}>Cartera <ArrowUpRight size={16} /></button>
     </section>
-    <div className="demo-grid">
-      <div className="demo-center">
-        <section className="demo-attention"><header><h2>Para revisar <span>3</span></h2>{jump('Avisos', 'Vencimientos, concentración y próximos eventos.')}</header>
-          <div className="demo-alerts">{demoAlerts.map((a, i) => <button key={a.label} className={'demo-alert ' + a.tone} onClick={() => { setSymbol(a.symbol); inspect(a.symbol + ' · ' + a.label, a.detail); }}><span className="demo-alert-marker">{i === 0 ? '2d' : i === 1 ? '31%' : '08:30'}</span><div><strong>{i === 0 ? 'SPY vence en 2 días' : i === 1 ? 'Concentración en QQQ' : 'Inflación mañana'}</strong><p>{a.detail}</p><small>{i === 0 ? 'SPY Income' : i === 1 ? 'QQQ Neutral' : 'Agenda de mercado'} · {a.time}</small></div><ChevronRight size={14} /></button>)}</div>
+    <div className="demo-grid"><main className="demo-center">
+      {(view === 'main' || view === 'strategies') && strategyList}
+      {view === 'main' && <>
+        <div className="demo-context-grid">
+          <section className="demo-findings"><header><h2>Hallazgos del agente</h2><span className="demo-secondary">Revisión 14:32 ET</span></header>
+            <button className="demo-finding" onClick={() => openStrategy('SPY Income', true)}><span className="demo-event-mark demo-warning">2d</span><div><strong>SPY Income · revisar salida</strong><p>Spread 600 / 595 vence en 2 días. Ganancia abierta de $340.</p><span>Supervisor de cartera · evidencia y plan</span></div><ChevronRight size={16} /></button>
+            <button className="demo-finding" onClick={() => openStrategy('QQQ Neutral', true)}><span className="demo-event-mark">31%</span><div><strong>QQQ Neutral · exposición concentrada</strong><p>QQQ reúne el 31% de la exposición. P&L abierto −$185.</p><span>Supervisor de riesgo · revisar distribución</span></div><ChevronRight size={16} /></button>
+          </section>
+          <section className="demo-agenda"><header><h2>Agenda</h2><span className="demo-secondary">ET</span></header>
+            <button className="demo-finding" onClick={() => { setSymbol('SPY'); setView('market'); }}><span className="demo-event-mark">Mañana<br />08:30</span><div><strong>Inflación · Estados Unidos</strong><p>En seguimiento: SPY, QQQ, IWM</p><span>Calendario económico</span></div><ArrowUpRight size={16} /></button>
+            <button className="demo-finding" onClick={() => openStrategy('SPY Income')}><span className="demo-event-mark">En 2d<br />16:00</span><div><strong>Vencimiento de SPY Income</strong><p>2 contratos · put spread 600 / 595</p><span>Calendario de posiciones</span></div><ArrowUpRight size={16} /></button>
+          </section>
+        </div>
+        <section className="demo-performance"><header><div className="demo-evolution-heading"><button className="demo-heading-link" onClick={() => setView('account')}>Evolución <ArrowUpRight size={14} /></button><strong><Pnl value={values[values.length - 1] - values[0]} /></strong><span>{period} sesiones</span></div><div className="demo-periods">{([5,20,60] as const).map(n => <button key={n} aria-pressed={period === n} onClick={() => setPeriod(n)}>{n === 5 ? '1S' : n === 20 ? '1M' : '3M'}</button>)}</div></header>
+          <svg className="demo-equity" viewBox="0 0 740 100" preserveAspectRatio="none" role="img" aria-label="Curva de equity ficticia, no representa resultados reales">{[20,55,90].map(y => <line key={y} x1="8" x2="732" y1={y} y2={y} stroke="var(--border-dark)" />)}<polyline points={line} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>
+          <footer className="demo-table-footer"><span>{money(values[0])} → {money(values[values.length - 1])}</span><span>Acierto 64% · 16 / 25 cierres en el último mes</span></footer>
         </section>
-        <section className="demo-positions"><header><h2>Posiciones abiertas <span>3</span></h2>{jump('Posiciones', 'Detalle de posiciones y estrategia vinculada.')}</header>
-          <div className="demo-table-wrap"><table><thead><tr><th>Activo / patas</th><th>Estrategia</th><th>Contratos</th><th>Vence en</th><th>Valor spread</th><th>P&amp;L abierto</th><th><span className="sr-only">Detalle</span></th></tr></thead><tbody>{demoPositions.map(p => <tr key={p.symbol}><td><button className="demo-position-symbol" onClick={() => { setSymbol(p.symbol); inspect(p.symbol, p.structure + ' · ' + p.legs); }}>{p.symbol}</button><small>{p.legs}</small></td><td><button className="demo-strategy" onClick={() => inspect(p.strategy, p.structure + '. ' + p.note)}>{p.strategy}<ArrowUpRight size={12} /></button><small>{p.structure}</small></td><td>{p.quantity}</td><td className={p.dte <= 2 ? 'demo-warning' : ''}>{p.dte} días</td><td>{fmtPrice(p.value)}</td><td>{pnl(p.pnl)}</td><td><button className="demo-jump" aria-label={'Investigar posición demo ' + p.symbol} onClick={() => { setSymbol(p.symbol); inspect(p.strategy + ' · ' + p.symbol, p.note); }}><ArrowUpRight size={16} /></button></td></tr>)}</tbody></table></div>
-        </section>
-        <section className="demo-performance"><header><div className="demo-evolution-heading"><h2>Evolución de la cuenta</h2><strong>{pnl(values[values.length - 1] - values[0])}</strong><span>{period} sesiones</span></div><div className="demo-periods">{([5,20,60] as const).map(p => <button key={p} aria-pressed={period === p} onClick={() => setPeriod(p)}>{p === 5 ? '1S' : p === 20 ? '1M' : '3M'}</button>)}{jump('Performance', 'Evolución de patrimonio y resultados del período seleccionado.')}</div></header>
-          <svg className="demo-equity" viewBox="0 0 740 116" preserveAspectRatio="none" role="img" aria-label="Curva de equity ficticia, no representa resultados reales"><defs><linearGradient id="demo-equity-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--accent)" stopOpacity=".16" /><stop offset="100%" stopColor="var(--accent)" stopOpacity="0" /></linearGradient></defs>{[30,65,100].map(y => <line key={y} x1="8" x2="732" y1={y} y2={y} stroke="var(--border-dark)" />)}<polygon points={'8,112 ' + line + ' 732,112'} fill="url(#demo-equity-fill)" /><polyline points={line} fill="none" stroke="var(--accent)" strokeWidth="2" vectorEffect="non-scaling-stroke" /></svg>
-          <div className="demo-performance-footer"><span>Realizado hoy <strong>{pnl(demoAccount.realizedToday)}</strong></span><span>Acierto <strong>64%</strong> · 16 de 25 operaciones cerradas</span><span>USD</span></div>
-        </section>
-      </div>
-      <aside className="demo-watchlist" aria-label="Watchlist"><header><h2>Watchlist</h2>{jump('Mercado', 'Precios y contexto del activo seleccionado.')}</header><table><thead><tr><th>Activo</th><th>Último</th><th>Cambio</th></tr></thead><tbody>{demoWatchlist.map(t => <tr key={t.symbol} className={symbol === t.symbol ? 'selected' : ''}><td><button onClick={() => { setSymbol(t.symbol); setDetail(null); }}>{t.symbol}</button></td><td>{fmtPrice(t.price)}</td><td className={t.change >= 0 ? 'demo-positive' : 'demo-negative'}>{t.change > 0 ? '+' : ''}{t.change.toFixed(2)}%</td></tr>)}</tbody></table>
-        <section className="demo-symbol"><span>Activo seleccionado</span><div><strong>{active.symbol}</strong><span>{active.context}</span></div><p>{fmtPrice(active.price)} <span className={active.change >= 0 ? 'demo-positive' : 'demo-negative'}>{active.change > 0 ? '+' : ''}{active.change.toFixed(2)}%</span></p><button onClick={() => inspect(symbol + ' · Mercado', 'Precio, volatilidad y exposición GEX de ' + symbol + '.')} >Analizar {symbol}<ArrowUpRight size={14} /></button></section>
-        {detail && <section className="demo-detail" aria-label="Detalle de demostración"><header><h3>{detail.title}</h3><button aria-label="Cerrar detalle demo" onClick={() => setDetail(null)}><X size={16} /></button></header><p>{detail.text}</p></section>}
-      </aside>
+      </>}
+      {view === 'strategy' && <section className="demo-workspace">
+        <div className="demo-workspace-summary"><span className="demo-status">Activa</span><span>{p.symbol} · v1</span><span>P&L hoy <Pnl value={daily[index]} /></span><span>Abierto <Pnl value={p.pnl} /></span></div>
+        <p className="demo-objective">{objectives[index]}</p>
+        <nav className="demo-tabs" aria-label="Workspace de estrategia">{(['positions', 'conversation', 'activity'] as const).map(t => <button key={t} aria-pressed={tab === t} onClick={() => setTab(t)}>{t === 'positions' ? 'Posiciones · 1' : t === 'conversation' ? 'Conversación' : 'Actividad'}</button>)}</nav>
+        {tab === 'positions' && <><h2>Posición abierta</h2>{positionDetail(p)}<div className="demo-position-plan"><h3>Plan de seguimiento</h3><p>{p.note}</p><button className="demo-text-action" onClick={() => setTab('conversation')}><MessageSquare size={16} />Investigar con contexto</button></div></>}
+        {tab === 'activity' && <div className="demo-activity"><p><strong>14:32 ET · Revisión del supervisor</strong><span>{p.note}</span></p><p><strong>14:35 ET · Lectura de cartera</strong><span>{p.quantity} contratos · valor {fmtPrice(p.value)} USD / spread · P&L {fmtPnl(p.pnl)}</span></p></div>}
+        {tab === 'conversation' && <div className="demo-conversation"><div className="demo-chat-context"><strong>Contexto de la sesión</strong><span>{strategy} · v1 · {p.symbol} · {p.legs} · {p.quantity} contratos · vence en {p.dte} días</span></div>
+          {finding && <div className="demo-evidence"><strong>Hallazgo seleccionado · supervisor, {p.symbol === 'QQQ' ? '14:20 ET' : '14:32 ET'}</strong><p>{p.symbol === 'QQQ' ? 'QQQ concentra el 31% de la exposición. Revisar la distribución antes de aumentar esta estrategia.' : 'El spread 600 / 595 vence en 2 días y tiene una ganancia abierta de $340. Revisar el plan de salida.'}</p><span>{p.symbol === 'QQQ' ? 'Evidencia: distribución de exposición de cartera, lectura 14:20 ET.' : 'Evidencia: posición abierta, vencimiento y valuación, lectura 14:32 ET.'}</span></div>}
+          <h2>Investigar {strategy}</h2><p className="demo-secondary">La sesión conserva el contexto de esta estrategia y tu borrador al volver a Main.</p>
+          <div className="demo-suggestions">{['¿Cómo viene la estrategia?', '¿Qué puede afectar esta posición?', 'Revisar el plan de salida'].map(prompt => <button key={prompt} onClick={() => patchSession({ ...session, draft: prompt })}>{prompt}</button>)}</div>
+          <div className="demo-messages" aria-live="polite">{session.messages.map((message, i) => <div key={i}><strong>Vos</strong><p>{message}</p><span className="demo-secondary">Consulta guardada en esta sesión. Respuesta del harness pendiente de integración.</span></div>)}</div>
+          <form onSubmit={event => { event.preventDefault(); if (session.draft.trim()) patchSession({ draft: '', messages: [...session.messages, session.draft.trim()] }); }}><label htmlFor="strategy-question">Consulta sobre {strategy}</label><textarea id="strategy-question" placeholder="Preguntá sobre resultados, riesgo o el plan…" value={session.draft} onChange={event => patchSession({ ...session, draft: event.target.value })} /><div><span className="demo-secondary">Sesión de trabajo · {strategy}</span><button type="submit" disabled={!session.draft.trim()}>Guardar consulta</button></div></form>
+        </div>}
+      </section>}
+      {view === 'market' && <section className="demo-market-view"><header><h2>{symbol} · contexto de mercado</h2><span className="demo-secondary">14:35 ET</span></header><div className="demo-market-price"><strong>{fmtPrice(active.price)}</strong><span className={active.change >= 0 ? 'demo-positive' : 'demo-negative'}>{active.change > 0 ? '+' : ''}{active.change.toFixed(2)}%</span></div><div className="demo-market-facts"><div><span>Régimen</span><strong>{active.context}</strong></div><div><span>En cartera</span><strong>{demoPositions.some(item => item.symbol === symbol) ? '1 posición abierta' : 'Sin posiciones'}</strong></div></div>
+        <h2>Estrategias vinculadas</h2>{demoPositions.filter(item => item.symbol === symbol).map(item => <button className="demo-finding" key={item.strategy} onClick={() => openStrategy(item.strategy)}><div><strong>{item.strategy}</strong><p>{item.legs} · vence en {item.dte} días</p></div><Pnl value={item.pnl} /><ArrowUpRight size={16} /></button>)}{!demoPositions.some(item => item.symbol === symbol) && <p className="demo-secondary">Este activo está en seguimiento y no tiene estrategias activas.</p>}
+        <div className="demo-position-plan"><h3>Próximo evento</h3><p>{['SPY', 'QQQ', 'IWM', 'TLT'].includes(symbol) ? 'Inflación · mañana 08:30 ET. Fuente: calendario económico.' : 'Resultados próximos. Fecha por confirmar.'}</p></div>
+      </section>}
+      {view === 'account' && <section className="demo-account-view"><header><h2>Resumen y riesgo</h2><span className="demo-secondary">USD · lectura 14:35 ET</span></header><div className="demo-market-facts"><div><span>Efectivo</span><strong>{money(demoAccount.cash)}</strong></div><div><span>Realizado hoy</span><strong><Pnl value={demoAccount.realizedToday} /></strong></div><div><span>P&L abierto</span><strong><Pnl value={demoAccount.openPnl} /></strong></div></div><h2>Posiciones por estrategia</h2>{demoPositions.map(item => <button className="demo-finding" key={item.strategy} onClick={() => openStrategy(item.strategy)}><div><strong>{item.strategy}</strong><p>{item.symbol} · {item.legs} · {item.quantity} contratos</p></div><Pnl value={item.pnl} /><ArrowUpRight size={16} /></button>)}</section>}
+    </main>
+    <aside className="demo-watchlist" aria-label="Watchlist"><header><h2>Watchlist</h2><button className="demo-icon" aria-label={'Abrir Mercado de ' + symbol} onClick={() => setView('market')}><ArrowUpRight size={16} /></button></header><table><thead><tr><th>Activo</th><th>Último</th><th>Cambio</th></tr></thead><tbody>{demoWatchlist.map(t => <tr key={t.symbol} className={symbol === t.symbol ? 'selected' : ''}><td><button aria-label={'Analizar ' + t.symbol} onClick={() => { setSymbol(t.symbol); setView('market'); }}>{t.symbol}</button></td><td>{fmtPrice(t.price)}</td><td className={t.change >= 0 ? 'demo-positive' : 'demo-negative'}>{t.change > 0 ? '+' : ''}{t.change.toFixed(2)}%</td></tr>)}</tbody></table><div className="demo-watchlist-note"><span>Contexto activo</span><strong>{symbol}</strong><p>{active.context}</p></div></aside>
     </div>
   </div>;
 }
