@@ -20,14 +20,14 @@ const PAGES: Record<Tab, string> = {
 };
 export function WorkspaceHeader({ mainDemo = false, mode = 'monitor', onModeChange, active, onChange, onLogout, conversationOpen, onConversation, onSymbol }: Props) {
   return <>
-    <div className="workspace-mode-bar">
+    <div className={'workspace-mode-bar' + (mainDemo ? ' workspace-mode-bar-compact' : '')}>
       <span className="workspace-mode-caption">{mode === 'monitor' ? 'Comprender' : mode === 'operativa' ? 'Gestionar' : 'Investigar y crear'}</span>
       <nav className="workspace-mode-switch" aria-label="Espacios de GaleCore">
         {(['monitor', 'operativa', 'lab'] as const).map(id => <button key={id} aria-pressed={mode === id} onClick={() => onModeChange ? onModeChange(id) : onChange(id === 'monitor' ? 'inicio' : id)}>{id === 'monitor' ? 'Monitor' : id === 'operativa' ? 'Operativa' : 'Lab'}</button>)}
       </nav>
       {mainDemo ? <button className="wd-demo-user" onClick={() => onChange('config')}><span>GC</span>Trader demo</button> : <AccountMenu onOpenSettings={() => onChange('config')} onLogout={onLogout} active={active === 'config'} />}
     </div>
-    {!(mode === 'lab' && ['lab', 'estrategias'].includes(active)) && <header className="workspace-heading">
+    {!(mode === 'lab' && ['lab', 'estrategias'].includes(active)) && !(mainDemo && ['inicio', 'monitor', 'config', 'admin'].includes(active)) && <header className="workspace-heading">
       <div><h1>{PAGES[active]}</h1></div>
       {mainDemo ? <span className="wd-header-context">USD · Cuenta demo 01</span> : <WorkspaceSearch onNavigate={onChange} onSymbol={onSymbol} />}
       <button className="workspace-conversation" aria-label="Abrir Lab real"

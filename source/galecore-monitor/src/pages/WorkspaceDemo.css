@@ -135,3 +135,7 @@
 @media(max-width:750px) { .wd-demo-bar { padding:7px 12px; font-size:12px; } .wd-demo-user { font-size:0; } .wd-demo-user > span { font-size:12px; } .wd-content { padding:20px 14px; } .wd-monitor-extra { padding:4px 14px 20px; grid-template-columns:1fr; } .wd-monitor-extra > :last-child { grid-column:auto; } .wd-metrics { grid-template-columns:1fr 1fr; } .wd-metrics strong { font-size:21px; } .wd-two-grid,.wd-settings,.wd-library { grid-template-columns:1fr; } .wd-position-numbers { grid-template-columns:1fr 1fr; } .wd-operation-grid > aside { display:block; } .wd-library > aside { border-right:0; border-bottom:1px solid var(--border); } .wd-settings { padding:20px 14px; } .wd-settings nav { display:flex; flex-wrap:wrap; } .wd-settings nav button { width:auto; } .wd-task { grid-template-columns:55px 1fr; gap:10px; } .wd-task small { grid-column:2; text-align:left; } .wd-section-title { align-items:flex-start; flex-direction:column; } .wd-position-focus { flex-wrap:wrap; } .wd-lab .lab-projects { max-height:260px; } }
 
 .workspace-demo .demo-mode { display:none; }
+
+/* La demo de Monitor y Configuración ya tiene título propio. */
+.workspace-mode-bar-compact { min-height:62px; padding-block:8px; }
+.workspace-mode-bar-compact .workspace-mode-switch button { padding-block:7px; }

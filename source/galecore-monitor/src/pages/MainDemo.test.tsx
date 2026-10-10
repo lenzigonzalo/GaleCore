@@ -55,3 +55,14 @@ test('hallazgo entra a conversación con evidencia, pérdidas y períodos conser
   expect(screen.getByText(/Hallazgo seleccionado/)).toBeInTheDocument();
   expect(screen.getByText(/SPY Income · v1 · SPY · 600/)).toBeInTheDocument();
 });
+
+test('Cartera muestra contratos y vuelve a su origen después de abrir un detalle', () => {
+  render(<MainDemo initialView="account" onExit={() => {}}/>);
+  expect(screen.getByRole('heading',{name:'Posiciones abiertas'})).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:/Estrategias activas/})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Abrir posición de SPY Income'}));
+  expect(screen.getByRole('heading',{name:'SPY Income'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Volver a Cartera'}));
+  expect(screen.getByRole('heading',{name:'Cartera'})).toBeInTheDocument();
+  expect(screen.getByRole('heading',{name:'Posiciones abiertas'})).toBeInTheDocument();
+});

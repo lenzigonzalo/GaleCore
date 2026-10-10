@@ -3,8 +3,9 @@ import { ArrowUpRight, Check, ChevronRight, Pause, Play } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
 import type { WorkspaceMode } from '../components/layout/WorkspaceNav';
 import { MainDemo } from './MainDemo';
+import { SettingsDemo } from './SettingsDemo';
 import { demoAccount, demoPositions, demoEquity } from './MainDemo.fixture';
-import { visualOrders, visualCalendar, visualAgents, visualDocuments } from './WorkspaceDemo.fixture';
+import { visualOrders, visualAgents, visualDocuments } from './WorkspaceDemo.fixture';
 import './WorkspaceDemo.css';
 
 const money = (n: number) => '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -25,8 +26,6 @@ export function WorkspaceDemo({ active, mode, onNavigate, onExit }: { active: Ta
   const [orders, setOrders] = useState(visualOrders);
   const [agents, setAgents] = useState(visualAgents);
   const [document, setDocument] = useState(0);
-  const [settingsTab, setSettingsTab] = useState('Perfil y objetivos');
-  const [saved, setSaved] = useState(false);
   const [toast, setToast] = useState('');
   const [shadowPeriod, setShadowPeriod] = useState(60);
   const p = demoPositions[selected];
@@ -38,14 +37,7 @@ export function WorkspaceDemo({ active, mode, onNavigate, onExit }: { active: Ta
   return <div className="workspace-demo">
     {toast && <div className="wd-toast" role="status"><Check size={16}/>{toast}<button onClick={()=>setToast('')}>Cerrar</button></div>}
     <div hidden={!isMain}><MainDemo onExit={onExit} initialView={active === 'monitor' ? 'account' : active === 'gex' ? 'market' : 'main'} />
-      {active !== 'gex' && <div className="wd-monitor-extra">
-        <section className="wd-panel"><header><h2>Capital asignado por estrategia</h2><span>Distribución demo</span></header>
-          {[['SPY Income',44],['QQQ Neutral',31],['IWM Range',25]].map(([name,value])=><div className="wd-exposure" key={name}><div><span>{name}</span><strong>{value}%</strong></div><div><i style={{width:value+'%'}}/></div></div>)}
-          <p className="wd-muted">Sobre el capital asignado a estas estrategias. No representa delta ni correlación.</p>
-        </section>
-        <section className="wd-panel"><header><h2>Contexto macro</h2><span>08:12 ET</span></header><h3>Tasas reales en baja; inflación en foco.</h3><p>La recuperación de acciones coincide con menores tasas reales. El próximo dato de inflación puede confirmar o interrumpir ese movimiento.</p><div className="wd-macro-facts"><span>UST 10Y<strong>4,28% <small>−4 pb</small></strong></span><span>VIX<strong>18,42 <small>−0,68</small></strong></span></div><p className="wd-muted">Alternativa: ajuste de posicionamiento antes del dato.</p><button className="main-link" onClick={()=>{setDocument(0);onNavigate('inteligencia');}}>Ver análisis <ArrowUpRight size={14}/></button></section>
-        <section className="wd-panel"><header><h2>Calendario P&L</h2><span>Período de ejemplo · USD</span></header><div className="wd-calendar">{['L','M','M','J','V','S','D'].map((d,i)=><b key={i}>{d}</b>)}{visualCalendar.map((v,i)=><div key={i} className={v>0?'positive':v<0?'negative':'neutral'}><span>{i+1}</span><strong>{v===0?'—':(v>0?'+':'−')+Math.abs(v).toFixed(0)}</strong></div>)}</div></section>
-      </div>}
+
     </div>
 
     {(active === 'operativa' || active === 'rpf' || (active === 'estrategias' && mode !== 'lab')) && <div className="wd-content">
@@ -65,8 +57,6 @@ export function WorkspaceDemo({ active, mode, onNavigate, onExit }: { active: Ta
 
     {active === 'inteligencia' && <div className="wd-library"><aside><span className="wd-kicker">BIBLIOTECA COMPARTIDA</span>{visualDocuments.map((d,i)=><button className={document===i?'selected':''} key={d.title} onClick={()=>setDocument(i)}><span>{d.kind} · {d.date}</span><strong>{d.title}</strong><small>{d.project}</small></button>)}</aside><article className="wd-document"><span className="wd-kicker">{visualDocuments[document].kind} · {visualDocuments[document].date}</span><h2>{visualDocuments[document].title}</h2><div className="wd-source-tags"><span>{visualDocuments[document].project}</span><span>Versión 1</span><span>Escenario demo</span></div><h3>Conclusión</h3><p>{visualDocuments[document].text}</p><h3>Evidencia del caso</h3><p>Lectura de posiciones, contexto del mercado y reglas vigentes del proyecto. El resultado se conserva junto con sus supuestos para revisarlo después.</p><Curve/><h3>Próxima revisión</h3><p>Después del dato de inflación, contrastar reacción observada y exposición de las estrategias.</p><button className="btn" onClick={()=>{onNavigate('lab');}}>Continuar en Lab</button></article></div>}
 
-    {(active === 'config' || active === 'admin') && <div className="wd-settings"><nav>{['Perfil y objetivos','Cuenta y conexiones','Skills y memoria','Preferencias'].map(s=><button key={s} className={settingsTab===s?'selected':''} onClick={()=>{setSettingsTab(s);setSaved(false);}}>{s}</button>)}</nav><section className="wd-panel"><header><h2>{settingsTab}</h2><span>Perfil de ejemplo</span></header><form key={settingsTab} onSubmit={e=>{e.preventDefault();setSaved(true);}}>
-      {(settingsTab==='Perfil y objetivos'?[['Nombre','Trader demo'],['Objetivo anual','10–15%'],['Capital de referencia','10000 USD'],['Horizonte','30–45 días'],['Riesgo máximo por operación','5%']]:settingsTab==='Cuenta y conexiones'?[['Broker','Tastytrade · cuenta demo'],['Moneda base','USD'],['Cotizaciones','DXLink · simulado'],['Fuentes macro','FRED / BLS / Tesoro · ejemplo']]:settingsTab==='Skills y memoria'?[['Método de estrategia','strategy_design · v1.0'],['Método de performance','performance · v1.2'],['Memoria del trader','Objetivos y preferencias'],['Conocimiento compartido','Análisis, métodos y decisiones']]:[['Idioma','Español'],['Zona horaria','America/Argentina/Buenos_Aires'],['Tema','Carbón'],['Vista inicial','Monitor']]).map(([label,value])=><label key={label}>{label}<input defaultValue={value}/></label>)}
-      <button className="btn" type="submit">{saved?'Guardado en demo':'Guardar cambios de ejemplo'}</button><p className="wd-muted">Estos campos no modifican tu cuenta ni configuración real.</p></form></section></div>}
+    {(active === 'config' || active === 'admin') && <SettingsDemo onLab={() => onNavigate('lab')} />}
   </div>;
 }

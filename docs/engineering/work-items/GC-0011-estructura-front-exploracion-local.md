@@ -266,6 +266,25 @@ Aceptación autorizada: proyectos personal/análisis/estrategia como workspaces 
 - Personal creado con README.md, AGENTS.md, workspace.json y carpetas files/memory; el descriptor conserva nombre/tipo al recuperar archivos sin índice local. Ninguna estrategia existente modificada. Pruebas de chat sin herramientas ni lectura/escritura de archivos; Codex respondió y retomó realmente; Claude informó límite semanal.
 - Build Dev verde y revisión independiente de una pasada, con dos hallazgos corregidos sin recheck. Evidencia permanente: ../evidence/GC-0011-lab-chat-20261010.json. QA visual y bootstrap financiero E2E pendientes; no aprobación o cierre inferidos.
 
-### Para retomar (vigente)
+### Para retomar (Lab, hito anterior)
 
 Abrir localhost:3039 → Lab y recargar. Elegir Personal o estrategia existente; + en Proyectos crea workspace por tipo. Nuevo chat usa Codex/Claude local; Claude hoy informó límite semanal. Files abre explorer. Shadow muestra propuesta/estado y métricas sólo del proyecto. Bootstrap de estrategia queda conectado como instrucción del host, pero su recorrido financiero completo aún no fue ejecutado. Mantener mocks de Monitor/Operativa hasta su propia consolidación. WS-0021 y ACTIVE_WORK_ITEM intactos.
+
+## UX de Monitor y Configuración — 10/10/2026
+
+Pedido owner: continuar exclusivamente la exploración de UX/frontend; no tocar más el harness ni el trabajo pendiente de Claude. Referencias autorizadas: capturas del owner de dashboards financieros/Claude web y páginas oficiales de Robinhood, tastytrade e IBKR. Excepción visual ENGINEERING §12 vigente. No cambia contratos, catálogo, plan ni estado de aprobación.
+
+- Monitor demo: patrimonio y curva dominante (1S/1M/3M, cursor y flechas), cuenta/distribución, tabla de estrategias y columna de watchlist/agenda/contexto. Se retiran paneles extra duplicados. P&L por sesión usa la misma serie mensual que la curva, con primera observación como base; valores de celdas redondeados y total exacto. Cuenta y poder de compra conservan distinta definición.
+- Resumen y Cartera diferenciados: Resumen muestra estrategias/hallazgos/P&L por sesión; Cartera muestra estructuras, contratos, valuación, vencimientos y saldos. Drill-down vuelve al destino inicial.
+- Configuración demo: General, Perfil y objetivos, Memoria y convenciones, Habilidades y conexiones, Tareas programadas. Skills/Conectores/Plugins, Tuyos/Descubrir y búsqueda sólo donde aplican; detalle Resumen/Contenido con árbol y texto/código. Catálogo y contenido explícitamente ilustrativos, sin leer ni modificar skills reales.
+- Campos/estado en useState, conservados al navegar dentro de Configuración y perdidos al recargar. Tareas son propuestas locales sin scheduling. Diálogo con foco, Tab/Escape y restauración. «Abrir Lab» sólo navega, sin prometer transferir/probar una skill ficticia.
+- Encabezado demo compacto y sin título global duplicado en inicio/monitor/config/admin. Vistas reales, autenticación, APIs, broker, Lab/harness y bootstrap no modificados.
+- Nuevos mocks a retirar antes de consolidación: MonitorOverview.tsx/css, SettingsDemo.tsx/css/fixture/test. También modificaciones de MainDemo/WorkspaceDemo/WorkspaceHeader y sus pruebas demo. No instalar ni conectar estas propuestas como si fueran configuración real.
+- Review de una pasada: ../reviews/GC-0011-monitor-settings-20261010-codex.md, CHANGES_REQUESTED. Hallazgos corregidos por implementer sin recheck; no se infiere APPROVE ni cierre.
+- QA visual pendiente: CUA sin navegador disponible. La compilación y tests no certifican composición observada a distintos tamaños.
+
+### Para retomar (vigente: UX)
+
+Recargar http://localhost:3039 con demo local activa. Recorrer Monitor → Resumen/Cartera y Configuración → Habilidades y conexiones → una habilidad → Contenido. La demo visual conserva datos de ejemplo; salir de demo recupera vistas reales anteriores. Ajustar densidad/contraste con feedback del owner antes de conectar datos reales. Harness y skill bootstrap quedan exclusivamente para revisión posterior con Claude, ya anotada en WS-0021; esta iteración no editó ese item ni ACTIVE_WORK_ITEM. GC-0011 permanece CHANGES_REQUESTED, aprobación pendiente.
+
+Verificación ejecutada del hito: preview CRA Compiled successfully / No issues found; MainDemo 4 pruebas verdes, SettingsDemo 2 y WorkspaceHeader 3 (corridas del área, sin suite integral). Un intento previo del nuevo caso de Cartera falló por selector ambiguo; etiqueta de retorno diferenciada y rerun verde. Comprobación de serie mensual: curva y sumatoria de P&L 1.510,80 USD. Evidencia: ../evidence/GC-0011-monitor-settings-20261010.json. Sin build de producción ni QA visual observada.
