@@ -56,7 +56,18 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
   for(const f of chatFiles()){const c=read(path.join(chatDir,f),null);if(c?.state==='running'){c.state='interrupted';c.activity='Servicio reiniciado';saveChat(c);}}
   function listProjects(){
     const old=legacyProjects().map(p=>({...p,type:p.id==='portfolio'?'analysis':'strategy',strategyName:p.id==='portfolio'?null:p.id}));
-    const all=old.map(p=>({...p,...registry.find(r=>r.id===p.id)}));
+    const descriptors=[];
+    for(const folder of ['workspaces','strategies']){
+      const base=path.join(kb,folder);if(!fs.existsSync(base))continue;
+      for(const entry of fs.readdirSync(base,{withFileTypes:true})){
+        if(!entry.isDirectory()||!ID.test(entry.name))continue;
+        const dir=path.join(base,entry.name);if(!fs.realpathSync(dir).startsWith(fs.realpathSync(kb)+path.sep))continue;
+        const meta=read(path.join(dir,'workspace.json'),null);
+        if(meta&&meta.id===entry.name&&typeof meta.label==='string'&&meta.label.length<=100&&TYPES.includes(meta.type)&&(folder!=='strategies'||meta.type==='strategy'))descriptors.push({id:entry.name,label:meta.label,type:meta.type,relative:folder+'/'+entry.name,strategyName:meta.type==='strategy'?entry.name:null,dir});
+      }
+    }
+    const all=old.map(p=>({...p,...registry.find(r=>r.id===p.id),...descriptors.find(d=>d.id===p.id)}));
+    for(const p of descriptors)if(!all.some(o=>o.id===p.id))all.push(p);
     for(const p of registry){if(all.some(o=>o.id===p.id))continue;const dir=path.join(kb,p.relative);if(fs.existsSync(dir) && fs.realpathSync(dir).startsWith(fs.realpathSync(kb)+path.sep))all.push({...p,dir});}
     return all;
   }
@@ -74,7 +85,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     fs.writeFileSync(path.join(dir,'README.md'),'# '+label+'\n\nWorkspace de '+(type==='strategy'?'estrategia':type==='personal'?'trabajo personal':'análisis')+'.\n\nLos resultados y memorias se guardan acá. Las conversaciones permanecen en el historial local del Lab.\n',{flag:'wx'});
     fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y recuperá antecedentes antes de preguntar.\n'+(type==='personal'?'No incorpores cuenta, perfil financiero ni otros proyectos salvo pedido explícito.\n':'Usá GaleCore-AI para memoria canónica y GaleCore para datos/cálculos financieros.\n')+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
     fs.mkdirSync(path.join(dir,'memory'),{recursive:true});fs.mkdirSync(path.join(dir,'files'),{recursive:true});
-    const p={id:slug,label,type,relative,strategyName:type==='strategy'?slug:null};registry.push(p);atomic(metadata,registry);return p;
+    const p={id:slug,label,type,relative,strategyName:type==='strategy'?slug:null};fs.writeFileSync(path.join(dir,'workspace.json'),JSON.stringify(p,null,2)+'\n',{flag:'wx'});registry.push(p);atomic(metadata,registry);return p;
   }
   // Un workspace personal explícito y separado del conocimiento financiero compartido.
   if(!listProjects().some(p=>p.id==='personal'))createProject({label:'Personal',type:'personal'});
