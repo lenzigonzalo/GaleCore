@@ -4,8 +4,9 @@
   "executed": {
     "serviceTests": {
       "command": "node --test tools/terminal/lab-workspaces.test.js",
-      "passed": 5,
-      "exitCode": 0
+      "passed": 6,
+      "exitCode": 0,
+      "note": "Incluye recuperación de workspace desde workspace.json sin índice local."
     },
     "frontendBuild": {
       "command": "CI=true npm run build con API/Supabase Dev y BUILD_PATH=../../dev/.local/lab-chat-build",
