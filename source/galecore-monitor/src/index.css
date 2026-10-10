@@ -447,3 +447,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .workspace-heading { gap: 12px; }
   .wd-header-context { margin-left: 0; }
 }
+
+/* Lab: un sidebar y un área de conversación. */
+.lab-dashboard-main { min-height: 0; overflow: hidden; }
+.lab-page-host { height: 100%; min-height: 0; }
+.lab-page-host[hidden] { display: none !important; }

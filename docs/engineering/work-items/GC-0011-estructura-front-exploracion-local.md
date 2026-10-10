@@ -253,3 +253,19 @@ Abrir localhost:3039 y recargar. Recorrer Monitor → Operativa → Lab; ejemplo
 - CUA sin browsers; IAB no disponible. QA visual no ejecutada. Reviews/tests históricos no cubren el puente nuevo. No se declara Lab final validado ni cierre aprobado.
 
 Para retomar: recorrer localhost:3039, comprobar composición de Monitor/Operativa y Lab real. Pendiente funcional de consolidación del puente: revisión y caso de guardar memoria/commit/retomar, sin confundirlo con la iteración visual. Retirada de mocks Monitor/Operativa sigue pendiente antes de conectar composición final con datos reales. ACTIVE_WORK_ITEM y WS-0021 intactos.
+
+
+## Lab centrado en chat — pedido owner 10/10/2026
+
+Aceptación autorizada: proyectos personal/análisis/estrategia como workspaces con archivos/memoria/convenciones; conversaciones agrupadas a la izquierda, chat principal, Files como explorer desplegable, bootstrap mediante harness y vista Shadow del proyecto. Reutilizar strategy_design/datos/riesgo; no desarrollar WS-0021.
+
+- UI: una columna de proyectos, nuevo proyecto/chat, borradores separados, proveedor por conversación, historial recuperable; sin terminal, memoria permanente derecha ni encabezados duplicados. Files muestra árbol y contenido de texto del workspace. Personal separado; Cartera no navega sus archivos.
+- Chat real mediante salida JSON de CLIs locales, sin API keys del proveedor ni bypass de permisos. Chats/metadatos quedan en tools/terminal/.local (ignorados), documentos en knowledge. Escrituras del agente sujetas al CLI; los bloqueos de permisos se muestran, no se omiten.
+- Skill del host: tools/terminal/skills/lab-strategy-bootstrap/SKILL.md; se entrega explícitamente en instrucciones del chat no personal. Coordina capacidades vigentes, no altera el catálogo ni el trabajo pendiente de GaleCore-AI. Crear carpeta no crea propuesta/aprobación; guía tesis, diseño/check/save, crítica, aprobación exacta y SHADOW Dev.
+- Shadow lee project show del harness y Runtime Status/Metrics; agrega sólo presentación. Lifecycle de versión actual por hash exacto; métricas históricas por versión y cantidades de instancias visibles. Sin Deploy/Stop/órdenes desde esta UI.
+- Personal creado con README.md, AGENTS.md y carpetas files/memory. Ninguna estrategia existente modificada. Pruebas de chat sin herramientas ni lectura/escritura de archivos; Codex respondió y retomó realmente; Claude informó límite semanal.
+- Build Dev verde y revisión independiente de una pasada, con dos hallazgos corregidos sin recheck. Evidencia permanente: ../evidence/GC-0011-lab-chat-20261010.json. QA visual y bootstrap financiero E2E pendientes; no aprobación o cierre inferidos.
+
+### Para retomar (vigente)
+
+Abrir localhost:3039 → Lab y recargar. Elegir Personal o estrategia existente; + en Proyectos crea workspace por tipo. Nuevo chat usa Codex/Claude local; Claude hoy informó límite semanal. Files abre explorer. Shadow muestra propuesta/estado y métricas sólo del proyecto. Bootstrap de estrategia queda conectado como instrucción del host, pero su recorrido financiero completo aún no fue ejecutado. Mantener mocks de Monitor/Operativa hasta su propia consolidación. WS-0021 y ACTIVE_WORK_ITEM intactos.

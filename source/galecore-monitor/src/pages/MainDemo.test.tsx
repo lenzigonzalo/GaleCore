@@ -30,17 +30,17 @@ test('estrategia expande posiciones y conserva borradores y consultas por worksp
   fireEvent.click(screen.getByRole('button', { name: 'Abrir workspace de SPY Income' }));
   fireEvent.click(screen.getByRole('button', { name: 'Conversación' }));
   fireEvent.change(screen.getByLabelText('Consulta sobre SPY Income'), { target: { value: '¿Qué afecta el vencimiento?' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Main' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Resumen' }));
   fireEvent.click(screen.getByRole('button', { name: 'Abrir workspace de QQQ Neutral' }));
   fireEvent.click(screen.getByRole('button', { name: 'Conversación' }));
   expect(screen.getByLabelText('Consulta sobre QQQ Neutral')).toHaveValue('');
-  fireEvent.click(screen.getByRole('button', { name: 'Main' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Resumen' }));
   fireEvent.click(screen.getByRole('button', { name: 'Abrir workspace de SPY Income' }));
   fireEvent.click(screen.getByRole('button', { name: 'Conversación' }));
   expect(screen.getByLabelText('Consulta sobre SPY Income')).toHaveValue('¿Qué afecta el vencimiento?');
   fireEvent.click(screen.getByRole('button', { name: 'Guardar consulta' }));
   expect(screen.getByText('¿Qué afecta el vencimiento?')).toBeInTheDocument();
-  expect(screen.getByText(/Respuesta del harness pendiente de integración/)).toBeInTheDocument();
+  expect(screen.getByText(/Respuesta de ejemplo:/)).toBeInTheDocument();
 });
 
 test('hallazgo entra a conversación con evidencia, pérdidas y períodos conservan significado', () => {

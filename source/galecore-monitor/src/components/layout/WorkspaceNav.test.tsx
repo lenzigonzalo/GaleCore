@@ -15,11 +15,11 @@ test('agrupa Mercado y ejecuciones en sus destinos, sin conceder administración
   expect(screen.queryByRole('button', { name: 'Administración' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Cartera' })); expect(change).toHaveBeenCalledWith('monitor');
   expect(screen.queryByRole('button', { name: 'Abrir conversación' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Lab' })); expect(change).toHaveBeenCalledWith('lab');
-  rerender(<WorkspaceNav active="shadow" onChange={change} />);
-  expect(screen.getByRole('button', { name: 'Lab' })).toHaveAttribute('aria-current', 'page');
-  expect(screen.getByText('Gestión')).toBeInTheDocument();
-  expect(screen.getByText('Trabajo')).toBeInTheDocument();
+  rerender(<WorkspaceNav mode="lab" active="shadow" onChange={change} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Espacio de trabajo' })); expect(change).toHaveBeenCalledWith('lab');
+  expect(screen.getByRole('button', { name: 'Seguimiento SHADOW' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.getByText('Tu espacio de trabajo')).toBeInTheDocument();
+  expect(screen.getByText('Compartido')).toBeInTheDocument();
 });
 
 test('contraer conserva destinos accesibles y sólo admin ve administración', () => {

@@ -112,7 +112,7 @@ function Dashboard({ onLogout }: DashboardProps) {
 
   return (
     <div className="workspace-shell flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      <WorkspaceNav mode={mode} active={tab} onChange={setTab} />
+      {!isLabWorkspace && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
         {!demoVisible && mode !== 'lab' && <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />}
         <WorkspaceHeader mode={mode} onModeChange={changeMode} mainDemo={demoVisible} active={tab} onChange={setTab} onLogout={onLogout}
@@ -126,8 +126,8 @@ function Dashboard({ onLogout }: DashboardProps) {
             store.setSelectedSymbol(selected); setTab('gex');
           }} conversationOpen={terminalOpen} onConversation={() => setTab('lab')} />
         {localDemo && mode !== 'lab' && <div className="wd-demo-bar"><span>{mainDemo ? 'DEMO VISUAL · datos y acciones ficticios · sesión de ejemplo 14:35 ET' : 'Datos reales · demo visual disponible'}</span><button onClick={() => setMainDemo(v => !v)}>{mainDemo ? 'Salir de la demo' : 'Ver demo completa'}</button></div>}
-        {mode === 'lab' && <div className="real-lab-scope">Lab real · sesiones del usuario de esta PC · sin datos demo</div>}
-        <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
+
+        <main className={"dashboard-main flex-1 " + (isLabWorkspace ? "lab-dashboard-main" : "overflow-auto")} style={{ position: 'relative' }}>
           {demoVisible ? <WorkspaceDemo active={tab} mode={mode} onNavigate={setTab} onExit={() => setMainDemo(false)} /> : <>
           {tab === 'inicio' && <Main demo={mainDemo} onDemoChange={localDemo ? setMainDemo : undefined} onNavigate={setTab} onConnectBroker={() => { setSettingsInitial('broker'); setTab('config'); }} />}
           {tab === 'operativa' && <Operations onNavigate={setTab} />}
@@ -158,10 +158,10 @@ function Dashboard({ onLogout }: DashboardProps) {
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
           </>}
-          <div hidden={!isLabWorkspace}><Lab onMonitor={() => setTab('shadow')} onNavigate={setTab} /></div>
+          <div className="lab-page-host" hidden={!isLabWorkspace}><Lab onMonitor={() => setTab('shadow')} onNavigate={setTab} /></div>
         </main>
         {/* Avisos del supervisor SHADOW: sólo en el espacio de trabajo. */}
-        {!demoVisible && ['lab', 'estrategias', 'rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
+        {!demoVisible && !isLabWorkspace && ['rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>

@@ -7,9 +7,9 @@ export interface LabState { projects: LabProject[]; providers: LabProvider[]; se
 export interface LabContext { project: string; folder: string; files: string[]; commits: { hash: string; date: string; message: string }[]; changes: number }
 let token: string | null = null;
 let pendingToken: Promise<string> | null = null;
-async function request(url: string, options: RequestInit = {}) {
+async function request(url: string, options: RequestInit = {}, timeout = 12000) {
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), 12000);
+  const timer = window.setTimeout(() => controller.abort(), timeout);
   try { return await fetch(LAB_URL + url, { ...options, signal: controller.signal }); }
   finally { window.clearTimeout(timer); }
 }
@@ -21,13 +21,20 @@ export async function labToken(): Promise<string> {
   }).finally(() => { pendingToken = null; });
   return pendingToken;
 }
-export async function labRequest<T>(url: string, body?: object): Promise<T> {
+export async function labRequest<T>(url: string, body?: object, timeout = 12000): Promise<T> {
   const send = async () => request(url, { method: body ? 'POST' : 'GET',
     headers: { Authorization: 'Bearer ' + await labToken(), ...(body ? { 'Content-Type': 'application/json' } : {}) },
-    ...(body ? { body: JSON.stringify(body) } : {}) });
+    ...(body ? { body: JSON.stringify(body) } : {}) }, timeout);
   let r = await send();
   if (r.status === 401) { token = null; r = await send(); }
   const value = await r.json();
   if (!r.ok) throw new Error(value.error || 'No se pudo completar el pedido.');
   return value;
 }
+
+export type LabProjectKind = 'personal' | 'analysis' | 'strategy';
+export interface WorkspaceProject { id: string; label: string; type: LabProjectKind; relative: string; strategyName: string | null }
+export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; at: string }
+export interface WorkspaceChat { id: string; project: string; provider: 'codex' | 'claude'; title: string; state: 'idle' | 'running' | 'interrupted' | 'failed' | 'cancelled'; activity: string; error: string | null; messages: ChatMessage[] }
+export interface WorkspaceState { projects: WorkspaceProject[]; chats: Omit<WorkspaceChat, 'messages'>[]; providers: LabProvider[] }
+export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'file'; children?: WorkspaceFile[] }

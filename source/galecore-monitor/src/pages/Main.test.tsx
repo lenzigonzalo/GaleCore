@@ -36,7 +36,7 @@ test('cuenta sin vincular ofrece conexión y evita errores de posiciones duplica
 
 test('enruta al laboratorio y no publica avisos simulados en gestión', () => {
   const navigate = jest.fn(); render(<Main onNavigate={navigate} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Ir al Lab' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Abrir Lab' }));
   expect(navigate).toHaveBeenCalledWith('lab');
   expect(screen.queryByText('Claves del día')).not.toBeInTheDocument();
   expect(screen.getByText('Historia no disponible')).toBeInTheDocument();
