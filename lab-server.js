@@ -21,6 +21,7 @@ const ORIGINS = new Set(['http://localhost:3039', 'http://127.0.0.1:3039']);
 const TOKEN = crypto.randomBytes(32).toString('hex');
 const sessions = new Map();
 const UUID = /^[0-9a-f-]{36}$/i;
+const { createWorkspaces } = require('./lab-workspaces');
 fs.mkdirSync(LOCAL, { recursive: true });
 try {
   for (const s of JSON.parse(fs.readFileSync(STORE, 'utf8'))) {
@@ -72,7 +73,7 @@ function instructions(project) {
     'Esta sesión pertenece a GaleCore Lab: trabajo real del trader, no desarrollo del software ni continuación del ACTIVE_WORK_ITEM.',
     'Proyecto seleccionado: ' + project.id + '. Workspace del producto: ' + ROOT + '.',
     'Al recibir el primer pedido, leé ' + path.join(ROOT, 'GaleCore-AI', 'CLAUDE.md') + ' y consultá antecedentes con las herramientas de GaleCore-AI.',
-    'Usá python -B -m galecore_ai.adapters.cli catalog --match con el pedido, y project show ' + (project.id === 'portfolio' ? 'portfolio' : 'strategy:' + project.id) + ' para recuperar contexto.',
+    'Usá python -B -m galecore_ai.adapters.cli catalog --match con el pedido y kb search para recuperar contexto. Para estrategias existentes, project show strategy:' + project.id + '; para cartera, project show portfolio. Un borrador nuevo todavía no tiene registro canónico.',
     'PYTHONPATH y GALECORE_KNOWLEDGE_DIR ya están definidos. Las capacidades y su contrato están en GaleCore-AI/docs/HOST-REFERENCE.md.',
     'Guardá investigaciones, decisiones y pendientes mediante research/project/feedback u otras herramientas canónicas; no edites registros con hashes a mano.',
     'Después de un hito útil, guardá su evidencia y próximos pasos. Revisá git status/diff en ' + KB + ' y hacé un commit LOCAL sólo de los archivos de tu trabajo con mensaje concreto.',
@@ -161,13 +162,15 @@ const validHost = req => ['127.0.0.1:' + PORT, 'localhost:' + PORT].includes(Str
 const validOrigin = req => ORIGINS.has(req.headers.origin);
 function json(res, status, data) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); }
 function readBody(req) {
+  req.setEncoding('utf8');
   return new Promise((resolve, reject) => {
     let value = '';
-    req.on('data', d => { value += d; if (value.length > 8192) { reject(Object.assign(new Error('Pedido demasiado grande.'), { status: 413 })); req.destroy(); } });
+    req.on('data', d => { value += d; if (value.length > 65536) { reject(Object.assign(new Error('Pedido demasiado grande.'), { status: 413 })); req.destroy(); } });
     req.on('end', () => { try { resolve(JSON.parse(value || '{}')); } catch { reject(Object.assign(new Error('JSON inválido.'), { status: 400 })); } });
     req.on('error', reject);
   });
 }
+const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, instructions, legacyProjects:projects, legacySessions:()=>[...sessions.values()] });
 const server = http.createServer(async (req, res) => {
   if (!validHost(req) || !validOrigin(req)) return json(res, 403, { error: 'Sólo se admite el monitor local de esta PC.' });
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
@@ -180,6 +183,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'GET' && url.pathname === '/bootstrap') return json(res, 200, { token: TOKEN, scope: 'local-os-user' });
   if (req.headers.authorization !== 'Bearer ' + TOKEN) return json(res, 401, { error: 'Conexión local no autorizada. Reconectá el Lab.' });
   try {
+    if (await workspaces.route(req,res,url,json,readBody)) return;
     if (req.method === 'GET' && url.pathname === '/state') return json(res, 200, {
       projects: projects().map(({ id, label }) => ({ id, label })),
       providers: ['codex', 'claude'].map(id => ({ id, label: id === 'codex' ? 'Codex' : 'Claude Code', installed: !!binaries[id] })),
@@ -225,6 +229,7 @@ server.on('upgrade', (req, socket, head) => {
   });
 });
 function shutdown() {
+  workspaces.shutdown();
   for (const s of sessions.values()) if (s.term) { s.state = 'interrupted'; try { s.term.kill(); } catch {} }
   persist(); server.close(); process.exit(0);
 }
