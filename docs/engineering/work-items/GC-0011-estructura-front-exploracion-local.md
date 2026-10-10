@@ -324,3 +324,8 @@ Feedback owner: watchlist como panel adyacente desde barra derecha, columnas Sym
 - Verificación final: 22 pruebas / 6 suites PASS (MainDemo, LiveWatchlist, TickerWatchlist, WorkspaceHeader, WorkspaceNav, StatusBar); CRA Compiled successfully / No issues found. git diff --check limpio. Sin build de producción ni nueva review por excepción visual ENGINEERING §12. QA visual observada pendiente por navegador no disponible; no cierre/aprobación inferidos.
 
 Para retomar: recargar http://localhost:3039 → Monitor → Resumen/Cartera/Mercado/Macro. Bookmark en barra derecha abre watchlist. ?demo=off muestra vistas heredadas reales; Ver cuenta también sale de la composición demo. Revisar densidad con owner; fuente real macro pendiente.
+
+
+### Alertas con prioridad visual — 10/10/2026
+
+Owner pide seguir referencia adjunta de filas coloreadas que destaquen cuando amerite. Bloque «Atención requerida» con borde/franja por severidad, badge sólido, motivo breve y acceso al workspace existente. Prioridad ilustrativa roja de concentración primero, ámbar de vencimiento después; no se deriva un umbral de riesgo real ni se ejecuta cierre/ajuste. Conserva navegación y mocks temporales; sin harness/backend. Ajuste visual bajo ENGINEERING §12: sin suites/review/build adicional; selector existente actualizado por nuevo orden de texto. CRA Compiled successfully / No issues found y git diff --check limpio. QA visual observada sigue pendiente. Para retomar: recargar :3039, Monitor → Resumen/Cartera y evaluar prominencia del bloque derecho.

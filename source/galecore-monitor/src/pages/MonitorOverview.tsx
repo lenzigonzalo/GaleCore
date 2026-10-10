@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowUpRight, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, TriangleAlert } from 'lucide-react';
 import { demoAccount, demoEquity } from './MainDemo.fixture';
 import './MonitorOverview.css';
 
@@ -62,9 +62,19 @@ export function MonitorOverview({ positions, onStrategy, onMarket, accountView =
       {accountView && <section className="mo-panel portfolio-exposure"><header><h2>Distribución de cartera</h2><span>Capital</span></header><div className="portfolio-exposure-grid"><div className="portfolio-donut-group"><div className="portfolio-donut" role="img" aria-label="Capital asignado por estrategia: SPY 44%, QQQ 31%, IWM 25%"><div><strong>3</strong><span>Estrategias</span></div></div><div className="portfolio-legend">{['SPY Income','QQQ Neutral','IWM Range'].map((name,i) => <button key={name} onClick={() => onStrategy(name)}><span><i style={{background:['var(--accent)','#8eaac6','#c6ae80'][i]}}/>{name}</span><strong>{[44,31,25][i]}%</strong></button>)}</div></div><div className="portfolio-liquidity"><h3>Liquidez</h3><strong>{(demoAccount.cash/demoAccount.netLiq*100).toFixed(1)}%<span> en efectivo</span></strong><div className="portfolio-liquidity-bar"><i style={{width:demoAccount.cash/demoAccount.netLiq*100+'%'}}/></div><dl><dt>Efectivo</dt><dd>{money(demoAccount.cash)}</dd><dt>Poder de compra</dt><dd>{money(demoAccount.buyingPower)}</dd><dt>Patrimonio</dt><dd>{money(demoAccount.netLiq)}</dd></dl></div></div></section>}
     </main>
     <aside className="mo-rail" aria-label="Seguimiento y agenda">
-      <section className="mo-panel mo-followup"><header><h2>Alertas y seguimiento</h2><span>2</span></header>
-        <button className="mo-attention" onClick={() => onStrategy('SPY Income',true)}><div><div className="mo-alert-title"><strong>SPY Income</strong><span className="alert-badge demo-warning">2 DTE</span></div><div className="mo-alert-details"><span>PCS · 600 / 595 · ×2</span><strong className="demo-positive">+$340</strong></div><span className="mo-alert-note">Vencimiento cercano</span></div><ChevronRight size={18}/></button>
-        <button className="mo-attention" onClick={() => onStrategy('QQQ Neutral',true)}><div><div className="mo-alert-title"><strong>QQQ Neutral</strong><span className="alert-badge">31%</span></div><div className="mo-alert-details"><span>IC · 16 DTE · ×1</span><strong className="demo-negative">−$185</strong></div><span className="mo-alert-note">Capital asignado a QQQ</span></div><ChevronRight size={18}/></button>
+      <section className="mo-panel mo-followup mo-alerts-priority" aria-label="Atención requerida">
+        <header><h2><TriangleAlert size={17} aria-hidden="true"/>Atención requerida</h2><span className="mo-alert-count">2</span></header>
+        {/* Prioridades ilustrativas del prototipo; no calculan riesgo ni ejecutan acciones. */}
+        <button className="mo-attention mo-alert-row alert-critical" onClick={() => onStrategy('QQQ Neutral',true)}>
+          <span className="mo-severity-badge">31<span>%</span></span>
+          <span className="mo-alert-copy"><strong>QQQ Neutral · Concentración</strong><small>Capital asignado · IC · 16 DTE</small></span>
+          <span className="mo-alert-action">Revisar<ChevronRight size={16}/></span>
+        </button>
+        <button className="mo-attention mo-alert-row alert-warning" onClick={() => onStrategy('SPY Income',true)}>
+          <span className="mo-severity-badge">2<span>DTE</span></span>
+          <span className="mo-alert-copy"><strong>SPY Income · Vencimiento</strong><small>PCS · 600 / 595 · ×2</small></span>
+          <span className="mo-alert-action">Ver salida<ChevronRight size={16}/></span>
+        </button>
       </section>
       <section className="mo-panel mo-agenda"><header><h2>Agenda</h2><span>ET</span></header>
         <button onClick={() => onMarket('SPY')}><span className="mo-agenda-time">Mañana<strong>08:30</strong></span><div><strong>Inflación de EE. UU.</strong><small>SPY · QQQ · IWM</small></div><ArrowUpRight size={16}/></button>

@@ -50,7 +50,7 @@ test('hallazgo entra a conversación con evidencia, pérdidas y períodos conser
   fireEvent.click(screen.getByRole('button', { name: '1S' }));
   expect(screen.getByText('5 sesiones')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: '1S' })).toHaveAttribute('aria-pressed', 'true');
-  fireEvent.click(screen.getByRole('button', { name: /SPY Income.*2 DTE/ }));
+  fireEvent.click(screen.getByRole('button', { name: /2 DTE.*SPY Income/ }));
   expect(screen.getByRole('button', { name: 'Conversación' })).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByText(/Hallazgo seleccionado/)).toBeInTheDocument();
   expect(screen.getByText(/SPY Income · v1 · SPY · 600/)).toBeInTheDocument();
