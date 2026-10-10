@@ -329,3 +329,18 @@ Para retomar: recargar http://localhost:3039 → Monitor → Resumen/Cartera/Mer
 ### Alertas con prioridad visual — 10/10/2026
 
 Owner pide seguir referencia adjunta de filas coloreadas que destaquen cuando amerite. Bloque «Atención requerida» con borde/franja por severidad, badge sólido, motivo breve y acceso al workspace existente. Prioridad ilustrativa roja de concentración primero, ámbar de vencimiento después; no se deriva un umbral de riesgo real ni se ejecuta cierre/ajuste. Conserva navegación y mocks temporales; sin harness/backend. Ajuste visual bajo ENGINEERING §12: sin suites/review/build adicional; selector existente actualizado por nuevo orden de texto. CRA Compiled successfully / No issues found y git diff --check limpio. QA visual observada sigue pendiente. Para retomar: recargar :3039, Monitor → Resumen/Cartera y evaluar prominencia del bloque derecho.
+
+
+## Mercado por indicadores — 10/10/2026
+
+Owner pide ordenar la mezcla de GEX en submenús tipo Unusual Whales y precio más cercano a TradingView. Primera composición: cotización/símbolo compartidos arriba y Precio, Gamma, IV y volatilidad debajo; watchlist lateral común. Sin cambios al harness/backend/credenciales ni al pendiente Claude.
+
+- Precio: GexChart existente sin gexData, velas reales del endpoint actual y contexto de precio separado. Cotización 36 px, variación contra cierre previo válido, bid/ask/volumen y recepción. Precio inválido/error nunca se reemplaza por spot del barrido ni un cero; variación ausente si falta cierre previo.
+- Gamma: conserva gráfico combinado velas+barras sincronizadas, selección de vencimiento/global y lectura de niveles. Contexto debajo sólo de grupo gamma declarado. IV: grupos market/volatility del JSON (VIX, VIX TS, IV Rank, IV ATM, momentum y RV); no inventa una historia de IV ni curvas nuevas. Selector visual conserva símbolo y scope.
+- Ejes del gráfico de Mercado 15 px/alto contraste y métricas 28 px, referencias 14 px; clases de presentación acotadas a market-workspace. Otros consumidores del gráfico conservan estilos por defecto. Lectura de velas muestra carga/ausencia/error en Mercado en lugar de esconder un histórico fallido.
+- Precio externo sigue disponible con barrido OFF, bajo la watchlist/feed ya independiente. Gamma e IV conservan panel de barrido apagado; ningún nuevo barrido ni acción financiera desde submenús. Cadencia y contratos GEX existentes conservados.
+- Verificación ejecutada: CI=true npm test -- --watchAll=false --runInBand --testMatch **/Gex.test.tsx, 3 PASS/1 suite, exit 0; separación/aislamiento de métricas, conservación de scope, precio con barrido OFF sin fetchGex y ausencia/recuperación de precio/variación. GexChart mockeado en estas pruebas: no certifican canvas/API ni E2E financiero. CRA compiló correctamente; git diff --check limpio. No suite integral/build/review adicional para esta exploración. QA visual observada y lectura real exitosa Dev siguen pendientes; diagnóstico previo de autenticación del proveedor permanece sin resolver.
+
+Para retomar: recargar :3039 → Mercado; Gamma abre por defecto. Probar Precio e IV y volatilidad con el mismo símbolo seleccionado desde watchlist. Recoger feedback de distribución antes de extender gráficos IV (requieren historia/contrato apropiado). Estado CHANGES_REQUESTED y aprobación PENDING intactos; sin cierre/push.
+
+Chequeo final de tipos: npx tsc --noEmit --pretty false, exit 0. Primer intento detectó opciones exact no soportadas en getByRole de los tests nuevos; retiradas antes del chequeo verde. Rerun Gex.test.tsx: 3 PASS, exit 0.

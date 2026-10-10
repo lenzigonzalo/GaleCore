@@ -329,7 +329,7 @@ function paintVsRef(cell: Cell | null, color?: 'vs_ref'): Cell | null {
 function GroupLabel({ label, hint }: { label: string; hint?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-      <span style={{
+      <span className="gex-group-label" style={{
         fontSize: 13, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
         color: '#a78bfa', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap',
       }}>
@@ -353,7 +353,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
   };
 
   return (
-    <div
+    <div className="gex-metric"
       style={{
         display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0,
         padding: '7px 9px', borderRadius: 6, backgroundColor: 'var(--bg-tertiary)',
@@ -390,7 +390,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
         </div>
       )}
 
-      <span style={{
+      <span className="gex-metric-label" style={{
         fontSize: 12, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase',
         color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
         overflowWrap: 'anywhere',
@@ -398,7 +398,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
         {label}
       </span>
 
-      <span className="tabular-nums" style={{
+      <span className="tabular-nums gex-metric-value" style={{
         fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1,
         color: cell.color ?? 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace',
         overflowWrap: 'anywhere',
@@ -409,7 +409,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
       {/* La referencia ENVUELVE, no se recorta. Es la mitad que le da sentido al número, y
           cortarla con puntos suspensivos ("put wall domina —…") deja justo la parte que no dice
           nada. El tile crece un renglón; el que no lo necesita no lo usa. */}
-      <span style={{
+      <span className="gex-metric-reference" style={{
         fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.25,
       }}>
         {cell.reference}
@@ -423,9 +423,11 @@ interface Props {
   /** Los grupos que declara display_config.gex_tab.details_panel, en orden de lectura. */
   groups?: DetailsGroup[];
   subtitle?: string;
+  /** Recorte visual de los grupos declarados, sin alterar métricas ni referencias. */
+  groupIds?: string[];
 }
 
-export function DetailsPanel({ data, groups, subtitle }: Props) {
+export function DetailsPanel({ data, groups, subtitle, groupIds }: Props) {
   const declared = groups?.length ? groups : DEFAULT_DETAILS_GROUPS;
   const checks = data?.macroRegime?.checks;
   const inputs = data?.structureInputs ?? null;
@@ -433,6 +435,7 @@ export function DetailsPanel({ data, groups, subtitle }: Props) {
   // Un id que el JSON declare y este panel no sepa dibujar se omite en vez de rendir una celda
   // vacía, que se leería como "sin dato" cuando el problema es de contrato.
   const rendered = declared
+    .filter(g => !groupIds || groupIds.includes(g.id))
     .map((g) => ({
       group: g,
       cells: g.metrics
@@ -490,7 +493,7 @@ export function DetailsPanel({ data, groups, subtitle }: Props) {
                 }}
               >
                 <GroupLabel label={group.label} hint={group.hint} />
-                <div style={{
+                <div className="gex-metrics-grid" style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 130px), 1fr))',
                   gap: 5,

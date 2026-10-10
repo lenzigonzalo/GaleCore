@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-10",
+  "scope": "GC-0011 Mercado por indicadores",
+  "indicators": [
+    "Precio",
+    "Gamma",
+    "IV y volatilidad"
+  ],
+  "sources": "Existing market store, Candle API and GEX response; no mock price/GEX/IV series added",
+  "verification": {
+    "testCommand": "CI=true npm test -- --watchAll=false --runInBand --testMatch **/Gex.test.tsx",
+    "testsPassed": 3,
+    "suitesPassed": 1,
+    "testExit": 0,
+    "typecheckCommand": "npx tsc --noEmit --pretty false",
+    "typecheckExit": 0,
+    "chartInTests": "mocked; no canvas/API E2E",
+    "preview": "CRA Compiled successfully"
+  },
+  "limits": [
+    "Visual browser QA not performed",
+    "Previous Dev provider authentication failure unresolved",
+    "IV view uses existing snapshot metrics; no IV history graph"
+  ],
+  "harnessChanged": false,
+  "backendChanged": false,
+  "approval": "PENDING"
+}

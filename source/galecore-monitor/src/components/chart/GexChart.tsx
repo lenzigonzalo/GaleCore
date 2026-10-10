@@ -16,6 +16,7 @@ import { fmtPrice, etDateParts, etOffsetMinutes } from '../../utils/formatters';
 import { GexBarsPanel } from './GexBarsPanel';
 
 interface Props {
+  readable?: boolean;
   symbol:       string;
   currentPrice: number;
   openPrice?:   number;
@@ -155,7 +156,7 @@ function marketOpenUnix(): number {
 }
 
 export function GexChart({
-  symbol, currentPrice, openPrice, iv30, gexData,
+  symbol, currentPrice, openPrice, iv30, gexData, readable = false,
   candleInterval = '5m',
   candleBucketSeconds = DEFAULT_BUCKET,
   maxCandles,
@@ -165,6 +166,7 @@ export function GexChart({
   alineado = false,
   onDesalinear,
 }: Props) {
+  const [historyState, setHistoryState] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
   const outerRef      = useRef<HTMLDivElement>(null);   // flex container
   const containerRef  = useRef<HTMLDivElement>(null);   // chart div
   const chartRef      = useRef<IChartApi | null>(null);
@@ -286,9 +288,9 @@ export function GexChart({
     const chart = createChart(el, {
       layout: {
         background: { type: ColorType.Solid, color: '#090909' },
-        textColor: '#b6b6b0',
+        textColor: readable ? '#e5e5df' : '#b6b6b0',
         fontFamily: getComputedStyle(el).getPropertyValue('--font-sans').trim(),
-        fontSize: 13,
+        fontSize: readable ? 15 : 13,
         attributionLogo: false,
       },
       grid: {
@@ -441,8 +443,12 @@ export function GexChart({
   // ── Load intraday candles ─────────────────────────────────────────────────
   useEffect(() => {
     if (!chartRef.current) return;
+    let cancelled = false;
+    setHistoryState('loading');
     fetchEquityCandles(symbol, candleInterval, { fromDays: candleFromDays, limit: maxCandles }).then(candles => {
-      if (!candles.length || !chartRef.current) return;
+      if (cancelled || !chartRef.current) return;
+      if (!candles.length) { setHistoryState('empty'); return; }
+      setHistoryState('ready');
       const chart = chartRef.current;
       if (seriesRef.current && !useCandlesRef.current) {
         chart.removeSeries(seriesRef.current);
@@ -466,7 +472,8 @@ export function GexChart({
         fitView();
         bump();
       }
-    }).catch(() => {});
+    }).catch(() => { if (!cancelled) setHistoryState('error'); });
+    return () => { cancelled = true; };
   }, [symbol]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live price update ─────────────────────────────────────────────────────
@@ -574,6 +581,7 @@ export function GexChart({
           de la banda se posicione sobre el canvas; lightweight-charts no dibuja zonas entre dos
           precios, así que va como overlay traducido con priceToCoordinate. */}
       <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        {readable && historyState !== 'ready' && <span role="status" style={{position:'absolute',top:12,left:14,zIndex:4,padding:'6px 10px',borderRadius:4,background:'#191919',color:historyState === 'error' ? '#ffb454' : '#e5e5df',fontSize:14,pointerEvents:'none'}}>{historyState === 'loading' ? 'Cargando velas…' : historyState === 'error' ? 'Histórico de velas no disponible' : 'Sin velas para este período'}</span>}
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         {gexData && (
           <>

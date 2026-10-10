@@ -3,6 +3,7 @@ import { RefreshCw, BookOpen, Crosshair } from 'lucide-react';
 import { MarketWatchlist } from '../components/ticker/MarketWatchlist';
 import { TickerGrid } from '../components/ticker/TickerGrid';
 import { SymbolSearchCard } from '../components/ticker/SymbolSearchCard';
+import './MarketIndicators.css';
 import { DetailsPanel } from '../components/gex/DetailsPanel';
 import { OptionsChainList } from '../components/gex/OptionsChainList';
 import { CHAIN_COL_W } from '../components/gex/graphLayout';
@@ -21,7 +22,7 @@ import { ConnectionStatus } from '../socket/useMarketSocket';
 import {
   GexChartData, GexExpiryApi, GexScopeApi, GexStrikeApi, GLOBAL_SCOPE,
 } from '../types/gex';
-import { fmtPrice, fmtTime, isStale, tint } from '../utils/formatters';
+import { calcChange, fmtPct, fmtPrice, fmtTime, isStale, tint } from '../utils/formatters';
 
 // Fallback si el JSON no declara refresh_seconds. Los barridos se serializan en el backend, así que
 // lo que manda es recorrer el universo entero (~383s medidos con 4 símbolos), no un barrido suelto.
@@ -94,7 +95,7 @@ function globalToChartData(symbol: string, spot: number, global: GexScopeApi): G
 }
 
 /**
- * Pestaña GEX — estrategia informativa. Replica el layout de Main leyendo su propio JSON:
+ * Mercado — indicadores informativos con un símbolo activo y lectura del JSON GEX:
  * cards del universo, cuadro Details (checks + diagnóstico, sin microestructura) con el GEX GLOBAL,
  * y el cuadro Graph con la cadena por vencimiento. No calcula ni muestra setup candidato.
  */
@@ -120,6 +121,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   const switchEnabled = useSwitchEnabled(switchEndpoint);
 
   const [refOpen, setRefOpen] = useState(false);
+  const [indicator, setIndicator] = useState<'price' | 'gamma' | 'iv'>('gamma');
 
   // El universo del JSON más lo que el operador pineó con el buscador. Los ad-hoc van al final y no
   // se mezclan con los declarados: son de esta sesión y de esta persona.
@@ -234,6 +236,10 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   // etiqueta MANUAL, que dice por qué la hora no se mueve.
   const stale = autoRefresh && isStale(updated, refreshSeconds * 1000 * 1.5);
 
+  const hasPrice = !!ticker && Number.isFinite(ticker.price) && ticker.price > 0 && !ticker.error.price;
+  const change = hasPrice && ticker?.prevClose != null && Number.isFinite(ticker.prevClose) && ticker.prevClose > 0 ? calcChange(ticker!.price,ticker.prevClose) : null;
+  const detailGroupIds = indicator === 'price' ? ['price'] : indicator === 'gamma' ? ['gamma'] : ['market','volatility'];
+
   if (rulesLoading) {
     return <div className="p-4 text-xs" style={{ color: 'var(--text-muted)' }}>Cargando reglas de GEX…</div>;
   }
@@ -243,11 +249,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
 
   return (
     <div className={'market-workspace' + (compact ? ' market-workspace-compact' : '')}><div className="market-analysis">
-      {/* Header — mismo formato que RPF: nombre de la estrategia + badge con su descripción. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 0' }}>
-        <span style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)' }}>{active || 'Mercado'}</span>
-        <span className="market-analysis-label">Gamma exposure</span>
-        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+<header className="market-symbol-header"><div className="market-symbol-price"><span className="market-active-symbol">{active || "Mercado"}</span><strong>{hasPrice ? fmtPrice(ticker!.price) : "—"}</strong><span className={change && change.abs !== 0 ? (change.abs > 0 ? "market-up" : "market-down") : "market-neutral"}>{change ? (change.abs > 0 ? "+" : "")+fmtPrice(change.abs)+" ("+fmtPct(change.pct)+")" : "Variación —"}</span></div>        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
           <button
             onClick={() => setRefOpen(true)}
             title="Definiciones de la estrategia + JSON de reglas"
@@ -265,7 +267,8 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
             title="Prender / apagar el barrido de la cadena. En OFF no se toca DXLink."
           />
         </span>
-      </div>
+<div className="market-quote-detail"><span>Bid <b>{ticker?.bid && ticker.bid > 0 ? fmtPrice(ticker.bid) : "—"}</b></span><span>Ask <b>{ticker?.ask && ticker.ask > 0 ? fmtPrice(ticker.ask) : "—"}</b></span><span>Volumen <b>{ticker?.volume != null ? ticker.volume.toLocaleString("en-US") : "—"}</b></span><span>{ticker?.lastUpdate ? "Recepción "+fmtTime(ticker.lastUpdate)+" ET" : "Sin cotización"}</span></div>{ticker?.error.price && <p className="market-price-error" role="status">{ticker.error.price}</p>}</header>
+<nav className="market-indicator-tabs" aria-label="Indicadores de mercado">{([{id:"price",label:"Precio"},{id:"gamma",label:"Gamma"},{id:"iv",label:"IV y volatilidad"}] as const).map(item => <button key={item.id} aria-pressed={indicator===item.id} onClick={()=>setIndicator(item.id)}>{item.label}</button>)}</nav>
 
       {GEX_REF && (
         <ReferencesModal
@@ -282,7 +285,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
           actividad real, no solo píxeles — TickerGrid hace su propio polling REST de respaldo y el
           gráfico mantiene series vivas. Mostrar el último barrido "congelado" era peor: un panel
           lleno de números se lee como vigente aunque diga que no lo está. */}
-      {switchEnabled === false ? (
+      {switchEnabled === false && (!externalWatchlist || indicator !== "price") ? (
         <div className="px-3">
           <StrategyOffPanel detail={externalWatchlist ? "Barrido GEX apagado. La watchlist mantiene sus cotizaciones; Gamma Exposure no se actualiza hasta activar el barrido." : "Apagada para TODA la plataforma: no se barre la cadena, no se toca DXLink ni a pedido, y no se suscribe ningun simbolo propio de la estrategia. El estado se guarda, asi que un reinicio no la vuelve a prender sola."} />
         </div>
@@ -292,6 +295,17 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
 
       {active && (
         <>
+
+          {indicator === 'price' && <section className="market-price-panel" aria-label="Gráfico de precio">
+            <header><h2>Precio</h2><span>{display?.candles?.interval ?? '1h'} · Velas</span></header>
+            <div className="market-price-chart"><GexChart key={'price-'+active} symbol={active}
+              currentPrice={hasPrice ? ticker!.price : 0} openPrice={ticker?.open ?? 0} gexData={null}
+              candleInterval={display?.candles?.interval ?? '1h'} candleBucketSeconds={3600}
+              maxCandles={display?.candles?.count ?? 100} candleFromDays={30}
+              rightPadBars={display?.candles?.right_pad_bars ?? 10} readable /></div>
+          </section>}
+
+          {indicator === "gamma" && <>
           {/* ── Cuadro Graph — cadena por vencimiento ── */}
           <div style={{
             margin: '0 12px 12px',
@@ -346,7 +360,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
               </div>
             </div>
 
-            <div style={{ display: 'flex', height: compact ? 350 : DETAIL_HEIGHT }}>
+            <div className="market-gamma-chart" style={{ display: 'flex', height: compact ? 350 : DETAIL_HEIGHT }}>
               {/* Izquierda: cadena + lectura numérica del vencimiento elegido */}
               <div style={{
                 width: CHAIN_COL_W,
@@ -391,6 +405,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                   <GexChart
                     // Key por símbolo, no por vencimiento: cambiar de vencimiento redibuja muros y
                     // barras sin remontar el chart (remontarlo volvería a pedir las velas).
+                    readable
                     key={active}
                     symbol={active}
                     currentPrice={ticker?.price ?? data?.spotPrice ?? 0}
@@ -410,6 +425,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
               </div>
             </div>
           </div>
+          </>}
           {/* ── Cuadro Details — GEX global + contexto. Sin columna Microstructure. ── */}
           <div style={{
             margin: '0 12px 12px',
@@ -428,7 +444,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                 fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
                 color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
               }}>
-                Contexto y GEX global
+                {indicator === "gamma" ? "Estructura gamma · Global" : indicator === "iv" ? "Volatilidad" : "Contexto de precio"}
               </span>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -521,7 +537,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                 padding: 16, fontSize: 14, lineHeight: 1.5,
                 color: chainMissing ? 'var(--text-secondary)' : 'var(--red-gc)',
               }}>
-                {chainMissing ? err : `Error cargando GEX: ${err}`}
+                {chainMissing ? err : `No se pudo leer ${indicator === "gamma" ? "GEX" : indicator === "iv" ? "volatilidad" : "el contexto de precio"}: ${err}`}
                 {chainMissing && (
                   <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>
                     El buscador matchea tambien la descripcion, asi que devuelve ETFs sobre el
@@ -533,8 +549,8 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
               <DetailsPanel
                 data={data}
                 groups={display?.details_panel?.groups}
-                subtitle={display?.details_panel?.subtitle
-                  ?? 'Contexto de mercado — lectura informativa'}
+                groupIds={detailGroupIds}
+                subtitle={undefined}
               />
             )}
           </div>
