@@ -140,6 +140,9 @@ namespace DataFeed.Application.App.Runtime
             {
                 var running = RunningInstances().FirstOrDefault(i => i.VersionHash == instance.VersionHash);
                 if (running != null) return DeployResult.Existing(running);
+                // Traza con las instancias paradas de la misma estrategia (WS-0024): la nueva no las reanuda, pero
+                // sus posiciones cuentan para sus límites (LimitScope).
+                created.Payload["previous_instances"] = StoppedOfStrategy(instance.SpecName).Select(i => i.InstanceId).ToList();
                 var other = _repository?.Deploy(deployment, instance, created);
                 if (other != null)
                 {
@@ -260,12 +263,35 @@ namespace DataFeed.Application.App.Runtime
                 .ToList().AsReadOnly();
 
         public int OpenPositionCount(string instanceId)
-            => _positions.Values.Count(p => p.Status == "OPEN" && p.InstanceId == instanceId);
+            => OpenPositionCount(new HashSet<string> { instanceId });
+
+        public int OpenPositionCount(IReadOnlySet<string> instanceIds)
+            => _positions.Values.Count(p => p.Status == "OPEN" && instanceIds.Contains(p.InstanceId));
 
         /// <summary>Hora de la última entrada de la instancia (abierta o cerrada); null si nunca entró.</summary>
         public DateTime? LastEntryAt(string instanceId)
-            => _positions.Values.Where(p => p.InstanceId == instanceId)
+            => LastEntryAt(new HashSet<string> { instanceId });
+
+        public DateTime? LastEntryAt(IReadOnlySet<string> instanceIds)
+            => _positions.Values.Where(p => instanceIds.Contains(p.InstanceId))
                 .Select(p => (DateTime?)p.EntryAt).Max();
+
+        /// <summary>
+        /// Las instancias cuyas posiciones cuentan para los límites de <paramref name="instance"/> (WS-0024): ella
+        /// y las paradas de la misma estrategia (mismo SpecName). Parar y volver a desplegar no deja a la instancia
+        /// nueva en cero: lo que la vieja dejó abierto sigue contando para el máximo de posiciones y el espaciado.
+        /// Las RUNNING de la misma estrategia (otra versión) siguen con su propio límite (P1-07).
+        /// </summary>
+        public IReadOnlySet<string> LimitScope(StrategyInstance instance)
+        {
+            var ids = new HashSet<string> { instance.InstanceId };
+            ids.UnionWith(StoppedOfStrategy(instance.SpecName).Select(i => i.InstanceId));
+            return ids;
+        }
+
+        private IEnumerable<StrategyInstance> StoppedOfStrategy(string specName)
+            => _instances.Values.Where(i => i.LifecycleState == "STOPPED" && i.SpecName == specName)
+                .OrderBy(i => i.CreatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal);
 
         // ── Evaluations ──
 

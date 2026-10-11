@@ -81,8 +81,10 @@ namespace DataFeed.Application.App.Runtime
                 return Outcomes.GatesNotPassed;
             }
 
-            // 3. Límite de posiciones.
-            int openCount = store.OpenPositionCount(instance.InstanceId);
+            // 3. Límite de posiciones: cuentan también las que dejaron abiertas las instancias paradas de la
+            // misma estrategia (WS-0024, ver ShadowRuntimeStore.LimitScope).
+            var limitScope = store.LimitScope(instance);
+            int openCount = store.OpenPositionCount(limitScope);
             if (spec.RiskLimits.MaxConcurrentPositions is int max && openCount >= max)
             {
                 AddEvent(store, instance, "ENTRY_SKIPPED", symbol, nowUtc,
@@ -90,13 +92,13 @@ namespace DataFeed.Application.App.Runtime
                 return Outcomes.MaxPositions;
             }
 
-            // 3b. Espaciado entre entradas (GC-0005): cuenta la última entrada de la instancia, abierta o
+            // 3b. Espaciado entre entradas (GC-0005): cuenta la última entrada del mismo alcance, abierta o
             // cerrada, así un cierre rápido no habilita otra entrada el mismo día. Igual que el máximo de
             // posiciones, se chequea fuera del lock de TryAddPosition: vale porque ShadowEntryLoopService es el
             // único que abre posiciones y evalúa un tick por vez, con las instancias en serie (P1-07). Un segundo
             // camino de entrada tendría que repetir estos dos chequeos bajo ese lock.
             if (spec.RiskLimits.MinMinutesBetweenEntries is int minMinutes
-                && store.LastEntryAt(instance.InstanceId) is DateTime lastEntry
+                && store.LastEntryAt(limitScope) is DateTime lastEntry
                 && nowUtc - lastEntry < TimeSpan.FromMinutes(minMinutes))
             {
                 var next = lastEntry.AddMinutes(minMinutes);
