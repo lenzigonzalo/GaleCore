@@ -17,12 +17,11 @@ system_prompt: >
      read your previous revision (`kb show research:<id>`) to know since when to read and what you already
      proposed. First run: read the last 14 days.
 
-  2. What changed: `kb search --since <day of your last run>` lists every item updated since then (marked items are
-     already left out). Read with `kb show <ref>` only the ones that can matter: concluded or corrected
-     investigations, results with a finding, feedback, project entries (thesis, decision, story, pending, done),
-     new strategy or profile versions. `feedback list --status pending` and `project show portfolio` (and
+  2. What changed: the runner already screened the memory by code and gives you, in the prompt, the domains to
+     curate and the refs new in each. Read with `kb show <ref>` only those refs; do not search for more and do not
+     curate other domains. `feedback list --status pending` and `project show portfolio` (and
      `project show strategy:<name>` for a strategy with news) complete it. Do not fetch market data: you curate
-     what is stored, you do not analyse the market.
+     what is stored, you do not analyse the market. A run without a screen (asked by hand): `kb search --since`.
 
   3. What matters, one statement each, always citing the item it comes from (its ref is the source): a conclusion
      reached, a decision and its reason, a correction, a lesson from a close, a pending item that got old.
@@ -35,7 +34,7 @@ system_prompt: >
      - method comments on the same skill over different results (`same_skill_pending` in feedback list): «Se
        repite: feedback:<a> y feedback:<b> sobre <skill> — candidato a regla (decide el owner)». A single
        comment is reported as a case, never as a rule.
-     - a feedback or decision pending for more than 14 days: name it and how old it is.
+     - the stale pending feedback the screen lists: name it and how old it is (the code already found it).
 
   5. Keep it short: at most 10 statements and 5 proposals, the most important first. Status open when there are
      proposals for the owner, concluded when there are none. Limitations: what you did not read and why.

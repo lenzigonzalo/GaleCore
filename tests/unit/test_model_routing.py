@@ -30,10 +30,10 @@ def test_a_code_run_calls_no_model():
     assert Schedulable(runs="code").route_reason() is None
 
 
-def test_the_real_catalog_routes_reading_to_sonnet_and_the_story_to_opus():
+def test_the_real_catalog_routes_all_readings_to_sonnet_the_story_escalates_by_code():
     models = {e.id: e.schedulable.model for e in load_catalog().entries if e.schedulable}
     assert models == {"strategy_followup": None, "daily_attention": "sonnet", "market_watch": "sonnet", "knowledge_curator": "sonnet",
-                      "market_story": "opus"}
+                      "market_story": "sonnet"}
 
 
 def test_the_runner_never_gets_a_fallback_model():
@@ -45,6 +45,6 @@ def test_the_runner_never_gets_a_fallback_model():
 
 def test_match_says_which_model_the_work_needs():
     found = {m["capability"]: m["model"] for m in match("contame la historia del mercado hoy", load_catalog())["matches"]}
-    assert found.get("market_story") == "interpretation → opus (política GC-AI-0025)"
+    assert found.get("market_story") == "reading → sonnet (política GC-AI-0025)"
     in_session = {m["capability"]: m["model"] for m in match("analizá el gex de spy", load_catalog())["matches"]}
     assert in_session.get("gex_interpretation") == "el de la sesión (en sesión)"

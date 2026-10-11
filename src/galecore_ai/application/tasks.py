@@ -660,7 +660,7 @@ def _tokens(tokens: dict | None) -> dict:
     return {"tokens": tokens} if tokens else {}
 
 
-def _story_pack(kb: KnowledgeBase, invoked_by: str, now: datetime) -> tuple[str, str]:
+def _story_pack(kb: KnowledgeBase, invoked_by: str, now: datetime) -> tuple[str, str, str | None]:
     """Gather and keep the day's market pack; the model gets it in the prompt and cites its ref."""
     from galecore_ai.adapters.cli import _build_dispatcher  # lazy: the CLI imports this module
     from galecore_ai.application import story
@@ -680,7 +680,7 @@ def _story_pack(kb: KnowledgeBase, invoked_by: str, now: datetime) -> tuple[str,
     note = (f"The runner already gathered today's market pack from GaleCore and stored it as {ref} (cite it with that "
             f"exact ref; do not fetch these data again). The pack, verbatim:\n```json\n"
             f"{json.dumps(pack, ensure_ascii=False)}\n```")
-    return ref, note
+    return ref, note, story.escalation_reason(pack, now.date())
 
 
 def _screen(task: TaskDefinition, now: datetime) -> dict:
@@ -708,12 +708,28 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     caps = entry.schedulable
     if isinstance(client, model_run.ClaudeCodeClient):
         client.model = caps.model                # always the policy's model (GC-AI-0025), never a fallback
-    rec = kept = screened = None
+    rec = kept = screened = escalated = None
     followup_error = None
     try:
         if entry.id == "market_story":       # the day's market pack, gathered by code before the model (GC-AI-0024)
-            kept, note = _story_pack(kb, invoked_by, now)
+            kept, note, escalated = _story_pack(kb, invoked_by, now)
+            if escalated and isinstance(client, model_run.ClaudeCodeClient):
+                client.model = "opus"            # Sonnet by policy; Opus only for the reason the code found
             written.append(kb.evidence.path_for(kept.removeprefix("evidence:")))
+        elif entry.id == "knowledge_curator":   # new items by domain, by code; the model only where it crossed the threshold
+            from galecore_ai.application import curation
+            latest = _latest_research(kb, task)
+            last = kb.research.load(latest.split(":", 1)[1]).current.recorded_at if latest else None
+            found = curation.screen(kb, last_run=last, now=now)
+            if not found["domains"]:
+                return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None, "result": "OK",
+                        "reason": f"sin material nuevo que curar, sin modelo: {curation.summary(found)}"[:800],
+                        "screen": found, "duration_s": round(time.monotonic() - t0, 1)}
+            note = (f"The runner screened the memory by code. Curate ONLY these domains: {', '.join(found['domains'])}; "
+                    "read with `kb show` only the refs listed for them, and name the stale pending feedback to the "
+                    "owner as listed. Do not search for more. The screen, verbatim:\n```json\n"
+                    f"{json.dumps(found, ensure_ascii=False)}\n```")
+            followup_error = "sin estrategia: no hay seguimiento"
         elif task.scan is not None:  # screened by code first; the model only with a finding (P1-05)
             from galecore_ai.application import scan
             screened = _screen(task, now)
@@ -763,7 +779,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     reply = client.run(prompt=prompt, allowed=allowed, max_turns=caps.max_turns, schema=model_run.output_schema(),
                        cwd=_REPO, timeout_s=int(min(caps.timeout_minutes * 60, left)), add_dir=scratch)
     base = {"invoked_by": invoked_by, "turns": reply.turns, "max_turns": caps.max_turns, "model": reply.model,
-            "route": caps.route_reason(),
+            "route": caps.route_reason() if not escalated else f"escalada a opus: {escalated}",
             "duration_model_s": reply.duration_s, **_tokens(reply.tokens), **({"followup": rec.id} if rec else {}),
             **({"pack": kept} if kept else {})}
     if reply.ok:

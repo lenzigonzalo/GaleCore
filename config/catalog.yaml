@@ -483,10 +483,10 @@ entries:
       - "The pack is gathered by code from GaleCore (no model): one call per capability, changes and term ratios computed here, a failed call declared in missing, never estimated"
       - The pack is kept as one evidence item and compared with the previous pack of the symbol (moves and sign flips)
       - The research controls; every reported number cites the pack; a save must cite the profile in force
-      - "A scheduled run: the runner gathers the pack, then the model (opus) reads it with only read commands and a turn cap; the runner validates and saves"
+      - "A scheduled run: the runner gathers the pack, then the model (sonnet; opus when the code finds a sign flip, a big SPY/VIX move or a macro release near today) reads it with only read commands and a turn cap; the runner validates and saves"
       - "Read-only: describes, never advises (the runner refuses advice addressed to the reader); no orders"
       - "Not checked - that the story is right or anticipates anything; the next readings and the owner's feedback exist to judge that"
-    schedulable: {runs: model, work: interpretation, max_turns: 12, timeout_minutes: 15}
+    schedulable: {runs: model, work: reading, max_turns: 12, timeout_minutes: 15}
 
   - id: on_demand_analysis
     kind: investigation

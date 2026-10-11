@@ -257,6 +257,26 @@ def compare(pack: dict, previous: dict | None) -> dict | None:
     return {"previous_gathered_at": previous.get("gathered_at"), "moves": moves, "sign_flips": signs}
 
 
+# When the story is worth the strongest model (WS-0025): a verifiable change, decided by code, never by the model.
+ESCALATE_PRICE_PCT = {"SPY.close": 2.0, "VIX.close": 10.0}   # move since the previous pack, in percent
+
+
+def escalation_reason(pack: dict, today: date) -> str | None:
+    """Why this pack calls for Opus instead of Sonnet, or None on a quiet day."""
+    since = pack.get("since_previous") or {}
+    if since.get("sign_flips"):
+        return f"cambio de signo: {', '.join(since['sign_flips'])}"
+    for key, limit in ESCALATE_PRICE_PCT.items():
+        pct = (since.get("moves") or {}).get(key, {}).get("change_pct")
+        if pct is not None and abs(pct) >= limit:
+            return f"{key} {pct:+.1f}% desde el pack anterior (umbral {limit:g}%)"
+    near = {(today - timedelta(days=1)).isoformat(), today.isoformat(), (today + timedelta(days=1)).isoformat()}
+    cal = pack.get("calendar") or {}
+    hit = [r["name"] for g in ("recent_releases", "macro_releases") for r in cal.get(g) or []
+           if (r.get("date") or "")[:10] in near]
+    return f"dato macro cerca de hoy: {', '.join(dict.fromkeys(hit))}" if hit else None
+
+
 def previous_pack(kb: KnowledgeBase, symbol: str, before: datetime) -> tuple[str, dict] | None:
     """The latest stored pack of this symbol gathered before `before`."""
     best = None

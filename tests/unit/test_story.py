@@ -227,3 +227,33 @@ def test_a_change_over_a_negative_base_keeps_its_sign():
 def test_an_empty_gex_answer_is_missing_not_zeros():
     pack = gather(gex={"symbol": "SPY", "gex": {}})
     assert "gex" not in pack["options"] and any("sin datos globales" in m for m in pack["missing"])
+
+
+# ── Opus only when the code finds a reason (WS-0025) ──────────────
+
+
+ESC_DAY = date(2026, 10, 14)
+
+
+def _pack(**over):
+    base = {"since_previous": {"moves": {"SPY.close": {"change_pct": 0.4}, "VIX.close": {"change_pct": 3.0}},
+                               "sign_flips": {}},
+            "calendar": {"recent_releases": [], "macro_releases": [{"date": "2026-10-21", "name": "CPI"}]}}
+    return {**base, **over}
+
+
+def test_a_quiet_day_stays_on_sonnet():
+    assert story.escalation_reason(_pack(), ESC_DAY) is None
+
+
+def test_a_sign_flip_a_big_move_or_a_near_release_escalate():
+    flip = _pack(since_previous={"moves": {}, "sign_flips": {"gex.net_gex": "cambió de signo"}})
+    assert "gex.net_gex" in story.escalation_reason(flip, ESC_DAY)
+    vix = _pack(since_previous={"moves": {"VIX.close": {"change_pct": -12.0}}, "sign_flips": {}})
+    assert "VIX.close -12.0%" in story.escalation_reason(vix, ESC_DAY)
+    near = _pack(calendar={"recent_releases": [{"date": "2026-10-14", "name": "Empleo"}], "macro_releases": []})
+    assert "Empleo" in story.escalation_reason(near, ESC_DAY)
+
+
+def test_the_first_pack_has_no_previous_and_only_the_calendar_can_escalate():
+    assert story.escalation_reason({"since_previous": None, "calendar": {}}, ESC_DAY) is None
