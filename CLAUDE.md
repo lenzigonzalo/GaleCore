@@ -21,6 +21,7 @@ implementer no marca su trabajo `VALIDATED` ni `CLOSED`. Antes de presentar una 
 
 ```bash
 python -B -m galecore_ai.adapters.cli space context        # perfil, objetivos, convenciones, agentes (lo imprime el hook)
+python -B -m galecore_ai.adapters.cli state                # estado ahora: entradas, instancias, posiciones, estructuras, datos
 python -B -m galecore_ai.adapters.cli catalog --match "<pedido en palabras del usuario>"   # capacidad y su flujo
 python -B -m galecore_ai.adapters.cli catalog              # todas: skill (versión+hash), contrato, flujo, controles
 python -B -m galecore_ai.adapters.cli kb search --text "<términos>" [--kind ...] [--status unfinished]
@@ -33,6 +34,10 @@ python -B -m galecore_ai.adapters.cli inbox add --text "<palabras textuales>"   
 El usuario nunca tiene que nombrar una skill: elegí la capacidad con `catalog --match`, decí cuál usás y seguí su
 `flow`; si ninguna sirve, ofrecé `capability_builder` en vez de improvisar. Antes de un trabajo nuevo, buscá
 antecedentes con `kb search`. Cada capacidad, sus comandos y sus contratos: `docs/HOST-REFERENCE.md`.
+
+**Estado:** lo que digas del runtime (entradas, instancias, posiciones, estructuras que ejecuta) o de la salud de los
+datos (conectividad, frescura, cobertura para valuar) sale de `state` en esa corrida, con su hora. Una investigación
+o un seguimiento guardado es antecedente, nunca estado; lo que `state` no pudo leer es «sin verificar».
 
 **Base de conocimiento:** `<workspace>/knowledge/` (fuera de los checkouts, git propio de datos;
 `GALECORE_KNOWLEDGE_DIR` la cambia). Después de una sesión que la escribió, commitearla en ese git (local; nunca se

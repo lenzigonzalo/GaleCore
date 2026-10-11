@@ -806,6 +806,11 @@ async def _cmd_performance(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+async def _cmd_state(args: argparse.Namespace) -> None:
+    from galecore_ai.application import state, supervisor
+    _json_out(state.snapshot(supervisor.api_reader()))
+
+
 async def _cmd_capital(args: argparse.Namespace) -> None:
     from galecore_ai.application import capital, supervisor
     kb = _build_knowledge_base()
@@ -1378,6 +1383,8 @@ def build_parser() -> _JsonArgumentParser:
     p_perf.add_argument("--strategy", action="append", help="Limit to this strategy (repeatable); default: all known")
     p_perf.add_argument("--since", help="Only closes (and their review) from this ISO date on, e.g. the week")
 
+    sub.add_parser("state", help="State read now from GaleCore: switch, instances, open positions, supported "
+                                 "structures, and data health as connectivity, freshness and coverage (WS-0023)")
     p_cap = sub.add_parser("capital", help="«¿Qué capital tengo disponible? ¿Estoy concentrado? Tengo X USD, ¿qué "
                                            "hago?» Exposición contra límites y reparto con reserva y escalera (P1-04)")
     p_cap.add_argument("--amount", type=float, help="Capital to split (USD); default: the profile's reference capital")
@@ -1637,6 +1644,8 @@ def main() -> None:
             asyncio.run(_cmd_supervise(args))
         elif args.command == "performance":
             asyncio.run(_cmd_performance(args))
+        elif args.command == "state":
+            asyncio.run(_cmd_state(args))
         elif args.command == "capital":
             asyncio.run(_cmd_capital(args))
         elif args.command == "contrast":

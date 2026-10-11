@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de daily_contrast y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: daily_contrast
 versions:
+  - version: "1.2.0"
+    date: 2026-10-11
+    changes: >
+      P1-PPa (WS-0023, owner 10/10): primero `state`; lo que se dice del runtime y de los datos sale de esa lectura con
+      su hora y lo guardado es antecedente. Las estructuras que SHADOW ejecuta se leen de `state` (decía «sólo put
+      credit spreads», falso desde P1-07; observado en C1 y R-C6 de WS-0022).
+    feedback: []
   - version: "1.1.0"
     date: 2026-10-06
     changes: >

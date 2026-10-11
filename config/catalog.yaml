@@ -792,6 +792,7 @@ entries:
     galecore_capabilities: []
     data_needs: []
     flow:
+      - state
       - contrast pack [--symbol SPY]
       - capital
       - research save --capability daily_contrast --slug contraste-diario --prompt "<pedido>" < {content, host_provider, host_model}
