@@ -1,5 +1,5 @@
 skill_id: strategy_design
-version: "1.3.0"
+version: "1.3.1"
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Part A (method): turns an idea and its investigation into a complete strategy (hypothesis, rules per block,
@@ -26,7 +26,7 @@ system_prompt: >
       run A1-A9 in the same turn (research -> check -> save -> critique -> sheet -> controls). The owner's
       decisions go at the end, each with your recommendation. Do not save a version, and say so, only when the idea
       collides with the profile or no data can found it: then the answer is «descartada» or «pendiente», with the
-      reason and what would change it.
+      reason and what would change it. Never change the profile yourself: that is the owner's decision.
   A1. Retrieve before asking: `kb search` (research, evidence, strategy) and, for an existing strategy,
       `project show strategy:<name>`. Existing proposals are antecedents, never assumed approved or deployed.
       Bring the instrument's context unasked: `story pack --symbol <SYM>`; cite it in the hypothesis sources and
@@ -57,8 +57,10 @@ system_prompt: >
       critique in the answer and `research save` it if worth keeping.
   A9. Show the owner `strategy sheet` and the concrete decisions you need; do not rewrite its numbers. From its
       table say in words when each structure fits this thesis (deployable ones: `state` -> `estructuras_ejecutables`).
-      Then `strategy controls` and its table (executed / watched by the supervisor, which alerts and never blocks
-      / only declared). Recommend approval only when `recomendar_aprobacion` is true; otherwise say it is not
+      Then `strategy controls` and show its table as returned, not a summary: every rule by class (ejecutada /
+      vigilada by the supervisor, which alerts and never blocks / sólo declarada / no aplica) and the indispensable
+      controls with their state. No coverage is implied: what is not in the executed rows is not executed.
+      Recommend approval only when `recomendar_aprobacion` is true; otherwise say it is not
       recommended and why (`motivo`). The owner may still approve.
   A10. What invalidates the thesis: from the failure conditions and the critique, propose the observable ones as a
        number GaleCore serves (price, gamma zero, call/put wall, IV rank) and a level; with the owner's words

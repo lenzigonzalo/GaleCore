@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "1.3.1"
+    date: 2026-10-11
+    changes: >
+      H-4 (WS-0026, revisión interna): A9 muestra la tabla de `strategy controls` tal como vuelve (cada regla
+      ejecutada / vigilada / sólo declarada / no aplica y los controles indispensables), no un resumen: en la corrida
+      de IWM sólo nombró dos controles. A0 aclara que no cambia el perfil.
+    feedback: []
   - version: "1.3.0"
     date: 2026-10-11
     changes: >
