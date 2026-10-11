@@ -152,6 +152,23 @@ public class ShadowRuntimeLifecycleTests
         Assert.Equal(new HashSet<string> { "i-1" }, store.LimitScope(store.GetInstance("i-1")!));
     }
 
+    [Fact]
+    public async Task RunningSibling_StoppedLater_DoesNotPassItsPositionsToTheOther()
+    {
+        // Dos versiones RUNNING de la misma estrategia (P1-07); parar una después no le suma sus posiciones a la otra.
+        var (store, _) = NewRuntime();
+        store.RegisterSpec("shadow_runtime_test_v1", Spec());
+        store.SetInstance("i-2", store.GetInstance("i-1")! with { InstanceId = "i-2", CreatedAt = Now.AddMinutes(1) });
+        var data = new FakeData { BuildFor = i => CandidateBuildResult.Built(RealCandidate() with { InstanceId = i.InstanceId }) };
+        await ShadowRuntimeTick.RunEntryTickAsync(store, data, () => true, Now, default);
+        store.Stop("i-1", Event("i-1", "INSTANCE_STOPPED", Now.AddMinutes(5)));
+
+        var scope = store.LimitScope(store.GetInstance("i-2")!);
+
+        Assert.Equal(new HashSet<string> { "i-2" }, scope);
+        Assert.Equal(1, store.OpenPositionCount(scope));
+    }
+
     // ── 3. Iron condor por el tick de entrada, con una cadena fija (T3) ──
 
     /// <summary>Cadena fija: vencimientos, griegas del 03/11 (40 DTE) y cotizaciones de las cuatro patas.</summary>

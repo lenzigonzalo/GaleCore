@@ -142,7 +142,7 @@ namespace DataFeed.Application.App.Runtime
                 if (running != null) return DeployResult.Existing(running);
                 // Traza con las instancias paradas de la misma estrategia (WS-0024): la nueva no las reanuda, pero
                 // sus posiciones cuentan para sus límites (LimitScope).
-                created.Payload["previous_instances"] = StoppedOfStrategy(instance.SpecName).Select(i => i.InstanceId).ToList();
+                created.Payload["previous_instances"] = StoppedBefore(instance.SpecName, instance.CreatedAt).Select(i => i.InstanceId).ToList();
                 var other = _repository?.Deploy(deployment, instance, created);
                 if (other != null)
                 {
@@ -278,19 +278,21 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>
         /// Las instancias cuyas posiciones cuentan para los límites de <paramref name="instance"/> (WS-0024): ella
-        /// y las paradas de la misma estrategia (mismo SpecName). Parar y volver a desplegar no deja a la instancia
-        /// nueva en cero: lo que la vieja dejó abierto sigue contando para el máximo de posiciones y el espaciado.
-        /// Las RUNNING de la misma estrategia (otra versión) siguen con su propio límite (P1-07).
+        /// y las que se pararon antes de que naciera, de la misma estrategia (mismo SpecName). Parar y volver a
+        /// desplegar no deja a la instancia nueva en cero: lo que la vieja dejó abierto sigue contando para el máximo
+        /// de posiciones y el espaciado. Las RUNNING de la misma estrategia (otra versión) siguen con su propio límite
+        /// (P1-07), también si una se para después: sus posiciones no pasan a la otra.
         /// </summary>
         public IReadOnlySet<string> LimitScope(StrategyInstance instance)
         {
             var ids = new HashSet<string> { instance.InstanceId };
-            ids.UnionWith(StoppedOfStrategy(instance.SpecName).Select(i => i.InstanceId));
+            ids.UnionWith(StoppedBefore(instance.SpecName, instance.CreatedAt).Select(i => i.InstanceId));
             return ids;
         }
 
-        private IEnumerable<StrategyInstance> StoppedOfStrategy(string specName)
-            => _instances.Values.Where(i => i.LifecycleState == "STOPPED" && i.SpecName == specName)
+        /// <summary>Las paradas de la estrategia hasta <paramref name="asOf"/> (Stop deja UpdatedAt en la hora del stop).</summary>
+        private IEnumerable<StrategyInstance> StoppedBefore(string specName, DateTime asOf)
+            => _instances.Values.Where(i => i.LifecycleState == "STOPPED" && i.SpecName == specName && i.UpdatedAt <= asOf)
                 .OrderBy(i => i.CreatedAt).ThenBy(i => i.InstanceId, StringComparer.Ordinal);
 
         // ── Evaluations ──
