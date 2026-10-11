@@ -467,3 +467,36 @@ def test_the_run_records_its_tokens_including_the_correction_round(briefing):
     assert result["tokens"] == {"input": 12, "output": 120}
     status = t.status(kb=kb, scheduler=FakeScheduler(), task_id="atencion-diaria", now=LATER)
     assert status["last_run"]["tokens"] == {"input": 12, "output": 120}
+
+
+# ── the daily briefing only with news (WS-0025) ─────────────────
+
+
+def test_a_scheduled_briefing_without_news_does_not_call_the_model(briefing, monkeypatch):
+    kb, _, follow = briefing
+    monkeypatch.setattr(t, "followup_news", lambda rec: False)
+    model = model_ok(output())
+    result = t.run(kb=kb, task_id="atencion-diaria", followup=follow, now=LATER, client=model, invoked_by="scheduler",
+                   commit=False)
+    assert model.calls == [] and result["model"] is None and result["result"] == "OK"
+    assert result["followup"] and "sin novedades" in result["reason"]
+    assert "Sin modelo: sin novedades" in (kb.base / "tasks" / "atencion-diaria" / "LATEST.md").read_text(encoding="utf-8")
+
+
+def test_a_manual_briefing_always_calls_the_model(briefing, monkeypatch):
+    kb, _, follow = briefing
+    monkeypatch.setattr(t, "followup_news", lambda rec: False)
+    model = model_ok(output())
+    run(kb, follow, model)
+    assert len(model.calls) == 1
+
+
+def test_news_is_an_open_position_a_notice_or_a_new_event():
+    from types import SimpleNamespace
+
+    from galecore_ai.application.followup import has_news
+    rec = lambda attention=(), shadow=(): SimpleNamespace(attention=list(attention), shadow=list(shadow))
+    assert not has_news(rec(shadow=["Posición CLOSED: crédito 0.46, salida TAKE_PROFIT"]))
+    assert has_news(rec(shadow=["Posición OPEN: crédito 0.44"]))
+    assert has_news(rec(attention=["GaleCore respondió sin estado del runtime"]))
+    assert has_news(rec(shadow=["2026-10-10T18:39 POSITION_OPENED: {}"]))

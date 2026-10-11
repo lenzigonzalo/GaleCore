@@ -33,6 +33,7 @@ from zoneinfo import ZoneInfo
 
 from galecore_ai.application import model_run
 from galecore_ai.application.catalog_check import CODE_RUNNERS, cli_commands
+from galecore_ai.application.followup import has_news as followup_news
 from galecore_ai.application.followup import history as followup_history
 from galecore_ai.application.followup import run_followup
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
@@ -622,6 +623,8 @@ def _write_latest(path: Path, task: TaskDefinition, outcome: dict, now: datetime
               f"{outcome.get('duration_s', '—')} s | {outcome.get('turns') or '—'} de {outcome.get('max_turns')} |"), ""]
     if outcome.get("scan"):
         lines += ["Escaneo por código (sin modelo): " + (outcome.get("reason") or "—"), ""]
+    elif outcome["result"] == "OK" and outcome.get("model") is None and outcome.get("reason"):
+        lines += ["Sin modelo: " + outcome["reason"], ""]
     elif outcome["result"] != "OK":
         lines += ["**No se pudo completar.** Motivo: " + (outcome.get("reason") or outcome.get("error") or "—"), ""]
     if outcome["result"] == "FAILED":
@@ -752,6 +755,11 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
                                  task_id=task.id, now=now)
             written += [path, path.parent / "LATEST.md",
                         *(kb.base / "evidence" / f"{s.split(':', 1)[1]}.json" for s in rec.sources)]
+            if entry.id == "daily_attention" and invoked_by == "scheduler" and not followup_news(rec):
+                return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None, "result": "OK",
+                        "followup": rec.id, "reason": "sin novedades en SHADOW (sin posición abierta, aviso ni "
+                        "evento nuevo), sin modelo; los datos del día quedaron guardados",
+                        "duration_s": round(time.monotonic() - t0, 1)}
             note = (f"The runner already ran the follow-up for today: record {rec.id} (status {rec.status}); read it "
                     f"with `followup history --strategy {task.strategy}` and use it as the runtime data of step 3.")
     except Exception as exc:  # noqa: BLE001 - recorded; the model still reads what it can

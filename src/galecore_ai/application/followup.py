@@ -88,6 +88,13 @@ def _write_latest(kb: KnowledgeBase, rec: FollowupRecord) -> None:
     (_dir(kb, rec.strategy) / "LATEST.md").write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
+def has_news(rec: FollowupRecord) -> bool:
+    """Whether the day's record has something for the briefing to say (WS-0025): an open position to value, a notice,
+    or a runtime event since the last review. Closed positions stay in the record for good, so they are not news."""
+    return bool(rec.attention) or any(
+        line.startswith("Posición OPEN") or line[:2] == "20" for line in rec.shadow)
+
+
 # ── reading the strategy and GaleCore ────────────────────────────
 
 
