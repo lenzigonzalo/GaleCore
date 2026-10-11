@@ -16,7 +16,7 @@ export function ClaudeTerminal() {
   const { open, session, start, setOpen } = useTerminalStore();
   const [folders, setFolders] = useState<TerminalFolder[] | null>(null);
   const [down, setDown] = useState(false);
-  const [folder, setFolder] = useState('workspace');
+  const [folder, setFolder] = useState('galecore');
   const [ended, setEnded] = useState(false);
   const host = useRef<HTMLDivElement>(null);
   const fitRef = useRef<FitAddon | null>(null);

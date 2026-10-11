@@ -136,7 +136,7 @@ function AlertCard({ alert, sent, error, analysis, onAnswer }: {
       {analysis?.status === 'done' && <AnalysisView analysis={analysis} />}
       {open && (
         <div style={{ marginTop: 6 }}>
-          <button onClick={e => { e.stopPropagation(); startTerminal('workspace', analysisPrompt(alert)); }} style={chip}
+          <button onClick={e => { e.stopPropagation(); startTerminal('galecore', analysisPrompt(alert)); }} style={chip}
             title="Abre Claude Code a la derecha con el pedido enviado">
             Analizá este aviso
           </button>
