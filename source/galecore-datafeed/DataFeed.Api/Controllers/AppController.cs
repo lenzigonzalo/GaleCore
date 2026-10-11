@@ -1580,7 +1580,8 @@ namespace DataFeed.Controllers
 
         /// <summary>
         /// Estado del runtime para la pantalla SHADOW (GC-0004): persistencia (y qué se recuperó al
-        /// arrancar), switch e instancias.
+        /// arrancar), switch, instancias y las estructuras que el runtime ejecuta (WS-0023: el harness las lee de acá
+        /// en vez de afirmarlas de memoria).
         /// </summary>
         [Tags("App.Runtime")]
         [HttpGet("Runtime/Status")]
@@ -1598,6 +1599,7 @@ namespace DataFeed.Controllers
                 },
                 @switch = new { enabled, source },
                 instances = _runtimeStore.AllInstances().OrderBy(i => i.CreatedAt),
+                supportedStructures = DataFeed.Application.App.Runtime.RuntimeStructures.Supported,
             });
         }
 
