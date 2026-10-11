@@ -1,6 +1,14 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "1.3.0"
+    date: 2026-10-11
+    changes: >
+      H-4 (WS-0026): A0, no frenar en preguntas. Observado en una sesión nueva («vender prima en IWM, la estructura
+      proponela vos»): v1.2.0 devolvió tres preguntas sin guardar investigación ni spec ni pasar por check, crítica y
+      ficha. Ahora diseña completo con valores propuestos (design_choice) y deja las decisiones al final; sólo
+      descarta o deja pendiente, con motivo, si choca con el perfil o no hay datos que la fundamenten.
+    feedback: []
   - version: "1.2.0"
     date: 2026-10-11
     changes: >
