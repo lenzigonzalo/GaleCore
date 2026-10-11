@@ -8,7 +8,8 @@
  *
  *   node tools/terminal/server.js          # :8770
  *
- * GET  /folders                                 → dónde se puede abrir: el workspace y cada estrategia
+ * GET  /folders                                 → dónde se puede abrir: GaleCore (el harness, por defecto), cada
+ *                                                 estrategia y el workspace de desarrollo
  * WS   /pty?folder=<clave>&prompt=<texto>&cols=&rows=
  *      servidor → panel: la salida tal cual · panel → servidor: {"type":"input","data"} | {"type":"resize","cols","rows"}
  */
@@ -23,6 +24,9 @@ const ORIGINS = (process.env.GALECORE_TERMINAL_ORIGINS || 'http://localhost:3039
   .split(',').map(s => s.trim()).filter(Boolean);
 const WORKSPACE = path.resolve(__dirname, '..', '..');
 const STRATEGIES = path.join(WORKSPACE, 'knowledge', 'strategies');
+// El trader usa el harness (GaleCore-AI), nunca el workspace de desarrollo con sus hooks y skills (owner 10/10, WS-0023).
+const HARNESS = path.join(WORKSPACE, 'GaleCore-AI');
+const DEFAULT_FOLDER = 'galecore';
 const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];   // contra DNS rebinding: el nombre tiene que ser local
 const MAX_SESSIONS = 4;
 const MAX_PROMPT = 2000;
@@ -36,12 +40,13 @@ function claudeBin() {
 
 /** Clave → carpeta. Sólo estas: el panel nunca manda una ruta. */
 function folders() {
-  const list = [{ key: 'workspace', label: 'Espacio de trabajo', dir: WORKSPACE }];
+  const list = [{ key: DEFAULT_FOLDER, label: 'GaleCore', dir: HARNESS }];
   try {
     for (const d of fs.readdirSync(STRATEGIES, { withFileTypes: true })) {
       if (d.isDirectory()) list.push({ key: `strategy:${d.name}`, label: d.name, dir: path.join(STRATEGIES, d.name) });
     }
-  } catch { /* sin estrategias: queda el workspace */ }
+  } catch { /* sin estrategias: quedan GaleCore y el workspace */ }
+  list.push({ key: 'workspace', label: 'Desarrollo (workspace)', dir: WORKSPACE });
   return list;
 }
 
@@ -79,13 +84,15 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 function open(ws, params) {
-  const folder = folders().find(f => f.key === (params.get('folder') || 'workspace'));
+  const folder = folders().find(f => f.key === (params.get('folder') || DEFAULT_FOLDER));
   if (!folder) { ws.close(4004, 'carpeta desconocida'); return; }
   const prompt = (params.get('prompt') || '').trim();
   // Un pedido que empieza con «-» claude lo tomaría como opción (p. ej. saltear permisos): no se acepta.
   if (prompt.startsWith('-') || prompt.length > MAX_PROMPT) { ws.close(4000, 'pedido no válido'); return; }
-  if (sessions >= MAX_SESSIONS) { ws.send(`
-Ya hay ${MAX_SESSIONS} sesiones abiertas: cerrá una.
+  if (sessions >= MAX_SESSIONS) { ws.send(`
+
+Ya hay ${MAX_SESSIONS} sesiones abiertas: cerrá una.
+
 `); ws.close(); return; }
   ws.on('error', () => { /* frame inválido o corte: se cierra y se mata la pty en «close» */ });
   let term;
