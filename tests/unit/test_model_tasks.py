@@ -500,3 +500,4 @@ def test_news_is_an_open_position_a_notice_or_a_new_event():
     assert has_news(rec(shadow=["Posición OPEN: crédito 0.44"]))
     assert has_news(rec(attention=["GaleCore respondió sin estado del runtime"]))
     assert has_news(rec(shadow=["2026-10-10T18:39 POSITION_OPENED: {}"]))
+    assert not has_news(rec(shadow=["2026-10-10T18:39 GATES_NOT_PASSED: iv", "2026-10-10T18:40 ENTRY_SKIPPED: x"]))

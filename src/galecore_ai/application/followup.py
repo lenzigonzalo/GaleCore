@@ -88,11 +88,15 @@ def _write_latest(kb: KnowledgeBase, rec: FollowupRecord) -> None:
     (_dir(kb, rec.strategy) / "LATEST.md").write_text("\n".join(lines), encoding="utf-8", newline="\n")
 
 
+NEWS_EVENTS = ("POSITION_OPENED", "POSITION_CLOSED", "CANDIDATE_CREATED")   # routine skips are not news
+
+
 def has_news(rec: FollowupRecord) -> bool:
     """Whether the day's record has something for the briefing to say (WS-0025): an open position to value, a notice,
-    or a runtime event since the last review. Closed positions stay in the record for good, so they are not news."""
+    or a position/candidate event since the last review. Closed positions stay in the record for good, and a day of
+    gates not passed or entries skipped is routine: neither is news."""
     return bool(rec.attention) or any(
-        line.startswith("Posición OPEN") or line[:2] == "20" for line in rec.shadow)
+        line.startswith("Posición OPEN") or any(e in line for e in NEWS_EVENTS) for line in rec.shadow)
 
 
 # ── reading the strategy and GaleCore ────────────────────────────
