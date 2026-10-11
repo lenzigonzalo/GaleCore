@@ -101,6 +101,7 @@ def snapshot(read: supervisor.Reader, now: datetime | None = None) -> dict:
             problems.append(f"{inst.get('specName')} {iid[:8]}: {str(exc)[:120]}")
             instances.append(row)
             continue
+        positions = [p for p in positions if isinstance(p, dict)]
         opened = [p for p in positions if p.get("status") == "OPEN"]
         row["abiertas"], row["cerradas"] = len(opened), sum(p.get("status") == "CLOSED" for p in positions)
         open_positions += opened

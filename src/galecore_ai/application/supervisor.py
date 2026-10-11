@@ -255,11 +255,14 @@ def bet_limits(kb: KnowledgeBase, read: Reader) -> tuple[list[dict], list[str]]:
         exp = read("/App/Runtime/Exposure?" + capital._query(lim["capital_referencia"], lim))
     except Exception as exc:  # noqa: BLE001 - reported, the rest of the pass stands
         return [], [f"tope por apuesta sin verificar: {str(exc)[:160]}"]
-    drafts = []
+    drafts, problems = [], []
     for check in (exp or {}).get("checks") or []:
         if not str(check.get("limit", "")).startswith("bet:") or check.get("ok"):
             continue
         bet = check["limit"][4:]
+        if not all(isinstance(check.get(k), int | float) for k in ("used", "max")):
+            problems.append(f"tope por apuesta {bet}: GaleCore no dio lo usado o el tope")
+            continue
         drafts.append({"strategy": "cartera", "strategy_ref": None, "instance_id": "", "position_id": bet,
                        "key": f"bet_limit:{bet}", "kind": AlertKind.BET_LIMIT,
                        "motivo": f"La apuesta {bet} usa {check.get('used'):g} USD de un tope de {check.get('max'):g}.",
@@ -268,7 +271,7 @@ def bet_limits(kb: KnowledgeBase, read: Reader) -> tuple[list[dict], list[str]]:
                        "regla": f"Tope por apuesta del perfil ({doc.ref}): vigilado por el supervisor; el runtime no "
                                 "lo bloquea",
                        "propuesta": "Revisar si se acepta la exposición o se reduce; nada se cierra solo por esto."})
-    return drafts, []
+    return drafts, problems
 
 
 # ── the pass ─────────────────────────────────────────────────────

@@ -68,7 +68,8 @@ def classify(doc: StrategyDocument) -> dict:
     indispensables = []
     for name, path in INDISPENSABLE:
         if path is None:
-            state = "vigilado (aviso, no bloquea)" if name in WATCHED_INDISPENSABLE else "no ejecutado por el runtime"
+            state = ("vigilado (aviso, no bloquea; si el perfil declara sus límites)" if name in WATCHED_INDISPENSABLE
+                     else "no ejecutado por el runtime")
         else:
             runs = _spec_value(spec, path) not in (None, {}, False) and any(
                 p == path or p.startswith(path + ".") for p in executed_paths)

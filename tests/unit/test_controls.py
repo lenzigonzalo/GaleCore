@@ -21,7 +21,7 @@ def test_rules_fall_in_three_classes_and_indispensables_decide_the_recommendatio
         assert by_id[rule.id]["clase"] == expected
     assert all(v["clase"] == "vigilada" for v in out["vigilancia_del_supervisor"])
     state = {i["control"]: i["estado"] for i in out["indispensables"]}
-    assert state["tope por apuesta"] == "vigilado (aviso, no bloquea)"        # final state: watched, never «ejecutado»
+    assert state["tope por apuesta"].startswith("vigilado (aviso, no bloquea")        # final state: watched, never «ejecutado»
     assert state["freno por pérdida acumulada"] == "no ejecutado por el runtime"
     assert out["recomendar_aprobacion"] is False
     assert "No se recomienda aprobar" in out["motivo"] and "tope por apuesta" in out["motivo"]
@@ -73,3 +73,12 @@ def test_a_bet_within_the_cap_is_quiet_and_incomplete_limits_are_unverified(kb, 
     set_profile(kb.profile, changes={"risk_limits": LIMITS[:2]}, note="n", prompt="p", host=HOST, now=NOW)
     out = supervisor.scan(kb, _reader(doc.spec_hash, [position()], exposure()), IN_SESSION.replace(minute=10))
     assert any(p.startswith("tope por apuesta sin verificar") for p in out["problems"])
+
+
+def test_a_bet_check_without_numbers_is_a_problem_not_a_crash(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
+                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    broken = {"limit": "bet:SPY bullish 2026-W46", "used": None, "max": 1500.0, "headroom": None, "ok": False}
+    out = supervisor.scan(kb, _reader(doc.spec_hash, [position()], exposure(checks=[broken])), IN_SESSION)
+    assert out["new"] == [] and any("no dio lo usado" in p for p in out["problems"])
