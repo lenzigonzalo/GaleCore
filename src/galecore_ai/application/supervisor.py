@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -239,6 +240,37 @@ def evaluate(position: dict, *, strategy: str, strategy_ref: str | None, spec: d
     return out
 
 
+def bet_limits(kb: KnowledgeBase, read: Reader) -> tuple[list[dict], list[str]]:
+    """WS-0023: the profile's cap per bet, **watched** (an alert), not executed — the runtime does not block by it.
+    GaleCore groups what is open by bet and checks it (``/App/Runtime/Exposure``); here only the broken ones become
+    drafts. Without the profile's limits the check is a problem of the pass, never «within the cap»."""
+    from galecore_ai.application import capital
+    doc = kb.profile.latest()
+    if doc is None:                    # no profile, no cap to watch (capital and the space say the profile is missing)
+        return [], []
+    lim = capital.limits(doc.content)
+    if lim["no_leidos"]:
+        return [], ["tope por apuesta sin verificar: faltan límites del perfil (" + ", ".join(lim["no_leidos"]) + ")"]
+    try:
+        exp = read("/App/Runtime/Exposure?" + capital._query(lim["capital_referencia"], lim))
+    except Exception as exc:  # noqa: BLE001 - reported, the rest of the pass stands
+        return [], [f"tope por apuesta sin verificar: {str(exc)[:160]}"]
+    drafts = []
+    for check in (exp or {}).get("checks") or []:
+        if not str(check.get("limit", "")).startswith("bet:") or check.get("ok"):
+            continue
+        bet = check["limit"][4:]
+        drafts.append({"strategy": "cartera", "strategy_ref": None, "instance_id": "", "position_id": bet,
+                       "key": f"bet_limit:{bet}", "kind": AlertKind.BET_LIMIT,
+                       "motivo": f"La apuesta {bet} usa {check.get('used'):g} USD de un tope de {check.get('max'):g}.",
+                       "dato": {"apuesta": bet, "usado_usd": check.get("used"), "tope_usd": check.get("max"),
+                                "margen_usd": check.get("headroom")},
+                       "regla": f"Tope por apuesta del perfil ({doc.ref}): vigilado por el supervisor; el runtime no "
+                                "lo bloquea",
+                       "propuesta": "Revisar si se acepta la exposición o se reduce; nada se cierra solo por esto."})
+    return drafts, []
+
+
 # ── the pass ─────────────────────────────────────────────────────
 
 
@@ -297,6 +329,19 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
                 _write(kb, alert)
                 known.add(alert.key)
                 new.append(alert)
+    if events is not None:                       # something is open: the cap per bet is watched too (WS-0023)
+        drafts, bet_problems = bet_limits(kb, read)
+        problems.extend(bet_problems)
+        for draft in drafts:
+            if draft["key"] in known:
+                continue
+            slug = re.sub(r"[^A-Za-z0-9-]+", "-", draft["position_id"]).strip("-")
+            alert = Alert(id=f"{now.date().isoformat()}-bet_limit-{slug}"[:80], detected_at=now,
+                          options=OPTIONS[AlertKind.BET_LIMIT], sources=["/App/Runtime/Exposure"], **draft)
+            alert = alert.model_copy(update={"content_hash": compute_document_hash(alert.hashable_content())})
+            _write(kb, alert)
+            known.add(alert.key)
+            new.append(alert)
     watched = 0
     if _in_session(now):                         # P1-01b: the owner's rules, only in the regular session
         from galecore_ai.application import watch

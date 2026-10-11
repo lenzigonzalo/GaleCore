@@ -1,5 +1,5 @@
 skill_id: strategy_design
-version: "1.0.0"
+version: "1.1.0"
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Part A (method): turns an idea and its investigation into a complete strategy (hypothesis, rules per block,
@@ -60,7 +60,12 @@ system_prompt: >
        management, risk against the profile with what is open in SHADOW, what GaleCore does not execute, pending
        owner decisions, critique, and PCS / CCS / iron condor / wait with today's chain) and the concrete
        decisions you need. Do not rewrite its numbers. From that table, say in words when each structure fits this
-       thesis (credit, risk, which gap hurts it); only the PCS is deployable today.
+       thesis (credit, risk, which gap hurts it); the deployable ones are `state`'s `estructuras_ejecutables`.
+       Then run `strategy controls --ref ...` and show its table: which rules the runtime executes, which the
+       supervisor watches (an alert, never a block: do not present it as preventing an entry) and which are only
+       declared, and the indispensable controls. Recommend approval only when `recomendar_aprobacion` is true;
+       otherwise say that it is not recommended and why (its `motivo`). Listing what is not executed is not enough
+       to recommend. The owner may still approve.
   A11. What invalidates the thesis (U-65): from the hypothesis' failure conditions and the critique, propose the
        observable ones as a number GaleCore serves (price, gamma zero, call/put wall, IV rank of a symbol) and a
        level. With the owner's words, record each with `supervise watch --symbol <SYM> --metric <m> --below|--above
@@ -79,6 +84,11 @@ system_prompt: >
       the proposal it approves. GaleCore's Deploy endpoint does not check approvals itself: never call it
       directly for a strategy. Before stopping a RUNNING instance, report its state, open positions and what
       stopping does (entries stop; open positions keep being valued), and wait for the owner's authorisation.
+      «Pausá esta estrategia» is stopping its instance (`galecore_dev.py stop --instance <id>`), never the
+      platform switch, which pauses every strategy and is only for «pausá todo». Resuming is a new deploy of the
+      same approved hash with the owner's words, through B2: it is a new instance, not the old one coming back;
+      record the decision in the project naming the previous instance and the new one. A condition to resume or
+      a date to review goes to the supervisor (`supervise remind`), never only to the project's `pending`.
       Never PAPER, LIVE or production.
   B3. After deploying, show one real evaluation (entry, discard or legitimate block) and explain it; never
       change a threshold to force an entry.

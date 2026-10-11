@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import math
 import re
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -25,6 +25,7 @@ from galecore_ai.contracts.strategy import compute_document_hash
 from galecore_ai.contracts.supervision import (
     METRIC_LABELS,
     OPTIONS,
+    REMINDERS,
     Alert,
     AlertKind,
     WatchCancel,
@@ -43,6 +44,7 @@ SOURCES: dict[WatchMetric, str] = {
     WatchMetric.PRICE: QUOTE, WatchMetric.GAMMA_ZERO: GEX, WatchMetric.CALL_WALL: GEX, WatchMetric.PUT_WALL: GEX,
     WatchMetric.IV_RANK: IV_RANK,
 }
+POSITIONS = "/App/Runtime/Instances/{instance}/Positions"
 GEX_FIELDS = {WatchMetric.GAMMA_ZERO: "gammaZeroLevel", WatchMetric.CALL_WALL: "callWall",
               WatchMetric.PUT_WALL: "putWall"}
 
@@ -89,6 +91,8 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
     depend on it, each of which gets the condition in its project (kind thesis), and the alert says which. The project
     entries follow the rule's write: if one fails, the rule stays stored and the error says so."""
     now = now or datetime.now(UTC)
+    if metric in {m.value for m in REMINDERS}:
+        raise KnowledgeError(f"{metric} is a reminder: use `supervise remind`")
     symbol = symbol.strip().upper()
     if not SYMBOL.match(symbol):
         raise KnowledgeError(f"symbol {symbol!r}: a ticker such as SPY")
@@ -114,8 +118,18 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
                          thesis=thesis.strip(), strategies=strategies)
     except (ValueError, ValidationError) as exc:
         raise KnowledgeError(f"Refusing to store the rule: {str(exc)[:200]}") from exc
-    same = (rule.symbol, rule.metric, rule.condition, rule.threshold)
-    if dup := next((r for r in rules(kb) if (r.symbol, r.metric, r.condition, r.threshold) == same
+    rule = _store(kb, rule, now)
+    if rule.thesis:
+        for name in rule.strategies:
+            project.add(kb=kb, name=name, kind="thesis", prompt=prompt, host_model=host_model, now=now,
+                        words=f"Deja de servir «{rule.thesis}» si {describe(rule)} (lo vigila el supervisor: regla "
+                              f"{rule.id}). Pedido: «{words}»")
+    return rule
+
+
+def _store(kb: KnowledgeBase, rule: WatchRule, now: datetime) -> WatchRule:
+    same = (rule.symbol, rule.metric, rule.condition, rule.threshold, rule.instance_id)
+    if dup := next((r for r in rules(kb) if (r.symbol, r.metric, r.condition, r.threshold, r.instance_id) == same
                     and status(kb, r, now) == "active"), None):
         raise KnowledgeError(f"the same rule is already active: {dup.id}")
     d = _dir(kb)
@@ -128,11 +142,6 @@ def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshol
     rule = rule.model_copy(update={"content_hash": compute_document_hash(rule.hashable_content())})
     with path.open("x", encoding="utf-8", newline="\n") as fh:
         fh.write(json.dumps(rule.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n")
-    if rule.thesis:
-        for name in rule.strategies:
-            project.add(kb=kb, name=name, kind="thesis", prompt=prompt, host_model=host_model, now=now,
-                        words=f"Deja de servir «{rule.thesis}» si {describe(rule)} (lo vigila el supervisor: regla "
-                              f"{rule.id}). Pedido: «{words}»")
     return rule
 
 
@@ -183,6 +192,29 @@ def cancel(kb: KnowledgeBase, rule_id: str, *, words: str, prompt: str, now: dat
     return mark
 
 
+def remind(kb: KnowledgeBase, *, words: str, prompt: str, on: date | None = None, instance_id: str = "",
+           decision: str = "", host_model: str | None = None, now: datetime | None = None) -> WatchRule:
+    """WS-0023: a decision's «revisar el <fecha>» or «reanudar cuando cierren» kept as a rule the supervisor checks,
+    so it does not depend on someone remembering a project's `pending`. Exactly one of ``on`` (a date, New York) or
+    ``instance_id`` (alerts when that instance has no open position). It alerts once, with the decision as context."""
+    from galecore_ai.application.supervisor import NEW_YORK
+    now = now or datetime.now(UTC)
+    if (on is None) == (not instance_id.strip()):
+        raise KnowledgeError("a reminder is either a date (--on) or an instance whose positions close (--when-closed)")
+    if not words.strip() or not prompt.strip():
+        raise KnowledgeError("a reminder keeps the owner's words and request (--text, --prompt)")
+    if on is not None:
+        if on <= now.astimezone(NEW_YORK).date():
+            raise KnowledgeError("--on is today or in the past")
+        metric, condition, threshold, tag = WatchMetric.DATE, WatchCondition.ABOVE, float(on.strftime("%Y%m%d")), "fecha"
+    else:
+        metric, condition, threshold, tag = WatchMetric.OPEN_POSITIONS, WatchCondition.BELOW, 0.0, instance_id[:8]
+    rule = WatchRule(id=f"{now.date().isoformat()}-recordatorio-{tag}-{_fmt(threshold)}", created_at=now, symbol="",
+                     metric=metric, condition=condition, threshold=threshold, words=words, prompt=prompt,
+                     host_model=host_model, instance_id=instance_id.strip(), decision=decision.strip())
+    return _store(kb, rule, now)
+
+
 def view(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
     met = _met(kb)
     return [{"id": r.id, "status": status(kb, r, now, met), "symbol": r.symbol, "metric": r.metric.value,
@@ -195,8 +227,25 @@ def view(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
 
 
 def describe(rule: WatchRule) -> str:
+    if rule.metric == WatchMetric.DATE:
+        t = int(rule.threshold)
+        return f"fecha ≥ {date(t // 10000, t // 100 % 100, t % 100):%d/%m/%Y}"
+    if rule.metric == WatchMetric.OPEN_POSITIONS:
+        return f"sin posiciones abiertas en la instancia {rule.instance_id[:8]}"
     sign = "≤" if rule.condition == WatchCondition.BELOW else "≥"
     return f"{METRIC_LABELS[rule.metric]} de {rule.symbol} {sign} {_fmt(rule.threshold)}"
+
+
+def _reminder_alert(rule: WatchRule, now: datetime, path: str) -> Alert:
+    alert = Alert(id=f"{now.date().isoformat()}-watch-{rule.id.split('-', 3)[-1]}"[:80],
+                  key=f"watch:{rule.id}", kind=AlertKind.WATCH, strategy="Recordatorio", strategy_ref=None,
+                  instance_id=rule.instance_id, position_id=rule.id, detected_at=now,
+                  motivo=f"Se cumplió: {describe(rule)}." + (f" Decisión: {rule.decision}" if rule.decision else ""),
+                  dato={"metric": rule.metric.value, "threshold": rule.threshold, "instance": rule.instance_id or None},
+                  regla=f"Recordatorio pedido por el owner: «{rule.words}» ({rule.created_at:%d/%m})",
+                  propuesta="Revisá la decisión con lo que pasó; reanudar o cambiar algo lo decidís vos.",
+                  options=OPTIONS[AlertKind.WATCH], sources=[path.split("?")[0]])
+    return alert.model_copy(update={"content_hash": compute_document_hash(alert.hashable_content())})
 
 
 def evaluate(kb: KnowledgeBase, read, now: datetime) -> tuple[list[Alert], list[str], int]:
@@ -206,22 +255,37 @@ def evaluate(kb: KnowledgeBase, read, now: datetime) -> tuple[list[Alert], list[
     cache: dict[str, object] = {}
     out, problems = [], []
     for rule in active:
-        path = SOURCES[rule.metric].format(symbol=rule.symbol)
-        if path not in cache:
-            try:
-                cache[path] = read(path)
-            except Exception as exc:  # noqa: BLE001 - one source unread is reported; the other rules still run
-                cache[path] = exc
-        payload = cache[path]
-        if isinstance(payload, Exception):
-            problems.append(f"regla {rule.id}: {str(payload)[:160]}")
-            continue
-        value = read_metric(payload, rule.metric)
+        if rule.metric == WatchMetric.DATE:          # a reminder by date reads nothing (WS-0023)
+            from galecore_ai.application.supervisor import NEW_YORK
+            payload, path = None, "reloj"
+        else:
+            path = (POSITIONS.format(instance=rule.instance_id) if rule.metric == WatchMetric.OPEN_POSITIONS
+                    else SOURCES[rule.metric].format(symbol=rule.symbol))
+            if path not in cache:
+                try:
+                    cache[path] = read(path)
+                except Exception as exc:  # noqa: BLE001 - one source unread is reported; the other rules still run
+                    cache[path] = exc
+            payload = cache[path]
+            if isinstance(payload, Exception):
+                problems.append(f"regla {rule.id}: {str(payload)[:160]}")
+                continue
+        if rule.metric == WatchMetric.DATE:
+            value = float(now.astimezone(NEW_YORK).strftime("%Y%m%d"))
+        elif rule.metric == WatchMetric.OPEN_POSITIONS:
+            value = (float(sum(isinstance(p, dict) and p.get("status") == "OPEN" for p in payload))
+                     if isinstance(payload, list) else None)
+        else:
+            value = read_metric(payload, rule.metric)
         if value is None:
-            problems.append(f"regla {rule.id}: GaleCore no dio {METRIC_LABELS[rule.metric]} de {rule.symbol}")
+            problems.append(f"regla {rule.id}: GaleCore no dio {METRIC_LABELS[rule.metric]} de "
+                            f"{rule.symbol or rule.instance_id[:8]}")
             continue
         hit = value <= rule.threshold if rule.condition == WatchCondition.BELOW else value >= rule.threshold
         if not hit:
+            continue
+        if rule.metric in REMINDERS:
+            out.append(_reminder_alert(rule, now, path))
             continue
         thesis = (f" Se cumple lo que invalida «{rule.thesis}»; dependen de esa tesis: {', '.join(rule.strategies)}."
                   if rule.thesis else "")

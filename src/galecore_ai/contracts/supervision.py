@@ -24,6 +24,7 @@ class AlertKind(str, Enum):
     RISK_LIMIT = "risk_limit"    # the position's max risk is above the spec's max loss per trade
     EVENT = "event"              # a macro release or FOMC decision before expiration, 2 business days ahead (E4)
     WATCH = "watch"              # a rule the owner asked for («avisame si SPY baja a 760») was met (P1-01b)
+    BET_LIMIT = "bet_limit"      # one bet (underlying, direction, expiry week) is above the profile's cap (WS-0023)
 
 
 # What the owner can answer to each kind of alert. The first one is what the rules already do.
@@ -34,12 +35,13 @@ OPTIONS: dict[AlertKind, list[str]] = {
     AlertKind.RISK_LIMIT: ["aceptar", "revisar el tamaño"],
     AlertKind.EVENT: ["mantener", "cerrar antes del dato"],
     AlertKind.WATCH: ["visto"],
+    AlertKind.BET_LIMIT: ["aceptar", "revisar la exposición"],
 }
 
 
 # Only these ask the owner for a decision; the rest inform and are recorded as they are (owner 06/10: «son cosas muy
 # extensas, además requiere mi input»).
-NEEDS_DECISION = {AlertKind.NEAR_STOP, AlertKind.RISK_LIMIT}
+NEEDS_DECISION = {AlertKind.NEAR_STOP, AlertKind.RISK_LIMIT, AlertKind.BET_LIMIT}
 
 
 class Alert(BaseModel):
@@ -81,12 +83,18 @@ class WatchMetric(str, Enum):
     CALL_WALL = "call_wall"              # gex.global.callWall
     PUT_WALL = "put_wall"                # gex.global.putWall
     IV_RANK = "iv_rank"                  # ivRank, 0-100 (GET /App.Analytics/IVRank)
+    # WS-0023: reminders of a decision, read without the market. DATE: today as YYYYMMDD (New York) against the
+    # threshold; OPEN_POSITIONS: open positions of one instance (GET /App/Runtime/Instances/{id}/Positions).
+    DATE = "date"
+    OPEN_POSITIONS = "open_positions"
 
 
 METRIC_LABELS: dict[WatchMetric, str] = {
     WatchMetric.PRICE: "precio", WatchMetric.GAMMA_ZERO: "nivel gamma cero", WatchMetric.CALL_WALL: "muro de calls",
-    WatchMetric.PUT_WALL: "muro de puts", WatchMetric.IV_RANK: "IV rank",
+    WatchMetric.PUT_WALL: "muro de puts", WatchMetric.IV_RANK: "IV rank", WatchMetric.DATE: "fecha",
+    WatchMetric.OPEN_POSITIONS: "posiciones abiertas",
 }
+REMINDERS = {WatchMetric.DATE, WatchMetric.OPEN_POSITIONS}
 
 
 class WatchCondition(str, Enum):
@@ -114,12 +122,14 @@ class WatchRule(BaseModel):
     host_model: str | None = None
     thesis: str = ""                     # WS-0016 (U-65): the thesis this condition invalidates, when it is one
     strategies: list[str] = Field(default_factory=list)   # the strategies that depend on that thesis
+    instance_id: str = ""                # WS-0023: the instance an OPEN_POSITIONS reminder counts
+    decision: str = ""                   # WS-0023: the decision this reminder comes from (its words or project ref)
     content_hash: str = ""
 
     def hashable_content(self) -> dict:
         data = self.model_dump(mode="json")
         data.pop("content_hash", None)
-        for added in ("thesis", "strategies"):   # absent in rules stored before WS-0016: their hash must not change
+        for added in ("thesis", "strategies", "instance_id", "decision"):   # absent in rules stored before WS-0016: their hash must not change
             if not data.get(added):
                 data.pop(added, None)
         return data

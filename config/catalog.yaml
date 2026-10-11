@@ -296,6 +296,8 @@ entries:
       - strategy save --spec <file> --prompt "<pedido>" < {content, host_provider, host_model}
       - strategy critique --ref strategy:<name>/<version> < {content, host_provider, host_model}   # el crítico, antes de pedir la aprobación
       - strategy sheet --ref strategy:<name>/<version>   # la ficha de una página para el owner, con el riesgo contra el perfil
+      - state
+      - strategy controls --ref strategy:<name>/<version>
       - strategy diff --from strategy:<name>/<anterior> --ref strategy:<name>/<version>   # qué cambió y por qué
       - supervise watch --symbol <SYM> --metric <m> --below|--above <nivel> --thesis "<tesis>" --strategy <name> --text "<owner>" --prompt "<pedido>"   # qué invalida la tesis; lo vigila el supervisor
       - strategy approve --ref strategy:<name>/<version> --spec-hash <hash> --owner-words "<owner>" --host-model <model>

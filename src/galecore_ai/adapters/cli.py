@@ -851,6 +851,16 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
                              thesis=args.thesis or "", strategies=args.strategy)
             _json_out({"status": "WATCHING", "rule": rule.id, "watches": watch.describe(rule),
                        "note": "El supervisor la revisa cada 5 minutos en la sesión regular y avisa una vez en el monitor."})
+        elif c == "remind":
+            from galecore_ai.application import watch
+            try:
+                on = _date.fromisoformat(args.on) if args.on else None
+            except ValueError as exc:
+                raise KnowledgeError(f"--on {args.on!r}: a date such as 2026-10-23") from exc
+            rule = watch.remind(kb, words=args.text, prompt=args.prompt, on=on, instance_id=args.when_closed or "",
+                                decision=args.decision, host_model=args.host_model)
+            _json_out({"status": "REMINDING", "rule": rule.id, "watches": watch.describe(rule),
+                       "note": "El supervisor la revisa cada 5 minutos en la sesión regular y avisa una vez en el monitor."})
         elif c == "watches":
             from galecore_ai.application import watch
             _json_out({"rules": watch.view(kb)})
@@ -1145,6 +1155,12 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
                 host=RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model")))
             _json_out({"status": "RECORDED", "ref": review.strategy_ref, "path": path,
                        "verdict": review.content.verdict.value, "content_hash": review.content_hash})
+        if args.strategy_command == "controls":
+            from galecore_ai.application.controls import classify
+            doc = kb.strategies.load(key)
+            if doc is None:
+                raise KnowledgeError(f"no strategy {args.ref}")
+            _json_out(classify(doc))
         if args.strategy_command == "sheet":
             from galecore_ai.application import supervisor
             from galecore_ai.application.strategy_sheet import sheet
@@ -1417,6 +1433,15 @@ def build_parser() -> _JsonArgumentParser:
     p_sv_watch.add_argument("--host-model", dest="host_model")
     p_sv_watch.add_argument("--thesis", help="The thesis this condition invalidates (U-65); needs --strategy")
     p_sv_watch.add_argument("--strategy", action="append", help="A strategy that depends on that thesis (repeatable)")
+    p_sv_remind = sv_sub.add_parser("remind", help="«Revisalo el 23/10» / «reanudá cuando cierren»: a reminder of a "
+                                                   "decision the supervisor checks and alerts once (WS-0023)")
+    when = p_sv_remind.add_mutually_exclusive_group(required=True)
+    when.add_argument("--on", help="Date (YYYY-MM-DD, New York) to alert on")
+    when.add_argument("--when-closed", dest="when_closed", help="Instance id: alert when it has no open position")
+    p_sv_remind.add_argument("--decision", default="", help="The decision it comes from (words or project ref)")
+    p_sv_remind.add_argument("--text", required=True, help="The owner's words, verbatim")
+    p_sv_remind.add_argument("--prompt", required=True, help="The owner's request")
+    p_sv_remind.add_argument("--host-model", dest="host_model")
     sv_sub.add_parser("watches", help="The owner's rules and their state (active, met, cancelled, expired)")
     p_sv_unwatch = sv_sub.add_parser("unwatch", help="Cancel an active rule")
     p_sv_unwatch.add_argument("rule", help="Rule id (supervise watches)")
@@ -1534,6 +1559,10 @@ def build_parser() -> _JsonArgumentParser:
     p_st_approve.add_argument("--host-model", dest="host_model", required=True)
     p_st_crit = st_sub.add_parser("critique", help="Record the critique of an exact version (stdin; one per version)")
     p_st_crit.add_argument("--ref", required=True, help="strategy:<name>/<version>")
+    p_st_ctl = st_sub.add_parser("controls", help="Which rules the runtime executes, the supervisor watches (alerts) or "
+                                              "are only declared; indispensable controls and whether to recommend "
+                                              "approval (WS-0023)")
+    p_st_ctl.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_sheet = st_sub.add_parser("sheet", help="One-page sheet: parameters, management, gaps, decisions, critique")
     p_st_sheet.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_sheet.add_argument("--offline", action="store_true", help="do not ask GaleCore what is open in SHADOW")
