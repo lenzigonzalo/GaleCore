@@ -110,8 +110,11 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     } else {
       // WS-0027: con `--permission-prompts none` y sin herramientas permitidas, todo se denegaba y la sesión leía
       // archivos crudos (dio un hash equivocado). Permiso acotado: leer, el CLI de GaleCore-AI y git local.
-      args=['-p','--output-format','stream-json','--verbose','--append-system-prompt',context,'--permission-prompts','none',
-        '--allowedTools','Read Grep Glob Write Bash(python -B -m galecore_ai.adapters.cli:*) PowerShell(python -B -m galecore_ai.adapters.cli *) Bash(git status:*) Bash(git diff:*) Bash(git add:*) Bash(git commit:*) Bash(git log:*)'];
+      // WS-0028: modelo y esfuerzo fijos (owner 12/10: sonnet/medium; GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT los cambian).
+      // Sin conectores de la cuenta (datos sólo de GaleCore). Edit se sumó: su falta perdió guardados en la primera tanda.
+      args=['-p','--model',process.env.GALECORE_LAB_MODEL||'sonnet','--effort',process.env.GALECORE_LAB_EFFORT||'medium',
+        '--output-format','stream-json','--verbose','--append-system-prompt',context,'--permission-prompts','none','--strict-mcp-config',
+        '--allowedTools','Read Grep Glob Write Edit Bash(python -B -m galecore_ai.adapters.cli:*) PowerShell(python -B -m galecore_ai.adapters.cli *) Bash(git status:*) Bash(git diff:*) Bash(git add:*) Bash(git commit:*) Bash(git log:*)'];
       if(chat.nativeId)args.push('--resume',chat.nativeId);
     }
     const proc=spawn(binaries[chat.provider],args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});
