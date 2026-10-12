@@ -19,6 +19,7 @@
   --border-dark:   #242424;
   --border:        #333333;
   --border-light:  #484848;
+  --focus-ring:    #b6b6b0;
 
   /* ── Text ── */
   --text-primary:   #f2f2ef;
@@ -139,9 +140,16 @@ body {
 /* Shared interaction treatment, independent of financial status colors. */
 button, input, select, textarea { font-family: inherit; }
 button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible,
-[role="button"]:focus-visible {
-  outline: 2px solid var(--accent);
+summary:focus-visible, [role="button"]:focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
+}
+/* Un solo foco neutro también con el reset de @tailwindcss/forms. */
+:root :is(input, select, textarea):focus {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+  --tw-ring-shadow: 0 0 #0000;
+  box-shadow: none;
 }
 ::selection { background: #a3d86c; color: #11170b; }
 .dashboard-main > div { scrollbar-gutter: stable; }
