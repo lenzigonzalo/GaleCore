@@ -35,6 +35,14 @@ se muestra sólo cuando el trader tiene que aprobar. El detalle, si lo pide. No 
 commits. La forma de cada tipo de pedido (cómo viene X, antes de un evento, prender/pausar, analizar un aviso,
 retomar) va en su skill.
 
+**Reloj, mapa y faltantes (el hook los imprime al empezar).** Fecha y estado del mercado salen de la línea `[reloj]`,
+no de suposiciones. Con el mercado cerrado no hay precio «de ahora»: usá el último dato registrado, decí su fecha y
+hora, y no intentes refrescarlo. Lo que GaleCore no sirve (ver `[mapa de GaleCore]`) se declara «no está abordado por
+GaleCore» y se registra con `gap add --need "<qué pidió>" --kind data|calc|analysis|cross|action [--why] [--instead]`;
+nunca se suple con la web ni con FMP u otra fuente externa, ni se ofrece refrescar por ahí. Un error de API se
+registra con `--kind api_error`. Respuesta de 120 palabras como máximo fuera de las tablas. No hagas `git commit`: la
+base de conocimiento la commitea el hook al terminar el turno.
+
 **Estado:** lo que digas del runtime (entradas, instancias, posiciones, estructuras que ejecuta) o de la salud de los
 datos (conectividad, frescura, cobertura para valuar) sale de `state` en esa corrida, con su hora. Una investigación
 o un seguimiento guardado es antecedente, nunca estado; lo que `state` no pudo leer es «sin verificar».
