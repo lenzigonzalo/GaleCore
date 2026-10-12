@@ -2388,24 +2388,50 @@ Los mercados que cubre salen de lo que el usuario opera (perfil/espacio), no de 
 feriado y media rueda de EE. UU. correctos; un segundo país configurable sin tocar código de skills; el tiempo y los
 comandos por pedido bajan de forma medible frente a la línea base (Q1–Q9 del 12/10).
 
-## BL-021 — Consultas innecesarias y preguntas que deberían ser fáciles de responder
+## BL-021 — El harness guía: no gasta consultas inútiles y exige el «para qué»
 
-**Origen:** owner, 12/10 (WS-0028). **Hacerlo como plan antes de cerrar Producto 1** (junto con BL-020; no está aún en
-`roadmap/README.md` §3: el plan único lo decide el owner).
+**Origen:** owner, 12/10 (WS-0028), aclarado el mismo día. **Hacerlo como plan antes de cerrar Producto 1** (junto con
+BL-020 y BL-022; todavía no está en `roadmap/README.md` §3: el plan único lo decide el owner).
 
-**Problema:** el costo y el tiempo de una respuesta dependen de cuántos comandos corre el modelo. En la segunda tanda
-(Sonnet/medium) los turnos fueron de 16 a 157 s; una atención diaria tardó 292 s en Opus; el modelo relee el catálogo,
-corre `state` y paquetes de análisis completos aun para preguntas simples, repite lo ya pedido en la misma sesión y pregunta
-por proyectos o archivos que no existen.
+**Dos ideas, una sola metodología de respuesta:**
 
-**Alcance propuesto (medir antes de tocar):**
-1. Línea base: por pedido tipo (Q1–Q10, E-series), comandos, tiempo, tokens y costo, desde las trazas ya guardadas en
-   `docs/engineering/evidence/WS-0028/`.
-2. Preguntas frecuentes con respuesta directa: un «estado del día» precalculado y fechado (posiciones, exposición, avisos,
-   eventos próximos) que el modelo lee de una sola vez en vez de armarlo; vence con la hora/evento (depende de BL-020).
-3. Reutilizar lo ya consultado en la sesión y lo guardado hoy (no repetir GEX, paquetes ni catálogo).
-4. Cortar preguntas evitables al usuario y búsquedas de archivos inexistentes (hallazgo 1 de la segunda tanda, ya corregido).
-5. Rutas baratas por tipo de pedido (modelo, esfuerzo, subagente Haiku para búsquedas) con criterio de calidad fijo.
+1. **No salir a buscar lo que sabemos que no hay.** Ante un pedido que GaleCore no puede traer ahora (mercado cerrado,
+   dato no disponible, feriado), el harness responde sin gastar comandos: «no hay dato en vivo porque el mercado está
+   cerrado; el último registrado es X, de tal fecha/hora». Depende de BL-020. Mismo criterio para lo ya consultado en la
+   sesión o guardado hoy (no repetir GEX, paquetes ni catálogo) y para archivos o proyectos que no existen.
+2. **Guiar, no sólo contestar.** El harness discute el pedido: entiende y pregunta el **para qué** (qué decisión
+   toma el usuario con la respuesta), critica lo que no sirve para ese fin, propone el pedido mejor y explica por qué.
+   Así el usuario aprende y se acostumbra a tener claro para qué pide algo. Sin bloquear: si el «para qué» no está, responde
+   igual con lo mínimo útil y lo pregunta al final.
+
+**Alcance (medir antes de tocar):**
+1. Línea base por pedido tipo (Q1–Q10, serie E) desde las trazas de `docs/engineering/evidence/WS-0028/`: comandos,
+   tiempo, tokens, costo. En la 2.ª tanda los turnos fueron de 16 a 157 s.
+2. «Estado del día» precalculado y fechado (posiciones, exposición, avisos, eventos próximos) que se lee de una vez.
+3. Regla de método en `PRODUCT.md`/skills: cuándo se responde con el último dato registrado, cuándo se pregunta el para
+   qué, cómo se critica un pedido sin frenar.
+4. Rutas baratas por tipo de pedido (modelo, esfuerzo, subagente Haiku) con criterio de calidad fijo.
 
 **Aceptación:** tiempo y comandos por pedido tipo bajan frente a la línea base sin perder los siete ejes del guion;
-los pedidos repetidos en el día se responden desde lo ya consultado.
+con el mercado cerrado no hay consultas en vivo y la respuesta dice «último dato: …»; ante un pedido sin propósito claro,
+el harness lo pregunta o lo propone sin bloquear; un pedido repetido en el día se responde desde lo ya consultado.
+
+## BL-022 — Retroalimentación automática hacia GaleCore: qué se pidió y no teníamos
+
+**Origen:** owner, 12/10 (WS-0028, E4). Cuando el usuario pide algo que GaleCore no cubre (dato, cálculo, análisis, cruce
+de información, acción), el harness **no sale a buscar a la web ni bloquea el trabajo**: dice «esto no está abordado por
+GaleCore», sigue con lo que sí hay y deja un registro automático para el desarrollo de GaleCore. Con el tiempo, ese registro
+dice qué endpoint, cálculo o análisis construir según la necesidad real (no sólo APIs).
+
+**Hoy:** `feedback add` guarda comentarios del owner sobre un resultado; `inbox add` guarda ideas del owner; el catálogo
+declara faltantes estáticos (`data_needs … missing`). Ninguno registra, en tiempo de uso, un pedido concreto sin cobertura.
+
+**Alcance propuesto:**
+1. Un registro de faltantes (`gap`) con: qué se pidió en palabras del usuario, para qué (BL-021), qué tipo de faltante
+   (dato / cálculo / análisis / cruce / acción), qué se hizo en su lugar, fecha, proyecto y frecuencia.
+2. Lo escribe el harness solo (sin pedir permiso) cada vez que declara un faltante; deduplica y cuenta repeticiones.
+3. Una vista/consulta para el desarrollo de GaleCore: faltantes ordenados por frecuencia e impacto, listos para convertirse
+   en backlog de GaleCore. Los datos de la web no se consultan para llenar el hueco.
+
+**Aceptación:** un pedido sin cobertura produce la respuesta honesta, la continuación del trabajo y un registro único con
+contador; el mismo faltante pedido de nuevo suma al contador; ninguna consulta web.
