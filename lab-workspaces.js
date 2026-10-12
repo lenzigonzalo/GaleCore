@@ -38,8 +38,10 @@ function consumeEvent(chat, event, provider) {
     if(event.session_id) chat.nativeId = event.session_id;
     if(event.type === 'assistant') {
       const text = (event.message?.content || []).filter(c=>c.type==='text').map(c=>c.text).join('\n');
-      if(text) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text,at:new Date().toISOString()});
+      // WS-0027: el texto que acompaña una consulta es narración interna («Now try the CLI…»): va a la actividad,
+      // no al chat. En el chat sólo queda la respuesta.
       if((event.message?.content || []).some(c=>c.type==='tool_use')) chat.activity='Consultando el workspace';
+      else if(text) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text,at:new Date().toISOString()});
     }
     if(event.type === 'result' && event.is_error) chat.error='Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
     if(event.permission_denials?.length) chat.error='Una herramienta necesita permiso. Retomá en la terminal para autorizarla; este chat no omite permisos.';
@@ -110,7 +112,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       // WS-0027: con `--permission-prompts none` y sin herramientas permitidas, todo se denegaba y la sesión leía
       // archivos crudos (dio un hash equivocado). Permiso acotado: leer, el CLI de GaleCore-AI y git local.
       args=['-p','--output-format','stream-json','--verbose','--append-system-prompt',context,'--permission-prompts','none',
-        '--allowedTools','Read Grep Glob Bash(python -B -m galecore_ai.adapters.cli:*) PowerShell(python -B -m galecore_ai.adapters.cli *) Bash(git status:*) Bash(git diff:*) Bash(git add:*) Bash(git commit:*) Bash(git log:*)'];
+        '--allowedTools','Read Grep Glob Write Bash(python -B -m galecore_ai.adapters.cli:*) PowerShell(python -B -m galecore_ai.adapters.cli *) Bash(git status:*) Bash(git diff:*) Bash(git add:*) Bash(git commit:*) Bash(git log:*)'];
       if(chat.nativeId)args.push('--resume',chat.nativeId);
     }
     const proc=spawn(binaries[chat.provider],args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});
