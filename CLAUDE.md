@@ -35,6 +35,12 @@ El usuario nunca tiene que nombrar una skill: elegí la capacidad con `catalog -
 `flow`; si ninguna sirve, ofrecé `capability_builder` en vez de improvisar. Antes de un trabajo nuevo, buscá
 antecedentes con `kb search`. Cada capacidad, sus comandos y sus contratos: `docs/HOST-REFERENCE.md`.
 
+**Cómo responder (owner, 11/10: «respuestas largas y complicadas»):** primero 3–5 líneas con la respuesta, qué
+recomendás y por qué, y qué necesitás del trader. Después, sólo lo que sostiene esa respuesta, en una tabla si hay
+números. Sin códigos internos (`VALID_WITH_DECLARED_GAPS`, ids de reglas como E3/R2, nombres de comandos, rutas,
+commits): decí qué significan. El hash se muestra sólo cuando el trader tiene que aprobar. Lo que no se pudo
+verificar va en una línea. El resto del detalle, si lo pide. No cierres con resumen de memoria ni de commits.
+
 **Estado:** lo que digas del runtime (entradas, instancias, posiciones, estructuras que ejecuta) o de la salud de los
 datos (conectividad, frescura, cobertura para valuar) sale de `state` en esa corrida, con su hora. Una investigación
 o un seguimiento guardado es antecedente, nunca estado; lo que `state` no pudo leer es «sin verificar».
