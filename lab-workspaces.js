@@ -108,13 +108,13 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       args=['--no-daemon','exec','--json','-c','developer_instructions='+JSON.stringify(context)];
       if(chat.nativeId)args.push('resume',chat.nativeId,'-');else args.push('--sandbox','workspace-write','-C',p.dir,'-');
     } else {
-      // WS-0027: con `--permission-prompts none` y sin herramientas permitidas, todo se denegaba y la sesión leía
-      // archivos crudos (dio un hash equivocado). Permiso acotado: leer, el CLI de GaleCore-AI y git local.
-      // WS-0028: modelo y esfuerzo fijos (owner 12/10: sonnet/medium; GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT los cambian).
-      // Sin conectores de la cuenta (datos sólo de GaleCore). Edit se sumó: su falta perdió guardados en la primera tanda.
+      // WS-0028 (plan v2): el CLI abierto en la carpeta del proyecto con el contexto de producto de knowledge/ (sin el de
+      // desarrollo ni ~/.claude). Permisos, hooks y commit automático salen de knowledge/.claude/settings.json.
+      // Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT). Sin conectores de la cuenta.
+      const brief=p.type==='personal'?context:'Proyecto: '+p.id+' ('+p.type+'). Leé AGENTS.md de este proyecto.'+(p.type==='strategy'?' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.':'');
       args=['-p','--model',process.env.GALECORE_LAB_MODEL||'sonnet','--effort',process.env.GALECORE_LAB_EFFORT||'medium',
-        '--output-format','stream-json','--verbose','--append-system-prompt',context,'--permission-prompts','none','--strict-mcp-config',
-        '--allowedTools','Read Grep Glob Write Edit Bash(python -B -m galecore_ai.adapters.cli:*) PowerShell(python -B -m galecore_ai.adapters.cli *) Bash(git status:*) Bash(git diff:*) Bash(git add:*) Bash(git commit:*) Bash(git log:*)'];
+        '--output-format','stream-json','--verbose','--append-system-prompt',brief,'--permission-prompts','none','--strict-mcp-config',
+        '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
       if(chat.nativeId)args.push('--resume',chat.nativeId);
     }
     const proc=spawn(binaries[chat.provider],args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});

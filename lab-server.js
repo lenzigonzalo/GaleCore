@@ -92,6 +92,7 @@ function environment() {
     if (['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'ANTHROPIC_BASE_URL', 'CLAUDECODE'].includes(k)) delete env[k];
     if (k.startsWith('CLAUDE_CODE_') && k !== 'CLAUDE_CODE_OAUTH_TOKEN') delete env[k];
   }
+  env.CLAUDE_CODE_SUBAGENT_MODEL = process.env.GALECORE_LAB_SUBAGENT_MODEL || 'haiku';  // WS-0028: subagentes baratos
   return env;
 }
 const dimension = (v, min, max, fallback) => Number.isFinite(Number(v)) ? Math.max(min, Math.min(max, Math.round(Number(v)))) : fallback;
@@ -119,7 +120,10 @@ function newSession(body) {
     // Historial nativo del proyecto si todavía no se capturó un ID; nunca --last ambiguo.
     if (previous || body.history) args.push('resume', ...(previous?.nativeId ? [previous.nativeId] : []));
   } else {
-    args = ['--append-system-prompt', context];
+    // WS-0028: mismo entorno que el chat (contexto de producto de knowledge/, sin desarrollo ni ~/.claude).
+    args = ['--model', process.env.GALECORE_LAB_MODEL || 'sonnet', '--effort', process.env.GALECORE_LAB_EFFORT || 'medium',
+      '--append-system-prompt', 'Proyecto: ' + project.id + '.', '--strict-mcp-config',
+      '--setting-sources', 'project,local', '--settings', path.join(KB, '.claude', 'settings.json')];
     if (previous || body.history) args.push('--resume', ...(previous?.nativeId ? [previous.nativeId] : []));
     else args.push('--session-id', s.nativeId);
   }
