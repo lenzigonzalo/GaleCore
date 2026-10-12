@@ -2345,3 +2345,26 @@ Tocar GaleCore se hace en `local/integracion`, sin push.
 **Aceptación:** un mapa de cada repo (qué hay, a qué repo pertenece, qué se mueve, qué queda como historia), aprobado
 por el owner antes de mover archivos; después del movimiento, los tests de los repos pasan y los enlaces de los
 documentos vigentes resuelven.
+
+## BL-019 — Bienvenida: el usuario explicita sus convenciones, objetivos e intereses la primera vez
+
+**Origen:** owner, 12/10 (WS-0028, E1). Convenciones, objetivos y temas de interés son propias de cada usuario; el producto
+tiene que garantizar que las explicite, p. ej. con un «hola» en un Lab personal que dispare el setup de primera vez.
+
+**Hoy:** el espacio del usuario (`space put/list/show`) ya guarda objetivos y convenciones por usuario, pero nada detecta
+que falten ni las pide. El hook de inicio del Lab sólo imprime lo que hay.
+
+**Alcance propuesto (no implementar antes del entry gate):**
+1. El hook de inicio declara «setup incompleto: falta X» cuando el espacio no tiene objetivos, convenciones o temas de interés.
+2. Una skill `bienvenida` (se activa con el saludo y ese estado): pocas preguntas, propone el texto de cada pieza y guarda
+   sólo lo que el usuario confirma, con `space put` y sus palabras textuales.
+3. El perfil de riesgo (capital, límites, mandato) queda **fuera**: la bienvenida remite a él, cambiarlo exige aprobación.
+4. Temas de interés: convención de texto libre, sin tipo nuevo en el espacio (revisar si hace falta tras usarla).
+
+**Entry gate:** cerrar la tanda de pruebas de WS-0028; es producto de cara al usuario, no un arreglo de la prueba.
+
+**Aceptación:** proyecto personal nuevo con espacio vacío + «hola» → el setup se completa con lo que el usuario confirma;
+una sesión nueva respeta lo guardado sin recordárselo; nada se guarda sin confirmación; el perfil de riesgo no cambia.
+
+**Nota:** el 12/10 se guardó por error una «convención de respuesta» como perfil v10; se movió al espacio
+(`convention/formato-de-respuesta`). La v10 queda en el historial del perfil, superada en contenido por la pieza del espacio.
