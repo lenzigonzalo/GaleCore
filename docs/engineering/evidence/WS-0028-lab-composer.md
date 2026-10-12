@@ -56,6 +56,27 @@ del workspace. No acredita cierre de P1-10 ni del recorrido C12.
 - Lockfile idéntico al del worktree previo; dependencias reutilizadas mediante junction al worktree
   `ws0028-lab-chat`, sin instalaciones ni cambios en node_modules del monitor en ejecución.
 
+## Integración local y vista disponible
+
+Commit de implementación `9b5be7e`, integrado por fast-forward en `local/integracion`, sin push/PR.
+No se reiniciaron monitor, API ni puente. El archivo Runtime no versionado ajeno se conservó intacto.
+`ACTIVE_WORK_ITEM` continúa apuntando a WS-0029 y su documento no se modificó.
+
+Comprobación posterior: monitor `http://localhost:3039/`, login visible; bundle HTTP 200 con
+`lab-jump-latest` y ResizeObserver del cambio, errores JavaScript `[]`. No se inició sesión ni una
+conversación: sigue pendiente QA autenticada. Primera comprobación del texto acentuado en el bundle
+dio falso negativo por su representación; se repitió con el identificador CSS estable, exit 0.
+
+Preview interactiva aislada en `http://127.0.0.1:3041/`, servida con Python desde
+`.tmp/lab-composer-qa/` (PID inicial 33744, puerto nuevo). Comprobada visible en Chromium.
+No conecta al Lab; CSP bloquea conexiones y el adaptador de QA rechaza escrituras. Presenta proyectos
+de QA y una respuesta histórica, no estado actual ni soporte de envío real.
+Resultados adicionales locales: `live-result.json`; guion `lab-composer-qa/check-live.cjs` en esta carpeta.
+
+Para probar: en el Lab local, escribir varias líneas y usar Tab; cambiar de proyecto/chat y volver
+al borrador; subir en el historial y usar «Ir al último mensaje». Para mirar el diseño sin efectos,
+abrir la preview aislada. Adjuntos y micrófono no se ofrecen todavía.
+
 ## Para retomar
 
 Tajada visual implementada y comprobada en aislamiento. F1 corregido y probado por el implementer.
