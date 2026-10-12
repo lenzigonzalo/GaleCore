@@ -2368,3 +2368,44 @@ una sesión nueva respeta lo guardado sin recordárselo; nada se guarda sin conf
 
 **Nota:** el 12/10 se guardó por error una «convención de respuesta» como perfil v10; se movió al espacio
 (`convention/formato-de-respuesta`). La v10 queda en el historial del perfil, superada en contenido por la pieza del espacio.
+
+## BL-020 — El harness sabe qué hora es y cuándo abre y cierra cada mercado
+
+**Origen:** owner, 12/10 (WS-0028). **Prioridad: crítica, reduce costos; hacerla antes de cerrar Producto 1.**
+
+**Hoy (verificado 12/10):** la sesión L–V 09:30–16:00 Nueva York está escrita a mano en `contracts/task.py` y la usan sólo
+las tareas programadas; `state` dice «mercado cerrado» y `story` evita el GEX en fin de semana. El asistente de una
+conversación **no tiene reloj ni calendario**: pide datos en vivo y repite comandos pesados sin saber si el mercado está
+abierto. No hay calendario por país, feriados ni medias ruedas.
+
+**Alcance propuesto:** una función de calendario de mercados en GaleCore (país/mercado, zona horaria, horario regular y
+extendido, feriados, medias ruedas, próxima apertura/cierre), servida por API. El hook de inicio del Lab y el CLI imprimen
+«ahora: <hora local y de cada mercado que opera el usuario> · SPY/IWM: abierto|cerrado, abre/cierra a las …». Las skills
+la usan para no pedir datos en vivo con el mercado cerrado (usar el último cierre, fechado) y para elegir qué consultar.
+Los mercados que cubre salen de lo que el usuario opera (perfil/espacio), no de una lista fija.
+
+**Aceptación:** con el mercado cerrado una conversación no repite consultas en vivo y declara «último cierre del …»;
+feriado y media rueda de EE. UU. correctos; un segundo país configurable sin tocar código de skills; el tiempo y los
+comandos por pedido bajan de forma medible frente a la línea base (Q1–Q9 del 12/10).
+
+## BL-021 — Consultas innecesarias y preguntas que deberían ser fáciles de responder
+
+**Origen:** owner, 12/10 (WS-0028). **Hacerlo como plan antes de cerrar Producto 1** (junto con BL-020; no está aún en
+`roadmap/README.md` §3: el plan único lo decide el owner).
+
+**Problema:** el costo y el tiempo de una respuesta dependen de cuántos comandos corre el modelo. En la segunda tanda
+(Sonnet/medium) los turnos fueron de 16 a 157 s; una atención diaria tardó 292 s en Opus; el modelo relee el catálogo,
+corre `state` y paquetes de análisis completos aun para preguntas simples, repite lo ya pedido en la misma sesión y pregunta
+por proyectos o archivos que no existen.
+
+**Alcance propuesto (medir antes de tocar):**
+1. Línea base: por pedido tipo (Q1–Q10, E-series), comandos, tiempo, tokens y costo, desde las trazas ya guardadas en
+   `docs/engineering/evidence/WS-0028/`.
+2. Preguntas frecuentes con respuesta directa: un «estado del día» precalculado y fechado (posiciones, exposición, avisos,
+   eventos próximos) que el modelo lee de una sola vez en vez de armarlo; vence con la hora/evento (depende de BL-020).
+3. Reutilizar lo ya consultado en la sesión y lo guardado hoy (no repetir GEX, paquetes ni catálogo).
+4. Cortar preguntas evitables al usuario y búsquedas de archivos inexistentes (hallazgo 1 de la segunda tanda, ya corregido).
+5. Rutas baratas por tipo de pedido (modelo, esfuerzo, subagente Haiku para búsquedas) con criterio de calidad fijo.
+
+**Aceptación:** tiempo y comandos por pedido tipo bajan frente a la línea base sin perder los siete ejes del guion;
+los pedidos repetidos en el día se responden desde lo ya consultado.
