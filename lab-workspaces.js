@@ -37,12 +37,11 @@ function consumeEvent(chat, event, provider) {
   } else {
     if(event.session_id) chat.nativeId = event.session_id;
     if(event.type === 'assistant') {
-      const text = (event.message?.content || []).filter(c=>c.type==='text').map(c=>c.text).join('\n');
-      // WS-0027: el texto que acompaña una consulta es narración interna («Now try the CLI…»): va a la actividad,
-      // no al chat. En el chat sólo queda la respuesta.
+      // WS-0027: los textos intermedios son narración interna («Now try the CLI…»), llegan en eventos propios y no
+      // van al chat. En el chat queda sólo la respuesta final del turno (evento `result`).
       if((event.message?.content || []).some(c=>c.type==='tool_use')) chat.activity='Consultando el workspace';
-      else if(text) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text,at:new Date().toISOString()});
     }
+    if(event.type === 'result' && !event.is_error && event.result) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.result,at:new Date().toISOString()});
     if(event.type === 'result' && event.is_error) chat.error='Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
     if(event.permission_denials?.length) chat.error='Una herramienta necesita permiso. Retomá en la terminal para autorizarla; este chat no omite permisos.';
   }
