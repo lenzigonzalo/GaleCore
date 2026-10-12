@@ -278,6 +278,9 @@ entries:
       - ¿Qué tendría que pasar para que esta tesis deje de servir?
       - ¿Qué cambió entre versiones y por qué?
       - ¿Está bien esta idea? ¿Qué le falta y por qué no?
+      - La estrategia que diseñamos, ¿la activo o espero?
+      - ¿Activamos la estrategia o conviene esperar?
+      - ¿La prendemos ya? ¿Apruebo esta estrategia o le falta algo?
     skill: skills/strategy-design/skill.yaml
     output_contract: galecore_ai.contracts.strategy.ProposalContent
     galecore_capabilities: [App/Runtime/Specs, App/Runtime/Deploy]

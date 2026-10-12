@@ -12,7 +12,7 @@ import json
 from collections.abc import Callable
 
 from galecore_ai.adapters.strategy_store import StrategyIntegrityError, StrategyStoreError
-from galecore_ai.application import capital, supervisor
+from galecore_ai.application import capital, controls, supervisor
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.application.strategy import IMPLICIT_BEHAVIOR, load_critique, load_proposal
 from galecore_ai.contracts.strategy import Basis, ManagementKind, RuntimeStatus, StrategyDocument
@@ -83,7 +83,7 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
     kill = [s for s in doc.content.management if s.kind == ManagementKind.KILL_SWITCH]
     kill_text = ("falta: ningún paso del árbol lo define" if not kill
                  else "; ".join(f"{s.id} — lo ejecuta GaleCore: {_runs(doc, s.rules)}" for s in kill))
-    opened = None
+    opened, broken = None, []
     if read is not None and ref is not None and not lim["no_leidos"]:
         try:
             exp = read("/App/Runtime/Exposure?" + capital._query(ref, lim))
@@ -94,11 +94,13 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
                 opened = (f"{capital._usd(exp['openMaxRisk'])} USD en riesgo en {exp['positionsOpen']} posiciones; "
                           f"entra riesgo nuevo por {capital._usd(exp['availableForNewRiskUsd'])} USD "
                           f"(GaleCore, {exp.get('asOf')})")
+                broken = [f"{x['limite']}: {capital._usd(x['usado_usd'])} USD de {capital._usd(x['maximo_usd'])}"
+                          for x in capital.concentration(exp)["limites"] if x["ok"] is False]
             except (KeyError, TypeError) as exc:
                 missing.append(f"lo abierto en SHADOW: respuesta inesperada de GaleCore ({exc!r})")
     elif read is None:
         missing.append("lo abierto en SHADOW: no se consultó GaleCore")
-    return {"rows": rows, "kill_switch": kill_text, "open_now": opened, "missing": missing,
+    return {"rows": rows, "kill_switch": kill_text, "open_now": opened, "over_limit": broken, "missing": missing,
             "profile": profile.ref if profile else None}
 
 
@@ -172,11 +174,20 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
         raise KnowledgeError(f"strategy:{key}: approval not usable ({exc})") from exc
     c = doc.content
     review_ok = review is not None and review.proposal_hash == doc.content_hash
+    ctl = controls.classify(doc)
+    r = risk(kb, doc, read)
+    # WS-0027 R2: asked «¿la activo o espero?», a session read only this sheet and proposed approving on credit alone;
+    # the controls verdict and the portfolio limits already broken go first, by code.
     lines = [
         f"# {c.display_name} — {c.name} {c.version}",
         "",
         (f"Check: {doc.check.verdict} · hash `{doc.spec_hash}` · crítica: "
          f"{review.content.verdict.value if review_ok else 'sin crítica'} · aprobada: {'sí' if approval else 'no'}"),
+        "",
+        "## ¿Se puede aprobar?",
+        "",
+        f"- Controles: {ctl['motivo']}",
+        *[f"- Límite de cartera fuera hoy: {b} (SHADOW)" for b in r["over_limit"]],
         "",
         f"**Para qué:** {_cell(c.purpose)}",
         "",
@@ -204,7 +215,6 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
                   for s in c.management]
     else:
         lines += ["Sin árbol de gestión (versión guardada antes de WS-0016)."]
-    r = risk(kb, doc, read)
     lines += ["", f"## Riesgo contra el perfil ({r['profile'] or 'sin perfil'})", ""]
     if r["rows"]:
         lines += ["| Qué | Esta versión | Límite del perfil (% × capital) | |", "|---|---|---|---|"]
@@ -238,6 +248,7 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
                    "desplegarla hace falta una crítica de esta versión.") if approval
                   else "Sin crítica de esta versión: no se puede aprobar."]
     return {"strategy": f"strategy:{key}", "spec_hash": doc.spec_hash, "check": doc.check.verdict, "risk": r,
+            "recomendar_aprobacion": ctl["recomendar_aprobacion"],
             "structures": st, "critique": review.content.verdict.value if review_ok else None, "approved": approval is not None,
             "markdown": "\n".join(lines) + "\n"}
 

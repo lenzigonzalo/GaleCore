@@ -32,6 +32,9 @@ def test_the_strategy_view_gathers_what_exists_with_references(kb, research_ref)
     assert view["current"]["spec_hash"] == doc.spec_hash and view["current"]["rules"]
     assert [r["ref"] for r in view["research"]] == [research_ref]
     assert view["last_followup"] is None and view["integrity_failed"] == []
+    # WS-0027: an unapproved version says whether approval is recommended (strategy controls), and why.
+    assert view["current"]["aprobacion"]["recomendar_aprobacion"] is False
+    assert view["current"]["aprobacion"]["motivo"].startswith("No se recomienda aprobar")
     assert any("tesis" in m for m in view["missing"]) and any("ninguna versión aprobada" in m for m in view["missing"])
 
 
@@ -40,6 +43,7 @@ def test_the_approved_version_is_the_one_in_force(kb, research_ref):  # noqa: F8
     approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="apruebo", host=HOST, now=NOW)
     view = project.strategy_project(kb, NAME)
     assert view["current"]["approved"] and not any("aprobada" in m for m in view["missing"])
+    assert "aprobacion" not in view["current"]
 
 
 def test_owner_entries_are_kept_verbatim_and_open_items_close(kb, research_ref):  # noqa: F811

@@ -74,6 +74,9 @@ python -B -m galecore_ai.adapters.cli catalog --check   # cada capacidad carga y
   reformula.
 - Una estrategia llega a SHADOW sólo con la aprobación del owner sobre el hash exacto, y sólo en GaleCore Dev. Nada
   envía órdenes reales ni toca producción.
+- Ante «¿la activo / apruebo / espero?» de una versión sin aprobar: correr `strategy controls --ref <ref>` y `capital`,
+  y decir primero `recomendar_aprobacion` con su `motivo` y cualquier límite de cartera fuera. Nunca proponer aprobar
+  «si el crédito alcanza» cuando los controles no lo recomiendan: aprobar igual es decisión del owner, sabiéndolo.
 - Sin secretos en código, logs, fixtures ni trazas. El runtime autónomo (FastAPI/CognitiveRuntime) está congelado.
 
 ## Referencia

@@ -19,7 +19,7 @@ from galecore_ai.adapters.knowledge_base import parse_ref
 from galecore_ai.adapters.profile_store import ProfileIntegrityError, ProfileStoreError
 from galecore_ai.adapters.research_store import ResearchIntegrityError, ResearchStoreError
 from galecore_ai.adapters.strategy_store import StrategyIntegrityError, StrategyStoreError
-from galecore_ai.application import followup
+from galecore_ai.application import controls, followup
 from galecore_ai.application.knowledge import (
     KnowledgeBase,
     KnowledgeError,
@@ -239,6 +239,13 @@ def strategy_project(kb: KnowledgeBase, name: str) -> dict:
             "owner_decisions": [d.model_dump(mode="json") for d in c.owner_decisions],
             "pending": c.pending, "limitations": c.limitations,
         }
+        if current["approval"] is None:
+            # WS-0027 R2: «¿la activo o espero?» was answered from this view alone, proposing approval on credit;
+            # whether approval is recommended, and why, is part of the project, not something the session may skip.
+            ctl = controls.classify(current["doc"])
+            view["current"]["aprobacion"] = {"recomendar_aprobacion": ctl["recomendar_aprobacion"],
+                                             "motivo": ctl["motivo"],
+                                             "detalle": f"strategy controls --ref {current['ref']}"}
     newer = [v["ref"] for v in versions if current and _vkey(v["ref"].split(":", 1)[1]) >
              _vkey(current["ref"].split(":", 1)[1])]
     view["versions"] = [{"ref": v["ref"], "approved": v["approval"] is not None,

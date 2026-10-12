@@ -775,6 +775,12 @@ def test_sheet_puts_the_version_against_the_profile_and_what_is_open(kb, researc
     assert f"({n:g} posiciones × pérdida máxima)" in md
     assert "- Kill switch: G5 — lo ejecuta GaleCore: no (hueco declarado)" in md
     assert "- Abierto hoy en SHADOW: 1.368 USD en riesgo en 3 posiciones; entra riesgo nuevo por 3.632 USD" in md
+    # WS-0027: the controls verdict and any broken portfolio limit go first, so «¿la activo?» cannot skip them.
+    assert "## ¿Se puede aprobar?" in md and "- Controles: No se recomienda aprobar" in md
+    assert out["recomendar_aprobacion"] is False and "Límite de cartera fuera hoy" not in md
+    broken = {"limit": "bet:SPY bullish 2026-W47", "used": 1968.0, "max": 1500.0, "headroom": -468.0, "ok": False}
+    md = sheet(kb, KEY, lambda path: exposure(checks=[broken]))["markdown"]
+    assert "- Límite de cartera fuera hoy: apuesta SPY bullish 2026-W47: 1.968 USD de 1.500 (SHADOW)" in md
 
     def down(path):
         raise supervisor.SupervisorError("GaleCore no respondió en http://localhost:7001: ConnectError")
