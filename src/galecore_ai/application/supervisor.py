@@ -50,6 +50,7 @@ class SupervisorError(Exception):
 
 CALENDAR_TIMEOUT_S = 120.0      # GaleCore asks FRED on a cold cache (observed > 20 s on 06/10); later calls are cached.
                                 # Also quotes and a GEX for a rule (P1-01b): a cold GEX past this is a problem of the pass
+SLOW_PATHS = ("/Data/", "/App/Gex/", "/App/Runtime/Structures")   # Structures reads the whole chain: QQQ ~31 s (WS-0028)
 
 
 def api_reader(base_url: str | None = None, api_key: str | None = None, timeout: float = 20.0) -> Reader:
@@ -63,7 +64,7 @@ def api_reader(base_url: str | None = None, api_key: str | None = None, timeout:
     def get(path: str):
         try:
             r = httpx.get(base + path, headers=headers,
-                          timeout=CALENDAR_TIMEOUT_S if path.startswith(("/Data/", "/App/Gex/")) else timeout)
+                          timeout=CALENDAR_TIMEOUT_S if path.startswith(SLOW_PATHS) else timeout)
         except httpx.HTTPError as exc:
             raise SupervisorError(f"GaleCore no respondió en {base}: {type(exc).__name__}") from exc
         if r.status_code != 200:
