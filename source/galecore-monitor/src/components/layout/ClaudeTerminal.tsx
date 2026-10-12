@@ -81,7 +81,7 @@ export function ClaudeTerminal() {
     border: '1px solid var(--border-dark)', color: 'var(--text-secondary)', background: 'transparent' };
 
   return (
-    <aside style={{ display: open ? 'flex' : 'none', flexDirection: 'column', width: 'min(760px, 50vw)', minWidth: 360,
+    <aside className="workspace-terminal" style={{ display: open ? 'flex' : 'none', flexDirection: 'column', width: 'min(760px, 50vw)', minWidth: 360,
       borderLeft: '1px solid var(--border-dark)', backgroundColor: '#141414' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
         borderBottom: '1px solid var(--border-dark)', backgroundColor: 'var(--bg-secondary)' }}>

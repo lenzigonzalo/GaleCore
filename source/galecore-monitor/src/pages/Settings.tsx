@@ -292,7 +292,7 @@ function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged: () =>
 
 // ── página ──────────────────────────────────────────────────────
 
-export function Settings({ initial = 'usuario' }: { initial?: Section }) {
+export function Settings({ initial = 'usuario', onBrokerLinked }: { initial?: Section; onBrokerLinked?: () => void }) {
   const [section, setSection] = useState<Section>(initial);
   const [items, setItems] = useState<SpaceItem[]>([]);
   const [shared, setShared] = useState<SpaceItem[]>([]);
@@ -329,7 +329,7 @@ export function Settings({ initial = 'usuario' }: { initial?: Section }) {
   } else if (section === 'contrasena') {
     body = <div style={card}><MyPasswordCard embedded /></div>;
   } else if (section === 'broker') {
-    body = <BrokerAccountCard />;
+    body = <BrokerAccountCard onLinked={onBrokerLinked} />;
   } else if (section === 'perfil') {
     body = own.length ? <ProfileView item={own[0]} /> : <div style={muted}>Todavía no hay un perfil en tu espacio.</div>;
   } else if (section === 'skills') {

@@ -4,7 +4,7 @@ import { useAccountStore } from '../../store/useAccountStore';
 import { fetchBalances, fetchPositions, describeAccountError } from '../../api/account';
 import { fmtCurrency, fmtTime, isStale } from '../../utils/formatters';
 
-export function AccountSummary() {
+export function AccountSummary({ layout = 'compact' }: { layout?: 'compact' | 'strip' }) {
   const {
     balances,
     loadingBalances,
@@ -46,7 +46,7 @@ export function AccountSummary() {
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>
-          Account{balances?.accountNumber ? ` · ${balances.accountNumber}` : ''}
+          Cuenta{balances?.accountNumber ? ` · ${balances.accountNumber}` : ''}
         </span>
         <button
           onClick={handleRefresh}
@@ -58,7 +58,7 @@ export function AccountSummary() {
             border: '1px solid var(--border-dark)',
             cursor: 'pointer',
           }}
-          title="Refrescar"
+          title="Actualizar cuenta" aria-label="Actualizar cuenta"
         >
           <RefreshCw size={14} className={loadingBalances ? 'animate-spin' : ''} />
         </button>
@@ -79,14 +79,14 @@ export function AccountSummary() {
           ))}
         </div>
       ) : balances ? (
-        <div className="space-y-1.5">
-          <Row label="Net Liq" value={fmtCurrency(balances.netLiquidatingValue)} highlight />
-          <Row label="Buying Power" value={fmtCurrency(balances.buyingPower)} />
-          <Row label="Cash" value={fmtCurrency(balances.cash)} />
+        <div className={layout === 'strip' ? 'account-values-strip' : 'space-y-1.5'}>
+          <Row label="Valor de la cuenta · USD" value={fmtCurrency(balances.netLiquidatingValue)} highlight />
+          <Row label="Poder de compra" value={fmtCurrency(balances.buyingPower)} />
+          <Row label="Efectivo" value={fmtCurrency(balances.cash)} />
         </div>
       ) : (
         <div className="text-xs" style={{ color: 'var(--text-muted)' }}>
-          No data
+          Sin lectura de la cuenta
         </div>
       )}
 
@@ -96,7 +96,7 @@ export function AccountSummary() {
           className="text-xs mt-2"
           style={{ color: stale ? 'var(--yellow-gc)' : 'var(--text-muted)' }}
         >
-          {fmtTime(lastUpdate)}
+          Lectura {fmtTime(lastUpdate)} ET{stale ? ' · actualizar' : ''}
         </div>
       )}
     </div>

@@ -15,7 +15,12 @@ function dropSymbols<T>(map: Record<string, T>, symbols: string[]): Record<strin
   return next;
 }
 
+let gexSession = 0;
+
 interface GexStore {
+  resetSession: () => void;
+  selectedSymbol: string | null;
+  setSelectedSymbol: (symbol: string | null) => void;
   /** Reglas propias de la estrategia (universo + contrato de render). */
   rules: GexRules | null;
   tickers: string[];
@@ -62,6 +67,12 @@ interface GexStore {
 }
 
 export const useGexStore = create<GexStore>((set, get) => ({
+  resetSession: () => {
+    gexSession++;
+    set({ selectedSymbol:null, adHocSymbols:[], cache:{}, loading:{}, error:{}, errorCode:{}, selectedExpiry:{} });
+  },
+  selectedSymbol: null,
+  setSelectedSymbol: (selectedSymbol) => set({ selectedSymbol }),
   rules: null,
   tickers: [],
   display: null,
@@ -97,6 +108,7 @@ export const useGexStore = create<GexStore>((set, get) => ({
     // Guarda de reentrada: el barrido de la cadena es caro y el auto-refresh no debe apilarse
     // sobre una llamada en vuelo.
     if (get().loading[symbol]) return;
+    const session = gexSession;
 
     set((s) => ({
       loading: { ...s.loading, [symbol]: true },
@@ -105,6 +117,7 @@ export const useGexStore = create<GexStore>((set, get) => ({
     }));
     try {
       const data = await fetchGexAnalysis(symbol, refresh);
+      if (session !== gexSession) return;
       set((s) => ({
         cache: { ...s.cache, [symbol]: { data, updatedAt: new Date() } },
         loading: { ...s.loading, [symbol]: false },
@@ -113,6 +126,7 @@ export const useGexStore = create<GexStore>((set, get) => ({
       // La API distingue el símbolo que no se puede barrer (409 + code) de una caída. Sin leer el
       // cuerpo, los dos se verían igual: "Request failed with status code 409", que no le dice a
       // nadie que el problema es el símbolo que eligió.
+      if (session !== gexSession) return;
       const payload = e?.response?.data;
       set((s) => ({
         loading: { ...s.loading, [symbol]: false },

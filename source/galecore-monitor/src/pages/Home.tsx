@@ -22,7 +22,7 @@ export function Home({ onNavigate }: Props) {
 
   return (
     <div style={{ padding: '16px 18px 40px', fontFamily: 'var(--font-sans)' }}>
-      <SectionTitle title="GaleCore Strategies" badge="switches de estrategia" style={{ marginBottom: 16 }} />
+      <SectionTitle title="Estrategias disponibles" style={{ marginBottom: 16 }} />
 
       {loading && (
         <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Cargando configuración…</div>
@@ -36,7 +36,7 @@ export function Home({ onNavigate }: Props) {
 
       {!loading && !error && strategies.length === 0 && (
         <div style={{ fontSize: 14, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-          No hay estrategias declaradas en <code>strategies[]</code> del config de la app.
+          No hay estrategias disponibles en la configuración actual.
         </div>
       )}
 
@@ -56,7 +56,7 @@ export function Home({ onNavigate }: Props) {
           que corra. */}
       {services.length > 0 && (
         <>
-          <SectionTitle title="GaleCore Services" badge="switches de servicio" style={{ margin: '28px 0 16px' }} />
+          <SectionTitle title="Servicios de datos" style={{ margin: '28px 0 16px' }} />
 
           <div
             className="grid gap-3"

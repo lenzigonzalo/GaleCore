@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, BookOpen, Crosshair } from 'lucide-react';
+import { MarketWatchlist } from '../components/ticker/MarketWatchlist';
 import { TickerGrid } from '../components/ticker/TickerGrid';
 import { SymbolSearchCard } from '../components/ticker/SymbolSearchCard';
+import './MarketIndicators.css';
 import { DetailsPanel } from '../components/gex/DetailsPanel';
 import { OptionsChainList } from '../components/gex/OptionsChainList';
 import { CHAIN_COL_W } from '../components/gex/graphLayout';
@@ -20,7 +22,7 @@ import { ConnectionStatus } from '../socket/useMarketSocket';
 import {
   GexChartData, GexExpiryApi, GexScopeApi, GexStrikeApi, GLOBAL_SCOPE,
 } from '../types/gex';
-import { fmtPrice, fmtTime, isStale, tint } from '../utils/formatters';
+import { calcChange, fmtPct, fmtPrice, fmtTime, isStale, tint } from '../utils/formatters';
 
 // Fallback si el JSON no declara refresh_seconds. Los barridos se serializan en el backend, así que
 // lo que manda es recorrer el universo entero (~383s medidos con 4 símbolos), no un barrido suelto.
@@ -93,7 +95,7 @@ function globalToChartData(symbol: string, spot: number, global: GexScopeApi): G
 }
 
 /**
- * Pestaña GEX — estrategia informativa. Replica el layout de Main leyendo su propio JSON:
+ * Mercado — indicadores informativos con un símbolo activo y lectura del JSON GEX:
  * cards del universo, cuadro Details (checks + diagnóstico, sin microestructura) con el GEX GLOBAL,
  * y el cuadro Graph con la cadena por vencimiento. No calcula ni muestra setup candidato.
  */
@@ -101,13 +103,15 @@ interface GexProps {
   subscribeSymbol: (symbol: string) => void;
   unsubscribeSymbol: (symbol: string) => void;
   socketStatus: ConnectionStatus;
+  externalWatchlist?: boolean;
+  compact?: boolean;
 }
 
-export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexProps) {
+export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, externalWatchlist = false, compact = false }: GexProps) {
   const {
     tickers, display, rulesLoading, rulesError, loadRules,
     cache, loading, error, errorCode, selectedExpiry, fetchGex, selectExpiry,
-    adHocSearch, adHocSymbols, pinAdHoc, unpinAdHoc,
+    adHocSearch, adHocSymbols, pinAdHoc, unpinAdHoc, selectedSymbol, setSelectedSymbol,
   } = useGexStore();
 
   const platformTickers = useAppConfigStore((s) => s.tickers);
@@ -116,8 +120,8 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
   const switchEndpoint = useSwitchEndpoint('gex', GEX_SWITCH_ENDPOINT);
   const switchEnabled = useSwitchEnabled(switchEndpoint);
 
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [refOpen, setRefOpen] = useState(false);
+  const [indicator, setIndicator] = useState<'price' | 'gamma' | 'iv'>('gamma');
 
   // El universo del JSON más lo que el operador pineó con el buscador. Los ad-hoc van al final y no
   // se mezclan con los declarados: son de esta sesión y de esta persona.
@@ -141,7 +145,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
    */
   const [alineado, setAlineado] = useState(false);
 
-  useEffect(() => { loadRules(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!externalWatchlist) loadRules(); }, [externalWatchlist, loadRules]);
 
   // Suscribir al hub el DELTA del universo de GEX: los símbolos de su JSON que la plataforma no
   // streamea. App ya suscribe universe.tickers del config de app (SPY/QQQ); acá completamos el resto
@@ -155,11 +159,11 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
   // al despinearlo el cleanup lo desuscribe.
   const extraTickersKey = gridSymbols.filter((s) => !platformTickers.includes(s)).join(',');
   useEffect(() => {
-    if (socketStatus !== 'connected' || !switchEnabled) return;
+    if (externalWatchlist || socketStatus !== 'connected' || !switchEnabled) return;
     const extras = extraTickersKey ? extraTickersKey.split(',') : [];
     extras.forEach(subscribeSymbol);
     return () => extras.forEach(unsubscribeSymbol);
-  }, [extraTickersKey, socketStatus, switchEnabled, subscribeSymbol, unsubscribeSymbol]);
+  }, [externalWatchlist, extraTickersKey, socketStatus, switchEnabled, subscribeSymbol, unsubscribeSymbol]);
 
   // Carga inicial + auto-refresh del símbolo activo. El período sale del JSON (display_config).
   // Con el switch en OFF no se programa nada: el backend igual rechazaría el barrido, pero pedirlo
@@ -232,6 +236,10 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
   // etiqueta MANUAL, que dice por qué la hora no se mueve.
   const stale = autoRefresh && isStale(updated, refreshSeconds * 1000 * 1.5);
 
+  const hasPrice = !!ticker && Number.isFinite(ticker.price) && ticker.price > 0 && !ticker.error.price;
+  const change = hasPrice && ticker?.prevClose != null && Number.isFinite(ticker.prevClose) && ticker.prevClose > 0 ? calcChange(ticker!.price,ticker.prevClose) : null;
+  const detailGroupIds = indicator === 'price' ? ['price'] : indicator === 'gamma' ? ['gamma'] : ['market','volatility'];
+
   if (rulesLoading) {
     return <div className="p-4 text-xs" style={{ color: 'var(--text-muted)' }}>Cargando reglas de GEX…</div>;
   }
@@ -240,18 +248,8 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
   }
 
   return (
-    <div className="flex flex-col">
-      {/* Header — mismo formato que RPF: nombre de la estrategia + badge con su descripción. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px 0' }}>
-        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>GaleCore GEX</span>
-        <span style={{
-          fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
-          color: '#a78bfa', backgroundColor: tint('#a78bfa', 13), border: `1px solid ${tint('#a78bfa', 30)}`,
-          fontFamily: 'JetBrains Mono, monospace',
-        }}>
-          Gamma Exposure · v1.4
-        </span>
-        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+    <div className={'market-workspace' + (compact ? ' market-workspace-compact' : '')}><div className="market-analysis">
+<header className="market-symbol-header"><div className="market-symbol-price"><span className="market-active-symbol">{active || "Mercado"}</span><strong>{hasPrice ? fmtPrice(ticker!.price) : "—"}</strong><span className={change && change.abs !== 0 ? (change.abs > 0 ? "market-up" : "market-down") : "market-neutral"}>{change ? (change.abs > 0 ? "+" : "")+fmtPrice(change.abs)+" ("+fmtPct(change.pct)+")" : "Variación —"}</span></div>        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
           <button
             onClick={() => setRefOpen(true)}
             title="Definiciones de la estrategia + JSON de reglas"
@@ -262,14 +260,15 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
               color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)',
             }}
           >
-            <BookOpen size={12} /> References
+            <BookOpen size={12} /> Referencias
           </button>
           <StrategySwitch
             endpoint={switchEndpoint}
             title="Prender / apagar el barrido de la cadena. En OFF no se toca DXLink."
           />
         </span>
-      </div>
+<div className="market-quote-detail"><span>Bid <b>{ticker?.bid && ticker.bid > 0 ? fmtPrice(ticker.bid) : "—"}</b></span><span>Ask <b>{ticker?.ask && ticker.ask > 0 ? fmtPrice(ticker.ask) : "—"}</b></span><span>Volumen <b>{ticker?.volume != null ? ticker.volume.toLocaleString("en-US") : "—"}</b></span><span>{ticker?.lastUpdate ? "Recepción "+fmtTime(ticker.lastUpdate)+" ET" : "Sin cotización"}</span></div>{ticker?.error.price && <p className="market-price-error" role="status">{ticker.error.price}</p>}</header>
+<nav className="market-indicator-tabs" aria-label="Indicadores de mercado">{([{id:"price",label:"Precio"},{id:"gamma",label:"Gamma"},{id:"iv",label:"IV y volatilidad"}] as const).map(item => <button key={item.id} aria-pressed={indicator===item.id} onClick={()=>setIndicator(item.id)}>{item.label}</button>)}</nav>
 
       {GEX_REF && (
         <ReferencesModal
@@ -286,40 +285,147 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
           actividad real, no solo píxeles — TickerGrid hace su propio polling REST de respaldo y el
           gráfico mantiene series vivas. Mostrar el último barrido "congelado" era peor: un panel
           lleno de números se lee como vigente aunque diga que no lo está. */}
-      {switchEnabled === false ? (
+      {switchEnabled === false && (!externalWatchlist || indicator !== "price") ? (
         <div className="px-3">
-          <StrategyOffPanel detail="Apagada para TODA la plataforma: no se barre la cadena, no se toca DXLink ni a pedido, y no se suscribe ningun simbolo propio de la estrategia. El estado se guarda, asi que un reinicio no la vuelve a prender sola." />
+          <StrategyOffPanel detail={externalWatchlist ? "Barrido GEX apagado. La watchlist mantiene sus cotizaciones; Gamma Exposure no se actualiza hasta activar el barrido." : "Apagada para TODA la plataforma: no se barre la cadena, no se toca DXLink ni a pedido, y no se suscribe ningun simbolo propio de la estrategia. El estado se guarda, asi que un reinicio no la vuelve a prender sola."} />
         </div>
       ) : (
       <>
-      <div className="p-3">
-        <TickerGrid
-          symbols={gridSymbols}
-          selectedSymbol={active}
-          onSelect={setSelectedSymbol}
-          removableSymbols={adHocSymbols}
-          onRemoveSymbol={(symbol) => {
-            // Si se saca el que estaba abierto, la pantalla vuelve al primero del universo en vez
-            // de quedarse mostrando un símbolo que ya no está en la grilla.
-            if (active === symbol) setSelectedSymbol(null);
-            unpinAdHoc(symbol);
-          }}
-          trailing={adHocSearch?.enabled ? (
-            <SymbolSearchCard
-              minQueryLength={adHocSearch.min_query_length}
-              maxResults={adHocSearch.max_results}
-              instrumentTypes={adHocSearch.allowed_instrument_types}
-              onPick={(symbol) => {
-                const pinned = pinAdHoc(symbol);
-                if (pinned) setSelectedSymbol(pinned);
-              }}
-            />
-          ) : undefined}
-        />
-      </div>
+
 
       {active && (
         <>
+
+          {indicator === 'price' && <section className="market-price-panel" aria-label="Gráfico de precio">
+            <header><h2>Precio</h2><span>{display?.candles?.interval ?? '1h'} · Velas</span></header>
+            <div className="market-price-chart"><GexChart key={'price-'+active} symbol={active}
+              currentPrice={hasPrice ? ticker!.price : 0} openPrice={ticker?.open ?? 0} gexData={null}
+              candleInterval={display?.candles?.interval ?? '1h'} candleBucketSeconds={3600}
+              maxCandles={display?.candles?.count ?? 100} candleFromDays={30}
+              rightPadBars={display?.candles?.right_pad_bars ?? 10} readable /></div>
+          </section>}
+
+          {indicator === "gamma" && <>
+          {/* ── Cuadro Graph — cadena por vencimiento ── */}
+          <div style={{
+            margin: '0 12px 12px',
+            borderRadius: 10,
+            overflow: 'hidden',
+            border: '1px solid var(--border)',
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: 'var(--shadow-sm)',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 14px',
+              borderBottom: '1px solid var(--border-dark)',
+              backgroundColor: 'var(--bg-tertiary)',
+            }}>
+              <span style={{
+                fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15,
+                color: 'var(--text-primary)', letterSpacing: '0.04em',
+              }}>
+                {active} · {isGlobalScope ? 'Toda la cadena' : 'Por vencimiento'}
+              </span>
+              {/* A la derecha, y a la izquierda del spot: encuadrar la escala en la zona gamma.
+                  Es un toggle con estado a la vista —no el switch ON/OFF del proyecto, que significa
+                  otra cosa (kill switch de estrategia, global y de admin)— porque esto es una
+                  preferencia de quien mira el gráfico. Se apaga solo cuando mueven la escala. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  onClick={() => setAlineado(v => !v)}
+                  disabled={!chartData}
+                  className="btn"
+                  aria-pressed={alineado}
+                  title={alineado
+                    ? 'Alineación activa — clic para soltar la escala'
+                    : (display?.chart_scale?.label ?? 'Encuadrar la escala en la zona gamma')}
+                  style={{
+                    padding: '3px 6px',
+                    ...(alineado ? {
+                      color: 'var(--blue-gc)',
+                      backgroundColor: 'var(--blue-muted)',
+                      borderColor: 'var(--blue-border)',
+                    } : null),
+                  }}
+                  aria-label="Encuadrar la escala en la zona gamma"
+                >
+                  <Crosshair size={11} />
+                </button>
+                <span className="tabular-nums" style={{
+                  fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
+                }}>
+                  Spot {fmtPrice(ticker?.price || data?.spotPrice || 0)}
+                </span>
+              </div>
+            </div>
+
+            <div className="market-gamma-chart" style={{ display: 'flex', height: compact ? 350 : DETAIL_HEIGHT }}>
+              {/* Izquierda: cadena + lectura numérica del vencimiento elegido */}
+              <div style={{
+                width: CHAIN_COL_W,
+                flexShrink: 0,
+                borderRight: '1px solid var(--border-dark)',
+                overflowY: 'auto',
+              }}>
+                <OptionsChainList
+                  expiries={expiries}
+                  selected={activeExpiration}
+                  onSelect={(scope) => selectExpiry(active, scope)}
+                  label={display?.options_chain?.label}
+                  globalNetGex={data?.gex.global.netGex}
+                  maxDte={data?.gex.config.maxDte}
+                  globalLabel={display?.options_chain?.global_row?.label}
+                />
+                <ExpiryEngine
+                  scope={isGlobalScope && data
+                    ? { kind: 'global', global: data.gex.global, maxDte: data.gex.config.maxDte ?? null }
+                    : { kind: 'expiry', expiry: activeExpiry }}
+                  label={display?.expiry_engine?.label}
+                />
+              </div>
+
+              {/* Derecha: gráfico del vencimiento seleccionado */}
+              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                {isLoading && !chartData ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    height: '100%', gap: 8, fontSize: 14, color: 'var(--text-muted)',
+                  }}>
+                    <span className="spinner" /> Barriendo la cadena…
+                  </div>
+                ) : !chartData ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    height: '100%', fontSize: 14, color: 'var(--text-muted)',
+                  }}>
+                    Sin datos GEX disponibles
+                  </div>
+                ) : (
+                  <GexChart
+                    // Key por símbolo, no por vencimiento: cambiar de vencimiento redibuja muros y
+                    // barras sin remontar el chart (remontarlo volvería a pedir las velas).
+                    readable
+                    key={active}
+                    symbol={active}
+                    currentPrice={ticker?.price ?? data?.spotPrice ?? 0}
+                    openPrice={ticker?.open ?? 0}
+                    iv30={iv30}
+                    gexData={chartData}
+                    candleInterval={display?.candles?.interval ?? '1h'}
+                    candleBucketSeconds={3600}
+                    maxCandles={display?.candles?.count ?? 100}
+                    candleFromDays={30}
+                    rightPadBars={display?.candles?.right_pad_bars ?? 10}
+                    scaleConfig={display?.chart_scale}
+                    alineado={alineado}
+                    onDesalinear={() => setAlineado(false)}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+          </>}
           {/* ── Cuadro Details — GEX global + contexto. Sin columna Microstructure. ── */}
           <div style={{
             margin: '0 12px 12px',
@@ -335,10 +441,10 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
               borderBottom: '1px solid var(--border-dark)',
             }}>
               <span style={{
-                fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
                 color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
               }}>
-                {active} · Details
+                {indicator === "gamma" ? "Estructura gamma · Global" : indicator === "iv" ? "Volatilidad" : "Contexto de precio"}
               </span>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -359,7 +465,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                   <span
                     title={updated ? `Último barrido: ${fmtTime(updated)}` : 'Sin barrido en esta sesión'}
                     style={{
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
                       padding: '2px 6px', borderRadius: 20,
                       color: 'var(--red-gc)',
                       backgroundColor: tint('var(--red-gc)', 10),
@@ -376,7 +482,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                   <span
                     title="Simbolo pineado con el buscador: no entra al auto-refresh del universo. Se rebarre con Reload."
                     style={{
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
                       padding: '2px 6px', borderRadius: 20,
                       color: 'var(--text-muted)',
                       border: '1px solid var(--border)',
@@ -391,7 +497,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                     title={`Faltaron ${(data!.gex.global.expirationsRequested - data!.gex.global.expirationsIncluded)} vencimientos · cobertura ${data!.gex.global.coveragePct}% de los símbolos`}
                     className="tabular-nums"
                     style={{
-                      fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
                       padding: '2px 6px', borderRadius: 20,
                       color: 'var(--yellow-gc)',
                       backgroundColor: 'var(--yellow-muted)',
@@ -431,7 +537,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
                 padding: 16, fontSize: 14, lineHeight: 1.5,
                 color: chainMissing ? 'var(--text-secondary)' : 'var(--red-gc)',
               }}>
-                {chainMissing ? err : `Error cargando GEX: ${err}`}
+                {chainMissing ? err : `No se pudo leer ${indicator === "gamma" ? "GEX" : indicator === "iv" ? "volatilidad" : "el contexto de precio"}: ${err}`}
                 {chainMissing && (
                   <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>
                     El buscador matchea tambien la descripcion, asi que devuelve ETFs sobre el
@@ -443,134 +549,42 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus }: GexPro
               <DetailsPanel
                 data={data}
                 groups={display?.details_panel?.groups}
-                subtitle={display?.details_panel?.subtitle
-                  ?? 'Contexto de mercado — lectura informativa'}
+                groupIds={detailGroupIds}
+                subtitle={undefined}
               />
             )}
           </div>
 
-          {/* ── Cuadro Graph — cadena por vencimiento ── */}
-          <div style={{
-            margin: '0 12px 12px',
-            borderRadius: 10,
-            overflow: 'hidden',
-            border: '1px solid var(--border)',
-            backgroundColor: 'var(--bg-secondary)',
-            boxShadow: 'var(--shadow-sm)',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '8px 14px',
-              borderBottom: '1px solid var(--border-dark)',
-              backgroundColor: 'var(--bg-tertiary)',
-            }}>
-              <span style={{
-                fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15,
-                color: 'var(--text-primary)', letterSpacing: '0.04em',
-              }}>
-                {active} · Graph ({isGlobalScope ? 'GEX Global — toda la cadena' : 'GEX by Expiry'})
-              </span>
-              {/* A la derecha, y a la izquierda del spot: encuadrar la escala en la zona gamma.
-                  Es un toggle con estado a la vista —no el switch ON/OFF del proyecto, que significa
-                  otra cosa (kill switch de estrategia, global y de admin)— porque esto es una
-                  preferencia de quien mira el gráfico. Se apaga solo cuando mueven la escala. */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button
-                  onClick={() => setAlineado(v => !v)}
-                  disabled={!chartData}
-                  className="btn"
-                  aria-pressed={alineado}
-                  title={alineado
-                    ? 'Alineación activa — clic para soltar la escala'
-                    : (display?.chart_scale?.label ?? 'Encuadrar la escala en la zona gamma')}
-                  style={{
-                    padding: '3px 6px',
-                    ...(alineado ? {
-                      color: 'var(--blue-gc)',
-                      backgroundColor: 'var(--blue-muted)',
-                      borderColor: 'var(--blue-border)',
-                    } : null),
-                  }}
-                  aria-label="Encuadrar la escala en la zona gamma"
-                >
-                  <Crosshair size={11} />
-                </button>
-                <span className="tabular-nums" style={{
-                  fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
-                }}>
-                  Spot {fmtPrice(ticker?.price || data?.spotPrice || 0)}
-                </span>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', height: DETAIL_HEIGHT }}>
-              {/* Izquierda: cadena + lectura numérica del vencimiento elegido */}
-              <div style={{
-                width: CHAIN_COL_W,
-                flexShrink: 0,
-                borderRight: '1px solid var(--border-dark)',
-                overflowY: 'auto',
-              }}>
-                <OptionsChainList
-                  expiries={expiries}
-                  selected={activeExpiration}
-                  onSelect={(scope) => selectExpiry(active, scope)}
-                  label={display?.options_chain?.label}
-                  globalNetGex={data?.gex.global.netGex}
-                  maxDte={data?.gex.config.maxDte}
-                  globalLabel={display?.options_chain?.global_row?.label}
-                />
-                <ExpiryEngine
-                  scope={isGlobalScope && data
-                    ? { kind: 'global', global: data.gex.global, maxDte: data.gex.config.maxDte ?? null }
-                    : { kind: 'expiry', expiry: activeExpiry }}
-                  label={display?.expiry_engine?.label}
-                />
-              </div>
-
-              {/* Derecha: gráfico del vencimiento seleccionado */}
-              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                {isLoading && !chartData ? (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    height: '100%', gap: 8, fontSize: 14, color: 'var(--text-muted)',
-                  }}>
-                    <span className="spinner" /> Barriendo la cadena…
-                  </div>
-                ) : !chartData ? (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    height: '100%', fontSize: 14, color: 'var(--text-muted)',
-                  }}>
-                    No GEX data
-                  </div>
-                ) : (
-                  <GexChart
-                    // Key por símbolo, no por vencimiento: cambiar de vencimiento redibuja muros y
-                    // barras sin remontar el chart (remontarlo volvería a pedir las velas).
-                    key={active}
-                    symbol={active}
-                    currentPrice={ticker?.price ?? data?.spotPrice ?? 0}
-                    openPrice={ticker?.open ?? 0}
-                    iv30={iv30}
-                    gexData={chartData}
-                    candleInterval={display?.candles?.interval ?? '1h'}
-                    candleBucketSeconds={3600}
-                    maxCandles={display?.candles?.count ?? 100}
-                    candleFromDays={30}
-                    rightPadBars={display?.candles?.right_pad_bars ?? 10}
-                    scaleConfig={display?.chart_scale}
-                    alineado={alineado}
-                    onDesalinear={() => setAlineado(false)}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
         </>
       )}
       </>
       )}
+    </div>
+    {!externalWatchlist && switchEnabled !== false && (      <MarketWatchlist>
+        <TickerGrid layout="list"
+          symbols={gridSymbols}
+          selectedSymbol={active}
+          onSelect={setSelectedSymbol}
+          removableSymbols={adHocSymbols}
+          onRemoveSymbol={(symbol) => {
+            // Si se saca el que estaba abierto, la pantalla vuelve al primero del universo en vez
+            // de quedarse mostrando un símbolo que ya no está en la grilla.
+            if (active === symbol) setSelectedSymbol(null);
+            unpinAdHoc(symbol);
+          }}
+          trailing={adHocSearch?.enabled ? (
+            <SymbolSearchCard compact
+              minQueryLength={adHocSearch.min_query_length}
+              maxResults={adHocSearch.max_results}
+              instrumentTypes={adHocSearch.allowed_instrument_types}
+              onPick={(symbol) => {
+                const pinned = pinAdHoc(symbol);
+                if (pinned) setSelectedSymbol(pinned);
+              }}
+            />
+          ) : undefined}
+        />
+      </MarketWatchlist>)}
     </div>
   );
 }

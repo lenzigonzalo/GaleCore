@@ -16,6 +16,8 @@ interface AccountStore {
   positions: PositionResponse[];
   loadingBalances: boolean;
   loadingPositions: boolean;
+  errorPositions: boolean;
+  positionsReadAt: Date | null;
   errorBalances: string | null;
   /**
    * El operador no puede leer su cuenta de bróker por algo que él arregla: no la vinculó, o la que
@@ -42,6 +44,8 @@ const EMPTY = {
   positions: [] as PositionResponse[],
   loadingBalances: false,
   loadingPositions: false,
+  errorPositions: false,
+  positionsReadAt: null,
   errorBalances: null,
   brokerAccountIssue: null,
   lastUpdate: null,
@@ -53,13 +57,13 @@ export const useAccountStore = create<AccountStore>((set) => ({
   // Que los balances lleguen prueba que la cuenta está vinculada Y que su credencial sirve: se
   // limpia la marca, sea cuál sea de las dos que estaba puesta.
   setBalances: (b) => set({ balances: b, lastUpdate: new Date(), errorBalances: null, brokerAccountIssue: null }),
-  setPositions: (p) => set({ positions: p }),
+  setPositions: (p) => set({ positions: p, errorPositions: false, positionsReadAt: new Date() }),
   setLoadingBalances: (v) => set({ loadingBalances: v }),
   setLoadingPositions: (v) => set({ loadingPositions: v }),
   setErrorBalances: (f) => set(f
     ? { errorBalances: f.message, brokerAccountIssue: f.brokerAccountIssue, balances: null, lastUpdate: null }
     : { errorBalances: null, brokerAccountIssue: null }),
-  failPositions: () => set({ positions: [] }),
+  failPositions: () => set({ positions: [], errorPositions: true, positionsReadAt: null }),
 
   reset: () => set({ ...EMPTY }),
 }));

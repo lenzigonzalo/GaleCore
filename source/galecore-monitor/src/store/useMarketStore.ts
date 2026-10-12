@@ -49,9 +49,10 @@ export const useMarketStore = create<MarketStore>((set) => ({
         [symbol]: {
           ...(s.tickers[symbol] ?? emptyTicker(symbol)),
           price: data.price,
+          ...(Number.isFinite(data.price) && data.price > 0 && { error: { ...(s.tickers[symbol]?.error ?? defaultError), price: undefined } }),
           lastUpdate: new Date(),
           isStreaming: true,
-          ...(data.extendedTradingHours != null && { extendedTradingHours: data.extendedTradingHours }),
+          ...(data.extendedTradingHours != null && { extendedTradingHours: data.extendedTradingHours, marketStatusReceivedAt: new Date(), marketStatusSourceAt: new Date(data.timestamp) }),
         },
       },
     })),

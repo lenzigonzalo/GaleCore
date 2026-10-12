@@ -1,0 +1,10 @@
+import React from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { WorkspaceHeader } from './WorkspaceHeader';
+jest.mock('./WorkspaceSearch',()=>({WorkspaceSearch:()=> <input aria-label="Buscar"/>}));
+jest.mock('./AccountMenu',()=>({AccountMenu:()=> <span>Perfil</span>}));
+const props={onChange:jest.fn(),onLogout:()=>{},conversationOpen:false,onConversation:()=>{},onSymbol:async()=>{}};
+beforeEach(()=>jest.clearAllMocks());
+test('Lab mantiene selector y perfil sin encabezado, búsqueda o acceso Lab duplicados',()=>{render(<WorkspaceHeader {...props} mode="lab" active="lab"/>);expect(screen.getByRole('navigation',{name:'Espacios de GaleCore'})).toBeInTheDocument();expect(screen.getByText('Perfil')).toBeInTheDocument();expect(screen.queryByRole('banner')).not.toBeInTheDocument();expect(screen.queryByRole('textbox',{name:'Buscar'})).not.toBeInTheDocument();expect(screen.queryByRole('button',{name:'Abrir Lab real'})).not.toBeInTheDocument();});
+test('cambiar espacio conserva los destinos sin ofrecer activación financiera',()=>{const change=jest.fn();render(<WorkspaceHeader {...props} onModeChange={change} mode="lab" active="lab"/>);fireEvent.click(screen.getByRole('button',{name:'Operativa'}));expect(change).toHaveBeenCalledWith('operativa');expect(screen.queryByRole('button',{name:/activar|deploy/i})).not.toBeInTheDocument();});
+test('Monitor real conserva búsqueda y demo evita el encabezado duplicado',()=>{const {rerender}=render(<WorkspaceHeader {...props} mode="monitor" active="inicio"/>);expect(screen.getByRole('textbox',{name:'Buscar'})).toBeInTheDocument();rerender(<WorkspaceHeader {...props} mode="monitor" active="inicio" mainDemo/>);expect(screen.queryByRole('textbox',{name:'Buscar'})).not.toBeInTheDocument();expect(screen.queryByRole('banner')).not.toBeInTheDocument();expect(screen.getByRole('button',{name:/Mi cuenta/})).toBeInTheDocument();});

@@ -1,0 +1,8 @@
+.macro-page { padding: 22px 26px; }
+.macro-page-heading { display:flex; align-items:baseline; gap:20px; margin-bottom:20px; }
+.macro-page-heading h1 { font-size:26px; margin:0; color:var(--text-primary); }
+.macro-page-heading > span { font-size:15px; color:var(--text-secondary); }
+.macro-page .macro-indicators { padding:22px 0; }
+.macro-page .macro-indicators strong { font-size:30px; }
+.macro-page .macro-rate svg { height:140px; }
+@media(max-width:600px) { .macro-page { padding:16px; } .macro-page-heading { flex-wrap:wrap; gap:8px; } }

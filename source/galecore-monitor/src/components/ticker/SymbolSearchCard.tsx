@@ -4,6 +4,8 @@ import { searchSymbols } from '../../api/marketdata';
 import { SymbolSearchResult } from '../../types/api';
 
 interface Props {
+  compact?: boolean;
+  initialOpen?: boolean;
   /** El símbolo elegido. Quien la monta decide qué hacer con él (pinearlo, seleccionarlo). */
   onPick: (symbol: string) => void;
   /** Todo sale del JSON de la estrategia: la card no tiene política propia. */
@@ -22,8 +24,8 @@ const DEBOUNCE_MS = 300;
  *
  * No sabe nada de GEX: recibe sus parámetros y avisa qué eligieron.
  */
-export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, instrumentTypes }: Props) {
-  const [open, setOpen] = useState(false);
+export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, instrumentTypes, compact = false, initialOpen = false }: Props) {
+  const [open, setOpen] = useState(initialOpen);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SymbolSearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,15 +42,16 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
   }, [open]);
 
   useEffect(() => {
+    const id = ++reqRef.current;
     const q = query.trim();
     if (q.length < Math.max(1, minQueryLength)) {
       setResults([]);
       setSearched(false);
       setError(null);
+      setLoading(false);
       return;
     }
 
-    const id = ++reqRef.current;
     setLoading(true);
     const timer = setTimeout(() => {
       searchSymbols(q, instrumentTypes)
@@ -89,9 +92,9 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
   const cardStyle: React.CSSProperties = {
     backgroundColor: 'var(--bg-secondary)',
     border: `1px ${open ? 'solid' : 'dashed'} ${open ? 'var(--blue-gc)' : 'var(--border)'}`,
-    borderRadius: 10,
-    padding: '14px 16px',
-    minWidth: 210,
+    borderRadius: compact ? 4 : 10,
+    padding: compact ? '10px 12px' : '14px 16px',
+    minWidth: compact ? 0 : 210,
     position: 'relative',
   };
 
@@ -100,15 +103,15 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
       <button
         onClick={() => setOpen(true)}
         className="w-full text-left card-interactive"
-        style={{ ...cardStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: 108 }}
-        title="Analizar un símbolo que no está en el universo de la estrategia"
+        style={{ ...cardStyle, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, minHeight: compact ? 42 : 108 }}
+        title="Agregar símbolo a la watchlist" aria-label="Agregar símbolo a la watchlist"
       >
         <Plus size={14} style={{ color: 'var(--text-muted)' }} />
         <span style={{
-          fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+          fontSize: 14, fontWeight: 500,
           color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
         }}>
-          Buscar símbolo
+          {compact ? 'Agregar símbolo' : 'Buscar símbolo'}
         </span>
       </button>
     );
@@ -194,7 +197,7 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
       {/* La búsqueda matchea también contra la descripción: "AAPL" devuelve siete ETFs apalancados
           sobre AAPL, y ninguno tiene cadena propia. Que el tipo sea Equity no promete que se pueda
           barrer — eso se sabe al pedir la cadena. */}
-      {!loading && !error && results.length > 1 && (
+      {!compact && !loading && !error && results.length > 1 && (
         <div style={{
           marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border-dark)',
           fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.4,

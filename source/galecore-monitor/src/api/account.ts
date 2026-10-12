@@ -70,47 +70,35 @@ export function describeAccountError(err: any): AccountFailure {
   };
 }
 
+/** Una respuesta incompleta no representa un saldo cero. */
+export function parseBalances(data: unknown): BalancesResponse {
+  const raw = ((data as any)?.data ?? data) as Record<string, unknown>;
+  if (!raw || typeof raw !== 'object') throw new Error('La API no devolvió una lectura de cuenta válida.');
+  const number = (keys: string[]): number => {
+    const value = keys.map(key => raw[key]).find(value => value != null);
+    const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() ? Number(value) : NaN;
+    if (!Number.isFinite(parsed)) throw new Error('La lectura de cuenta está incompleta: falta ' + keys[0] + '.');
+    return parsed;
+  };
+  return {
+    accountNumber: String(raw.accountNumber ?? raw['account-number'] ?? ''),
+    netLiquidatingValue: number(['netLiquidatingValue', 'netLiquidation', 'net-liquidating-value']),
+    buyingPower: number(['buyingPower', 'cashBuyingPower', 'derivativeBuyingPower', 'buying-power', 'derivative-buying-power']),
+    cash: number(['cash', 'cashBalance', 'cash-balance', 'cashAvailableToWithdraw']),
+    maintenanceRequirement: (raw.maintenanceRequirement ?? raw['maintenance-requirement']) as number | undefined,
+    // El store conserva por separado la hora de recepción; no inventamos hora de fuente.
+    timestamp: typeof raw.timestamp === 'string' ? raw.timestamp : '',
+  };
+}
+
 export async function fetchBalances(): Promise<BalancesResponse> {
   const { data } = await apiClient.get<unknown>('/Data/Tastytrade/Account/Balances');
-  console.debug('[Account/Balances] response:', data);
-
-  // Unwrap possible { data: {...} } wrapper
-  const raw = ((data as any)?.data ?? data) as Record<string, unknown>;
-
-  return {
-    accountNumber:
-      (raw.accountNumber as string) ??
-      (raw['account-number'] as string) ?? '',
-
-    netLiquidatingValue:
-      (raw.netLiquidatingValue as number) ??
-      (raw.netLiquidation as number) ??
-      (raw['net-liquidating-value'] as number) ?? 0,
-
-    buyingPower:
-      (raw.buyingPower as number) ??
-      (raw.cashBuyingPower as number) ??
-      (raw.derivativeBuyingPower as number) ??
-      (raw['buying-power'] as number) ??
-      (raw['derivative-buying-power'] as number) ?? 0,
-
-    cash:
-      (raw.cash as number) ??
-      (raw.cashBalance as number) ??
-      (raw['cash-balance'] as number) ??
-      (raw.cashAvailableToWithdraw as number) ?? 0,
-
-    maintenanceRequirement:
-      (raw.maintenanceRequirement as number | undefined) ??
-      (raw['maintenance-requirement'] as number | undefined),
-
-    timestamp: (raw.timestamp as string) ?? new Date().toISOString(),
-  };
+  return parseBalances(data);
 }
 
 export async function fetchPositions(): Promise<PositionResponse[]> {
   const { data } = await apiClient.get<unknown>('/Data/Tastytrade/Account/Positions');
-  console.debug('[Account/Positions] response:', data);
-  const arr = Array.isArray(data) ? data : (data as any)?.positions ?? [];
+  const arr = Array.isArray(data) ? data : (data as any)?.positions;
+  if (!Array.isArray(arr)) throw new Error('La API no devolvió una lista de posiciones válida.');
   return arr as PositionResponse[];
 }

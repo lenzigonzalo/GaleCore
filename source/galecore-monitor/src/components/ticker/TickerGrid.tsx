@@ -1,9 +1,12 @@
 import React, { useEffect, useRef } from 'react';
 import { TickerCard } from './TickerCard';
+import { TickerWatchlist } from './TickerWatchlist';
 import { useMarketStore } from '../../store/useMarketStore';
 import { fetchMarketDataBatch } from '../../api/marketdata';
 
 interface Props {
+  layout?: 'cards' | 'list';
+  sections?: {label:string; symbols:string[]}[];
   selectedSymbol: string | null;
   onSelect: (symbol: string | null) => void;
   /** Universo a mostrar. Lo pasa la estrategia dueña de la pantalla, desde su propio JSON de
@@ -21,6 +24,7 @@ interface Props {
 function applyMarketData(d: { symbol: string; open: number; prevClose?: number; volume: number; last: number; bid: number; ask: number }) {
   const store = useMarketStore.getState();
   store.setOpen(d.symbol, d.open, d.prevClose, d.volume);
+  if (Number.isFinite(d.last) && d.last > 0) store.setError(d.symbol, 'price', undefined);
   if (!store.tickers[d.symbol]?.price) {
     store.updatePrice(d.symbol, { price: d.last, size: 0, timestamp: new Date().toISOString() });
   }
@@ -29,7 +33,7 @@ function applyMarketData(d: { symbol: string; open: number; prevClose?: number; 
 
 export function TickerGrid({
   selectedSymbol, onSelect, symbols, loading, error,
-  trailing, removableSymbols, onRemoveSymbol,
+  trailing, removableSymbols, onRemoveSymbol, sections, layout = 'cards',
 }: Props) {
   // El estado de carga es el de quien pasa el universo — la grilla no lo deriva de ningún store.
   const rulesLoading = loading ?? false;
@@ -125,6 +129,15 @@ export function TickerGrid({
       </div>
     );
   }
+
+  if (layout === 'list') return <>
+    <TickerWatchlist sections={sections} tickers={symbols.map(symbol => tickers[symbol] ?? {
+      symbol, price: 0, open: 0, bid: 0, ask: 0, lastUpdate: null, isStreaming: false,
+      loading: { price: true, ivRank: true, iv: true, gex: false }, error: {},
+    })} selectedSymbol={selectedSymbol} onSelect={onSelect}
+      removableSymbols={removableSymbols} onRemoveSymbol={onRemoveSymbol} />
+    {trailing}
+  </>;
 
   return (
     <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))' }}>

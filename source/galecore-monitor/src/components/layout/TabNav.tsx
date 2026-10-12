@@ -7,7 +7,7 @@ import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 // del config de la app: las cards de Main navegan por ese valor.
 //
 // 'config' es una pestaña sin botón en la barra: Configuración (GC-0007), desde el menú de la cuenta.
-export type Tab = 'hoy' | 'inicio' | 'monitor' | 'rpf' | 'gex' | 'shadow' | 'inteligencia' | 'agentes' | 'admin' | 'config';
+export type Tab = 'operativa' | 'lab' | 'estrategias' | 'inicio' | 'monitor' | 'rpf' | 'gex' | 'macro' | 'shadow' | 'inteligencia' | 'agentes' | 'admin' | 'config';
 
 interface Props {
   active: Tab;
@@ -23,8 +23,7 @@ type TabDef = { id: Tab; label: string; Icon: React.ComponentType<{ size?: numbe
 // Las pestañas del tablero, de izquierda a derecha (GC-0009): Main, Monitor, el menú Estrategias,
 // Inteligencia y Agentes.
 const LEADING: TabDef[] = [
-  { id: 'hoy',             label: 'Hoy',               Icon: Activity        },
-  { id: 'inicio',         label: 'Main',              Icon: LayoutDashboard },
+  { id: 'inicio',          label: 'Main',              Icon: LayoutDashboard },
   { id: 'monitor',         label: 'Monitor',           Icon: Activity        },
 ];
 

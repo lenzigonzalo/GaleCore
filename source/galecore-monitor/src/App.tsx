@@ -2,14 +2,23 @@ import React, { useState, useEffect, useRef } from 'react';
 import './index.css';
 import { LoginScreen } from './components/LoginScreen';
 import { supabase, getSession, signOut } from './auth/supabase';
+import { LiveWatchlist } from './components/ticker/LiveWatchlist';
 import { StatusBar } from './components/layout/StatusBar';
-import { Sidebar } from './components/layout/Sidebar';
-import { TabNav, Tab } from './components/layout/TabNav';
+import type { Tab } from './components/layout/TabNav';
+import { MacroPreview } from './pages/MacroPreview';
+import { WorkspaceDemo } from './pages/WorkspaceDemo';
+import { Operations } from './pages/Operations';
+import type { WorkspaceMode } from './components/layout/WorkspaceNav';
+import { WorkspaceNav } from './components/layout/WorkspaceNav';
+import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
+import { Lab } from './pages/Lab';
+import { useGexStore } from './store/useGexStore';
+import { Main } from './pages/Main';
+import { AccountSummary } from './components/account/AccountSummary';
 import { SupervisorAlerts } from './components/layout/SupervisorAlerts';
 import { ClaudeTerminal } from './components/layout/ClaudeTerminal';
 import { useTerminalStore } from './store/useTerminalStore';
 import { Home } from './pages/Home';
-import { Hoy } from './pages/Hoy';
 import { Admin } from './pages/Admin';
 import { Settings } from './pages/Settings';
 import { Monitor } from './pages/Monitor';
@@ -31,12 +40,54 @@ interface DashboardProps {
 }
 
 function Dashboard({ onLogout }: DashboardProps) {
-  const [tab, setTab] = useState<Tab>('hoy');
+  const [tab, setCurrentTab] = useState<Tab>('inicio');
+  const [mode, setMode] = useState<WorkspaceMode>('monitor');
+  const lastView = useRef<Record<WorkspaceMode, Tab>>({ monitor: 'inicio', operativa: 'operativa', lab: 'lab' });
+  const setTab = (next: Tab) => {
+    let target = mode;
+    if (next === 'inicio' || next === 'macro') target = 'monitor';
+    if (next === 'operativa' || next === 'rpf') target = 'operativa';
+    if (next === 'lab' || next === 'shadow' || next === 'agentes') target = 'lab';
+    lastView.current[target] = next;
+    setMode(target);
+    setCurrentTab(next);
+  };
+  const changeMode = (next: WorkspaceMode) => {
+    lastView.current[mode] = tab;
+    setMode(next);
+    setCurrentTab(lastView.current[next]);
+  };
+  // TEMPORAL GC-0011: demo integral por defecto sólo en localhost. Retirar al conectar datos reales.
+  const localDemo = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
+  const [mainDemo, setMainDemo] = useState(() => localDemo && new URLSearchParams(window.location.search).get('demo') !== 'off');
+  const demoVisible = mainDemo && mode !== 'lab';
+  const isLabWorkspace = mode === 'lab' && ['lab', 'estrategias'].includes(tab);
+  const marketSurface = mode !== 'lab' && ['inicio','monitor','gex','macro'].includes(tab);
+  const [watchlistOpen,setWatchlistOpen] = useState(false);
+  useEffect(() => { if (!marketSurface) setWatchlistOpen(false); },[marketSurface]);
+  const [settingsInitial, setSettingsInitial] = useState<'usuario' | 'broker'>('usuario');
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
   const { setConfig, setLoading: setConfigLoading, setError: setConfigError, tickers } = useAppConfigStore();
   const { setBalances, setPositions, setLoadingBalances, setLoadingPositions, setErrorBalances, failPositions, lastUpdate } = useAccountStore();
   const reloadCurrentUser = useCurrentUserStore((s) => s.reload);
+
+  const refreshAccount = () => {
+    // Balances
+    setLoadingBalances(true);
+    fetchBalances()
+      .then(setBalances)
+      .catch((e) => setErrorBalances(describeAccountError(e)))
+      .finally(() => setLoadingBalances(false));
+
+    // Positions. Si fallan se vacían: dejar las de la lectura anterior es mostrarle a este operador
+    // las posiciones de otro.
+    setLoadingPositions(true);
+    fetchPositions()
+      .then(setPositions)
+      .catch(failPositions)
+      .finally(() => setLoadingPositions(false));
+  };
 
   useEffect(() => {
     // Quién está logueado y qué le deja hacer la plataforma. Va primero porque de acá sale qué
@@ -56,41 +107,41 @@ function Dashboard({ onLogout }: DashboardProps) {
       .catch((e) => setConfigError(e.message ?? 'Error cargando la configuración'))
       .finally(() => setConfigLoading(false));
 
-    // Balances
-    setLoadingBalances(true);
-    fetchBalances()
-      .then(setBalances)
-      .catch((e) => setErrorBalances(describeAccountError(e)))
-      .finally(() => setLoadingBalances(false));
-
-    // Positions. Si fallan se vacían: dejar las de la lectura anterior es mostrarle a este operador
-    // las posiciones de otro.
-    setLoadingPositions(true);
-    fetchPositions()
-      .then(setPositions)
-      .catch(failPositions)
-      .finally(() => setLoadingPositions(false));
+    refreshAccount();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const terminalOpen = useTerminalStore((t) => t.open);
-  const setTerminalOpen = useTerminalStore((t) => t.setOpen);
 
   const { status, subscribeSymbol, unsubscribeSymbol, subscribeLeg, unsubscribeLeg, acceptSuggestion, dismissSuggestion } = useMarketSocket(tickers);
   useEffect(() => { setSocketStatus(status); }, [status]);
 
   return (
-    <div className="flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      <Sidebar onLogoClick={() => setTab('hoy')} />
+    <div className={'workspace-shell flex' + (marketSurface ? ' has-watchlist-dock' : '') + (marketSurface && watchlistOpen ? ' watchlist-expanded' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
+      {!isLabWorkspace && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
-        <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />
-        <TabNav active={tab} onChange={setTab} onLogout={onLogout} />
-        <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
-          {/* Hoy (P1-10a) se monta al entrar y se refresca solo cada minuto. */}
-          {tab === 'hoy' && <Hoy />}
-          <div style={{ display: tab === 'inicio' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+
+        <WorkspaceHeader status={mode !== 'lab' ? <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/> : undefined} mode={mode} onModeChange={changeMode} mainDemo={demoVisible} active={tab} onChange={setTab} onLogout={onLogout}
+          onSymbol={async symbol => {
+            let store = useGexStore.getState();
+            if (!store.rules) { await store.loadRules(); store = useGexStore.getState(); }
+            if (store.rulesError) throw new Error('No se pudo cargar Mercado.');
+            if (!store.tickers.includes(symbol) && !store.adHocSearch?.enabled) throw new Error('La búsqueda de nuevos símbolos no está habilitada.');
+            const selected = store.pinAdHoc(symbol);
+            if (!selected) throw new Error('No se pudo abrir el símbolo.');
+            store.setSelectedSymbol(selected); setTab('gex');
+          }} conversationOpen={terminalOpen} onConversation={() => setTab('lab')} />
+
+
+        <main className={"dashboard-main flex-1 " + (isLabWorkspace ? "lab-dashboard-main" : "overflow-auto")} style={{ position: 'relative' }}>
+          {demoVisible ? <WorkspaceDemo active={tab} mode={mode} onNavigate={setTab} onExit={() => setMainDemo(false)} onMarketSelect={symbol => { useGexStore.getState().setSelectedSymbol(symbol); setTab('gex'); }} marketContent={tab === 'gex' ? <Gex externalWatchlist compact={tab !== 'gex'} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus}/> : undefined} /> : <>
+          {tab === 'inicio' && <Main demo={mainDemo} onDemoChange={localDemo ? setMainDemo : undefined} onNavigate={setTab} onConnectBroker={() => { setSettingsInitial('broker'); setTab('config'); }} />}
+          {tab === 'operativa' && <Operations onNavigate={setTab} />}
+
+          <div style={{ display: tab === 'estrategias' && !isLabWorkspace ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
           </div>
           <div style={{ display: tab === 'monitor' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+            <div className="workspace-portfolio-summary"><AccountSummary /></div>
             <Monitor subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg}
               subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />
           </div>
@@ -100,31 +151,28 @@ function Dashboard({ onLogout }: DashboardProps) {
           </div>
           {/* Se montan recién al entrar: leen la cuenta de bróker y la lista de usuarios — nada de
               eso tiene sentido traerlo en cada arranque del tablero. */}
-          {tab === 'config' && <Settings />}
+          {tab === 'config' && <Settings initial={settingsInitial} onBrokerLinked={refreshAccount} />}
           {tab === 'admin' && <Admin />}
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}
-          {tab === 'gex' && <Gex subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
+          {tab === 'gex' && <Gex externalWatchlist subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
           {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
+          {tab === 'macro' && (localDemo ? <MacroPreview /> : <section className="wd-content"><h1>Macro</h1><p>No hay una fuente macro conectada.</p></section>)}
           {tab === 'shadow' && <Shadow />}
           {/* Inteligencia se monta al entrar: lee el adapter local de GaleCore-AI, no la API. */}
           {tab === 'inteligencia' && <Inteligencia />}
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
+          </>}
+          <div className="lab-page-host" hidden={!isLabWorkspace}><Lab onMonitor={() => setTab('shadow')} onNavigate={setTab} /></div>
         </main>
-        {/* Avisos del supervisor de SHADOW (WS-0007): en todas las pestañas, con sonido. */}
-        <SupervisorAlerts />
+        {/* Avisos del supervisor SHADOW: sólo en el espacio de trabajo. */}
+        {!demoVisible && !isLabWorkspace && ['rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
-        {!terminalOpen && (
-          <button onClick={() => setTerminalOpen(true)}
-            style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 50, fontSize: 13, padding: '8px 14px',
-              borderRadius: 999, cursor: 'pointer', backgroundColor: 'var(--bg-secondary)',
-              color: 'var(--text-secondary)', border: '1px solid var(--border-dark)' }}>
-            Claude Code
-          </button>
-        )}
+
       </div>
-      <ClaudeTerminal />
+      <LiveWatchlist open={watchlistOpen} enabled={marketSurface} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
+      {!demoVisible && mode !== 'lab' && <ClaudeTerminal />}
     </div>
   );
 }
@@ -209,5 +257,6 @@ function App() {
   // en pantalla y que lo del nuevo llegue.
   return <Dashboard key={sessionUserId ?? 'anon'} onLogout={handleLogout} />;
 }
+
 
 export default App;

@@ -1,87 +1,40 @@
 import React, { useEffect, useState } from 'react';
-import { fmtTime } from '../../utils/formatters';
+import { fmtTime, MARKET_TZ } from '../../utils/formatters';
 import { isAuthUnverified } from '../../utils/authState';
 import { ConnectionStatus } from '../../socket/useMarketSocket';
+import { useMarketStore } from '../../store/useMarketStore';
+import { useGexStore } from '../../store/useGexStore';
+import { useAppConfigStore } from '../../store/useAppConfigStore';
+import { TickerState } from '../../types/market';
+import './StatusBar.css';
 
-interface Props {
-  connectionStatus: ConnectionStatus;
-  lastUpdate: Date | null;
+/** Horario regular ET; dentro del horario sólo se confirma apertura con señal reciente del proveedor. */
+export function regularSessionLabel(now:Date, ticker:TickerState|undefined, connected:boolean):string {
+  const day=now.toLocaleDateString('en-US',{timeZone:MARKET_TZ,weekday:'short'});
+  const time=fmtTime(now).split(':').map(Number);
+  const minutes=time[0]*60+time[1];
+  if (day === 'Sat' || day === 'Sun' || minutes < 570 || minutes >= 960) return 'Rueda regular cerrada';
+  const statusTime=ticker?.marketStatusReceivedAt;
+  const sourceTime=ticker?.marketStatusSourceAt;
+  if (!connected || !statusTime || !sourceTime || !Number.isFinite(sourceTime.getTime()) || sourceTime.getTime() > now.getTime() || now.getTime()-sourceTime.getTime() > 60000 || now.getTime()-statusTime.getTime() > 60000) return 'Apertura sin confirmar';
+  return ticker?.extendedTradingHours === false ? 'Rueda regular abierta' : ticker?.extendedTradingHours === true ? 'Fuera de rueda regular' : 'Apertura sin confirmar';
 }
-
-export function StatusBar({ connectionStatus, lastUpdate }: Props) {
-  const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const isOnline     = connectionStatus === 'connected';
-  const isConnecting = connectionStatus === 'connecting';
-
-  const systemColor = isOnline ? 'var(--green)' : isConnecting ? 'var(--yellow-gc)' : 'var(--red-gc)';
-  const systemLabel = isOnline ? 'ONLINE'       : isConnecting ? 'CONECTANDO'       : 'OFFLINE';
-
-  const lastUpdateStr = lastUpdate ? fmtTime(lastUpdate) : null;
-
-  // Se entró sin poder validar la clave (la API no respondió al login). No es lo mismo que entrar
-  // verificado y el tablero no puede mostrarlo igual: si la clave estuviera mal, los endpoints REST
-  // van a devolver 401 y las cards se van a ver vacías sin explicación. Esto le da el porqué.
-  const authUnverified = isAuthUnverified();
-
-  return (
-    <header style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '0 20px',
-      height: 40,
-      flexShrink: 0,
-      backgroundColor: 'var(--bg-primary)',
-      borderBottom: '1px solid var(--border-dark)',
-      fontFamily: 'JetBrains Mono, monospace',
-      fontSize: 13,
-      letterSpacing: '0.04em',
-      userSelect: 'none',
-    }}>
-      {/* Left: empty for balance */}
-      <div />
-
-      {/* Right: status + last update + clock */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        {authUnverified && (
-          <span
-            title="La API no respondió al iniciar sesión, así que la Access Key no se pudo validar. Si es incorrecta, los datos van a venir vacíos con 401."
-            style={{
-              color: 'var(--yellow-gc)',
-              fontWeight: 700,
-              border: '1px solid var(--yellow-gc)',
-              borderRadius: 3,
-              padding: '1px 6px',
-            }}
-          >
-            SIN VALIDAR
-          </span>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span
-            className={isOnline ? 'pulse-dot' : ''}
-            style={{
-              width: 6, height: 6, borderRadius: '50%',
-              backgroundColor: systemColor,
-              display: 'inline-block',
-              boxShadow: isOnline ? `0 0 6px ${systemColor}` : 'none',
-            }}
-          />
-          <span style={{ color: systemColor, fontWeight: 600 }}>{systemLabel}</span>
-        </div>
-        {lastUpdateStr && (
-          <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>
-            upd <span style={{ color: 'var(--text-secondary)' }}>{lastUpdateStr}</span>
-          </span>
-        )}
-        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{fmtTime(now)} ET</span>
-      </div>
-    </header>
-  );
+export function StatusBar({ connectionStatus, lastUpdate }: {
+  connectionStatus:ConnectionStatus; lastUpdate:Date|null; onWatchlist?:()=>void; watchlistOpen?:boolean;
+}) {
+  const [now,setNow]=useState(new Date());
+  useEffect(() => {const timer=setInterval(()=>setNow(new Date()),1000);return()=>clearInterval(timer);},[]);
+  const selected=useGexStore(s=>s.selectedSymbol);
+  const universe=useAppConfigStore(s=>s.tickers);
+  const symbol=selected ?? universe[0];
+  const ticker=useMarketStore(s=>symbol ? s.tickers[symbol] : undefined);
+  const connected=connectionStatus === 'connected';
+  const available=!!ticker && ticker.price > 0 && !ticker.error.price && !!ticker.lastUpdate;
+  const recent=available && now.getTime()-ticker!.lastUpdate!.getTime() <= 60000;
+  const session=regularSessionLabel(now,ticker,connected);
+  return <div className="gc-inline-status">
+    {isAuthUnverified() && <span className="gc-status-warning" title="La autenticación todavía no pudo validarse.">Sin validar</span>}
+    <span className={'gc-connection ' + (connected ? 'connected' : '')} title={session + ' · ' + (symbol || 'Cotizaciones') + ': ' + (available ? (recent ? 'datos recibidos ' : 'última lectura ') + fmtTime(ticker!.lastUpdate!) : 'sin datos disponibles') + (lastUpdate ? ' · Cuenta ' + fmtTime(lastUpdate) : '')}><i/>{connected ? 'Online' : connectionStatus === 'connecting' ? 'Conectando' : 'Offline'}</span>
+    <div className="gc-clock"><time dateTime={now.toISOString()}>{fmtTime(now)}</time><span>ET</span></div>
+  </div>;
 }
