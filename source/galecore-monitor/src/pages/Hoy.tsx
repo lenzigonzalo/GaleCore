@@ -1,12 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import apiClient from '../api/client';
 import { fetchSpace } from '../api/space';
-import { fetchShadowMetrics, fetchShadowStatus } from '../api/shadow';
-import { fetchQuote } from '../api/marketdata';
+import { fetchShadowStatus } from '../api/shadow';
 import { SectionTitle } from '../components/common/SectionTitle';
 import { useTerminalStore } from '../store/useTerminalStore';
 import type { ShadowInstance, SpecVersionMetrics } from '../types/shadow';
-import type { QuoteResponse } from '../types/api';
 
 /**
  * Hoy (P1-10a): lo primero que se mira. Qué pide una decisión, cómo están las estrategias SHADOW, qué datos macro
@@ -22,6 +20,15 @@ interface Alert { id: string; kind: string; strategy: string; motivo: string; de
   needs_decision: boolean; decision: unknown | null; propuesta: string }
 interface Piece { alerts?: Alert[]; responses?: Record<string, unknown> }
 interface CalEvent { date: string; name: string }
+interface Quote { bid: number; ask: number; readAt: string }
+
+/** El endpoint de cotización devuelve el evento de feed (`data[0].bidPrice/askPrice`) y no trae hora del dato: se muestra la de lectura. */
+async function readQuote(symbol: string): Promise<Quote> {
+  const { data } = await apiClient.get('/Data/Tastytrade/MarketData/Quote', { params: { Symbol: symbol }, timeout: 45_000 });
+  const q = (data?.data ?? [])[0];
+  if (!q || typeof q.bidPrice !== 'number') throw new Error('sin cotización');
+  return { bid: q.bidPrice, ask: q.askPrice, readAt: new Date().toISOString() };
+}
 
 const muted: React.CSSProperties = { fontSize: 12, color: 'var(--text-muted)' };
 const card: React.CSSProperties = { backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)',
@@ -61,7 +68,7 @@ export function Hoy() {
   const [metrics, setMetrics] = useState<SpecVersionMetrics[] | null>(null);
   const [switchOn, setSwitchOn] = useState<boolean | null>(null);
   const [events, setEvents] = useState<CalEvent[] | null>(null);
-  const [quotes, setQuotes] = useState<Record<string, QuoteResponse | null> | null>(null);
+  const [quotes, setQuotes] = useState<Record<string, Quote | null> | null>(null);
   const [readAt, setReadAt] = useState<Date | null>(null);
 
   const load = useCallback(async () => {
@@ -75,17 +82,17 @@ export function Hoy() {
       }).catch(() => setAlerts(null)),
       fetchShadowStatus().then((s) => { setInstances(s.instances); setSwitchOn(s.switch.enabled); })
         .catch(() => { setInstances(null); setSwitchOn(null); }),
-      fetchShadowMetrics().then(setMetrics).catch(() => setMetrics(null)),
+      apiClient.get<SpecVersionMetrics[]>('/App/Runtime/Metrics', { timeout: 45_000 }).then((r) => setMetrics(r.data)).catch(() => setMetrics(null)),
       Promise.all([
-        apiClient.get('/Data/Fred/ReleaseDates', { params: { From: today, To: end, ReleaseIds: '50,10,46,53,54,9' } }),
-        apiClient.get('/Data/Fed/FomcMeetings', { params: { Years: `${today.slice(0, 4)},${end.slice(0, 4)}` } }),
+        apiClient.get('/Data/Fred/ReleaseDates', { params: { From: today, To: end, ReleaseIds: '50,10,46,53,54,9' }, timeout: 45_000 }),
+        apiClient.get('/Data/Fed/FomcMeetings', { params: { Years: `${today.slice(0, 4)},${end.slice(0, 4)}` }, timeout: 45_000 }),
       ]).then(([rel, fomc]) => {
         const r = ((rel.data?.data ?? []) as { date: string; releaseName: string }[]).map((x) => ({ date: x.date, name: x.releaseName }));
         const f = ((fomc.data?.data ?? []) as { end?: string }[]).filter((m) => m.end && m.end >= today)
           .map((m) => ({ date: m.end as string, name: 'Decisión del FOMC' }));
         setEvents([...r, ...f].sort((a, b) => a.date.localeCompare(b.date)).slice(0, 8));
       }).catch(() => setEvents(null)),
-      Promise.all(SYMBOLS.map((s) => fetchQuote(s).then((q) => [s, q] as const).catch(() => [s, null] as const)))
+      Promise.all(SYMBOLS.map((s) => readQuote(s).then((q) => [s, q] as const).catch(() => [s, null] as const)))
         .then((rows) => setQuotes(Object.fromEntries(rows))),
     ]);
     setReadAt(new Date());
@@ -99,9 +106,8 @@ export function Hoy() {
 
   const pending = (alerts ?? []).filter((a) => a.needs_decision && !a.decision);
   const info = (alerts ?? []).filter((a) => !(a.needs_decision && !a.decision)).slice(0, 5);
-  const live = (instances ?? []).filter((i) => i.lifecycleState === 'RUNNING' || (metrics ?? []).some(
-    (m) => m.specName === i.specName && m.positionsOpen > 0));
-  const seenSpec = new Set<string>();
+  const metricOf = (i: ShadowInstance) => (metrics ?? []).find((m) => m.contentHash === i.versionHash);
+  const live = (instances ?? []).filter((i) => i.lifecycleState === 'RUNNING' || (metricOf(i)?.positionsOpen ?? 0) > 0);
 
   return (
     <div style={{ padding: '16px 18px 40px', fontFamily: 'var(--font-sans)' }}>
@@ -110,7 +116,7 @@ export function Hoy() {
         Leído {readAt ? readAt.toLocaleTimeString('es-AR') : '…'} · se actualiza cada minuto · SHADOW es simulación, no dinero real
       </div>
 
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))' }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(440px, 1fr))' }}>
         <Block title="Necesita tu decisión" note={alerts ? `${pending.length} pendiente(s)` : undefined}>
           {alerts === null && <Failed what="los avisos del supervisor" />}
           {alerts !== null && pending.length === 0 && <div style={muted}>Nada pendiente.</div>}
@@ -138,17 +144,17 @@ export function Hoy() {
           {instances !== null && live.length === 0 && <div style={muted}>Ninguna instancia corriendo ni con posiciones abiertas.</div>}
           {live.length > 0 && (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr><th style={th}>Estrategia</th><th style={th}>Estado</th><th style={th}>Abiertas</th><th style={th}>P&L abierto</th><th style={th}>P&L cerrado</th></tr></thead>
+              <thead><tr><th style={th}>Estrategia</th><th style={th}>Estado</th><th style={th}>Abiertas</th><th style={th}>Abierto</th><th style={th}>Cerrado</th></tr></thead>
               <tbody>
-                {live.filter((i) => !seenSpec.has(i.specName) && seenSpec.add(i.specName)).map((i) => {
-                  const m = (metrics ?? []).filter((x) => x.specName === i.specName);
+                {live.map((i) => {
+                  const m = metricOf(i);
                   return (
                     <tr key={i.instanceId} style={{ borderTop: '1px solid var(--border-dark)' }}>
                       <td style={td}>{i.specName}</td>
                       <td style={{ ...td, color: i.lifecycleState === 'RUNNING' ? 'var(--green)' : 'var(--text-muted)' }}>{i.lifecycleState === 'RUNNING' ? 'corriendo' : 'detenida'}</td>
-                      <td style={td}>{metrics ? m.map((x) => x.positionsOpen).join(' + ') || '0' : '—'}</td>
-                      <td style={td}>{metrics ? m.map((x) => usd(x.unrealizedPnl)).join(' + ') : '—'}</td>
-                      <td style={td}>{metrics ? m.map((x) => usd(x.realizedPnl)).join(' + ') : '—'}</td>
+                      <td style={td}>{m ? m.positionsOpen : '—'}</td>
+                      <td style={td}>{m ? usd(m.unrealizedPnl) : '—'}</td>
+                      <td style={td}>{m ? usd(m.realizedPnl) : '—'}</td>
                     </tr>
                   );
                 })}
@@ -169,11 +175,11 @@ export function Hoy() {
           ))}
         </Block>
 
-        <Block title="Mercado" note="bid / ask de Tastytrade">
+        <Block title="Mercado" note="bid / ask de Tastytrade; la API no informa la hora del dato, se muestra la de lectura">
           {quotes === null && <div style={muted}>Cargando…</div>}
           {quotes !== null && (
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr><th style={th}>Símbolo</th><th style={th}>Bid</th><th style={th}>Ask</th><th style={th}>Hora del dato</th></tr></thead>
+              <thead><tr><th style={th}>Símbolo</th><th style={th}>Bid</th><th style={th}>Ask</th><th style={th}>Leído</th></tr></thead>
               <tbody>
                 {SYMBOLS.map((s) => {
                   const q = quotes[s];
@@ -182,7 +188,7 @@ export function Hoy() {
                       <td style={td}>{s}</td>
                       <td style={td}>{q ? q.bid : '—'}</td>
                       <td style={td}>{q ? q.ask : '—'}</td>
-                      <td style={{ ...td, color: q ? 'var(--text-secondary)' : 'var(--yellow-gc)' }}>{q ? hhmm(q.timestamp) : 'no se pudo leer'}</td>
+                      <td style={{ ...td, color: q ? 'var(--text-secondary)' : 'var(--yellow-gc)' }}>{q ? hhmm(q.readAt) : 'no se pudo leer'}</td>
                     </tr>
                   );
                 })}
