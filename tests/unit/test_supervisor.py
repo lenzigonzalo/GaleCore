@@ -313,3 +313,9 @@ def test_event_exposure_sums_the_gap_case_and_declares_a_missing_stop(kb):  # no
     assert out["count"] == 1
     assert out["totals"]["if_gap_through_stops_usd"] == 456.0
     assert out["totals"]["if_stops_run_usd"] is None and out["missing"]
+
+
+def test_the_event_is_found_as_the_trader_writes_it():
+    assert supervisor._event_matches("CPI 14/10", "Consumer Price Index")
+    assert supervisor._event_matches("consumer price", "Consumer Price Index")
+    assert not supervisor._event_matches("PPI", "Consumer Price Index")

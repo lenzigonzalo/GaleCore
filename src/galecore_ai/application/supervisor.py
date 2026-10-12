@@ -140,6 +140,17 @@ def _spec(kb: KnowledgeBase, version_hash: str) -> tuple[str | None, dict]:
     return None, {}
 
 
+EVENT_ALIASES = {"cpi": "consumer price index", "ppi": "producer price index", "nfp": "employment situation",
+                 "pce": "personal income", "gdp": "gross domestic product", "fed": "fomc"}
+
+
+def _event_matches(query: str, name: str) -> bool:
+    """«CPI 14/10» finds «Consumer Price Index»: hosts write the event as the trader says it (WS-0028)."""
+    name = name.lower()
+    words = [w for w in query.lower().split() if not w[0].isdigit()]
+    return query.lower() in name or any(EVENT_ALIASES.get(w, w) in name for w in words)
+
+
 def _business_days(start: date, end: date) -> int:
     """Weekdays after ``start`` up to and including ``end`` (NYSE holidays not known)."""
     n, d = 0, start
@@ -395,14 +406,16 @@ def event_exposure(kb: KnowledgeBase, read: Reader, now: datetime | None = None,
             except ValueError:
                 expiration = None
             nxt = next(((d, n) for d, n in events if today <= d and (expiration is None or d <= expiration)
-                        and (not event or event.lower() in n.lower())), None)
+                        and (not event or _event_matches(event, n))), None)
             stop_loss = round(stop_pct / 100 * credit * 100, 2) if isinstance(stop_pct, int | float) and \
                 isinstance(credit, int | float) else None
             if stop_loss is None:
                 missing.append(f"{pos.get('symbol')} {str(pos.get('positionId'))[:8]}: sin stop o crédito en la spec")
             rows.append({"position_id": pos.get("positionId"), "strategy": inst.get("specName"),
                          "strategy_ref": strategy_ref, "symbol": pos.get("symbol"),
-                         "structure": pos.get("structure"), "expiration": raw_exp, "dte": pos.get("currentDte"),
+                         "structure": pos.get("structure"), "expiration": raw_exp,
+                         "short_strikes": sorted(leg["strike"] for leg in pos.get("legs") or []
+                                                 if leg.get("side") == "SELL" and isinstance(leg.get("strike"), int | float)), "dte": pos.get("currentDte"),
                          "entry_credit": credit, "max_risk_usd": risk, "stop_loss_usd": stop_loss,
                          "stop_rule": f"stop a {stop_pct / 100:g}× el crédito" if isinstance(stop_pct, int | float) else None,
                          "take_profit_pct": target_pct, "unrealized_pnl_usd": pos.get("unrealizedPnl"),
