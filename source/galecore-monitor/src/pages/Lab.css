@@ -121,3 +121,25 @@
 .lab-sidebar-brand span { color: var(--accent); }
 .sidebar-collapsed .lab-sidebar-brand { font-size: 0; padding-inline: 0; text-align: center; }
 .sidebar-collapsed .lab-sidebar-brand::before { content: "GC"; font-size: 18px; }
+
+/* Lectura cómoda (owner 12/10): letra grande, chat ancho, nombres editables. */
+.lab-chat-workspace { font-size: 16px; grid-template-columns: 310px minmax(0, 1fr); }
+.lab-chat-workspace.sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
+.lab-project-select { font-size: 16px; }
+.lab-project-chats button { font-size: 15px; }
+.lab-project-row { align-items: center; } .lab-chat-row { display: flex; align-items: center; }
+.lab-pencil { opacity: 0; width: 28px; height: 28px; } .lab-project-row:hover .lab-pencil, .lab-chat-row:hover .lab-pencil, .lab-pencil:focus-visible { opacity: 1; }
+.lab-rename { width: 100%; min-width: 0; font: inherit; color: var(--text-primary); background: var(--bg-primary); border: 1px solid var(--border-light); border-radius: 6px; padding: 4px 8px; }
+.lab-project-title strong { font-size: 20px; font-weight: 600; }
+.lab-project-title > span { font-size: 14px; }
+.lab-chat-header nav button, .lab-files-button { font-size: 15px; }
+.lab-messages { padding: 32px max(28px, calc((100% - 1120px) / 2)); }
+.lab-message { line-height: 1.7; }
+.lab-message > div { font-size: 18px; }
+.lab-message > span { font-size: 14px; }
+.lab-message.user { max-width: 80%; }
+.lab-chat-welcome h1 { font-size: clamp(28px, 3vw, 40px); }
+.lab-chat-composer { max-width: 1120px; width: calc(100% - 56px); padding: 18px 22px 14px; }
+.lab-chat-composer textarea { font-size: 18px; min-height: 84px; }
+.lab-chat-composer select { font-size: 15px; }
+.lab-chat-composer small { font-size: 13px; }

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, ChevronRight, ChevronDown, FileText, FlaskConical, BookOpen, Settings, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, ChevronRight, ChevronDown, FileText, FlaskConical, BookOpen, Settings, PanelLeftClose, PanelLeftOpen, Pencil } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
 import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, WorkspaceFile, LabProjectKind } from '../api/lab';
 import { LabShadow } from './LabShadow';
@@ -29,6 +29,19 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
   const [fileText, setFileText] = useState('');
   const [fileError, setFileError] = useState('');
   const [fileLoading, setFileLoading] = useState(false);
+  const [aliases, setAliases] = useState<Record<string, string>>(() => { try { return JSON.parse(localStorage.getItem('galecore:lab:aliases') || '{}'); } catch { return {}; } });
+  const [editing, setEditing] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const name = (key: string, label: string) => aliases[key] || label;
+  const startEdit = (key: string, label: string) => { setEditing(key); setEditValue(name(key, label)); };
+  const saveEdit = (key: string, original: string) => {
+    const value = editValue.trim(); const next = { ...aliases };
+    if (value && value !== original) next[key] = value; else delete next[key];
+    setAliases(next); setEditing(null);
+    try { localStorage.setItem('galecore:lab:aliases', JSON.stringify(next)); } catch { /* sin storage: el nombre vale hasta recargar */ }
+  };
+  const renameInput = (key: string, original: string) => <input className="lab-rename" autoFocus aria-label="Nuevo nombre" value={editValue} onChange={e => setEditValue(e.target.value)}
+    onBlur={() => saveEdit(key, original)} onKeyDown={e => { if (e.key === 'Enter') saveEdit(key, original); if (e.key === 'Escape') setEditing(null); }} onClick={e => e.stopPropagation()} />;
   const selection = useRef(0);
   const fileSequence = useRef(0);
   const bottom = useRef<HTMLDivElement>(null);
@@ -40,6 +53,7 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
     catch { setError('No se pudo conectar con el Lab local.'); }
   }, []);
   useEffect(() => { refresh(); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, [refresh]);
+  useEffect(() => { const ok = state?.providers.find(x => x.installed); if (ok && !state?.providers.find(x => x.id === provider)?.installed) setProvider(ok.id); }, [state, provider]);
   useEffect(() => { sessionStorage.setItem('galecore:lab:project', projectId); }, [projectId]);
   useEffect(() => { if(chatId) sessionStorage.setItem('galecore:lab:chat',chatId); else sessionStorage.removeItem('galecore:lab:chat'); },[chatId]);
   useEffect(() => {
@@ -99,13 +113,13 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
       <div className="lab-sidebar-heading"><button className="lab-new-chat" onClick={newChat}><MessageSquare size={19}/><span>Nuevo chat</span></button><button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button></div>
       {!collapsed && <><div className="lab-project-heading"><span>Proyectos</span><button className="lab-icon" aria-label="Crear proyecto" onClick={()=>setCreating(true)}><Plus size={18}/></button></div>
       <nav aria-label="Proyectos y conversaciones">{state?.projects.map(p => <div className="lab-project-group" key={p.id}>
-        <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}><button className="lab-project-select" onClick={()=>selectProject(p)}><Folder size={18}/><span>{p.label}</span></button><button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={()=>setExpanded(v=>({...v,[p.id]:!v[p.id]}))}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
-        {expanded[p.id] && <div className="lab-project-chats">{state.chats.filter(c=>c.project===p.id).slice().reverse().map(c=><button key={c.id} aria-current={chatId===c.id ? 'page' : undefined} onClick={()=>selectChat(p,c)}><MessageSquare size={14}/><span>{c.title}</span>{c.state==='running' && <i aria-label="Respondiendo"/>}</button>)}<button className="lab-project-new" onClick={()=>{selectProject(p);newChat();}}><Plus size={14}/>Nuevo chat</button></div>}
+        <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}><button className="lab-project-select" onClick={()=>selectProject(p)} onDoubleClick={()=>startEdit(p.id,p.label)}><Folder size={18}/>{editing===p.id ? renameInput(p.id,p.label) : <span>{name(p.id,p.label)}</span>}</button><button className="lab-icon lab-pencil" aria-label={'Renombrar ' + name(p.id,p.label)} onClick={()=>startEdit(p.id,p.label)}><Pencil size={14}/></button><button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={()=>setExpanded(v=>({...v,[p.id]:!v[p.id]}))}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
+        {expanded[p.id] && <div className="lab-project-chats">{state.chats.filter(c=>c.project===p.id).slice().reverse().map(c=><div className="lab-chat-row" key={c.id}><button aria-current={chatId===c.id ? 'page' : undefined} onClick={()=>selectChat(p,c)} onDoubleClick={()=>startEdit(c.id,c.title)}><MessageSquare size={14}/>{editing===c.id ? renameInput(c.id,c.title) : <span>{name(c.id,c.title)}</span>}{c.state==='running' && <i aria-label="Respondiendo"/>}</button><button className="lab-icon lab-pencil" aria-label={'Renombrar ' + name(c.id,c.title)} onClick={()=>startEdit(c.id,c.title)}><Pencil size={13}/></button></div>)}<button className="lab-project-new" onClick={()=>{selectProject(p);newChat();}}><Plus size={14}/>Nuevo chat</button></div>}
       </div>)}</nav>
       <footer className="lab-sidebar-footer"><button onClick={()=>onNavigate('inteligencia')}><BookOpen size={17}/>Biblioteca</button><button onClick={()=>onNavigate('config')}><Settings size={17}/>Configuración</button><span><i className={state && !error ? 'online' : ''}/>{state ? 'En tu equipo' : 'Conectando…'}</span></footer></>}
     </aside>
     <section className="lab-chat-main">
-      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project?.label || 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button><button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav><button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Files</button></header>
+      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button><button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav><button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Files</button></header>
       {view==='shadow' ? <LabShadow project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <>
       <div className="lab-messages">
         {!chat?.messages.length && <div className="lab-chat-welcome"><h1>{project?.type==='strategy' ? '¿Qué estrategia querés construir?' : project?.type==='personal' ? 'Tu espacio personal' : '¿Qué querés investigar?'}</h1>{project?.type==='strategy' && <p>De la idea a una estrategia lista para probar en Shadow.</p>}</div>}
