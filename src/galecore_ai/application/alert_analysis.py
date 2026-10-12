@@ -121,7 +121,10 @@ def gather(kb: KnowledgeBase, alert: Alert, read: Reader, decision: dict | None 
         sources.append(path.split("?")[0])
         return payload
 
-    symbol = str(alert.dato.get("symbol") or "SPY")
+    doc = kb.strategies.load(alert.strategy_ref.removeprefix("strategy:")) if alert.strategy_ref else None
+    spec = json.loads(doc.spec_json) if doc else {}
+    # Event alerts carry no symbol in `dato`: the strategy's own (IWM), not SPY by default (WS-0028).
+    symbol = str(alert.dato.get("symbol") or ((spec.get("universe") or {}).get("symbols") or ["SPY"])[0])
     if not watch.SYMBOL.match(symbol):                   # it goes into a GaleCore path
         missing.append(f"símbolo no válido en el aviso: {symbol[:20]!r}")
         symbol = "SPY"
@@ -148,11 +151,9 @@ def gather(kb: KnowledgeBase, alert: Alert, read: Reader, decision: dict | None 
             missing.append(f"la posición {alert.position_id[:8]} en GaleCore")
         ctx["posicion"] = pos
     if alert.strategy_ref:
-        doc = kb.strategies.load(alert.strategy_ref.removeprefix("strategy:"))
         if doc is None:
             missing.append(f"la spec de {alert.strategy_ref}")
         else:
-            spec = json.loads(doc.spec_json)
             ctx["reglas_de_la_estrategia"] = {"ref": alert.strategy_ref, "exits": spec.get("exits"),
                                               "risk_limits": spec.get("risk_limits")}
     ctx["faltante"] = missing
