@@ -5,15 +5,13 @@ import { supabase, getSession, signOut } from './auth/supabase';
 import { LiveWatchlist } from './components/ticker/LiveWatchlist';
 import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
-import { MacroPreview } from './pages/MacroPreview';
-import { WorkspaceDemo } from './pages/WorkspaceDemo';
+import { Resumen, Calendario } from './pages/Resumen';
 import { Operations } from './pages/Operations';
 import type { WorkspaceMode } from './components/layout/WorkspaceNav';
 import { WorkspaceNav } from './components/layout/WorkspaceNav';
 import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
 import { Lab } from './pages/Lab';
 import { useGexStore } from './store/useGexStore';
-import { Main } from './pages/Main';
 import { AccountSummary } from './components/account/AccountSummary';
 import { SupervisorAlerts } from './components/layout/SupervisorAlerts';
 import { ClaudeTerminal } from './components/layout/ClaudeTerminal';
@@ -57,15 +55,11 @@ function Dashboard({ onLogout }: DashboardProps) {
     setMode(next);
     setCurrentTab(lastView.current[next]);
   };
-  // TEMPORAL GC-0011: demo integral por defecto sólo en localhost. Retirar al conectar datos reales.
-  const localDemo = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname);
-  const [mainDemo, setMainDemo] = useState(() => localDemo && new URLSearchParams(window.location.search).get('demo') !== 'off');
-  const demoVisible = mainDemo && mode !== 'lab';
   const isLabWorkspace = mode === 'lab' && ['lab', 'estrategias'].includes(tab);
   const marketSurface = mode !== 'lab' && ['inicio','monitor','gex','macro'].includes(tab);
   const [watchlistOpen,setWatchlistOpen] = useState(false);
   useEffect(() => { if (!marketSurface) setWatchlistOpen(false); },[marketSurface]);
-  const [settingsInitial, setSettingsInitial] = useState<'usuario' | 'broker'>('usuario');
+  const [settingsInitial] = useState<'usuario' | 'broker'>('usuario');
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
   const { setConfig, setLoading: setConfigLoading, setError: setConfigError, tickers } = useAppConfigStore();
@@ -120,7 +114,7 @@ function Dashboard({ onLogout }: DashboardProps) {
       {!isLabWorkspace && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
 
-        <WorkspaceHeader status={mode !== 'lab' ? <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/> : undefined} mode={mode} onModeChange={changeMode} mainDemo={demoVisible} active={tab} onChange={setTab} onLogout={onLogout}
+        <WorkspaceHeader status={mode !== 'lab' ? <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/> : undefined} mode={mode} onModeChange={changeMode} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();
             if (!store.rules) { await store.loadRules(); store = useGexStore.getState(); }
@@ -133,8 +127,8 @@ function Dashboard({ onLogout }: DashboardProps) {
 
 
         <main className={"dashboard-main flex-1 " + (isLabWorkspace ? "lab-dashboard-main" : "overflow-auto")} style={{ position: 'relative' }}>
-          {demoVisible ? <WorkspaceDemo active={tab} mode={mode} onNavigate={setTab} onExit={() => setMainDemo(false)} onMarketSelect={symbol => { useGexStore.getState().setSelectedSymbol(symbol); setTab('gex'); }} marketContent={tab === 'gex' ? <Gex externalWatchlist compact={tab !== 'gex'} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus}/> : undefined} /> : <>
-          {tab === 'inicio' && <Main demo={mainDemo} onDemoChange={localDemo ? setMainDemo : undefined} onNavigate={setTab} onConnectBroker={() => { setSettingsInitial('broker'); setTab('config'); }} />}
+          <>
+          {tab === 'inicio' && <Resumen onNavigate={setTab} />}
           {tab === 'operativa' && <Operations onNavigate={setTab} />}
 
           <div style={{ display: tab === 'estrategias' && !isLabWorkspace ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
@@ -157,22 +151,22 @@ function Dashboard({ onLogout }: DashboardProps) {
               sentido dispararlo si el operador nunca abre la pestaña. */}
           {tab === 'gex' && <Gex externalWatchlist subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
           {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
-          {tab === 'macro' && (localDemo ? <MacroPreview /> : <section className="wd-content"><h1>Macro</h1><p>No hay una fuente macro conectada.</p></section>)}
+          {tab === 'macro' && <Calendario page />}
           {tab === 'shadow' && <Shadow />}
           {/* Inteligencia se monta al entrar: lee el adapter local de GaleCore-AI, no la API. */}
           {tab === 'inteligencia' && <Inteligencia />}
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
-          </>}
+          </>
           <div className="lab-page-host" hidden={!isLabWorkspace}><Lab onMonitor={() => setTab('shadow')} onNavigate={setTab} /></div>
         </main>
         {/* Avisos del supervisor SHADOW: sólo en el espacio de trabajo. */}
-        {!demoVisible && !isLabWorkspace && ['rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
+        {!isLabWorkspace && ['rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>
       <LiveWatchlist open={watchlistOpen} enabled={marketSurface} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
-      {!demoVisible && mode !== 'lab' && <ClaudeTerminal />}
+      {mode !== 'lab' && <ClaudeTerminal />}
     </div>
   );
 }

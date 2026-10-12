@@ -6,7 +6,6 @@ import { WorkspaceSearch } from './WorkspaceSearch';
 import { AccountMenu } from './AccountMenu';
 
 interface Props {
-  mainDemo?: boolean;
   status?:React.ReactNode;
   mode?: WorkspaceMode; onModeChange?: (mode: WorkspaceMode) => void;
   active: Tab; onChange: (tab: Tab) => void; onLogout: () => void;
@@ -19,18 +18,18 @@ const PAGES: Record<Tab, string> = {
   shadow: 'Seguimiento SHADOW', inteligencia: 'Biblioteca', agentes: 'Agentes y tareas',
   config: 'Configuración', admin: 'Administración',
 };
-export function WorkspaceHeader({ status, mainDemo = false, mode = 'monitor', onModeChange, active, onChange, onLogout, conversationOpen, onConversation, onSymbol }: Props) {
+export function WorkspaceHeader({ status, mode = 'monitor', onModeChange, active, onChange, onLogout, conversationOpen, onConversation, onSymbol }: Props) {
   return <>
-    <div className={'workspace-mode-bar' + (mainDemo ? ' workspace-mode-bar-compact' : '')}>
+    <div className={'workspace-mode-bar'}>
       <span className="workspace-mode-caption"></span>
       <nav className="workspace-mode-switch" aria-label="Espacios de GaleCore">
         {(['monitor', 'operativa', 'lab'] as const).map(id => <button key={id} aria-pressed={mode === id} onClick={() => onModeChange ? onModeChange(id) : onChange(id === 'monitor' ? 'inicio' : id)}>{id === 'monitor' ? 'Monitor' : id === 'operativa' ? 'Operativa' : 'Lab'}</button>)}
       </nav>
-      <div className="workspace-account-tools">{status}{mainDemo ? <button className="wd-demo-user" onClick={() => onChange('config')}><span>GC</span>Mi cuenta</button> : <AccountMenu onOpenSettings={() => onChange('config')} onLogout={onLogout} active={active === 'config'} />}</div>
+      <div className="workspace-account-tools">{status}<AccountMenu onOpenSettings={() => onChange('config')} onLogout={onLogout} active={active === 'config'} /></div>
     </div>
-    {!(mode === 'lab' && ['lab', 'estrategias'].includes(active)) && !(mainDemo && ['inicio', 'monitor', 'gex', 'macro', 'config', 'admin'].includes(active)) && <header className="workspace-heading">
+    {!(mode === 'lab' && ['lab', 'estrategias'].includes(active)) && <header className="workspace-heading">
       <div><h1>{PAGES[active]}</h1></div>
-      {mainDemo ? <span className="wd-header-context">USD</span> : <WorkspaceSearch onNavigate={onChange} onSymbol={onSymbol} />}
+      <WorkspaceSearch onNavigate={onChange} onSymbol={onSymbol} />
       <button className="workspace-conversation" aria-label="Abrir Lab real"
         aria-pressed={conversationOpen} onClick={onConversation}><MessageSquare size={18} /><span>Lab</span></button>
     </header>}
