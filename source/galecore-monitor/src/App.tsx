@@ -9,6 +9,7 @@ import { SupervisorAlerts } from './components/layout/SupervisorAlerts';
 import { ClaudeTerminal } from './components/layout/ClaudeTerminal';
 import { useTerminalStore } from './store/useTerminalStore';
 import { Home } from './pages/Home';
+import { Hoy } from './pages/Hoy';
 import { Admin } from './pages/Admin';
 import { Settings } from './pages/Settings';
 import { Monitor } from './pages/Monitor';
@@ -30,7 +31,7 @@ interface DashboardProps {
 }
 
 function Dashboard({ onLogout }: DashboardProps) {
-  const [tab, setTab] = useState<Tab>('inicio');
+  const [tab, setTab] = useState<Tab>('hoy');
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
   const { setConfig, setLoading: setConfigLoading, setError: setConfigError, tickers } = useAppConfigStore();
@@ -79,11 +80,13 @@ function Dashboard({ onLogout }: DashboardProps) {
 
   return (
     <div className="flex" style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
-      <Sidebar onLogoClick={() => setTab('inicio')} />
+      <Sidebar onLogoClick={() => setTab('hoy')} />
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
         <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate} />
         <TabNav active={tab} onChange={setTab} onLogout={onLogout} />
         <main className="dashboard-main flex-1 overflow-auto" style={{ position: 'relative' }}>
+          {/* Hoy (P1-10a) se monta al entrar y se refresca solo cada minuto. */}
+          {tab === 'hoy' && <Hoy />}
           <div style={{ display: tab === 'inicio' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
           </div>
