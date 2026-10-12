@@ -298,3 +298,18 @@ def test_a_strange_expiration_skips_e4_not_the_other_rules(kb, research_ref):  #
     out = supervisor.scan(kb, reader(doc.spec_hash, [odd], releases=[("2026-09-25", "Consumer Price Index")]),
                           IN_SESSION)
     assert out["problems"] == [] and [a.kind.value for a in supervisor.alerts(kb)] == ["risk_limit"]
+
+
+def test_event_exposure_sums_the_gap_case_and_declares_a_missing_stop(kb):  # noqa: F811
+    pos = {"positionId": "p1", "status": "OPEN", "symbol": "SPY", "entryCredit": 0.44, "maxRisk": 456.0,
+           "unrealizedPnl": 2.5, "currentDte": 32, "legs": [{"expiration": "2099-01-15"}]}
+
+    def read(path):
+        if path == "/App/Runtime/Instances":
+            return [{"mode": "SHADOW", "instanceId": "i1", "specName": "x", "versionHash": "sha256:none"}]
+        return [pos] if path.endswith("/Positions") else {"data": []}
+
+    out = supervisor.event_exposure(kb, read, symbol="spy")
+    assert out["count"] == 1
+    assert out["totals"]["if_gap_through_stops_usd"] == 456.0
+    assert out["totals"]["if_stops_run_usd"] is None and out["missing"]

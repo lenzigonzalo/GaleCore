@@ -359,6 +359,67 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
             "problems": problems}
 
 
+def event_exposure(kb: KnowledgeBase, read: Reader, now: datetime | None = None, symbol: str | None = None,
+                   event: str | None = None) -> dict:
+    """«¿Las dejo abiertas antes de <evento>?» — the numbers, computed here (WS-0027 AC-6): per open SHADOW position,
+    the loss if the rule's stop runs (stop% × credit × 100), the structural maximum ((width − credit) × 100) if it gaps
+    through the stop, the mark-to-market now, and the next calendar event before its expiration. No proposal: the host
+    reasons over these and the rules, citing the figures as given."""
+    now = now or datetime.now(UTC)
+    today = now.astimezone(NEW_YORK).date()
+    events = calendar(read, today)
+    instances = read("/App/Runtime/Instances")
+    if not isinstance(instances, list):
+        raise SupervisorError("GaleCore devolvió instancias sin forma de lista")
+    rows, missing = [], []
+    for inst in instances:
+        if inst.get("mode") != "SHADOW":
+            continue
+        try:
+            positions = read(f"/App/Runtime/Instances/{inst.get('instanceId', '')}/Positions")
+        except Exception as exc:  # noqa: BLE001 - one instance unread is declared, the rest still counted
+            missing.append(f"{inst.get('specName')}: posiciones sin leer ({str(exc)[:100]})")
+            continue
+        strategy_ref, spec = _spec(kb, inst.get("versionHash", ""))
+        exits = (spec.get("exits") or {}).get("deterministic") or {}
+        stop_pct = (exits.get("stop_loss") or {}).get("pct_of_credit")
+        target_pct = (exits.get("take_profit") or {}).get("pct_of_credit")
+        for pos in positions if isinstance(positions, list) else []:
+            if pos.get("status") != "OPEN" or (symbol and pos.get("symbol") != symbol.upper()):
+                continue
+            credit, risk = pos.get("entryCredit"), pos.get("maxRisk")
+            raw_exp = next((leg.get("expiration") for leg in pos.get("legs") or [] if leg.get("expiration")), None)
+            try:
+                expiration = date.fromisoformat(str(raw_exp)[:10]) if raw_exp else None
+            except ValueError:
+                expiration = None
+            nxt = next(((d, n) for d, n in events if today <= d and (expiration is None or d <= expiration)
+                        and (not event or event.lower() in n.lower())), None)
+            stop_loss = round(stop_pct / 100 * credit * 100, 2) if isinstance(stop_pct, int | float) and \
+                isinstance(credit, int | float) else None
+            if stop_loss is None:
+                missing.append(f"{pos.get('symbol')} {str(pos.get('positionId'))[:8]}: sin stop o crédito en la spec")
+            rows.append({"position_id": pos.get("positionId"), "strategy": inst.get("specName"),
+                         "strategy_ref": strategy_ref, "symbol": pos.get("symbol"),
+                         "structure": pos.get("structure"), "expiration": raw_exp, "dte": pos.get("currentDte"),
+                         "entry_credit": credit, "max_risk_usd": risk, "stop_loss_usd": stop_loss,
+                         "stop_rule": f"stop a {stop_pct / 100:g}× el crédito" if isinstance(stop_pct, int | float) else None,
+                         "take_profit_pct": target_pct, "unrealized_pnl_usd": pos.get("unrealizedPnl"),
+                         "valued_at": pos.get("lastValuedAt"),
+                         "event": {"name": nxt[1], "date": nxt[0].isoformat(),
+                                   "business_days": _business_days(today, nxt[0])} if nxt else None})
+    num = [r for r in rows if isinstance(r["max_risk_usd"], int | float)]
+    stops = [r["stop_loss_usd"] for r in rows if r["stop_loss_usd"] is not None]
+    return {"at": now.isoformat(), "positions": rows, "count": len(rows),
+            "totals": {"if_stops_run_usd": round(sum(stops), 2) if len(stops) == len(rows) else None,
+                       "if_gap_through_stops_usd": round(sum(r["max_risk_usd"] for r in num), 2)
+                       if len(num) == len(rows) else None,
+                       "unrealized_pnl_usd": round(sum(r["unrealized_pnl_usd"] or 0 for r in rows), 2)},
+            "missing": missing + ([] if rows else ["no hay posiciones abiertas que cumplan el filtro"]),
+            "note": "El stop limita la pérdida sólo si ejecuta al precio de la regla; un gap lo atraviesa y el peor caso "
+                    "es el riesgo máximo estructural. Ambos montos son SHADOW (simulación), no cuenta real."}
+
+
 CLOSED_NEWS_DAYS = 3        # a close older than this when first seen is history, not news (first pass, downtime)
 
 

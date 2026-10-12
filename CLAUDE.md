@@ -45,6 +45,11 @@ verificar va en una línea. El resto del detalle, si lo pide. No cierres con res
 datos (conectividad, frescura, cobertura para valuar) sale de `state` en esa corrida, con su hora. Una investigación
 o un seguimiento guardado es antecedente, nunca estado; lo que `state` no pudo leer es «sin verificar».
 
+**«¿Dejo abiertas las posiciones antes de <evento>?»** (CPI, FOMC…): correr `supervise exposure [--symbol X] [--event
+<texto>]` y citar sus montos tal cual (con stops / si hay gap / ganancia actual, por posición y sumado). Nunca calcular
+a mano un peor caso. Proponer cerrar / rollear / dejar / esperar con las reglas de la estrategia y decir qué cambiaría
+la propuesta; todo es SHADOW. Si `missing` trae algo, «faltan datos para decidir» y cuáles.
+
 **Base de conocimiento:** `<workspace>/knowledge/` (fuera de los checkouts, git propio de datos;
 `GALECORE_KNOWLEDGE_DIR` la cambia). Después de una sesión que la escribió, commitearla en ese git (local; nunca se
 sube a GitHub).

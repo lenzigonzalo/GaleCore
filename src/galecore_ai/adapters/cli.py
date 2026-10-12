@@ -838,6 +838,11 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
                 _json_out({"status": "ERROR", "error": str(exc)}, exit_code=_EXIT_INTERNAL_ERROR)
         elif c == "list":
             _json_out({"alerts": supervisor.view(kb, args.limit)})
+        elif c == "exposure":
+            try:
+                _json_out(supervisor.event_exposure(kb, supervisor.api_reader(), symbol=args.symbol, event=args.event))
+            except supervisor.SupervisorError as exc:
+                _json_out({"status": "ERROR", "error": str(exc)}, exit_code=_EXIT_INTERNAL_ERROR)
         elif c == "watch":
             from galecore_ai.application import watch
             try:
@@ -1411,6 +1416,11 @@ def build_parser() -> _JsonArgumentParser:
     sv_sub = p_supervise.add_subparsers(dest="supervise_command", required=True)
     sv_sub.add_parser("scan", help="Read GaleCore's runtime and raise the new alerts (the 5-minute task does it)")
     sv_sub.add_parser("list", help="Latest alerts with their decision").add_argument("--limit", type=int, default=20)
+    p_sv_exp = sv_sub.add_parser("exposure", help="«¿Las dejo abiertas antes del CPI?»: per open SHADOW position, the "
+                                                  "loss if the stop runs, the maximum if it gaps, and the next event "
+                                                  "(figures computed here, WS-0027)")
+    p_sv_exp.add_argument("--symbol", help="Only this underlying, e.g. SPY")
+    p_sv_exp.add_argument("--event", help="Only events whose name contains this text, e.g. Consumer Price")
     p_sv_decide = sv_sub.add_parser("decide", help="Record the owner's answer to an alert in the strategy's project")
     p_sv_decide.add_argument("--alert", required=True, help="Alert id (supervise list)")
     p_sv_decide.add_argument("--choice", required=True, help="One of the alert's options")
