@@ -36,6 +36,8 @@ Usage:
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
+    python -m galecore_ai.adapters.cli clock [--at ISO]
+    python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
     python -m galecore_ai.adapters.cli project add NAME|portfolio --kind thesis|story|decision|pending|done --text "..." [--ref REF] [--closes HASH] --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
@@ -732,6 +734,28 @@ async def _cmd_space(args: argparse.Namespace) -> None:
             _json_out({"status": "PUBLISHED", "user": client.user, **result})
     except SpaceError as exc:
         _error_out(str(exc), exit_code=1)
+
+
+def _cmd_clock(args: argparse.Namespace) -> None:
+    from galecore_ai.application import market_clock
+    at = datetime.fromisoformat(args.at) if args.at else None
+    if at is not None and at.tzinfo is None:
+        at = at.replace(tzinfo=UTC)
+    _json_out(market_clock.status(at).as_dict())
+
+
+def _cmd_gap(args: argparse.Namespace) -> None:
+    from galecore_ai.application import gap_log
+    kb = knowledge_dir()
+    try:
+        if args.gap_command == "add":
+            item = gap_log.add(kb, need=args.need, kind=args.kind, why=args.why or "", instead=args.instead or "",
+                               project=args.project or "")
+            _json_out({"status": "NOTED", "count": item["count"], **gap_log.summary(item)})
+        else:
+            _json_out({"gaps": [gap_log.summary(i) for i in gap_log.items(kb)]})
+    except ValueError as exc:
+        _error_out(str(exc), exit_code=3)
 
 
 async def _cmd_inbox(args: argparse.Namespace) -> None:
@@ -1473,6 +1497,18 @@ def build_parser() -> _JsonArgumentParser:
     ct_sub = p_contrast.add_subparsers(dest="contrast_command", required=True)
     ct_sub.add_parser("pack", help="Gather the contrast by code: story, strategies as projects, profile")         .add_argument("--symbol", default="SPY")
 
+    sub.add_parser("clock", help="What time it is and whether the US market is open, with the last close and "
+                                 "the next open (BL-020)").add_argument("--at", help="ISO time (default: now)")
+    p_gap = sub.add_parser("gap", help="Log what was asked and GaleCore does not cover, for GaleCore's development (BL-022)")
+    gap_sub = p_gap.add_subparsers(dest="gap_command", required=True)
+    p_gap_add = gap_sub.add_parser("add", help="Note a missing data/calculation/analysis/cross/action or an API error")
+    p_gap_add.add_argument("--need", required=True, help="What was asked, in plain words")
+    p_gap_add.add_argument("--kind", required=True, help="data | calc | analysis | cross | action | api_error")
+    p_gap_add.add_argument("--why", help="What the user needed it for")
+    p_gap_add.add_argument("--instead", help="What was done in its place")
+    p_gap_add.add_argument("--project")
+    gap_sub.add_parser("list", help="Gaps by frequency")
+
     p_inbox = sub.add_parser("inbox", help="Idea inbox: note the owner's idea now, review it later (GC-AI-0018)")
     in_sub = p_inbox.add_subparsers(dest="inbox_command", required=True)
     p_in_add = in_sub.add_parser("add", help="Note an idea with the owner's words, verbatim; it is not evaluated")
@@ -1675,6 +1711,10 @@ def main() -> None:
             asyncio.run(_cmd_profile(args))
         elif args.command == "feedback":
             asyncio.run(_cmd_feedback(args))
+        elif args.command == "clock":
+            _cmd_clock(args)
+        elif args.command == "gap":
+            _cmd_gap(args)
         elif args.command == "inbox":
             asyncio.run(_cmd_inbox(args))
         elif args.command == "project":
