@@ -107,7 +107,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       args=['--no-daemon','exec','--json','-c','developer_instructions='+JSON.stringify(context)];
       if(chat.nativeId)args.push('resume',chat.nativeId,'-');else args.push('--sandbox','workspace-write','-C',p.dir,'-');
     } else {
-      args=['-p','--output-format','stream-json','--verbose','--append-system-prompt',context,'--permission-prompts','none'];
+      // WS-0027: con `--permission-prompts none` y sin herramientas permitidas, todo se denegaba y la sesión leía
+      // archivos crudos (dio un hash equivocado). Permiso acotado: leer, el CLI de GaleCore-AI y git local.
+      args=['-p','--output-format','stream-json','--verbose','--append-system-prompt',context,'--permission-prompts','none',
+        '--allowedTools','Read Grep Glob Bash(python -B -m galecore_ai.adapters.cli:*) PowerShell(python -B -m galecore_ai.adapters.cli *) Bash(git status:*) Bash(git diff:*) Bash(git add:*) Bash(git commit:*) Bash(git log:*)'];
       if(chat.nativeId)args.push('--resume',chat.nativeId);
     }
     const proc=spawn(binaries[chat.provider],args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});
