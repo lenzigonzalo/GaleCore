@@ -238,6 +238,10 @@ def _intact(path: Path) -> dict:
     """Un documento de knowledge/strategies con su content_hash verificado (misma regla que GaleCore-AI)."""
     doc = json.loads(path.read_text(encoding="utf-8"))
     body = {k: v for k, v in doc.items() if k != "content_hash"}
+    if isinstance(body.get("content"), dict):  # PROPOSAL_FIELDS_ADDED (WS-0016): vacíos no entran al hash
+        for added in ("parameters", "management", "change"):
+            if not body["content"].get(added):
+                body["content"].pop(added, None)
     digest = "sha256:" + hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     if digest != doc.get("content_hash"):
         sys.exit(f"no se despliega: {path.name} fue editado (content_hash no coincide)")
