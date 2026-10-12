@@ -111,7 +111,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       // WS-0028 (plan v2): el CLI abierto en la carpeta del proyecto con el contexto de producto de knowledge/ (sin el de
       // desarrollo ni ~/.claude). Permisos, hooks y commit automático salen de knowledge/.claude/settings.json.
       // Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT). Sin conectores de la cuenta.
-      const brief=p.type==='personal'?context:'Proyecto: '+p.id+' ('+p.type+'). Leé AGENTS.md de este proyecto.'+(p.type==='strategy'?' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.':'');
+      const brief=p.type==='personal'?context:'Proyecto: '+p.id+' ('+p.type+').'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+(p.type==='strategy'?' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.':'');
       args=['-p','--model',process.env.GALECORE_LAB_MODEL||'sonnet','--effort',process.env.GALECORE_LAB_EFFORT||'medium',
         '--output-format','stream-json','--verbose','--append-system-prompt',brief,'--permission-prompts','none','--strict-mcp-config',
         '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
