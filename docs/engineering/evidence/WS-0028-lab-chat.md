@@ -23,12 +23,29 @@ modelo/esfuerzo y dejar adjuntos/micrófono para después. Restricción: no inte
   cargados. Sin desborde de página a 390 px; selector modelo/esfuerzo y reset de esfuerzo al elegir Haiku comprobados.
 - Inspección visual de las capturas de escritorio y móvil. El fixture de seguridad es sintético y está separado del
   texto financiero real; no es una evaluación de la calidad financiera de esa respuesta.
-- El navegador aislado abre el monitor real en login. No se usaron credenciales, no se enviaron mensajes, no se
-  escribieron proyectos ni se reiniciaron servicios. Esto verifica componentes; **no acredita una sesión autenticada E2E**.
+- El navegador aislado abre el monitor real en login. No se usaron credenciales, no se enviaron mensajes ni se
+  escribieron proyectos. Esto verifica componentes; **no acredita una sesión autenticada E2E**.
 - La herramienta de navegador integrada no arrancó por error del sandbox; se usó Chromium headless separado.
 
 Las capturas y el guion de comprobación quedan en el workspace, `.tmp/lab-ui-qa/` (artefactos locales, fuera del commit).
 No se marca VALIDATED/CLOSED este item ni C12.
+
+## Integración local y recuperación del monitor
+
+Frontend integrado en `local/integracion` (commit `a931964`), sin push/PR. La instalación inicial sin modificar lockfile
+resolvió también versiones transitivas; se sincronizó inmediatamente la instalación con el lockfile exacto del build.
+Comparación de todas las versiones instaladas: `missing: []`, `changed: []`; lockfile idéntico al compilado.
+
+El servidor React en caliente retuvo errores de módulos durante esa instalación. Se intentó invalidación por archivos;
+persistió una caché inválida. Se reinició **sólo el servidor visual :3039** mediante el arranque canónico
+`python dev/galecore_dev.py monitor`, con ventana oculta. La caché `node_modules/.cache/webpack` se renombró dentro del
+mismo directorio a `webpack-pre-lab-chat-20261012` (no se borró). Esta intervención no ejecutó reinicios del Lab :8771,
+de la API ni detuvo conversaciones/procesos del modelo. El Lab fue observado con PID 19096 y luego 6444 durante el
+trabajo concurrente; no se atribuye continuidad de ese proceso a esta verificación. La interrupción del servidor visual no se presenta como E2E
+sin fricción ni como parte de la evaluación de Claude.
+
+Comprobación después de recuperar el monitor: página de login accesible, bundle HTTP 200 con el renderizador nuevo,
+sin errores JavaScript (`errors: []`) en Chromium aislado. El soporte del selector sigue sin integrar en el puente.
 
 ## Modelo/esfuerzo: continuación sin interrumpir Claude
 
