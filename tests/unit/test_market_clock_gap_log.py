@@ -42,6 +42,14 @@ def test_gap_log_counts_repeats_and_ranks(tmp_path):
     assert next(i["need"] for i in gap_log.items(tmp_path)) == "Consenso de analistas"
 
 
+def test_gap_log_merges_same_need_worded_differently(tmp_path):
+    gap_log.add(tmp_path, need="Consenso de analistas para ganancias de NVDA", kind="data")
+    again = gap_log.add(tmp_path, need="consenso de analistas de NVDA, próximo trimestre", kind="data")
+    other = gap_log.add(tmp_path, need="Consenso de analistas para ganancias de AMD", kind="data")
+    assert again["count"] == 2
+    assert other["count"] == 1 and len(gap_log.items(tmp_path)) == 2
+
+
 def test_gap_log_rejects_unknown_kind(tmp_path):
     try:
         gap_log.add(tmp_path, need="x", kind="web")

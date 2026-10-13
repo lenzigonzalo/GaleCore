@@ -658,8 +658,12 @@ async def _cmd_galecore(args: argparse.Namespace) -> None:
         params[key] = value
     result = await _build_dispatcher().invoke(args.capability, params)
     if not result.ok:
-        _json_out({"capability": args.capability, "ok": False, "error": result.error,
-                   "latency_ms": result.latency_ms}, exit_code=1)
+        from galecore_ai.application import gap_log
+        noted = gap_log.add(knowledge_dir(), need=f"Error de API en {args.capability}", kind="api_error",
+                            why=str(result.error)[:300], instead="se siguió con lo disponible", project="")
+        first_line = str(result.error).strip().splitlines()[0][:300] if result.error else ""   # no stack trace for the host
+        _json_out({"capability": args.capability, "ok": False, "error": first_line,
+                   "latency_ms": result.latency_ms, "gap": {"id": noted["id"], "count": noted["count"]}}, exit_code=1)
         return
     body = {"capability": args.capability, "ok": True, "params": params, "latency_ms": result.latency_ms,
             "source": "GALECORE_VERIFIED", "retrieved_at": datetime.now(UTC).isoformat()}
