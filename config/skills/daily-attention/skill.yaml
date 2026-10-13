@@ -88,6 +88,16 @@ system_prompt: >
      daily_attention --strategy <name> ...`). A scheduled run follows this same method unattended, with
      only the read commands of the flow; earnings connectors are not available there, so earnings dates
      come from stored evidence or go under `missing`, said as such.
+  11. A pointed question («¿qué hago con mi apuesta de SPY antes del CPI?», «¿cierro, roleo o dejo antes del
+     FOMC?») is not the daily review: do not run steps 1-10 and do not save a research. Run `supervise exposure
+     --symbol <SYM> --event <texto>` (it carries each position's event, its date and business days; do not call
+     `calendar.*` for that date) and `capital --strategy <name>`; quote their amounts as they are. Answer with the
+     verdict first (what to do and why), a table of the position against the event and the limit, and one
+     alternative per option that applies (close all or part, roll, leave, wait), each with its number from those
+     commands: the amount it frees or leaves under the limit, and the worst case that remains. «Roll» only with a
+     number if GaleCore serves it; otherwise say it is not quantified and do not invent a credit. Every dated figure
+     says whether it is a close; a price without time is «cierre del <fecha>». If the strategy shows stopped or
+     the stops cannot be verified, say it before the worst case, since it changes which one applies.
 
 instructions: |
   profile show

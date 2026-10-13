@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -128,7 +130,8 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
         "param_key": "symbol",
         "source_param": "symbol",
     },
-    "calendar.macro_releases": {"method": "GET", "path": "/Data/Fred/ReleaseDates", "param_key": "", "source_param": ""},
+    "calendar.macro_releases": {"method": "GET", "path": "/Data/Fred/ReleaseDates", "param_key": "", "source_param": "",
+                                "default_window_days": 60},
     "calendar.fomc_meetings": {"method": "GET", "path": "/Data/Fed/FomcMeetings", "param_key": "", "source_param": ""},
     # WS-0014: fuentes públicas servidas por GaleCore (Data.Sources).
     "history.index_daily": {"method": "GET", "path": "/Data/Cboe/IndexHistory", "param_key": "", "source_param": ""},
@@ -260,6 +263,14 @@ class CapabilityDispatcher:
         for k, v in parameters.items():
             if k != source and v is not None:
                 params[k] = v
+
+        # Without a range GaleCore answers 500; a calendar asked "from now" gets the next N days (H5/H7: the call came bare).
+        days = route.get("default_window_days")
+        if days and not {k.lower() for k in params} & {"from", "to"}:
+            today = datetime.now(ZoneInfo("America/New_York")).date()
+            params["From"], params["To"] = today.isoformat(), (today + timedelta(days=days)).isoformat()
+            # Only the market-moving releases (NFP, CPI, PPI, GDP, income/spending, retail): the full list takes ~40 s.
+            params.setdefault("ReleaseIds", "50,10,46,53,54,9")
 
         return params
 

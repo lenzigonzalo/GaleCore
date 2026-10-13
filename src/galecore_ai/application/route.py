@@ -45,7 +45,8 @@ def match(request: str, catalog: Catalog, limit: int = 3) -> dict:
     best = [{"capability": cid, "score": score, "matched": hits, "serves": e.serves.strip(), "flow": e.flow,
              "skill": e.skill, "model": _model(e)} for score, cid, hits, e in ranked[:limit]]
     return {"request": request, "matches": best, "missing": not best,
-            "next": ("Seguí el flow de la primera (o la que mejor sirva) y su skill; empezá por `space context`."
+            "next": ("Leé el archivo de la skill de la primera (o la que mejor sirva), bajo config/, y seguí su método y su flow; "
+                     "ahí está cómo se responde ese tipo de pedido."
                      if best else "Ninguna capacidad lo cubre: ofrecé crearla con capability_builder; no improvises.")}
 
 

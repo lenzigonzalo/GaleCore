@@ -280,6 +280,7 @@ entries:
       - ¿Está bien esta idea? ¿Qué le falta y por qué no?
       - La estrategia que diseñamos, ¿la activo o espero?
       - ¿Activamos la estrategia o conviene esperar?
+      - Quiero vender prima en QQQ, ¿armo algo?
       - ¿La prendemos ya? ¿Apruebo esta estrategia o le falta algo?
     skill: skills/strategy-design/skill.yaml
     output_contract: galecore_ai.contracts.strategy.ProposalContent
@@ -363,6 +364,8 @@ entries:
       - ¿Cómo está la exposición y qué dicen las reglas de la estrategia sobre las posiciones abiertas?
       - ¿Qué cambió desde la última revisión y qué contexto importa hoy?
       - ¿Qué evento macro viene y cómo afecta mis posiciones?
+      - ¿Qué hago con mi apuesta de SPY antes del CPI?
+      - ¿Cierro, roleo o dejo mis posiciones antes del FOMC?
     skill: skills/daily-attention/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics, compute.gex_analysis, compute.put_skew, market_data.trade, calendar.macro_releases, calendar.fomc_meetings, calendar.treasury_auctions, rates.treasury_curve, history.index_daily]
@@ -506,6 +509,8 @@ entries:
       - Análisis técnico de QQQ
       - Analizame NVDA
       - El flow de opciones de SPY
+      - ¿Qué es el skew y por qué me tendría que importar?
+      - ¿Qué es el gamma exposure?
     skill: skills/on-demand-analysis/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [macro.fred_series, macro.bls_series, market_data.candles, filings.sec_facts, filings.sec_filings, market_data.volatility_metrics, market_data.quote, compute.put_skew, compute.implied_volatility, compute.iv_rank, compute.gex_analysis]
