@@ -9,19 +9,23 @@ import argparse
 import json
 import os
 import subprocess
+import sys
 
 import galecore_dev as dev
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["api", "monitor"])
+    parser.add_argument("command", choices=["api", "monitor", "mcp"])
     args = parser.parse_args()
     common = subprocess.check_output(["git", "rev-parse", "--git-common-dir"], cwd=dev.ROOT, text=True).strip()
     config_root = (dev.ROOT / common).resolve().parent
     if config_root == dev.ROOT:
         parser.error("La preview requiere un worktree separado; no modifica el checkout principal.")
     dev.ENV_FILE = config_root / "dev" / ".local" / "env.json"
+    if args.command == "mcp":
+        command = [sys.executable, str(dev.ROOT / "dev/local_mcp.py"), "--workspace", str(config_root.parent)]
+        return dev.sh(command, cwd=dev.ROOT, check=False)
     env = dev.load_env()  # revalida el proyecto GaleCore Dev
     api_url = "http://localhost:7002"
     if args.command == "api":

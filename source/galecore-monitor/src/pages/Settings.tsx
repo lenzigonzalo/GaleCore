@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BookOpen, Bot, Brain, Database, FileText, KeyRound, Lock, Plug, Scale, Target, User, Users } from 'lucide-react';
 import { Connections } from '../components/settings/Connections';
 import './Settings.css';
+import { LocalMcp } from '../components/settings/LocalMcp';
+import { localMcpAvailable } from '../api/localMcp';
 import { BrokerAccountCard } from '../components/account/BrokerAccountCard';
 import { MyPasswordCard } from '../components/account/MyPasswordCard';
 import { Markdown } from '../components/settings/Markdown';
@@ -22,12 +24,13 @@ import {
  * Nada se muestra como JSON: cada tipo tiene su vista legible, y lo que se edita como texto se edita en markdown.
  * El estado vive en esta pantalla (no en un store de módulo): muere con la sesión, como pide la regla de la persona.
  */
-type Section = 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'perfil' | 'objetivos' | 'convenciones' | 'memoria' | 'skills'
+type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'perfil' | 'objetivos' | 'convenciones' | 'memoria' | 'skills'
   | 'agentes' | 'datos' | 'compartido';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
   { group: 'Empezar', items: [
     { id: 'conexiones', label: 'Conexiones', Icon: Plug },
+    { id: 'mcp-local', label: 'MCP locales', Icon: Plug },
     { id: 'broker', label: 'Cuenta de bróker', Icon: KeyRound },
   ] },
   { group: 'Mi trading', items: [
@@ -323,7 +326,9 @@ export function Settings({ initial = 'conexiones', onBrokerLinked }: { initial?:
   const label = NAV.flatMap((g) => g.items).find((i) => i.id === section)?.label ?? '';
 
   let body: React.ReactNode;
-  if (section === 'conexiones') {
+  if (section === 'mcp-local') {
+    body = <LocalMcp />;
+  } else if (section === 'conexiones') {
     body = <Connections />;
   } else if (section === 'usuario') {
     body = (
@@ -370,7 +375,7 @@ export function Settings({ initial = 'conexiones', onBrokerLinked }: { initial?:
         {NAV.map((g) => (
           <div key={g.group} style={{ marginBottom: 14 }}>
             <div className="settings-nav-group">{g.group}</div>
-            {g.items.map(({ id, label: l, Icon }) => (
+            {g.items.filter(i => i.id !== 'mcp-local' || localMcpAvailable()).map(({ id, label: l, Icon }) => (
               <button key={id} onClick={() => setSection(id)} className={section === id ? 'is-selected' : ''} aria-current={section === id ? 'page' : undefined}>
                 <Icon size={17} />{l}
               </button>
