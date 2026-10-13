@@ -22,12 +22,10 @@ test('agrupa Mercado y ejecuciones en sus destinos, sin conceder administración
   expect(screen.getByText('Compartido')).toBeInTheDocument();
 });
 
-test('contraer conserva destinos accesibles y sólo admin ve administración', () => {
+test('conserva destinos accesibles y sólo admin ve administración', () => {
   mockAdmin = true;
   render(<WorkspaceNav active="config" onChange={() => {}} />);
   expect(screen.getByRole('button', { name: 'Administración' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Contraer navegación' }));
-  expect(screen.getByRole('button', { name: 'Expandir navegación' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Configuración' })).toHaveAttribute('aria-current', 'page');
 });
 

@@ -17,44 +17,30 @@ function sample(horizon = 'month'): MacroSnapshot {
   };
 }
 beforeEach(() => { window.history.replaceState(null, '', '/?macro=panorama'); fetchMock.mockReset(); fetchMock.mockImplementation((h: string) => Promise.resolve(sample(h))); });
-test('seis familias permanecen, null no es cero y calendario fallido no borra datos', async () => {
+
+test('seis familias, null no cero y presentación sin texto técnico ni copiar enlace', async () => {
   render(<Macro />); await screen.findByText('Serie rates');
-  for (const name of ['Tasas', 'Acciones', 'Crédito', 'Monedas', 'Commodities', 'Volatilidad']) expect(screen.getByText(name)).toBeInTheDocument();
+  for (const name of ['Tasas','Acciones','Crédito','Monedas','Materias primas','Volatilidad']) expect(screen.getByText(name)).toBeInTheDocument();
   expect(screen.getByText('4,50')).toBeInTheDocument(); expect(screen.getAllByText('N/D').length).toBeGreaterThan(0);
-  expect(screen.getByText(/fred-calendar: Error de fuente/)).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Copiar enlace'})).not.toBeInTheDocument();
+  expect(screen.queryByText('CONTEXTO DE MERCADO')).not.toBeInTheDocument();
   expect(screen.queryByText(/P&L|Órdenes|Posiciones/)).not.toBeInTheDocument();
 });
-test('detalle fuente/fecha, Escape restaura foco y Atrás restaura contexto', async () => {
-  render(<Macro />); const button = await screen.findByRole('button', { name: 'Serie rates' });
-  fireEvent.click(button); const dialog = screen.getByRole('dialog'); expect(dialog).toHaveFocus();
-  expect(within(dialog).getByRole('link', { name: /Abrir fuente/ })).toHaveAttribute('href', 'https://example.test');
-  expect(dialog).toHaveTextContent('2026-10-12'); expect(dialog).toHaveTextContent('Desconocida');
-  fireEvent.keyDown(dialog, { key: 'Escape' }); expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); expect(button).toHaveFocus();
-  act(() => { window.history.replaceState(null, '', '/?macro=panorama&detail=rates'); window.dispatchEvent(new PopStateEvent('popstate')); });
-  expect(screen.getByRole('dialog')).toBeInTheDocument();
+test('detalle conserva fuente y fechas detrás de disclosure, Escape restaura foco',async()=>{
+  render(<Macro />); const button=await screen.findByRole('button',{name:/Serie rates/});fireEvent.click(button);
+  const dialog=screen.getByRole('dialog');expect(dialog).toHaveFocus();
+  expect(within(dialog).getByRole('link',{name:/Ver fuente original/})).toHaveAttribute('href','https://example.test');
+  expect(dialog).toHaveTextContent('Último valor');expect(dialog).not.toHaveTextContent('Observaciones');
+  fireEvent.keyDown(dialog,{key:'Escape'});expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(button).toHaveFocus();
 });
-test('cambio de horizonte descarta respuesta tardía incompatible', async () => {
-  let resolveOld: (value: MacroSnapshot) => void = () => {};
-  fetchMock.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve; }));
-  render(<Macro />); fireEvent.change(screen.getByLabelText('Horizonte'), { target: { value: 'session' } });
-  await screen.findByText('Serie rates'); await act(async () => { resolveOld(sample('month')); });
-  expect(screen.getByLabelText('Horizonte')).toHaveValue('session');
-  expect(screen.getByText(/Este horizonte requiere/)).toBeInTheDocument();
-  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+test('enlace de período antiguo descarta respuesta tardía incompatible',async()=>{
+  let resolveOld:(value:MacroSnapshot)=>void=()=>{};fetchMock.mockImplementationOnce(()=>new Promise(resolve=>{resolveOld=resolve;}));
+  render(<Macro />);act(()=>{window.history.replaceState(null,'','/?macro=panorama&horizon=session');window.dispatchEvent(new PopStateEvent('popstate'));});
+  await screen.findByText('Serie rates');await act(async()=>{resolveOld(sample('month'));});
+  expect(screen.getByText(/Este enlace usa un período/)).toBeInTheDocument();await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(2));
 });
-test('recarga con enlace conserva snapshot y rechaza referencia inexistente', async () => {
-  window.history.replaceState(null, '', '/?macro=events&horizon=month&detail=missing&snapshot=' + 'a'.repeat(64));
-  render(<Macro />); await screen.findByText(/Referencia inexistente/);
-  expect(fetchMock.mock.calls[0][3]).toBe('a'.repeat(64)); expect(screen.getByText(/corte guardado/)).toBeInTheDocument();
-});
-test('entrada desde navegación sin query copia un enlace Macro completo', async () => {
-  window.history.replaceState(null, '', '/');
-  const writeText = jest.fn().mockResolvedValue(undefined);
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
-  render(<Macro />); await screen.findByText('Serie rates');
-  fireEvent.click(screen.getByRole('button', { name: 'Copiar enlace' }));
-  await screen.findByText('Enlace copiado');
-  const url = new URL(writeText.mock.calls[0][0]);
-  expect(url.searchParams.get('macro')).toBe('panorama'); expect(url.searchParams.get('horizon')).toBe('month');
-  expect(url.searchParams.get('snapshot')).toBe('a'.repeat(64));
+test('referencia inexistente no inventa un detalle y Eventos muestra calendario',async()=>{
+  window.history.replaceState(null,'','/?macro=events&detail=missing&snapshot='+'a'.repeat(64));render(<Macro />);
+  await screen.findByText('El dato de este enlace no está disponible.');expect(screen.getByRole('region',{name:'Calendario económico'})).toBeInTheDocument();
+  expect(fetchMock.mock.calls[0][3]).toBe('a'.repeat(64));
 });

@@ -11,9 +11,9 @@ export function MacroChart({ rows, unit, label }: { rows: MacroObservation[]; un
     void import('lightweight-charts').then(({ createChart, LineSeries, ColorType }) => {
     if (!alive || !host.current) return;
     const css = getComputedStyle(host.current);
-    chart = createChart(host.current, { autoSize: true, height: 180,
+    chart = createChart(host.current, { autoSize: true, height: host.current.clientHeight || 290,
       layout: { background: { type: ColorType.Solid, color: css.getPropertyValue('--bg-secondary').trim() || '#191919' },
-        textColor: css.getPropertyValue('--text-secondary').trim() || '#b5b5b5', fontSize: 12 },
+        textColor: css.getPropertyValue('--text-secondary').trim() || '#b5b5b5', fontSize: 14 },
       grid: { vertLines: { visible: false }, horzLines: { color: '#303030' } },
       timeScale: { borderVisible: false }, rightPriceScale: { borderVisible: false } });
     const series = chart.addSeries(LineSeries, { color: css.getPropertyValue('--accent').trim() || '#c7d2cb', lineWidth: 2,

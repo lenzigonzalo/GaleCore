@@ -57,6 +57,7 @@ function Dashboard({ onLogout }: DashboardProps) {
     setCurrentTab(lastView.current[next]);
   };
   const isLabWorkspace = mode === 'lab' && ['lab', 'estrategias'].includes(tab);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
   const [watchlistOpen,setWatchlistOpen] = useState(false);
   const [watchlistWidth,setWatchlistWidth] = useState(420);
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
@@ -109,11 +110,8 @@ function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => { setSocketStatus(status); }, [status]);
 
   return (
-    <div className={'workspace-shell flex has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
-      {!isLabWorkspace && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
-      <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
-
-        <WorkspaceHeader status={<StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/>} mode={mode} onModeChange={changeMode} active={tab} onChange={setTab} onLogout={onLogout}
+    <div className={'workspace-shell flex flex-col has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
+        <WorkspaceHeader sidebarHidden={sidebarHidden} onSidebarToggle={() => setSidebarHidden(v => !v)} status={<StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/>} mode={mode} onModeChange={changeMode} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();
             if (!store.rules) { await store.loadRules(); store = useGexStore.getState(); }
@@ -123,6 +121,11 @@ function Dashboard({ onLogout }: DashboardProps) {
             if (!selected) throw new Error('No se pudo abrir el símbolo.');
             store.setSelectedSymbol(selected); setTab('gex');
           }} conversationOpen={terminalOpen} onConversation={() => setTab('lab')} />
+      <div className="workspace-body flex flex-1">
+      {!isLabWorkspace && !sidebarHidden && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
+      <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
+
+
 
 
         <main className={"dashboard-main flex-1 " + (isLabWorkspace ? "lab-dashboard-main" : "overflow-auto")} style={{ position: 'relative' }}>
@@ -164,8 +167,9 @@ function Dashboard({ onLogout }: DashboardProps) {
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>
-      {tab !== 'macro' && <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onOpenSettings={()=>setTab('config')} onLogout={onLogout} accountActive={tab==='config'} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>}
+      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onOpenSettings={()=>setTab('config')} onLogout={onLogout} accountActive={tab==='config'} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
       {mode !== 'lab' && <ClaudeTerminal />}
+      </div>
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { searchSymbols } from '../../api/marketdata';
 import { useGexStore } from '../../store/useGexStore';
 import type { SymbolSearchResult } from '../../types/api';
 import type { Tab } from './TabNav';
 
-const SECTIONS: Array<[Tab, string]> = [['inicio', 'Main'], ['gex', 'Mercado'], ['monitor', 'Cartera'],
+const SECTIONS: Array<[Tab, string]> = [['inicio', 'Resumen'], ['gex', 'Mercado'], ['macro', 'Macro'], ['monitor', 'Cartera'],
   ['estrategias', 'Estrategias'], ['lab', 'Lab'], ['agentes', 'Agentes'], ['inteligencia', 'Biblioteca'], ['config', 'Configuración']];
 
 /** Busca sólo colecciones existentes: destinos locales y símbolos de GaleCore. */
@@ -17,6 +17,17 @@ export function WorkspaceSearch({ onNavigate, onSymbol }: { onNavigate: (tab: Ta
   const [error, setError] = useState<string | null>(null);
   const request = useRef(0);
   const wrap = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const launcher = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const keys = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setOpen(v => !v); }
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', keys);
+    return () => document.removeEventListener('keydown', keys);
+  }, []);
+  useEffect(() => { if (open) input.current?.focus(); else launcher.current?.focus(); }, [open]);
   useEffect(() => {
     let alive = true;
     const id = ++request.current;
@@ -46,12 +57,14 @@ export function WorkspaceSearch({ onNavigate, onSymbol }: { onNavigate: (tab: Ta
     return () => document.removeEventListener('mousedown', close);
   }, []);
   const sections = SECTIONS.filter(([, label]) => label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  return <div className="workspace-search" ref={wrap}>
-    <Search size={17} />
-    <input aria-label="Buscar símbolo o sección" placeholder="Buscar símbolo o sección" value={query}
+  return <div className="workspace-search-launcher" ref={wrap}>
+    <button ref={launcher} className="workspace-icon-button" aria-label="Buscar en GaleCore" title="Buscar · Ctrl K" onClick={() => setOpen(true)}><Search size={20} /></button>
+    {open && <div className="workspace-search-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setOpen(false); }}><section className="workspace-command" role="dialog" aria-modal="true" aria-label="Buscar en GaleCore"
+      onKeyDown={e => { if (e.key !== 'Tab') return; const controls = e.currentTarget.querySelectorAll<HTMLElement>('input,button'); const first = controls[0], last = controls[controls.length - 1]; if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); } }}>
+    <div className="workspace-command-input"><Search size={20} /><input ref={input} aria-label="Buscar símbolo o sección" placeholder="Buscar símbolo o sección" value={query}
       onFocus={() => setOpen(true)} onChange={e => { setQuery(e.target.value); setOpen(true); }}
-      onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }} />
-    {open && <div className="workspace-search-results">
+      onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }} /><button aria-label="Cerrar búsqueda" onClick={() => setOpen(false)}><X size={20} /></button></div>
+    <div className="workspace-search-results">
       {sections.map(([tab, label]) => <button key={tab} onClick={() => { onNavigate(tab); setOpen(false); setQuery(''); }}>{label}</button>)}
       {loading && <p>Buscando…</p>}{error && <p role="alert">{error}</p>}
       {results.map(r => <button key={r.symbol} onClick={async () => {
@@ -59,6 +72,6 @@ export function WorkspaceSearch({ onNavigate, onSymbol }: { onNavigate: (tab: Ta
         catch (e) { setError(e instanceof Error ? e.message : 'No se pudo abrir el símbolo.'); }
       }}><strong>{r.symbol}</strong><span>{r.description}</span></button>)}
       {!loading && !error && query.trim() && !sections.length && !results.length && <p>Sin resultados</p>}
-    </div>}
+    </div></section></div>}
   </div>;
 }
