@@ -1653,6 +1653,56 @@ namespace DataFeed.Controllers
         }
 
         /// <summary>
+        /// Panel de rendimiento de una estrategia SHADOW (WS-0033, P1-10): curva, riesgo, régimen, regla de salida,
+        /// versión, comparación con referencias, hipótesis y calidad de ejecución. Sólo SHADOW.
+        /// `spec` es obligatoria; `version`, `from` y `to` (UTC) filtran. Lo que llega del perfil o de otras fuentes
+        /// (`referenceCapital`, `cashRatePct`, `bond10yPct`, `targetAnnualPct`, `hypothesisMinTrades`,
+        /// `hypothesisMinDays` y los límites de /Runtime/Exposure) se pasa en el pedido; lo que falta vuelve null con su motivo.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Performance/Panel")]
+        public IActionResult RuntimePerformancePanel([FromQuery] string spec, [FromQuery] string? version,
+            [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] double? referenceCapital,
+            [FromQuery] double? cashRatePct, [FromQuery] double? bond10yPct, [FromQuery] double? targetAnnualPct,
+            [FromQuery] int? hypothesisMinTrades, [FromQuery] int? hypothesisMinDays,
+            [FromQuery] double? reservePct, [FromQuery] double? maxRiskPerTradePct, [FromQuery] double? maxOpenRiskPct,
+            [FromQuery] double? maxBetPct)
+        {
+            if (string.IsNullOrWhiteSpace(spec)) return BadRequest(new { error = "falta `spec` (nombre de la estrategia)" });
+            var repository = _runtimePersistence.Repository;
+            if (!_runtimePersistence.Available || repository == null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+                {
+                    error = "SHADOW sin persistencia: no hay operaciones guardadas.",
+                    reason = _runtimePersistence.Reason,
+                });
+            DataFeed.Application.App.Runtime.CapitalLimits? limits = null;
+            if (referenceCapital != null && reservePct != null && maxRiskPerTradePct != null && maxOpenRiskPct != null && maxBetPct != null)
+                limits = new DataFeed.Application.App.Runtime.CapitalLimits
+                {
+                    Capital = referenceCapital.Value, ReservePct = reservePct.Value, MaxRiskPerTradePct = maxRiskPerTradePct.Value,
+                    MaxOpenRiskPct = maxOpenRiskPct.Value, MaxBetPct = maxBetPct.Value,
+                };
+            var records = repository.LoadMetricsInputs().Where(r => r.SpecName == spec).ToList();
+            if (records.Count == 0) return NotFound(new { error = $"no hay posiciones SHADOW de la estrategia '{spec}'" });
+            var exits = new Dictionary<string, DataFeed.Application.App.Runtime.Contracts.DeterministicExits>();
+            foreach (var hash in records.Select(r => r.ContentHash).Distinct())
+            {
+                var json = repository.GetSpecJson(hash);
+                var loaded = json == null ? null : DataFeed.Application.App.Runtime.StrategySpecLoader.LoadFromJson(json);
+                if (loaded is { Success: true, Spec: not null }) exits[hash] = loaded.Spec.Exits.Deterministic;
+            }
+            static DateTime? Utc(DateTime? d) => d == null ? null : DateTime.SpecifyKind(d.Value.ToUniversalTime(), DateTimeKind.Utc);
+            return Ok(DataFeed.Application.App.Runtime.ShadowPanel.Compute(spec, records, exits,
+                new DataFeed.Application.App.Runtime.PanelOptions
+                {
+                    Version = version, From = Utc(from), To = Utc(to), ReferenceCapital = referenceCapital,
+                    CashRatePct = cashRatePct, Bond10yPct = bond10yPct, TargetAnnualPct = targetAnnualPct,
+                    HypothesisMinTrades = hypothesisMinTrades, HypothesisMinDays = hypothesisMinDays, Limits = limits,
+                }, DateTime.UtcNow));
+        }
+
+        /// <summary>
         /// Exposición SHADOW (P1-04): lo abierto sumado por apuesta (subyacente + dirección + semana de vencimiento),
         /// subyacente, estrategia y vencimiento, contra los límites como % de `capital`; cuánto riesgo nuevo entra hoy.
         /// </summary>
