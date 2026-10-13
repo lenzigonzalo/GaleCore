@@ -68,7 +68,9 @@ ni activa su prioridad. No requiere un modelo para repintar datos ni sumar un da
   `lab-composer-qa/shadow-api-diagnostic.json` junto a esta evidencia. Requiere GALECORE_API_KEY;
   sólo GET a localhost Dev, nunca imprime ni persiste la clave. El listado real de seis métricas
   no se convirtió en un fixture financiero.
-- `git diff --check` y `CI=true npm run build` final con F1: exit 0. Integración pendiente de registrar.
+- `git diff --check` y `CI=true npm run build` final con F1: exit 0. Commit `b74238a` integrado
+  en `local/integracion`. Monitor servido: HTTP 200, lectura parcial SHADOW presente en bundle,
+  errores JS `[]`; preview visible. Comprobación de login/bundle, no E2E autenticado.
 
 La corrección no declara validada la pieza ni resuelta la causa backend del timeout. Próxima
 propuesta de interfaz: ficha real, recuperable, versionada y enlazada al chat; alcance/contrato
