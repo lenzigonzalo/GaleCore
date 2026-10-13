@@ -6,7 +6,7 @@ interface MarketStore {
   tickers: Record<string, TickerState>;
 
   initTicker:   (symbol: string) => void;
-  updatePrice:  (symbol: string, data: TradePayload) => void;
+  updatePrice:  (symbol: string, data: TradePayload, streaming?: boolean) => void;
   updateQuote:  (symbol: string, data: QuotePayload) => void;
   updateGreeks: (symbol: string, data: GreeksPayload) => void;
   setOpen:      (symbol: string, open: number, prevClose?: number, volume?: number) => void;
@@ -42,8 +42,8 @@ export const useMarketStore = create<MarketStore>((set) => ({
       return { tickers: { ...s.tickers, [symbol]: emptyTicker(symbol) } };
     }),
 
-  updatePrice: (symbol, data) =>
-    set((s) => ({
+  updatePrice: (symbol, data, streaming = true) =>
+    set((s) => Number.isFinite(data.price) && data.price > 0 ? ({
       tickers: {
         ...s.tickers,
         [symbol]: {
@@ -51,11 +51,12 @@ export const useMarketStore = create<MarketStore>((set) => ({
           price: data.price,
           ...(Number.isFinite(data.price) && data.price > 0 && { error: { ...(s.tickers[symbol]?.error ?? defaultError), price: undefined } }),
           lastUpdate: new Date(),
-          isStreaming: true,
+          isStreaming: streaming,
+          ...(streaming && { lastTradeReceivedAt: new Date() }),
           ...(data.extendedTradingHours != null && { extendedTradingHours: data.extendedTradingHours, marketStatusReceivedAt: new Date(), marketStatusSourceAt: new Date(data.timestamp) }),
         },
       },
-    })),
+    }) : s),
 
   updateQuote: (symbol, data) =>
     set((s) => ({

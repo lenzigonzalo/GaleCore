@@ -91,3 +91,50 @@ test('los separadores se contraen sin sacar tickers del seguimiento',async()=>{
   fireEvent.click(screen.getByRole('button',{name:'Abrir watchlist'}));
   expect(toggle).toHaveBeenCalledTimes(1);
 });
+
+test('las actualizaciones del padre no roban el foco de la caja de texto',async()=>{
+  const {rerender}=render(<><textarea aria-label="Mensaje"/><LiveWatchlist {...props} onClose={()=>{}}/></>);
+  await waitFor(()=>expect(screen.getAllByText('101.00')).toHaveLength(2));
+  const input=screen.getByRole('textbox',{name:'Mensaje'});
+  input.focus();
+  fireEvent.change(input,{target:{value:'Quiero revisar SPY'}});
+  const close=jest.fn();
+  rerender(<><textarea aria-label="Mensaje"/><LiveWatchlist {...props} onClose={close}/></>);
+  expect(input).toHaveFocus();
+  expect(input).toHaveValue('Quiero revisar SPY');
+  fireEvent.keyDown(input,{key:'Escape'});
+  expect(close).toHaveBeenCalledTimes(1);
+});
+
+test('sin trades conserva el último precio y sigue refrescando por REST',async()=>{
+  jest.useFakeTimers();
+  try {
+    render(<LiveWatchlist {...props}/>);
+    await act(async()=>{});
+    expect(screen.getAllByText('101.00')).toHaveLength(2);
+    expect(useMarketStore.getState().tickers.SPY.isStreaming).toBe(false);
+    batch.mockResolvedValueOnce([{symbol:'SPY',last:102,prevClose:100,open:99,bid:101,ask:103,volume:1000},
+      {symbol:'AAPL',last:0,prevClose:100,open:99,bid:0,ask:0,volume:1000}]);
+    await act(async()=>{jest.advanceTimersByTime(40000);});
+    expect(screen.getByText('102.00')).toBeInTheDocument();
+    expect(screen.getByText('101.00')).toBeInTheDocument();
+    expect(batch).toHaveBeenCalledTimes(2);
+  } finally {jest.useRealTimers();}
+});
+
+test('estar suscripto al socket sin recibir trades también carga el último precio REST',async()=>{
+  useMarketStore.getState().setStreaming('SPY',true);
+  render(<LiveWatchlist {...props}/>);
+  await waitFor(()=>expect(screen.getAllByText('101.00')).toHaveLength(2));
+  expect(useMarketStore.getState().tickers.SPY.price).toBe(101);
+});
+
+test('una respuesta REST tardía no pisa un trade válido reciente',async()=>{
+  let resolve!:(data:any[])=>void;
+  batch.mockReturnValueOnce(new Promise(res=>{resolve=res;}));
+  render(<LiveWatchlist {...props}/>);
+  act(()=>useMarketStore.getState().updatePrice('SPY',{price:105,size:1,timestamp:new Date().toISOString()}));
+  await act(async()=>resolve([{symbol:'SPY',last:101,prevClose:100,open:99,bid:100,ask:102,volume:1000}]));
+  expect(screen.getByText('105.00')).toBeInTheDocument();
+  expect(useMarketStore.getState().tickers.SPY.isStreaming).toBe(true);
+});

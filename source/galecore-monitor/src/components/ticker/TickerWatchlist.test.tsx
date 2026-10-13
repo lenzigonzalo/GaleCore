@@ -43,3 +43,9 @@ test('no ofrece retirar instrumentos del universo y distingue recepción de orig
   expect(screen.getByRole('columnheader', { name: 'Recepción (ET)' })).toBeInTheDocument();
   expect(screen.getByText(/La hora indica recepción, no origen/)).toBeInTheDocument();
 });
+
+test('un error posterior no oculta el último precio disponible',()=>{
+  render(<TickerWatchlist tickers={[{...ticker,error:{price:'Falló el refresco'}}]}
+    selectedSymbol={null} onSelect={()=>{}}/>);
+  expect(screen.getByText('101.00')).toHaveAttribute('title','Falló el refresco');
+});

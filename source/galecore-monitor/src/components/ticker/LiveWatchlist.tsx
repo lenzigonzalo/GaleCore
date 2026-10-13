@@ -21,6 +21,8 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   const [searchOpen,setSearchOpen] = useState(false);
   const [message,setMessage] = useState('');
   const panel = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => { if (enabled && open && !rules && !rulesError) loadRules(); },[enabled,open,rules,rulesError,loadRules]);
   const symbols = Array.from(new Set([...tickers,...added,...adHocSymbols])).filter(s => !hidden.includes(s));
   const extrasKey = symbols.filter(s => !platformTickers.includes(s)).join(',');
@@ -36,12 +38,12 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
     const previous = document.activeElement as HTMLElement | null;
     panel.current?.querySelector<HTMLButtonElement>('[data-close]')?.focus();
     const keys = (e:KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+      if (e.key === 'Escape') { e.preventDefault(); onCloseRef.current(); }
 
     };
     document.addEventListener('keydown',keys);
     return () => { document.removeEventListener('keydown',keys); previous?.focus(); };
-  },[open,enabled,onClose]);
+  },[open,enabled]);
   const pick = (symbol:string) => {
     const normalized=symbol.trim().toUpperCase();
     if (!normalized) return;

@@ -8,6 +8,7 @@ export interface TickerState {
   volume?: number;
   lastUpdate: Date | null;
   isStreaming: boolean;
+  lastTradeReceivedAt?: Date; // recepción del último trade válido; suscripción no implica precio reciente
   extendedTradingHours?: boolean;
   marketStatusSourceAt?: Date; // timestamp de origen del trade con señal de sesión
   marketStatusReceivedAt?: Date; // recepción de la señal de sesión del proveedor, separada de quotes/REST

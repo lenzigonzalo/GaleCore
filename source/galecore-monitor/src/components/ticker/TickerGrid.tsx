@@ -21,12 +21,17 @@ interface Props {
   onRemoveSymbol?: (symbol: string) => void;
 }
 
+function needsRestPrice(symbol: string) {
+  const ticker = useMarketStore.getState().tickers[symbol];
+  return !ticker?.isStreaming || !ticker.lastTradeReceivedAt || Date.now() - ticker.lastTradeReceivedAt.getTime() > 30000;
+}
+
 function applyMarketData(d: { symbol: string; open: number; prevClose?: number; volume: number; last: number; bid: number; ask: number }) {
   const store = useMarketStore.getState();
   store.setOpen(d.symbol, d.open, d.prevClose, d.volume);
   if (Number.isFinite(d.last) && d.last > 0) store.setError(d.symbol, 'price', undefined);
-  if (!store.tickers[d.symbol]?.price) {
-    store.updatePrice(d.symbol, { price: d.last, size: 0, timestamp: new Date().toISOString() });
+  if (needsRestPrice(d.symbol)) {
+    store.updatePrice(d.symbol, { price: d.last, size: 0, timestamp: new Date().toISOString() }, false);
   }
   store.updateQuote(d.symbol, { bidPrice: d.bid, askPrice: d.ask, timestamp: new Date().toISOString() });
 }
@@ -85,14 +90,13 @@ export function TickerGrid({
   // ── REST fallback polling (single batch call) ─────────────────────────────
   useEffect(() => {
     const timer = setTimeout(() => {
-      const noStream = symbols.filter((s) => !useMarketStore.getState().tickers[s]?.isStreaming);
-      if (noStream.length && !pollRef.current) {
+      if (!pollRef.current) {
         pollRef.current = setInterval(() => {
+          const noStream = symbols.filter(needsRestPrice);
+          if (!noStream.length) return;
           fetchMarketDataBatch(noStream)
             .then((results) => {
-              results.forEach((d) => {
-                useMarketStore.getState().updatePrice(d.symbol, { price: d.last, size: 0, timestamp: new Date().toISOString() });
-              });
+              results.forEach(applyMarketData);
             })
             .catch(() => {});
         }, 30000);

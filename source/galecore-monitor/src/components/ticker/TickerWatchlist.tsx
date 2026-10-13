@@ -16,7 +16,7 @@ interface Props {
 export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSymbols, onRemoveSymbol, sections }: Props) {
   const [collapsed,setCollapsed] = useState<string[]>([]);
   const renderTicker = (ticker:TickerState) => {
-          const hasPrice = Number.isFinite(ticker.price) && ticker.price > 0 && !ticker.error.price;
+          const hasPrice = Number.isFinite(ticker.price) && ticker.price > 0;
           const hasClose = ticker.prevClose != null && Number.isFinite(ticker.prevClose) && ticker.prevClose > 0;
           const change = hasPrice && hasClose ? calcChange(ticker.price, ticker.prevClose!) : null;
           const color = change == null || change.abs === 0 ? 'var(--text-secondary)'
