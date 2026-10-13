@@ -968,7 +968,7 @@ No se cambia el roadmap, el item activo ni se autoriza implementación o ejecuci
 - Con el watchlist abierto no se puede escribir en la caja de texto. Debe permitir escribir y enviar un mensaje con el watchlist abierto.
 - Durante el cierre de mercado el watchlist muestra `-`. Debe mostrar el último precio disponible, con la fecha del dato y su hora si la fuente la informa; si no hay dato disponible, indicarlo explícitamente.
 
-**Estado:** el owner pidió corregirlos ahora; implementación y evidencia en [GC-0012](../../../GaleCore/docs/engineering/work-items/GC-0012-watchlist-foco-ultimo-precio.md). Este addendum queda como procedencia; el seguimiento vive en ese work item.
+**Estado:** el owner pidió corregirlos ahora; implementación y evidencia en [GC-0013](../../../GaleCore/docs/engineering/work-items/GC-0013-watchlist-foco-ultimo-precio.md). Este addendum queda como procedencia; el seguimiento vive en ese work item.
 
 ---
 
