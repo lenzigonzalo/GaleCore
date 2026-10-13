@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de performance_review y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: performance_review
 versions:
+  - version: "1.1.0"
+    date: 2026-10-13
+    changes: >
+      WS-0033: con `--strategy X` se lee también el panel SHADOW de GaleCore (régimen, regla de salida, versión,
+      referencias, hipótesis, ejecución) con el capital y los límites del perfil; la skill lo presenta con el motivo
+      de cada dato que falta.
+    feedback: []
   - version: "1.0.1"
     date: 2026-10-06
     changes: >

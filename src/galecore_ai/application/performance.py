@@ -20,7 +20,7 @@ import re
 from datetime import UTC, date, datetime
 from urllib.parse import urlencode
 
-from galecore_ai.application import supervisor
+from galecore_ai.application import capital, supervisor
 from galecore_ai.application.knowledge import KnowledgeBase
 from galecore_ai.contracts.profile import ProfileContent
 
@@ -186,6 +186,25 @@ def pending_reviews(decisions: dict[str, dict], today: date) -> list[dict]:
     return sorted(due, key=lambda d: d["review_by"])
 
 
+def panel_query(name: str, content: ProfileContent | None, crit: dict, since: datetime | None) -> tuple[str, dict]:
+    """The panel's request (WS-0033) with what the profile declares; what it does not say is not passed, so GaleCore
+    answers «falta …» for it. Also returns what was passed, so the answer can say it."""
+    lim = capital.limits(content)
+    passed: dict = {}
+    if crit["capital"]:
+        passed["referenceCapital"] = crit["capital"]
+    if all(lim.get(k) is not None for k, _, _ in capital._LIMITS):     # GaleCore takes the four limits or none
+        passed.update({k: lim[k] for k, _, _ in capital._LIMITS})
+    if crit["objetivo_anual_pct"]:
+        passed["targetAnnualPct"] = crit["objetivo_anual_pct"][0]       # the low end of the declared range
+    if crit["edge_min_cierres"] is not None and crit["edge_min_dias"] is not None:
+        passed["hypothesisMinTrades"], passed["hypothesisMinDays"] = crit["edge_min_cierres"], crit["edge_min_dias"]
+    query = [("spec", name)] + list(passed.items())
+    if since:
+        query.append(("from", since.astimezone(UTC).isoformat()))
+    return "/App/Runtime/Performance/Panel?" + urlencode(query), passed
+
+
 def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] | None = None,
            since: datetime | None = None, now: datetime | None = None) -> dict:
     """The whole answer: criteria, portfolio against the objective, edge, by strategy/version/rule, each close."""
@@ -224,12 +243,27 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
     seen = {g.get("specName") for g in perf.get("strategies", [])}
     missing += [f"estrategia {n}: GaleCore no tiene operaciones ni instancias con ese nombre" for n in names
                 if n not in seen]
+    panels: dict[str, dict] = {}
+    if strategies:                                  # «¿cómo viene la estrategia X? ¿dónde falla?»: the SHADOW panel
+        for n in names:
+            path, passed = panel_query(n, doc.content if doc else None, crit, since)
+            try:
+                panel = read(path)
+            except supervisor.SupervisorError as exc:
+                missing.append(f"panel de {n}: {exc}")
+                continue
+            if isinstance(panel, dict):
+                panels[n] = {"pedido_con": passed, **panel}
+            else:
+                missing.append(f"panel de {n}: GaleCore devolvió algo que no es el panel")
+        if panels:
+            missing.append("panel: efectivo y bono a 10 años no los declara el perfil; sus comparaciones salen sin valor")
     scope = ("cartera, contra_objetivo, edge, por_estrategia y por_version: acumulado desde la primera entrada"
              + (f"; ventana y operaciones: cierres desde {since.date().isoformat()}" if since else ""))
     return {"al": perf.get("asOf"), "estrategias_pedidas": names, "desde": since.isoformat() if since else None,
             "alcance": scope, "ventana": perf.get("window"), "criterios": crit, "cartera": portfolio,
             "contra_objetivo": against_objective(portfolio, crit, verdict["muestra_suficiente"]),
             "edge": verdict, "por_estrategia": perf.get("strategies", []), "por_version": perf.get("versions", []),
-            "operaciones": trades, "decisiones_a_revisar": pending_reviews(decisions, today),
+            "operaciones": trades, "paneles": panels, "decisiones_a_revisar": pending_reviews(decisions, today),
             "costos": COSTS_NOTE, "faltantes": missing,
-            "fuente": "GaleCore GET /App/Runtime/Performance; perfil " + (doc.ref if doc else "ninguno")}
+            "fuente": "GaleCore GET /App/Runtime/Performance" + (" y /Performance/Panel" if panels else "") + "; perfil " + (doc.ref if doc else "ninguno")}

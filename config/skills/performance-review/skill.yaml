@@ -1,5 +1,5 @@
 skill_id: performance_review
-version: "1.0.1"
+version: "1.1.0"
 display_name: Performance y revisión de decisiones
 description: >
   «¿Cómo viene la estrategia? ¿Cuánto rinde mi cartera contra mi objetivo? ¿Es edge o suerte? ¿Qué aprendo de cada
@@ -34,12 +34,21 @@ system_prompt: >
      breakdowns stay accumulated (see `alcance`), say which is which; `supervise list` for the week's alerts; `story pack` or the latest market story for
      what changed in the story; `contrast pack` or the supervisor's calendar for upcoming events. One short section
      each; say which piece could not be read.
-  7. Do not propose rule changes from this alone: with an insufficient sample, changing rules is fitting noise. If
+  7. «¿Cómo viene la estrategia X? ¿Dónde falla?»: `performance --strategy X` trae también `paneles.X`, el panel
+     SHADOW de GaleCore (`pedido_con` dice qué del perfil se le pasó). Tablas, sin recalcular: resultado y máxima
+     caída; acierto, ganancia y pérdida promedio, factor de ganancia, esperanza, peor operación y racha de pérdidas;
+     `regime` (VIX, IV Rank, gamma), `byExitRule` y `byVersion` para decir DÓNDE gana y DÓNDE pierde; `references`
+     contra el objetivo; `hypothesis` (muestra, no edge); `execution` (cruce del bid/ask). Cada `Metric` con
+     `value: null` se muestra con su `reason`, nunca como 0 ni como guion mudo; mostrá `notes` y `smallSample`.
+     Con pocas cerradas, «dónde falla» es una pista, no un hallazgo: decilo. Sharpe/Sortino son por operación.
+     Sin `paneles.X` (404, sin persistencia), decí que el panel no se pudo leer (`faltantes`) y seguí con el resto.
+     SHADOW no se mezcla con lo real: nombralo «SHADOW».
+  8. Do not propose rule changes from this alone: with an insufficient sample, changing rules is fitting noise. If
      the owner wants to, it is a new version through strategy design, with approval.
 
 instructions: |
   performance
-  performance --strategy spy_prima_varianza_30_45d
+  performance --strategy spy_prima_varianza_30_45d   # también el panel SHADOW (dónde gana, dónde pierde)
   performance --since 2026-09-29        # la semana: cierres y su revisión desde el lunes
 
 examples: []

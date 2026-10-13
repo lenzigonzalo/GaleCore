@@ -146,3 +146,49 @@ def test_report_refuses_what_is_not_a_performance_report(kb):  # noqa: F811
         assert "no es el informe" in str(exc)
     else:
         raise AssertionError("a list is not a performance report")
+
+
+def test_one_strategy_also_reads_the_shadow_panel_with_the_profiles_numbers(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    asked = []
+
+    def read(path):
+        asked.append(path)
+        if "/Panel" in path:
+            return {"spec": "x", "mode": "SHADOW", "tradesClosed": 2, "smallSample": True, "winRate": {"value": None,
+                    "reason": "muestra chica"}}
+        return {"asOf": "t", "window": {}, "portfolio": {}, "strategies": [], "versions": [], "trades": []}
+
+    out = performance.report(kb, read, strategies=["x"], since=IN_SESSION - timedelta(days=7), now=IN_SESSION)
+    panel_path = next(p for p in asked if "/Panel" in p)
+    assert panel_path.startswith("/App/Runtime/Performance/Panel?spec=x") and "&from=" in panel_path
+    assert out["paneles"]["x"]["mode"] == "SHADOW" and out["paneles"]["x"]["winRate"]["reason"] == "muestra chica"
+    assert out["paneles"]["x"]["pedido_con"] == {}          # the kb has no profile: nothing is invented
+    assert "/Performance/Panel" in out["fuente"]
+
+
+def test_the_panel_request_carries_capital_limits_target_and_criterion_when_the_profile_declares_them():
+    full = PROFILE.model_copy(update={"risk_limits": [
+        "pérdida máxima por operación 5 % del capital de referencia (500 USD)",
+        "riesgo máximo sumado 50 % del capital de referencia (5.000 USD)",
+        "reserva para ajustes 20 % del capital de referencia", "tope de una apuesta 10 % del capital"]})
+    path, passed = performance.panel_query("x", full, performance.criteria(full), None)
+    assert passed == {"referenceCapital": 10000.0, "maxRiskPerTradePct": 5.0, "maxOpenRiskPct": 50.0,
+                      "reservePct": 20.0, "maxBetPct": 10.0, "targetAnnualPct": 10.0,
+                      "hypothesisMinTrades": 30, "hypothesisMinDays": 90}
+    assert "maxBetPct=10.0" in path and "from=" not in path
+    _, partial = performance.panel_query("x", PROFILE, CRIT, None)      # two limits only: GaleCore takes four or none
+    assert "reservePct" not in partial and partial["referenceCapital"] == 10000.0
+
+
+def test_a_panel_that_fails_is_a_missing_item_not_a_broken_report(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+
+    def read(path):
+        if "/Panel" in path:
+            raise supervisor.SupervisorError("GET /App/Runtime/Performance/Panel -> HTTP 404")
+        return {"asOf": "t", "window": {}, "portfolio": {}, "strategies": [], "versions": [], "trades": []}
+
+    out = performance.report(kb, read, strategies=["x"], now=IN_SESSION)
+    assert out["paneles"] == {} and any("panel de x" in f and "404" in f for f in out["faltantes"])
+    assert "paneles" in performance.report(kb, read, now=IN_SESSION)    # no --strategy: no panel is asked
