@@ -7,6 +7,7 @@ import { LabMarkdown } from '../components/lab/LabMarkdown';
 import { LabChatSettings } from '../components/lab/LabChatSettings';
 import './Lab.css';
 const KIND = { personal: 'Personal', analysis: 'Análisis', strategy: 'Estrategia' };
+const limitSidebarWidth = (width: number, available: number) => Math.max(200, Math.min(width, 480, Math.max(200, available - 420)));
 function FileTree({ nodes, selected, onSelect }: { nodes: WorkspaceFile[]; selected: string; onSelect: (path: string) => void }) {
   return <ul className="lab-file-tree">{nodes.map(n => <li key={n.path}>{n.kind === 'folder' ? <details open><summary><Folder size={16}/>{n.name}</summary><FileTree nodes={n.children || []} selected={selected} onSelect={onSelect}/></details> : <button aria-pressed={selected === n.path} onClick={() => onSelect(n.path)}><FileText size={16}/>{n.name}</button>}</li>)}</ul>;
 }
@@ -19,6 +20,12 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
   const [chatSettings, setChatSettings] = useState({ model: '', effort: '' });
   const [view, setView] = useState<'chat' | 'shadow'>('chat');
   const [collapsed, setCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    try {
+      const stored = Number(localStorage.getItem('galecore:lab:sidebar-width'));
+      return limitSidebarWidth(stored >= 200 && Number.isFinite(stored) ? stored : 310, window.innerWidth);
+    } catch { return 310; }
+  });
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<string,string>>({});
   const [busy, setBusy] = useState(false);
@@ -47,6 +54,7 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
   const renameInput = (key: string, original: string) => <input className="lab-rename" autoFocus aria-label="Nuevo nombre" value={editValue} onChange={e => setEditValue(e.target.value)}
     onBlur={() => saveEdit(key, original)} onKeyDown={e => { if (e.key === 'Enter') saveEdit(key, original); if (e.key === 'Escape') setEditing(null); }} onClick={e => e.stopPropagation()} />;
   const selection = useRef(0);
+  const workspace = useRef<HTMLDivElement>(null);
   const fileSequence = useRef(0);
   const messages = useRef<HTMLDivElement>(null);
   const composer = useRef<HTMLTextAreaElement>(null);
@@ -59,6 +67,19 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
     catch { setError('No se pudo conectar con el Lab local.'); }
   }, []);
   useEffect(() => { refresh(); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, [refresh]);
+  useEffect(() => {
+    const element = workspace.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => {
+      if (element.clientWidth > 700) setSidebarWidth(width => limitSidebarWidth(width, element.clientWidth));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem('galecore:lab:sidebar-width', String(sidebarWidth)); } catch { /* disponible hasta recargar */ }
+  }, [sidebarWidth]);
+  const resizeSidebar = (width: number) => setSidebarWidth(limitSidebarWidth(width, workspace.current?.clientWidth || window.innerWidth));
   useEffect(() => { const ok = state?.providers.find(x => x.installed); if (ok && !state?.providers.find(x => x.id === provider)?.installed) setProvider(ok.id); }, [state, provider]);
   useEffect(() => { sessionStorage.setItem('galecore:lab:project', projectId); }, [projectId]);
   useEffect(() => { if(chatId) sessionStorage.setItem('galecore:lab:chat',chatId); else sessionStorage.removeItem('galecore:lab:chat'); },[chatId]);
@@ -137,8 +158,8 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
   };
   const openFile = async (path:string) => { const sequence = ++fileSequence.current; setFilePath(path); setFileText(''); setFileError(''); setFileLoading(true); try { const f = await labRequest<{text:string}>('/workspaces/' + projectId + '/files?path=' + encodeURIComponent(path)); if(sequence === fileSequence.current) setFileText(f.text); } catch(e) { if(sequence === fileSequence.current) setFileError(e instanceof Error ? e.message : 'Archivo no disponible.'); } finally { if(sequence === fileSequence.current) setFileLoading(false); } };
   const stop = async () => { if(!chat) return; try { await labRequest('/chats/' + chat.id + '/stop',{}); } catch { setError('No se pudo detener la respuesta.'); } };
-  return <div className={'lab-chat-workspace' + (collapsed ? ' sidebar-collapsed' : '')}>
-    <aside className="lab-chat-sidebar">
+  return <div ref={workspace} className={'lab-chat-workspace' + (collapsed ? ' sidebar-collapsed' : '')} style={{ '--lab-sidebar-width': sidebarWidth + 'px' } as React.CSSProperties}>
+    <aside className="lab-chat-sidebar" id="lab-project-sidebar">
       <button className="lab-sidebar-brand" onClick={()=>onNavigate('inicio')} aria-label="Ir a Monitor">GaleCore<span>.</span></button>
       <div className="lab-sidebar-heading"><button className="lab-new-chat" onClick={newChat}><MessageSquare size={19}/><span>Nuevo chat</span></button><button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button></div>
       {!collapsed && <><div className="lab-project-heading"><span>Proyectos</span><button className="lab-icon" aria-label="Crear proyecto" onClick={()=>setCreating(true)}><Plus size={18}/></button></div>
@@ -148,6 +169,19 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
       </div>)}</nav>
       <footer className="lab-sidebar-footer"><button onClick={()=>onNavigate('inteligencia')}><BookOpen size={17}/>Biblioteca</button><button onClick={()=>onNavigate('config')}><Settings size={17}/>Configuración</button><span><i className={state && !error ? 'online' : ''}/>{state ? 'En tu equipo' : 'Conectando…'}</span></footer></>}
     </aside>
+    {!collapsed && <div className="lab-sidebar-resize" role="separator" tabIndex={0} aria-label="Ancho de proyectos" aria-orientation="vertical" aria-controls="lab-project-sidebar"
+      aria-valuemin={200} aria-valuemax={limitSidebarWidth(480, workspace.current?.clientWidth || window.innerWidth)} aria-valuenow={sidebarWidth}
+      title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
+      onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId); }}
+      onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) resizeSidebar(e.clientX - (workspace.current?.getBoundingClientRect().left || 0)); }}
+      onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
+      onPointerCancel={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
+      onDoubleClick={() => resizeSidebar(310)}
+      onKeyDown={e => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+        e.preventDefault();
+        resizeSidebar(e.key === 'Home' ? 200 : e.key === 'End' ? 480 : sidebarWidth + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 40 : 10));
+      }}/>}
     <section className="lab-chat-main">
       <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button><button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav><button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Files</button></header>
       {view==='shadow' ? <LabShadow project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <>
@@ -162,7 +196,7 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
         {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}<button onClick={refresh}>Reintentar conexión</button></div>}
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
-      <form className="lab-chat-composer" onSubmit={send}><textarea ref={composer} rows={2} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" aria-describedby="lab-composer-hint" value={draft} onChange={e=>setDrafts(v=>({...v,[draftKey]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy&&chat?.state!=='running')e.currentTarget.form?.requestSubmit();}}}/><div><select aria-label="Motor del chat" value={chat?.provider || provider} disabled={!!chatId} onChange={e=>{setProvider(e.target.value as 'codex'|'claude');setChatSettings({model:'',effort:''});}}>{(state?.providers || [{id:'codex',label:'Codex',installed:true},{id:'claude',label:'Claude Code',installed:true}]).map(p=><option key={p.id} value={p.id} disabled={!p.installed}>{p.label}{!p.installed?' · no instalado':''}</option>)}</select>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state}><ArrowUp size={19}/></button>}</div><LabChatSettings options={state?.chatOptions?.[chat?.provider || provider]} model={chat ? chat.model || '' : chatSettings.model} effort={chat ? chat.effort || '' : chatSettings.effort} locked={!!chatId || busy} onChange={setChatSettings}/><small id="lab-composer-hint">Enter para enviar · Shift + Enter para otra línea</small></form>
+      <form className="lab-chat-composer" onSubmit={send}><textarea ref={composer} rows={1} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" aria-describedby="lab-composer-hint" title="Enter para enviar · Shift + Enter para otra línea" value={draft} onChange={e=>setDrafts(v=>({...v,[draftKey]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy&&chat?.state!=='running')e.currentTarget.form?.requestSubmit();}}}/><div className="lab-composer-toolbar"><select aria-label="Motor del chat" value={chat?.provider || provider} disabled={!!chatId} onChange={e=>{setProvider(e.target.value as 'codex'|'claude');setChatSettings({model:'',effort:''});}}>{(state?.providers || [{id:'codex',label:'Codex',installed:true},{id:'claude',label:'Claude Code',installed:true}]).map(p=><option key={p.id} value={p.id} disabled={!p.installed}>{p.label}{!p.installed?' · no instalado':''}</option>)}</select><LabChatSettings options={state?.chatOptions?.[chat?.provider || provider]} model={chat ? chat.model || '' : chatSettings.model} effort={chat ? chat.effort || '' : chatSettings.effort} locked={!!chatId || busy} onChange={setChatSettings}/>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state}><ArrowUp size={19}/></button>}</div><small id="lab-composer-hint" className="lab-composer-hint">Enter para enviar · Shift + Enter para otra línea</small></form>
       </>}
     </section>
     {creating && <div className="lab-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="lab-create-title" className="lab-create-project"><header><h2 id="lab-create-title">Nuevo proyecto</h2><button className="lab-icon" aria-label="Cerrar" onClick={()=>setCreating(false)}><X size={19}/></button></header><form onSubmit={createProject}><label>Nombre<input autoFocus required maxLength={100} value={projectLabel} onChange={e=>setProjectLabel(e.target.value)} placeholder="Estrategia SPY"/></label><label>Tipo<select value={projectKind} onChange={e=>setProjectKind(e.target.value as LabProjectKind)}><option value="strategy">Estrategia</option><option value="analysis">Análisis</option><option value="personal">Personal</option></select></label><p>{projectKind==='strategy'?'El chat guía investigación, diseño y preparación para Shadow.':'Archivos, memoria y convenciones propias.'}</p>{error && <p role="alert">{error}</p>}<button className="btn" disabled={busy||!projectLabel.trim()}>Crear proyecto</button></form></section></div>}

@@ -84,3 +84,46 @@ No marcar VALIDATED/CLOSED. QA autenticada real pendiente; el owner puede ver el
 y juzgar ancho/foco/caja, o abrir la preview aislada sin efectos.
 Adjuntos, modelo/esfuerzo, artefactos y SHADOW siguen el handoff y sus dependencias con WS-0029;
 no están implementados por este cambio. WS-0029 permanece activo; no se editó su work item.
+
+## Iteración del owner — caja más compacta y lateral ajustable (12/10)
+
+Feedback: «La caja sigue siendo muy grandota, la barra lateral debería ser achicable o agrandable,
+me gusta el tamaño de la letra». Reemplaza el requisito de dos líneas iniciales de esta tajada:
+una línea inicial, crecimiento al escribir hasta seis, letra conservada y una sola barra de controles.
+Modelo/esfuerzo se abre encima de la caja, sin aumentar su altura; el atajo permanece descrito para
+lectores de pantalla y en el tooltip del textarea.
+
+Sidebar ajustable por su borde, de 200 a 480 px cuando hay espacio; reserva al menos 420 px al chat
+en escritorio. Flechas cambian 10 px, Shift+flecha 40 px, Home/End llevan a los límites; doble clic
+restablece 310 px. Preferencia local persistida. El botón de colapsar conserva el ancho elegido.
+En anchos de hasta 700 px se mantiene la adaptación móvil y se oculta el separador de ancho.
+
+Aceptación: altura total inicial <=100 px, texto de entrada 16 px y lectura 18 px como antes;
+drag, teclado, límites, persistencia, colapsar/reabrir, cambios de ventana, borrador largo y settings.
+Sin desborde de página a 900/390 px ni aumento de caja al abrir settings. Sólo interfaz local;
+sin nuevos contratos, inferencias, permisos ni cambios de WS-0029.
+
+Verificación de esta iteración:
+
+- Chromium aislado, guion actualizado: exit 0. Caja inicial medida de **92 px × 760 px**, textarea
+  de 28 px/16 px de letra; lectura conserva 18 px. La caja anterior medía aproximadamente 194 px
+  en la captura inicial. Settings abierto no aumenta la altura de la caja.
+- Arrastre 310→400 px; recarga real de la página conserva 400 px; flechas, Shift+flecha, Home/End,
+  límites 200/480 px, colapsado a 64 px y reapertura al ancho elegido, doble clic para restablecer: PASS.
+- Cancelación sintética de pointer durante un arrastre real libera captura y evita seguir cambiando
+  ancho al mover el mouse. Panel abierto con Enter y cerrado con Escape; panel a 900/390 px
+  dentro de la ventana, sin aumentar caja: PASS. No equivale a una prueba de hardware táctil.
+- Pruebas previas de foco, borradores, polling, caja larga y responsive también verdes; errores JS `[]`.
+  Capturas de escritorio, settings y móvil inspeccionadas. La preview y los artefactos locales de
+  `.tmp/lab-composer-qa/` se regeneran con la versión más reciente; no son snapshots inmutables.
+- Review estático de otro agente Sol 6.1: `docs/engineering/reviews/WS-0028-lab-composer-sidebar-review.md`,
+  APPROVE sin hallazgos bloqueantes sobre el diff identificado allí. Sus límites de evidencia se
+  completaron después con recarga, cancelación y panel móvil; no se modificó ni reabrió ese review.
+  Escape, cancelación explícita y agarradera visual se consolidaron después de su snapshot.
+- Intento de las tres regresiones Jest existentes del Lab, incluido reintento con `--watchman=false`:
+  exit 1 «No tests found / No files found» en el worktree. No se presentaron como aprobadas ni se
+  usó `--passWithNoTests`. Los recorridos del cambio fueron comprobados en Chromium con el componente
+  real; el fallo de descubrimiento de Jest queda pendiente, fuera de este ajuste de interfaz.
+
+`CI=true npm run build` de la versión final consolidada: exit 0, compilación correcta.
+`git diff --check`: exit 0. Integración local y bundle servido se registran después de ejecutarlos.

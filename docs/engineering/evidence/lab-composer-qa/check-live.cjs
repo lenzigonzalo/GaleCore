@@ -11,10 +11,10 @@ const { chromium } = createRequire(path.resolve('.tmp/lab-ui-qa/package.json'))(
     await page.getByText('Entrar',{exact:true}).waitFor({timeout:30000});
     const asset=await page.request.get('http://localhost:3039/static/js/bundle.js');
     const bundle=await asset.text();
-    const live={http:asset.status(),newComposer:bundle.includes('lab-jump-latest'),resizeObserver:bundle.includes('observer.observe(element)'),errors,scope:'Login y bundle servido; no E2E autenticado.'};
+    const live={http:asset.status(),newComposer:bundle.includes('lab-jump-latest'),compactToolbar:bundle.includes('lab-composer-toolbar'),resizableSidebar:bundle.includes('lab-sidebar-resize'),resizeObserver:bundle.includes('observer.observe(element)'),errors,scope:'Login y bundle servido; no E2E autenticado.'};
     fs.writeFileSync('.tmp/lab-composer-qa/live-result.json',JSON.stringify(live,null,2));
     console.log(JSON.stringify(live));
-    if(!asset.ok()||!live.newComposer||errors.length)process.exitCode=1;
+    if(!asset.ok()||!live.newComposer||!live.compactToolbar||!live.resizableSidebar||errors.length)process.exitCode=1;
     await page.goto('http://127.0.0.1:3041/',{waitUntil:'domcontentloaded'});
     await page.getByLabel('Mensaje al proyecto').waitFor();
     if(errors.length)throw new Error(errors.join('; '));
