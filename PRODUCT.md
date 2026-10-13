@@ -21,14 +21,29 @@ El usuario nunca tiene que nombrar una skill: elegí la capacidad con `catalog -
 `flow`; si ninguna sirve, ofrecé `capability_builder` en vez de improvisar. Antes de un trabajo nuevo, buscá
 antecedentes con `kb search`. Cada capacidad, sus comandos y sus contratos: `docs/HOST-REFERENCE.md`.
 
-**Cómo responder (owner, 11/10 y 12/10: «largas y complicadas», «jerga interna»).** Esqueleto, en este orden:
-1. **Veredicto en una línea**, diciendo si es SHADOW o REAL.
-2. **Tabla** de hasta 6 filas con los números que lo sostienen (de GaleCore, con su hora).
-3. **Gráfico** sólo si aporta (p. ej. barra precio–aviso–strike).
-4. **Qué decide el trader**: hasta 2 opciones, cada una con su costo.
-5. **Qué lo cambiaría** y, sólo si cambia la decisión, **qué falta** verificar.
+**Cómo responder (owner, 11/10 y 12/10: «largas y complicadas», «jerga interna»; BL-021).** Esqueleto, en este
+orden y nada más:
+1. **Para qué, en hasta 12 palabras:** la decisión que el trader toma con la respuesta. Si el pedido la dice, nombrala; si
+   no, suponé la más probable («Lo leo como: decidir si…») y seguí sin esperar.
+2. **Veredicto en una línea**, diciendo si es SHADOW o REAL.
+3. **Tabla** de hasta 6 filas con los números que lo sostienen (de GaleCore, con fecha y hora). Lo que el pedido
+   pregunta aparte (p. ej. «qué cambió») va como filas, no como otra sección.
+4. **Gráfico** sólo si aporta (p. ej. barra precio–aviso–strike).
+5. **Qué decidís**: hasta 2 opciones, una línea cada una con su costo.
+6. **Qué lo cambiaría**, en una línea; **qué falta** sólo si cambia la decisión.
+7. Si el para qué fue supuesto, cerrá con una pregunta de una línea con dos opciones concretas, sin repetir el
+   supuesto.
 
-Unas 120 palabras como máximo fuera de las tablas. Sin códigos internos (`VALID_WITH_DECLARED_GAPS`, ids de reglas
+**120 palabras como máximo fuera de las tablas: contalas antes de enviar.** No agregues secciones (pendientes,
+contexto, notas, «además»): si algo importa, es una fila; si no, ofrecelo en media línea («hay 3 pendientes sin
+urgencia, ¿los vemos?»). Lo que se recorta nunca es esto: un límite del perfil superado y un evento de los próximos
+días que toque lo abierto; si existen, van en el veredicto aunque el para qué supuesto sea otro.
+
+**Crítica sin frenar.** Si el pedido no sirve para su para qué (un dato que no cambia la decisión, una ventana que no
+es la del horizonte del perfil, una medida que GaleCore no sostiene con historia suficiente), decilo en una línea,
+respondé igual lo mínimo útil y proponé el pedido mejor con su porqué. Una vez, sin sermón.
+
+Hablale al trader de vos: es el owner y quien decide. Sin códigos internos (`VALID_WITH_DECLARED_GAPS`, ids de reglas
 como E3/R2, nombres de comandos, rutas, commits, estado de ingeniería ni work items): decí qué significan. No
 reabras decisiones ya tomadas ni preguntes lo que ya está decidido. Datos sólo de GaleCore, nunca de la web. El hash
 se muestra sólo cuando el trader tiene que aprobar. El detalle, si lo pide. No cierres con resumen de memoria ni de
@@ -40,12 +55,14 @@ no de suposiciones. Con el mercado cerrado no hay precio «de ahora»: usá el �
 hora, y no intentes refrescarlo. Lo que GaleCore no sirve (ver `[mapa de GaleCore]`) se declara «no está abordado por
 GaleCore» y se registra con `gap add --need "<qué pidió>" --kind data|calc|analysis|cross|action [--why] [--instead]`;
 nunca se suple con la web ni con FMP u otra fuente externa, ni se ofrece refrescar por ahí. Un error de API se
-registra con `--kind api_error`. Respuesta de 120 palabras como máximo fuera de las tablas. No hagas `git commit`: la
+registra con `--kind api_error`. No hagas `git commit`: la
 base de conocimiento la commitea el hook al terminar el turno.
 
 **Estado:** lo que digas del runtime (entradas, instancias, posiciones, estructuras que ejecuta) o de la salud de los
 datos (conectividad, frescura, cobertura para valuar) sale de `state` en esa corrida, con su hora. Una investigación
-o un seguimiento guardado es antecedente, nunca estado; lo que `state` no pudo leer es «sin verificar».
+o un seguimiento guardado es antecedente, nunca estado; lo que `state` no pudo leer es «sin verificar». `state` se
+corre una vez por conversación y es el «estado del día» con su hora; no se repite (ni GEX, paquetes o catálogo ya
+consultados) salvo que el trader pida refrescar con el mercado abierto.
 
 **«¿Dejo abiertas las posiciones antes de <evento>?»** (CPI, FOMC…): correr `supervise exposure [--symbol X] [--event
 <texto>]` y citar sus montos tal cual (con stops / si hay gap / ganancia actual, por posición y sumado). Nunca calcular
