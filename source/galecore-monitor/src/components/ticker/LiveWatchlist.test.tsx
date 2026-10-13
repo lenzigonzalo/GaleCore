@@ -12,10 +12,46 @@ const props={open:true,enabled:true,onClose:jest.fn(),onSelect:jest.fn(),socketS
 beforeEach(()=>{
   jest.clearAllMocks();
   useMarketStore.setState({tickers:{}});
-  useAppConfigStore.setState({tickers:['SPY']});
+  useAppConfigStore.setState({tickers:['SPY'],loading:false,error:null});
   // Universo sintético de prueba, no una lectura financiera real.
   useGexStore.setState({rules:{} as any,tickers:['SPY','AAPL'],rulesLoading:false,rulesError:null,adHocSymbols:[],selectedSymbol:null,adHocSearch:null});
   batch.mockImplementation(async(symbols:string[])=>symbols.map(symbol=>({symbol,last:101,prevClose:100,open:99,bid:100,ask:102,volume:1000})));
+});
+
+test('muestra cotizaciones de plataforma mientras las reglas GEX siguen cargando',async()=>{
+  useGexStore.setState({rules:null,tickers:[],rulesLoading:true,rulesError:null,loadRules:jest.fn(async()=>{})});
+  render(<LiveWatchlist {...props}/>);
+  expect(await screen.findByText('101.00')).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'SPY'})).toBeInTheDocument();
+  expect(screen.queryByText('Cargando tickers…')).not.toBeInTheDocument();
+});
+
+test('reintenta cotizaciones al actualizar y al reabrir el panel',async()=>{
+  batch.mockRejectedValueOnce(new Error('Fallo temporal'));
+  const {rerender}=render(<LiveWatchlist {...props}/>);
+  await waitFor(()=>expect(screen.getAllByText('Sin datos')).toHaveLength(2));
+  fireEvent.click(screen.getByRole('button',{name:'Actualizar cotizaciones'}));
+  await waitFor(()=>expect(screen.getAllByText('101.00')).toHaveLength(2));
+  fireEvent.click(screen.getByRole('button',{name:'Actualizar cotizaciones'}));
+  await waitFor(()=>expect(batch).toHaveBeenCalledTimes(3));
+  rerender(<LiveWatchlist {...props} open={false}/>);
+  rerender(<LiveWatchlist {...props}/>);
+  await waitFor(()=>expect(batch).toHaveBeenCalledTimes(4));
+});
+
+test('una actualización fallida o incompleta identifica el precio anterior y oculta el cambio',async()=>{
+  render(<LiveWatchlist {...props}/>);
+  await waitFor(()=>expect(screen.getAllByText('+1.00%')).toHaveLength(2));
+  batch.mockRejectedValueOnce(new Error('Fallo temporal'));
+  fireEvent.click(screen.getByRole('button',{name:'Actualizar cotizaciones'}));
+  await waitFor(()=>expect(screen.getAllByText('Lectura anterior')).toHaveLength(2));
+  expect(screen.getAllByText('101.00')).toHaveLength(2);
+  expect(screen.queryByText('+1.00%')).not.toBeInTheDocument();
+  batch.mockResolvedValueOnce([{symbol:'SPY',last:103,prevClose:100,open:99,bid:102,ask:104,volume:1000}]);
+  fireEvent.click(screen.getByRole('button',{name:'Actualizar cotizaciones'}));
+  await waitFor(()=>expect(screen.getByText('+3.00%')).toBeInTheDocument());
+  expect(screen.getAllByText('Lectura anterior')).toHaveLength(1);
+  expect(within(screen.getByRole('button',{name:'AAPL'}).closest('tr')!).getByText('101.00')).toBeInTheDocument();
 });
 test('lee cotizaciones por la API existente y retirar/restaurar no altera el universo de reglas',async()=>{
   render(<LiveWatchlist {...props}/>);

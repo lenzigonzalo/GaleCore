@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, RotateCcw, Bookmark, Plus } from 'lucide-react';
+import { X, RotateCcw, Bookmark, Plus, RefreshCw } from 'lucide-react';
 import { TickerGrid } from './TickerGrid';
 import { SymbolSearchCard } from './SymbolSearchCard';
 import { useGexStore } from '../../store/useGexStore';
@@ -16,18 +16,20 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   width?:number; onWidthChange?:(width:number)=>void;
 }) {
   const { tickers, rules, rulesLoading, rulesError, loadRules, adHocSearch, adHocSymbols, pinAdHoc, unpinAdHoc, selectedSymbol, setSelectedSymbol } = useGexStore();
-  const platformTickers = useAppConfigStore(s => s.tickers);
+  const { tickers: platformTickers, loading: platformLoading, error: platformError } = useAppConfigStore();
   const [hidden,setHidden] = useState<string[]>([]);
   const [added,setAdded] = useState<string[]>([]);
   const [searchOpen,setSearchOpen] = useState(false);
   const [message,setMessage] = useState('');
+  const [refreshKey,setRefreshKey] = useState(0);
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{x:number; width:number} | null>(null);
   const resize = (next:number) => onWidthChange?.(Math.max(360, Math.min(720, next)));
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   useEffect(() => { if (enabled && open && !rules && !rulesError) loadRules(); },[enabled,open,rules,rulesError,loadRules]);
-  const symbols = Array.from(new Set([...tickers,...added,...adHocSymbols])).filter(s => !hidden.includes(s));
+  const baseSymbols = Array.from(new Set([...platformTickers,...tickers]));
+  const symbols = Array.from(new Set([...baseSymbols,...added,...adHocSymbols])).filter(s => !hidden.includes(s));
   const extrasKey = symbols.filter(s => !platformTickers.includes(s)).join(',');
   // Un único dueño de suscripciones extra: Gex usa externalWatchlist en este recorrido.
   useEffect(() => {
@@ -51,7 +53,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
     const normalized=symbol.trim().toUpperCase();
     if (!normalized) return;
     // La lista de cotizaciones no limita su tamaño por max_pinned del barrido GEX.
-    if (!tickers.includes(normalized)) setAdded(v => v.includes(normalized) ? v : [...v,normalized]);
+    if (!baseSymbols.includes(normalized)) setAdded(v => v.includes(normalized) ? v : [...v,normalized]);
     setHidden(v => v.filter(s => s !== normalized)); setMessage(''); setSearchOpen(false);
   };
   const select = (symbol:string|null) => {
@@ -71,17 +73,17 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
         onPointerCancel={() => { drag.current=null; }} onLostPointerCapture={() => { drag.current=null; }}
         onDoubleClick={() => resize(420)}
         onKeyDown={e => { if (['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) { e.preventDefault(); resize(e.key==='Home' ? 360 : e.key==='End' ? 720 : width + (e.key==='ArrowLeft' ? 20 : -20)); } }}/>
-      <header><h2 id="lw-title">Watchlist</h2><div>{adHocSearch?.enabled && <button className="lw-close" aria-label="Agregar símbolo a la watchlist" onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button>}<button className="lw-close" data-close aria-label="Cerrar panel de watchlist" onClick={onClose}><X size={21}/></button></div></header>
+      <header><h2 id="lw-title">Watchlist</h2><div><button className="lw-close" aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones" onClick={() => setRefreshKey(v => v + 1)}><RefreshCw size={18}/></button>{adHocSearch?.enabled && <button className="lw-close" aria-label="Agregar símbolo a la watchlist" onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button>}<button className="lw-close" data-close aria-label="Cerrar panel de watchlist" onClick={onClose}><X size={21}/></button></div></header>
       <div className="lw-content">
         {enabled && <>
           {adHocSearch?.enabled && searchOpen && <div className="lw-search"><SymbolSearchCard compact initialOpen minQueryLength={adHocSearch.min_query_length} maxResults={adHocSearch.max_results} instrumentTypes={adHocSearch.allowed_instrument_types} onPick={pick}/></div>}
           {message && <p role="status">{message}</p>}
-          <TickerGrid layout="list" symbols={symbols} selectedSymbol={selectedSymbol}
-            loading={rulesLoading} error={rulesError}
+          <TickerGrid layout="list" active={open && enabled} refreshKey={refreshKey} symbols={symbols} selectedSymbol={selectedSymbol}
+            loading={!symbols.length && platformLoading && rulesLoading} error={!symbols.length ? platformError || rulesError : null}
             onSelect={select}
             sections={[{label:"ETF",symbols:symbols.filter(s => ["SPY","QQQ","IWM","TLT"].includes(s))},{label:"Instrumentos",symbols:symbols.filter(s => !["SPY","QQQ","IWM","TLT"].includes(s))}].filter(g => g.symbols.length > 0)}
             removableSymbols={symbols}
-            onRemoveSymbol={symbol => { setAdded(v => v.filter(s => s !== symbol)); if (adHocSymbols.includes(symbol)) unpinAdHoc(symbol); if (tickers.includes(symbol)) setHidden(v => [...v,symbol]); if (selectedSymbol === symbol) setSelectedSymbol(null); }}
+            onRemoveSymbol={symbol => { setAdded(v => v.filter(s => s !== symbol)); if (adHocSymbols.includes(symbol)) unpinAdHoc(symbol); if (baseSymbols.includes(symbol)) setHidden(v => [...v,symbol]); if (selectedSymbol === symbol) setSelectedSymbol(null); }}
           />
           {hidden.length > 0 && <div className="lw-hidden"><span>Quitados de esta lista</span>{hidden.map(s => <button key={s} onClick={() => setHidden(v => v.filter(x => x !== s))}><RotateCcw size={14}/>{s}</button>)}</div>}
           {rulesError && <button className="btn" onClick={loadRules}>Reintentar lectura</button>}

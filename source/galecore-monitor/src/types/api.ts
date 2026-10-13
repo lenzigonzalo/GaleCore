@@ -384,7 +384,7 @@ export interface MarketDataItem {
   mark: number;
   last: number;       // current price
   open: number;
-  prevClose?: number; // previous session close — use for daily change
+  'prev-close'?: number; // nombre publicado por la API de GaleCore
   volume: number;
   beta: number;
 }

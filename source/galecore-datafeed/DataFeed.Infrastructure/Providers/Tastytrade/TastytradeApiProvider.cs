@@ -36,16 +36,9 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
             response.EnsureSuccessStatusCode();
 
             var content = await response.Content.ReadAsStringAsync();
-            //var result = JsonSerializer.Deserialize<ByTypeModel>(content, new JsonSerializerOptions
-            //{
-            //    PropertyNameCaseInsensitive = true
-            //});
-            var options = new JsonSerializerOptions
-            {
-                NumberHandling = JsonNumberHandling.AllowReadingFromString,
-                PropertyNameCaseInsensitive = true
-            };
-            var result = JsonSerializer.Deserialize<ByTypeModel>(content, options);
+            // ByTypeModel usa JsonProperty de Newtonsoft, incluidos nombres con guiones.
+            // System.Text.Json ignoraba esos nombres y perdía el cierre previo y la fecha.
+            var result = Newtonsoft.Json.JsonConvert.DeserializeObject<ByTypeModel>(content);
             return result;
         }
 

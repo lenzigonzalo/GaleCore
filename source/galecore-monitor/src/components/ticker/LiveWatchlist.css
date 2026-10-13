@@ -24,6 +24,7 @@
 .lw-drawer .ticker-watchlist .watchlist-group td { border-top:1px solid var(--border); border-bottom:0; padding:16px 4px 5px; }
 .watchlist-group button { display:flex; align-items:center; gap:7px; border:0; background:none; color:var(--text-secondary); font:inherit; font-size:12px; text-transform:uppercase; cursor:pointer; }
 .lw-drawer .watchlist-symbol { display:flex; align-items:center; gap:8px; padding:0; }
+.watchlist-price-error { display:block; font-size:12px; font-weight:400; color:var(--yellow-gc); }
 .watchlist-ticker-icon { display:grid; place-items:center; width:22px; height:22px; background:var(--bg-elevated); color:var(--text-secondary); border-radius:50%; font-size:12px; font-weight:500; }
 .lw-drawer .watchlist-action { width:22px; padding:8px 3px!important; }
 .lw-drawer .watchlist-remove { opacity:0; }

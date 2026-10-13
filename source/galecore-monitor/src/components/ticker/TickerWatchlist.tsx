@@ -18,7 +18,7 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
   const renderTicker = (ticker:TickerState) => {
           const hasPrice = Number.isFinite(ticker.price) && ticker.price > 0;
           const hasClose = ticker.prevClose != null && Number.isFinite(ticker.prevClose) && ticker.prevClose > 0;
-          const change = hasPrice && hasClose ? calcChange(ticker.price, ticker.prevClose!) : null;
+          const change = hasPrice && !ticker.error.price && hasClose ? calcChange(ticker.price, ticker.prevClose!) : null;
           const color = change == null || change.abs === 0 ? 'var(--text-secondary)'
             : change.abs > 0 ? 'var(--green)' : 'var(--red-gc)';
           const selected = selectedSymbol === ticker.symbol;
@@ -28,6 +28,7 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
               <th scope="row">
                 <button className="watchlist-symbol" aria-label={ticker.symbol} aria-pressed={selected}
                   onClick={() => onSelect(selected ? null : ticker.symbol)}><span className="watchlist-ticker-icon" aria-hidden="true">{ticker.symbol.slice(0,1)}</span>{ticker.symbol}</button>
+                {hasPrice && ticker.error.price && <span className="watchlist-price-error" role="status" title={ticker.error.price}>Lectura anterior</span>}
               </th>
               <td className="numeric tabular-nums" title={ticker.error.price || undefined}>
                 {hasPrice ? fmtPrice(ticker.price) : ticker.error.price ? 'Sin datos' : ticker.loading.price ? 'Cargando…' : '—'}

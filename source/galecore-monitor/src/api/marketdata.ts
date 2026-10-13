@@ -43,7 +43,7 @@ export async function fetchMarketDataBatch(symbols: string[]): Promise<MarketDat
   return items.map((item) => ({
     symbol:    item.symbol,
     open:      item.open,
-    prevClose: item.prevClose,
+    prevClose: item['prev-close'],
     last:      item.last,
     bid:       item.bid,
     ask:       item.ask,

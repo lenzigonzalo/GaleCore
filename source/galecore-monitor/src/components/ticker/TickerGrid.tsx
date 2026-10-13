@@ -5,6 +5,8 @@ import { useMarketStore } from '../../store/useMarketStore';
 import { fetchMarketDataBatch } from '../../api/marketdata';
 
 interface Props {
+  active?: boolean;
+  refreshKey?: number;
   layout?: 'cards' | 'list';
   sections?: {label:string; symbols:string[]}[];
   selectedSymbol: string | null;
@@ -38,7 +40,7 @@ function applyMarketData(d: { symbol: string; open: number; prevClose?: number; 
 
 export function TickerGrid({
   selectedSymbol, onSelect, symbols, loading, error,
-  trailing, removableSymbols, onRemoveSymbol, sections, layout = 'cards',
+  trailing, removableSymbols, onRemoveSymbol, sections, layout = 'cards', active = true, refreshKey = 0,
 }: Props) {
   // El estado de carga es el de quien pasa el universo — la grilla no lo deriva de ningún store.
   const rulesLoading = loading ?? false;
@@ -47,6 +49,7 @@ export function TickerGrid({
   const { tickers, initTicker, setLoading, setError } = marketStore;
   /** Qué símbolos ya se pidieron. NO es un booleano de "ya cargué": el universo cambia. */
   const loadedRef   = useRef<Set<string>>(new Set());
+  const refreshRef = useRef(refreshKey);
   const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Carga inicial por lote, solo del delta ────────────────────────────────
@@ -54,6 +57,8 @@ export function TickerGrid({
   // posterior entraba y salía sin pedir nada, y sus cards se quedaban en precio 0 hasta que
   // tickeara el socket. Con un universo fijo desde el arranque nunca se notó.
   useEffect(() => {
+    if (!active) { loadedRef.current.clear(); return; }
+    if (refreshRef.current !== refreshKey) { loadedRef.current.clear(); refreshRef.current = refreshKey; }
     // Lo que ya no se muestra sale del registro: si vuelve, su precio se vuelve a pedir en vez
     // de mostrarse el de la vez anterior. Se recorre con forEach y no con spread porque el
     // target del tsconfig es es5, donde iterar un Set exige downlevelIteration.
@@ -73,6 +78,10 @@ export function TickerGrid({
     fetchMarketDataBatch(pending)
       .then((results) => {
         results.forEach(applyMarketData);
+        pending.filter(s => !results.some(d => d.symbol === s && Number.isFinite(d.last) && d.last > 0)).forEach(s => {
+          loadedRef.current.delete(s);
+          setError(s, 'price', 'GaleCore no devolvió una cotización válida para este símbolo.');
+        });
       })
       .catch((e) => {
         // Un símbolo que falló NO queda marcado como cargado: el próximo intento tiene que
@@ -85,10 +94,11 @@ export function TickerGrid({
       .finally(() => {
         pending.forEach((s) => setLoading(s, 'price', false));
       });
-  }, [symbols.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [symbols.join(','), active, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── REST fallback polling (single batch call) ─────────────────────────────
   useEffect(() => {
+    if (!active) return;
     const timer = setTimeout(() => {
       if (!pollRef.current) {
         pollRef.current = setInterval(() => {
@@ -97,8 +107,11 @@ export function TickerGrid({
           fetchMarketDataBatch(noStream)
             .then((results) => {
               results.forEach(applyMarketData);
+              noStream.filter(s => !results.some(d => d.symbol === s && Number.isFinite(d.last) && d.last > 0)).forEach(s => {
+                useMarketStore.getState().setError(s, 'price', 'GaleCore no devolvió una cotización válida para este símbolo.');
+              });
             })
-            .catch(() => {});
+            .catch(e => noStream.forEach(s => useMarketStore.getState().setError(s, 'price', e.message)));
         }, 30000);
       }
     }, 10000);
@@ -106,7 +119,7 @@ export function TickerGrid({
       clearTimeout(timer);
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     };
-  }, [symbols.join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [symbols.join(','), active]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (rulesLoading) {
     return (
