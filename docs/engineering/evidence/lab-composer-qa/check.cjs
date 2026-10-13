@@ -44,6 +44,18 @@ const out = path.resolve('.tmp/lab-composer-qa');
     const compact = await page.locator('.lab-chat-composer').evaluate(el=>({height:el.offsetHeight,width:el.offsetWidth,font:getComputedStyle(el.querySelector('textarea')).fontSize}));
     const availableWidth=await page.locator('.lab-chat-main').evaluate(el=>el.clientWidth);
     assert.ok(compact.height<=100); assert.equal(compact.width,availableWidth-56); assert.equal(compact.font,'16px');
+    const layout=await page.evaluate(()=>({
+      modeBar:document.querySelector('.lab-mode-bar').getBoundingClientRect().height,
+      titleBar:document.querySelector('.lab-chat-header').getBoundingClientRect().height,
+      messageWidth:document.querySelector('.lab-message.assistant').getBoundingClientRect().width,
+      messageFont:getComputedStyle(document.querySelector('.lab-message > div')).fontSize
+    }));
+    assert.ok(layout.modeBar<=52); assert.ok(layout.titleBar<=52); assert.equal(layout.messageWidth,availableWidth-56); assert.equal(layout.messageFont,'18px');
+    const account=page.getByRole('button',{name:'MI CUENTA',exact:true});
+    await account.focus(); await page.keyboard.press('Enter');
+    await page.getByRole('menu').waitFor();
+    assert.ok(await page.getByRole('menu').evaluate(el=>{const box=el.getBoundingClientRect();return box.top>=0&&box.left>=0&&box.right<=innerWidth;}));
+    await page.keyboard.press('Escape'); assert.equal(await page.getByRole('menu').count(),0);
     assert.equal(await page.locator('.lab-message > div').last().evaluate(el=>getComputedStyle(el).fontSize),'18px');
     await page.screenshot({path:path.join(out,'desktop.png')});
     const resize=page.getByRole('separator',{name:'Ancho de proyectos'});
@@ -116,6 +128,9 @@ const out = path.resolve('.tmp/lab-composer-qa');
       await page.setViewportSize({width,height:844});
       await page.waitForFunction(()=>{const el=document.querySelector('textarea');return el.clientHeight>=Math.min(el.scrollHeight,168)-2;});
       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+      await account.click();
+      assert.ok(await page.getByRole('menu').evaluate(el=>{const box=el.getBoundingClientRect();return box.left>=0&&box.right<=innerWidth;}));
+      await page.keyboard.press('Escape');
       const closedHeight=await page.locator('.lab-chat-composer').evaluate(el=>el.offsetHeight);
       await settings.click();
       assert.equal(await page.locator('.lab-chat-composer').evaluate(el=>el.offsetHeight),closedHeight);
@@ -130,7 +145,7 @@ const out = path.resolve('.tmp/lab-composer-qa');
     }
     assert.ok(await textarea.evaluate(el=>el.clientHeight)>wideHeight);
     assert.deepEqual(errors,[]);
-    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({focus,compact,inputFocus,errors,checks:'caja <=100px, tipografía conservada, sidebar arrastre/teclado/persistencia/límites/colapsado, settings sin agrandar caja, autofit, borradores, scroll, 900/390px',scope:'Componente Lab real, API sustituida y red bloqueada; no E2E autenticado.'},null,2));
+    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({focus,compact,layout,inputFocus,errors,checks:'barras <=52px, mensajes y caja al ancho disponible, tipografía conservada, sidebar arrastre/teclado/persistencia/límites/colapsado, settings, autofit, borradores, scroll, 900/390px',scope:'Lab y WorkspaceHeader reales, API sustituida y red bloqueada; no E2E autenticado.'},null,2));
     console.log('PASS: caja compacta, misma letra, sidebar ajustable/persistido, autofit, foco, borradores, scroll, teclado, responsive. Sin escrituras/inferencias.');
   } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});

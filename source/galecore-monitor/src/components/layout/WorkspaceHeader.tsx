@@ -20,7 +20,7 @@ const PAGES: Record<Tab, string> = {
 };
 export function WorkspaceHeader({ status, mode = 'monitor', onModeChange, active, onChange, onLogout, conversationOpen, onConversation, onSymbol }: Props) {
   return <>
-    <div className={'workspace-mode-bar'}>
+    <div className={'workspace-mode-bar' + (mode === 'lab' && ['lab', 'estrategias'].includes(active) ? ' lab-mode-bar' : '')}>
       <span className="workspace-mode-caption"></span>
       <nav className="workspace-mode-switch" aria-label="Espacios de GaleCore">
         {(['monitor', 'operativa', 'lab'] as const).map(id => <button key={id} aria-pressed={mode === id} onClick={() => onModeChange ? onModeChange(id) : onChange(id === 'monitor' ? 'inicio' : id)}>{id === 'monitor' ? 'Monitor' : id === 'operativa' ? 'Operativa' : 'Lab'}</button>)}

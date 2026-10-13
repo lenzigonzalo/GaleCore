@@ -149,3 +149,25 @@ y responsive siguen verdes. Captura `desktop.png` inspeccionada y preview `:3041
 `git diff --check` y `CI=true npm run build`: exit 0. Commit `cecaf9e` integrado en
 `local/integracion`, sin reinicios. Bundle servido HTTP 200 con `wideComposer: true`;
 errores JS `[]`, preview visible. Comprobación de login/bundle, sin E2E autenticado.
+
+## Iteración: conversación ancha y barras compactas (12/10)
+
+Feedback: «Y qué pasó con la letra y el ancho… la barra de arriba que tiene el título ocupa mucho
+espacio… parece que el chat ocupa poco». Se comprobó la causa: caja ancha ya integrada, pero los
+mensajes seguían con columna limitada a 880 px; la preview anterior tampoco incluía la barra
+general Monitor/Operativa/Lab, que ocupa otros 76 px en el monitor real.
+
+Se amplían los mensajes al mismo ancho disponible del chat, con 28 px de margen por lado; letra
+sin cambios (18 px escritorio, 16 px móvil; entrada 16 px). Barra del proyecto de 48 px, título y
+tipo en línea cuando entran; barra general compacta sólo dentro del Lab. Controles y menú de cuenta
+conservados; sin recorte del menú. La preview ahora incluye `WorkspaceHeader` real además de `Lab`.
+
+Aceptación visual: ambas barras <=52 px en escritorio; mensajes y caja igual al ancho del chat
+menos los márgenes; letra conservada; responsive, menú de cuenta y teclado. D-0010, ajuste visual
+acotado sin review adicional. Sin contratos de datos, puente, permisos ni cambios de WS-0029.
+Chromium aislado: exit 0; barra general medida de 50 px, título de 48 px; mensajes y caja de
+1234 px de ancho en viewport 1600 px. Letra de mensajes 18 px y entrada 16 px; caja inicial 92 px
+de alto. Menú de cuenta abierto/cerrado por teclado, contenido dentro de la ventana en escritorio
+y móvil, sin clipping. Borradores, scroll, sidebar y settings siguen verdes; errores JS `[]`.
+Captura completa de escritorio inspeccionada con las dos barras reales. Preview `:3041` regenerada.
+`git diff --check`: exit 0. Build final en curso.
