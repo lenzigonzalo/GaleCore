@@ -37,6 +37,66 @@ class ConfigError(Exception):
     pass
 
 
+def secure_directory(path: Path):
+    """Backups contain original credentials: owner/System only, outside synced repos."""
+    path.mkdir(parents=True, exist_ok=True)
+    if os.name != "nt":
+        path.chmod(0o700)
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    advapi = ctypes.WinDLL("advapi32", use_last_error=True)
+    descriptor = ctypes.c_void_p()
+    advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.c_void_p,
+    ]
+    advapi.GetSecurityDescriptorDacl.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(wintypes.BOOL),
+        ctypes.POINTER(ctypes.c_void_p),
+        ctypes.POINTER(wintypes.BOOL),
+    ]
+    advapi.SetNamedSecurityInfoW.argtypes = [
+        wintypes.LPWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+    ]
+    # Protected DACL: inheritable full access for owner rights and local SYSTEM.
+    if not advapi.ConvertStringSecurityDescriptorToSecurityDescriptorW(
+        "D:P(A;OICI;FA;;;OW)(A;OICI;FA;;;SY)",
+        1,
+        ctypes.byref(descriptor),
+        None,
+    ):
+        raise OSError("Cannot protect backup directory")
+    try:
+        present, defaulted, acl = wintypes.BOOL(), wintypes.BOOL(), ctypes.c_void_p()
+        if not advapi.GetSecurityDescriptorDacl(
+            descriptor,
+            ctypes.byref(present),
+            ctypes.byref(acl),
+            ctypes.byref(defaulted),
+        ):
+            raise OSError("Cannot read backup ACL")
+        result = advapi.SetNamedSecurityInfoW(
+            str(path), 1, 0x80000004, None, None, acl, None
+        )
+        if result:
+            raise OSError("Cannot protect backup directory")
+    finally:
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.LocalFree.argtypes = [ctypes.c_void_p]
+        kernel.LocalFree(descriptor)
+
+
 class Inventory:
     def __init__(self, home: Path, workspace: Path, backups: Path):
         self.home, self.workspace, self.backups = home, workspace.resolve(), backups
@@ -74,7 +134,17 @@ class Inventory:
         project = self.workspace / ".mcp.json"
         local = self.workspace / ".claude/settings.local.json"
         settings = read_json(local)
+        approval = {}
+        for setting_file in (
+            self.home / ".claude/settings.json",
+            self.workspace / ".claude/settings.json",
+            local,
+        ):
+            approval.update(read_json(setting_file))
         for name, spec in read_json(project).get("mcpServers", {}).items():
+            approved = approval.get(
+                "enableAllProjectMcpServers"
+            ) is True or name in approval.get("enabledMcpjsonServers", [])
             sources.append(
                 {
                     "provider": "claude",
@@ -84,7 +154,9 @@ class Inventory:
                     "source": project,
                     "target": local,
                     "spec": spec,
-                    "enabled": name not in settings.get("disabledMcpjsonServers", []),
+                    "enabled": approved
+                    and name not in settings.get("disabledMcpjsonServers", []),
+                    "approvalRequired": not approved,
                     "kind": "project",
                 }
             )
@@ -137,6 +209,7 @@ class Inventory:
                     ),
                     "file": str(row["source"]),
                     "revision": self.revision(row),
+                    "approvalRequired": row.get("approvalRequired", False),
                 }
             )
         return {
@@ -157,6 +230,10 @@ class Inventory:
             if self.revision(row) != revision:
                 raise ConfigError(
                     "La configuración cambió desde otra aplicación. Actualizá antes de guardar."
+                )
+            if row.get("approvalRequired"):
+                raise ConfigError(
+                    "Este MCP necesita aprobacion en Claude antes de habilitarse desde el panel."
                 )
             path = row["target"]
             original = path.read_bytes() if path.exists() else b""
@@ -188,7 +265,7 @@ class Inventory:
                     "utf-8"
                 )
             path.parent.mkdir(parents=True, exist_ok=True)
-            self.backups.mkdir(parents=True, exist_ok=True)
+            secure_directory(self.backups)
             if original:
                 backup = self.backups / (
                     digest(str(path).encode())[:12] + "-" + digest(original) + ".bak"
@@ -211,80 +288,92 @@ class Inventory:
         return self.snapshot()
 
 
-def make_handler(inventory: Inventory, token: str):
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, *_):
-            pass  # URLs/payloads never logged.
+class Handler(BaseHTTPRequestHandler):
+    inventory: Inventory
+    token: str
 
-        def allowed(self):
-            return self.headers.get("Origin") == ORIGIN and self.headers.get(
-                "Host"
-            ) in {"127.0.0.1:8772", "localhost:8772"}
+    def log_message(self, *_):
+        pass  # URLs/payloads never logged.
 
-        def respond(self, code, body):
-            self.send_response(code)
-            if self.allowed():
-                self.send_header("Access-Control-Allow-Origin", ORIGIN)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Cache-Control", "no-store")
-            self.end_headers()
-            self.wfile.write(json.dumps(body).encode())
+    def allowed(self):
+        return self.headers.get("Origin") == ORIGIN and self.headers.get("Host") in {
+            "127.0.0.1:8772",
+            "localhost:8772",
+        }
 
-        def do_OPTIONS(self):
-            if not self.allowed():
-                return self.respond(403, {"error": "Origen no permitido."})
-            self.send_response(204)
+    def respond(self, code, body):
+        self.send_response(code)
+        if self.allowed():
             self.send_header("Access-Control-Allow-Origin", ORIGIN)
-            self.send_header(
-                "Access-Control-Allow-Headers", "Authorization, Content-Type"
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(json.dumps(body).encode())
+
+    def do_OPTIONS(self):
+        if not self.allowed():
+            return self.respond(403, {"error": "Origen no permitido."})
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Origin", ORIGIN)
+        self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST")
+        self.end_headers()
+
+    def dispatch(self):
+        if not self.allowed():
+            return self.respond(
+                403, {"error": "Sólo se acepta el monitor local en 3039."}
             )
-            self.send_header("Access-Control-Allow-Methods", "GET, POST")
-            self.end_headers()
-
-        def dispatch(self):
-            if not self.allowed():
+        if self.command == "GET" and self.path == "/bootstrap":
+            return self.respond(200, {"token": self.token})
+        authorization = self.headers.get("Authorization", "")
+        if not hmac.compare_digest(authorization, "Bearer " + self.token):
+            return self.respond(401, {"error": "Sesión local vencida."})
+        try:
+            if self.command == "GET" and self.path == "/inventory":
+                return self.respond(200, self.inventory.snapshot())
+            if self.command == "POST" and self.path == "/toggle":
+                size = int(self.headers.get("Content-Length", "0"))
+                if not 0 < size <= 4096:
+                    return self.respond(400, {"error": "Pedido inválido."})
+                body = json.loads(self.rfile.read(size))
                 return self.respond(
-                    403, {"error": "Sólo se acepta el monitor local en 3039."}
+                    200,
+                    self.inventory.toggle(
+                        body["id"], body["enabled"], body["revision"]
+                    ),
                 )
-            if self.command == "GET" and self.path == "/bootstrap":
-                return self.respond(200, {"token": token})
-            authorization = self.headers.get("Authorization", "")
-            if not hmac.compare_digest(authorization, "Bearer " + token):
-                return self.respond(401, {"error": "Sesión local vencida."})
-            try:
-                if self.command == "GET" and self.path == "/inventory":
-                    return self.respond(200, inventory.snapshot())
-                if self.command == "POST" and self.path == "/toggle":
-                    size = int(self.headers.get("Content-Length", "0"))
-                    if not 0 < size <= 4096:
-                        return self.respond(400, {"error": "Pedido inválido."})
-                    body = json.loads(self.rfile.read(size))
-                    return self.respond(
-                        200,
-                        inventory.toggle(body["id"], body["enabled"], body["revision"]),
-                    )
-                return self.respond(404, {"error": "Ruta desconocida."})
-            except ConfigError as error:
-                return self.respond(409, {"error": str(error)})
-            except (ValueError, KeyError, TypeError, AttributeError):
-                return self.respond(
-                    400,
-                    {
-                        "error": "Formato de configuración o pedido inválido. No se guardó el cambio."
-                    },
-                )
-            except OSError:
-                return self.respond(
-                    503,
-                    {
-                        "error": "No se pudo acceder a la configuración local. No se guardó el cambio."
-                    },
-                )
+            return self.respond(404, {"error": "Ruta desconocida."})
+        except ConfigError as error:
+            return self.respond(409, {"error": str(error)})
+        except (ValueError, KeyError, TypeError, AttributeError):
+            return self.respond(
+                400,
+                {
+                    "error": "Formato de configuración o pedido inválido. No se guardó el cambio."
+                },
+            )
+        except OSError:
+            return self.respond(
+                503,
+                {
+                    "error": "No se pudo acceder a la configuración local. No se guardó el cambio."
+                },
+            )
 
-        do_GET = dispatch
-        do_POST = dispatch
+    do_GET = dispatch
+    do_POST = dispatch
 
-    return Handler
+
+def make_handler(inventory: Inventory, token: str):
+    return type("LocalMcpHandler", (Handler,), {"inventory": inventory, "token": token})
+
+
+def default_backups() -> Path:
+    return (
+        Path(os.environ.get("LOCALAPPDATA", str(Path.home() / ".local/share")))
+        / "GaleCore/mcp-backups"
+    )
 
 
 def main():
@@ -292,7 +381,9 @@ def main():
     parser.add_argument("--workspace", type=Path, required=True)
     args = parser.parse_args()
     inventory = Inventory(
-        Path.home(), args.workspace, Path(__file__).parent / ".local/mcp-backups"
+        Path.home(),
+        args.workspace,
+        default_backups(),
     )
     server = ThreadingHTTPServer(
         ("127.0.0.1", 8772), make_handler(inventory, secrets.token_urlsafe(32))

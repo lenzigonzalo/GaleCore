@@ -9,7 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import tomlkit
-from local_mcp import ConfigError, Inventory, make_handler
+from local_mcp import ConfigError, Inventory, default_backups, make_handler
 
 
 class InventoryTests(unittest.TestCase):
@@ -48,6 +48,22 @@ class InventoryTests(unittest.TestCase):
         return next(
             r for r in self.inventory.snapshot()["servers"] if r["name"] == name
         )
+
+    def test_default_backups_are_outside_repo(self):
+        repo = Path(__file__).resolve().parent.parent
+        self.assertFalse(default_backups().resolve().is_relative_to(repo))
+
+    def test_global_shared_approval_is_honored(self):
+        (self.workspace / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"shared": {"command": "node"}}})
+        )
+        (self.workspace / ".claude").mkdir()
+        (self.workspace / ".claude/settings.local.json").write_text(
+            json.dumps({"enableAllProjectMcpServers": True})
+        )
+        row = self.row("shared")
+        self.assertTrue(row["enabled"])
+        self.assertFalse(row["approvalRequired"])
 
     def test_snapshot_never_contains_credentials(self):
         rendered = json.dumps(self.inventory.snapshot())
@@ -97,14 +113,29 @@ class InventoryTests(unittest.TestCase):
             json.dumps({"mcpServers": {"shared": {"command": "node"}}})
         )
         original = (self.workspace / ".mcp.json").read_bytes()
+        (self.workspace / ".claude").mkdir()
+        (self.workspace / ".claude/settings.local.json").write_text(
+            json.dumps({"enabledMcpjsonServers": ["shared"]})
+        )
         row = self.row("shared")
         self.inventory.toggle(row["id"], False, row["revision"])
         self.assertEqual(
             json.loads((self.workspace / ".claude/settings.local.json").read_text()),
-            {"disabledMcpjsonServers": ["shared"]},
+            {"disabledMcpjsonServers": ["shared"], "enabledMcpjsonServers": ["shared"]},
         )
         self.assertEqual((self.workspace / ".mcp.json").read_bytes(), original)
         self.assertFalse(self.row("shared")["enabled"])
+
+    def test_unapproved_shared_server_is_not_reported_or_toggled_as_enabled(self):
+        (self.workspace / ".mcp.json").write_text(
+            json.dumps({"mcpServers": {"shared": {"command": "node"}}})
+        )
+        row = self.row("shared")
+        self.assertFalse(row["enabled"])
+        self.assertTrue(row["approvalRequired"])
+        with self.assertRaises(ConfigError):
+            self.inventory.toggle(row["id"], True, row["revision"])
+        self.assertFalse((self.workspace / ".claude/settings.local.json").exists())
 
     def test_concurrent_edit_rejected(self):
         row = self.row("sample")

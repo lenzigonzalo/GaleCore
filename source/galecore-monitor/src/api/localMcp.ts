@@ -1,6 +1,6 @@
 export interface LocalMcpServer {
   id: string; name: string; provider: 'claude' | 'codex'; context: string; scope: string;
-  enabled: boolean; transport: string; file: string; revision: string;
+  enabled: boolean; approvalRequired?: boolean; transport: string; file: string; revision: string;
 }
 export interface LocalMcpInventory { servers: LocalMcpServer[]; workspace: string; status: string }
 export const localMcpAvailable = () => ['localhost', '127.0.0.1'].includes(window.location.hostname);

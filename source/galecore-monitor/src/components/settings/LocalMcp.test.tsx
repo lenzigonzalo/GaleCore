@@ -30,3 +30,13 @@ test('conflict does not falsely change the switch', async () => {
   await screen.findByRole('alert');
   expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
 });
+
+test('unapproved shared server is disabled and cannot be toggled from the panel', async () => {
+  (fetchLocalMcp as jest.Mock).mockResolvedValue({ ...data, servers: [{ ...data.servers[0], provider: 'claude', enabled: false, approvalRequired: true }] });
+  render(<LocalMcp/>);
+  const control = await screen.findByRole('switch');
+  expect(control).toBeDisabled();
+  expect(control).toHaveAttribute('aria-checked', 'false');
+  fireEvent.click(control);
+  expect(toggleLocalMcp).not.toHaveBeenCalled();
+});

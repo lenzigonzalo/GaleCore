@@ -5,8 +5,13 @@
   "observed_output": "Compiled successfully.",
   "artifacts": [
     {
-      "name": "main.ed4624c3.js",
-      "sha256": "f8912cfb5a0dab22c677e8062ad631cd41d371a414c2ef50a4a3db6c21bb69f4"
+      "name": "main.97ae9c29.js",
+      "sha256": "943f2ec67da4306aa59a705a3eb275217b2459cee7ec32f52ba183a0fbd8aa07"
     }
-  ]
+  ],
+  "final_build": {
+    "exit_code": 0,
+    "exec_session": 7430,
+    "log": "build-final.txt"
+  }
 }

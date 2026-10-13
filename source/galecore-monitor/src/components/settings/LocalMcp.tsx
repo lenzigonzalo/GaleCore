@@ -51,7 +51,7 @@ export function LocalMcp() {
     {inventory && !visible.length && <div className="local-mcp-empty"><Plug size={28}/><h2>Sin MCP configurados</h2><p>No hay servidores declarados en los archivos locales de {provider === 'claude' ? 'Claude' : 'Codex'} para este contexto.</p></div>}
     <div className="local-mcp-list">{visible.map(server => <section className="local-mcp-card" key={server.id} aria-label={`MCP ${server.name}`}>
       <div className="local-mcp-card-head"><div><h2>{server.name}</h2><span>{server.transport === 'stdio' ? 'Proceso local' : 'Servidor remoto'} · {server.scope}</span></div>
-        <button className="local-mcp-switch" role="switch" aria-checked={server.enabled} aria-label={`Habilitar ${server.name}`} disabled={busy} onClick={() => toggle(server)}><span/>{server.enabled ? 'Habilitado' : 'Deshabilitado'}</button>
+        <button className="local-mcp-switch" role="switch" aria-checked={server.enabled} aria-label={`Habilitar ${server.name}`} disabled={busy || server.approvalRequired} onClick={() => toggle(server)}><span/>{server.approvalRequired ? 'Pendiente de aprobación en Claude' : server.enabled ? 'Habilitado' : 'Deshabilitado'}</button>
       </div>
       <details><summary>Archivo de configuración</summary><p>{server.file}</p></details>
     </section>)}</div>
