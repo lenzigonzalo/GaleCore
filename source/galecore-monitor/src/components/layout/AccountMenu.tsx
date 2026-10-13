@@ -11,6 +11,7 @@ interface Props {
   onLogout?: () => void;
   /** La pestaña de la cuenta está activa: el botón del menú se marca como las demás pestañas. */
   active?: boolean;
+  docked?: boolean;
 }
 
 const itemStyle: React.CSSProperties = {
@@ -34,7 +35,7 @@ const itemStyle: React.CSSProperties = {
  * pantalla con estado (lee la cuenta vinculada, se vuelve a ella) y la segunda es un formulario de
  * dos campos que se completa y se cierra.
  */
-export function AccountMenu({ onOpenSettings, onLogout, active = false }: Props) {
+export function AccountMenu({ onOpenSettings, onLogout, active = false, docked = false }: Props) {
   const [open, setOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -66,11 +67,12 @@ export function AccountMenu({ onOpenSettings, onLogout, active = false }: Props)
   };
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', height: '100%' }}>
+    <div ref={wrapRef} style={{ position: 'relative', height: docked ? 'auto' : '100%' }}>
       <button
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label="Mi cuenta"
         title={username ? `Sesión de ${username}` : 'Mi cuenta'}
         className="flex items-center gap-1.5 px-3 h-full text-xs uppercase tracking-wider"
         style={{
@@ -84,16 +86,15 @@ export function AccountMenu({ onOpenSettings, onLogout, active = false }: Props)
           whiteSpace: 'nowrap',
         }}
       >
-        <User size={12} />
-        MI CUENTA
-        <ChevronDown size={11} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }} />
+        <User size={docked ? 21 : 12} />
+        {!docked && <>MI CUENTA<ChevronDown size={11} style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 120ms' }} /></>}
       </button>
 
       {open && (
         <div
           role="menu"
           style={{
-            position: 'absolute', top: '100%', right: 0, zIndex: 900, marginTop: 1,
+            position: 'absolute', top: docked ? undefined : '100%', bottom: docked ? 'calc(100% + 8px)' : undefined, right: 0, zIndex: 900, marginTop: 1,
             minWidth: 190, padding: '5px 0',
             backgroundColor: 'var(--bg-secondary)',
             border: '1px solid var(--border)',

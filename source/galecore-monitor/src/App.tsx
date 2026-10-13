@@ -56,9 +56,7 @@ function Dashboard({ onLogout }: DashboardProps) {
     setCurrentTab(lastView.current[next]);
   };
   const isLabWorkspace = mode === 'lab' && ['lab', 'estrategias'].includes(tab);
-  const marketSurface = mode !== 'lab' && ['inicio','monitor','gex','macro'].includes(tab);
   const [watchlistOpen,setWatchlistOpen] = useState(false);
-  useEffect(() => { if (!marketSurface) setWatchlistOpen(false); },[marketSurface]);
   const [settingsInitial] = useState<'usuario' | 'broker'>('usuario');
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
@@ -110,11 +108,11 @@ function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => { setSocketStatus(status); }, [status]);
 
   return (
-    <div className={'workspace-shell flex' + (marketSurface ? ' has-watchlist-dock' : '') + (marketSurface && watchlistOpen ? ' watchlist-expanded' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
+    <div className={'workspace-shell flex has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
       {!isLabWorkspace && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
 
-        <WorkspaceHeader status={mode !== 'lab' ? <StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/> : undefined} mode={mode} onModeChange={changeMode} active={tab} onChange={setTab} onLogout={onLogout}
+        <WorkspaceHeader status={<StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/>} mode={mode} onModeChange={changeMode} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();
             if (!store.rules) { await store.loadRules(); store = useGexStore.getState(); }
@@ -165,7 +163,7 @@ function Dashboard({ onLogout }: DashboardProps) {
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>
-      <LiveWatchlist open={watchlistOpen} enabled={marketSurface} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
+      <LiveWatchlist open={watchlistOpen} enabled onOpenSettings={()=>setTab('config')} onLogout={onLogout} accountActive={tab==='config'} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
       {mode !== 'lab' && <ClaudeTerminal />}
     </div>
   );

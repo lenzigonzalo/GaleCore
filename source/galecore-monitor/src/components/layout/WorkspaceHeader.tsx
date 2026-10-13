@@ -3,7 +3,6 @@ import { MessageSquare } from 'lucide-react';
 import type { Tab } from './TabNav';
 import type { WorkspaceMode } from './WorkspaceNav';
 import { WorkspaceSearch } from './WorkspaceSearch';
-import { AccountMenu } from './AccountMenu';
 
 interface Props {
   status?:React.ReactNode;
@@ -18,14 +17,14 @@ const PAGES: Record<Tab, string> = {
   shadow: 'Seguimiento SHADOW', inteligencia: 'Biblioteca', agentes: 'Agentes y tareas',
   config: 'Configuración', admin: 'Administración',
 };
-export function WorkspaceHeader({ status, mode = 'monitor', onModeChange, active, onChange, onLogout, conversationOpen, onConversation, onSymbol }: Props) {
+export function WorkspaceHeader({ status, mode = 'monitor', onModeChange, active, onChange, conversationOpen, onConversation, onSymbol }: Props) {
   return <>
-    <div className={'workspace-mode-bar' + (mode === 'lab' && ['lab', 'estrategias'].includes(active) ? ' lab-mode-bar' : '')}>
+    <div className="workspace-mode-bar">
       <span className="workspace-mode-caption"></span>
       <nav className="workspace-mode-switch" aria-label="Espacios de GaleCore">
         {(['monitor', 'operativa', 'lab'] as const).map(id => <button key={id} aria-pressed={mode === id} onClick={() => onModeChange ? onModeChange(id) : onChange(id === 'monitor' ? 'inicio' : id)}>{id === 'monitor' ? 'Monitor' : id === 'operativa' ? 'Operativa' : 'Lab'}</button>)}
       </nav>
-      <div className="workspace-account-tools">{status}<AccountMenu onOpenSettings={() => onChange('config')} onLogout={onLogout} active={active === 'config'} /></div>
+      <div className="workspace-account-tools">{status}</div>
     </div>
     {!(mode === 'lab' && ['lab', 'estrategias'].includes(active)) && <header className="workspace-heading">
       <div><h1>{PAGES[active]}</h1></div>

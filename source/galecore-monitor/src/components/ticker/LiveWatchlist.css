@@ -1,8 +1,11 @@
 .workspace-shell.has-watchlist-dock { padding-right:48px; transition:padding-right 160ms ease; }
 .workspace-shell.has-watchlist-dock.watchlist-expanded { padding-right:468px; }
 .lw-tools { position:fixed; right:0; top:0; bottom:0; width:48px; z-index:61; background:var(--bg-secondary); border-left:1px solid var(--border); padding:12px 5px; }
-.lw-tools button { display:grid; place-items:center; width:37px; height:40px; border:1px solid transparent; border-radius:5px; background:none; color:var(--text-secondary); cursor:pointer; }
+.lw-tools > button,.lw-account > div > button { display:grid; place-items:center; width:37px; height:40px; border:1px solid transparent; border-radius:5px; background:none; color:var(--text-secondary); cursor:pointer; }
 .lw-tools button.active { background:var(--bg-hover); border-color:var(--border-light); color:var(--text-primary); }
+.lw-account { position:absolute; bottom:12px; right:5px; }
+.lw-account > div > button { padding:0; }
+.lw-account [role="menu"] button { display:flex; width:100%; height:auto; justify-content:flex-start; }
 .lw-drawer { position:fixed; inset:0 48px 0 auto; z-index:60; width:420px; height:100dvh; display:flex; flex-direction:column; background:var(--bg-primary); color:var(--text-primary); border-left:1px solid var(--border); font-size:15px; }
 .lw-drawer[hidden] { display:none; }
 .lw-drawer > header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); flex-shrink:0; height:64px; }

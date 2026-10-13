@@ -184,7 +184,7 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
       }}/>}
     <section className="lab-chat-main">
       <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button>{project?.type==='strategy'&&<button aria-current={view==='design'?'page':undefined} onClick={()=>setView('design')}>Diseño</button>}<button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav><button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Files</button></header>
-      {view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={text=>{const next=[draft,text].filter(Boolean).join('\n\n');if(text&&next.length>12000){setError('El borrador ya ocupa casi todo el espacio. Acortalo antes de incorporar la consulta de la ficha.');}else{setError('');if(text)setDrafts(v=>({...v,[draftKey]:next}));}setView('chat');requestAnimationFrame(()=>composer.current?.focus());}} onMonitor={onMonitor}/> : <>
+      {view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <>
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;
         const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;

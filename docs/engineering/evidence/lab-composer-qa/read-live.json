@@ -1,0 +1,12 @@
+{
+  "http": 200,
+  "timings_ms": [
+    1191,
+    27,
+    33
+  ],
+  "ref": "strategy:iwm_prima_condor_30_45d/1.0.0",
+  "parameters": 12,
+  "management": 6,
+  "scope": "Authenticated local bridge GET, verified files; no model or market request; not authenticated monitor E2E"
+}

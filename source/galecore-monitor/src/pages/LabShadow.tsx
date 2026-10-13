@@ -10,7 +10,7 @@ const usd=(n:number|null)=>n===null?'—':(n<0?'−':'')+'$'+Math.abs(n).toLocal
 const readError=(error:unknown,part:string)=>error instanceof Error && /timeout|aborted/i.test(error.message)
   ? `${part} tardó demasiado en responder. No pudimos comprobar su estado; reintentá la lectura.`
   : error instanceof Error ? error.message : `No se pudo leer ${part.toLowerCase()}.`;
-export function LabShadow({project,onChat,onMonitor,mode='shadow'}:{project?:WorkspaceProject;onChat:(text?:string)=>void;onMonitor:()=>void;mode?:'design'|'shadow'}) {
+export function LabShadow({project,onChat,onMonitor,mode='shadow'}:{project?:WorkspaceProject;onChat:()=>void;onMonitor:()=>void;mode?:'design'|'shadow'}) {
   const [strategy,setStrategy]=useState<StrategyView|null>(null);
   const [metrics,setMetrics]=useState<SpecVersionMetrics[]>([]);
   const [instances,setInstances]=useState<ShadowInstance[]>([]);
@@ -18,7 +18,7 @@ export function LabShadow({project,onChat,onMonitor,mode='shadow'}:{project?:Wor
   const [runtimeError,setRuntimeError]=useState('');const [runtimeLoading,setRuntimeLoading]=useState(false);
   useEffect(()=>{
     if(project?.type!=='strategy')return;let active=true;setLoading(true);setRuntimeLoading(true);setStrategy(null);setMetrics([]);setInstances([]);setError('');setRuntimeError('');
-    labRequest<StrategyView>('/workspaces/'+project.id+'/strategy', undefined, 65000).then(s=>{
+    labRequest<StrategyView>('/workspaces/'+project.id+'/strategy'+(mode==='design'?'?view=design':''), undefined, 65000).then(s=>{
       if(!active)return;if(s.integrity_failed?.length)throw new Error('El harness detectó un problema de integridad en este proyecto.');setStrategy(s);
     }).catch(e=>{if(active)setError(readError(e,'La estrategia'));}).finally(()=>{if(active)setLoading(false);});
     if(mode==='shadow') Promise.all([fetchShadowMetrics(),fetchShadowStatus()]).then(([m,status])=>{
@@ -28,7 +28,7 @@ export function LabShadow({project,onChat,onMonitor,mode='shadow'}:{project?:Wor
   },[project?.id,project?.type,project?.strategyName,retry,mode]);
   if(project?.type!=='strategy')return <div className="lab-shadow-empty"><FlaskConical size={30}/><h2>Shadow para tus estrategias</h2><p>Elegí un proyecto de estrategia para ver su preparación y sus ejecuciones.</p><button className="main-link" onClick={()=>onChat()}>Volver al chat</button></div>;
   const approved=!!strategy?.current?.approved;
-  if(mode==='design') return <div className="lab-shadow-view"><header><div><span className="lab-eyebrow">ESTRATEGIA · DISEÑO</span><h1>La estrategia que estamos armando</h1>{strategy?.current?.purpose&&<p>{strategy.current.purpose}</p>}</div><button className="lab-icon" aria-label="Actualizar diseño" onClick={()=>setRetry(v=>v+1)}><RefreshCw size={18}/></button></header>{loading?<p role="status">Leyendo estrategia…</p>:error?<div className="lab-chat-error" role="alert">{error}<button onClick={()=>setRetry(v=>v+1)}>Reintentar lectura</button></div>:<LabStrategySheet strategy={strategy} onChat={onChat}/>}</div>;
+  if(mode==='design') return <div className="lab-shadow-view lab-design-view"><header><div><span className="lab-eyebrow">DISEÑO GUARDADO</span><h1>{strategy?.current?.display_name || 'Definición de la estrategia'}</h1></div><button className="lab-icon" aria-label="Actualizar diseño" onClick={()=>setRetry(v=>v+1)}><RefreshCw size={18}/></button></header>{loading?<p role="status">Leyendo archivos del diseño…</p>:error?<div className="lab-chat-error" role="alert">{error}<button onClick={()=>setRetry(v=>v+1)}>Reintentar lectura</button></div>:<LabStrategySheet strategy={strategy}/>}</div>;
   return <div className="lab-shadow-view"><header><div><span className="lab-eyebrow">SHADOW · SIMULACIÓN</span><h1>Preparación y ejecución</h1>{strategy?.current?.purpose&&<p>{strategy.current.purpose}</p>}</div><button className="lab-icon" aria-label="Actualizar Shadow" onClick={()=>setRetry(v=>v+1)}><RefreshCw size={18}/></button></header>
     {loading?<p role="status">Leyendo estrategia…</p>:error?<div className="lab-chat-error" role="alert">{error}<button onClick={()=>setRetry(v=>v+1)}>Reintentar lectura</button></div>:<>
       <ol className="lab-strategy-path">{[{label:'Workspace',done:true},{label:'Propuesta',done:!!strategy?.current},{label:'Aprobación',done:approved},{label:runtimeLoading||runtimeError?'SHADOW sin comprobar':'En Shadow',done:!!hash(strategy?.current?.spec_hash)&&instances.some(i=>i.lifecycleState==='RUNNING'&&hash(i.versionHash)===hash(strategy?.current?.spec_hash))}].map((s,i)=><li key={i} className={s.done?'done':''}><span>{s.done?<Check size={15}/>:i+1}</span>{s.label}</li>)}</ol>

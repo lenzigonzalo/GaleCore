@@ -6,11 +6,13 @@ import { useGexStore } from '../../store/useGexStore';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import type { ConnectionStatus } from '../../socket/useMarketSocket';
 import './LiveWatchlist.css';
+import { AccountMenu } from '../layout/AccountMenu';
 
 /** Lista real del universo existente. Quitar un ticker del JSON sólo oculta su fila en esta sesión. */
-export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, socketStatus, subscribeSymbol, unsubscribeSymbol }: {
+export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, socketStatus, subscribeSymbol, unsubscribeSymbol, onOpenSettings, onLogout, accountActive }: {
   open:boolean; enabled:boolean; onClose:()=>void; onToggle?:()=>void; onSelect:()=>void; socketStatus:ConnectionStatus;
   subscribeSymbol:(symbol:string)=>void; unsubscribeSymbol:(symbol:string)=>void;
+  onOpenSettings?:()=>void; onLogout?:()=>void; accountActive?:boolean;
 }) {
   const { tickers, rules, rulesLoading, rulesError, loadRules, adHocSearch, adHocSymbols, pinAdHoc, unpinAdHoc, selectedSymbol, setSelectedSymbol } = useGexStore();
   const platformTickers = useAppConfigStore(s => s.tickers);
@@ -19,7 +21,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   const [searchOpen,setSearchOpen] = useState(false);
   const [message,setMessage] = useState('');
   const panel = useRef<HTMLElement>(null);
-  useEffect(() => { if (enabled && !rules && !rulesError) loadRules(); },[enabled,rules,rulesError,loadRules]);
+  useEffect(() => { if (enabled && open && !rules && !rulesError) loadRules(); },[enabled,open,rules,rulesError,loadRules]);
   const symbols = Array.from(new Set([...tickers,...added,...adHocSymbols])).filter(s => !hidden.includes(s));
   const extrasKey = symbols.filter(s => !platformTickers.includes(s)).join(',');
   // Un único dueño de suscripciones extra: Gex usa externalWatchlist en este recorrido.
@@ -54,7 +56,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
     if (pinned) {setSelectedSymbol(pinned);setMessage('');onSelect();}
   };
   return <>
-    {enabled && <nav className="lw-tools" aria-label="Paneles de mercado"><button aria-label="Abrir watchlist" aria-expanded={open} aria-controls="lw-panel" className={open ? "active" : ""} onClick={onToggle ?? onClose}><Bookmark size={23}/></button></nav>}
+    {enabled && <nav className="lw-tools" aria-label="Paneles de mercado"><button aria-label="Abrir watchlist" aria-expanded={open} aria-controls="lw-panel" className={open ? "active" : ""} onClick={onToggle ?? onClose}><Bookmark size={23}/></button>{onOpenSettings&&<div className="lw-account"><AccountMenu docked onOpenSettings={onOpenSettings} onLogout={onLogout} active={accountActive}/></div>}</nav>}
     <aside id="lw-panel" ref={panel} className="lw-drawer" aria-labelledby="lw-title" hidden={!open || !enabled}>
       <header><h2 id="lw-title">Watchlist</h2><div>{adHocSearch?.enabled && <button className="lw-close" aria-label="Agregar símbolo a la watchlist" onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button>}<button className="lw-close" data-close aria-label="Cerrar panel de watchlist" onClick={onClose}><X size={21}/></button></div></header>
       <div className="lw-content">
