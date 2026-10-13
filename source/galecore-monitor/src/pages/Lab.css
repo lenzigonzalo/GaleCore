@@ -141,13 +141,13 @@
 .lab-project-title strong { font-size: 20px; font-weight: 600; }
 .lab-project-title > span { font-size: 14px; }
 .lab-chat-header nav button, .lab-files-button { font-size: 15px; }
-.lab-messages { padding: 20px 28px; }
+.lab-messages { padding: 20px max(28px, calc((100% - 1024px) / 2)); }
 .lab-message { line-height: 1.7; }
 .lab-message > div { font-size: 18px; }
 .lab-message > span { font-size: 14px; }
 .lab-message.user { max-width: 80%; }
 .lab-chat-welcome h1 { font-size: clamp(28px, 3vw, 40px); }
-.lab-chat-composer { position:relative; max-width: none; width: calc(100% - 56px); padding: 12px 14px; border-radius: 14px; }
+.lab-chat-composer { position:relative; max-width: 960px; width: calc(100% - 56px); padding: 12px 14px; border-radius: 14px; }
 .lab-chat-composer select { font-size: 15px; }
 .lab-chat-composer small { font-size: 13px; }
 .lab-chat-composer .lab-composer-hint { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }

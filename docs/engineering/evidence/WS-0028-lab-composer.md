@@ -173,3 +173,19 @@ Captura completa de escritorio inspeccionada con las dos barras reales. Preview 
 `git diff --check` y `CI=true npm run build`: exit 0. Commit `0fd1c4e` integrado en
 `local/integracion`. Monitor servido: HTTP 200, `wideMessages: true`, `compactHeader: true`,
 errores JS `[]`; preview accesible. Sin reinicios, push ni E2E autenticado. WS-0029 sigue activo.
+
+## Iteración: composición centrada similar a ChatGPT web (12/10)
+
+Feedback: el owner prefiere bastante ancho y espacio vertical, pero no ocupar TODO el ancho;
+caja un poco más angosta, similar a ChatGPT web. Conversación centrada con máximo de 1024 px
+y compositor de 960 px; ambos se adaptan al espacio disponible. Se mantienen letra, barras
+compactas y alto flexible del historial; caja baja con crecimiento por contenido. Referencia de
+composición, sin afirmar equivalencia exacta con las medidas o funcionamiento de ChatGPT.
+
+Ajuste sólo de dos valores CSS. D-0010: preview compilada con PostCSS/Tailwind y comprobación
+visual/responsive, sin repetir el build completo ni pedir review en cada iteración de espaciado.
+Chromium aislado: exit 0; conversación de 1024 px, caja de 960 × 92 px en viewport 1600 px,
+centrada y con márgenes simétricos. Letras y barras compactas conservadas; foco, borradores,
+scroll, ancho lateral, settings, menú de cuenta y responsive 900/390 px siguen verdes, errores JS `[]`.
+Captura completa de escritorio inspeccionada. Preview `:3041` regenerada; pendiente de registrar
+la integración y comprobación del bundle servido. Sin E2E autenticado.
