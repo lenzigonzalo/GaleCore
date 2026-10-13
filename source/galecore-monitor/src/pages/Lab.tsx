@@ -18,7 +18,7 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
   const [chat, setChat] = useState<WorkspaceChat | null>(null);
   const [provider, setProvider] = useState<'codex' | 'claude'>('codex');
   const [chatSettings, setChatSettings] = useState({ model: '', effort: '' });
-  const [view, setView] = useState<'chat' | 'shadow'>('chat');
+  const [view, setView] = useState<'chat' | 'design' | 'shadow'>('chat');
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
@@ -183,8 +183,8 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
         resizeSidebar(e.key === 'Home' ? 200 : e.key === 'End' ? 480 : sidebarWidth + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 40 : 10));
       }}/>}
     <section className="lab-chat-main">
-      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button><button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav><button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Files</button></header>
-      {view==='shadow' ? <LabShadow project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <>
+      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button>{project?.type==='strategy'&&<button aria-current={view==='design'?'page':undefined} onClick={()=>setView('design')}>Diseño</button>}<button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav><button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Files</button></header>
+      {view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={text=>{const next=[draft,text].filter(Boolean).join('\n\n');if(text&&next.length>12000){setError('El borrador ya ocupa casi todo el espacio. Acortalo antes de incorporar la consulta de la ficha.');}else{setError('');if(text)setDrafts(v=>({...v,[draftKey]:next}));}setView('chat');requestAnimationFrame(()=>composer.current?.focus());}} onMonitor={onMonitor}/> : <>
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;
         const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;

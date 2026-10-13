@@ -131,6 +131,26 @@
 .sidebar-collapsed .lab-sidebar-brand::before { content: "GC"; font-size: 18px; }
 
 /* Lectura cómoda: conversación centrada y compositor compacto, nombres editables. */
+.lab-strategy-sheet { max-width:1024px; margin:0 auto; line-height:1.65; }
+.lab-design-source { display:flex; flex-wrap:wrap; gap:8px 18px; padding:16px 0 24px; border-bottom:1px solid var(--border); }
+.lab-design-source small { width:100%; overflow-wrap:anywhere; color:var(--text-muted); }
+.lab-design-source p { width:100%; color:var(--text-secondary); }
+.lab-design-section { padding:24px 0; border-bottom:1px solid var(--border); min-width:0; }
+.lab-design-section > header { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px; }
+.lab-design-section h2 { font-size:20px; font-weight:600; margin-bottom:12px; }
+.lab-design-section h3 { font-size:16px; font-weight:600; margin:16px 0 8px; }
+.lab-design-section article { padding:16px; margin:12px 0; background:var(--bg-secondary); border:1px solid var(--border); border-radius:12px; overflow-wrap:anywhere; }
+.lab-design-section article p { margin:10px 0; font-size:17px; }
+.lab-design-section article small { display:block; color:var(--text-secondary); margin-bottom:10px; }
+.lab-rule-meta { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; font-size:13px; color:var(--text-secondary); }
+.lab-design-rules { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 28px; }
+.lab-design-missing { color:var(--text-muted); }
+.lab-design-hypothesis { display:grid; gap:14px; margin:14px 0; }
+.lab-design-hypothesis dt { font-size:13px; color:var(--text-secondary); }
+.lab-design-hypothesis dd { font-size:17px; margin:4px 0 0; overflow-wrap:anywhere; }
+.lab-design-section ul { list-style:disc; padding-left:22px; }
+.lab-design-section li { margin:8px 0; overflow-wrap:anywhere; }
+@media(max-width:1100px) { .lab-design-rules { grid-template-columns:1fr; } }
 .lab-chat-workspace { font-size: 16px; grid-template-columns: var(--lab-sidebar-width,310px) minmax(0, 1fr); }
 .lab-chat-workspace.sidebar-collapsed { grid-template-columns: 64px minmax(0, 1fr); }
 .lab-project-select { font-size: 16px; }
