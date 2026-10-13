@@ -927,3 +927,24 @@ def test_diff_compares_two_versions_of_one_strategy(kb, research_ref):  # noqa: 
     code, out = _cli("strategy", "diff", "--from", f"strategy:{KEY}", "--ref", f"strategy:{NAME}/1.0.4",
                      env={KNOWLEDGE_DIR_ENV: str(kb.base)})
     assert code == 0 and out["change"]["reason"] == "más posiciones" and out["spec"]
+
+
+def test_approval_in_plain_words_uses_the_stored_hash(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    approval, _ = approve(kb=kb, key=KEY, owner_words="Sí, activala", host=HOST, now=NOW)
+    assert approval.spec_hash == doc.spec_hash
+
+
+def test_install_spec_needs_approval_and_copies_the_exact_bytes(kb, research_ref, tmp_path):  # noqa: F811
+    from galecore_ai.application.strategy import install_spec
+    doc, _ = stored(kb, research_ref)
+    with pytest.raises(KnowledgeError, match="owner approves first"):
+        install_spec(kb=kb, key=KEY, target_dir=tmp_path)
+    approve(kb=kb, key=KEY, owner_words="Sí, activala", host=HOST, now=NOW)
+    out = install_spec(kb=kb, key=KEY, target_dir=tmp_path)
+    assert (tmp_path / doc.spec_file).read_bytes() == doc.spec_json.encode("utf-8")
+    assert out["status"] == "INSTALLED"
+    install_spec(kb=kb, key=KEY, target_dir=tmp_path)  # same content: idempotent
+    (tmp_path / doc.spec_file).write_text("{}", encoding="utf-8")
+    with pytest.raises(KnowledgeError, match="not overwritten"):
+        install_spec(kb=kb, key=KEY, target_dir=tmp_path)

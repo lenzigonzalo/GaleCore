@@ -21,11 +21,12 @@ Usage:
     python -m galecore_ai.adapters.cli sources declare --source ID --state available|denied|limited|down         --note "..." --observed-at ISO8601 --host-model MODEL [--category CAT] [--evidence REF]
     python -m galecore_ai.adapters.cli strategy check --spec PATH < proposal.json
     python -m galecore_ai.adapters.cli strategy save --spec PATH --prompt "..." < request.json
-    python -m galecore_ai.adapters.cli strategy approve --ref strategy:NAME/VERSION --spec-hash sha256:...         --owner-words "..." --host-model MODEL
+    python -m galecore_ai.adapters.cli strategy approve --ref strategy:NAME/VERSION [--spec-hash sha256:...]         --owner-words "..." --host-model MODEL
+    python -m galecore_ai.adapters.cli strategy install-spec --ref strategy:NAME/VERSION
     python -m galecore_ai.adapters.cli strategy critique --ref strategy:NAME/VERSION < critique.json
     python -m galecore_ai.adapters.cli strategy sheet --ref strategy:NAME/VERSION
     python -m galecore_ai.adapters.cli strategy diff --from strategy:NAME/OLD --ref strategy:NAME/NEW
-    python -m galecore_ai.adapters.cli strategy deploy-check --ref strategy:NAME/VERSION --galecore-hash sha256:...
+    python -m galecore_ai.adapters.cli strategy deploy-check --ref strategy:NAME/VERSION [--galecore-hash sha256:...]
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
@@ -123,6 +124,7 @@ from galecore_ai.application.strategy import (
     check_proposal,
     deploy_check,
     galecore_spec_hash,
+    load_proposal,
     save_proposal,
     strategy_key,
 )
@@ -1140,6 +1142,15 @@ def _read_proposal_request() -> tuple[ProposalContent, RecordHost]:
     return content, RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model"))
 
 
+def _runtime_specs_dir() -> Path:
+    """Where GaleCore Dev loads specs from: ``GALECORE_RUNTIME_SPECS_DIR`` or the sibling GaleCore checkout."""
+    configured = os.environ.get("GALECORE_RUNTIME_SPECS_DIR")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return (Path(__file__).resolve().parents[4] / "GaleCore" / "source" / "galecore-datafeed" / "DataFeed.Api"
+            / "Files" / "Runtime")
+
+
 async def _cmd_strategy(args: argparse.Namespace) -> None:
     if args.strategy_command == "hash":
         text, name = _read_spec(args.spec)
@@ -1169,6 +1180,9 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
             _json_out({"status": "APPROVED", "ref": approval.strategy_ref, "path": path,
                        "spec_hash": approval.spec_hash, "scope": approval.scope,
                        "content_hash": approval.content_hash})
+        if args.strategy_command == "install-spec":
+            from galecore_ai.application.strategy import install_spec
+            _json_out(install_spec(kb=kb, key=key, target_dir=_runtime_specs_dir()))
         if args.strategy_command == "critique":
             from galecore_ai.application.strategy import critique as strategy_critique
             from galecore_ai.contracts.strategy import CritiqueContent
@@ -1198,7 +1212,16 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
             from galecore_ai.application.strategy_sheet import diff
             _json_out(diff(kb, strategy_key(args.from_ref), key))
         if args.strategy_command == "deploy-check":
-            _json_out(deploy_check(kb=kb, key=key, galecore_hash=args.galecore_hash))
+            galecore_hash = args.galecore_hash
+            if galecore_hash is None:
+                from galecore_ai.application import supervisor
+                spec_name = Path(load_proposal(kb, key).spec_file).stem
+                listed = supervisor.api_reader()("/App/Runtime/Specs")
+                galecore_hash = next((x.get("contentHash") for x in listed if x.get("name") == spec_name), None)
+                if galecore_hash is None:
+                    raise KnowledgeError(f"GaleCore Dev does not list {spec_name} yet (it loads specs at start: "
+                                         "restart the Dev API)")
+            _json_out(deploy_check(kb=kb, key=key, galecore_hash=galecore_hash))
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
 
@@ -1598,11 +1621,14 @@ def build_parser() -> _JsonArgumentParser:
     p_st_save.add_argument("--prompt", required=True, help="What the user asked")
     p_st_approve = st_sub.add_parser("approve", help="Record the owner's approval of an exact version and hash")
     p_st_approve.add_argument("--ref", required=True, help="strategy:<name>/<version>")
-    p_st_approve.add_argument("--spec-hash", dest="spec_hash", required=True, help="the hash the owner approved")
+    p_st_approve.add_argument("--spec-hash", dest="spec_hash", default=None,
+                              help="optional: the owner's yes to the named version is enough; if given, it must match")
     p_st_approve.add_argument("--owner-words", dest="owner_words", required=True,
                               help="the owner's approval, verbatim")
     p_st_approve.add_argument("--host-provider", dest="host_provider", default="claude-code")
     p_st_approve.add_argument("--host-model", dest="host_model", required=True)
+    p_st_inst = st_sub.add_parser("install-spec", help="Copy the approved spec into GaleCore Dev's Files/Runtime")
+    p_st_inst.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_crit = st_sub.add_parser("critique", help="Record the critique of an exact version (stdin; one per version)")
     p_st_crit.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_ctl = st_sub.add_parser("controls", help="Which rules the runtime executes, the supervisor watches (alerts) or "
@@ -1617,8 +1643,8 @@ def build_parser() -> _JsonArgumentParser:
     p_st_diff.add_argument("--ref", required=True, help="strategy:<name>/<newer version>")
     p_st_deploy = st_sub.add_parser("deploy-check", help="Allow a deploy only with an approval of GaleCore's hash")
     p_st_deploy.add_argument("--ref", required=True, help="strategy:<name>/<version>")
-    p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", required=True,
-                             help="contentHash that App/Runtime/Specs/<name> reports")
+    p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", default=None,
+                             help="contentHash that App/Runtime/Specs/<name> reports (default: asked to GaleCore)")
 
     p_evidence = sub.add_parser("evidence", help="Keep a source response with its provenance (content on stdin)")
     ev_sub = p_evidence.add_subparsers(dest="evidence_command", required=True)

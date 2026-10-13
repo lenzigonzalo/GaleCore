@@ -46,7 +46,7 @@ respondé igual lo mínimo útil y proponé el pedido mejor con su porqué. Una 
 Hablale al trader de vos: es el owner y quien decide. Sin códigos internos (`VALID_WITH_DECLARED_GAPS`, ids de reglas
 como E3/R2, nombres de comandos, rutas, commits, estado de ingeniería ni work items): decí qué significan. No
 reabras decisiones ya tomadas ni preguntes lo que ya está decidido. Datos sólo de GaleCore, nunca de la web. El hash
-se muestra sólo cuando el trader tiene que aprobar. El detalle, si lo pide. No cierres con resumen de memoria ni de
+no se muestra ni se pide: queda por detrás. El detalle, si lo pide. No cierres con resumen de memoria ni de
 commits. La forma de cada tipo de pedido (cómo viene X, antes de un evento, prender/pausar, analizar un aviso,
 retomar) va en su skill.
 
@@ -77,8 +77,13 @@ sube a GitHub).
 
 - Nunca se inventan, reescalan ni redondean números de GaleCore; el payload aceptado es el límite del éxito y no se
   reformula.
-- Una estrategia llega a SHADOW sólo con la aprobación del owner sobre el hash exacto, y sólo en GaleCore Dev. Nada
+- Una estrategia llega a SHADOW sólo con la aprobación del owner sobre una versión exacta, y sólo en GaleCore Dev. Nada
   envía órdenes reales ni toca producción.
+- **Aprobar, en palabras del trader:** preguntá «¿Activás <nombre> <versión> en SHADOW (simulado, sin dinero real)? sí / no»,
+  con la ficha (`strategy sheet`) y los controles a la vista. Con su «sí» textual: `strategy approve --ref <ref>
+  --owner-words "<su sí>"` (sin hash: el comando usa el de esa versión), luego `strategy install-spec --ref <ref>` (copia la
+  spec aprobada a GaleCore Dev; no la escribas a mano en ninguna carpeta) y `strategy deploy-check --ref <ref>` (le pregunta a GaleCore su hash; si todavía no la lista, decí «GaleCore Dev aún no la cargó» y no la des por desplegada). No pidas ni muestres
+  el hash; un «sí» ambiguo o a otra versión no es aprobación.
 - Ante «¿la activo / apruebo / espero?» de una versión sin aprobar: correr `strategy controls --ref <ref>` y `capital`,
   y decir primero `recomendar_aprobacion` con su `motivo` y cualquier límite de cartera fuera. Nunca proponer aprobar
   «si el crédito alcanza» cuando los controles no lo recomiendan: aprobar igual es decisión del owner, sabiéndolo.

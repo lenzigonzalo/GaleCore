@@ -22,6 +22,7 @@ import json
 import math
 import re
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from galecore_ai.adapters.strategy_store import (
@@ -551,10 +552,12 @@ def load_proposal(kb: KnowledgeBase, key: str) -> StrategyDocument:
     return doc
 
 
-def approve(*, kb: KnowledgeBase, key: str, spec_hash: str, owner_words: str, host: RecordHost,
+def approve(*, kb: KnowledgeBase, key: str, spec_hash: str | None = None, owner_words: str, host: RecordHost,
             now: datetime | None = None) -> tuple[ApprovalDocument, str]:
-    """Record the owner's approval of exactly this version and hash. The hash must be retyped, not implied."""
+    """Record the owner's approval of exactly this version. The owner says yes to the named version in plain words;
+    the hash is the stored one (an explicit ``spec_hash`` must still match it)."""
     doc = load_proposal(kb, key)
+    spec_hash = spec_hash or doc.spec_hash
     if spec_hash != doc.spec_hash:
         raise KnowledgeError(f"strategy:{key}: the approved hash {spec_hash} is not this version's {doc.spec_hash}")
     if doc.check.verdict == "INVALID":
@@ -578,6 +581,26 @@ def approve(*, kb: KnowledgeBase, key: str, spec_hash: str, owner_words: str, ho
     except StrategyStoreError as exc:
         raise KnowledgeError(str(exc)) from exc
     return approval, str(path)
+
+
+def install_spec(*, kb: KnowledgeBase, key: str, target_dir: Path) -> dict:
+    """Copy the approved spec, byte for byte, where GaleCore loads it from (only with an intact approval)."""
+    doc = load_proposal(kb, key)
+    try:
+        approval = kb.strategies.load_approval(key)
+    except (StrategyStoreError, StrategyIntegrityError) as exc:
+        raise KnowledgeError(f"strategy:{key}: approval not usable ({exc})") from exc
+    if approval is None or approval.spec_hash != doc.spec_hash:
+        raise KnowledgeError(f"strategy:{key}: no approval of this version's spec; the owner approves first")
+    if galecore_spec_hash(doc.spec_json) != doc.spec_hash:
+        raise KnowledgeError(f"strategy:{key}: the stored spec does not hash to its recorded hash")
+    if not target_dir.is_dir():
+        raise KnowledgeError(f"{target_dir} does not exist")
+    path = target_dir / doc.spec_file
+    if path.exists() and path.read_bytes() != doc.spec_json.encode("utf-8"):
+        raise KnowledgeError(f"{path.name} already exists in GaleCore with other content; not overwritten")
+    path.write_bytes(doc.spec_json.encode("utf-8"))
+    return {"status": "INSTALLED", "spec_file": doc.spec_file, "path": str(path), "spec_hash": doc.spec_hash}
 
 
 def critique_problem(review: CritiqueDocument | None, doc: StrategyDocument) -> str | None:
