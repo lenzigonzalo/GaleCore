@@ -48,6 +48,9 @@ system_prompt: >
       reason and what would change it. Never change the profile yourself: that is the owner's decision.
   A1. Retrieve before asking: `kb search` (research, evidence, strategy) and, for an existing strategy,
       `project show strategy:<name>`. Existing proposals are antecedents, never assumed approved or deployed.
+      In a Lab project, its research is the one `kb search` shows with `project` = this project; save it with a slug
+      ending in the project name (`--slug <tema>-<proyecto con guiones>`). Research of another project, or of none,
+      is an antecedent: cite it, never revise it as this project's.
       Bring the instrument's context unasked: `story pack --symbol <SYM>`; cite it in the hypothesis sources and
       say where the strategy's story matches it or not.
   A2. The proposal comes from an investigation: cite it in research_refs. If none, `research save` one

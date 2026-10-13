@@ -844,6 +844,17 @@ def _item_day(summary: dict) -> str | None:
     return text[:10] if _DAY.match(text) else None
 
 
+def _project_names(kb: KnowledgeBase) -> list[str]:
+    """Lab projects (``strategies/<p>``, ``workspaces/<p>``): a research is theirs when its slug ends in the name."""
+    return sorted({d.name for sub in ("strategies", "workspaces") if (kb.base / sub).is_dir()
+                   for d in (kb.base / sub).iterdir() if d.is_dir()}, key=len, reverse=True)
+
+
+def _research_project(ref: str, projects: list[str]) -> str | None:
+    tail = ref.split(":", 1)[-1].split("-", 3)[-1]
+    return next((p for p in projects if tail == p.replace("_", "-") or tail.endswith("-" + p.replace("_", "-"))), None)
+
+
 def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status: str | None = None,
            symbol: str | None = None, include_marked: bool = False, since: str | None = None) -> dict:
     """Items whose text contains the query terms, best match first. Broken items are reported, never skipped.
@@ -857,8 +868,9 @@ def search(kb: KnowledgeBase, *, text: str = "", kind: str | None = None, status
     candidates: list[tuple[dict, str]] = []
     wanted = UNFINISHED if status == "unfinished" else {status}
     if kind in (None, "research"):
-        candidates += [(s, t) for s, t, _ in _research_items(kb, failed)
-                       if status is None or s["status"] in wanted]
+        projects = _project_names(kb)
+        candidates += [({**s, "project": _research_project(s["ref"], projects)}, t)
+                       for s, t, _ in _research_items(kb, failed) if status is None or s["status"] in wanted]
     if kind in (None, "regime") and status is None:
         candidates += _regime_items(kb, failed, symbol)
     if kind in (None, "evidence") and status is None:
