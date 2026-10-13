@@ -116,7 +116,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
   // Al abrir una conversación nueva en un proyecto, el final de la anterior del mismo proyecto (ya guardada por el Lab):
   // retomar sin depender de que el modelo haya guardado (WS-0029 H8). No genera datos nuevos.
   function previousTail(chat){
-    const prev=chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.project===chat.project&&c.id!==chat.id&&c.messages.some(m=>m.role==='assistant')).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+    const prev=chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.project===chat.project&&c.id!==chat.id&&(c.messages||[]).some(m=>m.role==='assistant')).sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0];
     if(!prev)return '';
     const tail=prev.messages.slice(-4).map(m=>(m.role==='user'?'Trader: ':'Respuesta: ')+m.text).join('\n\n').slice(-4000);
     return 'Final de la conversación anterior de este proyecto («'+prev.title+'»), para retomar sin preguntar (lo vigente está en memory/ y en los registros):\n'+tail;
@@ -143,7 +143,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       // D-0012: el núcleo del producto (GaleCore-AI/PRODUCT.md) va como instrucción de sistema; un import desde
       // knowledge/CLAUDE.md no carga en -p por estar fuera de la carpeta, y en el hook de inicio se recortaba.
       const product=p.type==='personal'?'':fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8')+'\n\n';
-      const resume=p.type==='personal'||chat.nativeId?'':previousTail(chat);
+      const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
       const brief=p.type==='personal'?context:(resume?resume+'\n\n':'')+product+'Proyecto: '+p.id+' ('+p.type+').'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+(p.type==='strategy'?' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.':'');
       args=['-p','--model',process.env.GALECORE_LAB_MODEL||'sonnet','--effort',process.env.GALECORE_LAB_EFFORT||'medium',
         '--output-format','stream-json','--verbose','--append-system-prompt',brief,'--permission-prompts','none','--strict-mcp-config',
