@@ -18,6 +18,7 @@ const http = require('http');
 const path = require('path');
 const pty = require('@lydell/node-pty');
 const { WebSocketServer } = require('ws');
+const { PROVIDERS, providerBinary, authCommand, authEnvironment, authStatus } = require('./provider-auth');
 
 const PORT = Number(process.env.GALECORE_TERMINAL_PORT || 8770);
 const ORIGINS = (process.env.GALECORE_TERMINAL_ORIGINS || 'http://localhost:3039,http://127.0.0.1:3039')
@@ -31,6 +32,7 @@ const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];   // contra DNS rebind
 const MAX_SESSIONS = 4;
 const MAX_PROMPT = 2000;
 let sessions = 0;
+const authSessions = new Set();
 
 function claudeBin() {
   if (process.env.GALECORE_CLAUDE_BIN) return process.env.GALECORE_CLAUDE_BIN;
@@ -63,11 +65,18 @@ const allowed = origin => !!origin && ORIGINS.includes(origin);
 const localHost = req => HOSTS.includes(String(req.headers.host || '').toLowerCase());
 const clamp = (v, lo, hi, dflt) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, Math.round(n))) : dflt; };
 
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin;
   if (!localHost(req) || (origin && !allowed(origin))) { res.writeHead(403).end(); return; }
   if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
   const url = new URL(req.url, 'http://127.0.0.1');
+  if (req.method === 'GET' && url.pathname === '/auth/status') {
+    if (!allowed(origin)) { res.writeHead(403).end(); return; }
+    const providers = await Promise.all(PROVIDERS.map(id => authStatus(id, providerBinary(id))));
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({ providers }));
+    return;
+  }
   if (req.method === 'GET' && url.pathname === '/folders') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(folders().map(({ key, label }) => ({ key, label }))));
@@ -84,6 +93,9 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 function open(ws, params) {
+  const auth = params.get('auth');
+  if (auth !== null && !PROVIDERS.includes(auth)) { ws.close(4000, 'proveedor desconocido'); return; }
+  if (auth !== null && authSessions.has(auth)) { ws.close(4009, 'autenticación en curso'); return; }
   const folder = folders().find(f => f.key === (params.get('folder') || DEFAULT_FOLDER));
   if (!folder) { ws.close(4004, 'carpeta desconocida'); return; }
   const prompt = (params.get('prompt') || '').trim();
@@ -97,18 +109,21 @@ Ya hay ${MAX_SESSIONS} sesiones abiertas: cerrá una.
   ws.on('error', () => { /* frame inválido o corte: se cierra y se mata la pty en «close» */ });
   let term;
   try {
-    term = pty.spawn(claudeBin(), prompt ? [prompt] : [], {
-      name: 'xterm-256color', cwd: folder.dir, env: cleanEnv(),
+    const binary = auth !== null ? providerBinary(auth) : claudeBin();
+    if (!binary) { ws.close(4004, 'proveedor no instalado'); return; }
+    term = pty.spawn(binary, auth !== null ? authCommand(auth) : prompt ? [prompt] : [], {
+      name: 'xterm-256color', cwd: auth !== null ? HARNESS : folder.dir, env: auth !== null ? authEnvironment() : cleanEnv(),
       cols: clamp(params.get('cols'), 20, 400, 100), rows: clamp(params.get('rows'), 5, 200, 30),
     });
   } catch (e) {
-    ws.send(`\r\nNo se pudo abrir claude: ${e.message}\r\n`); ws.close(); return;
+    ws.send('\r\nNo se pudo abrir la terminal local.\r\n'); ws.close(); return;
   }
   sessions += 1;
+  if (auth !== null) authSessions.add(auth);
   console.log(`[terminal] ${new Date().toISOString()} abre ${folder.key} pid=${term.pid}${prompt ? ' con pedido' : ''}`);
   term.onData(d => { if (ws.readyState === ws.OPEN) ws.send(d); });
   term.onExit(({ exitCode }) => {
-    if (ws.readyState === ws.OPEN) { ws.send(`\r\n[claude terminó (${exitCode})]\r\n`); ws.close(); }
+    if (ws.readyState === ws.OPEN) { ws.send(`\r\n[${auth || 'claude'} terminó (${exitCode})]\r\n`); ws.close(); }
   });
   ws.on('message', raw => {
     let m; try { m = JSON.parse(String(raw)); } catch { return; }
@@ -117,7 +132,7 @@ Ya hay ${MAX_SESSIONS} sesiones abiertas: cerrá una.
       else if (m.type === 'resize') term.resize(clamp(m.cols, 20, 400, 100), clamp(m.rows, 5, 200, 30));
     } catch { /* claude ya terminó */ }
   });
-  ws.on('close', () => { sessions -= 1; try { term.kill(); } catch { /* ya terminó */ } });
+  ws.on('close', () => { sessions -= 1; if (auth !== null) authSessions.delete(auth); try { term.kill(); } catch { /* ya terminó */ } });
 }
 
 server.listen(PORT, '127.0.0.1', () => console.log(`[terminal] http://127.0.0.1:${PORT} · claude=${claudeBin()} · origins=${ORIGINS.join(' ')}`));
