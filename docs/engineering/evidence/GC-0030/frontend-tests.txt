@@ -6,7 +6,7 @@ At line:2 char:17
 +                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     + CategoryInfo          : NotSpecified: (PASS src/pages/Resumen.test.tsx:String) [], RemoteException
     + FullyQualifiedErrorId : NativeCommandError
- 
+
 PASS src/components/layout/WorkspaceNav.test.tsx
 PASS src/pages/Macro.test.tsx (6.074 s)
 
@@ -14,5 +14,5 @@ Test Suites: 3 passed, 3 total
 Tests:       12 passed, 12 total
 Snapshots:   0 total
 Time:        9.065 s, estimated 15 s
-Ran all test suites within paths "src/pages/Macro.test.tsx", "src/pages/Resumen.test.tsx", 
+Ran all test suites within paths "src/pages/Macro.test.tsx", "src/pages/Resumen.test.tsx",
 "src/components/layout/WorkspaceNav.test.tsx".
