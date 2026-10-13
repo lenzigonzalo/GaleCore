@@ -19,6 +19,7 @@ Owner 13/10/2026: reemplazar la ficha extensa por secciones de definiciones, qui
 - Review independiente: `../reviews/WS-0028-design-definitions-review.md`, CHANGES_REQUESTED del snapshot inicial. F1 corregido (capture/owner_inputs presentes), F2 corregido (CSS acotado a botones del dock, modal probado), F3 corregido (--yellow-gc existente). Sin recheck ni alteración del informe. Skill e inventario de cálculos añadidos después: declaración de método/metadata, no evaluación económica ni aprobación independiente de su comportamiento.
 - Build final: exit 0, `main.7d310248.js` / `main.30bb246e.css`. Integración de lector AI `3347703` y bridge workspace `4f3eb9d` por fast-forward; diff contra destino incluía sólo archivos propios, no PRODUCT.md ni WS-0029/tools/caso.py/evidencia de Claude. Skill `bedb5dc` permanece aislada, no está en main. Lab :8771 recargado tras comprobar `/workspaces` y `/state` sin chats/sesiones activos; API :7001, monitor :3039 y Claude externo conservados.
 - GET autenticado al bridge real actualizado: HTTP 200, IWM 1.0.0, 12 parámetros y 6 pasos de gestión, tiempos 1191 / 27 / 33 ms. Token sólo en memoria, no guardado. Artefacto `lab-composer-qa/read-live.json`; no E2E del monitor autenticado.
+- Interfaz integrada `e777c36`: login y bundle servido :3039, HTTP 200, ficha nueva/barra/cuenta presentes y cero errores JS. `check-live.cjs`: exit 0; resultado preservado `lab-composer-qa/definitions-live-result.json`. Sin push/PR ni cambios de las specs untracked ajenas.
 
 ## Feedback y continuidad
 
