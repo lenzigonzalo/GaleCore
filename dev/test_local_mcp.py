@@ -1,9 +1,12 @@
 import json
+import subprocess
 import tempfile
 import threading
 import unittest
+from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -48,6 +51,67 @@ class InventoryTests(unittest.TestCase):
         return next(
             r for r in self.inventory.snapshot()["servers"] if r["name"] == name
         )
+
+    def test_cli_account_and_plugin_discovery_is_sanitized(self):
+        output = (
+            "claude.ai Google Drive: https://private.example/fixture-token - Connected\n"
+            "claude.ai IBKR: https://private.example/fixture-key - Needs authentication\n"
+            "plugin:finance:google calendar: https://private.example/fixture-key - Failed to connect\n"
+            "claude.ai Foo: https://connected.example/fixture-token\n"
+        )
+        with (
+            patch("local_mcp.shutil.which", return_value="claude"),
+            patch(
+                "local_mcp.subprocess.run",
+                return_value=SimpleNamespace(returncode=0, stdout=output),
+            ),
+        ):
+            self.inventory._discover()
+        rows = self.inventory.snapshot()["servers"]
+        cloud = next(r for r in rows if r["name"] == "claude.ai Google Drive")
+        self.assertEqual(cloud["runtimeStatus"], "connected")
+        self.assertEqual(cloud["origin"], "account")
+        self.assertEqual(
+            next(r for r in rows if r["name"] == "claude.ai Foo")["runtimeStatus"],
+            "unverified",
+        )
+        self.assertEqual(
+            next(r for r in rows if r["name"].startswith("plugin:"))["origin"], "plugin"
+        )
+        self.assertNotIn("private.example", json.dumps(self.inventory.snapshot()))
+        self.assertNotIn("fixture-token", json.dumps(self.inventory.snapshot()))
+        self.inventory.toggle(cloud["id"], False, cloud["revision"])
+        settings = json.loads(self.claude.read_text())["projects"][self.context]
+        self.assertIn("claude.ai Google Drive", settings["disabledMcpServers"])
+
+    def test_historical_connectors_are_not_editable_before_cli_check(self):
+        doc = json.loads(self.claude.read_text())
+        doc["claudeAiMcpEverConnected"] = ["claude.ai Old connector"]
+        self.claude.write_text(json.dumps(doc))
+        row = self.row("claude.ai Old connector")
+        self.assertFalse(row["editable"])
+        self.assertEqual(row["runtimeStatus"], "unverified")
+        with self.assertRaises(ConfigError):
+            self.inventory.toggle(row["id"], False, row["revision"])
+
+    def test_discovery_failure_keeps_last_checked_list(self):
+        self.inventory.observed = [
+            {"name": "claude.ai Google Drive", "status": "connected"}
+        ]
+        self.inventory.checked_at = datetime.now(timezone.utc).isoformat()
+        with (
+            patch("local_mcp.shutil.which", return_value="claude"),
+            patch(
+                "local_mcp.subprocess.run",
+                side_effect=subprocess.TimeoutExpired("claude", 55),
+            ),
+        ):
+            self.inventory._discover()
+        self.assertIsNotNone(self.inventory.discovery_error)
+        self.assertEqual(
+            self.row("claude.ai Google Drive")["runtimeStatus"], "connected"
+        )
+        self.assertFalse(self.inventory.checking)
 
     def test_default_backups_are_outside_repo(self):
         repo = Path(__file__).resolve().parent.parent

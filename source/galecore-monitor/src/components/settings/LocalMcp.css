@@ -28,3 +28,18 @@
 .local-mcp-empty { padding: 28px; border: 1px dashed var(--border-light); border-radius: 12px; color: var(--text-secondary); }
 .local-mcp-empty h2 { color: var(--text-primary); font-size: 20px; margin: 14px 0 8px; }
 @media(max-width:700px) { .local-mcp-card { padding: 18px; } .local-mcp-tabs button { padding: 10px 16px; } }
+
+.local-mcp-card { padding: 16px 20px; }
+.local-mcp-card h3 { font-size: 18px; font-weight: 600; margin: 0 0 6px; overflow-wrap: anywhere; }
+.local-mcp-group { display: grid; gap: 14px; }
+.local-mcp-group-title { font-size: 18px; margin: 0; display: flex; gap: 12px; align-items: center; }
+.local-mcp-group-title span { color: var(--text-secondary); font-size: 14px; font-weight: 400; }
+.local-mcp-search { display: flex; gap: 12px; align-items: center; border: 1px solid var(--border); background: var(--bg-secondary); border-radius: 10px; padding: 12px 14px; }
+.local-mcp-search input { flex: 1; min-width: 0; background: transparent; border: 0; color: var(--text-primary); font-size: 16px; outline: none; }
+.local-mcp-search:focus-within { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.local-mcp-runtime { font-size: 14px; color: var(--text-secondary); }
+.local-mcp-runtime.is-connected { color: var(--green); }
+.local-mcp-runtime.is-needs-auth, .local-mcp-runtime.is-not-configured { color: var(--yellow-gc); }
+.local-mcp-runtime.is-failed { color: var(--red-gc); }
+.local-mcp-scope, .local-mcp-checked { font-size: 14px; color: var(--text-secondary); }
+.local-mcp-switch:disabled { cursor: not-allowed; }

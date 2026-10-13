@@ -4,7 +4,7 @@
   "toggle": "temporary-home-only",
   "checks": [
     "Codex inventory: node_repl enabled, real configuration; no credential fields",
-    "Claude inventory: datafeed and exact project context, real configuration",
+    "Claude native inventory: Alpha Vantage, Google, IBKR, IoL; correct workspace selected, legacy datafeed absent",
     "Mobile 390px: no horizontal overflow",
     "UI disable/enable invokes backend writer on temporary config, persists state, new-session notice"
   ],

@@ -8,21 +8,23 @@ workspace se deshabilitan con disabledMcpjsonServers en .claude/settings.local.j
 Los MCP usuario/local de Claude usan projects[context].disabledMcpServers en ~/.claude.json.
 El alcance de estos campos se contrastó con el código del CLI instalado; no se conectaron MCP.
 No se muestran URL, comandos, argumentos, variables, headers ni credenciales.
-No incluye MCP de plugins, conectores remotos del host ni overrides por argumentos/sesión.
+Incluye MCP de plugins y conectores de cuenta de Claude via listado nativo del CLI.
+No incluye integraciones de la app Codex ni overrides por argumentos/sesion.
 Para .mcp.json, habilitar conserva la aprobación que Claude requiera; no la concede.
 
 ## Ejecución y evidencia
 - Servicio sólo 127.0.0.1:8772: origen exacto http://localhost:3039, Host permitido,
   token efímero en memoria, escrituras por IDs del inventario, sin rutas enviadas por cliente.
-- 12 tests Python: backend-tests.txt (hogares temporales), conservación de secretos/otros ajustes,
+- 15 tests Python: backend-tests.txt (hogares temporales), conservación de secretos/otros ajustes,
   comentarios TOML, reversibilidad, respaldo original, conflicto y reemplazo fallido, origen/token/Host.
-- 4 tests frontend de LocalMcp: proveedores, confirmación del guardado, conflicto sin cambio falso.
+- 5 tests frontend de LocalMcp: proveedores, confirmación del guardado, conflicto sin cambio falso.
 - Build CI pasó: build-receipt.json referencia la ejecución y el hash del artefacto.
 - Chromium: browser-run.json + capturas. Inventario real de archivos locales, **sesión Supabase
   sintética aislada al navegador de QA**; API 7002 simulada en ese contexto, servicio MCP real.
   La prueba de interruptores redirige sólo inventory/toggle a Inventory con un hogar temporal;
   no modifica MCP del usuario. No acredita login Dev real, conexión con servidores ni cambio de una sesión abierta.
-- Codex real: node_repl habilitado. Claude real: datafeed, contexto C:/Users/lenzi.
+- Comprobacion inicial: Codex node_repl; Claude mostraba la entrada local datafeed en C:/Users/lenzi.
+  Esa entrada NO acreditaba un MCP conectado; el owner detecto la cobertura insuficiente.
 
 ## Correr y retomar
 Dependencia local: python -m pip install -r dev/local_mcp_requirements.txt.
@@ -57,3 +59,20 @@ aprobacion desde este panel. Pruebas positivas/negativas agregadas.
 F3 registrado: sigue la ventana hash-reemplazo sin bloqueo compartido con los CLIs.
 No editar simultaneamente estos archivos desde otros programas al usar un interruptor.
 No se pidio recheck ni se modifica el review; no hay APPROVE/VALIDATED/CLOSED.
+
+## Correccion de inventario: cuenta y plugins de Claude (13/10)
+El owner confirmo Claude Code en esta PC. Listado real del CLI detecta 24 conectores de
+cuenta y 27 MCP de plugins. Alpha Vantage, Google Drive/Calendar/Gmail e IoL conectados;
+IBKR requiere autenticacion en la comprobacion registrada. Capturas account-*.png.
+No se instalaron esas conexiones: existian en la cuenta y el listado anterior las omitia.
+Servicio inicia/actualiza Claude mcp list en un hilo, timeout 55s. Solo publica nombres
+y estados canonicos; URLs/args/headers/stdout completo nunca se guardan ni se devuelven.
+Referencias historicas solo se muestran sin comprobar y no editables hasta verificar CLI.
+Conectores y plugins se deshabilitan por nombre completo en disabledMcpServers del
+proyecto actual; no revoca OAuth ni desconecta globalmente cuentas/brokers.
+El proyecto del workspace se selecciona por defecto; datafeed queda como entrada local
+del contexto anterior y no sustituye a las conexiones reales. Buscador y grupos por origen.
+Navegador actualizado: browser-run.json; auth sintetica aislada, inventario CLI real,
+interruptores exclusivamente con archivos temporales. 15 backend / 5 frontend / build CI.
+Logs del build: build-account-discovery.txt. Review previo no cubre esta ampliacion,
+no se pidio recheck ni se cambia su resultado. F3 sigue documentado.

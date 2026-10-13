@@ -1,8 +1,9 @@
 export interface LocalMcpServer {
   id: string; name: string; provider: 'claude' | 'codex'; context: string; scope: string;
+  displayName?: string; origin?: 'account' | 'plugin' | 'local'; runtimeStatus?: string; editable?: boolean;
   enabled: boolean; approvalRequired?: boolean; transport: string; file: string; revision: string;
 }
-export interface LocalMcpInventory { servers: LocalMcpServer[]; workspace: string; status: string }
+export interface LocalMcpInventory { servers: LocalMcpServer[]; workspace: string; status: string; refreshing?: boolean; checkedAt?: string | null; discoveryError?: string | null }
 export const localMcpAvailable = () => ['localhost', '127.0.0.1'].includes(window.location.hostname);
 const URL = 'http://127.0.0.1:8772';
 let token: string | null = null;
@@ -27,3 +28,5 @@ async function request<T>(path: string, body?: object): Promise<T> {
 export const fetchLocalMcp = () => request<LocalMcpInventory>('/inventory');
 export const toggleLocalMcp = (server: LocalMcpServer, enabled: boolean) =>
   request<LocalMcpInventory>('/toggle', { id: server.id, enabled, revision: server.revision });
+
+export const refreshLocalMcp = () => request<LocalMcpInventory>('/refresh', {});

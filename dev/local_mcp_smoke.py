@@ -79,10 +79,26 @@ def main():
             "Codex inventory: node_repl enabled, real configuration; no credential fields"
         )
         page.get_by_role("button", name="Claude Code", exact=True).click()
-        page.get_by_role("heading", name="datafeed", exact=True).wait_for()
+        page.get_by_text("Comprobado con Claude Code:", exact=False).wait_for(timeout=70000)
+        page.get_by_role(
+            "heading", name="Alpha Vantage MCP Server", exact=True
+        ).wait_for(timeout=70000)
+        assert page.get_by_role("heading", name="datafeed", exact=True).count() == 0
+        search = page.get_by_role("textbox", name="Buscar conexión")
+        for query, names in (
+            ("Google", ["Google Drive", "Google Calendar"]),
+            ("IBKR", ["Interactive Brokers (IBKR)"]),
+            ("Alpha", ["Alpha Vantage MCP Server"]),
+            ("IoL", ["IoL"]),
+        ):
+            search.fill(query)
+            for name in names:
+                page.get_by_role("heading", name=name, exact=True).wait_for()
+            page.screenshot(path=str(output / ("account-" + query.lower() + ".png")))
+        search.fill("Google")
         page.screenshot(path=str(output / "claude-real.png"))
         report["checks"].append(
-            "Claude inventory: datafeed and exact project context, real configuration"
+            "Claude native inventory: Alpha Vantage, Google, IBKR, IoL; correct workspace selected, legacy datafeed absent"
         )
         page.set_viewport_size({"width": 390, "height": 844})
         page.screenshot(path=str(output / "mobile-real.png"), full_page=True)
@@ -91,6 +107,8 @@ def main():
         )
         report["checks"].append("Mobile 390px: no horizontal overflow")
         page.set_viewport_size({"width": 1440, "height": 1000})
+        search.fill("")
+        page.get_by_role("button", name="Codex", exact=True).click()
         home = Path(folder)
         (home / ".codex").mkdir()
         config = home / ".codex/config.toml"

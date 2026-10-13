@@ -1,4 +1,4 @@
-"""Local-only MCP configuration inventory. No subprocesses or server connections.
+"""Local MCP inventory with native Claude CLI discovery. No MCP tool calls.
 Run: python dev/local_mcp.py --workspace <workspace folder>
 Dependency: pip install -r dev/local_mcp_requirements.txt
 """
@@ -10,9 +10,13 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
+import shutil
+import subprocess
 import tempfile
 import threading
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -100,6 +104,120 @@ def secure_directory(path: Path):
 class Inventory:
     def __init__(self, home: Path, workspace: Path, backups: Path):
         self.home, self.workspace, self.backups = home, workspace.resolve(), backups
+        self.observed = []
+        self.checked_at = None
+        self.checking = False
+        self.discovery_error = None
+        self.discovery_lock = threading.Lock()
+
+    @staticmethod
+    def parse_cli_listing(output: str) -> list[dict]:
+        rows = []
+        for line in output.splitlines():
+            match = re.match(r"^(claude[.]ai [^:]+|plugin:[^ ]+:[^:]+): (.+)$", line)
+            if not match:
+                continue
+            name, detail = match.groups()
+            if len(name) > 160:
+                continue
+            lowered = re.sub(r"^[^a-zA-Z]+", "", detail.rsplit(" - ", 1)[-1]).lower()
+            status = "unverified"
+            for phrase, value in (
+                ("failed to connect", "failed"),
+                ("not connected", "failed"),
+                ("disconnected", "failed"),
+                ("needs authentication", "needs-auth"),
+                ("disabled", "disabled"),
+                ("not configured", "not-configured"),
+                ("invalid config", "not-configured"),
+                ("missing configuration", "not-configured"),
+                ("connected", "connected"),
+            ):
+                if lowered.startswith(phrase):
+                    status = value
+                    break
+            rows.append({"name": name, "status": status})
+        return rows
+
+    def refresh(self):
+        with self.discovery_lock:
+            if self.checking:
+                return
+            self.checking = True
+        threading.Thread(target=self._discover, daemon=True).start()
+
+    def _discover(self):
+        try:
+            executable = shutil.which("claude")
+            if not executable:
+                raise OSError("Claude not installed")
+            if os.name == "nt" and Path(executable).suffix.lower() in {".cmd", ".ps1"}:
+                native = (
+                    Path(executable).parent
+                    / "node_modules/@anthropic-ai/claude-code/bin/claude.exe"
+                )
+                if native.is_file():
+                    executable = str(native)
+            result = subprocess.run(
+                [executable, "mcp", "list"],
+                cwd=self.workspace,
+                capture_output=True,
+                check=False,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=55,
+            )
+            if result.returncode:
+                raise OSError("Claude MCP listing failed")
+            rows = self.parse_cli_listing(result.stdout)
+            self.observed = rows
+            self.checked_at = datetime.now(timezone.utc).isoformat()
+            self.discovery_error = None
+        except (OSError, subprocess.TimeoutExpired):
+            self.discovery_error = "No se pudo comprobar el listado de Claude. Se conservan las referencias anteriores."
+        finally:
+            self.checking = False
+
+    def discovered_sources(self, data: dict) -> list[dict]:
+        context = self.workspace.as_posix()
+        disabled = (
+            data.get("projects", {}).get(context, {}).get("disabledMcpServers", [])
+        )
+        observed = (
+            self.observed
+            if self.checked_at
+            else [
+                {"name": name, "status": "unverified"}
+                for name in data.get("claudeAiMcpEverConnected", [])
+                if isinstance(name, str) and name.startswith("claude.ai ")
+            ]
+        )
+        claude = self.home / ".claude.json"
+        return [
+            {
+                "provider": "claude",
+                "name": row["name"],
+                "context": context,
+                "scope": "Control en este proyecto"
+                if row["name"].startswith("claude.ai ")
+                else "Plugin " + row["name"].split(":", 2)[1] + " · este proyecto",
+                "source": claude,
+                "target": claude,
+                "spec": {"type": "http"},
+                "enabled": row["name"] not in disabled,
+                "kind": "claude",
+                "origin": "account"
+                if row["name"].startswith("claude.ai ")
+                else "plugin",
+                "runtimeStatus": row["status"],
+                "editable": bool(self.checked_at),
+                "displayName": row["name"].removeprefix("claude.ai ")
+                if row["name"].startswith("claude.ai ")
+                else row["name"].split(":", 2)[-1],
+            }
+            for row in observed
+        ]
 
     def contexts(self, data: dict) -> list[str]:
         paths = {str(self.workspace).replace("\\", "/")}
@@ -177,6 +295,7 @@ class Inventory:
                         "kind": "codex",
                     }
                 )
+        sources.extend(self.discovered_sources(data))
         return sources
 
     def identity(self, row: dict) -> str:
@@ -210,12 +329,19 @@ class Inventory:
                     "file": str(row["source"]),
                     "revision": self.revision(row),
                     "approvalRequired": row.get("approvalRequired", False),
+                    "origin": row.get("origin", "local"),
+                    "runtimeStatus": row.get("runtimeStatus", "unverified"),
+                    "editable": row.get("editable", True),
+                    "displayName": row.get("displayName", row["name"]),
                 }
             )
         return {
             "servers": rows,
-            "workspace": str(self.workspace),
-            "status": "configuration-only",
+            "workspace": self.workspace.as_posix(),
+            "status": "cli-and-configuration",
+            "refreshing": self.checking,
+            "checkedAt": self.checked_at,
+            "discoveryError": self.discovery_error,
         }
 
     def toggle(self, identifier: str, enabled: bool, revision: str) -> dict:
@@ -231,6 +357,8 @@ class Inventory:
                 raise ConfigError(
                     "La configuración cambió desde otra aplicación. Actualizá antes de guardar."
                 )
+            if not row.get("editable", True):
+                raise ConfigError("Primero comproba esta conexion con Actualizar.")
             if row.get("approvalRequired"):
                 raise ConfigError(
                     "Este MCP necesita aprobacion en Claude antes de habilitarse desde el panel."
@@ -332,6 +460,9 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.command == "GET" and self.path == "/inventory":
                 return self.respond(200, self.inventory.snapshot())
+            if self.command == "POST" and self.path == "/refresh":
+                self.inventory.refresh()
+                return self.respond(200, self.inventory.snapshot())
             if self.command == "POST" and self.path == "/toggle":
                 size = int(self.headers.get("Content-Length", "0"))
                 if not 0 < size <= 4096:
@@ -385,6 +516,7 @@ def main():
         args.workspace,
         default_backups(),
     )
+    inventory.refresh()
     server = ThreadingHTTPServer(
         ("127.0.0.1", 8772), make_handler(inventory, secrets.token_urlsafe(32))
     )

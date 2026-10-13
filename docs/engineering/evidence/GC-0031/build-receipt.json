@@ -5,13 +5,18 @@
   "observed_output": "Compiled successfully.",
   "artifacts": [
     {
-      "name": "main.97ae9c29.js",
-      "sha256": "943f2ec67da4306aa59a705a3eb275217b2459cee7ec32f52ba183a0fbd8aa07"
+      "name": "main.52e3d8ca.js",
+      "sha256": "1c74bf3813181d1432ec23cea459cd3334117b7e478f59276ba7d2ef8ae1c053"
     }
   ],
   "final_build": {
     "exit_code": 0,
     "exec_session": 7430,
     "log": "build-final.txt"
+  },
+  "account_discovery_build": {
+    "exit_code": 0,
+    "exec_session": 51559,
+    "log": "build-account-discovery.txt"
   }
 }
