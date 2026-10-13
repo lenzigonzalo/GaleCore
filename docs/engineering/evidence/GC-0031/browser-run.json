@@ -1,0 +1,13 @@
+{
+  "auth": "synthetic-browser-session",
+  "inventory": "real-local-configurations",
+  "toggle": "temporary-home-only",
+  "checks": [
+    "Codex inventory: node_repl enabled, real configuration; no credential fields",
+    "Claude inventory: datafeed and exact project context, real configuration",
+    "Mobile 390px: no horizontal overflow",
+    "UI disable/enable invokes backend writer on temporary config, persists state, new-session notice"
+  ],
+  "browser": "120.0.6099.28",
+  "exit_code": 0
+}

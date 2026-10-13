@@ -1,0 +1,16 @@
+[
+  {
+    "command": "codex -c mcp_servers.node_repl.enabled=false mcp list --json",
+    "name": "node_repl",
+    "enabled": false,
+    "exit_code": 0,
+    "configuration_modified": false
+  },
+  {
+    "command": "codex -c mcp_servers.node_repl.enabled=true mcp list --json",
+    "name": "node_repl",
+    "enabled": true,
+    "exit_code": 0,
+    "configuration_modified": false
+  }
+]

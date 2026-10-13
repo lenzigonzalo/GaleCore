@@ -1,0 +1,14 @@
+test_claude_project_toggle_preserves_connections (test_local_mcp.InventoryTests.test_claude_project_toggle_preserves_connections) ... ok
+test_codex_toggle_preserves_comments_secrets_and_other_settings (test_local_mcp.InventoryTests.test_codex_toggle_preserves_comments_secrets_and_other_settings) ... ok
+test_concurrent_edit_rejected (test_local_mcp.InventoryTests.test_concurrent_edit_rejected) ... ok
+test_http_origin_host_and_token (test_local_mcp.InventoryTests.test_http_origin_host_and_token) ... ok
+test_invalid_configuration_does_not_write (test_local_mcp.InventoryTests.test_invalid_configuration_does_not_write) ... ok
+test_invalid_id_or_boolean_does_not_write (test_local_mcp.InventoryTests.test_invalid_id_or_boolean_does_not_write) ... ok
+test_replace_failure_keeps_original (test_local_mcp.InventoryTests.test_replace_failure_keeps_original) ... ok
+test_shared_project_server_uses_local_disable_list (test_local_mcp.InventoryTests.test_shared_project_server_uses_local_disable_list) ... ok
+test_snapshot_never_contains_credentials (test_local_mcp.InventoryTests.test_snapshot_never_contains_credentials) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 1.093s
+
+OK

@@ -156,7 +156,7 @@ class Inventory:
                 raise ConfigError("La conexión ya no existe. Actualizá el inventario.")
             if self.revision(row) != revision:
                 raise ConfigError(
-                    "La configuración cambi? desde otra aplicación. Actualizá antes de guardar."
+                    "La configuración cambió desde otra aplicación. Actualizá antes de guardar."
                 )
             path = row["target"]
             original = path.read_bytes() if path.exists() else b""
@@ -250,7 +250,7 @@ def make_handler(inventory: Inventory, token: str):
                 return self.respond(200, {"token": token})
             authorization = self.headers.get("Authorization", "")
             if not hmac.compare_digest(authorization, "Bearer " + token):
-                return self.respond(401, {"error": "Sesi?n local vencida."})
+                return self.respond(401, {"error": "Sesión local vencida."})
             try:
                 if self.command == "GET" and self.path == "/inventory":
                     return self.respond(200, inventory.snapshot())
@@ -298,7 +298,7 @@ def main():
         ("127.0.0.1", 8772), make_handler(inventory, secrets.token_urlsafe(32))
     )
     print(
-        "Conexiones locales MCP: 127.0.0.1:8772 ? monitor permitido localhost:3039",
+        "Conexiones locales MCP: 127.0.0.1:8772 · monitor permitido localhost:3039",
         flush=True,
     )
     server.serve_forever()

@@ -1,0 +1,12 @@
+{
+  "command": "CI=true npm run build",
+  "exec_session": 73046,
+  "exit_code": 0,
+  "observed_output": "Compiled successfully.",
+  "artifacts": [
+    {
+      "name": "main.ed4624c3.js",
+      "sha256": "f8912cfb5a0dab22c677e8062ad631cd41d371a414c2ef50a4a3db6c21bb69f4"
+    }
+  ]
+}
