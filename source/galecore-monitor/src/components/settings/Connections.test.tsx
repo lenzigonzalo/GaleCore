@@ -1,46 +1,36 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Connections } from './Connections';
-import { labRequest } from '../../api/lab';
-import { fetchBrokerAccount } from '../../api/brokerAccount';
-import { fetchSpace } from '../../api/space';
-jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
-jest.mock('../../api/brokerAccount', () => ({ fetchBrokerAccount: jest.fn() }));
-jest.mock('../../api/space', () => ({ fetchSpace: jest.fn() }));
+import { fetchProviderAuth } from '../../api/terminal';
+jest.mock('../../api/terminal', () => ({ fetchProviderAuth: jest.fn() }));
+jest.mock('./AuthenticationTerminal', () => ({ AuthenticationTerminal: ({ provider, onEnd, onClose }: any) => <div role="region" aria-label="Terminal de autenticación"><code>{provider === 'claude' ? 'claude auth login' : 'codex login'}</code><button onClick={onEnd}>Terminar prueba</button><button onClick={onClose}>Cancelar</button></div> }));
 beforeEach(() => {
   jest.clearAllMocks();
-  (labRequest as jest.Mock).mockImplementation(async path => path === '/state'
-    ? { providers: [{ id: 'claude', installed: true }, { id: 'codex', installed: false }] }
-    : { commits: [], changes: 2 });
-  (fetchBrokerAccount as jest.Mock).mockResolvedValue({ linked: true });
-  (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
+  (fetchProviderAuth as jest.Mock).mockResolvedValue({ providers: [{ id: 'claude', status: 'authenticated' }, { id: 'codex', status: 'signed-out' }] });
 });
-test('instalación y vinculación no se presentan como autenticación comprobada; guía no inicia sesiones', async () => {
-  const onBroker = jest.fn(), onLab = jest.fn();
-  render(<Connections onBroker={onBroker} onData={() => {}} onLab={onLab}/>);
-  await screen.findByText('Lab disponible');
-  expect(screen.getAllByText('Autenticación sin comprobar')).toHaveLength(2);
-  expect(screen.getByText('No instalado')).toBeInTheDocument();
-  fireEvent.click(screen.getAllByRole('button', { name: /Conectar o reautenticar/ })[0]);
+test('dos proveedores, estado y terminal con comando correcto; no textos del Lab ni Git', async () => {
+  render(<Connections/>);
+  await screen.findByText('Cuenta conectada');
+  expect(screen.getByText('Sin autenticar')).toBeInTheDocument();
+  expect(screen.queryByText(/Lab|Git|Antes de empezar/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Reautenticar Codex' }));
+  expect(screen.getByText('codex login')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Reautenticar Claude Code' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Reautenticar Claude Code' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Reautenticar Claude Code' }));
   expect(screen.getByText('claude auth login')).toBeInTheDocument();
-  expect(labRequest).toHaveBeenCalledTimes(2);
-  fireEvent.click(screen.getByRole('button', { name: /Administrar credenciales/ }));
-  expect(onBroker).toHaveBeenCalledTimes(1);
-  fireEvent.click(screen.getByRole('button', { name: /Abrir Lab/ }));
-  expect(onLab).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: 'Terminar prueba' }));
+  await waitFor(() => expect(fetchProviderAuth).toHaveBeenCalledTimes(3));
 });
-test('fallas independientes y reintento descartan resultados anteriores', async () => {
-  (labRequest as jest.Mock).mockRejectedValue(new Error('offline'));
-  render(<Connections onBroker={() => {}} onData={() => {}}/>);
-  await screen.findByText('Lab sin acceso');
-  expect(screen.getByText('Espacio accesible')).toBeInTheDocument();
-  expect(screen.getByText('Sin acceso al historial')).toBeInTheDocument();
-  (labRequest as jest.Mock).mockImplementation(async path => path === '/state' ? { providers: [] } : { commits: [], changes: 0 });
-  (fetchSpace as jest.Mock).mockRejectedValue(new Error('denied'));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Volver a comprobar' })).toBeEnabled());
-  fireEvent.click(screen.getByRole('button', { name: 'Volver a comprobar' }));
-  await screen.findByText('Lab disponible');
-  await screen.findByText('Sin acceso');
-  expect(screen.queryByText('Espacio accesible')).not.toBeInTheDocument();
-  expect(screen.getByText('Historial accesible')).toBeInTheDocument();
+test('no instalado y fallo de servicio no se muestran como cuenta conectada; reintento', async () => {
+  (fetchProviderAuth as jest.Mock).mockResolvedValue({ providers: [{ id: 'claude', status: 'not-installed' }, { id: 'codex', status: 'unknown' }] });
+  render(<Connections/>);
+  await screen.findByText('No instalado');
+  expect(screen.getByRole('button', { name: 'Reautenticar Claude Code' })).toBeDisabled();
+  (fetchProviderAuth as jest.Mock).mockRejectedValue(new Error('offline'));
+  fireEvent.click(screen.getByRole('button', { name: 'Actualizar conexiones' }));
+  await screen.findByRole('alert');
+  expect(screen.queryByText('Cuenta conectada')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Reautenticar Codex' })).toBeDisabled();
 });

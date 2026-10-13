@@ -143,7 +143,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           </div>
           {/* Se montan recién al entrar: leen la cuenta de bróker y la lista de usuarios — nada de
               eso tiene sentido traerlo en cada arranque del tablero. */}
-          {tab === 'config' && <Settings onBrokerLinked={refreshAccount} onLab={() => setTab('lab')} />}
+          {tab === 'config' && <Settings onBrokerLinked={refreshAccount} />}
           {tab === 'admin' && <Admin />}
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}

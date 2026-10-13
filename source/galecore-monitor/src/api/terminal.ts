@@ -20,3 +20,18 @@ export function terminalSocketUrl(folder: string, prompt: string, cols: number, 
 }
 
 export const TERMINAL_START_HINT = 'node tools/terminal/server.js   (desde el workspace)';
+
+export interface ProviderAuth { id: 'claude' | 'codex'; status: 'authenticated' | 'signed-out' | 'not-installed' | 'unknown' }
+export async function fetchProviderAuth(): Promise<{ providers: ProviderAuth[] }> {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(`${TERMINAL_URL}/auth/status`, { signal: controller.signal, cache: 'no-store' });
+    if (!response.ok) throw new Error('No se pudo comprobar la conexión.');
+    return response.json();
+  } finally { window.clearTimeout(timer); }
+}
+export function authSocketUrl(provider: ProviderAuth['id'], cols: number, rows: number): string {
+  const params = new URLSearchParams({ auth: provider, cols: String(cols), rows: String(rows) });
+  return `${TERMINAL_URL.replace(/^http/, 'ws')}/pty?${params}`;
+}

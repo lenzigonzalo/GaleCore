@@ -297,7 +297,7 @@ function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged: () =>
 
 // ── página ──────────────────────────────────────────────────────
 
-export function Settings({ initial = 'conexiones', onBrokerLinked, onLab }: { initial?: Section; onBrokerLinked?: () => void; onLab?: () => void }) {
+export function Settings({ initial = 'conexiones', onBrokerLinked }: { initial?: Section; onBrokerLinked?: () => void }) {
   const [section, setSection] = useState<Section>(initial);
   const [items, setItems] = useState<SpaceItem[]>([]);
   const [shared, setShared] = useState<SpaceItem[]>([]);
@@ -324,7 +324,7 @@ export function Settings({ initial = 'conexiones', onBrokerLinked, onLab }: { in
 
   let body: React.ReactNode;
   if (section === 'conexiones') {
-    body = <Connections onBroker={() => setSection('broker')} onData={() => setSection('datos')} onLab={onLab} />;
+    body = <Connections />;
   } else if (section === 'usuario') {
     body = (
       <div style={{ ...card, display: 'grid', gridTemplateColumns: '160px 1fr', rowGap: 10, fontSize: 13 }}>
