@@ -42,3 +42,16 @@ No hay APPROVE, VALIDATED ni CLOSED. Sólo local; sin push ni PR.
 
 Recorrido para retomar: Monitor → Resumen (capital, exposición, tabla, aviso de vencimientos),
 luego Macro (calendario). Revisar escritorio y ancho reducido con datos de la cuenta.
+
+
+## Corrección de la instancia de desarrollo (13/10, reporte del owner)
+
+El owner vio TS2307 para `portfolioSummary` y TS7006 derivados. El módulo sí existe y está
+versionado en `f07e029`. La instancia CRA activa en :3039 se reinició con
+`python dev/galecore_dev.py monitor`, sin cambio de código ni configuración.
+Resultado real del servidor: `Compiled successfully!` y `webpack compiled successfully`.
+Comprobación aparte: `node node_modules/typescript/bin/tsc --noEmit --incremental false`, exit 0.
+HTTP GET `http://localhost:3039`: 200. Esto acredita compilación de desarrollo y respuesta HTTP;
+no acredita aún el recorrido visual autenticado. Causa compatible con estado obsoleto del watcher;
+no se reprodujo TS2307 en compilación limpia. Logs locales (sin versionar):
+`dev/.local/monitor-restart.stdout.log` y `dev/.local/monitor-restart.stderr.log`.
