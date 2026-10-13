@@ -60,6 +60,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const composer = useRef<HTMLTextAreaElement>(null);
   const followBottom = useRef(true);
   const project = state?.projects.find(p => p.id === projectId);
+  const activeChoice = chat || state?.chats.find(c => c.id === chatId);
   const draftKey = projectId + '/' + (chatId || 'new');
   const draft = drafts[draftKey] || '';
   const refresh = useCallback(async () => {
@@ -80,7 +81,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     try { localStorage.setItem('galecore:lab:sidebar-width', String(sidebarWidth)); } catch { /* disponible hasta recargar */ }
   }, [sidebarWidth]);
   const resizeSidebar = (width: number) => setSidebarWidth(limitSidebarWidth(width, workspace.current?.clientWidth || window.innerWidth));
-  useEffect(() => { const ok = state?.providers.find(x => x.installed); if (ok && !state?.providers.find(x => x.id === provider)?.installed) setProvider(ok.id); }, [state, provider]);
+  useEffect(() => { const ok = state?.providers.find(x => x.installed); if (ok && !state?.providers.find(x => x.id === provider)?.installed) { setProvider(ok.id); setChatSettings({model:'',effort:''}); } }, [state, provider]);
   useEffect(() => { sessionStorage.setItem('galecore:lab:project', projectId); }, [projectId]);
   useEffect(() => { if(chatId) sessionStorage.setItem('galecore:lab:chat',chatId); else sessionStorage.removeItem('galecore:lab:chat'); },[chatId]);
   useEffect(() => {
@@ -139,7 +140,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     return () => { window.removeEventListener('keydown',trap); previous?.focus(); };
   },[creating,filesOpen]);
   const selectProject = (p: WorkspaceProject) => { selection.current++; setProjectId(p.id); setChatId(null); setChat(null); setView('chat'); setExpanded(v=>({...v,[p.id]:true})); setError(''); };
-  const selectChat = (p: WorkspaceProject, c: WorkspaceState['chats'][number]) => { selection.current++; setProjectId(p.id); setChatId(c.id); setChat(null); setProvider(c.provider); setView('chat'); setError(''); };
+  const selectChat = (p: WorkspaceProject, c: WorkspaceState['chats'][number]) => { selection.current++; setProjectId(p.id); setChatId(c.id); setChat(null); setView('chat'); setError(''); };
   const newChat = () => { selection.current++; setChatId(null); setChat(null); setView('chat'); setError(''); };
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true);
@@ -148,7 +149,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     finally { setBusy(false); }
   };
   const send = async (e: React.FormEvent) => {
-    e.preventDefault(); if(!draft.trim() || busy || chat?.state === 'running' || !project) return; setBusy(true); setError(''); const sendingSelection = selection.current;
+    e.preventDefault(); if(!draft.trim() || busy || (chatId && !chat) || chat?.state === 'running' || !project) return; setBusy(true); setError(''); const sendingSelection = selection.current;
     try {
       const target = chat || await labRequest<WorkspaceChat>('/chats',{project:projectId,provider,...(state?.chatOptions?.[provider] ? chatSettings : {})});
       const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text:draft});
@@ -182,7 +183,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         resizeSidebar(e.key === 'Home' ? 200 : e.key === 'End' ? 480 : sidebarWidth + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 40 : 10));
       }}/>}
     <section className="lab-chat-main">
-      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><LabModelPicker provider={chat?.provider || provider} model={chat ? chat.model || '' : chatSettings.model} effort={chat ? chat.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><div className="lab-header-actions"><nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button>{project?.type==='strategy'&&<button aria-current={view==='design'?'page':undefined} onClick={()=>setView('design')}>Diseño</button>}<button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav><button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Files</button></div></header>
+      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><div className="lab-header-actions"><nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button>{project?.type==='strategy'&&<button aria-current={view==='design'?'page':undefined} onClick={()=>setView('design')}>Diseño</button>}<button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav><button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Files</button></div></header>
       {view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <>
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;
@@ -195,7 +196,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}<button onClick={refresh}>Reintentar conexión</button></div>}
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
-      <form className="lab-chat-composer" onSubmit={send}><textarea ref={composer} rows={1} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" aria-describedby="lab-composer-hint" title="Enter para enviar · Shift + Enter para otra línea" value={draft} onChange={e=>setDrafts(v=>({...v,[draftKey]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy&&chat?.state!=='running')e.currentTarget.form?.requestSubmit();}}}/><div className="lab-composer-toolbar">{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state}><ArrowUp size={19}/></button>}</div><small id="lab-composer-hint" className="lab-composer-hint">Enter para enviar · Shift + Enter para otra línea</small></form>
+      <form className="lab-chat-composer" onSubmit={send}><textarea ref={composer} rows={1} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" aria-describedby="lab-composer-hint" title="Enter para enviar · Shift + Enter para otra línea" value={draft} onChange={e=>setDrafts(v=>({...v,[draftKey]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy&&chat?.state!=='running')e.currentTarget.form?.requestSubmit();}}}/><div className="lab-composer-toolbar">{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div><small id="lab-composer-hint" className="lab-composer-hint">Enter para enviar · Shift + Enter para otra línea</small></form>
       </>}
     </section>
     {creating && <div className="lab-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="lab-create-title" className="lab-create-project"><header><h2 id="lab-create-title">Nuevo proyecto</h2><button className="lab-icon" aria-label="Cerrar" onClick={()=>setCreating(false)}><X size={19}/></button></header><form onSubmit={createProject}><label>Nombre<input autoFocus required maxLength={100} value={projectLabel} onChange={e=>setProjectLabel(e.target.value)} placeholder="Estrategia SPY"/></label><label>Tipo<select value={projectKind} onChange={e=>setProjectKind(e.target.value as LabProjectKind)}><option value="strategy">Estrategia</option><option value="analysis">Análisis</option><option value="personal">Personal</option></select></label><p>{projectKind==='strategy'?'El chat guía investigación, diseño y preparación para Shadow.':'Archivos, memoria y convenciones propias.'}</p>{error && <p role="alert">{error}</p>}<button className="btn" disabled={busy||!projectLabel.trim()}>Crear proyecto</button></form></section></div>}

@@ -28,6 +28,11 @@
 .lab-sidebar-footer > span { display:flex; align-items:center; gap:7px; color:var(--text-muted); font-size:12px; margin-top:18px; }
 .lab-sidebar-footer i { width:5px; height:5px; background:var(--text-muted); border-radius:50%; }
 .lab-sidebar-footer i.online { background:var(--green); }
+@media(min-width:701px) {
+  .lab-chat-sidebar { overflow:hidden; }
+  .lab-chat-sidebar > nav { flex:1; min-height:0; overflow-y:auto; }
+  .lab-sidebar-heading,.lab-project-heading,.lab-sidebar-footer { flex-shrink:0; }
+}
 .sidebar-collapsed .lab-sidebar-heading { flex-direction:column; }
 .sidebar-collapsed .lab-new-chat { padding:10px; }
 .sidebar-collapsed .lab-new-chat span { display:none; }

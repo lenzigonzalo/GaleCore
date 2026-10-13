@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Lab } from './Lab';
 import { labRequest } from '../api/lab';
 jest.mock('../api/lab', () => ({ labRequest: jest.fn() }));
@@ -9,6 +9,23 @@ beforeEach(() => {
   sessionStorage.clear(); jest.clearAllMocks();
   (labRequest as jest.Mock).mockResolvedValue({ projects: [{ id: 'personal', label: 'Personal', type: 'personal' }], chats: [], providers: [{ id: 'codex', label: 'Codex', installed: true }] });
   window.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+});
+test('browsing Claude history preserves the coherent Codex selection for a new chat', async () => {
+  const history={id:'history',project:'personal',provider:'claude',model:'opus',effort:'high',title:'Anterior',state:'idle',messages:[]};
+  const metadata={projects:[{id:'personal',label:'Personal',type:'personal'}],chats:[history],providers:[{id:'codex',installed:true},{id:'claude',installed:true}],chatOptions:{codex:{models:['gpt-fixture'],efforts:['high']},claude:{models:['opus'],efforts:['high']}}};
+  (labRequest as jest.Mock).mockImplementation((path,body)=>Promise.resolve(path==='/workspaces'?metadata:path==='/chats'?{...history,id:'new',...body}:history));
+  render(<Lab onMonitor={()=>{}}/>);
+  await screen.findByRole('button',{name:'Personal'});
+  fireEvent.click(screen.getByRole('button',{name:/Proveedor y modelo/}));
+  fireEvent.click(screen.getByRole('option',{name:'Codex — GPT-fixture'}));
+  fireEvent.click(screen.getByRole('button',{name:'Personal'}));
+  fireEvent.click(screen.getByRole('button',{name:'Anterior'}));
+  await screen.findByRole('button',{name:'Proveedor y modelo: Claude - Opus'});
+  fireEvent.click(screen.getAllByRole('button',{name:/^Nuevo chat$/})[0]);
+  expect(screen.getByRole('button',{name:'Proveedor y modelo: Codex - GPT-fixture'})).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox',{name:'Mensaje al proyecto'}),{target:{value:'fixture'}});
+  fireEvent.click(screen.getByRole('button',{name:'Enviar mensaje'}));
+  await waitFor(()=>expect(labRequest).toHaveBeenCalledWith('/chats',{project:'personal',provider:'codex',model:'gpt-fixture',effort:''}));
 });
 test('Lab mantiene proyectos y borrador, sin logo ni segundo control de barra', async () => {
   const props = { onMonitor: () => {}, onSidebarToggle: jest.fn() };

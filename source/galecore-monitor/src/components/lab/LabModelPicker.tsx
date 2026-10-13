@@ -19,7 +19,7 @@ export function LabModelPicker({ provider, model, effort, providers, options, lo
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const displayed = model || (!locked && options?.[provider]?.defaultModel) || '';
-  const availableEfforts = options?.[provider]?.modelEfforts?.[model] || options?.[provider]?.efforts || [];
+  const availableEfforts = options?.[provider]?.modelEfforts?.[displayed] || options?.[provider]?.efforts || [];
   useEffect(() => {
     if (!open) return;
     const outside = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
@@ -73,7 +73,7 @@ export function LabModelPicker({ provider, model, effort, providers, options, lo
         })}
       </div>
       {options?.[provider] && <label className="lab-provider-effort">Esfuerzo
-        <select aria-label="Esfuerzo de la conversación" value={effort} disabled={locked || model.includes('haiku')}
+        <select aria-label="Esfuerzo de la conversación" value={effort} disabled={locked || displayed.includes('haiku')}
           onChange={event => onChange({ provider, model, effort: event.target.value })}>
           <option value="">Predeterminado</option>{availableEfforts.map(value => <option key={value} value={value}>{effortLabels[value] || value}</option>)}
         </select>
