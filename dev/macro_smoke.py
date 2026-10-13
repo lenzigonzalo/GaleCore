@@ -81,7 +81,7 @@ def main() -> int:
         page.screenshot(path=str(args.output / "panorama-mobile.png"), full_page=True)
         assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
         page.locator("main").evaluate("el => el.scrollTop = el.scrollHeight")
-        page.screenshot(path=str(args.output / "radar-mobile.png"))
+        page.screenshot(path=str(args.output / "eventos-mobile.png"))
         page.get_by_role("button", name="Tesoro 10 años", exact=True).click()
         assert page.get_by_role("dialog").bounding_box()["width"] >= 380
         page.screenshot(path=str(args.output / "detalle-mobile.png"))

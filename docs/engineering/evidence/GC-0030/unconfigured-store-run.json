@@ -1,0 +1,28 @@
+{
+  "started_at": "2026-10-13T18:21:09.484486+00:00",
+  "mode": "real-dev-unconfigured-store",
+  "checks": [
+    {
+      "path": "/App/Macro/Snapshot",
+      "status": 503,
+      "code": "macro_store_unconfigured"
+    },
+    {
+      "path": "/App/Macro/Snapshots/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": 503,
+      "code": "macro_store_unconfigured"
+    },
+    {
+      "path": "/App/Macro/Series/UST10?snapshotId=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": 503,
+      "code": "macro_store_unconfigured"
+    },
+    {
+      "path": "/App/Macro/Events?snapshotId=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "status": 503,
+      "code": "macro_store_unconfigured"
+    }
+  ],
+  "finished_at": "2026-10-13T18:21:19.245333+00:00",
+  "exit_code": 0
+}
