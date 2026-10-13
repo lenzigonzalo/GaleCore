@@ -12,11 +12,14 @@ from playwright.sync_api import sync_playwright
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--saved-data', action='store_true', help='QA visual con snapshot real guardado y sesión sintética aislada')
+    parser.add_argument('--sidebar-only', action='store_true', help='Comprobar lateral única de Lab y navegación general')
     args = parser.parse_args()
     root = Path(__file__).resolve().parent.parent
     env = json.loads(Path('C:/Users/lenzi/OneDrive/Escritorio/GaleCore/GaleCore/dev/.local/env.json').read_text(encoding='utf-8'))
     assert env['project_ref'] == 'ecymbgpimqbtcvqyjtaq'
     output = root / 'docs/engineering/evidence/GC-0030/visual-feedback'
+    if args.sidebar_only:
+        output = root / 'docs/engineering/evidence/GC-0030/sidebar-unified'
     output.mkdir(parents=True, exist_ok=True)
     report = {'started_at': datetime.now(timezone.utc).isoformat(), 'checks': [], 'mode': 'saved-real-data-synthetic-session' if args.saved_data else 'real-dev-browser'}
     with sync_playwright() as p:
@@ -62,6 +65,13 @@ def main() -> None:
             raise
         assert page.get_by_role('button', name='Copiar enlace', exact=True).count() == 0
         assert page.get_by_text('CONTEXTO DE MERCADO', exact=True).count() == 0
+        if args.sidebar_only:
+            sidebar_checks(page, output, report)
+            report.update({'browser': browser.version, 'finished_at': datetime.now(timezone.utc).isoformat(), 'exit_code': 0})
+            (output / 'browser-run.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
+            print(json.dumps(report, ensure_ascii=True))
+            browser.close()
+            return
         page.screenshot(path=str(output / 'panorama.png'))
         page.get_by_role('button', name='Ocultar barra lateral').click()
         assert page.get_by_role('navigation', name='Navegación del espacio').count() == 0
@@ -115,6 +125,39 @@ def main() -> None:
     report.update({'finished_at': datetime.now(timezone.utc).isoformat(), 'exit_code': 0})
     (output / 'browser-run.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
     print(json.dumps(report, ensure_ascii=True))
+
+
+def sidebar_checks(page, output: Path, report: dict) -> None:
+    assert page.get_by_role('navigation', name='Navegación del espacio').count() == 1
+    page.screenshot(path=str(output / 'monitor.png'))
+    mode = page.get_by_role('navigation', name='Espacios de GaleCore')
+    mode.get_by_role('button', name='Lab', exact=True).click()
+    page.get_by_role('button', name='Nuevo chat', exact=True).first.wait_for()
+    assert page.get_by_role('navigation', name='Navegación del espacio').count() == 0
+    assert page.locator('.lab-sidebar-brand').count() == 0
+    assert page.get_by_role('button', name='Ocultar proyectos', exact=True).count() == 0
+    assert page.locator('.workspace-logo').count() == 1
+    composer = page.get_by_role('textbox', name='Mensaje al proyecto')
+    composer.fill('Borrador visual de prueba; no enviado')
+    page.screenshot(path=str(output / 'lab.png'))
+    page.get_by_role('button', name='Ocultar barra lateral').click()
+    assert not page.locator('#lab-project-sidebar').is_visible()
+    assert composer.input_value() == 'Borrador visual de prueba; no enviado'
+    page.get_by_role('button', name='Mostrar barra lateral').click()
+    assert page.locator('#lab-project-sidebar').is_visible()
+    assert composer.input_value() == 'Borrador visual de prueba; no enviado'
+    composer.fill('')
+    mode.get_by_role('button', name='Monitor', exact=True).click()
+    assert page.get_by_role('navigation', name='Navegación del espacio').count() == 1
+    page.get_by_role('button', name='Ocultar barra lateral').click()
+    assert page.get_by_role('navigation', name='Navegación del espacio').count() == 0
+    page.get_by_role('button', name='Mostrar barra lateral').click()
+    page.set_viewport_size({'width': 390, 'height': 844})
+    mode.get_by_role('button', name='Lab', exact=True).click()
+    page.get_by_role('button', name='Ocultar barra lateral').click()
+    assert page.evaluate('document.documentElement.scrollWidth <= window.innerWidth')
+    page.screenshot(path=str(output / 'lab-mobile.png'))
+    report['checks'] = ['Una lateral por espacio y un logo global', 'Control superior oculta/restaura proyectos sin perder borrador; sin enviar mensajes', 'Formato lateral de Lab en Monitor; navegación conservada', 'Lab móvil sin overflow']
 
 
 if __name__ == '__main__':

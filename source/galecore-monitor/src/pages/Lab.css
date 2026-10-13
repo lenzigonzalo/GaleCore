@@ -125,10 +125,6 @@
 @media(max-width:480px) { .lab-chat-workspace { grid-template-columns:130px minmax(0,1fr); } .lab-chat-sidebar { padding:14px 6px; } .lab-project-select { font-size:12px; padding-inline:6px; gap:6px; } .lab-project-row > .lab-icon { width:24px; } .lab-sidebar-heading { flex-wrap:wrap; } .lab-new-chat { font-size:12px; padding-inline:6px; } .lab-project-chats { margin-left:9px; padding-left:4px; }.lab-chat-header nav button { padding:8px; }.lab-files-button { padding:8px; }.lab-chat-welcome h1 { font-size:23px; }.lab-shadow-metrics dl { grid-template-columns:1fr; }.lab-explorer-body { grid-template-columns:1fr; }.lab-explorer-body > aside { max-height:180px; border-right:0; border-bottom:1px solid var(--border); }.lab-explorer { height:90vh; } }
 @media(prefers-reduced-motion:reduce) { .lab-messages { scroll-behavior:auto; } }
 
-.lab-sidebar-brand { border: 0; background: transparent; color: var(--text-primary); font: 600 19px var(--font-sans); text-align: left; padding: 8px 10px 22px; cursor: pointer; }
-.lab-sidebar-brand span { color: var(--accent); }
-.sidebar-collapsed .lab-sidebar-brand { font-size: 0; padding-inline: 0; text-align: center; }
-.sidebar-collapsed .lab-sidebar-brand::before { content: "GC"; font-size: 18px; }
 
 /* Lectura cómoda: conversación centrada y compositor compacto, nombres editables. */
 .lab-design-view { max-width:none; padding:28px 32px; }
@@ -259,9 +255,10 @@
   .lab-chat-workspace:not(.sidebar-collapsed) .lab-chat-sidebar { max-height: 180px; border-right: 0; border-bottom: 1px solid var(--border-dark); }
   .lab-chat-workspace:not(.sidebar-collapsed) { grid-template-rows: auto minmax(0, 1fr); }
   .lab-sidebar-heading { margin-bottom: 8px; }
-  .lab-sidebar-brand { padding-bottom: 8px; }
   .lab-sidebar-footer { padding-top: 8px; }
   .lab-chat-composer small { font-size: 12px; }
   .lab-chat-composer select { min-width: 0; }
   .lab-composer-toolbar .lab-settings-label { display:none; }
 }
+.lab-chat-workspace.sidebar-hidden { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr); }
+.lab-chat-workspace.sidebar-hidden > .lab-chat-sidebar { display:none; }

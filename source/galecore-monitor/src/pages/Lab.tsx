@@ -11,7 +11,7 @@ const limitSidebarWidth = (width: number, available: number) => Math.max(200, Ma
 function FileTree({ nodes, selected, onSelect }: { nodes: WorkspaceFile[]; selected: string; onSelect: (path: string) => void }) {
   return <ul className="lab-file-tree">{nodes.map(n => <li key={n.path}>{n.kind === 'folder' ? <details open><summary><Folder size={16}/>{n.name}</summary><FileTree nodes={n.children || []} selected={selected} onSelect={onSelect}/></details> : <button aria-pressed={selected === n.path} onClick={() => onSelect(n.path)}><FileText size={16}/>{n.name}</button>}</li>)}</ul>;
 }
-export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => void; onNavigate?: (tab: Tab) => void }) {
+export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, onSidebarToggle }: { onMonitor: () => void; onNavigate?: (tab: Tab) => void; sidebarHidden?: boolean; onSidebarToggle?: () => void }) {
   const [state, setState] = useState<WorkspaceState | null>(null);
   const [projectId, setProjectId] = useState(() => sessionStorage.getItem('galecore:lab:project') || 'personal');
   const [chatId, setChatId] = useState<string | null>(() => sessionStorage.getItem('galecore:lab:chat'));
@@ -158,10 +158,9 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
   };
   const openFile = async (path:string) => { const sequence = ++fileSequence.current; setFilePath(path); setFileText(''); setFileError(''); setFileLoading(true); try { const f = await labRequest<{text:string}>('/workspaces/' + projectId + '/files?path=' + encodeURIComponent(path)); if(sequence === fileSequence.current) setFileText(f.text); } catch(e) { if(sequence === fileSequence.current) setFileError(e instanceof Error ? e.message : 'Archivo no disponible.'); } finally { if(sequence === fileSequence.current) setFileLoading(false); } };
   const stop = async () => { if(!chat) return; try { await labRequest('/chats/' + chat.id + '/stop',{}); } catch { setError('No se pudo detener la respuesta.'); } };
-  return <div ref={workspace} className={'lab-chat-workspace' + (collapsed ? ' sidebar-collapsed' : '')} style={{ '--lab-sidebar-width': sidebarWidth + 'px' } as React.CSSProperties}>
+  return <div ref={workspace} className={'lab-chat-workspace' + (sidebarHidden ? ' sidebar-hidden' : collapsed ? ' sidebar-collapsed' : '')} style={{ '--lab-sidebar-width': sidebarWidth + 'px' } as React.CSSProperties}>
     <aside className="lab-chat-sidebar" id="lab-project-sidebar">
-      <button className="lab-sidebar-brand" onClick={()=>onNavigate('inicio')} aria-label="Ir a Monitor">GaleCore<span>.</span></button>
-      <div className="lab-sidebar-heading"><button className="lab-new-chat" onClick={newChat}><MessageSquare size={19}/><span>Nuevo chat</span></button><button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button></div>
+      <div className="lab-sidebar-heading"><button className="lab-new-chat" onClick={newChat}><MessageSquare size={19}/><span>Nuevo chat</span></button>{!onSidebarToggle && <button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>}</div>
       {!collapsed && <><div className="lab-project-heading"><span>Proyectos</span><button className="lab-icon" aria-label="Crear proyecto" onClick={()=>setCreating(true)}><Plus size={18}/></button></div>
       <nav aria-label="Proyectos y conversaciones">{state?.projects.map(p => <div className="lab-project-group" key={p.id}>
         <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}><button className="lab-project-select" onClick={()=>selectProject(p)} onDoubleClick={()=>startEdit(p.id,p.label)}><Folder size={18}/>{editing===p.id ? renameInput(p.id,p.label) : <span>{name(p.id,p.label)}</span>}</button><button className="lab-icon lab-pencil" aria-label={'Renombrar ' + name(p.id,p.label)} onClick={()=>startEdit(p.id,p.label)}><Pencil size={14}/></button><button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={()=>setExpanded(v=>({...v,[p.id]:!v[p.id]}))}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
@@ -169,7 +168,7 @@ export function Lab({ onMonitor, onNavigate = () => {} }: { onMonitor: () => voi
       </div>)}</nav>
       <footer className="lab-sidebar-footer"><button onClick={()=>onNavigate('inteligencia')}><BookOpen size={17}/>Biblioteca</button><button onClick={()=>onNavigate('config')}><Settings size={17}/>Configuración</button><span><i className={state && !error ? 'online' : ''}/>{state ? 'En tu equipo' : 'Conectando…'}</span></footer></>}
     </aside>
-    {!collapsed && <div className="lab-sidebar-resize" role="separator" tabIndex={0} aria-label="Ancho de proyectos" aria-orientation="vertical" aria-controls="lab-project-sidebar"
+    {!collapsed && !sidebarHidden && <div className="lab-sidebar-resize" role="separator" tabIndex={0} aria-label="Ancho de proyectos" aria-orientation="vertical" aria-controls="lab-project-sidebar"
       aria-valuemin={200} aria-valuemax={limitSidebarWidth(480, workspace.current?.clientWidth || window.innerWidth)} aria-valuenow={sidebarWidth}
       title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
       onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId); }}
