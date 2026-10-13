@@ -2435,3 +2435,21 @@ declara faltantes estáticos (`data_needs … missing`). Ninguno registra, en ti
 
 **Aceptación:** un pedido sin cobertura produce la respuesta honesta, la continuación del trabajo y un registro único con
 contador; el mismo faltante pedido de nuevo suma al contador; ninguna consulta web.
+
+## BL-023 — `state` dice si una estrategia detenida sigue ejecutando salidas
+
+**Origen:** hallazgo 6 de WS-0028 (12/10, Q6). Para ver más adelante; sin fecha.
+
+Ante «¿pauso la estrategia?» una sesión confirmó leyendo código de GaleCore que una estrategia detenida sigue ejecutando
+stops y otra lo dio por «sin verificar». Debería salir de `state` (API), no de leer código.
+
+**Aceptación:** `state` indica por estrategia si, detenida, sigue ejecutando salidas/stops sobre sus posiciones abiertas.
+
+## BL-024 — El aviso de evento guarda el precio del subyacente al disparar
+
+**Origen:** hallazgo 8 de WS-0028 (12/10, Q7). Para ver más adelante; sin fecha.
+
+El aviso de evento (p. ej. CPI) no guarda el precio del subyacente cuando se dispara, y después no se puede juzgar cómo
+estaba la posición en ese momento.
+
+**Aceptación:** el aviso queda con símbolo, precio y hora al disparar, visibles al analizarlo.
