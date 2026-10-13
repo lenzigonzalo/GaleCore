@@ -39,7 +39,7 @@ def main() -> int:
         dev.sh(["dotnet", "build", str(dev.API_CSPROJ), "-nologo", "-v", "q"], cwd=dev.ROOT)
         return dev.sh(["dotnet", "run", "--no-build", "--no-launch-profile", "--project", str(dev.API_CSPROJ)],
                       cwd=dev.API_CSPROJ.parent, env=run_env, check=False)
-    run_env = {**os.environ, "PORT": "5173", "BROWSER": "none", "REACT_APP_API_BASE_URL": api_url,
+    run_env = {**os.environ, "PORT": "3039", "BROWSER": "none", "REACT_APP_API_BASE_URL": api_url,
                "REACT_APP_SIGNALR_HUB_URL": api_url + "/hubs/marketdata",
                "REACT_APP_SUPABASE_URL": env["supabase_url"], "REACT_APP_SUPABASE_ANON_KEY": env["anon_key"]}
     return dev.sh(["npm", "start"], cwd=dev.MONITOR, env=run_env, check=False)

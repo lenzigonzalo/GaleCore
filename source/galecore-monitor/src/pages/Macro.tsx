@@ -102,7 +102,7 @@ export function Macro() {
   };
   return <div className="macro-page">
     <nav className="macro-tabs" aria-label="Secciones Macro">{tabs.map(([id,label]) => <button key={id} aria-current={route.tab === id ? 'page' : undefined} onClick={() => navigate({ tab:id })}>{label}</button>)}</nav>
-    <div className="macro-toolbar"><span><strong>Últimos valores</strong> · cambio frente a 1 mes</span><button disabled={loading} onClick={() => { if(route.snapshot) navigate({snapshot:undefined}); else setRefresh(v=>v+1); }}>Actualizar</button></div>
+    <div className="macro-toolbar"><span>{route.tab === 'events' ? 'Eventos económicos' : <><strong>Últimos valores</strong> · cambio frente a 1 mes</>}</span><button disabled={loading} onClick={() => { if(route.snapshot) navigate({snapshot:undefined}); else setRefresh(v=>v+1); }}>Actualizar</button></div>
     {route.horizon !== 'month' && <p role="status" className="macro-attention">Este enlace usa un período que todavía no se puede comparar. <button onClick={() => navigate({horizon:'month',snapshot:undefined})}>Ver comparación de 1 mes</button></p>}
     {loading && <p role="status">Cargando datos de mercado…</p>}{error && <p role="alert" className="macro-attention">{error}</p>}
     {!loading && data && <>
@@ -110,7 +110,7 @@ export function Macro() {
       {route.tab === 'drivers' && <><div className="macro-driver-layout"><MacroCurve observations={data.observations} />{chart('T10YIE')}</div><div className="macro-charts">{['UST2','UST10','DFII10','BAMLH0A0HYM2'].map(chart)}</div><h2 className="macro-section-title">Tasas y curva</h2>{radar(data.seriesDefinitions.filter(d=>d.family==='rates'))}</>}
       {route.tab === 'markets' && <><h2 className="macro-section-title">Mercados de EE. UU.</h2>{radar(data.seriesDefinitions.filter(d=>d.family!=='rates' && d.family!=='volatility'))}<p className="macro-coverage">Todavía no hay series de acciones, monedas y materias primas. No se muestran sustitutos.</p><div className="macro-charts">{['BAMLH0A0HYM2','BAMLC0A0CM'].map(chart)}</div></>}
       {route.tab === 'volatility' && <><div className="macro-charts">{['VIX','VVIX','SKEW'].map(chart)}</div>{radar(data.seriesDefinitions.filter(d=>d.family==='volatility'))}</>}
-      {route.tab === 'events' && calendar}
+      {route.tab === 'events' && <>{route.snapshot && <p className="macro-coverage">Agenda de la consulta guardada del {date(data.generatedAt)}. El calendario lateral muestra la agenda actual.</p>}{calendar}</>}
       {data.sourceStatuses.filter(s=>s.id.endsWith('calendar') && s.status==='source-error').map(s=><p key={s.id} role="status" className="macro-attention">No se pudo actualizar una fuente del calendario. Los demás eventos siguen disponibles.</p>)}
     </>}
     {route.detail && data && !selected && <p role="alert">El dato de este enlace no está disponible. <button onClick={close}>Cerrar detalle</button></p>}

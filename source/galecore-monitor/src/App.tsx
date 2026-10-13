@@ -122,7 +122,7 @@ function Dashboard({ onLogout }: DashboardProps) {
             store.setSelectedSymbol(selected); setTab('gex');
           }} conversationOpen={terminalOpen} onConversation={() => setTab('lab')} />
       <div className="workspace-body flex flex-1">
-      {!isLabWorkspace && !sidebarHidden && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
+      {!sidebarHidden && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
 
 

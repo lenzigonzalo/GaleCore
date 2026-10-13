@@ -29,6 +29,12 @@ def main() -> None:
             token = encode({'alg': 'none'}) + '.' + encode({'sub': user['id'], 'exp': int(time.time()) + 3600}) + '.test'
             session = {'access_token': token, 'refresh_token': 'synthetic-test-only', 'token_type': 'bearer', 'expires_at': int(time.time()) + 3600, 'expires_in': 3600, 'user': user}
             page.add_init_script('localStorage.setItem("sb-ecymbgpimqbtcvqyjtaq-auth-token", ' + json.dumps(json.dumps(session)) + ')')
+            page.add_init_script("""document.addEventListener('DOMContentLoaded', () => {
+                const note = document.createElement('div');
+                note.textContent = 'QA VISUAL · DATOS REALES GUARDADOS · SESIÓN SIMULADA';
+                note.style.cssText = 'position:fixed;bottom:0;left:0;z-index:999;background:#503b12;color:white;padding:4px 10px;font-size:12px';
+                document.body.appendChild(note);
+            });""")
             def recorded(route):
                 url = route.request.url
                 if '/App/Macro/' in url:
@@ -43,13 +49,11 @@ def main() -> None:
                     payload = {}
                 route.fulfill(status=200, content_type='application/json', body=json.dumps(payload))
             page.route('http://localhost:7002/**', recorded)
-        page.goto('http://localhost:5173/?macro=panorama', wait_until='domcontentloaded')
+        page.goto('http://localhost:3039/?macro=panorama', wait_until='domcontentloaded')
         if not args.saved_data:
             page.locator('#username').fill('demo')
             page.locator('#password').fill(env['demo_password'])
             page.locator('button[type=submit]').click()
-        else:
-            page.evaluate("document.body.insertAdjacentHTML('afterbegin','<div style=\"position:fixed;bottom:0;left:0;z-index:999;background:#503b12;color:white;padding:4px 10px;font-size:12px\">QA VISUAL · DATOS REALES GUARDADOS · SESIÓN SIMULADA</div>')")
         try:
             page.get_by_role('button', name='Tesoro 10 años', exact=False).first.wait_for(timeout=45000)
         except Exception:
@@ -81,13 +85,16 @@ def main() -> None:
         page.get_by_role('button', name='Expectativas y drivers', exact=True).click()
         page.screenshot(path=str(output / 'drivers.png'))
         page.get_by_role('button', name='Eventos', exact=True).click()
+        if args.saved_data:
+            page.goto('http://localhost:3039/?macro=events&snapshot=' + snapshot['id'], wait_until='domcontentloaded')
+            page.get_by_text('Agenda de la consulta guardada', exact=False).wait_for()
         page.get_by_role('region', name='Calendario económico').wait_for()
         page.screenshot(path=str(output / 'eventos.png'))
         page.get_by_role('button', name='Mes siguiente').click()
         page.get_by_role('button', name='Hoy', exact=True).click()
         page.get_by_role('button', name='Abrir calendario', exact=True).click()
         page.locator('#lw-panel').get_by_role('region', name='Calendario económico').wait_for(timeout=45000)
-        resize = page.get_by_role('separator', name='Ancho de watchlist')
+        resize = page.get_by_role('separator', name='Ancho de calendario')
         resize.focus()
         resize.press('ArrowLeft')
         assert resize.get_attribute('aria-valuenow') == '440'

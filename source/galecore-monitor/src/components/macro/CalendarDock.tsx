@@ -11,7 +11,7 @@ export function CalendarDock() {
   useEffect(() => {
     const controller = new AbortController(); let alive = true;
     const from = new Date(); const to = new Date(); to.setDate(to.getDate() + 45);
-    const iso = (d: Date) => d.toISOString().slice(0, 10);
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     Promise.allSettled([
       api.get('/Data/Fred/ReleaseDates', { params: { from: iso(from), to: iso(to), releaseIds: '10,50,46,53' }, signal: controller.signal }),
       api.get('/Data/Fed/FomcMeetings', { signal: controller.signal }),
@@ -35,8 +35,8 @@ export function CalendarDock() {
     return () => { alive = false; controller.abort(); };
   }, []);
   return <>{loading ? <p style={{ padding: 20 }}>Cargando calendario…</p> : <>
-    <MacroCalendar events={events} onSelect={e => setSelected(e)} />
+    <p className="calendar-dock-scope">Agenda actual</p><MacroCalendar events={events} onSelect={e => setSelected(e)} />
     {errors.map(e => <p key={e} role="status" className="macro-attention" style={{ padding: 12 }}>{e}</p>)}
-    {selected && <section className="calendar-dock-detail"><h3>{eventName(selected.name)}</h3><p>{selected.date}</p><p>Fecha programada. El horario aún no está disponible.</p><a href={selected.sourceRef} target="_blank" rel="noreferrer">Ver publicación original ↗</a></section>}
+    {selected && <section className="calendar-dock-detail"><h3>{eventName(selected.name)}</h3><p>{selected.date}</p><p>Fecha programada. El horario aún no está disponible.</p><a href={selected.sourceRef} target="_blank" rel="noreferrer">Ver publicación original ↗</a><details><summary>Fuente y actualización</summary><p>{selected.source} · consultado {new Date(selected.retrievedAt).toLocaleString('es-AR')}</p></details></section>}
   </>}</>;
 }

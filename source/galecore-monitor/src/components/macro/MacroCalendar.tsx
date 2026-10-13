@@ -25,7 +25,7 @@ export function MacroCalendar({ events, onSelect }: { events: MacroEvent[]; onSe
       const matches = events.filter(e => e.date === date);
       const isToday = valid && day === today.getDate() && month.getMonth() === today.getMonth() && month.getFullYear() === today.getFullYear();
       return <div key={index} className={'mc-day' + (!valid ? ' empty' : '') + (isToday ? ' today' : '')}>
-        {valid && <><span className="mc-date">{day}</span>{matches.map(e => <button key={e.id} aria-label={eventName(e.name)} title={eventName(e.name)} onClick={click => onSelect(e, click.currentTarget)}><span className="mc-event-full">{eventName(e.name)}</span><span className="mc-event-short">{shortName(e.name)}</span></button>)}</>}
+        {valid && <><span className="mc-date">{day}</span>{matches.map(e => <button key={e.id} aria-label={`${date} · ${eventName(e.name)}`} title={eventName(e.name)} onClick={click => onSelect(e, click.currentTarget)}><span className="mc-event-full">{eventName(e.name)}</span><span className="mc-event-short">{shortName(e.name)}</span></button>)}</>}
       </div>;
     })}</div>
     <p className="mc-coverage">Eventos disponibles desde hoy y durante los próximos 45 días. Las fechas pueden cambiar.</p>

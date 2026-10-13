@@ -69,7 +69,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
       <button aria-label="Abrir calendario" aria-expanded={open && calendarMode} aria-controls="lw-panel" className={open && calendarMode ? 'active' : ''} onClick={() => { setCalendarMode(true); if (!open || calendarMode) (onToggle ?? onClose)(); }}><CalendarDays size={23}/></button>
       {onOpenSettings&&<div className="lw-account"><AccountMenu docked onOpenSettings={onOpenSettings} onLogout={onLogout} active={accountActive}/></div>}</nav>}
     <aside id="lw-panel" ref={panel} className="lw-drawer" style={{width}} aria-labelledby="lw-title" hidden={!open || !enabled}>
-      <div className="lw-resize" role="separator" tabIndex={0} aria-label="Ancho de watchlist" aria-orientation="vertical" aria-valuemin={360} aria-valuemax={720} aria-valuenow={width}
+      <div className="lw-resize" role="separator" tabIndex={0} aria-label={calendarMode ? 'Ancho de calendario' : 'Ancho de watchlist'} aria-orientation="vertical" aria-valuemin={360} aria-valuemax={720} aria-valuenow={width}
         title="Arrastrá para ajustar el ancho · doble clic para restablecer"
         onPointerDown={e => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.focus(); drag.current={x:e.clientX,width}; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={e => { if (drag.current) resize(drag.current.width + drag.current.x - e.clientX); }}

@@ -1,0 +1,20 @@
+npm : PASS src/pages/Macro.test.tsx (12.363 s)
+At line:2 char:17
++ ... :CI='true'; npm --prefix source/galecore-monitor test -- --watchAll=f ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS src/pages/Macro.test.tsx (12.363 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+PASS src/components/macro/CalendarDock.test.tsx
+PASS src/components/layout/WorkspaceSearch.test.tsx
+PASS src/components/layout/WorkspaceNav.test.tsx
+PASS src/pages/Resumen.test.tsx
+PASS src/components/layout/WorkspaceHeader.test.tsx
+
+Test Suites: 6 passed, 6 total
+Tests:       17 passed, 17 total
+Snapshots:   0 total
+Time:        34.474 s, estimated 104 s
+Ran all test suites within paths "src/pages/Macro.test.tsx", "src/pages/Resumen.test.tsx",
+"src/components/layout/WorkspaceNav.test.tsx", "src/components/layout/WorkspaceSearch.test.tsx",
+"src/components/layout/WorkspaceHeader.test.tsx", "src/components/macro/CalendarDock.test.tsx".

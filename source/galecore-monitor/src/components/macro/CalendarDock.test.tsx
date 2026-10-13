@@ -9,7 +9,9 @@ test('una fuente fallida conserva el calendario de la otra y muestra detalle leg
   (api.get as jest.Mock).mockImplementation((path: string) => path.includes('Fred') ? Promise.reject(new Error('offline'))
     : Promise.resolve({ data: { data: [{ end: date }], upstreamUrl: 'https://example.test/fed', retrievedAt: new Date().toISOString() } }));
   render(<CalendarDock />);
-  const event = await screen.findByRole('button', { name: 'Reunión FOMC' });
+  const event = await screen.findByRole('button', { name: /Reunión FOMC/ });
+  expect(event).toHaveAccessibleName(`${date} · Reunión FOMC`);
+  expect(screen.getByText('Agenda actual')).toBeInTheDocument();
   expect(screen.getByText('FRED: no se pudo actualizar el calendario.')).toBeInTheDocument();
   fireEvent.click(event);
   expect(screen.getByRole('link', { name: 'Ver publicación original ↗' })).toHaveAttribute('href', 'https://example.test/fed');
