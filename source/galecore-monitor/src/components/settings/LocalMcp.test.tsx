@@ -4,7 +4,7 @@ import { LocalMcp } from './LocalMcp';
 import { fetchLocalMcp, toggleLocalMcp } from '../../api/localMcp';
 jest.mock('../../api/localMcp', () => ({ fetchLocalMcp: jest.fn(), refreshLocalMcp: jest.fn(), toggleLocalMcp: jest.fn() }));
 const data = { workspace: 'test-project', status: 'configuration-only', servers: [{ id: 'a', name: 'sample', provider: 'codex', context: 'Todos los proyectos', scope: 'Usuario', enabled: true, transport: 'stdio', file: 'config.toml', revision: 'r' }] };
-beforeEach(() => { jest.resetAllMocks(); (fetchLocalMcp as jest.Mock).mockResolvedValue(data); });
+beforeEach(() => { jest.resetAllMocks(); localStorage.clear(); (fetchLocalMcp as jest.Mock).mockResolvedValue(data); });
 test('provider separation and configuration status are explicit', async () => {
   render(<LocalMcp/>);
   await screen.findByText('Sin MCP configurados');
@@ -34,11 +34,30 @@ test('conflict does not falsely change the switch', async () => {
 test('unapproved shared server is disabled and cannot be toggled from the panel', async () => {
   (fetchLocalMcp as jest.Mock).mockResolvedValue({ ...data, servers: [{ ...data.servers[0], provider: 'claude', enabled: false, approvalRequired: true }] });
   render(<LocalMcp/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Todas' }));
   const control = await screen.findByRole('switch');
   expect(control).toBeDisabled();
   expect(control).toHaveAttribute('aria-checked', 'false');
   fireEvent.click(control);
   expect(toggleLocalMcp).not.toHaveBeenCalled();
+});
+
+test('GaleCore favorites hide unrelated account tools and only change the local view', async () => {
+  (fetchLocalMcp as jest.Mock).mockResolvedValue({ ...data, workspace: 'active', servers: [
+    { ...data.servers[0], id: 'google', provider: 'claude', name: 'claude.ai Google Drive', displayName: 'Google Drive', context: 'active', origin: 'account' },
+    { ...data.servers[0], id: 'travel', provider: 'claude', name: 'claude.ai Booking.com', displayName: 'Booking.com', context: 'active', origin: 'account' },
+  ] });
+  render(<LocalMcp/>);
+  await screen.findByRole('heading', { name: 'Google Drive' });
+  expect(screen.queryByRole('heading', { name: 'Booking.com' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Todas' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Mostrar en vista GaleCore: Booking.com' }));
+  fireEvent.click(screen.getByRole('button', { name: 'GaleCore' }));
+  expect(screen.getByRole('heading', { name: 'Booking.com' })).toBeInTheDocument();
+  expect(JSON.parse(localStorage.getItem('galecore.localMcp.favorites.v1') || '[]')).toContain('claude:claude.ai Booking.com');
+  expect(toggleLocalMcp).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Mostrar en vista GaleCore: Booking.com' }));
+  expect(screen.queryByRole('heading', { name: 'Booking.com' })).toBeNull();
 });
 
 test('account connectors and plugins are shown in the active workspace rather than the legacy local project', async () => {

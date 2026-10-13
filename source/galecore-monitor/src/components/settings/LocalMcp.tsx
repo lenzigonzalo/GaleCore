@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plug, RefreshCw, Search } from 'lucide-react';
+import { Plug, RefreshCw, Search, Star } from 'lucide-react';
 import { fetchLocalMcp, refreshLocalMcp, toggleLocalMcp, LocalMcpInventory, LocalMcpServer } from '../../api/localMcp';
 import './LocalMcp.css';
 
@@ -12,6 +12,16 @@ const groups = [
   { id: 'plugin', label: 'MCP de plugins' },
   { id: 'local', label: 'Entradas de configuración local' },
 ];
+const favoritesKey = 'galecore.localMcp.favorites.v1';
+function savedFavorites(): string[] | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(favoritesKey) || 'null');
+    return Array.isArray(value) && value.every(item => typeof item === 'string') ? value : null;
+  } catch { return null; }
+}
+const favoriteId = (server: LocalMcpServer) => server.provider + ':' + server.name;
+const initialFavorite = (server: LocalMcpServer) => server.origin === 'account'
+  && /alpha|google drive|google calendar|gmail|ibkr|iol/i.test(server.name);
 
 export function LocalMcp() {
   const [inventory, setInventory] = useState<LocalMcpInventory | null>(null);
@@ -19,6 +29,8 @@ export function LocalMcp() {
   const [context, setContext] = useState('');
   const [query, setQuery] = useState('');
   const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [view, setView] = useState<'galecore' | 'all'>('galecore');
+  const [favorites, setFavorites] = useState<string[] | null>(savedFavorites);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -42,8 +54,17 @@ export function LocalMcp() {
   const selectedContext = contexts.includes(context) ? context
     : contexts.includes(inventory?.workspace || '') ? inventory!.workspace : contexts[0] || '';
   const visible = rows.filter(s => s.context === selectedContext);
+  const isFavorite = (server: LocalMcpServer) => favorites === null ? initialFavorite(server) : favorites.includes(favoriteId(server));
   const matches = visible.filter(s => (s.displayName || s.name).toLowerCase().includes(query.trim().toLowerCase())
-    && (enabledFilter === 'all' || s.enabled === (enabledFilter === 'enabled')));
+    && (enabledFilter === 'all' || s.enabled === (enabledFilter === 'enabled'))
+    && (view === 'all' || isFavorite(s)));
+  function favorite(server: LocalMcpServer) {
+    const selected = favorites || (inventory?.servers || []).filter(initialFavorite).map(favoriteId);
+    const id = favoriteId(server);
+    const next = selected.includes(id) ? selected.filter(item => item !== id) : [...selected, id];
+    setFavorites(next);
+    try { localStorage.setItem(favoritesKey, JSON.stringify(next)); } catch { /* Keep the current selection in memory. */ }
+  }
   async function refresh() {
     setBusy(true); setError(''); setMessage('');
     try { setInventory(await (provider === 'claude' ? refreshLocalMcp() : fetchLocalMcp())); }
@@ -63,7 +84,7 @@ export function LocalMcp() {
     <div className="local-mcp-toolbar">
       <div className="local-mcp-tabs" role="group" aria-label="CLI de las conexiones">
         {(['claude', 'codex'] as const).map(id => <button key={id} aria-pressed={provider === id} disabled={busy}
-          onClick={() => { setProvider(id); setContext(''); setQuery(''); setMessage(''); }}>{id === 'claude' ? 'Claude Code' : 'Codex'}</button>)}
+          onClick={() => { setProvider(id); setContext(''); setQuery(''); setMessage(''); setView(id === 'claude' ? 'galecore' : 'all'); }}>{id === 'claude' ? 'Claude Code' : 'Codex'}</button>)}
       </div>
       <button className="settings-action" disabled={busy || (provider === 'claude' && inventory?.refreshing)} onClick={refresh}><RefreshCw size={16}/>Actualizar</button>
     </div>
@@ -73,9 +94,15 @@ export function LocalMcp() {
       </select>
     </label>}
     <label className="local-mcp-search"><Search size={18}/><input aria-label="Buscar conexión" placeholder="Buscar Alpha Vantage, Google, IBKR…" value={query} onChange={e => setQuery(e.target.value)}/></label>
+    <div className="local-mcp-filter-row">
+    <div className="local-mcp-tabs local-mcp-filters" role="group" aria-label="Vista de conexiones">
+      <button aria-pressed={view === 'galecore'} onClick={() => setView('galecore')}>GaleCore</button>
+      <button aria-pressed={view === 'all'} onClick={() => setView('all')}>Todas</button>
+    </div>
     <div className="local-mcp-tabs local-mcp-filters" role="group" aria-label="Filtrar por habilitación">
       {([{ id: 'all', label: 'Todos' }, { id: 'enabled', label: 'Habilitados' }, { id: 'disabled', label: 'Deshabilitados' }] as const).map(filter =>
         <button key={filter.id} aria-pressed={enabledFilter === filter.id} onClick={() => setEnabledFilter(filter.id)}>{filter.label}</button>)}
+    </div>
     </div>
     {busy && <p role="status">Leyendo o guardando configuración…</p>}
     {provider === 'claude' && inventory?.refreshing && <p role="status">Comprobando conexiones con Claude Code…</p>}
@@ -84,7 +111,7 @@ export function LocalMcp() {
     {provider === 'claude' && inventory?.discoveryError && <div className="settings-error" role="alert">{inventory.discoveryError}</div>}
     {message && <p className="local-mcp-notice" role="status">{message}</p>}
     {inventory && !visible.length && <div className="local-mcp-empty"><Plug size={28}/><h2>Sin MCP configurados</h2><p>No hay conexiones detectadas para este CLI y proyecto.</p></div>}
-    {visible.length > 0 && !matches.length && <p>No hay conexiones que coincidan con los filtros.</p>}
+    {visible.length > 0 && !matches.length && <p>No hay conexiones que coincidan con los filtros. {view === 'galecore' && 'En Todas podés marcar las que querés ver con la estrella.'}</p>}
     {groups.map(group => {
       const entries = matches.filter(s => (s.origin || 'local') === group.id);
       if (!entries.length) return null;
@@ -93,7 +120,9 @@ export function LocalMcp() {
         <div className="local-mcp-list">{entries.map(server => {
           const status = server.enabled ? server.runtimeStatus || 'unverified' : 'disabled';
           return <section className="local-mcp-card" key={server.id} aria-label={'MCP ' + server.name}>
-            <div className="local-mcp-card-head"><div><h3>{server.displayName || server.name}</h3>
+            <div className="local-mcp-card-head"><button className={'local-mcp-favorite' + (isFavorite(server) ? ' is-selected' : '')}
+              aria-label={'Mostrar en vista GaleCore: ' + (server.displayName || server.name)} aria-pressed={isFavorite(server)} onClick={() => favorite(server)}><Star size={16}/></button>
+              <div className="local-mcp-card-info"><h3>{server.displayName || server.name}</h3>
               <span className={'local-mcp-runtime is-' + status}>{statusLabels[status] || 'Sin comprobar'}</span>
               <span className="local-mcp-scope"> · {server.scope}</span></div>
               <button className="local-mcp-switch" role="switch" aria-checked={server.enabled} aria-label={'Habilitar ' + server.name}
@@ -107,6 +136,7 @@ export function LocalMcp() {
       </section>;
     })}
     <div className="local-mcp-help"><strong>El interruptor controla la próxima sesión</strong>
+      <p>La estrella sólo selecciona lo que ves en GaleCore; no habilita ni deshabilita herramientas.</p>
       <p>En Claude se aplica al proyecto elegido, incluso para conectores de cuenta y plugins. No desconecta tu cuenta de Google ni del broker.</p>
       <p>El estado de conexión proviene de la última comprobación del CLI. Una entrada local sin comprobar sólo acredita que existe una configuración.</p>
       {provider === 'codex' && <p>Codex muestra los servidores MCP declarados en su configuración de usuario; sus integraciones de la aplicación quedan fuera de este listado.</p>}

@@ -82,6 +82,21 @@ def main():
         page.get_by_text("Comprobado con Claude Code:", exact=False).wait_for(
             timeout=70000
         )
+        assert page.get_by_role("heading", name="Booking.com", exact=True).count() == 0
+        page.get_by_role("button", name="Todas", exact=True).click()
+        page.get_by_role("heading", name="Booking.com", exact=True).wait_for()
+        page.get_by_role(
+            "button", name="Mostrar en vista GaleCore: Booking.com", exact=True
+        ).click()
+        page.get_by_role("button", name="GaleCore", exact=True).click()
+        page.get_by_role("heading", name="Booking.com", exact=True).wait_for()
+        page.get_by_role(
+            "button", name="Mostrar en vista GaleCore: Booking.com", exact=True
+        ).click()
+        assert page.get_by_role("heading", name="Booking.com", exact=True).count() == 0
+        report["checks"].append(
+            "GaleCore favorites exclude unrelated travel tools; stars edit browser preference only"
+        )
         page.get_by_role(
             "heading", name="Alpha Vantage MCP Server", exact=True
         ).wait_for(timeout=70000)
@@ -98,6 +113,11 @@ def main():
                 page.get_by_role("heading", name=name, exact=True).wait_for()
             page.screenshot(path=str(output / ("account-" + query.lower() + ".png")))
         search.fill("Google")
+        google_card = page.get_by_role(
+            "region", name="MCP claude.ai Google Drive", exact=True
+        )
+        assert google_card.bounding_box()["height"] <= 80
+        report["checks"].append("Compact desktop account row is at most 80px high")
         page.get_by_role("button", name="Habilitados", exact=True).click()
         page.get_by_role("heading", name="Google Drive", exact=True).wait_for()
         page.get_by_role("button", name="Todos", exact=True).click()

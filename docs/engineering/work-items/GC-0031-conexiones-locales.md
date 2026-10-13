@@ -41,3 +41,12 @@ ACTIVE_WORK_ITEM sigue WS-0031 de Claude; prioridad autorizada en roadmap §4.
 Owner 13/10: filtro Todos / Habilitados / Deshabilitados, combinado con busqueda.
 Navegador verifica que al apagar/prender una conexion la fila sale del filtro activo.
 Solo prueba temporal, sin modificar configuracion real; mismo 3039, sin cambios al harness.
+
+## Iteracion visual: filas compactas y seleccion GaleCore
+Owner 13/10: mas conexiones visibles y separar las ajenas a GaleCore.
+Filas compactas (desktop verificadas <=80px), controles y espacios reducidos.
+Vista GaleCore: favoritos editables con estrella, guardados solo en este navegador.
+Seleccion inicial de las conexiones que el owner menciono (Alpha Vantage, Google, IBKR, IoL).
+Todas conserva inventario completo; estrellas no cambian autorizaciones del CLI.
+6 tests de componente pasan; recorrido real + fixture verifica favoritos, filtros y mobile.
+Build: ../evidence/GC-0031/build-compact-favorites.txt. No se modifica backend/harness.

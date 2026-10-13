@@ -4,6 +4,8 @@
   "toggle": "temporary-home-only",
   "checks": [
     "Codex inventory: node_repl enabled, real configuration; no credential fields",
+    "GaleCore favorites exclude unrelated travel tools; stars edit browser preference only",
+    "Compact desktop account row is at most 80px high",
     "Claude native inventory: Alpha Vantage, Google, IBKR, IoL; correct workspace selected, legacy datafeed absent",
     "Mobile 390px: no horizontal overflow",
     "UI disable/enable invokes backend writer on temporary config, persists state, new-session notice",

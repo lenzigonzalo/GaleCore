@@ -83,3 +83,16 @@ Usa el estado del interruptor, independientemente de conectado/requiere autentic
 Recorrido Chromium agrega checks de filtro sobre inventario real y cambio de pertenencia
 al apagar/prender el fixture temporal. No cambia MCP reales ni el servicio local.
 Build de esta iteracion: build-enabled-filter.txt.
+
+## Filas compactas y favoritos para GaleCore (13/10)
+Filas desktop <=80px, menor padding/separacion/tipografia; mobile sin overflow.
+Vista GaleCore por defecto para Claude: seleccion inicial de conexiones mencionadas por
+el owner. Todas muestra el inventario completo. Estrellas suman/quitan favoritos,
+guardados en localStorage (nombres de conexiones, sin credenciales). No escriben config
+del CLI ni cambian habilitacion o conexion; los interruptores conservan esa funcion.
+Prueba de componente de preferencias: agregar/quitar Booking.com, persistencia local
+y cero llamadas al writer de MCP. 6 tests del componente pasan.
+Browser-run.json confirma seleccion sobre inventario real y tama?o compacto; auth
+sintetica declarada, preferencias aisladas en ese navegador de QA.
+Build: build-compact-favorites.txt. Fallo inicial de tipo en test (opcion exact no admitida
+por ByRoleOptions) corregido; navegador/dev vuelven a compilar sin errores.
