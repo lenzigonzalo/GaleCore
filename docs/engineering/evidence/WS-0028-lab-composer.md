@@ -170,4 +170,6 @@ Chromium aislado: exit 0; barra general medida de 50 px, título de 48 px; mensa
 de alto. Menú de cuenta abierto/cerrado por teclado, contenido dentro de la ventana en escritorio
 y móvil, sin clipping. Borradores, scroll, sidebar y settings siguen verdes; errores JS `[]`.
 Captura completa de escritorio inspeccionada con las dos barras reales. Preview `:3041` regenerada.
-`git diff --check`: exit 0. Build final en curso.
+`git diff --check` y `CI=true npm run build`: exit 0. Commit `0fd1c4e` integrado en
+`local/integracion`. Monitor servido: HTTP 200, `wideMessages: true`, `compactHeader: true`,
+errores JS `[]`; preview accesible. Sin reinicios, push ni E2E autenticado. WS-0029 sigue activo.
