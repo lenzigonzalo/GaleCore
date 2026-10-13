@@ -790,9 +790,13 @@ async def _cmd_project(args: argparse.Namespace) -> None:
     from galecore_ai.application import project
     kb = _build_knowledge_base()
     try:
-        if args.project_command == "show":
+        if args.project_command in ("show", "design"):
             target = args.target
-            if target == "portfolio":
+            if args.project_command == "design":
+                if not target.startswith("strategy:"):
+                    raise KnowledgeError("project design needs strategy:<name>")
+                view = project.strategy_design_view(kb, target.split(":", 1)[1])
+            elif target == "portfolio":
                 state, error = None, None
                 try:
                     from galecore_ai.adapters.galecore_space import SpaceClient
@@ -1436,6 +1440,7 @@ def build_parser() -> _JsonArgumentParser:
                                                "and the owner's log (GC-AI-0026)")
     pj_sub = p_project.add_subparsers(dest="project_command", required=True)
     pj_sub.add_parser("show", help="strategy:<name> or portfolio").add_argument("target")
+    pj_sub.add_parser("design", help="Verified local design only, without research or market queries").add_argument("target")
     p_pj_add = pj_sub.add_parser("add", help="Append the owner's words: thesis, story, decision, pending or done")
     p_pj_add.add_argument("name", help="Strategy name or portfolio")
     p_pj_add.add_argument("--kind", required=True, choices=["thesis", "story", "decision", "pending", "done"])

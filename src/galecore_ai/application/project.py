@@ -266,6 +266,77 @@ def strategy_project(kb: KnowledgeBase, name: str) -> dict:
     return view
 
 
+def strategy_design_view(kb: KnowledgeBase, name: str) -> dict:
+    """The saved design only: verified local files, no research scan, market API or model.
+
+    Keep the same approved/latest selection as project show. Expose the complete method instead
+    of reducing parameter rows to rule text; legacy omissions stay omissions.
+    """
+    if not project_name_ok(name) or name == PORTFOLIO:
+        raise KnowledgeError("use strategy:<name> for a design")
+    broken: list[dict] = []
+    versions = _versions(kb, name, broken)
+    approved = [v for v in versions if v["approval"] is not None]
+    selected = approved[-1] if approved else (versions[-1] if versions else None)
+    log = _safe_log(kb, name, broken)
+    view = {"project": f"strategy:{name}", "current": None,
+            "log": {"open": [_entry_view(e) for e in log.open_items()]},
+            "versions": [{"ref": v["ref"], "approved": v["approval"] is not None,
+                          "recorded_at": v["doc"].recorded_at.isoformat()} for v in versions],
+            "newer_than_approved": [], "integrity_failed": broken}
+    if selected:
+        doc = selected["doc"]
+        approval = selected["approval"]
+        if approval and approval.spec_hash != doc.spec_hash:
+            broken.append({"ref": selected["ref"], "problems": ["approval spec_hash mismatch"]})
+        try:
+            critique = kb.strategies.load_critique(f"{doc.name}/{doc.version}")
+        except (StrategyIntegrityError, StrategyStoreError) as exc:
+            broken.append({"ref": selected["ref"], "problems": [str(exc)]})
+            critique = None
+        current = doc.content.model_dump(mode="json")
+        current.update(ref=selected["ref"], approved=approval is not None, spec_hash=doc.spec_hash,
+                       recorded_at=doc.recorded_at.isoformat(), spec=json.loads(doc.spec_json),
+                       declared_gaps=doc.check.declared_gaps, controls=controls.classify(doc),
+                       critique=critique.content.model_dump(mode="json") if critique else None)
+        current["rules"] = [{**r.model_dump(mode="json"), "runtime": r.runtime.status.value,
+                             "runtime_note": r.runtime.note, "spec_paths": r.runtime.spec_paths}
+                            for r in doc.content.rules]
+        # Inventory of the implementation, not a retroactive amendment of the approved proposal.
+        # These routes are the dispatcher's canonical GaleCore paths; reading them calls no API.
+        from galecore_ai.capabilities.dispatcher import _ROUTE_TABLE
+        spec = current["spec"]
+        sources = []
+        if (spec.get("candidate_construction") or {}).get("legs"):
+            sources += [("Vencimientos, strikes y símbolos", "market_data.option_chains", "Constructor de candidatos"),
+                        ("Deltas por strike y vencimiento", "compute.gamma_exposure", "Selección por delta"),
+                        ("Bid, ask y hora por pata", "market_data.quote", "Crédito y valuación")]
+        for layer in (spec.get("entry_filters") or {}).values():
+            for gate in layer.get("gates", []) if isinstance(layer, dict) else []:
+                ref = gate.get("metric_ref", "").removeprefix("capability:")
+                capability = next((key for key in _ROUTE_TABLE if ref.startswith(key + ".")), None)
+                if capability:
+                    sources.append((gate.get("label", gate["id"]), capability, "Gate " + gate["id"]))
+        current["runtime_sources"] = [{"need": need, "capability": cap, "source": "GaleCore",
+                                       "endpoint": _ROUTE_TABLE[cap]["path"], "used_for": use}
+                                      for need, cap, use in sources]
+        current["runtime_calculations"] = []
+        if (spec.get("structure") or {}).get("default_structure") in (
+                "put_credit_spread", "call_credit_spread", "iron_condor"):
+            current["runtime_calculations"] = [
+                {"name": "Mid de cada pata", "inputs": "Bid y ask de GaleCore",
+                 "implementation": "RuntimeMarketData.LegQuote.Mid", "source": "GaleCore"},
+                {"name": "Crédito neto", "inputs": "Mids de patas vendidas y compradas",
+                 "implementation": "CreditSpreadCandidateBuilder", "source": "GaleCore"},
+                {"name": "Riesgo máximo del candidato", "inputs": "Ancho real, crédito y multiplicador del contrato",
+                 "implementation": "CreditSpreadCandidateBuilder", "source": "GaleCore"},
+            ]
+        view["current"] = current
+        view["newer_than_approved"] = [v["ref"] for v in versions if _vkey(v["ref"].split(":", 1)[1]) >
+                                      _vkey(selected["ref"].split(":", 1)[1])]
+    return view
+
+
 def _missing(view: dict) -> list[str]:
     out = []
     log = view["log"]
