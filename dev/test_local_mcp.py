@@ -130,7 +130,7 @@ class InventoryTests(unittest.TestCase):
         row = self.row("sample")
         self.codex.write_text("[broken", encoding="utf-8")
         original = self.codex.read_bytes()
-        with self.assertRaises(Exception):
+        with self.assertRaises(tomlkit.exceptions.ParseError):
             self.inventory.toggle(row["id"], False, row["revision"])
         self.assertEqual(original, self.codex.read_bytes())
 

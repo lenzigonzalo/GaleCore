@@ -29,7 +29,7 @@ def digest(raw: bytes) -> str:
 def read_json(path: Path) -> dict:
     data = json.loads(path.read_text(encoding="utf-8-sig")) if path.exists() else {}
     if not isinstance(data, dict):
-        raise ValueError("Expected object")
+        raise TypeError("Expected object")
     return data
 
 
