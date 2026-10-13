@@ -43,3 +43,4 @@
 .local-mcp-runtime.is-failed { color: var(--red-gc); }
 .local-mcp-scope, .local-mcp-checked { font-size: 14px; color: var(--text-secondary); }
 .local-mcp-switch:disabled { cursor: not-allowed; }
+.local-mcp-filters { width: fit-content; max-width: 100%; flex-wrap: wrap; }

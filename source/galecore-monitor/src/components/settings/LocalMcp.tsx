@@ -18,6 +18,7 @@ export function LocalMcp() {
   const [provider, setProvider] = useState<'claude' | 'codex'>('claude');
   const [context, setContext] = useState('');
   const [query, setQuery] = useState('');
+  const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
@@ -41,7 +42,8 @@ export function LocalMcp() {
   const selectedContext = contexts.includes(context) ? context
     : contexts.includes(inventory?.workspace || '') ? inventory!.workspace : contexts[0] || '';
   const visible = rows.filter(s => s.context === selectedContext);
-  const matches = visible.filter(s => (s.displayName || s.name).toLowerCase().includes(query.trim().toLowerCase()));
+  const matches = visible.filter(s => (s.displayName || s.name).toLowerCase().includes(query.trim().toLowerCase())
+    && (enabledFilter === 'all' || s.enabled === (enabledFilter === 'enabled')));
   async function refresh() {
     setBusy(true); setError(''); setMessage('');
     try { setInventory(await (provider === 'claude' ? refreshLocalMcp() : fetchLocalMcp())); }
@@ -71,6 +73,10 @@ export function LocalMcp() {
       </select>
     </label>}
     <label className="local-mcp-search"><Search size={18}/><input aria-label="Buscar conexión" placeholder="Buscar Alpha Vantage, Google, IBKR…" value={query} onChange={e => setQuery(e.target.value)}/></label>
+    <div className="local-mcp-tabs local-mcp-filters" role="group" aria-label="Filtrar por habilitación">
+      {([{ id: 'all', label: 'Todos' }, { id: 'enabled', label: 'Habilitados' }, { id: 'disabled', label: 'Deshabilitados' }] as const).map(filter =>
+        <button key={filter.id} aria-pressed={enabledFilter === filter.id} onClick={() => setEnabledFilter(filter.id)}>{filter.label}</button>)}
+    </div>
     {busy && <p role="status">Leyendo o guardando configuración…</p>}
     {provider === 'claude' && inventory?.refreshing && <p role="status">Comprobando conexiones con Claude Code…</p>}
     {provider === 'claude' && inventory?.checkedAt && <p className="local-mcp-checked">Comprobado con Claude Code: {new Date(inventory.checkedAt).toLocaleTimeString('es-AR')}</p>}
@@ -78,7 +84,7 @@ export function LocalMcp() {
     {provider === 'claude' && inventory?.discoveryError && <div className="settings-error" role="alert">{inventory.discoveryError}</div>}
     {message && <p className="local-mcp-notice" role="status">{message}</p>}
     {inventory && !visible.length && <div className="local-mcp-empty"><Plug size={28}/><h2>Sin MCP configurados</h2><p>No hay conexiones detectadas para este CLI y proyecto.</p></div>}
-    {visible.length > 0 && !matches.length && <p>No hay conexiones que coincidan con la búsqueda.</p>}
+    {visible.length > 0 && !matches.length && <p>No hay conexiones que coincidan con los filtros.</p>}
     {groups.map(group => {
       const entries = matches.filter(s => (s.origin || 'local') === group.id);
       if (!entries.length) return null;

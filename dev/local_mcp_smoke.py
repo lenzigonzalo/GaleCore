@@ -79,7 +79,9 @@ def main():
             "Codex inventory: node_repl enabled, real configuration; no credential fields"
         )
         page.get_by_role("button", name="Claude Code", exact=True).click()
-        page.get_by_text("Comprobado con Claude Code:", exact=False).wait_for(timeout=70000)
+        page.get_by_text("Comprobado con Claude Code:", exact=False).wait_for(
+            timeout=70000
+        )
         page.get_by_role(
             "heading", name="Alpha Vantage MCP Server", exact=True
         ).wait_for(timeout=70000)
@@ -96,6 +98,9 @@ def main():
                 page.get_by_role("heading", name=name, exact=True).wait_for()
             page.screenshot(path=str(output / ("account-" + query.lower() + ".png")))
         search.fill("Google")
+        page.get_by_role("button", name="Habilitados", exact=True).click()
+        page.get_by_role("heading", name="Google Drive", exact=True).wait_for()
+        page.get_by_role("button", name="Todos", exact=True).click()
         page.screenshot(path=str(output / "claude-real.png"))
         report["checks"].append(
             "Claude native inventory: Alpha Vantage, Google, IBKR, IoL; correct workspace selected, legacy datafeed absent"
@@ -136,17 +141,25 @@ def main():
         page.get_by_role("button", name="Codex", exact=True).click()
         switch = page.get_by_role("switch", name="Habilitar browser_fixture")
         switch.wait_for()
+        page.get_by_role("button", name="Habilitados", exact=True).click()
         switch.click()
         page.get_by_text("browser_fixture: deshabilitado.", exact=False).wait_for()
+        assert switch.count() == 0
+        page.get_by_role("button", name="Deshabilitados", exact=True).click()
         assert switch.get_attribute("aria-checked") == "false"
         assert "enabled = false" in config.read_text()
         switch.click()
         page.get_by_text("browser_fixture: habilitado.", exact=False).wait_for()
+        assert switch.count() == 0
+        page.get_by_role("button", name="Todos", exact=True).click()
         assert switch.get_attribute("aria-checked") == "true"
         assert "enabled = true" in config.read_text()
         page.screenshot(path=str(output / "toggle-temporary.png"))
         report["checks"].append(
             "UI disable/enable invokes backend writer on temporary config, persists state, new-session notice"
+        )
+        report["checks"].append(
+            "Enabled filter combines with search; rows disappear from enabled/disabled filter after toggling"
         )
         report["browser"] = browser.version
         report["exit_code"] = 0

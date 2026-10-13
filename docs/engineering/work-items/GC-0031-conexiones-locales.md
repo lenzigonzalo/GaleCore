@@ -36,3 +36,8 @@ Correccion owner 13/10: registro local datafeed no acreditaba MCP activo; faltab
 Proyecto del workspace seleccionado por defecto, buscador y estados de conexion reales.
 Actualizar solicita listado Claude en segundo plano (timeout 55s); no publica stdout/URLs/credenciales.
 ACTIVE_WORK_ITEM sigue WS-0031 de Claude; prioridad autorizada en roadmap §4.
+
+## Iteracion visual: filtro de habilitacion
+Owner 13/10: filtro Todos / Habilitados / Deshabilitados, combinado con busqueda.
+Navegador verifica que al apagar/prender una conexion la fila sale del filtro activo.
+Solo prueba temporal, sin modificar configuracion real; mismo 3039, sin cambios al harness.

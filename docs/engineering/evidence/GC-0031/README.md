@@ -76,3 +76,10 @@ Navegador actualizado: browser-run.json; auth sintetica aislada, inventario CLI 
 interruptores exclusivamente con archivos temporales. 15 backend / 5 frontend / build CI.
 Logs del build: build-account-discovery.txt. Review previo no cubre esta ampliacion,
 no se pidio recheck ni se cambia su resultado. F3 sigue documentado.
+
+## Filtro de habilitacion (13/10)
+Todos / Habilitados / Deshabilitados, combinado con el buscador y el proyecto/CLI.
+Usa el estado del interruptor, independientemente de conectado/requiere autenticacion.
+Recorrido Chromium agrega checks de filtro sobre inventario real y cambio de pertenencia
+al apagar/prender el fixture temporal. No cambia MCP reales ni el servicio local.
+Build de esta iteracion: build-enabled-filter.txt.
