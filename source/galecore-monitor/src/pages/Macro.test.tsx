@@ -47,3 +47,14 @@ test('recarga con enlace conserva snapshot y rechaza referencia inexistente', as
   render(<Macro />); await screen.findByText(/Referencia inexistente/);
   expect(fetchMock.mock.calls[0][3]).toBe('a'.repeat(64)); expect(screen.getByText(/corte guardado/)).toBeInTheDocument();
 });
+test('entrada desde navegación sin query copia un enlace Macro completo', async () => {
+  window.history.replaceState(null, '', '/');
+  const writeText = jest.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  render(<Macro />); await screen.findByText('Serie rates');
+  fireEvent.click(screen.getByRole('button', { name: 'Copiar enlace' }));
+  await screen.findByText('Enlace copiado');
+  const url = new URL(writeText.mock.calls[0][0]);
+  expect(url.searchParams.get('macro')).toBe('panorama'); expect(url.searchParams.get('horizon')).toBe('month');
+  expect(url.searchParams.get('snapshot')).toBe('a'.repeat(64));
+});

@@ -51,12 +51,14 @@ public class MacroController(IMediator mediator, IConfiguration config) : Contro
     [HttpGet("Snapshots/{id}")]
     public async Task<IActionResult> Stored(string id, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(config["Macro:SnapshotDirectory"])) return StoreUnavailable();
         var snapshot = await Load(id, ct);
         return snapshot == null ? NotFound(new { code = "macro_snapshot_not_found" }) : Ok(snapshot);
     }
     [HttpGet("Series/{id}")]
     public async Task<IActionResult> Series(string id, [FromQuery] string snapshotId, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(config["Macro:SnapshotDirectory"])) return StoreUnavailable();
         var snapshot = await Load(snapshotId, ct);
         var definition = snapshot?.SeriesDefinitions.SingleOrDefault(s => s.Id == id);
         return definition == null ? NotFound(new { code = "macro_series_not_found" }) : Ok(new { definition,
@@ -66,6 +68,7 @@ public class MacroController(IMediator mediator, IConfiguration config) : Contro
     [HttpGet("Events")]
     public async Task<IActionResult> Events([FromQuery] string snapshotId, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(config["Macro:SnapshotDirectory"])) return StoreUnavailable();
         var snapshot = await Load(snapshotId, ct);
         return snapshot == null ? NotFound(new { code = "macro_snapshot_not_found" }) : Ok(new { snapshotId,
             snapshot.Events, sourceStatuses = snapshot.SourceStatuses.Where(s => s.Id.EndsWith("calendar")) });
@@ -78,4 +81,6 @@ public class MacroController(IMediator mediator, IConfiguration config) : Contro
         if (!System.IO.File.Exists(path)) return null;
         return JsonSerializer.Deserialize<MacroSnapshot>(await System.IO.File.ReadAllTextAsync(path, ct), Json);
     }
+    private ObjectResult StoreUnavailable() => StatusCode(503,
+        new { code = "macro_store_unconfigured", error = "Almacenamiento Macro local no configurado." });
 }

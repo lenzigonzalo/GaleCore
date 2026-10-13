@@ -85,13 +85,18 @@ public class MacroSnapshotHandler(IMediator mediator) : IRequestHandler<MacroSna
             var rows = r.Data.SelectMany(day => new[] { ("2Y", "UST2"), ("5Y", "UST5"), ("10Y", "UST10"), ("30Y", "UST30") }
                 .Select(t => Row(t.Item2, day.Date, day.Rates.TryGetValue(t.Item1, out var value) ? value : null,
                     r.UpstreamUrl, r.RetrievedAt, null, cutoff))).ToArray();
-            return new(rows, Array.Empty<MacroEvent>(), Status("treasury", r, rows.Length == 0));
+            return new(rows, Array.Empty<MacroEvent>(), Status("treasury", r, !rows.Any(o => o.Value != null)));
         }, ct);
     private Task<Part> ReadFred(string id, DateTime from, DateTime cutoff, CancellationToken ct) => Read(id,
-        new FredSeriesRequest { SeriesId = id, From = from, To = cutoff }, r => new(
-            r.Data.Observations.Select(o => Row(id, o.Date, o.Value, r.UpstreamUrl, r.RetrievedAt,
+        new FredSeriesRequest { SeriesId = id, From = from, To = cutoff }, r =>
+        {
+            var expectedFrequency = id.StartsWith("BAML", StringComparison.Ordinal) ? "Daily, Close" : "Daily";
+            if (r.Data.Id != id || r.Data.Units != "Percent" || r.Data.Frequency != expectedFrequency)
+                throw new ValidationException("Identidad, unidad o frecuencia FRED incompatible con macro-v1.");
+            return new(r.Data.Observations.Select(o => Row(id, o.Date, o.Value, $"https://fred.stlouisfed.org/series/{id}", r.RetrievedAt,
                 $"{r.Data.RealtimeStart}:{r.Data.RealtimeEnd}", cutoff)).ToArray(), Array.Empty<MacroEvent>(),
-            Status(id, r, !r.Data.Observations.Any(o => o.Value != null))), ct);
+                Status(id, r, !r.Data.Observations.Any(o => o.Value != null)));
+        }, ct);
     private Task<Part> ReadCboe(string id, DateTime from, DateTime cutoff, CancellationToken ct) => Read(id,
         new CboeIndexHistoryRequest { Index = id, From = from, To = cutoff }, r => new(
             r.Data.Select(o => Row(id, o.Date, o.Close, r.UpstreamUrl, r.RetrievedAt, null, cutoff)).ToArray(),

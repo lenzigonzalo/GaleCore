@@ -36,8 +36,8 @@ public static class MacroCatalog
         D("SLOPE5_30", "Pendiente 5–30", "rates", "pb", "treasury"),
         D("DFII10", "Tasa real 10 años", "rates", "%", "fred"),
         D("T10YIE", "Breakeven 10 años", "rates", "%", "fred"),
-        D("BAMLH0A0HYM2", "High yield OAS", "credit", "%", "fred"),
-        D("BAMLC0A0CM", "Investment grade OAS", "credit", "%", "fred"),
+        D("BAMLH0A0HYM2", "High yield OAS", "credit", "%", "fred", "daily-close"),
+        D("BAMLC0A0CM", "Investment grade OAS", "credit", "%", "fred", "daily-close"),
         D("VIX", "VIX", "volatility", "puntos", "cboe"),
         D("VVIX", "VVIX", "volatility", "puntos", "cboe"),
         D("SKEW", "SKEW", "volatility", "puntos", "cboe"),
@@ -79,6 +79,8 @@ public static class MacroCalculations
             var shortRow = shortRows[longRow.ObservationTime];
             return longRow with { Id = $"{id}:{longRow.ObservationTime}", SeriesId = id,
                 Value = (longRow.Value - shortRow.Value) * 100m, Provenance = "calculated",
+                QualityStatus = longRow.Value == null || shortRow.Value == null ? "unavailable"
+                    : longRow.QualityStatus == "delayed" || shortRow.QualityStatus == "delayed" ? "delayed" : "available",
                 QualityReasons = new[] { $"long-minus-short-v1; entradas {longRow.Id}, {shortRow.Id}; fecha común." } };
         }).ToArray();
     }

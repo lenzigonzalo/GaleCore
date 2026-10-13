@@ -34,6 +34,7 @@ public class MacroDashboardTests
             O("UST2", "2026-10-12", 4.1m), O("UST2", "2026-10-13", null), O("UST10", "2026-10-13", 4.4m) };
         var result = MacroCalculations.Slope("SLOPE2_10", "UST2", "UST10", rows);
         Assert.Equal(2, result.Length); Assert.Equal(40m, result[0].Value); Assert.Null(result[1].Value);
+        Assert.Equal("unavailable", result[1].QualityStatus);
         Assert.Contains("UST2:2026-10-12", result[0].QualityReasons[0]);
     }
     [Theory]
@@ -51,8 +52,9 @@ public class MacroDashboardTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddMediatR(c => c.RegisterServicesFromAssemblyContaining<MacroSnapshotHandler>());
-        services.AddTransient<IRequestHandler<DataFeed.Application.Data.Treasury.TreasuryYieldCurveRequest,
-            SourcedResponse<List<DataFeed.Application.Data.Treasury.TreasuryCurveDayDto>>>, TreasuryStub>();
+        var treasury = new TreasuryStub();
+        services.AddSingleton<IRequestHandler<DataFeed.Application.Data.Treasury.TreasuryYieldCurveRequest,
+            SourcedResponse<List<DataFeed.Application.Data.Treasury.TreasuryCurveDayDto>>>>(treasury);
         using var provider = services.BuildServiceProvider();
         var mediator = provider.GetRequiredService<IMediator>();
         var snapshot = await new MacroSnapshotHandler(mediator).Handle(new(), default);
@@ -61,12 +63,20 @@ public class MacroDashboardTests
         Assert.Contains(snapshot.SourceStatuses, s => s.Id == "DFII10" && s.Status == "source-error");
         Assert.Contains(snapshot.Observations, o => o.SeriesId == "UST10" && o.Value == 4.5m);
         Assert.Null(snapshot.Metrics.Single(m => m.SeriesId == "DFII10").Value);
+        treasury.Fail = true;
+        var failedUpdate = await new MacroSnapshotHandler(mediator).Handle(new(), default);
+        Assert.Equal(snapshot.Observations.First(o => o.SeriesId == "UST10").RetrievedAt,
+            failedUpdate.Observations.First(o => o.SeriesId == "UST10").RetrievedAt);
+        Assert.Contains(failedUpdate.SourceStatuses, s => s.Id == "treasury" && s.Status == "source-error");
     }
     private class TreasuryStub : IRequestHandler<DataFeed.Application.Data.Treasury.TreasuryYieldCurveRequest,
         SourcedResponse<List<DataFeed.Application.Data.Treasury.TreasuryCurveDayDto>>>
     {
+        public bool Fail { get; set; }
         public Task<SourcedResponse<List<DataFeed.Application.Data.Treasury.TreasuryCurveDayDto>>> Handle(
-            DataFeed.Application.Data.Treasury.TreasuryYieldCurveRequest r, CancellationToken ct) => Task.FromResult(new SourcedResponse<List<DataFeed.Application.Data.Treasury.TreasuryCurveDayDto>> {
+            DataFeed.Application.Data.Treasury.TreasuryYieldCurveRequest r, CancellationToken ct) => Fail
+            ? throw new HttpRequestException("Synthetic failure, no network")
+            : Task.FromResult(new SourcedResponse<List<DataFeed.Application.Data.Treasury.TreasuryCurveDayDto>> {
                 Source = "treasury", RetrievedAt = DateTime.UtcNow, AsOf = "2026-10-12", UpstreamUrl = "https://example.test",
                 Data = new() { new("2026-10-12", new Dictionary<string, decimal> { ["2Y"] = 4, ["5Y"] = 4.2m, ["10Y"] = 4.5m, ["30Y"] = 4.8m }) } });
     }

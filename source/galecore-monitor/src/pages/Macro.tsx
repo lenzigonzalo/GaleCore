@@ -39,6 +39,15 @@ export function Macro() {
   }
   useEffect(() => { const pop = () => setRoute(readRoute()); window.addEventListener('popstate', pop); return () => window.removeEventListener('popstate', pop); }, []);
   useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has('macro')) {
+      url.searchParams.set('macro', 'panorama');
+      url.searchParams.set('horizon', readRoute().horizon);
+      url.searchParams.set('region', readRoute().region);
+      window.history.replaceState(null, '', url);
+    }
+  }, []);
+  useEffect(() => {
     const controller = new AbortController(); let alive = true;
     setLoading(true); setError(''); setData(null);
     fetchMacro(route.horizon, route.region, controller.signal, route.snapshot).then(snapshot => {
@@ -64,7 +73,10 @@ export function Macro() {
   const statusFor = (d: MacroDefinition) => sourceFailure(d) ? 'Error de fuente' : quality[lastFor(d.id)?.qualityStatus || 'unavailable'];
   async function copy() {
     if (!data) return;
-    const url = new URL(window.location.href); url.searchParams.set('snapshot', data.id);
+    const url = new URL(window.location.href);
+    url.searchParams.set('macro', route.tab); url.searchParams.set('horizon', route.horizon);
+    url.searchParams.set('region', route.region); url.searchParams.set('snapshot', data.id);
+    if (route.detail) url.searchParams.set('detail', route.detail); else url.searchParams.delete('detail');
     try { await navigator.clipboard.writeText(url.toString()); setCopied(true); } catch { setError('No se pudo copiar el enlace.'); }
   }
   const radar = (defs: MacroDefinition[]) => <div className="macro-table-wrap"><table className="macro-radar"><caption>Datos observados y cálculos · sin interpretación de IA</caption><thead><tr><th>Indicador / unidad</th><th>Nivel</th><th>Cambio</th><th>Magnitud</th><th>Observación / calidad</th></tr></thead><tbody>{families.map(([id, label]) => {

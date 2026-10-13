@@ -27,16 +27,25 @@ def main() -> int:
         page = context.new_page()
         page.on("response", lambda r: report["responses"].append({"path": r.url.split("?")[0].replace("http://localhost:7002", ""), "status": r.status}) if "/App/Macro/" in r.url else None)
         personal = []
-        page.on("request", lambda r: personal.append(r.url.split("?")[0]) if any(x in r.url for x in ["/Balances", "/Positions", "/Deploy", "/Stop"]) else None)
-        page.goto("http://localhost:5173/?macro=panorama", wait_until="domcontentloaded")
+        macro_entered = False
+        page.on("request", lambda r: personal.append(r.url.split("?")[0]) if macro_entered and any(x in r.url for x in ["/Balances", "/Positions", "/Deploy", "/Stop"]) else None)
+        page.goto("http://localhost:5173/", wait_until="domcontentloaded")
         page.get_by_label("Usuario", exact=True).fill("demo")
         page.locator("#password").fill(env["demo_password"])
         page.get_by_role("button", name="Entrar", exact=True).click()
+        page.get_by_role("button", name="Macro", exact=True).click()
+        macro_entered = True
         page.get_by_role("button", name="Tesoro 10 años", exact=True).wait_for(timeout=60000)
+        page.get_by_role("button", name="Copiar enlace", exact=True).click()
+        page.get_by_role("button", name="Enlace copiado", exact=True).wait_for()
+        initial_link = page.evaluate("navigator.clipboard.readText()")
+        assert "macro=panorama" in initial_link and "snapshot=" in initial_link
+        page.goto(initial_link, wait_until="domcontentloaded")
+        page.get_by_role("button", name="Tesoro 10 años", exact=True).wait_for(timeout=30000)
         assert page.get_by_text("P&L", exact=True).count() == 0
         assert page.get_by_text("Órdenes", exact=True).count() == 0
         page.screenshot(path=str(args.output / "panorama-desktop.png"), full_page=True)
-        report["checks"].append("Panorama real: seis familias, ausencia de gestión personal")
+        report["checks"].append("Monitor → Macro; enlace inmediato/recarga; seis familias, ausencia de gestión personal")
         page.get_by_role("button", name="Tesoro 10 años", exact=True).click()
         dialog = page.get_by_role("dialog")
         dialog.wait_for()
@@ -47,7 +56,7 @@ def main() -> int:
         assert page.get_by_role("button", name="Tesoro 10 años", exact=True).evaluate("el => el === document.activeElement")
         page.go_back()
         page.get_by_role("dialog").wait_for()
-        page.get_by_role("button", name="Cerrar · Esc", exact=True).click()
+        page.keyboard.press("Escape")
         report["checks"].append("Detalle fuente/fechas; Escape restaura foco; Atrás reabre detalle")
         page.get_by_role("button", name="Expectativas y drivers", exact=True).click()
         page.screenshot(path=str(args.output / "drivers-desktop.png"), full_page=True)
@@ -70,6 +79,9 @@ def main() -> int:
         page.get_by_role("button", name="Panorama", exact=True).click()
         page.set_viewport_size({"width": 390, "height": 844})
         page.screenshot(path=str(args.output / "panorama-mobile.png"), full_page=True)
+        assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+        page.locator("main").evaluate("el => el.scrollTop = el.scrollHeight")
+        page.screenshot(path=str(args.output / "radar-mobile.png"))
         page.get_by_role("button", name="Tesoro 10 años", exact=True).click()
         assert page.get_by_role("dialog").bounding_box()["width"] >= 380
         page.screenshot(path=str(args.output / "detalle-mobile.png"))
@@ -80,7 +92,7 @@ def main() -> int:
         report["exit_code"] = 0
         browser.close()
     (args.output / "browser-run.json").write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(json.dumps({"checks": report["checks"], "personal_requests": personal, "exit_code": 0}, ensure_ascii=False))
+    print(json.dumps({"checks": report["checks"], "personal_requests": personal, "exit_code": 0}, ensure_ascii=True))
     return 0
 
 
