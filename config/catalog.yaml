@@ -272,6 +272,7 @@ entries:
       registrar la aprobación del owner de esa versión exacta y desplegarla en SHADOW de desarrollo.
     example_requests:
       - Desarrollá esta estrategia hasta SHADOW.
+      - Quiero desarrollar una estrategia en SPY, guiame paso a paso
       - ¿Qué le falta a esta estrategia para correr en SHADOW y qué reglas no soporta GaleCore?
       - Quiero probar una estrategia de put credit spreads en SHADOW
       - Tengo una idea de estrategia, armala y ponela a prueba
