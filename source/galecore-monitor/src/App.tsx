@@ -57,6 +57,7 @@ function Dashboard({ onLogout }: DashboardProps) {
   };
   const isLabWorkspace = mode === 'lab' && ['lab', 'estrategias'].includes(tab);
   const [watchlistOpen,setWatchlistOpen] = useState(false);
+  const [watchlistWidth,setWatchlistWidth] = useState(420);
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
   const { setConfig, setLoading: setConfigLoading, setError: setConfigError, tickers } = useAppConfigStore();
@@ -107,7 +108,7 @@ function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => { setSocketStatus(status); }, [status]);
 
   return (
-    <div className={'workspace-shell flex has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)' }}>
+    <div className={'workspace-shell flex has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
       {!isLabWorkspace && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
 
@@ -162,7 +163,7 @@ function Dashboard({ onLogout }: DashboardProps) {
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>
-      <LiveWatchlist open={watchlistOpen} enabled onOpenSettings={()=>setTab('config')} onLogout={onLogout} accountActive={tab==='config'} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
+      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onOpenSettings={()=>setTab('config')} onLogout={onLogout} accountActive={tab==='config'} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
       {mode !== 'lab' && <ClaudeTerminal />}
     </div>
   );

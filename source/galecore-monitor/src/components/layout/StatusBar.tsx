@@ -35,6 +35,6 @@ export function StatusBar({ connectionStatus, lastUpdate }: {
   return <div className="gc-inline-status">
     {isAuthUnverified() && <span className="gc-status-warning" title="La autenticación todavía no pudo validarse.">Sin validar</span>}
     <span className={'gc-connection ' + (connected ? 'connected' : '')} title={session + ' · ' + (symbol || 'Cotizaciones') + ': ' + (available ? (recent ? 'datos recibidos ' : 'última lectura ') + fmtTime(ticker!.lastUpdate!) : 'sin datos disponibles') + (lastUpdate ? ' · Cuenta ' + fmtTime(lastUpdate) : '')}><i/>{connected ? 'Online' : connectionStatus === 'connecting' ? 'Conectando' : 'Offline'}</span>
-    <div className="gc-clock"><time dateTime={now.toISOString()}>{fmtTime(now)}</time><span>ET</span></div>
+    <div className="gc-clock" title="Hora de Argentina (UTC−3)"><time dateTime={now.toISOString()}>{now.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><span>ARG</span></div>
   </div>;
 }
