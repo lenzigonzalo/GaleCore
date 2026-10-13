@@ -5,7 +5,8 @@ import { supabase, getSession, signOut } from './auth/supabase';
 import { LiveWatchlist } from './components/ticker/LiveWatchlist';
 import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
-import { Resumen, Calendario } from './pages/Resumen';
+import { Resumen } from './pages/Resumen';
+import { Macro } from './pages/Macro';
 import { Operations } from './pages/Operations';
 import type { WorkspaceMode } from './components/layout/WorkspaceNav';
 import { WorkspaceNav } from './components/layout/WorkspaceNav';
@@ -38,7 +39,7 @@ interface DashboardProps {
 }
 
 function Dashboard({ onLogout }: DashboardProps) {
-  const [tab, setCurrentTab] = useState<Tab>('inicio');
+  const [tab, setCurrentTab] = useState<Tab>(new URLSearchParams(window.location.search).has('macro') ? 'macro' : 'inicio');
   const [mode, setMode] = useState<WorkspaceMode>('monitor');
   const lastView = useRef<Record<WorkspaceMode, Tab>>({ monitor: 'inicio', operativa: 'operativa', lab: 'lab' });
   const setTab = (next: Tab) => {
@@ -99,7 +100,7 @@ function Dashboard({ onLogout }: DashboardProps) {
       .catch((e) => setConfigError(e.message ?? 'Error cargando la configuración'))
       .finally(() => setConfigLoading(false));
 
-    refreshAccount();
+    if (!new URLSearchParams(window.location.search).has('macro')) refreshAccount();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const terminalOpen = useTerminalStore((t) => t.open);
@@ -129,18 +130,18 @@ function Dashboard({ onLogout }: DashboardProps) {
           {tab === 'inicio' && <Resumen onNavigate={setTab} />}
           {tab === 'operativa' && <Operations onNavigate={setTab} />}
 
-          <div style={{ display: tab === 'estrategias' && !isLabWorkspace ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+          {tab !== 'macro' && <div style={{ display: tab === 'estrategias' && !isLabWorkspace ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Home onNavigate={(t) => setTab(t as Tab)} />
-          </div>
-          <div style={{ display: tab === 'monitor' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+          </div>}
+          {tab !== 'macro' && <div style={{ display: tab === 'monitor' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <div className="workspace-portfolio-summary"><AccountSummary /></div>
             <Monitor subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg}
               subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />
-          </div>
-          <div style={{ display: tab === 'rpf' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
+          </div>}
+          {tab !== 'macro' && <div style={{ display: tab === 'rpf' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <Rpf acceptSuggestion={acceptSuggestion} dismissSuggestion={dismissSuggestion}
               subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg} socketStatus={socketStatus} />
-          </div>
+          </div>}
           {/* Se montan recién al entrar: leen la cuenta de bróker y la lista de usuarios — nada de
               eso tiene sentido traerlo en cada arranque del tablero. */}
           {tab === 'config' && <Settings onBrokerLinked={refreshAccount} />}
@@ -149,7 +150,7 @@ function Dashboard({ onLogout }: DashboardProps) {
               sentido dispararlo si el operador nunca abre la pestaña. */}
           {tab === 'gex' && <Gex externalWatchlist subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
           {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
-          {tab === 'macro' && <Calendario page />}
+          {tab === 'macro' && <Macro />}
           {tab === 'shadow' && <Shadow />}
           {/* Inteligencia se monta al entrar: lee el adapter local de GaleCore-AI, no la API. */}
           {tab === 'inteligencia' && <Inteligencia />}
@@ -163,7 +164,7 @@ function Dashboard({ onLogout }: DashboardProps) {
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>
-      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onOpenSettings={()=>setTab('config')} onLogout={onLogout} accountActive={tab==='config'} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
+      {tab !== 'macro' && <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onOpenSettings={()=>setTab('config')} onLogout={onLogout} accountActive={tab==='config'} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>}
       {mode !== 'lab' && <ClaudeTerminal />}
     </div>
   );
