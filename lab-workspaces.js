@@ -105,14 +105,22 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     if(!fs.realpathSync(path.dirname(dir)).startsWith(fs.realpathSync(kb)+path.sep))throw fail('Carpeta fuera del conocimiento local.',403);
     fs.mkdirSync(dir);
     fs.writeFileSync(path.join(dir,'README.md'),'# '+label+'\n\nWorkspace de '+(type==='strategy'?'estrategia':type==='personal'?'trabajo personal':'análisis')+'.\n\nLos resultados y memorias se guardan acá. Las conversaciones permanecen en el historial local del Lab.\n',{flag:'wx'});
-    fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y recuperá antecedentes antes de preguntar.\n'+(type==='personal'?'No incorpores cuenta, perfil financiero ni otros proyectos salvo pedido explícito.\n':'Usá GaleCore-AI para memoria canónica y GaleCore para datos/cálculos financieros.\n')+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
-    fs.mkdirSync(path.join(dir,'memory'),{recursive:true});fs.mkdirSync(path.join(dir,'files'),{recursive:true});
+    fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y memory/README.md (el criterio vigente, por tema) y recuperá antecedentes antes de preguntar.\n'+(type==='personal'?'No incorpores cuenta, perfil financiero ni otros proyectos salvo pedido explícito.\n':'Usá GaleCore-AI para memoria canónica y GaleCore para datos/cálculos financieros.\n')+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
+    fs.mkdirSync(path.join(dir,'memory'),{recursive:true});if(type!=='personal')fs.writeFileSync(path.join(dir,'memory','README.md'),'# Memoria de '+label+'\n\nCriterio vigente del proyecto, una página por tema. Índice:\n\n',{flag:'wx'});fs.mkdirSync(path.join(dir,'files'),{recursive:true});
     const p={id:slug,label,type,relative,strategyName:type==='strategy'?slug:null};fs.writeFileSync(path.join(dir,'workspace.json'),JSON.stringify(p,null,2)+'\n',{flag:'wx'});registry.push(p);atomic(metadata,registry);return p;
   }
   // Un workspace personal explícito y separado del conocimiento financiero compartido.
   if(!listProjects().some(p=>p.id==='personal'))createProject({label:'Personal',type:'personal'});
   const publicProject=({dir,...p})=>p;
   function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(Boolean).map(({messages,...c})=>({...c,messageCount:messages.length}));}
+  // Al abrir una conversación nueva en un proyecto, el final de la anterior del mismo proyecto (ya guardada por el Lab):
+  // retomar sin depender de que el modelo haya guardado (WS-0029 H8). No genera datos nuevos.
+  function previousTail(chat){
+    const prev=chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.project===chat.project&&c.id!==chat.id&&c.messages.some(m=>m.role==='assistant')).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))[0];
+    if(!prev)return '';
+    const tail=prev.messages.slice(-4).map(m=>(m.role==='user'?'Trader: ':'Respuesta: ')+m.text).join('\n\n').slice(-4000);
+    return 'Final de la conversación anterior de este proyecto («'+prev.title+'»), para retomar sin preguntar (lo vigente está en memory/ y en los registros):\n'+tail;
+  }
   function send(chat, words){
     const p=project(chat.project);
     if(jobs.has(chat.id))throw fail('La conversación está respondiendo.',409);
@@ -135,7 +143,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       // D-0012: el núcleo del producto (GaleCore-AI/PRODUCT.md) va como instrucción de sistema; un import desde
       // knowledge/CLAUDE.md no carga en -p por estar fuera de la carpeta, y en el hook de inicio se recortaba.
       const product=p.type==='personal'?'':fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8')+'\n\n';
-      const brief=p.type==='personal'?context:product+'Proyecto: '+p.id+' ('+p.type+').'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+(p.type==='strategy'?' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.':'');
+      const resume=p.type==='personal'||chat.nativeId?'':previousTail(chat);
+      const brief=p.type==='personal'?context:(resume?resume+'\n\n':'')+product+'Proyecto: '+p.id+' ('+p.type+').'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+(p.type==='strategy'?' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.':'');
       args=['-p','--model',process.env.GALECORE_LAB_MODEL||'sonnet','--effort',process.env.GALECORE_LAB_EFFORT||'medium',
         '--output-format','stream-json','--verbose','--append-system-prompt',brief,'--permission-prompts','none','--strict-mcp-config',
         '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
