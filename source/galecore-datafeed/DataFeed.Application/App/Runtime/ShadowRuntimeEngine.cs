@@ -144,7 +144,7 @@ namespace DataFeed.Application.App.Runtime
             ShadowPosition position;
             try
             {
-                position = ShadowFillSimulator.Fill(candidate, nowUtc);
+                position = ShadowFillSimulator.Fill(candidate, nowUtc) with { EntryContext = BuildEntryContext(eval, candidate) };
             }
             catch (InvalidOperationException ex)
             {
@@ -163,6 +163,21 @@ namespace DataFeed.Application.App.Runtime
             return Outcomes.Opened;
         }
 
+        /// <summary>Lo que la spec evaluó y las cotizaciones de las patas al armar el candidato (WS-0033).</summary>
+        private static EntryContext BuildEntryContext(EvaluationResult eval, TradeCandidate candidate) => new()
+        {
+            EvaluationId = eval.EvaluationId,
+            Gates = eval.GateResults,
+            Vix = candidate.Snapshot.Vix,
+            IvRank = candidate.Snapshot.IvRank,
+            UnderlyingPrice = candidate.Snapshot.UnderlyingPrice,
+            SnapshotAt = candidate.Snapshot.AsOf,
+            Legs = candidate.Legs.Select(l => new LegQuoteSnapshot
+            {
+                Side = l.Side, Type = l.Type, Strike = l.Strike, Bid = l.Bid, Ask = l.Ask,
+            }).ToList(),
+        };
+
         // ── Valuación y salidas ─────────────────────────────────────
 
         /// <summary>
@@ -177,6 +192,7 @@ namespace DataFeed.Application.App.Runtime
             DateTime nowUtc, CancellationToken ct, bool evaluateExits = true, TimeSpan? maxQuoteAge = null)
         {
             var problems = new List<string>();
+            var legQuotes = new List<LegQuoteSnapshot>();
             double spreadValue = 0;
             foreach (var leg in pos.Legs)
             {
@@ -200,6 +216,10 @@ namespace DataFeed.Application.App.Runtime
                     problems.Add($"{leg.StreamerSymbol}: {stale}");
                     continue;
                 }
+                legQuotes.Add(new LegQuoteSnapshot
+                {
+                    Side = leg.Side, Type = leg.Type, Strike = leg.Strike, Bid = quote.Bid, Ask = quote.Ask,
+                });
                 // Débito para cerrar: recomprar lo vendido (+mid) y vender lo comprado (−mid).
                 if (leg.Side == "SELL") spreadValue += quote.Mid;
                 else if (leg.Side == "BUY") spreadValue -= quote.Mid;
@@ -232,7 +252,10 @@ namespace DataFeed.Application.App.Runtime
             var reason = ShadowFillSimulator.EvaluateExits(valued, exits, spreadValue, dte!.Value);
             if (reason == null) return Outcomes.Valued;
 
-            var closed = ShadowFillSimulator.Close(valued, spreadValue, reason, nowUtc);
+            var closed = ShadowFillSimulator.Close(valued, spreadValue, reason, nowUtc) with
+            {
+                ExitContext = new ExitContext { CapturedAt = nowUtc, Dte = dte, Legs = legQuotes },
+            };
             // El cierre y su evento se guardan juntos (GC-0004).
             store.UpdatePosition(closed, NewEvent(pos.InstanceId, "POSITION_CLOSED", pos.Symbol, nowUtc,
                 ("position_id", pos.PositionId), ("exit_reason", reason),

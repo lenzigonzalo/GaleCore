@@ -215,6 +215,10 @@ namespace DataFeed.Repositories.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("entry_at");
 
+                    b.Property<string>("EntryContextJson")
+                        .HasColumnType("text")
+                        .HasColumnName("entry_context_json");
+
                     b.Property<double>("EntryCredit")
                         .HasColumnType("double precision")
                         .HasColumnName("entry_credit");
@@ -226,6 +230,10 @@ namespace DataFeed.Repositories.Migrations
                     b.Property<DateTime?>("ExitAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("exit_at");
+
+                    b.Property<string>("ExitContextJson")
+                        .HasColumnType("text")
+                        .HasColumnName("exit_context_json");
 
                     b.Property<double?>("ExitDebit")
                         .HasColumnType("double precision")

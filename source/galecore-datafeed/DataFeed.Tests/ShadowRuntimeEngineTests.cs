@@ -201,6 +201,26 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
+    public async Task OpenedPosition_KeepsEntryContext_GateValuesAndLegQuotes()
+    {
+        var (store, instance) = NewRuntime();
+        var candidate = RealCandidate();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(candidate) };
+
+        await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, Spec(), "SPY", Now, default);
+
+        var ctx = Assert.Single(store.AllPositions()).EntryContext;
+        Assert.NotNull(ctx);
+        Assert.Equal(store.GetEvaluations("i-1").Single().EvaluationId, ctx!.EvaluationId);
+        Assert.NotEmpty(ctx.Gates);
+        Assert.All(ctx.Gates, g => Assert.NotNull(g.Value));
+        Assert.Equal(candidate.Snapshot.Vix, ctx.Vix);
+        Assert.Equal(candidate.Snapshot.UnderlyingPrice, ctx.UnderlyingPrice);
+        Assert.Equal(candidate.Legs.Select(l => (l.Bid, l.Ask)), ctx.Legs.Select(l => (l.Bid, l.Ask)));
+        Assert.Null(store.AllPositions().Single().ExitContext);
+    }
+
+    [Fact]
     public async Task MaxPositionsReached_SkipsWithReason()
     {
         var (store, instance) = NewRuntime();
@@ -374,6 +394,11 @@ public class ShadowRuntimeEngineTests
         var closed = store.GetPosition(pos.PositionId)!;
         Assert.Equal("TAKE_PROFIT", closed.ExitReason);
         Assert.Equal(0.3, closed.ExitDebit);
+        // Las cotizaciones de cada pata al cerrar quedan guardadas (calidad de ejecución, WS-0033).
+        Assert.NotNull(closed.ExitContext);
+        Assert.Equal(Now, closed.ExitContext!.CapturedAt);
+        Assert.Contains(closed.ExitContext.Legs, l => l.Strike == 720 && l.Bid == 0.50 && l.Ask == 0.60);
+        Assert.Contains(closed.ExitContext.Legs, l => l.Strike == 715 && l.Bid == 0.20 && l.Ask == 0.30);
     }
 
     [Fact]

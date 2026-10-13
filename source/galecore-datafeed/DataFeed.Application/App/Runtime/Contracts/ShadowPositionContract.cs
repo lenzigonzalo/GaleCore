@@ -42,8 +42,48 @@ namespace DataFeed.Application.App.Runtime.Contracts
         /// <summary>Por qué la última valuación no se pudo hacer (null si la última se hizo).</summary>
         public List<string>? ValuationProblems { get; init; }
 
+        /// <summary>
+        /// Contexto de mercado al abrir (WS-0033): lo que la spec evaluó y las cotizaciones de las patas.
+        /// null en posiciones anteriores a este campo: no se reconstruye.
+        /// </summary>
+        public EntryContext? EntryContext { get; init; }
+        /// <summary>Cotizaciones de las patas al cerrar. null si sigue abierta o es anterior a este campo.</summary>
+        public ExitContext? ExitContext { get; init; }
+
         public DateTime CreatedAt { get; init; }
         public DateTime UpdatedAt { get; init; }
+    }
+
+    /// <summary>Bid y ask de una pata en un momento. Con eso se mide cuánto cuesta ejecutar contra el mid simulado.</summary>
+    public record LegQuoteSnapshot
+    {
+        public string Side { get; init; } = "";
+        public string Type { get; init; } = "";
+        public double Strike { get; init; }
+        public double? Bid { get; init; }
+        public double? Ask { get; init; }
+    }
+
+    /// <summary>
+    /// Qué miró la spec para decidir entrar. Los gates traen valor, umbral y resultado tal como los resolvió
+    /// el motor; VIX, IV Rank y subyacente salen del snapshot del candidato. Nada que la spec no use.
+    /// </summary>
+    public record EntryContext
+    {
+        public string? EvaluationId { get; init; }
+        public List<GateResult> Gates { get; init; } = new();
+        public double? Vix { get; init; }
+        public double? IvRank { get; init; }
+        public double? UnderlyingPrice { get; init; }
+        public DateTime? SnapshotAt { get; init; }
+        public List<LegQuoteSnapshot> Legs { get; init; } = new();
+    }
+
+    public record ExitContext
+    {
+        public DateTime CapturedAt { get; init; }
+        public int? Dte { get; init; }
+        public List<LegQuoteSnapshot> Legs { get; init; } = new();
     }
 
     public record ShadowLeg

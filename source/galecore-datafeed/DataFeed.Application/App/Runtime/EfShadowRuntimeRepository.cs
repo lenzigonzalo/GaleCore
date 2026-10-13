@@ -163,6 +163,8 @@ namespace DataFeed.Application.App.Runtime
             row.CurrentDte = p.CurrentDte;
             row.LastValuedAt = UtcOrNull(p.LastValuedAt);
             row.ValuationProblemsJson = p.ValuationProblems == null ? null : JsonConvert.SerializeObject(p.ValuationProblems);
+            row.EntryContextJson = p.EntryContext == null ? null : JsonConvert.SerializeObject(p.EntryContext);
+            row.ExitContextJson = p.ExitContext == null ? null : JsonConvert.SerializeObject(p.ExitContext);
             row.UpdatedAt = Utc(p.UpdatedAt);
             // Un solo SaveChanges = una transacción: la posición y su evento quedan juntos o no queda ninguno.
             if (lifecycleEvent != null)
@@ -310,6 +312,8 @@ namespace DataFeed.Application.App.Runtime
             CurrentDte = p.CurrentDte,
             LastValuedAt = UtcOrNull(p.LastValuedAt),
             ValuationProblems = p.ValuationProblemsJson == null ? null : JsonConvert.DeserializeObject<List<string>>(p.ValuationProblemsJson),
+            EntryContext = p.EntryContextJson == null ? null : JsonConvert.DeserializeObject<EntryContext>(p.EntryContextJson),
+            ExitContext = p.ExitContextJson == null ? null : JsonConvert.DeserializeObject<ExitContext>(p.ExitContextJson),
             CreatedAt = Utc(p.CreatedAt),
             UpdatedAt = Utc(p.UpdatedAt),
         };

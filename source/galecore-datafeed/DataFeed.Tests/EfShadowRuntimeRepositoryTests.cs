@@ -124,6 +124,9 @@ public class EfShadowRuntimeRepositoryTests
         var recovered = after.GetPosition(opened.PositionId)!;
         Assert.Equal(opened.EntryCredit, recovered.EntryCredit);
         Assert.Equal(opened.EntryAt, recovered.EntryAt);
+        Assert.NotNull(recovered.EntryContext);
+        Assert.Equal(opened.EntryContext!.Gates.Select(g => g.Value), recovered.EntryContext!.Gates.Select(g => g.Value));
+        Assert.Equal(opened.EntryContext.Legs.Select(l => (l.Bid, l.Ask)), recovered.EntryContext.Legs.Select(l => (l.Bid, l.Ask)));
         Assert.Equal(opened.Legs.Select(l => l.StreamerSymbol), recovered.Legs.Select(l => l.StreamerSymbol));
         Assert.Equal(store.GetEvaluations(instance.InstanceId).Single().GateResults.Count,
                      after.GetEvaluations(instance.InstanceId).Single().GateResults.Count);
