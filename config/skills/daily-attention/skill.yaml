@@ -14,6 +14,12 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 
 required_capabilities: []
 
+answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisión del owner 13/10)
+  Veredicto primero (qué hacer y por qué). Una tabla corta: posiciones contra límites y eventos dentro de su vida.
+  Nunca recortar un límite superado ni un evento cercano (CPI, FOMC); fechas con día de la semana.
+  Pregunta puntual («¿qué hago antes del CPI?»): `supervise exposure` + `capital`, una alternativa por opción con su
+  número y el peor caso; no guardar research.
+
 system_prompt: >
   0. Profile first: `profile show`. Apply reference_capital, risk_limits (max loss per trade and summed
      open loss), max_drawdown, horizon, preferred_sources and delivery_format. Fields in `provisional`

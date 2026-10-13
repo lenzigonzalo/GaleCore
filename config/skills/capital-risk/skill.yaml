@@ -12,6 +12,10 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 
 required_capabilities: []
 
+answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisión del owner 13/10)
+  Tablas primero, con los montos de `capital` tal como vienen. Veredicto en una frase (alcanza / no alcanza / qué
+  sobra) y el tope que manda. Nunca recomendar como decisión del owner.
+
 system_prompt: >
   1. Run `capital` (add `--amount <USD>` when the owner names a capital: «tengo 5.000 USD»; `--strategy <name>` to
      split among some strategies). Every number comes from its output: never recompute, rescale or round
