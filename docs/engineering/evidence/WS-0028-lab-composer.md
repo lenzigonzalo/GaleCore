@@ -187,5 +187,6 @@ visual/responsive, sin repetir el build completo ni pedir review en cada iteraci
 Chromium aislado: exit 0; conversación de 1024 px, caja de 960 × 92 px en viewport 1600 px,
 centrada y con márgenes simétricos. Letras y barras compactas conservadas; foco, borradores,
 scroll, ancho lateral, settings, menú de cuenta y responsive 900/390 px siguen verdes, errores JS `[]`.
-Captura completa de escritorio inspeccionada. Preview `:3041` regenerada; pendiente de registrar
-la integración y comprobación del bundle servido. Sin E2E autenticado.
+Captura completa de escritorio inspeccionada. Preview `:3041` regenerada; commit `5a59d8f`
+integrado en `local/integracion`. Bundle HTTP 200 con las nuevas reglas de 1024/960 px, errores
+JS `[]`; preview visible. `git diff --check`: exit 0. Sin reinicios ni E2E autenticado.
