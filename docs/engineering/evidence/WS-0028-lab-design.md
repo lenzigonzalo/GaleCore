@@ -14,7 +14,7 @@ Negativos: propuesta ausente muestra un inicio útil; integridad fallida oculta 
 
 - Lectura real de `python -B -m galecore_ai.adapters.cli project show strategy:tlt_put_spread_simple_30_45d`, PYTHONPATH local GaleCore-AI/src, exit 0. Snapshot sin credenciales: `lab-composer-qa/design-real.json`; fecha de aprobación interna conservada. Sin modelo ni escrituras financieras.
 - `node docs/engineering/evidence/lab-composer-qa/check.cjs` desde el workspace usando la ruta del worktree: Chromium real monta Lab/WorkspaceHeader, red bloqueada y APIs sustituidas. Casos con snapshot real: todas las reglas exactas, referencia en mensaje, borrador previo, límite 12000, aislamiento por proyecto, ausencia, versión posterior, 390px sin overflow e integridad fallida. Regresión de SHADOW y compositor incluida. No equivale a E2E autenticado ni lectura live del runtime. Resultado y capturas se conservan junto al harness.
-- Build `CI=true npm run build` y `git diff --check`: resultados finales registrados al integrar.
+- Build final `CI=true npm run build`: exit 0, `main.c371dada.js` y `main.a6120fb5.css`. `git diff --check`: exit 0. Integración local por fast-forward del commit `bba017a`, sin push/PR. Monitor :3039 responde 200 y sirve la ficha nueva; login y bundle sin errores JS, no E2E autenticado. Resultado: `lab-composer-qa/design-live-result.json`.
 - Review independiente estático: `../reviews/WS-0028-lab-design-review.md`. APPROVE como insumo; P3 de codificación corregido. Límite de borrador cubierto con protección y caso negativo. No recheck ni estado VALIDATED/CLOSED.
 
 ## Para retomar
