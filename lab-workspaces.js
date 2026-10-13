@@ -46,11 +46,32 @@ function consumeEvent(chat, event, provider) {
     if(event.permission_denials?.length) chat.error='Una herramienta necesita permiso. Retomá en la terminal para autorizarla; este chat no omite permisos.';
   }
 }
-function createWorkspaces({ root, kb, local, binaries, environment, instructions, legacyProjects, legacySessions }) {
+function createWorkspaces({ root, kb, local, binaries, environment, instructions, legacyProjects, legacySessions, execute = execFile }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats');
   fs.mkdirSync(chatDir,{recursive:true});
   let registry=read(metadata,[]);
   const jobs=new Map();
+  const designReads=new Map();
+  function designFingerprint(name) {
+    const dir=path.join(kb,'strategies',name), digest=crypto.createHash('sha256');
+    const files=fs.existsSync(dir)?fs.readdirSync(dir).filter(f=>/^\d+\.\d+\.\d+\.(proposal|approval|critique)\.json$/.test(f)).sort():[];
+    for(const file of files){digest.update(file);digest.update(fs.readFileSync(path.join(dir,file)));}
+    const log=path.join(kb,'projects',name+'.json');if(fs.existsSync(log))digest.update(fs.readFileSync(log));
+    return digest.digest('hex');
+  }
+  async function readStrategy(p, design) {
+    const fingerprint=design?designFingerprint(p.strategyName):null;
+    const cached=designReads.get(p.strategyName);
+    if(design&&cached?.fingerprint===fingerprint)return cached.promise;
+    const promise=new Promise((resolve,reject)=>execute('python',['-B','-m','galecore_ai.adapters.cli','project',design?'design':'show','strategy:'+p.strategyName],{cwd:root,env:environment(),windowsHide:true,timeout:60000,maxBuffer:2*1024*1024},(e,out)=>{
+      let data;try{data=JSON.parse(out);}catch{return reject(fail('No se pudo leer la estrategia desde el harness.',502));}
+      if(e&&!data.current){if(String(data.error||'').includes('no strategy named'))return resolve({missing:true});if(!data.integrity_failed?.length)return reject(fail('No se pudo verificar la estrategia con el harness.',502));}
+      try{if(design&&designFingerprint(p.strategyName)!==fingerprint)return reject(fail('La estrategia cambió durante la lectura. Volvé a actualizar.',409));}catch{return reject(fail('Los archivos cambiaron durante la lectura. Volvé a actualizar.',409));}
+      resolve(data);
+    }));
+    if(design){const entry={fingerprint,promise};designReads.set(p.strategyName,entry);promise.catch(()=>{if(designReads.get(p.strategyName)===entry)designReads.delete(p.strategyName);});}
+    return promise;
+  }
   const chatFiles=()=>fs.readdirSync(chatDir).filter(f=>UUID.test(f.replace('.json','')) && f.endsWith('.json'));
   const loadChat=id=>{if(!UUID.test(id))throw fail('Conversación desconocida.',404);const c=read(path.join(chatDir,id+'.json'),null);if(!c)throw fail('Conversación desconocida.',404);return c;};
   const saveChat=c=>atomic(path.join(chatDir,c.id+'.json'),c);
@@ -129,11 +150,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='strategy'){
       const p=project(parts[1]); if(p.type!=='strategy')throw fail('Este proyecto no es una estrategia.');
-      const value=await new Promise((resolve,reject)=>execFile('python',['-B','-m','galecore_ai.adapters.cli','project','show','strategy:'+p.strategyName],{cwd:root,env:environment(),windowsHide:true,timeout:60000,maxBuffer:2*1024*1024},(e,out)=>{
-        let data;try{data=JSON.parse(out);}catch{return reject(fail('No se pudo leer la estrategia desde el harness.',502));}
-        if(e && !data.current){ if(String(data.error||'').includes('no strategy named'))return resolve({missing:true});return reject(fail('No se pudo verificar la estrategia con el harness.',502)); }
-        resolve(data);
-      }));json(res,200,value);return true;
+      const value=await readStrategy(p,url.searchParams.get('view')==='design');json(res,200,value);return true;
     }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='files'){
       const p=project(parts[1]), rel=url.searchParams.get('path');const target=rel?safeFile(p.dir,rel):null;if(p.id==='portfolio'&&target&&target.toLowerCase().startsWith(path.join(fs.realpathSync(p.dir),'workspaces').toLowerCase()+path.sep))throw fail('Elegí el proyecto personal para leer sus archivos.',403);json(res,200,rel?{path:rel,text:fs.readFileSync(target,'utf8')}:{tree:tree(p.dir).filter(n=>p.id!=='portfolio'||n.name!=='workspaces'),folder:p.relative});return true;
