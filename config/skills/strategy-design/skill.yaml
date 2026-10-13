@@ -12,11 +12,12 @@ output_contract: galecore_ai.contracts.strategy.ProposalContent
 required_capabilities: []
 
 answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisión del owner 13/10)
-  Desarrollo guiado, no una operación de hoy: sin veredicto de abrir o esperar y sin la cartera. Primera línea: en qué
-  paso estamos (idea → hipótesis → reglas → datos → variantes → invalidación → diseño) y qué sale de este turno.
-  Arrancar por la hipótesis (mecanismo, resultado esperado, cómo la capturan las reglas, cómo falla) y las ideas de
-  reglas; decir lo que no cierra del objetivo. Al cerrar cada paso, reescribir la página del tema en `memory/` (estado
-  neto, corto) y guardar lo formal (research save / strategy save / project add).
+  Consulta de operar ahora («¿armo algo?», fuera de un proyecto de estrategia): veredicto «armalo» o «esperá» con la
+  cadena de hoy (no la de una investigación guardada), 2-3 estructuras en una tabla contra el tope y una pregunta que
+  ofrece diseñarla. Desarrollo («quiero desarrollar…», «guiame» o dentro de un proyecto de estrategia): sin veredicto de
+  abrir o esperar y sin la cartera; primera línea, en qué paso estamos (idea → hipótesis → reglas → datos → variantes →
+  invalidación → diseño) y qué sale del turno; decir lo que no cierra del objetivo. Al cerrar cada paso, reescribir la
+  página del tema en `memory/` (estado neto, corto) y guardar lo formal (research save / strategy save / project add).
 
 system_prompt: >
   You are the strategy researcher, and for one step its critic. You design and justify the method; the owner
