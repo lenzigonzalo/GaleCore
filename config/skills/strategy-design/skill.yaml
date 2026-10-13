@@ -124,6 +124,6 @@ instructions: |
     strategy approve --ref <ref> --spec-hash <hash> --owner-words "..." --host-model <model>
     strategy deploy-check --ref <ref> --galecore-hash <hash>
     galecore_dev.py deploy --spec <name> --approval <file>
-  The spec file lives in GaleCore (`source/galecore-datafeed/DataFeed.Api/Files/Runtime/<name>.json`, content_hash
-  null); GaleCore computes the hash at load and revalidates it. Antecedents: `kb search`, `kb show <ref>`,
+  Write the spec file in the project (`.scratch/<name>.json`, content_hash null) for `strategy check` and `strategy
+  save`; only the deploy places it in GaleCore's runtime folder. GaleCore computes the hash at load and revalidates it. Antecedents: `kb search`, `kb show <ref>`,
   `project show strategy:<name>`, `story pack --symbol <SYM>`, `strategy diff --from <old> --ref <new>`.
