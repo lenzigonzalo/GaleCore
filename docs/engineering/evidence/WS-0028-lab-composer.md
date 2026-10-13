@@ -134,3 +134,16 @@ Sin reinicios ni instalaciones. No se ejecutó un E2E autenticado ni se enviaron
 Para probar esta versión: abrir el Lab y escribir; la caja parte de una línea y crece al necesitarlo.
 Arrastrar la agarradera gris del borde de proyectos para achicar o agrandar; recargar conserva el ancho.
 Doble clic restablece el ancho inicial. Letra sin cambios. WS-0029 sigue activo y no se marca cierre.
+
+## Ajuste de ancho solicitado por el owner (12/10)
+
+«Más largo, no tan alto»: se elimina el límite de 760 px del compositor. Ocupa el ancho disponible
+del chat dejando 28 px por lado en escritorio y 14 px en móvil. Se conserva la altura compacta,
+crecimiento al escribir, letra, columna de lectura y lateral ajustable. Ajuste exclusivamente CSS;
+preview y verificación proporcional según D-0010, sin nuevo review por esta iteración visual.
+Guion actualizado para comprobar ancho igual al área de chat menos los márgenes, altura y tipografía.
+
+Chromium aislado: exit 0; en viewport 1600 px, caja medida **1234 × 92 px**, frente a 760 × 92 px
+de la iteración anterior. Letra de entrada 16 px, lectura 18 px; foco, sidebar, borradores, scroll
+y responsive siguen verdes. Captura `desktop.png` inspeccionada y preview `:3041` regenerada.
+`git diff --check`: exit 0. Build final en curso.
