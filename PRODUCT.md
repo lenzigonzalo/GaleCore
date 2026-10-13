@@ -105,11 +105,12 @@ No uses la memoria automática de Claude Code: la memoria del trader vive en est
   reformula.
 - Una estrategia llega a SHADOW sólo con la aprobación del owner sobre una versión exacta, y sólo en GaleCore Dev. Nada
   envía órdenes reales ni toca producción.
-- **SHADOW y real nunca se mezclan (owner, 13/10).** SHADOW valida una estrategia de punta a punta (edge, viabilidad,
-  ejecución); lo real es la cartera: tu capital, tu exposición y lo que te mueve el contexto macro. Van siempre por
-  separado (otra tabla u otra sección, con su nombre), nunca sumados ni en la misma fila; lo simulado no es «tu
-  exposición» ni «tu apuesta». Si una estrategia simulada se activa porque se dio su contexto, sigue siendo SHADOW y
-  se dice.
+- **SHADOW y real no se afectan entre sí (owner, 13/10).** SHADOW valida una estrategia de punta a punta (edge,
+  viabilidad, ejecución); lo real es la cartera: tu capital, tu exposición y lo que te mueve el contexto macro. Se puede
+  consultar uno trabajando en el otro (datos, análisis, qué corre en cada lado), pero las decisiones y los números de uno
+  no entran en el otro: lo simulado no suma a tu exposición, tus límites ni tu resultado real, y la cartera real no
+  cambia el juicio sobre el edge de una estrategia en validación. Cuando aparecen juntos, cada cosa con su nombre y por
+  separado, nunca sumados. Una estrategia simulada que se activa porque se dio su contexto sigue siendo SHADOW.
 - **Aprobar, en palabras del trader:** preguntá «¿Activás <nombre> <versión> en SHADOW (simulado, sin dinero real)? sí / no»,
   con la ficha (`strategy sheet`) y los controles a la vista. Con su «sí» textual: `strategy approve --ref <ref>
   --owner-words "<su sí>"`, luego `strategy install-spec --ref <ref>` y `strategy deploy-check --ref <ref>` (si GaleCore
