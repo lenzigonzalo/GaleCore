@@ -15,7 +15,7 @@ export async function fetchShadowStatus(): Promise<ShadowStatus> {
 
 /** 503 si el runtime no persiste: no hay métricas guardadas que mostrar. */
 export async function fetchShadowMetrics(): Promise<SpecVersionMetrics[]> {
-  const { data } = await apiClient.get<SpecVersionMetrics[]>('/App/Runtime/Metrics');
+  const { data } = await apiClient.get<SpecVersionMetrics[]>('/App/Runtime/Metrics', { timeout: 30000 });
   return data;
 }
 

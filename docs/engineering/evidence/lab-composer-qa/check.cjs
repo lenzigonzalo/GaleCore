@@ -11,7 +11,7 @@ const out = path.resolve('.tmp/lab-composer-qa');
 (async () => {
   await esbuild.build({ entryPoints: [path.join(__dirname,'entry.tsx')], outfile:path.join(out,'preview.js'), bundle:true,
     nodePaths:[path.join(front,'node_modules')], define:{'process.env.NODE_ENV':'"production"','process.env':'{}'},
-    plugins:[{name:'isolated-lab', setup(build) { build.onResolve({filter:/api\/lab$/},()=>({path:path.join(__dirname,'api.ts')})); }}] });
+    plugins:[{name:'isolated-lab', setup(build) { build.onResolve({filter:/api\/lab$/},()=>({path:path.join(__dirname,'api.ts')})); build.onResolve({filter:/api\/shadow$/},()=>({path:path.join(__dirname,'shadow.ts')})); }}] });
   const config = frontRequire('./tailwind.config.js');
   config.content = [path.join(front,'src/**/*.{ts,tsx}')];
   const source = fs.readFileSync(path.join(front,'src/index.css'),'utf8').replace(/@import\s+url\([^)]*\);/g,'');
@@ -20,7 +20,7 @@ const out = path.resolve('.tmp/lab-composer-qa');
   const text = saved.messages.find(m=>m.text.includes('Como idea vale')).text;
   const chat = {id:'qa-chat',project:'personal',provider:'claude',title:'Respuesta guardada · QA aislada',state:'idle',activity:'',error:null,
     messages:Array.from({length:12},(_,i)=>({id:'qa-'+i,role:'assistant',text:i===11?text:'QA de scroll, sin datos financieros.\n\n'+('Texto de prueba de lectura. '.repeat(24)),at:''}))};
-  const fixture = {chat,state:{projects:[{id:'personal',label:'Personal · QA aislada',type:'personal'},{id:'qa-other',label:'Otro proyecto · QA',type:'analysis'}],
+  const fixture = {chat,strategy:{current:{ref:'strategy:qa_strategy/1.0',approved:false,purpose:'Fixture de preparación, sin ejecución real.',spec_hash:'sha256:qa'},integrity_failed:[]},runtime:{mode:'ok',metrics:[],status:{persistence:{available:true},instances:[]}},state:{projects:[{id:'personal',label:'Personal · QA aislada',type:'personal'},{id:'qa-other',label:'Otro proyecto · QA',type:'analysis'},{id:'qa-strategy',label:'Estrategia de prueba · QA',type:'strategy',strategyName:'qa_strategy'}],
     chats:[{...chat,messages:undefined}],providers:[{id:'claude',label:'Claude Code',installed:true}],chatOptions:{claude:{models:['sonnet'],efforts:['medium']}}}};
   fs.writeFileSync(path.join(out,'theme.css'),css.css+'\n'+fs.readFileSync(path.join(front,'src/pages/Lab.css'),'utf8'));
   fs.writeFileSync(path.join(out,'index.html'),'<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src \'self\' \'unsafe-inline\'; connect-src \'none\'; img-src \'none\'"><title>Lab · Preview aislada de la primera tajada</title><link rel="stylesheet" href="theme.css"><div id="root" style="height:100vh"></div><script>window.__LAB_FIXTURE__='+JSON.stringify(fixture).replace(/</g,'\\u003c')+';sessionStorage.setItem("galecore:lab:project","personal");sessionStorage.setItem("galecore:lab:chat","qa-chat");</script><script src="preview.js"></script></html>');
@@ -50,7 +50,7 @@ const out = path.resolve('.tmp/lab-composer-qa');
       messageWidth:document.querySelector('.lab-message.assistant').getBoundingClientRect().width,
       messageFont:getComputedStyle(document.querySelector('.lab-message > div')).fontSize
     }));
-    assert.ok(layout.modeBar<=52); assert.ok(layout.titleBar<=52); assert.equal(layout.messageWidth,Math.min(1024,availableWidth-56)); assert.equal(layout.messageFont,'18px');
+    assert.ok(layout.modeBar<=58); assert.ok(layout.titleBar<=56); assert.equal(layout.messageWidth,Math.min(1024,availableWidth-56)); assert.equal(layout.messageFont,'18px');
     assert.ok(layout.messageWidth>compact.width); // conversación amplia, caja algo más angosta
     assert.ok(await page.locator('.lab-chat-composer').evaluate(el=>{const box=el.getBoundingClientRect();const parent=el.parentElement.getBoundingClientRect();return Math.abs((box.left-parent.left)-(parent.right-box.right))<2;}));
     const account=page.getByRole('button',{name:'MI CUENTA',exact:true});
@@ -146,8 +146,46 @@ const out = path.resolve('.tmp/lab-composer-qa');
       await page.getByRole('button',{name:'Mostrar proyectos'}).click();
     }
     assert.ok(await textarea.evaluate(el=>el.clientHeight)>wideHeight);
+    await page.setViewportSize({width:1600,height:1000});
+    await page.getByRole('button',{name:'Estrategia de prueba · QA',exact:true}).click();
+    await page.getByRole('button',{name:'Shadow',exact:true}).click();
+    await page.getByText('Propuesta sin aprobar',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Estrategia de prueba · QA',{exact:true}).count(),2);
+    assert.equal(await page.getByText('Versión 1.0',{exact:true}).count(),1);
+    await page.evaluate(()=>window.__LAB_FIXTURE__.runtime.mode='timeout');
+    await page.getByRole('button',{name:'Actualizar Shadow'}).click();
+    await page.getByRole('alert').filter({hasText:'tardó demasiado'}).waitFor();
+    assert.equal(await page.getByText('Propuesta sin aprobar',{exact:true}).count(),1);
+    assert.equal(await page.getByText(/timeout of/).count(),0);
+    assert.equal(await page.getByText(/No hay métricas/).count(),0);
+    await page.screenshot({path:path.join(out,'shadow-timeout.png')});
+    await page.evaluate(()=>window.__LAB_FIXTURE__.runtime.mode='ok');
+    await page.getByRole('button',{name:'Reintentar ejecución'}).click();
+    await page.getByText(/No hay métricas/).waitFor();
+    await page.evaluate(()=>window.__LAB_FIXTURE__.runtime.mode='pending');
+    await page.getByRole('button',{name:'Actualizar Shadow'}).click();
+    await page.getByText('Propuesta sin aprobar',{exact:true}).waitFor();
+    await page.getByText('Leyendo ejecución SHADOW…',{exact:true}).waitFor();
+    assert.equal(await page.getByText(/No hay métricas/).count(),0);
+    await page.evaluate(()=>{window.__LAB_FIXTURE__.runtime.mode='ok';window.__LAB_FIXTURE__.runtime.status.persistence.available=false;});
+    await page.getByRole('button',{name:'Actualizar Shadow'}).click();
+    await page.getByRole('alert').filter({hasText:'no tiene persistencia'}).waitFor();
+    assert.equal(await page.getByText('Propuesta sin aprobar',{exact:true}).count(),1);
+    await page.evaluate(()=>{
+      window.__LAB_FIXTURE__.runtime.status.persistence.available=true;
+      window.__LAB_FIXTURE__.runtime.status.instances=[{instanceId:'qa-instance',specName:'qa_strategy',versionHash:'sha256:qa',lifecycleState:'RUNNING',schedulerState:'ACTIVE',updatedAt:'2026-10-12T12:00:00Z'}];
+      window.__LAB_FIXTURE__.strategyPending=true;
+    });
+    await page.getByRole('button',{name:'Actualizar Shadow'}).click();
+    await page.getByText('Versión sin comprobar',{exact:true}).waitFor();
+    assert.equal(await page.getByText('Otra versión',{exact:true}).count(),0);
+    await page.evaluate(()=>{window.__LAB_FIXTURE__.strategyPending=false;window.__LAB_FIXTURE__.strategy.integrity_failed=['Fixture de integridad'];});
+    await page.getByRole('button',{name:'Actualizar Shadow'}).click();
+    await page.getByRole('alert').filter({hasText:'integridad'}).waitFor();
+    assert.equal(await page.getByText('Propuesta sin aprobar',{exact:true}).count(),0);
+    assert.equal(await page.getByText('Otra versión',{exact:true}).count(),0);
     assert.deepEqual(errors,[]);
-    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({focus,compact,layout,inputFocus,errors,checks:'conversación centrada amplia y caja más angosta, barras <=52px, tipografía conservada, sidebar arrastre/teclado/persistencia/límites/colapsado, settings, autofit, borradores, scroll, 900/390px',scope:'Lab y WorkspaceHeader reales, API sustituida y red bloqueada; no E2E autenticado.'},null,2));
+    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({focus,compact,layout,inputFocus,errors,checks:'conversación centrada y caja más angosta, toggles algo mayores, tipografía conservada, sidebar, settings, autofit, borradores, scroll, 900/390px',shadowChecks:'título sin repetición, versión legible, timeout humano conserva estrategia, reintento, runtime pendiente, persistencia ausente, integridad y hash desconocido sin mismatch',scope:'Lab y WorkspaceHeader reales, APIs sustituidas y red bloqueada; no E2E autenticado.'},null,2));
     console.log('PASS: caja compacta, misma letra, sidebar ajustable/persistido, autofit, foco, borradores, scroll, teclado, responsive. Sin escrituras/inferencias.');
   } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});
