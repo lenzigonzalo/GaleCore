@@ -5,8 +5,8 @@
   "observed_output": "Compiled successfully.",
   "artifacts": [
     {
-      "name": "main.52e3d8ca.js",
-      "sha256": "1c74bf3813181d1432ec23cea459cd3334117b7e478f59276ba7d2ef8ae1c053"
+      "name": "main.654461b7.js",
+      "sha256": "fea0936c5676f6a286492b59be1c63149e513f144bdcc7443f4475bb7d9ec712"
     }
   ],
   "final_build": {
@@ -18,5 +18,10 @@
     "exit_code": 0,
     "exec_session": 51559,
     "log": "build-account-discovery.txt"
+  },
+  "compact_favorites_build": {
+    "exit_code": 0,
+    "exec_session": 79619,
+    "log": "build-compact-favorites.txt"
   }
 }

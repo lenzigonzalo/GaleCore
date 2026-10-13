@@ -96,3 +96,5 @@ Browser-run.json confirma seleccion sobre inventario real y tama?o compacto; aut
 sintetica declarada, preferencias aisladas en ese navegador de QA.
 Build: build-compact-favorites.txt. Fallo inicial de tipo en test (opcion exact no admitida
 por ByRoleOptions) corregido; navegador/dev vuelven a compilar sin errores.
+
+Build CI final de compactacion/favoritos pasa (sesion 79619); log y receipt guardados.
