@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de capability_builder y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: capability_builder
 versions:
+  - version: "0.4.0"
+    date: 2026-10-13
+    changes: >
+      P1-09 (WS-0031): recorrido guiado para armar una skill, un agente o una tarea (para qué, dónde vive según
+      lo que se repite, qué usa, ficha con costo y control, prueba con datos reales, aprobación y control desde
+      el chat). Viene del alcance del owner del 13/10, no de un comentario sobre un resultado.
+    feedback: []
   - version: "0.3.0"
     date: 2026-10-08
     changes: >

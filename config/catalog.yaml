@@ -169,6 +169,9 @@ entries:
       y declarar lo que no se pudo completar.
     example_requests:
       - Quiero una capacidad que me diga qué merece mi atención hoy.
+      - Quiero que cada mañana me digas cómo está el gamma de SPY.
+      - Armame un agente que todos los días me prepare el resumen del mercado.
+      - Quiero una tarea que me avise cada semana cómo viene mi cartera.
       - Armá una skill de reporte macro para ver los eventos de la semana.
       - Le faltó el calendario de la Fed.
       - ¿Qué feedback quedó pendiente?
@@ -536,6 +539,38 @@ entries:
       - The pack is kept as one evidence item and points at the previous one of the same kind and symbol
       - The research controls; every reported number cites the pack; a save must cite the profile in force
       - "Not checked - that the reading is right; consensus and estimates are missing, so surprises are not measured"
+
+  - id: scheduled_report
+    kind: investigation
+    serves: >-
+      Un informe que armás en tus palabras (qué leer de GaleCore, qué decir, qué comparar con la corrida anterior) y
+      que corre solo como tarea (por ejemplo cada día hábil antes de la apertura) o a pedido. Cada corrida lee los
+      datos, escribe el informe y lo guarda como revisión de una investigación, diciendo qué cambió desde la anterior.
+    example_requests:
+      - Armame un informe diario antes de la apertura con el VIX y el calendario macro
+      - Mostrame el último informe de gamma
+    skill: skills/scheduled-report/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [compute.gex_analysis, market_data.volatility_metrics, calendar.macro_releases, calendar.fomc_meetings, market_data.trade]
+    data_needs:
+      - need: GEX de SPY
+      - need: calendario macro
+    flow:
+      - profile show
+      - kb search --kind research --text "<report slug>"
+      - galecore list
+      - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
+      - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research save --capability scheduled_report --slug <report slug> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability scheduled_report --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - The research and evidence controls; every reported number comes from a stored response
+      - A save must cite the profile in force (profile:v<N>); each revision records this skill's version and hash
+      - "Read-only: the report describes, never advises (the runner refuses advice addressed to the reader); no orders"
+      - "A scheduled run calls the model (sonnet) with only the read commands of this flow and a turn cap; the runner validates and saves the result"
+      - Not checked - that the report answers what the owner wanted or that its reading is right; the first real run shows it
+    schedulable: {runs: model, work: reading, max_turns: 20, timeout_minutes: 10}
 
   - id: recurring_followup
     kind: task

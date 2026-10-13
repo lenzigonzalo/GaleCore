@@ -1,0 +1,15 @@
+# Qué cambió en cada versión de scheduled_report y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: scheduled_report
+versions:
+  - version: "0.1.1"
+    date: 2026-10-13
+    changes: >
+      Primera corrida programada real (WS-0031): fallaba por «conviene abrir» y un hecho sin fuente. El veredicto se
+      da como lectura de las condiciones del perfil, nunca como orden, y todo hecho cita su evidencia.
+    feedback: []
+  - version: "0.1.0"
+    date: 2026-10-13
+    changes: >
+      Primera versión (WS-0031, P1-09): informe programado genérico cuyo `objective` es el método, para armar tareas
+      como «cada mañana decime cómo está el gamma de SPY» sin escribir una capacidad por idea.
+    feedback: []

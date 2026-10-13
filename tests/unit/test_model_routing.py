@@ -32,7 +32,7 @@ def test_a_code_run_calls_no_model():
 
 def test_the_real_catalog_routes_all_readings_to_sonnet_the_story_escalates_by_code():
     models = {e.id: e.schedulable.model for e in load_catalog().entries if e.schedulable}
-    assert models == {"strategy_followup": None, "daily_attention": "sonnet", "market_watch": "sonnet", "knowledge_curator": "sonnet",
+    assert models == {"strategy_followup": None, "daily_attention": "sonnet", "market_watch": "sonnet", "scheduled_report": "sonnet", "knowledge_curator": "sonnet",
                       "market_story": "sonnet"}
 
 
