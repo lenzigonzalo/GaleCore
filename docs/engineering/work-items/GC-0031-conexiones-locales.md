@@ -29,4 +29,3 @@ Pendiente revisión independiente, aceptación owner; sin VALIDATED/CLOSED.
 Retoma: Configuración → MCP locales, elegir CLI/proyecto, Actualizar y un interruptor.
 Servidor: python dev/macro_dev.py mcp. No incluye plugins/conectores remotos.
 ACTIVE_WORK_ITEM sigue WS-0031 de Claude; prioridad autorizada en roadmap §4.
-
