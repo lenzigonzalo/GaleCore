@@ -1181,6 +1181,13 @@ de arriba). Que un broker exponga tools en el host no prueba que funcionen ni au
 
 ---
 
+**Addendum de BL-006, 2026-10-13 — routing MCP de brokers vs GaleCore decidido:** el owner aprobó el criterio
+(`docs/decisions/D-0002-mcp-de-brokers-vs-galecore.md`): se elige por de quién es el dato, no por liviano/pesado. Mercado
+y cálculos por GaleCore; cuenta real por MCP sólo en lectura mientras GaleCore no la tenga; lo repetido lo incorpora
+GaleCore; ninguna orden desde el chat. Queda abierto el bloqueo técnico de escrituras en el host.
+
+---
+
 **Addendum de BL-006, 2026-09-26 — primer caso externo de análisis propuesto:**
 
 El owner necesita demostrar asistencia para estrategias con contexto de mercado, memoria y
