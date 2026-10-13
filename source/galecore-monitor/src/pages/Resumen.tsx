@@ -75,17 +75,32 @@ export function Calendario({ page = false }: { page?: boolean }) {
 }
 
 export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
-  const { positions, balances, loadingPositions, errorPositions, positionsReadAt } = useAccountStore();
+  const { positions, loadingPositions, errorPositions, positionsReadAt } = useAccountStore();
   const rows = portfolioRows(positions);
   const ready = !!positionsReadAt && !errorPositions && !loadingPositions;
   const gross = ready && rows.every(r => r.gross !== null) ? rows.reduce((s, r) => s + r.gross!, 0) : null;
-  const exposure = gross !== null && balances && balances.netLiquidatingValue > 0 ? gross / balances.netLiquidatingValue * 100 : null;
+  const concentration = Array.from(rows.reduce((byTicker, row) => {
+    byTicker.set(row.ticker, (byTicker.get(row.ticker) ?? 0) + (row.gross ?? 0));
+    return byTicker;
+  }, new Map<string, number>())).sort((a, b) => b[1] - a[1]);
   const expiring = ready ? rows.filter(r => r.expiry && daysTo(r.expiry) <= 7) : [];
   const money = (n: number | null) => n === null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
   return <div className="rs">
     <header className="rs-top"><h1>Mi portfolio</h1><span>Cuenta real · USD</span></header>
     <div className="rs-capital"><AccountSummary layout="strip" />
-      <section className="rs-exposure"><span title="Suma del valor absoluto de las posiciones; no equivale a riesgo máximo">Exposición bruta</span><strong>{exposure === null ? '—' : `${exposure.toFixed(1)}%`}</strong><span>{gross === null ? 'Sin valoración completa' : `${fmtCurrency(gross)} en posiciones`}</span></section>
+      <section className="rs-exposure">
+        <div className="rs-head"><h2>Concentración por instrumento</h2><span>Valor bruto de posiciones</span></div>
+        {!ready || gross === null ? <p className="rs-empty">Sin valoración completa</p>
+          : concentration.length === 0 ? <p className="rs-empty">Sin posiciones</p>
+          : <div className="rs-concentration">{concentration.map(([ticker, value]) => {
+            const weight = gross > 0 ? value / gross * 100 : null;
+            return <div className="rs-holding" key={ticker}>
+              <div><b>{ticker}</b><strong>{weight === null ? '—' : `${weight.toFixed(1)}%`}</strong><span>{fmtCurrency(value)}</span></div>
+              <div className="rs-weight" aria-hidden="true"><i style={{ width: `${weight ?? 0}%` }}/></div>
+            </div>;
+          })}</div>}
+        <p className="rs-caption">Opciones a valor de prima · No mide riesgo ni exposición nominal</p>
+      </section>
     </div>
     {expiring.length > 0 && <div className={'rs-alert' + (expiring.some(r => daysTo(r.expiry!) <= 2) ? ' urgent' : '')} role="status"><AlertTriangle size={20}/><strong>Vencimientos próximos</strong><span>{expiring.map(r => `${r.ticker} · ${daysTo(r.expiry!) < 0 ? 'vencida' : daysTo(r.expiry!) === 0 ? 'hoy' : `${daysTo(r.expiry!)} días`}`).join(' / ')}</span></div>}
     <section className="rs-panel rs-portfolio">

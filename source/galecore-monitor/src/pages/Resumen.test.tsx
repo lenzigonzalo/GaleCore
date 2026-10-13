@@ -37,3 +37,15 @@ test('sin lectura y ante error no presenta una cuenta vacía como lectura real',
   expect(screen.getByText('Lun')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Mes anterior' })).toBeDisabled();
  });
+
+test('concentración distribuye el valor entre tickers, no contra el capital de la cuenta', () => {
+  useAccountStore.getState().setBalances({ netLiquidatingValue: 10000 } as any);
+  useAccountStore.getState().setPositions([
+    { symbol: 'SPY', underlyingSymbol: 'SPY', instrumentType: 'Equity', quantity: 2, quantityDirection: 'Long', closePrice: 100, averageOpenPrice: 100, multiplier: 1 },
+    { symbol: 'TLT', underlyingSymbol: 'TLT', instrumentType: 'Equity', quantity: 1, quantityDirection: 'Long', closePrice: 50, averageOpenPrice: 50, multiplier: 1 },
+  ] as any);
+  render(<Resumen onNavigate={() => {}} />);
+  expect(screen.getByText('80.0%')).toBeInTheDocument();
+  expect(screen.getByText('20.0%')).toBeInTheDocument();
+  expect(screen.queryByText('2.5%')).not.toBeInTheDocument();
+});

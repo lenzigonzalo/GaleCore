@@ -55,3 +55,16 @@ HTTP GET `http://localhost:3039`: 200. Esto acredita compilación de desarrollo 
 no acredita aún el recorrido visual autenticado. Causa compatible con estado obsoleto del watcher;
 no se reprodujo TS2307 en compilación limpia. Logs locales (sin versionar):
 `dev/.local/monitor-restart.stdout.log` y `dev/.local/monitor-restart.stderr.log`.
+
+
+## Ajuste del owner: cuenta compacta y concentración (13/10)
+
+Valoración total, poder de compra y efectivo reunidos en un cuadro de hasta 420 px, con el total
+como cifra principal y los otros dos en líneas compactas. Exposición reinterpretada por instrucción
+del owner: distribución por ticker, ordenada por mayor valor bruto, con peso y monto. El denominador
+es el valor bruto de posiciones, no el capital de cuenta. Opciones a valor de prima, explícito en UI;
+no se afirma concentración de riesgo ni exposición nominal. Sin lectura completa no muestra pesos.
+Prueba nueva: SPY 200 y TLT 50 dan 80%/20% incluso con capital de cuenta de 10.000.
+Tests anteriores: 6/6; nueva corrida de Resumen: 4/4 (exit 0).
+Build CI: exit 0, `Compiled successfully`. Servidor de desarrollo: `Compiled successfully`,
+`No issues found`. QA visual sigue pendiente.
