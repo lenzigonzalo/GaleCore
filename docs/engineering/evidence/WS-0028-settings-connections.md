@@ -23,6 +23,7 @@ Fuera de alcance: endpoints nuevos de autenticación, login iniciado desde el na
 - Chromium aislado: `node .tmp/settings-qa/check.cjs`, **PASS**. Desktop 1500×1100, móvil 390×900 sin overflow; guía, foco y Tab/Shift+Tab, navegación bróker/Lab, fallas/reintento, cero errores JS. APIs simuladas explícitamente y red bloqueada: **no E2E autenticado**. Mock de bróker sin escrituras.
 - Capturas observadas: `.tmp/settings-qa/desktop.png`, `auth-guide.png`, `mobile.png`, `offline.png`; resultado `.tmp/settings-qa/result.json`. Copia permanente de capturas/resultado en `WS-0028-settings-connections/` junto a este archivo.
 - Build aislado CI: ambas compilaciones exit 0; final `main.256193a3.js` / `main.8e6d738b.css` después del ajuste explícito de foco. Sin instalar dependencias ni cambiar lockfile; junction a dependencias existentes.
+- Integración local por fast-forward del commit `0841b9b`. Monitor :3039 sirve el bundle nuevo: `node .tmp/settings-qa/check-live.cjs`, exit 0, HTTP 200, componentes presentes y cero errores JS en login. No E2E autenticado. Primer chequeo del bundle falló por comparar literalmente un acento escapado por Webpack; corregido a texto ASCII estable. Sin reiniciar servicios. Resultado permanente: `WS-0028-settings-connections/live-result.json`.
 
 ## Para retomar
 
