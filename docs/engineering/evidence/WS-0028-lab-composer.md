@@ -146,4 +146,6 @@ Guion actualizado para comprobar ancho igual al área de chat menos los márgene
 Chromium aislado: exit 0; en viewport 1600 px, caja medida **1234 × 92 px**, frente a 760 × 92 px
 de la iteración anterior. Letra de entrada 16 px, lectura 18 px; foco, sidebar, borradores, scroll
 y responsive siguen verdes. Captura `desktop.png` inspeccionada y preview `:3041` regenerada.
-`git diff --check`: exit 0. Build final en curso.
+`git diff --check` y `CI=true npm run build`: exit 0. Commit `cecaf9e` integrado en
+`local/integracion`, sin reinicios. Bundle servido HTTP 200 con `wideComposer: true`;
+errores JS `[]`, preview visible. Comprobación de login/bundle, sin E2E autenticado.
