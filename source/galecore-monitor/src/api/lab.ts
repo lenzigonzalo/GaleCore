@@ -36,6 +36,6 @@ export type LabProjectKind = 'personal' | 'analysis' | 'strategy';
 export interface WorkspaceProject { id: string; label: string; type: LabProjectKind; relative: string; strategyName: string | null }
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; at: string }
 export interface WorkspaceChat { id: string; project: string; provider: 'codex' | 'claude'; model?: string; effort?: string; title: string; state: 'idle' | 'running' | 'interrupted' | 'failed' | 'cancelled'; activity: string; error: string | null; messages: ChatMessage[] }
-export interface ChatOptions { models: string[]; efforts: string[] }
+export interface ChatOptions { models: string[]; efforts: string[]; defaultModel?: string; modelEfforts?: Record<string, string[]> }
 export interface WorkspaceState { projects: WorkspaceProject[]; chats: Omit<WorkspaceChat, 'messages'>[]; providers: LabProvider[]; chatOptions?: Partial<Record<'codex' | 'claude', ChatOptions>> }
 export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'file'; children?: WorkspaceFile[] }

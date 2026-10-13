@@ -122,7 +122,7 @@ function Dashboard({ onLogout }: DashboardProps) {
             store.setSelectedSymbol(selected); setTab('gex');
           }} conversationOpen={terminalOpen} onConversation={() => setTab('lab')} />
       <div className="workspace-body flex flex-1">
-      {!isLabWorkspace && !sidebarHidden && <WorkspaceNav mode={mode} active={tab} onChange={setTab} />}
+      {!isLabWorkspace && !sidebarHidden && <WorkspaceNav mode={mode} active={tab} onChange={setTab} onLogout={onLogout} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
 
 
@@ -160,14 +160,14 @@ function Dashboard({ onLogout }: DashboardProps) {
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
           </>
-          <div className="lab-page-host" hidden={!isLabWorkspace}><Lab sidebarHidden={sidebarHidden} onSidebarToggle={() => setSidebarHidden(v => !v)} onMonitor={() => setTab('shadow')} onNavigate={setTab} /></div>
+          <div className="lab-page-host" hidden={!isLabWorkspace}><Lab onLogout={onLogout} sidebarHidden={sidebarHidden} onSidebarToggle={() => setSidebarHidden(v => !v)} onMonitor={() => setTab('shadow')} onNavigate={setTab} /></div>
         </main>
         {/* Avisos del supervisor SHADOW: sólo en el espacio de trabajo. */}
         {!isLabWorkspace && ['rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
         {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
 
       </div>
-      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onOpenSettings={()=>setTab('config')} onLogout={onLogout} accountActive={tab==='config'} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
+      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
       {mode !== 'lab' && <ClaudeTerminal />}
       </div>
     </div>

@@ -262,3 +262,12 @@
 }
 .lab-chat-workspace.sidebar-hidden { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr); }
 .lab-chat-workspace.sidebar-hidden > .lab-chat-sidebar { display:none; }
+
+.lab-chat-header { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); gap:12px; }
+.lab-header-actions { display:flex; align-items:center; justify-content:flex-end; gap:8px; min-width:0; }
+@media(max-width:1000px) {
+  .lab-chat-header { grid-template-columns:minmax(0,1fr) auto; }
+  .lab-chat-header > .lab-provider-picker { grid-column:1 / -1; grid-row:1; }
+  .lab-chat-header > .lab-project-title { grid-row:2; }
+  .lab-header-actions { grid-row:2; }
+}
