@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Bot, Brain, Database, FileText, KeyRound, Lock, Scale, Target, User, Users } from 'lucide-react';
+import { BookOpen, Bot, Brain, Database, FileText, KeyRound, Lock, Plug, Scale, Target, User, Users } from 'lucide-react';
+import { Connections } from '../components/settings/Connections';
+import './Settings.css';
 import { BrokerAccountCard } from '../components/account/BrokerAccountCard';
 import { MyPasswordCard } from '../components/account/MyPasswordCard';
 import { Markdown } from '../components/settings/Markdown';
@@ -20,13 +22,12 @@ import {
  * Nada se muestra como JSON: cada tipo tiene su vista legible, y lo que se edita como texto se edita en markdown.
  * El estado vive en esta pantalla (no en un store de módulo): muere con la sesión, como pide la regla de la persona.
  */
-type Section = 'usuario' | 'contrasena' | 'broker' | 'perfil' | 'objetivos' | 'convenciones' | 'memoria' | 'skills'
+type Section = 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'perfil' | 'objetivos' | 'convenciones' | 'memoria' | 'skills'
   | 'agentes' | 'datos' | 'compartido';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
-  { group: 'Cuenta', items: [
-    { id: 'usuario', label: 'Usuario', Icon: User },
-    { id: 'contrasena', label: 'Contraseña', Icon: Lock },
+  { group: 'Empezar', items: [
+    { id: 'conexiones', label: 'Conexiones', Icon: Plug },
     { id: 'broker', label: 'Cuenta de bróker', Icon: KeyRound },
   ] },
   { group: 'Mi trading', items: [
@@ -34,13 +35,17 @@ const NAV: { group: string; items: { id: Section; label: string; Icon: React.Com
     { id: 'objetivos', label: 'Objetivos', Icon: Target },
     { id: 'convenciones', label: 'Convenciones', Icon: FileText },
   ] },
-  { group: 'GaleCore-AI', items: [
+  { group: 'Conocimiento', items: [
     { id: 'memoria', label: 'Memoria', Icon: Brain },
-    { id: 'skills', label: 'Skills', Icon: BookOpen },
+    { id: 'skills', label: 'Métodos y skills', Icon: BookOpen },
     { id: 'agentes', label: 'Agentes', Icon: Bot },
-    { id: 'datos', label: 'Datos', Icon: Database },
+    { id: 'datos', label: 'Mis fuentes', Icon: Database },
   ] },
-  { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
+  { group: 'Cuenta y equipo', items: [
+    { id: 'usuario', label: 'Usuario', Icon: User },
+    { id: 'contrasena', label: 'Contraseña', Icon: Lock },
+    { id: 'compartido', label: 'Compartido conmigo', Icon: Users },
+  ] },
 ];
 
 const SECTION_KIND: Partial<Record<Section, SpaceKind>> = {
@@ -62,23 +67,23 @@ const INTRO: Partial<Record<Section, string>> = {
 // ── estilos ─────────────────────────────────────────────────────
 
 const card: React.CSSProperties = {
-  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 8, padding: '14px 16px',
+  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 12, padding: '20px 22px',
 };
 const btn = (primary = false): React.CSSProperties => ({
-  fontSize: 12, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
-  border: `1px solid ${primary ? 'var(--blue-gc)' : 'var(--border-dark)'}`,
-  backgroundColor: primary ? 'var(--blue-gc)' : 'transparent', color: primary ? '#fff' : 'var(--text-secondary)',
+  fontSize: 14, padding: '8px 14px', borderRadius: 8, cursor: 'pointer', fontFamily: 'var(--font-sans)',
+  border: `1px solid ${primary ? 'var(--accent)' : 'var(--border)'}`,
+  backgroundColor: primary ? 'var(--accent)' : 'transparent', color: primary ? 'var(--accent-ink)' : 'var(--text-secondary)',
 });
 const field: React.CSSProperties = {
   width: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border-dark)',
-  borderRadius: 6, padding: '8px 10px', fontSize: 13, fontFamily: 'Inter, sans-serif',
+  borderRadius: 8, padding: '10px 12px', fontSize: 15, fontFamily: 'var(--font-sans)',
 };
 const pill = (on: boolean): React.CSSProperties => ({
   fontSize: 11, padding: '3px 10px', borderRadius: 999, cursor: 'pointer',
   border: `1px solid ${on ? 'var(--blue-gc)' : 'var(--border-dark)'}`, backgroundColor: on ? 'var(--bg-elevated)' : 'transparent',
   color: on ? 'var(--text-primary)' : 'var(--text-muted)',
 });
-const muted: React.CSSProperties = { fontSize: 12, color: 'var(--text-muted)' };
+const muted: React.CSSProperties = { fontSize: 14, color: 'var(--text-muted)' };
 
 const parse = (s: string): any => { try { return JSON.parse(s); } catch { return null; } };
 const human = (k: string) => k.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
@@ -292,7 +297,7 @@ function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged: () =>
 
 // ── página ──────────────────────────────────────────────────────
 
-export function Settings({ initial = 'usuario', onBrokerLinked }: { initial?: Section; onBrokerLinked?: () => void }) {
+export function Settings({ initial = 'conexiones', onBrokerLinked, onLab }: { initial?: Section; onBrokerLinked?: () => void; onLab?: () => void }) {
   const [section, setSection] = useState<Section>(initial);
   const [items, setItems] = useState<SpaceItem[]>([]);
   const [shared, setShared] = useState<SpaceItem[]>([]);
@@ -318,7 +323,9 @@ export function Settings({ initial = 'usuario', onBrokerLinked }: { initial?: Se
   const label = NAV.flatMap((g) => g.items).find((i) => i.id === section)?.label ?? '';
 
   let body: React.ReactNode;
-  if (section === 'usuario') {
+  if (section === 'conexiones') {
+    body = <Connections onBroker={() => setSection('broker')} onData={() => setSection('datos')} onLab={onLab} />;
+  } else if (section === 'usuario') {
     body = (
       <div style={{ ...card, display: 'grid', gridTemplateColumns: '160px 1fr', rowGap: 10, fontSize: 13 }}>
         <div style={muted}>Usuario</div><div style={{ color: 'var(--text-primary)' }}>{user?.username ?? '—'}</div>
@@ -357,27 +364,22 @@ export function Settings({ initial = 'usuario', onBrokerLinked }: { initial?: Se
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', fontFamily: 'Inter, sans-serif' }}>
-      <aside style={{ width: 220, flexShrink: 0, borderRight: '1px solid var(--border-dark)', padding: '18px 10px',
-        backgroundColor: 'var(--bg-secondary)', overflowY: 'auto' }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', padding: '0 10px 14px' }}>Configuración</div>
+    <div className="settings-page">
+      <aside className="settings-nav" aria-label="Secciones de configuración">
+        <div className="settings-nav-title">Configuración</div>
         {NAV.map((g) => (
           <div key={g.group} style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)',
-              padding: '0 10px 6px' }}>{g.group}</div>
+            <div className="settings-nav-group">{g.group}</div>
             {g.items.map(({ id, label: l, Icon }) => (
-              <button key={id} onClick={() => setSection(id)} style={{ display: 'flex', alignItems: 'center', gap: 9,
-                width: '100%', padding: '7px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13,
-                textAlign: 'left', backgroundColor: section === id ? 'var(--bg-elevated)' : 'transparent',
-                color: section === id ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                <Icon size={14} />{l}
+              <button key={id} onClick={() => setSection(id)} className={section === id ? 'is-selected' : ''} aria-current={section === id ? 'page' : undefined}>
+                <Icon size={17} />{l}
               </button>
             ))}
           </div>
         ))}
       </aside>
-      <main style={{ flex: 1, overflowY: 'auto', padding: '24px 32px 48px', maxWidth: 980 }}>
-        <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>{label}</div>
+      <main className="settings-main">
+        <h1>{label}</h1>
         {INTRO[section] && <div style={{ ...muted, fontSize: 13, marginBottom: 18 }}>{INTRO[section]}</div>}
         {error && kind && <div style={{ ...card, color: 'var(--red-gc)', fontSize: 13, marginBottom: 12 }}>{error}</div>}
         {!(error && kind) && body}

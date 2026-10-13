@@ -57,7 +57,6 @@ function Dashboard({ onLogout }: DashboardProps) {
   };
   const isLabWorkspace = mode === 'lab' && ['lab', 'estrategias'].includes(tab);
   const [watchlistOpen,setWatchlistOpen] = useState(false);
-  const [settingsInitial] = useState<'usuario' | 'broker'>('usuario');
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
   const { setConfig, setLoading: setConfigLoading, setError: setConfigError, tickers } = useAppConfigStore();
@@ -143,7 +142,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           </div>
           {/* Se montan recién al entrar: leen la cuenta de bróker y la lista de usuarios — nada de
               eso tiene sentido traerlo en cada arranque del tablero. */}
-          {tab === 'config' && <Settings initial={settingsInitial} onBrokerLinked={refreshAccount} />}
+          {tab === 'config' && <Settings onBrokerLinked={refreshAccount} onLab={() => setTab('lab')} />}
           {tab === 'admin' && <Admin />}
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}
