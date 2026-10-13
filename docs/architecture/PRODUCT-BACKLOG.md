@@ -2453,3 +2453,40 @@ El aviso de evento (p. ej. CPI) no guarda el precio del subyacente cuando se dis
 estaba la posición en ese momento.
 
 **Aceptación:** el aviso queda con símbolo, precio y hora al disparar, visibles al analizarlo.
+
+## BL-025 — Estudio de eventos (elecciones, datos macro)
+
+**Origen:** borrador de casos CU-08 (06/10) e idea del buzón del owner sobre las elecciones de medio término; ordenado el
+12/10 (D-0011). Se revisa al cerrar Producto 1.
+
+Qué pasó en el mercado alrededor de eventos comparables del pasado (elecciones, CPI, FOMC), con dataset, cálculo y límites
+estadísticos explícitos; no es un backtest general.
+
+**Aceptación:** un primer estudio reproducible con fuente, muestra y conclusión limitada a lo que la muestra soporta.
+
+## BL-026 — Transmisión macro y escenarios por horizonte
+
+**Origen:** borrador de casos CU-04/CU-05 (06/10); ordenado el 12/10. Se revisa al cerrar Producto 1.
+
+Explicar cómo un dato macro llega a precios y volatilidad, y escenarios a corto, medio y largo plazo separando lo medido
+de lo explicativo.
+
+**Aceptación:** distingue qué está medido y vigilado en GaleCore y qué es explicación.
+
+## BL-027 — Vistas de análisis guardadas y actualizables
+
+**Origen:** borrador de casos CU-18 (06/10); relacionado con U-52/U-53. Se revisa al cerrar Producto 1.
+
+Guardar una vista (tabla o gráfico) y volver a pedirla con datos nuevos.
+
+**Aceptación:** la vista guardada se reabre con el dato actualizado y su fecha.
+
+## BL-028 — Posición en el Lab: payoff, tiempo y volatilidad
+
+**Origen:** borrador de casos CU-19 (08/10; referencia de interacción OptionStrat) y `FRONT-GALECORE-INTEGRAL.md` §25.4.
+Se revisa al cerrar Producto 1.
+
+Construir o abrir una posición de opciones y ver cómo cambian riesgo y resultado con precio, tiempo y volatilidad;
+comparar alternativas.
+
+**Aceptación:** distingue vencimiento de valuación previa, declara supuestos y no confunde simulación con pronóstico.
