@@ -126,4 +126,11 @@ Verificación de esta iteración:
   real; el fallo de descubrimiento de Jest queda pendiente, fuera de este ajuste de interfaz.
 
 `CI=true npm run build` de la versión final consolidada: exit 0, compilación correcta.
-`git diff --check`: exit 0. Integración local y bundle servido se registran después de ejecutarlos.
+`git diff --check`: exit 0. Commit `a90eb5e` integrado por fast-forward en `local/integracion`.
+Comprobación final del monitor servido: exit 0, bundle HTTP 200, `compactToolbar: true`,
+`resizableSidebar: true`, `resizeObserver: true`, errores JS `[]`; preview `:3041` visible.
+Sin reinicios ni instalaciones. No se ejecutó un E2E autenticado ni se enviaron mensajes reales.
+
+Para probar esta versión: abrir el Lab y escribir; la caja parte de una línea y crece al necesitarlo.
+Arrastrar la agarradera gris del borde de proyectos para achicar o agrandar; recargar conserva el ancho.
+Doble clic restablece el ancho inicial. Letra sin cambios. WS-0029 sigue activo y no se marca cierre.
