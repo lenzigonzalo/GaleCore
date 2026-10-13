@@ -1,548 +1,548 @@
-
-> galecore-monitor@0.1.0 test
-> react-scripts test --watchAll=false --runInBand
-
-npm : PASS src/components/inteligencia/RegimeTab.test.tsx (12.348 s)
-At line:2 char:17
-+ ... :CI='true'; npm test -- --watchAll=false --runInBand *> ../../docs/en ...
-+                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (PASS src/compon....tsx (12.348 s):String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
-  ● Console
-
-    console.error
-      An update to RegimeTab inside a test was not wrapped in act(...).
-      
-      When testing, code that causes React state updates should be wrapped into act(...):
-      
-      act(() => {
-        /* fire events that update state */
-      });
-      /* assert on the output */
-      
-      This ensures that you're testing the behavior the user would see in the browser. Learn more at 
-https://react.dev/link/wrap-tests-with-act
-
-      111 |       // operador pudo cambiar de símbolo mientras el POST estaba en vuelo).
-      112 |       if (res.record) {
-    > 113 |         setRecords((prev) => (prev && prev.symbol === body.symbol
-          |         ^
-      114 |           ? { ...prev, records: prev.records.map((r) => (r.date === res.record!.date ? res.record! : r)) }
-      115 |           : prev));
-      116 |         setToday((prev) => (prev && prev.symbol === body.symbol && prev.date === res.record!.date
-
-      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
-ient.development.js:18758:19
-      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
-om/cjs/react-dom-client.development.js:874:13)
-      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
-_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
-      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
-ct-dom/cjs/react-dom-client.development.js:16409:11)
-      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
-react-dom/cjs/react-dom-client.development.js:9170:13)
-      at setRecords (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/
-react-dom-client.development.js:9127:7)
-      at submitReview (src/components/inteligencia/RegimeTab.tsx:113:9)
-
-    console.error
-      An update to RegimeTab inside a test was not wrapped in act(...).
-      
-      When testing, code that causes React state updates should be wrapped into act(...):
-      
-      act(() => {
-        /* fire events that update state */
-      });
-      /* assert on the output */
-      
-      This ensures that you're testing the behavior the user would see in the browser. Learn more at 
-https://react.dev/link/wrap-tests-with-act
-
-      114 |           ? { ...prev, records: prev.records.map((r) => (r.date === res.record!.date ? res.record! : r)) }
-      115 |           : prev));
-    > 116 |         setToday((prev) => (prev && prev.symbol === body.symbol && prev.date === res.record!.date
-          |         ^
-      117 |           ? { ...prev, record: res.record, status: res.record!.status }
-      118 |           : prev));
-      119 |       }
-
-      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
-ient.development.js:18758:19
-      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
-om/cjs/react-dom-client.development.js:874:13)
-      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
-_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
-      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
-ct-dom/cjs/react-dom-client.development.js:16409:11)
-      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
-react-dom/cjs/react-dom-client.development.js:9170:13)
-      at setToday (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/re
-act-dom-client.development.js:9127:7)
-      at submitReview (src/components/inteligencia/RegimeTab.tsx:116:9)
-
-    console.error
-      An update to RegimeTab inside a test was not wrapped in act(...).
-      
-      When testing, code that causes React state updates should be wrapped into act(...):
-      
-      act(() => {
-        /* fire events that update state */
-      });
-      /* assert on the output */
-      
-      This ensures that you're testing the behavior the user would see in the browser. Learn more at 
-https://react.dev/link/wrap-tests-with-act
-
-      121 |       const reread = res.record?.status === 'OK' ? res.record.entries.find((e) => e.run_id === 
-body.run_id) : undefined;
-      122 |       const landed = reread?.human_reviews.some((r) => r.verdict === body.verdict && r.comment === 
-body.comment) ?? false;
-    > 123 |       if (landed) setReviewOk(`Review ${res.recorded.verdict} de ${body.symbol} ${body.date} guardado en 
-${res.recorded.path}`);
-          |                   ^
-      124 |       else if (res.reread_error) fail(`El review quedó guardado en ${res.recorded.path}, pero la relectura 
-falló (${res.reread_error}). No lo vuelvas a enviar: tocá Actualizar.`);
-      125 |       else fail(`El adapter contestó 201 pero la relectura del día (${res.record?.status ?? 'sin 
-registro'}) no muestra el review. Actualizá y verificá.`);
-      126 |     } catch (e) {
-
-      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
-ient.development.js:18758:19
-      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
-om/cjs/react-dom-client.development.js:874:13)
-      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
-_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
-      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
-ct-dom/cjs/react-dom-client.development.js:16409:11)
-      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
-react-dom/cjs/react-dom-client.development.js:9170:13)
-      at setReviewOk (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs
-/react-dom-client.development.js:9127:7)
-      at submitReview (src/components/inteligencia/RegimeTab.tsx:123:19)
-
-    console.error
-      An update to RegimeTab inside a test was not wrapped in act(...).
-      
-      When testing, code that causes React state updates should be wrapped into act(...):
-      
-      act(() => {
-        /* fire events that update state */
-      });
-      /* assert on the output */
-      
-      This ensures that you're testing the behavior the user would see in the browser. Learn more at 
-https://react.dev/link/wrap-tests-with-act
-
-      128 |       fail(describeRegimeError(e));
-      129 |     } finally {
-    > 130 |       setReviewBusy(false);
-          |       ^
-      131 |     }
-      132 |   };
-      133 |
-
-      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
-ient.development.js:18758:19
-      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
-om/cjs/react-dom-client.development.js:874:13)
-      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
-_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
-      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
-ct-dom/cjs/react-dom-client.development.js:16409:11)
-      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
-react-dom/cjs/react-dom-client.development.js:9170:13)
-      at setReviewBusy (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/c
-js/react-dom-client.development.js:9127:7)
-      at submitReview (src/components/inteligencia/RegimeTab.tsx:130:7)
-
-    console.error
-      An update to RegimeTab inside a test was not wrapped in act(...).
-      
-      When testing, code that causes React state updates should be wrapped into act(...):
-      
-      act(() => {
-        /* fire events that update state */
-      });
-      /* assert on the output */
-      
-      This ensures that you're testing the behavior the user would see in the browser. Learn more at 
-https://react.dev/link/wrap-tests-with-act
-
-      102 |
-      103 |   const submitReview = async (body: RegimeReviewRequest, token: string) => {
-    > 104 |     const fail = (message: string) => setReviewError({ symbol: body.symbol, date: body.date, runId: 
-body.run_id, message });
-          |                                       ^
-      105 |     setReviewBusy(true); setReviewError(null); setReviewOk(null);
-      106 |     try {
-      107 |       const res = await postRegimeReview(body, token);
-
-      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
-ient.development.js:18758:19
-      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
-om/cjs/react-dom-client.development.js:874:13)
-      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
-_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
-      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
-ct-dom/cjs/react-dom-client.development.js:16409:11)
-      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
-react-dom/cjs/react-dom-client.development.js:9170:13)
-      at setReviewError (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/
-cjs/react-dom-client.development.js:9127:7)
-      at fail (src/components/inteligencia/RegimeTab.tsx:104:39)
-      at submitReview (src/components/inteligencia/RegimeTab.tsx:128:7)
-
-    console.error
-      An update to RegimeTab inside a test was not wrapped in act(...).
-      
-      When testing, code that causes React state updates should be wrapped into act(...):
-      
-      act(() => {
-        /* fire events that update state */
-      });
-      /* assert on the output */
-      
-      This ensures that you're testing the behavior the user would see in the browser. Learn more at 
-https://react.dev/link/wrap-tests-with-act
-
-      128 |       fail(describeRegimeError(e));
-      129 |     } finally {
-    > 130 |       setReviewBusy(false);
-          |       ^
-      131 |     }
-      132 |   };
-      133 |
-
-      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
-ient.development.js:18758:19
-      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
-om/cjs/react-dom-client.development.js:874:13)
-      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
-_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
-      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
-ct-dom/cjs/react-dom-client.development.js:16409:11)
-      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
-react-dom/cjs/react-dom-client.development.js:9170:13)
-      at setReviewBusy (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/c
-js/react-dom-client.development.js:9127:7)
-      at submitReview (src/components/inteligencia/RegimeTab.tsx:130:7)
-
-PASS src/components/ticker/LiveWatchlist.test.tsx (7.227 s)
-PASS src/pages/Shadow.test.tsx
-PASS src/pages/Macro.test.tsx
-PASS src/pages/Gex.test.tsx
-FAIL src/pages/LabShadow.test.tsx
-  ● lectura fallida no se presenta como estrategia sin versión o sin métricas
-
-    expect(element).not.toBeInTheDocument()
-
-    expected document not to contain element, found <p class="lab-shadow-note">No hay métricas de ejecución para este 
-proyecto en la lectura actual.</p> instead
-
-      10 | test('propuesta no implica aprobación o despliegue; no ofrece activar',async()=>{render(<LabShadow 
-project={project} onChat={()=>{}} onMonitor={()=>{}}/>);expect(await screen.findByText('Propuesta sin aprobar')).toBeIn
-TheDocument();expect(screen.queryByRole('button',{name:/activar|deploy/i})).not.toBeInTheDocument();expect(screen.getBy
-Text('Aprobación').closest('li')).not.toHaveClass('done');});
-      11 | test('métricas filtradas por nombre exacto, conservan pérdida y nulo sin mezclar otras 
-estrategias',async()=>{(fetchShadowMetrics as jest.Mock).mockResolvedValue([{specName:'spy',specVersion:'1.0',contentHa
-sh:'exact',instances:2,realizedPnl:-12.5,unrealizedPnl:null,positionsOpen:1,positionsClosed:3,openPositionsNotValued:1,
-evaluations:10,noDataBlocks:2},{specName:'otra',specVersion:'Otra 
-estrategia',contentHash:'other',realizedPnl:9999}]);render(<LabShadow project={project} onChat={()=>{}} 
-onMonitor={()=>{}}/>);expect(await screen.findByText('−$12.50')).toBeInTheDocument();expect(screen.getByText('—')).toBe
-InTheDocument();expect(screen.queryByText('Otra estrategia')).not.toBeInTheDocument();expect(screen.getByText(/2 
-instancias · métricas por versión/)).toBeInTheDocument();});
-    > 12 | test('lectura fallida no se presenta como estrategia sin versión o sin métricas',async()=>{(labRequest as 
-jest.Mock).mockRejectedValue(new Error('Lectura fallida'));render(<LabShadow project={project} onChat={()=>{}} 
-onMonitor={()=>{}}/>);expect(await screen.findByRole('alert')).toHaveTextContent('Lectura 
-fallida');expect(screen.queryByText('De la idea a la 
-estrategia')).not.toBeInTheDocument();expect(screen.queryByText(/No hay métricas/)).not.toBeInTheDocument();});
-         |                                                                                                             
-                                                                                                                       
-                                                                                                                       
-                                                                                                      ^
-      13 |
-      14 | test('instancia histórica del mismo spec no marca la versión actual como desplegada',async()=>{(labRequest 
-as jest.Mock).mockResolvedValue({current:{ref:'strategy:spy/2.0',approved:true,spec_hash:'sha256:current',purpose:'Vers
-ión actual'},integrity_failed:[]});(fetchShadowStatus as jest.Mock).mockResolvedValue({persistence:{available:true},ins
-tances:[{specName:'spy',instanceId:'older',versionHash:'sha256:old',lifecycleState:'RUNNING',schedulerState:'ACTIVE',up
-datedAt:'2026-10-10T12:00:00Z'}]});render(<LabShadow project={project} onChat={()=>{}} onMonitor={()=>{}}/>);await 
-screen.findByText('Versión aprobada');expect(screen.getByText('En 
-Shadow').closest('li')).not.toHaveClass('done');expect(screen.getByText('Otra versión')).toBeInTheDocument();});
-      15 | test('lifecycle cruza el hash exacto, con prefijo sha256 normalizado',async()=>{(labRequest as jest.Mock).mo
-ckResolvedValue({current:{ref:'strategy:spy/2.0',approved:true,spec_hash:'sha256:current',purpose:'Versión 
-actual'},integrity_failed:[]});(fetchShadowStatus as jest.Mock).mockResolvedValue({persistence:{available:true},instanc
-es:[{specName:'spy',instanceId:'same',versionHash:'current',lifecycleState:'RUNNING',schedulerState:'ACTIVE',updatedAt:
-'2026-10-10T12:00:00Z'}]});render(<LabShadow project={project} onChat={()=>{}} onMonitor={()=>{}}/>);await 
-screen.findByText('Versión aprobada');expect(screen.getByText('En Shadow').closest('li')).toHaveClass('done');});
-
-      at Object.<anonymous> (src/pages/LabShadow.test.tsx:12:449)
-
-FAIL src/pages/Lab.test.tsx
-  ● Test suite failed to run
-
-    Jest encountered an unexpected token
-
-    Jest failed to parse a file. This happens e.g. when your code or its dependencies use non-standard JavaScript 
-syntax, or when Jest is not configured to support such syntax.
-
-    Out of the box Jest supports Babel, which will be used to transform your files into valid JS based on your Babel 
-configuration.
-
-    By default "node_modules" folder is ignored by transformers.
-
-    Here's what you can do:
-     • If you are trying to use ECMAScript Modules, see https://jestjs.io/docs/ecmascript-modules for how to enable it.
-     • If you are trying to use TypeScript, see https://jestjs.io/docs/getting-started#using-typescript
-     • To have some of your "node_modules" files transformed, you can specify a custom "transformIgnorePatterns" in 
-your config.
-     • If you need a custom transformation specify a "transform" option in your config.
-     • If you simply want to mock your non-JS modules (e.g. binary assets) you can stub them out with the 
-"moduleNameMapper" config option.
-
-    You'll find more details and examples of these config options in the docs:
-    https://jestjs.io/docs/configuration
-    For information about custom transformations, see:
-    https://jestjs.io/docs/code-transformation
-
-    Details:
-
-    C:\Users\lenzi\OneDrive\Escritorio\GaleCore\GaleCore\source\galecore-monitor\node_modules\react-markdown\index.js:9
-    export {
-    ^^^^^^
-
-    SyntaxError: Unexpected token 'export'
-
-      1 | import React, { memo } from 'react';
-    > 2 | import ReactMarkdown from 'react-markdown';
-        | ^
-      3 | import remarkGfm from 'remark-gfm';
-      4 |
-      5 | /** Renderiza la respuesta sin ejecutar HTML ni cargar imágenes externas del modelo. */
-
-      at Runtime.createScriptFromCode (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modu
-les/jest-runtime/build/index.js:1728:14)
-      at Object.<anonymous> (src/components/lab/LabMarkdown.tsx:2:1)
-      at Object.<anonymous> (src/pages/Lab.tsx:6:1)
-      at Object.<anonymous> (src/pages/Lab.test.tsx:3:1)
-
-PASS src/pages/Resumen.test.tsx
-PASS src/components/settings/AuthenticationTerminal.test.tsx
-PASS src/components/layout/WorkspaceSearch.test.tsx
-PASS src/components/ticker/TickerWatchlist.test.tsx
-PASS src/components/settings/Connections.test.tsx
-PASS src/components/layout/StatusBar.test.tsx
-PASS src/components/layout/WorkspaceNav.test.tsx
-PASS src/components/ticker/MarketWatchlist.test.tsx
-PASS src/pages/LabSidebar.test.tsx
-PASS src/components/ticker/LiveWatchlistResize.test.tsx
-PASS src/pages/ShadowOverview.test.tsx
-PASS src/utils/portfolioSummary.test.ts
-PASS src/components/macro/CalendarDock.test.tsx
-PASS src/store/resetUserScoped.test.ts
-PASS src/components/layout/WorkspaceHeader.test.tsx
-PASS src/components/layout/StatusBarArgentina.test.tsx
-PASS src/store/useMarketStore.test.ts
-PASS src/api/account.test.tsx
-PASS src/api/marketdata.test.ts
-FAIL src/App.test.tsx
-  ● Test suite failed to run
-
-    Jest encountered an unexpected token
-
-    Jest failed to parse a file. This happens e.g. when your code or its dependencies use non-standard JavaScript 
-syntax, or when Jest is not configured to support such syntax.
-
-    Out of the box Jest supports Babel, which will be used to transform your files into valid JS based on your Babel 
-configuration.
-
-    By default "node_modules" folder is ignored by transformers.
-
-    Here's what you can do:
-     • If you are trying to use ECMAScript Modules, see https://jestjs.io/docs/ecmascript-modules for how to enable it.
-     • If you are trying to use TypeScript, see https://jestjs.io/docs/getting-started#using-typescript
-     • To have some of your "node_modules" files transformed, you can specify a custom "transformIgnorePatterns" in 
-your config.
-     • If you need a custom transformation specify a "transform" option in your config.
-     • If you simply want to mock your non-JS modules (e.g. binary assets) you can stub them out with the 
-"moduleNameMapper" config option.
-
-    You'll find more details and examples of these config options in the docs:
-    https://jestjs.io/docs/configuration
-    For information about custom transformations, see:
-    https://jestjs.io/docs/code-transformation
-
-    Details:
-
-    C:\Users\lenzi\OneDrive\Escritorio\GaleCore\GaleCore\source\galecore-monitor\node_modules\react-markdown\index.js:9
-    export {
-    ^^^^^^
-
-    SyntaxError: Unexpected token 'export'
-
-      1 | import React, { memo } from 'react';
-    > 2 | import ReactMarkdown from 'react-markdown';
-        | ^
-      3 | import remarkGfm from 'remark-gfm';
-      4 |
-      5 | /** Renderiza la respuesta sin ejecutar HTML ni cargar imágenes externas del modelo. */
-
-      at Runtime.createScriptFromCode (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modu
-les/jest-runtime/build/index.js:1728:14)
-      at Object.<anonymous> (src/components/lab/LabMarkdown.tsx:2:1)
-      at Object.<anonymous> (src/pages/Lab.tsx:6:1)
-      at Object.<anonymous> (src/App.tsx:14:1)
-      at Object.<anonymous> (src/App.test.tsx:3:1)
-
-PASS src/components/settings/LocalMcp.test.tsx
-
-Summary of all failing tests
-FAIL src/pages/LabShadow.test.tsx
-  ● lectura fallida no se presenta como estrategia sin versión o sin métricas
-
-    expect(element).not.toBeInTheDocument()
-
-    expected document not to contain element, found <p class="lab-shadow-note">No hay métricas de ejecución para este 
-proyecto en la lectura actual.</p> instead
-
-      10 | test('propuesta no implica aprobación o despliegue; no ofrece activar',async()=>{render(<LabShadow 
-project={project} onChat={()=>{}} onMonitor={()=>{}}/>);expect(await screen.findByText('Propuesta sin aprobar')).toBeIn
-TheDocument();expect(screen.queryByRole('button',{name:/activar|deploy/i})).not.toBeInTheDocument();expect(screen.getBy
-Text('Aprobación').closest('li')).not.toHaveClass('done');});
-      11 | test('métricas filtradas por nombre exacto, conservan pérdida y nulo sin mezclar otras 
-estrategias',async()=>{(fetchShadowMetrics as jest.Mock).mockResolvedValue([{specName:'spy',specVersion:'1.0',contentHa
-sh:'exact',instances:2,realizedPnl:-12.5,unrealizedPnl:null,positionsOpen:1,positionsClosed:3,openPositionsNotValued:1,
-evaluations:10,noDataBlocks:2},{specName:'otra',specVersion:'Otra 
-estrategia',contentHash:'other',realizedPnl:9999}]);render(<LabShadow project={project} onChat={()=>{}} 
-onMonitor={()=>{}}/>);expect(await screen.findByText('−$12.50')).toBeInTheDocument();expect(screen.getByText('—')).toBe
-InTheDocument();expect(screen.queryByText('Otra estrategia')).not.toBeInTheDocument();expect(screen.getByText(/2 
-instancias · métricas por versión/)).toBeInTheDocument();});
-    > 12 | test('lectura fallida no se presenta como estrategia sin versión o sin métricas',async()=>{(labRequest as 
-jest.Mock).mockRejectedValue(new Error('Lectura fallida'));render(<LabShadow project={project} onChat={()=>{}} 
-onMonitor={()=>{}}/>);expect(await screen.findByRole('alert')).toHaveTextContent('Lectura 
-fallida');expect(screen.queryByText('De la idea a la 
-estrategia')).not.toBeInTheDocument();expect(screen.queryByText(/No hay métricas/)).not.toBeInTheDocument();});
-         |                                                                                                             
-                                                                                                                       
-                                                                                                                       
-                                                                                                      ^
-      13 |
-      14 | test('instancia histórica del mismo spec no marca la versión actual como desplegada',async()=>{(labRequest 
-as jest.Mock).mockResolvedValue({current:{ref:'strategy:spy/2.0',approved:true,spec_hash:'sha256:current',purpose:'Vers
-ión actual'},integrity_failed:[]});(fetchShadowStatus as jest.Mock).mockResolvedValue({persistence:{available:true},ins
-tances:[{specName:'spy',instanceId:'older',versionHash:'sha256:old',lifecycleState:'RUNNING',schedulerState:'ACTIVE',up
-datedAt:'2026-10-10T12:00:00Z'}]});render(<LabShadow project={project} onChat={()=>{}} onMonitor={()=>{}}/>);await 
-screen.findByText('Versión aprobada');expect(screen.getByText('En 
-Shadow').closest('li')).not.toHaveClass('done');expect(screen.getByText('Otra versión')).toBeInTheDocument();});
-      15 | test('lifecycle cruza el hash exacto, con prefijo sha256 normalizado',async()=>{(labRequest as jest.Mock).mo
-ckResolvedValue({current:{ref:'strategy:spy/2.0',approved:true,spec_hash:'sha256:current',purpose:'Versión 
-actual'},integrity_failed:[]});(fetchShadowStatus as jest.Mock).mockResolvedValue({persistence:{available:true},instanc
-es:[{specName:'spy',instanceId:'same',versionHash:'current',lifecycleState:'RUNNING',schedulerState:'ACTIVE',updatedAt:
-'2026-10-10T12:00:00Z'}]});render(<LabShadow project={project} onChat={()=>{}} onMonitor={()=>{}}/>);await 
-screen.findByText('Versión aprobada');expect(screen.getByText('En Shadow').closest('li')).toHaveClass('done');});
-
-      at Object.<anonymous> (src/pages/LabShadow.test.tsx:12:449)
-
-FAIL src/pages/Lab.test.tsx
-  ● Test suite failed to run
-
-    Jest encountered an unexpected token
-
-    Jest failed to parse a file. This happens e.g. when your code or its dependencies use non-standard JavaScript 
-syntax, or when Jest is not configured to support such syntax.
-
-    Out of the box Jest supports Babel, which will be used to transform your files into valid JS based on your Babel 
-configuration.
-
-    By default "node_modules" folder is ignored by transformers.
-
-    Here's what you can do:
-     • If you are trying to use ECMAScript Modules, see https://jestjs.io/docs/ecmascript-modules for how to enable it.
-     • If you are trying to use TypeScript, see https://jestjs.io/docs/getting-started#using-typescript
-     • To have some of your "node_modules" files transformed, you can specify a custom "transformIgnorePatterns" in 
-your config.
-     • If you need a custom transformation specify a "transform" option in your config.
-     • If you simply want to mock your non-JS modules (e.g. binary assets) you can stub them out with the 
-"moduleNameMapper" config option.
-
-    You'll find more details and examples of these config options in the docs:
-    https://jestjs.io/docs/configuration
-    For information about custom transformations, see:
-    https://jestjs.io/docs/code-transformation
-
-    Details:
-
-    C:\Users\lenzi\OneDrive\Escritorio\GaleCore\GaleCore\source\galecore-monitor\node_modules\react-markdown\index.js:9
-    export {
-    ^^^^^^
-
-    SyntaxError: Unexpected token 'export'
-
-      1 | import React, { memo } from 'react';
-    > 2 | import ReactMarkdown from 'react-markdown';
-        | ^
-      3 | import remarkGfm from 'remark-gfm';
-      4 |
-      5 | /** Renderiza la respuesta sin ejecutar HTML ni cargar imágenes externas del modelo. */
-
-      at Runtime.createScriptFromCode (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modu
-les/jest-runtime/build/index.js:1728:14)
-      at Object.<anonymous> (src/components/lab/LabMarkdown.tsx:2:1)
-      at Object.<anonymous> (src/pages/Lab.tsx:6:1)
-      at Object.<anonymous> (src/pages/Lab.test.tsx:3:1)
-
-FAIL src/App.test.tsx
-  ● Test suite failed to run
-
-    Jest encountered an unexpected token
-
-    Jest failed to parse a file. This happens e.g. when your code or its dependencies use non-standard JavaScript 
-syntax, or when Jest is not configured to support such syntax.
-
-    Out of the box Jest supports Babel, which will be used to transform your files into valid JS based on your Babel 
-configuration.
-
-    By default "node_modules" folder is ignored by transformers.
-
-    Here's what you can do:
-     • If you are trying to use ECMAScript Modules, see https://jestjs.io/docs/ecmascript-modules for how to enable it.
-     • If you are trying to use TypeScript, see https://jestjs.io/docs/getting-started#using-typescript
-     • To have some of your "node_modules" files transformed, you can specify a custom "transformIgnorePatterns" in 
-your config.
-     • If you need a custom transformation specify a "transform" option in your config.
-     • If you simply want to mock your non-JS modules (e.g. binary assets) you can stub them out with the 
-"moduleNameMapper" config option.
-
-    You'll find more details and examples of these config options in the docs:
-    https://jestjs.io/docs/configuration
-    For information about custom transformations, see:
-    https://jestjs.io/docs/code-transformation
-
-    Details:
-
-    C:\Users\lenzi\OneDrive\Escritorio\GaleCore\GaleCore\source\galecore-monitor\node_modules\react-markdown\index.js:9
-    export {
-    ^^^^^^
-
-    SyntaxError: Unexpected token 'export'
-
-      1 | import React, { memo } from 'react';
-    > 2 | import ReactMarkdown from 'react-markdown';
-        | ^
-      3 | import remarkGfm from 'remark-gfm';
-      4 |
-      5 | /** Renderiza la respuesta sin ejecutar HTML ni cargar imágenes externas del modelo. */
-
-      at Runtime.createScriptFromCode (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modu
-les/jest-runtime/build/index.js:1728:14)
-      at Object.<anonymous> (src/components/lab/LabMarkdown.tsx:2:1)
-      at Object.<anonymous> (src/pages/Lab.tsx:6:1)
-      at Object.<anonymous> (src/App.tsx:14:1)
-      at Object.<anonymous> (src/App.test.tsx:3:1)
-
-
-Test Suites: 3 failed, 25 passed, 28 total
-Tests:       1 failed, 86 passed, 87 total
-Snapshots:   0 total
-Time:        76.54 s
-Ran all test suites.
+
+> galecore-monitor@0.1.0 test
+> react-scripts test --watchAll=false --runInBand
+
+npm : PASS src/components/inteligencia/RegimeTab.test.tsx (12.348 s)
+At line:2 char:17
++ ... :CI='true'; npm test -- --watchAll=false --runInBand *> ../../docs/en ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS src/compon....tsx (12.348 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+  ● Console
+
+    console.error
+      An update to RegimeTab inside a test was not wrapped in act(...).
+
+      When testing, code that causes React state updates should be wrapped into act(...):
+
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at
+https://react.dev/link/wrap-tests-with-act
+
+      111 |       // operador pudo cambiar de símbolo mientras el POST estaba en vuelo).
+      112 |       if (res.record) {
+    > 113 |         setRecords((prev) => (prev && prev.symbol === body.symbol
+          |         ^
+      114 |           ? { ...prev, records: prev.records.map((r) => (r.date === res.record!.date ? res.record! : r)) }
+      115 |           : prev));
+      116 |         setToday((prev) => (prev && prev.symbol === body.symbol && prev.date === res.record!.date
+
+      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
+ient.development.js:18758:19
+      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
+om/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
+_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
+ct-dom/cjs/react-dom-client.development.js:16409:11)
+      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
+react-dom/cjs/react-dom-client.development.js:9170:13)
+      at setRecords (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/
+react-dom-client.development.js:9127:7)
+      at submitReview (src/components/inteligencia/RegimeTab.tsx:113:9)
+
+    console.error
+      An update to RegimeTab inside a test was not wrapped in act(...).
+
+      When testing, code that causes React state updates should be wrapped into act(...):
+
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at
+https://react.dev/link/wrap-tests-with-act
+
+      114 |           ? { ...prev, records: prev.records.map((r) => (r.date === res.record!.date ? res.record! : r)) }
+      115 |           : prev));
+    > 116 |         setToday((prev) => (prev && prev.symbol === body.symbol && prev.date === res.record!.date
+          |         ^
+      117 |           ? { ...prev, record: res.record, status: res.record!.status }
+      118 |           : prev));
+      119 |       }
+
+      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
+ient.development.js:18758:19
+      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
+om/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
+_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
+ct-dom/cjs/react-dom-client.development.js:16409:11)
+      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
+react-dom/cjs/react-dom-client.development.js:9170:13)
+      at setToday (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/re
+act-dom-client.development.js:9127:7)
+      at submitReview (src/components/inteligencia/RegimeTab.tsx:116:9)
+
+    console.error
+      An update to RegimeTab inside a test was not wrapped in act(...).
+
+      When testing, code that causes React state updates should be wrapped into act(...):
+
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at
+https://react.dev/link/wrap-tests-with-act
+
+      121 |       const reread = res.record?.status === 'OK' ? res.record.entries.find((e) => e.run_id ===
+body.run_id) : undefined;
+      122 |       const landed = reread?.human_reviews.some((r) => r.verdict === body.verdict && r.comment ===
+body.comment) ?? false;
+    > 123 |       if (landed) setReviewOk(`Review ${res.recorded.verdict} de ${body.symbol} ${body.date} guardado en
+${res.recorded.path}`);
+          |                   ^
+      124 |       else if (res.reread_error) fail(`El review quedó guardado en ${res.recorded.path}, pero la relectura
+falló (${res.reread_error}). No lo vuelvas a enviar: tocá Actualizar.`);
+      125 |       else fail(`El adapter contestó 201 pero la relectura del día (${res.record?.status ?? 'sin
+registro'}) no muestra el review. Actualizá y verificá.`);
+      126 |     } catch (e) {
+
+      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
+ient.development.js:18758:19
+      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
+om/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
+_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
+ct-dom/cjs/react-dom-client.development.js:16409:11)
+      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
+react-dom/cjs/react-dom-client.development.js:9170:13)
+      at setReviewOk (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs
+/react-dom-client.development.js:9127:7)
+      at submitReview (src/components/inteligencia/RegimeTab.tsx:123:19)
+
+    console.error
+      An update to RegimeTab inside a test was not wrapped in act(...).
+
+      When testing, code that causes React state updates should be wrapped into act(...):
+
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at
+https://react.dev/link/wrap-tests-with-act
+
+      128 |       fail(describeRegimeError(e));
+      129 |     } finally {
+    > 130 |       setReviewBusy(false);
+          |       ^
+      131 |     }
+      132 |   };
+      133 |
+
+      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
+ient.development.js:18758:19
+      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
+om/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
+_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
+ct-dom/cjs/react-dom-client.development.js:16409:11)
+      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
+react-dom/cjs/react-dom-client.development.js:9170:13)
+      at setReviewBusy (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/c
+js/react-dom-client.development.js:9127:7)
+      at submitReview (src/components/inteligencia/RegimeTab.tsx:130:7)
+
+    console.error
+      An update to RegimeTab inside a test was not wrapped in act(...).
+
+      When testing, code that causes React state updates should be wrapped into act(...):
+
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at
+https://react.dev/link/wrap-tests-with-act
+
+      102 |
+      103 |   const submitReview = async (body: RegimeReviewRequest, token: string) => {
+    > 104 |     const fail = (message: string) => setReviewError({ symbol: body.symbol, date: body.date, runId:
+body.run_id, message });
+          |                                       ^
+      105 |     setReviewBusy(true); setReviewError(null); setReviewOk(null);
+      106 |     try {
+      107 |       const res = await postRegimeReview(body, token);
+
+      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
+ient.development.js:18758:19
+      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
+om/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
+_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
+ct-dom/cjs/react-dom-client.development.js:16409:11)
+      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
+react-dom/cjs/react-dom-client.development.js:9170:13)
+      at setReviewError (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/
+cjs/react-dom-client.development.js:9127:7)
+      at fail (src/components/inteligencia/RegimeTab.tsx:104:39)
+      at submitReview (src/components/inteligencia/RegimeTab.tsx:128:7)
+
+    console.error
+      An update to RegimeTab inside a test was not wrapped in act(...).
+
+      When testing, code that causes React state updates should be wrapped into act(...):
+
+      act(() => {
+        /* fire events that update state */
+      });
+      /* assert on the output */
+
+      This ensures that you're testing the behavior the user would see in the browser. Learn more at
+https://react.dev/link/wrap-tests-with-act
+
+      128 |       fail(describeRegimeError(e));
+      129 |     } finally {
+    > 130 |       setReviewBusy(false);
+          |       ^
+      131 |     }
+      132 |   };
+      133 |
+
+      at ../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/cjs/react-dom-cl
+ient.development.js:18758:19
+      at runWithFiberInDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-d
+om/cjs/react-dom-client.development.js:874:13)
+      at warnIfUpdatesNotWrappedWithActDEV (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node
+_modules/react-dom/cjs/react-dom-client.development.js:18757:9)
+      at scheduleUpdateOnFiber (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/rea
+ct-dom/cjs/react-dom-client.development.js:16409:11)
+      at dispatchSetStateInternal (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/
+react-dom/cjs/react-dom-client.development.js:9170:13)
+      at setReviewBusy (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modules/react-dom/c
+js/react-dom-client.development.js:9127:7)
+      at submitReview (src/components/inteligencia/RegimeTab.tsx:130:7)
+
+PASS src/components/ticker/LiveWatchlist.test.tsx (7.227 s)
+PASS src/pages/Shadow.test.tsx
+PASS src/pages/Macro.test.tsx
+PASS src/pages/Gex.test.tsx
+FAIL src/pages/LabShadow.test.tsx
+  ● lectura fallida no se presenta como estrategia sin versión o sin métricas
+
+    expect(element).not.toBeInTheDocument()
+
+    expected document not to contain element, found <p class="lab-shadow-note">No hay métricas de ejecución para este
+proyecto en la lectura actual.</p> instead
+
+      10 | test('propuesta no implica aprobación o despliegue; no ofrece activar',async()=>{render(<LabShadow
+project={project} onChat={()=>{}} onMonitor={()=>{}}/>);expect(await screen.findByText('Propuesta sin aprobar')).toBeIn
+TheDocument();expect(screen.queryByRole('button',{name:/activar|deploy/i})).not.toBeInTheDocument();expect(screen.getBy
+Text('Aprobación').closest('li')).not.toHaveClass('done');});
+      11 | test('métricas filtradas por nombre exacto, conservan pérdida y nulo sin mezclar otras
+estrategias',async()=>{(fetchShadowMetrics as jest.Mock).mockResolvedValue([{specName:'spy',specVersion:'1.0',contentHa
+sh:'exact',instances:2,realizedPnl:-12.5,unrealizedPnl:null,positionsOpen:1,positionsClosed:3,openPositionsNotValued:1,
+evaluations:10,noDataBlocks:2},{specName:'otra',specVersion:'Otra
+estrategia',contentHash:'other',realizedPnl:9999}]);render(<LabShadow project={project} onChat={()=>{}}
+onMonitor={()=>{}}/>);expect(await screen.findByText('−$12.50')).toBeInTheDocument();expect(screen.getByText('—')).toBe
+InTheDocument();expect(screen.queryByText('Otra estrategia')).not.toBeInTheDocument();expect(screen.getByText(/2
+instancias · métricas por versión/)).toBeInTheDocument();});
+    > 12 | test('lectura fallida no se presenta como estrategia sin versión o sin métricas',async()=>{(labRequest as
+jest.Mock).mockRejectedValue(new Error('Lectura fallida'));render(<LabShadow project={project} onChat={()=>{}}
+onMonitor={()=>{}}/>);expect(await screen.findByRole('alert')).toHaveTextContent('Lectura
+fallida');expect(screen.queryByText('De la idea a la
+estrategia')).not.toBeInTheDocument();expect(screen.queryByText(/No hay métricas/)).not.toBeInTheDocument();});
+         |
+
+
+                                                                                                      ^
+      13 |
+      14 | test('instancia histórica del mismo spec no marca la versión actual como desplegada',async()=>{(labRequest
+as jest.Mock).mockResolvedValue({current:{ref:'strategy:spy/2.0',approved:true,spec_hash:'sha256:current',purpose:'Vers
+ión actual'},integrity_failed:[]});(fetchShadowStatus as jest.Mock).mockResolvedValue({persistence:{available:true},ins
+tances:[{specName:'spy',instanceId:'older',versionHash:'sha256:old',lifecycleState:'RUNNING',schedulerState:'ACTIVE',up
+datedAt:'2026-10-10T12:00:00Z'}]});render(<LabShadow project={project} onChat={()=>{}} onMonitor={()=>{}}/>);await
+screen.findByText('Versión aprobada');expect(screen.getByText('En
+Shadow').closest('li')).not.toHaveClass('done');expect(screen.getByText('Otra versión')).toBeInTheDocument();});
+      15 | test('lifecycle cruza el hash exacto, con prefijo sha256 normalizado',async()=>{(labRequest as jest.Mock).mo
+ckResolvedValue({current:{ref:'strategy:spy/2.0',approved:true,spec_hash:'sha256:current',purpose:'Versión
+actual'},integrity_failed:[]});(fetchShadowStatus as jest.Mock).mockResolvedValue({persistence:{available:true},instanc
+es:[{specName:'spy',instanceId:'same',versionHash:'current',lifecycleState:'RUNNING',schedulerState:'ACTIVE',updatedAt:
+'2026-10-10T12:00:00Z'}]});render(<LabShadow project={project} onChat={()=>{}} onMonitor={()=>{}}/>);await
+screen.findByText('Versión aprobada');expect(screen.getByText('En Shadow').closest('li')).toHaveClass('done');});
+
+      at Object.<anonymous> (src/pages/LabShadow.test.tsx:12:449)
+
+FAIL src/pages/Lab.test.tsx
+  ● Test suite failed to run
+
+    Jest encountered an unexpected token
+
+    Jest failed to parse a file. This happens e.g. when your code or its dependencies use non-standard JavaScript
+syntax, or when Jest is not configured to support such syntax.
+
+    Out of the box Jest supports Babel, which will be used to transform your files into valid JS based on your Babel
+configuration.
+
+    By default "node_modules" folder is ignored by transformers.
+
+    Here's what you can do:
+     • If you are trying to use ECMAScript Modules, see https://jestjs.io/docs/ecmascript-modules for how to enable it.
+     • If you are trying to use TypeScript, see https://jestjs.io/docs/getting-started#using-typescript
+     • To have some of your "node_modules" files transformed, you can specify a custom "transformIgnorePatterns" in
+your config.
+     • If you need a custom transformation specify a "transform" option in your config.
+     • If you simply want to mock your non-JS modules (e.g. binary assets) you can stub them out with the
+"moduleNameMapper" config option.
+
+    You'll find more details and examples of these config options in the docs:
+    https://jestjs.io/docs/configuration
+    For information about custom transformations, see:
+    https://jestjs.io/docs/code-transformation
+
+    Details:
+
+    C:\Users\lenzi\OneDrive\Escritorio\GaleCore\GaleCore\source\galecore-monitor\node_modules\react-markdown\index.js:9
+    export {
+    ^^^^^^
+
+    SyntaxError: Unexpected token 'export'
+
+      1 | import React, { memo } from 'react';
+    > 2 | import ReactMarkdown from 'react-markdown';
+        | ^
+      3 | import remarkGfm from 'remark-gfm';
+      4 |
+      5 | /** Renderiza la respuesta sin ejecutar HTML ni cargar imágenes externas del modelo. */
+
+      at Runtime.createScriptFromCode (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modu
+les/jest-runtime/build/index.js:1728:14)
+      at Object.<anonymous> (src/components/lab/LabMarkdown.tsx:2:1)
+      at Object.<anonymous> (src/pages/Lab.tsx:6:1)
+      at Object.<anonymous> (src/pages/Lab.test.tsx:3:1)
+
+PASS src/pages/Resumen.test.tsx
+PASS src/components/settings/AuthenticationTerminal.test.tsx
+PASS src/components/layout/WorkspaceSearch.test.tsx
+PASS src/components/ticker/TickerWatchlist.test.tsx
+PASS src/components/settings/Connections.test.tsx
+PASS src/components/layout/StatusBar.test.tsx
+PASS src/components/layout/WorkspaceNav.test.tsx
+PASS src/components/ticker/MarketWatchlist.test.tsx
+PASS src/pages/LabSidebar.test.tsx
+PASS src/components/ticker/LiveWatchlistResize.test.tsx
+PASS src/pages/ShadowOverview.test.tsx
+PASS src/utils/portfolioSummary.test.ts
+PASS src/components/macro/CalendarDock.test.tsx
+PASS src/store/resetUserScoped.test.ts
+PASS src/components/layout/WorkspaceHeader.test.tsx
+PASS src/components/layout/StatusBarArgentina.test.tsx
+PASS src/store/useMarketStore.test.ts
+PASS src/api/account.test.tsx
+PASS src/api/marketdata.test.ts
+FAIL src/App.test.tsx
+  ● Test suite failed to run
+
+    Jest encountered an unexpected token
+
+    Jest failed to parse a file. This happens e.g. when your code or its dependencies use non-standard JavaScript
+syntax, or when Jest is not configured to support such syntax.
+
+    Out of the box Jest supports Babel, which will be used to transform your files into valid JS based on your Babel
+configuration.
+
+    By default "node_modules" folder is ignored by transformers.
+
+    Here's what you can do:
+     • If you are trying to use ECMAScript Modules, see https://jestjs.io/docs/ecmascript-modules for how to enable it.
+     • If you are trying to use TypeScript, see https://jestjs.io/docs/getting-started#using-typescript
+     • To have some of your "node_modules" files transformed, you can specify a custom "transformIgnorePatterns" in
+your config.
+     • If you need a custom transformation specify a "transform" option in your config.
+     • If you simply want to mock your non-JS modules (e.g. binary assets) you can stub them out with the
+"moduleNameMapper" config option.
+
+    You'll find more details and examples of these config options in the docs:
+    https://jestjs.io/docs/configuration
+    For information about custom transformations, see:
+    https://jestjs.io/docs/code-transformation
+
+    Details:
+
+    C:\Users\lenzi\OneDrive\Escritorio\GaleCore\GaleCore\source\galecore-monitor\node_modules\react-markdown\index.js:9
+    export {
+    ^^^^^^
+
+    SyntaxError: Unexpected token 'export'
+
+      1 | import React, { memo } from 'react';
+    > 2 | import ReactMarkdown from 'react-markdown';
+        | ^
+      3 | import remarkGfm from 'remark-gfm';
+      4 |
+      5 | /** Renderiza la respuesta sin ejecutar HTML ni cargar imágenes externas del modelo. */
+
+      at Runtime.createScriptFromCode (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modu
+les/jest-runtime/build/index.js:1728:14)
+      at Object.<anonymous> (src/components/lab/LabMarkdown.tsx:2:1)
+      at Object.<anonymous> (src/pages/Lab.tsx:6:1)
+      at Object.<anonymous> (src/App.tsx:14:1)
+      at Object.<anonymous> (src/App.test.tsx:3:1)
+
+PASS src/components/settings/LocalMcp.test.tsx
+
+Summary of all failing tests
+FAIL src/pages/LabShadow.test.tsx
+  ● lectura fallida no se presenta como estrategia sin versión o sin métricas
+
+    expect(element).not.toBeInTheDocument()
+
+    expected document not to contain element, found <p class="lab-shadow-note">No hay métricas de ejecución para este
+proyecto en la lectura actual.</p> instead
+
+      10 | test('propuesta no implica aprobación o despliegue; no ofrece activar',async()=>{render(<LabShadow
+project={project} onChat={()=>{}} onMonitor={()=>{}}/>);expect(await screen.findByText('Propuesta sin aprobar')).toBeIn
+TheDocument();expect(screen.queryByRole('button',{name:/activar|deploy/i})).not.toBeInTheDocument();expect(screen.getBy
+Text('Aprobación').closest('li')).not.toHaveClass('done');});
+      11 | test('métricas filtradas por nombre exacto, conservan pérdida y nulo sin mezclar otras
+estrategias',async()=>{(fetchShadowMetrics as jest.Mock).mockResolvedValue([{specName:'spy',specVersion:'1.0',contentHa
+sh:'exact',instances:2,realizedPnl:-12.5,unrealizedPnl:null,positionsOpen:1,positionsClosed:3,openPositionsNotValued:1,
+evaluations:10,noDataBlocks:2},{specName:'otra',specVersion:'Otra
+estrategia',contentHash:'other',realizedPnl:9999}]);render(<LabShadow project={project} onChat={()=>{}}
+onMonitor={()=>{}}/>);expect(await screen.findByText('−$12.50')).toBeInTheDocument();expect(screen.getByText('—')).toBe
+InTheDocument();expect(screen.queryByText('Otra estrategia')).not.toBeInTheDocument();expect(screen.getByText(/2
+instancias · métricas por versión/)).toBeInTheDocument();});
+    > 12 | test('lectura fallida no se presenta como estrategia sin versión o sin métricas',async()=>{(labRequest as
+jest.Mock).mockRejectedValue(new Error('Lectura fallida'));render(<LabShadow project={project} onChat={()=>{}}
+onMonitor={()=>{}}/>);expect(await screen.findByRole('alert')).toHaveTextContent('Lectura
+fallida');expect(screen.queryByText('De la idea a la
+estrategia')).not.toBeInTheDocument();expect(screen.queryByText(/No hay métricas/)).not.toBeInTheDocument();});
+         |
+
+
+                                                                                                      ^
+      13 |
+      14 | test('instancia histórica del mismo spec no marca la versión actual como desplegada',async()=>{(labRequest
+as jest.Mock).mockResolvedValue({current:{ref:'strategy:spy/2.0',approved:true,spec_hash:'sha256:current',purpose:'Vers
+ión actual'},integrity_failed:[]});(fetchShadowStatus as jest.Mock).mockResolvedValue({persistence:{available:true},ins
+tances:[{specName:'spy',instanceId:'older',versionHash:'sha256:old',lifecycleState:'RUNNING',schedulerState:'ACTIVE',up
+datedAt:'2026-10-10T12:00:00Z'}]});render(<LabShadow project={project} onChat={()=>{}} onMonitor={()=>{}}/>);await
+screen.findByText('Versión aprobada');expect(screen.getByText('En
+Shadow').closest('li')).not.toHaveClass('done');expect(screen.getByText('Otra versión')).toBeInTheDocument();});
+      15 | test('lifecycle cruza el hash exacto, con prefijo sha256 normalizado',async()=>{(labRequest as jest.Mock).mo
+ckResolvedValue({current:{ref:'strategy:spy/2.0',approved:true,spec_hash:'sha256:current',purpose:'Versión
+actual'},integrity_failed:[]});(fetchShadowStatus as jest.Mock).mockResolvedValue({persistence:{available:true},instanc
+es:[{specName:'spy',instanceId:'same',versionHash:'current',lifecycleState:'RUNNING',schedulerState:'ACTIVE',updatedAt:
+'2026-10-10T12:00:00Z'}]});render(<LabShadow project={project} onChat={()=>{}} onMonitor={()=>{}}/>);await
+screen.findByText('Versión aprobada');expect(screen.getByText('En Shadow').closest('li')).toHaveClass('done');});
+
+      at Object.<anonymous> (src/pages/LabShadow.test.tsx:12:449)
+
+FAIL src/pages/Lab.test.tsx
+  ● Test suite failed to run
+
+    Jest encountered an unexpected token
+
+    Jest failed to parse a file. This happens e.g. when your code or its dependencies use non-standard JavaScript
+syntax, or when Jest is not configured to support such syntax.
+
+    Out of the box Jest supports Babel, which will be used to transform your files into valid JS based on your Babel
+configuration.
+
+    By default "node_modules" folder is ignored by transformers.
+
+    Here's what you can do:
+     • If you are trying to use ECMAScript Modules, see https://jestjs.io/docs/ecmascript-modules for how to enable it.
+     • If you are trying to use TypeScript, see https://jestjs.io/docs/getting-started#using-typescript
+     • To have some of your "node_modules" files transformed, you can specify a custom "transformIgnorePatterns" in
+your config.
+     • If you need a custom transformation specify a "transform" option in your config.
+     • If you simply want to mock your non-JS modules (e.g. binary assets) you can stub them out with the
+"moduleNameMapper" config option.
+
+    You'll find more details and examples of these config options in the docs:
+    https://jestjs.io/docs/configuration
+    For information about custom transformations, see:
+    https://jestjs.io/docs/code-transformation
+
+    Details:
+
+    C:\Users\lenzi\OneDrive\Escritorio\GaleCore\GaleCore\source\galecore-monitor\node_modules\react-markdown\index.js:9
+    export {
+    ^^^^^^
+
+    SyntaxError: Unexpected token 'export'
+
+      1 | import React, { memo } from 'react';
+    > 2 | import ReactMarkdown from 'react-markdown';
+        | ^
+      3 | import remarkGfm from 'remark-gfm';
+      4 |
+      5 | /** Renderiza la respuesta sin ejecutar HTML ni cargar imágenes externas del modelo. */
+
+      at Runtime.createScriptFromCode (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modu
+les/jest-runtime/build/index.js:1728:14)
+      at Object.<anonymous> (src/components/lab/LabMarkdown.tsx:2:1)
+      at Object.<anonymous> (src/pages/Lab.tsx:6:1)
+      at Object.<anonymous> (src/pages/Lab.test.tsx:3:1)
+
+FAIL src/App.test.tsx
+  ● Test suite failed to run
+
+    Jest encountered an unexpected token
+
+    Jest failed to parse a file. This happens e.g. when your code or its dependencies use non-standard JavaScript
+syntax, or when Jest is not configured to support such syntax.
+
+    Out of the box Jest supports Babel, which will be used to transform your files into valid JS based on your Babel
+configuration.
+
+    By default "node_modules" folder is ignored by transformers.
+
+    Here's what you can do:
+     • If you are trying to use ECMAScript Modules, see https://jestjs.io/docs/ecmascript-modules for how to enable it.
+     • If you are trying to use TypeScript, see https://jestjs.io/docs/getting-started#using-typescript
+     • To have some of your "node_modules" files transformed, you can specify a custom "transformIgnorePatterns" in
+your config.
+     • If you need a custom transformation specify a "transform" option in your config.
+     • If you simply want to mock your non-JS modules (e.g. binary assets) you can stub them out with the
+"moduleNameMapper" config option.
+
+    You'll find more details and examples of these config options in the docs:
+    https://jestjs.io/docs/configuration
+    For information about custom transformations, see:
+    https://jestjs.io/docs/code-transformation
+
+    Details:
+
+    C:\Users\lenzi\OneDrive\Escritorio\GaleCore\GaleCore\source\galecore-monitor\node_modules\react-markdown\index.js:9
+    export {
+    ^^^^^^
+
+    SyntaxError: Unexpected token 'export'
+
+      1 | import React, { memo } from 'react';
+    > 2 | import ReactMarkdown from 'react-markdown';
+        | ^
+      3 | import remarkGfm from 'remark-gfm';
+      4 |
+      5 | /** Renderiza la respuesta sin ejecutar HTML ni cargar imágenes externas del modelo. */
+
+      at Runtime.createScriptFromCode (../../../OneDrive/Escritorio/GaleCore/GaleCore/source/galecore-monitor/node_modu
+les/jest-runtime/build/index.js:1728:14)
+      at Object.<anonymous> (src/components/lab/LabMarkdown.tsx:2:1)
+      at Object.<anonymous> (src/pages/Lab.tsx:6:1)
+      at Object.<anonymous> (src/App.tsx:14:1)
+      at Object.<anonymous> (src/App.test.tsx:3:1)
+
+
+Test Suites: 3 failed, 25 passed, 28 total
+Tests:       1 failed, 86 passed, 87 total
+Snapshots:   0 total
+Time:        76.54 s
+Ran all test suites.
