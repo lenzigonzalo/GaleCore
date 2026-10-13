@@ -36,6 +36,11 @@ namespace DataFeed.Repositories.Entities
         /// <summary>Por qué la última valuación no se pudo hacer, como JSON (null si se hizo).</summary>
         public string? ValuationProblemsJson { get; set; }
 
+        /// <summary>Contexto de mercado al abrir, como JSON (null en posiciones anteriores, WS-0033).</summary>
+        public string? EntryContextJson { get; set; }
+        /// <summary>Cotizaciones de las patas al cerrar, como JSON (null si sigue abierta).</summary>
+        public string? ExitContextJson { get; set; }
+
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }
