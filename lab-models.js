@@ -14,11 +14,11 @@ function modelOptions(home = os.homedir()) {
     modelEfforts = Object.fromEntries(visible.map(m => [m.slug, (m.supported_reasoning_levels || []).map(level => level.effort).filter(e => EFFORTS.includes(e))]));
   } catch { /* No cache: only the CLI default is offered. */ }
   return {
-    claude: { models: ['sonnet', 'opus', 'haiku'], efforts: EFFORTS.filter(e => e !== 'ultra'), defaultModel: process.env.GALECORE_LAB_MODEL || 'sonnet' },
-    codex: { models, efforts: EFFORTS, modelEfforts },
+    claude: { models: [...new Set(['sonnet', 'opus', 'haiku', process.env.GALECORE_LAB_MODEL || 'sonnet'])], efforts: EFFORTS.filter(e => e !== 'ultra'), modelEfforts: { haiku: [] }, defaultModel: process.env.GALECORE_LAB_MODEL || 'sonnet' },
+    codex: { models, efforts: models.length ? EFFORTS.filter(e => models.every(m => modelEfforts[m].includes(e))) : [], modelEfforts },
   };
 }
-function selection(provider, body) {
+function normalize(provider, body) {
   if ((body.model !== undefined && typeof body.model !== 'string') || (body.effort !== undefined && typeof body.effort !== 'string')) throw new Error('Modelo o esfuerzo inválido.');
   const model = body.model || (provider === 'claude' ? process.env.GALECORE_LAB_MODEL || 'sonnet' : '');
   const effort = body.effort || (provider === 'claude' && !model.includes('haiku') ? process.env.GALECORE_LAB_EFFORT || 'medium' : '');
@@ -26,9 +26,16 @@ function selection(provider, body) {
   if (typeof effort !== 'string' || (effort && (!EFFORTS.includes(effort) || (provider === 'claude' && effort === 'ultra')))) throw new Error('Esfuerzo inválido.');
   return { model, effort: model.includes('haiku') ? '' : effort };
 }
+function selection(provider, body, options = modelOptions()) {
+  const chosen = normalize(provider, body), catalog = options[provider];
+  if (!catalog || (chosen.model && !catalog.models.includes(chosen.model))) throw new Error('Modelo no disponible para este proveedor.');
+  const supported = catalog.modelEfforts?.[chosen.model] || catalog.efforts;
+  if ((body.effort && !supported.includes(body.effort)) || (chosen.effort && !supported.includes(chosen.effort))) throw new Error('Esfuerzo no disponible para este modelo.');
+  return chosen;
+}
 function modelFlags(chat) {
-  const chosen = selection(chat.provider, chat);
+  const chosen = normalize(chat.provider, chat);
   if (chat.provider === 'claude') return ['--model', chosen.model, ...(chosen.effort ? ['--effort', chosen.effort] : [])];
   return [...(chosen.model ? ['--model', chosen.model] : []), ...(chosen.effort ? ['-c', 'model_reasoning_effort=' + JSON.stringify(chosen.effort)] : [])];
 }
-module.exports = { modelOptions, selection, modelFlags };
+module.exports = { modelOptions, selection, modelFlags, normalize };

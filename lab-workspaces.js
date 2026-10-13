@@ -3,7 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
-const { modelOptions, selection, modelFlags } = require('./lab-models');
+const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -128,6 +128,9 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     if([...jobs.values()].some(j=>j.project===p.id || j.project==='portfolio' || p.id==='portfolio') || legacySessions().some(s=>s.state==='running'&&(s.project===p.id||s.project==='portfolio'||p.id==='portfolio')))throw fail('Otra sesión está trabajando en este workspace. Esperá a que termine.',409);
     if(jobs.size>=4)throw fail('Hay cuatro conversaciones trabajando.',409);
     if(!binaries[chat.provider])throw fail('El motor no está instalado.',409);
+    // Legacy chats have no recoverable original model metadata. Freeze the fallback once,
+    // before the next send; subsequent environment changes cannot alter this selection.
+    if(chat.model === undefined || chat.effort === undefined){Object.assign(chat,normalize(chat.provider,chat),{selectionSource:'legacy-fallback'});saveChat(chat);}
     chat.messages.push({id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()});
     if(chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
     chat.state='running';chat.error=null;chat.activity='Pensando';saveChat(chat);
