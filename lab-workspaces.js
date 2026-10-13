@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { spawn, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
+const { modelOptions, selection, modelFlags } = require('./lab-models');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -46,7 +47,7 @@ function consumeEvent(chat, event, provider) {
     if(event.permission_denials?.length) chat.error='Una herramienta necesita permiso. Retomá en la terminal para autorizarla; este chat no omite permisos.';
   }
 }
-function createWorkspaces({ root, kb, local, binaries, environment, instructions, legacyProjects, legacySessions, execute = execFile }) {
+function createWorkspaces({ root, kb, local, binaries, environment, instructions, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats');
   fs.mkdirSync(chatDir,{recursive:true});
   let registry=read(metadata,[]);
@@ -134,7 +135,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     const context=p.type==='personal' ? 'Proyecto personal '+p.label+'. Leé las convenciones y memoria de este workspace. No consultes cuenta ni harness financiero salvo pedido explícito. No continúes ACTIVE_WORK_ITEM. No guardes secretos ni cambios ajenos.' : instructions(p)+'\nTipo del proyecto: '+p.type+'. Leé AGENTS.md de este workspace. Si el usuario quiere construir una estrategia o pide trabajar una estrategia en un símbolo, aplicá la skill '+skill+'. No confundir crear carpeta con estrategia aprobada. El bootstrap no despliega. Sólo guardá memoria de este proyecto.';
     let args;
     if(chat.provider==='codex'){
-      args=['--no-daemon','exec','--json','-c','developer_instructions='+JSON.stringify(context)];
+      args=['--no-daemon','exec','--json',...modelFlags(chat),'-c','developer_instructions='+JSON.stringify(context)];
       if(chat.nativeId)args.push('resume',chat.nativeId,'-');else args.push('--sandbox','workspace-write','-C',p.dir,'-');
     } else {
       // WS-0028 (plan v2): el CLI abierto en la carpeta del proyecto con el contexto de producto de knowledge/ (sin el de
@@ -145,12 +146,12 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       const product=p.type==='personal'?'':fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8')+'\n\n';
       const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
       const brief=p.type==='personal'?context:(resume?resume+'\n\n':'')+product+'Proyecto: '+p.id+' ('+p.type+').'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+(p.type==='strategy'?' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.':'');
-      args=['-p','--model',process.env.GALECORE_LAB_MODEL||'sonnet','--effort',process.env.GALECORE_LAB_EFFORT||'medium',
+      args=['-p',...modelFlags(chat),
         '--output-format','stream-json','--verbose','--append-system-prompt',brief,'--permission-prompts','none','--strict-mcp-config',
         '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
       if(chat.nativeId)args.push('--resume',chat.nativeId);
     }
-    const proc=spawn(binaries[chat.provider],args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});
+    const proc=spawnProcess(binaries[chat.provider],args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});
     jobs.set(chat.id,{proc,project:p.id,chat});const decoder=new StringDecoder('utf8');let pending='',done=false;
     function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';saveChat(chat);}
     proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{consumeEvent(chat,JSON.parse(line),chat.provider);saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
@@ -158,7 +159,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
   }
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
-    if(req.method==='GET' && url.pathname==='/workspaces'){json(res,200,{projects:listProjects().map(publicProject),chats:listChats(),providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
+    if(req.method==='GET' && url.pathname==='/workspaces'){json(res,200,{projects:listProjects().map(publicProject),chats:listChats(),chatOptions:modelOptions(),providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='strategy'){
       const p=project(parts[1]); if(p.type!=='strategy')throw fail('Este proyecto no es una estrategia.');
@@ -167,7 +168,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='files'){
       const p=project(parts[1]), rel=url.searchParams.get('path');const target=rel?safeFile(p.dir,rel):null;if(p.id==='portfolio'&&target&&target.toLowerCase().startsWith(path.join(fs.realpathSync(p.dir),'workspaces').toLowerCase()+path.sep))throw fail('Elegí el proyecto personal para leer sus archivos.',403);json(res,200,rel?{path:rel,text:fs.readFileSync(target,'utf8')}:{tree:tree(p.dir).filter(n=>p.id!=='portfolio'||n.name!=='workspaces'),folder:p.relative});return true;
     }
-    if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
+    if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);
       if(req.method==='GET'&&parts.length===2){json(res,200,c);return true;}
       if(req.method==='POST'&&parts[2]==='messages'){const b=await readBody(req);const words=String(b.text||'').trim();if(!words||words.length>12000)throw fail('El mensaje debe tener entre 1 y 12000 caracteres.');json(res,202,send(c,words));return true;}

@@ -62,6 +62,10 @@ function binary(provider) {
       path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe'),
     ]) if (fs.existsSync(bin)) return bin;
   }
+  if (provider === 'codex' && process.platform === 'win32') {
+    const bin = path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', '@openai', 'codex', 'node_modules', '@openai', 'codex-win32-x64', 'vendor', 'x86_64-pc-windows-msvc', 'bin', 'codex.exe');
+    if (fs.existsSync(bin)) return bin;
+  }
   try {
     const found = execFileSync(process.platform === 'win32' ? 'where.exe' : 'which', [provider], { encoding: 'utf8', windowsHide: true, timeout: 3000 });
     return found.trim().split(/\r?\n/).find(p => process.platform !== 'win32' || p.toLowerCase().endsWith('.exe')) || null;
