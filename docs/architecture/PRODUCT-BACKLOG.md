@@ -960,6 +960,16 @@ prueba temprana y separada de un pedido desde el chat integrado. Borrador, sin f
 Preserva identidad de versiones, aislamiento de cuentas, permisos y separación de SHADOW/cuenta real/LIVE.
 No se cambia el roadmap, el item activo ni se autoriza implementación o ejecución financiera.
 
+### Addendum 2026-10-13 — hallazgos del owner en el watchlist
+
+**Origen y evidencia:** reporte del owner mientras usa el front; pendiente de reproducción independiente.
+**Target:** monitor de GaleCore, trabajo local. Dos pendientes:
+
+- Con el watchlist abierto no se puede escribir en la caja de texto. Debe permitir escribir y enviar un mensaje con el watchlist abierto.
+- Durante el cierre de mercado el watchlist muestra `-`. Debe mostrar el último precio disponible, con la fecha del dato y su hora si la fuente la informa; si no hay dato disponible, indicarlo explícitamente.
+
+**Estado:** el owner pidió corregirlos ahora; implementación y evidencia en [GC-0012](../../../GaleCore/docs/engineering/work-items/GC-0012-watchlist-foco-ultimo-precio.md). Este addendum queda como procedencia; el seguimiento vive en ese work item.
+
 ---
 
 ## BL-006 — Federación MCP, trust y routing de tools externas
