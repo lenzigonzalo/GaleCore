@@ -149,6 +149,35 @@ namespace DataFeed.Application.App.Runtime
         public double? ExitDebit { get; init; }
         public string? ExitReason { get; init; }
         public double? RealizedPnl { get; init; }
+        public double MaxRisk { get; init; }
+        public double? PnlPctOfCredit { get; init; }
+        public double? PnlPctOfMaxRisk { get; init; }
+        /// <summary>Realizado − nivel planeado de la regla que actuó (TP o SL); null si no aplica.</summary>
+        public double? GapToPlan { get; init; }
+        /// <summary>Contexto guardado al entrar (desde WS-0033); null en posiciones anteriores.</summary>
+        public double? EntryVix { get; init; }
+        public double? EntryIvRank { get; init; }
+        public double? EntryUnderlyingPrice { get; init; }
+        public int? ExitDte { get; init; }
+    }
+
+    /// <summary>Una fila de la lista de estrategias SHADOW: las cifras del panel de cada una, en un solo pedido.</summary>
+    public record StrategySummary
+    {
+        public string Spec { get; init; } = "";
+        public int TradesClosed { get; init; }
+        public int TradesOpen { get; init; }
+        public Metric WinRate { get; init; } = Metric.None("");
+        public Metric RealizedPnl { get; init; } = Metric.None("");
+        public Metric UnrealizedPnl { get; init; } = Metric.None("");
+        public Metric Expectancy { get; init; } = Metric.None("");
+        public Metric MaxDrawdown { get; init; } = Metric.None("");
+        public Metric WorstTrade { get; init; } = Metric.None("");
+        public Metric AvgDaysHeld { get; init; } = Metric.None("");
+        public int TakeProfitExits { get; init; }
+        public int StopLossExits { get; init; }
+        public int OtherExits { get; init; }
+        public DateTime? LastExitAt { get; init; }
     }
 
     public record PanelReport
@@ -179,6 +208,13 @@ namespace DataFeed.Application.App.Runtime
         public Metric UnrealizedPnl { get; init; } = Metric.None("");
         public Metric MaxDrawdown { get; init; } = Metric.None("");
         public Metric WinRate { get; init; } = Metric.None("");
+        public int TradesWon { get; init; }
+        public int TradesLost { get; init; }
+        public Metric GrossProfit { get; init; } = Metric.None("");
+        public Metric GrossLoss { get; init; } = Metric.None("");
+        public Metric LargestWin { get; init; } = Metric.None("");
+        /// <summary>Ganancia promedio / |pérdida promedio|.</summary>
+        public Metric WinLossRatio { get; init; } = Metric.None("");
         public Metric AvgWin { get; init; } = Metric.None("");
         public Metric AvgLoss { get; init; } = Metric.None("");
         public Metric ProfitFactor { get; init; } = Metric.None("");
@@ -205,6 +241,23 @@ namespace DataFeed.Application.App.Runtime
 
     public static class ShadowPanel
     {
+        /// <summary>Lista de estrategias: el panel de cada spec sin filtros, reducido a lo que se ve antes de entrar.</summary>
+        public static List<StrategySummary> Summaries(IReadOnlyList<SpecVersionRecord> records,
+            IReadOnlyDictionary<string, DeterministicExits> exitsByHash, DateTime now) =>
+            records.Select(r => r.SpecName).Distinct().OrderBy(n => n).Select(spec =>
+            {
+                var p = Compute(spec, records, exitsByHash, new PanelOptions(), now);
+                int Exits(string rule) => p.ByExitRule.Where(g => g.Key == rule).Sum(g => g.Trades);
+                return new StrategySummary
+                {
+                    Spec = spec, TradesClosed = p.TradesClosed, TradesOpen = p.TradesOpen, WinRate = p.WinRate,
+                    RealizedPnl = p.RealizedPnl, UnrealizedPnl = p.UnrealizedPnl, Expectancy = p.Expectancy,
+                    MaxDrawdown = p.MaxDrawdown, WorstTrade = p.WorstTrade, AvgDaysHeld = p.AvgDaysHeld,
+                    TakeProfitExits = Exits("TAKE_PROFIT"), StopLossExits = Exits("STOP_LOSS"),
+                    OtherExits = p.TradesClosed - Exits("TAKE_PROFIT") - Exits("STOP_LOSS"), LastExitAt = p.LastExitAt,
+                };
+            }).ToList();
+
         public static PanelReport Compute(string spec, IEnumerable<SpecVersionRecord> records,
             IReadOnlyDictionary<string, DeterministicExits> exitsByHash, PanelOptions o, DateTime now)
         {
@@ -257,11 +310,25 @@ namespace DataFeed.Application.App.Runtime
                     PositionId = t.PositionId, Version = t.SpecVersion, Structure = t.Structure, Legs = t.Legs,
                     EntryAt = t.EntryAt, ExitAt = t.ExitAt, DaysHeld = t.DaysHeld, EntryCredit = t.EntryCredit,
                     ExitDebit = t.ExitDebit, ExitReason = t.ExitReason, RealizedPnl = t.RealizedPnl,
+                    MaxRisk = t.MaxRisk, PnlPctOfCredit = t.PnlPctOfCredit, PnlPctOfMaxRisk = t.PnlPctOfMaxRisk,
+                    GapToPlan = t.GapToPlan,
+                    EntryVix = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.Vix,
+                    EntryIvRank = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.IvRank,
+                    EntryUnderlyingPrice = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.UnderlyingPrice,
+                    ExitDte = positions.GetValueOrDefault(t.PositionId)?.ExitContext?.Dte,
                 }).ToList(),
                 RealizedPnl = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(pnls.Sum()),
                 UnrealizedPnl = Unrealized(open),
                 MaxDrawdown = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(curve.Max(c => c.Drawdown)),
                 WinRate = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of((double)wins.Count / trades.Count, 4),
+                TradesWon = wins.Count,
+                TradesLost = losses.Count,
+                GrossProfit = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(wins.Sum()),
+                GrossLoss = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(losses.Sum()),
+                LargestWin = wins.Count == 0 ? Metric.None(trades.Count == 0 ? NoClosed() : "sin operaciones ganadoras") : Metric.Of(wins.Max()),
+                WinLossRatio = wins.Count == 0 || losses.Count == 0
+                    ? Metric.None(trades.Count == 0 ? NoClosed() : wins.Count == 0 ? "sin operaciones ganadoras" : "sin operaciones perdedoras")
+                    : Metric.Of(wins.Average() / -losses.Average()),
                 AvgWin = wins.Count == 0 ? Metric.None(trades.Count == 0 ? NoClosed() : "sin operaciones ganadoras") : Metric.Of(wins.Average()),
                 AvgLoss = losses.Count == 0 ? Metric.None(trades.Count == 0 ? NoClosed() : "sin operaciones perdedoras") : Metric.Of(losses.Average()),
                 ProfitFactor = trades.Count == 0 ? Metric.None(NoClosed())

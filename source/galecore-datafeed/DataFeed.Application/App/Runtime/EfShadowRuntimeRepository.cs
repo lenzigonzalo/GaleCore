@@ -247,36 +247,46 @@ namespace DataFeed.Application.App.Runtime
         public IReadOnlyList<SpecVersionRecord> LoadMetricsInputs(string? specName = null)
         {
             using var db = _newContext();
-            var records = new List<SpecVersionRecord>();
-            // Filtrar por spec en la base: el panel de una estrategia no tiene que leer todas (WS-0036, ~10 s en Dev).
+            // Cinco viajes a la base en total, no varios por versión: contra Supabase Dev cada viaje cuesta (WS-0036).
             var instances = db.StrategyInstances.AsNoTracking().Where(i => specName == null || i.SpecName == specName).ToList();
+            if (instances.Count == 0) return new List<SpecVersionRecord>();
+            var ids = instances.Select(i => i.Id).ToList();
+            var hashes = instances.Select(i => i.VersionHash).Distinct().ToList();
+            var specs = db.StrategySpecs.AsNoTracking().Where(s => hashes.Contains(s.ContentHash))
+                .Select(s => new { s.ContentHash, s.Name, s.Version }).ToList()
+                .GroupBy(s => s.ContentHash).ToDictionary(g => g.Key, g => g.First());
+            var evals = db.EvaluationLogs.AsNoTracking().Where(e => ids.Contains(e.InstanceId))
+                .GroupBy(e => e.InstanceId).Select(g => new
+                {
+                    InstanceId = g.Key, Count = g.Count(), Passed = g.Count(e => e.OverallPass),
+                    First = g.Min(e => (DateTime?)e.EvaluatedAt), Last = g.Max(e => (DateTime?)e.EvaluatedAt),
+                }).ToList().ToDictionary(e => e.InstanceId);
+            var events = db.OperationalEvents.AsNoTracking().Where(e => ids.Contains(e.InstanceId))
+                .GroupBy(e => new { e.InstanceId, e.EventType }).Select(g => new { g.Key.InstanceId, g.Key.EventType, Count = g.Count() })
+                .ToList();
+            var positions = db.ShadowPositions.AsNoTracking().Where(p => ids.Contains(p.InstanceId)).ToList()
+                .ToLookup(p => p.InstanceId);
+
+            var records = new List<SpecVersionRecord>();
             foreach (var group in instances.GroupBy(i => i.VersionHash).OrderBy(g => g.Min(i => i.CreatedAt)))
             {
                 var hash = group.Key;
-                var ids = group.Select(i => i.Id).ToList();
-                var spec = db.StrategySpecs.AsNoTracking().FirstOrDefault(s => s.ContentHash == hash);
-                // Un solo viaje a la base para los cuatro agregados de evaluaciones.
-                var evals = db.EvaluationLogs.AsNoTracking().Where(e => ids.Contains(e.InstanceId))
-                    .GroupBy(_ => 1).Select(g => new
-                    {
-                        Count = g.Count(), Passed = g.Count(e => e.OverallPass),
-                        First = g.Min(e => (DateTime?)e.EvaluatedAt), Last = g.Max(e => (DateTime?)e.EvaluatedAt),
-                    }).FirstOrDefault();
+                var groupIds = group.Select(i => i.Id).ToHashSet();
+                specs.TryGetValue(hash, out var spec);
+                var groupEvals = groupIds.Where(evals.ContainsKey).Select(id => evals[id]).ToList();
                 records.Add(new SpecVersionRecord
                 {
                     ContentHash = hash,
                     SpecName = spec?.Name ?? group.First().SpecName,
                     SpecVersion = spec?.Version ?? "",
-                    Instances = ids.Count,
-                    Evaluations = evals?.Count ?? 0,
-                    EvaluationsPassed = evals?.Passed ?? 0,
-                    FirstEvaluationAt = evals?.First,
-                    LastEvaluationAt = evals?.Last,
-                    EventCounts = db.OperationalEvents.AsNoTracking().Where(e => ids.Contains(e.InstanceId))
-                        .GroupBy(e => e.EventType).Select(g => new { g.Key, Count = g.Count() })
-                        .ToDictionary(x => x.Key, x => x.Count),
-                    Positions = db.ShadowPositions.AsNoTracking().Where(p => ids.Contains(p.InstanceId))
-                        .AsEnumerable().Select(ToContract).ToList(),
+                    Instances = groupIds.Count,
+                    Evaluations = groupEvals.Sum(e => e.Count),
+                    EvaluationsPassed = groupEvals.Sum(e => e.Passed),
+                    FirstEvaluationAt = groupEvals.Min(e => e.First),
+                    LastEvaluationAt = groupEvals.Max(e => e.Last),
+                    EventCounts = events.Where(e => groupIds.Contains(e.InstanceId))
+                        .GroupBy(e => e.EventType).ToDictionary(g => g.Key, g => g.Sum(e => e.Count)),
+                    Positions = groupIds.SelectMany(id => positions[id]).Select(ToContract).ToList(),
                 });
             }
             return records;

@@ -32,6 +32,10 @@ Todo número es `Metric = { value, reason }`. **Si no hay valor, `value` es `nul
 | `daily[]` | `{ date, pnl, trades }`: realizado por día de salida en hora de Nueva York (`yyyy-MM-dd`), sólo días con cierres; sigue `version`, `from`, `to` (WS-0036). |
 | `openPositions[]` | Abiertas de la spec, todas las instancias, la más nueva primero: `{ positionId, version, structure, legs, entryAt, entryDte, currentDte, entryCredit, lastSpreadValue, unrealizedPnl, maxRisk, lastValuedAt, valuationProblems }`. Sigue `version`; el período no las filtra (como `tradesOpen`). `legs` es texto («SELL PUT 580 2026-11-20 / BUY PUT 575 2026-11-20»). |
 | `closedTrades[]` | Cerradas del período, la más reciente primero: `{ positionId, version, structure, legs, entryAt, exitAt, daysHeld, entryCredit, exitDebit, exitReason, realizedPnl }`. |
+| `tradesWon`, `tradesLost`, `grossProfit`, `grossLoss`, `largestWin`, `winLossRatio` | Para el panel compacto (WS-0036): ganadoras/perdedoras, ganancia y pérdida brutas, mayor ganancia, ganancia promedio / |pérdida promedio|. |
+| `closedTrades[]` (v3) | Además: `maxRisk`, `pnlPctOfCredit`, `pnlPctOfMaxRisk`, `gapToPlan`, `entryVix`, `entryIvRank`, `entryUnderlyingPrice`, `exitDte` (contexto `null` en posiciones anteriores a WS-0033). Plano, para leerlo la IA. |
+
+`GET /App/Runtime/Performance/Summary` (WS-0036): una fila por spec con `spec`, `tradesClosed`, `tradesOpen`, `winRate`, `realizedPnl`, `unrealizedPnl`, `expectancy`, `maxDrawdown`, `worstTrade`, `avgDaysHeld` (todos `Metric`), `takeProfitExits`, `stopLossExits`, `otherExits`, `lastExitAt`. Sin filtros; el estado de la instancia sale de `/Runtime/Status`.
 | `realizedPnl`, `unrealizedPnl`, `maxDrawdown` | Resultado y máxima caída. |
 | `winRate` (0–1), `avgWin`, `avgLoss`, `profitFactor`, `expectancy` | Por operación cerrada. |
 | `sharpe`, `sortino` | **Por operación**, no anualizados: media/desvío del resultado en % del riesgo máximo. Requieren ≥ 30 cerradas. |

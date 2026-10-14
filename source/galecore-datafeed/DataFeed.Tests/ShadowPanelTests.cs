@@ -332,4 +332,63 @@ public class ShadowPanelTests
         Assert.Empty(rep.ClosedTrades);
         Assert.Single(rep.OpenPositions);
     }
+
+    // WS-0036 v3 — métricas del panel compacto, log para analizar y lista de estrategias.
+
+    [Fact]
+    public void CompactMetrics_FromKnownTrades()
+    {
+        var rep = Panel(null, T0.AddDays(10), Known()); // +22, −106, +22, +22
+
+        Assert.Equal(3, rep.TradesWon);
+        Assert.Equal(1, rep.TradesLost);
+        Assert.Equal(66, rep.GrossProfit.Value);
+        Assert.Equal(-106, rep.GrossLoss.Value);
+        Assert.Equal(22, rep.LargestWin.Value);
+        Assert.Equal(Math.Round(22.0 / 106, 2), rep.WinLossRatio.Value);
+    }
+
+    [Fact]
+    public void ClosedTrades_CarryEntryContextAndPlanGap_ForAnalysis()
+    {
+        var entry = new EntryContext { Vix = 17.2, IvRank = 41, UnderlyingPrice = 580.5 };
+        var rep = Panel(null, T0.AddDays(10), Version("1",
+            Closed(0.44, 0.22, "TAKE_PROFIT", 1, entry, new ExitContext { Dte = 39 }), Closed(0.44, 0.22, "TAKE_PROFIT", 2)));
+
+        var withContext = rep.ClosedTrades.Single(t => t.EntryVix != null);
+        Assert.Equal(17.2, withContext.EntryVix);
+        Assert.Equal(41, withContext.EntryIvRank);
+        Assert.Equal(580.5, withContext.EntryUnderlyingPrice);
+        Assert.Equal(39, withContext.ExitDte);
+        Assert.Equal(456, withContext.MaxRisk);
+        Assert.Equal(0, withContext.GapToPlan);
+        Assert.NotNull(withContext.PnlPctOfCredit);
+        Assert.Null(rep.ClosedTrades.Single(t => t.EntryVix == null).ExitDte);
+    }
+
+    [Fact]
+    public void Summaries_OneRowPerSpec_WithExitCounts()
+    {
+        var a = Known();
+        var b = new SpecVersionRecord
+        {
+            ContentHash = "sha256:b:1", SpecName = "b", SpecVersion = "1", Positions = new List<ShadowPosition> { Open() },
+        };
+        var rows = ShadowPanel.Summaries(new[] { a, b }, new Dictionary<string, DeterministicExits> { [a.ContentHash] = Exits },
+            T0.AddDays(10));
+
+        Assert.Equal(new[] { "a", "b" }, rows.Select(r => r.Spec));
+        var ra = rows[0];
+        Assert.Equal(4, ra.TradesClosed);
+        Assert.Equal(3, ra.TakeProfitExits);
+        Assert.Equal(1, ra.StopLossExits);
+        Assert.Equal(0, ra.OtherExits);
+        Assert.Equal(-40, ra.RealizedPnl.Value);
+        Assert.Equal(0.75, ra.WinRate.Value);
+        var rb = rows[1];
+        Assert.Equal(0, rb.TradesClosed);
+        Assert.Equal(1, rb.TradesOpen);
+        Assert.Null(rb.WinRate.Value);
+        Assert.False(string.IsNullOrEmpty(rb.WinRate.Reason));
+    }
 }

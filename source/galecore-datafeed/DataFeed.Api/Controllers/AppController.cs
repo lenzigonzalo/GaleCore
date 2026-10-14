@@ -1653,6 +1653,32 @@ namespace DataFeed.Controllers
         }
 
         /// <summary>
+        /// Lista de estrategias SHADOW (WS-0036): por spec, las cifras de su panel sin filtros (operaciones, acierto,
+        /// realizado, abierto, esperanza, máxima caída, peor operación, días promedio y salidas por regla). Un solo pedido.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Performance/Summary")]
+        public IActionResult RuntimePerformanceSummary()
+        {
+            var repository = _runtimePersistence.Repository;
+            if (!_runtimePersistence.Available || repository == null)
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, new
+                {
+                    error = "SHADOW sin persistencia: no hay operaciones guardadas.",
+                    reason = _runtimePersistence.Reason,
+                });
+            var records = repository.LoadMetricsInputs();
+            var exits = new Dictionary<string, DataFeed.Application.App.Runtime.Contracts.DeterministicExits>();
+            foreach (var hash in records.Select(r => r.ContentHash).Distinct())
+            {
+                var json = repository.GetSpecJson(hash);
+                var loaded = json == null ? null : DataFeed.Application.App.Runtime.StrategySpecLoader.LoadFromJson(json);
+                if (loaded is { Success: true, Spec: not null }) exits[hash] = loaded.Spec.Exits.Deterministic;
+            }
+            return Ok(DataFeed.Application.App.Runtime.ShadowPanel.Summaries(records, exits, DateTime.UtcNow));
+        }
+
+        /// <summary>
         /// Panel de rendimiento de una estrategia SHADOW (WS-0033, P1-10): curva, riesgo, régimen, regla de salida,
         /// versión, comparación con referencias, hipótesis y calidad de ejecución. Sólo SHADOW.
         /// `spec` es obligatoria; `version`, `from` y `to` (UTC) filtran. Lo que llega del perfil o de otras fuentes
