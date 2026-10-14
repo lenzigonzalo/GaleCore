@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de scheduled_report y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: scheduled_report
 versions:
+  - version: "0.1.2"
+    date: 2026-10-14
+    changes: >
+      Corrida programada del 14/10 quedó INCOMPLETE: no podía leer la revisión anterior (`kb show` faltaba en el flujo
+      del catálogo) y contaba como faltantes los límites por operación sin un spread concreto. Ahora lee la anterior
+      y esos límites se nombran como «no aplica sin estructura».
+    feedback: []
   - version: "0.1.1"
     date: 2026-10-13
     changes: >

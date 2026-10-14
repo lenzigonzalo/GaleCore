@@ -558,6 +558,7 @@ entries:
     flow:
       - profile show
       - kb search --kind research --text "<report slug>"
+      - kb show research:<id>
       - galecore list
       - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
       - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}

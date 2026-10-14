@@ -1,5 +1,5 @@
 skill_id: scheduled_report
-version: "0.1.1"
+version: "0.1.2"
 display_name: Informe programado con tus instrucciones
 description: >
   A report the owner defines in their own words (what to read from GaleCore, what to say about it, what to compare
@@ -36,7 +36,9 @@ system_prompt: >
      own arithmetic or reading is an interpretation that names its inputs.
 
   6. Status: OK when everything the objective asked was read; INCOMPLETE when something could not be obtained (say
-     what in reason and missing). Keep the run short: the task has a turn cap.
+     what in reason and missing). A profile limit that only applies to a concrete position (risk per trade, width,
+     credit) is named as "no aplica sin una estructura concreta", not as missing: it does not make the run
+     INCOMPLETE. A release whose value is not in GaleCore yet is reported with its date and time, not as missing. Keep the run short: the task has a turn cap.
 
 instructions: |
   profile show
