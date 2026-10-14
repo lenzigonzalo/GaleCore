@@ -1,15 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Database, RefreshCw } from 'lucide-react';
-import { SectionTitle } from '../components/common/SectionTitle';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Database } from 'lucide-react';
+import { InstanceState, latestInstance } from '../components/shadow/InstanceState';
 import { PerformancePanel } from '../components/shadow/PerformancePanel';
 import { fetchReferenceCapital } from '../api/space';
-import { metricText, rate, readPanelError, stateLabel, usd as panelUsd } from '../components/shadow/panelPresentation';
+import { amount, days, metricText, rate, readPanelError, stateLabel, usd as panelUsd } from '../components/shadow/panelPresentation';
 import { NoticePanel } from '../components/common/NoticePanel';
 import {
-  fetchPerformancePanel, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
+  fetchPerformanceSummary, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
 } from '../api/shadow';
 import {
-  PerformancePanelResponse, DISCARD_LABELS, ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics,
+  PerformanceSummary, Metric, DISCARD_LABELS, ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics,
 } from '../types/shadow';
 
 /**
@@ -79,59 +79,49 @@ function errorText(e: unknown): string {
 export function Shadow() {
   const [spec, setSpec] = useState<string | null>(null);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
-  return <div className="shadow-page">
-    {spec ? <>
-      <button className="shadow-back" onClick={() => { setSpec(null); setRuntimeOpen(false); }}>← Estrategias</button>
-      <PerformancePanel key={spec} spec={spec} />
-      <details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}>
-        <summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}
-      </details>
-    </> : <StrategyList onSelect={setSpec} />}
-  </div>;
-}
-
-function StrategyList({ onSelect }: { onSelect: (spec: string) => void }) {
-  const [rows, setRows] = useState<{ spec: string; panel: PerformancePanelResponse | null; error: string | null }[]>([]);
+  const [rows, setRows] = useState<PerformanceSummary[]>([]);
   const [instances, setInstances] = useState<ShadowInstance[]>([]);
+  const [capital, setCapital] = useState<number | undefined>();
   const [statusError, setStatusError] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
+  const requests = useRef<{ retry: number; summary: Promise<PerformanceSummary[]>; status: Promise<ShadowStatus> } | undefined>(undefined);
+  const profileRequest = useRef<Promise<number | undefined> | undefined>(undefined);
   useEffect(() => {
     let active = true;
-    setLoading(true); setError(''); setRows([]); setInstances([]); setStatusError('');
-    fetchShadowStatus().then(status => { if (active) setInstances(status.instances); })
+    setLoading(true); setError(''); setStatusError('');
+    if (!requests.current || requests.current.retry !== retry) requests.current = { retry, summary: fetchPerformanceSummary(), status: fetchShadowStatus() };
+    requests.current.status.then(status => { if (active) setInstances(status.instances); })
       .catch(() => { if (active) setStatusError('No se pudo leer el estado de las instancias'); });
-    Promise.all([fetchShadowMetrics(), fetchReferenceCapital()]).then(async ([metrics, capital]) => {
-      const names = Array.from(new Set(metrics.map(item => item.specName)));
-      if (!active) return;
-      setRows(names.map(spec => ({ spec, panel: null, error: null })));
-      await Promise.all(names.map(async spec => {
-        let panel: PerformancePanelResponse | null = null;
-        let error: string | null = null;
-        try { panel = await fetchPerformancePanel({ spec, ...(capital !== undefined ? { referenceCapital: capital } : {}) }); }
-        catch (e) { error = readPanelError(e); }
-        if (active) setRows(current => current.map(row => row.spec === spec ? { spec, panel, error } : row));
-      }));
-    }).catch(e => { if (active) setError(errorText(e)); }).finally(() => { if (active) setLoading(false); });
+    requests.current.summary.then(data => { if (active) setRows(data); })
+      .catch(e => { if (active) setError(readPanelError(e)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [retry]);
-  return <div className="performance-panel">
-    <SectionTitle title="Estrategias SHADOW"><button onClick={() => setRetry(n => n + 1)} disabled={loading} title="Actualizar"><RefreshCw size={16} /> Actualizar</button></SectionTitle>
-    {error && <div role="alert">{error}<button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
-    {statusError && <p role="alert">{statusError}</p>}
-    {loading && <p role="status">Cargando estrategias…</p>}
-    {!loading && !error && !rows.length && <p>Sin estrategias SHADOW</p>}
-    {!!rows.length && <div className="performance-table strategy-list"><table><thead><tr>{['Estrategia', 'Estado', 'Realizado', 'Abierto', 'Cerradas / abiertas', 'Acierto'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>
-      {rows.map(row => {
-        const instance = pickInstance(instances.filter(instance => instance.specName === row.spec));
-        return <tr key={row.spec}><td><button className="strategy-name" onClick={() => onSelect(row.spec)}>{row.spec}</button>{row.error && <div role="alert">{row.error}</div>}</td><td>{instance ? stateLabel(instance.lifecycleState) : 'n/d'}</td>
-          <td title={row.panel?.realizedPnl.reason || undefined}>{row.panel ? metricText(row.panel.realizedPnl, panelUsd) : 'n/d'}</td>
-          <td title={row.panel?.unrealizedPnl.reason || undefined}>{row.panel ? metricText(row.panel.unrealizedPnl, panelUsd) : 'n/d'}</td>
-          <td>{row.panel ? `${row.panel.tradesClosed} / ${row.panel.tradesOpen}` : 'n/d'}</td>
-          <td title={row.panel?.winRate.reason || undefined}>{row.panel ? metricText(row.panel.winRate, rate) : 'n/d'}</td></tr>;
-      })}
-    </tbody></table></div>}
+  useEffect(() => { let active = true; profileRequest.current ??= fetchReferenceCapital(); profileRequest.current.then(value => { if (active) setCapital(value); }); return () => { active = false; }; }, []);
+  const cell = (metric: Metric, format = panelUsd, signed = false) => <td title={metric.reason || undefined} style={signed && metric.value !== null ? { color: metric.value < 0 ? 'var(--red-gc)' : metric.value > 0 ? 'var(--green)' : undefined } : undefined}>{metricText(metric, format)}</td>;
+  const headers = [
+    ['Estrategia', 'Nombre de la estrategia.'], ['Estado', 'Estado de la instancia más reciente.'], ['Operaciones', 'Cantidad de operaciones cerradas y posiciones abiertas.'],
+    ['% ganadoras', 'Proporción de operaciones cerradas que ganaron.'], ['Ganancia total', 'Resultado acumulado de las operaciones cerradas en USD.'],
+    ['Promedio por operación', 'Resultado promedio de todas las operaciones cerradas en USD.'], ['Salidas', 'Cantidad de salidas por toma de ganancia, stop loss y otros motivos.'],
+    ['Días promedio', 'Tiempo promedio entre la entrada y la salida.'], ['Máx. caída', 'Mayor caída del resultado acumulado desde su máximo anterior.'], ['Peor operación', 'Peor resultado de una operación cerrada.'],
+  ];
+  return <div className="shadow-page">
+    {spec ? <>
+      <button className="shadow-back" onClick={() => { setSpec(null); setRuntimeOpen(false); }}>← Estrategias</button>
+      <PerformancePanel key={spec} spec={spec} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />
+    </> : <div className="performance-panel">
+      <h2>Estrategias SHADOW</h2>
+      {error && <div role="alert">{error}<button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
+      {statusError && <p role="alert">{statusError}</p>}
+      <div className="performance-table strategy-list" aria-busy={loading}><table><thead><tr>{headers.map(([label, definition]) => <th key={label} title={definition}>{label}</th>)}</tr></thead><tbody>
+        {loading ? Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia">{headers.map(([label]) => <td key={label}><div className="performance-skeleton row-skeleton" /></td>)}</tr>) : rows.map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} aria-label={`Abrir ${row.spec}`} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec(row.spec); } }}>
+          <td><button className="strategy-name" onClick={() => setSpec(row.spec)}>{row.spec}</button></td><td><InstanceState instance={latestInstance(instances, row.spec)} /></td><td>{row.tradesClosed} cerradas · {row.tradesOpen} abiertas</td>
+          {cell(row.winRate, rate)}{cell(row.realizedPnl, panelUsd, true)}{cell(row.expectancy, panelUsd, true)}<td>{row.takeProfitExits} TP · {row.stopLossExits} SL · {row.otherExits} otras</td>{cell(row.avgDaysHeld, days)}{cell(row.maxDrawdown, amount)}{cell(row.worstTrade, panelUsd, true)}
+        </tr>)}
+        {!loading && !error && !rows.length && <tr><td colSpan={headers.length}>Sin estrategias SHADOW</td></tr>}
+      </tbody></table></div>
+    </div>}
   </div>;
 }
 

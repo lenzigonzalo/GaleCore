@@ -6,7 +6,7 @@
 .performance-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 28px; margin: 20px 0 28px; }
 .performance-chips, .performance-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .performance-chips time { font-size: 14px; }
-.performance-heading .performance-filters { justify-content: flex-end; max-width: 420px; }
+.performance-heading .performance-filters { justify-content: flex-end; max-width: none; }
 .performance-filters label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
 .performance-panel select, .performance-panel input, .performance-panel button, .shadow-back, .shadow-runtime button { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
 .performance-panel button, .shadow-back, .shadow-runtime button { cursor: pointer; }
@@ -46,4 +46,42 @@
 .performance-missing li { margin: 8px 0; }
 .shadow-runtime > summary { font-size: 20px; font-weight: 600; cursor: pointer; }
 .shadow-runtime > div { margin-top: 24px; }
+.performance-tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--border); margin-bottom: 24px; }
+.performance-tabs button { background: transparent; border: 0; border-radius: 0; padding: 12px 0; font-size: 17px; border-bottom: 2px solid transparent; }
+.performance-tabs button[aria-selected="true"] { border-bottom-color: var(--text-primary); font-weight: 600; }
+.performance-metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.metric-overview { margin-bottom: 28px; }
+.metric-overview section { margin-bottom: 20px; }
+.metric-overview h3 { font-size: 17px; margin-bottom: 10px; }
+.performance-stat { padding: 14px; border-radius: 8px; }
+.performance-stat > div { font-size: 14px; min-height: 34px; }
+.performance-number { font-size: 24px; margin-top: 4px; }
+.sample-notice { margin: 0 0 20px; font-size: 16px; }
+.performance-visuals { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; }
+.performance-visuals .performance-block { min-width: 0; padding: 20px; }
+.performance-visuals .calendar-grid { gap: 5px; }
+.performance-visuals .calendar-day { min-height: 58px; padding: 7px; }
+.performance-visuals .calendar-day strong { font-size: 15px; }
+.performance-missing-box > summary { cursor: pointer; font-size: 17px; font-weight: 600; }
+.trade-log-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
+.trade-log-heading > div { display: flex; gap: 10px; }
+.instance-state { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 20px; font: 14px var(--font-sans); white-space: nowrap; }
+.instance-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); }
+.instance-state.running i { background: var(--green); }
+.instance-state.paused i { background: var(--yellow-gc); }
+.strategy-list { max-height: none; }
+.strategy-list td { font-size: 14px; padding: 20px 12px; vertical-align: middle; }
+.strategy-list td:first-child { min-width: 240px; max-width: 300px; }
+.strategy-row { cursor: pointer; }
+.strategy-row:hover, .strategy-row:focus-visible { background: var(--bg-tertiary); outline: 1px solid var(--border); }
+.strategy-list .strategy-name { font-size: 16px; }
+.strategy-list th { white-space: normal; min-width: 85px; }
+.performance-skeleton { background: var(--bg-tertiary); border-radius: 8px; animation: performance-pulse 1.5s ease-in-out infinite alternate; }
+.row-skeleton { min-width: 90px; height: 20px; }
+.metric-skeleton { height: 92px; }
+.chart-skeleton, .design-skeleton { height: 360px; margin-top: 24px; }
+@keyframes performance-pulse { to { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .performance-skeleton { animation: none; } }
+@media (max-width: 1200px) { .performance-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); } .performance-visuals { grid-template-columns: 1fr; } }
+@media (max-width: 650px) { .performance-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .trade-log-heading { flex-direction: column; margin-bottom: 20px; } }
 @media (max-width: 950px) { .performance-heading { grid-template-columns: 1fr; } .performance-heading .performance-filters { justify-content: flex-start; max-width: none; } .performance-key-numbers { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .exit-bar { grid-template-columns: 1fr 1fr; } .calendar-day { padding: 6px; min-height: 64px; } .calendar-day strong { font-size: 13px; } }

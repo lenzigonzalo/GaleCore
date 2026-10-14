@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Shadow, discardReason, pickInstance } from './Shadow';
 import * as api from '../api/shadow';
 import plainFixture from '../components/shadow/__fixtures__/panel_sin_parametros.json';
@@ -7,6 +7,7 @@ import { fetchReferenceCapital } from '../api/space';
 import { ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics } from '../types/shadow';
 
 jest.mock('../api/shadow', () => ({
+  fetchPerformanceSummary: jest.fn(),
   fetchPerformancePanel: jest.fn(),
   fetchShadowStatus: jest.fn(),
   fetchShadowMetrics: jest.fn(),
@@ -15,7 +16,7 @@ jest.mock('../api/shadow', () => ({
   fetchShadowPositions: jest.fn(),
 }));
 
-jest.mock('../components/shadow/PerformancePanel', () => ({ PerformancePanel: ({ spec }: { spec: string }) => <div data-testid="performance-panel">{spec}</div> }));
+jest.mock('../components/shadow/PerformancePanel', () => ({ PerformancePanel: ({ spec, runtime }: { spec: string; runtime: React.ReactNode }) => <div data-testid="performance-panel">{spec}{runtime}</div> }));
 
 jest.mock('../api/space', () => ({ fetchReferenceCapital: jest.fn() }));
 const capitalApi = fetchReferenceCapital as jest.MockedFunction<typeof fetchReferenceCapital>;
@@ -83,39 +84,56 @@ function position(over: Partial<ShadowPosition> = {}): ShadowPosition {
 beforeEach(() => {
   jest.clearAllMocks();
   capitalApi.mockResolvedValue(undefined);
-  mocked.fetchPerformancePanel.mockImplementation(async params => ({ ...plainFixture, spec: params.spec, daily: [], openPositions: [], closedTrades: [] }));
+  mocked.fetchPerformanceSummary.mockResolvedValue([summary()]);
   mocked.fetchShadowStatus.mockResolvedValue(status());
   mocked.fetchShadowMetrics.mockResolvedValue([metrics()]);
-  mocked.fetchShadowEvaluations.mockResolvedValue([evaluation]);
-  mocked.fetchShadowDiscards.mockResolvedValue([discard]);
+  mocked.fetchShadowEvaluations.mockImplementation(async id => [{ ...evaluation, evaluationId: `e-${id}`, instanceId: id }]);
+  mocked.fetchShadowDiscards.mockImplementation(async id => [{ ...discard, eventId: `ev-${id}`, instanceId: id }]);
   mocked.fetchShadowPositions.mockResolvedValue([]);
 });
 
-test('lista una fila por spec con cifras de su panel', async () => {
-  mocked.fetchShadowMetrics.mockResolvedValue([metrics(), metrics({ contentHash: 'second', specVersion: '2' }), metrics({ specName: 'otra', contentHash: 'other', realizedPnl: 99999 })]);
+function summary(spec = instance.specName) {
+  return { spec, tradesClosed: 2, tradesOpen: 4, winRate: plainFixture.winRate, realizedPnl: plainFixture.realizedPnl, unrealizedPnl: plainFixture.unrealizedPnl, expectancy: plainFixture.expectancy, maxDrawdown: plainFixture.maxDrawdown, worstTrade: plainFixture.worstTrade, avgDaysHeld: plainFixture.avgDaysHeld, takeProfitExits: 2, stopLossExits: 0, otherExits: 0, lastExitAt: plainFixture.lastExitAt };
+}
+test('list uses one Summary and Status in parallel, never Metrics or individual panels', async () => {
+  mocked.fetchPerformanceSummary.mockResolvedValue([summary(), summary('otra')]);
+  mocked.fetchShadowStatus.mockResolvedValue(status({}, [instance, { ...instance, instanceId: 'new', lifecycleState: 'STOPPED', createdAt: '2026-10-14T12:00:00Z' }]));
   render(<Shadow />);
-  await waitFor(() => expect(mocked.fetchPerformancePanel).toHaveBeenCalledTimes(2));
-  const row = screen.getByRole('button', { name: instance.specName }).closest('tr')!;
-  await waitFor(() => expect(row).toHaveTextContent('+$45.00'));
-  expect(row).toHaveTextContent('2 / 4'); expect(row).toHaveTextContent('100.0%');
-  expect(screen.getAllByRole('button', { name: instance.specName })).toHaveLength(1);
-  expect(screen.queryByText(/99,999/)).not.toBeInTheDocument();
-  expect(mocked.fetchShadowEvaluations).not.toHaveBeenCalled();
-  expect(screen.queryByTestId('performance-panel')).not.toBeInTheDocument();
+  const row = (await screen.findByRole('button', { name: instance.specName })).closest('tr')!;
+  expect(row).toHaveTextContent('+$45.00'); expect(row).toHaveTextContent('2 cerradas · 4 abiertas');
+  expect(row).toHaveTextContent('100.0%'); expect(row).toHaveTextContent('2 TP · 0 SL · 0 otras');
+  expect(row).toHaveTextContent('Detenida'); expect(screen.getByText('Sin ejecución')).toBeInTheDocument();
+  expect(mocked.fetchPerformanceSummary).toHaveBeenCalledTimes(1); expect(mocked.fetchShadowStatus).toHaveBeenCalledTimes(1);
+  expect(mocked.fetchPerformancePanel).not.toHaveBeenCalled(); expect(mocked.fetchShadowMetrics).not.toHaveBeenCalled();
 });
-test('clic abre sólo la elegida y permite volver a la lista', async () => {
-  mocked.fetchShadowMetrics.mockResolvedValue([metrics(), metrics({ specName: 'otra', contentHash: 'other' })]);
-  render(<Shadow />); fireEvent.click(await screen.findByRole('button', { name: 'otra' }));
-  expect(screen.getByTestId('performance-panel')).toHaveTextContent('otra');
-  expect(screen.queryByRole('button', { name: instance.specName })).not.toBeInTheDocument();
-  expect(mocked.fetchShadowEvaluations).not.toHaveBeenCalled();
+test('whole row supports keyboard navigation and returning preserves the list without new requests', async () => {
+  mocked.fetchPerformanceSummary.mockResolvedValue([summary(), summary('otra')]);
+  render(<Shadow />); const row = (await screen.findByRole('button', { name: 'otra' })).closest('tr')!;
+  fireEvent.keyDown(row, { key: 'Enter' }); expect(screen.getByTestId('performance-panel')).toHaveTextContent('otra');
   fireEvent.click(screen.getByRole('button', { name: '← Estrategias' }));
-  expect(await screen.findByRole('button', { name: instance.specName })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: instance.specName })).toBeInTheDocument();
+  expect(mocked.fetchPerformanceSummary).toHaveBeenCalledTimes(1); expect(mocked.fetchShadowStatus).toHaveBeenCalledTimes(1);
+});
+test('null summary metrics show a dash with the API reason in title', async () => {
+  mocked.fetchPerformanceSummary.mockResolvedValue([{ ...summary(), realizedPnl: { value: null, reason: 'Sin cerradas' } }]);
+  render(<Shadow />); const cell = await screen.findByTitle('Sin cerradas'); expect(cell).toHaveTextContent('—');
+});
+test('StrictMode development remount does not duplicate Summary or Status requests', async () => {
+  render(<React.StrictMode><Shadow /></React.StrictMode>);
+  await screen.findByRole('button', { name: instance.specName });
+  expect(mocked.fetchPerformanceSummary).toHaveBeenCalledTimes(1);
+  expect(mocked.fetchShadowStatus).toHaveBeenCalledTimes(1);
+});
+test('list has skeleton rows while the summary request is pending', async () => {
+  mocked.fetchPerformanceSummary.mockReturnValue(new Promise(() => {})); render(<Shadow />);
+  expect(screen.getAllByLabelText('Cargando estrategia')).toHaveLength(5);
+  expect(screen.queryByText('Cargando estrategias…')).not.toBeInTheDocument();
+  await act(async () => {});
 });
 test('Runtime plegado carga sólo instancias y lecturas de la estrategia', async () => {
   mocked.fetchShadowStatus.mockResolvedValue(status({}, [instance, { ...instance, instanceId: 'i-2' }, { ...instance, specName: 'otra', instanceId: 'other' }]));
   mocked.fetchShadowMetrics.mockResolvedValue([metrics(), metrics({ specName: 'otra', contentHash: 'other' })]);
-  mocked.fetchShadowPositions.mockResolvedValue([position()]);
+  mocked.fetchShadowPositions.mockImplementation(async id => [position({ positionId: `p-${id}`, instanceId: id })]);
   render(<Shadow />); fireEvent.click(await screen.findByRole('button', { name: instance.specName }));
   expect(mocked.fetchShadowPositions).not.toHaveBeenCalled();
   fireEvent.click(screen.getByText('Runtime')); await screen.findByText('Guardado en base');
@@ -131,14 +149,10 @@ test('el error del runtime no desmonta el panel', async () => {
   mocked.fetchShadowStatus.mockRejectedValue(new Error('offline')); fireEvent.click(screen.getByText('Runtime'));
   await screen.findByText('No se pudo leer el runtime'); expect(screen.getByTestId('performance-panel')).toBeInTheDocument();
 });
-test('errores del panel se muestran sin fabricar ceros', async () => {
-  mocked.fetchPerformancePanel.mockRejectedValue({ response: { status: 404 } }); render(<Shadow />);
-  expect(await screen.findByText('Esta estrategia todavía no tiene posiciones SHADOW')).toBeInTheDocument();
-  expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
-});
-test('la lista sólo pasa capital de referencia', async () => {
-  capitalApi.mockResolvedValue(12000); render(<Shadow />);
-  await waitFor(() => expect(mocked.fetchPerformancePanel).toHaveBeenCalledWith({ spec: instance.specName, referenceCapital: 12000 }));
+test('summary errors do not invent zero values and can be retried', async () => {
+  mocked.fetchPerformanceSummary.mockRejectedValueOnce({ response: { status: 503 } }); render(<Shadow />);
+  await screen.findByText('SHADOW no tiene persistencia disponible'); expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByText('Reintentar')); await screen.findByRole('button', { name: instance.specName });
 });
 test('elige la instancia que corre o la última', () => {
   const stopped = { ...instance, instanceId: 'i-0', lifecycleState: 'STOPPED' };

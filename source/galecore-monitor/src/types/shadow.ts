@@ -140,10 +140,18 @@ export interface PerformanceGroup {
 export interface PerformancePanelParams {
   spec: string; version?: string; from?: string; to?: string; referenceCapital?: number;
 }
+export interface PerformanceSummary {
+  spec: string; tradesClosed: number; tradesOpen: number;
+  winRate: Metric; realizedPnl: Metric; unrealizedPnl: Metric; expectancy: Metric;
+  maxDrawdown: Metric; worstTrade: Metric; avgDaysHeld: Metric;
+  takeProfitExits: number; stopLossExits: number; otherExits: number; lastExitAt: string | null;
+}
 export interface PerformancePanelResponse {
   asOf: string; mode: string; source: string; spec: string; version: string | null;
   from: string | null; to: string | null;
   tradesClosed: number; tradesOpen: number; firstExitAt: string | null; lastExitAt: string | null;
+  tradesWon: number; tradesLost: number;
+  grossProfit: Metric; grossLoss: Metric; largestWin: Metric; winLossRatio: Metric;
   smallSample: boolean; notes: string[];
   curve: { at: string; pnl: number; cumulative: number; drawdown: number }[];
   daily: { date: string; pnl: number; trades: number }[];
@@ -153,7 +161,10 @@ export interface PerformancePanelResponse {
     lastValuedAt: string | null; valuationProblems: string[] | null }[];
   closedTrades: { positionId: string; version: string; structure: string; legs: string;
     entryAt: string; exitAt: string | null; daysHeld: number | null; entryCredit: number;
-    exitDebit: number | null; exitReason: string | null; realizedPnl: number | null }[];
+    exitDebit: number | null; exitReason: string | null; realizedPnl: number | null;
+    maxRisk: number; pnlPctOfCredit: number | null; pnlPctOfMaxRisk: number | null;
+    gapToPlan: number | null; entryVix: number | null; entryIvRank: number | null;
+    entryUnderlyingPrice: number | null; exitDte: number | null }[];
   realizedPnl: Metric; unrealizedPnl: Metric; maxDrawdown: Metric;
   winRate: Metric; avgWin: Metric; avgLoss: Metric; profitFactor: Metric; expectancy: Metric;
   sharpe: Metric; sortino: Metric; avgDaysHeld: Metric; worstTrade: Metric; lossStreak: Metric;

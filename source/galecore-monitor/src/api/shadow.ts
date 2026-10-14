@@ -1,6 +1,6 @@
 import apiClient from './client';
 import {
-  DISCARD_EVENT_TYPES, PerformancePanelParams, PerformancePanelResponse, ShadowEvaluation, ShadowEvent, ShadowPosition, ShadowStatus, SpecVersionMetrics,
+  DISCARD_EVENT_TYPES, PerformancePanelParams, PerformancePanelResponse, PerformanceSummary, ShadowEvaluation, ShadowEvent, ShadowPosition, ShadowStatus, SpecVersionMetrics,
 } from '../types/shadow';
 
 /**
@@ -41,5 +41,10 @@ export async function fetchShadowPositions(instanceId: string): Promise<ShadowPo
 export async function fetchPerformancePanel(params: PerformancePanelParams): Promise<PerformancePanelResponse> {
   const { data } = await apiClient.get<PerformancePanelResponse>(
     '/App/Runtime/Performance/Panel', { params, timeout: 30000 });
+  return data;
+}
+
+export async function fetchPerformanceSummary(): Promise<PerformanceSummary[]> {
+  const { data } = await apiClient.get<PerformanceSummary[]>('/App/Runtime/Performance/Summary', { timeout: 30000 });
   return data;
 }
