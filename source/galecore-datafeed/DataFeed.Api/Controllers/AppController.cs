@@ -1600,7 +1600,35 @@ namespace DataFeed.Controllers
                 @switch = new { enabled, source },
                 instances = _runtimeStore.AllInstances().OrderBy(i => i.CreatedAt),
                 supportedStructures = DataFeed.Application.App.Runtime.RuntimeStructures.Supported,
+                openPositionsManagement = OpenPositionsManagement(DateTime.UtcNow),
             });
+        }
+
+        /// <summary>
+        /// BL-023: si cada instancia con posiciones abiertas sigue cuidándolas. El monitor valúa toda posición abierta
+        /// y ejecuta sus salidas en sesión sin mirar el estado de la instancia ni el switch
+        /// (ShadowPositionMonitorService); sólo no puede si no encuentra la spec de la instancia.
+        /// </summary>
+        private IEnumerable<object> OpenPositionsManagement(DateTime nowUtc)
+        {
+            foreach (var instance in _runtimeStore.AllInstances().OrderBy(i => i.CreatedAt))
+            {
+                var open = _runtimeStore.OpenPositions(instance.InstanceId).Count;
+                if (open == 0) continue;
+                var spec = _runtimeStore.SpecFor(instance);
+                yield return new
+                {
+                    instanceId = instance.InstanceId,
+                    specName = instance.SpecName,
+                    lifecycleState = instance.LifecycleState,
+                    openPositions = open,
+                    exitsManaged = spec != null,
+                    exitsEvaluatedNow = spec != null && DataFeed.Application.App.Runtime.ShadowSession.IsOpen(spec.Operational, nowUtc),
+                    detail = spec == null
+                        ? "sin la spec de la instancia: se valúan, pero no se ejecutan salidas"
+                        : "stops y toma de ganancia se ejecutan en sesión aunque la estrategia esté detenida o el switch apagado; detener sólo frena entradas nuevas",
+                };
+            }
         }
 
         /// <summary>
