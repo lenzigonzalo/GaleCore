@@ -12,7 +12,10 @@
   --panel-padding: 24px;
   --panel-radius: 12px;
   --font-sans: 'DM Sans', 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', monospace;
+  /* Una sola tipografía para letras y números (owner, 14/10): las cifras usan DM Sans con ancho fijo
+     (tabular-nums) para alinear columnas; la monoespaciada queda sólo para código. */
+  --font-mono: var(--font-sans);
+  --font-code: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', monospace;
   --accent: #a3d86c;
   --accent-ink: #11170b;
   /* ── Backgrounds: neutral charcoal ── */
@@ -62,13 +65,15 @@ body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'tnum';
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-.font-mono, code {
-  font-family: var(--font-mono);
+.font-mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+code, pre {
+  font-family: var(--font-code);
 }
 
 .tabular-nums {

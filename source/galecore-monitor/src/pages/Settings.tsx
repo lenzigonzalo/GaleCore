@@ -129,7 +129,7 @@ function Editor({ kind, item, onDone }: { kind: SpaceKind; item?: SpaceItem; onD
   return (
     <div style={{ ...card, display: 'grid', gap: 10 }}>
       <input style={field} placeholder="Título" value={title} onChange={(e) => setTitle(e.target.value)} />
-      <textarea style={{ ...field, minHeight: 160, fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}
+      <textarea style={{ ...field, minHeight: 160, fontFamily: 'var(--font-mono)', fontSize: 12 }}
         placeholder="Escribilo en tus palabras (markdown)" value={content} onChange={(e) => setContent(e.target.value)} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button style={pill(visibility === 'private')} onClick={() => setVisibility('private')}>Sólo vos</button>
@@ -217,7 +217,7 @@ function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged: () =>
         </div>
         {tab === 'texto' ? <Markdown text={skill.content} /> : (
           <>
-            <textarea style={{ ...field, minHeight: 280, fontFamily: 'JetBrains Mono, monospace', fontSize: 12 }}
+            <textarea style={{ ...field, minHeight: 280, fontFamily: 'var(--font-mono)', fontSize: 12 }}
               value={draft} readOnly={!skill.isOwn} onChange={(e) => setDraft(e.target.value)} />
             {skill.isOwn && (
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>

@@ -17,7 +17,7 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
   color: 'var(--text-muted)',
-  fontFamily: 'JetBrains Mono, monospace',
+  fontFamily: 'var(--font-mono)',
 };
 
 /**
@@ -124,7 +124,7 @@ export function BrokerAccountCard({ onLinked }: { onLinked?: () => void }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <KeyRound size={13} style={{ color: ACCENT }} />
         <span style={{
-          fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 16,
+          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 16,
           color: 'var(--text-primary)', letterSpacing: '0.05em',
         }}>
           Cuenta de bróker
@@ -133,7 +133,7 @@ export function BrokerAccountCard({ onLinked }: { onLinked?: () => void }) {
         {state?.linked && state.broker && (
           <span style={{
             fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-            padding: '2px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace',
+            padding: '2px 7px', borderRadius: 4, fontFamily: 'var(--font-mono)',
             color: ACCENT, backgroundColor: tint(ACCENT, 13), border: `1px solid ${tint(ACCENT, 30)}`,
           }}>
             {state.broker}
@@ -145,7 +145,7 @@ export function BrokerAccountCard({ onLinked }: { onLinked?: () => void }) {
             title="Es la cuenta con la que los procesos de fondo piden datos de mercado."
             style={{
               fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-              padding: '2px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace',
+              padding: '2px 7px', borderRadius: 4, fontFamily: 'var(--font-mono)',
               color: '#a78bfa', backgroundColor: tint('#a78bfa', 13), border: `1px solid ${tint('#a78bfa', 30)}`,
             }}
           >
@@ -166,7 +166,7 @@ export function BrokerAccountCard({ onLinked }: { onLinked?: () => void }) {
       </div>
 
       {/* Estado actual */}
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
         {loading && 'Leyendo…'}
         {!loading && state?.linked && (
           <>

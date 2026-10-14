@@ -53,7 +53,7 @@ export function Stat({ label, value, hint }: { label: string; value: React.React
       backgroundColor: 'var(--bg-tertiary)', borderRadius: 6, minWidth: 0,
     }}>
       <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase', color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{label}</span>
-      <span className="tabular-nums" style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace', lineHeight: 1.1 }}>{value}</span>
+      <span className="tabular-nums" style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', lineHeight: 1.1 }}>{value}</span>
       {hint && <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{hint}</span>}
     </div>
   );
@@ -75,7 +75,7 @@ export function TD({ children, mono, color }: { children: React.ReactNode; mono?
   return (
     <td style={{
       padding: '5px 8px', fontSize: 13, color: color ?? 'var(--text-primary)',
-      fontFamily: mono ? 'JetBrains Mono, monospace' : 'var(--font-sans)',
+      fontFamily: mono ? 'var(--font-mono)' : 'var(--font-sans)',
       borderBottom: '1px solid var(--border-dark)',
     }}>
       {children}

@@ -14,10 +14,10 @@ test('falla de conexión visible, sin historial ni respuestas inventadas',async(
 test('proyecto recibido desde Estrategias comparte la lateral y abre su seguimiento',async()=>{
  const host=document.createElement('div');host.id='workspace-projects';document.body.appendChild(host);
  const follow=jest.fn();const {unmount}=render(<Lab embedded projectRequest={{id:'spy',sequence:1}} onFollowStrategy={follow} onMonitor={()=>{}}/>);
- await waitFor(()=>expect(screen.getByRole('combobox',{name:'Proyecto del chat'})).toHaveValue('spy'));
+ await screen.findByRole('button',{name:'Ver resultados'});
  expect(host.querySelector('.lab-chat-sidebar')).toBeInTheDocument();
  expect(document.querySelectorAll('.lab-chat-sidebar')).toHaveLength(1);
  expect(screen.queryByRole('button',{name:'Configuración'})).not.toBeInTheDocument();
- fireEvent.click(screen.getByRole('button',{name:'Ver seguimiento'}));expect(follow).toHaveBeenCalledWith('spy_spec');
+ fireEvent.click(screen.getByRole('button',{name:'Ver resultados'}));expect(follow).toHaveBeenCalledWith('spy_spec');
  unmount();host.remove();
 });

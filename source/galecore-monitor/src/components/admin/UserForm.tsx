@@ -13,7 +13,7 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
   color: 'var(--text-muted)',
-  fontFamily: 'JetBrains Mono, monospace',
+  fontFamily: 'var(--font-mono)',
 };
 
 /** El mismo charset que `Usernames.Pattern` en el backend y que el check de Postgres. */
@@ -109,7 +109,7 @@ export function UserForm({ user, onSaved, onCancel }: Props) {
       }}
     >
       <div style={{
-        fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15,
+        fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 15,
         color: 'var(--text-primary)', letterSpacing: '0.05em',
       }}>
         {esAlta ? 'Nuevo operador' : `Editar ${user!.username}`}

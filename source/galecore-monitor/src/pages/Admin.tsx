@@ -14,7 +14,7 @@ const thStyle: React.CSSProperties = {
   borderBottom: '1px solid var(--border-dark)', whiteSpace: 'nowrap', backgroundColor: 'var(--bg-tertiary)',
 };
 const tdStyle: React.CSSProperties = {
-  padding: '10px', fontFamily: 'JetBrains Mono, monospace', fontSize: 14,
+  padding: '10px', fontFamily: 'var(--font-mono)', fontSize: 14,
   color: 'var(--text-secondary)', borderBottom: '1px solid var(--border-dark)', verticalAlign: 'middle',
 };
 
@@ -23,7 +23,7 @@ const Pill = ({ children, color, title }: { children: React.ReactNode; color: st
     title={title}
     style={{
       fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-      padding: '2px 7px', borderRadius: 4, fontFamily: 'JetBrains Mono, monospace',
+      padding: '2px 7px', borderRadius: 4, fontFamily: 'var(--font-mono)',
       color, backgroundColor: tint(color, 13), border: `1px solid ${tint(color, 30)}`,
     }}
   >
@@ -267,7 +267,7 @@ export function Admin() {
                             color: u.isAdmin ? ACCENT : 'var(--text-muted)',
                             cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
                             fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',
-                            fontFamily: 'JetBrains Mono, monospace',
+                            fontFamily: 'var(--font-mono)',
                           }}
                         >
                           <span style={{

@@ -149,11 +149,11 @@ export function ReferencesModal({ open, onClose, title, accentColor = 'var(--blu
           {tab === 'json' && (
             <>
               {jsonLoading && <div style={{ padding: 18, fontSize: 14, color: 'var(--text-muted)' }}>Cargando JSON…</div>}
-              {jsonErr && <div style={{ padding: 18, fontSize: 14, color: 'var(--red-gc)', fontFamily: 'JetBrains Mono, monospace' }}>⚠ {jsonErr}</div>}
+              {jsonErr && <div style={{ padding: 18, fontSize: 14, color: 'var(--red-gc)', fontFamily: 'var(--font-mono)' }}>⚠ {jsonErr}</div>}
               {json && (
                 <pre style={{
                   margin: 0, padding: '14px 16px', fontSize: 13.5, lineHeight: 1.55,
-                  fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-secondary)',
+                  fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)',
                   whiteSpace: 'pre', tabSize: 2,
                 }}>
                   {json}

@@ -81,7 +81,7 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
 
       <div
         className="flex items-start gap-8 px-5 py-3 flex-wrap"
-        style={{ backgroundColor: 'var(--bg-secondary)', fontFamily: 'JetBrains Mono, monospace' }}
+        style={{ backgroundColor: 'var(--bg-secondary)', fontFamily: 'var(--font-mono)' }}
       >
         <MetricBlock label="Net Liq"      value={fmtCurrency(netLiq)} />
         <Divider />

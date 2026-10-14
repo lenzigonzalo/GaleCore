@@ -105,7 +105,7 @@ export function AccountMenu({ onOpenSettings, onLogout, active = false, docked =
           {username && (
             <div style={{
               padding: '4px 12px 8px', fontSize: 12, letterSpacing: '0.05em',
-              color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace',
+              color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
               borderBottom: '1px solid var(--border-dark)', marginBottom: 5,
             }}>
               {username}

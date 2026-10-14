@@ -66,7 +66,7 @@ export function OptionsChainList({
           >
             <span className="tabular-nums" style={{
               fontSize: 12.5,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--font-mono)',
               fontWeight: 700,
               color: '#a78bfa',
               whiteSpace: 'nowrap',
@@ -75,7 +75,7 @@ export function OptionsChainList({
             </span>
             <span className="tabular-nums" style={{
               fontSize: 11,
-              fontFamily: 'JetBrains Mono, monospace',
+              fontFamily: 'var(--font-mono)',
               color: 'var(--text-muted)',
               whiteSpace: 'nowrap',
             }}>
@@ -115,7 +115,7 @@ export function OptionsChainList({
                   <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 4, minWidth: 0 }}>
                     <span className="tabular-nums" style={{
                       fontSize: 12.5,
-                      fontFamily: 'JetBrains Mono, monospace',
+                      fontFamily: 'var(--font-mono)',
                       fontWeight: isRegular || isActive ? 700 : 400,
                       color: isRegular || isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                       whiteSpace: 'nowrap',
@@ -126,7 +126,7 @@ export function OptionsChainList({
                       title={isRegular ? 'Regular (mensual)' : 'Weekly'}
                       style={{
                         fontSize: 10.5,
-                        fontFamily: 'JetBrains Mono, monospace',
+                        fontFamily: 'var(--font-mono)',
                         fontWeight: 700,
                         color: isRegular ? 'var(--green)' : 'var(--text-muted)',
                         whiteSpace: 'nowrap',
@@ -137,7 +137,7 @@ export function OptionsChainList({
                   </span>
                   <span className="tabular-nums" style={{
                     fontSize: 11,
-                    fontFamily: 'JetBrains Mono, monospace',
+                    fontFamily: 'var(--font-mono)',
                     color: e.dte === 0 ? 'var(--yellow-gc)' : 'var(--text-muted)',
                     whiteSpace: 'nowrap',
                   }}>

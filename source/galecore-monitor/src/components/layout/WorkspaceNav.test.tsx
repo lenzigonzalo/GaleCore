@@ -25,8 +25,8 @@ test('administración sólo aparece en el menú de un admin; usuario puede salir
   expect(screen.queryByRole('menuitem',{ name:'Administración' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('menuitem',{ name:'Salir' })); expect(logout).toHaveBeenCalled();
 });
-test('Mercado también identifica la pantalla macro, sin una entrada duplicada',()=>{
+test('Macro tiene su propia entrada (owner, 14/10)',()=>{
  render(<WorkspaceNav active="macro" onChange={()=>{}}/>);
- expect(screen.getByRole('button',{name:'Mercado'})).toHaveAttribute('aria-current','page');
- expect(screen.queryByRole('button',{name:'Macro'})).not.toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Macro'})).toHaveAttribute('aria-current','page');
+ expect(screen.getByRole('button',{name:'Mercado'})).not.toHaveAttribute('aria-current');
 });

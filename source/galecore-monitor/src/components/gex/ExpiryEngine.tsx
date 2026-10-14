@@ -38,7 +38,7 @@ function ListRow({ label, value, hint }: { label: string; value: string; hint?: 
       <span className="tabular-nums" style={{
         fontSize: 16,
         color: 'var(--text-secondary)',
-        fontFamily: 'JetBrains Mono, monospace',
+        fontFamily: 'var(--font-mono)',
         fontWeight: 600,
       }}>
         {value}

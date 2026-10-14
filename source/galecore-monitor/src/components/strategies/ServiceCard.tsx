@@ -36,7 +36,7 @@ export function ServiceCard({ service }: Props) {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15,
+          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 15,
           color: 'var(--text-primary)', letterSpacing: '0.04em',
         }}>
           {service.label}
@@ -45,7 +45,7 @@ export function ServiceCard({ service }: Props) {
           fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
           padding: '2px 7px', borderRadius: 4,
           color: 'var(--text-muted)', border: '1px solid var(--border)',
-          fontFamily: 'JetBrains Mono, monospace',
+          fontFamily: 'var(--font-mono)',
         }}>
           servicio
         </span>
@@ -54,7 +54,7 @@ export function ServiceCard({ service }: Props) {
       {service.name && (
         <div style={{
           fontSize: 12.5, color: 'var(--text-secondary)',
-          fontFamily: 'JetBrains Mono, monospace', marginTop: -4,
+          fontFamily: 'var(--font-mono)', marginTop: -4,
         }}>
           {service.name}
         </div>

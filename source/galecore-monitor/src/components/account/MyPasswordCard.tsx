@@ -17,7 +17,7 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: '0.06em',
   textTransform: 'uppercase',
   color: 'var(--text-muted)',
-  fontFamily: 'JetBrains Mono, monospace',
+  fontFamily: 'var(--font-mono)',
 };
 
 interface Props {
@@ -98,7 +98,7 @@ export function MyPasswordCard({ embedded = false }: Props = {}) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <Lock size={13} style={{ color: ACCENT }} />
           <span style={{
-            fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 16,
+            fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 16,
             color: 'var(--text-primary)', letterSpacing: '0.05em',
           }}>
             Mi contraseña
@@ -106,7 +106,7 @@ export function MyPasswordCard({ embedded = false }: Props = {}) {
         </div>
       )}
 
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'JetBrains Mono, monospace' }}>
+      <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
         {username || '—'}
         {email && <span style={{ color: 'var(--text-muted)' }}>{' · '}{email}</span>}
       </div>

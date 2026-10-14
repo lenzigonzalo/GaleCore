@@ -9,7 +9,7 @@ function inline(text: string, key: string): React.ReactNode[] {
   return parts.map((p, i) => {
     if (p.startsWith('**') && p.endsWith('**')) return <strong key={`${key}-${i}`} style={{ color: 'var(--text-primary)' }}>{p.slice(2, -2)}</strong>;
     if (p.startsWith('`') && p.endsWith('`')) {
-      return <code key={`${key}-${i}`} style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.92em',
+      return <code key={`${key}-${i}`} style={{ fontFamily: 'var(--font-mono)', fontSize: '0.92em',
         backgroundColor: 'var(--bg-tertiary)', padding: '0 4px', borderRadius: 3 }}>{p.slice(1, -1)}</code>;
     }
     return p;

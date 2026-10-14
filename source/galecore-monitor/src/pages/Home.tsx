@@ -29,7 +29,7 @@ export function Home({ onNavigate }: Props) {
       )}
 
       {error && (
-        <div style={{ fontSize: 14, color: 'var(--red-gc)', fontFamily: 'JetBrains Mono, monospace' }}>
+        <div style={{ fontSize: 14, color: 'var(--red-gc)', fontFamily: 'var(--font-mono)' }}>
           ⚠ Error cargando la configuración de la app: {error}
         </div>
       )}

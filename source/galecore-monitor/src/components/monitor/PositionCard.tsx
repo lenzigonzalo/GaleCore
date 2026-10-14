@@ -221,7 +221,7 @@ function HeaderField({ label, value, valueColor }: { label: string; value: strin
       <span style={{ color: 'var(--text-secondary)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
         {label}
       </span>
-      <span style={{ color: valueColor ?? 'var(--text-secondary)', fontSize: 20, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600 }}>
+      <span style={{ color: valueColor ?? 'var(--text-secondary)', fontSize: 20, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
         {value}
       </span>
     </div>
@@ -240,7 +240,7 @@ function TriggerBar({ label, pct, marker, color }: {
       <div className="flex-1" style={{ height: 14, backgroundColor: 'var(--bg-tertiary)', borderRadius: 5, overflow: 'hidden', border: '1px solid var(--border-dark)' }}>
         <div style={{ width: `${filled}%`, height: '100%', backgroundColor: color, borderRadius: 5, transition: 'width 0.3s ease' }} />
       </div>
-      <span style={{ width: 52, flexShrink: 0, textAlign: 'right', color, fontSize: 15.5, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700 }}>
+      <span style={{ width: 52, flexShrink: 0, textAlign: 'right', color, fontSize: 15.5, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
         {marker}
       </span>
     </div>
@@ -255,7 +255,7 @@ function StatCard({ label, value, sub, valueColor }: {
       <div style={{ color: 'var(--text-secondary)', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {label}
       </div>
-      <div style={{ color: valueColor ?? 'var(--text-primary)', fontSize: 22, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, lineHeight: 1.2 }}>
+      <div style={{ color: valueColor ?? 'var(--text-primary)', fontSize: 22, fontFamily: 'var(--font-mono)', fontWeight: 700, lineHeight: 1.2 }}>
         {value}
       </div>
       {sub && <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{sub}</div>}
@@ -299,19 +299,19 @@ function LegDetails({ spread: s, tickers }: { spread: LiveSpread; tickers: Recor
                   {r.dir === 'Short' ? '−1' : '+1'}
                 </span>
               </div>
-              <div style={{ color: 'var(--text-primary)', fontSize: 20, fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, marginTop: 2 }}>
+              <div style={{ color: 'var(--text-primary)', fontSize: 20, fontFamily: 'var(--font-mono)', fontWeight: 700, marginTop: 2 }}>
                 ${fmtPrice(r.strike, 0)}
               </div>
               <div className="flex items-baseline justify-between mt-1">
                 <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
                   entry {r.entry != null ? `$${fmtPrice(r.entry, 2)}` : '—'}
                 </span>
-                <span style={{ color: 'var(--text-secondary)', fontSize: 14, fontFamily: 'JetBrains Mono, monospace' }}>
+                <span style={{ color: 'var(--text-secondary)', fontSize: 14, fontFamily: 'var(--font-mono)' }}>
                   {cur != null ? `$${fmtPrice(cur, 2)}` : '—'}
                 </span>
               </div>
               {chgPct != null && (
-                <div style={{ color: chgColor, fontSize: 13, fontFamily: 'JetBrains Mono, monospace', fontWeight: 600, textAlign: 'right' }}>
+                <div style={{ color: chgColor, fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, textAlign: 'right' }}>
                   {chgPct >= 0 ? '+' : ''}{chgPct.toFixed(1)}%
                 </div>
               )}

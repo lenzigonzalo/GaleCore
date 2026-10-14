@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { labRequest, WorkspaceProject, WorkspaceState } from '../api/lab';
 import { useAppConfigStore } from '../store/useAppConfigStore';
-import { Eye, EyeOff, Database } from 'lucide-react';
-import { InstanceState, latestInstance } from '../components/shadow/InstanceState';
-import { useHiddenStrategies } from '../components/shadow/useHiddenStrategies';
+import { useStrategySwitchStore, useSwitchEnabled } from '../store/useStrategySwitchStore';
+import { Database } from 'lucide-react';
+import { latestInstance } from '../components/shadow/InstanceState';
 import { PerformancePanel } from '../components/shadow/PerformancePanel';
 import { fetchReferenceCapital } from '../api/space';
-import { amount, days, metricText, rate, readPanelError, stateLabel, usd as panelUsd } from '../components/shadow/panelPresentation';
+import { amount, rate, readPanelError, stateLabel, strategyName, usd as panelUsd } from '../components/shadow/panelPresentation';
 import { NoticePanel } from '../components/common/NoticePanel';
 import {
   fetchPerformanceSummary, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
@@ -79,16 +79,23 @@ function errorText(e: unknown): string {
   return any.message ?? String(e);
 }
 
+function StageState({ active }: { active: boolean | null }) {
+  return <span className={'instance-state ' + (active ? 'running' : 'stopped')}><i aria-hidden="true" />{active === null ? '—' : active ? 'Activa' : 'Apagada'}</span>;
+}
+
 export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { selectedSpec?: string | null; onSelectSpec?: (spec: string | null) => void; onOpenChat?: (projectId: string) => void; rpf?: React.ReactNode }) {
-  const visibility = useHiddenStrategies();
-  const [showHidden, setShowHidden] = useState(false);
   const [spec, setLocalSpec] = useState<string | null>(selectedSpec ?? null);
   const setSpec = (value: string | null) => { setLocalSpec(value); onSelectSpec?.(value); };
   useEffect(() => { if (selectedSpec !== undefined) setLocalSpec(selectedSpec); }, [selectedSpec]);
   const [projects, setProjects] = useState<WorkspaceProject[]>([]);
   const [projectsError, setProjectsError] = useState('');
   const projectsRequest = useRef<Promise<WorkspaceState> | undefined>(undefined);
-  const rpfEnabled = useAppConfigStore(s => s.strategies.some(strategy => strategy.tab === 'rpf'));
+  const rpfEntry = useAppConfigStore(s => s.strategies.find(strategy => strategy.tab === 'rpf'));
+  const rpfEnabled = !!rpfEntry;
+  const rpfName = rpfEntry?.label ? (rpfEntry.name ? `${rpfEntry.label} · ${rpfEntry.name}` : rpfEntry.label) : 'RPF';
+  const rpfActive = useSwitchEnabled(rpfEntry?.switch_endpoint || '/App/Rpf/Switch');
+  const readSwitch = useStrategySwitchStore(st => st.read);
+  useEffect(() => { if (rpfEntry?.switch_endpoint) void readSwitch(rpfEntry.switch_endpoint); }, [rpfEntry?.switch_endpoint, readSwitch]);
   useEffect(() => {
     let active = true;
     projectsRequest.current ??= labRequest<WorkspaceState>('/workspaces');
@@ -116,41 +123,39 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
     return () => { active = false; };
   }, [retry]);
   useEffect(() => { let active = true; profileRequest.current ??= fetchReferenceCapital(); profileRequest.current.then(value => { if (active) setCapital(value); }); return () => { active = false; }; }, []);
-  const cell = (metric: Metric, format = panelUsd, signed = false) => <td className="numeric" title={metric.reason || undefined} style={signed && metric.value !== null ? { color: metric.value < 0 ? 'var(--red-gc)' : metric.value > 0 ? 'var(--green)' : undefined } : undefined}>{metricText(metric, format)}</td>;
-  const visible = (name: string) => showHidden || !visibility.hidden.includes(name);
-  const rowClass = (name: string) => 'strategy-row' + (visibility.hidden.includes(name) ? ' strategy-hidden' : '');
-  const visibilityAction = (name: string) => {
-    const hidden = visibility.hidden.includes(name);
-    const label = hidden ? 'Volver a mostrar' : 'Ocultar de mi lista';
-    return <button className="strategy-visibility" aria-label={label} title={label} disabled={!visibility.ready || visibility.busy}
-      onClick={event => { event.stopPropagation(); void visibility.toggle(name); }}>
-      {hidden ? <Eye size={16}/> : <EyeOff size={16}/>}{hidden && <span>Volver a mostrar</span>}
-    </button>;
-  };
-  const headers = [
-    ['Estrategia', 'Nombre de la estrategia.'], ['Estado', 'Estado de la instancia más reciente.'], ['Operaciones', 'Cantidad de operaciones cerradas y posiciones abiertas.'],
-    ['% Gan', 'Proporción de operaciones cerradas que ganaron.'], ['Ganancia total', 'Resultado acumulado de las operaciones cerradas en USD.'],
-    ['Promedio por operación', 'Resultado promedio de todas las operaciones cerradas en USD.'], ['Salidas', 'Cantidad de salidas por toma de ganancia, stop loss y otros motivos.'],
-    ['Días promedio', 'Tiempo promedio entre la entrada y la salida.'], ['Máx. caída', 'Mayor caída del resultado acumulado desde su máximo anterior.'], ['Peor operación', 'Peor resultado de una operación cerrada.'],
-  ];
+  const cell = (metric: Metric, format = panelUsd, signed = false) => <td className="numeric" title={metric.reason || undefined} style={signed && metric.value !== null ? { color: metric.value < 0 ? 'var(--red-gc)' : metric.value > 0 ? 'var(--green)' : undefined } : undefined}>{metric.value === null ? '' : format(metric.value)}</td>;
+  const isRunning = (name: string) => latestInstance(instances, name)?.lifecycleState === 'RUNNING';
+  const sortByState = (list: PerformanceSummary[]) => [...list].sort((a, b) => Number(isRunning(b.spec)) - Number(isRunning(a.spec)) || strategyName(a.spec).localeCompare(strategyName(b.spec)));
+  const designOnly = projects.filter(project => project.strategyName && project.strategyName !== 'rpf' && !rows.some(row => row.spec === project.strategyName))
+    .sort((a, b) => strategyName(a.strategyName!).localeCompare(strategyName(b.strategyName!)));
   return <div className="shadow-page">
     {spec ? <>
       <button className="shadow-back" onClick={() => { setSpec(null); setRuntimeOpen(false); }}>← Estrategias</button>
-      {spec === 'rpf' && rpf ? <div className="performance-panel"><h2>RPF</h2><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
+      {spec === 'rpf' && rpf ? <div className="performance-panel"><h2>{rpfName}</h2><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
     </> : <div className="performance-panel">
-      <div className="strategy-list-heading"><h2>Estrategias</h2><label className="strategy-hidden-toggle"><input type="checkbox" role="switch" checked={showHidden} onChange={event => setShowHidden(event.target.checked)}/>Mostrar ocultas ({visibility.hidden.length})</label></div>
-      {visibility.error && <div role="alert">{visibility.error === 'read' ? 'No se pudieron leer tus preferencias de estrategias.' : 'No se pudo guardar tu lista de estrategias.'} <button onClick={visibility.retry} disabled={visibility.busy}>Reintentar</button></div>}
+      <h2 className="strategy-list-title">Estrategias</h2>
       {error && <div role="alert">{error}<button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
       {statusError && <p role="alert">{statusError}</p>}{projectsError && <p role="alert">{projectsError}</p>}
-      <div className="performance-table strategy-list" aria-busy={loading}><table><thead><tr>{headers.map(([label, definition]) => <th key={label} title={definition}>{label}</th>)}</tr></thead><tbody>
-        {loading ? Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia">{headers.map(([label]) => <td key={label}><div className="performance-skeleton row-skeleton" /></td>)}</tr>) : rows.filter(row => visible(row.spec)).map(row => <tr key={row.spec} className={rowClass(row.spec)} tabIndex={0} aria-label={`Abrir ${row.spec}`} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec(row.spec); } }}>
-          <td><div className="strategy-name-actions"><button className="strategy-name" onClick={() => setSpec(row.spec)}>{row.spec}</button>{visibilityAction(row.spec)}</div></td><td><InstanceState instance={latestInstance(instances, row.spec)} /></td><td>{row.tradesClosed} cerradas · {row.tradesOpen} abiertas</td>
-          {cell(row.winRate, rate)}{cell(row.realizedPnl, panelUsd, true)}{cell(row.expectancy, panelUsd, true)}<td>{row.takeProfitExits} TP · {row.stopLossExits} SL · {row.otherExits} otras</td>{cell(row.avgDaysHeld, days)}{cell(row.maxDrawdown, amount)}{cell(row.worstTrade, panelUsd, true)}
-        </tr>)}
-        {!loading && projects.filter(project => !rows.some(row => row.spec === project.strategyName) && project.strategyName !== 'rpf' && visible(project.strategyName!)).map(project => <tr key={project.id} className={rowClass(project.strategyName!)} tabIndex={0} aria-label={`Abrir ${project.strategyName}`} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec(project.strategyName); } }}><td><div className="strategy-name-actions"><button className="strategy-name" onClick={() => setSpec(project.strategyName)}>{project.strategyName}</button>{visibilityAction(project.strategyName!)}</div></td><td>{latestInstance(instances, project.strategyName!) ? <InstanceState instance={latestInstance(instances, project.strategyName!)} /> : 'En diseño'}</td>{headers.slice(2).map(([label]) => <td key={label} title="Todavía no tiene operaciones SHADOW">—</td>)}</tr>)}
-        {!loading && rpf && rpfEnabled && visible('rpf') && !rows.some(row => row.spec === 'rpf') && <tr className={rowClass('rpf')} tabIndex={0} aria-label="Abrir RPF" onClick={() => setSpec('rpf')} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec('rpf'); } }}><td><div className="strategy-name-actions"><button className="strategy-name" onClick={() => setSpec('rpf')}>RPF</button>{visibilityAction('rpf')}</div></td><td>Monitor propio</td>{headers.slice(2).map(([label]) => <td key={label} title="Disponible en la pestaña Hoy">—</td>)}</tr>}
-        {!loading && !error && !rows.some(row => visible(row.spec)) && !projects.some(project => visible(project.strategyName!)) && !(rpf && rpfEnabled && visible('rpf')) && <tr><td colSpan={headers.length}>{visibility.hidden.length && !showHidden ? 'No hay estrategias visibles. Activá Mostrar ocultas para recuperarlas.' : 'Sin estrategias SHADOW'}</td></tr>}
-      </tbody></table></div>
+      <div className="performance-table strategy-list" aria-busy={loading}><table>
+        <thead><tr><th>Estrategia</th><th>Estado</th><th className="numeric">Abiertas</th><th className="numeric">Resultado</th><th className="numeric">% ganadoras</th><th className="numeric">Operaciones</th><th className="numeric">Máx. caída</th></tr></thead>
+        {loading ? <tbody>{Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia"><td colSpan={7}><div className="performance-skeleton row-skeleton" /></td></tr>)}</tbody> : <>
+          {rpf && rpfEnabled && <tbody><tr className="strategy-stage"><th colSpan={7}>Producción</th></tr>
+            <tr className="strategy-row" tabIndex={0} onClick={() => setSpec('rpf')} onKeyDown={event => { if (event.key === 'Enter') setSpec('rpf'); }}>
+              <td className="strategy-name"><button onClick={event => { event.stopPropagation(); setSpec('rpf'); }}>{rpfName}</button></td><td><StageState active={rpfActive} /></td><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" />
+            </tr></tbody>}
+          {rows.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={7}>SHADOW</th></tr>
+            {sortByState(rows).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.key === 'Enter') setSpec(row.spec); }}>
+              <td className="strategy-name"><button title={row.spec} onClick={event => { event.stopPropagation(); setSpec(row.spec); }}>{strategyName(row.spec)}</button></td>
+              <td><StageState active={isRunning(row.spec)} /></td>
+              <td className="numeric">{row.tradesOpen || ''}</td>
+              {cell(row.realizedPnl, panelUsd, true)}{cell(row.winRate, rate)}<td className="numeric">{row.tradesClosed || ''}</td>{cell(row.maxDrawdown, amount)}
+            </tr>)}</tbody>}
+          {designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={7}>En diseño</th></tr>
+            {designOnly.map(project => <tr key={project.id} className="strategy-row" tabIndex={0} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.key === 'Enter') setSpec(project.strategyName); }}>
+              <td className="strategy-name"><button title={project.strategyName!} onClick={event => { event.stopPropagation(); setSpec(project.strategyName); }}>{strategyName(project.strategyName!)}</button></td><td /><td colSpan={5} />
+            </tr>)}</tbody>}
+        </>}
+      </table></div>
     </div>}
   </div>;
 }

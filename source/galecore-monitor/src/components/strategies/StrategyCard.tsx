@@ -65,7 +65,7 @@ export function StrategyCard({ strategy, onOpen }: Props) {
       {/* Identidad */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
-          fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 16,
+          fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 16,
           color: 'var(--text-primary)', letterSpacing: '0.05em',
         }}>
           {strategy.label}
@@ -75,7 +75,7 @@ export function StrategyCard({ strategy, onOpen }: Props) {
             fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
             padding: '2px 7px', borderRadius: 4,
             color: accent, backgroundColor: tint(accent, 13), border: `1px solid ${tint(accent, 30)}`,
-            fontFamily: 'JetBrains Mono, monospace',
+            fontFamily: 'var(--font-mono)',
           }}>
             {strategy.kind}
           </span>

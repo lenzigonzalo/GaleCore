@@ -276,3 +276,7 @@
   .lab-chat-header > .lab-project-title { grid-row:2; }
   .lab-header-actions { grid-row:2; }
 }
+
+/* Encabezado del chat (14/10, Claude): acciones como enlaces de texto, sin cajas. */
+.lab-header-actions > button { display:inline-flex; align-items:center; gap:6px; background:none; border:0; color:var(--text-secondary); font:14px var(--font-sans); padding:6px 8px; border-radius:6px; cursor:pointer; }
+.lab-header-actions > button:hover { color:var(--text-primary); background:var(--bg-tertiary); }

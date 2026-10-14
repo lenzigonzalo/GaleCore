@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, ChevronRight, ChevronDown, FileText, FlaskConical, BookOpen, Settings, PanelLeftClose, PanelLeftOpen, Pencil, LogOut } from 'lucide-react';
+import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, ChevronRight, ChevronDown, FileText, FlaskConical, BookOpen, Settings, PanelLeftClose, PanelLeftOpen, Pencil, LogOut, ArrowUpRight } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
 import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, WorkspaceFile, LabProjectKind } from '../api/lab';
 import { LabShadow } from './LabShadow';
@@ -74,13 +74,15 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   useEffect(() => { refresh(); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, [refresh]);
   useEffect(() => {
     const element = workspace.current;
-    if (!element) return;
+    // Embebido, la lista de proyectos vive en la barra lateral: ajustar su ancho acá cambia el tamaño del propio
+    // espacio y el observador se vuelve a disparar sin fin (colgaba el navegador al abrir el Chat).
+    if (!element || embedded) return;
     const observer = new ResizeObserver(() => {
       if (element.clientWidth > 700) setSidebarWidth(width => limitSidebarWidth(width, element.clientWidth));
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [embedded]);
   useEffect(() => {
     try { localStorage.setItem('galecore:lab:sidebar-width', String(sidebarWidth)); } catch { /* disponible hasta recargar */ }
   }, [sidebarWidth]);
@@ -194,7 +196,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         resizeSidebar(e.key === 'Home' ? 200 : e.key === 'End' ? 480 : sidebarWidth + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 40 : 10));
       }}/>}
     <section className="lab-chat-main">
-      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><div className="lab-header-actions">{embedded ? <>{project?.strategyName && <button onClick={() => onFollowStrategy?.(project.strategyName!)}>Ver seguimiento</button>}<select aria-label="Proyecto del chat" value={projectId} onChange={e => { const next = state?.projects.find(p => p.id === e.target.value); if (next) selectProject(next); }}>{state?.projects.filter(p => !p.strategyName?.startsWith('shadow_runtime_test_')).map(p => <option key={p.id} value={p.id}>{name(p.id, p.label)}</option>)}</select><select aria-label="Conversación del proyecto" value={chatId || ''} onChange={e => { const next = state?.chats.find(c => c.id === e.target.value); if (next && project) selectChat(project, next); else newChat(); }}><option value="">Nuevo chat</option>{state?.chats.filter(c => c.project === projectId && !/^test[_ -]/i.test(c.title)).map(c => <option key={c.id} value={c.id}>{name(c.id, c.title)}</option>)}</select><button aria-label="Crear proyecto" onClick={() => setCreating(true)}><Plus size={17}/></button></> : <nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button>{project?.type==='strategy'&&<button aria-current={view==='design'?'page':undefined} onClick={()=>setView('design')}>Diseño</button>}<button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav>}<button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Archivos</button></div></header>
+      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><div className="lab-header-actions">{embedded ? <>{project?.strategyName && <button className="lab-header-link" title="Resultados de esta estrategia en Estrategias" onClick={() => onFollowStrategy?.(project.strategyName!)}>Ver resultados<ArrowUpRight size={15}/></button>}</> : <nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button>{project?.type==='strategy'&&<button aria-current={view==='design'?'page':undefined} onClick={()=>setView('design')}>Diseño</button>}<button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav>}<button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Archivos</button></div></header>
       {view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <>
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;

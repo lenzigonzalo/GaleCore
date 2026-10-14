@@ -381,7 +381,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
               </span>
               <span className="tabular-nums" style={{
                 fontSize: 12, color: 'var(--text-primary)',
-                fontFamily: 'JetBrains Mono, monospace', fontWeight: 600,
+                fontFamily: 'var(--font-mono)', fontWeight: 600,
               }}>
                 {r.value}
               </span>
@@ -400,7 +400,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
 
       <span className="tabular-nums gex-metric-value" style={{
         fontSize: 20, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1,
-        color: cell.color ?? 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace',
+        color: cell.color ?? 'var(--text-primary)', fontFamily: 'var(--font-mono)',
         overflowWrap: 'anywhere',
       }}>
         {cell.value}

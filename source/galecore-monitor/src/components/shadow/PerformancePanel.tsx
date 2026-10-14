@@ -3,7 +3,7 @@ import type { IChartApi, UTCTimestamp, Time, TickMarkType as ChartTickMarkType }
 import { fetchPerformancePanel } from '../../api/shadow';
 import { Metric, PerformanceGroup, PerformancePanelParams, PerformancePanelResponse, ShadowInstance } from '../../types/shadow';
 import { fmtPrice, fmtTime, MARKET_TZ } from '../../utils/formatters';
-import { amount, date, days, exitLabel, metricText, pct, rate, readPanelError, usd } from './panelPresentation';
+import { amount, date, days, exitLabel, metricText, pct, rate, readPanelError, usd, strategyName } from './panelPresentation';
 import { LivePositionRow } from '../positions/PositionRow';
 import { PnlCalendar } from './PnlCalendar';
 import { InstanceState } from './InstanceState';
@@ -98,7 +98,7 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
   const stat = (label: string, definition: string, metric: Metric, format: (n: number) => string = fmtPrice, signed = false) => <Stat key={label} label={label} definition={definition} metric={metric} format={format} signed={signed} />;
   const minimum = panel?.notes.map(note => /mínimo (\d+)/i.exec(note)?.[1]).find(Boolean);
   return <div className="performance-panel" aria-label="Panel de rendimiento">
-    <header className="performance-heading"><div><h2>{spec}</h2>{inDesign ? <span className="instance-state">En diseño</span> : <InstanceState instance={instance} />}</div>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</header>
+    <header className="performance-heading"><div><h2 title={spec}>{strategyName(spec)}</h2>{inDesign ? <span className="instance-state">En diseño</span> : <InstanceState instance={instance} />}</div>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</header>
     <div className="strategy-chat-link">{design.projectId && onOpenChat && <button onClick={() => onOpenChat(design.projectId!)}>Abrir en el chat</button>}</div>
     <StrategyOverview strategy={design.strategy} />
     <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Operaciones', 'Diseño', 'Datos'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>

@@ -62,7 +62,7 @@ export function StrategySwitch({ endpoint, title }: Props) {
         backgroundColor: tint(color, 10), border: `1px solid ${tint(color, 30)}`,
         color, cursor: busy || locked ? 'default' : 'pointer',
         fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',
-        fontFamily: 'JetBrains Mono, monospace', opacity: busy || locked ? 0.6 : 1,
+        fontFamily: 'var(--font-mono)', opacity: busy || locked ? 0.6 : 1,
       }}
     >
       {/* Riel del switch */}

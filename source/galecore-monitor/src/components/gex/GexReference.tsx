@@ -66,7 +66,7 @@ export function GexReference() {
       <CollapsibleCard title={`B · Macro régimen (${checks.length} checks · lectura)`} titleColor="#a78bfa" defaultOpen>
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, lineHeight: 1.5 }}>
           En GEX el régimen es contexto, no un gate: ningún check bloquea nada porque no hay trade
-          (<span style={{ fontFamily: 'JetBrains Mono, monospace' }}>on_fail: {regimeOnFail}</span>).
+          (<span style={{ fontFamily: 'var(--font-mono)' }}>on_fail: {regimeOnFail}</span>).
         </div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead><tr><TH>Check</TH><TH>Label</TH><TH>On fail</TH></tr></thead>
@@ -166,7 +166,7 @@ export function GexReference() {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {forbidden.map((f) => (
               <span key={f} style={{
-                padding: '3px 8px', borderRadius: 4, fontSize: 12, fontFamily: 'JetBrains Mono, monospace',
+                padding: '3px 8px', borderRadius: 4, fontSize: 12, fontFamily: 'var(--font-mono)',
                 backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-dark)', color: 'var(--text-muted)',
                 textDecoration: 'line-through',
               }}>

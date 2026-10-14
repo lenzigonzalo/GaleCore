@@ -13,7 +13,7 @@ export const WARN = 'var(--yellow-gc)';
 export const BAD = 'var(--red-gc)';
 export const NOTE = INTELIGENCIA_ACCENT;
 
-export const MONO: React.CSSProperties = { fontFamily: 'JetBrains Mono, monospace' };
+export const MONO: React.CSSProperties = { fontFamily: 'var(--font-mono)' };
 export const SANS: React.CSSProperties = { fontFamily: 'var(--font-sans)' };
 
 export function Badge({ color, children, title }: { color: string; children: React.ReactNode; title?: string }) {

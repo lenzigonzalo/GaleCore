@@ -145,3 +145,26 @@
 .metric-columns h3 { font-size: 17px; margin-bottom: 12px; }
 @media (max-width: 1200px) { .metric-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 0; } .metric-columns > section:nth-child(3) { border-left: 0; padding-left: 0; } .metric-columns > section:nth-child(2) { padding-right: 0; } }
 @media (max-width: 650px) { .metric-overview { padding: 16px; } .performance-highlights { grid-template-columns: repeat(2, minmax(0, 1fr)); } .metric-columns { grid-template-columns: 1fr; } .metric-columns > section { padding: 0; border-left: 0; } }
+
+/* Lista de estrategias (14/10, Claude): números a la derecha, texto a la izquierda; grupos sin tabla de guiones. */
+.strategy-list th, .strategy-list td { text-align: left; }
+.strategy-list th.numeric, .strategy-list td.numeric { text-align: right; }
+.strategy-list th { font-size: 13px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+.strategy-group { margin-top: 28px; }
+.strategy-group h3 { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin: 0 0 10px; }
+.strategy-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.strategy-chip { display: inline-flex; align-items: center; gap: 2px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary); }
+.strategy-chip > button:first-child { background: none; border: 0; color: var(--text-primary); font: 14px var(--font-sans); padding: 8px 4px 8px 12px; cursor: pointer; }
+.strategy-chip:hover { border-color: var(--text-secondary); }
+.strategy-chip .strategy-visibility { opacity: 0; }
+.strategy-chip:hover .strategy-visibility { opacity: 1; }
+.strategy-chip.strategy-hidden { opacity: .5; }
+.strategy-list-title { margin: 0 0 18px; }
+.strategy-list tr.strategy-stage th { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-align: left; padding: 18px 12px 8px; border-bottom: 1px solid var(--border); background: none; }
+.strategy-list tbody:first-of-type tr.strategy-stage th { padding-top: 8px; }
+.strategy-list tr.strategy-row { cursor: pointer; }
+.strategy-list tr.strategy-row:hover td { background: var(--bg-tertiary); }
+.strategy-list td.strategy-name { font-weight: 500; }
+.strategy-list tr.strategy-row td { height: 46px; padding-top: 0; padding-bottom: 0; }
+.strategy-list tr.strategy-row td { border-bottom: 1px solid var(--border-dark); }
+.strategy-list td.strategy-name button { background: none; border: 0; padding: 0; color: var(--text-primary); font: 500 14px var(--font-sans); cursor: pointer; text-align: left; }

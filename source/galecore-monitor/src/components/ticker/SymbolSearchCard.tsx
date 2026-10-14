@@ -134,7 +134,7 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
           autoComplete="off"
           style={{
             flex: 1, minWidth: 0, background: 'none', border: 'none', outline: 'none',
-            color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace',
+            color: 'var(--text-primary)', fontFamily: 'var(--font-mono)',
             fontSize: 15, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
           }}
         />
@@ -179,7 +179,7 @@ export function SymbolSearchCard({ onPick, minQueryLength = 1, maxResults = 8, i
             onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
           >
             <span style={{
-              fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 13,
+              fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 13,
               letterSpacing: '0.05em', color: 'var(--text-primary)', flexShrink: 0,
             }}>
               {r.symbol}

@@ -17,3 +17,11 @@ export function readPanelError(error: unknown): string {
   if (/timeout|aborted/i.test(e.message || '')) return 'El panel tardó demasiado en responder. Reintentá la lectura.';
   return e.message || 'No se pudo leer el panel de rendimiento.';
 }
+const SYMBOLS = new Set(['spy', 'qqq', 'iwm', 'tlt', 'gex', 'pcs', 'vix', 'iv', 'ic']);
+/** Nombre legible de una spec: «spy_prima_varianza_30_45d» → «SPY prima varianza 30–45d». Sólo presentación. */
+export function strategyName(spec: string): string {
+  const words = spec.replace(/(\d+)_(\d+d)\b/g, '$1–$2').split('_').filter(Boolean)
+    .map(word => SYMBOLS.has(word) ? word.toUpperCase() : word);
+  const text = words.join(' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

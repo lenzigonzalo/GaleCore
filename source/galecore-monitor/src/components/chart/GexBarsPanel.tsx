@@ -97,7 +97,7 @@ export const GexBarsPanel = React.memo(function GexBarsPanel({
                 fontSize={isAtm ? 9.5 : 8.5}
                 fontWeight={isAtm ? 600 : 400}
                 textAnchor="end"
-                fontFamily="JetBrains Mono, monospace"
+                fontFamily="var(--font-mono)"
               >
                 {s.strike}
               </text>

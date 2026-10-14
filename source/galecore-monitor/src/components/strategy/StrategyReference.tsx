@@ -51,14 +51,14 @@ export function StrategyReference({ embedded = false }: { embedded?: boolean }) 
           <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>RPF Strategy Reference</span>
           {meta && (
             <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
-              color: 'var(--blue-gc)', backgroundColor: tint('var(--blue-gc)', 13), border: `1px solid ${tint('var(--blue-gc)', 27)}`, fontFamily: 'JetBrains Mono, monospace' }}>
+              color: 'var(--blue-gc)', backgroundColor: tint('var(--blue-gc)', 13), border: `1px solid ${tint('var(--blue-gc)', 27)}`, fontFamily: 'var(--font-mono)' }}>
               v{meta.version} · {meta.status}
             </span>
           )}
         </div>
       )}
 
-      {err && <div style={{ color: 'var(--red-gc)', fontSize: 13, marginBottom: 12, fontFamily: 'JetBrains Mono, monospace' }}>⚠ {err}</div>}
+      {err && <div style={{ color: 'var(--red-gc)', fontSize: 13, marginBottom: 12, fontFamily: 'var(--font-mono)' }}>⚠ {err}</div>}
 
       {/* A · Definition */}
       <SectionTitle>A · Definition</SectionTitle>
@@ -101,9 +101,9 @@ export function StrategyReference({ embedded = false }: { embedded?: boolean }) 
           const thr = def.min ?? (def.min_usd != null ? `$${def.min_usd}` : undefined) ?? (def.bars_by_regime ? 'by regime' : undefined);
           return (
             <div key={id} style={{ display: 'grid', gridTemplateColumns: '180px 1fr 80px', gap: 10, alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--border-dark)' }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace' }}>{id}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{id}</span>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{def.label ?? '—'}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, textAlign: 'right', fontFamily: 'JetBrains Mono, monospace',
+              <span style={{ fontSize: 12, fontWeight: 700, textAlign: 'right', fontFamily: 'var(--font-mono)',
                 color: def.enabled ? 'var(--green)' : 'var(--text-muted)' }}>
                 {def.enabled ? (thr ?? 'ON') : 'OFF'}
               </span>
@@ -116,7 +116,7 @@ export function StrategyReference({ embedded = false }: { embedded?: boolean }) 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {Object.entries(edgeBars).map(([regime, bar]: [string, any]) => (
                 <div key={regime} style={{
-                  padding: '4px 10px', borderRadius: 4, fontSize: 13, fontFamily: 'JetBrains Mono, monospace',
+                  padding: '4px 10px', borderRadius: 4, fontSize: 13, fontFamily: 'var(--font-mono)',
                   backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-dark)',
                 }}>
                   <span style={{ color: 'var(--text-muted)' }}>{regime}: </span>
@@ -148,7 +148,7 @@ export function StrategyReference({ embedded = false }: { embedded?: boolean }) 
             {(tm.evaluation_priority ?? []).map((step: string, i: number) => (
               <div key={step} style={{
                 display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 4,
-                fontSize: 12, fontFamily: 'JetBrains Mono, monospace',
+                fontSize: 12, fontFamily: 'var(--font-mono)',
                 backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-dark)', color: 'var(--text-primary)',
               }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>{i + 1}</span> {step}
@@ -191,8 +191,8 @@ export function StrategyReference({ embedded = false }: { embedded?: boolean }) 
                     padding: '4px 8px', borderRadius: 4, backgroundColor: 'var(--bg-tertiary)',
                     border: '1px solid var(--border-dark)',
                   }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'JetBrains Mono, monospace' }}>{i + 1}</span>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: c, fontFamily: 'JetBrains Mono, monospace' }}>{state}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{i + 1}</span>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: c, fontFamily: 'var(--font-mono)' }}>{state}</span>
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{desc}</span>
                   </div>
                 );

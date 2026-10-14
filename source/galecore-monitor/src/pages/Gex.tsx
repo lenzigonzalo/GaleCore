@@ -322,7 +322,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
               backgroundColor: 'var(--bg-tertiary)',
             }}>
               <span style={{
-                fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 15,
+                fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 15,
                 color: 'var(--text-primary)', letterSpacing: '0.04em',
               }}>
                 {active} · {isGlobalScope ? 'Toda la cadena' : 'Por vencimiento'}
@@ -353,7 +353,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                   <Crosshair size={11} />
                 </button>
                 <span className="tabular-nums" style={{
-                  fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
+                  fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
                 }}>
                   Spot {fmtPrice(ticker?.price || data?.spotPrice || 0)}
                 </span>
@@ -449,7 +449,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className="tabular-nums" style={{
-                  fontSize: 12, fontFamily: 'JetBrains Mono, monospace', color: 'var(--text-muted)',
+                  fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
                 }}>
                   {/* Solo la COBERTURA del barrido. El GEX global se fue de acá: es una métrica y
                       vive en su celda del cuadro (grupo "Estructura gamma"), donde tiene su
@@ -470,7 +470,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                       color: 'var(--red-gc)',
                       backgroundColor: tint('var(--red-gc)', 10),
                       border: `1px solid ${tint('var(--red-gc)', 30)}`,
-                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', cursor: 'help',
+                      fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', cursor: 'help',
                     }}
                   >
                     DETENIDO{data ? ' · DATO CONGELADO' : ''}
@@ -486,7 +486,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                       padding: '2px 6px', borderRadius: 20,
                       color: 'var(--text-muted)',
                       border: '1px solid var(--border)',
-                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', cursor: 'help',
+                      fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', cursor: 'help',
                     }}
                   >
                     MANUAL
@@ -502,7 +502,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                       color: 'var(--yellow-gc)',
                       backgroundColor: 'var(--yellow-muted)',
                       border: '1px solid var(--yellow-border)',
-                      fontFamily: 'JetBrains Mono, monospace', whiteSpace: 'nowrap', cursor: 'help',
+                      fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', cursor: 'help',
                     }}
                   >
                     PARCIAL {data!.gex.global.expirationsIncluded}/{data!.gex.global.expirationsRequested}
@@ -510,7 +510,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                 )}
                 {updated && (
                   <span className="tabular-nums" style={{
-                    fontSize: 12, fontFamily: 'JetBrains Mono, monospace',
+                    fontSize: 12, fontFamily: 'var(--font-mono)',
                     color: stale ? 'var(--yellow-gc)' : 'var(--text-muted)',
                   }}>
                     {fmtTime(updated)}
