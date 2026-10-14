@@ -2,6 +2,7 @@ using System.Globalization;
 using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime.Contracts;
 using DataFeed.Application.App.Shared;
+using DataFeed.Application.Data.Tastytrade.OptionChains;
 using DataFeed.Application.Functions;
 
 namespace DataFeed.Application.App.Runtime
@@ -56,7 +57,30 @@ namespace DataFeed.Application.App.Runtime
 
         public StructureComparer(IPcsMarketSource market)
         {
-            _market = market;
+            // El PCS, el CCS y la IV de las patas piden las mismas griegas del mismo vencimiento: sin memoria eran tres
+            // GEX de 9-24 s cada uno (40-48 s por comparación, 14/10). Se piden una vez por comparación.
+            _market = new OncePerComparison(market);
+        }
+
+        /// <summary>Recuerda, sólo durante una comparación, los vencimientos y las griegas ya pedidos.</summary>
+        private sealed class OncePerComparison : IPcsMarketSource
+        {
+            private readonly IPcsMarketSource _inner;
+            private readonly Dictionary<string, Task<List<Expiration>?>> _expirations = new();
+            private readonly Dictionary<string, Task<GammaExposureResponse?>> _gex = new();
+
+            public OncePerComparison(IPcsMarketSource inner) => _inner = inner;
+
+            public Task<List<Expiration>?> GetExpirationsAsync(string symbol, CancellationToken ct)
+                => _expirations.TryGetValue(symbol, out var t) ? t : _expirations[symbol] = _inner.GetExpirationsAsync(symbol, ct);
+
+            public Task<GammaExposureResponse?> GetGammaExposureAsync(GammaExposureRequest r, CancellationToken ct)
+            {
+                var key = string.Join('|', r.Symbol, r.TargetDte, r.MaxDTE, r.IncludeZeroDte, string.Join(',', r.ExpirationTypes ?? Array.Empty<string>()));
+                return _gex.TryGetValue(key, out var t) ? t : _gex[key] = _inner.GetGammaExposureAsync(r, ct);
+            }
+
+            public Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct) => _inner.GetQuoteAsync(streamerSymbol, ct);
         }
 
         public async Task<StructureComparison> CompareAsync(
