@@ -13,7 +13,7 @@ test('el resumen usa la cuenta del operador y no capital ni posiciones SHADOW', 
   useMarketStore.getState().updateQuote('SPY', { bidPrice: 100.9, askPrice: 101.1 });
   render(<Resumen onNavigate={() => {}} />);
   expect(screen.getByText('$12,345')).toBeInTheDocument();
-  expect(screen.getByText('$2.00')).toBeInTheDocument();
+  expect(screen.getByText('+$2.00')).toBeInTheDocument();
   expect(screen.getByText('+1.00%')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Ver cartera/ })).not.toBeInTheDocument();
   expect(screen.queryByText(/SHADOW|capital de referencia|Riesgo abierto/)).not.toBeInTheDocument();

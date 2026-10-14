@@ -45,7 +45,7 @@ export function portfolioRows(positions: PositionResponse[], tickers: Record<str
       const pnl = valid && !priceStatus ? parts.reduce((s, p, i) => s + (p.quantityDirection === 'Short' ? -1 : 1) * (marks[i].mid! - p.averageOpenPrice) * p.quantity * p.multiplier, 0) : null;
       const gross = valid && !priceStatus ? parts.reduce((s, p, i) => s + Math.abs(marks[i].mid! * p.quantity * p.multiplier), 0) : null;
       return { id: parts.map(p => p.symbol).join('|'), ticker: first.underlyingSymbol || first.symbol,
-        quantity: first.quantity, unit: first.instrumentType === 'Equity' ? 'acc' : 'ctos',
+        legs: parts, quantity: first.quantity, unit: first.instrumentType === 'Equity' ? 'acc' : 'ctos',
         structure: type ?? (first.instrumentType === 'Equity' ? 'ACC' : option?.side === 'P' ? 'PUT' : option?.side === 'C' ? 'CALL' : first.instrumentType),
         short: !type && first.quantityDirection === 'Short', expiry: option?.expiration,
         pnl, pct: pnl !== null && entry ? pnl / Math.abs(entry) * 100 : null, gross, priceStatus };

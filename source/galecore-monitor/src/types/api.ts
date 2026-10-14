@@ -410,12 +410,10 @@ export interface CandleItem {
 }
 
 export interface QuoteResponse {
-  symbol: string;
-  bid: number;
-  ask: number;
-  bidSize: number;
-  askSize: number;
-  timestamp: string;
+  type: string;
+  channel: number;
+  data: { eventSymbol: string; bidPrice: number; askPrice: number;
+    bidSize: number; askSize: number; eventTime: number; midPrice: number }[] | null;
 }
 
 // ─── Account API ──────────────────────────────────────────────────────────────

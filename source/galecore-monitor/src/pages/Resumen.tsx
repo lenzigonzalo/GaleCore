@@ -7,6 +7,8 @@ import { fmtCurrency, fmtPct, etDateParts } from '../utils/formatters';
 import { useMarketStore } from '../store/useMarketStore';
 import type { Tab } from '../components/layout/TabNav';
 import { portfolioRows } from '../utils/portfolioSummary';
+import { LivePositionRow } from '../components/positions/PositionRow';
+import { parseOccSymbol } from '../utils/streamerSymbol';
 import './Resumen.css';
 
 /** Cuenta del operador y calendario real de GaleCore. */
@@ -91,7 +93,6 @@ export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
     return byTicker;
   }, new Map<string, number>())).sort((a, b) => b[1] - a[1]);
   const expiring = ready ? rows.filter(r => r.expiry && daysTo(r.expiry) <= 7) : [];
-  const money = (n: number | null) => n === null ? '—' : n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2 });
   return <div className="rs">
     <header className="rs-top"><h1>Mi portfolio</h1><span>Cuenta real · USD</span></header>
     <div className="rs-capital"><AccountSummary layout="strip" />
@@ -115,16 +116,8 @@ export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
         : errorPositions ? <p className="rs-alert urgent" role="alert">No se pudieron leer las posiciones de la cuenta.</p>
         : !positionsReadAt ? <p className="rs-empty">Sin lectura de posiciones disponible.</p>
         : rows.length === 0 ? <p className="rs-empty">Sin posiciones en la última lectura.</p>
-        : <div className="rs-table-scroll"><table className="rs-table">
-          <thead><tr><th>Ticker</th><th className="num">Cantidad</th><th>Estructura</th><th>Estrategia</th><th className="num" title="P&L abierto al punto medio bid/ask de todas las patas">P&amp;L abierto · USD</th><th className="num" title="Sobre débito o crédito neto inicial">P&amp;L %</th><th>Venc.</th></tr></thead>
-          <tbody>{rows.map(r => <tr key={r.id}>
-            <td><b title={r.id}>{r.ticker}</b></td><td className="num">{r.short ? '−' : ''}{r.quantity} <span>{r.unit}</span></td>
-            <td><span className="rs-structure">{r.structure}</span></td><td title="La cuenta no informa una estrategia vinculada">—</td>
-            <td className={'num rs-pnl ' + (r.pnl === null || r.pnl === 0 ? '' : r.pnl > 0 ? 'pos' : 'neg')}>{r.pnl === null ? <span className="rs-price-status">{r.priceStatus ?? 'Sin precio de entrada'}</span> : money(r.pnl)}</td>
-            <td className={'num ' + (r.pct === null || r.pct === 0 ? '' : r.pct > 0 ? 'pos' : 'neg')}>{r.pct === null ? '—' : fmtPct(r.pct)}</td>
-            <td>{r.expiry ? <span className={'rs-expiry ' + (daysTo(r.expiry) <= 2 ? 'danger' : daysTo(r.expiry) <= 7 ? 'warning' : '')}>{new Date(`${r.expiry}T12:00:00`).toLocaleDateString('es-AR')} · {daysTo(r.expiry) < 0 ? 'vencida' : daysTo(r.expiry) === 0 ? 'hoy' : `${daysTo(r.expiry)} d`}</span> : '—'}</td>
-          </tr>)}</tbody>
-        </table></div>}
+        : <div className="rs-position-rows">{rows.map(row => <LivePositionRow key={row.id} position={{ structure: row.structure, symbol: row.ticker, expiration: row.expiry ?? null, dte: row.expiry ? daysTo(row.expiry) : null, legs: row.legs.flatMap(leg => { const option = parseOccSymbol(leg.symbol); return option ? [{ side: leg.quantityDirection === 'Short' ? 'SELL' : 'BUY', type: option.side === 'P' ? 'PUT' : 'CALL', strike: option.strike, expiration: option.expiration }] : []; }), entryAt: row.legs[0].createdAt ?? null, credit: row.legs.length === 1 && row.short ? row.legs[0].averageOpenPrice : null, currentValue: null, pnl: row.pnl, risk: null, reason: row.priceStatus }}><div className="position-account-context"><span>{row.short ? '−' : ''}{row.quantity} {row.unit}</span><span>{row.pct === null ? row.priceStatus : fmtPct(row.pct)}</span></div></LivePositionRow>)}</div>}
+
     </section>
   </div>;
 }

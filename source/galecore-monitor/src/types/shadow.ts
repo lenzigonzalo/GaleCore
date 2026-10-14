@@ -146,6 +146,7 @@ export interface PerformanceSummary {
   maxDrawdown: Metric; worstTrade: Metric; avgDaysHeld: Metric;
   takeProfitExits: number; stopLossExits: number; otherExits: number; lastExitAt: string | null;
 }
+export interface PanelLeg { side: string; type: string; strike: number; expiration: string | null }
 export interface PerformancePanelResponse {
   asOf: string; mode: string; source: string; spec: string; version: string | null;
   from: string | null; to: string | null;
@@ -155,11 +156,11 @@ export interface PerformancePanelResponse {
   smallSample: boolean; notes: string[];
   curve: { at: string; pnl: number; cumulative: number; drawdown: number }[];
   daily: { date: string; pnl: number; trades: number }[];
-  openPositions: { positionId: string; version: string; structure: string; legs: string;
+  openPositions: { positionId: string; version: string; structure: string; legs: string; symbol: string; legList: PanelLeg[];
     entryAt: string; entryDte: number; currentDte: number | null; entryCredit: number;
     lastSpreadValue: number | null; unrealizedPnl: number | null; maxRisk: number;
     lastValuedAt: string | null; valuationProblems: string[] | null }[];
-  closedTrades: { positionId: string; version: string; structure: string; legs: string;
+  closedTrades: { positionId: string; version: string; structure: string; legs: string; symbol: string; legList: PanelLeg[];
     entryAt: string; exitAt: string | null; daysHeld: number | null; entryCredit: number;
     exitDebit: number | null; exitReason: string | null; realizedPnl: number | null;
     maxRisk: number; pnlPctOfCredit: number | null; pnlPctOfMaxRisk: number | null;

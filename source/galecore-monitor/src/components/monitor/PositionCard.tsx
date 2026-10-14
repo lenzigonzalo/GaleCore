@@ -3,6 +3,7 @@ import { LiveSpread, AlertType } from '../../types/position';
 import { useMarketStore } from '../../store/useMarketStore';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { StrikeLadder } from './StrikeLadder';
+import { PositionHeading, PositionLeg, useUnderlyingPrice } from '../positions/PositionRow';
 import { GammaExposureResponse } from '../../types/api';
 import { fmtPrice, fmtPnl } from '../../utils/formatters';
 import { legMid } from '../../utils/streamerSymbol';
@@ -11,10 +12,6 @@ interface Props {
   spread: LiveSpread;
   gexData: Record<string, GammaExposureResponse>;
 }
-
-const TYPE_LABELS: Record<string, string> = {
-  PUT_CS: 'PUT CS', CALL_CS: 'CALL CS', IC: 'IC', LONG: 'LONG',
-};
 
 const ALERT_CFG: Record<NonNullable<AlertType>, { label: string; bg: string; text: string }> = {
   CERRAR:        { label: 'CLOSE',        bg: '#16a34a', text: '#fff' },
@@ -25,9 +22,9 @@ const ALERT_CFG: Record<NonNullable<AlertType>, { label: string; bg: string; tex
   MACRO_PROXIMO: { label: 'MACRO EVENT',  bg: '#d97706', text: '#fff' },
 };
 
-export function PositionCard({ spread: s, gexData }: Props) {
+export function PositionCard({ spread: s }: Props) {
   const { config }    = useAppConfigStore();
-  const spotPrice     = useMarketStore(st => st.tickers[s.underlyingSymbol]?.price ?? 0);
+  const spotPrice     = useUnderlyingPrice(s.underlyingSymbol);
   const tickers       = useMarketStore(st => st.tickers);
 
   // Rule thresholds — nodo `monitor` del config de la app (transversal a estrategias)
@@ -37,19 +34,17 @@ export function PositionCard({ spread: s, gexData }: Props) {
   const rollTrigPct    = tm?.defensive_roll?.trigger_unrealized_loss_pct_of_initial_credit_gte ?? 1.0;
   const timeExitDte    = tm?.time_exit?.dte_threshold ?? 21;
 
-  // GEX walls + chain
-  const gex      = gexData[s.underlyingSymbol];
-  const callWall = gex?.callWall;
-  const putWall  = gex?.putWall;
-
   // Colors
   const dteColor    = s.dte <= timeExitDte ? '#f59e0b' : s.dte <= timeExitDte + 7 ? '#f97316' : 'var(--text-secondary)';
   const pnlColor    = s.currentPnl == null ? 'var(--text-muted)' : s.currentPnl >= 0 ? 'var(--green)' : 'var(--red-gc)';
   const alertCfg    = s.alert ? ALERT_CFG[s.alert] : null;
   const borderColor = alertCfg ? alertCfg.bg + '88' : 'var(--border-dark)';
 
-  // Strikes display string
-  const strikesStr = buildStrikesStr(s);
+  const ladderLegs: PositionLeg[] = [];
+  if (s.longPutStrike != null) ladderLegs.push({ side: 'BUY', type: 'PUT', strike: s.longPutStrike });
+  if (s.shortPutStrike != null) ladderLegs.push({ side: 'SELL', type: 'PUT', strike: s.shortPutStrike });
+  if (s.shortCallStrike != null) ladderLegs.push({ side: 'SELL', type: 'CALL', strike: s.shortCallStrike });
+  if (s.longCallStrike != null) ladderLegs.push({ side: 'BUY', type: 'CALL', strike: s.longCallStrike });
 
   // Width of the spread
   const putWidth  = (s.shortPutStrike  != null && s.longPutStrike  != null) ? Math.abs(s.shortPutStrike  - s.longPutStrike)  : 0;
@@ -137,25 +132,7 @@ export function PositionCard({ spread: s, gexData }: Props) {
         style={{ borderBottom: '1px solid var(--border-dark)', backgroundColor: 'var(--bg-tertiary)' }}
       >
         <div className="flex items-center gap-6 flex-wrap">
-          <div className="flex items-center gap-2.5">
-            <span style={{ color: 'var(--text-primary)', fontFamily: 'JetBrains Mono, monospace', fontWeight: 700, fontSize: 23 }}>
-              {s.underlyingSymbol}
-            </span>
-            <span
-              className="px-2 py-0.5 rounded"
-              style={{ backgroundColor: 'var(--bg-primary)', color: 'var(--blue-gc)', fontSize: 14, fontWeight: 700, letterSpacing: '0.05em' }}
-            >
-              {TYPE_LABELS[s.type] ?? s.type}
-            </span>
-          </div>
-
-          <HeaderField label="Strikes" value={strikesStr} valueColor="var(--text-primary)" />
-          <HeaderField label="Expiration" value={fmtExp(s.expiration)} />
-          <HeaderField
-            label="Days left"
-            value={`${s.dte}d`}
-            valueColor={dteColor}
-          />
+          <PositionHeading structure={s.type} symbol={s.underlyingSymbol} expiration={s.expiration} dte={s.dte} />
           {s.contracts > 1 && (
             <HeaderField label="Contracts" value={`×${s.contracts}`} />
           )}
@@ -182,18 +159,7 @@ export function PositionCard({ spread: s, gexData }: Props) {
 
       <div className="px-4 py-3 flex flex-col gap-4">
         {/* ── Strike Ladder ──────────────────────────────────────────────── */}
-        {spotPrice > 0 && (
-          <StrikeLadder
-            type={s.type}
-            shortStrike={s.shortPutStrike ?? s.shortCallStrike ?? 0}
-            longStrike={s.longPutStrike   ?? s.longCallStrike  ?? 0}
-            shortStrike2={s.shortCallStrike}
-            longStrike2={s.longCallStrike}
-            spot={spotPrice}
-            callWall={callWall}
-            putWall={putWall}
-          />
-        )}
+        <StrikeLadder legs={ladderLegs} spot={spotPrice} />
 
         {/* Stale-data warning — the account API only exposes the previous close;
             without live option quotes the P&L below can be wrong. Don't pretend. */}
@@ -376,22 +342,4 @@ function fmtMoney(n: number | null): string {
 function signColor(n: number | null): string {
   if (n == null) return 'var(--text-muted)';
   return n >= 0 ? 'var(--green)' : 'var(--red-gc)';
-}
-
-function fmtExp(iso: string): string {
-  // "2026-07-17" → "Jul 17, 2026"
-  const [y, m, d] = iso.split('-').map(Number);
-  if (!y || !m || !d) return iso;
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${months[m - 1]} ${d}, ${y}`;
-}
-
-function buildStrikesStr(s: LiveSpread): string {
-  if (s.type === 'PUT_CS')
-    return `${fmtPrice(s.shortPutStrike ?? 0, 0)} / ${fmtPrice(s.longPutStrike ?? 0, 0)}`;
-  if (s.type === 'CALL_CS')
-    return `${fmtPrice(s.shortCallStrike ?? 0, 0)} / ${fmtPrice(s.longCallStrike ?? 0, 0)}`;
-  if (s.type === 'IC')
-    return `${fmtPrice(s.longPutStrike ?? 0, 0)}/${fmtPrice(s.shortPutStrike ?? 0, 0)} – ${fmtPrice(s.shortCallStrike ?? 0, 0)}/${fmtPrice(s.longCallStrike ?? 0, 0)}`;
-  return '';
 }

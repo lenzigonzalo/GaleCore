@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PerformancePanel } from './PerformancePanel';
 import { fetchPerformancePanel } from '../../api/shadow';
+import { fetchQuote } from '../../api/marketdata';
 import { labRequest } from '../../api/lab';
 import { tradeCsv } from './TradeLog';
 import plainFixture from './__fixtures__/panel_sin_parametros.json';
@@ -10,18 +11,20 @@ import { PerformancePanelResponse } from '../../types/shadow';
 import { createChart } from 'lightweight-charts';
 
 jest.mock('../../api/shadow', () => ({ fetchPerformancePanel: jest.fn() }));
+jest.mock('../../api/marketdata', () => ({ fetchQuote: jest.fn() }));
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
 jest.mock('lightweight-charts', () => ({ ColorType: { Solid: 'solid' }, LineSeries: {}, AreaSeries: {},
   TickMarkType: { Year: 0, Month: 1, DayOfMonth: 2, Time: 3, TimeWithSeconds: 4 },
   createChart: jest.fn(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() })),
 }));
 const extra = { tradesWon: 2, tradesLost: 0, grossProfit: { value: 45, reason: null }, grossLoss: { value: 0, reason: null }, largestWin: { value: 23, reason: null }, winLossRatio: { value: null, reason: 'Sin pérdidas' } };
-const context = { maxRisk: 456, pnlPctOfCredit: 50, pnlPctOfMaxRisk: 4.82, gapToPlan: null, entryVix: null, entryIvRank: null, entryUnderlyingPrice: null, exitDte: null };
+const context = { symbol: 'SPY', legList: [{ side: 'SELL', type: 'PUT', strike: 720, expiration: '2026-11-20' }], maxRisk: 456, pnlPctOfCredit: 50, pnlPctOfMaxRisk: 4.82, gapToPlan: null, entryVix: null, entryIvRank: null, entryUnderlyingPrice: null, exitDte: null };
 const plain: PerformancePanelResponse = { ...plainFixture, ...extra, daily: [], openPositions: [], closedTrades: [] };
 const illustrative: PerformancePanelResponse = { ...illustrativeFixture, ...extra, daily: [], openPositions: [], closedTrades: [] };
 const panelApi = fetchPerformancePanel as jest.MockedFunction<typeof fetchPerformancePanel>;
 const labApi = labRequest as jest.Mock;
 beforeEach(() => {
+  (fetchQuote as jest.Mock).mockImplementation(async symbol => ({ data: [{ eventSymbol: symbol, bidPrice: 725, askPrice: 726, midPrice: 725.5 }] }));
   jest.clearAllMocks(); panelApi.mockResolvedValue(plain); labApi.mockResolvedValue({ projects: [] });
   (createChart as jest.Mock).mockImplementation(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() }));
 });
@@ -82,12 +85,12 @@ test.each([['RUNNING', 'Corriendo'], ['PAUSED', 'Pausada'], ['STOPPED', 'Detenid
 // Synthetic position/calendar rows exercise v2 shape; the metrics above remain the original contract fixtures.
 test('uses API daily values, saved open legs and closed trade rows without deriving P&L', async () => {
   panelApi.mockResolvedValue({ ...plain, daily: [{ date: '2026-10-05', pnl: 45, trades: 2 }],
-    openPositions: [{ positionId: 'open', version: '1.0.5', structure: 'put_credit_spread', legs: 'SELL PUT 720 2026-11-20', entryAt: plain.asOf, entryDte: 40, currentDte: null, entryCredit: .44, lastSpreadValue: null, unrealizedPnl: null, maxRisk: 456, lastValuedAt: null, valuationProblems: ['cotización no disponible'] }],
+    openPositions: [{ symbol: 'SPY', legList: [{ side: 'SELL', type: 'PUT', strike: 720, expiration: '2026-11-20' }], positionId: 'open', version: '1.0.5', structure: 'put_credit_spread', legs: 'SELL PUT 720 2026-11-20', entryAt: plain.asOf, entryDte: 40, currentDte: null, entryCredit: .44, lastSpreadValue: null, unrealizedPnl: null, maxRisk: 456, lastValuedAt: null, valuationProblems: ['cotización no disponible'] }],
     closedTrades: [{ ...context, positionId: 'closed', version: '1.0.3', structure: 'put_credit_spread', legs: '', entryAt: plain.asOf, exitAt: plain.asOf, daysHeld: 5.7, entryCredit: .44, exitDebit: .22, exitReason: 'TAKE_PROFIT', realizedPnl: 22 }],
   });
   render(<PerformancePanel spec={plain.spec} />); await screen.findByText(/Qué falta \(/);
   expect(screen.getByTitle('2026-10-05 · 2 cierre(s)')).toHaveTextContent('+$45.00');
-  expect(screen.getByText('SELL PUT 720 2026-11-20')).toBeInTheDocument();
+  expect(screen.getByText('VENTA PUT')).toBeInTheDocument();
   expect(screen.getByText('cotización no disponible')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
   const exits = screen.getByRole('heading', { name: 'Salidas' }).closest('section')!;

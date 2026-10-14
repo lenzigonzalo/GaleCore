@@ -4,6 +4,7 @@ import { fetchPerformancePanel } from '../../api/shadow';
 import { Metric, PerformanceGroup, PerformancePanelParams, PerformancePanelResponse, ShadowInstance } from '../../types/shadow';
 import { fmtPrice, fmtTime, MARKET_TZ } from '../../utils/formatters';
 import { amount, date, days, exitLabel, metricText, missingReasons, pct, rate, readPanelError, usd } from './panelPresentation';
+import { LivePositionRow } from '../positions/PositionRow';
 import { PnlCalendar } from './PnlCalendar';
 import { InstanceState } from './InstanceState';
 import { StrategyDesign } from './StrategyDesign';
@@ -150,10 +151,7 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
         </div></section>
       </div>
       <div className="performance-visuals"><Block title="Evolución"><Curve rows={panel.curve} /></Block><Block title="Calendario"><PnlCalendar daily={panel.daily} asOf={panel.asOf} /></Block></div>
-      <Block title="Posiciones abiertas"><Table headers={['Estructura / strikes', 'Versión', 'Entrada', 'DTE entrada / actual', 'Crédito', 'Valor actual', 'Resultado abierto', 'Riesgo']}>
-        {panel.openPositions.map(position => <tr key={position.positionId}><td><strong>{position.structure}</strong><div>{position.legs}</div></td><td>{position.version}</td><td>{date(position.entryAt)}</td><td>{position.entryDte} / {value(position.currentDte, n => `${n}`)}</td><td>{amount(position.entryCredit)}</td><td title={position.valuationProblems?.join(' · ') || `Valuado: ${date(position.lastValuedAt)}`}>{value(position.lastSpreadValue)}</td><td>{value(position.unrealizedPnl, usd)}</td><td>{amount(position.maxRisk)}</td></tr>)}
-        {!panel.openPositions.length && <tr><td colSpan={8}>Sin posiciones abiertas</td></tr>}
-      </Table></Block>
+      <Block title="Posiciones abiertas">{panel.openPositions.map(position => <LivePositionRow key={position.positionId} position={{ structure: position.structure, symbol: position.symbol, expiration: position.legList[0]?.expiration ?? null, dte: position.currentDte, legs: position.legList, entryAt: position.entryAt, credit: position.entryCredit, currentValue: position.lastSpreadValue, pnl: position.unrealizedPnl, risk: position.maxRisk, reason: position.valuationProblems?.join(' · ') }} />)}{!panel.openPositions.length && <p>Sin posiciones abiertas</p>}</Block>
       <details className="performance-block performance-missing-box"><summary>Qué falta ({reasons.length})</summary><ul className="performance-missing">{reasons.map(reason => <li key={reason}>{reason}</li>)}</ul></details>
     </div>}
     {panel && !loading && !error && tab === 'Operaciones' && <div role="tabpanel" id="pane-Operaciones" aria-labelledby="tab-Operaciones">
