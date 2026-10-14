@@ -58,7 +58,7 @@ export function AccountSummary({ layout = 'compact' }: { layout?: 'compact' | 's
             border: '1px solid var(--border-dark)',
             cursor: 'pointer',
           }}
-          title="Actualizar cuenta" aria-label="Actualizar cuenta"
+          title={lastUpdate ? `Actualizar cuenta · Lectura ${fmtTime(lastUpdate)} ET` : 'Actualizar cuenta'} aria-label="Actualizar cuenta"
         >
           <RefreshCw size={14} className={loadingBalances ? 'animate-spin' : ''} />
         </button>
@@ -91,12 +91,12 @@ export function AccountSummary({ layout = 'compact' }: { layout?: 'compact' | 's
       )}
 
       {/* Timestamp */}
-      {lastUpdate && (
+      {lastUpdate && stale && (
         <div
           className="text-xs mt-2"
           style={{ color: stale ? 'var(--yellow-gc)' : 'var(--text-muted)' }}
         >
-          Lectura {fmtTime(lastUpdate)} ET{stale ? ' · actualizar' : ''}
+          Cuenta sin actualizar
         </div>
       )}
     </div>

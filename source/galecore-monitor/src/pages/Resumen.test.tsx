@@ -2,13 +2,15 @@ import React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { Resumen, Calendario } from './Resumen';
 import { useAccountStore } from '../store/useAccountStore';
+import { useMarketStore } from '../store/useMarketStore';
 jest.mock('../api/client', () => ({ __esModule: true, default: { get: jest.fn().mockResolvedValue({ data: { data: [] } }) } }));
 
-beforeEach(() => useAccountStore.getState().reset());
+beforeEach(() => { useAccountStore.getState().reset(); useMarketStore.setState({ tickers: {} }); });
 
 test('el resumen usa la cuenta del operador y no capital ni posiciones SHADOW', async () => {
   useAccountStore.getState().setBalances({ accountNumber: 'test', netLiquidatingValue: 12345, buyingPower: 2345, cash: 345 } as any);
   useAccountStore.getState().setPositions([{ symbol: 'SPY', underlyingSymbol: 'SPY', quantity: 2, quantityDirection: 'Long', closePrice: 101, averageOpenPrice: 100, multiplier: 1, instrumentType: 'Equity' }] as any);
+  useMarketStore.getState().updateQuote('SPY', { bidPrice: 100.9, askPrice: 101.1 });
   render(<Resumen onNavigate={() => {}} />);
   expect(screen.getByText('$12,345')).toBeInTheDocument();
   expect(screen.getByText('$2.00')).toBeInTheDocument();
@@ -44,6 +46,8 @@ test('concentración distribuye el valor entre tickers, no contra el capital de 
     { symbol: 'SPY', underlyingSymbol: 'SPY', instrumentType: 'Equity', quantity: 2, quantityDirection: 'Long', closePrice: 100, averageOpenPrice: 100, multiplier: 1 },
     { symbol: 'TLT', underlyingSymbol: 'TLT', instrumentType: 'Equity', quantity: 1, quantityDirection: 'Long', closePrice: 50, averageOpenPrice: 50, multiplier: 1 },
   ] as any);
+  useMarketStore.getState().updateQuote('SPY', { bidPrice: 99, askPrice: 101 });
+  useMarketStore.getState().updateQuote('TLT', { bidPrice: 49, askPrice: 51 });
   render(<Resumen onNavigate={() => {}} />);
   expect(screen.getByText('80.0%')).toBeInTheDocument();
   expect(screen.getByText('20.0%')).toBeInTheDocument();

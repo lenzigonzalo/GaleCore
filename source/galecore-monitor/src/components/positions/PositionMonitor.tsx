@@ -7,6 +7,7 @@ import { useAccountStore } from '../../store/useAccountStore';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { useMarketStore } from '../../store/useMarketStore';
 import { buildLiveSpreads } from '../../utils/spreadBuilder';
+import { buildStreamerSymbol, parseOccSymbol } from '../../utils/streamerSymbol';
 import { fetchGammaExposure, fetchIVRank } from '../../api/analytics';
 import { fetchPositions, fetchBalances } from '../../api/account';
 import { ConnectionStatus } from '../../socket/useMarketSocket';
@@ -50,10 +51,16 @@ export function PositionMonitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol,
 
   // ── Subscribe / unsubscribe leg symbols ─────────────────────────────────
   useEffect(() => {
-    if (socketStatus !== 'connected') return;
+    if (socketStatus !== 'connected') {
+      subscribedLegsRef.current.clear();
+      return;
+    }
 
     const neededLegs = new Set<string>();
-    spreads.forEach(s => Object.values(s.legSymbols).forEach(sym => neededLegs.add(sym)));
+    positions.filter(p => p.quantity !== 0 && p.instrumentType !== 'Equity').forEach(p => {
+      const option = parseOccSymbol(p.symbol);
+      if (option) neededLegs.add(buildStreamerSymbol(option.underlying, option.expiration, option.side, option.strike));
+    });
 
     // Subscribe new legs
     Array.from(neededLegs).forEach(sym => {
@@ -95,7 +102,9 @@ export function PositionMonitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol,
   // a las estrategias (CLAUDE.md) y no puede depender de ninguna. Se hizo evidente al gatear las
   // suscripciones de GEX por su switch: apagar una estrategia informativa se llevaba puesto el
   // precio de una posición abierta.
-  const underlyingsKey = Array.from(new Set(spreads.map(s => s.underlyingSymbol))).sort().join(',');
+  const underlyingsKey = Array.from(new Set(positions.filter(p => p.quantity !== 0)
+    .map(p => p.underlyingSymbol || (p.instrumentType === 'Equity' ? p.symbol : parseOccSymbol(p.symbol)?.underlying))
+    .filter((symbol): symbol is string => !!symbol))).sort().join(',');
   useEffect(() => {
     if (socketStatus !== 'connected' || !underlyingsKey) return;
     const syms = underlyingsKey.split(',');
