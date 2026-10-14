@@ -101,3 +101,18 @@ def test_one_unread_instance_makes_the_count_incomplete_not_wrong():
     rt = state.snapshot(read, IN_SESSION)["runtime"]
     assert rt["posiciones_abiertas"] == "4 (incompleto: 1 instancia(s) sin leer)"
     assert rt["problemas"] and "HTTP 500" in rt["problemas"][0]
+
+
+def test_says_whether_a_stopped_strategy_still_runs_exits_of_what_is_open():
+    """BL-023: from GaleCore's openPositionsManagement, not from reading code; absent field → «sin verificar»."""
+    fresh = (IN_SESSION - timedelta(minutes=2)).isoformat()
+    st = status([inst("i-stop", "STOPPED"), inst("i-nospec", "STOPPED", "otra"), inst("i-old", "STOPPED", "vieja")])
+    st["openPositionsManagement"] = [
+        {"instanceId": "i-stop", "exitsManaged": True, "detail": "detener sólo frena entradas nuevas"},
+        {"instanceId": "i-nospec", "exitsManaged": False, "detail": "sin la spec de la instancia"}]
+    read = reader(st, {"i-stop": four_open_one_closed(fresh), "i-nospec": [position(pid="n1", lastValuedAt=fresh)],
+                       "i-old": [position(pid="o1", lastValuedAt=fresh)]}, quote={"data": [{"midPrice": 778.5}]})
+    rows = {i["instancia"]: i for i in state.snapshot(read, IN_SESSION)["runtime"]["instancias"]}
+    assert rows["i-stop"]["salidas_de_abiertas"].startswith("se ejecutan")
+    assert rows["i-nospec"]["salidas_de_abiertas"].startswith("no se ejecutan")
+    assert rows["i-old"]["salidas_de_abiertas"] == state.UNVERIFIED

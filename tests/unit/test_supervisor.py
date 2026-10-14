@@ -319,3 +319,26 @@ def test_the_event_is_found_as_the_trader_writes_it():
     assert supervisor._event_matches("CPI 14/10", "Consumer Price Index")
     assert supervisor._event_matches("consumer price", "Consumer Price Index")
     assert not supervisor._event_matches("PPI", "Consumer Price Index")
+
+
+def test_an_alert_keeps_the_underlying_price_when_it_fires(kb, research_ref):  # noqa: F811
+    """BL-024: symbol, price and read time of the underlying stay in the alert; without a quote, None and why."""
+    doc, _ = stored(kb, research_ref)
+    base = reader(doc.spec_hash, [position(maxRisk=960.0, symbol="SPY")])
+
+    def read(path):
+        if path.startswith("/Data/Tastytrade/MarketData/Quote"):
+            return {"data": [{"midPrice": 661.25}]}
+        return base(path)
+    supervisor.scan(kb, read, IN_SESSION)
+    [alert] = supervisor.alerts(kb)
+    assert alert.dato["underlying_symbol"] == "SPY" and alert.dato["underlying_price"] == 661.25
+    assert alert.dato["underlying_read_at"] == IN_SESSION.isoformat()
+    assert any("Quote?symbol=SPY" in s for s in alert.sources)
+
+
+def test_an_alert_without_quote_declares_the_missing_price(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    supervisor.scan(kb, reader(doc.spec_hash, [position(maxRisk=960.0, symbol="SPY")], calendar_fails=True), IN_SESSION)
+    [alert] = supervisor.alerts(kb)
+    assert alert.dato["underlying_price"] is None and "sin cotización" in alert.dato["underlying_note"]

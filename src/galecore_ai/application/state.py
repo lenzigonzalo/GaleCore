@@ -88,6 +88,9 @@ def snapshot(read: supervisor.Reader, now: datetime | None = None) -> dict:
                         "frescura": {"estado": UNVERIFIED}, "cobertura": {"estado": UNVERIFIED}}
         return out
     instances, open_positions, problems = [], [], []
+    # BL-023: whether a stopped strategy (or one with the switch off) still runs the exits of what is open, as GaleCore
+    # reports it; a GaleCore without the field leaves it «sin verificar», never assumed.
+    management = {m.get("instanceId"): m for m in status.get("openPositionsManagement") or [] if isinstance(m, dict)}
     for inst in status.get("instances") or []:
         iid = inst.get("instanceId", "")
         row = {"estrategia": inst.get("specName"), "instancia": iid, "estado": inst.get("lifecycleState"),
@@ -104,6 +107,10 @@ def snapshot(read: supervisor.Reader, now: datetime | None = None) -> dict:
         positions = [p for p in positions if isinstance(p, dict)]
         opened = [p for p in positions if p.get("status") == "OPEN"]
         row["abiertas"], row["cerradas"] = len(opened), sum(p.get("status") == "CLOSED" for p in positions)
+        if opened:
+            m = management.get(iid)
+            row["salidas_de_abiertas"] = UNVERIFIED if m is None else (
+                ("se ejecutan" if m.get("exitsManaged") else "no se ejecutan") + f": {m.get('detail', '')}")
         open_positions += opened
         if row["abiertas"] or row["estado"] == "RUNNING":
             instances.append(row)

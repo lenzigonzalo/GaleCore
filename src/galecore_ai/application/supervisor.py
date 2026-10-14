@@ -290,6 +290,26 @@ def bet_limits(kb: KnowledgeBase, read: Reader) -> tuple[list[dict], list[str]]:
 # ── the pass ─────────────────────────────────────────────────────
 
 
+QUOTE = "/Data/Tastytrade/MarketData/Quote?symbol={symbol}"
+
+
+def _underlying(read: Reader, symbol: str, cache: dict[str, dict], now: datetime) -> dict:
+    """BL-024: the underlying's price when an alert fires, read once per symbol and pass. A quote GaleCore cannot give
+    is kept as None with its reason, never filled in."""
+    if symbol not in cache:
+        out: dict = {"underlying_symbol": symbol, "underlying_price": None, "underlying_read_at": now.isoformat()}
+        try:
+            rows = (read(QUOTE.format(symbol=symbol)) or {}).get("data")
+            row = rows[0] if isinstance(rows, list) and rows and isinstance(rows[0], dict) else {}
+            out["underlying_price"] = row.get("midPrice")
+            if out["underlying_price"] is None:
+                out["underlying_note"] = "GaleCore respondió sin cotización"
+        except Exception as exc:  # noqa: BLE001 - the alert still fires; the missing price is declared
+            out["underlying_note"] = f"sin cotización: {str(exc)[:100]}"
+        cache[symbol] = out
+    return cache[symbol]
+
+
 def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
     """Read GaleCore, raise the new alerts, and return {new, checked, problems}. Raises SupervisorError if unread."""
     now = now or datetime.now(UTC)
@@ -301,6 +321,7 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
         raise SupervisorError(f"GaleCore no se pudo leer: {type(exc).__name__}") from exc
     known = {a.key for a in alerts(kb)}
     new, checked, problems = [], 0, []
+    quotes: dict[str, dict] = {}
     events: list[tuple[date, str]] | None = None
     if not isinstance(instances, list):
         raise SupervisorError("GaleCore devolvió instancias sin forma de lista")
@@ -338,9 +359,12 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
                     known.add(draft["key"])   # closed before the supervisor existed: history, not news
                     continue
                 kind = draft["kind"]
+                sources = ["/App/Runtime/Instances", path]
+                if kind != AlertKind.CLOSED and pos.get("symbol"):   # BL-024: how the underlying was when it fired
+                    draft = {**draft, "dato": {**draft["dato"], **_underlying(read, pos["symbol"], quotes, now)}}
+                    sources.append(QUOTE.format(symbol=pos["symbol"]))
                 alert = Alert(id=f"{now.date().isoformat()}-{kind.value}-{draft['position_id'][:8]}",
-                              detected_at=now, options=OPTIONS[kind],
-                              sources=["/App/Runtime/Instances", path], **draft)
+                              detected_at=now, options=OPTIONS[kind], sources=sources, **draft)
                 alert = alert.model_copy(update={"content_hash": compute_document_hash(alert.hashable_content())})
                 _write(kb, alert)
                 known.add(alert.key)

@@ -684,7 +684,7 @@ def test_cli_save_approve_deploy_check(kb, research_ref):  # noqa: F811
                             stdin=json.dumps({"content": critique_content().model_dump(mode="json"),
                                               "host_provider": "claude-code", "host_model": "test"}))
     assert code == 0 and criticised["verdict"] == "seguir", criticised
-    code, page = _cli("strategy", "sheet", "--ref", saved["ref"], env=env)
+    code, page = _cli("strategy", "sheet", "--ref", saved["ref"], "--offline", env=env)   # no live GaleCore in a unit test
     assert code == 0 and page["critique"] == "seguir" and "## Parámetros" in page["markdown"]
     code, refused = _cli("strategy", "deploy-check", "--ref", saved["ref"], "--galecore-hash", saved["spec_hash"],
                          env=env)
