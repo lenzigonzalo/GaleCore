@@ -565,7 +565,7 @@ namespace DataFeed.Repositories.Migrations
 
                             t.HasCheckConstraint("ck_trader_space_key", "key ~ '^[a-z0-9][a-z0-9._-]{0,63}$'");
 
-                            t.HasCheckConstraint("ck_trader_space_kind", "kind IN ('profile','objective','convention','memory','skill','agent','data')");
+                            t.HasCheckConstraint("ck_trader_space_kind", "kind IN ('profile','objective','convention','memory','skill','agent','data','preference')");
 
                             t.HasCheckConstraint("ck_trader_space_visibility", "visibility IN ('private','shared')");
                         });

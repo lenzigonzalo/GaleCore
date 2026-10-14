@@ -2,7 +2,7 @@ namespace DataFeed.Repositories.Entities
 {
     /// <summary>
     /// Una pieza del espacio del trader (GC-0007): su perfil, un objetivo, una convención, algo de su memoria, una
-    /// skill, un agente o un dato que pone a disposición. Es de su dueño; si es <c>shared</c>, el resto del equipo la ve
+    /// skill, un agente, un dato que pone a disposición o una preferencia de la interfaz (watchlist, paneles; WS-0036). Es de su dueño; si es <c>shared</c>, el resto del equipo la ve
     /// (y no la edita). GaleCore-AI la carga al iniciar cada sesión para responder según los objetivos del trader.
     ///
     /// Una sola tabla genérica a propósito: el contenido es texto (markdown o JSON) que escribe el trader o
@@ -10,7 +10,7 @@ namespace DataFeed.Repositories.Entities
     /// </summary>
     public class TraderSpaceItem
     {
-        public static readonly string[] Kinds = { "profile", "objective", "convention", "memory", "skill", "agent", "data" };
+        public static readonly string[] Kinds = { "profile", "objective", "convention", "memory", "skill", "agent", "data", "preference" };
         public static readonly string[] Visibilities = { "private", "shared" };
         public static readonly string[] Formats = { "markdown", "json" };
         public const string KeyPattern = "^[a-z0-9][a-z0-9._-]{0,63}$";
