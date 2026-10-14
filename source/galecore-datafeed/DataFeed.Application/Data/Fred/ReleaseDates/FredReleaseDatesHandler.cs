@@ -50,15 +50,11 @@ namespace DataFeed.Application.Data.Fred.ReleaseDates
                 (rows, upstreamUrl) = await provider.GetReleaseDatesAsync(from, to, cancellationToken);
             else
             {
-                rows = new();
-                var urls = new List<string>();
-                foreach (var id in ids.OrderBy(i => i))
-                {
-                    var (part, url) = await provider.GetReleaseDatesAsync(id, from, to, cancellationToken);
-                    rows.AddRange(part);
-                    urls.Add(url);
-                }
-                upstreamUrl = string.Join(" ", urls);
+                // En paralelo: una tras otra eran ~8 s por publicación (47 s las seis, 14/10); FRED admite 120 por minuto.
+                var parts = await Task.WhenAll(ids.OrderBy(i => i)
+                    .Select(id => provider.GetReleaseDatesAsync(id, from, to, cancellationToken)));
+                rows = parts.SelectMany(p => p.Item1).ToList();
+                upstreamUrl = string.Join(" ", parts.Select(p => p.Item2));
             }
             var data = rows
                 .Where(r => ids.Count == 0 || ids.Contains(r.ReleaseId))
