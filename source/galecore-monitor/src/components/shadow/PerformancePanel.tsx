@@ -8,6 +8,8 @@ import { LivePositionRow } from '../positions/PositionRow';
 import { PnlCalendar } from './PnlCalendar';
 import { InstanceState } from './InstanceState';
 import { StrategyOverview } from './StrategyOverview';
+import { StrategyData } from './StrategyData';
+import type { AlgorithmSpec } from './CompactStrategyDesign';
 import { StrategyDesign, useStrategyDesign } from './StrategyDesign';
 import { TradeLog } from './TradeLog';
 import './PerformancePanel.css';
@@ -68,38 +70,41 @@ function Curve({ rows }: { rows: PerformancePanelResponse['curve'] }) {
     {error && <p role="alert">No se pudo mostrar la curva.</p>}
   </>;
 }
-export function PerformancePanel({ spec, instance = null, referenceCapital, runtime }: { spec: string; instance?: ShadowInstance | null; referenceCapital?: number; runtime?: React.ReactNode }) {
+export function PerformancePanel({ spec, instance = null, referenceCapital, runtime, onOpenChat, inDesign = false }: { onOpenChat?: (projectId: string) => void; inDesign?: boolean; spec: string; instance?: ShadowInstance | null; referenceCapital?: number; runtime?: React.ReactNode }) {
   const [panel, setPanel] = useState<PerformancePanelResponse | null>(null);
   const [versions, setVersions] = useState<string[]>([]);
   const [version, setVersion] = useState('');
   const [retry, setRetry] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState('Resumen');
+  const [tab, setTab] = useState(inDesign ? 'Diseño' : 'Resumen');
   const design = useStrategyDesign(spec);
   const request = useRef<{ key: string; promise: Promise<PerformancePanelResponse> } | undefined>(undefined);
   useEffect(() => {
+    if (inDesign) { setLoading(false); return; }
     let active = true;
     setError(''); setLoading(true);
     const params: PerformancePanelParams = { spec, ...(referenceCapital !== undefined ? { referenceCapital } : {}) };
     if (version) params.version = version;
-    const key = JSON.stringify([spec, referenceCapital, version, retry]);
+    const key = JSON.stringify([spec, referenceCapital, version, retry, inDesign]);
     if (request.current?.key !== key) request.current = { key, promise: fetchPerformancePanel(params) };
     request.current.promise.then(data => {
       if (active) { setPanel(data); if (!version) setVersions(data.byVersion.map(v => v.key)); }
     }).catch(e => { if (active) setError(readPanelError(e)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [spec, referenceCapital, version, retry]);
+  }, [spec, referenceCapital, version, retry, inDesign]);
   const count = (n: number): Metric => ({ value: n, reason: null });
   const integer = (n: number) => `${n}`;
   const stat = (label: string, definition: string, metric: Metric, format: (n: number) => string = fmtPrice, signed = false) => <Stat key={label} label={label} definition={definition} metric={metric} format={format} signed={signed} />;
   const minimum = panel?.notes.map(note => /mínimo (\d+)/i.exec(note)?.[1]).find(Boolean);
   return <div className="performance-panel" aria-label="Panel de rendimiento">
-    <header className="performance-heading"><div><h2>{spec}</h2><InstanceState instance={instance} /></div>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</header>
+    <header className="performance-heading"><div><h2>{spec}</h2>{inDesign ? <span className="instance-state">En diseño</span> : <InstanceState instance={instance} />}</div>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</header>
+    <div className="strategy-chat-link">{design.projectId && onOpenChat && <button onClick={() => onOpenChat(design.projectId!)}>Abrir en el chat</button>}</div>
     <StrategyOverview strategy={design.strategy} />
-    <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Operaciones', 'Diseño'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
-    {tab !== 'Diseño' && loading && <div role="status" aria-label="Cargando rendimiento" className="performance-loading"><div className="performance-metrics">{Array.from({ length: 12 }, (_, i) => <div key={i} className="performance-skeleton metric-skeleton" />)}</div><div className="performance-skeleton chart-skeleton" /></div>}
-    {tab !== 'Diseño' && error && <div role="alert"><p>{error}</p><button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
+    <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Operaciones', 'Diseño', 'Datos'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
+    {inDesign && (tab === 'Resumen' || tab === 'Operaciones') && <p>Esta estrategia está en diseño. Abrí su proyecto en el chat para prepararla para SHADOW.</p>}
+    {(tab === 'Resumen' || tab === 'Operaciones') && loading && <div role="status" aria-label="Cargando rendimiento" className="performance-loading"><div className="performance-metrics">{Array.from({ length: 12 }, (_, i) => <div key={i} className="performance-skeleton metric-skeleton" />)}</div><div className="performance-skeleton chart-skeleton" /></div>}
+    {(tab === 'Resumen' || tab === 'Operaciones') && error && <div role="alert"><p>{error}</p><button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
     {panel && !loading && !error && tab === 'Resumen' && <div role="tabpanel" id="pane-Resumen" aria-labelledby="tab-Resumen">
       {panel.smallSample && <p className="sample-notice">{minimum ? `Pocas operaciones: ${panel.tradesClosed} de ${minimum} para que Sharpe y Sortino sean confiables` : panel.notes.join(' ')}</p>}
       <div className="metric-overview" aria-label="Métricas de rendimiento">
@@ -148,6 +153,7 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
       <Block title="Régimen y versión"><div className="performance-breakdowns"><div><Groups title="VIX" rows={panel.regime.byVix} /><Groups title="IV Rank" rows={panel.regime.byIvRank} /><Groups title="Gamma" rows={panel.regime.byGamma} />{panel.regime.tradesWithoutContext > 0 && <p>{panel.regime.tradesWithoutContext} cerradas sin contexto de régimen</p>}</div><Groups title="Versión" rows={panel.byVersion} /></div></Block>
       {runtime}
     </div>}
+    {tab === 'Datos' && <div role="tabpanel" id="pane-Datos" aria-labelledby="tab-Datos"><StrategyData spec={spec} quality={(design.strategy?.current?.spec as AlgorithmSpec | undefined)?.data_quality}/></div>}
     {tab === 'Diseño' && <div role="tabpanel" id="pane-Diseño" aria-labelledby="tab-Diseño"><StrategyDesign design={design} /></div>}
   </div>;
 }

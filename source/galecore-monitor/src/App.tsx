@@ -7,19 +7,18 @@ import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
 import { Resumen } from './pages/Resumen';
 import { Macro } from './pages/Macro';
-import { Operations } from './pages/Operations';
-import type { WorkspaceMode } from './components/layout/WorkspaceNav';
 import { WorkspaceNav } from './components/layout/WorkspaceNav';
 import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
+import './components/layout/SingleWorkspace.css';
 import { Lab } from './pages/Lab';
 import { useGexStore } from './store/useGexStore';
 import { AccountSummary } from './components/account/AccountSummary';
-import { SupervisorAlerts } from './components/layout/SupervisorAlerts';
 import { ClaudeTerminal } from './components/layout/ClaudeTerminal';
 import { useTerminalStore } from './store/useTerminalStore';
-import { Home } from './pages/Home';
+import { SettingsModal, needsSetup } from './components/settings/SettingsModal';
+import { fetchSpace } from './api/space';
+import { fetchProviderAuth } from './api/terminal';
 import { Admin } from './pages/Admin';
-import { Settings } from './pages/Settings';
 import { Monitor } from './pages/Monitor';
 import { Rpf } from './pages/Rpf';
 import { Gex } from './pages/Gex';
@@ -40,24 +39,24 @@ interface DashboardProps {
 
 function Dashboard({ onLogout }: DashboardProps) {
   const [tab, setCurrentTab] = useState<Tab>(new URLSearchParams(window.location.search).has('macro') ? 'macro' : 'inicio');
-  const [mode, setMode] = useState<WorkspaceMode>('monitor');
-  const lastView = useRef<Record<WorkspaceMode, Tab>>({ monitor: 'inicio', operativa: 'operativa', lab: 'lab' });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [setup, setSetup] = useState(false);
+  const [strategiesVisited, setStrategiesVisited] = useState(false);
+  const [labVisited, setLabVisited] = useState(false);
+  const [selectedSpec, setSelectedSpec] = useState<string | null>(null);
+  const [projectRequest, setProjectRequest] = useState<{ id: string; sequence: number }>();
   const setTab = (next: Tab) => {
-    let target = mode;
-    if (next === 'inicio' || next === 'macro') target = 'monitor';
-    if (next === 'operativa' || next === 'rpf') target = 'operativa';
-    if (next === 'lab' || next === 'shadow' || next === 'agentes') target = 'lab';
-    lastView.current[target] = next;
-    setMode(target);
+    if (next === 'config') { setSetup(false); setSettingsOpen(true); return; }
+    if (next === 'rpf') { setSelectedSpec('rpf'); next = 'estrategias'; }
+    if (next === 'shadow') next = 'estrategias';
+    if (next === 'operativa') next = 'monitor';
+    if (next === 'estrategias') setStrategiesVisited(true);
+    if (next === 'lab') setLabVisited(true);
     setCurrentTab(next);
   };
-  const changeMode = (next: WorkspaceMode) => {
-    lastView.current[mode] = tab;
-    setMode(next);
-    setCurrentTab(lastView.current[next]);
-  };
-  const isLabWorkspace = mode === 'lab' && ['lab', 'estrategias'].includes(tab);
-  const [sidebarHidden, setSidebarHidden] = useState(false);
+  const openProject = (id: string) => { setProjectRequest(previous => ({ id, sequence: (previous?.sequence || 0) + 1 })); setTab('lab'); };
+  const followStrategy = (spec: string) => { setSelectedSpec(spec); setTab('estrategias'); };
+  const isLabWorkspace = tab === 'lab';
   const [watchlistOpen,setWatchlistOpen] = useState(false);
   const [watchlistWidth,setWatchlistWidth] = useState(420);
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
@@ -104,6 +103,14 @@ function Dashboard({ onLogout }: DashboardProps) {
     if (!new URLSearchParams(window.location.search).has('macro')) refreshAccount();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    let active = true;
+    Promise.all([fetchSpace(), fetchProviderAuth()]).then(([space, auth]) => {
+      if (active && needsSetup(space.items, auth.providers)) { setSetup(true); setSettingsOpen(true); }
+    }).catch(() => { /* Una lectura fallida no equivale a una cuenta sin configurar. */ });
+    return () => { active = false; };
+  }, []);
+
   const terminalOpen = useTerminalStore((t) => t.open);
 
   const { status, subscribeSymbol, unsubscribeSymbol, subscribeLeg, unsubscribeLeg, acceptSuggestion, dismissSuggestion } = useMarketSocket(tickers);
@@ -111,7 +118,7 @@ function Dashboard({ onLogout }: DashboardProps) {
 
   return (
     <div className={'workspace-shell flex flex-col has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
-        <WorkspaceHeader sidebarHidden={sidebarHidden} onSidebarToggle={() => setSidebarHidden(v => !v)} status={<StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/>} mode={mode} onModeChange={changeMode} active={tab} onChange={setTab} onLogout={onLogout}
+        <WorkspaceHeader status={<StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/>} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();
             if (!store.rules) { await store.loadRules(); store = useGexStore.getState(); }
@@ -120,9 +127,9 @@ function Dashboard({ onLogout }: DashboardProps) {
             const selected = store.pinAdHoc(symbol);
             if (!selected) throw new Error('No se pudo abrir el símbolo.');
             store.setSelectedSymbol(selected); setTab('gex');
-          }} conversationOpen={terminalOpen} onConversation={() => setTab('lab')} />
+          }} conversationOpen={terminalOpen} onConversation={() => useTerminalStore.getState().setOpen(!terminalOpen)} />
       <div className="workspace-body flex flex-1">
-      {!isLabWorkspace && !sidebarHidden && <WorkspaceNav mode={mode} active={tab} onChange={setTab} onLogout={onLogout} />}
+      <WorkspaceNav active={tab} onChange={setTab} onLogout={onLogout} />
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
 
 
@@ -131,45 +138,33 @@ function Dashboard({ onLogout }: DashboardProps) {
         <main className={"dashboard-main flex-1 " + (isLabWorkspace ? "lab-dashboard-main" : "overflow-auto")} style={{ position: 'relative' }}>
           <>
           {tab === 'inicio' && <Resumen onNavigate={setTab} />}
-          {tab === 'operativa' && <Operations onNavigate={setTab} />}
 
-          {tab !== 'macro' && <div style={{ display: tab === 'estrategias' && !isLabWorkspace ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
-            <Home onNavigate={(t) => setTab(t as Tab)} />
-          </div>}
           {tab !== 'macro' && <div style={{ display: tab === 'monitor' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
             <div className="workspace-portfolio-summary"><AccountSummary /></div>
             <Monitor subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg}
               subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />
           </div>}
-          {tab !== 'macro' && <div style={{ display: tab === 'rpf' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
-            <Rpf acceptSuggestion={acceptSuggestion} dismissSuggestion={dismissSuggestion}
-              subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg} socketStatus={socketStatus} />
-          </div>}
           {/* Se montan recién al entrar: leen la cuenta de bróker y la lista de usuarios — nada de
               eso tiene sentido traerlo en cada arranque del tablero. */}
-          {tab === 'config' && <Settings onBrokerLinked={refreshAccount} />}
           {tab === 'admin' && <Admin />}
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}
           {tab === 'gex' && <Gex externalWatchlist subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
           {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
           {tab === 'macro' && <Macro />}
-          {tab === 'shadow' && <Shadow />}
+          {strategiesVisited && <div hidden={tab !== 'estrategias'}><Shadow selectedSpec={selectedSpec} onSelectSpec={setSelectedSpec} onOpenChat={openProject} rpf={<Rpf acceptSuggestion={acceptSuggestion} dismissSuggestion={dismissSuggestion} subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg} socketStatus={socketStatus}/>} /></div>}
           {/* Inteligencia se monta al entrar: lee el adapter local de GaleCore-AI, no la API. */}
           {tab === 'inteligencia' && <Inteligencia />}
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
           </>
-          <div className="lab-page-host" hidden={!isLabWorkspace}><Lab onLogout={onLogout} sidebarHidden={sidebarHidden} onSidebarToggle={() => setSidebarHidden(v => !v)} onMonitor={() => setTab('shadow')} onNavigate={setTab} /></div>
+          {labVisited && <div className="lab-page-host" hidden={!isLabWorkspace}><Lab embedded projectRequest={projectRequest} onFollowStrategy={followStrategy} onMonitor={() => setTab('estrategias')} onNavigate={setTab}/></div>}
         </main>
-        {/* Avisos del supervisor SHADOW: sólo en el espacio de trabajo. */}
-        {!isLabWorkspace && ['rpf', 'shadow', 'agentes'].includes(tab) && <SupervisorAlerts />}
-        {/* Claude Code (P1-01c): abre el panel de la derecha; ocultarlo no corta la sesión. */}
-
       </div>
       <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
-      {mode !== 'lab' && <ClaudeTerminal />}
+      <ClaudeTerminal onOpenSettings={() => setTab('config')} />
       </div>
+      {settingsOpen && <SettingsModal wizard={setup} onClose={() => setSettingsOpen(false)} />}
     </div>
   );
 }

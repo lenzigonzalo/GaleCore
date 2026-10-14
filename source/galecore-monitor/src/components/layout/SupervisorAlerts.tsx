@@ -166,7 +166,8 @@ function AlertCard({ alert, sent, error, analysis, onAnswer }: {
   );
 }
 
-export function SupervisorAlerts() {
+export function SupervisorAlerts({ embedded = false }: { embedded?: boolean }) {
+  const [loading, setLoading] = useState(true);
   const [item, setItem] = useState<SpaceItem | null>(null);
   const [piece, setPiece] = useState<Piece>({});
   const [open, setOpen] = useState(false);
@@ -187,7 +188,7 @@ export function SupervisorAlerts() {
       }
     } catch {
       setError('No se pudieron leer los avisos.');
-    }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -221,6 +222,9 @@ export function SupervisorAlerts() {
   const alerts = piece.alerts ?? [];
   const pending = alerts.filter(a => a.needs_decision && !a.decision && !piece.responses?.[a.id]).length;
   const failed = !!piece.last_run?.failed;          // lo decide GaleCore-AI: la última revisión no leyó todo
+  if (embedded) return <section className="supervisor-dock" aria-label="Avisos del supervisor">
+    {loading ? <p role="status">Leyendo avisos…</p> : error ? <div role="alert"><p>{error}</p><button onClick={load}>Reintentar</button></div> : <><p>Última revisión: {when(piece.last_run?.at)}{failed ? ` · falló: ${piece.state_detail || piece.last_run?.result}` : ''}</p>{!alerts.length && <p>{item ? 'Sin avisos.' : 'Todavía no hay avisos del supervisor en tu espacio.'}</p>}{alerts.map(alert => <AlertCard key={alert.id} alert={alert} sent={piece.responses?.[alert.id]} error={piece.response_errors?.[alert.id]} analysis={piece.analyses?.[alert.id]} onAnswer={response => answer(alert.id, response)}/>)}</>}
+  </section>;
   if (!item) return null;
 
   return (

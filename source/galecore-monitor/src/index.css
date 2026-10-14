@@ -222,7 +222,6 @@ summary:focus-visible, [role="button"]:focus-visible {
   .workspace-heading { padding: 16px 20px; }
   .workspace-heading-actions { gap: 10px; }
   .workspace-conversation span { display: none; }
-  .workspace-terminal { position: absolute; right: 0; top: 0; bottom: 0; z-index: 60; width: min(760px, calc(100vw - 72px)) !important; min-width: 0 !important; }
 }
 @media (max-width: 700px) {
   .workspace-navigation { width: 72px; padding-inline: 8px; }

@@ -145,7 +145,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
    */
   const [alineado, setAlineado] = useState(false);
 
-  useEffect(() => { if (!externalWatchlist) loadRules(); }, [externalWatchlist, loadRules]);
+  useEffect(() => { if (!useGexStore.getState().rules) loadRules(); }, [loadRules]);
 
   // Suscribir al hub el DELTA del universo de GEX: los símbolos de su JSON que la plataforma no
   // streamea. App ya suscribe universe.tickers del config de app (SPY/QQQ); acá completamos el resto

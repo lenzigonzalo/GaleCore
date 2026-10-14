@@ -4,9 +4,9 @@ import { searchSymbols } from '../../api/marketdata';
 import { useGexStore } from '../../store/useGexStore';
 import type { SymbolSearchResult } from '../../types/api';
 import type { Tab } from './TabNav';
+import { DESTINATIONS } from './navigation';
 
-const SECTIONS: Array<[Tab, string]> = [['inicio', 'Resumen'], ['gex', 'Mercado'], ['macro', 'Macro'], ['monitor', 'Cartera'],
-  ['estrategias', 'Estrategias'], ['lab', 'Lab'], ['agentes', 'Agentes'], ['inteligencia', 'Biblioteca'], ['config', 'Configuración']];
+const SECTIONS: Array<[Tab, string]> = [...DESTINATIONS.map(({ id, label }) => [id, label] as [Tab, string]), ['config', 'Configuración']];
 
 /** Busca sólo colecciones existentes: destinos locales y símbolos de GaleCore. */
 export function WorkspaceSearch({ onNavigate, onSymbol }: { onNavigate: (tab: Tab) => void; onSymbol: (symbol: string) => Promise<void> }) {

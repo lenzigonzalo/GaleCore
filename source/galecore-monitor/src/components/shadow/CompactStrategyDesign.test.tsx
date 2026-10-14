@@ -28,7 +28,7 @@ test('algorithm view preserves structured exit thresholds and does not derive nu
   expect(within(exits).getByText('Pérdida sobre el crédito').closest('tr')).toHaveTextContent('≥175 % del créditoCerrar por stop');
   expect(within(exits).getByText('Días restantes').closest('tr')).toHaveTextContent('≤19 DTECerrar por tiempo');
   expect(screen.getByText('Tiempo entre entradas').closest('tr')).toHaveTextContent('0 minutos');
-  expect(screen.getByText('Edad de cotización configurada').closest('tr')).toHaveTextContent('15 segundos');
+  expect(screen.queryByText('Edad de cotización configurada')).not.toBeInTheDocument();
   expect(screen.queryByText('150 segundos')).not.toBeInTheDocument();
   expect(screen.getByText('Entrar según un criterio por definir').closest('tr')).toHaveTextContent('—');
 });

@@ -1,8 +1,9 @@
 import React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Gex } from './Gex';
 import { useGexStore } from '../store/useGexStore';
 import { useMarketStore } from '../store/useMarketStore';
+import { fetchGexRules } from '../api/gex';
 
 let mockEnabled = true;
 jest.mock('../api/gex', () => ({ GEX_SWITCH_ENDPOINT:'/test/switch', fetchGexRules:jest.fn(), fetchGexAnalysis:jest.fn() }));
@@ -15,9 +16,16 @@ jest.mock('../components/gex/OptionsChainList', () => ({ OptionsChainList:({onSe
 jest.mock('../components/gex/ExpiryEngine', () => ({ ExpiryEngine:()=> <div>Niveles del scope</div> }));
 
 const props = {externalWatchlist:true, subscribeSymbol:jest.fn(),unsubscribeSymbol:jest.fn(),socketStatus:'connected' as const};
+test('abrir Mercado lee las reglas aunque el dock de Watchlist nunca se haya abierto', async () => {
+  (fetchGexRules as jest.Mock).mockResolvedValue({ universe: { tickers: ['SPY','QQQ'] }, display_config: {} });
+  useGexStore.setState({ rules: null, rulesLoading: true });
+  render(<Gex {...props}/>);
+  await waitFor(() => expect(fetchGexRules).toHaveBeenCalledTimes(1));
+  expect(await screen.findByTestId('chart')).toBeInTheDocument();
+});
 beforeEach(() => {
   mockEnabled=true;
-  useGexStore.setState({tickers:['SPY','QQQ'],rulesLoading:false,rulesError:null,display:null,selectedSymbol:'SPY',selectedExpiry:{},error:{},errorCode:{},loading:{},adHocSymbols:[],cache:{
+  useGexStore.setState({rules:{} as any,tickers:['SPY','QQQ'],rulesLoading:false,rulesError:null,display:null,selectedSymbol:'SPY',selectedExpiry:{},error:{},errorCode:{},loading:{},adHocSymbols:[],cache:{
     SPY:{updatedAt:new Date(),data:{spotPrice:100,frozen:false,macroRegime:null,structureInputs:null,gex:{config:{maxDte:60},global:{netGex:2,strikes:[],expirationsIncluded:1,expirationsRequested:1},byExpiry:[{expiration:'2026-10-12',dte:2,netGex:2,gammaZeroLevel:99,callWall:102,putWall:98,callBand:null,putBand:null,expectedMove:2,atmIv:.2,strikes:[]}]}} as any}
   },fetchGex:jest.fn() as any});
   useMarketStore.setState({tickers:{SPY:{symbol:'SPY',price:100,prevClose:98,bid:99.9,ask:100.1,open:99,lastUpdate:new Date(),isStreaming:true,loading:{},error:{}} as any}});

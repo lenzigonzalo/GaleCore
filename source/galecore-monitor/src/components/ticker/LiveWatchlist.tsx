@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, RotateCcw, Bookmark, Plus, RefreshCw, CalendarDays } from 'lucide-react';
+import { X, RotateCcw, Bookmark, Plus, RefreshCw, CalendarDays, Bell } from 'lucide-react';
+import { SupervisorAlerts } from '../layout/SupervisorAlerts';
 import { CalendarDock } from '../macro/CalendarDock';
 import { TickerGrid } from './TickerGrid';
 import { SymbolSearchCard } from './SymbolSearchCard';
@@ -23,23 +24,26 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   const [searchOpen,setSearchOpen] = useState(false);
   const [message,setMessage] = useState('');
   const [refreshKey,setRefreshKey] = useState(0);
-  const [calendarMode, setCalendarMode] = useState(false);
+  const [panelMode, setPanelMode] = useState<'watchlist' | 'calendar' | 'alerts'>('watchlist');
+  const calendarMode = panelMode === 'calendar';
+  const alertsMode = panelMode === 'alerts';
+  const togglePanel = (next: typeof panelMode) => { setPanelMode(next); if (!open || panelMode === next) (onToggle ?? onClose)(); };
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{x:number; width:number} | null>(null);
   const resize = (next:number) => onWidthChange?.(Math.max(360, Math.min(720, next)));
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  useEffect(() => { if (enabled && open && !calendarMode && !rules && !rulesError) loadRules(); },[enabled,open,calendarMode,rules,rulesError,loadRules]);
+  useEffect(() => { if (enabled && open && panelMode === 'watchlist' && !rules && !rulesError) loadRules(); },[enabled,open,panelMode,rules,rulesError,loadRules]);
   const baseSymbols = Array.from(new Set([...platformTickers,...tickers]));
   const symbols = Array.from(new Set([...baseSymbols,...added,...adHocSymbols])).filter(s => !hidden.includes(s));
   const extrasKey = symbols.filter(s => !platformTickers.includes(s)).join(',');
   // Un único dueño de suscripciones extra: Gex usa externalWatchlist en este recorrido.
   useEffect(() => {
-    if (!enabled || !open || calendarMode || socketStatus !== 'connected') return;
+    if (!enabled || !open || panelMode !== 'watchlist' || socketStatus !== 'connected') return;
     const extras = extrasKey ? extrasKey.split(',') : [];
     extras.forEach(symbol => subscribeSymbol(symbol));
     return () => extras.forEach(symbol => unsubscribeSymbol(symbol));
-  },[enabled,open,calendarMode,socketStatus,extrasKey,subscribeSymbol,unsubscribeSymbol]);
+  },[enabled,open,panelMode,socketStatus,extrasKey,subscribeSymbol,unsubscribeSymbol]);
   useEffect(() => {
     if (!open || !enabled) return;
     const previous = document.activeElement as HTMLElement | null;
@@ -65,11 +69,12 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
     if (pinned) {setSelectedSymbol(pinned);setMessage('');onSelect();}
   };
   return <>
-    {enabled && <nav className="lw-tools" aria-label="Paneles de mercado"><button aria-label="Abrir watchlist" aria-expanded={open && !calendarMode} aria-controls="lw-panel" className={open && !calendarMode ? "active" : ""} onClick={() => { setCalendarMode(false); if (!open || !calendarMode) (onToggle ?? onClose)(); }}><Bookmark size={23}/></button>
-      <button aria-label="Abrir calendario" aria-expanded={open && calendarMode} aria-controls="lw-panel" className={open && calendarMode ? 'active' : ''} onClick={() => { setCalendarMode(true); if (!open || calendarMode) (onToggle ?? onClose)(); }}><CalendarDays size={23}/></button>
+    {enabled && <nav className="lw-tools" aria-label="Paneles de mercado"><button aria-label="Abrir watchlist" aria-expanded={open && panelMode === 'watchlist'} aria-controls="lw-panel" className={open && panelMode === 'watchlist' ? "active" : ""} onClick={() => togglePanel('watchlist')}><Bookmark size={23}/></button>
+      <button aria-label="Abrir calendario" aria-expanded={open && calendarMode} aria-controls="lw-panel" className={open && calendarMode ? 'active' : ''} onClick={() => togglePanel('calendar')}><CalendarDays size={23}/></button>
+      <button aria-label="Abrir avisos" aria-expanded={open && alertsMode} aria-controls="lw-panel" className={open && alertsMode ? 'active' : ''} onClick={() => togglePanel('alerts')}><Bell size={23}/></button>
       {onOpenSettings&&<div className="lw-account"><AccountMenu docked onOpenSettings={onOpenSettings} onLogout={onLogout} active={accountActive}/></div>}</nav>}
     <aside id="lw-panel" ref={panel} className="lw-drawer" style={{width}} aria-labelledby="lw-title" hidden={!open || !enabled}>
-      <div className="lw-resize" role="separator" tabIndex={0} aria-label={calendarMode ? 'Ancho de calendario' : 'Ancho de watchlist'} aria-orientation="vertical" aria-valuemin={360} aria-valuemax={720} aria-valuenow={width}
+      <div className="lw-resize" role="separator" tabIndex={0} aria-label={alertsMode ? 'Ancho de avisos' : calendarMode ? 'Ancho de calendario' : 'Ancho de watchlist'} aria-orientation="vertical" aria-valuemin={360} aria-valuemax={720} aria-valuenow={width}
         title="Arrastrá para ajustar el ancho · doble clic para restablecer"
         onPointerDown={e => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.focus(); drag.current={x:e.clientX,width}; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={e => { if (drag.current) resize(drag.current.width + drag.current.x - e.clientX); }}
@@ -77,10 +82,11 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
         onPointerCancel={() => { drag.current=null; }} onLostPointerCapture={() => { drag.current=null; }}
         onDoubleClick={() => resize(420)}
         onKeyDown={e => { if (['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) { e.preventDefault(); resize(e.key==='Home' ? 360 : e.key==='End' ? 720 : width + (e.key==='ArrowLeft' ? 20 : -20)); } }}/>
-      <header><h2 id="lw-title">{calendarMode ? 'Calendario' : 'Watchlist'}</h2><div>{!calendarMode && <><button className="lw-close" aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones" onClick={() => setRefreshKey(v => v + 1)}><RefreshCw size={18}/></button>{adHocSearch?.enabled && <button className="lw-close" aria-label="Agregar símbolo a la watchlist" onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button>}</>}<button className="lw-close" data-close aria-label={calendarMode ? 'Cerrar calendario' : 'Cerrar panel de watchlist'} onClick={onClose}><X size={21}/></button></div></header>
+      <header><h2 id="lw-title">{alertsMode ? 'Avisos' : calendarMode ? 'Calendario' : 'Watchlist'}</h2><div>{panelMode === 'watchlist' && <><button className="lw-close" aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones" onClick={() => setRefreshKey(v => v + 1)}><RefreshCw size={18}/></button>{adHocSearch?.enabled && <button className="lw-close" aria-label="Agregar símbolo a la watchlist" onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button>}</>}<button className="lw-close" data-close aria-label={alertsMode ? 'Cerrar avisos' : calendarMode ? 'Cerrar calendario' : 'Cerrar panel de watchlist'} onClick={onClose}><X size={21}/></button></div></header>
       <div className="lw-content">
         {enabled && open && calendarMode && <CalendarDock />}
-        {enabled && !calendarMode && <>
+        {enabled && alertsMode && <SupervisorAlerts embedded />}
+        {enabled && panelMode === 'watchlist' && <>
           {adHocSearch?.enabled && searchOpen && <div className="lw-search"><SymbolSearchCard compact initialOpen minQueryLength={adHocSearch.min_query_length} maxResults={adHocSearch.max_results} instrumentTypes={adHocSearch.allowed_instrument_types} onPick={pick}/></div>}
           {message && <p role="status">{message}</p>}
           <TickerGrid layout="list" active={open && enabled} refreshKey={refreshKey} symbols={symbols} selectedSymbol={selectedSymbol}

@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { labRequest, WorkspaceProject, WorkspaceState } from '../api/lab';
+import { useAppConfigStore } from '../store/useAppConfigStore';
 import { Database } from 'lucide-react';
 import { InstanceState, latestInstance } from '../components/shadow/InstanceState';
 import { PerformancePanel } from '../components/shadow/PerformancePanel';
@@ -76,8 +78,20 @@ function errorText(e: unknown): string {
   return any.message ?? String(e);
 }
 
-export function Shadow() {
-  const [spec, setSpec] = useState<string | null>(null);
+export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { selectedSpec?: string | null; onSelectSpec?: (spec: string | null) => void; onOpenChat?: (projectId: string) => void; rpf?: React.ReactNode }) {
+  const [spec, setLocalSpec] = useState<string | null>(selectedSpec ?? null);
+  const setSpec = (value: string | null) => { setLocalSpec(value); onSelectSpec?.(value); };
+  useEffect(() => { if (selectedSpec !== undefined) setLocalSpec(selectedSpec); }, [selectedSpec]);
+  const [projects, setProjects] = useState<WorkspaceProject[]>([]);
+  const [projectsError, setProjectsError] = useState('');
+  const projectsRequest = useRef<Promise<WorkspaceState> | undefined>(undefined);
+  const rpfEnabled = useAppConfigStore(s => s.strategies.some(strategy => strategy.tab === 'rpf'));
+  useEffect(() => {
+    let active = true;
+    projectsRequest.current ??= labRequest<WorkspaceState>('/workspaces');
+    projectsRequest.current.then(state => { if (active) { setProjects(state.projects.filter(p => p.type === 'strategy' && p.strategyName && !p.strategyName.startsWith('shadow_runtime_test_'))); setProjectsError(''); } }).catch(() => { if (active) setProjectsError('No se pudieron leer las estrategias en diseño.'); });
+    return () => { active = false; };
+  }, []);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
   const [rows, setRows] = useState<PerformanceSummary[]>([]);
   const [instances, setInstances] = useState<ShadowInstance[]>([]);
@@ -109,17 +123,19 @@ export function Shadow() {
   return <div className="shadow-page">
     {spec ? <>
       <button className="shadow-back" onClick={() => { setSpec(null); setRuntimeOpen(false); }}>← Estrategias</button>
-      <PerformancePanel key={spec} spec={spec} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />
+      {spec === 'rpf' && rpf ? <div className="performance-panel"><h2>RPF</h2><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
     </> : <div className="performance-panel">
-      <h2>Estrategias SHADOW</h2>
+      <h2>Estrategias</h2>
       {error && <div role="alert">{error}<button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
-      {statusError && <p role="alert">{statusError}</p>}
+      {statusError && <p role="alert">{statusError}</p>}{projectsError && <p role="alert">{projectsError}</p>}
       <div className="performance-table strategy-list" aria-busy={loading}><table><thead><tr>{headers.map(([label, definition]) => <th key={label} title={definition}>{label}</th>)}</tr></thead><tbody>
-        {loading ? Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia">{headers.map(([label]) => <td key={label}><div className="performance-skeleton row-skeleton" /></td>)}</tr>) : rows.map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} aria-label={`Abrir ${row.spec}`} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec(row.spec); } }}>
+        {loading ? Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia">{headers.map(([label]) => <td key={label}><div className="performance-skeleton row-skeleton" /></td>)}</tr>) : rows.filter(row => !row.spec.startsWith('shadow_runtime_test_')).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} aria-label={`Abrir ${row.spec}`} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec(row.spec); } }}>
           <td><button className="strategy-name" onClick={() => setSpec(row.spec)}>{row.spec}</button></td><td><InstanceState instance={latestInstance(instances, row.spec)} /></td><td>{row.tradesClosed} cerradas · {row.tradesOpen} abiertas</td>
           {cell(row.winRate, rate)}{cell(row.realizedPnl, panelUsd, true)}{cell(row.expectancy, panelUsd, true)}<td>{row.takeProfitExits} TP · {row.stopLossExits} SL · {row.otherExits} otras</td>{cell(row.avgDaysHeld, days)}{cell(row.maxDrawdown, amount)}{cell(row.worstTrade, panelUsd, true)}
         </tr>)}
-        {!loading && !error && !rows.length && <tr><td colSpan={headers.length}>Sin estrategias SHADOW</td></tr>}
+        {!loading && projects.filter(project => !rows.some(row => row.spec === project.strategyName) && project.strategyName !== 'rpf').map(project => <tr key={project.id} className="strategy-row" tabIndex={0} aria-label={`Abrir ${project.strategyName}`} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.key === 'Enter') setSpec(project.strategyName); }}><td><button className="strategy-name" onClick={() => setSpec(project.strategyName)}>{project.strategyName}</button></td><td>{latestInstance(instances, project.strategyName!) ? <InstanceState instance={latestInstance(instances, project.strategyName!)} /> : 'En diseño'}</td>{headers.slice(2).map(([label]) => <td key={label} title="Todavía no tiene operaciones SHADOW">—</td>)}</tr>)}
+        {!loading && rpf && rpfEnabled && !rows.some(row => row.spec === 'rpf') && <tr className="strategy-row" tabIndex={0} aria-label="Abrir RPF" onClick={() => setSpec('rpf')} onKeyDown={event => { if (event.key === 'Enter') setSpec('rpf'); }}><td><button className="strategy-name" onClick={() => setSpec('rpf')}>RPF</button></td><td>Monitor propio</td>{headers.slice(2).map(([label]) => <td key={label} title="Disponible en la pestaña Hoy">—</td>)}</tr>}
+        {!loading && !error && !rows.length && !projects.length && !rpfEnabled && <tr><td colSpan={headers.length}>Sin estrategias SHADOW</td></tr>}
       </tbody></table></div>
     </div>}
   </div>;

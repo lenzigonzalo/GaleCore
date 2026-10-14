@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { fetchTerminalFolders, terminalSocketUrl, TerminalFolder, TERMINAL_START_HINT } from '../../api/terminal';
+import { fetchTerminalFolders, terminalSocketUrl, TerminalFolder } from '../../api/terminal';
 import { useTerminalStore } from '../../store/useTerminalStore';
 
 /**
@@ -12,7 +12,13 @@ import { useTerminalStore } from '../../store/useTerminalStore';
  *
  * Ocultar el panel no corta la sesión; «Nueva sesión» o cambiar de carpeta sí (cierra `claude` y abre otro).
  */
-export function ClaudeTerminal() {
+export function ClaudeTerminal({ onOpenSettings }: { onOpenSettings?: () => void }) {
+  const [width, setWidth] = useState(460);
+  const [maximum, setMaximum] = useState(720);
+  const panel = useRef<HTMLElement>(null);
+  const drag = useRef<{ x: number; width: number } | null>(null);
+  const resize = (next: number) => setWidth(Math.max(260, Math.min(maximum, next)));
+
   const { open, session, start, setOpen } = useTerminalStore();
   const [folders, setFolders] = useState<TerminalFolder[] | null>(null);
   const [down, setDown] = useState(false);
@@ -20,6 +26,18 @@ export function ClaudeTerminal() {
   const [ended, setEnded] = useState(false);
   const host = useRef<HTMLDivElement>(null);
   const fitRef = useRef<FitAddon | null>(null);
+
+  useEffect(() => {
+    if (!open || !panel.current?.parentElement) return;
+    const container = panel.current.parentElement;
+    const fit = () => {
+      const nav = container.querySelector('.workspace-navigation')?.getBoundingClientRect().width || 0;
+      const max = Math.max(260, Math.min(720, container.clientWidth - nav - 280));
+      setMaximum(max); setWidth(previous => Math.max(260, Math.min(max, previous)));
+    };
+    fit(); const observer = new ResizeObserver(fit); observer.observe(container);
+    return () => observer.disconnect();
+  }, [open]);
 
   // ¿Corre el servidor local? Se pregunta cada vez que se abre el panel: pudo levantarse después.
   useEffect(() => {
@@ -47,7 +65,7 @@ export function ClaudeTerminal() {
     let alive = true;                           // el cierre del socket anterior llega tarde: no cuenta
     const term = new Terminal({
       cursorBlink: true, fontSize: 13, scrollback: 5000, convertEol: false,
-      fontFamily: 'Cascadia Mono, Consolas, Menlo, monospace',
+      fontFamily: getComputedStyle(host.current).getPropertyValue('--font-mono'),
       theme: { background: '#141414', foreground: '#e6e6e6', cursor: '#e6e6e6', selectionBackground: '#3a3a3a' },
     });
     const fit = new FitAddon();
@@ -81,9 +99,14 @@ export function ClaudeTerminal() {
     border: '1px solid var(--border-dark)', color: 'var(--text-secondary)', background: 'transparent' };
 
   return (
-    <aside className="workspace-terminal" style={{ display: open ? 'flex' : 'none', flexDirection: 'column', width: 'min(760px, 50vw)', minWidth: 360,
+    <aside ref={panel} className="workspace-terminal" style={{ position: 'relative', flexShrink: 0, display: open ? 'flex' : 'none', flexDirection: 'column', width, minWidth: 260,
       borderLeft: '1px solid var(--border-dark)', backgroundColor: '#141414' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+      <div className="terminal-resize" role="separator" tabIndex={0} aria-label="Ancho del chat dividido" aria-orientation="vertical" aria-valuemin={260} aria-valuemax={maximum} aria-valuenow={width}
+        onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); drag.current = { x: event.clientX, width }; event.currentTarget.setPointerCapture(event.pointerId); }}
+        onPointerMove={event => { if (drag.current) resize(drag.current.width + drag.current.x - event.clientX); }}
+        onPointerUp={event => { drag.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onLostPointerCapture={() => { drag.current = null; }}
+        onKeyDown={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); resize(width + (event.key === 'ArrowLeft' ? 20 : -20)); } }}/>
+      <div className="terminal-heading" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
         borderBottom: '1px solid var(--border-dark)', backgroundColor: 'var(--bg-secondary)' }}>
         <span style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>Claude Code</span>
         {folders && (
@@ -97,15 +120,13 @@ export function ClaudeTerminal() {
         {ended && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>sesión terminada</span>}
         <span style={{ flex: 1 }} />
         {!down && <button style={btn} onClick={() => start(folder)}>Nueva sesión</button>}
-        <button onClick={() => setOpen(false)} aria-label="Ocultar" title="Ocultar (la sesión sigue)"
+        <button onClick={() => setOpen(false)} aria-label="Ocultar chat dividido" title="Ocultar (la sesión sigue)"
           style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 18 }}>×</button>
       </div>
       {down ? (
         <div style={{ padding: 16, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-          La terminal local no está corriendo en esta PC. Para usarla:
-          <pre style={{ marginTop: 8, padding: 8, background: 'var(--bg-primary)', borderRadius: 6, fontSize: 12 }}>
-            {TERMINAL_START_HINT}
-          </pre>
+          <p>La terminal local no está disponible en este equipo.</p>
+          {onOpenSettings && <button style={btn} onClick={onOpenSettings}>Ver conexiones</button>}
           <button style={btn} onClick={() => { setOpen(false); setTimeout(() => setOpen(true), 0); }}>Reintentar</button>
         </div>
       ) : (

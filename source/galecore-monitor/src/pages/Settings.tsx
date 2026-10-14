@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Bot, Brain, Database, FileText, KeyRound, Lock, Plug, Scale, Target, User, Users } from 'lucide-react';
+import { BookOpen, Brain, Database, FileText, Lock, Plug, Scale, Target, User, Users } from 'lucide-react';
 import { Connections } from '../components/settings/Connections';
 import './Settings.css';
 import { LocalMcp } from '../components/settings/LocalMcp';
 import { localMcpAvailable } from '../api/localMcp';
-import { BrokerAccountCard } from '../components/account/BrokerAccountCard';
+import { ProfileForm } from '../components/settings/ProfileForm';
 import { MyPasswordCard } from '../components/account/MyPasswordCard';
 import { Markdown } from '../components/settings/Markdown';
 import { useCurrentUserStore } from '../store/useCurrentUserStore';
@@ -24,31 +24,15 @@ import {
  * Nada se muestra como JSON: cada tipo tiene su vista legible, y lo que se edita como texto se edita en markdown.
  * El estado vive en esta pantalla (no en un store de módulo): muere con la sesión, como pide la regla de la persona.
  */
-type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'perfil' | 'objetivos' | 'convenciones' | 'memoria' | 'skills'
+export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'perfil' | 'objetivos' | 'convenciones' | 'memoria' | 'skills'
   | 'agentes' | 'datos' | 'compartido';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
-  { group: 'Empezar', items: [
-    { id: 'conexiones', label: 'Conexiones', Icon: Plug },
-    { id: 'mcp-local', label: 'MCP locales', Icon: Plug },
-    { id: 'broker', label: 'Cuenta de bróker', Icon: KeyRound },
-  ] },
-  { group: 'Mi trading', items: [
-    { id: 'perfil', label: 'Perfil y límites', Icon: Scale },
-    { id: 'objetivos', label: 'Objetivos', Icon: Target },
-    { id: 'convenciones', label: 'Convenciones', Icon: FileText },
-  ] },
-  { group: 'Conocimiento', items: [
-    { id: 'memoria', label: 'Memoria', Icon: Brain },
-    { id: 'skills', label: 'Métodos y skills', Icon: BookOpen },
-    { id: 'agentes', label: 'Agentes', Icon: Bot },
-    { id: 'datos', label: 'Mis fuentes', Icon: Database },
-  ] },
-  { group: 'Cuenta y equipo', items: [
-    { id: 'usuario', label: 'Usuario', Icon: User },
-    { id: 'contrasena', label: 'Contraseña', Icon: Lock },
-    { id: 'compartido', label: 'Compartido conmigo', Icon: Users },
-  ] },
+  { group: 'General', items: [{ id: 'usuario', label: 'Usuario', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }] },
+  { group: 'Conexiones', items: [{ id: 'conexiones', label: 'Conexiones', Icon: Plug }] },
+  { group: 'Mi trading', items: [{ id: 'perfil', label: 'Perfil y límites', Icon: Scale }, { id: 'objetivos', label: 'Objetivos', Icon: Target }, { id: 'convenciones', label: 'Convenciones', Icon: FileText }] },
+  { group: 'Conocimiento', items: [{ id: 'memoria', label: 'Memoria', Icon: Brain }, { id: 'skills', label: 'Métodos y skills', Icon: BookOpen }, { id: 'datos', label: 'Fuentes', Icon: Database }] },
+  { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
 ];
 
 const SECTION_KIND: Partial<Record<Section, SpaceKind>> = {
@@ -90,6 +74,13 @@ const muted: React.CSSProperties = { fontSize: 14, color: 'var(--text-muted)' };
 
 const parse = (s: string): any => { try { return JSON.parse(s); } catch { return null; } };
 const human = (k: string) => k.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+function ReadableValue({ value }: { value: unknown }): React.ReactElement {
+  if (value === null || value === undefined) return <span>—</span>;
+  if (typeof value === 'boolean') return <span>{value ? 'Sí' : 'No'}</span>;
+  if (Array.isArray(value)) return <ul>{value.map((item, index) => <li key={index}><ReadableValue value={item}/></li>)}</ul>;
+  if (typeof value === 'object') return <dl>{Object.entries(value).map(([key, item]) => <div key={key}><dt>{human(key)}</dt><dd><ReadableValue value={item}/></dd></div>)}</dl>;
+  return <span>{String(value)}</span>;
+}
 
 function Visibility({ item }: { item: SpaceItem }) {
   const shared = item.visibility === 'shared';
@@ -103,63 +94,6 @@ function Visibility({ item }: { item: SpaceItem }) {
 
 // ── vistas legibles por tipo ────────────────────────────────────
 
-function ProfileView({ item }: { item: SpaceItem }) {
-  const p = parse(item.content) ?? {};
-  const provisional: string[] = p.provisional ?? [];
-  const cap = p.reference_capital;
-  const rows: [string, string, React.ReactNode][] = [
-    ['reference_capital', 'Capital de referencia', cap ? `${Number(cap.amount).toLocaleString('es-AR')} ${cap.currency}` : '—'],
-    ['horizon', 'Horizonte', p.horizon ?? '—'],
-    ['max_drawdown', 'Pérdida máxima tolerada', p.max_drawdown ?? '—'],
-    ['risk_limits', 'Límites de riesgo', (p.risk_limits ?? []).length ? <ul style={{ margin: 0, paddingLeft: 16 }}>{p.risk_limits.map((r: string) => <li key={r}>{r}</li>)}</ul> : '—'],
-    ['delivery_format', 'Cómo querés las respuestas', (p.delivery_format ?? []).join(' · ') || '—'],
-    ['preferred_sources', 'Fuentes preferidas', (p.preferred_sources ?? []).join(', ') || '—'],
-    ['language', 'Idioma', p.language ?? '—'],
-  ];
-  return (
-    <div style={card}>
-      <div style={{ display: 'grid', gridTemplateColumns: '210px 1fr', rowGap: 12, columnGap: 16, fontSize: 13 }}>
-        {rows.map(([key, label, value]) => (
-          <React.Fragment key={key}>
-            <div style={{ color: 'var(--text-muted)' }}>{label}</div>
-            <div style={{ color: 'var(--text-primary)' }}>
-              {value}
-              {provisional.includes(key) && <span style={{ ...muted, marginLeft: 8, color: 'var(--yellow-gc)' }}>provisorio</span>}
-            </div>
-          </React.Fragment>
-        ))}
-      </div>
-      <div style={{ ...muted, marginTop: 14 }}>
-        Versión {p.version ?? item.version}. El perfil se cambia desde el chat con GaleCore-AI («subí el límite por operación a…»)
-        y queda versionado.
-      </div>
-    </div>
-  );
-}
-
-// Un agente cancelado queda publicado como historia (GC-AI-0023): no se lista como si estuviera pausado.
-const liveAgents = (items: SpaceItem[]) => items.filter((i) => parse(i.content)?.status !== 'cancelled');
-
-function AgentView({ item }: { item: SpaceItem }) {
-  const a = parse(item.content) ?? {};
-  const what: Record<string, string> = { market_watch: 'Vigila el mercado', daily_attention: 'Briefing diario',
-    strategy_followup: 'Seguimiento de estrategia' };
-  const on = a.status === 'active';
-  return (
-    <div style={card}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{item.key}</span>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{what[a.capability] ?? a.capability}</span>
-        <span style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, color: on ? 'var(--green)' : 'var(--yellow-gc)',
-          border: `1px solid ${on ? 'var(--green-border)' : 'var(--yellow-border)'}` }}>{on ? 'Prendido' : 'Pausado'}</span>
-      </div>
-      <div style={{ ...muted, marginBottom: 8 }}>{a.schedule}{a.strategy ? ` · estrategia ${a.strategy}` : ''}</div>
-      <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{a.objective}</div>
-    </div>
-  );
-}
-
 function ConventionBody({ item }: { item: SpaceItem }) {
   const d = item.format === 'json' ? parse(item.content) : null;
   if (d && typeof d === 'object' && !Array.isArray(d)) {
@@ -168,7 +102,7 @@ function ConventionBody({ item }: { item: SpaceItem }) {
         {Object.entries(d).map(([k, v]) => (
           <React.Fragment key={k}>
             <div style={{ color: 'var(--text-muted)' }}>{human(k)}</div>
-            <div style={{ color: 'var(--text-primary)' }}>{String(v)}</div>
+            <div style={{ color: 'var(--text-primary)' }}><ReadableValue value={v}/></div>
           </React.Fragment>
         ))}
       </div>
@@ -223,14 +157,14 @@ function PieceList({ kind, items, onChanged, render }: {
     <div style={{ display: 'grid', gap: 10 }}>
       <div><button style={btn(true)} onClick={() => setEditing('__new__')}>+ Agregar</button></div>
       {editing === '__new__' && <Editor kind={kind} onDone={done} />}
-      {items.length === 0 && editing !== '__new__' && <div style={muted}>Todavía no hay nada acá.</div>}
+      {items.length === 0 && editing !== '__new__' && <div style={muted}>Todavía no hay contenido. Usá Agregar para guardar {kind === 'data' ? 'una fuente' : kind === 'objective' ? 'un objetivo' : kind === 'convention' ? 'una convención' : 'una nota'}.</div>}
       {items.map((i) => editing === i.key ? <Editor key={i.key} kind={kind} item={i} onDone={done} /> : (
         <div key={i.key} style={card}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{i.title}</span>
             <Visibility item={i} />
           </div>
-          {render ? render(i) : <Markdown text={i.content} />}
+          {render ? render(i) : i.format === 'json' ? <ConventionBody item={i}/> : <Markdown text={i.content} />}
           {i.isOwn && (
             <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
               {i.format !== 'json' && <button style={btn()} onClick={() => setEditing(i.key)}>Editar</button>}
@@ -249,7 +183,7 @@ function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged: () =>
   const [draft, setDraft] = useState('');
   const skill = items.find((i) => i.key === selected) ?? items[0];
   useEffect(() => { setDraft(skill?.content ?? ''); setTab('texto'); }, [skill?.key, skill?.content]);
-  if (!skill) return <div style={muted}>Todavía no hay skills en tu espacio.</div>;
+  if (!skill) return <div style={muted}>Todavía no hay skills en tu espacio. Creá un método desde el chat para guardarlo acá.</div>;
   const save = async () => {
     await saveSpaceItem(skill.kind, skill.key, { title: skill.title, content: draft, format: 'markdown', visibility: skill.visibility });
     onChanged();
@@ -300,14 +234,17 @@ function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged: () =>
 
 // ── página ──────────────────────────────────────────────────────
 
-export function Settings({ initial = 'conexiones', onBrokerLinked }: { initial?: Section; onBrokerLinked?: () => void }) {
+export function Settings({ initial = 'usuario', wizard = false, onClose }: { initial?: Section; wizard?: boolean; onClose?: () => void }) {
   const [section, setSection] = useState<Section>(initial);
+  const [step, setStep] = useState(0);
+  const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<SpaceItem[]>([]);
   const [shared, setShared] = useState<SpaceItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const user = useCurrentUserStore((s) => s.user);
 
   const load = useCallback(async () => {
+    setLoading(true);
     try {
       const data = await fetchSpace();
       setItems(data.items);
@@ -317,7 +254,7 @@ export function Settings({ initial = 'conexiones', onBrokerLinked }: { initial?:
       setItems([]);
       setShared([]);
       setError(e?.response?.data?.error ?? 'No se pudo leer tu espacio de GaleCore');
-    }
+    } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -329,7 +266,7 @@ export function Settings({ initial = 'conexiones', onBrokerLinked }: { initial?:
   if (section === 'mcp-local') {
     body = <LocalMcp />;
   } else if (section === 'conexiones') {
-    body = <Connections />;
+    body = <div className="settings-connections"><Connections /><section style={card}><h2>GaleCore</h2><p>{loading ? 'Comprobando conexión…' : error ? 'No disponible' : 'Conectado'}</p>{error && <><p role="alert">{error}</p><button style={btn()} onClick={load}>Reintentar</button></>}</section>{localMcpAvailable() && <section><h2>MCP</h2><LocalMcp /></section>}<section style={card}><h2>Cuenta de bróker</h2><p>Próximamente</p></section></div>;
   } else if (section === 'usuario') {
     body = (
       <div style={{ ...card, display: 'grid', gridTemplateColumns: '160px 1fr', rowGap: 10, fontSize: 13 }}>
@@ -341,14 +278,11 @@ export function Settings({ initial = 'conexiones', onBrokerLinked }: { initial?:
   } else if (section === 'contrasena') {
     body = <div style={card}><MyPasswordCard embedded /></div>;
   } else if (section === 'broker') {
-    body = <BrokerAccountCard onLinked={onBrokerLinked} />;
+    body = <p>Cuenta de bróker: próximamente.</p>;
   } else if (section === 'perfil') {
-    body = own.length ? <ProfileView item={own[0]} /> : <div style={muted}>Todavía no hay un perfil en tu espacio.</div>;
+    body = <ProfileForm item={own.find(item => item.isOwn)} onChanged={load} />;
   } else if (section === 'skills') {
     body = <SkillsView items={own} onChanged={load} />;
-  } else if (section === 'agentes') {
-    body = liveAgents(own).length ? <div style={{ display: 'grid', gap: 10 }}>{liveAgents(own).map((i) => <AgentView key={i.key} item={i} />)}</div>
-      : <div style={muted}>Todavía no tenés agentes. Pedíselo a GaleCore-AI: «armame un agente que…».</div>;
   } else if (section === 'compartido') {
     body = shared.length ? (
       <div style={{ display: 'grid', gap: 10 }}>
@@ -358,37 +292,25 @@ export function Settings({ initial = 'conexiones', onBrokerLinked }: { initial?:
               <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{i.title}</span>
               <Visibility item={i} />
             </div>
-            {i.kind === 'convention' ? <ConventionBody item={i} /> : <Markdown text={i.format === 'json' ? '' : i.content} />}
+            {i.format === 'json' ? <ConventionBody item={i} /> : <Markdown text={i.content} />}
           </div>
         ))}
       </div>
-    ) : <div style={muted}>Nadie del equipo compartió nada todavía.</div>;
+    ) : <div style={muted}>Nadie del equipo compartió contenido todavía. Se puede compartir una pieza desde Mi trading o Conocimiento.</div>;
   } else if (kind) {
     body = <PieceList kind={kind} items={own} onChanged={load}
       render={kind === 'convention' ? (i) => <ConventionBody item={i} /> : undefined} />;
   }
 
-  return (
-    <div className="settings-page">
-      <aside className="settings-nav" aria-label="Secciones de configuración">
-        <div className="settings-nav-title">Configuración</div>
-        {NAV.map((g) => (
-          <div key={g.group} style={{ marginBottom: 14 }}>
-            <div className="settings-nav-group">{g.group}</div>
-            {g.items.filter(i => i.id !== 'mcp-local' || localMcpAvailable()).map(({ id, label: l, Icon }) => (
-              <button key={id} onClick={() => setSection(id)} className={section === id ? 'is-selected' : ''} aria-current={section === id ? 'page' : undefined}>
-                <Icon size={17} />{l}
-              </button>
-            ))}
-          </div>
-        ))}
-      </aside>
-      <main className="settings-main">
-        <h1>{label}</h1>
-        {INTRO[section] && <div style={{ ...muted, fontSize: 13, marginBottom: 18 }}>{INTRO[section]}</div>}
-        {error && kind && <div style={{ ...card, color: 'var(--red-gc)', fontSize: 13, marginBottom: 12 }}>{error}</div>}
-        {!(error && kind) && body}
-      </main>
-    </div>
-  );
+  const group = NAV.find(group => group.items.some(item => item.id === section)) || NAV[0];
+  const changeStep = (next: number) => { setStep(next); setSection((['conexiones', 'perfil', 'datos'] as Section[])[next]); };
+  return <div className={'settings-page' + (wizard ? ' settings-wizard' : '')}>
+    <aside className="settings-nav" aria-label="Secciones de configuración">{wizard ? <ol>{['Conectar la IA', 'Tu perfil', 'Fuentes'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined}>{index + 1}. {label}</li>)}</ol> : NAV.map(group => <button key={group.group} onClick={() => setSection(group.items[0].id)} className={group.items.some(item => item.id === section) ? 'is-selected' : ''} aria-current={group.items.some(item => item.id === section) ? 'page' : undefined}>{group.group}</button>)}</aside>
+    <main className="settings-main"><h1>{wizard ? ['Conectar la IA', 'Tu perfil', 'Fuentes'][step] : group.group}</h1>
+      {!wizard && group.items.length > 1 && <nav className="settings-subsections" aria-label={group.group}>{group.items.map(item => <button key={item.id} aria-current={section === item.id ? 'page' : undefined} onClick={() => setSection(item.id)}>{item.label}</button>)}</nav>}
+      {INTRO[section] && <p>{INTRO[section]}</p>}
+      {kind && loading ? <p role="status">Cargando {label.toLowerCase()}…</p> : error && kind ? <div role="alert"><p>{error}</p><button style={btn()} onClick={load}>Reintentar</button></div> : body}
+      {wizard && <footer className="settings-wizard-actions"><button onClick={onClose}>Completar más tarde</button><div>{step > 0 && <button onClick={() => changeStep(step - 1)}>Anterior</button>}<button onClick={() => step < 2 ? changeStep(step + 1) : onClose?.()}>{step < 2 ? 'Siguiente' : 'Finalizar'}</button></div></footer>}
+    </main>
+  </div>;
 }

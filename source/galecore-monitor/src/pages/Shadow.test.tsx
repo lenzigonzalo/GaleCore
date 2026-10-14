@@ -4,6 +4,8 @@ import { Shadow, discardReason, pickInstance } from './Shadow';
 import * as api from '../api/shadow';
 import plainFixture from '../components/shadow/__fixtures__/panel_sin_parametros.json';
 import { fetchReferenceCapital } from '../api/space';
+import { labRequest } from '../api/lab';
+import { useAppConfigStore } from '../store/useAppConfigStore';
 import { ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics } from '../types/shadow';
 
 jest.mock('../api/shadow', () => ({
@@ -18,6 +20,8 @@ jest.mock('../api/shadow', () => ({
 
 jest.mock('../components/shadow/PerformancePanel', () => ({ PerformancePanel: ({ spec, runtime }: { spec: string; runtime: React.ReactNode }) => <div data-testid="performance-panel">{spec}{runtime}</div> }));
 
+jest.mock('../api/lab', () => ({ labRequest: jest.fn().mockResolvedValue({ projects: [], chats: [], providers: [] }) }));
+
 jest.mock('../api/space', () => ({ fetchReferenceCapital: jest.fn() }));
 const capitalApi = fetchReferenceCapital as jest.MockedFunction<typeof fetchReferenceCapital>;
 
@@ -27,7 +31,7 @@ const mocked = api as jest.Mocked<typeof api>;
 // sirven para probar cómo se muestra cada estado.
 const instance: ShadowInstance = {
   instanceId: 'i-1', deploymentId: 'd-1', versionHash: 'sha256:68add468f142baaca705', lifecycleState: 'RUNNING',
-  schedulerState: 'IDLE', specName: 'shadow_runtime_test_v1', mode: 'SHADOW',
+  schedulerState: 'IDLE', specName: 'spy_strategy', mode: 'SHADOW',
   createdAt: '2026-09-24T14:00:00Z', updatedAt: '2026-09-24T15:00:00Z',
 };
 
@@ -45,7 +49,7 @@ function status(over: Partial<ShadowStatus['persistence']> = {}, instances = [in
 
 function metrics(over: Partial<SpecVersionMetrics> = {}): SpecVersionMetrics {
   return {
-    contentHash: instance.versionHash, specName: 'shadow_runtime_test_v1', specVersion: '1.0.0', instances: 1,
+    contentHash: instance.versionHash, specName: 'spy_strategy', specVersion: '1.0.0', instances: 1,
     evaluations: 3, evaluationsPassed: 0, firstEvaluationAt: '2026-09-24T14:01:00Z', lastEvaluationAt: '2026-09-24T14:03:00Z',
     discards: { GATES_NOT_PASSED: 3 }, discardsTotal: 3, noDataBlocks: 1,
     positionsOpened: 0, positionsOpen: 0, positionsClosed: 0, openPositionsNotValued: 0,
@@ -83,6 +87,7 @@ function position(over: Partial<ShadowPosition> = {}): ShadowPosition {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  (labRequest as jest.Mock).mockResolvedValue({ projects: [], chats: [], providers: [] });
   capitalApi.mockResolvedValue(undefined);
   mocked.fetchPerformanceSummary.mockResolvedValue([summary()]);
   mocked.fetchShadowStatus.mockResolvedValue(status());
@@ -164,4 +169,22 @@ test('motivo del descarte conserva razón y gates', () => {
   expect(discardReason({ ...discard, payload: { reason: 'sin strikes' } })).toBe('sin strikes');
   expect(discardReason({ ...discard, payload: { errors: ['riesgo', 'DTE'] } })).toBe('riesgo · DTE');
   expect(discardReason({ ...discard, payload: {} })).toBe('sin motivo registrado');
+});
+
+test('incluye proyectos en diseño sin números inventados y oculta estrategias de prueba',async()=>{
+ (labRequest as jest.Mock).mockResolvedValue({projects:[{id:'draft',type:'strategy',strategyName:'idea'}, {id:'test',type:'strategy',strategyName:'shadow_runtime_test_hidden'}],chats:[],providers:[]});
+ mocked.fetchPerformanceSummary.mockResolvedValue([summary('shadow_runtime_test_hidden')]);
+ render(<Shadow/>);
+ const row=(await screen.findByRole('button',{name:'idea'})).closest('tr')!;
+ expect(row).toHaveTextContent('En diseño');expect(row).not.toHaveTextContent('$0');
+ expect(screen.queryByRole('button',{name:'shadow_runtime_test_hidden'})).not.toBeInTheDocument();
+});
+test('RPF ocupa una fila y su monitor aparece en Hoy',async()=>{
+ useAppConfigStore.setState({strategies:[{id:'rpf',tab:'rpf'} as any]});
+ render(<Shadow rpf={<div>Monitor real RPF</div>}/>);
+ fireEvent.click(await screen.findByRole('button',{name:'RPF'}));
+ expect(screen.getByRole('tab',{name:'Hoy'})).toHaveAttribute('aria-selected','true');
+ expect(screen.getByText('Monitor real RPF')).toBeInTheDocument();
+ expect(screen.queryByTestId('performance-panel')).not.toBeInTheDocument();
+ useAppConfigStore.setState({strategies:[]});
 });

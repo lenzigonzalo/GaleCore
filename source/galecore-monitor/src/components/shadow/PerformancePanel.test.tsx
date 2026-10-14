@@ -8,8 +8,10 @@ import { tradeCsv } from './TradeLog';
 import plainFixture from './__fixtures__/panel_sin_parametros.json';
 import illustrativeFixture from './__fixtures__/panel_con_parametros_ilustrativos.json';
 import { PerformancePanelResponse } from '../../types/shadow';
+import apiClient from '../../api/client';
 import { createChart } from 'lightweight-charts';
 
+jest.mock('../../api/client', () => ({ __esModule: true, default: { get: jest.fn() } }));
 jest.mock('../../api/shadow', () => ({ fetchPerformancePanel: jest.fn() }));
 jest.mock('../../api/marketdata', () => ({ fetchQuote: jest.fn() }));
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
@@ -185,4 +187,19 @@ test('a failed design can be retried without reloading the panel', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
   await screen.findByText('Esta estrategia no tiene proyecto en el Lab');
   expect(panelApi).toHaveBeenCalledTimes(1);
+});
+
+test('Datos sólo consulta su API al abrir la pestaña, incluso en una estrategia en diseño', async()=>{
+ const get=apiClient.get as jest.Mock;get.mockResolvedValue({data:{spec:plain.spec,storage:'Sin historia',lastEvaluationAt:null,items:[]}});
+ render(<PerformancePanel spec={plain.spec} inDesign/>);
+ await screen.findByText('Esta estrategia no tiene proyecto en el Lab');
+ expect(panelApi).not.toHaveBeenCalled();expect(get).not.toHaveBeenCalled();
+ fireEvent.click(screen.getByRole('tab',{name:'Datos'}));
+ expect(await screen.findByText(/Sin historia/)).toBeInTheDocument();
+ expect(get).toHaveBeenCalledTimes(1);expect(get).toHaveBeenCalledWith('/App/Runtime/Performance/Data',{params:{spec:plain.spec}});
+});
+test('Abrir en el chat usa el id del proyecto asociado, no el nombre de la spec',async()=>{
+ labApi.mockResolvedValueOnce({projects:[{id:'real-project',strategyName:plain.spec}]}).mockResolvedValueOnce({current:{purpose:'Diseño'}});
+ const open=jest.fn();render(<PerformancePanel spec={plain.spec} onOpenChat={open}/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Abrir en el chat'}));expect(open).toHaveBeenCalledWith('real-project');
 });

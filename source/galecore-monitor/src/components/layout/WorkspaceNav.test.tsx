@@ -1,41 +1,32 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { WorkspaceNav } from './WorkspaceNav';
-
 let mockAdmin = false;
-jest.mock('../../store/useCurrentUserStore', () => ({
-  useCurrentUserStore: (select: (state: { user: { isAdmin: boolean } }) => unknown) => select({ user: { isAdmin: mockAdmin } }),
-}));
-
-test('agrupa Mercado y ejecuciones en sus destinos, sin conceder administración', () => {
-  mockAdmin = false;
-  const change = jest.fn();
-  const { rerender } = render(<WorkspaceNav active="gex" onChange={change} />);
-  expect(screen.getByRole('button', { name: 'Mercado' })).toHaveAttribute('aria-current', 'page');
-  expect(screen.queryByRole('button', { name: 'Administración' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Cartera' })); expect(change).toHaveBeenCalledWith('monitor');
-  expect(screen.queryByRole('button', { name: 'Abrir conversación' })).not.toBeInTheDocument();
-  rerender(<WorkspaceNav mode="lab" active="shadow" onChange={change} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Espacio de trabajo' })); expect(change).toHaveBeenCalledWith('lab');
-  expect(screen.getByRole('button', { name: 'Seguimiento SHADOW' })).toHaveAttribute('aria-current', 'page');
-  expect(screen.getByText('Tu espacio de trabajo')).toBeInTheDocument();
-  expect(screen.getByText('Compartido')).toBeInTheDocument();
+jest.mock('../../store/useCurrentUserStore', () => ({ useCurrentUserStore: (select: any) => select({ user: { username: 'demo', isAdmin: mockAdmin } }) }));
+test('los seis destinos permanecen al entrar al chat, sin duplicados', () => {
+  mockAdmin = false; const change = jest.fn();
+  const { rerender } = render(<WorkspaceNav active="gex" onChange={change}/>);
+  for (const name of ['Inicio','Mercado','Posiciones','Estrategias','Chat','Agentes']) expect(screen.getAllByRole('button',{ name })).toHaveLength(1);
+  for (const name of ['Biblioteca','Mesa de operación','Cartera','Seguimiento RPF','Seguimiento SHADOW']) expect(screen.queryByRole('button',{ name })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{ name:'Posiciones' })); expect(change).toHaveBeenCalledWith('monitor');
+  rerender(<WorkspaceNav active="lab" onChange={change}/>);
+  expect(screen.getByRole('button',{ name:'Chat' })).toHaveAttribute('aria-current','page');
+  expect(document.getElementById('workspace-projects')).not.toHaveAttribute('hidden');
+  expect(screen.getByRole('button',{ name:'Estrategias' })).toBeInTheDocument();
 });
-
-test('conserva destinos accesibles y sólo admin ve administración', () => {
-  mockAdmin = true;
-  render(<WorkspaceNav active="config" onChange={() => {}} />);
-  expect(screen.getByRole('button', { name: 'Administración' })).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Configuración' })).toHaveAttribute('aria-current', 'page');
+test('administración sólo aparece en el menú de un admin; usuario puede salir', () => {
+  mockAdmin = true; const change=jest.fn(), logout=jest.fn();
+  const { rerender }=render(<WorkspaceNav active="inicio" onChange={change} onLogout={logout}/>);
+  expect(screen.queryByRole('menuitem',{ name:'Administración' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{ name:'Menú de usuario' }));
+  fireEvent.click(screen.getByRole('menuitem',{ name:'Administración' })); expect(change).toHaveBeenCalledWith('admin');
+  mockAdmin=false; rerender(<WorkspaceNav active="inicio" onChange={change} onLogout={logout}/>);
+  fireEvent.click(screen.getByRole('button',{ name:'Menú de usuario' }));
+  expect(screen.queryByRole('menuitem',{ name:'Administración' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('menuitem',{ name:'Salir' })); expect(logout).toHaveBeenCalled();
 });
-
-test("Macro tiene un destino propio debajo de Mercado", () => {
-  const change = jest.fn();
-  render(<WorkspaceNav active="macro" onChange={change} />);
-  const macro = screen.getByRole("button", { name: "Macro" });
-  expect(macro).toHaveAttribute("aria-current", "page");
-  fireEvent.click(macro);
-  expect(change).toHaveBeenCalledWith("macro");
-  const buttons = screen.getAllByRole("button");
-  expect(buttons.indexOf(macro)).toBe(buttons.indexOf(screen.getByRole("button", { name: "Mercado" })) + 1);
+test('Mercado también identifica la pantalla macro, sin una entrada duplicada',()=>{
+ render(<WorkspaceNav active="macro" onChange={()=>{}}/>);
+ expect(screen.getByRole('button',{name:'Mercado'})).toHaveAttribute('aria-current','page');
+ expect(screen.queryByRole('button',{name:'Macro'})).not.toBeInTheDocument();
 });

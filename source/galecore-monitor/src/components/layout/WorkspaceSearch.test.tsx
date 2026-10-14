@@ -9,7 +9,7 @@ test('busca una sección local y no promete documentos', () => {
   const navigate = jest.fn(); render(<WorkspaceSearch onNavigate={navigate} onSymbol={async () => {}} />);
   fireEvent.click(screen.getByRole('button', { name: 'Buscar en GaleCore' }));
   fireEvent.focus(screen.getByRole('textbox', { name: 'Buscar símbolo o sección' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Lab' })); expect(navigate).toHaveBeenCalledWith('lab');
+  fireEvent.click(screen.getByRole('button', { name: 'Chat' })); expect(navigate).toHaveBeenCalledWith('lab');
   expect(searchSymbols).not.toHaveBeenCalled();
 });
 test('busca símbolos reales y no oculta el error al abrirlos', async () => {
