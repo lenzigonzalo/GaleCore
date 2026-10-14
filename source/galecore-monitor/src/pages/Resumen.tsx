@@ -3,7 +3,8 @@ import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../api/client';
 import { AccountSummary } from '../components/account/AccountSummary';
 import { useAccountStore } from '../store/useAccountStore';
-import { fmtCurrency, fmtPct, fmtTime, etDateParts } from '../utils/formatters';
+import { fmtCurrency, fmtPct, etDateParts } from '../utils/formatters';
+import { useMarketStore } from '../store/useMarketStore';
 import type { Tab } from '../components/layout/TabNav';
 import { portfolioRows } from '../utils/portfolioSummary';
 import './Resumen.css';
@@ -59,7 +60,7 @@ export function Calendario({ page = false }: { page?: boolean }) {
       <strong>{month.toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</strong>
       <button aria-label="Mes siguiente" disabled={offset >= maxOffset} onClick={() => setOffset(offset + 1)}><ChevronRight size={18}/></button>
     </div></div>
-    <p className="rs-caption">Inflación · Empleo · Actividad · Fed</p>
+    <p>Inflación · Empleo · Actividad · Fed</p>
     {events === undefined && <p className="rs-empty">Cargando calendario…</p>}
     {events === null && <p className="rs-alert" role="alert">No se pudo leer el calendario macro.</p>}
     {events && events.length === 0 && <p className="rs-empty">Sin eventos en los próximos 45 días.</p>}
@@ -70,13 +71,19 @@ export function Calendario({ page = false }: { page?: boolean }) {
         {(events ?? []).filter(e => e.date === iso).map((e, i) => <div className="rs-event" key={e.name + i}>{NAMES[e.name] ?? e.name}</div>)}
       </div>)}
     </div></div>
-    <p className="rs-caption">Fechas de EE. UU. · {todayET()} a {coverageEnd} · FRED / Fed</p>
+    <p>Fechas de EE. UU. · {todayET()} a {coverageEnd} · FRED / Fed</p>
   </section>;
 }
 
 export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
   const { positions, loadingPositions, errorPositions, positionsReadAt } = useAccountStore();
-  const rows = portfolioRows(positions);
+  const tickers = useMarketStore(s => s.tickers);
+  const [, setClock] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setClock(n => n + 1), 10_000);
+    return () => clearInterval(timer);
+  }, []);
+  const rows = portfolioRows(positions, tickers);
   const ready = !!positionsReadAt && !errorPositions && !loadingPositions;
   const gross = ready && rows.every(r => r.gross !== null) ? rows.reduce((s, r) => s + r.gross!, 0) : null;
   const concentration = Array.from(rows.reduce((byTicker, row) => {
@@ -89,7 +96,7 @@ export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
     <header className="rs-top"><h1>Mi portfolio</h1><span>Cuenta real · USD</span></header>
     <div className="rs-capital"><AccountSummary layout="strip" />
       <section className="rs-exposure">
-        <div className="rs-head"><h2>Concentración por instrumento</h2><span>Valor bruto de posiciones</span></div>
+        <div className="rs-head"><h2 title="Distribución del valor bruto de las posiciones; opciones valuadas a prima, sin medir riesgo ni exposición nominal">Concentración por valor bruto</h2></div>
         {!ready || gross === null ? <p className="rs-empty">Sin valoración completa</p>
           : concentration.length === 0 ? <p className="rs-empty">Sin posiciones</p>
           : <div className="rs-concentration">{concentration.map(([ticker, value]) => {
@@ -99,27 +106,25 @@ export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
               <div className="rs-weight" aria-hidden="true"><i style={{ width: `${weight ?? 0}%` }}/></div>
             </div>;
           })}</div>}
-        <p className="rs-caption">Opciones a valor de prima · No mide riesgo ni exposición nominal</p>
       </section>
     </div>
     {expiring.length > 0 && <div className={'rs-alert' + (expiring.some(r => daysTo(r.expiry!) <= 2) ? ' urgent' : '')} role="status"><AlertTriangle size={20}/><strong>Vencimientos próximos</strong><span>{expiring.map(r => `${r.ticker} · ${daysTo(r.expiry!) < 0 ? 'vencida' : daysTo(r.expiry!) === 0 ? 'hoy' : `${daysTo(r.expiry!)} días`}`).join(' / ')}</span></div>}
     <section className="rs-panel rs-portfolio">
-      <div className="rs-head"><h2>Portfolio</h2><span>{ready ? `${rows.length} posiciones` : 'Cuenta'}{positionsReadAt && !errorPositions ? ` · Lectura ${fmtTime(positionsReadAt)} ET` : ''}</span></div>
+      <div className="rs-head"><h2>Posiciones</h2></div>
       {loadingPositions ? <p className="rs-empty">Leyendo posiciones…</p>
         : errorPositions ? <p className="rs-alert urgent" role="alert">No se pudieron leer las posiciones de la cuenta.</p>
         : !positionsReadAt ? <p className="rs-empty">Sin lectura de posiciones disponible.</p>
         : rows.length === 0 ? <p className="rs-empty">Sin posiciones en la última lectura.</p>
         : <div className="rs-table-scroll"><table className="rs-table">
-          <thead><tr><th>Ticker</th><th className="num">Cantidad</th><th>Estructura</th><th>Estrategia</th><th className="num">P&amp;L total</th><th className="num">P&amp;L %</th><th>Venc.</th></tr></thead>
+          <thead><tr><th>Ticker</th><th className="num">Cantidad</th><th>Estructura</th><th>Estrategia</th><th className="num" title="P&L abierto al punto medio bid/ask de todas las patas">P&amp;L abierto · USD</th><th className="num" title="Sobre débito o crédito neto inicial">P&amp;L %</th><th>Venc.</th></tr></thead>
           <tbody>{rows.map(r => <tr key={r.id}>
             <td><b title={r.id}>{r.ticker}</b></td><td className="num">{r.short ? '−' : ''}{r.quantity} <span>{r.unit}</span></td>
             <td><span className="rs-structure">{r.structure}</span></td><td title="La cuenta no informa una estrategia vinculada">—</td>
-            <td className={'num ' + (r.pnl === null || r.pnl === 0 ? '' : r.pnl > 0 ? 'pos' : 'neg')}>{money(r.pnl)}</td>
+            <td className={'num rs-pnl ' + (r.pnl === null || r.pnl === 0 ? '' : r.pnl > 0 ? 'pos' : 'neg')}>{r.pnl === null ? <span className="rs-price-status">{r.priceStatus ?? 'Sin precio de entrada'}</span> : money(r.pnl)}</td>
             <td className={'num ' + (r.pct === null || r.pct === 0 ? '' : r.pct > 0 ? 'pos' : 'neg')}>{r.pct === null ? '—' : fmtPct(r.pct)}</td>
             <td>{r.expiry ? <span className={'rs-expiry ' + (daysTo(r.expiry) <= 2 ? 'danger' : daysTo(r.expiry) <= 7 ? 'warning' : '')}>{new Date(`${r.expiry}T12:00:00`).toLocaleDateString('es-AR')} · {daysTo(r.expiry) < 0 ? 'vencida' : daysTo(r.expiry) === 0 ? 'hoy' : `${daysTo(r.expiry)} d`}</span> : '—'}</td>
           </tr>)}</tbody>
         </table></div>}
-      <p className="rs-caption">P&amp;L abierto a precios informados · % sobre débito o crédito neto inicial</p>
     </section>
   </div>;
 }

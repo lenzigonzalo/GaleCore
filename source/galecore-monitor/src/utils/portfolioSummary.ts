@@ -1,8 +1,10 @@
 import { PositionResponse } from '../types/api';
-import { parseOccSymbol } from './streamerSymbol';
+import { buildStreamerSymbol, legMid, parseOccSymbol } from './streamerSymbol';
+import { TickerState } from '../types/market';
+import { isStale } from './formatters';
 
 /** Sólo combina estructuras inequívocas; las demás patas se conservan individualmente. */
-export function portfolioRows(positions: PositionResponse[]) {
+export function portfolioRows(positions: PositionResponse[], tickers: Record<string, TickerState> = {}) {
   const groups = new Map<string, PositionResponse[]>();
   positions.filter(p => p.quantity !== 0).forEach(p => {
     const o = p.instrumentType === 'Equity' ? null : parseOccSymbol(p.symbol);
@@ -27,17 +29,26 @@ export function portfolioRows(positions: PositionResponse[]) {
     return (type ? [legs] : legs.map(p => [p])).map(parts => {
       const first = parts[0];
       const option = first.instrumentType === 'Equity' ? null : parseOccSymbol(first.symbol);
-      const valid = parts.every(p => Number.isFinite(p.closePrice) && Number.isFinite(p.averageOpenPrice) &&
+      const marks = parts.map(p => {
+        const o = p.instrumentType === 'Equity' ? null : parseOccSymbol(p.symbol);
+        const symbol = o ? buildStreamerSymbol(o.underlying, o.expiration, o.side, o.strike) : p.symbol;
+        const quote = tickers[symbol];
+        const mid = legMid(quote?.bid, quote?.ask);
+        return { mid: mid !== null && Number.isFinite(mid) && quote.bid <= quote.ask ? mid : null,
+          stale: isStale(quote?.lastQuoteReceivedAt ?? null) };
+      });
+      const priceStatus = marks.some(m => m.mid === null) ? 'Sin cotización' : marks.some(m => m.stale) ? 'Cotización anterior' : null;
+      const valid = parts.every(p => Number.isFinite(p.averageOpenPrice) &&
         Number.isFinite(p.quantity) && p.quantity > 0 && Number.isFinite(p.multiplier) && p.multiplier > 0 &&
         ['Long', 'Short'].includes(p.quantityDirection));
       const entry = valid ? parts.reduce((s, p) => s + (p.quantityDirection === 'Short' ? -1 : 1) * p.averageOpenPrice * p.quantity * p.multiplier, 0) : null;
-      const pnl = valid ? parts.reduce((s, p) => s + (p.quantityDirection === 'Short' ? -1 : 1) * (p.closePrice - p.averageOpenPrice) * p.quantity * p.multiplier, 0) : null;
-      const gross = valid ? parts.reduce((s, p) => s + Math.abs(p.closePrice * p.quantity * p.multiplier), 0) : null;
+      const pnl = valid && !priceStatus ? parts.reduce((s, p, i) => s + (p.quantityDirection === 'Short' ? -1 : 1) * (marks[i].mid! - p.averageOpenPrice) * p.quantity * p.multiplier, 0) : null;
+      const gross = valid && !priceStatus ? parts.reduce((s, p, i) => s + Math.abs(marks[i].mid! * p.quantity * p.multiplier), 0) : null;
       return { id: parts.map(p => p.symbol).join('|'), ticker: first.underlyingSymbol || first.symbol,
         quantity: first.quantity, unit: first.instrumentType === 'Equity' ? 'acc' : 'ctos',
         structure: type ?? (first.instrumentType === 'Equity' ? 'ACC' : option?.side === 'P' ? 'PUT' : option?.side === 'C' ? 'CALL' : first.instrumentType),
         short: !type && first.quantityDirection === 'Short', expiry: option?.expiration,
-        pnl, pct: pnl !== null && entry ? pnl / Math.abs(entry) * 100 : null, gross };
+        pnl, pct: pnl !== null && entry ? pnl / Math.abs(entry) * 100 : null, gross, priceStatus };
     });
   });
 }

@@ -7,6 +7,7 @@ export interface TickerState {
   ask: number;
   volume?: number;
   lastUpdate: Date | null;
+  lastQuoteReceivedAt?: Date;
   isStreaming: boolean;
   lastTradeReceivedAt?: Date; // recepción del último trade válido; suscripción no implica precio reciente
   extendedTradingHours?: boolean;

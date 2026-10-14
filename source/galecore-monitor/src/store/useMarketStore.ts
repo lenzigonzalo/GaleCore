@@ -66,6 +66,7 @@ export const useMarketStore = create<MarketStore>((set) => ({
           ...(s.tickers[symbol] ?? emptyTicker(symbol)),
           bid: data.bidPrice,
           ask: data.askPrice,
+          lastQuoteReceivedAt: new Date(),
           ...(data.volume != null && { volume: data.volume }),
           lastUpdate: new Date(),
         },

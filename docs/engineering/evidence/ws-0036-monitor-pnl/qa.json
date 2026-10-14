@@ -1,0 +1,16 @@
+{
+  "readAt": "2026-10-14T17:19:45.360598+00:00",
+  "url": "http://localhost:5173",
+  "table": "Ticker\tCantidad\tEstructura\tEstrategia\tP&L abierto · USD\tP&L %\tVenc.\nSPY\t1 ctos\tPCS\t—\t-$5.50\t-3.93%\t20/11/2026 · 37 d",
+  "removedTexts": "PASS",
+  "Operativa": [
+    "Todo lo que tenés en juego.",
+    "Posiciones abiertas",
+    "Atención y gestión",
+    "Órdenes y actividad",
+    "¿Qué querés investigar?"
+  ],
+  "Lab": [
+    "¿Qué querés investigar?"
+  ]
+}
