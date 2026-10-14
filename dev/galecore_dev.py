@@ -194,6 +194,8 @@ def api_env(env: dict) -> dict:
         "Runtime__Persistence__Enabled": "true",
         **({"Security__TokenProtectionKey": env["token_protection_key"]}
            if env.get("token_protection_key") else {}),
+        # Cuenta que usan los procesos sin usuario (loop de RPF) para leer posiciones y saldos; en env.json, fuera de git (WS-0036).
+        **({"Tastytrade__AccountNumber": env["rpf_account_number"]} if env.get("rpf_account_number") else {}),
         # La clave de FRED del entorno del usuario (calendario macro, GC-0006); nunca se escribe en un archivo.
         **({"FredApi__Key": os.environ["FRED_API_KEY"]} if os.environ.get("FRED_API_KEY") else {}),
     }

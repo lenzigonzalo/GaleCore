@@ -27,8 +27,12 @@ public class StructureComparerTests
             new() { ExpirationDate = "2026-11-03", ExpirationType = "Weekly", DaysToExpiration = 40 },
         });
 
-        public Task<GammaExposureResponse?> GetGammaExposureAsync(GammaExposureRequest request, CancellationToken ct) =>
-            Task.FromResult<GammaExposureResponse?>(new()
+        public int GexCalls;
+
+        public Task<GammaExposureResponse?> GetGammaExposureAsync(GammaExposureRequest request, CancellationToken ct)
+        {
+            GexCalls++;
+            return Task.FromResult<GammaExposureResponse?>(new()
             {
                 Symbol = "SPY", Spot = 767.7, Expiration = "2026-11-03", DTE = 40, ExpirationType = "Weekly",
                 Strikes = new()
@@ -39,6 +43,7 @@ public class StructureComparerTests
                     new() { Strike = 805, CallDelta = 0.13, CallIV = 0.13, CallStreamerSymbol = ".SPY261103C805" },
                 },
             });
+        }
 
         public Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
             => Task.FromResult(Quotes.GetValueOrDefault(streamerSymbol));
@@ -83,6 +88,14 @@ public class StructureComparerTests
 
         Assert.Null(wait.Credit);
         Assert.True(wait.ExecutableToday);
+    }
+
+    [Fact]
+    public async Task The_greeks_of_the_expiration_are_read_once_per_comparison()
+    {
+        var source = new FakeSource();
+        await Compare(source);
+        Assert.Equal(1, source.GexCalls);   // PCS, CCS e IV de las patas: antes, tres GEX de 9-24 s cada uno
     }
 
     [Fact]
