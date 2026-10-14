@@ -280,4 +280,56 @@ public class ShadowPanelTests
         Assert.Equal(4, rep.TradesClosed);
         Assert.Equal("SHADOW", rep.Mode);
     }
+
+    // WS-0036 — calendario, abiertas y cerradas para el panel del front.
+
+    [Fact]
+    public void Daily_GroupsByExitDayInNewYork_AndFollowsThePeriod()
+    {
+        // 01:30 UTC del 3/9 son las 21:30 ET del 2/9: cuenta para el 2/9, junto con la salida de ese día.
+        var late = Closed(0.44, 0.22, "TAKE_PROFIT", 0) with { ExitAt = new DateTime(2026, 9, 3, 1, 30, 0, DateTimeKind.Utc) };
+        var rep = Panel(null, T0.AddDays(10), Version("1",
+            Closed(0.44, 0.22, "TAKE_PROFIT", 1), late, Closed(0.44, 1.50, "STOP_LOSS", 3)));
+
+        Assert.Equal(new[] { "2026-09-02", "2026-09-04" }, rep.Daily.Select(d => d.Date));
+        Assert.Equal(44, rep.Daily[0].Pnl);
+        Assert.Equal(2, rep.Daily[0].Trades);
+        Assert.Equal(-106, rep.Daily[1].Pnl);
+
+        var period = Panel(new PanelOptions { From = T0.AddDays(2.5) }, T0.AddDays(10), Version("1",
+            Closed(0.44, 0.22, "TAKE_PROFIT", 1), Closed(0.44, 1.50, "STOP_LOSS", 3)));
+        Assert.Single(period.Daily);
+        Assert.Equal("2026-09-04", period.Daily[0].Date);
+    }
+
+    [Fact]
+    public void OpenAndClosed_AreListedWithTheirVersion_AndFollowTheVersionFilter()
+    {
+        var v1 = Version("1", Closed(0.44, 0.22, "TAKE_PROFIT", 1), Closed(0.44, 1.50, "STOP_LOSS", 3), Open());
+        var v2 = Version("2", Closed(0.44, 0.22, "TAKE_PROFIT", 2), Open() with { UnrealizedPnl = 12, CurrentDte = 30 });
+
+        var all = Panel(null, T0.AddDays(10), v1, v2);
+        Assert.Equal(2, all.OpenPositions.Count);
+        Assert.Equal(new[] { "STOP_LOSS", "TAKE_PROFIT", "TAKE_PROFIT" }, all.ClosedTrades.Select(t => t.ExitReason));
+        Assert.Equal(new[] { "1", "2", "1" }, all.ClosedTrades.Select(t => t.Version));
+        Assert.Equal(-106, all.ClosedTrades[0].RealizedPnl);
+        Assert.Equal(3, all.ClosedTrades[0].DaysHeld);
+
+        var only2 = Panel(new PanelOptions { Version = "2" }, T0.AddDays(10), v1, v2);
+        var open = Assert.Single(only2.OpenPositions);
+        Assert.Equal("2", open.Version);
+        Assert.Equal(12, open.UnrealizedPnl);
+        Assert.Equal(30, open.CurrentDte);
+        Assert.Single(only2.ClosedTrades);
+        Assert.Single(only2.Daily);
+    }
+
+    [Fact]
+    public void NoClosedTrades_DailyAndClosedAreEmpty()
+    {
+        var rep = Panel(null, T0.AddDays(5), Version("1", Open()));
+        Assert.Empty(rep.Daily);
+        Assert.Empty(rep.ClosedTrades);
+        Assert.Single(rep.OpenPositions);
+    }
 }

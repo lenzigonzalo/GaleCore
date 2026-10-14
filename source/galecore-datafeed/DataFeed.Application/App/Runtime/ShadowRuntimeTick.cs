@@ -25,7 +25,7 @@ namespace DataFeed.Application.App.Runtime
             return local.TimeOfDay >= start && local.TimeOfDay < end;
         }
 
-        private static bool TryZone(string id, out TimeZoneInfo zone)
+        internal static bool TryZone(string id, out TimeZoneInfo zone)
         {
             // Windows sin ICU no conoce los ids IANA ("America/New_York"): se prueba el id de Windows equivalente.
             foreach (var candidate in new[] { id, TimeZoneInfo.TryConvertIanaIdToWindowsId(id, out var win) ? win : null })

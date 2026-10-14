@@ -109,6 +109,48 @@ namespace DataFeed.Application.App.Runtime
         public string NotIncluded { get; init; } = "comisiones y costos reales de la cuenta: SHADOW no los conoce";
     }
 
+    /// <summary>Resultado realizado de un día de salida (fecha ET), para el calendario.</summary>
+    public record DailyPnl
+    {
+        public string Date { get; init; } = "";
+        public double Pnl { get; init; }
+        public int Trades { get; init; }
+    }
+
+    /// <summary>Posición SHADOW abierta tal como está guardada (última valuación con precios reales).</summary>
+    public record OpenPositionRow
+    {
+        public string PositionId { get; init; } = "";
+        public string Version { get; init; } = "";
+        public string Structure { get; init; } = "";
+        public string Legs { get; init; } = "";
+        public DateTime EntryAt { get; init; }
+        public int EntryDte { get; init; }
+        public int? CurrentDte { get; init; }
+        public double EntryCredit { get; init; }
+        public double? LastSpreadValue { get; init; }
+        public double? UnrealizedPnl { get; init; }
+        public double MaxRisk { get; init; }
+        public DateTime? LastValuedAt { get; init; }
+        public List<string>? ValuationProblems { get; init; }
+    }
+
+    /// <summary>Operación SHADOW cerrada del período, con su motivo de salida.</summary>
+    public record ClosedTradeRow
+    {
+        public string PositionId { get; init; } = "";
+        public string Version { get; init; } = "";
+        public string Structure { get; init; } = "";
+        public string Legs { get; init; } = "";
+        public DateTime EntryAt { get; init; }
+        public DateTime? ExitAt { get; init; }
+        public double? DaysHeld { get; init; }
+        public double EntryCredit { get; init; }
+        public double? ExitDebit { get; init; }
+        public string? ExitReason { get; init; }
+        public double? RealizedPnl { get; init; }
+    }
+
     public record PanelReport
     {
         public DateTime AsOf { get; init; }
@@ -127,6 +169,12 @@ namespace DataFeed.Application.App.Runtime
         public List<string> Notes { get; init; } = new();
 
         public List<CurvePoint> Curve { get; init; } = new();
+        /// <summary>Realizado por día de salida en hora de Nueva York; sólo días con cierres.</summary>
+        public List<DailyPnl> Daily { get; init; } = new();
+        /// <summary>Abiertas de la spec (todas sus instancias; el período no las filtra, igual que TradesOpen).</summary>
+        public List<OpenPositionRow> OpenPositions { get; init; } = new();
+        /// <summary>Cerradas del período, la más reciente primero.</summary>
+        public List<ClosedTradeRow> ClosedTrades { get; init; } = new();
         public Metric RealizedPnl { get; init; } = Metric.None("");
         public Metric UnrealizedPnl { get; init; } = Metric.None("");
         public Metric MaxDrawdown { get; init; } = Metric.None("");
@@ -166,7 +214,9 @@ namespace DataFeed.Application.App.Runtime
             var trades = perf.Trades
                 .Where(t => (o.From == null || t.ExitAt >= o.From) && (o.To == null || t.ExitAt <= o.To))
                 .OrderBy(t => t.ExitAt).ToList();
-            var open = recs.SelectMany(r => r.Positions).Where(p => p.Status == "OPEN").ToList();
+            var openRows = recs.SelectMany(r => r.Positions.Where(p => p.Status == "OPEN").Select(p => (r.SpecVersion, p)))
+                .OrderByDescending(x => x.p.EntryAt).ToList();
+            var open = openRows.Select(x => x.p).ToList();
             var pnls = trades.Select(t => t.RealizedPnl!.Value).ToList();
             var notes = new List<string>();
 
@@ -193,6 +243,21 @@ namespace DataFeed.Application.App.Runtime
                 SmallSample = small,
                 Notes = notes,
                 Curve = curve,
+                Daily = Daily(trades),
+                OpenPositions = openRows.Select(x => new OpenPositionRow
+                {
+                    PositionId = x.p.PositionId, Version = x.SpecVersion, Structure = x.p.Structure,
+                    Legs = ShadowPerformance.LegsText(x.p), EntryAt = x.p.EntryAt, EntryDte = x.p.EntryDte,
+                    CurrentDte = x.p.CurrentDte, EntryCredit = x.p.EntryCredit, LastSpreadValue = x.p.LastSpreadValue,
+                    UnrealizedPnl = x.p.UnrealizedPnl, MaxRisk = x.p.MaxRisk, LastValuedAt = x.p.LastValuedAt,
+                    ValuationProblems = x.p.ValuationProblems,
+                }).ToList(),
+                ClosedTrades = trades.AsEnumerable().Reverse().Select(t => new ClosedTradeRow
+                {
+                    PositionId = t.PositionId, Version = t.SpecVersion, Structure = t.Structure, Legs = t.Legs,
+                    EntryAt = t.EntryAt, ExitAt = t.ExitAt, DaysHeld = t.DaysHeld, EntryCredit = t.EntryCredit,
+                    ExitDebit = t.ExitDebit, ExitReason = t.ExitReason, RealizedPnl = t.RealizedPnl,
+                }).ToList(),
                 RealizedPnl = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(pnls.Sum()),
                 UnrealizedPnl = Unrealized(open),
                 MaxDrawdown = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(curve.Max(c => c.Drawdown)),
@@ -222,6 +287,19 @@ namespace DataFeed.Application.App.Runtime
                 Hypothesis = Hypothesis(trades, recs, o, now),
                 Execution = Execution(trades, positions),
             };
+        }
+
+        // Día de salida en hora de Nueva York: una salida 21:30 ET es de ese día aunque en UTC ya sea el siguiente.
+        private static List<DailyPnl> Daily(List<TradeReview> trades)
+        {
+            ShadowSession.TryZone("America/New_York", out var et);
+            return trades.Where(t => t.ExitAt != null)
+                .GroupBy(t => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(t.ExitAt!.Value, DateTimeKind.Utc), et).Date)
+                .OrderBy(g => g.Key)
+                .Select(g => new DailyPnl
+                {
+                    Date = g.Key.ToString("yyyy-MM-dd"), Pnl = Math.Round(g.Sum(t => t.RealizedPnl!.Value), 2), Trades = g.Count(),
+                }).ToList();
         }
 
         private static Metric DaysHeld(List<TradeReview> trades)

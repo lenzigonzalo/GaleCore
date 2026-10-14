@@ -29,6 +29,9 @@ Todo número es `Metric = { value, reason }`. **Si no hay valor, `value` es `nul
 | `tradesClosed`, `tradesOpen`, `firstExitAt`, `lastExitAt` | Muestra. |
 | `smallSample`, `notes[]` | Avisos en texto: «Muestra chica…», «Sin operaciones cerradas…». Mostrarlos. |
 | `curve[]` | `{ at, pnl, cumulative, drawdown }` por instante de salida. |
+| `daily[]` | `{ date, pnl, trades }`: realizado por día de salida en hora de Nueva York (`yyyy-MM-dd`), sólo días con cierres; sigue `version`, `from`, `to` (WS-0036). |
+| `openPositions[]` | Abiertas de la spec, todas las instancias, la más nueva primero: `{ positionId, version, structure, legs, entryAt, entryDte, currentDte, entryCredit, lastSpreadValue, unrealizedPnl, maxRisk, lastValuedAt, valuationProblems }`. Sigue `version`; el período no las filtra (como `tradesOpen`). `legs` es texto («SELL PUT 580 2026-11-20 / BUY PUT 575 2026-11-20»). |
+| `closedTrades[]` | Cerradas del período, la más reciente primero: `{ positionId, version, structure, legs, entryAt, exitAt, daysHeld, entryCredit, exitDebit, exitReason, realizedPnl }`. |
 | `realizedPnl`, `unrealizedPnl`, `maxDrawdown` | Resultado y máxima caída. |
 | `winRate` (0–1), `avgWin`, `avgLoss`, `profitFactor`, `expectancy` | Por operación cerrada. |
 | `sharpe`, `sortino` | **Por operación**, no anualizados: media/desvío del resultado en % del riesgo máximo. Requieren ≥ 30 cerradas. |

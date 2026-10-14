@@ -112,6 +112,10 @@ namespace DataFeed.Application.App.Runtime
 
     public static class ShadowPerformance
     {
+        /// <summary>Patas en texto: «SELL PUT 580 2026-11-20 / BUY PUT 575 2026-11-20».</summary>
+        public static string LegsText(ShadowPosition p) =>
+            string.Join(" / ", p.Legs.Select(l => $"{l.Side} {l.Type} {l.Strike:0.##} {l.Expiration}".Trim()));
+
         public static PerformanceReport Compute(IEnumerable<SpecVersionRecord> records,
             IReadOnlyDictionary<string, DeterministicExits> exitsByHash, double? referenceCapital, DateTime now,
             DateTime? from = null)
@@ -176,7 +180,7 @@ namespace DataFeed.Application.App.Runtime
                 SpecVersion = r.SpecVersion,
                 Symbol = p.Symbol,
                 Structure = p.Structure,
-                Legs = string.Join(" / ", p.Legs.Select(l => $"{l.Side} {l.Type} {l.Strike:0.##} {l.Expiration}".Trim())),
+                Legs = LegsText(p),
                 EntryAt = p.EntryAt,
                 ExitAt = p.ExitAt,
                 DaysHeld = p.ExitAt == null ? null : Math.Round((p.ExitAt.Value - p.EntryAt).TotalDays, 1),
