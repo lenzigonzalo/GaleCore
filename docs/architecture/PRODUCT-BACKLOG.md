@@ -2507,3 +2507,15 @@ Construir o abrir una posición de opciones y ver cómo cambian riesgo y resulta
 comparar alternativas.
 
 **Aceptación:** distingue vencimiento de valuación previa, declara supuestos y no confunde simulación con pronóstico.
+
+## BL-029 — Limpieza de datos de prueba antes de lanzar
+
+**Origen:** owner, 14/10 (WS-0036): «después vamos a tener que borrar todo lo de test, chats también». Se hace al final,
+antes de lanzar, porque faltan más pruebas.
+
+Borrar lo creado para probar: estrategias e instancias SHADOW de prueba (`shadow_runtime_test_v1`, `shadow_runtime_test_v2`
+y las que se sumen), sus posiciones y evaluaciones; chats y proyectos de prueba del Lab; restos de casos del harness
+(`knowledge/`, evidencias de prueba que no sean registro).
+
+**Aceptación:** inventario de lo que se borra revisado por el owner antes de borrar; en Dev primero; nada real ni de
+SHADOW productivo; producción sólo con aprobación explícita.
