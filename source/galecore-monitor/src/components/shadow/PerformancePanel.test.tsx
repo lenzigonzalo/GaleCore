@@ -6,10 +6,12 @@ import { fetchReferenceCapital } from '../../api/space';
 import plainFixture from './__fixtures__/panel_sin_parametros.json';
 import illustrativeFixture from './__fixtures__/panel_con_parametros_ilustrativos.json';
 import { PerformancePanelResponse } from '../../types/shadow';
+import { createChart } from 'lightweight-charts';
 
 jest.mock('../../api/shadow', () => ({ fetchPerformancePanel: jest.fn(), fetchShadowStatus: jest.fn() }));
 jest.mock('../../api/space', () => ({ fetchReferenceCapital: jest.fn() }));
 jest.mock('lightweight-charts', () => ({ ColorType: { Solid: 'solid' }, LineSeries: {}, AreaSeries: {},
+  TickMarkType: { Year: 0, Month: 1, DayOfMonth: 2, Time: 3, TimeWithSeconds: 4 },
   createChart: jest.fn(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() })),
 }));
 const plain: PerformancePanelResponse = { ...plainFixture, daily: [], openPositions: [], closedTrades: [] };
@@ -19,6 +21,7 @@ const capitalApi = fetchReferenceCapital as jest.MockedFunction<typeof fetchRefe
 const statusApi = fetchShadowStatus as jest.MockedFunction<typeof fetchShadowStatus>;
 beforeEach(() => {
   jest.clearAllMocks(); panelApi.mockResolvedValue(plain); capitalApi.mockResolvedValue(undefined);
+  (createChart as jest.Mock).mockImplementation(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() }));
   statusApi.mockResolvedValue({ instances: [] } as any);
 });
 test('shows five key figures, n/d in the table and deduplicated reasons only in Qué falta', async () => {
@@ -28,7 +31,7 @@ test('shows five key figures, n/d in the table and deduplicated reasons only in 
   expect(within(box).getByText(plain.sharpe.reason!)).toBeInTheDocument();
   expect(screen.getAllByText(plain.sharpe.reason!)).toHaveLength(1);
   expect(within(box).getByText(plain.avgLoss.reason!)).toBeInTheDocument();
-  expect(within(box).getByText('sin dato')).toBeInTheDocument();
+  expect(within(box).queryByText('sin dato')).not.toBeInTheDocument();
   expect(screen.getByText('Pérdida promedio').closest('tr')).toHaveTextContent('n/d');
   expect(document.querySelectorAll('.performance-key-numbers .performance-stat')).toHaveLength(5);
   expect(screen.queryByText('Datos de la curva')).not.toBeInTheDocument();
@@ -94,8 +97,32 @@ test('uses API daily values, saved open legs and closed trade rows without deriv
   expect(screen.getByText('SELL PUT 720 2026-11-20')).toBeInTheDocument();
   expect(screen.getByText('cotización no disponible')).toBeInTheDocument();
   const exits = screen.getByRole('heading', { name: 'Salidas' }).closest('section')!;
-  expect(within(exits).getByRole('meter', { name: 'Salidas TAKE_PROFIT' })).toHaveAttribute('value', '2');
+  expect(within(exits).getByRole('meter', { name: 'Salidas Toma de ganancia' })).toHaveAttribute('value', '2');
   expect(within(exits).getByText('+$22.00')).toBeInTheDocument();
   fireEvent.click(screen.getByLabelText('Mes siguiente')); expect(screen.queryByTitle('2026-10-05 · 2 cierre(s)')).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText('Mes anterior')); expect(screen.getByTitle('2026-10-05 · 2 cierre(s)')).toBeInTheDocument();
+});
+
+test('chart ticks use ET with DST and leave mouse wheel scrolling to the page', async () => {
+  render(<PerformancePanel spec={plain.spec} />);
+  await waitFor(() => expect(createChart).toHaveBeenCalled());
+  const options = (createChart as jest.Mock).mock.calls[0][1];
+  const tick = options.timeScale.tickMarkFormatter;
+  expect(tick(Date.parse('2026-10-05T19:02:00Z') / 1000, 3)).toBe('15:02 ET');
+  expect(tick(Date.parse('2026-12-05T19:02:00Z') / 1000, 3)).toBe('14:02 ET');
+  expect(tick(Date.parse('2026-10-05T19:02:51Z') / 1000, 4)).toBe('15:02:51 ET');
+  expect(tick(Date.parse('2026-10-06T01:02:00Z') / 1000, 2)).toBe(new Date('2026-10-06T01:02:00Z').toLocaleDateString('es-AR', { timeZone: 'America/New_York', day: 'numeric', month: 'short' }));
+  expect(options.handleScroll.mouseWheel).toBe(false);
+  expect(options.handleScale.mouseWheel).toBe(false);
+});
+
+test.each([['TAKE_PROFIT', 'Toma de ganancia'], ['STOP_LOSS', 'Stop loss'], ['DTE_EXIT', 'Por vencimiento/tiempo'], ['TIME_EXIT', 'Por vencimiento/tiempo'], ['MANUAL', 'MANUAL']])('exit reason %s is shown as %s in both bars and trades', async (reason, label) => {
+  panelApi.mockResolvedValue({ ...plain, byExitRule: [{ ...plain.byExitRule[0], key: reason }],
+    closedTrades: [{ positionId: 'closed', version: '1.0.3', structure: 'put_credit_spread', legs: '', entryAt: plain.asOf, exitAt: plain.asOf, daysHeld: 5.7, entryCredit: .44, exitDebit: .22, exitReason: reason, realizedPnl: 22 }],
+  });
+  render(<PerformancePanel spec={plain.spec} />);
+  await screen.findByRole('heading', { name: 'Qué falta' });
+  const exits = screen.getByRole('heading', { name: 'Salidas' }).closest('section')!;
+  expect(within(exits).getAllByText(label)).toHaveLength(2);
+  expect(within(exits).getByRole('meter', { name: `Salidas ${label}` })).toBeInTheDocument();
 });

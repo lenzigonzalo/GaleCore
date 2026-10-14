@@ -19,3 +19,7 @@ Reproducir: `python docs/engineering/evidence/gc-0036-panel-v2/capture.py` con P
 
 Revisión independiente: APPROVE, sin hallazgos ([review](../../reviews/WS-0036-panel-v2-codex.md)).
 Fuera: navegación nueva, Eventos y rendimiento real. Pendiente aceptación del owner; sin VALIDATED/CLOSED.
+
+Ajustes del owner: `cd49bd4` integrado por fast-forward; eje ET con DST, salidas en castellano,
+reasons vacíos omitidos y rueda del gráfico liberada para la página. Build CI y 124 tests verdes,
+más comprobación real Dev sin capturas nuevas ([salida](verification-ui-polish.txt)).

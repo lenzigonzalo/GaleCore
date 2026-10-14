@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import type { IChartApi, UTCTimestamp } from 'lightweight-charts';
+import type { IChartApi, UTCTimestamp, Time, TickMarkType as ChartTickMarkType } from 'lightweight-charts';
 import { fetchPerformancePanel, fetchShadowStatus } from '../../api/shadow';
 import { fetchReferenceCapital } from '../../api/space';
 import { Metric, PerformanceGroup, PerformancePanelParams, PerformancePanelResponse, ShadowInstance } from '../../types/shadow';
-import { fmtPrice } from '../../utils/formatters';
-import { amount, date, days, metricText, missingReasons, pct, rate, readPanelError, stateLabel, usd } from './panelPresentation';
+import { fmtPrice, fmtTime, MARKET_TZ } from '../../utils/formatters';
+import { amount, date, days, exitLabel, metricText, missingReasons, pct, rate, readPanelError, stateLabel, usd } from './panelPresentation';
 import { PnlCalendar } from './PnlCalendar';
 import './PerformancePanel.css';
 
@@ -59,14 +59,22 @@ function Curve({ rows }: { rows: PerformancePanelResponse['curve'] }) {
     let chart: IChartApi | undefined;
     let active = true;
     setError(false);
-    void import('lightweight-charts').then(({ createChart, LineSeries, AreaSeries, ColorType }) => {
+    void import('lightweight-charts').then(({ createChart, LineSeries, AreaSeries, ColorType, TickMarkType }) => {
       if (!active || !host.current) return;
       const css = getComputedStyle(host.current);
       const color = (token: string) => css.getPropertyValue(token).trim();
       chart = createChart(host.current, { autoSize: true, height: 360,
         layout: { background: { type: ColorType.Solid, color: color('--bg-secondary') }, textColor: color('--text-primary'), fontSize: 14, panes: { separatorColor: color('--border') } },
         grid: { vertLines: { visible: false }, horzLines: { color: color('--border-dark') } },
-        timeScale: { timeVisible: true, secondsVisible: true },
+        handleScroll: { mouseWheel: false }, handleScale: { mouseWheel: false },
+        timeScale: { timeVisible: true, secondsVisible: true, tickMarkFormatter: (time: Time, type: ChartTickMarkType) => {
+          if (typeof time !== 'number') return null;
+          const at = new Date(time * 1000);
+          if (type === TickMarkType.Time) return `${fmtTime(at).slice(0, 5)} ET`;
+          if (type === TickMarkType.TimeWithSeconds) return `${fmtTime(at)} ET`;
+          return at.toLocaleDateString('es-AR', { timeZone: MARKET_TZ,
+            ...(type === TickMarkType.Year ? { year: 'numeric' } : type === TickMarkType.Month ? { month: 'short' } : { day: 'numeric', month: 'short' }) });
+        } },
         localization: { timeFormatter: (time: number) => date(new Date(time * 1000).toISOString()) } });
       const cumulative = chart.addSeries(LineSeries, { color: color('--green'), lineWidth: 3, title: 'Acumulado USD', priceFormat: { type: 'custom', formatter: usd } });
       const drawdown = chart.addSeries(AreaSeries, { lineColor: color('--red-gc'), topColor: color('--red-muted'), bottomColor: color('--bg-secondary'), title: 'Caída USD', priceFormat: { type: 'custom', formatter: amount } }, 1);
@@ -156,9 +164,9 @@ export function PerformancePanel({ spec }: { spec: string }) {
         {(panel.openPositions ?? []).map(position => <tr key={position.positionId}><td><strong>{position.structure}</strong><div>{position.legs}</div></td><td>{position.version}</td><td>{date(position.entryAt)}</td><td>{position.entryDte} / {value(position.currentDte, n => `${n}`)}</td><td>{amount(position.entryCredit)}</td><td title={position.valuationProblems?.join(' · ') || `Valuado: ${date(position.lastValuedAt)}`}>{value(position.lastSpreadValue)}</td><td>{value(position.unrealizedPnl, usd)}</td><td>{amount(position.maxRisk)}</td></tr>)}
         {!panel.openPositions?.length && <tr><td colSpan={8}>Sin posiciones abiertas</td></tr>}
       </Table></Block>
-      <Block title="Salidas"><div className="exit-bars">{panel.byExitRule.map(rule => <div className="exit-bar" key={rule.key}><strong>{rule.key}</strong><meter min={0} max={Math.max(1, ...panel.byExitRule.map(row => row.trades))} value={rule.trades} aria-label={`Salidas ${rule.key}`} /><span>{rule.trades} operaciones</span><span className="font-mono">{value(rule.realizedPnl, usd)}</span></div>)}</div>
+      <Block title="Salidas"><div className="exit-bars">{panel.byExitRule.map(rule => <div className="exit-bar" key={rule.key}><strong>{exitLabel(rule.key)}</strong><meter min={0} max={Math.max(1, ...panel.byExitRule.map(row => row.trades))} value={rule.trades} aria-label={`Salidas ${exitLabel(rule.key)}`} /><span>{rule.trades} operaciones</span><span className="font-mono">{value(rule.realizedPnl, usd)}</span></div>)}</div>
         <Table headers={['Estructura / strikes', 'Versión', 'Entrada', 'Salida', 'Días', 'Motivo', 'Crédito / débito', 'P&L']}>
-          {(panel.closedTrades ?? []).map(trade => <tr key={trade.positionId}><td><strong>{trade.structure}</strong><div>{trade.legs}</div></td><td>{trade.version}</td><td>{date(trade.entryAt)}</td><td>{date(trade.exitAt)}</td><td>{value(trade.daysHeld, days)}</td><td>{trade.exitReason || 'n/d'}</td><td>{amount(trade.entryCredit)} / {value(trade.exitDebit)}</td><td>{value(trade.realizedPnl, usd)}</td></tr>)}
+          {(panel.closedTrades ?? []).map(trade => <tr key={trade.positionId}><td><strong>{trade.structure}</strong><div>{trade.legs}</div></td><td>{trade.version}</td><td>{date(trade.entryAt)}</td><td>{date(trade.exitAt)}</td><td>{value(trade.daysHeld, days)}</td><td>{trade.exitReason ? exitLabel(trade.exitReason) : 'n/d'}</td><td>{amount(trade.entryCredit)} / {value(trade.exitDebit)}</td><td>{value(trade.realizedPnl, usd)}</td></tr>)}
           {!panel.closedTrades?.length && <tr><td colSpan={8}>Sin salidas en el período</td></tr>}
         </Table>
       </Block>
