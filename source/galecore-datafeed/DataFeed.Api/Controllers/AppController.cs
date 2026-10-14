@@ -1681,6 +1681,24 @@ namespace DataFeed.Controllers
         }
 
         /// <summary>
+        /// Datos de una estrategia SHADOW (WS-0036): qué usa, de qué fuente, si es del momento o histórico, qué historia
+        /// guarda GaleCore y qué valor vio en su última evaluación. Toma la instancia más reciente de la spec.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Runtime/Performance/Data")]
+        public IActionResult RuntimePerformanceData([FromQuery] string spec)
+        {
+            if (string.IsNullOrWhiteSpace(spec)) return BadRequest(new { error = "falta `spec` (nombre de la estrategia)" });
+            var instances = _runtimeStore.AllInstances().Where(i => i.SpecName == spec).ToList();
+            var latest = instances.OrderByDescending(i => i.CreatedAt).FirstOrDefault();
+            var definition = latest == null ? null : _runtimeStore.SpecFor(latest);
+            if (definition == null) return NotFound(new { error = $"no hay una instancia SHADOW con su definición para '{spec}'" });
+            var lastEvaluation = instances.SelectMany(i => _runtimeStore.GetEvaluations(i.InstanceId))
+                .OrderByDescending(e => e.EvaluatedAt).FirstOrDefault();
+            return Ok(DataFeed.Application.App.Runtime.StrategyData.Build(definition, lastEvaluation, DateTime.UtcNow));
+        }
+
+        /// <summary>
         /// Lista de estrategias SHADOW (WS-0036): por spec, las cifras de su panel sin filtros (operaciones, acierto,
         /// realizado, abierto, esperanza, máxima caída, peor operación, días promedio y salidas por regla). Un solo pedido.
         /// </summary>

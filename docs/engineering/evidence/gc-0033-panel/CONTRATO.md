@@ -61,3 +61,13 @@ Todo número es `Metric = { value, reason }`. **Si no hay valor, `value` es `nul
 
 - `panel_sin_parametros.json` — `spy_prima_varianza_30_45d` en Dev, sin parámetros opcionales.
 - `panel_con_parametros_ilustrativos.json` — mismos datos con valores **ilustrativos** (no son el perfil real): capital 10.000, efectivo 4,5 %, bono 4,2 %, objetivo 15 %, hipótesis 30 operaciones / 60 días.
+
+## Datos de una estrategia (WS-0036)
+
+`GET /App/Runtime/Performance/Data?spec=` → `{ asOf, spec, version, lastEvaluationAt, storage, items[] }`. Cada ítem:
+`need` (qué dato), `capability`, `usedFor` (para qué lo usa la estrategia), `source` (proveedor o cálculo),
+`kind` («del momento», «calculado por el proveedor sobre historia», «serie histórica del proveedor», «calendario»),
+`history` (qué historia guarda GaleCore), `note` (advertencia, o `null`), y para los gates `gateId`, `lastValue`,
+`lastStatus` (PASS | FAIL | NO_DATA | SKIPPED) y `lastAt` de la última evaluación. Toma la instancia más reciente de la
+spec; 404 si no hay. `storage` dice en una frase qué guarda GaleCore (hoy: ninguna historia de mercado).
+Fuera del catálogo: «sin catálogo».
