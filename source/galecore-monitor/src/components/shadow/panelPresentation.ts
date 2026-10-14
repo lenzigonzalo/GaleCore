@@ -1,4 +1,4 @@
-import { Metric, PerformancePanelResponse } from '../../types/shadow';
+import { Metric } from '../../types/shadow';
 import { fmtPnl, fmtPct, fmtPrice, fmtTime, MARKET_TZ } from '../../utils/formatters';
 
 export const usd = (n: number) => fmtPnl(n).replace('-', '−');
@@ -16,22 +16,4 @@ export function readPanelError(error: unknown): string {
   if (e.response?.status === 503) return 'SHADOW no tiene persistencia disponible';
   if (/timeout|aborted/i.test(e.message || '')) return 'El panel tardó demasiado en responder. Reintentá la lectura.';
   return e.message || 'No se pudo leer el panel de rendimiento.';
-}
-export function missingReasons(panel: PerformancePanelResponse): string[] {
-  const reasons = new Set<string>();
-  const visit = (value: unknown) => {
-    if (!value || typeof value !== 'object') return;
-    const item = value as Record<string, unknown>;
-    if ('value' in item && item.value === null && typeof item.reason === 'string' && item.reason.trim()) reasons.add(item.reason);
-    Object.values(item).forEach(visit);
-  };
-  visit(panel);
-  for (const reason of [panel.openRiskVsLimits === null ? panel.openRiskVsLimitsReason : null,
-    panel.hypothesis.sampleReached === null ? panel.hypothesis.reason : null, panel.regime.reason,
-    panel.execution.notIncluded]) if (reason?.trim()) reasons.add(reason);
-  for (const position of panel.openPositions ?? []) {
-    position.valuationProblems?.forEach(reason => reasons.add(reason));
-    if (position.unrealizedPnl === null || position.lastSpreadValue === null) reasons.add('Posiciones abiertas sin valuación disponible');
-  }
-  return Array.from(reasons);
 }

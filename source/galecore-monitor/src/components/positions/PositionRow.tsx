@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { fetchQuote } from '../../api/marketdata';
 import { useMarketStore } from '../../store/useMarketStore';
-import { fmtPrice } from '../../utils/formatters';
+import { fmtPrice, fmtTime, MARKET_TZ } from '../../utils/formatters';
 import { amount, date, usd } from '../shadow/panelPresentation';
 import { StrikeLadder } from '../monitor/StrikeLadder';
 import './PositionRow.css';
@@ -38,10 +38,11 @@ export function PositionHeading({ structure, symbol, expiration, dte }: Pick<Pos
   return <div className="position-heading"><svg className="position-payoff" viewBox="0 0 48 40" aria-hidden="true"><path d={condor ? 'M4 32H10L18 9H30L38 32H44' : call ? 'M4 10H18L30 32H44' : 'M4 32H18L30 10H44'} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" /></svg><div><h4>{name} <span>{symbol}</span></h4><div className="position-expiry">{expiry && <span>{expiry}</span>}{dte !== null && <span className="position-dte">{fmtPrice(dte, 0)} DTE</span>}</div></div></div>;
 }
 export function PositionRow({ position, compact = false, children }: { position: PositionRowData; compact?: boolean; children?: React.ReactNode }) {
+  const entry = position.entryAt ? `${new Date(position.entryAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', timeZone: MARKET_TZ })} ${fmtTime(new Date(position.entryAt)).slice(0, 5)} ET` : '—';
   return <article className={`position-row${compact ? ' compact' : ''}`} aria-label={`${position.symbol} ${names[position.structure] || position.structure}`}>
     <PositionHeading {...position} />
     <StrikeLadder legs={position.legs} spot={compact ? null : position.spot} />
-    {!compact && <dl className="position-values"><div><dt>Entrada</dt><dd>{date(position.entryAt)}</dd></div><div><dt>Crédito</dt><dd>{position.credit === null ? '—' : amount(position.credit)}</dd></div><div><dt>Valor actual</dt><dd title={position.reason || undefined}>{position.currentValue === null ? '—' : amount(position.currentValue)}</dd></div><div><dt>Resultado abierto</dt><dd title={position.reason || undefined} style={{ color: position.pnl === null || position.pnl === 0 ? undefined : position.pnl > 0 ? 'var(--green)' : 'var(--red-gc)' }}>{position.pnl === null ? '—' : usd(position.pnl)}</dd></div><div><dt>Riesgo</dt><dd title={position.risk === null ? 'La API de la cuenta no informa el riesgo de esta estructura.' : undefined}>{position.risk === null ? '—' : amount(position.risk)}</dd></div></dl>}
+    {!compact && <dl className="position-values"><div><dt>Entrada</dt><dd title={date(position.entryAt)}>{entry}</dd></div><div><dt>Crédito</dt><dd>{position.credit === null ? '—' : amount(position.credit)}</dd></div><div><dt>Valor actual</dt><dd title={position.reason || undefined}>{position.currentValue === null ? '—' : amount(position.currentValue)}</dd></div><div><dt>Resultado abierto</dt><dd title={position.reason || undefined} style={{ color: position.pnl === null || position.pnl === 0 ? undefined : position.pnl > 0 ? 'var(--green)' : 'var(--red-gc)' }}>{position.pnl === null ? '—' : usd(position.pnl)}</dd></div><div><dt>Riesgo</dt><dd title={position.risk === null ? 'La API de la cuenta no informa el riesgo de esta estructura.' : undefined}>{position.risk === null ? '—' : amount(position.risk)}</dd></div></dl>}
     {children}
   </article>;
 }

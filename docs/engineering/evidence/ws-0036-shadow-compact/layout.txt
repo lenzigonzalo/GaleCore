@@ -1,0 +1,4 @@
+﻿Metric columns: 367px 367px 367px 367px
+Layout 1920 {'width': 1464, 'height': 104, 'valuesBelow': False, 'overflow': False, 'sell': '#ed6666', 'buy': '#6bd6a3'}
+Layout 1366 {'width': 910, 'height': 177.5, 'valuesBelow': True, 'overflow': False, 'sell': '#ed6666', 'buy': '#6bd6a3'}
+Layout 760 {'width': 394, 'height': 291.6875, 'valuesBelow': True, 'overflow': False, 'sell': '#ed6666', 'buy': '#6bd6a3'}

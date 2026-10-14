@@ -28,16 +28,15 @@ beforeEach(() => {
   jest.clearAllMocks(); panelApi.mockResolvedValue(plain); labApi.mockResolvedValue({ projects: [] });
   (createChart as jest.Mock).mockImplementation(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() }));
 });
-test('compact metrics show API values and missing reasons in titles, with a folded missing box', async () => {
+test('one metric panel has four groups and four headlines, with reasons only in tooltips', async () => {
   render(<PerformancePanel spec={plain.spec} />);
   await screen.findByText('Ganancia total');
   expect(screen.getByText('Sharpe').parentElement).toHaveAttribute('title', plain.sharpe.reason!);
   expect(screen.getByText('Sharpe').parentElement).toHaveTextContent('—');
-  const box = screen.getByText(/Qué falta \(/).closest('details')!;
-  expect(box.open).toBe(false);
-  expect(within(box).getByText(plain.sharpe.reason!)).toBeInTheDocument();
-  expect(within(box).queryByText('sin dato')).not.toBeInTheDocument();
-  expect(document.querySelectorAll('.metric-overview section')).toHaveLength(4);
+  expect(screen.queryByText(/Qué falta/)).not.toBeInTheDocument();
+  expect(screen.queryByText(plain.sharpe.reason!)).not.toBeInTheDocument();
+  expect(document.querySelectorAll('.metric-columns > section')).toHaveLength(4);
+  expect(document.querySelectorAll('.performance-highlights > .performance-stat')).toHaveLength(4);
   expect(screen.queryByText('SHADOW · simulado')).not.toBeInTheDocument();
   expect(screen.queryByText('Muestra chica')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Actualizar' })).not.toBeInTheDocument();
@@ -58,11 +57,11 @@ test.each([404, 503, 'timeout'])('shows useful error and retries (%s)', async st
   render(<PerformancePanel spec={plain.spec} />);
   const error = await screen.findByRole('alert');
   expect(error).toHaveTextContent(status === 404 ? 'todavía no tiene posiciones SHADOW' : status === 503 ? 'persistencia disponible' : 'tardó demasiado');
-  fireEvent.click(screen.getByText('Reintentar')); await screen.findByText(/Qué falta \(/);
+  fireEvent.click(screen.getByText('Reintentar')); await screen.findByText('Ganancia total');
 });
 test('only sends supplied numeric capital and filters; never profile limits or rates', async () => {
   render(<PerformancePanel spec={plain.spec} referenceCapital={12000} />);
-  await screen.findByText(/Qué falta \(/);
+  await screen.findByText('Ganancia total');
   expect(panelApi).toHaveBeenCalledWith({ spec: plain.spec, referenceCapital: 12000 });
   fireEvent.change(screen.getByLabelText('Versión'), { target: { value: '1.0.3' } });
   fireEvent.change(screen.getByLabelText('Período'), { target: { value: 'custom' } });
@@ -72,7 +71,7 @@ test('only sends supplied numeric capital and filters; never profile limits or r
   expect(screen.getByRole('option', { name: '1.0.5' })).toBeInTheDocument();
 });
 test.each(['30', '90'])('requests a %s-day UTC period from the API', async period => {
-  render(<PerformancePanel spec={plain.spec} />); await screen.findByText(/Qué falta \(/);
+  render(<PerformancePanel spec={plain.spec} />); await screen.findByText('Ganancia total');
   fireEvent.change(screen.getByLabelText('Período'), { target: { value: period } });
   await waitFor(() => expect(panelApi.mock.calls.some(([params]) => params.from && params.to)).toBe(true));
   const params = panelApi.mock.calls.find(([params]) => params.from && params.to)![0];
@@ -88,10 +87,12 @@ test('uses API daily values, saved open legs and closed trade rows without deriv
     openPositions: [{ symbol: 'SPY', legList: [{ side: 'SELL', type: 'PUT', strike: 720, expiration: '2026-11-20' }], positionId: 'open', version: '1.0.5', structure: 'put_credit_spread', legs: 'SELL PUT 720 2026-11-20', entryAt: plain.asOf, entryDte: 40, currentDte: null, entryCredit: .44, lastSpreadValue: null, unrealizedPnl: null, maxRisk: 456, lastValuedAt: null, valuationProblems: ['cotización no disponible'] }],
     closedTrades: [{ ...context, positionId: 'closed', version: '1.0.3', structure: 'put_credit_spread', legs: '', entryAt: plain.asOf, exitAt: plain.asOf, daysHeld: 5.7, entryCredit: .44, exitDebit: .22, exitReason: 'TAKE_PROFIT', realizedPnl: 22 }],
   });
-  render(<PerformancePanel spec={plain.spec} />); await screen.findByText(/Qué falta \(/);
+  render(<PerformancePanel spec={plain.spec} />); await screen.findByText('Ganancia total');
   expect(screen.getByTitle('2026-10-05 · 2 cierre(s)')).toHaveTextContent('+$45.00');
   expect(screen.getByText('VENTA PUT')).toBeInTheDocument();
-  expect(screen.getByText('cotización no disponible')).toBeInTheDocument();
+  expect(screen.queryByText('cotización no disponible')).not.toBeInTheDocument();
+  expect(screen.getAllByTitle('cotización no disponible')).toHaveLength(2);
+  expect(screen.getByText('octubre 2026')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
   const exits = screen.getByRole('heading', { name: 'Salidas' }).closest('section')!;
   expect(within(exits).getByRole('meter', { name: 'Salidas Toma de ganancia' })).toHaveAttribute('value', '2');
@@ -119,7 +120,7 @@ test.each([['TAKE_PROFIT', 'Toma de ganancia'], ['STOP_LOSS', 'Stop loss'], ['DT
     closedTrades: [{ ...context, positionId: 'closed', version: '1.0.3', structure: 'put_credit_spread', legs: '', entryAt: plain.asOf, exitAt: plain.asOf, daysHeld: 5.7, entryCredit: .44, exitDebit: .22, exitReason: reason, realizedPnl: 22 }],
   });
   render(<PerformancePanel spec={plain.spec} />);
-  await screen.findByText(/Qué falta \(/);
+  await screen.findByText('Ganancia total');
   fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
   const exits = screen.getByRole('heading', { name: 'Salidas' }).closest('section')!;
   expect(within(exits).getByText(label)).toBeInTheDocument();

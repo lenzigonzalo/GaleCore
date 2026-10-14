@@ -16,7 +16,7 @@ export function PnlCalendar({ daily, asOf }: { daily: PerformancePanelResponse['
   const scale = Math.max(1, ...daily.filter(day => day.date.startsWith(month)).map(day => Math.abs(day.pnl)));
   const move = (delta: number) => setMonth(new Date(Date.UTC(year, number - 1 + delta, 1)).toISOString().slice(0, 7));
   return <div className="pnl-calendar">
-    <div className="calendar-heading"><button aria-label="Mes anterior" onClick={() => move(-1)}>←</button><strong>{first.toLocaleDateString('es-AR', { month: 'long', year: 'numeric', timeZone: 'UTC' })}</strong><button aria-label="Mes siguiente" onClick={() => move(1)}>→</button></div>
+    <div className="calendar-heading"><button aria-label="Mes anterior" onClick={() => move(-1)}>←</button><strong>{`${first.toLocaleDateString('es-AR', { month: 'long', timeZone: 'UTC' })} ${year}`}</strong><button aria-label="Mes siguiente" onClick={() => move(1)}>→</button></div>
     <div className="calendar-grid">{['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => <div className="calendar-weekday" key={day}>{day}</div>)}
       {Array.from({ length: offset }, (_, index) => <div key={`empty-${index}`} />)}
       {Array.from({ length: count }, (_, index) => {

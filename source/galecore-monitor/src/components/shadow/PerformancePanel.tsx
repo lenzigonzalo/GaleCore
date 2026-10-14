@@ -3,7 +3,7 @@ import type { IChartApi, UTCTimestamp, Time, TickMarkType as ChartTickMarkType }
 import { fetchPerformancePanel } from '../../api/shadow';
 import { Metric, PerformanceGroup, PerformancePanelParams, PerformancePanelResponse, ShadowInstance } from '../../types/shadow';
 import { fmtPrice, fmtTime, MARKET_TZ } from '../../utils/formatters';
-import { amount, date, days, exitLabel, metricText, missingReasons, pct, rate, readPanelError, usd } from './panelPresentation';
+import { amount, date, days, exitLabel, metricText, pct, rate, readPanelError, usd } from './panelPresentation';
 import { LivePositionRow } from '../positions/PositionRow';
 import { PnlCalendar } from './PnlCalendar';
 import { InstanceState } from './InstanceState';
@@ -100,7 +100,6 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
     }).catch(e => { if (active) setError(readPanelError(e)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [spec, referenceCapital, version, period, from, to, retry]);
-  const reasons = panel ? missingReasons(panel) : [];
   const count = (n: number): Metric => ({ value: n, reason: null });
   const integer = (n: number) => `${n}`;
   const stat = (label: string, definition: string, metric: Metric, format: (n: number) => string = fmtPrice, signed = false) => <Stat key={label} label={label} definition={definition} metric={metric} format={format} signed={signed} />;
@@ -116,43 +115,46 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
     {tab !== 'Diseño' && error && <div role="alert"><p>{error}</p><button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
     {panel && !loading && !error && tab === 'Resumen' && <div role="tabpanel" id="pane-Resumen" aria-labelledby="tab-Resumen">
       {panel.smallSample && <p className="sample-notice">{minimum ? `Pocas operaciones: ${panel.tradesClosed} de ${minimum} para que Sharpe y Sortino sean confiables` : panel.notes.join(' ')}</p>}
-      <div className="metric-overview">
-        <section><h3>Resultado</h3><div className="performance-metrics">
+      <div className="metric-overview" aria-label="Métricas de rendimiento">
+        <div className="performance-highlights">
           {stat('Ganancia total', 'Resultado acumulado de las operaciones cerradas.', panel.realizedPnl, usd, true)}
+          {stat('% ganadoras', 'Proporción de operaciones cerradas que ganaron.', panel.winRate, rate)}
+          {stat('Promedio por operación', 'Resultado promedio de todas las operaciones cerradas.', panel.expectancy, usd, true)}
+          {stat('Máxima caída', 'Mayor caída del resultado acumulado desde su máximo anterior.', panel.maxDrawdown, amount)}
+        </div>
+        <div className="metric-columns">
+        <section><h3>Resultado</h3><div className="metric-rows">
           {stat('Resultado de las abiertas', 'Ganancia o pérdida de las posiciones que siguen abiertas.', panel.unrealizedPnl, usd, true)}
           {stat('Ganancia bruta', 'Suma de los resultados positivos de las operaciones cerradas.', panel.grossProfit, amount)}
           {stat('Pérdida bruta', 'Suma de las pérdidas de las operaciones cerradas.', panel.grossLoss, amount)}
-          {stat('Máxima caída', 'Mayor caída del resultado acumulado desde su máximo anterior.', panel.maxDrawdown, amount)}
           {stat('Retorno sobre capital', 'Resultado cerrado dividido por el capital de referencia.', panel.references.strategyReturnPct, pct, true)}
         </div></section>
-        <section><h3>Operaciones</h3><div className="performance-metrics">
+        <section><h3>Operaciones</h3><div className="metric-rows">
           {stat('Cerradas', 'Cantidad de operaciones que ya terminaron.', count(panel.tradesClosed), integer)}
           {stat('Abiertas', 'Cantidad de posiciones que siguen abiertas.', count(panel.tradesOpen), integer)}
           {stat('Ganadoras', 'Operaciones cerradas con resultado positivo.', count(panel.tradesWon), integer)}
           {stat('Perdedoras', 'Operaciones cerradas con resultado negativo.', count(panel.tradesLost), integer)}
-          {stat('% ganadoras', 'Proporción de operaciones cerradas que ganaron.', panel.winRate, rate)}
           {stat('Días promedio', 'Tiempo promedio entre la entrada y la salida.', panel.avgDaysHeld, days)}
           {panel.byExitRule.map(rule => stat(exitLabel(rule.key), `Operaciones cerradas por ${exitLabel(rule.key)}.`, count(rule.trades), integer))}
         </div></section>
-        <section><h3>Por operación</h3><div className="performance-metrics">
-          {stat('Promedio por operación', 'Resultado promedio de todas las operaciones cerradas.', panel.expectancy, usd, true)}
+        <section><h3>Por operación</h3><div className="metric-rows">
           {stat('Ganancia promedio', 'Resultado promedio de las operaciones ganadoras.', panel.avgWin, usd, true)}
           {stat('Pérdida promedio', 'Resultado promedio de las operaciones perdedoras.', panel.avgLoss, usd, true)}
           {stat('Mayor ganancia', 'Mejor resultado de una operación cerrada.', panel.largestWin, usd, true)}
           {stat('Peor operación', 'Peor resultado de una operación cerrada.', panel.worstTrade, usd, true)}
           {stat('Ganancia/pérdida promedio', 'Relación entre la ganancia promedio y la pérdida promedio.', panel.winLossRatio)}
         </div></section>
-        <section><h3>Riesgo y calidad</h3><div className="performance-metrics">
+        <section><h3>Riesgo y calidad</h3><div className="metric-rows">
           {stat('Factor de ganancia', 'Ganancia bruta dividida por la pérdida bruta.', panel.profitFactor)}
           {stat('Sharpe', 'Resultado por operación ajustado por su variabilidad.', panel.sharpe)}
           {stat('Sortino', 'Resultado por operación ajustado por la variabilidad de las pérdidas.', panel.sortino)}
           {stat('Racha de pérdidas', 'Mayor cantidad de operaciones perdedoras consecutivas.', panel.lossStreak, integer)}
           {stat('Riesgo abierto', 'Riesgo máximo de las posiciones abiertas.', count(panel.openMaxRisk), amount)}
         </div></section>
+        </div>
       </div>
       <div className="performance-visuals"><Block title="Evolución"><Curve rows={panel.curve} /></Block><Block title="Calendario"><PnlCalendar daily={panel.daily} asOf={panel.asOf} /></Block></div>
       <Block title="Posiciones abiertas">{panel.openPositions.map(position => <LivePositionRow key={position.positionId} position={{ structure: position.structure, symbol: position.symbol, expiration: position.legList[0]?.expiration ?? null, dte: position.currentDte, legs: position.legList, entryAt: position.entryAt, credit: position.entryCredit, currentValue: position.lastSpreadValue, pnl: position.unrealizedPnl, risk: position.maxRisk, reason: position.valuationProblems?.join(' · ') }} />)}{!panel.openPositions.length && <p>Sin posiciones abiertas</p>}</Block>
-      <details className="performance-block performance-missing-box"><summary>Qué falta ({reasons.length})</summary><ul className="performance-missing">{reasons.map(reason => <li key={reason}>{reason}</li>)}</ul></details>
     </div>}
     {panel && !loading && !error && tab === 'Operaciones' && <div role="tabpanel" id="pane-Operaciones" aria-labelledby="tab-Operaciones">
       <Block title="Salidas"><div className="exit-bars">{panel.byExitRule.map(rule => <div className="exit-bar" key={rule.key}><strong>{exitLabel(rule.key)}</strong><meter min={0} max={Math.max(1, ...panel.byExitRule.map(row => row.trades))} value={rule.trades} aria-label={`Salidas ${exitLabel(rule.key)}`} /><span>{rule.trades} operaciones</span><span className="font-mono">{value(rule.realizedPnl, usd)}</span></div>)}</div></Block>
