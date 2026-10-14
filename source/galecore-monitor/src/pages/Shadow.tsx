@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Database, RefreshCw } from 'lucide-react';
 import { SectionTitle } from '../components/common/SectionTitle';
+import { PerformancePanel } from '../components/shadow/PerformancePanel';
 import { NoticePanel } from '../components/common/NoticePanel';
 import {
   fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
@@ -77,6 +78,7 @@ export function Shadow() {
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedSpec, setSelectedSpec] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -124,7 +126,18 @@ export function Shadow() {
       )}
 
       {/* Si el último refresco falló, el cartel reemplaza a los datos: números viejos se leen como vigentes. */}
-      {data && !error && <Content data={data} />}
+      {data && !error && <>
+        <label style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 20, fontSize: 16 }}>
+          Estrategia
+          <select aria-label="Estrategia" value={selectedSpec || data.metrics?.[0]?.specName || ''}
+            onChange={e => setSelectedSpec(e.target.value)}
+            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
+            {Array.from(new Set(data.metrics?.map(m => m.specName) ?? [])).map(spec => <option key={spec}>{spec}</option>)}
+          </select>
+        </label>
+        {(selectedSpec || data.metrics?.[0]?.specName) && <PerformancePanel key={selectedSpec || data.metrics?.[0]?.specName} spec={selectedSpec || data.metrics![0].specName} />}
+        <Content data={data} />
+      </>}
       {!data && !error && <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 16 }}>Cargando…</div>}
     </div>
   );

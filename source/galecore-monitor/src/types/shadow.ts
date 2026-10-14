@@ -132,3 +132,35 @@ export const DISCARD_LABELS: Record<string, string> = {
   RISK_CHECK_FAILED: 'Riesgo rechazado',
   ENTRY_ABORTED: 'Switch apagado durante la entrada',
 };
+export interface Metric { value: number | null; reason: string | null }
+export interface PerformanceGroup {
+  key: string; trades: number; winRate: number | null; avgPnl: number | null;
+  realizedPnl: number; avgGapToPlan: number | null;
+}
+export interface PerformancePanelParams {
+  spec: string; version?: string; from?: string; to?: string; referenceCapital?: number;
+}
+export interface PerformancePanelResponse {
+  asOf: string; mode: string; source: string; spec: string; version: string | null;
+  from: string | null; to: string | null;
+  tradesClosed: number; tradesOpen: number; firstExitAt: string | null; lastExitAt: string | null;
+  smallSample: boolean; notes: string[];
+  curve: { at: string; pnl: number; cumulative: number; drawdown: number }[];
+  realizedPnl: Metric; unrealizedPnl: Metric; maxDrawdown: Metric;
+  winRate: Metric; avgWin: Metric; avgLoss: Metric; profitFactor: Metric; expectancy: Metric;
+  sharpe: Metric; sortino: Metric; avgDaysHeld: Metric; worstTrade: Metric; lossStreak: Metric;
+  openMaxRisk: number;
+  openRiskVsLimits: { limit: string; used: number; max: number; headroom: number; ok: boolean }[] | null;
+  openRiskVsLimitsReason: string | null;
+  regime: { byVix: PerformanceGroup[]; byIvRank: PerformanceGroup[]; byGamma: PerformanceGroup[];
+    tradesWithoutContext: number; reason: string | null; edges: string };
+  byExitRule: PerformanceGroup[]; byVersion: PerformanceGroup[];
+  references: { periodDays: number; strategyReturnPct: Metric; cashReturnPct: Metric;
+    bondReturnPct: Metric; targetReturnPct: Metric; excessVsCashPct: Metric;
+    excessVsBondPct: Metric; excessVsTargetPct: Metric };
+  hypothesis: { tradesClosed: number; tradesRequired: number | null; daysElapsed: number;
+    daysRequired: number | null; sampleReached: boolean | null; reason: string | null };
+  execution: { tradesMeasured: number; tradesWithoutQuotes: number; avgCrossingCost: Metric;
+    totalCrossingCost: Metric; realizedMeasured: Metric; realizedAfterCrossing: Metric;
+    winRateAfterCrossing: Metric; notIncluded: string };
+}

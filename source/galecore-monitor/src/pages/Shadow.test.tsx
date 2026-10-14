@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Shadow, discardReason, pickInstance } from './Shadow';
 import * as api from '../api/shadow';
 import { ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics } from '../types/shadow';
@@ -11,6 +11,8 @@ jest.mock('../api/shadow', () => ({
   fetchShadowDiscards: jest.fn(),
   fetchShadowPositions: jest.fn(),
 }));
+
+jest.mock('../components/shadow/PerformancePanel', () => ({ PerformancePanel: ({ spec }: { spec: string }) => <div data-testid="performance-panel">{spec}</div> }));
 
 const mocked = api as jest.Mocked<typeof api>;
 
@@ -150,4 +152,15 @@ test('motivo del descarte: razón, errores de riesgo o gates', () => {
   expect(discardReason({ ...discard, eventType: 'RISK_CHECK_FAILED', payload: { errors: ['riesgo > máximo', 'DTE fuera de rango'] } }))
     .toBe('riesgo > máximo · DTE fuera de rango');
   expect(discardReason({ ...discard, payload: {} })).toBe('sin motivo registrado');
+});
+
+
+test('selector de estrategia monta el panel seleccionado sin mezclar specs', async () => {
+  mocked.fetchShadowStatus.mockResolvedValue(status());
+  mocked.fetchShadowMetrics.mockResolvedValue([metrics({ specName: 'spy' }), metrics({ specName: 'tlt', contentHash: 'other' })]);
+  render(<Shadow />);
+  const selector = await screen.findByLabelText('Estrategia');
+  expect(screen.getByTestId('performance-panel')).toHaveTextContent('spy');
+  fireEvent.change(selector, { target: { value: 'tlt' } });
+  expect(screen.getByTestId('performance-panel')).toHaveTextContent('tlt');
 });

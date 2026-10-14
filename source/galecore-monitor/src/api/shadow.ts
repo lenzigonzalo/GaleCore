@@ -1,6 +1,6 @@
 import apiClient from './client';
 import {
-  DISCARD_EVENT_TYPES, ShadowEvaluation, ShadowEvent, ShadowPosition, ShadowStatus, SpecVersionMetrics,
+  DISCARD_EVENT_TYPES, PerformancePanelParams, PerformancePanelResponse, ShadowEvaluation, ShadowEvent, ShadowPosition, ShadowStatus, SpecVersionMetrics,
 } from '../types/shadow';
 
 /**
@@ -35,5 +35,11 @@ export async function fetchShadowDiscards(instanceId: string, limit = 20): Promi
 export async function fetchShadowPositions(instanceId: string): Promise<ShadowPosition[]> {
   const { data } = await apiClient.get<ShadowPosition[]>(
     `/App/Runtime/Instances/${encodeURIComponent(instanceId)}/Positions`);
+  return data;
+}
+
+export async function fetchPerformancePanel(params: PerformancePanelParams): Promise<PerformancePanelResponse> {
+  const { data } = await apiClient.get<PerformancePanelResponse>(
+    '/App/Runtime/Performance/Panel', { params, timeout: 30000 });
   return data;
 }

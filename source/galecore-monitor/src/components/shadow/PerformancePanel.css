@@ -1,0 +1,21 @@
+.performance-panel { color: var(--text-primary); font-size: 16px; margin: 20px 0 32px; }
+.performance-panel h2 { font-size: 28px; font-weight: 600; overflow-wrap: anywhere; margin: 12px 0; }
+.performance-panel h3 { font-size: 22px; font-weight: 600; margin: 0 0 18px; }
+.performance-panel h4 { font-size: 18px; font-weight: 600; margin: 20px 0 12px; }
+.performance-panel p { margin: 12px 0; }
+.performance-filters, .performance-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 16px; }
+.performance-filters label { display: flex; align-items: center; gap: 10px; }
+.performance-filters select, .performance-filters input, .performance-panel button { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.performance-mode { display: inline-block; padding: 6px 12px; background: var(--bg-elevated); border: 1px solid var(--yellow-gc); border-radius: 8px; font-weight: 600; }
+.performance-warning { border-left: 4px solid var(--yellow-gc); padding: 4px 18px; background: var(--bg-secondary); margin-top: 18px; }
+.performance-block { background: var(--bg-secondary); border: 1px solid var(--border-dark); border-radius: 14px; padding: 22px; margin-top: 20px; }
+.performance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; margin-bottom: 18px; }
+.performance-stat { background: var(--bg-tertiary); border-radius: 10px; padding: 16px; min-width: 0; }
+.performance-number { display: block; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; font-size: 28px; line-height: 1.4; margin-top: 8px; overflow-wrap: anywhere; }
+.performance-reason { display: block; font-size: 16px; line-height: 1.5; margin-top: 8px; }
+.performance-table, .performance-panel details { overflow-x: auto; }
+.performance-panel table { width: 100%; border-collapse: collapse; font-size: 16px; }
+.performance-panel th, .performance-panel td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); }
+.performance-panel td:not(:first-child) { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.performance-limit { border-top: 1px solid var(--border); padding: 16px 0; overflow-wrap: anywhere; }
+.performance-limit progress { width: 100%; height: 14px; margin: 12px 0; }
