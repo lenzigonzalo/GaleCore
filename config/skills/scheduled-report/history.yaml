@@ -6,7 +6,8 @@ versions:
     changes: >
       Corrida programada del 14/10 quedó INCOMPLETE: no podía leer la revisión anterior (`kb show` faltaba en el flujo
       del catálogo) y contaba como faltantes los límites por operación sin un spread concreto. Ahora lee la anterior
-      y esos límites se nombran como «no aplica sin estructura».
+      y esos límites se nombran como «no aplica sin estructura»; una publicación
+      cuyo valor aún no está en GaleCore se informa con fecha y hora, no como faltante.
     feedback: []
   - version: "0.1.1"
     date: 2026-10-13
