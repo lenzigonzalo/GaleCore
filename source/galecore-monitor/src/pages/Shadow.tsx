@@ -2,12 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Database, RefreshCw } from 'lucide-react';
 import { SectionTitle } from '../components/common/SectionTitle';
 import { PerformancePanel } from '../components/shadow/PerformancePanel';
+import { fetchReferenceCapital } from '../api/space';
+import { metricText, rate, readPanelError, stateLabel, usd as panelUsd } from '../components/shadow/panelPresentation';
 import { NoticePanel } from '../components/common/NoticePanel';
 import {
-  fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
+  fetchPerformancePanel, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
 } from '../api/shadow';
 import {
-  DISCARD_LABELS, ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics,
+  PerformancePanelResponse, DISCARD_LABELS, ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics,
 } from '../types/shadow';
 
 /**
@@ -75,74 +77,96 @@ function errorText(e: unknown): string {
 }
 
 export function Shadow() {
+  const [spec, setSpec] = useState<string | null>(null);
+  const [runtimeOpen, setRuntimeOpen] = useState(false);
+  return <div className="shadow-page">
+    {spec ? <>
+      <button className="shadow-back" onClick={() => { setSpec(null); setRuntimeOpen(false); }}>← Estrategias</button>
+      <PerformancePanel key={spec} spec={spec} />
+      <details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}>
+        <summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}
+      </details>
+    </> : <StrategyList onSelect={setSpec} />}
+  </div>;
+}
+
+function StrategyList({ onSelect }: { onSelect: (spec: string) => void }) {
+  const [rows, setRows] = useState<{ spec: string; panel: PerformancePanelResponse | null; error: string | null }[]>([]);
+  const [instances, setInstances] = useState<ShadowInstance[]>([]);
+  const [statusError, setStatusError] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [retry, setRetry] = useState(0);
+  useEffect(() => {
+    let active = true;
+    setLoading(true); setError(''); setRows([]); setInstances([]); setStatusError('');
+    fetchShadowStatus().then(status => { if (active) setInstances(status.instances); })
+      .catch(() => { if (active) setStatusError('No se pudo leer el estado de las instancias'); });
+    Promise.all([fetchShadowMetrics(), fetchReferenceCapital()]).then(async ([metrics, capital]) => {
+      const names = Array.from(new Set(metrics.map(item => item.specName)));
+      if (!active) return;
+      setRows(names.map(spec => ({ spec, panel: null, error: null })));
+      await Promise.all(names.map(async spec => {
+        let panel: PerformancePanelResponse | null = null;
+        let error: string | null = null;
+        try { panel = await fetchPerformancePanel({ spec, ...(capital !== undefined ? { referenceCapital: capital } : {}) }); }
+        catch (e) { error = readPanelError(e); }
+        if (active) setRows(current => current.map(row => row.spec === spec ? { spec, panel, error } : row));
+      }));
+    }).catch(e => { if (active) setError(errorText(e)); }).finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [retry]);
+  return <div className="performance-panel">
+    <SectionTitle title="Estrategias SHADOW"><button onClick={() => setRetry(n => n + 1)} disabled={loading} title="Actualizar"><RefreshCw size={16} /> Actualizar</button></SectionTitle>
+    {error && <div role="alert">{error}<button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
+    {statusError && <p role="alert">{statusError}</p>}
+    {loading && <p role="status">Cargando estrategias…</p>}
+    {!loading && !error && !rows.length && <p>Sin estrategias SHADOW</p>}
+    {!!rows.length && <div className="performance-table strategy-list"><table><thead><tr>{['Estrategia', 'Estado', 'Realizado', 'Abierto', 'Cerradas / abiertas', 'Acierto'].map(label => <th key={label}>{label}</th>)}</tr></thead><tbody>
+      {rows.map(row => {
+        const instance = pickInstance(instances.filter(instance => instance.specName === row.spec));
+        return <tr key={row.spec}><td><button className="strategy-name" onClick={() => onSelect(row.spec)}>{row.spec}</button>{row.error && <div role="alert">{row.error}</div>}</td><td>{instance ? stateLabel(instance.lifecycleState) : 'n/d'}</td>
+          <td title={row.panel?.realizedPnl.reason || undefined}>{row.panel ? metricText(row.panel.realizedPnl, panelUsd) : 'n/d'}</td>
+          <td title={row.panel?.unrealizedPnl.reason || undefined}>{row.panel ? metricText(row.panel.unrealizedPnl, panelUsd) : 'n/d'}</td>
+          <td>{row.panel ? `${row.panel.tradesClosed} / ${row.panel.tradesOpen}` : 'n/d'}</td>
+          <td title={row.panel?.winRate.reason || undefined}>{row.panel ? metricText(row.panel.winRate, rate) : 'n/d'}</td></tr>;
+      })}
+    </tbody></table></div>}
+  </div>;
+}
+
+function RuntimeDetails({ spec }: { spec: string }) {
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [selectedSpec, setSelectedSpec] = useState('');
-  const [knownSpecs, setKnownSpecs] = useState<string[]>([]);
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const status = await fetchShadowStatus();
-      const instance = pickInstance(status.instances);
+      const raw = await fetchShadowStatus();
+      const instances = raw.instances.filter(instance => instance.specName === spec);
+      const status = { ...raw, instances, persistence: { ...raw.persistence, recovery: null } };
+      const instance = pickInstance(instances);
       let metrics: SpecVersionMetrics[] | null = null;
       let metricsError: string | null = null;
-      try { metrics = await fetchShadowMetrics(); } catch (e) { metricsError = errorText(e); }
-      if (metrics) setKnownSpecs(Array.from(new Set(metrics.map(m => m.specName))));
-      const [evaluations, discards, positions] = instance
-        ? await Promise.all([
-            fetchShadowEvaluations(instance.instanceId),
-            fetchShadowDiscards(instance.instanceId),
-            fetchShadowPositions(instance.instanceId),
-          ])
-        : [[], [], []];
-      setData({ status, metrics, metricsError, instance, evaluations, discards, positions, loadedAt: new Date() });
+      try { metrics = (await fetchShadowMetrics()).filter(metric => metric.specName === spec); } catch (e) { metricsError = errorText(e); }
+      const readings = await Promise.all(instances.map(async instance => {
+        const [evaluations, discards, positions] = await Promise.all([
+          fetchShadowEvaluations(instance.instanceId), fetchShadowDiscards(instance.instanceId), fetchShadowPositions(instance.instanceId),
+        ]);
+        return { evaluations, discards, positions };
+      }));
+      setData({ status, metrics, metricsError, instance, evaluations: readings.flatMap(row => row.evaluations),
+        discards: readings.flatMap(row => row.discards), positions: readings.flatMap(row => row.positions), loadedAt: new Date() });
       setError(null);
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    const id = setInterval(load, REFRESH_MS);
-    return () => clearInterval(id);
-  }, [load]);
-
-  return (
-    <div style={{ padding: '16px 18px 40px', fontFamily: 'var(--font-sans)' }}>
-      <SectionTitle title="GaleCore SHADOW" badge="simulación con datos reales · no mueve plata" accent="#38bdf8">
-        <button onClick={load} disabled={loading} title="Actualizar"
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)',
-            background: 'var(--bg-tertiary)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
-          <RefreshCw size={12} /> {loading ? 'Cargando…' : 'Actualizar'}
-        </button>
-      </SectionTitle>
-
-      {error && (
-        <NoticePanel title="No se pudo leer el runtime" detail={error} icon={<Database size={16} />} color="var(--red-gc)"
-          hint="¿Está levantada la API y tu sesión vigente?" />
-      )}
-
-      {/* Si el último refresco falló, el cartel reemplaza a los datos: números viejos se leen como vigentes. */}
-      {knownSpecs.length > 0 && <>
-        <label style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 20, fontSize: 16 }}>
-          Estrategia
-          <select aria-label="Estrategia" value={selectedSpec || knownSpecs[0]}
-            onChange={e => setSelectedSpec(e.target.value)}
-            style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
-            {knownSpecs.map(spec => <option key={spec}>{spec}</option>)}
-          </select>
-        </label>
-        <PerformancePanel key={selectedSpec || knownSpecs[0]} spec={selectedSpec || knownSpecs[0]} />
-      </>}
-      {data && !error && <Content data={data} />}
-      {!data && !error && <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 16 }}>Cargando…</div>}
-    </div>
-  );
+    } catch (e) { setError(errorText(e)); }
+    finally { setLoading(false); }
+  }, [spec]);
+  useEffect(() => { load(); const id = setInterval(load, REFRESH_MS); return () => clearInterval(id); }, [load]);
+  return <div><button onClick={load} disabled={loading} title="Actualizar runtime">Actualizar runtime</button>
+    {error && <NoticePanel title="No se pudo leer el runtime" detail={error} icon={<Database size={16} />} color="var(--red-gc)" />}
+    {!data && !error && <p>Cargando runtime…</p>}
+    {data && !error && <><div className="performance-table"><table><thead><tr><th>Instancia</th><th>Estado</th><th>Actualizado</th></tr></thead><tbody>{data.status.instances.map(instance => <tr key={instance.instanceId}><td>{instance.instanceId}</td><td>{stateLabel(instance.lifecycleState)}</td><td>{when(instance.updatedAt)}</td></tr>)}</tbody></table></div><Content data={data} /></>}
+  </div>;
 }
 
 function Content({ data }: { data: Loaded }) {

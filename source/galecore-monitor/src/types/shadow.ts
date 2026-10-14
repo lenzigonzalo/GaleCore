@@ -135,7 +135,7 @@ export const DISCARD_LABELS: Record<string, string> = {
 export interface Metric { value: number | null; reason: string | null }
 export interface PerformanceGroup {
   key: string; trades: number; winRate: number | null; avgPnl: number | null;
-  realizedPnl: number; avgGapToPlan: number | null;
+  realizedPnl: number | null; avgGapToPlan: number | null;
 }
 export interface PerformancePanelParams {
   spec: string; version?: string; from?: string; to?: string; referenceCapital?: number;
@@ -146,6 +146,14 @@ export interface PerformancePanelResponse {
   tradesClosed: number; tradesOpen: number; firstExitAt: string | null; lastExitAt: string | null;
   smallSample: boolean; notes: string[];
   curve: { at: string; pnl: number; cumulative: number; drawdown: number }[];
+  daily: { date: string; pnl: number; trades: number }[];
+  openPositions: { positionId: string; version: string; structure: string; legs: string;
+    entryAt: string; entryDte: number; currentDte: number | null; entryCredit: number;
+    lastSpreadValue: number | null; unrealizedPnl: number | null; maxRisk: number;
+    lastValuedAt: string | null; valuationProblems: string[] | null }[];
+  closedTrades: { positionId: string; version: string; structure: string; legs: string;
+    entryAt: string; exitAt: string | null; daysHeld: number | null; entryCredit: number;
+    exitDebit: number | null; exitReason: string | null; realizedPnl: number | null }[];
   realizedPnl: Metric; unrealizedPnl: Metric; maxDrawdown: Metric;
   winRate: Metric; avgWin: Metric; avgLoss: Metric; profitFactor: Metric; expectancy: Metric;
   sharpe: Metric; sortino: Metric; avgDaysHeld: Metric; worstTrade: Metric; lossStreak: Metric;
@@ -155,10 +163,10 @@ export interface PerformancePanelResponse {
   regime: { byVix: PerformanceGroup[]; byIvRank: PerformanceGroup[]; byGamma: PerformanceGroup[];
     tradesWithoutContext: number; reason: string | null; edges: string };
   byExitRule: PerformanceGroup[]; byVersion: PerformanceGroup[];
-  references: { periodDays: number; strategyReturnPct: Metric; cashReturnPct: Metric;
+  references: { periodDays: number | null; strategyReturnPct: Metric; cashReturnPct: Metric;
     bondReturnPct: Metric; targetReturnPct: Metric; excessVsCashPct: Metric;
     excessVsBondPct: Metric; excessVsTargetPct: Metric };
-  hypothesis: { tradesClosed: number; tradesRequired: number | null; daysElapsed: number;
+  hypothesis: { tradesClosed: number; tradesRequired: number | null; daysElapsed: number | null;
     daysRequired: number | null; sampleReached: boolean | null; reason: string | null };
   execution: { tradesMeasured: number; tradesWithoutQuotes: number; avgCrossingCost: Metric;
     totalCrossingCost: Metric; realizedMeasured: Metric; realizedAfterCrossing: Metric;

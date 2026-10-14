@@ -1,21 +1,49 @@
-.performance-panel { color: var(--text-primary); font-size: 16px; margin: 20px 0 32px; }
-.performance-panel h2 { font-size: 28px; font-weight: 600; overflow-wrap: anywhere; margin: 12px 0; }
-.performance-panel h3 { font-size: 22px; font-weight: 600; margin: 0 0 18px; }
-.performance-panel h4 { font-size: 18px; font-weight: 600; margin: 20px 0 12px; }
-.performance-panel p { margin: 12px 0; }
-.performance-filters, .performance-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 16px; }
-.performance-filters label { display: flex; align-items: center; gap: 10px; }
-.performance-filters select, .performance-filters input, .performance-panel button { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
-.performance-mode { display: inline-block; padding: 6px 12px; background: var(--bg-elevated); border: 1px solid var(--yellow-gc); border-radius: 8px; font-weight: 600; }
-.performance-warning { border-left: 4px solid var(--yellow-gc); padding: 4px 18px; background: var(--bg-secondary); margin-top: 18px; }
-.performance-block { background: var(--bg-secondary); border: 1px solid var(--border-dark); border-radius: 14px; padding: 22px; margin-top: 20px; }
-.performance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; margin-bottom: 18px; }
-.performance-stat { background: var(--bg-tertiary); border-radius: 10px; padding: 16px; min-width: 0; }
-.performance-number { display: block; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; font-size: 28px; line-height: 1.4; margin-top: 8px; overflow-wrap: anywhere; }
-.performance-reason { display: block; font-size: 16px; line-height: 1.5; margin-top: 8px; }
-.performance-table, .performance-panel details { overflow-x: auto; }
-.performance-table table, .performance-panel details table { width: 100%; border-collapse: collapse; font-size: 16px; }
-.performance-table th, .performance-table td, .performance-panel details th, .performance-panel details td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); }
-.performance-table td:not(:first-child), .performance-panel details td:not(:first-child) { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.performance-limit { border-top: 1px solid var(--border); padding: 16px 0; overflow-wrap: anywhere; }
-.performance-limit progress { width: 100%; height: 14px; margin: 12px 0; }
+.shadow-page { padding: 24px 24px 48px; font-family: var(--font-sans); }
+.performance-panel { color: var(--text-primary); font-size: 16px; }
+.performance-panel h2 { font-size: 28px; font-weight: 600; overflow-wrap: anywhere; margin: 0 0 12px; }
+.performance-panel h3 { font-size: 21px; font-weight: 600; margin: 0 0 20px; }
+.performance-panel h4 { font-size: 18px; font-weight: 600; margin: 24px 0 12px; }
+.performance-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 28px; margin: 20px 0 28px; }
+.performance-chips, .performance-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.performance-chips time { font-size: 14px; }
+.performance-heading .performance-filters { justify-content: flex-end; max-width: 420px; }
+.performance-filters label { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.performance-panel select, .performance-panel input, .performance-panel button, .shadow-back, .shadow-runtime button { background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.performance-panel button, .shadow-back, .shadow-runtime button { cursor: pointer; }
+.performance-panel button:disabled { cursor: default; opacity: .65; }
+.performance-mode, .performance-chip { display: inline-block; padding: 5px 10px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+.performance-mode { border-color: var(--yellow-gc); }
+.performance-chip.warning { color: var(--yellow-gc); }
+.performance-key-numbers { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 0 0 32px; }
+.performance-stat { background: var(--bg-secondary); border: 1px solid var(--border-dark); border-radius: 12px; padding: 18px 16px; min-width: 0; }
+.performance-number { display: block; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; font-size: 28px; margin-top: 8px; overflow-wrap: anywhere; }
+.performance-block { background: var(--bg-secondary); border: 1px solid var(--border-dark); border-radius: 14px; padding: 24px; margin: 0 0 32px; }
+.performance-table { overflow: auto; max-height: 520px; }
+.quality-risk-table { max-height: none; }
+.performance-table table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+.performance-table th { position: sticky; top: 0; background: var(--bg-secondary); z-index: 1; font-weight: 600; white-space: nowrap; }
+.performance-table th, .performance-table td { text-align: right; padding: 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.performance-table th:first-child, .performance-table td:first-child { text-align: left; }
+.performance-table td:not(:first-child) { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+.performance-table td { white-space: nowrap; }
+.performance-table td:first-child { white-space: normal; min-width: 180px; }
+.performance-table td:first-child div { margin-top: 5px; }
+.performance-table progress { width: 160px; height: 12px; }
+.performance-panel .strategy-name { border: 0; background: transparent; padding: 0; text-align: left; font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.strategy-list { margin-top: 24px; }
+.strategy-list td { padding: 20px 14px; font-size: 17px; }
+.calendar-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; text-transform: capitalize; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.calendar-weekday { text-align: center; font-size: 14px; }
+.calendar-day { min-height: 72px; padding: 10px; border: 1px solid var(--border-dark); border-radius: 8px; }
+.calendar-day span { display: block; font-size: 14px; }
+.calendar-day strong { display: block; font-size: 17px; margin-top: 6px; overflow-wrap: anywhere; }
+.exit-bars { display: grid; gap: 16px; margin-bottom: 24px; }
+.exit-bar { display: grid; grid-template-columns: minmax(150px, 1fr) 2fr 140px 120px; align-items: center; gap: 16px; font-size: 15px; }
+.exit-bar meter { width: 100%; height: 22px; }
+.exit-bar span { text-align: right; }
+.performance-missing { margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.6; }
+.performance-missing li { margin: 8px 0; }
+.shadow-runtime > summary { font-size: 20px; font-weight: 600; cursor: pointer; }
+.shadow-runtime > div { margin-top: 24px; }
+@media (max-width: 950px) { .performance-heading { grid-template-columns: 1fr; } .performance-heading .performance-filters { justify-content: flex-start; max-width: none; } .performance-key-numbers { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); } .exit-bar { grid-template-columns: 1fr 1fr; } .calendar-day { padding: 6px; min-height: 64px; } .calendar-day strong { font-size: 13px; } }

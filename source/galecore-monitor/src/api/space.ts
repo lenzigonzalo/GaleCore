@@ -51,3 +51,15 @@ export function keyFromTitle(title: string): string {
   return title.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 64) || 'pieza';
 }
+
+/** Only numeric USD capital is available to the SHADOW panel; no risk-text parsing or defaults. */
+export async function fetchReferenceCapital(): Promise<number | undefined> {
+  try {
+    const space = await fetchSpace();
+    const profile = space.items.find(i => i.kind === 'profile' && i.isOwn);
+    if (!profile) return undefined;
+    const capital = JSON.parse(profile.content)?.reference_capital;
+    return capital?.currency === 'USD' && typeof capital.amount === 'number' && Number.isFinite(capital.amount)
+      ? capital.amount : undefined;
+  } catch { return undefined; }
+}

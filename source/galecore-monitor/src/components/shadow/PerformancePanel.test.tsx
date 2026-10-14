@@ -2,109 +2,100 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PerformancePanel } from './PerformancePanel';
 import { fetchPerformancePanel, fetchShadowStatus } from '../../api/shadow';
-import { fetchSpace, SpaceItem } from '../../api/space';
-import plain from './__fixtures__/panel_sin_parametros.json';
-import illustrative from './__fixtures__/panel_con_parametros_ilustrativos.json';
+import { fetchReferenceCapital } from '../../api/space';
+import plainFixture from './__fixtures__/panel_sin_parametros.json';
+import illustrativeFixture from './__fixtures__/panel_con_parametros_ilustrativos.json';
+import { PerformancePanelResponse } from '../../types/shadow';
 
 jest.mock('../../api/shadow', () => ({ fetchPerformancePanel: jest.fn(), fetchShadowStatus: jest.fn() }));
-jest.mock('../../api/space', () => ({ fetchSpace: jest.fn() }));
-jest.mock('lightweight-charts', () => ({
-  ColorType: { Solid: 'solid' }, LineSeries: {}, AreaSeries: {},
+jest.mock('../../api/space', () => ({ fetchReferenceCapital: jest.fn() }));
+jest.mock('lightweight-charts', () => ({ ColorType: { Solid: 'solid' }, LineSeries: {}, AreaSeries: {},
   createChart: jest.fn(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() })),
 }));
+const plain: PerformancePanelResponse = { ...plainFixture, daily: [], openPositions: [], closedTrades: [] };
+const illustrative: PerformancePanelResponse = { ...illustrativeFixture, daily: [], openPositions: [], closedTrades: [] };
 const panelApi = fetchPerformancePanel as jest.MockedFunction<typeof fetchPerformancePanel>;
-const spaceApi = fetchSpace as jest.MockedFunction<typeof fetchSpace>;
+const capitalApi = fetchReferenceCapital as jest.MockedFunction<typeof fetchReferenceCapital>;
 const statusApi = fetchShadowStatus as jest.MockedFunction<typeof fetchShadowStatus>;
-const profile = (currency: string, amount: unknown = 12000, isOwn = true): SpaceItem => ({ kind: 'profile', key: 'profile', title: 'Perfil', format: 'json', visibility: 'private', version: 1, updatedAt: '', owner: 'test', isOwn,
-  content: JSON.stringify({ reference_capital: { amount, currency }, risk_limits: ['máximo 2 %'], cashRatePct: 4, hypothesisMinTrades: 30 }) });
 beforeEach(() => {
-  jest.clearAllMocks();
-  panelApi.mockResolvedValue(plain);
-  spaceApi.mockResolvedValue({ items: [], shared: [] });
+  jest.clearAllMocks(); panelApi.mockResolvedValue(plain); capitalApi.mockResolvedValue(undefined);
   statusApi.mockResolvedValue({ instances: [] } as any);
 });
-test('shows API reasons in the number slot, including empty reasons, and every block', async () => {
+test('shows five key figures, n/d in the table and deduplicated reasons only in Qué falta', async () => {
   render(<PerformancePanel spec={plain.spec} />);
-  await screen.findByText('SHADOW · simulado');
-  const loss = screen.getByText('Pérdida promedio').parentElement!;
-  expect(within(loss).getByText(plain.avgLoss.reason!)).toBeInTheDocument();
-  expect(within(loss).queryByText(/\$0/)).not.toBeInTheDocument();
-  expect(screen.getAllByText(plain.sharpe.reason!)).toHaveLength(2);
-  expect(screen.getAllByText('sin dato')).toHaveLength(4);
-  expect(screen.getByText(plain.openRiskVsLimitsReason!)).toBeInTheDocument();
-  expect(screen.getByText(plain.hypothesis.reason!)).toBeInTheDocument();
-  expect(screen.getByText(plain.execution.notIncluded)).toBeInTheDocument();
-  expect(screen.getByText('2 cerradas sin contexto')).toBeInTheDocument();
+  const missing = await screen.findByRole('heading', { name: 'Qué falta' });
+  const box = missing.closest('section')!;
+  expect(within(box).getByText(plain.sharpe.reason!)).toBeInTheDocument();
+  expect(screen.getAllByText(plain.sharpe.reason!)).toHaveLength(1);
+  expect(within(box).getByText(plain.avgLoss.reason!)).toBeInTheDocument();
+  expect(within(box).getByText('sin dato')).toBeInTheDocument();
+  expect(screen.getByText('Pérdida promedio').closest('tr')).toHaveTextContent('n/d');
+  expect(document.querySelectorAll('.performance-key-numbers .performance-stat')).toHaveLength(5);
+  expect(screen.queryByText('Datos de la curva')).not.toBeInTheDocument();
+  expect(screen.queryByText('Fuente')).not.toBeInTheDocument();
+  expect(screen.queryByText(plain.regime.edges)).not.toBeInTheDocument();
+  expect(screen.queryByText('Mide la muestra, no dice si hay edge.')).not.toBeInTheDocument();
+  expect(screen.getByText('SHADOW · simulado')).toHaveAttribute('title', plain.source);
+  expect(screen.getByText('2 cerradas sin contexto de régimen')).toBeInTheDocument();
   expect(panelApi).toHaveBeenCalledWith({ spec: plain.spec });
 });
-test('renders illustrative limits and references strictly from the fixture', async () => {
-  panelApi.mockResolvedValue(illustrative);
-  render(<PerformancePanel spec={plain.spec} />);
-  await screen.findByText('SHADOW · simulado');
-  const risk = screen.getByRole('progressbar', { name: 'open_risk' });
-  expect(risk).toHaveAttribute('value', '1822');
-  expect(risk).toHaveAttribute('max', '1000');
-  expect(screen.getByText('2 / 30')).toBeInTheDocument();
-  expect(screen.getByText('−0.2%')).toBeInTheDocument();
-  expect(screen.getByText('Máxima caída').parentElement).toHaveTextContent('$0.00');
-  expect(screen.getByText('Máxima caída').parentElement).not.toHaveTextContent('+$');
-  expect(screen.getByText('Riesgo máximo abierto').parentElement).toHaveTextContent('$1,822.00');
-  expect(screen.getByText('Riesgo máximo abierto').parentElement).not.toHaveTextContent('+$');
-  const limit = risk.closest('.performance-limit')!;
-  expect(within(limit as HTMLElement).getByText('$1,822.00 / $1,000.00')).toBeInTheDocument();
-  expect(limit).toHaveTextContent('Margen: −$822.00');
-  expect(screen.getByRole('progressbar', { name: 'reserve' }).closest('.performance-limit')).toHaveTextContent('Margen: $6,178.00');
+test('renders illustrative limits and available references with unsigned risk values', async () => {
+  panelApi.mockResolvedValue(illustrative); render(<PerformancePanel spec={plain.spec} />);
+  await screen.findByRole('heading', { name: 'Qué falta' });
+  const row = screen.getByRole('progressbar', { name: 'open_risk' }).closest('tr')!;
+  expect(row).toHaveTextContent('$1,822.00 / $1,000.00'); expect(row).toHaveTextContent('Margen: −$822.00');
+  expect(row).not.toHaveTextContent('+$');
+  expect(screen.getByRole('progressbar', { name: 'reserve' }).closest('tr')).toHaveTextContent('Margen: $6,178.00');
+  expect(screen.getByText('Riesgo máximo abierto').closest('tr')).toHaveTextContent('$1,822.00');
+  expect(screen.getByText('Máx. caída').parentElement).toHaveTextContent('$0.00');
   expect(screen.getByText('Realizado').parentElement).toHaveTextContent('+$45.00');
-  expect(screen.getByText('Esperanza por operación').parentElement).toHaveTextContent('+$22.50');
-  expect(screen.getByText('Peor operación').parentElement).toHaveTextContent('+$22.00');
+  expect(screen.getByText('Esperanza/op.').parentElement).toHaveTextContent('+$22.50');
+  expect(screen.getByText('Peor operación').closest('tr')).toHaveTextContent('+$22.00');
+  expect(screen.getByText('−0.2%')).toBeInTheDocument();
+  expect(screen.getByText('Muestra · operaciones').closest('tr')).toHaveTextContent('2 / 30');
 });
 test.each([404, 503, 'timeout'])('shows useful error and retries (%s)', async status => {
   panelApi.mockRejectedValueOnce(status === 'timeout' ? new Error('timeout exceeded') : { response: { status } });
   render(<PerformancePanel spec={plain.spec} />);
-  await screen.findByRole('alert');
-  expect(screen.getByRole('alert')).toHaveTextContent(status === 404 ? 'todavía no tiene posiciones SHADOW' : status === 503 ? 'persistencia disponible' : 'tardó demasiado');
-  fireEvent.click(screen.getByText('Reintentar'));
-  await screen.findByText('SHADOW · simulado');
+  const error = await screen.findByRole('alert');
+  expect(error).toHaveTextContent(status === 404 ? 'todavía no tiene posiciones SHADOW' : status === 503 ? 'persistencia disponible' : 'tardó demasiado');
+  fireEvent.click(screen.getByText('Reintentar')); await screen.findByRole('heading', { name: 'Qué falta' });
 });
-test.each([['USD', 12000, true, 12000], ['ARS', 12000, true, undefined], ['USD', '12000', true, undefined], ['USD', 12000, false, undefined]])('passes only own numeric USD capital (%s, %s, %s)', async (currency, amount, isOwn, expected) => {
-  spaceApi.mockResolvedValue({ items: [profile(currency as string, amount, isOwn as boolean)], shared: [] });
-  render(<PerformancePanel spec={plain.spec} />);
-  await screen.findByText('SHADOW · simulado');
-  expect(panelApi).toHaveBeenCalledWith({ spec: plain.spec, ...(expected === undefined ? {} : { referenceCapital: expected }) });
-});
-test('profile failure still requests the panel without capital', async () => {
-  spaceApi.mockRejectedValue(new Error('unavailable'));
-  render(<PerformancePanel spec={plain.spec} />);
-  await screen.findByText('SHADOW · simulado');
-  expect(panelApi).toHaveBeenCalledWith({ spec: plain.spec });
-});
-test('version choices survive filtering and UTC date bounds are sent', async () => {
-  render(<PerformancePanel spec={plain.spec} />);
-  await screen.findByText('SHADOW · simulado');
-  panelApi.mockImplementation(async params => params.version ? { ...plain, byVersion: [plain.byVersion[0]] } : plain);
+test('only sends supplied numeric capital and filters; never profile limits or rates', async () => {
+  capitalApi.mockResolvedValue(12000); render(<PerformancePanel spec={plain.spec} />);
+  await screen.findByRole('heading', { name: 'Qué falta' });
+  expect(panelApi).toHaveBeenCalledWith({ spec: plain.spec, referenceCapital: 12000 });
   fireEvent.change(screen.getByLabelText('Versión'), { target: { value: '1.0.3' } });
-  await waitFor(() => expect(panelApi).toHaveBeenCalledWith({ spec: plain.spec, version: '1.0.3' }));
-  expect(screen.getByRole('option', { name: '1.0.5' })).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Período'), { target: { value: 'custom' } });
   fireEvent.change(screen.getByLabelText('Desde (UTC)'), { target: { value: '2026-10-01' } });
   fireEvent.change(screen.getByLabelText('Hasta (UTC)'), { target: { value: '2026-10-14' } });
-  await waitFor(() => expect(panelApi).toHaveBeenCalledWith({ spec: plain.spec, version: '1.0.3', from: '2026-10-01T00:00:00.000Z', to: '2026-10-14T23:59:59.999Z' }));
+  await waitFor(() => expect(panelApi).toHaveBeenCalledWith({ spec: plain.spec, referenceCapital: 12000, version: '1.0.3', from: '2026-10-01T00:00:00.000Z', to: '2026-10-14T23:59:59.999Z' }));
+  expect(screen.getByRole('option', { name: '1.0.5' })).toBeInTheDocument();
 });
-
-
 test.each(['30', '90'])('requests a %s-day UTC period from the API', async period => {
-  render(<PerformancePanel spec={plain.spec} />);
-  await screen.findByText('SHADOW · simulado');
+  render(<PerformancePanel spec={plain.spec} />); await screen.findByRole('heading', { name: 'Qué falta' });
   fireEvent.change(screen.getByLabelText('Período'), { target: { value: period } });
   await waitFor(() => expect(panelApi.mock.calls.some(([params]) => params.from && params.to)).toBe(true));
   const params = panelApi.mock.calls.find(([params]) => params.from && params.to)![0];
   expect(new Date(params.to!).getTime() - new Date(params.from!).getTime()).toBe(Number(period) * 86400000);
 });
-
-
 test.each([['RUNNING', 'corriendo'], ['PAUSED', 'pausada'], ['STOPPED', 'detenida'], ['UNKNOWN', 'UNKNOWN']])('shows instance state %s as %s', async (lifecycleState, label) => {
   statusApi.mockResolvedValue({ instances: [{ instanceId: 'test', specName: plain.spec, lifecycleState, updatedAt: plain.asOf }] } as any);
-  render(<PerformancePanel spec={plain.spec} />);
-  await screen.findByText('SHADOW · simulado');
-  expect(screen.getByText(new RegExp('^' + label + ' \u00b7'))).toBeInTheDocument();
+  render(<PerformancePanel spec={plain.spec} />); expect(await screen.findByText(label)).toBeInTheDocument();
+});
+// Synthetic position/calendar rows exercise v2 shape; the metrics above remain the original contract fixtures.
+test('uses API daily values, saved open legs and closed trade rows without deriving P&L', async () => {
+  panelApi.mockResolvedValue({ ...plain, daily: [{ date: '2026-10-05', pnl: 45, trades: 2 }],
+    openPositions: [{ positionId: 'open', version: '1.0.5', structure: 'put_credit_spread', legs: 'SELL PUT 720 2026-11-20', entryAt: plain.asOf, entryDte: 40, currentDte: null, entryCredit: .44, lastSpreadValue: null, unrealizedPnl: null, maxRisk: 456, lastValuedAt: null, valuationProblems: ['cotización no disponible'] }],
+    closedTrades: [{ positionId: 'closed', version: '1.0.3', structure: 'put_credit_spread', legs: '', entryAt: plain.asOf, exitAt: plain.asOf, daysHeld: 5.7, entryCredit: .44, exitDebit: .22, exitReason: 'TAKE_PROFIT', realizedPnl: 22 }],
+  });
+  render(<PerformancePanel spec={plain.spec} />); await screen.findByRole('heading', { name: 'Qué falta' });
+  expect(screen.getByTitle('2026-10-05 · 2 cierre(s)')).toHaveTextContent('+$45.00');
+  expect(screen.getByText('SELL PUT 720 2026-11-20')).toBeInTheDocument();
+  expect(screen.getByText('cotización no disponible')).toBeInTheDocument();
+  const exits = screen.getByRole('heading', { name: 'Salidas' }).closest('section')!;
+  expect(within(exits).getByRole('meter', { name: 'Salidas TAKE_PROFIT' })).toHaveAttribute('value', '2');
+  expect(within(exits).getByText('+$22.00')).toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText('Mes siguiente')); expect(screen.queryByTitle('2026-10-05 · 2 cierre(s)')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText('Mes anterior')); expect(screen.getByTitle('2026-10-05 · 2 cierre(s)')).toBeInTheDocument();
 });

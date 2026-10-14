@@ -1,28 +1,55 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { IChartApi, UTCTimestamp } from 'lightweight-charts';
 import { fetchPerformancePanel, fetchShadowStatus } from '../../api/shadow';
-import { fetchSpace } from '../../api/space';
+import { fetchReferenceCapital } from '../../api/space';
 import { Metric, PerformanceGroup, PerformancePanelParams, PerformancePanelResponse, ShadowInstance } from '../../types/shadow';
-import { fmtPnl, fmtPct, fmtPrice, fmtTime, MARKET_TZ } from '../../utils/formatters';
+import { fmtPrice } from '../../utils/formatters';
+import { amount, date, days, metricText, missingReasons, pct, rate, readPanelError, stateLabel, usd } from './panelPresentation';
+import { PnlCalendar } from './PnlCalendar';
 import './PerformancePanel.css';
 
-const usd = (n: number) => fmtPnl(n).replace('-', '−');
-const amount = (n: number) => usd(n).replace(/^\+/, '');
-const lifecycleLabel: Record<string, string> = { RUNNING: 'corriendo', PAUSED: 'pausada', STOPPED: 'detenida' };
-const pct = (n: number) => fmtPct(n, 1).replace('-', '−');
-const rate = (n: number) => pct(n * 100);
-const days = (n: number) => `${fmtPrice(n, 1)} d`;
-const date = (iso: string | null) => iso ? `${new Date(iso).toLocaleDateString('es-AR', { timeZone: MARKET_TZ })} ${fmtTime(new Date(iso))} ET` : 'sin fecha registrada';
-
 function MetricValue({ metric, format = fmtPrice, signed = false }: { metric: Metric; format?: (n: number) => string; signed?: boolean }) {
-  return metric.value === null ? <span className="performance-reason">{metric.reason?.trim() || 'sin dato'}</span>
-    : <span className="performance-number" style={signed ? { color: metric.value < 0 ? 'var(--red-gc)' : metric.value > 0 ? 'var(--green)' : undefined } : undefined}>{format(metric.value)}</span>;
+  return <span className="performance-number" style={signed && metric.value !== null ? { color: metric.value < 0 ? 'var(--red-gc)' : metric.value > 0 ? 'var(--green)' : undefined } : undefined}>{metricText(metric, format)}</span>;
 }
 function Stat({ label, metric, format, signed }: { label: string; metric: Metric; format?: (n: number) => string; signed?: boolean }) {
   return <div className="performance-stat"><div>{label}</div><MetricValue metric={metric} format={format} signed={signed} /></div>;
 }
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return <section className="performance-block"><h3>{title}</h3>{children}</section>;
+}
+function Table({ headers, children, className = '' }: { headers: string[]; children: React.ReactNode; className?: string }) {
+  return <div className={`performance-table ${className}`}><table><thead><tr>{headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;
+}
+const value = (n: number | null, format: (n: number) => string = amount) => n === null ? 'n/d' : format(n);
+function Groups({ title, rows }: { title: string; rows: PerformanceGroup[] }) {
+  return <div><h4>{title}</h4><Table headers={['Grupo', 'Operaciones', 'Acierto', 'Promedio USD', 'Realizado USD']}>
+    {rows.map(row => <tr key={row.key}><td>{row.key}</td><td>{row.trades}</td><td>{value(row.winRate, rate)}</td><td>{value(row.avgPnl, usd)}</td><td>{value(row.realizedPnl, usd)}</td></tr>)}
+    {!rows.length && <tr><td colSpan={5}>Sin operaciones</td></tr>}
+  </Table></div>;
+}
+function QualityRisk({ panel }: { panel: PerformancePanelResponse }) {
+  const metrics: [string, Metric, ((n: number) => string)?][] = [
+    ['Operaciones cerradas', { value: panel.tradesClosed, reason: null }, n => `${n}`],
+    ['Operaciones abiertas', { value: panel.tradesOpen, reason: null }, n => `${n}`],
+    ['Ganancia promedio', panel.avgWin, usd], ['Pérdida promedio', panel.avgLoss, usd],
+    ['Factor de ganancia', panel.profitFactor], ['Sharpe por operación', panel.sharpe], ['Sortino por operación', panel.sortino],
+    ['Duración promedio', panel.avgDaysHeld, days], ['Peor operación', panel.worstTrade, usd],
+    ['Racha de pérdidas', panel.lossStreak, n => `${n}`], ['Riesgo máximo abierto', { value: panel.openMaxRisk, reason: null }, amount],
+  ];
+  const optional: [string, Metric, (n: number) => string][] = [
+    ['Retorno SHADOW', panel.references.strategyReturnPct, pct], ['Efectivo', panel.references.cashReturnPct, pct],
+    ['Bono 10 a', panel.references.bondReturnPct, pct], ['Objetivo', panel.references.targetReturnPct, pct],
+    ['vs efectivo', panel.references.excessVsCashPct, pct], ['vs bono 10 a', panel.references.excessVsBondPct, pct],
+    ['vs objetivo', panel.references.excessVsTargetPct, pct], ['Costo de cruce promedio', panel.execution.avgCrossingCost, amount],
+    ['Costo de cruce total', panel.execution.totalCrossingCost, amount], ['Realizado medido', panel.execution.realizedMeasured, usd],
+    ['Realizado después del cruce', panel.execution.realizedAfterCrossing, usd], ['Acierto después del cruce', panel.execution.winRateAfterCrossing, rate],
+  ];
+  return <Table className="quality-risk-table" headers={['Métrica', 'Valor']}>
+    {[...metrics, ...optional.filter(([, metric]) => metric.value !== null)].map(([label, metric, format]) => <tr key={label}><td>{label}</td><td>{metricText(metric, format)}</td></tr>)}
+    {panel.openRiskVsLimits?.map(limit => <tr key={limit.limit}><td>{limit.limit} · {limit.ok ? 'Dentro del límite' : 'Excede el límite'}</td><td><div>{amount(limit.used)} / {amount(limit.max)}</div><progress aria-label={limit.limit} value={limit.used} max={limit.max} /><div>Margen: {amount(limit.headroom)}</div></td></tr>)}
+    {panel.hypothesis.tradesRequired !== null && <tr><td>Muestra · operaciones</td><td>{panel.hypothesis.tradesClosed} / {panel.hypothesis.tradesRequired}</td></tr>}
+    {panel.hypothesis.daysRequired !== null && <tr><td>Muestra · período</td><td>{value(panel.hypothesis.daysElapsed, days)} / {days(panel.hypothesis.daysRequired)}</td></tr>}
+  </Table>;
 }
 function Curve({ rows }: { rows: PerformancePanelResponse['curve'] }) {
   const host = useRef<HTMLDivElement>(null);
@@ -54,20 +81,8 @@ function Curve({ rows }: { rows: PerformancePanelResponse['curve'] }) {
   return !rows.length ? <p>Sin operaciones cerradas para la curva.</p> : <>
     <div ref={host} style={{ height: 360, width: '100%' }} role="img" aria-label="Resultado acumulado y caída en USD" />
     {error && <p role="alert">No se pudo mostrar la curva.</p>}
-    <details><summary>Datos de la curva</summary><table><thead><tr><th>Salida</th><th>Resultado</th><th>Acumulado</th><th>Caída</th></tr></thead><tbody>{rows.map(r => <tr key={r.at}><td>{date(r.at)}</td><td>{usd(r.pnl)}</td><td>{usd(r.cumulative)}</td><td>{amount(r.drawdown)}</td></tr>)}</tbody></table></details>
   </>;
 }
-function Groups({ title, rows, exit = false }: { title: string; rows: PerformanceGroup[]; exit?: boolean }) {
-  return <div className="performance-groups"><h4>{title}</h4>{rows.length ? <div className="performance-table"><table><thead><tr>{['Grupo', 'Operaciones', 'Acierto', 'Promedio USD', 'Realizado USD', ...(exit ? ['Desvío al plan USD'] : [])].map(h => <th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map(r => <tr key={r.key}><td>{r.key}</td><td>{r.trades}</td><td>{r.winRate === null ? 'sin dato' : rate(r.winRate)}</td><td>{r.avgPnl === null ? 'sin dato' : usd(r.avgPnl)}</td><td>{usd(r.realizedPnl)}</td>{exit && <td>{r.avgGapToPlan === null ? 'sin dato' : amount(r.avgGapToPlan)}</td>}</tr>)}</tbody></table></div> : <p>Sin operaciones con este contexto.</p>}</div>;
-}
-function readError(error: unknown): string {
-  const e = error as { response?: { status?: number }; message?: string };
-  if (e.response?.status === 404) return 'Esta estrategia todavía no tiene posiciones SHADOW';
-  if (e.response?.status === 503) return 'SHADOW no tiene persistencia disponible';
-  if (/timeout|aborted/i.test(e.message || '')) return 'El panel tardó demasiado en responder. No pudimos comprobar su estado; reintentá la lectura.';
-  return e.message || 'No se pudo leer el panel de rendimiento.';
-}
-
 export function PerformancePanel({ spec }: { spec: string }) {
   const [panel, setPanel] = useState<PerformancePanelResponse | null>(null);
   const [instance, setInstance] = useState<ShadowInstance | null>(null);
@@ -84,14 +99,7 @@ export function PerformancePanel({ spec }: { spec: string }) {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     let active = true;
-    fetchSpace().then(space => {
-      const profile = space.items.find(i => i.kind === 'profile' && i.isOwn);
-      if (!profile) return;
-      try {
-        const cap = JSON.parse(profile.content)?.reference_capital;
-        if (active && cap?.currency === 'USD' && typeof cap.amount === 'number' && Number.isFinite(cap.amount)) setCapital(cap.amount);
-      } catch { /* Invalid profile: the API provides the missing-capital reason. */ }
-    }).catch(() => {}).finally(() => { if (active) setProfileReady(true); });
+    fetchReferenceCapital().then(value => { if (active) { setCapital(value); setProfileReady(true); } });
     return () => { active = false; };
   }, []);
   useEffect(() => {
@@ -124,38 +132,39 @@ export function PerformancePanel({ spec }: { spec: string }) {
     choices?.then(data => { if (active) setVersions(data.byVersion.map(v => v.key)); }).catch(() => {});
     fetchPerformancePanel(params).then(data => {
       if (active) { setPanel(data); if (!choices) setVersions(data.byVersion.map(v => v.key)); }
-    }).catch(e => { if (active) setError(readError(e)); }).finally(() => { if (active) setLoading(false); });
+    }).catch(e => { if (active) setError(readPanelError(e)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [spec, capital, profileReady, version, period, from, to, retry]);
 
   return <div className="performance-panel" aria-label="Panel de rendimiento SHADOW">
-    <div className="performance-filters">
-      <label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label>
-      <label>Período<select value={period} onChange={e => setPeriod(e.target.value)}><option value="all">Todo</option><option value="30">30 d</option><option value="90">90 d</option><option value="custom">Personalizado</option></select></label>
-      {period === 'custom' && <><label>Desde (UTC)<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>Hasta (UTC)<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label></>}
-      <button onClick={() => setRetry(n => n + 1)}>Actualizar panel</button>
-    </div>
+    <header className="performance-heading">
+      <div><h2>{spec}</h2><div className="performance-chips"><span className="performance-mode" title={panel?.source}>SHADOW · simulado</span>{instance && <span className="performance-chip" title={date(instance.updatedAt)}>{stateLabel(instance.lifecycleState)}</span>}{statusError && <span>{statusError}</span>}{panel?.smallSample && <span className="performance-chip warning" title={panel.notes.join(' · ')}>Muestra chica</span>}<time>{panel && date(panel.asOf)}</time></div></div>
+      <div className="performance-filters">
+        <label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label>
+        <label>Período<select value={period} onChange={e => setPeriod(e.target.value)}><option value="all">Todo</option><option value="30">30 d</option><option value="90">90 d</option><option value="custom">Personalizado</option></select></label>
+        {period === 'custom' && <><label>Desde (UTC)<input type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>Hasta (UTC)<input type="date" value={to} onChange={e => setTo(e.target.value)} /></label></>}
+        <button onClick={() => setRetry(n => n + 1)}>Actualizar</button>
+      </div>
+    </header>
     {loading && <p role="status">Cargando rendimiento…</p>}
     {error && <div role="alert"><p>{error}</p><button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
     {panel && !loading && !error && <>
-      <header><span className="performance-mode">SHADOW · simulado</span><h2>{panel.spec}</h2>
-        <div className="performance-meta"><span>{panel.version ? `v${panel.version}` : 'Todas las versiones'}</span><span>{instance ? `${lifecycleLabel[instance.lifecycleState] ?? instance.lifecycleState} · ${date(instance.updatedAt)}` : statusError || 'Sin instancia registrada'}</span><span>Al {date(panel.asOf)}</span></div>
-        <div className="performance-meta"><span>{panel.tradesClosed} cerradas · {panel.tradesOpen} abiertas</span><span>Primera salida: {date(panel.firstExitAt)}</span><span>Última salida: {date(panel.lastExitAt)}</span></div>
-        <details><summary>Fuente</summary>{panel.source}</details>
-      </header>
-      {(panel.smallSample || panel.notes.length > 0) && <div className="performance-warning">{panel.smallSample && !panel.notes.length && <p>Muestra chica</p>}{panel.notes.map((n, i) => <p key={i}>{n}</p>)}</div>}
-      <Block title="Resultado"><div className="performance-grid"><Stat label="Realizado" metric={panel.realizedPnl} format={usd} signed /><Stat label="No realizado" metric={panel.unrealizedPnl} format={usd} signed /><Stat label="Máxima caída" metric={panel.maxDrawdown} format={amount} /></div><Curve rows={panel.curve} />
-        <h4>Referencias · {days(panel.references.periodDays)}</h4><div className="performance-grid"><Stat label="Retorno SHADOW" metric={panel.references.strategyReturnPct} format={pct} signed />
-          <Stat label="Efectivo" metric={panel.references.cashReturnPct} format={pct} /><Stat label="Bono 10 a" metric={panel.references.bondReturnPct} format={pct} /><Stat label="Objetivo" metric={panel.references.targetReturnPct} format={pct} />
-          <Stat label="vs efectivo" metric={panel.references.excessVsCashPct} format={pct} signed /><Stat label="vs bono 10 a" metric={panel.references.excessVsBondPct} format={pct} signed /><Stat label="vs objetivo" metric={panel.references.excessVsTargetPct} format={pct} signed /></div>
+      <div className="performance-key-numbers"><Stat label="Realizado" metric={panel.realizedPnl} format={usd} signed /><Stat label="Abierto" metric={panel.unrealizedPnl} format={usd} signed /><Stat label="Máx. caída" metric={panel.maxDrawdown} format={amount} /><Stat label="Acierto" metric={panel.winRate} format={rate} /><Stat label="Esperanza/op." metric={panel.expectancy} format={usd} signed /></div>
+      <Block title="Evolución"><Curve rows={panel.curve} /></Block>
+      <Block title="Calendario de P&L"><PnlCalendar daily={panel.daily ?? []} asOf={panel.asOf} /></Block>
+      <Block title="Posiciones abiertas"><Table headers={['Estructura / strikes', 'Versión', 'Entrada', 'DTE entrada / actual', 'Crédito', 'Valor actual', 'P&L abierto', 'Riesgo']}>
+        {(panel.openPositions ?? []).map(position => <tr key={position.positionId}><td><strong>{position.structure}</strong><div>{position.legs}</div></td><td>{position.version}</td><td>{date(position.entryAt)}</td><td>{position.entryDte} / {value(position.currentDte, n => `${n}`)}</td><td>{amount(position.entryCredit)}</td><td title={position.valuationProblems?.join(' · ') || `Valuado: ${date(position.lastValuedAt)}`}>{value(position.lastSpreadValue)}</td><td>{value(position.unrealizedPnl, usd)}</td><td>{amount(position.maxRisk)}</td></tr>)}
+        {!panel.openPositions?.length && <tr><td colSpan={8}>Sin posiciones abiertas</td></tr>}
+      </Table></Block>
+      <Block title="Salidas"><div className="exit-bars">{panel.byExitRule.map(rule => <div className="exit-bar" key={rule.key}><strong>{rule.key}</strong><meter min={0} max={Math.max(1, ...panel.byExitRule.map(row => row.trades))} value={rule.trades} aria-label={`Salidas ${rule.key}`} /><span>{rule.trades} operaciones</span><span className="font-mono">{value(rule.realizedPnl, usd)}</span></div>)}</div>
+        <Table headers={['Estructura / strikes', 'Versión', 'Entrada', 'Salida', 'Días', 'Motivo', 'Crédito / débito', 'P&L']}>
+          {(panel.closedTrades ?? []).map(trade => <tr key={trade.positionId}><td><strong>{trade.structure}</strong><div>{trade.legs}</div></td><td>{trade.version}</td><td>{date(trade.entryAt)}</td><td>{date(trade.exitAt)}</td><td>{value(trade.daysHeld, days)}</td><td>{trade.exitReason || 'n/d'}</td><td>{amount(trade.entryCredit)} / {value(trade.exitDebit)}</td><td>{value(trade.realizedPnl, usd)}</td></tr>)}
+          {!panel.closedTrades?.length && <tr><td colSpan={8}>Sin salidas en el período</td></tr>}
+        </Table>
       </Block>
-      <Block title="Calidad"><div className="performance-grid"><Stat label="Operaciones cerradas" metric={{ value: panel.tradesClosed, reason: null }} format={n => `${n}`} /><Stat label="Acierto" metric={panel.winRate} format={rate} /><Stat label="Ganancia promedio" metric={panel.avgWin} format={usd} signed /><Stat label="Pérdida promedio" metric={panel.avgLoss} format={usd} signed /><Stat label="Factor de ganancia" metric={panel.profitFactor} /><Stat label="Esperanza por operación" metric={panel.expectancy} format={usd} signed /><Stat label="Sharpe por operación" metric={panel.sharpe} /><Stat label="Sortino por operación" metric={panel.sortino} /><Stat label="Duración promedio" metric={panel.avgDaysHeld} format={days} /></div></Block>
-      <Block title="Riesgo"><div className="performance-grid"><Stat label="Riesgo máximo abierto" metric={{ value: panel.openMaxRisk, reason: null }} format={amount} /><Stat label="Peor operación" metric={panel.worstTrade} format={usd} signed /><Stat label="Racha de pérdidas" metric={panel.lossStreak} format={n => `${n}`} /></div>
-        {panel.openRiskVsLimits === null ? <p>{panel.openRiskVsLimitsReason || 'sin dato'}</p> : panel.openRiskVsLimits.map(l => <div className="performance-limit" key={l.limit}><strong>{l.limit} · {l.ok ? 'Dentro del límite' : 'Excede el límite'}</strong><div className="performance-number">{amount(l.used)} / {amount(l.max)}</div><progress aria-label={l.limit} value={l.used} max={l.max} style={{ accentColor: l.ok ? 'var(--green)' : 'var(--red-gc)' }} /><div>Margen: {amount(l.headroom)}</div></div>)}
-      </Block>
-      <Block title="Dónde gana y dónde pierde"><p>{panel.regime.edges}</p>{panel.regime.reason && <p>{panel.regime.reason}</p>}<p>{panel.regime.tradesWithoutContext} cerradas sin contexto</p><Groups title="VIX" rows={panel.regime.byVix} /><Groups title="IV Rank" rows={panel.regime.byIvRank} /><Groups title="Gamma" rows={panel.regime.byGamma} /><Groups title="Regla de salida" rows={panel.byExitRule} exit /><Groups title="Versión" rows={panel.byVersion} /></Block>
-      <Block title="Hipótesis">{panel.hypothesis.reason ? <p>{panel.hypothesis.reason}</p> : <div className="performance-grid"><div className="performance-stat">Operaciones<div className="performance-number">{panel.hypothesis.tradesClosed} / {panel.hypothesis.tradesRequired ?? 'sin criterio'}</div></div><div className="performance-stat">Período<div className="performance-number">{days(panel.hypothesis.daysElapsed)} / {panel.hypothesis.daysRequired === null ? 'sin criterio' : days(panel.hypothesis.daysRequired)}</div></div><div className="performance-stat">Muestra<div>{panel.hypothesis.sampleReached === null ? 'sin criterio' : panel.hypothesis.sampleReached ? 'Alcanzada' : 'Pendiente'}</div></div></div>}<p>Mide la muestra, no dice si hay edge.</p></Block>
-      <Block title="Ejecución"><div className="performance-meta"><span>{panel.execution.tradesMeasured} medidas</span><span>{panel.execution.tradesWithoutQuotes} cerradas sin cotizaciones</span></div><div className="performance-grid"><Stat label="Costo de cruce promedio" metric={panel.execution.avgCrossingCost} format={amount} /><Stat label="Costo de cruce total" metric={panel.execution.totalCrossingCost} format={amount} /><Stat label="Realizado medido" metric={panel.execution.realizedMeasured} format={usd} signed /><Stat label="Realizado después del cruce" metric={panel.execution.realizedAfterCrossing} format={usd} signed /><Stat label="Acierto después del cruce" metric={panel.execution.winRateAfterCrossing} format={rate} /></div><p>{panel.execution.notIncluded}</p></Block>
+      <Block title="Calidad y riesgo"><QualityRisk panel={panel} /></Block>
+      <Block title="Régimen y versión">{!panel.regime.byVix.length && !panel.regime.byIvRank.length && !panel.regime.byGamma.length ? <p>{panel.regime.tradesWithoutContext} cerradas sin contexto de régimen</p> : <><Groups title="VIX" rows={panel.regime.byVix} /><Groups title="IV Rank" rows={panel.regime.byIvRank} /><Groups title="Gamma" rows={panel.regime.byGamma} />{panel.regime.tradesWithoutContext > 0 && <p>{panel.regime.tradesWithoutContext} cerradas sin contexto de régimen</p>}</>}<Groups title="Versión" rows={panel.byVersion} /></Block>
+      <Block title="Qué falta"><ul className="performance-missing">{missingReasons(panel).map(reason => <li key={reason}>{reason}</li>)}</ul></Block>
     </>}
   </div>;
 }

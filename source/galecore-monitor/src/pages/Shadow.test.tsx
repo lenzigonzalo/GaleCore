@@ -2,9 +2,12 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Shadow, discardReason, pickInstance } from './Shadow';
 import * as api from '../api/shadow';
+import plainFixture from '../components/shadow/__fixtures__/panel_sin_parametros.json';
+import { fetchReferenceCapital } from '../api/space';
 import { ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics } from '../types/shadow';
 
 jest.mock('../api/shadow', () => ({
+  fetchPerformancePanel: jest.fn(),
   fetchShadowStatus: jest.fn(),
   fetchShadowMetrics: jest.fn(),
   fetchShadowEvaluations: jest.fn(),
@@ -13,6 +16,9 @@ jest.mock('../api/shadow', () => ({
 }));
 
 jest.mock('../components/shadow/PerformancePanel', () => ({ PerformancePanel: ({ spec }: { spec: string }) => <div data-testid="performance-panel">{spec}</div> }));
+
+jest.mock('../api/space', () => ({ fetchReferenceCapital: jest.fn() }));
+const capitalApi = fetchReferenceCapital as jest.MockedFunction<typeof fetchReferenceCapital>;
 
 const mocked = api as jest.Mocked<typeof api>;
 
@@ -76,6 +82,8 @@ function position(over: Partial<ShadowPosition> = {}): ShadowPosition {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  capitalApi.mockResolvedValue(undefined);
+  mocked.fetchPerformancePanel.mockImplementation(async params => ({ ...plainFixture, spec: params.spec, daily: [], openPositions: [], closedTrades: [] }));
   mocked.fetchShadowStatus.mockResolvedValue(status());
   mocked.fetchShadowMetrics.mockResolvedValue([metrics()]);
   mocked.fetchShadowEvaluations.mockResolvedValue([evaluation]);
@@ -83,94 +91,63 @@ beforeEach(() => {
   mocked.fetchShadowPositions.mockResolvedValue([]);
 });
 
-test('sin operaciones: lo dice, no muestra ceros, y explica cada descarte con el valor real del gate', async () => {
+test('lista una fila por spec con cifras de su panel', async () => {
+  mocked.fetchShadowMetrics.mockResolvedValue([metrics(), metrics({ contentHash: 'second', specVersion: '2' }), metrics({ specName: 'otra', contentHash: 'other', realizedPnl: 99999 })]);
   render(<Shadow />);
-
-  expect(await screen.findByText(/todavía no abrió operaciones/)).toBeInTheDocument();
-  expect(screen.getByText('Guardado en base')).toBeInTheDocument();
-  const card = screen.getByTestId('shadow-metrics');
-  expect(within(card).getByText('sin operaciones cerradas')).toBeInTheDocument();
-  expect(within(card).queryByText('$0.00')).not.toBeInTheDocument();
-  expect(within(card).getByText(/Gates no cumplidos 3/)).toBeInTheDocument();
-  expect(screen.getByText('No hay operaciones abiertas.')).toBeInTheDocument();
-  expect(screen.getByText('gex_positive: FAIL (-412.5 >= 0)')).toBeInTheDocument();
-  expect(screen.getByText('NO PASA')).toBeInTheDocument();
-  expect(screen.getByText(/gex_positive: -412.5 >= 0/)).toBeInTheDocument();
-  expect(mocked.fetchShadowEvaluations).toHaveBeenCalledWith('i-1');
+  await waitFor(() => expect(mocked.fetchPerformancePanel).toHaveBeenCalledTimes(2));
+  const row = screen.getByRole('button', { name: instance.specName }).closest('tr')!;
+  await waitFor(() => expect(row).toHaveTextContent('+$45.00'));
+  expect(row).toHaveTextContent('2 / 4'); expect(row).toHaveTextContent('100.0%');
+  expect(screen.getAllByRole('button', { name: instance.specName })).toHaveLength(1);
+  expect(screen.queryByText(/99,999/)).not.toBeInTheDocument();
+  expect(mocked.fetchShadowEvaluations).not.toHaveBeenCalled();
+  expect(screen.queryByTestId('performance-panel')).not.toBeInTheDocument();
 });
-
-test('sin persistencia: lo dice con el motivo y no inventa métricas', async () => {
-  mocked.fetchShadowStatus.mockResolvedValue(status({ available: false, reason: 'la base configurada no es local (db.x.supabase.co)', recoveredAt: null, recovery: null }, []));
-  mocked.fetchShadowMetrics.mockRejectedValue({ response: { status: 503, data: { error: 'SHADOW sin persistencia: no hay métricas guardadas.', reason: 'la base configurada no es local (db.x.supabase.co)' } } });
-
-  render(<Shadow />);
-
-  expect(await screen.findByText('Sin persistencia')).toBeInTheDocument();
-  expect(screen.getByText(/Sin métricas: SHADOW sin persistencia/)).toBeInTheDocument();
-  expect(screen.getByText(/No hay instancias SHADOW/)).toBeInTheDocument();
+test('clic abre sólo la elegida y permite volver a la lista', async () => {
+  mocked.fetchShadowMetrics.mockResolvedValue([metrics(), metrics({ specName: 'otra', contentHash: 'other' })]);
+  render(<Shadow />); fireEvent.click(await screen.findByRole('button', { name: 'otra' }));
+  expect(screen.getByTestId('performance-panel')).toHaveTextContent('otra');
+  expect(screen.queryByRole('button', { name: instance.specName })).not.toBeInTheDocument();
+  expect(mocked.fetchShadowEvaluations).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '← Estrategias' }));
+  expect(await screen.findByRole('button', { name: instance.specName })).toBeInTheDocument();
+});
+test('Runtime plegado carga sólo instancias y lecturas de la estrategia', async () => {
+  mocked.fetchShadowStatus.mockResolvedValue(status({}, [instance, { ...instance, instanceId: 'i-2' }, { ...instance, specName: 'otra', instanceId: 'other' }]));
+  mocked.fetchShadowMetrics.mockResolvedValue([metrics(), metrics({ specName: 'otra', contentHash: 'other' })]);
+  mocked.fetchShadowPositions.mockResolvedValue([position()]);
+  render(<Shadow />); fireEvent.click(await screen.findByRole('button', { name: instance.specName }));
   expect(mocked.fetchShadowPositions).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('Runtime')); await screen.findByText('Guardado en base');
+  expect(mocked.fetchShadowPositions).toHaveBeenCalledWith('i-1');
+  expect(mocked.fetchShadowPositions).toHaveBeenCalledWith('i-2');
+  expect(mocked.fetchShadowPositions).not.toHaveBeenCalledWith('other');
+  expect(screen.getAllByTestId('shadow-metrics')).toHaveLength(1);
+  expect(screen.queryByText('other')).not.toBeInTheDocument();
+  expect(screen.getAllByText('gex_positive: FAIL (-412.5 >= 0)')).toHaveLength(2);
 });
-
-test('con operaciones: muestra la valuación real, las que no se pudieron valuar y las cerradas', async () => {
-  mocked.fetchShadowMetrics.mockResolvedValue([metrics({
-    noTrades: false, positionsOpened: 3, positionsOpen: 2, positionsClosed: 1, openPositionsNotValued: 1,
-    realizedPnl: 45, unrealizedPnl: 20, winRate: 1, maxDrawdown: 0,
-  })]);
-  mocked.fetchShadowPositions.mockResolvedValue([
-    position(),
-    position({ positionId: 'p-2', unrealizedPnl: null, lastValuedAt: null, valuationProblems: ['.SPY261030P715: sin cotización utilizable'] }),
-    position({ positionId: 'p-3', status: 'CLOSED', exitReason: 'TAKE_PROFIT', exitDebit: 0.35, realizedPnl: 45, exitAt: '2026-09-25T15:00:00Z' }),
-  ]);
-
-  render(<Shadow />);
-
-  expect(await screen.findByText(/Sin valuar: .SPY261030P715: sin cotización utilizable/)).toBeInTheDocument();
-  expect(screen.queryByText(/todavía no abrió operaciones/)).not.toBeInTheDocument();
-  expect(screen.getAllByText(/0.60 · \$20.00/).length).toBeGreaterThan(0);   // la cerrada conserva su última valuación
-  expect(screen.getByText(/TAKE_PROFIT · 0.35 · \$45.00/)).toBeInTheDocument();
-  expect(screen.getByText('1 abiertas sin valuar')).toBeInTheDocument();
-  expect(screen.getByText('100.0 %')).toBeInTheDocument();
+test('el error del runtime no desmonta el panel', async () => {
+  render(<Shadow />); fireEvent.click(await screen.findByRole('button', { name: instance.specName }));
+  mocked.fetchShadowStatus.mockRejectedValue(new Error('offline')); fireEvent.click(screen.getByText('Runtime'));
+  await screen.findByText('No se pudo leer el runtime'); expect(screen.getByTestId('performance-panel')).toBeInTheDocument();
 });
-
-test('si la API no responde lo dice, sin dejar datos viejos', async () => {
-  mocked.fetchShadowStatus.mockRejectedValue(new Error('Network Error'));
-  render(<Shadow />);
-  await waitFor(() => expect(screen.getByText('No se pudo leer el runtime')).toBeInTheDocument());
-  expect(screen.queryByTestId('shadow-status')).not.toBeInTheDocument();
+test('errores del panel se muestran sin fabricar ceros', async () => {
+  mocked.fetchPerformancePanel.mockRejectedValue({ response: { status: 404 } }); render(<Shadow />);
+  expect(await screen.findByText('Esta estrategia todavía no tiene posiciones SHADOW')).toBeInTheDocument();
+  expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
 });
-
-test('elige la instancia que corre; si ninguna, la última', () => {
+test('la lista sólo pasa capital de referencia', async () => {
+  capitalApi.mockResolvedValue(12000); render(<Shadow />);
+  await waitFor(() => expect(mocked.fetchPerformancePanel).toHaveBeenCalledWith({ spec: instance.specName, referenceCapital: 12000 }));
+});
+test('elige la instancia que corre o la última', () => {
   const stopped = { ...instance, instanceId: 'i-0', lifecycleState: 'STOPPED' };
   expect(pickInstance([stopped, instance])?.instanceId).toBe('i-1');
-  expect(pickInstance([instance, stopped].map((i) => ({ ...i, lifecycleState: 'STOPPED' })))?.instanceId).toBe('i-0');
+  expect(pickInstance([instance, stopped].map(i => ({ ...i, lifecycleState: 'STOPPED' })))?.instanceId).toBe('i-0');
   expect(pickInstance([])).toBeNull();
 });
-
-test('motivo del descarte: razón, errores de riesgo o gates', () => {
-  expect(discardReason({ ...discard, eventType: 'CANDIDATE_NOT_VIABLE', payload: { reason: 'sin strikes con delta en rango' } }))
-    .toBe('sin strikes con delta en rango');
-  expect(discardReason({ ...discard, eventType: 'RISK_CHECK_FAILED', payload: { errors: ['riesgo > máximo', 'DTE fuera de rango'] } }))
-    .toBe('riesgo > máximo · DTE fuera de rango');
+test('motivo del descarte conserva razón y gates', () => {
+  expect(discardReason({ ...discard, payload: { reason: 'sin strikes' } })).toBe('sin strikes');
+  expect(discardReason({ ...discard, payload: { errors: ['riesgo', 'DTE'] } })).toBe('riesgo · DTE');
   expect(discardReason({ ...discard, payload: {} })).toBe('sin motivo registrado');
-});
-
-
-test('selector de estrategia monta el panel seleccionado sin mezclar specs', async () => {
-  mocked.fetchShadowStatus.mockResolvedValue(status());
-  mocked.fetchShadowMetrics.mockResolvedValue([metrics({ specName: 'spy' }), metrics({ specName: 'tlt', contentHash: 'other' })]);
-  render(<Shadow />);
-  const selector = await screen.findByLabelText('Estrategia');
-  expect(screen.getByTestId('performance-panel')).toHaveTextContent('spy');
-  fireEvent.change(selector, { target: { value: 'tlt' } });
-  expect(screen.getByTestId('performance-panel')).toHaveTextContent('tlt');
-});
-
-
-test('un error del seguimiento antiguo no desmonta el panel independiente', async () => {
-  render(<Shadow />);
-  await screen.findByTestId('performance-panel');
-  mocked.fetchShadowStatus.mockRejectedValue(new Error('Runtime unavailable'));
-  fireEvent.click(screen.getByTitle('Actualizar'));
-  await screen.findByText('No se pudo leer el runtime');
-  expect(screen.getByTestId('performance-panel')).toBeInTheDocument();
 });
