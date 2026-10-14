@@ -320,6 +320,8 @@ public class ShadowPanelTests
         Assert.Equal("2", open.Version);
         Assert.Equal(12, open.UnrealizedPnl);
         Assert.Equal(30, open.CurrentDte);
+        Assert.Equal("SPY", open.Symbol);
+        Assert.Equal("SPY", all.ClosedTrades[0].Symbol);
         Assert.Single(only2.ClosedTrades);
         Assert.Single(only2.Daily);
     }

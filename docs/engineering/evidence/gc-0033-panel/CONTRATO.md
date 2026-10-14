@@ -35,6 +35,8 @@ Todo número es `Metric = { value, reason }`. **Si no hay valor, `value` es `nul
 | `tradesWon`, `tradesLost`, `grossProfit`, `grossLoss`, `largestWin`, `winLossRatio` | Para el panel compacto (WS-0036): ganadoras/perdedoras, ganancia y pérdida brutas, mayor ganancia, ganancia promedio / |pérdida promedio|. |
 | `closedTrades[]` (v3) | Además: `maxRisk`, `pnlPctOfCredit`, `pnlPctOfMaxRisk`, `gapToPlan`, `entryVix`, `entryIvRank`, `entryUnderlyingPrice`, `exitDte` (contexto `null` en posiciones anteriores a WS-0033). Plano, para leerlo la IA. |
 
+`openPositions[]` y `closedTrades[]` también traen `symbol` y `legList[]` (`{ side, type, strike, expiration, … }`, las patas por separado para dibujarlas; `legs` sigue como texto).
+
 `GET /App/Runtime/Performance/Summary` (WS-0036): una fila por spec con `spec`, `tradesClosed`, `tradesOpen`, `winRate`, `realizedPnl`, `unrealizedPnl`, `expectancy`, `maxDrawdown`, `worstTrade`, `avgDaysHeld` (todos `Metric`), `takeProfitExits`, `stopLossExits`, `otherExits`, `lastExitAt`. Sin filtros; el estado de la instancia sale de `/Runtime/Status`.
 | `realizedPnl`, `unrealizedPnl`, `maxDrawdown` | Resultado y máxima caída. |
 | `winRate` (0–1), `avgWin`, `avgLoss`, `profitFactor`, `expectancy` | Por operación cerrada. |

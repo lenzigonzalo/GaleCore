@@ -124,6 +124,9 @@ namespace DataFeed.Application.App.Runtime
         public string Version { get; init; } = "";
         public string Structure { get; init; } = "";
         public string Legs { get; init; } = "";
+        public string Symbol { get; init; } = "";
+        /// <summary>Las patas por separado (lado, tipo, strike, vencimiento), para dibujarlas.</summary>
+        public List<ShadowLeg> LegList { get; init; } = new();
         public DateTime EntryAt { get; init; }
         public int EntryDte { get; init; }
         public int? CurrentDte { get; init; }
@@ -142,6 +145,9 @@ namespace DataFeed.Application.App.Runtime
         public string Version { get; init; } = "";
         public string Structure { get; init; } = "";
         public string Legs { get; init; } = "";
+        public string Symbol { get; init; } = "";
+        /// <summary>Las patas por separado (lado, tipo, strike, vencimiento), para dibujarlas.</summary>
+        public List<ShadowLeg> LegList { get; init; } = new();
         public DateTime EntryAt { get; init; }
         public DateTime? ExitAt { get; init; }
         public double? DaysHeld { get; init; }
@@ -300,7 +306,7 @@ namespace DataFeed.Application.App.Runtime
                 OpenPositions = openRows.Select(x => new OpenPositionRow
                 {
                     PositionId = x.p.PositionId, Version = x.SpecVersion, Structure = x.p.Structure,
-                    Legs = ShadowPerformance.LegsText(x.p), EntryAt = x.p.EntryAt, EntryDte = x.p.EntryDte,
+                    Legs = ShadowPerformance.LegsText(x.p), Symbol = x.p.Symbol, LegList = x.p.Legs, EntryAt = x.p.EntryAt, EntryDte = x.p.EntryDte,
                     CurrentDte = x.p.CurrentDte, EntryCredit = x.p.EntryCredit, LastSpreadValue = x.p.LastSpreadValue,
                     UnrealizedPnl = x.p.UnrealizedPnl, MaxRisk = x.p.MaxRisk, LastValuedAt = x.p.LastValuedAt,
                     ValuationProblems = x.p.ValuationProblems,
@@ -308,6 +314,7 @@ namespace DataFeed.Application.App.Runtime
                 ClosedTrades = trades.AsEnumerable().Reverse().Select(t => new ClosedTradeRow
                 {
                     PositionId = t.PositionId, Version = t.SpecVersion, Structure = t.Structure, Legs = t.Legs,
+                    Symbol = t.Symbol, LegList = positions.GetValueOrDefault(t.PositionId)?.Legs ?? new List<ShadowLeg>(),
                     EntryAt = t.EntryAt, ExitAt = t.ExitAt, DaysHeld = t.DaysHeld, EntryCredit = t.EntryCredit,
                     ExitDebit = t.ExitDebit, ExitReason = t.ExitReason, RealizedPnl = t.RealizedPnl,
                     MaxRisk = t.MaxRisk, PnlPctOfCredit = t.PnlPctOfCredit, PnlPctOfMaxRisk = t.PnlPctOfMaxRisk,
