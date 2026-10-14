@@ -46,6 +46,17 @@ test('renders illustrative limits and references strictly from the fixture', asy
   expect(risk).toHaveAttribute('max', '1000');
   expect(screen.getByText('2 / 30')).toBeInTheDocument();
   expect(screen.getByText('−0.2%')).toBeInTheDocument();
+  expect(screen.getByText('Máxima caída').parentElement).toHaveTextContent('$0.00');
+  expect(screen.getByText('Máxima caída').parentElement).not.toHaveTextContent('+$');
+  expect(screen.getByText('Riesgo máximo abierto').parentElement).toHaveTextContent('$1,822.00');
+  expect(screen.getByText('Riesgo máximo abierto').parentElement).not.toHaveTextContent('+$');
+  const limit = risk.closest('.performance-limit')!;
+  expect(within(limit as HTMLElement).getByText('$1,822.00 / $1,000.00')).toBeInTheDocument();
+  expect(limit).toHaveTextContent('Margen: −$822.00');
+  expect(screen.getByRole('progressbar', { name: 'reserve' }).closest('.performance-limit')).toHaveTextContent('Margen: $6,178.00');
+  expect(screen.getByText('Realizado').parentElement).toHaveTextContent('+$45.00');
+  expect(screen.getByText('Esperanza por operación').parentElement).toHaveTextContent('+$22.50');
+  expect(screen.getByText('Peor operación').parentElement).toHaveTextContent('+$22.00');
 });
 test.each([404, 503, 'timeout'])('shows useful error and retries (%s)', async status => {
   panelApi.mockRejectedValueOnce(status === 'timeout' ? new Error('timeout exceeded') : { response: { status } });
@@ -88,4 +99,12 @@ test.each(['30', '90'])('requests a %s-day UTC period from the API', async perio
   await waitFor(() => expect(panelApi.mock.calls.some(([params]) => params.from && params.to)).toBe(true));
   const params = panelApi.mock.calls.find(([params]) => params.from && params.to)![0];
   expect(new Date(params.to!).getTime() - new Date(params.from!).getTime()).toBe(Number(period) * 86400000);
+});
+
+
+test.each([['RUNNING', 'corriendo'], ['PAUSED', 'pausada'], ['STOPPED', 'detenida'], ['UNKNOWN', 'UNKNOWN']])('shows instance state %s as %s', async (lifecycleState, label) => {
+  statusApi.mockResolvedValue({ instances: [{ instanceId: 'test', specName: plain.spec, lifecycleState, updatedAt: plain.asOf }] } as any);
+  render(<PerformancePanel spec={plain.spec} />);
+  await screen.findByText('SHADOW · simulado');
+  expect(screen.getByText(new RegExp('^' + label + ' \u00b7'))).toBeInTheDocument();
 });

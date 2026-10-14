@@ -48,3 +48,8 @@ No se cambió la cuenta de Auth. La automatización nativa no pudo arrancar su h
 Fuera: Eventos (sin API), navegación nueva, rendimiento real, cambios de backend/perfil.
 Los límites/tasas/criterios que faltan se muestran con los motivos de la API.
 Pendiente: revisión de Claude/reviewer y aceptación del owner. No se marcó VALIDATED ni CLOSED.
+
+Ajustes pedidos por el owner (14/10): montos de riesgo, límites, caída y costos sin +;
+se conservan los negativos del dato, como el margen agotado. Estados RUNNING/PAUSED/STOPPED
+traducidos a corriendo/pausada/detenida, con fallback literal. Tests actualizados;
+build y suite completos en verde: [verification-adjustments.txt](verification-adjustments.txt).
