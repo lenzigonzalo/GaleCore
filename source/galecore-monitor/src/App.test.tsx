@@ -3,11 +3,12 @@ import { render, screen } from '@testing-library/react';
 import App from './App';
 
 jest.mock('./auth/supabase', () => ({
-  getSession: jest.fn(async () => null),
+  getSession: async () => null,
   supabaseConfigured: true,
-  supabase: { auth: { onAuthStateChange: jest.fn(() => ({ data: { subscription: { unsubscribe: jest.fn() } } })) } },
+  supabase: { auth: { onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }) } },
 }));
 jest.mock('lightweight-charts', () => ({}));
+jest.mock('@xterm/xterm', () => ({ Terminal: jest.fn() }));
 
 test('shows login when there is no authenticated session', async () => {
   render(<App />);
