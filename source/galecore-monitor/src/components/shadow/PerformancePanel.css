@@ -54,8 +54,10 @@
 .performance-visuals .calendar-day strong { font-size: 15px; }
 .trade-log-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
 .trade-log-heading > div { display: flex; gap: 10px; }
-.strategy-hypothesis { margin-top: 10px; font-size: 14px; line-height: 1.5; }
-.strategy-hypothesis p { margin: 3px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.performance-panel .strategy-overview { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; margin: 0 0 24px; }
+.strategy-overview p:last-child { margin-bottom: 0; }
+.strategy-overview .lab-design-facts { margin: 0; }
+.strategy-overview .lab-design-facts dd { margin: 0; }
 .performance-heading .performance-filters select { padding: 5px 8px; font-size: 14px; }
 .trade-log-block { padding: 16px; margin-bottom: 16px; }
 .trade-log-heading h3 { margin: 0; font-size: 18px; }
@@ -86,6 +88,14 @@
 .compact-design dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; border-bottom: 1px solid var(--border-dark); }
 .compact-design dd { margin: 0; text-align: right; }
 .design-no-data { font-size: 13px; }
+.algorithm-design table { width: 100%; border-collapse: collapse; text-align: left; font-size: 14px; }
+.algorithm-design th { font-size: 13px; font-weight: 600; padding: 8px 6px; border-bottom: 1px solid var(--border); }
+.algorithm-design td { padding: 8px 6px; border-bottom: 1px solid var(--border-dark); vertical-align: top; }
+.algorithm-design td:first-child { width: 35%; }
+.algorithm-design .algorithm-section + .algorithm-section { margin-top: 24px; }
+.algorithm-design .design-annotations { grid-column: 1 / -1; margin-top: 0; }
+.design-annotations td:first-child { width: 90px; }
+.design-annotations td:last-child { min-width: 120px; }
 @media (max-width: 850px) { .compact-design, .performance-breakdowns { grid-template-columns: 1fr; } }
 .instance-state { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 20px; font: 14px var(--font-sans); white-space: nowrap; }
 .instance-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); }

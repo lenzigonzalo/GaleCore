@@ -7,6 +7,7 @@ import { amount, date, days, exitLabel, metricText, pct, rate, readPanelError, u
 import { LivePositionRow } from '../positions/PositionRow';
 import { PnlCalendar } from './PnlCalendar';
 import { InstanceState } from './InstanceState';
+import { StrategyOverview } from './StrategyOverview';
 import { StrategyDesign, useStrategyDesign } from './StrategyDesign';
 import { TradeLog } from './TradeLog';
 import './PerformancePanel.css';
@@ -94,9 +95,8 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
   const stat = (label: string, definition: string, metric: Metric, format: (n: number) => string = fmtPrice, signed = false) => <Stat key={label} label={label} definition={definition} metric={metric} format={format} signed={signed} />;
   const minimum = panel?.notes.map(note => /mínimo (\d+)/i.exec(note)?.[1]).find(Boolean);
   return <div className="performance-panel" aria-label="Panel de rendimiento">
-    <header className="performance-heading"><div><h2>{spec}</h2><InstanceState instance={instance} />
-      {design.strategy?.current?.hypothesis && <div className="strategy-hypothesis">{design.strategy.current.hypothesis.mechanism && <p title={design.strategy.current.hypothesis.mechanism}><strong>Hipótesis:</strong> {design.strategy.current.hypothesis.mechanism}</p>}{design.strategy.current.hypothesis.expected_result && <p title={design.strategy.current.hypothesis.expected_result}><strong>Objetivo:</strong> {design.strategy.current.hypothesis.expected_result}</p>}</div>}
-    </div>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</header>
+    <header className="performance-heading"><div><h2>{spec}</h2><InstanceState instance={instance} /></div>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</header>
+    <StrategyOverview strategy={design.strategy} />
     <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Operaciones', 'Diseño'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
     {tab !== 'Diseño' && loading && <div role="status" aria-label="Cargando rendimiento" className="performance-loading"><div className="performance-metrics">{Array.from({ length: 12 }, (_, i) => <div key={i} className="performance-skeleton metric-skeleton" />)}</div><div className="performance-skeleton chart-skeleton" /></div>}
     {tab !== 'Diseño' && error && <div role="alert"><p>{error}</p><button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
