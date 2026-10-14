@@ -24,7 +24,7 @@ import {
  */
 
 const REFRESH_MS = 30_000;
-const mono: React.CSSProperties = { fontFamily: 'JetBrains Mono, monospace' };
+const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' };
 
 function when(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -99,10 +99,10 @@ export function Shadow() {
     return () => { active = false; };
   }, [retry]);
   useEffect(() => { let active = true; profileRequest.current ??= fetchReferenceCapital(); profileRequest.current.then(value => { if (active) setCapital(value); }); return () => { active = false; }; }, []);
-  const cell = (metric: Metric, format = panelUsd, signed = false) => <td title={metric.reason || undefined} style={signed && metric.value !== null ? { color: metric.value < 0 ? 'var(--red-gc)' : metric.value > 0 ? 'var(--green)' : undefined } : undefined}>{metricText(metric, format)}</td>;
+  const cell = (metric: Metric, format = panelUsd, signed = false) => <td className="numeric" title={metric.reason || undefined} style={signed && metric.value !== null ? { color: metric.value < 0 ? 'var(--red-gc)' : metric.value > 0 ? 'var(--green)' : undefined } : undefined}>{metricText(metric, format)}</td>;
   const headers = [
     ['Estrategia', 'Nombre de la estrategia.'], ['Estado', 'Estado de la instancia más reciente.'], ['Operaciones', 'Cantidad de operaciones cerradas y posiciones abiertas.'],
-    ['% ganadoras', 'Proporción de operaciones cerradas que ganaron.'], ['Ganancia total', 'Resultado acumulado de las operaciones cerradas en USD.'],
+    ['% Gan', 'Proporción de operaciones cerradas que ganaron.'], ['Ganancia total', 'Resultado acumulado de las operaciones cerradas en USD.'],
     ['Promedio por operación', 'Resultado promedio de todas las operaciones cerradas en USD.'], ['Salidas', 'Cantidad de salidas por toma de ganancia, stop loss y otros motivos.'],
     ['Días promedio', 'Tiempo promedio entre la entrada y la salida.'], ['Máx. caída', 'Mayor caída del resultado acumulado desde su máximo anterior.'], ['Peor operación', 'Peor resultado de una operación cerrada.'],
   ];

@@ -12,6 +12,7 @@
   --panel-padding: 24px;
   --panel-radius: 12px;
   --font-sans: 'DM Sans', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', monospace;
   --accent: #a3d86c;
   --accent-ink: #11170b;
   /* ── Backgrounds: neutral charcoal ── */
@@ -67,7 +68,7 @@ body {
 }
 
 .font-mono, code {
-  font-family: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', 'SF Mono', monospace;
+  font-family: var(--font-mono);
 }
 
 .tabular-nums {

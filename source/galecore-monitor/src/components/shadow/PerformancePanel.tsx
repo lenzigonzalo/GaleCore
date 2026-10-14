@@ -40,7 +40,7 @@ function Curve({ rows }: { rows: PerformancePanelResponse['curve'] }) {
       const css = getComputedStyle(host.current);
       const color = (token: string) => css.getPropertyValue(token).trim();
       chart = createChart(host.current, { autoSize: true, height: 360,
-        layout: { background: { type: ColorType.Solid, color: color('--bg-secondary') }, textColor: color('--text-primary'), fontSize: 14, panes: { separatorColor: color('--border') } },
+        layout: { background: { type: ColorType.Solid, color: color('--bg-secondary') }, textColor: color('--text-primary'), fontFamily: color('--font-sans'), fontSize: 14, panes: { separatorColor: color('--border') } },
         grid: { vertLines: { visible: false }, horzLines: { color: color('--border-dark') } },
         handleScroll: { mouseWheel: false }, handleScale: { mouseWheel: false },
         timeScale: { timeVisible: true, secondsVisible: true, tickMarkFormatter: (time: Time, type: ChartTickMarkType) => {

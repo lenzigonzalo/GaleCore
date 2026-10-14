@@ -1,5 +1,5 @@
 .shadow-page { padding: 24px 24px 48px; font-family: var(--font-sans); }
-.performance-panel { color: var(--text-primary); font-size: 16px; }
+.performance-panel { color: var(--text-primary); font-family: var(--font-sans); font-size: 16px; }
 .performance-panel h2 { font-size: 28px; font-weight: 600; overflow-wrap: anywhere; margin: 0 0 12px; }
 .performance-panel h3 { font-size: 21px; font-weight: 600; margin: 0 0 20px; }
 .performance-panel h4 { font-size: 18px; font-weight: 600; margin: 24px 0 12px; }
@@ -18,10 +18,11 @@
 .performance-table { overflow: auto; max-height: 520px; }
 .quality-risk-table { max-height: none; }
 .performance-table table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
-.performance-table th { position: sticky; top: 0; background: var(--bg-secondary); z-index: 1; font-weight: 600; white-space: nowrap; }
-.performance-table th, .performance-table td { text-align: right; padding: 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
-.performance-table th:first-child, .performance-table td:first-child { text-align: left; }
-.performance-table td:not(:first-child) { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; }
+.performance-table th { position: sticky; top: 0; background: var(--bg-secondary); z-index: 1; font-weight: 600; white-space: nowrap; text-align: center; vertical-align: middle; }
+.performance-table th, .performance-table td { padding: 12px; border-bottom: 1px solid var(--border); }
+.performance-table td { text-align: right; vertical-align: top; font-variant-numeric: tabular-nums; }
+.performance-table td:first-child { text-align: left; }
+.performance-table td.numeric { font-family: var(--font-mono); }
 .performance-table td { white-space: nowrap; }
 .performance-table td:first-child { white-space: normal; min-width: 180px; }
 .performance-table td:first-child div { margin-top: 5px; }
@@ -64,6 +65,7 @@
 .strategy-row:hover, .strategy-row:focus-visible { background: var(--bg-tertiary); outline: 1px solid var(--border); }
 .strategy-list .strategy-name { font-size: 16px; }
 .strategy-list th { white-space: normal; min-width: 85px; }
+.strategy-list th:nth-child(4) { white-space: nowrap; }
 .performance-skeleton { background: var(--bg-tertiary); border-radius: 8px; animation: performance-pulse 1.5s ease-in-out infinite alternate; }
 .row-skeleton { min-width: 90px; height: 20px; }
 .metric-skeleton { height: 92px; }
@@ -77,7 +79,7 @@
 .metric-overview { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 12px; padding: 22px; margin-bottom: 24px; }
 .performance-highlights { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 24px; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
 .performance-stat { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; min-width: 0; padding: 7px 0; font-size: 15px; }
-.performance-number { flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; font-size: inherit; white-space: nowrap; }
+.performance-number { flex-shrink: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: inherit; white-space: nowrap; }
 .performance-highlights .performance-stat { display: block; padding: 0; }
 .performance-highlights .performance-number { display: block; font-size: 27px; margin-top: 8px; }
 .metric-columns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
