@@ -4,7 +4,7 @@ import apiClient from './client';
  * Espacio del trader (GC-0007): lo que GaleCore-AI sabe de cada uno — perfil, objetivos, convenciones, memoria,
  * skills, agentes y datos —, propio o compartido con el equipo. Lo propio se edita; lo compartido por otro, no.
  */
-export type SpaceKind = 'profile' | 'objective' | 'convention' | 'memory' | 'skill' | 'agent' | 'data';
+export type SpaceKind = 'profile' | 'objective' | 'convention' | 'memory' | 'skill' | 'agent' | 'data' | 'preference';
 export type SpaceVisibility = 'private' | 'shared';
 export type SpaceFormat = 'markdown' | 'json';
 

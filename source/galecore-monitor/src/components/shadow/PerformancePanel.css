@@ -107,6 +107,19 @@
 .strategy-row { cursor: pointer; }
 .strategy-row:hover, .strategy-row:focus-visible { background: var(--bg-tertiary); outline: 1px solid var(--border); }
 .strategy-list .strategy-name { font-size: 14px; white-space: nowrap; overflow-wrap: normal; }
+.strategy-list-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.strategy-hidden-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.performance-panel .strategy-hidden-toggle input { appearance: none; width: 30px; height: 18px; padding: 2px; border-radius: 99px; cursor: pointer; background: var(--bg-tertiary); }
+.strategy-hidden-toggle input::before { content: ''; display: block; width: 12px; height: 12px; border-radius: 50%; background: var(--text-secondary); transition: transform .12s; }
+.strategy-hidden-toggle input:checked::before { transform: translateX(12px); background: var(--accent); }
+.strategy-name-actions { display: flex; align-items: center; gap: 12px; }
+.strategy-list .strategy-visibility { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; padding: 5px; opacity: 0; color: var(--text-secondary); white-space: nowrap; font: 13px var(--font-sans); }
+.strategy-row:hover .strategy-visibility, .strategy-row:focus-within .strategy-visibility, .strategy-visibility:focus-visible, .strategy-hidden .strategy-visibility { opacity: 1; }
+.strategy-hidden td { opacity: .55; }
+.strategy-hidden td:first-child { opacity: 1; }
+.strategy-hidden .strategy-name { opacity: .55; }
+.strategy-visibility:disabled { cursor: wait; }
+@media (hover: none) { .strategy-list .strategy-visibility { opacity: 1; } }
 .strategy-list th { white-space: normal; min-width: 85px; }
 .strategy-list th:nth-child(4) { white-space: nowrap; }
 .performance-skeleton { background: var(--bg-tertiary); border-radius: 8px; animation: performance-pulse 1.5s ease-in-out infinite alternate; }

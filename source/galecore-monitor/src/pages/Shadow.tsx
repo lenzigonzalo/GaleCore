@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { labRequest, WorkspaceProject, WorkspaceState } from '../api/lab';
 import { useAppConfigStore } from '../store/useAppConfigStore';
-import { Database } from 'lucide-react';
+import { Eye, EyeOff, Database } from 'lucide-react';
 import { InstanceState, latestInstance } from '../components/shadow/InstanceState';
+import { useHiddenStrategies } from '../components/shadow/useHiddenStrategies';
 import { PerformancePanel } from '../components/shadow/PerformancePanel';
 import { fetchReferenceCapital } from '../api/space';
 import { amount, days, metricText, rate, readPanelError, stateLabel, usd as panelUsd } from '../components/shadow/panelPresentation';
@@ -79,6 +80,8 @@ function errorText(e: unknown): string {
 }
 
 export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { selectedSpec?: string | null; onSelectSpec?: (spec: string | null) => void; onOpenChat?: (projectId: string) => void; rpf?: React.ReactNode }) {
+  const visibility = useHiddenStrategies();
+  const [showHidden, setShowHidden] = useState(false);
   const [spec, setLocalSpec] = useState<string | null>(selectedSpec ?? null);
   const setSpec = (value: string | null) => { setLocalSpec(value); onSelectSpec?.(value); };
   useEffect(() => { if (selectedSpec !== undefined) setLocalSpec(selectedSpec); }, [selectedSpec]);
@@ -89,7 +92,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   useEffect(() => {
     let active = true;
     projectsRequest.current ??= labRequest<WorkspaceState>('/workspaces');
-    projectsRequest.current.then(state => { if (active) { setProjects(state.projects.filter(p => p.type === 'strategy' && p.strategyName && !p.strategyName.startsWith('shadow_runtime_test_'))); setProjectsError(''); } }).catch(() => { if (active) setProjectsError('No se pudieron leer las estrategias en diseño.'); });
+    projectsRequest.current.then(state => { if (active) { setProjects(state.projects.filter(p => p.type === 'strategy' && p.strategyName)); setProjectsError(''); } }).catch(() => { if (active) setProjectsError('No se pudieron leer las estrategias en diseño.'); });
     return () => { active = false; };
   }, []);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
@@ -114,6 +117,16 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   }, [retry]);
   useEffect(() => { let active = true; profileRequest.current ??= fetchReferenceCapital(); profileRequest.current.then(value => { if (active) setCapital(value); }); return () => { active = false; }; }, []);
   const cell = (metric: Metric, format = panelUsd, signed = false) => <td className="numeric" title={metric.reason || undefined} style={signed && metric.value !== null ? { color: metric.value < 0 ? 'var(--red-gc)' : metric.value > 0 ? 'var(--green)' : undefined } : undefined}>{metricText(metric, format)}</td>;
+  const visible = (name: string) => showHidden || !visibility.hidden.includes(name);
+  const rowClass = (name: string) => 'strategy-row' + (visibility.hidden.includes(name) ? ' strategy-hidden' : '');
+  const visibilityAction = (name: string) => {
+    const hidden = visibility.hidden.includes(name);
+    const label = hidden ? 'Volver a mostrar' : 'Ocultar de mi lista';
+    return <button className="strategy-visibility" aria-label={label} title={label} disabled={!visibility.ready || visibility.busy}
+      onClick={event => { event.stopPropagation(); void visibility.toggle(name); }}>
+      {hidden ? <Eye size={16}/> : <EyeOff size={16}/>}{hidden && <span>Volver a mostrar</span>}
+    </button>;
+  };
   const headers = [
     ['Estrategia', 'Nombre de la estrategia.'], ['Estado', 'Estado de la instancia más reciente.'], ['Operaciones', 'Cantidad de operaciones cerradas y posiciones abiertas.'],
     ['% Gan', 'Proporción de operaciones cerradas que ganaron.'], ['Ganancia total', 'Resultado acumulado de las operaciones cerradas en USD.'],
@@ -125,17 +138,18 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
       <button className="shadow-back" onClick={() => { setSpec(null); setRuntimeOpen(false); }}>← Estrategias</button>
       {spec === 'rpf' && rpf ? <div className="performance-panel"><h2>RPF</h2><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
     </> : <div className="performance-panel">
-      <h2>Estrategias</h2>
+      <div className="strategy-list-heading"><h2>Estrategias</h2><label className="strategy-hidden-toggle"><input type="checkbox" role="switch" checked={showHidden} onChange={event => setShowHidden(event.target.checked)}/>Mostrar ocultas ({visibility.hidden.length})</label></div>
+      {visibility.error && <div role="alert">{visibility.error === 'read' ? 'No se pudieron leer tus preferencias de estrategias.' : 'No se pudo guardar tu lista de estrategias.'} <button onClick={visibility.retry} disabled={visibility.busy}>Reintentar</button></div>}
       {error && <div role="alert">{error}<button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
       {statusError && <p role="alert">{statusError}</p>}{projectsError && <p role="alert">{projectsError}</p>}
       <div className="performance-table strategy-list" aria-busy={loading}><table><thead><tr>{headers.map(([label, definition]) => <th key={label} title={definition}>{label}</th>)}</tr></thead><tbody>
-        {loading ? Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia">{headers.map(([label]) => <td key={label}><div className="performance-skeleton row-skeleton" /></td>)}</tr>) : rows.filter(row => !row.spec.startsWith('shadow_runtime_test_')).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} aria-label={`Abrir ${row.spec}`} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec(row.spec); } }}>
-          <td><button className="strategy-name" onClick={() => setSpec(row.spec)}>{row.spec}</button></td><td><InstanceState instance={latestInstance(instances, row.spec)} /></td><td>{row.tradesClosed} cerradas · {row.tradesOpen} abiertas</td>
+        {loading ? Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia">{headers.map(([label]) => <td key={label}><div className="performance-skeleton row-skeleton" /></td>)}</tr>) : rows.filter(row => visible(row.spec)).map(row => <tr key={row.spec} className={rowClass(row.spec)} tabIndex={0} aria-label={`Abrir ${row.spec}`} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec(row.spec); } }}>
+          <td><div className="strategy-name-actions"><button className="strategy-name" onClick={() => setSpec(row.spec)}>{row.spec}</button>{visibilityAction(row.spec)}</div></td><td><InstanceState instance={latestInstance(instances, row.spec)} /></td><td>{row.tradesClosed} cerradas · {row.tradesOpen} abiertas</td>
           {cell(row.winRate, rate)}{cell(row.realizedPnl, panelUsd, true)}{cell(row.expectancy, panelUsd, true)}<td>{row.takeProfitExits} TP · {row.stopLossExits} SL · {row.otherExits} otras</td>{cell(row.avgDaysHeld, days)}{cell(row.maxDrawdown, amount)}{cell(row.worstTrade, panelUsd, true)}
         </tr>)}
-        {!loading && projects.filter(project => !rows.some(row => row.spec === project.strategyName) && project.strategyName !== 'rpf').map(project => <tr key={project.id} className="strategy-row" tabIndex={0} aria-label={`Abrir ${project.strategyName}`} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.key === 'Enter') setSpec(project.strategyName); }}><td><button className="strategy-name" onClick={() => setSpec(project.strategyName)}>{project.strategyName}</button></td><td>{latestInstance(instances, project.strategyName!) ? <InstanceState instance={latestInstance(instances, project.strategyName!)} /> : 'En diseño'}</td>{headers.slice(2).map(([label]) => <td key={label} title="Todavía no tiene operaciones SHADOW">—</td>)}</tr>)}
-        {!loading && rpf && rpfEnabled && !rows.some(row => row.spec === 'rpf') && <tr className="strategy-row" tabIndex={0} aria-label="Abrir RPF" onClick={() => setSpec('rpf')} onKeyDown={event => { if (event.key === 'Enter') setSpec('rpf'); }}><td><button className="strategy-name" onClick={() => setSpec('rpf')}>RPF</button></td><td>Monitor propio</td>{headers.slice(2).map(([label]) => <td key={label} title="Disponible en la pestaña Hoy">—</td>)}</tr>}
-        {!loading && !error && !rows.length && !projects.length && !rpfEnabled && <tr><td colSpan={headers.length}>Sin estrategias SHADOW</td></tr>}
+        {!loading && projects.filter(project => !rows.some(row => row.spec === project.strategyName) && project.strategyName !== 'rpf' && visible(project.strategyName!)).map(project => <tr key={project.id} className={rowClass(project.strategyName!)} tabIndex={0} aria-label={`Abrir ${project.strategyName}`} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec(project.strategyName); } }}><td><div className="strategy-name-actions"><button className="strategy-name" onClick={() => setSpec(project.strategyName)}>{project.strategyName}</button>{visibilityAction(project.strategyName!)}</div></td><td>{latestInstance(instances, project.strategyName!) ? <InstanceState instance={latestInstance(instances, project.strategyName!)} /> : 'En diseño'}</td>{headers.slice(2).map(([label]) => <td key={label} title="Todavía no tiene operaciones SHADOW">—</td>)}</tr>)}
+        {!loading && rpf && rpfEnabled && visible('rpf') && !rows.some(row => row.spec === 'rpf') && <tr className={rowClass('rpf')} tabIndex={0} aria-label="Abrir RPF" onClick={() => setSpec('rpf')} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); setSpec('rpf'); } }}><td><div className="strategy-name-actions"><button className="strategy-name" onClick={() => setSpec('rpf')}>RPF</button>{visibilityAction('rpf')}</div></td><td>Monitor propio</td>{headers.slice(2).map(([label]) => <td key={label} title="Disponible en la pestaña Hoy">—</td>)}</tr>}
+        {!loading && !error && !rows.some(row => visible(row.spec)) && !projects.some(project => visible(project.strategyName!)) && !(rpf && rpfEnabled && visible('rpf')) && <tr><td colSpan={headers.length}>{visibility.hidden.length && !showHidden ? 'No hay estrategias visibles. Activá Mostrar ocultas para recuperarlas.' : 'Sin estrategias SHADOW'}</td></tr>}
       </tbody></table></div>
     </div>}
   </div>;
