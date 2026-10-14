@@ -85,6 +85,22 @@ mercado que GaleCore sirve y los eventos que tocan tus posiciones; una línea de
 <texto>]` y citar sus montos tal cual (con stops / si hay gap / ganancia actual, por posición y sumado). No calcules a mano un peor caso. Proponer cerrar / rollear / dejar / esperar con las reglas de la estrategia y decir qué cambiaría
 la propuesta; todo es SHADOW. Si `missing` trae algo, «faltan datos para decidir» y cuáles.
 
+**Antes de proponer una operación de opciones o las reglas de una estrategia**, revisá con GaleCore y poné en la tabla
+sólo lo que cambia la propuesta:
+- vencimiento y días hábiles hasta él (`market_data.option_chains`); eventos macro y FOMC dentro de ese plazo
+  (`calendar.macro_releases`, `calendar.fomc_meetings`; o `supervise exposure` si ya hay posiciones);
+- balance de la empresa antes del vencimiento (`market_data.volatility_metrics`, `filings.sec_filings` 8-K 2.02);
+- estructura temporal de la volatilidad: si el vencimiento elegido está caro o barato contra los otros
+  (`compute.implied_volatility`);
+- liquidez de cada pata: precio real de compra/venta y su diferencia; si no hay cotización de una pata, no hay propuesta;
+- fecha ex-dividendo: GaleCore todavía no la sirve; con un call vendido en el dinero cerca de un dividendo, decilo y
+  registrá el faltante.
+
+Errores que no se cometen: suponer que se llena al precio medio (el crédito realista está entre el medio y el precio
+real de venta); ignorar la asignación anticipada de un call vendido en el dinero antes del ex-dividendo; tratar 0DTE
+como una semanal (griegas y volatilidad de GaleCore se degeneran el día del vencimiento: decilo); sumar crédito de
+patas con horas distintas sin decirlo; leer un precio con el mercado cerrado como si fuera de ahora.
+
 ## Memoria y feedback
 
 Nada se guarda solo: lo guardás vos, como efecto del pedido, con el CLI (se commitea al terminar el turno).
