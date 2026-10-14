@@ -22,6 +22,14 @@
 .strike-spot { position: absolute; top: 59px; transform: translateX(-50%); color: var(--text-primary); font: 14px var(--font-mono); white-space: nowrap; }
 .strike-spot::before { content: ''; position: absolute; bottom: 100%; left: 50%; width: 2px; height: 30px; background: currentColor; }
 .strike-spot.outside { color: var(--red-gc); }
+.strike-ladder:has(.strike-wall) { height: 116px; }
+.strike-wall { position: absolute; top: 25px; height: 60px; border-left: 1px dashed var(--text-secondary); color: var(--text-primary); }
+.strike-wall span { position: absolute; top: 60px; left: 0; transform: translateX(-50%); white-space: nowrap; font-size: 13px; }
+.strike-wall.call span { top: 77px; }
+.strike-ladder-inline { display: inline-flex; align-items: center; gap: 8px; height: 24px; font: 14px var(--font-mono); }
+.strike-inline-leg { display: inline-flex; align-items: center; gap: 4px; }
+.strike-inline-leg i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.strike-inline-leg.sell i { background: var(--red-gc); }
 .strike-empty { padding-top: 30px; font-size: 14px; }
 .position-row.compact { grid-template-columns: minmax(140px, .6fr) minmax(300px, 1fr); min-width: 470px; padding: 6px 10px; margin: 0; gap: 12px; }
 .position-row.compact .position-heading h4 { font-size: 14px; margin-bottom: 0; }

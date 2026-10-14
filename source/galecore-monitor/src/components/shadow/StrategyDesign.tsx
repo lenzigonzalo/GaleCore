@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { labRequest, WorkspaceState } from '../../api/lab';
-import { LabStrategySheet, StrategyView } from '../../pages/LabStrategySheet';
+import type { StrategyView } from '../../pages/LabStrategySheet';
+import { CompactStrategyDesign } from './CompactStrategyDesign';
 
-export function StrategyDesign({ spec }: { spec: string }) {
+export function useStrategyDesign(spec: string) {
   const [strategy, setStrategy] = useState<StrategyView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -25,8 +26,11 @@ export function StrategyDesign({ spec }: { spec: string }) {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [spec, retry]);
-  if (loading) return <div className="performance-skeleton design-skeleton" role="status" aria-label="Cargando diseño" />;
-  if (error) return <div role="alert"><p>{error}</p><button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>;
-  if (absent) return <p>Esta estrategia no tiene proyecto en el Lab</p>;
-  return <LabStrategySheet strategy={strategy} />;
+  return { strategy, loading, error, absent, retry: () => setRetry(n => n + 1) };
+}
+export function StrategyDesign({ design }: { design: ReturnType<typeof useStrategyDesign> }) {
+  if (design.loading) return <div className="performance-skeleton design-skeleton" role="status" aria-label="Cargando diseño" />;
+  if (design.error) return <div role="alert"><p>{design.error}</p><button onClick={design.retry}>Reintentar</button></div>;
+  if (design.absent) return <p>Esta estrategia no tiene proyecto en el Lab</p>;
+  return <CompactStrategyDesign strategy={design.strategy} />;
 }

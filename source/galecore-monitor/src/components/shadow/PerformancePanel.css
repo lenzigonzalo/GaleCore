@@ -54,6 +54,39 @@
 .performance-visuals .calendar-day strong { font-size: 15px; }
 .trade-log-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; }
 .trade-log-heading > div { display: flex; gap: 10px; }
+.strategy-hypothesis { margin-top: 10px; font-size: 14px; line-height: 1.5; }
+.strategy-hypothesis p { margin: 3px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.performance-heading .performance-filters select { padding: 5px 8px; font-size: 14px; }
+.trade-log-block { padding: 16px; margin-bottom: 16px; }
+.trade-log-heading h3 { margin: 0; font-size: 18px; }
+.performance-panel .trade-export { display: inline-flex; align-items: center; justify-content: center; padding: 5px; border: 0; background: transparent; }
+.exit-summary { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0; font-size: 14px; }
+.exit-summary span + span::before { content: '·'; margin-right: 16px; }
+.exit-summary strong { font-weight: 600; }
+.trade-log table { font-size: 14px; }
+.trade-log th, .trade-log td { padding: 6px 8px; vertical-align: middle; }
+.trade-log td:first-child { min-width: 100px; white-space: nowrap; }
+.trade-structure { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.performance-breakdowns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+.performance-breakdowns > div { min-width: 0; }
+.performance-breakdowns h4 { margin: 10px 0 8px; font-size: 16px; }
+.performance-breakdowns th, .performance-breakdowns td { padding: 6px 8px; }
+.performance-breakdowns th { white-space: normal; }
+.performance-breakdowns td:first-child { min-width: 90px; }
+.performance-breakdowns p { font-size: 14px; margin: 12px 0 0; }
+.shadow-runtime { padding: 12px 16px; margin-bottom: 16px; }
+.shadow-runtime > summary { font-size: 16px; }
+.compact-design { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; padding: 16px; font-size: 14px; }
+.compact-design > div { min-width: 0; }
+.compact-design section + section { margin-top: 20px; }
+.compact-design h3 { font-size: 17px; margin: 0 0 8px; }
+.compact-design ul { list-style: none; padding: 0; margin: 0; }
+.compact-design li { padding: 6px 0; border-bottom: 1px solid var(--border-dark); line-height: 1.5; }
+.compact-design dl { margin: 0; }
+.compact-design dl > div { display: flex; justify-content: space-between; gap: 16px; padding: 6px 0; border-bottom: 1px solid var(--border-dark); }
+.compact-design dd { margin: 0; text-align: right; }
+.design-no-data { font-size: 13px; }
+@media (max-width: 850px) { .compact-design, .performance-breakdowns { grid-template-columns: 1fr; } }
 .instance-state { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--border); border-radius: 20px; font: 14px var(--font-sans); white-space: nowrap; }
 .instance-state i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); }
 .instance-state.running i { background: var(--green); }

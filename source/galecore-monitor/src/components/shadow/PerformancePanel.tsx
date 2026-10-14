@@ -7,7 +7,7 @@ import { amount, date, days, exitLabel, metricText, pct, rate, readPanelError, u
 import { LivePositionRow } from '../positions/PositionRow';
 import { PnlCalendar } from './PnlCalendar';
 import { InstanceState } from './InstanceState';
-import { StrategyDesign } from './StrategyDesign';
+import { StrategyDesign, useStrategyDesign } from './StrategyDesign';
 import { TradeLog } from './TradeLog';
 import './PerformancePanel.css';
 
@@ -71,46 +71,33 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
   const [panel, setPanel] = useState<PerformancePanelResponse | null>(null);
   const [versions, setVersions] = useState<string[]>([]);
   const [version, setVersion] = useState('');
-  const [period, setPeriod] = useState('all');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
   const [retry, setRetry] = useState(0);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('Resumen');
-  const [designOpened, setDesignOpened] = useState(false);
+  const design = useStrategyDesign(spec);
   const request = useRef<{ key: string; promise: Promise<PerformancePanelResponse> } | undefined>(undefined);
   useEffect(() => {
     let active = true;
     setError(''); setLoading(true);
     const params: PerformancePanelParams = { spec, ...(referenceCapital !== undefined ? { referenceCapital } : {}) };
     if (version) params.version = version;
-    if (period === 'custom') {
-      if (from && to && from > to) { setError('La fecha desde debe ser anterior a la fecha hasta.'); setLoading(false); return; }
-      if (from) params.from = `${from}T00:00:00.000Z`;
-      if (to) params.to = `${to}T23:59:59.999Z`;
-    } else if (period !== 'all') {
-      const end = new Date(); params.to = end.toISOString();
-      params.from = new Date(end.getTime() - Number(period) * 86400000).toISOString();
-    }
-    const key = JSON.stringify([spec, referenceCapital, version, period, from, to, retry]);
+    const key = JSON.stringify([spec, referenceCapital, version, retry]);
     if (request.current?.key !== key) request.current = { key, promise: fetchPerformancePanel(params) };
     request.current.promise.then(data => {
-      if (active) { setPanel(data); if (!version && period === 'all') setVersions(data.byVersion.map(v => v.key)); }
+      if (active) { setPanel(data); if (!version) setVersions(data.byVersion.map(v => v.key)); }
     }).catch(e => { if (active) setError(readPanelError(e)); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [spec, referenceCapital, version, period, from, to, retry]);
+  }, [spec, referenceCapital, version, retry]);
   const count = (n: number): Metric => ({ value: n, reason: null });
   const integer = (n: number) => `${n}`;
   const stat = (label: string, definition: string, metric: Metric, format: (n: number) => string = fmtPrice, signed = false) => <Stat key={label} label={label} definition={definition} metric={metric} format={format} signed={signed} />;
   const minimum = panel?.notes.map(note => /mínimo (\d+)/i.exec(note)?.[1]).find(Boolean);
   return <div className="performance-panel" aria-label="Panel de rendimiento">
-    <header className="performance-heading"><div><h2>{spec}</h2><InstanceState instance={instance} /></div><div className="performance-filters">
-      <label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas las versiones</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label>
-      <label>Período<select value={period} onChange={e => setPeriod(e.target.value)}><option value="all">Desde el inicio</option><option value="30">Últimos 30 días</option><option value="90">Últimos 90 días</option><option value="custom">Elegir fechas</option></select></label>
-      {period === 'custom' && <><label>Desde<input title="Fecha inicial en UTC" type="date" value={from} onChange={e => setFrom(e.target.value)} /></label><label>Hasta<input title="Fecha final en UTC" type="date" value={to} onChange={e => setTo(e.target.value)} /></label></>}
-    </div></header>
-    <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Operaciones', 'Diseño'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => { setTab(name); if (name === 'Diseño') setDesignOpened(true); }}>{name}</button>)}</div>
+    <header className="performance-heading"><div><h2>{spec}</h2><InstanceState instance={instance} />
+      {design.strategy?.current?.hypothesis && <div className="strategy-hypothesis">{design.strategy.current.hypothesis.mechanism && <p title={design.strategy.current.hypothesis.mechanism}><strong>Hipótesis:</strong> {design.strategy.current.hypothesis.mechanism}</p>}{design.strategy.current.hypothesis.expected_result && <p title={design.strategy.current.hypothesis.expected_result}><strong>Objetivo:</strong> {design.strategy.current.hypothesis.expected_result}</p>}</div>}
+    </div>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</header>
+    <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Operaciones', 'Diseño'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
     {tab !== 'Diseño' && loading && <div role="status" aria-label="Cargando rendimiento" className="performance-loading"><div className="performance-metrics">{Array.from({ length: 12 }, (_, i) => <div key={i} className="performance-skeleton metric-skeleton" />)}</div><div className="performance-skeleton chart-skeleton" /></div>}
     {tab !== 'Diseño' && error && <div role="alert"><p>{error}</p><button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
     {panel && !loading && !error && tab === 'Resumen' && <div role="tabpanel" id="pane-Resumen" aria-labelledby="tab-Resumen">
@@ -157,11 +144,10 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
       <Block title="Posiciones abiertas">{panel.openPositions.map(position => <LivePositionRow key={position.positionId} position={{ structure: position.structure, symbol: position.symbol, expiration: position.legList[0]?.expiration ?? null, dte: position.currentDte, legs: position.legList, entryAt: position.entryAt, credit: position.entryCredit, currentValue: position.lastSpreadValue, pnl: position.unrealizedPnl, risk: position.maxRisk, reason: position.valuationProblems?.join(' · ') }} />)}{!panel.openPositions.length && <p>Sin posiciones abiertas</p>}</Block>
     </div>}
     {panel && !loading && !error && tab === 'Operaciones' && <div role="tabpanel" id="pane-Operaciones" aria-labelledby="tab-Operaciones">
-      <Block title="Salidas"><div className="exit-bars">{panel.byExitRule.map(rule => <div className="exit-bar" key={rule.key}><strong>{exitLabel(rule.key)}</strong><meter min={0} max={Math.max(1, ...panel.byExitRule.map(row => row.trades))} value={rule.trades} aria-label={`Salidas ${exitLabel(rule.key)}`} /><span>{rule.trades} operaciones</span><span className="font-mono">{value(rule.realizedPnl, usd)}</span></div>)}</div></Block>
-      <TradeLog trades={panel.closedTrades} spec={spec} />
-      <Block title="Régimen y versión"><Groups title="VIX" rows={panel.regime.byVix} /><Groups title="IV Rank" rows={panel.regime.byIvRank} /><Groups title="Gamma" rows={panel.regime.byGamma} />{panel.regime.tradesWithoutContext > 0 && <p>{panel.regime.tradesWithoutContext} cerradas sin contexto de régimen</p>}<Groups title="Versión" rows={panel.byVersion} /></Block>
+      <TradeLog trades={panel.closedTrades} spec={spec} exits={panel.byExitRule} />
+      <Block title="Régimen y versión"><div className="performance-breakdowns"><div><Groups title="VIX" rows={panel.regime.byVix} /><Groups title="IV Rank" rows={panel.regime.byIvRank} /><Groups title="Gamma" rows={panel.regime.byGamma} />{panel.regime.tradesWithoutContext > 0 && <p>{panel.regime.tradesWithoutContext} cerradas sin contexto de régimen</p>}</div><Groups title="Versión" rows={panel.byVersion} /></div></Block>
       {runtime}
     </div>}
-    {designOpened && <div role="tabpanel" id="pane-Diseño" aria-labelledby="tab-Diseño" hidden={tab !== 'Diseño'}><StrategyDesign spec={spec} /></div>}
+    {tab === 'Diseño' && <div role="tabpanel" id="pane-Diseño" aria-labelledby="tab-Diseño"><StrategyDesign design={design} /></div>}
   </div>;
 }

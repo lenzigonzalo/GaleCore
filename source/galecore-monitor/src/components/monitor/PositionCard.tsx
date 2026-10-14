@@ -22,7 +22,7 @@ const ALERT_CFG: Record<NonNullable<AlertType>, { label: string; bg: string; tex
   MACRO_PROXIMO: { label: 'MACRO EVENT',  bg: '#d97706', text: '#fff' },
 };
 
-export function PositionCard({ spread: s }: Props) {
+export function PositionCard({ spread: s, gexData }: Props) {
   const { config }    = useAppConfigStore();
   const spotPrice     = useUnderlyingPrice(s.underlyingSymbol);
   const tickers       = useMarketStore(st => st.tickers);
@@ -159,7 +159,7 @@ export function PositionCard({ spread: s }: Props) {
 
       <div className="px-4 py-3 flex flex-col gap-4">
         {/* ── Strike Ladder ──────────────────────────────────────────────── */}
-        <StrikeLadder legs={ladderLegs} spot={spotPrice} />
+        <StrikeLadder legs={ladderLegs} spot={spotPrice} putWall={gexData[s.underlyingSymbol]?.putWall} callWall={gexData[s.underlyingSymbol]?.callWall} />
 
         {/* Stale-data warning — the account API only exposes the previous close;
             without live option quotes the P&L below can be wrong. Don't pretend. */}

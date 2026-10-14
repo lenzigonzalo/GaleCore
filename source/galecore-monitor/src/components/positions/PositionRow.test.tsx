@@ -60,3 +60,12 @@ test('fallback requests one quote per symbol across rows, then the stream overri
   act(() => useMarketStore.getState().updatePrice('TEST-QUOTE', { price: 275 } as any));
   expect(within(screen.getAllByRole('article')[0]).getByText('275.00')).toBeInTheDocument();
 });
+test('optional GEX walls remain visible even without spot, and are absent from shared position rows', () => {
+  const { container, rerender } = render(<StrikeLadder legs={legs} putWall={240} callWall={300} />);
+  expect(screen.getByText('PUT WALL 240')).toBeInTheDocument();
+  expect(screen.getByText('CALL WALL 300')).toBeInTheDocument();
+  expect(container.querySelectorAll('.strike-wall')).toHaveLength(2);
+  expect(container.querySelector('.strike-spot')).toBeNull();
+  rerender(<PositionRow position={position} />);
+  expect(container.querySelector('.strike-wall')).toBeNull();
+});
