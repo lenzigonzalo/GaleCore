@@ -1,4 +1,4 @@
-"""QA contra Dev: no ?rdenes, datos simulados ni credenciales en artefactos."""
+"""QA contra Dev: no órdenes, datos simulados ni credenciales en artefactos."""
 import argparse
 import json
 import re
