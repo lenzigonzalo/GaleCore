@@ -277,11 +277,12 @@ def bet_limits(kb: KnowledgeBase, read: Reader) -> tuple[list[dict], list[str]]:
             continue
         drafts.append({"strategy": "cartera", "strategy_ref": None, "instance_id": "", "position_id": bet,
                        "key": f"bet_limit:{bet}", "kind": AlertKind.BET_LIMIT,
-                       "motivo": f"La apuesta {bet} usa {check.get('used'):g} USD de un tope de {check.get('max'):g}.",
+                       "motivo": f"La apuesta SHADOW (simulada) {bet} usa {check.get('used'):g} USD frente a un tope de referencia "
+                                  f"del perfil de {check.get('max'):g}; no es exposición real.",
                        "dato": {"apuesta": bet, "usado_usd": check.get("used"), "tope_usd": check.get("max"),
                                 "margen_usd": check.get("headroom")},
-                       "regla": f"Tope por apuesta del perfil ({doc.ref}): vigilado por el supervisor; el runtime no "
-                                "lo bloquea",
+                       "regla": f"Tope por apuesta del perfil ({doc.ref}) como referencia de la simulación: vigilado por el "
+                                "supervisor; el runtime no lo bloquea",
                        "propuesta": "Revisar si se acepta la exposición o se reduce; nada se cierra solo por esto."})
     return drafts, problems
 
@@ -411,7 +412,7 @@ def event_exposure(kb: KnowledgeBase, read: Reader, now: datetime | None = None,
                 isinstance(credit, int | float) else None
             if stop_loss is None:
                 missing.append(f"{pos.get('symbol')} {str(pos.get('positionId'))[:8]}: sin stop o crédito en la spec")
-            rows.append({"position_id": pos.get("positionId"), "strategy": inst.get("specName"),
+            rows.append({"scope": "SHADOW", "position_id": pos.get("positionId"), "strategy": inst.get("specName"),
                          "strategy_ref": strategy_ref, "symbol": pos.get("symbol"),
                          "structure": pos.get("structure"), "expiration": raw_exp,
                          "short_strikes": sorted(leg["strike"] for leg in pos.get("legs") or []

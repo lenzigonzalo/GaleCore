@@ -60,6 +60,7 @@ def test_a_bet_over_the_cap_is_one_alert_that_says_it_is_watched_not_blocked(kb,
     assert alert.dato == {"apuesta": "SPY bullish 2026-W46", "usado_usd": 1822.0, "tope_usd": 1500.0,
                           "margen_usd": -322.0}
     assert "vigilado" in alert.regla and "no lo bloquea" in alert.regla
+    assert "SHADOW" in alert.motivo and "no es exposición real" in alert.motivo     # simulado ≠ real (PRODUCT.md «Límites»)
     assert alert.options == ["aceptar", "revisar la exposición"]
     again = supervisor.scan(kb, _reader(doc.spec_hash, [position()], exp), IN_SESSION.replace(minute=5))
     assert again["new"] == []                                                   # once per bet

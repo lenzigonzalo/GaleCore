@@ -1,6 +1,14 @@
 # Qué cambió en cada versión de daily_attention y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: daily_attention
 versions:
+  - version: "0.2.5"
+    date: 2026-10-13
+    changes: >
+      Separa SHADOW y real según PRODUCT.md «Límites» (owner, 13/10): la exposición simulada se llama «exposición SHADOW»,
+      nunca «tu apuesta» ni «tu exposición»; los topes del perfil son la vara de referencia, no un límite que lo simulado
+      consuma del capital real; la cartera real va aparte y sin sumar. El supervisor (`bet_limit`) y `supervise exposure`
+      marcan sus montos como SHADOW. Origen: H4 y H5 de la vuelta 28 de WS-0029 («tu apuesta de SPY pasa su tope»).
+    feedback: []
   - version: "0.2.4"
     date: 2026-10-06
     changes: >

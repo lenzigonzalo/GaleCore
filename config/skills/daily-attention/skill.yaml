@@ -1,5 +1,5 @@
 skill_id: daily_attention
-version: "0.2.4"
+version: "0.2.5"
 display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
 description: >
   Answers "what deserves my attention today about what I have in SHADOW?": exposure of the open SHADOW
@@ -17,6 +17,8 @@ required_capabilities: []
 answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisión del owner 13/10)
   Veredicto primero (qué hacer y por qué). Una tabla corta: posiciones contra límites y eventos dentro de su vida.
   Nunca recortar un límite superado ni un evento cercano (CPI, FOMC); fechas con día de la semana.
+  SHADOW y real van separados y con su nombre (PRODUCT.md «Límites»): lo simulado no es «tu exposición» ni «tu apuesta»;
+  los topes del perfil son la vara de referencia para validar, no un límite que la simulación consuma de tu capital real.
   Pregunta puntual («¿qué hago antes del CPI?»): `supervise exposure` + `capital`, una alternativa por opción con su
   número y el peor caso; no guardar research.
 
@@ -41,7 +43,11 @@ system_prompt: >
      exposure. A spec whose report could not be read is "not verified", never zero. If the record lacks a value for a position,
      that value is `missing` for that position — never fill it from another day or instance without
      saying so. Greeks are NOT served by any registered source: write them under `missing`.
-     Comparing exposure with the profile's limits (and any stop-loss arithmetic) is your own
+     Call it «exposición SHADOW (simulada)», never the owner's exposure or bet: simulated positions do not add to
+     the real portfolio or consume the real capital (PRODUCT.md «Límites»). The profile's limits are the reference
+     bar against which the simulation is read; say «supera el tope de referencia del perfil», not «tu apuesta pasa
+     tu tope». The real portfolio is a separate line (what GaleCore serves of it, or «sin cartera real conectada»),
+     never summed with SHADOW. Comparing exposure with the profile's limits (and any stop-loss arithmetic) is your own
      calculation: write it as an interpretation labelled "Cálculo propio", citing the record, and mark
      it provisional when the limits are.
   5. Rules check: for each open position and for today's evaluations, which rule of the approved spec
@@ -82,8 +88,8 @@ system_prompt: >
      happened since the last review, and the events coming inside the positions' life (7b).
      Then the attention points, ordered: first what breaks a rule or a limit, then what is near one,
      then events that fall inside a position's life, then data gaps, then context. Each point names its source (followup record, evidence id, strategy ref).
-     Keep SHADOW results (simulated fills at mid, never executions), operation and economic evidence
-     separate. No recommendation presented as the owner's decision; say "la regla X dice…".
+     Keep SHADOW results (simulated fills at mid, never executions), real portfolio, operation and economic evidence
+     separate, each under its own name. No recommendation presented as the owner's decision; say "la regla X dice…".
   9. Deliver in the profile's format (tables first, minimal text). Save: first time
      `research save --capability daily_attention --slug atencion-diaria-<strategy>` (slug in lowercase with dashes:
      `spy_prima_varianza_30_45d` → `spy-prima-varianza-30-45d`); afterwards
@@ -98,7 +104,7 @@ system_prompt: >
      FOMC?») is not the daily review: do not run steps 1-10 and do not save a research. Run `supervise exposure
      --symbol <SYM> --event <texto>` (it carries each position's event, its date and business days; do not call
      `calendar.*` for that date) and `capital --strategy <name>`; quote their amounts as they are. Answer with the
-     verdict first (what to do and why), a table of the position against the event and the limit, and one
+     verdict first (what to do and why; state that positions and amounts are SHADOW/simulated), a table of the position against the event and the limit, and one
      alternative per option that applies (close all or part, roll, leave, wait), each with its number from those
      commands: the amount it frees or leaves under the limit, and the worst case that remains. «Roll» only with a
      number if GaleCore serves it; otherwise say it is not quantified and do not invent a credit. Every dated figure
