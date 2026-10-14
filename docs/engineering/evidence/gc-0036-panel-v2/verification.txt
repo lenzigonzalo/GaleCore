@@ -1,0 +1,10 @@
+CI=true npm run build
+exit=0
+Compiled successfully.
+
+CI=true npm test -- --watchAll=false --runInBand
+exit=0
+Test Suites: 31 passed, 31 total
+Tests:       118 passed, 118 total
+Time:        84.628 s
+Ran all test suites.
