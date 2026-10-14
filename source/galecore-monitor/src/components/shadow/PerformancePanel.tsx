@@ -50,7 +50,7 @@ function Curve({ rows }: { rows: PerformancePanelResponse['curve'] }) {
     return () => { active = false; chart?.remove(); };
   }, [rows]);
   return !rows.length ? <p>Sin operaciones cerradas para la curva.</p> : <>
-    <div ref={host} role="img" aria-label="Resultado acumulado y caída en USD" />
+    <div ref={host} style={{ height: 360, width: '100%' }} role="img" aria-label="Resultado acumulado y caída en USD" />
     {error && <p role="alert">No se pudo mostrar la curva.</p>}
     <details><summary>Datos de la curva</summary><table><thead><tr><th>Salida</th><th>Resultado</th><th>Acumulado</th><th>Caída</th></tr></thead><tbody>{rows.map(r => <tr key={r.at}><td>{date(r.at)}</td><td>{usd(r.pnl)}</td><td>{usd(r.cumulative)}</td><td>{usd(r.drawdown)}</td></tr>)}</tbody></table></details>
   </>;

@@ -14,8 +14,8 @@
 .performance-number { display: block; font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; font-size: 28px; line-height: 1.4; margin-top: 8px; overflow-wrap: anywhere; }
 .performance-reason { display: block; font-size: 16px; line-height: 1.5; margin-top: 8px; }
 .performance-table, .performance-panel details { overflow-x: auto; }
-.performance-panel table { width: 100%; border-collapse: collapse; font-size: 16px; }
-.performance-panel th, .performance-panel td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); }
-.performance-panel td:not(:first-child) { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.performance-table table, .performance-panel details table { width: 100%; border-collapse: collapse; font-size: 16px; }
+.performance-table th, .performance-table td, .performance-panel details th, .performance-panel details td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); }
+.performance-table td:not(:first-child), .performance-panel details td:not(:first-child) { font-family: 'JetBrains Mono', monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .performance-limit { border-top: 1px solid var(--border); padding: 16px 0; overflow-wrap: anywhere; }
 .performance-limit progress { width: 100%; height: 14px; margin: 12px 0; }

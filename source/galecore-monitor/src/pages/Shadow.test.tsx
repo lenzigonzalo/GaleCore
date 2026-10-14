@@ -164,3 +164,13 @@ test('selector de estrategia monta el panel seleccionado sin mezclar specs', asy
   fireEvent.change(selector, { target: { value: 'tlt' } });
   expect(screen.getByTestId('performance-panel')).toHaveTextContent('tlt');
 });
+
+
+test('un error del seguimiento antiguo no desmonta el panel independiente', async () => {
+  render(<Shadow />);
+  await screen.findByTestId('performance-panel');
+  mocked.fetchShadowStatus.mockRejectedValue(new Error('Runtime unavailable'));
+  fireEvent.click(screen.getByTitle('Actualizar'));
+  await screen.findByText('No se pudo leer el runtime');
+  expect(screen.getByTestId('performance-panel')).toBeInTheDocument();
+});

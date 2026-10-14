@@ -79,6 +79,7 @@ export function Shadow() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedSpec, setSelectedSpec] = useState('');
+  const [knownSpecs, setKnownSpecs] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,6 +89,7 @@ export function Shadow() {
       let metrics: SpecVersionMetrics[] | null = null;
       let metricsError: string | null = null;
       try { metrics = await fetchShadowMetrics(); } catch (e) { metricsError = errorText(e); }
+      if (metrics) setKnownSpecs(Array.from(new Set(metrics.map(m => m.specName))));
       const [evaluations, discards, positions] = instance
         ? await Promise.all([
             fetchShadowEvaluations(instance.instanceId),
@@ -126,18 +128,18 @@ export function Shadow() {
       )}
 
       {/* Si el último refresco falló, el cartel reemplaza a los datos: números viejos se leen como vigentes. */}
-      {data && !error && <>
+      {knownSpecs.length > 0 && <>
         <label style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 20, fontSize: 16 }}>
           Estrategia
-          <select aria-label="Estrategia" value={selectedSpec || data.metrics?.[0]?.specName || ''}
+          <select aria-label="Estrategia" value={selectedSpec || knownSpecs[0]}
             onChange={e => setSelectedSpec(e.target.value)}
             style={{ background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
-            {Array.from(new Set(data.metrics?.map(m => m.specName) ?? [])).map(spec => <option key={spec}>{spec}</option>)}
+            {knownSpecs.map(spec => <option key={spec}>{spec}</option>)}
           </select>
         </label>
-        {(selectedSpec || data.metrics?.[0]?.specName) && <PerformancePanel key={selectedSpec || data.metrics?.[0]?.specName} spec={selectedSpec || data.metrics![0].specName} />}
-        <Content data={data} />
+        <PerformancePanel key={selectedSpec || knownSpecs[0]} spec={selectedSpec || knownSpecs[0]} />
       </>}
+      {data && !error && <Content data={data} />}
       {!data && !error && <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 16 }}>Cargando…</div>}
     </div>
   );
