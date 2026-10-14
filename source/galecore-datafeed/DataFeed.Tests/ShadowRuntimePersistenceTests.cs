@@ -68,7 +68,7 @@ public class ShadowRuntimePersistenceTests
             return Specs.GetValueOrDefault(contentHash);
         }
 
-        public IReadOnlyList<SpecVersionRecord> LoadMetricsInputs() => throw new NotSupportedException();
+        public IReadOnlyList<SpecVersionRecord> LoadMetricsInputs(string? specName = null) => throw new NotSupportedException();
     }
 
     private static SpecLoadResult SpecFile()
@@ -210,7 +210,7 @@ public class ShadowRuntimePersistenceTests
         public void AddEvent(OperationalEvent e) => _inner.AddEvent(e);
         public ShadowRuntimeSnapshot Load(int a, int b) => _inner.Load(a, b);
         public string? GetSpecJson(string h) => _inner.GetSpecJson(h);
-        public IReadOnlyList<SpecVersionRecord> LoadMetricsInputs() => _inner.LoadMetricsInputs();
+        public IReadOnlyList<SpecVersionRecord> LoadMetricsInputs(string? specName = null) => _inner.LoadMetricsInputs(specName);
     }
 
     [Fact]

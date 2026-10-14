@@ -1683,7 +1683,7 @@ namespace DataFeed.Controllers
                     Capital = referenceCapital.Value, ReservePct = reservePct.Value, MaxRiskPerTradePct = maxRiskPerTradePct.Value,
                     MaxOpenRiskPct = maxOpenRiskPct.Value, MaxBetPct = maxBetPct.Value,
                 };
-            var records = repository.LoadMetricsInputs().Where(r => r.SpecName == spec).ToList();
+            var records = repository.LoadMetricsInputs(spec).Where(r => r.SpecName == spec).ToList();
             if (records.Count == 0) return NotFound(new { error = $"no hay posiciones SHADOW de la estrategia '{spec}'" });
             var exits = new Dictionary<string, DataFeed.Application.App.Runtime.Contracts.DeterministicExits>();
             foreach (var hash in records.Select(r => r.ContentHash).Distinct())

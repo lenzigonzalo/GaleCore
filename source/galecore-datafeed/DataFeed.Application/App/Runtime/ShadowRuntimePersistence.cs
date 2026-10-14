@@ -35,8 +35,8 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>JSON guardado de una spec, o null si esa versión nunca se guardó.</summary>
         string? GetSpecJson(string contentHash);
 
-        /// <summary>Los insumos de las métricas, una entrada por versión de spec desplegada.</summary>
-        IReadOnlyList<SpecVersionRecord> LoadMetricsInputs();
+        /// <summary>Los insumos de las métricas, una entrada por versión de spec desplegada; con `specName`, sólo esa spec.</summary>
+        IReadOnlyList<SpecVersionRecord> LoadMetricsInputs(string? specName = null);
     }
 
     public record ShadowRuntimeSnapshot

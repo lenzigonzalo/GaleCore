@@ -316,5 +316,9 @@ public class EfShadowRuntimeRepositoryTests
         Assert.True(m.NoTrades);
         Assert.Null(m.RealizedPnl);
         Assert.Equal(Now, m.FirstEvaluationAt);
+
+        // WS-0036: con spec, sólo esa (lo usa el panel); otra spec no trae nada.
+        Assert.Equal(2, repo.LoadMetricsInputs("shadow_runtime_test_v1").Single().Evaluations);
+        Assert.Empty(repo.LoadMetricsInputs("otra_spec"));
     }
 }

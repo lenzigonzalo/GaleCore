@@ -244,26 +244,34 @@ namespace DataFeed.Application.App.Runtime
             return db.StrategySpecs.AsNoTracking().Where(s => s.ContentHash == contentHash).Select(s => s.SpecJson).FirstOrDefault();
         }
 
-        public IReadOnlyList<SpecVersionRecord> LoadMetricsInputs()
+        public IReadOnlyList<SpecVersionRecord> LoadMetricsInputs(string? specName = null)
         {
             using var db = _newContext();
             var records = new List<SpecVersionRecord>();
-            foreach (var group in db.StrategyInstances.AsNoTracking().ToList().GroupBy(i => i.VersionHash).OrderBy(g => g.Min(i => i.CreatedAt)))
+            // Filtrar por spec en la base: el panel de una estrategia no tiene que leer todas (WS-0036, ~10 s en Dev).
+            var instances = db.StrategyInstances.AsNoTracking().Where(i => specName == null || i.SpecName == specName).ToList();
+            foreach (var group in instances.GroupBy(i => i.VersionHash).OrderBy(g => g.Min(i => i.CreatedAt)))
             {
                 var hash = group.Key;
                 var ids = group.Select(i => i.Id).ToList();
                 var spec = db.StrategySpecs.AsNoTracking().FirstOrDefault(s => s.ContentHash == hash);
-                var evals = db.EvaluationLogs.AsNoTracking().Where(e => ids.Contains(e.InstanceId));
+                // Un solo viaje a la base para los cuatro agregados de evaluaciones.
+                var evals = db.EvaluationLogs.AsNoTracking().Where(e => ids.Contains(e.InstanceId))
+                    .GroupBy(_ => 1).Select(g => new
+                    {
+                        Count = g.Count(), Passed = g.Count(e => e.OverallPass),
+                        First = g.Min(e => (DateTime?)e.EvaluatedAt), Last = g.Max(e => (DateTime?)e.EvaluatedAt),
+                    }).FirstOrDefault();
                 records.Add(new SpecVersionRecord
                 {
                     ContentHash = hash,
                     SpecName = spec?.Name ?? group.First().SpecName,
                     SpecVersion = spec?.Version ?? "",
                     Instances = ids.Count,
-                    Evaluations = evals.Count(),
-                    EvaluationsPassed = evals.Count(e => e.OverallPass),
-                    FirstEvaluationAt = evals.Min(e => (DateTime?)e.EvaluatedAt),
-                    LastEvaluationAt = evals.Max(e => (DateTime?)e.EvaluatedAt),
+                    Evaluations = evals?.Count ?? 0,
+                    EvaluationsPassed = evals?.Passed ?? 0,
+                    FirstEvaluationAt = evals?.First,
+                    LastEvaluationAt = evals?.Last,
                     EventCounts = db.OperationalEvents.AsNoTracking().Where(e => ids.Contains(e.InstanceId))
                         .GroupBy(e => e.EventType).Select(g => new { g.Key, Count = g.Count() })
                         .ToDictionary(x => x.Key, x => x.Count),
