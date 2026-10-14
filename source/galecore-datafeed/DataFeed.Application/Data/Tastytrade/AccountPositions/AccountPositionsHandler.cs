@@ -36,8 +36,9 @@ namespace DataFeed.Application.Data.Tastytrade.AccountPositions
 
                 var accountNumber = request.AccountNumber
                     ?? credential?.AccountNumber
-                    ?? _config["Tastytrade:AccountNumber"]
-                    ?? throw new Exception("Número de cuenta requerido. Enviarlo en el request o configurar Tastytrade:AccountNumber.");
+                    // Vacío cuenta como no configurado: con "" Tastytrade responde un 403 que no dice qué falta (WS-0036).
+                    ?? (string.IsNullOrWhiteSpace(_config["Tastytrade:AccountNumber"]) ? null : _config["Tastytrade:AccountNumber"])
+                    ?? throw new Exception("Falta el número de cuenta: no hay usuario con cuenta vinculada y Tastytrade:AccountNumber no está configurado.");
 
                 var provider = new TastytradeApiProvider(_config, _auth, _client);
                 var positions = await provider.GetAccountPositionsAsync(accountNumber, cancellationToken, credential);
