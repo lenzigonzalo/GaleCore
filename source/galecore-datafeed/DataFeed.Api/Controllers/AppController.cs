@@ -112,6 +112,32 @@ namespace DataFeed.Controllers
             });
 
         /// <summary>
+        /// Aviso cerca del strike vendido (WS-0036): posiciones de la cuenta real con el precio a menos de la distancia
+        /// que el usuario configuró (`preference/aviso-strike` de su espacio). La campana del Monitor lo consulta y suena.
+        /// </summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/Account/StrikeAlerts")]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> AccountStrikeAlertsAsync(
+            [FromQuery] string? accountNumber,
+            [FromServices] IServiceProvider services,
+            CancellationToken ct)
+        {
+            var userId = _currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            var settings = await db.TraderSpaceItems.AsNoTracking()
+                .Where(i => i.OwnerId == userId.Value && i.Kind == "preference" && i.Key == "aviso-strike")
+                .Select(i => i.Content).FirstOrDefaultAsync(ct);
+            return await Handle(new DataFeed.Application.Data.Tastytrade.StrikeAlerts.StrikeAlertsRequest
+            {
+                AccountNumber = accountNumber, SettingsJson = settings,
+            });
+        }
+
+        /// <summary>
         /// Estado del switch de un servicio de plataforma (`services[]` de la config de la app).
         /// Dos niveles, no tres: estos procesos no trabajan para nadie en particular, así que no
         /// tienen preferencia por usuario. `source` vale "platform" o "rules".

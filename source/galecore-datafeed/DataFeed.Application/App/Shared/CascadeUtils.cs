@@ -507,6 +507,15 @@ namespace DataFeed.Application.App.Shared
         public static DateTime TodayEt(DateTimeOffset? nowUtc = null) =>
             TimeZoneInfo.ConvertTime(nowUtc ?? DateTimeOffset.UtcNow, EtZone).Date;
 
+        /// <summary>Rueda regular de EE. UU.: lunes a viernes, 9:30 a 16:00 ET (los feriados no se descuentan).</summary>
+        public static bool IsRegularSessionEt(DateTimeOffset? nowUtc = null)
+        {
+            var et = TimeZoneInfo.ConvertTime(nowUtc ?? DateTimeOffset.UtcNow, EtZone);
+            if (et.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) return false;
+            var t = et.TimeOfDay;
+            return t >= new TimeSpan(9, 30, 0) && t < new TimeSpan(16, 0, 0);
+        }
+
         /// <summary>
         /// Años hasta el vencimiento, para el expected move (spot · IV · √T).
         ///

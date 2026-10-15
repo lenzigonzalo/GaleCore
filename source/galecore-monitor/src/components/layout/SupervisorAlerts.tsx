@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchSpace, SpaceItem } from '../../api/space';
+import { fetchStrikeAlerts, StrikeAlert } from '../../api/account';
 
 /**
  * Avisos del supervisor de SHADOW (WS-0007): está en todas las pestañas y suena cuando llega un aviso nuevo.
@@ -9,7 +10,7 @@ import { fetchSpace, SpaceItem } from '../../api/space';
  * explicación aparte, botones ni desplegable: las acciones se agregan cuando el uso las pida.
  */
 
-type Category = 'eeuu' | 'empresa' | 'estrategia' | 'cuenta' | 'mercado';
+type Category = 'eeuu' | 'empresa' | 'estrategia' | 'cuenta' | 'mercado' | 'strike';
 interface Alert { id: string; kind: string; detected_at: string; motivo: string; decision: unknown; category?: Category; title?: string }
 interface Piece { alerts?: Alert[]; last_run?: { at: string; result: string; failed: boolean }; state_detail?: string | null }
 
@@ -24,13 +25,48 @@ const CATEGORY: Record<Category, { label: string; color: string }> = {
   estrategia: { label: 'Estrategia', color: '#34d399' },
   cuenta: { label: 'Cuenta', color: '#fb923c' },
   mercado: { label: 'Mercado', color: '#22d3ee' },
+  strike: { label: 'Strike', color: '#f87171' },
 };
 
-function readSeen(): Set<string> {
-  try { return new Set(JSON.parse(localStorage.getItem(SEEN) || '[]')); } catch { return new Set(); }
+function readSeen(key = SEEN): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch { return new Set(); }
 }
-function writeSeen(ids: Set<string>) {
-  try { localStorage.setItem(SEEN, JSON.stringify(Array.from(ids).slice(-200))); } catch { /* sin storage: suena de nuevo */ }
+function writeSeen(ids: Set<string>, key = SEEN) {
+  try { localStorage.setItem(key, JSON.stringify(Array.from(ids).slice(-200))); } catch { /* sin storage: suena de nuevo */ }
+}
+
+const STRIKE_MS = 30_000;
+const STRIKE_SEEN = 'galecore.strike.seen';
+
+/**
+ * Aviso cerca del strike vendido (WS-0036): lo evalúa la API con la preferencia del usuario; acá se consulta cada 30 s
+ * desde cualquier pestaña y suena una vez por posición, lado y día. Sin cuenta vinculada o con la API caída, calla.
+ */
+export function useStrikeAlerts(active: boolean, onNew?: () => void): StrikeAlert[] {
+  const [alerts, setAlerts] = useState<StrikeAlert[]>([]);
+  const onNewRef = useRef(onNew);
+  onNewRef.current = onNew;
+  useEffect(() => {
+    if (!active) return;
+    let alive = true;
+    const seen = new Set<string>(readSeen(STRIKE_SEEN));
+    const load = async () => {
+      try {
+        const list = await fetchStrikeAlerts();
+        if (!alive) return;
+        setAlerts(list);
+        const fresh = list.filter(a => !seen.has(a.id));
+        if (fresh.length) {
+          chime(); onNewRef.current?.();
+          fresh.forEach(a => seen.add(a.id)); writeSeen(seen, STRIKE_SEEN);
+        }
+      } catch { /* sin cuenta o sin API: no hay aviso que dar */ }
+    };
+    load();
+    const id = setInterval(load, STRIKE_MS);
+    return () => { alive = false; clearInterval(id); };
+  }, [active]);
+  return alerts;
 }
 
 /** Dos tonos cortos. Sin archivo de audio: Web Audio. Si el navegador lo bloquea, queda el aviso visual. */
@@ -91,7 +127,7 @@ function AlertCard({ alert }: { alert: Alert }) {
   );
 }
 
-export function SupervisorAlerts({ embedded = false }: { embedded?: boolean }) {
+export function SupervisorAlerts({ embedded = false, strike = [] }: { embedded?: boolean; strike?: StrikeAlert[] }) {
   const [loading, setLoading] = useState(true);
   const [item, setItem] = useState<SpaceItem | null>(null);
   const [piece, setPiece] = useState<Piece>({});
@@ -123,7 +159,10 @@ export function SupervisorAlerts({ embedded = false }: { embedded?: boolean }) {
   }, [load]);
 
   // La campana es de la cartera real (owner 15/10): lo de SHADOW va por su camino (Estrategias), no acá.
-  const alerts = (piece.alerts ?? []).filter(a => a.kind === 'watch');
+  // Los del strike van primero: piden decidir ya (rolear o no). Se muestran mientras la API los siga viendo.
+  const strikeCards: Alert[] = strike.map(a => ({ id: a.id, kind: 'watch', detected_at: new Date().toISOString(), motivo: a.title,
+    decision: null, category: 'strike', title: a.title }));
+  const alerts = [...strikeCards, ...(piece.alerts ?? []).filter(a => a.kind === 'watch')];
   const failed = !!piece.last_run?.failed;          // lo decide GaleCore-AI: la última revisión no leyó todo
   const status = <p className="alert-status">Última revisión: {when(piece.last_run?.at)}
     {failed ? ` · falló: ${piece.state_detail || piece.last_run?.result}` : ''}</p>;

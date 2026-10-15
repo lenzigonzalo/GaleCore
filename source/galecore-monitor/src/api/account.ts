@@ -145,6 +145,24 @@ export interface PositionLine {
   takeProfit: number | null; stopLoss: number | null; targetSource: string | null;
 }
 
+/** Aviso cerca del strike vendido (WS-0036): la API lo evalúa con la preferencia `aviso-strike` del usuario. */
+export interface StrikeAlertSettings {
+  enabled: boolean; unit: 'points' | 'pct'; distance: number; market_hours_only: boolean;
+  by_position: Record<string, number>;
+}
+export const STRIKE_ALERT_KEY = 'aviso-strike';
+export const STRIKE_ALERT_DEFAULTS: StrikeAlertSettings = { enabled: false, unit: 'points', distance: 15, market_hours_only: true, by_position: {} };
+
+export interface StrikeAlert {
+  id: string; positionId: string; side: 'put' | 'call'; strike: number; spot: number;
+  distancePoints: number; distancePct: number; thresholdPoints: number; title: string;
+}
+
+export async function fetchStrikeAlerts(): Promise<StrikeAlert[]> {
+  const { data } = await apiClient.get<{ alerts?: StrikeAlert[] }>('/App/GaleCore/Account/StrikeAlerts', { timeout: 30_000 });
+  return data?.alerts ?? [];
+}
+
 export async function fetchAccountOverview(): Promise<AccountOverview> {
   const { data } = await apiClient.get<AccountOverview>('/App/GaleCore/Account/Overview', { timeout: 30_000 });
   return data;

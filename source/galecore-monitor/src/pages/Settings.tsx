@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BookOpen, Brain, Database, FileText, Lock, Plug, Scale, Target, User, Users } from 'lucide-react';
+import { Bell, BookOpen, Brain, Database, FileText, Lock, Plug, Scale, Target, User, Users } from 'lucide-react';
 import { Connections } from '../components/settings/Connections';
 import './Settings.css';
 import { LocalMcp } from '../components/settings/LocalMcp';
 import { localMcpAvailable } from '../api/localMcp';
 import { ProfileForm } from '../components/settings/ProfileForm';
+import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
+import { STRIKE_ALERT_KEY } from '../api/account';
 import { MyPasswordCard } from '../components/account/MyPasswordCard';
 import { Markdown } from '../components/settings/Markdown';
 import { useCurrentUserStore } from '../store/useCurrentUserStore';
@@ -25,12 +27,12 @@ import {
  * El estado vive en esta pantalla (no en un store de módulo): muere con la sesión, como pide la regla de la persona.
  */
 export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'perfil' | 'objetivos' | 'convenciones' | 'memoria' | 'skills'
-  | 'agentes' | 'datos' | 'compartido';
+  | 'agentes' | 'datos' | 'compartido' | 'avisos';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
   { group: 'General', items: [{ id: 'usuario', label: 'Usuario', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }] },
   { group: 'Conexiones', items: [{ id: 'conexiones', label: 'Conexiones', Icon: Plug }] },
-  { group: 'Mi trading', items: [{ id: 'perfil', label: 'Perfil y límites', Icon: Scale }, { id: 'objetivos', label: 'Objetivos', Icon: Target }, { id: 'convenciones', label: 'Convenciones', Icon: FileText }] },
+  { group: 'Mi trading', items: [{ id: 'perfil', label: 'Perfil y límites', Icon: Scale }, { id: 'objetivos', label: 'Objetivos', Icon: Target }, { id: 'convenciones', label: 'Convenciones', Icon: FileText }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Conocimiento', items: [{ id: 'memoria', label: 'Memoria', Icon: Brain }, { id: 'skills', label: 'Métodos y skills', Icon: BookOpen }, { id: 'datos', label: 'Fuentes', Icon: Database }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
 ];
@@ -48,6 +50,7 @@ const INTRO: Partial<Record<Section, string>> = {
   skills: 'Los métodos que GaleCore-AI sabe aplicar. Se leen en texto y se pueden ajustar en markdown.',
   agentes: 'Lo que corre solo con tus instrucciones. Se crean desde el chat; cómo van y el botón para prenderlos o apagarlos, en la pestaña Agentes.',
   datos: 'Fuentes que ponés a disposición de GaleCore-AI.',
+  avisos: 'Avisos de la cuenta real que suenan en la campana.',
   compartido: 'Lo que otros del equipo compartieron. Se lee, no se edita.',
 };
 
@@ -281,6 +284,9 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
     body = <p>Cuenta de bróker: próximamente.</p>;
   } else if (section === 'perfil') {
     body = <ProfileForm item={own.find(item => item.isOwn)} onChanged={load} />;
+  } else if (section === 'avisos') {
+    body = loading && !items.length ? <p role="status">Cargando avisos…</p>
+      : <StrikeAlertForm item={items.find(i => i.kind === 'preference' && i.key === STRIKE_ALERT_KEY)} onChanged={load} />;
   } else if (section === 'skills') {
     body = <SkillsView items={own} onChanged={load} />;
   } else if (section === 'compartido') {

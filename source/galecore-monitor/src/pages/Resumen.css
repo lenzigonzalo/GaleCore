@@ -64,7 +64,7 @@
 .rs-attention i { flex:0 0 8px; height:8px; border-radius:50%; background:#60a5fa; }
 .rs-attention i.gestion { background:var(--yellow-gc); }
 .rs-lines { font-size:15px; margin-top:8px; }
-.rs-line { display:grid; grid-template-columns:minmax(240px,1.4fr) 230px minmax(110px,.6fr) minmax(150px,.8fr) minmax(170px,.8fr); gap:16px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-dark); font-variant-numeric:tabular-nums; }
+.rs-line { display:grid; grid-template-columns:minmax(170px,1.4fr) minmax(150px,230px) minmax(90px,.6fr) minmax(120px,.8fr) minmax(140px,.8fr) minmax(90px,.5fr); gap:14px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-dark); font-variant-numeric:tabular-nums; }
 .rs-line>span:nth-child(n+3) { text-align:right; }
 .rs-line em { font-style:normal; font-size:14px; }
 .rs-line-head { font-size:14px; color:var(--text-secondary); padding:10px 0 6px; }
@@ -75,4 +75,13 @@
 .rs-ladder { width:220px; height:34px; display:block; }
 .rs-ladder text { font-size:12px; fill:var(--text-primary); font-family:var(--font-sans); }
 .rs-muted { color:var(--text-secondary); }
-@media(max-width:760px) { .rs-line { grid-template-columns:1fr auto; } .rs-line>span:nth-child(2), .rs-line>span:nth-child(3), .rs-line>span:nth-child(5) { display:none; } }
+@media(max-width:760px) { .rs-line { grid-template-columns:1fr auto; } .rs-line>span:nth-child(2), .rs-line>span:nth-child(3), .rs-line>span:nth-child(5), .rs-line>span:nth-child(6) { display:none; } }
+
+.rs-strike { background:none; border:1px solid transparent; border-radius:6px; padding:2px 6px; color:var(--text-primary); font:inherit; cursor:pointer; }
+.rs-strike:hover { border-color:var(--border-light); }
+.rs-strike em { color:var(--text-secondary); }
+.rs-strike-input { width:80px; text-align:right; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-light); border-radius:6px; padding:3px 6px; font:inherit; }
+
+/* Con la campana o la watchlist abiertas, Inicio queda angosto: la escalera se va antes de que se corten los números. */
+.rs-lines { container-type:inline-size; }
+@container (max-width:860px) { .rs-line>span:nth-child(2) { display:none; } .rs-line { grid-template-columns:minmax(150px,1.4fr) minmax(90px,.6fr) minmax(120px,.8fr) minmax(140px,.8fr) minmax(90px,.5fr); } }

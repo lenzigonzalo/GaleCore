@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../api/client';
 import { fmtCurrency, fmtPct, fmtPnl, etDateParts } from '../utils/formatters';
-import { AccountOverview, PositionLine, describeAccountError, fetchAccountOverview } from '../api/account';
+import { AccountOverview, PositionLine, STRIKE_ALERT_KEY, StrikeAlertSettings, describeAccountError, fetchAccountOverview } from '../api/account';
+import { fetchSpace } from '../api/space';
+import { readStrikeSettings, saveStrikeSettings } from '../components/settings/StrikeAlertForm';
 import type { Tab } from '../components/layout/TabNav';
 import './Resumen.css';
 
@@ -74,6 +76,13 @@ export function Calendario({ page = false }: { page?: boolean }) {
 export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
   const [overview, setOverview] = useState<AccountOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [strike, setStrike] = useState<StrikeAlertSettings | null>(null);
+  useEffect(() => {
+    let active = true;   // una lectura atrasada no pisa lo que el usuario acaba de cambiar
+    fetchSpace().then(({ items }) => { if (active) setStrike(readStrikeSettings(items.find(i => i.kind === 'preference' && i.key === STRIKE_ALERT_KEY))); })
+      .catch(() => { if (active) setStrike(null); });
+    return () => { active = false; };
+  }, []);
   useEffect(() => {
     let active = true;
     const load = () => fetchAccountOverview()
@@ -86,7 +95,7 @@ export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
   return <div className="rs">
     {error && !overview && <p className="rs-alert urgent" role="alert">{error}</p>}
     {!overview && !error && <p className="rs-empty">Leyendo la cuenta…</p>}
-    {overview && <Overview o={overview} />}
+    {overview && <Overview o={overview} strike={strike} onStrike={setStrike} />}
   </div>;
 }
 
@@ -99,7 +108,7 @@ const STRUCTURE: Record<string, string> = { PUT_CS: 'Put spread', CALL_CS: 'Call
  * Inicio como el encabezado de Tastytrade o IBKR: una franja con los números de la cuenta, debajo lo que pide atención
  * y la tabla de posiciones a todo el ancho.
  */
-function Overview({ o }: { o: AccountOverview }) {
+function Overview({ o, strike, onStrike }: { o: AccountOverview; strike: StrikeAlertSettings | null; onStrike: (s: StrikeAlertSettings) => void }) {
   const over = o.maxRiskPct != null && o.maxRiskLimitPct != null && o.maxRiskPct > o.maxRiskLimitPct;
   const e = o.exposure;
   return <>
@@ -120,8 +129,8 @@ function Overview({ o }: { o: AccountOverview }) {
     </section>}
     <section className="rs-lines" aria-label="Posiciones">
       {o.positions.length === 0 ? <p className="rs-empty">Sin posiciones abiertas.</p> : <>
-        <div className="rs-line rs-line-head"><span>Posición</span><span>Strikes</span><span>Vence</span><span>Resultado</span><span>Objetivo</span></div>
-        {o.positions.map(p => <PositionLineRow key={p.id} p={p} />)}
+        <div className="rs-line rs-line-head"><span>Posición</span><span>Strikes</span><span>Vence</span><span>Resultado</span><span>Objetivo</span><span>Aviso strike</span></div>
+        {o.positions.map(p => <PositionLineRow key={p.id} p={p} strike={strike} onStrike={onStrike} />)}
       </>}
     </section>
   </>;
@@ -150,7 +159,7 @@ function MiniLadder({ p }: { p: PositionLine }) {
   </svg>;
 }
 
-function PositionLineRow({ p }: { p: PositionLine }) {
+function PositionLineRow({ p, strike, onStrike }: { p: PositionLine; strike: StrikeAlertSettings | null; onStrike: (s: StrikeAlertSettings) => void }) {
   const exp = p.expiration ? `${p.expiration.slice(8, 10)}/${p.expiration.slice(5, 7)}` : '—';
   return <div className="rs-line">
     <span className="rs-pos"><Payoff structure={p.structure}/><b>{p.symbol}</b>{STRUCTURE[p.structure] ?? p.structure}
@@ -159,5 +168,33 @@ function PositionLineRow({ p }: { p: PositionLine }) {
     <span>{p.dte == null ? '—' : `${exp} · ${p.dte} d`}</span>
     <span className={tone(p.pnl)}>{p.pnl == null ? '—' : fmtPnl(p.pnl)}{p.pnlPct != null && <em> {fmtPct(p.pnlPct, 1)}</em>}</span>
     <span>{p.takeProfit == null ? '—' : <><span className="pos">{fmtPnl(p.takeProfit)}</span> / <span className="neg">{fmtPnl(p.stopLoss ?? 0)}</span></>}</span>
+    <span>{p.structure === 'EQUITY' || !strike?.enabled ? '—' : <StrikeDistance id={p.id} s={strike} onSave={onStrike} />}</span>
   </div>;
+}
+
+/**
+ * Distancia del aviso cerca del strike para esta posición (WS-0036). Muestra la general o la propia; al tocarla se
+ * edita, y vacía vuelve a la general. Se guarda en la misma preferencia que Configuración › Avisos.
+ */
+function StrikeDistance({ id, s, onSave }: { id: string; s: StrikeAlertSettings; onSave: (s: StrikeAlertSettings) => void }) {
+  const own = s.by_position[id];
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const unit = s.unit === 'pct' ? '%' : 'pts';
+  const commit = async () => {
+    setEditing(false);
+    const value = Number(draft.replace(',', '.'));
+    const by = { ...s.by_position };
+    if (draft.trim() === '' || !(value > 0)) delete by[id]; else by[id] = value;
+    const next = { ...s, by_position: by };
+    onSave(next);
+    try { await saveStrikeSettings(next); } catch { onSave(s); }
+  };
+  if (editing) return <input className="rs-strike-input" autoFocus inputMode="decimal" value={draft} aria-label="Distancia del aviso"
+    placeholder={String(s.distance)} onChange={e => setDraft(e.target.value)} onBlur={commit}
+    onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') setEditing(false); }} />;
+  return <button className="rs-strike" title="Cambiar la distancia de esta posición (vacío = la general)"
+    onClick={() => { setDraft(own != null ? String(own) : ''); setEditing(true); }}>
+    {own ?? s.distance} {unit}{own == null && <em> general</em>}
+  </button>;
 }

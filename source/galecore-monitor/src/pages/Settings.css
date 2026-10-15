@@ -28,3 +28,13 @@
 .settings-auth-terminal-host { height: 360px; padding: 12px; min-width: 0; }
 @media (max-width: 1100px) { .settings-main { padding: 28px 24px 48px; } .settings-provider-row { gap: 16px; flex-wrap: wrap; } }
 @media (max-width: 700px) { .settings-page { flex-direction: column; height: auto; min-height: 100%; } .settings-nav { width: 100%; border-right: 0; border-bottom: 1px solid var(--border); padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; overflow: visible; } .settings-nav-title { width: 100%; padding: 8px 12px; } .settings-nav > div:not(.settings-nav-title) { flex: 1 1 140px; margin-bottom: 0 !important; } .settings-nav-group { padding-top: 6px; } .settings-main { overflow: visible; padding: 24px 16px 48px; } .settings-provider-row { padding: 20px; } .settings-provider-row h2 { flex-basis: 100%; } .settings-auth-terminal header code { overflow-wrap: anywhere; } }
+.strike-alert-form { background:var(--bg-secondary); border:1px solid var(--border-dark); border-radius:12px; padding:20px 22px; display:grid; gap:16px; max-width:640px; }
+.strike-alert-form .saf-row { display:flex; align-items:center; gap:10px; font-size:15px; color:var(--text-primary); }
+.strike-alert-form .saf-row > span { display:grid; gap:2px; }
+.strike-alert-form .saf-row small { font-size:13px; color:var(--text-secondary); }
+.strike-alert-form .saf-distance { display:flex; flex-wrap:wrap; }
+.strike-alert-form .saf-distance[aria-disabled="true"] { opacity:.5; }
+.strike-alert-form input[type="number"] { width:84px; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-dark); border-radius:8px; padding:8px 10px; font-size:15px; }
+.strike-alert-form select { background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-dark); border-radius:8px; padding:8px 10px; font-size:15px; }
+.strike-alert-form input[type="checkbox"] { width:18px; height:18px; accent-color:var(--accent); }
+.strike-alert-form .saf-note, .strike-alert-form .saf-state { margin:0; font-size:13px; color:var(--text-secondary); min-height:1em; }
