@@ -16,7 +16,7 @@ function inline(text: string, key: string): React.ReactNode[] {
   });
 }
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, fontSize = 13 }: { text: string; fontSize?: number }) {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const out: React.ReactNode[] = [];
   let list: string[] = [];
@@ -51,5 +51,5 @@ export function Markdown({ text }: { text: string }) {
     }
   }
   flushList(); flushPara();
-  return <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{out}</div>;
+  return <div style={{ fontSize, lineHeight: fontSize === 13 ? 1.55 : 1.65, fontFamily: 'var(--font-sans)', color: 'var(--text-secondary)' }}>{out}</div>;
 }
