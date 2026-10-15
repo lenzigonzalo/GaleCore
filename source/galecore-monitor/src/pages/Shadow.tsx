@@ -172,7 +172,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
             {sortByState(rows.filter(row => stageOf(row.spec) === currentStage)).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.key === 'Enter') setSpec(row.spec); }}>
               <td className="strategy-name"><button title={row.spec} onClick={event => { event.stopPropagation(); setSpec(row.spec); }}>{strategyName(row.spec)}</button></td>
               <td><StageState active={isRunning(row.spec)} /></td>
-              <td><ModeSwitch mode={modeOf(row.spec)} busy={savingMode === row.spec} autoBlocked={stageOf(row.spec) === 'LIVE' ? 'En Live, Auto mandaría órdenes solas: bloqueado hasta que exista la ejecución.' : undefined} onChange={mode => void changeMode(row.spec, mode)} /></td>
+              <td><ModeSwitch mode={modeOf(row.spec)} busy={savingMode === row.spec} autoBlocked={stageOf(row.spec) === 'LIVE' ? 'En Live, Auto mandaría órdenes solas: bloqueado hasta que exista la ejecución.' : undefined} manualBlocked={stageOf(row.spec) === 'SHADOW' ? 'SHADOW corre siempre en automático.' : undefined} onChange={mode => void changeMode(row.spec, mode)} /></td>
               <td className="numeric">{row.tradesOpen || ''}</td>
               {cell(row.realizedPnl, panelUsd, true)}{cell(row.winRate, rate)}<td className="numeric">{row.tradesClosed || ''}</td>{cell(row.maxDrawdown, amount)}
             </tr>)}

@@ -196,7 +196,7 @@ test('RPF ocupa una fila en Producción y su monitor aparece en Hoy',async()=>{
 
 const preference = (hidden: string[], isOwn = true) => ({ kind: 'preference', key: 'estrategias', isOwn, content: JSON.stringify({ hidden }) });
 
-test('etapas Live | Paper | SHADOW: RPF en Live·Manual con Auto bloqueado; el modo se guarda en GaleCore', async () => {
+test('etapas Live | Paper | SHADOW: RPF en Live·Manual con Auto bloqueado; SHADOW siempre Auto', async () => {
   useAppConfigStore.setState({ strategies: [{ id: 'rpf', tab: 'rpf', label: 'RPF', switch_endpoint: '/App/Rpf/Switch' } as any] });
   (api.saveStrategySetting as jest.Mock).mockResolvedValue({ name: instance.specName, stage: 'SHADOW', mode: 'MANUAL', isDefault: false, effect: '' });
   render(<Shadow rpf={<div>Monitor real RPF</div>} />);
@@ -207,7 +207,8 @@ test('etapas Live | Paper | SHADOW: RPF en Live·Manual con Auto bloqueado; el m
   expect(within(rpfRow).getByRole('radio', { name: 'Manual' })).toHaveAttribute('aria-checked', 'true');
   fireEvent.click(screen.getByRole('tab', { name: /SHADOW/ }));
   const row = (await screen.findByRole('button', { name: strategyName(instance.specName) })).closest('tr')!;
-  fireEvent.click(within(row).getByRole('radio', { name: 'Manual' }));
-  await waitFor(() => expect(api.saveStrategySetting).toHaveBeenCalledWith(instance.specName, 'SHADOW', 'MANUAL'));
+  expect(within(row).getByRole('radio', { name: 'Manual' })).toBeDisabled();
+  expect(within(row).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
+  expect(api.saveStrategySetting).not.toHaveBeenCalled();
   useAppConfigStore.setState({ strategies: [] });
 });
