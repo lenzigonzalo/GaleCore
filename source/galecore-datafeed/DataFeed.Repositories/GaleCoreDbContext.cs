@@ -33,6 +33,7 @@ namespace DataFeed.Repositories
         public DbSet<User> Users => Set<User>();
         public DbSet<Account> Accounts => Set<Account>();
         public DbSet<TraderSpaceItem> TraderSpaceItems => Set<TraderSpaceItem>();
+        public DbSet<StrategySettingEntity> StrategySettings => Set<StrategySettingEntity>();
 
         // ── Runtime (Trading Runtime SHADOW) ──
         public DbSet<StrategySpecEntity> StrategySpecs => Set<StrategySpecEntity>();
@@ -194,6 +195,21 @@ namespace DataFeed.Repositories
                 e.HasOne(x => x.Instance).WithMany().HasForeignKey(x => x.InstanceId).OnDelete(DeleteBehavior.Cascade);
                 e.Property(x => x.Seq).UseIdentityAlwaysColumn();
                 e.HasIndex(x => new { x.InstanceId, x.Timestamp, x.Seq });
+            });
+            // Etapa y modo de cada estrategia (WS-0036): una fila por estrategia, con los valores válidos también en la base.
+            b.Entity<StrategySettingEntity>(e =>
+            {
+                e.ToTable("strategy_settings", t =>
+                {
+                    t.HasCheckConstraint("ck_strategy_settings_stage", "stage IN ('" + string.Join("','", StrategySettingEntity.Stages) + "')");
+                    t.HasCheckConstraint("ck_strategy_settings_mode", "mode IN ('" + string.Join("','", StrategySettingEntity.Modes) + "')");
+                    t.HasCheckConstraint("ck_strategy_settings_live_auto", "NOT (stage = 'LIVE' AND mode = 'AUTO')");
+                });
+                e.HasKey(x => x.Name);
+                e.Property(x => x.Name).HasMaxLength(100);
+                e.Property(x => x.Stage).HasMaxLength(10).IsRequired();
+                e.Property(x => x.Mode).HasMaxLength(10).IsRequired();
+                e.Property(x => x.UpdatedBy).HasMaxLength(100).IsRequired();
             });
             // Espacio del trader (GC-0007): una pieza por (dueño, tipo, clave). Los tipos, la visibilidad y el formato
             // están también en la base porque una escritura a mano contra Postgres no pasa por la app.

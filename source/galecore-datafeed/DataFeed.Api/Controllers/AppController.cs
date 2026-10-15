@@ -1681,6 +1681,49 @@ namespace DataFeed.Controllers
         }
 
         /// <summary>
+        /// Etapa (SHADOW | PAPER | LIVE) y modo (AUTO | MANUAL) de cada estrategia (WS-0036, owner 14/10): las del runtime y
+        /// RPF. Sin fila guardada valen los de por defecto (runtime SHADOW·AUTO, RPF LIVE·MANUAL); `effect` dice qué hace hoy.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpGet("Strategies/Settings")]
+        public async Task<IActionResult> StrategySettingsList([FromServices] IServiceProvider services, CancellationToken ct)
+        {
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            var names = _runtimeStore.AllInstances().Select(i => i.SpecName).Append("rpf");
+            var saved = (await db.StrategySettings.AsNoTracking().ToListAsync(ct))
+                .ToDictionary(x => x.Name, x => (x.Stage, x.Mode, x.UpdatedBy, x.UpdatedAt));
+            return Ok(DataFeed.Application.App.Runtime.StrategySettings.Resolve(names.Concat(saved.Keys), saved));
+        }
+
+        public record StrategySettingRequest(string Stage, string Mode);
+
+        /// <summary>Cambia etapa y modo de una estrategia. LIVE·AUTO se rechaza (409) hasta que exista la ejecución.</summary>
+        [Tags("App.Runtime")]
+        [HttpPut("Strategies/Settings/{name}")]
+        public async Task<IActionResult> StrategySettingsUpdate(string name, [FromBody] StrategySettingRequest body,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser, CancellationToken ct)
+        {
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            name = (name ?? "").Trim();
+            if (name.Length == 0 || name.Length > 100) return BadRequest(new { error = "nombre de estrategia inválido" });
+            var stage = (body.Stage ?? "").Trim().ToUpperInvariant();
+            var mode = (body.Mode ?? "").Trim().ToUpperInvariant();
+            var problem = DataFeed.Application.App.Runtime.StrategySettings.Problem(stage, mode);
+            if (problem != null) return stage == "LIVE" && mode == "AUTO" ? Conflict(new { error = problem }) : BadRequest(new { error = problem });
+            var row = await db.StrategySettings.FirstOrDefaultAsync(x => x.Name == name, ct);
+            if (row == null) { row = new DataFeed.Repositories.Entities.StrategySettingEntity { Name = name }; db.StrategySettings.Add(row); }
+            row.Stage = stage; row.Mode = mode;
+            row.UpdatedBy = currentUser.UserId?.ToString() ?? "api";
+            row.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return Ok(DataFeed.Application.App.Runtime.StrategySettings.Resolve(new[] { name },
+                new Dictionary<string, (string, string, string, DateTime)> { [name] = (row.Stage, row.Mode, row.UpdatedBy, row.UpdatedAt) })[0]);
+        }
+
+        /// <summary>
         /// Datos de una estrategia SHADOW (WS-0036): qué usa, de qué fuente, si es del momento o histórico, qué historia
         /// guarda GaleCore y qué valor vio en su última evaluación. Toma la instancia más reciente de la spec.
         /// </summary>

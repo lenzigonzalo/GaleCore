@@ -427,6 +427,48 @@ namespace DataFeed.Repositories.Migrations
                     b.ToTable("strategy_instances", (string)null);
                 });
 
+            modelBuilder.Entity("DataFeed.Repositories.Entities.StrategySettingEntity", b =>
+                {
+                    b.Property<string>("Name")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("mode");
+
+                    b.Property<string>("Stage")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("stage");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("Name")
+                        .HasName("pk_strategy_settings");
+
+                    b.ToTable("strategy_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_strategy_settings_live_auto", "NOT (stage = 'LIVE' AND mode = 'AUTO')");
+
+                            t.HasCheckConstraint("ck_strategy_settings_mode", "mode IN ('AUTO','MANUAL')");
+
+                            t.HasCheckConstraint("ck_strategy_settings_stage", "stage IN ('SHADOW','PAPER','LIVE')");
+                        });
+                });
+
             modelBuilder.Entity("DataFeed.Repositories.Entities.StrategySpecEntity", b =>
                 {
                     b.Property<Guid>("Id")
