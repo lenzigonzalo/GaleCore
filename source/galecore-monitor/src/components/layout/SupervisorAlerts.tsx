@@ -10,7 +10,7 @@ import { fetchSpace, SpaceItem } from '../../api/space';
  */
 
 type Category = 'eeuu' | 'empresa' | 'estrategia' | 'cuenta' | 'mercado';
-interface Alert { id: string; detected_at: string; motivo: string; decision: unknown; category?: Category; title?: string }
+interface Alert { id: string; kind: string; detected_at: string; motivo: string; decision: unknown; category?: Category; title?: string }
 interface Piece { alerts?: Alert[]; last_run?: { at: string; result: string; failed: boolean }; state_detail?: string | null }
 
 const KEY = 'supervisor';
@@ -106,7 +106,7 @@ export function SupervisorAlerts({ embedded = false }: { embedded?: boolean }) {
       let p: Piece = {};
       try { p = it ? JSON.parse(it.content) : {}; } catch { p = {}; }
       setItem(it); setPiece(p); setError(null);
-      const fresh = (p.alerts ?? []).filter(a => !a.decision && !seen.current.has(a.id));  // todo aviso nuevo suena una vez
+      const fresh = (p.alerts ?? []).filter(a => a.kind === 'watch' && !a.decision && !seen.current.has(a.id));  // todo aviso nuevo suena una vez
       if (fresh.length) {
         chime(); setOpen(true);
         fresh.forEach(a => seen.current.add(a.id)); writeSeen(seen.current);
@@ -122,7 +122,8 @@ export function SupervisorAlerts({ embedded = false }: { embedded?: boolean }) {
     return () => clearInterval(id);
   }, [load]);
 
-  const alerts = piece.alerts ?? [];
+  // La campana es de la cartera real (owner 15/10): lo de SHADOW va por su camino (Estrategias), no acá.
+  const alerts = (piece.alerts ?? []).filter(a => a.kind === 'watch');
   const failed = !!piece.last_run?.failed;          // lo decide GaleCore-AI: la última revisión no leyó todo
   const status = <p className="alert-status">Última revisión: {when(piece.last_run?.at)}
     {failed ? ` · falló: ${piece.state_detail || piece.last_run?.result}` : ''}</p>;
