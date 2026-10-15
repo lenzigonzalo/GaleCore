@@ -27,7 +27,8 @@ test('Inicio muestra lo que calcula la API: cuenta, riesgo, exposición y lo que
   expect(await screen.findByText('$2,526')).toBeInTheDocument();
   expect(screen.getByText('+$6.50')).toBeInTheDocument();
   expect(screen.getByText(/\$1,860/)).toHaveClass('neg');
-  expect(screen.getByText('6.2 SPY · $4,797')).toBeInTheDocument();
+  expect(screen.getByText('6.2 SPY')).toBeInTheDocument();
+  expect(screen.getByText('$4,797 en acciones EE. UU.')).toBeInTheDocument();
   expect(screen.getByText('Put spread')).toBeInTheDocument();
   expect(screen.getByRole('img', { name: 'Strikes 710 / 730, precio 770.00' })).toBeInTheDocument();
   expect(screen.getByText('20/11 · 36 d')).toBeInTheDocument();

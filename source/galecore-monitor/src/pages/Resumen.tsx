@@ -95,36 +95,29 @@ const signed = (n: number, d = 2) => `${n >= 0 ? '+' : '−'}$${Math.abs(n).toFi
 const tone = (n: number | null | undefined) => n == null ? undefined : n >= 0 ? 'pos' : 'neg';
 const STRUCTURE: Record<string, string> = { PUT_CS: 'Put spread', CALL_CS: 'Call spread', IC: 'Iron condor', EQUITY: 'Acciones' };
 
-/** Tablero: la cuenta a la izquierda, exposición y lo de hoy al lado; abajo, una línea por posición. */
+/**
+ * Inicio como el encabezado de Tastytrade o IBKR: una franja con los números de la cuenta, debajo lo que pide atención
+ * y la tabla de posiciones a todo el ancho.
+ */
 function Overview({ o }: { o: AccountOverview }) {
   const over = o.maxRiskPct != null && o.maxRiskLimitPct != null && o.maxRiskPct > o.maxRiskLimitPct;
   const e = o.exposure;
   return <>
-    <div className="rs-board">
-      <section className="rs-account">
-        <span className="rs-label">Valor de la cuenta</span>
-        <strong className="rs-big">{money(o.netLiq)}</strong>
-        <div className="rs-row"><span>Hoy</span><b className={tone(o.dayPnl)}>{o.dayPnl == null ? '—' : fmtPnl(o.dayPnl)}
-          {o.dayPnlPct != null && <em> {fmtPct(o.dayPnlPct)}</em>}</b></div>
-        <div className="rs-row"><span>Poder de compra</span><b>{money(o.buyingPower)}</b></div>
-        <div className="rs-row"><span>Riesgo máximo</span><b className={over ? 'neg' : undefined}>{money(o.maxRisk)}
-          {o.maxRiskPct != null && <em> {o.maxRiskPct.toFixed(0)} %{o.maxRiskLimitPct != null ? ` (límite ${o.maxRiskLimitPct} %)` : ''}</em>}</b></div>
-      </section>
-      <section>
-        <span className="rs-label">Exposición</span>
-        <div className="rs-row"><span>Acciones EE. UU.</span><b>{e.spyEquivalentShares == null ? '—'
-          : `${e.spyEquivalentShares.toFixed(1)} SPY${e.spyEquivalentDollars != null ? ` · ${money(e.spyEquivalentDollars)}` : ''}`}</b></div>
-        <div className="rs-row"><span>Theta</span><b className={tone(e.theta)}>{e.theta == null ? '—' : `${signed(e.theta)}/día`}</b></div>
-        <div className="rs-row"><span>Vega</span><b className={tone(e.vega)}>{e.vega == null ? '—' : `${signed(e.vega)}/punto`}</b></div>
-        {e.byUnderlying.length > 1 && e.byUnderlying.map(u => <div className="rs-row" key={u.symbol}><span>{u.symbol}</span>
-          <b>{u.dollarDelta == null ? '—' : money(u.dollarDelta)}</b></div>)}
-      </section>
-      <section>
-        <span className="rs-label">Atención</span>
-        {o.attention.length === 0 ? <div className="rs-row"><span>Nada que pida atención.</span></div>
-          : o.attention.map(a => <div className="rs-attention" key={a.title}><i className={a.kind}/>{a.title}</div>)}
-      </section>
+    <div className="rs-strip">
+      <div className="rs-stat rs-stat-main"><span>Valor de la cuenta</span><strong>{money(o.netLiq)}</strong></div>
+      <div className="rs-stat"><span>Hoy</span><strong className={tone(o.dayPnl)}>{o.dayPnl == null ? '—' : fmtPnl(o.dayPnl)}</strong>
+        {o.dayPnlPct != null && <em className={tone(o.dayPnlPct)}>{fmtPct(o.dayPnlPct)}</em>}</div>
+      <div className="rs-stat"><span>Poder de compra</span><strong>{money(o.buyingPower)}</strong></div>
+      <div className="rs-stat"><span>Riesgo máximo</span><strong className={over ? 'neg' : undefined}>{money(o.maxRisk)}</strong>
+        {o.maxRiskPct != null && <em className={over ? 'neg' : undefined}>{o.maxRiskPct.toFixed(0)} % de la cuenta{o.maxRiskLimitPct != null ? ` · límite ${o.maxRiskLimitPct} %` : ''}</em>}</div>
+      <div className="rs-stat"><span>Exposición</span><strong>{e.spyEquivalentShares == null ? '—' : `${e.spyEquivalentShares.toFixed(1)} SPY`}</strong>
+        {e.spyEquivalentDollars != null && <em>{money(e.spyEquivalentDollars)} en acciones EE. UU.</em>}</div>
+      <div className="rs-stat"><span>Theta · Vega</span><strong className={tone(e.theta)}>{e.theta == null ? '—' : `${signed(e.theta)}/día`}</strong>
+        {e.vega != null && <em className={tone(e.vega)}>{signed(e.vega)} por punto de vol.</em>}</div>
     </div>
+    {o.attention.length > 0 && <section className="rs-attention-list" aria-label="Atención">
+      {o.attention.map(a => <div className="rs-attention" key={a.title}><i className={a.kind}/>{a.title}</div>)}
+    </section>}
     <section className="rs-lines" aria-label="Posiciones">
       {o.positions.length === 0 ? <p className="rs-empty">Sin posiciones abiertas.</p> : <>
         <div className="rs-line rs-line-head"><span>Posición</span><span>Strikes</span><span>Vence</span><span>Resultado</span><span>Objetivo</span></div>
@@ -148,12 +141,12 @@ function MiniLadder({ p }: { p: PositionLine }) {
   if (legs.length === 0) return <span className="rs-muted">{p.quantity} acciones</span>;
   const values = [...legs.map(l => l.k), ...(p.spot != null ? [p.spot] : [])];
   const min = Math.min(...values), max = Math.max(...values), span = max - min || 1;
-  const x = (v: number) => 8 + (v - min) / span * 164;
-  return <svg className="rs-ladder" viewBox="0 0 180 30" role="img" aria-label={`Strikes ${legs.map(l => l.k).join(' / ')}${p.spot != null ? `, precio ${p.spot.toFixed(2)}` : ''}`}>
-    <line x1="8" x2="172" y1="9" y2="9" stroke="var(--border-light)" strokeWidth="1.5"/>
-    {legs.map(l => <g key={l.k}><circle cx={x(l.k)} cy="9" r="4" fill={l.short ? 'var(--red-gc)' : 'var(--green)'}/>
-      <text x={x(l.k)} y="27" textAnchor="middle">{l.k}</text></g>)}
-    {p.spot != null && <line x1={x(p.spot)} x2={x(p.spot)} y1="2" y2="16" stroke="var(--text-primary)" strokeWidth="2"/>}
+  const x = (v: number) => 10 + (v - min) / span * 200;
+  return <svg className="rs-ladder" viewBox="0 0 220 34" role="img" aria-label={`Strikes ${legs.map(l => l.k).join(' / ')}${p.spot != null ? `, precio ${p.spot.toFixed(2)}` : ''}`}>
+    <line x1="10" x2="210" y1="10" y2="10" stroke="var(--border-light)" strokeWidth="1.5"/>
+    {legs.map(l => <g key={l.k}><circle cx={x(l.k)} cy="10" r="5" fill={l.short ? 'var(--red-gc)' : 'var(--green)'}/>
+      <text x={x(l.k)} y="31" textAnchor="middle">{l.k}</text></g>)}
+    {p.spot != null && <line x1={x(p.spot)} x2={x(p.spot)} y1="2" y2="18" stroke="var(--text-primary)" strokeWidth="2"/>}
   </svg>;
 }
 
