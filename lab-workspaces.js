@@ -122,7 +122,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     const tail=prev.messages.slice(-4).map(m=>(m.role==='user'?'Trader: ':'Respuesta: ')+m.text).join('\n\n').slice(-4000);
     return 'Final de la conversación anterior de este proyecto («'+prev.title+'»), para retomar sin preguntar (lo vigente está en memory/ y en los registros):\n'+tail;
   }
-  function send(chat, words){
+  function send(chat, words, options={}){
+    const auto=options.mode==='auto';
     const p=project(chat.project);
     if(jobs.has(chat.id))throw fail('La conversación está respondiendo.',409);
     if([...jobs.values()].some(j=>j.project===p.id || j.project==='portfolio' || p.id==='portfolio') || legacySessions().some(s=>s.state==='running'&&(s.project===p.id||s.project==='portfolio'||p.id==='portfolio')))throw fail('Otra sesión está trabajando en este workspace. Esperá a que termine.',409);
@@ -138,7 +139,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     const context=p.type==='personal' ? 'Proyecto personal '+p.label+'. Leé las convenciones y memoria de este workspace. No consultes cuenta ni harness financiero salvo pedido explícito. No continúes ACTIVE_WORK_ITEM. No guardes secretos ni cambios ajenos.' : instructions(p)+'\nTipo del proyecto: '+p.type+'. Leé AGENTS.md de este workspace. Si el usuario quiere construir una estrategia o pide trabajar una estrategia en un símbolo, aplicá la skill '+skill+'. No confundir crear carpeta con estrategia aprobada. El bootstrap no despliega. Sólo guardá memoria de este proyecto.';
     let args;
     if(chat.provider==='codex'){
-      args=['--no-daemon','exec','--json',...modelFlags(chat),'-c','developer_instructions='+JSON.stringify(context)];
+      args=['--no-daemon','exec','--json',...modelFlags(chat),...(auto?['--approve-for-me']:[]),'-c','developer_instructions='+JSON.stringify(context)];
       if(chat.nativeId)args.push('resume',chat.nativeId,'-');else args.push('--sandbox','workspace-write','-C',p.dir,'-');
     } else {
       // WS-0028 (plan v2): el CLI abierto en la carpeta del proyecto con el contexto de producto de knowledge/ (sin el de
@@ -150,7 +151,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
       const brief=p.type==='personal'?context:(resume?resume+'\n\n':'')+product+'Proyecto: '+p.id+' ('+p.type+').'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+(p.type==='strategy'?' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.':'');
       args=['-p',...modelFlags(chat),
-        '--output-format','stream-json','--verbose','--append-system-prompt',brief,'--permission-prompts','none','--strict-mcp-config',
+        '--output-format','stream-json','--verbose','--append-system-prompt',brief,...(auto?['--permission-mode','auto']:['--permission-prompts','none']),'--strict-mcp-config',
         '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
       if(chat.nativeId)args.push('--resume',chat.nativeId);
     }
@@ -168,13 +169,27 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       const p=project(parts[1]); if(p.type!=='strategy')throw fail('Este proyecto no es una estrategia.');
       const value=await readStrategy(p,url.searchParams.get('view')==='design');json(res,200,value);return true;
     }
+    if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='attachments'){
+      // Un adjunto del chat (WS-0036): cuerpo crudo, nombre en X-File-Name, hasta 15 MB, a adjuntos/ del proyecto.
+      const p=project(parts[1]), raw=decodeURIComponent(String(req.headers['x-file-name']||'archivo'));
+      const safe=raw.replace(/[^\w.\- ]+/g,'_').replace(/^[.\s]+/,'').slice(-80)||'archivo';
+      const chunks=[];let size=0;
+      await new Promise((ok,ko)=>{req.on('data',d=>{size+=d.length;if(size>15*1024*1024){ko(fail('El archivo supera 15 MB.',413));req.destroy();}else chunks.push(d);});req.on('end',ok);req.on('error',ko);});
+      const rel='adjuntos/'+Date.now()+'-'+safe;fs.mkdirSync(path.join(p.dir,'adjuntos'),{recursive:true});
+      fs.writeFileSync(path.join(p.dir,rel),Buffer.concat(chunks));json(res,201,{path:rel,name:safe,size});return true;
+    }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='files'){
       const p=project(parts[1]), rel=url.searchParams.get('path');const target=rel?safeFile(p.dir,rel):null;if(p.id==='portfolio'&&target&&target.toLowerCase().startsWith(path.join(fs.realpathSync(p.dir),'workspaces').toLowerCase()+path.sep))throw fail('Elegí el proyecto personal para leer sus archivos.',403);json(res,200,rel?{path:rel,text:fs.readFileSync(target,'utf8')}:{tree:tree(p.dir).filter(n=>p.id!=='portfolio'||n.name!=='workspaces'),folder:p.relative});return true;
     }
     if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);
       if(req.method==='GET'&&parts.length===2){json(res,200,c);return true;}
-      if(req.method==='POST'&&parts[2]==='messages'){const b=await readBody(req);const words=String(b.text||'').trim();if(!words||words.length>12000)throw fail('El mensaje debe tener entre 1 y 12000 caracteres.');json(res,202,send(c,words));return true;}
+      if(req.method==='POST'&&parts[2]==='messages'){const b=await readBody(req);const words=String(b.text||'').trim();if(!words||words.length>12000)throw fail('El mensaje debe tener entre 1 y 12000 caracteres.');
+        // Adjuntos subidos antes a /workspaces/<id>/attachments: sólo rutas de adjuntos/ del proyecto, que existan.
+        const dir=project(c.project).dir, files=(Array.isArray(b.attachments)?b.attachments:[]).slice(0,10).map(String);
+        for(const rel of files){if(!/^adjuntos\/[\w.\- ]+$/.test(rel)||!fs.existsSync(path.join(dir,rel)))throw fail('Adjunto no encontrado: '+rel,404);}
+        const text=files.length?words+'\n\nArchivos adjuntos (en la carpeta del proyecto): '+files.join(', '):words;
+        json(res,202,send(c,text,{mode:b.mode==='auto'?'auto':'manual'}));return true;}
       if(req.method==='POST'&&parts[2]==='stop'){const j=jobs.get(c.id);if(j){j.chat.state='cancelled';saveChat(j.chat);j.proc.kill();}json(res,200,{requested:!!j});return true;}
     }
     return false;
