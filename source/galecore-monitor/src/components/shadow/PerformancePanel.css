@@ -183,7 +183,7 @@
 .strategy-list td.strategy-empty { color: var(--text-secondary); text-align: left; padding: 18px 12px; }
 .strategy-list td.strategy-name { padding-left: 12px; }
 
-/* Encabezado común de estrategia y bloque de hipótesis compacto (owner, 14/10). */
+/* Encabezado común de estrategia (owner, 14/10). */
 .strategy-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
 .strategy-header-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
 .strategy-header-title h2 { margin: 0; font-size: 24px; font-weight: 600; }
@@ -193,11 +193,6 @@
 .strategy-header-actions { display: flex; align-items: center; gap: 10px; }
 .strategy-header-link { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--text-secondary); font: 500 14px var(--font-sans); padding: 6px 8px; border-radius: 7px; cursor: pointer; }
 .strategy-header-link:hover { background: var(--bg-tertiary); color: var(--text-primary); }
-.strategy-overview.compact { display: grid; gap: 4px; padding: 12px 16px; margin-bottom: 14px; border: 1px solid var(--border-dark); border-radius: 10px; background: var(--bg-secondary); cursor: pointer; }
-.strategy-overview.compact p { margin: 0; font-size: 14px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.strategy-overview.compact.open p { display: block; }
-.strategy-overview.compact p strong { font-weight: 600; margin-right: 8px; }
-.strategy-overview.compact .strategy-facts { color: var(--text-secondary); -webkit-line-clamp: 1; }
 /* Datos: misma tabla que el resto (14/10). */
 .strategy-data-storage { font-size: 14px; color: var(--text-secondary); margin: 0 0 10px; }
 .strategy-data-table table { width: 100%; }
