@@ -2339,6 +2339,25 @@ Sonnet o el owner, cada decisión registrada (formato de P1-01). Orden: primero 
 nuevo); Jev/Clef/Decisions API sólo si hace falta probabilidad calibrada por opción. Se abre junto con la fuente de
 noticias o EDGAR; también aplica si el chat del hub clasifica listas largas pagando Sonnet.
 
+
+**Addendum 15/10 (b) — estado y fuentes para los avisos de la cartera real (WS-0036).** Verificado en la API Dev el
+15/10: las cinco fuentes de la tabla ya tienen endpoint en GaleCore (`Data/Cboe/IndexHistory`, `Data/Sec/{Company,Facts,Filings}`,
+`Data/Treasury/{YieldCurve,Auctions/Upcoming}`, `Data/Fred/Series`, `Data/Bls/Series`). Lo que pide ahora el owner es
+avisar lo que puede mover drásticamente la cartera real (exposición por factor × evento) y para eso faltan:
+
+| Fuente | Para qué (ejemplo del owner) |
+|---|---|
+| Calendario de balances de empresas | «Mañana presenta Nvidia»: avisar si pesa en lo que tenemos |
+| Composición de ETF (pesos) | Exposición por factor: cuánto de SPY es tecnología o una empresa |
+| Bancos centrales fuera de la Fed (BoJ, BCE…) | «Japón mueve tasas»: carry y equity |
+| Agenda de discursos de la Fed (chairman) | «Mañana habla el chairman»: riesgo de evento |
+| Noticias (U-06) | «Pasó esto»: lo que no está en ningún calendario |
+
+**Regla del owner (15/10):** si es una API, va a GaleCore con la receta de arriba; si es un MCP, se conecta a la cuenta y
+se activa (no se reimplementa). Antes de elegir: ver si es gratis y qué cubre (U-68). Hay MCPs conectados a la cuenta de
+Claude que cubren parte (FMP, Alpha Vantage: balances, ETFs, noticias); falta decidir si se usan y cómo entran sin romper
+«los datos vienen de GaleCore».
+
 ---
 
 ## BL-018 — Orden de los tres repos pensando en la forma de trabajo final
