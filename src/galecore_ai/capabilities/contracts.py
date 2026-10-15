@@ -251,4 +251,54 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         returns="source=sec, asOf (last filed), notes, data[cik, entityName, label, facts[unit, start, end, value, form, "
         "fiscalYear, fiscalPeriod, filed, frame, accession]]",
     ),
+    # WS-0037: la cuenta real (Tastytrade, sólo lectura) y Macro, que el monitor ya muestra. Cuenta real ≠ SHADOW:
+    # nunca se suman ni se cruzan sus decisiones (PRODUCT.md «Límites»).
+    CapabilityDefinition(
+        capability_id="account.overview",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="REAL account (Tastytrade, read-only) at a glance: value, cash, buying power, today's and open "
+        "result, max risk against the limit, SPY-equivalent exposure, theta, vega and what needs attention today",
+        parameters=[],
+        returns="asOf, netLiq, cash, buyingPower, dayPnl, dayPnlPct, openPnl, maxRisk, maxRiskPct, maxRiskLimitPct, "
+        "exposure (SPY delta x beta, theta, vega), attention[], positions[], missing[]",
+    ),
+    CapabilityDefinition(
+        capability_id="account.balances",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="REAL account (Tastytrade, read-only) balances: cash, derivative values, margin equity, buying power",
+        parameters=[],
+        returns="accountNumber, cashBalance, longDerivativeValue, shortDerivativeValue, marginEquity, equityBuyingPower, …",
+    ),
+    CapabilityDefinition(
+        capability_id="account.positions",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="REAL account (Tastytrade, read-only) open positions, leg by leg",
+        parameters=[],
+        returns="positions[symbol, instrumentType, underlyingSymbol, quantity, quantityDirection, closePrice, "
+        "averageOpenPrice, expiresAt, …]",
+    ),
+    CapabilityDefinition(
+        capability_id="account.spreads",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="REAL account (Tastytrade, read-only) positions grouped as spreads, with max loss, probability of "
+        "profit and net greeks computed by GaleCore",
+        parameters=[],
+        returns="spreads[id, underlyingSymbol, expiration, structure, contracts, width, short/long put/call strikes, "
+        "initialCredit, currentNetCredit, hasLiveQuote, maxProfit, maxLoss, pop, openPnl, dayPnl, greeks]",
+    ),
+    CapabilityDefinition(
+        capability_id="macro.board",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="The Macro board of the monitor: futures strip (ES, NQ, gold, oil…), rates, breakevens, currencies "
+        "and commodities with day/week/month changes (~140 KB: use --out)",
+        parameters=[],
+        returns="asOf, strip[id, name, symbol, unit, last, changeDay, changeWeek, changeMonth, asOf], sections[…]",
+    ),
+    CapabilityDefinition(
+        capability_id="macro.catalog",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="What the Macro board covers: each series' definition, family, region, unit, source and frequency",
+        parameters=[],
+        returns="schemaVersion, methodologyVersion, seriesDefinitions[id, name, family, region, unit, source, frequency]",
+    ),
 ]

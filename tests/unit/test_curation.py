@@ -67,7 +67,7 @@ def test_with_material_the_model_gets_only_the_domains_that_crossed_the_threshol
     assert "Curate ONLY these domains: mercado" in prompt and "research:" in prompt
 
 
-def test_a_story_with_a_reason_runs_on_opus_and_the_event_says_why(env, monkeypatch):
+def test_a_story_with_a_reason_stays_on_sonnet_and_the_event_says_why(env, monkeypatch):
     kb, sch, follow = env
     make(kb, sch, task_id="historia", capability="market_story", strategy=None, result_slug="historia-spy",
          objective="¿Qué historia está priceando el mercado?")
@@ -81,4 +81,4 @@ def test_a_story_with_a_reason_runs_on_opus_and_the_event_says_why(env, monkeypa
             return mr.ModelReply(ok=False, error="sin cuota", turns=1, duration_s=1.0, model="claude-test")
 
     out = t.run(kb=kb, task_id="historia", followup=follow, commit=False, now=LATER, client=Spy(binary="claude"))
-    assert Spy.used == ["opus"] and out["route"] == "escalada a opus: VIX.close +12.0%"
+    assert Spy.used == ["sonnet"] and out["route"].endswith("la historia marcó: VIX.close +12.0%")

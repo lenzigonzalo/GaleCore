@@ -96,6 +96,8 @@ mercado que GaleCore sirve y los eventos que tocan tus posiciones; una línea de
 
 **Estado:** lo que digas del runtime (entradas, instancias, posiciones, estructuras) o de la salud de los datos sale de `state` en esa corrida, con su hora; se corre una vez por conversación y no se repite (ni GEX, paquetes o catálogo) salvo que el trader pida refrescar con el mercado abierto. Una investigación o seguimiento guardado es antecedente, nunca estado; lo que `state` no pudo leer es «sin verificar».
 
+**Cuenta real** («¿cómo está mi cuenta?», «¿qué tengo abierto?», «¿cuánto gané hoy?»): `galecore get account.overview` (valor, poder de compra, resultado del día, riesgo máximo contra el límite, exposición y qué pide atención) y `account.spreads` (cada posición con pérdida máxima, probabilidad y resultado), sólo lectura, de la cuenta de Tastytrade. Todo número de ahí se dice «cuenta real» y va aparte de lo simulado, nunca sumado. Macro del monitor (futuros, tasas, monedas, commodities): `macro.board` con `--out`.
+
 **«¿Dejo abiertas las posiciones antes de <evento>?»** (CPI, FOMC…): correr `supervise exposure [--symbol X] [--event
 <texto>]` y citar sus montos tal cual (con stops / si hay gap / ganancia actual, por posición y sumado). No calcules a mano un peor caso. Proponer cerrar / rollear / dejar / esperar con las reglas de la estrategia y decir qué cambiaría
 la propuesta; todo es SHADOW. Si `missing` trae algo, «faltan datos para decidir» y cuáles.

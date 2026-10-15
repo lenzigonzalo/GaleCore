@@ -72,6 +72,8 @@ entries:
       - ¿De dónde saco la cadena de opciones de SPY?
       - ¿Cuál es el IV rank de NVDA?
       - Traeme las velas diarias de QQQ del último mes
+      - ¿Cómo está mi cuenta real?
+      - ¿Cómo están los futuros, el oro y el dólar hoy?
     skill: skills/data-sources/skill.yaml
     output_contract: galecore_ai.contracts.sources.SourceQueryResult
     galecore_capabilities: []
@@ -104,6 +106,8 @@ entries:
       límites, y guarda lo que le pedís conservar.
     example_requests:
       - ¿Qué sabés de mí y de mis objetivos?
+      - ¿Qué podés hacer? ¿Qué te puedo pedir?
+      - ¿Qué skills y agentes tengo?
       - Guardá como convención que opero sólo spreads de riesgo definido
       - Acordate de que el NFP me sacó de una posición la semana pasada
       - Compartí con el equipo mi agente de oportunidades
@@ -136,6 +140,7 @@ entries:
     example_requests:
       - ¿Qué perfil tengo?
       - Revisemos mis objetivos, ¿qué está vago o falta?
+      - Mis objetivos, ¿están claros y son compatibles?
       - ¿Qué puede hacer el sistema solo y qué necesita mi aprobación?
       - Mi capital de referencia es 10.000 USD
       - Los informes, tablas y gráficos primero
@@ -177,6 +182,8 @@ entries:
       - ¿Qué feedback quedó pendiente?
       - "Esto ya no vale: reemplazalo por la investigación nueva."
       - Retirá esa regla, ya no la uso.
+      - Esto no me sirvió porque usaste datos viejos.
+      - Este trabajo me sirvió, quiero reutilizarlo o delegarlo.
     skill: skills/capability-builder/skill.yaml
     output_contract: galecore_ai.harness.catalog.CatalogEntry
     galecore_capabilities: []
@@ -282,6 +289,8 @@ entries:
       - ¿Qué tendría que pasar para que esta tesis deje de servir?
       - ¿Qué cambió entre versiones y por qué?
       - ¿Está bien esta idea? ¿Qué le falta y por qué no?
+      - Tengo esta idea, pensemos si sirve.
+      - ¿Prendo, pauso o espero esta estrategia?
       - La estrategia que diseñamos, ¿la activo o espero?
       - ¿Activamos la estrategia o conviene esperar?
       - Quiero vender prima en QQQ, ¿armo algo?
@@ -368,6 +377,7 @@ entries:
       - ¿Cómo está la exposición y qué dicen las reglas de la estrategia sobre las posiciones abiertas?
       - ¿Qué cambió desde la última revisión y qué contexto importa hoy?
       - ¿Qué evento macro viene y cómo afecta mis posiciones?
+      - ¿Qué cambió y me afecta?
       - ¿Qué hago con mi apuesta de SPY antes del CPI?
       - ¿Cierro, roleo o dejo mis posiciones antes del FOMC?
     skill: skills/daily-attention/skill.yaml
@@ -493,7 +503,7 @@ entries:
       - "The pack is gathered by code from GaleCore (no model): one call per capability, changes and term ratios computed here, a failed call declared in missing, never estimated"
       - The pack is kept as one evidence item and compared with the previous pack of the symbol (moves and sign flips)
       - The research controls; every reported number cites the pack; a save must cite the profile in force
-      - "A scheduled run: the runner gathers the pack, then the model (sonnet; opus when the code finds a sign flip, a big SPY/VIX move or a macro release near today) reads it with only read commands and a turn cap; the runner validates and saves"
+      - "A scheduled run: the runner gathers the pack, then the model (sonnet; what the code flags — a sign flip, a big SPY/VIX move, a macro release near today — goes in the run event) reads it with only read commands and a turn cap; the runner validates and saves"
       - "Read-only: describes, never advises (the runner refuses advice addressed to the reader); no orders"
       - "Not checked - that the story is right or anticipates anything; the next readings and the owner's feedback exist to judge that"
     schedulable: {runs: model, work: reading, max_turns: 12, timeout_minutes: 15}
@@ -513,6 +523,7 @@ entries:
       - Análisis técnico de QQQ
       - Analizame NVDA
       - El flow de opciones de SPY
+      - ¿Qué mueve a SPY?
       - ¿Qué es el skew y por qué me tendría que importar?
       - ¿Qué es el gamma exposure?
     skill: skills/on-demand-analysis/skill.yaml
@@ -650,6 +661,7 @@ entries:
       - ¿Qué aprendemos de la última operación cerrada?
       - ¿Qué esperábamos cuando decidimos, qué ocurrió y qué corresponde revisar?
       - Resumime la semana de mi cartera.
+      - ¿Cómo viene mi cartera?
     skill: skills/performance-review/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [App/Runtime/Performance]
@@ -681,6 +693,8 @@ entries:
       - ¿Estoy concentrado?
       - ¿Varias posiciones chicas son una sola apuesta?
       - ¿Cuánto riesgo tengo abierto contra mis límites?
+      - ¿Qué exposición tengo?
+      - Tengo 5000 USD, ¿qué puedo hacer?
     skill: skills/capital-risk/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [App/Runtime/Exposure, App/Runtime/Allocation]
@@ -801,6 +815,8 @@ entries:
     example_requests:
       - Estemos en la estrategia spy_prima_varianza.
       - Abrí mi cartera.
+      - Retomemos lo que trabajamos.
+      - ¿Dónde habíamos quedado?
       - ¿Qué tengo pendiente en la estrategia de prima de varianza?
       - "Decisión para la estrategia: no operar con VIX arriba de 30."
       - ¿En qué historia del mercado funciona esta estrategia?

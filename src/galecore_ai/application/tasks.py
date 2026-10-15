@@ -737,9 +737,8 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     followup_error = None
     try:
         if entry.id == "market_story":       # the day's market pack, gathered by code before the model (GC-AI-0024)
+            # Sonnet always (owner 15/10: the escalation put 16 of 30 runs on Opus); the code's reason stays in the event.
             kept, note, escalated = _story_pack(kb, invoked_by, now)
-            if escalated and task.model is None and isinstance(client, model_run.ClaudeCodeClient):
-                client.model = "opus"            # Sonnet by policy; Opus only for the reason the code found
             written.append(kb.evidence.path_for(kept.removeprefix("evidence:")))
         elif entry.id == "knowledge_curator":   # new items by domain, by code; the model only where it crossed the threshold
             from galecore_ai.application import curation
@@ -810,7 +809,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
                        cwd=_REPO, timeout_s=int(min(caps.timeout_minutes * 60, left)), add_dir=scratch)
     base = {"invoked_by": invoked_by, "turns": reply.turns, "max_turns": caps.max_turns, "model": reply.model,
             "route": (f"modelo elegido por el owner: {task.model}" if task.model else
-                      caps.route_reason() if not escalated else f"escalada a opus: {escalated}"),
+                      caps.route_reason() + (f"; la historia marcó: {escalated}" if escalated else "")),
             "duration_model_s": reply.duration_s, **_tokens(reply.tokens), **({"followup": rec.id} if rec else {}),
             **({"pack": kept} if kept else {})}
     if reply.ok:
