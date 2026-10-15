@@ -196,6 +196,8 @@ def api_env(env: dict) -> dict:
            if env.get("token_protection_key") else {}),
         # Cuenta que usan los procesos sin usuario (loop de RPF) para leer posiciones y saldos; en env.json, fuera de git (WS-0036).
         **({"Tastytrade__AccountNumber": env["rpf_account_number"]} if env.get("rpf_account_number") else {}),
+        # Carpeta de las fotos de Macro (WS-0030); sin ella /App/Macro/Snapshot responde 503 «no configurado».
+        "Macro__SnapshotDirectory": str(ROOT / "dev" / ".local" / "macro-snapshots"),
         # La clave de FRED del entorno del usuario (calendario macro, GC-0006); nunca se escribe en un archivo.
         **({"FredApi__Key": os.environ["FRED_API_KEY"]} if os.environ.get("FRED_API_KEY") else {}),
     }
