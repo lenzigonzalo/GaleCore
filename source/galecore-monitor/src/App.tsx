@@ -57,6 +57,11 @@ function Dashboard({ onLogout }: DashboardProps) {
   const followStrategy = (spec: string) => { setSelectedSpec(spec); setTab('estrategias'); };
   const isLabWorkspace = tab === 'lab';
   const [watchlistOpen,setWatchlistOpen] = useState(false);
+  // Barra lateral: oculta o visible y su ancho, recordados en este navegador (preferencia de vista, 14/10).
+  const readPref = (key: string) => { try { return localStorage.getItem(key); } catch { return null; } };
+  const [navHidden, setNavHidden] = useState(() => readPref('galecore:nav:hidden') === '1');
+  const [navWidth, setNavWidth] = useState(() => Number(readPref('galecore:nav:width')) || 230);
+  useEffect(() => { try { localStorage.setItem('galecore:nav:hidden', navHidden ? '1' : '0'); localStorage.setItem('galecore:nav:width', String(navWidth)); } catch { /* sin guardado */ } }, [navHidden, navWidth]);
   const [watchlistWidth,setWatchlistWidth] = useState(420);
   const [socketStatus, setSocketStatus] = useState<ConnectionStatus>('disconnected');
 
@@ -126,9 +131,9 @@ function Dashboard({ onLogout }: DashboardProps) {
             const selected = store.pinAdHoc(symbol);
             if (!selected) throw new Error('No se pudo abrir el símbolo.');
             store.setSelectedSymbol(selected); setTab('gex');
-          }} conversationOpen={terminalOpen} onConversation={() => useTerminalStore.getState().setOpen(!terminalOpen)} />
+          }} conversationOpen={terminalOpen} onConversation={() => useTerminalStore.getState().setOpen(!terminalOpen)} navHidden={navHidden} onNavToggle={() => setNavHidden(v => !v)} />
       <div className="workspace-body flex flex-1">
-      <WorkspaceNav active={tab} onChange={setTab} onLogout={onLogout} />
+      {!navHidden && <WorkspaceNav active={tab} onChange={setTab} onLogout={onLogout} width={navWidth} onResize={setNavWidth} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
 
 
