@@ -30,6 +30,13 @@
 .terminal-heading select{max-width:180px}
 .supervisor-dock{padding:16px;font-size:14px;line-height:1.6}
 .supervisor-dock button{font:inherit}
+/* Avisos legibles en un segundo (WS-0036): tipo en color, título, una línea de explicación. */
+.alert-card{border-top:1px solid var(--border-dark);padding:12px 0}
+.alert-meta{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:4px;font-size:13px;color:var(--text-secondary)}
+.alert-category{display:inline-flex;align-items:center;gap:6px;font-weight:500}
+.alert-category i{width:8px;height:8px;border-radius:50%}
+.alert-title{font-size:15px;line-height:1.45;color:var(--text-primary)}
+.alert-detail{margin-top:2px;font-size:14px;line-height:1.5;color:var(--text-secondary)}
 .settings-backdrop{position:fixed;inset:0;z-index:250;background:#0009;display:grid;place-items:center;padding:24px}
 .settings-dialog{width:min(1120px,100%);height:min(820px,calc(100vh - 48px));display:flex;flex-direction:column;min-height:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 100px #0009;overflow:hidden}
 .settings-dialog>header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border-dark);flex-shrink:0}

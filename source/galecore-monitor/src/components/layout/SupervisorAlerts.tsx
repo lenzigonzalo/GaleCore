@@ -22,7 +22,10 @@ interface Alert {
   id: string; kind: string; strategy: string; strategy_ref: string | null; detected_at: string; motivo: string;
   dato: Record<string, string | number | null>; regla: string; propuesta: string; options: string[];
   needs_decision: boolean; decision: Decision | null;
+  /** Desde WS-0036 GaleCore-AI manda el aviso ya legible: categoría, título y una línea de explicación. */
+  category?: Category; title?: string; detail?: string;
 }
+type Category = 'eeuu' | 'empresa' | 'estrategia' | 'cuenta' | 'mercado';
 interface Response { choice: string; words: string; expected: string; review_by: string | null; at: string }
 interface Analysis {
   status: 'running' | 'done' | 'failed'; at: string; summary?: string; detail?: string; missing?: string[];
@@ -45,7 +48,39 @@ const DATO: Record<string, string> = {
   last_valued_at: 'Última valuación', problems: 'Problemas', max_risk_usd: 'Riesgo máximo (USD)',
   limit_usd: 'Límite (USD)', event: 'Dato', event_date: 'Fecha', business_days: 'Días hábiles',
   symbol: 'Símbolo', metric: 'Medida', value: 'Valor', threshold: 'Umbral', condition: 'Condición',
+  underlying_symbol: 'Subyacente', underlying_price: 'Precio del subyacente', underlying_read_at: 'Leído',
+  apuesta: 'Apuesta', usado_usd: 'En riesgo (USD)', tope_usd: 'Tope (USD)', margen_usd: 'Margen (USD)',
 };
+
+/** Color y rótulo por tipo, para leer el aviso en un segundo (WS-0036). */
+const CATEGORY: Record<Category, { label: string; color: string }> = {
+  eeuu: { label: 'EE. UU.', color: '#60a5fa' },
+  empresa: { label: 'Empresa', color: '#c084fc' },
+  estrategia: { label: 'Estrategia', color: '#34d399' },
+  cuenta: { label: 'Cuenta', color: '#fb923c' },
+  mercado: { label: 'Mercado', color: '#22d3ee' },
+};
+
+function UsFlag() {
+  return <svg width="16" height="11" viewBox="0 0 16 11" aria-hidden="true" style={{ borderRadius: 2, flex: '0 0 16px' }}>
+    {[0, 2, 4, 6, 8, 10].map(y => <rect key={y} x="0" y={y} width="16" height="1" fill="#e5484d" />)}
+    {[1, 3, 5, 7, 9].map(y => <rect key={y} x="0" y={y} width="16" height="1" fill="#f5f5f5" />)}
+    <rect x="0" y="0" width="7" height="6" fill="#3b5bdb" />
+  </svg>;
+}
+
+function CategoryTag({ category }: { category?: Category }) {
+  const c = CATEGORY[category ?? 'estrategia'] ?? CATEGORY.estrategia;
+  return <span className="alert-category" style={{ color: c.color }}>
+    {category === 'eeuu' ? <UsFlag /> : <i style={{ background: c.color }} />}{c.label}
+  </span>;
+}
+
+function datoValue(key: string, value: string | number): string {
+  if (key.endsWith('_at')) return when(String(value));
+  if (typeof value === 'number' && !Number.isInteger(value)) return value.toFixed(2);
+  return String(value);
+}
 
 function readSeen(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(SEEN) || '[]')); } catch { return new Set(); }
@@ -74,11 +109,14 @@ function chime() {
 function when(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso
-    : d.toLocaleString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  if (Number.isNaN(d.getTime())) return iso;
+  const day = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
+  const date = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+  const time = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  return `${day} ${date}, ${time}`;   // «jue 15/10, 11:21», como en Agentes
 }
 
-const muted: React.CSSProperties = { fontSize: 12, color: 'var(--text-muted)' };
+const muted: React.CSSProperties = { fontSize: 13, color: 'var(--text-secondary)' };
 const chip: React.CSSProperties = { fontSize: 12, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
   border: '1px solid var(--border-dark)', color: 'var(--text-secondary)', background: 'transparent' };
 
@@ -121,15 +159,16 @@ function AlertCard({ alert, sent, error, analysis, onAnswer }: {
   const ask = alert.needs_decision && !done && !sent;
 
   return (
-    <div style={{ borderTop: '1px solid var(--border-dark)', padding: '8px 0' }}>
-      <div onClick={() => setOpen(o => !o)} style={{ cursor: 'pointer', display: 'flex', gap: 8, alignItems: 'baseline' }}>
-        <span style={{ fontSize: 13, color: ask ? 'var(--yellow-gc)' : 'var(--text-primary)', flex: 1 }}>{alert.motivo}</span>
-        <span style={muted}>{when(alert.detected_at)}</span>
+    <div className="alert-card">
+      <div onClick={() => setOpen(o => !o)} style={{ cursor: 'pointer' }}>
+        <div className="alert-meta"><CategoryTag category={alert.category} /><span>{when(alert.detected_at)}</span></div>
+        <div className="alert-title" style={ask ? { color: 'var(--yellow-gc)' } : undefined}>{alert.title || alert.motivo}</div>
+        {alert.detail && <div className="alert-detail">{alert.detail}</div>}
       </div>
       {open && (
-        <div style={{ ...muted, margin: '4px 0' }}>
+        <div style={{ ...muted, margin: '6px 0' }}>
           {Object.entries(alert.dato).filter(([, v]) => v !== null && v !== '')
-            .map(([k, v]) => `${DATO[k] ?? k}: ${k.endsWith('_at') ? when(String(v)) : String(v)}`).join(' · ')}
+            .map(([k, v]) => `${DATO[k] ?? k}: ${datoValue(k, v as string | number)}`).join(' · ')}
           <div>Regla: {alert.regla}</div>
         </div>
       )}
