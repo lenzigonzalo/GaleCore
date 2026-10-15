@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, ChevronRight, ChevronDown, FileText, FlaskConical, BookOpen, Settings, PanelLeftClose, PanelLeftOpen, Pencil, LogOut, ArrowUpRight, Mic, Paperclip } from 'lucide-react';
+import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, ChevronRight, ChevronDown, FileText, PanelLeftClose, PanelLeftOpen, Pencil, ArrowUpRight, Mic, Paperclip } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
 import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, WorkspaceFile, LabProjectKind, labUpload } from '../api/lab';
 import { LabShadow } from './LabShadow';
