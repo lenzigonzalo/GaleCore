@@ -17,6 +17,8 @@ jest.mock('../api/shadow', () => ({
   fetchShadowEvaluations: jest.fn(),
   fetchShadowDiscards: jest.fn(),
   fetchShadowPositions: jest.fn(),
+  fetchStrategySettings: jest.fn(),
+  saveStrategySetting: jest.fn(),
 }));
 
 jest.mock('../components/shadow/PerformancePanel', () => ({ PerformancePanel: ({ spec, runtime }: { spec: string; runtime: React.ReactNode }) => <div data-testid="performance-panel">{spec}{runtime}</div> }));
@@ -93,6 +95,7 @@ beforeEach(() => {
   (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
   (saveSpaceItem as jest.Mock).mockResolvedValue(undefined);
   mocked.fetchPerformanceSummary.mockResolvedValue([summary()]);
+  (api.fetchStrategySettings as jest.Mock).mockResolvedValue([]);
   mocked.fetchShadowStatus.mockResolvedValue(status());
   mocked.fetchShadowMetrics.mockResolvedValue([metrics()]);
   mocked.fetchShadowEvaluations.mockImplementation(async id => [{ ...evaluation, evaluationId: `e-${id}`, instanceId: id }]);
@@ -192,3 +195,19 @@ test('RPF ocupa una fila en Producción y su monitor aparece en Hoy',async()=>{
 });
 
 const preference = (hidden: string[], isOwn = true) => ({ kind: 'preference', key: 'estrategias', isOwn, content: JSON.stringify({ hidden }) });
+
+test('etapas Live | Paper | SHADOW: RPF en Live·Manual con Auto bloqueado; el modo se guarda en GaleCore', async () => {
+  useAppConfigStore.setState({ strategies: [{ id: 'rpf', tab: 'rpf', label: 'RPF', switch_endpoint: '/App/Rpf/Switch' } as any] });
+  (api.saveStrategySetting as jest.Mock).mockResolvedValue({ name: instance.specName, stage: 'SHADOW', mode: 'MANUAL', isDefault: false, effect: '' });
+  render(<Shadow rpf={<div>Monitor real RPF</div>} />);
+  const live = await screen.findByRole('tab', { name: /Live/ });
+  expect(live).toHaveAttribute('aria-selected', 'true');
+  const rpfRow = screen.getByRole('button', { name: 'RPF' }).closest('tr')!;
+  expect(within(rpfRow).getByRole('radio', { name: 'Auto' })).toBeDisabled();
+  expect(within(rpfRow).getByRole('radio', { name: 'Manual' })).toHaveAttribute('aria-checked', 'true');
+  fireEvent.click(screen.getByRole('tab', { name: /SHADOW/ }));
+  const row = (await screen.findByRole('button', { name: strategyName(instance.specName) })).closest('tr')!;
+  fireEvent.click(within(row).getByRole('radio', { name: 'Manual' }));
+  await waitFor(() => expect(api.saveStrategySetting).toHaveBeenCalledWith(instance.specName, 'SHADOW', 'MANUAL'));
+  useAppConfigStore.setState({ strategies: [] });
+});

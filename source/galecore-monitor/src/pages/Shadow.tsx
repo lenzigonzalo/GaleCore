@@ -5,12 +5,14 @@ import { useStrategySwitchStore, useSwitchEnabled } from '../store/useStrategySw
 import { Database } from 'lucide-react';
 import { latestInstance } from '../components/shadow/InstanceState';
 import { PerformancePanel } from '../components/shadow/PerformancePanel';
+import { ModeSwitch } from '../components/common/ModeSwitch';
 import { fetchReferenceCapital } from '../api/space';
 import { amount, rate, readPanelError, stateLabel, strategyName, usd as panelUsd } from '../components/shadow/panelPresentation';
 import { NoticePanel } from '../components/common/NoticePanel';
 import {
-  fetchPerformanceSummary, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
+  fetchPerformanceSummary, fetchStrategySettings, saveStrategySetting, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
 } from '../api/shadow';
+import type { StrategySetting } from '../api/shadow';
 import {
   PerformanceSummary, Metric, DISCARD_LABELS, ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics,
 } from '../types/shadow';
@@ -95,9 +97,25 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   const rpfName = rpfEntry?.label ? (rpfEntry.name ? `${rpfEntry.label} · ${rpfEntry.name}` : rpfEntry.label) : 'RPF';
   const rpfActive = useSwitchEnabled(rpfEntry?.switch_endpoint || '/App/Rpf/Switch');
   const readSwitch = useStrategySwitchStore(st => st.read);
-  const hasProduction = !!rpf && rpfEnabled;
-  const [stage, setStage] = useState<'produccion' | 'shadow'>('produccion');
-  const currentStage = hasProduction ? stage : 'shadow';
+  // Etapa y modo de cada estrategia (WS-0036): vienen de GaleCore; sin dato, los de por defecto.
+  type Stage = StrategySetting['stage'];
+  const [settings, setSettings] = useState<Record<string, StrategySetting>>({});
+  const [settingsError, setSettingsError] = useState('');
+  const [savingMode, setSavingMode] = useState<string | null>(null);
+  useEffect(() => { let active = true; fetchStrategySettings().then(list => { if (active) setSettings(Object.fromEntries(list.map(x => [x.name, x]))); })
+    .catch(() => { if (active) setSettingsError('No se pudo leer la etapa y el modo de las estrategias.'); }); return () => { active = false; }; }, []);
+  const stageOf = (name: string): Stage => settings[name]?.stage ?? (name === 'rpf' ? 'LIVE' : 'SHADOW');
+  const modeOf = (name: string) => settings[name]?.mode ?? (name === 'rpf' ? 'MANUAL' : 'AUTO');
+  const changeMode = async (name: string, mode: 'AUTO' | 'MANUAL') => {
+    const before = settings[name]; setSavingMode(name); setSettingsError('');
+    setSettings(all => ({ ...all, [name]: { ...(before ?? { name, stage: stageOf(name), isDefault: true, effect: '' }), mode } }));
+    try { const saved = await saveStrategySetting(name, stageOf(name), mode); setSettings(all => ({ ...all, [name]: saved })); }
+    catch { setSettings(all => { const next = { ...all }; if (before) next[name] = before; else delete next[name]; return next; }); setSettingsError('No se pudo cambiar el modo.'); }
+    finally { setSavingMode(null); }
+  };
+  const showRpf = !!rpf && rpfEnabled;
+  const stages: { id: Stage; label: string }[] = [{ id: 'LIVE', label: 'Live' }, { id: 'PAPER', label: 'Paper' }, { id: 'SHADOW', label: 'SHADOW' }];
+  const [stage, setStage] = useState<Stage | null>(null);
   useEffect(() => { if (rpfEntry?.switch_endpoint) void readSwitch(rpfEntry.switch_endpoint); }, [rpfEntry?.switch_endpoint, readSwitch]);
   useEffect(() => {
     let active = true;
@@ -131,35 +149,38 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   const sortByState = (list: PerformanceSummary[]) => [...list].sort((a, b) => Number(isRunning(b.spec)) - Number(isRunning(a.spec)) || strategyName(a.spec).localeCompare(strategyName(b.spec)));
   const designOnly = projects.filter(project => project.strategyName && project.strategyName !== 'rpf' && !rows.some(row => row.spec === project.strategyName))
     .sort((a, b) => strategyName(a.strategyName!).localeCompare(strategyName(b.strategyName!)));
+  const countIn = (id: Stage) => rows.filter(r => stageOf(r.spec) === id).length + (showRpf && stageOf('rpf') === id ? 1 : 0);
+  const currentStage: Stage = stage ?? (countIn('LIVE') ? 'LIVE' : 'SHADOW');
   return <div className="shadow-page">
     {spec ? <>
       <button className="shadow-back" onClick={() => { setSpec(null); setRuntimeOpen(false); }}>← Estrategias</button>
       {spec === 'rpf' && rpf ? <div className="performance-panel"><h2>{rpfName}</h2><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
     </> : <div className="performance-panel">
       <div className="strategy-list-heading"><h2 className="strategy-list-title">Estrategias</h2>
-        <div className="stage-switch" role="tablist" aria-label="Etapa">
-          {hasProduction && <button role="tab" aria-selected={currentStage === 'produccion'} onClick={() => setStage('produccion')}>Producción</button>}
-          <button role="tab" aria-selected={currentStage === 'shadow'} onClick={() => setStage('shadow')}>SHADOW</button>
-        </div></div>
+        <div className="stage-switch" role="tablist" aria-label="Etapa">{stages.map(x => <button key={x.id} role="tab" aria-selected={currentStage === x.id} onClick={() => setStage(x.id)}>{x.label}<span className="stage-count">{countIn(x.id) || ''}</span></button>)}</div></div>
       {error && <div role="alert">{error}<button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
-      {statusError && <p role="alert">{statusError}</p>}{projectsError && <p role="alert">{projectsError}</p>}
+      {statusError && <p role="alert">{statusError}</p>}{projectsError && <p role="alert">{projectsError}</p>}{settingsError && <p role="alert">{settingsError}</p>}
       <div className="performance-table strategy-list" aria-busy={loading}><table>
-        <thead><tr><th>Estrategia</th><th>Estado</th><th className="numeric">Abiertas</th><th className="numeric">Resultado</th><th className="numeric">% ganadoras</th><th className="numeric">Operaciones</th><th className="numeric">Máx. caída</th></tr></thead>
-        {loading ? <tbody>{Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia"><td colSpan={7}><div className="performance-skeleton row-skeleton" /></td></tr>)}</tbody> : <>
-          {currentStage === 'produccion' && hasProduction && <tbody>
-            <tr className="strategy-row" tabIndex={0} onClick={() => setSpec('rpf')} onKeyDown={event => { if (event.key === 'Enter') setSpec('rpf'); }}>
-              <td className="strategy-name"><button onClick={event => { event.stopPropagation(); setSpec('rpf'); }}>{rpfName}</button></td><td><StageState active={rpfActive} /></td><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" />
-            </tr></tbody>}
-          {currentStage === 'shadow' && rows.length > 0 && <tbody>
-            {sortByState(rows).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.key === 'Enter') setSpec(row.spec); }}>
+        <thead><tr><th>Estrategia</th><th>Estado</th><th>Modo</th><th className="numeric">Abiertas</th><th className="numeric">Resultado</th><th className="numeric">% ganadoras</th><th className="numeric">Operaciones</th><th className="numeric">Máx. caída</th></tr></thead>
+        {loading ? <tbody>{Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia"><td colSpan={8}><div className="performance-skeleton row-skeleton" /></td></tr>)}</tbody> : <>
+          <tbody>
+            {showRpf && stageOf('rpf') === currentStage && <tr className="strategy-row" tabIndex={0} onClick={() => setSpec('rpf')} onKeyDown={event => { if (event.key === 'Enter') setSpec('rpf'); }}>
+              <td className="strategy-name"><button onClick={event => { event.stopPropagation(); setSpec('rpf'); }}>{rpfName}</button></td><td><StageState active={rpfActive} /></td>
+              <td><ModeSwitch mode={modeOf('rpf')} busy={savingMode === 'rpf'} autoBlocked={stageOf('rpf') === 'LIVE' ? 'En Live, Auto mandaría órdenes solas: bloqueado hasta que exista la ejecución.' : undefined} onChange={mode => void changeMode('rpf', mode)} /></td>
+              <td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" />
+            </tr>}
+            {sortByState(rows.filter(row => stageOf(row.spec) === currentStage)).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.key === 'Enter') setSpec(row.spec); }}>
               <td className="strategy-name"><button title={row.spec} onClick={event => { event.stopPropagation(); setSpec(row.spec); }}>{strategyName(row.spec)}</button></td>
               <td><StageState active={isRunning(row.spec)} /></td>
+              <td><ModeSwitch mode={modeOf(row.spec)} busy={savingMode === row.spec} autoBlocked={stageOf(row.spec) === 'LIVE' ? 'En Live, Auto mandaría órdenes solas: bloqueado hasta que exista la ejecución.' : undefined} onChange={mode => void changeMode(row.spec, mode)} /></td>
               <td className="numeric">{row.tradesOpen || ''}</td>
               {cell(row.realizedPnl, panelUsd, true)}{cell(row.winRate, rate)}<td className="numeric">{row.tradesClosed || ''}</td>{cell(row.maxDrawdown, amount)}
-            </tr>)}</tbody>}
-          {currentStage === 'shadow' && designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={7}>En diseño</th></tr>
+            </tr>)}
+            {countIn(currentStage) === 0 && <tr><td colSpan={8} className="strategy-empty">{currentStage === 'PAPER' ? 'Ninguna estrategia en Paper. Paper necesita la cuenta paper del bróker, que todavía no está conectada.' : 'Ninguna estrategia en esta etapa.'}</td></tr>}
+          </tbody>
+          {currentStage === 'SHADOW' && designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={8}>En diseño</th></tr>
             {designOnly.map(project => <tr key={project.id} className="strategy-row" tabIndex={0} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.key === 'Enter') setSpec(project.strategyName); }}>
-              <td className="strategy-name"><button title={project.strategyName!} onClick={event => { event.stopPropagation(); setSpec(project.strategyName); }}>{strategyName(project.strategyName!)}</button></td><td /><td colSpan={5} />
+              <td className="strategy-name"><button title={project.strategyName!} onClick={event => { event.stopPropagation(); setSpec(project.strategyName); }}>{strategyName(project.strategyName!)}</button></td><td /><td /><td colSpan={5} />
             </tr>)}</tbody>}
         </>}
       </table></div>

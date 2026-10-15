@@ -48,3 +48,14 @@ export async function fetchPerformanceSummary(): Promise<PerformanceSummary[]> {
   const { data } = await apiClient.get<PerformanceSummary[]>('/App/Runtime/Performance/Summary', { timeout: 30000 });
   return data;
 }
+
+/** Etapa (SHADOW | PAPER | LIVE) y modo (AUTO | MANUAL) de cada estrategia (WS-0036). */
+export interface StrategySetting { name: string; stage: 'SHADOW' | 'PAPER' | 'LIVE'; mode: 'AUTO' | 'MANUAL'; isDefault: boolean; effect: string; updatedBy?: string | null; updatedAt?: string | null }
+export async function fetchStrategySettings(): Promise<StrategySetting[]> {
+  const { data } = await apiClient.get<StrategySetting[]>('/App/Strategies/Settings', { timeout: 15000 });
+  return data;
+}
+export async function saveStrategySetting(name: string, stage: StrategySetting['stage'], mode: StrategySetting['mode']): Promise<StrategySetting> {
+  const { data } = await apiClient.put<StrategySetting>(`/App/Strategies/Settings/${encodeURIComponent(name)}`, { stage, mode });
+  return data;
+}
