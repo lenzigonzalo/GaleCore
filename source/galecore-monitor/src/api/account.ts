@@ -120,3 +120,22 @@ export async function fetchSpreadRisk(): Promise<Record<string, AccountSpreadRis
   const { data } = await apiClient.get<{ spreads?: AccountSpreadRisk[] }>('/Data/Tastytrade/Account/Spreads');
   return Object.fromEntries((data?.spreads ?? []).map(s => [s.id, s]));
 }
+
+/** Inicio de la cuenta real (WS-0036): todo calculado en la API; el Monitor sólo lo muestra. */
+export interface AccountOverview {
+  asOf: string;
+  netLiq: number; cash: number; buyingPower: number;
+  dayPnl: number | null; dayPnlPct: number | null; openPnl: number | null;
+  maxRisk: number; maxRiskPct: number | null; maxRiskLimitPct: number | null;
+  exposure: {
+    spyEquivalentShares: number | null; spyEquivalentDollars: number | null; theta: number | null; vega: number | null;
+    byUnderlying: { symbol: string; dollarDelta: number | null; beta: number | null; maxRisk: number }[];
+  };
+  attention: { kind: 'gestion' | 'evento'; title: string }[];
+  missing: string[];
+}
+
+export async function fetchAccountOverview(): Promise<AccountOverview> {
+  const { data } = await apiClient.get<AccountOverview>('/App/GaleCore/Account/Overview', { timeout: 30_000 });
+  return data;
+}

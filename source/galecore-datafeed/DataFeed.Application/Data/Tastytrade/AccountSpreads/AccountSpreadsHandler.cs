@@ -29,16 +29,25 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
             var positions = (await _mediator.Send(new AccountPositionsRequest { AccountNumber = request.AccountNumber }, cancellationToken))
                 .Positions ?? new List<AccountPositionDto>();
 
-            var symbols = positions
-                .Where(p => p.Symbol != null && TastytradeHelper.IsOptionSymbol(p.Symbol))
-                .Select(p => TastytradeHelper.GetOptionSymbolFromTicker(p.Symbol))
+            var options = positions.Where(p => p.Symbol != null && TastytradeHelper.IsOptionSymbol(p.Symbol)).ToList();
+            var optionSymbols = options.Select(p => TastytradeHelper.GetOptionSymbolFromTicker(p.Symbol)).Distinct().ToList();
+            // Acciones y subyacentes: sólo cotización (no tienen Greeks; pedirlos haría esperar todo el timeout).
+            var quoteOnly = positions.Where(p => p.Symbol != null && !TastytradeHelper.IsOptionSymbol(p.Symbol)
+                                                 && string.Equals(p.InstrumentType, "Equity", StringComparison.OrdinalIgnoreCase))
+                .Select(p => p.Symbol)
+                .Concat(options.Select(p => p.Symbol.Substring(0, 6).Trim()))
                 .Distinct()
                 .ToList();
 
-            var market = await SnapshotAsync(symbols, cancellationToken);
+            var market = await SnapshotAsync(optionSymbols, quoteOnly, cancellationToken);
             return new AccountSpreadsResponse
             {
                 Spreads = AccountSpreadBuilder.Build(positions, market),
+                Equities = AccountSpreadBuilder.Equities(positions, market),
+                UnderlyingPrices = quoteOnly
+                    .Select(s => (s, Mid: market.TryGetValue(s, out var m) ? AccountSpreadBuilder.MidOf(m.Bid, m.Ask) : null))
+                    .Where(x => x.Mid != null)
+                    .ToDictionary(x => x.s, x => x.Mid!.Value),
                 AsOf = DateTime.UtcNow,
             };
         }
@@ -48,12 +57,15 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
         /// afuera y el spread sale con esos campos en null (fuera de horario, por ejemplo): mejor
         /// un dato faltante declarado que la página esperando.
         /// </summary>
-        private async Task<IReadOnlyDictionary<string, LegMarket>> SnapshotAsync(List<string> symbols, CancellationToken ct)
+        private async Task<IReadOnlyDictionary<string, LegMarket>> SnapshotAsync(List<string> options, List<string> quoteOnly, CancellationToken ct)
         {
             var result = new Dictionary<string, LegMarket>();
+            var symbols = options.Concat(quoteOnly).Distinct().ToList();
             if (symbols.Count == 0) return result;
 
-            var subs = symbols.SelectMany(s => new[] { (s, "Quote", (long?)null), (s, "Greeks", (long?)null) }).ToList();
+            var subs = options.SelectMany(s => new[] { (s, "Quote", (long?)null), (s, "Greeks", (long?)null) })
+                .Concat(quoteOnly.Select(s => (s, "Quote", (long?)null)))
+                .ToList();
             var items = await _streaming.RequestSnapshotAsync(subs, isSymbolComplete: _ => true, timeout: TimeSpan.FromSeconds(6), cancellationToken: ct);
 
             var quotes = new Dictionary<string, JObject>();

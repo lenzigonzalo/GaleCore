@@ -67,6 +67,11 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
                     ? used.Select((l, i) => -Sign(l) * currentPrices[i]!.Value).Sum()
                     : null;
 
+                var closes = used.Select(l => l.Position.ClosePrice > 0 ? (double)l.Position.ClosePrice : (double?)null).ToList();
+                double? previousCredit = closes.All(c => c != null) ? used.Select((l, i) => -Sign(l) * closes[i]!.Value).Sum() : null;
+                double? openPnl = hasLive && currentCredit != null ? (initialCredit - currentCredit.Value) * size : null;
+                double? dayPnl = hasLive && currentCredit != null && previousCredit != null ? (previousCredit.Value - currentCredit.Value) * size : null;
+
                 var popCredit = hasLive && currentCredit != null ? currentCredit.Value : initialCredit;
                 double? pop = width > 0 ? Clamp((1 - popCredit / width) * 100) : null;
 
@@ -82,6 +87,9 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
                     InitialCredit = Round(initialCredit, 4),
                     CurrentNetCredit = currentCredit == null ? null : Round(currentCredit.Value, 4),
                     HasLiveQuote = hasLive,
+                    PreviousNetCredit = previousCredit == null ? null : Round(previousCredit.Value, 4),
+                    OpenPnl = openPnl == null ? null : Round(openPnl.Value, 2),
+                    DayPnl = dayPnl == null ? null : Round(dayPnl.Value, 2),
                     MaxProfit = Round(initialCredit * size, 2),
                     MaxLoss = Round(Math.Max(0, width - initialCredit) * size, 2),
                     Pop = pop == null ? null : Round(pop.Value, 1),
@@ -92,6 +100,23 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
             }
             return spreads;
         }
+
+        /// <summary>Acciones y ETFs (no opciones), con su resultado si hay cotización.</summary>
+        public static List<AccountEquityDto> Equities(IEnumerable<AccountPositionDto> positions, IReadOnlyDictionary<string, LegMarket> market) =>
+            positions.Where(p => p.Symbol != null && !TastytradeHelper.IsOptionSymbol(p.Symbol) && p.Quantity != 0
+                                 && string.Equals(p.InstrumentType, "Equity", StringComparison.OrdinalIgnoreCase))
+                .Select(p =>
+                {
+                    var qty = (double)p.Quantity * (string.Equals(p.QuantityDirection, "Short", StringComparison.OrdinalIgnoreCase) ? -1 : 1);
+                    var mid = market.TryGetValue(p.Symbol, out var m) ? MidOf(m.Bid, m.Ask) : null;
+                    return new AccountEquityDto
+                    {
+                        Symbol = p.Symbol, Quantity = qty, AverageOpenPrice = (double)p.AverageOpenPrice, ClosePrice = (double)p.ClosePrice,
+                        Mid = mid,
+                        OpenPnl = mid == null ? null : Round((mid.Value - (double)p.AverageOpenPrice) * qty, 2),
+                        DayPnl = mid == null || p.ClosePrice <= 0 ? null : Round((mid.Value - (double)p.ClosePrice) * qty, 2),
+                    };
+                }).ToList();
 
         private static SpreadGreeksDto? NetGreeks(List<Leg> legs, IReadOnlyDictionary<string, LegMarket> market, Func<Leg, double> sign, double size, Leg shortLeg)
         {

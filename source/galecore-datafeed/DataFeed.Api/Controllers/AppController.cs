@@ -98,6 +98,20 @@ namespace DataFeed.Controllers
             => await ServeRulesFileAsync("galecore_rules_core.json");
 
         /// <summary>
+        /// Inicio de la cuenta real (WS-0036): valor, resultado del día, riesgo máximo, exposición en SPY y lo que
+        /// pide atención hoy (reglas de gestión del nodo `monitor` y agenda de EE. UU.). El Monitor sólo lo muestra.
+        /// </summary>
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/Account/Overview")]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> AccountOverviewAsync([FromQuery] string? accountNumber)
+            => await Handle(new DataFeed.Application.Data.Tastytrade.AccountOverview.AccountOverviewRequest
+            {
+                AccountNumber = accountNumber,
+                RulesJson = await LoadFileOrNullAsync("galecore_rules_core.json"),
+            });
+
+        /// <summary>
         /// Estado del switch de un servicio de plataforma (`services[]` de la config de la app).
         /// Dos niveles, no tres: estos procesos no trabajan para nadie en particular, así que no
         /// tienen preferencia por usuario. `source` vale "platform" o "rules".

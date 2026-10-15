@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../api/client';
-import { AccountSummary } from '../components/account/AccountSummary';
 import { useAccountStore } from '../store/useAccountStore';
-import { fmtCurrency, fmtPct, etDateParts } from '../utils/formatters';
+import { fmtCurrency, fmtPct, fmtPnl, etDateParts } from '../utils/formatters';
+import { AccountOverview, describeAccountError, fetchAccountOverview } from '../api/account';
 import { useMarketStore } from '../store/useMarketStore';
 import type { Tab } from '../components/layout/TabNav';
 import { portfolioRows } from '../utils/portfolioSummary';
@@ -80,38 +80,25 @@ export function Calendario({ page = false }: { page?: boolean }) {
 export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
   const { positions, loadingPositions, errorPositions, positionsReadAt } = useAccountStore();
   const tickers = useMarketStore(s => s.tickers);
-  const [, setClock] = useState(0);
+  const [overview, setOverview] = useState<AccountOverview | null>(null);
+  const [overviewError, setOverviewError] = useState<string | null>(null);
   useEffect(() => {
-    const timer = setInterval(() => setClock(n => n + 1), 10_000);
-    return () => clearInterval(timer);
+    let active = true;
+    const load = () => fetchAccountOverview()
+      .then(o => { if (active) { setOverview(o); setOverviewError(null); } })
+      .catch(err => { if (active) setOverviewError(describeAccountError(err).message); });
+    load();
+    const timer = setInterval(load, 60_000);
+    return () => { active = false; clearInterval(timer); };
   }, []);
   const rows = portfolioRows(positions, tickers);
-  const ready = !!positionsReadAt && !errorPositions && !loadingPositions;
-  const gross = ready && rows.every(r => r.gross !== null) ? rows.reduce((s, r) => s + r.gross!, 0) : null;
-  const concentration = Array.from(rows.reduce((byTicker, row) => {
-    byTicker.set(row.ticker, (byTicker.get(row.ticker) ?? 0) + (row.gross ?? 0));
-    return byTicker;
-  }, new Map<string, number>())).sort((a, b) => b[1] - a[1]);
-  const expiring = ready ? rows.filter(r => r.expiry && daysTo(r.expiry) <= 7) : [];
   return <div className="rs">
-    <header className="rs-top"><h1>Mi portfolio</h1><span>Cuenta real · USD</span></header>
-    <div className="rs-capital"><AccountSummary layout="strip" />
-      <section className="rs-exposure">
-        <div className="rs-head"><h2 title="Distribución del valor bruto de las posiciones; opciones valuadas a prima, sin medir riesgo ni exposición nominal">Concentración por valor bruto</h2></div>
-        {!ready || gross === null ? <p className="rs-empty">Sin valoración completa</p>
-          : concentration.length === 0 ? <p className="rs-empty">Sin posiciones</p>
-          : <div className="rs-concentration">{concentration.map(([ticker, value]) => {
-            const weight = gross > 0 ? value / gross * 100 : null;
-            return <div className="rs-holding" key={ticker}>
-              <div><b>{ticker}</b><strong>{weight === null ? '—' : `${weight.toFixed(1)}%`}</strong><span>{fmtCurrency(value)}</span></div>
-              <div className="rs-weight" aria-hidden="true"><i style={{ width: `${weight ?? 0}%` }}/></div>
-            </div>;
-          })}</div>}
-      </section>
-    </div>
-    {expiring.length > 0 && <div className={'rs-alert' + (expiring.some(r => daysTo(r.expiry!) <= 2) ? ' urgent' : '')} role="status"><AlertTriangle size={20}/><strong>Vencimientos próximos</strong><span>{expiring.map(r => `${r.ticker} · ${daysTo(r.expiry!) < 0 ? 'vencida' : daysTo(r.expiry!) === 0 ? 'hoy' : `${daysTo(r.expiry!)} días`}`).join(' / ')}</span></div>}
-    <section className="rs-panel rs-portfolio">
-      <div className="rs-head"><h2>Posiciones</h2></div>
+    <header className="rs-top"><h1>Mi cuenta</h1><span>Tastytrade · USD</span></header>
+    {overviewError && !overview && <p className="rs-alert urgent" role="alert">{overviewError}</p>}
+    {!overview && !overviewError && <p className="rs-empty">Leyendo la cuenta…</p>}
+    {overview && <Overview o={overview} />}
+    <section className="rs-block rs-portfolio">
+      <h2>Posiciones</h2>
       {loadingPositions ? <p className="rs-empty">Leyendo posiciones…</p>
         : errorPositions ? <p className="rs-alert urgent" role="alert">No se pudieron leer las posiciones de la cuenta.</p>
         : !positionsReadAt ? <p className="rs-empty">Sin lectura de posiciones disponible.</p>
@@ -120,4 +107,40 @@ export function Resumen(_: { onNavigate: (tab: Tab) => void }) {
 
     </section>
   </div>;
+}
+
+const money = (n: number) => fmtCurrency(n);
+const signed = (n: number, d = 2) => `${n >= 0 ? '+' : '−'}$${Math.abs(n).toFixed(d)}`;
+const tone = (n: number | null | undefined) => n == null ? undefined : n >= 0 ? 'pos' : 'neg';
+
+/** Lo primero que se ve: cuánta plata hay, qué riesgo tenemos, a qué estamos expuestos y qué pide atención. */
+function Overview({ o }: { o: AccountOverview }) {
+  const over = o.maxRiskPct != null && o.maxRiskLimitPct != null && o.maxRiskPct > o.maxRiskLimitPct;
+  const e = o.exposure;
+  return <>
+    <div className="rs-strip">
+      <div><span>Valor de la cuenta</span><strong>{money(o.netLiq)}</strong></div>
+      <div><span>Resultado de hoy</span><strong className={tone(o.dayPnl)}>{o.dayPnl == null ? '—' : fmtPnl(o.dayPnl)}</strong>
+        {o.dayPnlPct != null && <em className={tone(o.dayPnlPct)}>{fmtPct(o.dayPnlPct)}</em>}</div>
+      <div><span>Poder de compra</span><strong>{money(o.buyingPower)}</strong></div>
+      <div><span>Riesgo máximo abierto</span><strong className={over ? 'neg' : undefined}>{money(o.maxRisk)}</strong>
+        {o.maxRiskPct != null && <em className={over ? 'neg' : undefined}>{o.maxRiskPct.toFixed(0)} % de la cuenta{o.maxRiskLimitPct != null ? ` · límite ${o.maxRiskLimitPct} %` : ''}</em>}</div>
+    </div>
+    <div className="rs-two">
+      <section className="rs-block">
+        <h2>A qué estamos expuestos</h2>
+        <div className="rs-row"><span>Acciones de EE. UU.</span><b>{e.spyEquivalentShares == null ? '—'
+          : `${e.spyEquivalentShares.toFixed(1)} acciones de SPY${e.spyEquivalentDollars != null ? ` · ${money(e.spyEquivalentDollars)}` : ''}`}</b></div>
+        <div className="rs-row"><span>Theta (paso del tiempo)</span><b className={tone(e.theta)}>{e.theta == null ? '—' : `${signed(e.theta)} por día`}</b></div>
+        <div className="rs-row"><span>Vega (volatilidad)</span><b className={tone(e.vega)}>{e.vega == null ? '—' : `${signed(e.vega)} por punto`}</b></div>
+        {e.byUnderlying.length > 1 && e.byUnderlying.map(u => <div className="rs-row" key={u.symbol}><span>{u.symbol}</span>
+          <b>{u.dollarDelta == null ? '—' : money(u.dollarDelta)}{u.maxRisk > 0 ? ` · riesgo ${money(u.maxRisk)}` : ''}</b></div>)}
+      </section>
+      <section className="rs-block">
+        <h2>Qué pide atención hoy</h2>
+        {o.attention.length === 0 ? <p className="rs-empty">Nada para hoy.</p>
+          : o.attention.map(a => <div className="rs-attention" key={a.title}><i className={a.kind}/>{a.title}</div>)}
+      </section>
+    </div>
+  </>;
 }

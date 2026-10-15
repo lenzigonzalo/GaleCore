@@ -6,6 +6,10 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
     public class AccountSpreadsResponse
     {
         public List<AccountSpreadDto> Spreads { get; set; } = new();
+        /// <summary>Acciones y ETFs de la cuenta (no forman spreads, pero cuentan en la exposición).</summary>
+        public List<AccountEquityDto> Equities { get; set; } = new();
+        /// <summary>Mid de cada subyacente y acción de la cuenta (para la exposición en dólares).</summary>
+        public Dictionary<string, double> UnderlyingPrices { get; set; } = new();
         public DateTime AsOf { get; set; }
     }
 
@@ -42,8 +46,26 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
         /// <summary>"vivo" si el POP usa el crédito de hoy, "entrada" si usa el de apertura.</summary>
         public string PopBasis { get; set; } = "entrada";
 
+        /// <summary>Crédito neto al cierre anterior (precio de cierre de cada pata).</summary>
+        public double? PreviousNetCredit { get; set; }
+        /// <summary>Resultado desde la apertura y en el día, en USD; null sin cotización en vivo.</summary>
+        public double? OpenPnl { get; set; }
+        public double? DayPnl { get; set; }
+
         /// <summary>Griegas netas de la posición; null si alguna pata no las tiene.</summary>
         public SpreadGreeksDto? Greeks { get; set; }
+    }
+
+    public class AccountEquityDto
+    {
+        public string Symbol { get; set; } = "";
+        /// <summary>Con signo: negativa si está vendida.</summary>
+        public double Quantity { get; set; }
+        public double AverageOpenPrice { get; set; }
+        public double ClosePrice { get; set; }
+        public double? Mid { get; set; }
+        public double? OpenPnl { get; set; }
+        public double? DayPnl { get; set; }
     }
 
     /// <summary>
