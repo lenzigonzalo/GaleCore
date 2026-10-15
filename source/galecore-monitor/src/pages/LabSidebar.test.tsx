@@ -1,6 +1,7 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Lab } from './Lab';
+jest.mock('../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: [], shared: [] }), saveSpaceItem: () => Promise.resolve() }));
 import { labRequest } from '../api/lab';
 jest.mock('../api/lab', () => ({ labRequest: jest.fn() }));
 jest.mock('../components/lab/LabMarkdown', () => ({ LabMarkdown: () => null }));

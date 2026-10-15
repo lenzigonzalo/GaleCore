@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronRight, Folder, MessageSquare, MoreHorizontal, Plus, X } from 'lucide-react';
 import type { WorkspaceProject, WorkspaceState } from '../../api/lab';
+import { fetchSpace, saveSpaceItem } from '../../api/space';
 import './LabProjectList.css';
 
 const STORAGE = 'galecore:lab:groups:v1';
@@ -11,9 +12,13 @@ type Color = keyof typeof COLORS;
 type Group = { id: string; label: string; color: Color; collapsed: boolean };
 type Organization = { groups: Group[]; members: Record<string, string>; colors: Record<string, Color> };
 type Chat = WorkspaceState['chats'][number];
+/** La organización es del usuario (preferencia en su espacio); la copia local sólo evita el parpadeo al abrir. */
+const PREFERENCE_KEY = 'chat-grupos';
 function readOrganization(): Organization {
+  try { return parseOrganization(JSON.parse(localStorage.getItem(STORAGE) || 'null')); } catch { return { groups: [], members: {}, colors: {} }; }
+}
+function parseOrganization(value: any): Organization {
   try {
-    const value = JSON.parse(localStorage.getItem(STORAGE) || 'null');
     if (!value || !Array.isArray(value.groups)) throw new Error();
     const ids = new Set<string>();
     const groups = value.groups.filter((g: Group) => {
@@ -71,10 +76,26 @@ export function LabProjectList(props: Props) {
     const trigger = Array.from(root.current?.querySelectorAll<HTMLButtonElement>('button') || []).find(button => button.getAttribute('aria-label') === label);
     trigger?.focus();
   }, [menu, editor]);
+  // Lo guardado en el espacio manda; hasta que llega se muestra la copia local. Sólo se escribe lo que el usuario cambió.
+  const changed = useRef(false);
   useEffect(() => {
-    try { localStorage.setItem(STORAGE, JSON.stringify(organization)); setStorageError(false); }
-    catch { setStorageError(true); }
+    let alive = true;
+    fetchSpace().then(({ items }) => {
+      const item = items.find(i => i.kind === 'preference' && i.key === PREFERENCE_KEY && i.isOwn);
+      if (alive && item && !changed.current) { try { setOrganization(parseOrganization(JSON.parse(item.content))); } catch { /* preferencia ilegible: queda la local */ } }
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE, JSON.stringify(organization)); } catch { /* sólo caché */ }
+    if (!changed.current) return;
+    const timer = setTimeout(() => {
+      saveSpaceItem('preference', PREFERENCE_KEY, { title: 'Grupos del chat', content: JSON.stringify(organization), format: 'json', visibility: 'private' })
+        .then(() => setStorageError(false)).catch(() => setStorageError(true));
+    }, 600);
+    return () => clearTimeout(timer);
   }, [organization]);
+  const organize = (update: (old: Organization) => Organization) => { changed.current = true; setOrganization(update); };
   useEffect(() => {
     const close = (event: PointerEvent) => { if (menuPanel.current && !menuPanel.current.contains(event.target as Node) && !lastTrigger.current?.contains(event.target as Node)) { lastTrigger.current = null; setMenu(null); } };
     const dismiss = (event: Event) => { if (event.target instanceof Node && menuPanel.current?.contains(event.target)) return; lastTrigger.current = null; setMenu(null); };
@@ -86,7 +107,7 @@ export function LabProjectList(props: Props) {
   const projects = state?.projects.filter(p => !p.strategyName?.startsWith('shadow_runtime_test_')) || [];
   const chats = state?.chats.filter(c => !/^test[_ -]/i.test(c.title) && projects.some(p => p.id === c.project)) || [];
   const move = (key: string, group: string) => {
-    setOrganization(old => {
+    organize(old => {
       const members = { ...old.members }; if (group) members[key] = group; else delete members[key];
       return { ...old, members, groups: old.groups.map(g => g.id === group ? { ...g, collapsed: false } : g) };
     }); setMenu(null); lastTrigger.current?.focus();
@@ -117,7 +138,7 @@ export function LabProjectList(props: Props) {
   const itemOptions = (key: string, label: string) => menu === key && optionsPanel('Organizar ' + label, <>
     <label>Mover a grupo<select aria-label={'Grupo de ' + label} value={organization.members[key] || ''} onChange={e => move(key, e.target.value)}><option value="">{key.startsWith('c:') ? 'Dentro de su proyecto' : 'Sin grupo'}</option>{organization.groups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
     {organization.members[key] && <button type="button" onClick={() => move(key, '')}>Sacar del grupo</button>}
-    <span>{key.startsWith('p:') ? 'Color de carpeta' : 'Color del chat'}</span><Palette value={organization.colors[key] || organization.groups.find(g => g.id === organization.members[key])?.color || 'neutral'} onChange={color => setOrganization(old => ({ ...old, colors: { ...old.colors, [key]: color } }))}/>{organization.colors[key] && <button type="button" onClick={() => setOrganization(old => { const colors = { ...old.colors }; delete colors[key]; return { ...old, colors }; })}>Usar color del grupo</button>}
+    <span>{key.startsWith('p:') ? 'Color de carpeta' : 'Color del chat'}</span><Palette value={organization.colors[key] || organization.groups.find(g => g.id === organization.members[key])?.color || 'neutral'} onChange={color => organize(old => ({ ...old, colors: { ...old.colors, [key]: color } }))}/>{organization.colors[key] && <button type="button" onClick={() => organize(old => { const colors = { ...old.colors }; delete colors[key]; return { ...old, colors }; })}>Usar color del grupo</button>}
   </>);
   const renderChat = (c: Chat, standalone = false, color?: Color) => {
     const p = projects.find(project => project.id === c.project)!;
@@ -139,20 +160,20 @@ export function LabProjectList(props: Props) {
   const saveGroup = (event: React.FormEvent) => {
     event.preventDefault(); if (!editor?.label.trim()) return;
     const id = editor.id || 'group-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
-    setOrganization(old => ({ ...old, groups: editor.id ? old.groups.map(g => g.id === id ? { ...g, label: editor.label.trim(), color: editor.color } : g) : [...old.groups, { id, label: editor.label.trim(), color: editor.color, collapsed: false }] }));
+    organize(old => ({ ...old, groups: editor.id ? old.groups.map(g => g.id === id ? { ...g, label: editor.label.trim(), color: editor.color } : g) : [...old.groups, { id, label: editor.label.trim(), color: editor.color, collapsed: false }] }));
     setEditor(null); lastTrigger.current?.focus();
   };
   return <div className="lab-project-list" ref={root}>
     <div className="lab-project-heading"><span>Proyectos</span><div><button className="lab-icon" aria-label="Crear grupo" title="Crear grupo" onClick={e => { lastTrigger.current = e.currentTarget; setEditor({ label: '', color: 'neutral' }); setMenu(null); }}><Folder size={17}/><Plus size={11}/></button><button className="lab-icon" aria-label="Crear proyecto" onClick={onCreateProject}><Plus size={18}/></button></div></div>
     {editor && <form className="lab-group-editor" aria-label={editor.id ? 'Editar grupo' : 'Nuevo grupo'} onSubmit={saveGroup}><header><strong>{editor.id ? 'Editar grupo' : 'Nuevo grupo'}</strong><button type="button" className="lab-icon" aria-label="Cancelar grupo" onClick={() => { setEditor(null); lastTrigger.current?.focus(); }}><X size={16}/></button></header><label>Nombre del grupo<input autoFocus required maxLength={100} value={editor.label} onChange={e => setEditor({ ...editor, label: e.target.value })}/></label><Palette value={editor.color} onChange={color => setEditor({ ...editor, color })}/><button className="lab-group-save" disabled={!editor.label.trim()}>{editor.id ? 'Guardar grupo' : 'Crear grupo'}</button></form>}
-    {storageError && <p className="lab-group-empty" role="status">No se pudo guardar la organización; se conservará hasta recargar.</p>}
+    {storageError && <p className="lab-group-empty" role="status">No se pudo guardar la organización en tu cuenta; queda en este navegador.</p>}
     <nav aria-label="Proyectos y conversaciones">
       {organization.groups.map(g => {
         const groupedProjects = projects.filter(p => organization.members['p:' + p.id] === g.id);
         const groupedChats = chats.filter(c => organization.members['c:' + c.id] === g.id);
         const count = groupedProjects.length + groupedChats.length;
-        return <section className={'lab-sidebar-group' + (dropTarget === g.id ? ' lab-drop-target' : '')} {...dropProps(g.id)} key={g.id} aria-label={g.label} style={{ '--group-color': COLORS[g.color][1] } as React.CSSProperties}><div className="lab-sidebar-group-heading"><button className="lab-group-toggle" aria-label={(g.collapsed ? 'Expandir grupo ' : 'Contraer grupo ') + g.label} aria-expanded={!g.collapsed} aria-controls={'lab-group-' + g.id} onClick={() => setOrganization(old => ({ ...old, groups: old.groups.map(group => group.id === g.id ? { ...group, collapsed: !group.collapsed } : group) }))}>{g.collapsed ? <ChevronRight size={15}/> : <ChevronDown size={15}/>}<span>{g.label}</span><small>{count}</small></button>{optionsButton('g:' + g.id, 'grupo ' + g.label)}</div>
-          {menu === 'g:' + g.id && optionsPanel('Organizar grupo ' + g.label, <><button onClick={() => { setEditor({ id: g.id, label: g.label, color: g.color }); setMenu(null); }}>Editar nombre y color</button><button onClick={() => { setOrganization(old => ({ ...old, groups: old.groups.filter(group => group.id !== g.id), members: Object.fromEntries(Object.entries(old.members).filter(([, id]) => id !== g.id)) })); setMenu(null); }}>Eliminar grupo (conservar contenido)</button></>)}
+        return <section className={'lab-sidebar-group' + (dropTarget === g.id ? ' lab-drop-target' : '')} {...dropProps(g.id)} key={g.id} aria-label={g.label} style={{ '--group-color': COLORS[g.color][1] } as React.CSSProperties}><div className="lab-sidebar-group-heading"><button className="lab-group-toggle" aria-label={(g.collapsed ? 'Expandir grupo ' : 'Contraer grupo ') + g.label} aria-expanded={!g.collapsed} aria-controls={'lab-group-' + g.id} onClick={() => organize(old => ({ ...old, groups: old.groups.map(group => group.id === g.id ? { ...group, collapsed: !group.collapsed } : group) }))}><i className="lab-group-dot" aria-hidden="true"/><span>{g.label}</span><small>{count}</small>{g.collapsed ? <ChevronRight size={15}/> : <ChevronDown size={15}/>}</button>{optionsButton('g:' + g.id, 'grupo ' + g.label)}</div>
+          {menu === 'g:' + g.id && optionsPanel('Organizar grupo ' + g.label, <><button onClick={() => { setEditor({ id: g.id, label: g.label, color: g.color }); setMenu(null); }}>Editar nombre y color</button><button onClick={() => { organize(old => ({ ...old, groups: old.groups.filter(group => group.id !== g.id), members: Object.fromEntries(Object.entries(old.members).filter(([, id]) => id !== g.id)) })); setMenu(null); }}>Eliminar grupo (conservar contenido)</button></>)}
           <div className="lab-sidebar-group-content" hidden={g.collapsed} id={'lab-group-' + g.id}>{groupedProjects.map(p => renderProject(p, g.color))}<div className="lab-project-chats lab-group-loose-chats">{groupedChats.slice().reverse().map(c => renderChat(c, true, g.color))}</div>{!count && <p className="lab-group-empty">Arrastrá proyectos o chats aquí.</p>}</div>
         </section>;
       })}

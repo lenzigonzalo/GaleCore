@@ -1,7 +1,10 @@
 import React from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LabProjectList } from './LabProjectList';
+const spaceItems: any[] = [];
+const saved: any[] = [];
+jest.mock('../../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: spaceItems, shared: [] }), saveSpaceItem: (...args: any[]) => { saved.push(args); return Promise.resolve(); } }));
 import type { WorkspaceState } from '../../api/lab';
 
 const storage = 'galecore:lab:groups:v1';
@@ -76,10 +79,10 @@ test.each(['{broken', '{"groups":[null,{"id":"x","label":"Bad","color":"unknown"
   localStorage.setItem(storage, stored); render(<LabProjectList {...props}/>);
   expect(screen.getByRole('button', { name: 'SPY' })).toBeInTheDocument();
 });
-test('Escape cancela creación y devuelve el foco; storage no disponible lo avisa', () => {
+test('Escape cancela creación y devuelve el foco; sin storage local sigue funcionando', () => {
   const spy = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
   render(<LabProjectList {...props}/>);
-  expect(screen.getByRole('status')).toHaveTextContent('No se pudo guardar');
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Crear grupo' }));
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(screen.queryByRole('form', { name: 'Nuevo grupo' })).not.toBeInTheDocument();
@@ -150,4 +153,18 @@ test('menú compacto fuera del scroll sólo permite grupo y color; chat conserva
   fireEvent.click(screen.getByRole('button', { name: 'Opciones de SPY' }));
   fireEvent.scroll(screen.getByRole('navigation', { name: 'Proyectos y conversaciones' }));
   expect(screen.queryByRole('group', { name: 'Organizar SPY' })).not.toBeInTheDocument();
+});
+
+test('la organización guardada en la cuenta manda sobre la de este navegador y los cambios se guardan en la cuenta', async () => {
+  jest.useFakeTimers();
+  spaceItems.push({ kind: 'preference', key: 'chat-grupos', isOwn: true, content: JSON.stringify({ groups: [{ id: 'g1', label: 'Desde la cuenta', color: 'blue', collapsed: false }], members: { 'p:spy': 'g1' }, colors: {} }) });
+  render(<LabProjectList {...props}/>);
+  expect(await screen.findByRole('region', { name: 'Desde la cuenta' })).toBeInTheDocument();
+  expect(saved).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button', { name: 'Contraer grupo Desde la cuenta' }));
+  act(() => { jest.advanceTimersByTime(700); });
+  expect(saved[0][0]).toBe('preference');
+  expect(saved[0][1]).toBe('chat-grupos');
+  expect(JSON.parse(saved[0][2].content).groups[0].collapsed).toBe(true);
+  spaceItems.length = 0; saved.length = 0; jest.useRealTimers();
 });
