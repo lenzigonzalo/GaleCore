@@ -146,7 +146,7 @@ def _save(kb: KnowledgeBase, task: TaskDefinition) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     # Absent optional fields stay out of the file: a checkout that predates them still reads the task.
-    drop = {f for f in ("result_slug", "scan") if getattr(task, f) is None}
+    drop = {f for f in ("result_slug", "scan", "model") if getattr(task, f) is None}
     data = task.model_dump(mode="json", exclude=drop or None)
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, path)
@@ -444,6 +444,28 @@ def set_frequency(*, kb: KnowledgeBase, scheduler, task_id: str, schedule: Sched
     return task
 
 
+def set_settings(*, kb: KnowledgeBase, task_id: str, settings: dict, prompt: str,
+                 expected_updated_at: datetime, now: datetime | None = None) -> TaskDefinition:
+    """Apply an owner edit without changing schedule, tools, budgets or task status."""
+    now = now or datetime.now(UTC)
+    if not settings or set(settings) - {"objective", "model"}:
+        raise TaskError("sólo se pueden editar instrucciones y modelo")
+    with _state_lock(kb, task_id):
+        task = load(kb, task_id)
+        if task.status == "cancelled" or task.updated_at != expected_updated_at:
+            raise TaskError("la tarea cambió; actualizá la pantalla antes de editar")
+        if "model" in settings and task.kind in CODE_RUNNERS:
+            raise TaskError("esta tarea corre por código, sin modelo")
+        if "objective" in settings and (not isinstance(settings["objective"], str)
+                                        or len(settings["objective"]) > 12000):
+            raise TaskError("las instrucciones deben tener entre 1 y 12000 caracteres")
+        updated = TaskDefinition.model_validate({**task.model_dump(), **settings, "updated_at": now})
+        _save(kb, updated)
+        _append(kb, task_id, "settings_changed", now, before={k: getattr(task, k) for k in settings},
+                after=settings, prompt=prompt)
+    return updated
+
+
 def set_scan(*, kb: KnowledgeBase, task_id: str, rule: ScanRule | None, prompt: str,
              now: datetime | None = None) -> TaskDefinition:
     """Give a market agent its screen by code (P1-05), or take it away (None). The status is not touched."""
@@ -710,13 +732,13 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     t0 = time.monotonic()
     caps = entry.schedulable
     if isinstance(client, model_run.ClaudeCodeClient):
-        client.model = caps.model                # always the policy's model (GC-AI-0025), never a fallback
+        client.model = task.model or caps.model  # owner's explicit selection; otherwise the catalog policy
     rec = kept = screened = escalated = None
     followup_error = None
     try:
         if entry.id == "market_story":       # the day's market pack, gathered by code before the model (GC-AI-0024)
             kept, note, escalated = _story_pack(kb, invoked_by, now)
-            if escalated and isinstance(client, model_run.ClaudeCodeClient):
+            if escalated and task.model is None and isinstance(client, model_run.ClaudeCodeClient):
                 client.model = "opus"            # Sonnet by policy; Opus only for the reason the code found
             written.append(kb.evidence.path_for(kept.removeprefix("evidence:")))
         elif entry.id == "knowledge_curator":   # new items by domain, by code; the model only where it crossed the threshold
@@ -787,7 +809,8 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     reply = client.run(prompt=prompt, allowed=allowed, max_turns=caps.max_turns, schema=model_run.output_schema(),
                        cwd=_REPO, timeout_s=int(min(caps.timeout_minutes * 60, left)), add_dir=scratch)
     base = {"invoked_by": invoked_by, "turns": reply.turns, "max_turns": caps.max_turns, "model": reply.model,
-            "route": caps.route_reason() if not escalated else f"escalada a opus: {escalated}",
+            "route": (f"modelo elegido por el owner: {task.model}" if task.model else
+                      caps.route_reason() if not escalated else f"escalada a opus: {escalated}"),
             "duration_model_s": reply.duration_s, **_tokens(reply.tokens), **({"followup": rec.id} if rec else {}),
             **({"pack": kept} if kept else {})}
     if reply.ok:

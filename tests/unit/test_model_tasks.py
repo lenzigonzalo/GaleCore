@@ -80,6 +80,23 @@ def test_a_model_task_records_its_capability_and_limits(briefing):
     assert t.events(kb, task.id)[0]["capability"] == "daily_attention"
 
 
+def test_owner_selected_model_reaches_client_without_changing_limits(briefing, monkeypatch):
+    kb, _, follow = briefing
+    task = t.load(kb, "atencion-diaria")
+    t.set_settings(kb=kb, task_id=task.id, settings={"model": "haiku"}, prompt="owner monitor",
+                   expected_updated_at=task.updated_at, now=LATER)
+    seen = []
+    reply = model_ok(output()).reply
+    def fake_run(self, **kw):
+        seen.append((self.model, kw["max_turns"], kw["allowed"]))
+        return reply
+    monkeypatch.setattr(mr.ClaudeCodeClient, "run", fake_run)
+    result = run(kb, follow, mr.ClaudeCodeClient())
+    assert seen[0][0] == "haiku" and seen[0][1] == 40
+    assert "owner" in result["route"]
+    assert t.load(kb, task.id).allowed == task.allowed
+
+
 def test_a_code_task_file_stays_readable_by_the_previous_code(env):
     kb, sch, _ = env
     make(kb, sch)

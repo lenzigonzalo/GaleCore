@@ -289,3 +289,91 @@ def test_the_sync_task_runs_every_five_minutes(monkeypatch):
     assert args[args.index("/tn") + 1] == r"GaleCore-AI\espacio-agentes"
     assert args[args.index("/sc") + 1] == "minute" and args[args.index("/mo") + 1] == "5"
     assert args[args.index("/tr") + 1].endswith("space_sync.py")
+
+
+def test_settings_from_monitor_apply_once_and_preserve_schedule(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    task = make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    space.publish_agents(client, kb_, sch)
+    client.put("agent", task.id, title="x", fmt="json", content=json.dumps({**_agent(fake), "request": {
+        "settings": {"objective": "Observar cambios de SPY", "model": "haiku"}, "at": _now()}}))
+    assert space.publish_agents(client, kb_, sch)["requests"][0]["result"] == "applied"
+    saved = t.load(kb_, task.id)
+    assert saved.model == "haiku" and saved.objective == "Observar cambios de SPY"
+    assert saved.schedule == task.schedule and saved.status == task.status and saved.allowed == task.allowed
+    assert _agent(fake)["model"] == "haiku" and "request" not in _agent(fake)
+    assert _agent(fake)["editable"] and _agent(fake)["model_editable"]
+    space.publish_agents(client, kb_, sch)
+    assert len([e for e in t.events(kb_, task.id) if e["event"] == "settings_changed"]) == 1
+
+
+@pytest.mark.parametrize("settings", [{"model": "unknown"}, {"objective": " "}, {"schedule": {}},
+                                     {"objective": "x" * 12001}])
+def test_invalid_settings_are_refused_without_changing_task(env, galecore, settings):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    task = make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    space.publish_agents(client, kb_, sch)
+    client.put("agent", task.id, title="x", fmt="json", content=json.dumps({**_agent(fake), "request": {
+        "settings": settings, "at": _now()}}))
+    assert space.publish_agents(client, kb_, sch)["requests"][0]["result"] == "refused"
+    assert t.load(kb_, task.id) == task
+    assert _agent(fake)["request_error"]
+
+
+def test_history_keeps_each_research_revision_and_does_not_reuse_it_for_failed_attempt(env):  # noqa: F811
+    kb_, sch, _ = env
+    from datetime import timedelta
+
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_model_tasks import LATER, model_ok, output
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    for i, title in enumerate(["Informe primero", "Informe segundo"]):
+        t.run(kb=kb_, task_id="oportunidades", commit=False, now=LATER + timedelta(hours=i),
+              client=model_ok(output(title=title)), followup=lambda **kw: None)
+    t._append(kb_, "oportunidades", "run_finished", LATER + timedelta(hours=3), result="INCOMPLETE",
+              reason="output refused: malformed reference")
+    state = space.agent_state(kb_, "oportunidades", LATER + timedelta(hours=4))
+    assert state["history_total"] == 3
+    rows = state["history"]
+    assert rows[0]["result"] == "INCOMPLETE" and rows[0]["findings"] is None
+    assert "Informe segundo" in rows[1]["findings"] and "Informe primero" in rows[2]["findings"]
+    for i in range(25):
+        t._append(kb_, "oportunidades", "run_failed", LATER + timedelta(hours=5 + i), error="offline")
+    bounded = space.agent_state(kb_, "oportunidades")
+    assert len(bounded["history"]) == 20 and bounded["history_total"] == 28
+
+
+def test_code_agent_rejects_model_selection(env):  # noqa: F811
+    kb_, sch, _ = env
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_tasks import make
+    task = make(kb_, sch)
+    with pytest.raises(t.TaskError, match="sin modelo"):
+        t.set_settings(kb=kb_, task_id=task.id, settings={"model": "opus"}, prompt="monitor",
+                       expected_updated_at=task.updated_at)
+    assert t.load(kb_, task.id) == task
+
+
+def test_combined_settings_and_current_status_are_refused_instead_of_discarded(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    task = make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    space.publish_agents(client, kb_, sch)
+    client.put("agent", task.id, title="x", fmt="json", content=json.dumps({**_agent(fake), "request": {
+        "status": "active", "settings": {"objective": "Otra instrucción"}, "at": _now()}}))
+    assert space.publish_agents(client, kb_, sch)["requests"][0]["result"] == "refused"
+    assert t.load(kb_, task.id) == task
+    assert "por separado" in _agent(fake)["request_error"]

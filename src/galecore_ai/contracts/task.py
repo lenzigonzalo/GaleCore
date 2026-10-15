@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime
+from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -117,6 +118,7 @@ class TaskDefinition(BaseModel):
     allowed: list[str] = Field(default_factory=lambda: ["followup run (read-only)"])
     result_slug: str | None = None          # model runs: the investigation each run revises (research:<date>-<slug>)
     scan: ScanRule | None = None            # market agents: screened by code; the model only with a finding (P1-05)
+    model: Literal["haiku", "sonnet", "opus"] | None = None  # owner's override; None follows the catalog policy
 
     @field_validator("id")
     @classmethod

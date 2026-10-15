@@ -33,19 +33,47 @@ def _slug(text: str, limit: int = 48) -> str:
 
 
 FINDINGS_LIMIT = 12_000          # characters of the latest result shown in the monitor; the full one stays here
+HISTORY_LIMIT = 20
+HISTORY_FINDINGS_LIMIT = 6000   # bounded publication, never grows with the lifetime of a task
 
 
-def _research_findings(kb: KnowledgeBase, ref: str) -> str | None:
+def _research_findings(kb: KnowledgeBase, ref: str, revision: int | None = None) -> str | None:
     """A research result as short markdown for the monitor: what was found, what is missing, what follows."""
     doc = kb.research.load(ref.removeprefix("research:"))
     if doc is None:
         return None
-    c = doc.current.content
+    rev = next((r for r in doc.revisions if r.revision == revision), None) if revision is not None else doc.current
+    if rev is None:
+        return None
+    c = rev.content
     lines = [f"**{c.title}**", "", *(f"- {s.text}" for s in c.statements)]
     for title, items in (("Falta", c.missing), ("Próximos pasos", c.next_steps), ("Límites", c.limitations)):
         if items:
             lines += ["", f"**{title}**", "", *(f"- {i}" for i in items)]
     return "\n".join(lines)
+
+
+def _agent_history(kb: KnowledgeBase, task, outcomes: list[dict]) -> list[dict]:
+    """Each row refers to its own stored revision, never the most recent successful result."""
+    from galecore_ai.application import tasks as t
+
+    followups = {r.id: r for r in t.runs(kb, task, limit=HISTORY_LIMIT)} if task.kind in t.CODE_RUNNERS else {}
+    rows = []
+    for e in reversed(outcomes[-HISTORY_LIMIT:]):
+        findings = None
+        if e.get("research") and e.get("revision") is not None:
+            findings = _research_findings(kb, e["research"], e["revision"])
+        elif rec := followups.get(e.get("followup")):
+            lines = []
+            for title, items in (("Atención", rec.attention), ("Funcionamiento", rec.operation),
+                                 ("Resultados SHADOW", rec.shadow), ("Hipótesis", rec.hypothesis)):
+                lines += [f"## {title}", *(f"- {x}" for x in items), ""]
+            findings = "\n".join(lines)
+        trimmed = bool(findings and len(findings) > HISTORY_FINDINGS_LIMIT)
+        rows.append({**{k: e[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error")
+                        if e.get(k) is not None}, "failed": e["event"] == "run_failed",
+                     "findings": findings[:HISTORY_FINDINGS_LIMIT] if findings else None, "truncated": trimmed})
+    return rows
 
 
 def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) -> dict:
@@ -69,6 +97,10 @@ def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) ->
     return {
         "capability": task.kind, "status": task.status, "schedule": task.schedule.describe(),
         "strategy": task.strategy, "objective": task.objective,
+        "model": task.model, "model_default": (t.schedulable_entry(task.kind).schedulable.model
+                                                if task.kind not in t.CODE_RUNNERS else None),
+        "editable": True, "model_editable": task.kind not in t.CODE_RUNNERS,
+        "history": _agent_history(kb, task, outcomes), "history_total": len(outcomes),
         "state": fresh["state"], "state_detail": fresh.get("detail"), "next_expected_at": fresh.get("next_expected_at"),
         "last_run": ({k: last[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error")
                       if last.get(k) is not None} | {"failed": last["event"] == "run_failed"}) if last else None,
@@ -229,8 +261,11 @@ def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     done = []
     for item, content in (items if items is not None else _agent_items(client)):
         req = content.get("request") or {}
+        if not isinstance(req, dict):
+            continue
         wanted = req.get("status")
-        if wanted not in ("active", "paused"):
+        settings = req.get("settings")
+        if wanted not in ("active", "paused") and settings is None:
             continue
         task_id = known.get(item["key"])
         if task_id is None or task_id != content.get("id"):
@@ -249,7 +284,7 @@ def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
             done.append({"agent": item["key"], "status": wanted, "result": "refused",
                          "error": "el agente está cancelado; se vuelve a crear desde el chat"})
             continue
-        if task.status == wanted:
+        if settings is None and task.status == wanted:
             done.append({"agent": item["key"], "status": wanted, "result": "already"})
             continue
         if at > datetime.now(UTC) + timedelta(minutes=10):
@@ -261,11 +296,17 @@ def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
                          "error": f"superado por un cambio posterior ({task.updated_at:%Y-%m-%d %H:%M} UTC)"})
             continue
         try:
-            change = t.resume if wanted == "active" else t.pause
-            change(kb=kb, scheduler=scheduler, task_id=task_id, now=now,
-                   prompt=f"Pedido desde el monitor por {client.user} ({req['at']})")
+            prompt = f"Pedido desde el monitor por {client.user} ({req['at']})"
+            if settings is not None:
+                if wanted is not None or not isinstance(settings, dict):
+                    raise t.TaskError("pedido de configuración inválido; enviá instrucciones/modelo por separado del estado")
+                t.set_settings(kb=kb, task_id=task_id, settings=settings, prompt=prompt,
+                               expected_updated_at=task.updated_at, now=now)
+            else:
+                change = t.resume if wanted == "active" else t.pause
+                change(kb=kb, scheduler=scheduler, task_id=task_id, now=now, prompt=prompt)
             done.append({"agent": item["key"], "status": wanted, "result": "applied"})
-        except (t.TaskError, OSError) as exc:
+        except (t.TaskError, OSError, ValueError) as exc:
             done.append({"agent": item["key"], "status": wanted, "result": "refused", "error": str(exc)[:300]})
     return done
 
