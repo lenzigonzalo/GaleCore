@@ -1,0 +1,33 @@
+/* Monitor de una posición (14/10): un panel, filas nombre … valor, en castellano, como el Resumen de estrategias. */
+.position-monitor { border: 1px solid var(--border-dark); border-radius: 12px; background: var(--bg-secondary); padding: 18px 20px; display: flex; flex-direction: column; gap: 16px; }
+.position-monitor-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.position-monitor-contracts { font-size: 14px; color: var(--text-secondary); }
+.position-monitor-alert { margin-left: auto; padding: 4px 10px; border-radius: 7px; font-size: 13px; font-weight: 600; }
+.position-monitor-stale { margin: 0; font-size: 14px; color: var(--yellow-gc); }
+.position-monitor-body { display: grid; grid-template-columns: minmax(0, 3fr) minmax(260px, 2fr); gap: 28px; align-items: start; }
+.position-monitor-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 24px; }
+.position-monitor-metrics dl { margin: 0; }
+.position-monitor-metrics dt.group, .position-monitor-rules h3 { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin: 0 0 6px; }
+.position-monitor-metrics .metric-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border-dark); }
+.position-monitor-metrics .metric-row dt { font-size: 14px; color: var(--text-secondary); }
+.position-monitor-metrics .metric-row dd { margin: 0; font-size: 16px; font-weight: 600; text-align: right; }
+.position-monitor-metrics .metric-row dd small { display: block; font-size: 12px; font-weight: 400; color: var(--text-secondary); }
+.position-monitor-rules { display: flex; flex-direction: column; gap: 10px; }
+.trigger-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) 52px; align-items: center; gap: 12px; font-size: 14px; color: var(--text-secondary); }
+.trigger-track { height: 8px; border-radius: 4px; background: var(--bg-tertiary); overflow: hidden; }
+.trigger-track > div { height: 100%; border-radius: 4px; }
+.trigger-row strong { text-align: right; font-size: 14px; }
+.position-monitor-legs { width: 100%; border-collapse: collapse; font-size: 14px; }
+.position-monitor-legs th { text-align: right; font-size: 13px; font-weight: 500; color: var(--text-secondary); padding: 6px 10px; border-bottom: 1px solid var(--border-dark); }
+.position-monitor-legs td { text-align: right; padding: 8px 10px; border-bottom: 1px solid var(--border-dark); }
+.position-monitor-legs th:first-child, .position-monitor-legs td:first-child { text-align: left; }
+@media (max-width: 1000px) { .position-monitor-body { grid-template-columns: 1fr; } .position-monitor-metrics { grid-template-columns: 1fr; } }
+
+/* Cartera */
+.cartera-page { display: flex; flex-direction: column; height: 100%; }
+.cartera-body { flex: 1; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; }
+.cartera-rows { display: flex; flex-direction: column; gap: 10px; }
+.cartera-row { cursor: pointer; border-radius: 12px; }
+.cartera-row:hover > * { border-color: var(--text-secondary); }
+.cartera-empty { color: var(--text-secondary); font-size: 15px; padding-top: 24px; }
+.cartera-body > .shadow-back { align-self: flex-start; }

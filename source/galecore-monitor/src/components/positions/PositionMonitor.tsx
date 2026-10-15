@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { PortfolioRiskBar } from '../monitor/PortfolioRiskBar';
 import { PositionCard } from '../monitor/PositionCard';
+import { LivePositionRow, PositionRowData } from './PositionRow';
 import { GammaExposureResponse } from '../../types/api';
 import { LiveSpread } from '../../types/position';
 import { useAccountStore } from '../../store/useAccountStore';
@@ -31,6 +32,7 @@ export function PositionMonitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol,
 
   const [gexData,    setGexData]    = useState<Record<string, GammaExposureResponse>>({});
   const [refreshing, setRefreshing] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const subscribedLegsRef           = useRef<Set<string>>(new Set());
 
   // ── Rule thresholds ──────────────────────────────────────────────────────
@@ -147,27 +149,37 @@ export function PositionMonitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol,
     return () => clearInterval(id);
   }, [doRefresh]);
 
-  // ── Render ───────────────────────────────────────────────────────────────
+  // ── Render: Cartera (14/10) — resumen arriba, una fila por posición; el monitor detallado al hacer clic.
+  const current = spreads.find(s => s.id === selected) ?? null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="cartera-page">
       <PortfolioRiskBar spreads={spreads} onRefresh={doRefresh} refreshing={refreshing} />
-
-      <div
-        className="flex-1 overflow-auto p-3"
-        style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
-      >
-        {spreads.length === 0 && (
-          <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14, paddingTop: 40 }}>
-            {positions.length === 0
-              ? 'Sin posiciones en la cuenta · Usá ↻ Actualizar para recargar'
-              : 'Posiciones en cuenta no reconocidas como spreads (PUT_CS / CALL_CS / IC)'}
-          </div>
-        )}
-
-        {spreads.map(s => (
-          <PositionCard key={s.id} spread={s} gexData={gexData} />
-        ))}
+      <div className="cartera-body">
+        {current ? <>
+          <button className="shadow-back" onClick={() => setSelected(null)}>← Cartera</button>
+          <PositionCard spread={current} gexData={gexData} />
+        </> : <>
+          {spreads.length === 0 && <p className="cartera-empty">{positions.length === 0
+            ? 'Sin posiciones abiertas en la cuenta.'
+            : 'Las posiciones de la cuenta no forman spreads reconocidos (put o call credit spread, iron condor).'}</p>}
+          <div className="cartera-rows">{spreads.map(s => <div key={s.id} className="cartera-row" role="button" tabIndex={0} aria-label={'Abrir ' + s.underlyingSymbol + ' ' + s.expiration}
+            onClick={() => setSelected(s.id)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(s.id); } }}>
+            <LivePositionRow position={toRow(s)} /></div>)}</div>
+        </>}
       </div>
     </div>
   );
+}
+
+const STRUCTURES: Record<string, string> = { PUT_CS: 'put_credit_spread', CALL_CS: 'call_credit_spread', IC: 'iron_condor', LONG: 'long' };
+function toRow(s: LiveSpread): PositionRowData {
+  const legs = [
+    s.longPutStrike != null && { side: 'BUY', type: 'PUT', strike: s.longPutStrike },
+    s.shortPutStrike != null && { side: 'SELL', type: 'PUT', strike: s.shortPutStrike },
+    s.shortCallStrike != null && { side: 'SELL', type: 'CALL', strike: s.shortCallStrike },
+    s.longCallStrike != null && { side: 'BUY', type: 'CALL', strike: s.longCallStrike },
+  ].filter(Boolean) as PositionRowData['legs'];
+  return { structure: STRUCTURES[s.type] ?? s.type, symbol: s.underlyingSymbol, expiration: s.expiration, dte: s.dte, legs, entryAt: null,
+    credit: s.initialCredit, currentValue: s.hasLiveQuote ? s.currentNetCredit ?? null : null, pnl: s.hasLiveQuote ? s.currentPnl ?? null : null, risk: null,
+    reason: s.hasLiveQuote ? null : 'Sin cotización en vivo' };
 }

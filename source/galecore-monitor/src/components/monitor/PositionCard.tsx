@@ -7,6 +7,7 @@ import { PositionHeading, PositionLeg, useUnderlyingPrice } from '../positions/P
 import { GammaExposureResponse } from '../../types/api';
 import { fmtPrice, fmtPnl } from '../../utils/formatters';
 import { legMid } from '../../utils/streamerSymbol';
+import './PositionCard.css';
 
 interface Props {
   spread: LiveSpread;
@@ -14,12 +15,12 @@ interface Props {
 }
 
 const ALERT_CFG: Record<NonNullable<AlertType>, { label: string; bg: string; text: string }> = {
-  CERRAR:        { label: 'CLOSE',        bg: '#16a34a', text: '#fff' },
-  STOP_LOSS:     { label: 'STOP LOSS',    bg: '#dc2626', text: '#fff' },
-  TIME_EXIT:     { label: 'TIME EXIT',    bg: '#d97706', text: '#fff' },
-  EVALUAR_ROLL:  { label: 'EVALUATE ROLL',bg: '#ea580c', text: '#fff' },
-  DELTA_BREACH:  { label: 'DELTA BREACH', bg: '#dc2626', text: '#fff' },
-  MACRO_PROXIMO: { label: 'MACRO EVENT',  bg: '#d97706', text: '#fff' },
+  CERRAR:        { label: 'Cerrar',            bg: '#16a34a', text: '#fff' },
+  STOP_LOSS:     { label: 'Stop loss',         bg: '#dc2626', text: '#fff' },
+  TIME_EXIT:     { label: 'Salida por tiempo', bg: '#d97706', text: '#fff' },
+  EVALUAR_ROLL:  { label: 'Evaluar roll',      bg: '#ea580c', text: '#fff' },
+  DELTA_BREACH:  { label: 'Delta excedido',    bg: '#dc2626', text: '#fff' },
+  MACRO_PROXIMO: { label: 'Evento macro',      bg: '#d97706', text: '#fff' },
 };
 
 export function PositionCard({ spread: s, gexData }: Props) {
@@ -38,7 +39,6 @@ export function PositionCard({ spread: s, gexData }: Props) {
   const dteColor    = s.dte <= timeExitDte ? '#f59e0b' : s.dte <= timeExitDte + 7 ? '#f97316' : 'var(--text-secondary)';
   const pnlColor    = s.currentPnl == null ? 'var(--text-muted)' : s.currentPnl >= 0 ? 'var(--green)' : 'var(--red-gc)';
   const alertCfg    = s.alert ? ALERT_CFG[s.alert] : null;
-  const borderColor = alertCfg ? alertCfg.bg + '88' : 'var(--border-dark)';
 
   const ladderLegs: PositionLeg[] = [];
   if (s.longPutStrike != null) ladderLegs.push({ side: 'BUY', type: 'PUT', strike: s.longPutStrike });
@@ -62,7 +62,7 @@ export function PositionCard({ spread: s, gexData }: Props) {
   const creditRatio = totalWidth > 0 ? popCredit / totalWidth : 0;
   const pop   = clampPct((1 - creditRatio) * 100);
   const pop50 = clampPct((100 + pop) / 2);
-  const popSub = s.hasLiveQuote ? 'at expiration' : 'at entry';
+  const popSub = s.hasLiveQuote ? 'al vencimiento' : 'a la entrada';
 
   // Cost to close the spread right now (debit to buy it back)
   // ── Position Greeks (aggregated from live per-leg Greeks via socket) ───────
@@ -94,7 +94,7 @@ export function PositionCard({ spread: s, gexData }: Props) {
   // P&L-driven triggers only make sense with a live quote (else pnlPct is stale).
   if (s.hasLiveQuote && s.pnlPct != null && s.pnlPct >= 0) {
     triggers.push({
-      label: `Take Profit · ${(takeProfitPct * 100).toFixed(0)}%`,
+      label: `Toma de ganancia · ${(takeProfitPct * 100).toFixed(0)}%`,
       pct: pnlPct / (takeProfitPct * 100),
       marker: `${pnlPct.toFixed(0)}%`,
       color: 'var(--green)',
@@ -102,225 +102,84 @@ export function PositionCard({ spread: s, gexData }: Props) {
   }
   if (s.hasLiveQuote && s.pnlPct != null && s.pnlPct < 0) {
     triggers.push({
-      label: `Roll · ${(rollTrigPct * 100).toFixed(0)}% loss`,
+      label: `Roll · pérdida ${(rollTrigPct * 100).toFixed(0)}%`,
       pct: Math.abs(pnlPct) / (rollTrigPct * 100),
       marker: `${pnlPct.toFixed(0)}%`,
       color: '#f97316',
     });
     triggers.push({
-      label: `Hard Defense · ${(stopLossPct * 100).toFixed(0)}% loss`,
+      label: `Defensa · pérdida ${(stopLossPct * 100).toFixed(0)}%`,
       pct: Math.abs(pnlPct) / (stopLossPct * 100),
       marker: `${pnlPct.toFixed(0)}%`,
       color: 'var(--red-gc)',
     });
   }
   triggers.push({
-    label: `Time Exit · ${timeExitDte}d`,
+    label: `Salida por tiempo · ${timeExitDte} d`,
     pct: timeExitDte / Math.max(s.dte, 1),
     marker: `${s.dte}d`,
     color: dteColor,
   });
 
+  const money = (n: number) => `$${fmtPrice(n, 0)}`;
+  const groups: { group: string; items: [string, string, string?, string?][] }[] = [
+    { group: 'Resultado', items: [
+      ['Crédito', money(s.initialCredit * 100), s.contracts > 1 ? `${money(s.initialPremium)} en total` : undefined],
+      ['Resultado', s.currentPnl != null && s.hasLiveQuote ? fmtPnl(s.currentPnl) : '—', s.hasLiveQuote && s.pnlPct != null ? `${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(1)}%` : undefined, s.hasLiveQuote ? pnlColor : undefined],
+      ['Ganancia máxima', money(s.initialCredit * mult * s.contracts), undefined, 'var(--green)'],
+      ['Pérdida máxima', `−${money(maxLossPerContract * mult * s.contracts)}`, undefined, 'var(--red-gc)'],
+    ] },
+    { group: 'Griegas', items: [
+      ['Delta', fmtSigned(netDelta, 1)],
+      ['Theta por día', fmtMoney(netTheta), undefined, signColor(netTheta)],
+      ['Vega por punto de vol.', fmtMoney(netVega), undefined, signColor(netVega)],
+      ['Gamma', fmtSigned(netGamma, 1)],
+    ] },
+    { group: 'Probabilidad', items: [
+      ['De ganar', `${pop.toFixed(0)}%`, popSub],
+      ['De llegar al 50%', `${pop50.toFixed(0)}%`],
+      ['IV Rank', ivRank != null ? ivRank.toFixed(0) : '—', shortIv != null ? `IV pata vendida ${(shortIv * 100).toFixed(0)}%` : undefined],
+    ] },
+  ];
   return (
-    <div
-      className="rounded"
-      style={{ border: `1px solid ${borderColor}`, backgroundColor: 'var(--bg-secondary)', overflow: 'hidden' }}
-    >
-      {/* ── Header ───────────────────────────────────────────────────────── */}
-      <div
-        className="flex items-center justify-between px-4 py-2.5"
-        style={{ borderBottom: '1px solid var(--border-dark)', backgroundColor: 'var(--bg-tertiary)' }}
-      >
-        <div className="flex items-center gap-6 flex-wrap">
-          <PositionHeading structure={s.type} symbol={s.underlyingSymbol} expiration={s.expiration} dte={s.dte} />
-          {s.contracts > 1 && (
-            <HeaderField label="Contracts" value={`×${s.contracts}`} />
-          )}
-          {!s.hasLiveQuote && (
-            <span
-              className="px-2 py-0.5 rounded"
-              style={{ color: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.4)', fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}
-              title="No live option quotes (after-hours or stream down). Values use the previous close."
-            >
-              STALE · PREV CLOSE
-            </span>
-          )}
-        </div>
-
-        {alertCfg && (
-          <span
-            className="px-2.5 py-1 rounded font-bold uppercase tracking-wide ml-2 flex-shrink-0"
-            style={{ backgroundColor: alertCfg.bg, color: alertCfg.text, fontSize: 14 }}
-          >
-            {alertCfg.label}
-          </span>
-        )}
+    <section className="position-monitor" style={alertCfg ? { borderColor: alertCfg.bg + '88' } : undefined}>
+      <header className="position-monitor-head">
+        <PositionHeading structure={s.type} symbol={s.underlyingSymbol} expiration={s.expiration} dte={s.dte} />
+        {s.contracts > 1 && <span className="position-monitor-contracts">×{s.contracts} contratos</span>}
+        {alertCfg && <span className="position-monitor-alert" style={{ backgroundColor: alertCfg.bg, color: alertCfg.text }}>{alertCfg.label}</span>}
+      </header>
+      {!s.hasLiveQuote && <p className="position-monitor-stale" title="Fuera de horario o sin stream de opciones: los valores son del cierre anterior.">Sin cotización en vivo · valores del cierre anterior</p>}
+      <StrikeLadder legs={ladderLegs} spot={spotPrice} putWall={gexData[s.underlyingSymbol]?.putWall} callWall={gexData[s.underlyingSymbol]?.callWall} />
+      <div className="position-monitor-body">
+        <div className="position-monitor-metrics">{groups.map(group => <dl key={group.group}><dt className="group">{group.group}</dt>
+          {group.items.map(([label, value, sub, color]) => <div key={label} className="metric-row"><dt>{label}</dt><dd style={color ? { color } : undefined}>{value}{sub && <small>{sub}</small>}</dd></div>)}</dl>)}</div>
+        <div className="position-monitor-rules"><h3>Reglas de gestión</h3>{triggers.map(t => <TriggerBar key={t.label} {...t} />)}</div>
       </div>
-
-      <div className="px-4 py-3 flex flex-col gap-4">
-        {/* ── Strike Ladder ──────────────────────────────────────────────── */}
-        <StrikeLadder legs={ladderLegs} spot={spotPrice} putWall={gexData[s.underlyingSymbol]?.putWall} callWall={gexData[s.underlyingSymbol]?.callWall} />
-
-        {/* Stale-data warning — the account API only exposes the previous close;
-            without live option quotes the P&L below can be wrong. Don't pretend. */}
-        {!s.hasLiveQuote && (
-          <div className="rounded px-3 py-2" style={{ backgroundColor: 'rgba(245,158,11,0.10)', border: '1px solid rgba(245,158,11,0.35)' }}>
-            <span style={{ color: '#f59e0b', fontSize: 14 }}>
-              No live option quotes (after-hours or stream down). P&amp;L and live metrics use the <strong>previous close</strong> and may not reflect the current position.
-            </span>
-          </div>
-        )}
-
-        {/* ── Stat cards (left, 3 rows) + Management triggers (right) ─────── */}
-        <div className="flex items-start gap-8 flex-wrap">
-          {/* All metrics as uniform cards — rows: money / greeks / probabilities */}
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(4, minmax(136px, 1fr))' }}>
-            {/* Row 1 — money */}
-            <StatCard label="Credit"     value={`$${fmtPrice(s.initialCredit * 100, 0)}`}
-              sub={s.contracts > 1 ? `$${fmtPrice(s.initialPremium, 0)} total` : undefined} />
-            <StatCard label="P&L"        value={s.currentPnl != null ? fmtPnl(s.currentPnl) : '—'}
-              sub={!s.hasLiveQuote ? 'prev close' : (s.pnlPct != null ? `${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(1)}%` : undefined)}
-              valueColor={s.hasLiveQuote ? pnlColor : 'var(--text-muted)'} />
-            <StatCard label="Max Profit" value={`$${fmtPrice(s.initialCredit * mult * s.contracts, 0)}`} valueColor="var(--green)" />
-            <StatCard label="Max Loss"   value={`-$${fmtPrice(maxLossPerContract * mult * s.contracts, 0)}`} valueColor="var(--red-gc)" />
-            {/* Row 2 — greeks (aggregated from live per-leg Greeks) */}
-            <StatCard label="Net Delta"  value={fmtSigned(netDelta, 1)} />
-            <StatCard label="Theta"      value={fmtMoney(netTheta)} valueColor={signColor(netTheta)} sub="/ day" />
-            <StatCard label="Vega"       value={fmtMoney(netVega)}  valueColor={signColor(netVega)}  sub="/ 1 vol" />
-            <StatCard label="Gamma"      value={fmtSigned(netGamma, 1)} />
-            {/* Row 3 — probabilities */}
-            <StatCard label="POP"        value={`${pop.toFixed(0)}%`}   sub={popSub} valueColor="var(--green)" />
-            <StatCard label="Prob. +50%" value={`${pop50.toFixed(0)}%`} sub="reach target" />
-            <StatCard label="IV Rank"    value={ivRank != null ? ivRank.toFixed(0) : '—'}
-              sub={shortIv != null ? `IV ${(shortIv * 100).toFixed(0)}%` : undefined} />
-          </div>
-
-          {/* Management triggers — progress bars, top-aligned to the first card row */}
-          <div className="flex-1 flex flex-col gap-2.5" style={{ minWidth: 300 }}>
-            <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-              Management triggers
-            </span>
-            {triggers.map(t => (
-              <TriggerBar key={t.label} {...t} />
-            ))}
-          </div>
-        </div>
-
-        {/* ── Leg positioning (entry · current · change) ─────────────────── */}
-        <LegDetails spread={s} tickers={tickers} />
-      </div>
-    </div>
+      <LegDetails spread={s} tickers={tickers} />
+    </section>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
-
-function HeaderField({ label, value, valueColor }: { label: string; value: string; valueColor?: string }) {
-  return (
-    <div className="flex flex-col" style={{ lineHeight: 1.15 }}>
-      <span style={{ color: 'var(--text-secondary)', fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-        {label}
-      </span>
-      <span style={{ color: valueColor ?? 'var(--text-secondary)', fontSize: 20, fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
-        {value}
-      </span>
-    </div>
-  );
-}
-
-function TriggerBar({ label, pct, marker, color }: {
-  label: string; pct: number; marker: string; color: string;
-}) {
-  const filled = clampPct(pct * 100);
-  return (
-    <div className="flex items-center gap-3">
-      <span style={{ width: 168, flexShrink: 0, color: 'var(--text-secondary)', fontSize: 14.5, whiteSpace: 'nowrap' }}>
-        {label}
-      </span>
-      <div className="flex-1" style={{ height: 14, backgroundColor: 'var(--bg-tertiary)', borderRadius: 5, overflow: 'hidden', border: '1px solid var(--border-dark)' }}>
-        <div style={{ width: `${filled}%`, height: '100%', backgroundColor: color, borderRadius: 5, transition: 'width 0.3s ease' }} />
-      </div>
-      <span style={{ width: 52, flexShrink: 0, textAlign: 'right', color, fontSize: 15.5, fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-        {marker}
-      </span>
-    </div>
-  );
-}
-
-function StatCard({ label, value, sub, valueColor }: {
-  label: string; value: string; sub?: string; valueColor?: string;
-}) {
-  return (
-    <div className="rounded px-2.5 py-2" style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-dark)' }}>
-      <div style={{ color: 'var(--text-secondary)', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {label}
-      </div>
-      <div style={{ color: valueColor ?? 'var(--text-primary)', fontSize: 22, fontFamily: 'var(--font-mono)', fontWeight: 700, lineHeight: 1.2 }}>
-        {value}
-      </div>
-      {sub && <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>{sub}</div>}
-    </div>
-  );
+function TriggerBar({ label, pct, marker, color }: { label: string; pct: number; marker: string; color: string }) {
+  return <div className="trigger-row"><span>{label}</span><div className="trigger-track"><div style={{ width: `${clampPct(pct * 100)}%`, backgroundColor: color }} /></div><strong style={{ color }}>{marker}</strong></div>;
 }
 
 function LegDetails({ spread: s, tickers }: { spread: LiveSpread; tickers: Record<string, any> }) {
-  type Row = { role: string; dir: 'Short' | 'Long'; strike: number; entry?: number; sym?: string };
+  type Row = { role: string; short: boolean; strike: number; entry?: number; sym?: string };
   const rows: Row[] = [];
-
-  if (s.shortPutStrike  != null) rows.push({ role: 'Short Put',  dir: 'Short', strike: s.shortPutStrike,  entry: s.shortPutEntry,  sym: s.legSymbols.shortPut });
-  if (s.longPutStrike   != null) rows.push({ role: 'Long Put',   dir: 'Long',  strike: s.longPutStrike,   entry: s.longPutEntry,   sym: s.legSymbols.longPut  });
-  if (s.shortCallStrike != null) rows.push({ role: 'Short Call', dir: 'Short', strike: s.shortCallStrike, entry: s.shortCallEntry, sym: s.legSymbols.shortCall });
-  if (s.longCallStrike  != null) rows.push({ role: 'Long Call',  dir: 'Long',  strike: s.longCallStrike,  entry: s.longCallEntry,  sym: s.legSymbols.longCall  });
-
-  return (
-    <div style={{ borderTop: '1px solid var(--border-dark)', paddingTop: 10 }}>
-      <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-        Legs
-      </span>
-      <div className="grid gap-2 mt-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-        {rows.map(r => {
-          const cur = r.sym ? legMid(tickers[r.sym]?.bid, tickers[r.sym]?.ask) : null;
-          // % change of the option price vs entry, colored by benefit to the position
-          const chgPct = (cur != null && r.entry) ? ((cur - r.entry) / r.entry) * 100 : null;
-          const benefits = chgPct == null ? null : (r.dir === 'Short' ? chgPct < 0 : chgPct > 0);
-          const chgColor = benefits == null ? 'var(--text-muted)' : benefits ? 'var(--green)' : 'var(--red-gc)';
-          const dirColor = r.dir === 'Short' ? 'var(--red-gc)' : 'var(--green)';
-          return (
-            <div
-              key={r.role}
-              className="rounded px-3 py-2"
-              style={{ backgroundColor: 'var(--bg-tertiary)', border: '1px solid var(--border-dark)' }}
-            >
-              <div className="flex items-center justify-between">
-                <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  {r.role}
-                </span>
-                <span style={{ color: dirColor, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em' }}>
-                  {r.dir === 'Short' ? '−1' : '+1'}
-                </span>
-              </div>
-              <div style={{ color: 'var(--text-primary)', fontSize: 20, fontFamily: 'var(--font-mono)', fontWeight: 700, marginTop: 2 }}>
-                ${fmtPrice(r.strike, 0)}
-              </div>
-              <div className="flex items-baseline justify-between mt-1">
-                <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                  entry {r.entry != null ? `$${fmtPrice(r.entry, 2)}` : '—'}
-                </span>
-                <span style={{ color: 'var(--text-secondary)', fontSize: 14, fontFamily: 'var(--font-mono)' }}>
-                  {cur != null ? `$${fmtPrice(cur, 2)}` : '—'}
-                </span>
-              </div>
-              {chgPct != null && (
-                <div style={{ color: chgColor, fontSize: 13, fontFamily: 'var(--font-mono)', fontWeight: 600, textAlign: 'right' }}>
-                  {chgPct >= 0 ? '+' : ''}{chgPct.toFixed(1)}%
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+  if (s.shortPutStrike  != null) rows.push({ role: 'Venta put',   short: true,  strike: s.shortPutStrike,  entry: s.shortPutEntry,  sym: s.legSymbols.shortPut });
+  if (s.longPutStrike   != null) rows.push({ role: 'Compra put',  short: false, strike: s.longPutStrike,   entry: s.longPutEntry,   sym: s.legSymbols.longPut });
+  if (s.shortCallStrike != null) rows.push({ role: 'Venta call',  short: true,  strike: s.shortCallStrike, entry: s.shortCallEntry, sym: s.legSymbols.shortCall });
+  if (s.longCallStrike  != null) rows.push({ role: 'Compra call', short: false, strike: s.longCallStrike,  entry: s.longCallEntry,  sym: s.legSymbols.longCall });
+  return <table className="position-monitor-legs"><thead><tr><th>Pata</th><th>Strike</th><th>Entrada</th><th>Actual</th><th>Cambio</th></tr></thead><tbody>
+    {rows.map(r => {
+      const cur = r.sym ? legMid(tickers[r.sym]?.bid, tickers[r.sym]?.ask) : null;
+      const chg = cur != null && r.entry ? ((cur - r.entry) / r.entry) * 100 : null;
+      const good = chg == null ? null : r.short ? chg < 0 : chg > 0;
+      return <tr key={r.role}><td style={{ color: r.short ? 'var(--red-gc)' : 'var(--green)' }}>{r.role}</td><td>{fmtPrice(r.strike, 0)}</td>
+        <td>{r.entry != null ? `$${fmtPrice(r.entry, 2)}` : '—'}</td><td>{cur != null ? `$${fmtPrice(cur, 2)}` : '—'}</td>
+        <td style={{ color: good == null ? undefined : good ? 'var(--green)' : 'var(--red-gc)' }}>{chg != null ? `${chg >= 0 ? '+' : ''}${chg.toFixed(1)}%` : '—'}</td></tr>;
+    })}</tbody></table>;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

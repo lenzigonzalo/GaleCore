@@ -1,7 +1,6 @@
 import React from 'react';
 import { KeyRound } from 'lucide-react';
 import { PositionMonitor } from '../components/positions/PositionMonitor';
-import { SectionTitle } from '../components/common/SectionTitle';
 import { NoticePanel } from '../components/common/NoticePanel';
 import { useAccountStore } from '../store/useAccountStore';
 import { ConnectionStatus } from '../socket/useMarketSocket';
@@ -38,11 +37,6 @@ export function Monitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol, unsubsc
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', fontFamily: 'var(--font-sans)' }}>
-      <SectionTitle
-        title="GaleCore Monitor"
-        badge="Positions Manager"
-        style={{ padding: '14px 18px 12px', flexShrink: 0 }}
-      />
 
       {brokerAccountIssue ? (
         <div style={{ padding: '0 18px' }}>

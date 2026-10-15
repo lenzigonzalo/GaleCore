@@ -12,7 +12,6 @@ import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
 import './components/layout/SingleWorkspace.css';
 import { Lab } from './pages/Lab';
 import { useGexStore } from './store/useGexStore';
-import { AccountSummary } from './components/account/AccountSummary';
 import { ClaudeTerminal } from './components/layout/ClaudeTerminal';
 import { useTerminalStore } from './store/useTerminalStore';
 import { SettingsModal, needsSetup } from './components/settings/SettingsModal';
@@ -140,7 +139,6 @@ function Dashboard({ onLogout }: DashboardProps) {
           {tab === 'inicio' && <Resumen onNavigate={setTab} />}
 
           {tab !== 'macro' && <div style={{ display: tab === 'monitor' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
-            <div className="workspace-portfolio-summary"><AccountSummary /></div>
             <Monitor subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg}
               subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />
           </div>}

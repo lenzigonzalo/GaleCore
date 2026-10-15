@@ -83,19 +83,19 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
         className="flex items-start gap-8 px-5 py-3 flex-wrap"
         style={{ backgroundColor: 'var(--bg-secondary)', fontFamily: 'var(--font-mono)' }}
       >
-        <MetricBlock label="Net Liq"      value={fmtCurrency(netLiq)} />
+        <MetricBlock label="Valor de la cuenta" value={fmtCurrency(netLiq)} />
         <Divider />
-        <MetricBlock label="Buying Power" value={fmtCurrency(buyingPwr)} />
+        <MetricBlock label="Poder de compra" value={fmtCurrency(buyingPwr)} />
         <Divider />
         <MetricBlock
-          label="P&L"
+          label="Resultado"
           value={hasAnyPnl ? `${totalPnl >= 0 ? '+' : ''}${fmtCurrency(totalPnl)}` : '—'}
           color={hasAnyPnl ? pnlColor : 'var(--text-muted)'}
           sub={hasAnyPnl ? fmtPct(pnlPct) : undefined}
         />
         <Divider />
         <MetricBlock
-          label="Daily P&L"
+          label="Resultado del día"
           value={hasAnyDaily ? `${dailyPnl >= 0 ? '+' : ''}${fmtCurrency(dailyPnl)}` : '—'}
           color={hasAnyDaily ? (dailyPnl >= 0 ? 'var(--green)' : 'var(--red-gc)') : 'var(--text-muted)'}
           sub={hasAnyDaily ? fmtPct(dailyPct) : undefined}
@@ -104,8 +104,8 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
 
         {/* Heat gauge */}
         <div className="flex flex-col gap-1">
-          <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>
-            Portfolio Heat
+          <span style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500 }}>
+            Riesgo de cartera
           </span>
           <div className="flex items-center gap-2">
             <span style={{ color: heatColor, fontSize: 22, fontWeight: 700 }}>
@@ -125,7 +125,7 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
 
         <Divider />
         <MetricBlock
-          label="Positions"
+          label="Posiciones"
           value={`${spreads.length}/${maxPositions}`}
           color={spreads.length >= maxPositions ? 'var(--yellow-gc)' : 'var(--text-primary)'}
         />
@@ -144,7 +144,7 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
               fontSize: 14,
             }}
           >
-            {refreshing ? '…' : '↻ Refresh'}
+            {refreshing ? 'Actualizando…' : '↻ Actualizar'}
           </button>
         </div>
       </div>
@@ -155,7 +155,7 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
 function MetricBlock({ label, value, color, sub }: { label: string; value: string; color?: string; sub?: string }) {
   return (
     <div className="flex flex-col gap-1" style={{ minWidth: 110 }}>
-      <span style={{ color: 'var(--text-secondary)', fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, whiteSpace: 'nowrap' }}>
+      <span style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' }}>
         {label}
       </span>
       <span style={{ color: color ?? 'var(--text-primary)', fontSize: 22, fontWeight: 700, lineHeight: 1.1 }}>
