@@ -262,7 +262,7 @@ def test_a_release_two_business_days_ahead_is_one_informative_line(kb, research_
     out = supervisor.scan(kb, rd, IN_SESSION)
     [alert] = supervisor.alerts(kb)
     assert out["new"] == [alert.id] and alert.kind.value == "event" and "en 2 días hábiles (25/09)" in alert.motivo
-    assert supervisor.view(kb)[0]["needs_decision"] is False
+    assert supervisor.view(kb, today=IN_SESSION.date())[0]["needs_decision"] is False
     later = IN_SESSION + timedelta(hours=3)
     fresh = position(lastValuedAt=later.isoformat())
     rd = reader(doc.spec_hash, [fresh], releases=[("2026-09-25", "Consumer Price Index")])
@@ -342,3 +342,23 @@ def test_an_alert_without_quote_declares_the_missing_price(kb, research_ref):  #
     supervisor.scan(kb, reader(doc.spec_hash, [position(maxRisk=960.0, symbol="SPY")], calendar_fails=True), IN_SESSION)
     [alert] = supervisor.alerts(kb)
     assert alert.dato["underlying_price"] is None and "sin cotización" in alert.dato["underlying_note"]
+
+
+def test_the_monitor_reads_one_line_per_release_in_plain_words(kb, research_ref):  # noqa: F811
+    """WS-0036: one release is one line however many positions it touches; a close says why in Spanish."""
+    doc, _ = stored(kb, research_ref)
+    other = position("bbbbbbbb-2", legs=[{"side": "SELL", "strike": 720.0, "expiration": "2026-11-13"},
+                                         {"side": "BUY", "strike": 715.0, "expiration": "2026-11-13"}])
+    rd = reader(doc.spec_hash, [position(), other], releases=[("2026-09-24", "Consumer Price Index")])
+    supervisor.scan(kb, rd, IN_SESSION)
+    closed = position("cccccccc-3", status="CLOSED", exitReason="TAKE_PROFIT", realizedPnl=23.0,
+                      exitAt=(IN_SESSION + timedelta(minutes=5)).isoformat())
+    supervisor.scan(kb, reader(doc.spec_hash, [closed]), IN_SESSION + timedelta(minutes=10))
+    shown = supervisor.view(kb, today=IN_SESSION.date())
+    [event] = [a for a in shown if a["kind"] == "event"]
+    assert event["category"] == "eeuu" and event["title"] == "Inflación de EE. UU. (CPI) mañana"
+    assert "2 posiciones de SHADOW" in event["detail"] and len(event["positions"]) == 2
+    [close] = [a for a in shown if a["kind"] == "closed"]
+    assert close["category"] == "estrategia"
+    assert close["title"].endswith("733/728 · vence 13/11: SHADOW la cerró por toma de ganancia, +$23")
+    assert supervisor.view(kb, today=date(2026, 9, 25)) == [close | {"title": close["title"]}]   # past release drops

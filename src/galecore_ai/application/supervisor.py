@@ -506,14 +506,116 @@ def decide(*, kb: KnowledgeBase, alert_id: str, choice: str, words: str, prompt:
     return {"project": name, "hash": entry.hash, "path": str(path)}
 
 
-def view(kb: KnowledgeBase, limit: int = 20) -> list[dict]:
-    """The latest alerts with their decision, newest first: what the monitor shows."""
+# How the monitor reads an alert in one second (WS-0036): a category with its color, a plain title and one detail
+# line. The stored alert is not touched; this is only presentation.
+EVENT_NAMES = {
+    "consumer price index": "Inflación de EE. UU. (CPI)",
+    "producer price index": "Precios mayoristas de EE. UU. (PPI)",
+    "advance monthly sales for retail and food services": "Ventas minoristas de EE. UU.",
+    "employment situation": "Empleo de EE. UU. (nóminas)",
+    "gross domestic product": "PIB de EE. UU.",
+    "personal income and outlays": "Ingreso y gasto personal de EE. UU. (PCE)",
+    "decisión del fomc": "Decisión de tasas de la Fed (FOMC)",
+}
+EXIT_REASONS = {"TAKE_PROFIT": "toma de ganancia", "STOP_LOSS": "stop", "TIME_EXIT": "salida por tiempo",
+                "EXPIRED": "vencimiento", "MANUAL": "cierre manual"}
+CATEGORY = {AlertKind.EVENT: "eeuu", AlertKind.WATCH: "mercado"}      # the rest are about a SHADOW strategy
+_LABEL = re.compile(r"(?P<strikes>\d+(?:\.\d+)?(?:/\d+(?:\.\d+)?)*) (?P<exp>\d{4}-\d{2}-\d{2})")
+_WEEKDAYS = ("lun", "mar", "mié", "jue", "vie", "sáb", "dom")
+
+
+def _position_label(a: Alert) -> str:
+    """«TLT 77/75 · vence 20/11» instead of «77/75 2026-11-20»."""
+    prefix = a.strategy.split("_")[0]
+    symbol = str(a.dato.get("underlying_symbol") or (prefix if len(prefix) <= 5 else "")).upper()
+    m = _LABEL.search(a.motivo)
+    if not m:
+        return symbol
+    exp = date.fromisoformat(m["exp"])
+    return f"{symbol} {m['strikes']} · vence {exp:%d/%m}".strip()
+
+
+def _day(iso: str, today: date) -> str:
+    d = date.fromisoformat(iso)
+    return "hoy" if d == today else "mañana" if d == today + timedelta(days=1) else f"el {_WEEKDAYS[d.weekday()]} {d:%d/%m}"
+
+
+def _money(v) -> str:
+    return f"{'+' if v >= 0 else '−'}${abs(v):,.0f}" if isinstance(v, int | float) else ""
+
+
+def _readable(a: Alert, today: date) -> tuple[str, str]:
+    """(title, detail) in plain words."""
+    label, d = _position_label(a), a.dato
+    if a.kind == AlertKind.CLOSED:
+        reason = EXIT_REASONS.get(str(d.get("exit_reason")), str(d.get("exit_reason") or "sin motivo").lower())
+        pnl = _money(d.get("realized_pnl_usd"))
+        return f"{label}: SHADOW la cerró por {reason}" + (f", {pnl}" if pnl else ""), "Revisá el resultado contra lo que esperabas al abrir."
+    if a.kind == AlertKind.NEAR_STOP:
+        return f"{label}: la pérdida llegó a {d.get('loss_multiple')}× el crédito", a.propuesta
+    if a.kind == AlertKind.RISK_LIMIT:
+        return f"{label}: riesgo máximo ${d.get('max_risk_usd'):g} sobre el límite de ${d.get('limit_usd'):g}", a.propuesta
+    if a.kind == AlertKind.WATCH and d.get("metric") == "price" and isinstance(d.get("value"), int | float):
+        below = d.get("condition") == "below"
+        return (f"{d.get('symbol')} {'bajó a' if below else 'subió a'} {d['value']:,.2f}",
+                f"Pediste aviso {'por debajo' if below else 'por encima'} de {d.get('threshold'):g}. {a.propuesta}")
+    if a.kind == AlertKind.BET_LIMIT and isinstance(d.get("usado_usd"), int | float):
+        sym, direction, week = (str(d.get("apuesta") or "").split(" ") + ["", "", ""])[:3]
+        side = {"bullish": "alcista", "bearish": "bajista"}.get(direction, direction)
+        title = (f"Apuesta {sym} {side}{f', semana {week[-2:]}' if week else ''}: ${d['usado_usd']:,.0f} en riesgo, "
+                 f"tope ${d.get('tope_usd'):,.0f}")
+        return title, a.propuesta
+    return a.motivo, a.propuesta
+
+
+def view(kb: KnowledgeBase, limit: int = 20, today: date | None = None) -> list[dict]:
+    """The latest alerts with their decision, newest first: what the monitor shows.
+
+    A macro release is one line however many positions it touches (it used to be one per position and per day:
+    «mañana» and then «hoy» for each one), and the positions without a price on one day are one line too.
+    """
+    today = today or datetime.now(NEW_YORK).date()
     answered = decisions(kb)
-    out = []
-    for a in alerts(kb)[:limit]:
-        out.append({"id": a.id, "kind": a.kind.value, "strategy": a.strategy, "strategy_ref": a.strategy_ref,
-                    "position_id": a.position_id,
-                    "detected_at": a.detected_at.isoformat(), "motivo": a.motivo, "dato": a.dato, "regla": a.regla,
-                    "propuesta": a.propuesta, "options": a.options, "needs_decision": a.kind in NEEDS_DECISION,
-                    "decision": answered.get(a.id)})
+    out: list[dict] = []
+    groups: dict[tuple, dict] = {}
+    for a in alerts(kb):
+        group = (("event", a.dato.get("event"), a.dato.get("event_date")) if a.kind == AlertKind.EVENT
+                 else ("no_price", a.detected_at.date()) if a.kind == AlertKind.NO_PRICE else None)
+        if a.kind == AlertKind.EVENT and str(a.dato.get("event_date") or "9999") < today.isoformat():
+            continue                                  # the release already happened: history, not news
+        label = _position_label(a)
+        if group and group in groups:
+            shown = groups[group]
+            if label not in shown["positions"]:
+                shown["positions"].append(label)
+            continue
+        if len(out) >= limit:
+            continue
+        title, detail = _readable(a, today)
+        item = {"id": a.id, "kind": a.kind.value, "category": CATEGORY.get(a.kind, "estrategia"),
+                "strategy": a.strategy, "strategy_ref": a.strategy_ref, "position_id": a.position_id,
+                "detected_at": a.detected_at.isoformat(), "title": title, "detail": detail,
+                "motivo": a.motivo, "dato": a.dato, "regla": a.regla,
+                "propuesta": a.propuesta, "options": a.options, "needs_decision": a.kind in NEEDS_DECISION,
+                "decision": answered.get(a.id), "positions": [label]}
+        if group:
+            groups[group] = item
+        out.append(item)
+    for item in groups.values():
+        n = len(item["positions"])
+        if n > 3:                                     # «TLT 4, IWM 5» reads faster than nine strikes
+            symbols = [p.split(" ")[0] if "/" not in p.split(" ")[0] else "otra" for p in item["positions"]]
+            positions = ", ".join(f"{s} {symbols.count(s)}" for s in dict.fromkeys(symbols))
+        else:
+            positions = ", ".join(item["positions"])
+        word = "posiciones" if n > 1 else "posición"
+        if item["kind"] == AlertKind.EVENT.value:
+            name = str(item["dato"].get("event") or "")
+            item["title"] = f"{EVENT_NAMES.get(name.lower(), name)} {_day(str(item['dato'].get('event_date')), today)}"
+            item["detail"] = (f"Antes del vencimiento de {n} {word} de SHADOW ({positions}). "
+                              "Las salidas siguen siendo las de la regla.")
+        else:
+            item["title"] = f"Sin precio para {n} {word} de SHADOW en sesión"
+            item["detail"] = (f"{positions}. Mientras no haya precio, las salidas no se evalúan; "
+                              "suele ser la conexión de datos de GaleCore.")
     return out
