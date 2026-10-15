@@ -2352,6 +2352,7 @@ avisar lo que puede mover drásticamente la cartera real (exposición por factor
 | Bancos centrales fuera de la Fed (BoJ, BCE…) | «Japón mueve tasas»: carry y equity |
 | Agenda de discursos de la Fed (chairman) | «Mañana habla el chairman»: riesgo de evento |
 | Noticias (U-06) | «Pasó esto»: lo que no está en ningún calendario |
+| Riesgo global: GDELT (noticias del mundo cada 15 min), GPR y EPU | Termómetro y lupa de riesgo geopolítico; buzón 14/10 «para analizar después, no decidido» |
 
 **Regla del owner (15/10):** si es una API, va a GaleCore con la receta de arriba; si es un MCP, se conecta a la cuenta y
 se activa (no se reimplementa). Antes de elegir: ver si es gratis y qué cubre (U-68). Hay MCPs conectados a la cuenta de
