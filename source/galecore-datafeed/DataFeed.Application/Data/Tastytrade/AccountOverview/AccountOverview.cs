@@ -34,6 +34,9 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         /// <summary>Margen usado (requerimiento de mantenimiento de Tastytrade), en USD y en % del valor de la cuenta.</summary>
         public double? MarginUsed { get; set; }
         public double? MarginUsedPct { get; set; }
+        /// <summary>Valor de la cuenta para el gráfico de Inicio: cierres diarios del último año y puntos de hoy.</summary>
+        public List<NetLiqPointDto> History { get; set; } = new();
+        public List<NetLiqPointDto> Intraday { get; set; } = new();
         /// <summary>Pérdida máxima sumada de lo abierto (spreads), en USD y en % de la cuenta.</summary>
         public double MaxRisk { get; set; }
         public double? MaxRiskPct { get; set; }
@@ -111,6 +114,8 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public double? AverageOpenPrice { get; set; }
         public double? MarketValue { get; set; }
     }
+
+    public record NetLiqPointDto(DateTime Time, double Value);
 
     public class PeriodPnlDto
     {

@@ -189,7 +189,8 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                     if (!it.TryGetProperty("time", out var t) || !it.TryGetProperty("close", out var c)) continue;
                     var close = c.ValueKind == JsonValueKind.Number ? c.GetDecimal()
                         : decimal.TryParse(c.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : (decimal?)null;
-                    if (close != null && DateTime.TryParse(t.GetString(), System.Globalization.CultureInfo.InvariantCulture,
+                    // El día en curso llega con cierre 0 hasta que cierra: no es un valor de la cuenta.
+                    if (close is > 0 && DateTime.TryParse(t.GetString(), System.Globalization.CultureInfo.InvariantCulture,
                         System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var time))
                         points.Add((time, close.Value));
                 }

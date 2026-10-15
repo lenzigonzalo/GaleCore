@@ -49,6 +49,8 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
             response.MarginUsedPct = balances.NetLiquidatingValue > 0
                 ? Math.Round((double)(balances.MaintenanceRequirement / balances.NetLiquidatingValue) * 100, 1) : null;
             if (balances.NetLiqHistory == null) missing.Add("Historia del valor de la cuenta (Tastytrade): sin dato; semana, mes y año sin calcular.");
+            response.History = balances.NetLiqHistory?.Select(h => new NetLiqPointDto(h.Time, (double)h.Close)).ToList() ?? new();
+            response.Intraday = balances.NetLiqIntraday?.Select(h => new NetLiqPointDto(h.Time, (double)h.Close)).ToList() ?? new();
             response.Periods = AccountOverviewBuilder.Periods((double)balances.NetLiquidatingValue, response.DayPnl, response.DayPnlPct,
                 balances.NetLiqHistory?.Select(h => (DateOnly.FromDateTime(h.Time), (double)h.Close)).ToList(), today);
             return response;

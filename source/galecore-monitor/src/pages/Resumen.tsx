@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../api/client';
 import { fmtCurrency, fmtPct, fmtPnl, etDateParts } from '../utils/formatters';
 import { AccountOverview, PositionLine, STRIKE_ALERT_KEY, StrikeAlertSettings, describeAccountError, fetchAccountOverview } from '../api/account';
 import { fetchSpace } from '../api/space';
 import { readStrikeSettings, saveStrikeSettings } from '../components/settings/StrikeAlertForm';
+import { NetLiqChart } from '../components/account/NetLiqChart';
 import type { Tab } from '../components/layout/TabNav';
 import './Resumen.css';
 
@@ -111,15 +112,29 @@ const STRUCTURE: Record<string, string> = { PUT_CS: 'Put spread', CALL_CS: 'Call
 function Overview({ o, strike, onStrike }: { o: AccountOverview; strike: StrikeAlertSettings | null; onStrike: (s: StrikeAlertSettings) => void }) {
   const over = o.maxRiskPct != null && o.maxRiskLimitPct != null && o.maxRiskPct > o.maxRiskLimitPct;
   const e = o.exposure;
+  const periods = o.periods ?? [{ label: 'Hoy', pnl: o.dayPnl, pct: o.dayPnlPct }];
+  const [period, setPeriod] = useState('Hoy');
+  // El gráfico sólo recorta la serie de la API al período elegido y le suma el valor de ahora.
+  const chartPoints = useMemo(() => {
+    const now = { time: o.asOf, value: o.netLiq };
+    if (period === 'Hoy') return [...(o.intraday ?? []), now];
+    const d = new Date(o.asOf);
+    const from = period === 'Semana' ? new Date(d.getTime() - 7 * 864e5)
+      : period === 'Mes' ? new Date(d.getFullYear(), d.getMonth() - 1, d.getDate()) : new Date(d.getFullYear(), 0, 1);
+    return [...(o.history ?? []).filter(p => new Date(p.time) >= from), now];
+  }, [o, period]);
   return <>
-    <div className="rs-hero">
-      <div className="rs-hero-value"><span>Valor de la cuenta</span><strong>{money(o.netLiq)}</strong></div>
-      <div className="rs-periods" aria-label="Resultado por período">
-        {(o.periods ?? [{ label: 'Hoy', pnl: o.dayPnl, pct: o.dayPnlPct }]).map(p => <div key={p.label}>
-          <span>{p.label}</span><strong className={tone(p.pnl)}>{p.pnl == null ? '—' : fmtPnl(p.pnl)}</strong>
-          <em className={tone(p.pct)}>{p.pct == null ? '' : fmtPct(p.pct)}</em></div>)}
+    <section className="rs-card rs-hero" aria-label="Valor de la cuenta">
+      <div className="rs-hero-side">
+        <div className="rs-hero-value"><span>Valor de la cuenta</span><strong>{money(o.netLiq)}</strong></div>
+        <div className="rs-periods" role="tablist" aria-label="Resultado por período">
+          {periods.map(p => <button key={p.label} role="tab" aria-selected={period === p.label} onClick={() => setPeriod(p.label)}>
+            <span>{p.label}</span><strong className={tone(p.pnl)}>{p.pnl == null ? '—' : fmtPnl(p.pnl)}</strong>
+            <em className={tone(p.pct)}>{p.pct == null ? '' : fmtPct(p.pct)}</em></button>)}
+        </div>
       </div>
-    </div>
+      <NetLiqChart points={chartPoints} up={(periods.find(p => p.label === period)?.pnl ?? 0) >= 0} label={`Valor de la cuenta, ${period.toLowerCase()}`} intraday={period === 'Hoy'} />
+    </section>
     <div className="rs-cards">
       <section className="rs-card" aria-label="Capital">
         <h2>Capital</h2>

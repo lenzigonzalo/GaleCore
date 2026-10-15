@@ -130,6 +130,8 @@ export interface AccountOverview {
   periods?: { label: string; pnl: number | null; pct: number | null }[];
   /** Margen usado (mantenimiento), USD y % de la cuenta. */
   marginUsed?: number | null; marginUsedPct?: number | null;
+  /** Valor de la cuenta: cierres diarios del último año y puntos de hoy, para el gráfico de Inicio. */
+  history?: { time: string; value: number }[]; intraday?: { time: string; value: number }[];
   maxRisk: number; maxRiskPct: number | null; maxRiskLimitPct: number | null;
   exposure: {
     spyEquivalentShares: number | null; spyEquivalentDollars: number | null; theta: number | null; vega: number | null;

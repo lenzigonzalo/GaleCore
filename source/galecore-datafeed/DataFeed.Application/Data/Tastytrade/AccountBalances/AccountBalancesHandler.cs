@@ -49,12 +49,8 @@ namespace DataFeed.Application.Data.Tastytrade.AccountBalances
                 var response = _mapper.Map<AccountBalancesResponse>(balances.Data);
                 if (request.WithHistory)
                 {
-                    try
-                    {
-                        var history = await provider.GetNetLiqHistoryAsync(accountNumber, "1y", cancellationToken, credential);
-                        response.NetLiqHistory = history.Select(h => new NetLiqPoint(h.Time, h.Close)).ToList();
-                    }
-                    catch (Exception) when (!cancellationToken.IsCancellationRequested) { /* sin historia: los períodos quedan sin dato */ }
+                    response.NetLiqHistory = await HistoryAsync(provider, accountNumber, "1y", TimeSpan.FromMinutes(10), credential, cancellationToken);
+                    response.NetLiqIntraday = await HistoryAsync(provider, accountNumber, "1d", TimeSpan.FromSeconds(60), credential, cancellationToken);
                 }
                 return response;
             }
@@ -87,6 +83,24 @@ namespace DataFeed.Application.Data.Tastytrade.AccountBalances
         /// LANZA: devolverle silenciosamente los datos de la cuenta de sistema sería mostrarle
         /// posiciones ajenas, que es peor que un error.
         /// </summary>
+        // Historia del valor de la cuenta por cuenta y período: Tastytrade corta pedidos seguidos (Inicio pide dos veces al
+        // abrir) y la historia cambia lento. Se guarda unos minutos y, si un pedido falla, queda la última buena.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (DateTime At, List<NetLiqPoint> Points)> History = new();
+
+        private static async Task<List<NetLiqPoint>?> HistoryAsync(TastytradeApiProvider provider, string account, string timeBack, TimeSpan ttl,
+            TastytradeCredential? credential, CancellationToken ct)
+        {
+            var key = account + "|" + timeBack;
+            if (History.TryGetValue(key, out var hit) && DateTime.UtcNow - hit.At < ttl) return hit.Points;
+            try
+            {
+                var points = (await provider.GetNetLiqHistoryAsync(account, timeBack, ct, credential)).Select(h => new NetLiqPoint(h.Time, h.Close)).ToList();
+                if (points.Count > 0) { History[key] = (DateTime.UtcNow, points); return points; }
+            }
+            catch (Exception) when (!ct.IsCancellationRequested) { /* sin lectura nueva: la anterior, si hay */ }
+            return History.TryGetValue(key, out var last) ? last.Points : null;
+        }
+
         private async Task<TastytradeCredential?> ResolveCredentialAsync(CancellationToken ct)
         {
             var userId = _currentUser.UserId;

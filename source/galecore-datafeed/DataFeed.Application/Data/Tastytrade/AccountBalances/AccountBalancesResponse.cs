@@ -22,6 +22,8 @@ namespace DataFeed.Application.Data.Tastytrade.AccountBalances
         public string UpdatedAt { get; set; }
         /// <summary>Valor de la cuenta al cierre de cada día del último año (sólo con WithHistory); null si no se pudo leer.</summary>
         public List<NetLiqPoint>? NetLiqHistory { get; set; }
+        /// <summary>Valor de la cuenta durante el día de hoy (sólo con WithHistory).</summary>
+        public List<NetLiqPoint>? NetLiqIntraday { get; set; }
     }
 
     public record NetLiqPoint(DateTime Time, decimal Close);

@@ -138,3 +138,18 @@
 .rs-card .rs-group-head { padding-left:6px; }
 .rs-card .rs-detail { background:var(--bg-tertiary,#232323); border-radius:0 0 8px 8px; }
 @container (max-width:980px) { .rs-card.rs-lines .rs-line>span:nth-child(2) { display:none; } .rs-card.rs-lines .rs-line { grid-template-columns:minmax(150px,1.3fr) minmax(80px,.6fr) minmax(110px,.8fr) minmax(56px,.4fr) minmax(64px,.45fr) minmax(130px,.8fr) minmax(80px,.5fr); } }
+
+/* Cuadro del valor de la cuenta (owner 15/10): total y períodos chicos uno debajo del otro, y el gráfico al lado. */
+.rs-card.rs-hero { display:grid; grid-template-columns:260px minmax(0,1fr); gap:24px; align-items:stretch; padding:18px 20px; margin-bottom:16px; }
+.rs-hero-side { display:flex; flex-direction:column; gap:14px; }
+.rs-hero .rs-hero-value strong { font-size:40px; }
+.rs-hero .rs-periods { display:flex; flex-direction:column; gap:2px; }
+.rs-hero .rs-periods button { display:grid; grid-template-columns:70px 1fr auto; align-items:baseline; gap:8px; background:none; border:0; border-radius:8px; padding:7px 10px; margin:0 -10px; color:inherit; cursor:pointer; text-align:left; font:inherit; }
+.rs-hero .rs-periods button:hover { background:var(--bg-hover); }
+.rs-hero .rs-periods button[aria-selected="true"] { background:var(--bg-tertiary,#262626); }
+.rs-hero .rs-periods span { margin:0; font-size:15px; }
+.rs-hero .rs-periods strong { font-size:18px; display:inline; }
+.rs-hero .rs-periods em { font-size:14px; display:inline; min-height:0; }
+.rs-chart { height:230px; min-width:0; }
+.rs-chart-empty { display:flex; align-items:center; justify-content:center; color:var(--text-secondary); font-size:15px; }
+@media(max-width:900px) { .rs-card.rs-hero { grid-template-columns:1fr; } }
