@@ -43,6 +43,10 @@ public class AccountOverviewBuilderTests
         Assert.Equal(4620, o.Exposure.SpyEquivalentDollars);
         Assert.Equal(2.5, o.Exposure.Theta);
         Assert.Empty(o.Attention);
+        var line = Assert.Single(o.Positions);
+        Assert.Equal(("SPY", "PUT_CS", 36), (line.Symbol, line.Structure, line.Dte));
+        Assert.Equal(2.86, line.PnlPct);                 // 4 / 140 del crédito
+        Assert.Equal((70.0, -280.0, "reglas"), (line.TakeProfit!.Value, line.StopLoss!.Value, line.TargetSource));
     }
 
     [Theory]

@@ -132,7 +132,17 @@ export interface AccountOverview {
     byUnderlying: { symbol: string; dollarDelta: number | null; beta: number | null; maxRisk: number }[];
   };
   attention: { kind: 'gestion' | 'evento'; title: string }[];
+  positions: PositionLine[];
   missing: string[];
+}
+
+/** Una posición en una línea, armada en la API (objetivo: el de las reglas mientras el usuario no ponga el suyo). */
+export interface PositionLine {
+  id: string; symbol: string; structure: 'PUT_CS' | 'CALL_CS' | 'IC' | 'EQUITY' | string;
+  expiration: string | null; dte: number | null; quantity: number;
+  shortPutStrike: number | null; longPutStrike: number | null; shortCallStrike: number | null; longCallStrike: number | null;
+  spot: number | null; pnl: number | null; pnlPct: number | null;
+  takeProfit: number | null; stopLoss: number | null; targetSource: string | null;
 }
 
 export async function fetchAccountOverview(): Promise<AccountOverview> {

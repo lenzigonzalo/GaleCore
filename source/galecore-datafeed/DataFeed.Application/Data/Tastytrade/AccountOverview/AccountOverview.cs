@@ -36,6 +36,8 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public double? MaxRiskLimitPct { get; set; }
         public ExposureDto Exposure { get; set; } = new();
         public List<AttentionDto> Attention { get; set; } = new();
+        /// <summary>Una fila por posición (spread o acción), lista para mostrar.</summary>
+        public List<PositionLineDto> Positions { get; set; } = new();
         /// <summary>Lo que no se pudo leer (fuente caída, sin cotización); se declara, no se inventa.</summary>
         public List<string> Missing { get; set; } = new();
     }
@@ -58,6 +60,34 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public double? DollarDelta { get; set; }
         public double? Beta { get; set; }
         public double MaxRisk { get; set; }
+    }
+
+    /// <summary>
+    /// Una posición en una línea: qué es, cuánto va ganando y su objetivo. Mientras el usuario no defina el suyo, el
+    /// objetivo es el de las reglas de la plataforma (toma de ganancia y defensa del nodo `monitor`).
+    /// </summary>
+    public class PositionLineDto
+    {
+        public string Id { get; set; } = "";
+        public string Symbol { get; set; } = "";
+        /// <summary>PUT_CS, CALL_CS, IC o EQUITY.</summary>
+        public string Structure { get; set; } = "";
+        public string? Expiration { get; set; }
+        public int? Dte { get; set; }
+        public double Quantity { get; set; }
+        public double? ShortPutStrike { get; set; }
+        public double? LongPutStrike { get; set; }
+        public double? ShortCallStrike { get; set; }
+        public double? LongCallStrike { get; set; }
+        public double? Spot { get; set; }
+        public double? Pnl { get; set; }
+        /// <summary>En un spread, % del crédito cobrado; en acciones, % del costo.</summary>
+        public double? PnlPct { get; set; }
+        /// <summary>Objetivo en USD: ganancia a la que se cierra y pérdida a la que se defiende.</summary>
+        public double? TakeProfit { get; set; }
+        public double? StopLoss { get; set; }
+        /// <summary>"reglas" (de la plataforma) mientras el usuario no ponga el suyo.</summary>
+        public string? TargetSource { get; set; }
     }
 
     public class AttentionDto
@@ -120,6 +150,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
                 response.Missing.Add("Resultado del día: sin cotización en vivo de alguna posición.");
 
             response.Attention.AddRange(Management(spreads, monitor, today));
+            response.Positions.AddRange(Lines(spreads, equities, prices, monitor, today));
             if (spreads.Count > 0 || equities.Count > 0)   // hay exposición a EE. UU.: los datos y la Fed la mueven
                 response.Attention.AddRange(Events(events, today));
             return response;
@@ -184,6 +215,38 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
                     pct != null && pct <= -rollLoss && dte >= rollMinDte ? string.Create(Es, $"{label}: pérdida de {-pct:0.#}× el crédito con {dte} días, evaluar roleo") :
                     null;
                 if (title != null) yield return new AttentionDto { Kind = "gestion", Title = title };
+            }
+        }
+
+        public static IEnumerable<PositionLineDto> Lines(List<AccountSpreadDto> spreads, List<AccountEquityDto> equities,
+            IReadOnlyDictionary<string, double> prices, JsonNode? monitor, DateOnly today)
+        {
+            var tm = monitor?["trade_management"];
+            var takeProfit = (double?)tm?["take_profit"]?["pct_of_initial_credit"] ?? 0.5;
+            var hardLoss = (double?)tm?["hard_defense"]?["trigger_any"]?["unrealized_loss_pct_of_initial_credit_gte"] ?? 2.0;
+            foreach (var s in spreads)
+            {
+                int? dte = DateOnly.TryParse(s.Expiration, CultureInfo.InvariantCulture, out var exp) ? exp.DayNumber - today.DayNumber : null;
+                yield return new PositionLineDto
+                {
+                    Id = s.Id, Symbol = s.UnderlyingSymbol, Structure = s.Structure, Expiration = s.Expiration, Dte = dte,
+                    Quantity = (double)s.Contracts,
+                    ShortPutStrike = s.ShortPutStrike, LongPutStrike = s.LongPutStrike,
+                    ShortCallStrike = s.ShortCallStrike, LongCallStrike = s.LongCallStrike,
+                    Spot = prices.TryGetValue(s.UnderlyingSymbol, out var px) ? px : null,
+                    Pnl = s.OpenPnl, PnlPct = s.OpenPnl != null && s.MaxProfit > 0 ? R(s.OpenPnl.Value / s.MaxProfit * 100) : null,
+                    TakeProfit = R(s.MaxProfit * takeProfit), StopLoss = R(-Math.Min(s.MaxProfit * hardLoss, s.MaxLoss)),
+                    TargetSource = "reglas",
+                };
+            }
+            foreach (var e in equities)
+            {
+                var cost = Math.Abs(e.AverageOpenPrice * e.Quantity);
+                yield return new PositionLineDto
+                {
+                    Id = e.Symbol, Symbol = e.Symbol, Structure = "EQUITY", Quantity = e.Quantity, Spot = e.Mid,
+                    Pnl = e.OpenPnl, PnlPct = e.OpenPnl != null && cost > 0 ? R(e.OpenPnl.Value / cost * 100) : null,
+                };
             }
         }
 

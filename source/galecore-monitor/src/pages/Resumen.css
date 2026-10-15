@@ -49,17 +49,29 @@
 .rs-event { padding:5px 7px; margin-top:6px; border-left:3px solid var(--yellow-gc); border-radius:3px; background:var(--yellow-muted); font-size:var(--font-label); line-height:1.3; overflow-wrap:anywhere; }
 @media(max-width:950px) { .rs { padding:12px; } .rs-capital { grid-template-columns:1fr; } .rs-exposure { border-left:0; border-top:1px solid var(--border); } .rs-page { margin:12px; } }
 
-/* Inicio (WS-0036): franja sin cuadros, números grandes; exposición y atención en filas. */
-.rs-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:24px; padding:8px 0 24px; border-bottom:1px solid var(--border); margin-bottom:24px; }
-.rs-strip>div { display:flex; flex-direction:column; gap:4px; min-width:0; }
-.rs-strip span { font-size:14px; color:var(--text-secondary); }
-.rs-strip strong { font-size:28px; font-weight:600; font-variant-numeric:tabular-nums; }
-.rs-strip em { font-style:normal; font-size:14px; font-variant-numeric:tabular-nums; color:var(--text-secondary); }
-.rs-two { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:40px; margin-bottom:28px; }
-.rs-block h2 { margin:0 0 6px; padding-bottom:10px; border-bottom:1px solid var(--border); font-size:16px; font-weight:600; }
-.rs-row { display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--border-dark); font-size:15px; }
+/* Inicio (WS-0036): tablero compacto. La cuenta con un número grande y tres filas; exposición y lo de hoy al lado;
+   una línea fina por posición (pensado para muchas, de varios brokers). */
+.rs-board { display:grid; grid-template-columns:minmax(240px,1fr) minmax(240px,1fr) minmax(280px,1.3fr); gap:36px; padding-bottom:20px; border-bottom:1px solid var(--border); margin-bottom:8px; }
+.rs-board section { min-width:0; }
+.rs-label { display:block; font-size:13px; color:var(--text-secondary); margin-bottom:4px; }
+.rs-big { display:block; font-size:30px; font-weight:600; font-variant-numeric:tabular-nums; margin-bottom:6px; }
+.rs-row { display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-bottom:1px solid var(--border-dark); font-size:14px; }
+.rs-row span { color:var(--text-secondary); }
 .rs-row b { font-weight:500; font-variant-numeric:tabular-nums; text-align:right; }
-.rs-attention { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--border-dark); font-size:15px; }
-.rs-attention i { flex:0 0 8px; height:8px; border-radius:50%; background:#60a5fa; }
+.rs em { font-style:normal; font-size:13px; }
+.rs-attention { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border-dark); font-size:14px; }
+.rs-attention i { flex:0 0 7px; height:7px; border-radius:50%; background:#60a5fa; }
 .rs-attention i.gestion { background:var(--yellow-gc); }
-@media(max-width:950px) { .rs-strip { grid-template-columns:repeat(2,minmax(0,1fr)); } .rs-two { grid-template-columns:1fr; } }
+.rs-lines { font-size:14px; }
+.rs-line { display:grid; grid-template-columns:minmax(220px,1.4fr) 190px minmax(90px,.6fr) minmax(130px,.8fr) minmax(140px,.8fr); gap:16px; align-items:center; padding:6px 0; border-bottom:1px solid var(--border-dark); font-variant-numeric:tabular-nums; }
+.rs-line>span:nth-child(n+3) { text-align:right; }
+.rs-line-head { font-size:13px; color:var(--text-secondary); padding:10px 0 6px; }
+.rs-pos { display:flex; align-items:center; gap:8px; min-width:0; white-space:nowrap; }
+.rs-pos b { font-weight:600; }
+.rs-pos em { color:var(--text-secondary); }
+.rs-payoff { width:24px; height:20px; color:var(--text-secondary); flex:0 0 24px; }
+.rs-ladder { width:180px; height:30px; display:block; }
+.rs-ladder text { font-size:10px; fill:var(--text-secondary); font-family:var(--font-sans); }
+.rs-muted { color:var(--text-secondary); }
+@media(max-width:1100px) { .rs-board { grid-template-columns:1fr 1fr; } .rs-board section:last-child { grid-column:1/-1; } }
+@media(max-width:760px) { .rs-board { grid-template-columns:1fr; } .rs-line { grid-template-columns:1fr auto; } .rs-line>span:nth-child(2), .rs-line>span:nth-child(3), .rs-line>span:nth-child(5) { display:none; } }

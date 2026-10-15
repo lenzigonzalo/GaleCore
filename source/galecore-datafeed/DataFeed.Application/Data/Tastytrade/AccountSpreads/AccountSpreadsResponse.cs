@@ -29,6 +29,10 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
         public decimal Multiplier { get; set; }
         /// <summary>Ancho que puede perderse: en un IC sólo pierde un lado, así que es el mayor de los dos.</summary>
         public double Width { get; set; }
+        public double? ShortPutStrike { get; set; }
+        public double? LongPutStrike { get; set; }
+        public double? ShortCallStrike { get; set; }
+        public double? LongCallStrike { get; set; }
 
         public double InitialCredit { get; set; }
         /// <summary>Crédito neto para cerrar hoy (mid de cada pata; cierre anterior si no hay cotización).</summary>
