@@ -1,56 +1,21 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { fetchSpace, saveSpaceItem, SpaceItem } from '../../api/space';
-import { useTerminalStore } from '../../store/useTerminalStore';
+import { fetchSpace, SpaceItem } from '../../api/space';
 
 /**
- * Avisos del supervisor de SHADOW (WS-0007): está en todas las pestañas, suena cuando llega un aviso nuevo y deja
- * responderlo.
+ * Avisos del supervisor de SHADOW (WS-0007): está en todas las pestañas y suena cuando llega un aviso nuevo.
  *
- * GaleCore-AI publica la pieza `agent/supervisor` cada 5 minutos desde la PC donde corre. Trae los últimos avisos
- * con el motivo, el dato, la regla, la propuesta, las opciones y la decisión, si ya la hay. Todo viene calculado:
- * acá sólo se muestra. Lo informativo es una línea (el detalle, con un click); sólo lo que pide decisión trae
- * botones, sin campos de texto (owner 06/10). Responder escribe `responses[<aviso>]` en la pieza y GaleCore-AI lo guarda como decisión en
- * el proyecto de la estrategia en la próxima pasada. En SHADOW no ejecuta nada.
- *
- * «Analizá este aviso» (U-70, P1-01c) abre Claude Code en el panel de la derecha con el pedido ya enviado: se sigue
- * por chat, sin esperar a la próxima pasada. La sesión arma el contexto con `supervise context <aviso>`. Los análisis
- * que dejó la corrida en segundo plano de WS-0008 (`analyses[<aviso>]`) se siguen mostrando.
+ * GaleCore-AI publica la pieza `agent/supervisor` cada 5 minutos desde la PC donde corre, con los avisos de hoy ya
+ * legibles: tipo, hora y un título que se entiende solo. Acá sólo se muestra. Desde el 15/10 (owner) no hay
+ * explicación aparte, botones ni desplegable: las acciones se agregan cuando el uso las pida.
  */
 
-interface Decision { choice: string; words: string; expected: string; review_by: string | null; at: string }
-interface Alert {
-  id: string; kind: string; strategy: string; strategy_ref: string | null; detected_at: string; motivo: string;
-  dato: Record<string, string | number | null>; regla: string; propuesta: string; options: string[];
-  needs_decision: boolean; decision: Decision | null;
-  /** Desde WS-0036 GaleCore-AI manda el aviso ya legible: categoría, título y una línea de explicación. */
-  category?: Category; title?: string; detail?: string;
-}
 type Category = 'eeuu' | 'empresa' | 'estrategia' | 'cuenta' | 'mercado';
-interface Response { choice: string; words: string; expected: string; review_by: string | null; at: string }
-interface Analysis {
-  status: 'running' | 'done' | 'failed'; at: string; summary?: string; detail?: string; missing?: string[];
-  model?: string | null; tokens?: { output?: number } | null; duration_s?: number | null; error?: string | null;
-}
-interface Piece {
-  alerts?: Alert[]; responses?: Record<string, Response>; response_errors?: Record<string, string>;
-  analyses?: Record<string, Analysis>;
-  last_run?: { at: string; result: string; failed: boolean }; state_detail?: string | null;
-}
+interface Alert { id: string; detected_at: string; motivo: string; decision: unknown; category?: Category; title?: string }
+interface Piece { alerts?: Alert[]; last_run?: { at: string; result: string; failed: boolean }; state_detail?: string | null }
 
 const KEY = 'supervisor';
 const REFRESH_MS = 60_000;
 const SEEN = 'galecore.supervisor.seen';
-
-const DATO: Record<string, string> = {
-  exit_reason: 'Motivo de salida', entry_credit: 'Crédito', exit_debit: 'Débito de salida',
-  realized_pnl_usd: 'Resultado (USD)', dte: 'DTE', exit_at: 'Salida', spread_value: 'Valor del spread',
-  loss_multiple: 'Pérdida / crédito', unrealized_pnl_usd: 'P&L abierto (USD)', valued_at: 'Valuado',
-  last_valued_at: 'Última valuación', problems: 'Problemas', max_risk_usd: 'Riesgo máximo (USD)',
-  limit_usd: 'Límite (USD)', event: 'Dato', event_date: 'Fecha', business_days: 'Días hábiles',
-  symbol: 'Símbolo', metric: 'Medida', value: 'Valor', threshold: 'Umbral', condition: 'Condición',
-  underlying_symbol: 'Subyacente', underlying_price: 'Precio del subyacente', underlying_read_at: 'Leído',
-  apuesta: 'Apuesta', usado_usd: 'En riesgo (USD)', tope_usd: 'Tope (USD)', margen_usd: 'Margen (USD)',
-};
 
 /** Color y rótulo por tipo, para leer el aviso en un segundo (WS-0036). */
 const CATEGORY: Record<Category, { label: string; color: string }> = {
@@ -60,27 +25,6 @@ const CATEGORY: Record<Category, { label: string; color: string }> = {
   cuenta: { label: 'Cuenta', color: '#fb923c' },
   mercado: { label: 'Mercado', color: '#22d3ee' },
 };
-
-function UsFlag() {
-  return <svg width="16" height="11" viewBox="0 0 16 11" aria-hidden="true" style={{ borderRadius: 2, flex: '0 0 16px' }}>
-    {[0, 2, 4, 6, 8, 10].map(y => <rect key={y} x="0" y={y} width="16" height="1" fill="#e5484d" />)}
-    {[1, 3, 5, 7, 9].map(y => <rect key={y} x="0" y={y} width="16" height="1" fill="#f5f5f5" />)}
-    <rect x="0" y="0" width="7" height="6" fill="#3b5bdb" />
-  </svg>;
-}
-
-function CategoryTag({ category }: { category?: Category }) {
-  const c = CATEGORY[category ?? 'estrategia'] ?? CATEGORY.estrategia;
-  return <span className="alert-category" style={{ color: c.color }}>
-    {category === 'eeuu' ? <UsFlag /> : <i style={{ background: c.color }} />}{c.label}
-  </span>;
-}
-
-function datoValue(key: string, value: string | number): string {
-  if (key.endsWith('_at')) return when(String(value));
-  if (typeof value === 'number' && !Number.isInteger(value)) return value.toFixed(2);
-  return String(value);
-}
 
 function readSeen(): Set<string> {
   try { return new Set(JSON.parse(localStorage.getItem(SEEN) || '[]')); } catch { return new Set(); }
@@ -106,6 +50,7 @@ function chime() {
   } catch { /* sin audio */ }
 }
 
+/** «jue 15/10, 11:21», como en Agentes. */
 function when(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -113,94 +58,35 @@ function when(iso?: string | null): string {
   const day = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
   const date = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
   const time = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
-  return `${day} ${date}, ${time}`;   // «jue 15/10, 11:21», como en Agentes
+  return `${day} ${date}, ${time}`;
 }
 
-const muted: React.CSSProperties = { fontSize: 13, color: 'var(--text-secondary)' };
-const chip: React.CSSProperties = { fontSize: 12, padding: '4px 10px', borderRadius: 999, cursor: 'pointer',
-  border: '1px solid var(--border-dark)', color: 'var(--text-secondary)', background: 'transparent' };
-
-/** Un análisis anterior (corrida en segundo plano de WS-0008), tal cual. Una línea; el detalle, con un click. */
-function AnalysisView({ analysis }: { analysis: Analysis }) {
-  const [more, setMore] = useState(false);
-  const meta = [analysis.model, analysis.tokens?.output != null ? `${analysis.tokens.output} tokens` : null,
-    analysis.duration_s != null ? `${analysis.duration_s} s` : null].filter(Boolean).join(' · ');
-  return (
-    <div style={{ marginTop: 6, paddingLeft: 8, borderLeft: '2px solid var(--border-dark)' }}>
-      <div onClick={() => setMore(m => !m)} style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-        {analysis.summary}
-      </div>
-      {more && (
-        <div style={{ ...muted, whiteSpace: 'pre-wrap', marginTop: 4 }}>
-          {analysis.detail}
-          {analysis.missing && analysis.missing.length > 0 && <div>Faltó: {analysis.missing.join('; ')}</div>}
-        </div>
-      )}
-      <div style={{ ...muted, fontSize: 11, marginTop: 2 }}>Análisis {when(analysis.at)}{meta ? ` · ${meta}` : ''}</div>
-    </div>
-  );
+function hhmm(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 }
 
-/** El pedido que recibe Claude Code: el aviso y de dónde sale su contexto. */
-function analysisPrompt(alert: Alert): string {
-  return `Analizá el aviso ${alert.id} del supervisor de SHADOW («${alert.motivo}»). `
-    + `El contexto (aviso, posición, reglas de la estrategia, números de hoy) lo arma, desde GaleCore-AI, \`python -B -m galecore_ai.adapters.cli supervise context ${alert.id}\`.`;
+function UsFlag() {
+  return <svg width="16" height="11" viewBox="0 0 16 11" aria-hidden="true" style={{ borderRadius: 2, flex: '0 0 16px' }}>
+    {[0, 2, 4, 6, 8, 10].map(y => <rect key={y} x="0" y={y} width="16" height="1" fill="#e5484d" />)}
+    {[1, 3, 5, 7, 9].map(y => <rect key={y} x="0" y={y} width="16" height="1" fill="#f5f5f5" />)}
+    <rect x="0" y="0" width="7" height="6" fill="#3b5bdb" />
+  </svg>;
 }
 
-/** Una línea: qué pasó. Click: el detalle. Sólo lo que pide decisión trae botones (un click, sin texto). */
-function AlertCard({ alert, sent, error, analysis, onAnswer }: {
-  alert: Alert; sent?: Response; error?: string; analysis?: Analysis;
-  onAnswer: (r: Omit<Response, 'at'>) => Promise<void>;
-}) {
-  const startTerminal = useTerminalStore(t => t.start);
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const done = alert.decision;
-  const ask = alert.needs_decision && !done && !sent;
+function CategoryTag({ category }: { category?: Category }) {
+  const c = CATEGORY[category ?? 'estrategia'] ?? CATEGORY.estrategia;
+  return <span className="alert-category" style={{ color: c.color }}>
+    {category === 'eeuu' ? <UsFlag /> : <i style={{ background: c.color }} />}{c.label}
+  </span>;
+}
 
+/** Un aviso: tipo y hora arriba, el título abajo. Nada más. */
+function AlertCard({ alert }: { alert: Alert }) {
   return (
     <div className="alert-card">
-      <div onClick={() => setOpen(o => !o)} style={{ cursor: 'pointer' }}>
-        <div className="alert-meta"><CategoryTag category={alert.category} /><span>{when(alert.detected_at)}</span></div>
-        <div className="alert-title" style={ask ? { color: 'var(--yellow-gc)' } : undefined}>{alert.title || alert.motivo}</div>
-        {alert.detail && <div className="alert-detail">{alert.detail}</div>}
-      </div>
-      {open && (
-        <div style={{ ...muted, margin: '6px 0' }}>
-          {Object.entries(alert.dato).filter(([, v]) => v !== null && v !== '')
-            .map(([k, v]) => `${DATO[k] ?? k}: ${datoValue(k, v as string | number)}`).join(' · ')}
-          <div>Regla: {alert.regla}</div>
-        </div>
-      )}
-      {analysis?.status === 'done' && <AnalysisView analysis={analysis} />}
-      {open && (
-        <div style={{ marginTop: 6 }}>
-          <button onClick={e => { e.stopPropagation(); startTerminal('galecore', analysisPrompt(alert)); }} style={chip}
-            title="Abre Claude Code a la derecha con el pedido enviado">
-            Analizá este aviso
-          </button>
-        </div>
-      )}
-      {ask && (
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-          {alert.options.map(o => (
-            <button key={o} disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                try { await onAnswer({ choice: o, words: '', expected: '', review_by: null }); } finally { setBusy(false); }
-              }}
-              style={chip}>
-              {o}
-            </button>
-          ))}
-        </div>
-      )}
-      {alert.needs_decision && (done || sent) && (
-        <div style={{ ...muted, marginTop: 4 }}>
-          {done ? `Decidido: ${done.choice}` : `Enviado: ${sent!.choice} (se guarda en ≤ 5 min)`}
-        </div>
-      )}
-      {error && <div style={{ fontSize: 12, color: 'var(--red-gc)', marginTop: 4 }}>No se guardó: {error}</div>}
+      <div className="alert-meta"><CategoryTag category={alert.category} /><span>{hhmm(alert.detected_at)}</span></div>
+      <div className="alert-title">{alert.title || alert.motivo}</div>
     </div>
   );
 }
@@ -236,67 +122,42 @@ export function SupervisorAlerts({ embedded = false }: { embedded?: boolean }) {
     return () => clearInterval(id);
   }, [load]);
 
-  /** Se relee la pieza justo antes de escribir: GaleCore-AI pudo publicar otra mientras el trader miraba. */
-  const write = async (change: (current: Piece) => Piece, failure: string) => {
-    if (!item) return;
-    try {
-      const { items } = await fetchSpace();
-      const latest = items.find(i => i.kind === 'agent' && i.key === KEY) ?? item;
-      let current: Piece = {};
-      try { current = JSON.parse(latest.content); } catch { current = piece; }
-      await saveSpaceItem('agent', KEY, {
-        title: latest.title, format: 'json', visibility: latest.visibility, content: JSON.stringify(change(current)),
-      });
-      await load();
-    } catch {
-      setError(failure);
-    }
-  };
-
-  const answer = (alertId: string, r: Omit<Response, 'at'>) => write(current => {
-    const { response_errors: _drop, ...rest } = current;
-    return { ...rest, responses: { ...(current.responses ?? {}), [alertId]: { ...r, at: new Date().toISOString() } } };
-  }, 'No se pudo guardar la decisión. Probá de nuevo.');
-
   const alerts = piece.alerts ?? [];
-  const pending = alerts.filter(a => a.needs_decision && !a.decision && !piece.responses?.[a.id]).length;
   const failed = !!piece.last_run?.failed;          // lo decide GaleCore-AI: la última revisión no leyó todo
+  const status = <p className="alert-status">Última revisión: {when(piece.last_run?.at)}
+    {failed ? ` · falló: ${piece.state_detail || piece.last_run?.result}` : ''}</p>;
+  const empty = <p className="alert-status">{item ? 'Sin avisos hoy.' : 'Todavía no hay avisos del supervisor en tu espacio.'}</p>;
+
   if (embedded) return <section className="supervisor-dock" aria-label="Avisos del supervisor">
-    {loading ? <p role="status">Leyendo avisos…</p> : error ? <div role="alert"><p>{error}</p><button onClick={load}>Reintentar</button></div> : <><p>Última revisión: {when(piece.last_run?.at)}{failed ? ` · falló: ${piece.state_detail || piece.last_run?.result}` : ''}</p>{!alerts.length && <p>{item ? 'Sin avisos.' : 'Todavía no hay avisos del supervisor en tu espacio.'}</p>}{alerts.map(alert => <AlertCard key={alert.id} alert={alert} sent={piece.responses?.[alert.id]} error={piece.response_errors?.[alert.id]} analysis={piece.analyses?.[alert.id]} onAnswer={response => answer(alert.id, response)}/>)}</>}
+    {loading ? <p role="status">Leyendo avisos…</p>
+      : error ? <div role="alert"><p>{error}</p><button onClick={load}>Reintentar</button></div>
+      : <>{status}{!alerts.length && empty}{alerts.map(a => <AlertCard key={a.id} alert={a} />)}</>}
   </section>;
   if (!item) return null;
 
   return (
     <div style={{ position: 'absolute', right: 16, bottom: 16, zIndex: 50, maxWidth: 'calc(100% - 32px)' }}>
       {open && (
-        <div style={{ width: 420, maxWidth: '100%', maxHeight: '70vh', overflow: 'auto', marginBottom: 8,
+        <div className="supervisor-dock" style={{ width: 420, maxWidth: '100%', maxHeight: '70vh', overflow: 'auto', marginBottom: 8,
           backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 12,
-          padding: '12px 16px', boxShadow: '0 8px 24px rgba(0,0,0,.35)' }}>
+          boxShadow: '0 8px 24px rgba(0,0,0,.35)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ fontSize: 15, color: 'var(--text-primary)' }}>Avisos de SHADOW</span>
+            <span style={{ fontSize: 15, color: 'var(--text-primary)' }}>Avisos</span>
             <button onClick={() => setOpen(false)} aria-label="Cerrar"
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16 }}>×</button>
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 16 }}>×</button>
           </div>
-          <div style={muted}>
-            Última revisión: {when(piece.last_run?.at)}
-            {failed ? ` · falló: ${piece.state_detail || piece.last_run?.result}` : ''}
-          </div>
-          {error && <div style={{ fontSize: 12, color: 'var(--red-gc)' }}>{error}</div>}
-          {alerts.length === 0 && <div style={{ ...muted, padding: '12px 0' }}>Sin avisos.</div>}
-          {alerts.map(a => (
-            <AlertCard key={a.id} alert={a} sent={piece.responses?.[a.id]} error={piece.response_errors?.[a.id]}
-              analysis={piece.analyses?.[a.id]} onAnswer={r => answer(a.id, r)} />
-          ))}
+          {status}
+          {error && <p style={{ color: 'var(--red-gc)' }}>{error}</p>}
+          {!alerts.length && empty}
+          {alerts.map(a => <AlertCard key={a.id} alert={a} />)}
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button onClick={() => setOpen(o => !o)}
-          style={{ fontSize: 13, padding: '8px 14px', borderRadius: 999, cursor: 'pointer',
-            backgroundColor: 'var(--bg-secondary)',
-            color: failed ? 'var(--red-gc)' : pending ? 'var(--yellow-gc)' : 'var(--text-secondary)',
-            border: `1px solid ${failed ? 'var(--red-border)' : pending ? 'var(--yellow-border)' : 'var(--border-dark)'}` }}>
-          {pending ? `${pending} para decidir` : 'Avisos'}
-          {failed ? ' · la última revisión falló' : ''}
+          style={{ fontSize: 13, padding: '8px 14px', borderRadius: 999, cursor: 'pointer', backgroundColor: 'var(--bg-secondary)',
+            color: failed ? 'var(--red-gc)' : 'var(--text-secondary)',
+            border: `1px solid ${failed ? 'var(--red-border)' : 'var(--border-dark)'}` }}>
+          {alerts.length ? `Avisos (${alerts.length})` : 'Avisos'}{failed ? ' · la última revisión falló' : ''}
         </button>
       </div>
     </div>
