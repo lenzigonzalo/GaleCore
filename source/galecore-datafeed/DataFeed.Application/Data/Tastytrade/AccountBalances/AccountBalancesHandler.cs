@@ -1,4 +1,4 @@
-﻿using AutoMapper;
+using AutoMapper;
 using DataFeed.Infrastructure.Providers.Tastytrade;
 using MediatR;
 using Microsoft.Extensions.Configuration;
@@ -46,7 +46,17 @@ namespace DataFeed.Application.Data.Tastytrade.AccountBalances
                 if (balances?.Data == null)
                     throw new Exception($"No se encontraron balances para la cuenta: {accountNumber}");
 
-                return _mapper.Map<AccountBalancesResponse>(balances.Data);
+                var response = _mapper.Map<AccountBalancesResponse>(balances.Data);
+                if (request.WithHistory)
+                {
+                    try
+                    {
+                        var history = await provider.GetNetLiqHistoryAsync(accountNumber, "1y", cancellationToken, credential);
+                        response.NetLiqHistory = history.Select(h => new NetLiqPoint(h.Time, h.Close)).ToList();
+                    }
+                    catch (Exception) when (!cancellationToken.IsCancellationRequested) { /* sin historia: los períodos quedan sin dato */ }
+                }
+                return response;
             }
             catch (BrokerAccountNotLinkedException)
             {

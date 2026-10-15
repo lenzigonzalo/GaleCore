@@ -126,6 +126,10 @@ export interface AccountOverview {
   asOf: string;
   netLiq: number; cash: number; buyingPower: number;
   dayPnl: number | null; dayPnlPct: number | null; openPnl: number | null;
+  /** Hoy (posiciones) y semana, mes y año (valor de la cuenta). */
+  periods?: { label: string; pnl: number | null; pct: number | null }[];
+  /** Margen usado (mantenimiento), USD y % de la cuenta. */
+  marginUsed?: number | null; marginUsedPct?: number | null;
   maxRisk: number; maxRiskPct: number | null; maxRiskLimitPct: number | null;
   exposure: {
     spyEquivalentShares: number | null; spyEquivalentDollars: number | null; theta: number | null; vega: number | null;
@@ -143,6 +147,10 @@ export interface PositionLine {
   shortPutStrike: number | null; longPutStrike: number | null; shortCallStrike: number | null; longCallStrike: number | null;
   spot: number | null; pnl: number | null; pnlPct: number | null;
   takeProfit: number | null; stopLoss: number | null; targetSource: string | null;
+  /** Detalle (lo que era Cartera): spreads con crédito y valor por acción; acciones con precio promedio y valor. */
+  credit?: number | null; currentValue?: number | null; maxLoss?: number | null; pop?: number | null;
+  delta?: number | null; theta?: number | null; vega?: number | null; shortDistance?: number | null;
+  averageOpenPrice?: number | null; marketValue?: number | null;
 }
 
 /** Aviso cerca del strike vendido (WS-0036): la API lo evalúa con la preferencia `aviso-strike` del usuario. */

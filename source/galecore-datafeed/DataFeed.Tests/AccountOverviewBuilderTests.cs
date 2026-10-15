@@ -85,4 +85,19 @@ public class AccountOverviewBuilderTests
         Assert.Null(o.DayPnl);
         Assert.Contains(o.Missing, m => m.StartsWith("Resultado del día"));
     }
+
+    [Fact]
+    public void Periodos_salen_del_valor_de_la_cuenta_contra_el_cierre_anterior_a_cada_fecha()
+    {
+        var today = new DateOnly(2026, 10, 15);
+        var history = new List<(DateOnly, double)> { (new(2026, 3, 2), 2000), (new(2026, 9, 14), 2400), (new(2026, 10, 7), 2500) };
+        var p = AccountOverviewBuilder.Periods(2550, 6.5, 0.26, history, today);
+        Assert.Equal(new[] { "Hoy", "Semana", "Mes", "Año" }, p.Select(x => x.Label));
+        Assert.Equal(6.5, p[0].Pnl);
+        Assert.Equal(50, p[1].Pnl);     // contra el 07/10
+        Assert.Equal(150, p[2].Pnl);    // contra el 14/09
+        Assert.Equal(550, p[3].Pnl);    // cuenta nueva en el año: contra su primer cierre
+        Assert.Equal(27.5, p[3].Pct);
+        Assert.Null(AccountOverviewBuilder.Periods(2550, null, null, null, today)[2].Pnl);
+    }
 }

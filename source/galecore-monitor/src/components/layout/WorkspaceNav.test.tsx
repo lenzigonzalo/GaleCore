@@ -6,9 +6,9 @@ jest.mock('../../store/useCurrentUserStore', () => ({ useCurrentUserStore: (sele
 test('los destinos permanecen al entrar al chat, sin duplicados; en el chat la barra queda en íconos', () => {
   mockAdmin = false; const change = jest.fn();
   const { rerender } = render(<WorkspaceNav active="gex" onChange={change}/>);
-  for (const name of ['Inicio','Mercado','Macro','Cartera','Estrategias','Chat','Agentes']) expect(screen.getAllByRole('button',{ name })).toHaveLength(1);
+  for (const name of ['Inicio','Mercado','Macro','Estrategias','Chat','Agentes']) expect(screen.getAllByRole('button',{ name })).toHaveLength(1);
   for (const name of ['Biblioteca','Mesa de operación','Posiciones','Seguimiento RPF','Seguimiento SHADOW']) expect(screen.queryByRole('button',{ name })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{ name:'Cartera' })); expect(change).toHaveBeenCalledWith('monitor');
+  expect(screen.queryByRole('button',{ name:'Cartera' })).not.toBeInTheDocument(); // Cartera se unió a Inicio (15/10)
   rerender(<WorkspaceNav active="lab" onChange={change}/>);
   expect(screen.getByRole('button',{ name:'Chat' })).toHaveAttribute('aria-current','page');
   expect(document.querySelector('.workspace-navigation')).toHaveClass('compact');

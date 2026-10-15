@@ -18,7 +18,6 @@ import { SettingsModal, needsSetup } from './components/settings/SettingsModal';
 import { fetchSpace } from './api/space';
 import { fetchProviderAuth } from './api/terminal';
 import { Admin } from './pages/Admin';
-import { Monitor } from './pages/Monitor';
 import { Rpf } from './pages/Rpf';
 import { Gex } from './pages/Gex';
 import { Shadow } from './pages/Shadow';
@@ -48,7 +47,8 @@ function Dashboard({ onLogout }: DashboardProps) {
     if (next === 'config') { setSetup(false); setSettingsOpen(true); return; }
     if (next === 'rpf') { setSelectedSpec('rpf'); next = 'estrategias'; }
     if (next === 'shadow') next = 'estrategias';
-    if (next === 'operativa') next = 'monitor';
+    // Cartera e Inicio son una sola pantalla desde el 15/10 (owner): los enlaces viejos llevan a Inicio.
+    if (next === 'operativa' || next === 'monitor') next = 'inicio';
     if (next === 'estrategias') setStrategiesVisited(true);
     if (next === 'lab') setLabVisited(true);
     setCurrentTab(next);
@@ -143,10 +143,6 @@ function Dashboard({ onLogout }: DashboardProps) {
           <>
           {tab === 'inicio' && <Resumen onNavigate={setTab} />}
 
-          {tab !== 'macro' && <div style={{ display: tab === 'monitor' ? 'block' : 'none', height: '100%', overflow: 'auto' }}>
-            <Monitor subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg}
-              subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />
-          </div>}
           {/* Se montan recién al entrar: leen la cuenta de bróker y la lista de usuarios — nada de
               eso tiene sentido traerlo en cada arranque del tablero. */}
           {tab === 'admin' && <Admin />}

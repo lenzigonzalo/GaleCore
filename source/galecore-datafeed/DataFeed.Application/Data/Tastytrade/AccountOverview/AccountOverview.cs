@@ -29,6 +29,11 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public double? DayPnl { get; set; }
         public double? DayPnlPct { get; set; }
         public double? OpenPnl { get; set; }
+        /// <summary>Resultado por período: hoy (de las posiciones) y semana, mes y año (del valor de la cuenta).</summary>
+        public List<PeriodPnlDto> Periods { get; set; } = new();
+        /// <summary>Margen usado (requerimiento de mantenimiento de Tastytrade), en USD y en % del valor de la cuenta.</summary>
+        public double? MarginUsed { get; set; }
+        public double? MarginUsedPct { get; set; }
         /// <summary>Pérdida máxima sumada de lo abierto (spreads), en USD y en % de la cuenta.</summary>
         public double MaxRisk { get; set; }
         public double? MaxRiskPct { get; set; }
@@ -88,6 +93,30 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public double? StopLoss { get; set; }
         /// <summary>"reglas" (de la plataforma) mientras el usuario no ponga el suyo.</summary>
         public string? TargetSource { get; set; }
+
+        // Detalle para Cartera (WS-0036): los mismos números que Inicio, sin recalcular en el Monitor.
+        /// <summary>Crédito cobrado y valor de cierre hoy, por acción como los cotiza el bróker (spreads).</summary>
+        public double? Credit { get; set; }
+        public double? CurrentValue { get; set; }
+        /// <summary>Pérdida máxima en USD (spreads).</summary>
+        public double? MaxLoss { get; set; }
+        /// <summary>Probabilidad de ganar al vencimiento, en %.</summary>
+        public double? Pop { get; set; }
+        public double? Delta { get; set; }
+        public double? Theta { get; set; }
+        public double? Vega { get; set; }
+        /// <summary>Puntos del precio al strike vendido más cercano (negativo: ya lo pasó).</summary>
+        public double? ShortDistance { get; set; }
+        /// <summary>Acciones: precio promedio de compra y valor de mercado hoy.</summary>
+        public double? AverageOpenPrice { get; set; }
+        public double? MarketValue { get; set; }
+    }
+
+    public class PeriodPnlDto
+    {
+        public string Label { get; set; } = "";
+        public double? Pnl { get; set; }
+        public double? Pct { get; set; }
     }
 
     public class AttentionDto
@@ -237,6 +266,9 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
                     Pnl = s.OpenPnl, PnlPct = s.OpenPnl != null && s.MaxProfit > 0 ? R(s.OpenPnl.Value / s.MaxProfit * 100) : null,
                     TakeProfit = R(s.MaxProfit * takeProfit), StopLoss = R(-Math.Min(s.MaxProfit * hardLoss, s.MaxLoss)),
                     TargetSource = "reglas",
+                    Credit = s.InitialCredit, CurrentValue = s.CurrentNetCredit, MaxLoss = R(s.MaxLoss), Pop = s.Pop,
+                    Delta = s.Greeks?.Delta, Theta = s.Greeks?.Theta, Vega = s.Greeks?.Vega,
+                    ShortDistance = prices.TryGetValue(s.UnderlyingSymbol, out var sp) ? ShortDistance(s, sp) : null,
                 };
             }
             foreach (var e in equities)
@@ -246,8 +278,30 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
                 {
                     Id = e.Symbol, Symbol = e.Symbol, Structure = "EQUITY", Quantity = e.Quantity, Spot = e.Mid,
                     Pnl = e.OpenPnl, PnlPct = e.OpenPnl != null && cost > 0 ? R(e.OpenPnl.Value / cost * 100) : null,
+                    AverageOpenPrice = e.AverageOpenPrice, MarketValue = e.Mid == null ? null : R(e.Mid.Value * e.Quantity),
+                    Delta = e.Quantity,
                 };
             }
+        }
+
+        /// <summary>
+        /// Hoy sale de las posiciones (como el encabezado de los brokers); semana, mes y año, de la diferencia del valor de
+        /// la cuenta contra el cierre del último día hábil anterior a cada fecha. Los depósitos y retiros entran en la
+        /// diferencia: Tastytrade no los separa en esta historia.
+        /// </summary>
+        public static List<PeriodPnlDto> Periods(double netLiq, double? dayPnl, double? dayPct,
+            IReadOnlyList<(DateOnly Date, double Close)>? history, DateOnly today)
+        {
+            var list = new List<PeriodPnlDto> { new() { Label = "Hoy", Pnl = dayPnl, Pct = dayPct } };
+            foreach (var (label, from) in new[] { ("Semana", today.AddDays(-7)), ("Mes", today.AddMonths(-1)), ("Año", new DateOnly(today.Year, 1, 1)) })
+            {
+                // El cierre del último día antes del período; en el año, si la cuenta es más nueva, su primer cierre.
+                var anchor = history?.Where(h => h.Date < from).Select(h => (double?)h.Close).LastOrDefault()
+                    ?? (label == "Año" ? history?.Select(h => (double?)h.Close).FirstOrDefault() : null);
+                list.Add(anchor is > 0 ? new() { Label = label, Pnl = R(netLiq - anchor.Value), Pct = R((netLiq / anchor.Value - 1) * 100) }
+                    : new() { Label = label });
+            }
+            return list;
         }
 
         /// <summary>Datos de EE. UU. y la Fed de hoy a dos días hábiles.</summary>
@@ -261,6 +315,15 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
                 var name = EventNames.TryGetValue(e.Name, out var n) ? n : e.Name;
                 yield return new AttentionDto { Kind = "evento", Title = $"{Capitalize(when)}: {name}" };
             }
+        }
+
+        /// <summary>Puntos al strike vendido más cercano: spot − put vendido o call vendido − spot, el menor.</summary>
+        public static double? ShortDistance(AccountSpreadDto s, double spot)
+        {
+            var gaps = new List<double>();
+            if (s.ShortPutStrike is double put) gaps.Add(spot - put);
+            if (s.ShortCallStrike is double call) gaps.Add(call - spot);
+            return gaps.Count == 0 ? null : R(gaps.Min());
         }
 
         public static string Label(AccountSpreadDto s)

@@ -20,5 +20,9 @@ namespace DataFeed.Application.Data.Tastytrade.AccountBalances
         public decimal PendingCash { get; set; }
         public string SnapshotDate { get; set; }
         public string UpdatedAt { get; set; }
+        /// <summary>Valor de la cuenta al cierre de cada día del último año (sólo con WithHistory); null si no se pudo leer.</summary>
+        public List<NetLiqPoint>? NetLiqHistory { get; set; }
     }
+
+    public record NetLiqPoint(DateTime Time, decimal Close);
 }

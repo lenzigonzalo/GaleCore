@@ -30,7 +30,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
             var missing = new List<string>();
 
             // Cuenta (saldos y posiciones) sale con la credencial del usuario: sus 409 pasan sin envolver.
-            var balancesTask = _mediator.Send(new AccountBalancesRequest { AccountNumber = request.AccountNumber }, ct);
+            var balancesTask = _mediator.Send(new AccountBalancesRequest { AccountNumber = request.AccountNumber, WithHistory = true }, ct);
             var accountTask = _mediator.Send(new AccountSpreadsRequest { AccountNumber = request.AccountNumber }, ct);
             var eventsTask = CalendarAsync(today, missing, ct);
             var balances = await balancesTask;
@@ -42,9 +42,16 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
             var events = await eventsTask;
 
             var rules = string.IsNullOrWhiteSpace(request.RulesJson) ? null : JsonNode.Parse(request.RulesJson)?.AsObject();
-            return AccountOverviewBuilder.Build(
+            var response = AccountOverviewBuilder.Build(
                 (double)balances.NetLiquidatingValue, (double)balances.CashBalance, (double)balances.DerivativeBuyingPower,
                 account, betas, rules, today, events, missing);
+            response.MarginUsed = (double)balances.MaintenanceRequirement;
+            response.MarginUsedPct = balances.NetLiquidatingValue > 0
+                ? Math.Round((double)(balances.MaintenanceRequirement / balances.NetLiquidatingValue) * 100, 1) : null;
+            if (balances.NetLiqHistory == null) missing.Add("Historia del valor de la cuenta (Tastytrade): sin dato; semana, mes y año sin calcular.");
+            response.Periods = AccountOverviewBuilder.Periods((double)balances.NetLiquidatingValue, response.DayPnl, response.DayPnlPct,
+                balances.NetLiqHistory?.Select(h => (DateOnly.FromDateTime(h.Time), (double)h.Close)).ToList(), today);
+            return response;
         }
 
         private async Task<Dictionary<string, double>> BetasAsync(List<string> symbols, List<string> missing, CancellationToken ct)

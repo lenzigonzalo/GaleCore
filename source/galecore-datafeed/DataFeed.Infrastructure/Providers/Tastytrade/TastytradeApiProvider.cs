@@ -168,6 +168,34 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
             return JsonSerializer.Deserialize<AccountBalancesModel>(content, options);
         }
 
+        /// <summary>
+        /// GET /accounts/{n}/net-liq/history?time-back=1y — valor de la cuenta al cierre de cada día (WS-0036, resultado
+        /// por períodos en Inicio). Devuelve (fecha, cierre) en orden.
+        /// </summary>
+        public async Task<List<(DateTime Time, decimal Close)>> GetNetLiqHistoryAsync(string accountNumber, string timeBack,
+            CancellationToken cancellationToken, TastytradeCredential? credential = null)
+        {
+            _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            _client.DefaultRequestHeaders.UserAgent.ParseAdd("PostmanRuntime/7.36.0");
+            var path = $"/accounts/{accountNumber}/net-liq/history?time-back={Uri.EscapeDataString(timeBack)}";
+            var request = credential == null ? await _auth.CreateOAuthApiRequestAsync(path) : await _auth.CreateOAuthApiRequestAsync(path, credential);
+            var response = await _client.SendAsync(request, cancellationToken);
+            await EnsureAccountSuccessAsync(response);
+            using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            var points = new List<(DateTime, decimal)>();
+            if (doc.RootElement.TryGetProperty("data", out var data) && data.TryGetProperty("items", out var items))
+                foreach (var it in items.EnumerateArray())
+                {
+                    if (!it.TryGetProperty("time", out var t) || !it.TryGetProperty("close", out var c)) continue;
+                    var close = c.ValueKind == JsonValueKind.Number ? c.GetDecimal()
+                        : decimal.TryParse(c.GetString(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : (decimal?)null;
+                    if (close != null && DateTime.TryParse(t.GetString(), System.Globalization.CultureInfo.InvariantCulture,
+                        System.Globalization.DateTimeStyles.AdjustToUniversal | System.Globalization.DateTimeStyles.AssumeUniversal, out var time))
+                        points.Add((time, close.Value));
+                }
+            return points.OrderBy(p => p.Item1).ToList();
+        }
+
         /// <param name="credential">Ver <see cref="GetAccountBalancesAsync"/>: null = credencial de sistema.</param>
         public async Task<AccountPositionsModel?> GetAccountPositionsAsync(string accountNumber, CancellationToken cancellationToken, TastytradeCredential? credential = null)
         {

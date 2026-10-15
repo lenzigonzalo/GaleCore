@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '../api/client';
 import { fmtCurrency, fmtPct, fmtPnl, etDateParts } from '../utils/formatters';
 import { AccountOverview, PositionLine, STRIKE_ALERT_KEY, StrikeAlertSettings, describeAccountError, fetchAccountOverview } from '../api/account';
@@ -112,28 +112,70 @@ function Overview({ o, strike, onStrike }: { o: AccountOverview; strike: StrikeA
   const over = o.maxRiskPct != null && o.maxRiskLimitPct != null && o.maxRiskPct > o.maxRiskLimitPct;
   const e = o.exposure;
   return <>
-    <div className="rs-strip">
-      <div className="rs-stat rs-stat-main"><span>Valor de la cuenta</span><strong>{money(o.netLiq)}</strong></div>
-      <div className="rs-stat"><span>Hoy</span><strong className={tone(o.dayPnl)}>{o.dayPnl == null ? '—' : fmtPnl(o.dayPnl)}</strong>
-        {o.dayPnlPct != null && <em className={tone(o.dayPnlPct)}>{fmtPct(o.dayPnlPct)}</em>}</div>
-      <div className="rs-stat"><span>Poder de compra</span><strong>{money(o.buyingPower)}</strong></div>
-      <div className="rs-stat"><span>Riesgo máximo</span><strong className={over ? 'neg' : undefined}>{money(o.maxRisk)}</strong>
-        {o.maxRiskPct != null && <em className={over ? 'neg' : undefined}>{o.maxRiskPct.toFixed(0)} % de la cuenta{o.maxRiskLimitPct != null ? ` · límite ${o.maxRiskLimitPct} %` : ''}</em>}</div>
-      <div className="rs-stat"><span>Exposición</span><strong>{e.spyEquivalentShares == null ? '—' : `${e.spyEquivalentShares.toFixed(1)} SPY`}</strong>
-        {e.spyEquivalentDollars != null && <em>{money(e.spyEquivalentDollars)} en acciones EE. UU.</em>}</div>
-      <div className="rs-stat"><span>Theta · Vega</span><strong className={tone(e.theta)}>{e.theta == null ? '—' : `${signed(e.theta)}/día`}</strong>
-        {e.vega != null && <em className={tone(e.vega)}>{signed(e.vega)} por punto de vol.</em>}</div>
+    <div className="rs-hero">
+      <div className="rs-hero-value"><span>Valor de la cuenta</span><strong>{money(o.netLiq)}</strong></div>
+      <div className="rs-periods" aria-label="Resultado por período">
+        {(o.periods ?? [{ label: 'Hoy', pnl: o.dayPnl, pct: o.dayPnlPct }]).map(p => <div key={p.label}>
+          <span>{p.label}</span><strong className={tone(p.pnl)}>{p.pnl == null ? '—' : fmtPnl(p.pnl)}</strong>
+          <em className={tone(p.pct)}>{p.pct == null ? '' : fmtPct(p.pct)}</em></div>)}
+      </div>
     </div>
-    {o.attention.length > 0 && <section className="rs-attention-list" aria-label="Atención">
-      {o.attention.map(a => <div className="rs-attention" key={a.title}><i className={a.kind}/>{a.title}</div>)}
+    <div className="rs-cards">
+      <section className="rs-card" aria-label="Capital">
+        <h2>Capital</h2>
+        <div className="rs-tiles">
+          <Tile label="Poder de compra" value={money(o.buyingPower)} concept="Lo que queda para abrir posiciones" />
+          <Tile label="Margen usado" value={o.marginUsed == null ? '—' : money(o.marginUsed)}
+            concept={o.marginUsedPct == null ? 'Lo que el bróker retiene como garantía' : `${o.marginUsedPct.toFixed(0)} % de la cuenta retenido como garantía`}
+            bar={o.marginUsedPct ?? undefined} />
+          <Tile label="Riesgo máximo" value={money(o.maxRisk)} tone={over ? 'neg' : undefined}
+            concept={o.maxRiskPct == null ? 'Lo máximo que pueden perder los spreads' : `${o.maxRiskPct.toFixed(0)} % de la cuenta${o.maxRiskLimitPct != null ? ` · límite ${o.maxRiskLimitPct} %` : ''}`}
+            bar={o.maxRiskPct ?? undefined} limit={o.maxRiskLimitPct ?? undefined} />
+        </div>
+      </section>
+      <section className="rs-card" aria-label="Griegas de la cartera">
+        <h2>Griegas de la cartera</h2>
+        <div className="rs-tiles">
+          <Tile label="Delta" value={e.spyEquivalentShares == null ? '—' : `${e.spyEquivalentShares.toFixed(1)} SPY`} tone={tone(e.spyEquivalentShares)}
+            concept={e.spyEquivalentShares == null ? 'Cuánto se mueve con el mercado' : `Si SPY sube $1, la cartera ${e.spyEquivalentShares >= 0 ? 'gana' : 'pierde'} ${signed(Math.abs(e.spyEquivalentShares))}`} />
+          <Tile label="Theta" value={e.theta == null ? '—' : `${signed(e.theta)}/día`} tone={tone(e.theta)}
+            concept="Lo que se cobra por cada día que pasa" />
+          <Tile label="Vega" value={e.vega == null ? '—' : signed(e.vega)} tone={tone(e.vega)}
+            concept="Si la volatilidad sube 1 punto" />
+        </div>
+      </section>
+    </div>
+    {o.attention.length > 0 && <section className="rs-card rs-attention-card" aria-label="Atención">
+      <h2>Qué pide atención</h2>
+      {o.attention.map(a => <div className="rs-attention" key={a.title}>
+        <span className={'rs-tag ' + a.kind}>{a.kind === 'gestion' ? 'Posición' : 'EE. UU.'}</span>{a.title}</div>)}
     </section>}
-    <section className="rs-lines" aria-label="Posiciones">
+    <section className="rs-card rs-lines" aria-label="Posiciones">
+      <h2>Posiciones</h2>
       {o.positions.length === 0 ? <p className="rs-empty">Sin posiciones abiertas.</p> : <>
-        <div className="rs-line rs-line-head"><span>Posición</span><span>Strikes</span><span>Vence</span><span>Resultado</span><span>Objetivo</span><span>Aviso strike</span></div>
-        {o.positions.map(p => <PositionLineRow key={p.id} p={p} strike={strike} onStrike={onStrike} />)}
+        <div className="rs-line rs-line-head"><span>Posición</span><span>Strikes</span><span>Vence</span><span>Resultado</span><span>Delta</span><span>Theta</span><span>Objetivo</span><span>Aviso strike</span></div>
+        {Array.from(new Set(o.positions.map(p => p.symbol))).map(sym => {
+          const rows = o.positions.filter(p => p.symbol === sym);
+          const pnl = rows.every(r => r.pnl != null) ? rows.reduce((a, r) => a + (r.pnl ?? 0), 0) : null;
+          const risk = o.exposure.byUnderlying.find(u => u.symbol === sym)?.maxRisk;
+          return <div key={sym} className="rs-group" role="group" aria-label={`Posiciones en ${sym}`}>
+            <div className="rs-group-head"><b>{sym}</b>{rows[0].spot != null && <span>{money(rows[0].spot)}</span>}
+              {pnl != null && <span className={tone(pnl)}>{fmtPnl(pnl)}</span>}
+              {risk != null && risk > 0 && <span>riesgo {money(risk)}</span>}</div>
+            {rows.map(p => <PositionLineRow key={p.id} p={p} strike={strike} onStrike={onStrike} />)}
+          </div>;
+        })}
       </>}
     </section>
   </>;
+}
+
+/** Un número grande con su concepto escrito al lado (owner 15/10: «números grandes y conceptos visibles»). */
+function Tile({ label, value, concept, tone: t, bar, limit }: { label: string; value: string; concept: string; tone?: string; bar?: number; limit?: number }) {
+  return <div className="rs-tile"><span>{label}</span><strong className={t}>{value}</strong>
+    {bar != null && <div className="rs-bar" aria-hidden="true"><i style={{ width: `${Math.min(100, Math.max(0, bar))}%` }} className={limit != null && bar > limit ? 'neg' : undefined}/>
+      {limit != null && <b style={{ left: `${Math.min(100, limit)}%` }}/>}</div>}
+    <p>{concept}</p></div>;
 }
 
 function Payoff({ structure }: { structure: string }) {
@@ -161,15 +203,42 @@ function MiniLadder({ p }: { p: PositionLine }) {
 
 function PositionLineRow({ p, strike, onStrike }: { p: PositionLine; strike: StrikeAlertSettings | null; onStrike: (s: StrikeAlertSettings) => void }) {
   const exp = p.expiration ? `${p.expiration.slice(8, 10)}/${p.expiration.slice(5, 7)}` : '—';
-  return <div className="rs-line">
-    <span className="rs-pos"><Payoff structure={p.structure}/><b>{p.symbol}</b>{STRUCTURE[p.structure] ?? p.structure}
+  const [open, setOpen] = useState(false);
+  return <div className={'rs-position' + (open ? ' open' : '')}>
+  <div className="rs-line" role="button" tabIndex={0} aria-expanded={open} onClick={() => setOpen(v => !v)}
+    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(v => !v); } }}>
+    <span className="rs-pos"><ChevronDown size={16} className="rs-chevron"/><Payoff structure={p.structure}/>{STRUCTURE[p.structure] ?? p.structure}
       {p.structure !== 'EQUITY' && p.quantity > 1 && <em>×{p.quantity}</em>}</span>
     <span><MiniLadder p={p}/></span>
     <span>{p.dte == null ? '—' : `${exp} · ${p.dte} d`}</span>
     <span className={tone(p.pnl)}>{p.pnl == null ? '—' : fmtPnl(p.pnl)}{p.pnlPct != null && <em> {fmtPct(p.pnlPct, 1)}</em>}</span>
+    <span>{p.delta == null ? '—' : p.delta.toFixed(1)}</span>
+    <span className={tone(p.theta)}>{p.theta == null ? '—' : signed(p.theta)}</span>
     <span>{p.takeProfit == null ? '—' : <><span className="pos">{fmtPnl(p.takeProfit)}</span> / <span className="neg">{fmtPnl(p.stopLoss ?? 0)}</span></>}</span>
-    <span>{p.structure === 'EQUITY' || !strike?.enabled ? '—' : <StrikeDistance id={p.id} s={strike} onSave={onStrike} />}</span>
+    <span onClick={e => e.stopPropagation()}>{p.structure === 'EQUITY' || !strike?.enabled ? '—' : <StrikeDistance id={p.id} s={strike} onSave={onStrike} />}</span>
+  </div>
+  {open && <PositionDetail p={p} />}
   </div>;
+}
+
+/** El detalle de la posición (lo que era Cartera), con los números de la API. */
+function PositionDetail({ p }: { p: PositionLine }) {
+  const items: [string, React.ReactNode][] = p.structure === 'EQUITY' ? [
+    ['Cantidad', `${p.quantity} acciones`],
+    ['Precio promedio', p.averageOpenPrice == null ? '—' : money(p.averageOpenPrice)],
+    ['Precio actual', p.spot == null ? '—' : money(p.spot)],
+    ['Valor de mercado', p.marketValue == null ? '—' : money(p.marketValue)],
+  ] : [
+    ['Crédito cobrado', p.credit == null ? '—' : `$${p.credit.toFixed(2)}`],
+    ['Valor para cerrar', p.currentValue == null ? '—' : `$${p.currentValue.toFixed(2)}`],
+    ['Riesgo máximo', p.maxLoss == null ? '—' : money(p.maxLoss)],
+    ['Prob. de ganar', p.pop == null ? '—' : `${p.pop.toFixed(0)} %`],
+    ['Al strike vendido', p.shortDistance == null ? '—' : <span className={p.shortDistance < 0 ? 'neg' : undefined}>{p.shortDistance.toFixed(1)} pts</span>],
+    ['Delta', p.delta == null ? '—' : p.delta.toFixed(1)],
+    ['Theta', p.theta == null ? '—' : <span className={tone(p.theta)}>{signed(p.theta)}/día</span>],
+    ['Vega', p.vega == null ? '—' : signed(p.vega)],
+  ];
+  return <dl className="rs-detail">{items.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>;
 }
 
 /**

@@ -85,3 +85,56 @@
 /* Con la campana o la watchlist abiertas, Inicio queda angosto: la escalera se va antes de que se corten los números. */
 .rs-lines { container-type:inline-size; }
 @container (max-width:860px) { .rs-line>span:nth-child(2) { display:none; } .rs-line { grid-template-columns:minmax(150px,1.4fr) minmax(90px,.6fr) minmax(120px,.8fr) minmax(140px,.8fr) minmax(90px,.5fr); } }
+
+/* Inicio = cuenta + posiciones (Cartera se unió acá el 15/10): una tabla como la de Macro, agrupada por subyacente, y
+   cada posición se abre con su detalle. */
+.rs-section-title { font-size:20px; font-weight:600; margin:22px 0 4px; }
+.rs-line-head { border-bottom:1px solid var(--border); }
+.rs-group-head { display:flex; align-items:baseline; gap:16px; padding:16px 0 6px; border-bottom:1px solid var(--border); font-size:15px; font-variant-numeric:tabular-nums; }
+.rs-group-head b { font-size:16px; font-weight:600; }
+.rs-group-head .pos { color:var(--green); } .rs-group-head .neg { color:var(--red-gc); }
+.rs-position .rs-line { cursor:pointer; }
+.rs-position .rs-line:hover { background:var(--bg-hover); }
+.rs-chevron { color:var(--text-secondary); transition:transform .15s; transform:rotate(-90deg); flex:0 0 16px; }
+.rs-position.open .rs-chevron { transform:none; }
+.rs-detail { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px 24px; margin:0; padding:14px 0 18px 26px; border-bottom:1px solid var(--border-dark); background:var(--bg-secondary); }
+.rs-detail div { display:flex; flex-direction:column; gap:4px; }
+.rs-detail dt { font-size:14px; color:var(--text-secondary); }
+.rs-detail dd { margin:0; font-size:17px; font-weight:500; font-variant-numeric:tabular-nums; }
+.rs-detail .pos { color:var(--green); } .rs-detail .neg { color:var(--red-gc); }
+
+/* Inicio 15/10 (owner): valor y resultado por período arriba; capital y griegas en cuadros con números grandes y el
+   concepto escrito; lo que pide atención con su tipo, sin viñetas. */
+.rs-hero { display:flex; flex-wrap:wrap; align-items:flex-end; gap:24px 56px; padding:4px 0 22px; }
+.rs-hero-value span, .rs-periods span { display:block; font-size:15px; color:var(--text-secondary); margin-bottom:4px; }
+.rs-hero-value strong { font-size:44px; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; }
+.rs-periods { display:flex; gap:40px; flex-wrap:wrap; }
+.rs-periods strong { display:block; font-size:26px; font-weight:600; line-height:1.15; font-variant-numeric:tabular-nums; }
+.rs-periods em { display:block; font-style:normal; font-size:15px; font-variant-numeric:tabular-nums; min-height:1.2em; }
+.rs .rs-periods .pos, .rs .rs-tile .pos { color:var(--green); } .rs .rs-periods .neg, .rs .rs-tile .neg { color:var(--red-gc); }
+.rs-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:16px; margin-bottom:16px; }
+.rs-card { background:var(--bg-secondary); border:1px solid var(--border-dark); border-radius:12px; padding:16px 20px 18px; }
+.rs-card h2 { font-size:16px; font-weight:600; margin:0 0 12px; }
+.rs-tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+.rs-tile span { display:block; font-size:15px; color:var(--text-secondary); }
+.rs-tile strong { display:block; font-size:28px; font-weight:600; line-height:1.2; margin:4px 0 6px; font-variant-numeric:tabular-nums; }
+.rs-tile p { margin:0; font-size:14px; line-height:1.4; color:var(--text-primary); opacity:.85; }
+.rs-bar { position:relative; height:6px; border-radius:3px; background:var(--bg-tertiary,#2a2a2a); margin:0 0 8px; overflow:visible; }
+.rs-bar i { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:var(--accent); }
+.rs-bar i.neg { background:var(--red-gc); }
+.rs-bar b { position:absolute; top:-3px; width:2px; height:12px; background:var(--text-primary); }
+.rs-attention-card { margin-bottom:8px; }
+.rs-attention-card .rs-attention { display:flex; align-items:center; gap:12px; padding:9px 0; border-top:1px solid var(--border-dark); font-size:15px; }
+.rs-attention-card h2 + .rs-attention { border-top:0; }
+.rs-tag { flex:0 0 auto; font-size:13px; font-weight:600; padding:3px 9px; border-radius:999px; border:1px solid currentColor; }
+.rs-tag.gestion { color:var(--yellow-gc); } .rs-tag.evento { color:#60a5fa; }
+@container (max-width:700px) { .rs-tiles { grid-template-columns:1fr 1fr; } }
+@media(max-width:700px) { .rs-tiles { grid-template-columns:1fr; } .rs-hero-value strong { font-size:36px; } }
+
+/* Posiciones en su cuadro, con delta y theta por fila (owner 15/10). */
+.rs-card.rs-lines { margin-top:0; }
+.rs-card.rs-lines .rs-line { grid-template-columns:minmax(170px,1.3fr) minmax(150px,220px) minmax(90px,.6fr) minmax(120px,.8fr) minmax(56px,.4fr) minmax(64px,.45fr) minmax(140px,.8fr) minmax(90px,.5fr); }
+.rs-card.rs-lines .rs-line:not(.rs-line-head) { padding-left:6px; padding-right:6px; }
+.rs-card .rs-group-head { padding-left:6px; }
+.rs-card .rs-detail { background:var(--bg-tertiary,#232323); border-radius:0 0 8px 8px; }
+@container (max-width:980px) { .rs-card.rs-lines .rs-line>span:nth-child(2) { display:none; } .rs-card.rs-lines .rs-line { grid-template-columns:minmax(150px,1.3fr) minmax(80px,.6fr) minmax(110px,.8fr) minmax(56px,.4fr) minmax(64px,.45fr) minmax(130px,.8fr) minmax(80px,.5fr); } }
