@@ -1,0 +1,17 @@
+node : PASS src/components/lab/LabProjectList.test.tsx (42.071 s)
+At line:3 char:1
++ node --no-network-family-autoselection node_modules/react-scripts/bin ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS src/compon....tsx (42.071 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+PASS src/pages/Lab.test.tsx (15.74 s)
+PASS src/pages/LabSidebar.test.tsx (7.587 s)
+
+Test Suites: 3 passed, 3 total
+Tests:       16 passed, 16 total
+Snapshots:   0 total
+Time:        71.063 s
+Ran all test suites within paths "src/components/lab/LabProjectList.test.tsx", "src/pages/LabSidebar.test.tsx",
+"src/pages/Lab.test.tsx".
+exit_code=0
