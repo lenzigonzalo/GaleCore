@@ -128,3 +128,4 @@
 .agents-settings small { color: var(--text-secondary); font-size: 14px; }
 .agents-clip { display: block; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agents-clip.agents-what { max-width: 280px; }
+.agents-page .stage-switch button[aria-pressed="true"] { background: var(--bg-tertiary); color: var(--text-primary); }

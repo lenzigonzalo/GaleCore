@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { labRequest, WorkspaceProject, WorkspaceState } from '../api/lab';
 import { useAppConfigStore } from '../store/useAppConfigStore';
-import { useStrategySwitchStore, useSwitchEnabled } from '../store/useStrategySwitchStore';
+import { useStrategySwitchStore, useSwitchEnabled, useSwitchEntry } from '../store/useStrategySwitchStore';
+import { useCanManagePlatform } from '../store/useCurrentUserStore';
 import { Database } from 'lucide-react';
 import { latestInstance } from '../components/shadow/InstanceState';
 import { PerformancePanel } from '../components/shadow/PerformancePanel';
@@ -86,6 +87,20 @@ function StageState({ active }: { active: boolean | null }) {
   return <span className={'instance-state ' + (active ? 'running' : 'stopped')}><i aria-hidden="true" />{active === null ? '—' : active ? 'Activa' : 'Apagada'}</span>;
 }
 
+/**
+ * Estado de RPF en su encabezado: para un admin es además el interruptor del motor (antes «ON» dentro del monitor).
+ * Apagar afecta a toda la plataforma; la protección real es el 403 del backend.
+ */
+function RpfStateSwitch({ endpoint }: { endpoint: string }) {
+  const { enabled, busy } = useSwitchEntry(endpoint);
+  const toggle = useStrategySwitchStore(s => s.toggle);
+  const canManage = useCanManagePlatform() === true;
+  if (!canManage) return <StageState active={enabled ?? null} />;
+  return <button type="button" className={'instance-state ' + (enabled ? 'running' : 'stopped')} disabled={busy || enabled == null}
+    onClick={() => toggle(endpoint)} title={enabled ? 'Apagar el motor de RPF para toda la plataforma' : 'Prender el motor de RPF para toda la plataforma'}>
+    <i aria-hidden="true" />{enabled == null ? '—' : enabled ? 'Activa' : 'Apagada'}</button>;
+}
+
 export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { selectedSpec?: string | null; onSelectSpec?: (spec: string | null) => void; onOpenChat?: (projectId: string) => void; rpf?: React.ReactNode }) {
   const [spec, setLocalSpec] = useState<string | null>(selectedSpec ?? null);
   const setSpec = (value: string | null) => { setLocalSpec(value); onSelectSpec?.(value); };
@@ -155,7 +170,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   const back = () => { setSpec(null); setRuntimeOpen(false); };
   return <div className="shadow-page">
     {spec ? <>
-      {spec === 'rpf' && rpf ? <div className="performance-panel"><StrategyHeader title={rpfName} onBack={back} chips={<><StageState active={rpfActive} /><StageModeChip stage={stageOf('rpf')} mode={modeOf('rpf')} /></>} /><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} onBack={back} stage={stageOf(spec)} mode={modeOf(spec)} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
+      {spec === 'rpf' && rpf ? <div className="performance-panel"><StrategyHeader title={rpfName} onBack={back} chips={<><RpfStateSwitch endpoint={rpfEntry?.switch_endpoint || '/App/Rpf/Switch'} /><StageModeChip stage={stageOf('rpf')} mode={modeOf('rpf')} /></>} /><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} onBack={back} stage={stageOf(spec)} mode={modeOf(spec)} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
     </> : <div className="performance-panel">
       <div className="strategy-list-heading"><h2 className="strategy-list-title">Estrategias</h2>
         <div className="stage-switch" role="tablist" aria-label="Etapa">{stages.map(x => <button key={x.id} role="tab" aria-selected={currentStage === x.id} onClick={() => setStage(x.id)}>{x.label}<span className="stage-count">{countIn(x.id) || ''}</span></button>)}</div></div>

@@ -1,23 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import {
-  WifiOff, Check, X, Circle, AlertTriangle, Clock, ChevronDown, RefreshCw,
-  Moon, Target, Zap, Ban, Hourglass, Layers, Briefcase, BookOpen, LucideIcon,
-} from 'lucide-react';
+import { Check, X, Circle, AlertTriangle, Clock, BookOpen } from 'lucide-react';
 import { useRpfStore } from '../store/useRpfStore';
 import { useMarketStore } from '../store/useMarketStore';
 import { useSwitchEndpoint } from '../store/useAppConfigStore';
 import { useSwitchEnabled } from '../store/useStrategySwitchStore';
-import { RpfStateBadge } from '../components/rpf/RpfStateBadge';
 import { RpfSuggestionCard } from '../components/rpf/RpfSuggestionCard';
 import { ReferencesModal } from '../components/common/ReferencesModal';
-import { StrategySwitch } from '../components/common/StrategySwitch';
 import { StrategyOffPanel } from '../components/common/StrategyOffPanel';
 import { getStrategyReference } from '../components/strategy/strategyReferences';
 import { RpfStateUpdate, RpfCheck, RpfCandidate, RpfStateName } from '../types/rpf';
 import { ConnectionStatus } from '../socket/useMarketSocket';
 import { LegMeta } from '../types/api';
 import { RPF_SWITCH_ENDPOINT } from '../api/rpf';
-import { tint, fmtPrice, fmtOI, fmtExpiry, fmtTime } from '../utils/formatters';
+import { fmtPrice, fmtOI, fmtExpiry } from '../utils/formatters';
+import './Rpf.css';
 
 const RPF_REF = getStrategyReference('rpf');
 
@@ -32,20 +28,20 @@ interface Props {
 // Estados en los que el entorno ya armó (el eje DISPARA está activo).
 const ARMED_STATES: RpfStateName[] = ['ARMED', 'WAITING_CAPACITY', 'COOLDOWN', 'TRIGGERED', 'IN_POSITION'];
 
-// Máquina de estados: icono + etiqueta en español + color, para el bloque de resolución.
-const STATE_META: Record<RpfStateName, { color: string; es: string; Icon: LucideIcon }> = {
-  DORMANT:          { color: 'var(--text-muted)', es: 'Dormido',        Icon: Moon },
-  ARMED:            { color: 'var(--text-secondary)',           es: 'Armado',         Icon: Target },
-  TRIGGERED:        { color: 'var(--green)',      es: 'Disparado',      Icon: Zap },
-  COOLDOWN:         { color: 'var(--text-secondary)',           es: 'Enfriamiento',   Icon: Hourglass },
-  IN_POSITION:      { color: 'var(--blue-gc)',    es: 'En posición',    Icon: Briefcase },
-  WAITING_CAPACITY: { color: 'var(--yellow-gc)',  es: 'Esperando cupo', Icon: Layers },
-  VETOED:           { color: 'var(--red-gc)',     es: 'Vetado',         Icon: Ban },
+// Máquina de estados: nombre en castellano y color del estado resuelto.
+const STATE_META: Record<RpfStateName, { color: string; es: string }> = {
+  DORMANT:          { color: 'var(--text-secondary)', es: 'Dormido' },
+  ARMED:            { color: 'var(--text-primary)',   es: 'Armado' },
+  TRIGGERED:        { color: 'var(--green)',          es: 'Disparado' },
+  COOLDOWN:         { color: 'var(--text-primary)',   es: 'Enfriamiento' },
+  IN_POSITION:      { color: 'var(--blue-gc)',        es: 'En posición' },
+  WAITING_CAPACITY: { color: 'var(--yellow-gc)',      es: 'Esperando cupo' },
+  VETOED:           { color: 'var(--red-gc)',         es: 'Vetado' },
 };
 
 // Explicación en lenguaje llano de cada estado (la "salida" de la orquestación).
 const STATE_EXPLAIN: Record<RpfStateName, string> = {
-  DORMANT: 'El entorno todavía no está alineado (macro no pasa) pero no hay peligro. La cascada corta arriba y los gates de prima ni se evalúan. El loop sigue vivo y mira cada tick; el candidato se muestra solo como referencia.',
+  DORMANT: 'El entorno todavía no está alineado (macro no pasa) pero no hay peligro. La cascada corta arriba y los filtros de prima no se evalúan. El motor sigue mirando cada tick; el candidato se muestra sólo como referencia.',
   VETOED: 'Peligro de cola activo: el veto de seguridad manda sobre todo lo demás (safety-first). Aunque hubiera edge y cupo, no se ofrece ningún trade. Es el único estado que bloquea de forma dura.',
   ARMED: 'Entorno seguro y armado: macro, VRP y cola pasan. Falta que el edge empírico llegue a la barra del régimen. Se espera con el candidato listo; no se dispara nada hasta que la prima pague.',
   WAITING_CAPACITY: 'La prima paga (el edge cruza la barra) pero la cartera está llena. El disparo queda en espera: en cuanto se libere un cupo puede emitir la sugerencia.',
@@ -56,21 +52,12 @@ const STATE_EXPLAIN: Record<RpfStateName, string> = {
 
 const STATUS_COLOR: Record<string, string> = {
   pass: 'var(--green)', fail: 'var(--red-gc)', no_data: 'var(--yellow-gc)', wait: 'var(--yellow-gc)',
-  skipped: 'var(--text-muted)', pending: 'var(--text-muted)', na: 'var(--text-muted)',
+  skipped: 'var(--text-secondary)', pending: 'var(--text-secondary)', na: 'var(--text-secondary)',
 };
 
 // Claves de régimen (edge.bars_by_regime) → etiqueta legible.
 const REGIME_ES: Record<string, string> = {
   low_vol: 'vol baja', normal: 'normal', elevated: 'vol elevada', caution: 'cautela',
-};
-
-const panelStyle: React.CSSProperties = {
-  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 10, padding: '14px 16px',
-};
-
-// Sub-etiqueta de sección dentro de un panel (ej: "Macro · capa 1", "Prima y cola").
-const subLabelStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '0 0 2px',
 };
 
 const fmt = (n: number | null | undefined, d = 2) =>
@@ -82,26 +69,14 @@ const legMid = (bid?: number, ask?: number): number | null =>
 
 // Punto verde: el valor de esta celda es live (recalculado del socket), no un snapshot.
 function LiveDot() {
-  return <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-    backgroundColor: '#22c55e', marginLeft: 5, verticalAlign: 'middle', boxShadow: '0 0 4px #22c55e88' }} />;
+  return <span className="rpf-live" aria-label="en vivo" />;
 }
 
-// ── Celdas de la tabla del candidato (look Main · Setup candidato) ──
-const thStyle: React.CSSProperties = {
-  padding: '6px 8px', fontSize: 11.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-  color: 'var(--text-muted)', textAlign: 'center', fontFamily: 'var(--font-sans)',
-  borderBottom: '1px solid var(--border-dark)', borderRight: '1px solid rgba(255,255,255,0.04)',
-  whiteSpace: 'nowrap', verticalAlign: 'middle', backgroundColor: 'var(--bg-tertiary)',
-};
-const tdStyle: React.CSSProperties = {
-  padding: '10px 8px', textAlign: 'center', whiteSpace: 'nowrap', verticalAlign: 'middle',
-  fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums', fontSize: 15,
-  borderRight: '1px solid rgba(255,255,255,0.03)',
-};
+// Celdas de la tabla del candidato: números a la derecha, como el resto de las tablas.
 const Th = ({ children, colSpan, rowSpan }: { children: React.ReactNode; colSpan?: number; rowSpan?: number }) =>
-  <th colSpan={colSpan} rowSpan={rowSpan} style={thStyle}>{children}</th>;
+  <th colSpan={colSpan} rowSpan={rowSpan}>{children}</th>;
 const Td = ({ children, color }: { children: React.ReactNode; color?: string }) =>
-  <td style={{ ...tdStyle, color: color ?? 'var(--text-secondary)' }}>{children}</td>;
+  <td style={color ? { color } : undefined}>{children}</td>;
 
 // Sublínea OI + cierre previo bajo un strike (datos estáticos del candle anterior).
 function StrikeMeta({ meta }: { meta: LegMeta | null | undefined }) {
@@ -109,22 +84,15 @@ function StrikeMeta({ meta }: { meta: LegMeta | null | undefined }) {
   const parts: string[] = [];
   if (meta.openInterest != null) parts.push(`OI ${fmtOI(meta.openInterest)}`);
   if (meta.prevClose != null) parts.push(fmtPrice(meta.prevClose, 2));
-  return (
-    <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)',
-      fontVariantNumeric: 'tabular-nums', marginTop: 2, whiteSpace: 'nowrap' }}>
-      {parts.join(' · ')}
-    </span>
-  );
+  return <span className="rpf-strike-meta">{parts.join(' · ')}</span>;
 }
 
-// Delega en fmtTime para que el tick del loop se lea en la MISMA zona que el reloj del encabezado.
-// Antes formateaba con toLocaleTimeString('es-AR'), o sea hora local con locale hardcodeado: el
-// tablero decía "tick vivo · 13:33" mientras la StatusBar marcaba otra hora, y comparar frescura
-// entre los dos daba una hora de diferencia fantasma.
+// El tick se lee en la misma zona que el reloj del encabezado (Argentina): con zonas distintas, comparar
+// frescura entre los dos daba una hora de diferencia fantasma.
 const tickTime = (iso?: string) => {
   if (!iso) return null;
   const d = new Date(iso);
-  return isNaN(d.getTime()) ? null : fmtTime(d);
+  return isNaN(d.getTime()) ? null : d.toLocaleTimeString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', hourCycle: 'h23', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
 // Nota contextual del candidato según en qué punto de la orquestación estamos.
@@ -142,7 +110,7 @@ function candidateNote(state: RpfStateName, armed: boolean, vetoed: boolean): st
 }
 
 function StatusIcon({ status }: { status: string }) {
-  const c = STATUS_COLOR[status] ?? 'var(--text-muted)';
+  const c = STATUS_COLOR[status] ?? 'var(--text-secondary)';
   if (status === 'pass') return <Check size={15} style={{ color: c, flexShrink: 0 }} />;
   if (status === 'fail') return <X size={15} style={{ color: c, flexShrink: 0 }} />;
   if (status === 'wait') return <Clock size={14} style={{ color: c, flexShrink: 0 }} />;
@@ -157,21 +125,16 @@ function StatusIcon({ status }: { status: string }) {
 // bloqueó, no qué. Es la misma regla que el amarillo de `no_data`: el estado tiene que decir cuál
 // guarda dejó de estar, no solo que no está verde.
 function CheckRow({ c }: { c: RpfCheck }) {
-  const color = STATUS_COLOR[c.status] ?? 'var(--text-muted)';
+  const color = STATUS_COLOR[c.status] ?? 'var(--text-secondary)';
   const valTxt = c.value != null
     ? `${fmt(c.value)}${c.threshold != null ? ` / ${fmt(c.threshold)}` : ''}`
     : '';
   const showDetail = !!c.detail && c.status !== 'pass';
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', borderBottom: '1px solid var(--border-dark)' }}>
+    <div className="rpf-row">
       <StatusIcon status={c.status} />
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{c.label}</div>
-        {showDetail && (
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{c.detail}</div>
-        )}
-      </div>
-      <span className="tabular-nums" style={{ fontSize: 13, color: c.status === 'fail' ? color : 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{valTxt}</span>
+      <div className="rpf-row-label">{c.label}{showDetail && <span>{c.detail}</span>}</div>
+      <span className="rpf-row-value" style={c.status === 'fail' ? { color } : undefined}>{valTxt}</span>
     </div>
   );
 }
@@ -180,90 +143,34 @@ function CheckRow({ c }: { c: RpfCheck }) {
 function DisparaRow({ label, hint, value, status }: {
   label: string; hint?: string; value: string; status: 'pass' | 'fail' | 'wait' | 'na';
 }) {
-  const color = STATUS_COLOR[status] ?? 'var(--text-muted)';
-  const valColor = status === 'na' ? 'var(--text-muted)' : status === 'pass' ? 'var(--text-primary)' : color;
+  const color = status === 'pass' || status === 'na' ? undefined : STATUS_COLOR[status];
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid var(--border-dark)' }}>
+    <div className="rpf-row">
       <StatusIcon status={status} />
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{label}</div>
-        {hint && <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{hint}</div>}
-      </div>
-      <span className="tabular-nums" style={{ fontSize: 14, fontWeight: 600, fontFamily: 'var(--font-mono)', color: valColor }}>{value}</span>
+      <div className="rpf-row-label">{label}{hint && <span>{hint}</span>}</div>
+      <span className="rpf-row-value" style={color ? { color } : undefined}>{value}</span>
     </div>
   );
 }
 
-function PanelHeader({ title, right, rightColor }: { title: string; right: string; rightColor: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>{title}</span>
-      <span style={{ fontSize: 13, fontWeight: 700, color: rightColor, fontFamily: 'var(--font-mono)' }}>{right}</span>
-    </div>
-  );
-}
-
-// Conector vertical del flujo: chevron hacia abajo con etiqueta opcional.
-function Connector({ label }: { label?: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, margin: '7px 0' }}>
-      {label && <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{label}</span>}
-      <ChevronDown size={14} style={{ color: 'var(--text-disabled)' }} />
-    </div>
-  );
-}
-
-// Motor: el nodo raíz del flujo. El loop corre la cascada cada tick y la reparte en los dos ejes.
-function MotorStrip({ online, lastTick }: { online: boolean; lastTick: string | null }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderRadius: 8, ...panelStyle, padding: '10px 14px', width: '60%', margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <RefreshCw size={15} style={{ color: online ? 'var(--green)' : 'var(--text-muted)' }} />
-        <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>MOTOR</span>
-      </div>
-      <span style={{ fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
-        corre la cascada de 4 capas cada tick y la reparte en los dos ejes
-      </span>
-      <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontFamily: 'var(--font-mono)', color: online ? 'var(--green)' : 'var(--text-muted)' }}>
-        <span className={online ? 'pulse-dot' : ''} style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: online ? 'var(--green)' : 'var(--text-muted)' }} />
-        {online ? 'tick vivo' : 'sin tick'}{lastTick ? ` · ${lastTick}` : ''}
-      </span>
-    </div>
-  );
-}
-
-// Eje ARMA: macro checks + gates de señal (VRP, cola). Si la cascada cortó en macro, los gates
-// no corrieron → se muestra una nota en vez de filas vacías.
+// Eje ARMA: macro y filtros de señal (VRP, cola). Si la cascada cortó en macro, los filtros no corrieron.
 function ArmaPanel({ st, armed, vetoed }: { st: RpfStateUpdate; armed: boolean; vetoed: boolean }) {
   const macro = st.macroChecks ?? [];
   const gates = st.gates ?? [];
-  const right = vetoed ? 'VETADO' : armed ? 'ARMADO' : 'NO ARMADO';
-  const rightColor = vetoed ? 'var(--red-gc)' : armed ? 'var(--green)' : 'var(--text-muted)';
+  const right = vetoed ? 'Vetado' : armed ? 'Armado' : 'No armado';
+  const rightColor = vetoed ? 'var(--red-gc)' : armed ? 'var(--green)' : 'var(--text-secondary)';
   return (
-    <div style={panelStyle}>
-      <PanelHeader title="Arma · ¿el entorno es seguro?" right={right} rightColor={rightColor} />
-      {/* Macro · capa 1 y Prima y cola lado a lado (cada uno = un tercio del ancho total de la fila),
-          separados por un divisor vertical */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
-        <div style={{ paddingRight: 22 }}>
-          <div style={subLabelStyle}>Macro · capa 1</div>
-          {macro.length > 0
-            ? macro.map((c) => <CheckRow key={c.id} c={c} />)
-            : <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '6px 0' }}>Macro no evaluado.</div>}
-        </div>
-        <div style={{ paddingLeft: 22, borderLeft: '1px solid var(--border-dark)' }}>
-          <div style={subLabelStyle}>Prima y cola</div>
-          {gates.length > 0
-            ? gates.map((c) => <CheckRow key={c.id} c={c} />)
-            : <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '6px 0' }}>No evaluado — la cascada cortó en macro.</div>}
-        </div>
-      </div>
-    </div>
+    <section className="rpf-block">
+      <h3>¿El entorno es seguro? <span style={{ color: rightColor }}>{right}</span></h3>
+      <h4>Macro</h4>
+      {macro.length > 0 ? macro.map((c) => <CheckRow key={c.id} c={c} />) : <p className="rpf-note">Macro no evaluado.</p>}
+      <h4>Prima y cola</h4>
+      {gates.length > 0 ? gates.map((c) => <CheckRow key={c.id} c={c} />) : <p className="rpf-note">No evaluado: la cascada cortó en macro.</p>}
+    </section>
   );
 }
 
-// Eje DISPARA: los gates de decisión (edge vs barra + cupo + enfriamiento). La estructura del
-// spread candidato vive en su propia tarjeta abajo. Atenuado si el entorno no armó.
+// Eje DISPARA: edge contra la barra del régimen, cupo y enfriamiento. Atenuado si el entorno no armó.
 function DisparaPanel({ st, active }: { st: RpfStateUpdate; active: boolean }) {
   const edge = st.edge ?? st.candidate?.edge ?? null;
   const bar = st.bar ?? st.candidate?.bar ?? null;
@@ -272,58 +179,21 @@ function DisparaPanel({ st, active }: { st: RpfStateUpdate; active: boolean }) {
   const max = st.maxPositions || 2;
   const capOk = st.capacityAvailable ?? (open < max);
   const cd = st.cooldownRemainingSec ?? 0;
-  const regimeLabel = st.regime ? `barra · régimen ${REGIME_ES[st.regime] ?? st.regime}` : 'barra del régimen';
-  const heat = st.heatPct != null ? ` · heat ${(st.heatPct * 100).toFixed(0)}%` : '';
+  const regimeLabel = st.regime ? `barra del régimen ${REGIME_ES[st.regime] ?? st.regime}` : 'barra del régimen';
+  const heat = st.heatPct != null ? ` · uso ${(st.heatPct * 100).toFixed(0)} %` : '';
 
   return (
-    <div style={{ ...panelStyle, opacity: active ? 1 : 0.55 }}>
-      <PanelHeader title="Dispara · ¿la prima paga?" right={active ? 'ACTIVO' : 'EN ESPERA'} rightColor={active ? 'var(--green)' : 'var(--text-muted)'} />
-      {!active && (
-        <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginBottom: 6, fontFamily: 'var(--font-sans)' }}>
-          eje no evaluado hasta que el entorno arme
-        </div>
-      )}
-      <DisparaRow
-        label="Edge vs barra"
-        hint={regimeLabel}
+    <section className={'rpf-block' + (active ? '' : ' rpf-idle')}>
+      <h3>¿La prima paga? <span style={{ color: active ? 'var(--green)' : 'var(--text-secondary)' }}>{active ? 'Activo' : 'En espera'}</span></h3>
+      {!active && <p className="rpf-note">Se evalúa cuando el entorno arma.</p>}
+      <DisparaRow label="Edge contra la barra" hint={regimeLabel}
         value={edge != null ? `${fmt(edge)} ${edgeOk ? '≥' : '<'} ${fmt(bar)}` : '—'}
-        status={edge == null ? 'na' : edgeOk ? 'pass' : 'fail'}
-      />
-      <DisparaRow
-        label="Cupo de cartera"
-        hint={`máx ${max}${heat}`}
-        value={`${open} / ${max}`}
-        status={!active ? 'na' : capOk ? 'pass' : 'fail'}
-      />
-      <DisparaRow
-        label="Enfriamiento"
-        hint="suprime el re-disparo"
-        value={cd > 0 ? `${Math.round(cd)}s` : 'inactivo'}
-        status={cd > 0 ? 'wait' : 'pass'}
-      />
-    </div>
-  );
-}
-
-// Máquina de estados: el estado resuelto es la salida de la orquestación.
-function StateResolution({ state }: { state: RpfStateName }) {
-  const meta = STATE_META[state] ?? STATE_META.DORMANT;
-  const { Icon } = meta;
-  return (
-    <div style={{ borderRadius: 10, padding: '14px 16px', backgroundColor: tint(meta.color, 9), border: `1px solid ${tint(meta.color, 30)}`, width: '60%', margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 40, height: 40, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: tint(meta.color, 15), flexShrink: 0 }}>
-          <Icon size={22} style={{ color: meta.color }} />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12.5, fontFamily: 'var(--font-mono)', color: meta.color, letterSpacing: '0.08em' }}>{meta.es}</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-sans)' }}>{meta.es}</div>
-        </div>
-      </div>
-      <div style={{ fontSize: 14.5, color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 10, fontFamily: 'var(--font-sans)' }}>
-        {STATE_EXPLAIN[state]}
-      </div>
-    </div>
+        status={edge == null ? 'na' : edgeOk ? 'pass' : 'fail'} />
+      <DisparaRow label="Cupo de cartera" hint={`máximo ${max}${heat}`} value={`${open} de ${max}`}
+        status={!active ? 'na' : capOk ? 'pass' : 'fail'} />
+      <DisparaRow label="Enfriamiento" hint="evita volver a disparar la misma señal"
+        value={cd > 0 ? `${Math.round(cd)} s` : 'inactivo'} status={cd > 0 ? 'wait' : 'pass'} />
+    </section>
   );
 }
 
@@ -346,19 +216,14 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
     return () => legs.forEach((occ) => unsubscribeLeg(occ));
   }, [socketStatus, ls?.shortPut, ls?.longPut]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const header = (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)' }}>Candidato PCS · primas en vivo</span>
-      <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>{note}</span>
-    </div>
-  );
+  const header = <h3>Candidato <span>{note}</span></h3>;
 
   if (!cand || cand.shortPutStrike == null) {
     return (
-      <div style={panelStyle}>
+      <section className="rpf-block rpf-candidate">
         {header}
-        <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>El motor no propuso una posición candidata.</div>
-      </div>
+        <p className="rpf-note">El motor no propuso una posición candidata.</p>
+      </section>
     );
   }
 
@@ -383,7 +248,7 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
   // Regla 1/3, max profit/loss y BPR — por contrato. Derivados del crédito vigente (live o snapshot).
   const ratioPct = credit != null && width != null && width > 0 ? (credit / width) * 100
     : cand.creditRatio != null ? cand.creditRatio * 100 : null;
-  const ratioColor = ratioPct == null ? 'var(--text-muted)' : ratioPct >= 33.3 ? 'var(--green)' : ratioPct >= 25 ? 'var(--yellow-gc)' : 'var(--red-gc)';
+  const ratioColor = ratioPct == null ? undefined : ratioPct >= 33.3 ? 'var(--green)' : ratioPct >= 25 ? 'var(--yellow-gc)' : 'var(--red-gc)';
   const maxProfit = credit != null ? credit * 100 : null;
   const maxLoss   = credit != null && width != null ? (width - credit) * 100 : null;
   const bpr       = maxLoss; // PCS: BPR = ancho − crédito (= max loss)
@@ -391,10 +256,10 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
   const liveCell = (v: React.ReactNode) => <span>{v}{isLive && <LiveDot />}</span>;
 
   return (
-    <div style={panelStyle}>
+    <section className="rpf-block rpf-candidate">
       {header}
-      <div style={{ borderRadius: 8, border: '1px solid var(--border-dark)', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <div className="rpf-table">
+        <table>
           <thead>
             <tr>
               <Th rowSpan={2}>Símbolo</Th>
@@ -402,7 +267,7 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
               <Th rowSpan={2}>Precio</Th>
               <Th rowSpan={2}>Estructura</Th>
               <Th colSpan={2}>Strikes</Th>
-              <Th colSpan={2}>Prima en vivo</Th>
+              <Th colSpan={2}>Prima</Th>
               <Th rowSpan={2}>Crédito neto</Th>
               <Th rowSpan={2}>Regla 1/3</Th>
               <Th rowSpan={2}>POP</Th>
@@ -411,45 +276,36 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
               <Th rowSpan={2}>BPR</Th>
             </tr>
             <tr>
-              <Th>Put comprado</Th>
-              <Th>Put vendido</Th>
-              <Th>Put comprado</Th>
-              <Th>Put vendido</Th>
+              <Th>Comprado</Th>
+              <Th>Vendido</Th>
+              <Th>Comprado</Th>
+              <Th>Vendido</Th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <Td color="var(--text-primary)"><span style={{ fontWeight: 700, fontSize: 17, letterSpacing: '0.05em' }}>{symbol}</span></Td>
+              <Td color="var(--text-primary)"><strong>{symbol}</strong></Td>
               <Td>
-                {cand.dte ? <span style={{ color: 'var(--text-muted)' }}>{cand.dte}d</span> : '—'}
-                {cand.expiration && <span style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginTop: 3 }}>{fmtExpiry(cand.expiration)}</span>}
+                {cand.dte ? `${cand.dte} d` : '—'}
+                {cand.expiration && <span className="rpf-strike-meta">{fmtExpiry(cand.expiration)}</span>}
               </Td>
-              <Td color="var(--text-primary)">{price != null && price > 0 ? fmtPrice(price) : '—'}</Td>
+              <Td>{price != null && price > 0 ? fmtPrice(price) : '—'}</Td>
+              <Td>Put spread</Td>
               <Td>
-                <span style={{ fontSize: 14, fontWeight: 700, padding: '3px 5px', borderRadius: 4, color: 'var(--green)',
-                  backgroundColor: tint('var(--green)', 9), border: `1px solid ${tint('var(--green)', 19)}` }}>PCS</span>
-              </Td>
-              {/* Strikes */}
-              <Td color="var(--red-gc)">
                 <div>{cand.longPutStrike != null ? fmtPrice(cand.longPutStrike, 0) : '—'}</div>
                 <StrikeMeta meta={cand.legMeta?.longPut} />
               </Td>
-              <Td color="var(--red-gc)">
-                <div>{fmtPrice(cand.shortPutStrike, 0)}{cand.shortPutDelta != null && <span style={{ color: 'var(--text-muted)', fontSize: 12, marginLeft: 4 }}>Δ{Math.abs(cand.shortPutDelta).toFixed(2)}</span>}</div>
+              <Td>
+                <div>{fmtPrice(cand.shortPutStrike, 0)}{cand.shortPutDelta != null && <span className="rpf-delta">Δ {Math.abs(cand.shortPutDelta).toFixed(2)}</span>}</div>
                 <StrikeMeta meta={cand.legMeta?.shortPut} />
               </Td>
-              {/* Premium live */}
-              <Td>{longPutMid != null ? <span>{fmtPrice(longPutMid, 2)}<LiveDot /></span> : ls?.longPut ? <span style={{ opacity: 0.4 }}>…</span> : '—'}</Td>
-              <Td>{shortPutMid != null ? <span>{fmtPrice(shortPutMid, 2)}<LiveDot /></span> : ls?.shortPut ? <span style={{ opacity: 0.4 }}>…</span> : '—'}</Td>
-              {/* Net credit */}
-              <Td color={credit != null ? (credit > 0 ? 'var(--green)' : 'var(--red-gc)') : 'var(--text-muted)'}>
+              <Td>{longPutMid != null ? <span>{fmtPrice(longPutMid, 2)}<LiveDot /></span> : ls?.longPut ? '…' : '—'}</Td>
+              <Td>{shortPutMid != null ? <span>{fmtPrice(shortPutMid, 2)}<LiveDot /></span> : ls?.shortPut ? '…' : '—'}</Td>
+              <Td color={credit != null ? (credit > 0 ? 'var(--green)' : 'var(--red-gc)') : undefined}>
                 {credit != null ? liveCell(`$${fmtPrice(credit, 2)}`) : '—'}
               </Td>
-              {/* 1/3 rule */}
               <Td color={ratioColor}>{ratioPct != null ? liveCell(`${ratioPct.toFixed(1)}%`) : '—'}</Td>
-              {/* POP */}
-              <Td color="var(--green)">{cand.pop != null ? `${cand.pop.toFixed(0)}%` : '—'}</Td>
-              {/* Max profit / loss / BPR */}
+              <Td>{cand.pop != null ? `${cand.pop.toFixed(0)}%` : '—'}</Td>
               <Td color="var(--green)">{maxProfit != null ? liveCell(`$${fmtPrice(maxProfit, 0)}`) : '—'}</Td>
               <Td color="var(--red-gc)">{maxLoss != null ? liveCell(`$${fmtPrice(maxLoss, 0)}`) : '—'}</Td>
               <Td>{bpr != null ? liveCell(`$${fmtPrice(bpr, 0)}`) : '—'}</Td>
@@ -457,7 +313,7 @@ function CandidateCard({ symbol, cand, note, subscribeLeg, unsubscribeLeg, socke
           </tbody>
         </table>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -478,35 +334,24 @@ function SymbolPanel({ symbol, st, suggestion, onAccept, onDismiss, subscribeLeg
   const stFull: RpfStateUpdate = st ?? { symbol, state, timestamp: '' };
   const note = candidateNote(state, armed, vetoed);
 
-  return (
-    <div style={{ marginBottom: 22 }}>
-      {/* Cabecera del símbolo: scan rápido (badge) + frescura */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{symbol}</span>
-        <RpfStateBadge state={state} />
-        {st && st.cascadeOk === false && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, marginLeft: 'auto', fontSize: 12, color: 'var(--yellow-gc)', fontFamily: 'var(--font-mono)' }}>
-            <AlertTriangle size={11} /> sin datos de cascada
-          </span>
-        )}
-      </div>
+  const meta = STATE_META[state] ?? STATE_META.DORMANT;
 
-      {/* Flujo: Arma (2/3, con Macro y Prima en tercios) + Dispara (1/3) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 12 }}>
+  return (
+    <div className="rpf-symbol">
+      <div className="rpf-state">
+        <h2>{symbol} <span style={{ color: meta.color }}>{meta.es}</span></h2>
+        {st && st.cascadeOk === false && <span className="rpf-warn"><AlertTriangle size={13} /> Sin datos de la cascada</span>}
+      </div>
+      <p className="rpf-explain">{STATE_EXPLAIN[state]}</p>
+
+      <div className="rpf-axes">
         <ArmaPanel st={stFull} armed={armed} vetoed={vetoed} />
         <DisparaPanel st={stFull} active={active} />
       </div>
 
-      {/* AND no compensable → máquina de estados */}
-      <Connector label="arma Y dispara · no compensable" />
-      <StateResolution state={state} />
-
-      {/* Candidato */}
-      <Connector />
       <CandidateCard symbol={symbol} cand={st?.candidate ?? null} note={note}
         subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg} socketStatus={socketStatus} />
 
-      {/* Sugerencia (solo cuando dispara) */}
       {suggestion && (
         <div style={{ marginTop: 12 }}>
           <RpfSuggestionCard suggestion={suggestion} onAccept={onAccept} onDismiss={onDismiss} />
@@ -567,37 +412,11 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
   const loopOnline = !switchOff && fresh;
 
   return (
-    <div className="rpf-page" style={{ padding: '14px 18px 40px', height: '100%', overflowY: 'auto', fontFamily: 'var(--font-sans)' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <span style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)' }}>GaleCore RPF</span>
-        <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.06em',
-          color: 'var(--text-secondary)', backgroundColor: tint('var(--text-secondary)', 13), border: `1px solid ${tint('var(--text-secondary)', 30)}`, fontFamily: 'var(--font-mono)' }}>
-          Prima real · simulado
-        </span>
-        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-          <button
-            onClick={() => setRefOpen(true)}
-            title="Definiciones de la estrategia + JSON de reglas"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6,
-              background: 'none', border: '1px solid var(--border)', cursor: 'pointer',
-              fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-              color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)',
-            }}
-          >
-            <BookOpen size={12} /> Referencias
-          </button>
-          <StrategySwitch
-            endpoint={switchEndpoint}
-            title="Prender / apagar la estrategia RPF. En OFF el loop no corre y el tablero se vacía, para todos los operadores; solo lo pueden tocar los admin."
-          />
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 700, fontFamily: 'var(--font-mono)',
-            color: loopOnline ? 'var(--green)' : 'var(--text-muted)' }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', backgroundColor: loopOnline ? 'var(--green)' : 'var(--text-muted)' }} />
-            {loopOnline ? 'MOTOR CONECTADO' : 'MOTOR DESCONECTADO'}
-          </span>
-        </span>
+    <div className="rpf-page">
+      <div className="rpf-motor">
+        <span className={loopOnline ? 'rpf-motor-on' : 'rpf-motor-off'}><i aria-hidden="true" />
+          {switchOff ? 'Motor apagado' : loopOnline ? `Motor al día${lastTick ? ` · último tick ${lastTick}` : ''}` : `Motor sin noticias${lastTick ? ` desde ${lastTick}` : ''}`}</span>
+        <button type="button" onClick={() => setRefOpen(true)} title="Definiciones de la estrategia y JSON de reglas"><BookOpen size={15} />Referencias</button>
       </div>
 
       {RPF_REF && (
@@ -619,28 +438,8 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
         <StrategyOffPanel detail="Apagada para TODA la plataforma: el loop no corre, no se consume feed y nadie ve estado ni sugerencias. El backend lo confirma dentro de un tick y lo persiste, asi que un reinicio no la vuelve a prender sola." />
       ) : (
       <>
-      {/* Motor: nodo raíz del flujo de orquestación */}
-      <MotorStrip online={loopOnline} lastTick={lastTick} />
-      {symbols.length > 0 && <Connector />}
-
       {!loopOnline && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', marginTop: 8, marginBottom: 16, borderRadius: 8,
-          backgroundColor: 'var(--bg-secondary)', border: '1px dashed var(--border)' }}>
-          {switchOff
-            ? <Ban size={16} style={{ color: 'var(--red-gc)', flexShrink: 0, marginTop: 1 }} />
-            : <WifiOff size={16} style={{ color: 'var(--text-muted)', flexShrink: 0, marginTop: 1 }} />}
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: switchOff ? 'var(--red-gc)' : 'var(--text-secondary)', marginBottom: 3 }}>
-              {switchOff ? 'Estrategia apagada' : 'Motor desconectado'}
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              {switchOff
-                ? <>El loop está parado a propósito: no corre la cascada ni emite. El tablero vuelve a llenarse al prender el switch.</>
-                : <>El backend no está empujando por el grupo <code style={{ fontFamily: 'var(--font-mono)' }}>rpf</code>. El tablero se llena en cuanto el loop emite.
-                   No se corre la cascada localmente: una sola fuente de verdad.</>}
-            </div>
-          </div>
-        </div>
+        <p className="rpf-note rpf-offline">El backend no está enviando el estado de RPF. El tablero se llena en cuanto el motor emite; no se calcula nada en el navegador.</p>
       )}
 
       {symbols.map((sym) => (
@@ -658,9 +457,7 @@ export function Rpf({ acceptSuggestion, dismissSuggestion, subscribeLeg, unsubsc
       ))}
 
       {loopOnline && symbols.length === 0 && (
-        <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '10px 12px', marginTop: 8, border: '1px dashed var(--border-dark)', borderRadius: 8 }}>
-          Loop conectado — esperando el primer estado del universo RPF (SPY).
-        </div>
+        <p className="rpf-note">Motor conectado: esperando el primer estado de SPY.</p>
       )}
       </>
       )}
