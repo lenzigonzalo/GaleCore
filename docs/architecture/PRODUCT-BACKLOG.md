@@ -2328,6 +2328,17 @@ Contrato completo y acceso probado el 30/09: `docs/engineering/HANDOFF-GALECORE-
 **Entry gate:** un caso concreto que necesite la fuente (una skill, un agente o una estrategia), o tiempo libre entre
 entregas. No requiere decisión nueva del owner: el alcance ya está aprobado (Producto 1, fase 1b).
 
+**Addendum 15/10 — modelo de decisión (Sistema 1) con las noticias y los 8-K.** El owner quiere tener noticias, 8-K y
+demás «de última», y con ellas un modelo de decisión que responda preguntas cerradas sobre texto (análisis: WS-0006,
+`knowledge/research/2026-10-05-modelos-de-decision.md`; U-64). Hoy no paga: el harness ya filtra por código antes del
+modelo (`tasks.py`: atención diaria, oportunidades e historia no llaman al modelo sin novedad) y hubo ~29 corridas con
+modelo en dos semanas; las condiciones numéricas (GEX, régimen, liquidez, datos corruptos) siguen en código. Paga
+cuando entren noticias/8-K en volumen. Diseño a llevar entonces: por texto, pregunta cerrada («¿toca lo abierto o una
+estrategia? sí / no / información insuficiente»), opciones fijas, acción derivada en código, confianza baja → recién ahí
+Sonnet o el owner, cada decisión registrada (formato de P1-01). Orden: primero Haiku con salida forzada (sin proveedor
+nuevo); Jev/Clef/Decisions API sólo si hace falta probabilidad calibrada por opción. Se abre junto con la fuente de
+noticias o EDGAR; también aplica si el chat del hub clasifica listas largas pagando Sonnet.
+
 ---
 
 ## BL-018 — Orden de los tres repos pensando en la forma de trabajo final
