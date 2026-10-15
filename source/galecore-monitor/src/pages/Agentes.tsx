@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { SectionTitle } from '../components/common/SectionTitle';
+import { ArrowLeft, ArrowUpRight, Bot, ChevronDown, ChevronRight, Clock3, Copy, Eye, Plus, Radar, Sun, X, Zap } from 'lucide-react';
+import './Agentes.css';
 import { Markdown } from '../components/settings/Markdown';
 import { fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
 
@@ -47,11 +48,7 @@ const STATE_HELP: Record<string, string> = {
   DUE_NOW: 'Le tocaba hace poco y todavía no arrancó.',
 };
 
-const card: React.CSSProperties = {
-  backgroundColor: 'var(--bg-secondary)', border: '1px solid var(--border-dark)', borderRadius: 12, padding: '14px 16px',
-};
 const muted: React.CSSProperties = { fontSize: 13, color: 'var(--text-muted)' };
-const label: React.CSSProperties = { fontSize: 12, color: 'var(--text-muted)', marginBottom: 2 };
 
 const parse = (s: string): Agent | null => { try { return JSON.parse(s); } catch { return null; } };
 
@@ -105,113 +102,87 @@ function Toggle({ a, onRequest, busy }: { a: Agent; onRequest: (status: 'active'
   }
   const on = a.status === 'active';
   return (
-    <button
-      className="btn"
-      disabled={busy}
-      onClick={(e) => { e.stopPropagation(); onRequest(on ? 'paused' : 'active'); }}
-      style={{
-        fontSize: 13, padding: '5px 14px', borderRadius: 8, cursor: busy ? 'wait' : 'pointer', fontFamily: 'var(--font-sans)',
-        border: `1px solid ${on ? 'var(--border-dark)' : 'var(--accent)'}`,
-        backgroundColor: on ? 'transparent' : 'var(--accent)', color: on ? 'var(--text-secondary)' : 'var(--accent-ink)',
-        fontWeight: on ? 400 : 600,
-      }}
-    >
-      {on ? 'Apagar' : 'Prender'}
+    <button type="button" role="switch" aria-checked={on} aria-label={on ? 'Pausar tarea' : 'Activar tarea'}
+      className="agents-toggle" disabled={busy}
+      onClick={() => onRequest(on ? 'paused' : 'active')}>
+      <span>{on ? 'Activa' : 'En pausa'}</span><i aria-hidden="true"><span /></i>
     </button>
   );
 }
 
-function AgentCard({ a, publishedAt, selected, onSelect, onRequest, busy }: {
-  a: Agent; publishedAt: string; selected: boolean; onSelect: () => void; onRequest: (s: 'active' | 'paused') => void; busy: boolean;
-}) {
-  const on = a.status === 'active';
-  const last = a.last_run;
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(e) => { if (e.key === 'Enter') onSelect(); }}
-      style={{ ...card, cursor: 'pointer', borderColor: selected ? 'var(--text-secondary)' : 'var(--border-dark)' }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ width: 8, height: 8, borderRadius: 999, backgroundColor: on ? 'var(--green)' : 'var(--text-muted)' }} />
-        <span style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)' }}>{a.id}</span>
-        <span style={muted}>{WHAT[a.capability] ?? a.capability}</span>
-        <span style={{ flex: 1 }} />
-        <StatePill a={a} />
-        <Toggle a={a} onRequest={onRequest} busy={busy} />
-      </div>
-      <div style={{ ...muted, marginTop: 8 }}>{a.schedule}{a.strategy ? ` · ${a.strategy}` : ''}</div>
-      {silent(a) && (
-        <div style={{ fontSize: 13, color: 'var(--yellow-gc)', marginTop: 6 }}>
-          Tu PC no publica desde {when(publishedAt)}: la próxima corrida ya tendría que haber pasado. Lo de abajo es de ese momento.
-        </div>
-      )}
-      <div style={{ display: 'flex', gap: 24, marginTop: 10, flexWrap: 'wrap' }}>
-        <div>
-          <div style={label}>Última corrida</div>
-          <div style={{ fontSize: 14, color: last?.failed ? 'var(--red-gc)' : 'var(--text-primary)' }} className="tabular-nums">
-            {last ? `${when(last.at)} · ${last.result}` : 'Nunca corrió'}
-          </div>
-        </div>
-        <div>
-          <div style={label}>Próxima</div>
-          <div style={{ fontSize: 14, color: 'var(--text-primary)' }} className="tabular-nums">
-            {on && !silent(a) ? when(a.next_expected_at) : '—'}
-          </div>
-        </div>
-        <div>
-          <div style={label}>Corridas</div>
-          <div style={{ fontSize: 14, color: 'var(--text-primary)' }} className="tabular-nums">{a.runs}</div>
-        </div>
-      </div>
-      {a.request_error && (
-        <div style={{ fontSize: 13, color: 'var(--red-gc)', marginTop: 8 }}>No se pudo aplicar: {a.request_error}</div>
-      )}
-    </div>
-  );
+const TEMPLATES = [
+  { name: 'Briefing diario', Icon: Sun, description: 'Un resumen de lo que necesita tu atención antes de empezar.', frequency: 'Frecuencia a definir', prompt: 'Quiero preparar un briefing de mi cuenta y mis estrategias. Ayudame a definir qué necesita mi atención, las fuentes, el horario y el costo antes de programarlo.' },
+  { name: 'Vigilancia del mercado', Icon: Radar, description: 'Seguí los símbolos y las condiciones de mercado que te interesan.', frequency: 'Por condición o frecuencia', prompt: 'Quiero preparar un agente que vigile el mercado. Ayudame a elegir símbolos, condiciones y fuentes de GaleCore, y a definir la frecuencia y el costo antes de programarlo.' },
+  { name: 'Seguimiento de estrategia', Icon: Eye, description: 'Revisá cómo avanza una estrategia y qué requiere una decisión.', frequency: 'Frecuencia a definir', prompt: 'Quiero preparar un seguimiento de una estrategia. Ayudame a elegir la estrategia, qué cambios observar y cuándo avisarme, con fuentes y costo definidos antes de programarlo.' },
+];
+
+function AgentIcon({ capability }: { capability: string }) {
+  const Icon = capability === 'daily_attention' ? Sun : capability === 'market_watch' ? Radar : capability === 'strategy_followup' ? Eye : Bot;
+  return <span className="agents-icon"><Icon size={21} strokeWidth={1.5} /></span>;
 }
 
-function AgentDetail({ a, publishedAt }: { a: Agent; publishedAt: string }) {
+function AgentDetail({ a, title, publishedAt, onRequest, busy, onBack }: {
+  a: Agent; title: string; publishedAt: string; onRequest: (s: 'active' | 'paused') => void; busy: boolean; onBack: () => void;
+}) {
   const last = a.last_run;
-  return (
-    <div style={{ display: 'grid', gap: 12, alignContent: 'start' }}>
-      <div style={card}>
-        <div style={label}>Qué le pediste</div>
-        <div style={{ fontSize: 15, color: 'var(--text-primary)', lineHeight: 1.55 }}>{a.objective}</div>
-      </div>
-      {last && (
-        <div style={card}>
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
-            <div><div style={label}>Resultado</div>
-              <div style={{ fontSize: 20, fontWeight: 600, color: last.failed ? 'var(--red-gc)' : 'var(--text-primary)' }}>{last.result}</div></div>
-            <div><div style={label}>Cuándo</div><div style={{ fontSize: 14 }} className="tabular-nums">{when(last.at)}</div></div>
-            {last.duration_s != null && (
-              <div><div style={label}>Duración</div><div style={{ fontSize: 14 }} className="tabular-nums">{Math.round(last.duration_s)} s</div></div>
-            )}
-            {last.model && <div><div style={label}>Modelo</div><div style={{ fontSize: 14 }}>{last.model}</div></div>}
-            <div><div style={label}>Quién la lanzó</div>
-              <div style={{ fontSize: 14 }}>{last.invoked_by === 'scheduler' ? 'Programada' : 'A mano'}</div></div>
-          </div>
-          {(last.reason || last.error) && (
-            <div style={{ fontSize: 13, color: last.failed ? 'var(--red-gc)' : 'var(--text-secondary)', marginTop: 10, lineHeight: 1.5 }}>
-              {last.error ?? last.reason}
-            </div>
-          )}
-          {STATE_HELP[a.state] && <div style={{ ...muted, marginTop: 8 }}>{STATE_HELP[a.state]}</div>}
-        </div>
-      )}
-      <div style={card}>
-        <div style={{ ...label, marginBottom: 8 }}>
-          Qué encontró{a.result_ref ? ` · ${a.result_ref}` : ''} · publicado {when(publishedAt)}
-        </div>
-        {a.findings
-          ? <div style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.55 }}><Markdown text={a.findings} /></div>
-          : <div style={muted}>Todavía no hay un resultado guardado.</div>}
-      </div>
+  const [showResult, setShowResult] = useState(true);
+  return <>
+    <div className="agents-breadcrumb"><button onClick={onBack}><ArrowLeft size={15} />Tareas programadas</button><span>/</span><span>{title}</span></div>
+    <header className="agents-detail-heading"><div><h1>{title}</h1><p>{a.status === 'paused' ? 'Esta tarea está en pausa' : WHAT[a.capability] || a.capability}</p></div><Toggle a={a} busy={busy} onRequest={onRequest} /></header>
+    {a.request && a.request.status !== a.status && <p className="agents-notice" role="status">El pedido se aplicará en tu PC en hasta 5 minutos; tiene que estar encendida.</p>}
+    {a.request_error && <p className="agents-error" role="alert">No se pudo aplicar: {a.request_error}</p>}
+    {silent(a) && <p className="agents-notice">Sin noticias de tu PC desde {when(publishedAt)}. La próxima corrida ya tendría que haber pasado; el resultado guardado es anterior.</p>}
+    <div className="agents-detail-grid">
+      <section className="agents-history"><h2>Historial</h2>
+        {last ? <><button className="agents-run" aria-expanded={showResult} onClick={() => setShowResult(v => !v)}><Zap size={17} /><span><strong>{title}</strong><small>{when(last.at)} · {last.failed ? 'Falló' : last.result}</small></span><ChevronDown size={16} className={showResult ? 'expanded' : ''} /></button>
+          {showResult && <div className="agents-result"><div className="agents-result-heading"><h3>Último resultado</h3><StatePill a={a} /></div>
+            {(last.error || last.reason) && <p className={last.failed ? 'agents-error' : ''}>{last.error || last.reason}</p>}
+            {STATE_HELP[a.state] && <p className="agents-secondary">{STATE_HELP[a.state]}</p>}
+            {a.findings ? <Markdown text={a.findings} /> : <p className="agents-secondary">Todavía no hay un resultado guardado.</p>}
+            <div className="agents-run-meta"><span>{last.invoked_by === 'scheduler' ? 'Programada' : last.invoked_by ? 'A mano' : 'Origen no informado'}</span>{last.duration_s != null && <span>{Math.round(last.duration_s)} s</span>}</div>
+          </div>}</> : <p className="agents-empty">Esta tarea todavía no corrió.</p>}
+        <p className="agents-history-note">{a.runs} corridas registradas. GaleCore publica únicamente la última corrida.</p>
+      </section>
+      <aside className="agents-settings">
+        <section><h2>Instrucciones</h2><p>{a.objective || 'Sin instrucciones publicadas.'}</p></section>
+        <section><h2>Frecuencia</h2><p><Clock3 size={16} />{a.schedule || 'Sin frecuencia publicada'}</p>{a.status === 'active' && !silent(a) && a.next_expected_at && <small>Próxima: {when(a.next_expected_at)}</small>}</section>
+        <section><h2>Se ejecuta con</h2><p><Bot size={18} />GaleCore-AI · tu PC</p>{a.strategy && <p><Eye size={18} />{a.strategy}</p>}{last?.model && <p><Zap size={18} />{last.model}</p>}</section>
+        <section><h2>Detalles</h2><StatePill a={a} /><small>Publicado {when(publishedAt)}</small>{a.result_ref && <small>Resultado: {a.result_ref}</small>}<small>Identificador: {a.id}</small></section>
+      </aside>
     </div>
-  );
+  </>;
+}
+
+function TaskDraft({ initial, onClose }: { initial: string; onClose: () => void }) {
+  const [draft, setDraft] = useState(initial);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState(false);
+  const closeRef = React.useRef<HTMLButtonElement>(null);
+  const dialogRef = React.useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    closeRef.current?.focus();
+    return () => previous?.focus();
+  }, []);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(draft); setCopied(true); setError(false); }
+    catch { setError(true); }
+  };
+  return <div className="agents-modal-backdrop" onClick={onClose}><div ref={dialogRef} className="agents-modal" role="dialog" aria-modal="true" aria-labelledby="agent-draft-title" onClick={e => e.stopPropagation()} onKeyDown={e => {
+    if (e.key === 'Escape') onClose();
+    if (e.key === 'Tab') {
+      const controls = dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), textarea');
+      if (!controls?.length) return;
+      const first = controls[0], last = controls[controls.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }}><div className="agents-modal-title"><h2 id="agent-draft-title">Preparar una tarea</h2><button ref={closeRef} aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
+    <p>Definí el pedido y copialo al chat de GaleCore-AI para acordar las instrucciones y la frecuencia. La tarea aparecerá en «Tuyos» cuando se publique desde tu PC.</p>
+    <label htmlFor="agent-draft">Tu pedido</label><textarea id="agent-draft" value={draft} onChange={e => { setDraft(e.target.value); setCopied(false); }} rows={6} />
+    {error && <p role="alert">No se pudo copiar. Seleccioná el texto y copialo manualmente.</p>}
+    <button className="agents-primary" onClick={copy} disabled={!draft.trim()}><Copy size={15} />{copied ? 'Pedido copiado' : 'Copiar pedido para el chat'}</button><span role="status" className="agents-secondary">{copied ? 'Listo para pegar en el chat.' : 'Este paso prepara el pedido; todavía no programa la tarea.'}</span>
+  </div></div>;
 }
 
 export function Agentes() {
@@ -219,6 +190,8 @@ export function Agentes() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [view, setView] = useState<'own' | 'templates'>('own');
+  const [draft, setDraft] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -240,7 +213,7 @@ export function Agentes() {
     .map((i) => ({ item: i, a: parse(i.content) }))
     .filter((x): x is { item: SpaceItem; a: Agent } => !!x.a && !!x.a.id && x.a.status !== 'cancelled')
     .sort((x, y) => (x.a.status === y.a.status ? x.a.id.localeCompare(y.a.id) : x.a.status === 'active' ? -1 : 1));
-  const current = agents.find((x) => x.item.key === selected) ?? agents[0];
+  const current = agents.find((x) => x.item.key === selected);
 
   const request = async (item: SpaceItem, a: Agent, status: 'active' | 'paused') => {
     setBusy(item.key);
@@ -258,35 +231,18 @@ export function Agentes() {
     }
   };
 
-  const pending = agents.some((x) => x.a.request && x.a.request.status !== x.a.status);
-
-  return (
-    <div style={{ padding: '14px 18px 24px' }}>
-      <SectionTitle title="GaleCore Agentes" badge="CORREN SOLOS · CON TUS INSTRUCCIONES" />
-      <div style={{ ...muted, margin: '8px 0 16px', maxWidth: 820, lineHeight: 1.5 }}>
-        Los agentes corren en tu PC con GaleCore-AI. Se crean desde el chat («armame un agente que…»); acá ves cómo
-        van y los prendés o apagás.
-        {pending && ' El cambio se aplica en tu PC en hasta 5 minutos (tiene que estar prendida).'}
-      </div>
-      {error && <div style={{ fontSize: 14, color: 'var(--red-gc)', marginBottom: 12 }}>{error}</div>}
-      {items === null && !error && <div style={muted}>Cargando…</div>}
-      {items !== null && agents.length === 0 && (
-        <div style={card}>
-          <div style={{ fontSize: 15, color: 'var(--text-primary)', marginBottom: 6 }}>Todavía no tenés agentes.</div>
-          <div style={muted}>Pedíselo a GaleCore-AI: «armame un agente que me avise cuando haya prima para vender en SPY».</div>
-        </div>
-      )}
-      {current && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 16, alignItems: 'start' }}>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {agents.map(({ item, a }) => (
-              <AgentCard key={item.key} a={a} publishedAt={item.updatedAt} selected={item.key === current.item.key} busy={busy === item.key}
-                onSelect={() => setSelected(item.key)} onRequest={(s) => request(item, a, s)} />
-            ))}
-          </div>
-          <AgentDetail a={current.a} publishedAt={current.item.updatedAt} />
-        </div>
-      )}
-    </div>
-  );
+  return <div className="agents-page">
+    {error && <div className="agents-error" role="alert">{error}<button className="agents-text-button" onClick={load}>Reintentar</button></div>}
+    {current ? <AgentDetail key={current.item.key} a={current.a} title={current.item.title || WHAT[current.a.capability] || current.a.id}
+      publishedAt={current.item.updatedAt} busy={busy === current.item.key} onRequest={s => request(current.item, current.a, s)} onBack={() => setSelected(null)} /> : <>
+      <header className="agents-heading"><h1>Tareas programadas</h1></header>
+      <div className="agents-toolbar"><div className="agents-tabs" role="group" aria-label="Vista de tareas"><button aria-pressed={view === 'own'} onClick={() => setView('own')}>Tuyos</button><button aria-pressed={view === 'templates'} onClick={() => setView('templates')}>Plantillas</button></div><button className="agents-primary" onClick={() => setDraft('Quiero preparar un agente que… Ayudame a definir las instrucciones, las fuentes, la frecuencia y el costo antes de programarlo.')}><Plus size={15} />Nueva tarea</button></div>
+      {view === 'templates' ? <div className="agents-catalog">{TEMPLATES.map(t => <button className="agents-catalog-item" key={t.name} onClick={() => setDraft(t.prompt)}><span className="agents-icon"><t.Icon size={21} strokeWidth={1.5} /></span><span className="agents-item-copy"><strong>{t.name}</strong><span>{t.description}</span><small><Clock3 size={13} />{t.frequency}</small></span><ArrowUpRight className="agents-item-arrow" size={16} /></button>)}</div> : <>
+        {items === null && !error && <p className="agents-empty" role="status">Cargando tareas…</p>}
+        {items !== null && agents.length === 0 && <div className="agents-empty-state"><span className="agents-icon"><Bot size={24} /></span><h2>Todavía no tenés tareas programadas</h2><p>Prepará una tarea con tus instrucciones o elegí una plantilla para empezar.</p><button className="agents-text-button" onClick={() => setView('templates')}>Explorar plantillas <ChevronRight size={15} /></button></div>}
+        <div className="agents-catalog">{agents.map(({ item, a }) => <button className="agents-catalog-item" key={item.key} onClick={() => setSelected(item.key)}><AgentIcon capability={a.capability} /><span className="agents-item-copy"><strong>{item.title || WHAT[a.capability] || a.id}</strong><span>{a.objective || WHAT[a.capability] || a.capability}</span><small><Clock3 size={13} />{a.schedule || 'Sin frecuencia publicada'}</small><span className="agents-item-status"><StatePill a={a} />{a.status === 'paused' && a.state !== 'PAUSED' && <small>En pausa</small>}{a.request && a.request.status !== a.status && <small>Cambio pendiente</small>}</span>{a.request_error && <small className="agents-error">No se pudo aplicar: {a.request_error}</small>}</span><ChevronRight className="agents-item-arrow" size={16} /></button>)}</div>
+      </>}
+    </>}
+    {draft !== null && <TaskDraft initial={draft} onClose={() => setDraft(null)} />}
+  </div>;
 }
