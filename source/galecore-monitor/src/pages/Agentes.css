@@ -1,4 +1,4 @@
-.agents-page { max-width: 1240px; margin: 0 auto; padding: 32px 32px 64px; color: var(--text-primary); font-family: var(--font-sans); font-size: 15px; container-type: inline-size; }
+.agents-page { padding: 24px 24px 48px; color: var(--text-primary); font-family: var(--font-sans); font-size: 15px; container-type: inline-size; }
 .agents-page h1 { margin: 0; font-size: var(--font-page); font-weight: 600; letter-spacing: -.4px; line-height: 1.3; }
 .agents-page h2, .agents-page h3 { margin: 0; font-size: 15px; font-weight: 600; }
 .agents-page button { font-family: inherit; cursor: pointer; }
@@ -87,7 +87,7 @@
 .agents-catalog-item .agents-item-copy > small { margin-top: auto; font-size: 13px; }
 .agents-catalog { gap: 20px; }
 .agents-day { margin: 26px 0; }
-.agents-day > h3 { color: var(--text-muted); font-size: 13px; font-weight: 400; text-transform: capitalize; padding: 0 4px 10px; }
+.agents-day > h3 { color: var(--text-secondary); font-size: 14px; font-weight: 500; padding: 0 8px 6px; }
 .agents-run-group { border-bottom: 1px solid var(--border-dark); }
 .agents-run-group > summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 16px 8px; cursor: pointer; border-radius: 8px; }
 .agents-run-group > summary::-webkit-details-marker { display: none; }
@@ -114,3 +114,17 @@
 .agents-edit-actions { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 20px; }
 .agents-detail-grid { grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 40px; }
 @container (max-width: 720px) { .agents-catalog, .agents-detail-grid { grid-template-columns: minmax(0, 1fr); } .agents-detail-heading { flex-wrap: wrap; } .agents-result { padding-left: 12px; } }
+/* Lista como tabla, igual que Estrategias (15/10, Claude). */
+.agents-actions { display: flex; align-items: center; gap: 22px; }
+.agents-page .agents-new { font-size: 14px; color: var(--text-primary); }
+.agents-table td:first-child { min-width: 200px; }
+.agents-table td:last-child { min-width: 130px; }
+.agents-page .agents-failed { color: var(--red-gc); }
+.agents-table .agents-toggle { padding: 0; }
+.agents-table td.strategy-name button { white-space: nowrap; }
+.agents-page .agents-warn { color: var(--yellow-gc); }
+.agents-run-time { width: 46px; flex-shrink: 0; font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 14px; }
+.agents-run-model { color: var(--text-secondary); font-size: 14px; }
+.agents-settings small { color: var(--text-secondary); font-size: 14px; }
+.agents-clip { display: block; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agents-clip.agents-what { max-width: 280px; }

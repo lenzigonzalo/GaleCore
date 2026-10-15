@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pencil, Save, ArrowLeft, ArrowUpRight, Bot, ChevronDown, ChevronRight, Clock3, Copy, Eye, Plus, Radar, Sun, X, Zap } from 'lucide-react';
+import { Pencil, Save, ArrowLeft, Bot, ChevronDown, ChevronRight, Clock3, Copy, Plus, X } from 'lucide-react';
+import '../components/shadow/PerformancePanel.css';
 import './Agentes.css';
 import { Markdown } from '../components/settings/Markdown';
 import { fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
@@ -33,6 +34,24 @@ const WHAT: Record<string, string> = {
   supervisor: 'Avisos de estrategias', market_watch: 'Vigilancia del mercado', daily_attention: 'Atención diaria', strategy_followup: 'Seguimiento de estrategia', market_story: 'Resumen del mercado', knowledge_curator: 'Revisión de memoria',
 };
 
+const TICKERS = new Set(['spy', 'qqq', 'iwm', 'tlt', 'gex', 'vix', 'pcs', 'rpf']);
+
+/** «gamma-spy-diaria» → «Gamma SPY diaria»: el id es lo único legible cuando la tarea no tiene un tipo conocido. */
+function humanize(id: string): string {
+  const words = id.split(/[-_]+/).filter(Boolean).map(w => (TICKERS.has(w.toLowerCase()) ? w.toUpperCase() : w.toLowerCase()));
+  const text = words.join(' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** La frecuencia como la publica la PC, en castellano: «(America/New_York)» → «, hora de Nueva York». */
+function scheduleText(schedule?: string): string {
+  if (!schedule) return 'Sin frecuencia publicada';
+  const text = schedule
+    .replace(/^de lunes a viernes/i, 'lun a vie').replace(/ a las /, ', ')
+    .replace(/\s*\(America\/New_York\)/, ' NY').replace(/\s*\(America\/Argentina\/Buenos_Aires\)/, ' ARG').replace(/ Nueva York\)/, ' NY)');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 const muted: React.CSSProperties = { fontSize: 13, color: 'var(--text-muted)' };
 
 const parse = (s: string): Agent | null => { try { return JSON.parse(s); } catch { return null; } };
@@ -41,7 +60,12 @@ function when(iso?: string | null): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('es-AR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  const weekday = d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '');
+  return `${weekday} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}, ${hhmm(d)}`;
+}
+
+function hhmm(d: Date): string {
+  return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
 }
 
 // Margen para que una corrida programada arranque y se publique (GaleCore-AI publica cada 5 min).
@@ -82,19 +106,14 @@ function Toggle({ a, onRequest, busy }: { a: Agent; onRequest: (status: 'active'
 }
 
 const TEMPLATES = [
-  { name: 'Briefing diario', Icon: Sun, description: 'Un resumen de lo que necesita tu atención antes de empezar.', frequency: 'Frecuencia a definir', prompt: 'Quiero preparar un briefing de mi cuenta y mis estrategias. Ayudame a definir qué necesita mi atención, las fuentes, el horario y el costo antes de programarlo.' },
-  { name: 'Vigilancia del mercado', Icon: Radar, description: 'Seguí los símbolos y las condiciones de mercado que te interesan.', frequency: 'Por condición o frecuencia', prompt: 'Quiero preparar un agente que vigile el mercado. Ayudame a elegir símbolos, condiciones y fuentes de GaleCore, y a definir la frecuencia y el costo antes de programarlo.' },
-  { name: 'Seguimiento de estrategia', Icon: Eye, description: 'Revisá cómo avanza una estrategia y qué requiere una decisión.', frequency: 'Frecuencia a definir', prompt: 'Quiero preparar un seguimiento de una estrategia. Ayudame a elegir la estrategia, qué cambios observar y cuándo avisarme, con fuentes y costo definidos antes de programarlo.' },
+  { name: 'Briefing diario', description: 'Un resumen de lo que necesita tu atención antes de empezar.', frequency: 'A definir', prompt: 'Quiero preparar un briefing de mi cuenta y mis estrategias. Ayudame a definir qué necesita mi atención, las fuentes, el horario y el costo antes de programarlo.' },
+  { name: 'Vigilancia del mercado', description: 'Seguí los símbolos y las condiciones de mercado que te interesan.', frequency: 'Por condición o frecuencia', prompt: 'Quiero preparar un agente que vigile el mercado. Ayudame a elegir símbolos, condiciones y fuentes de GaleCore, y a definir la frecuencia y el costo antes de programarlo.' },
+  { name: 'Seguimiento de estrategia', description: 'Revisá cómo avanza una estrategia y qué requiere una decisión.', frequency: 'A definir', prompt: 'Quiero preparar un seguimiento de una estrategia. Ayudame a elegir la estrategia, qué cambios observar y cuándo avisarme, con fuentes y costo definidos antes de programarlo.' },
 ];
 
-function AgentIcon({ capability }: { capability: string }) {
-  const Icon = capability === 'daily_attention' ? Sun : capability === 'market_watch' ? Radar : capability === 'strategy_followup' ? Eye : Bot;
-  return <span className="agents-icon"><Icon size={21} strokeWidth={1.5} /></span>;
-}
-
 function taskTitle(a: Agent, title: string): string {
-  if (title && title !== a.id && !title.startsWith(a.id + ' (') && !title.includes('_')) return title;
-  return `${WHAT[a.capability] || 'Tarea programada'}${a.strategy ? ' · ' + a.strategy.split('_')[0].toUpperCase() : ''}`;
+  if (title && title !== a.id && !title.startsWith(a.id + ' (') && !title.includes('_')) return title.replace(/\s*\([^)]*\)$/, '');
+  return WHAT[a.capability] ? `${WHAT[a.capability]}${a.strategy ? ' · ' + a.strategy.split('_')[0].toUpperCase() : ''}` : humanize(a.id);
 }
 
 function resultLabel(run: LastRun): string {
@@ -104,19 +123,25 @@ function resultLabel(run: LastRun): string {
   return 'Completada';
 }
 
+function resultTone(run: LastRun): string {
+  const label = resultLabel(run);
+  return label === 'Completada' ? '' : label === 'Requiere atención' ? 'agents-warn' : 'agents-failed';
+}
+
 function RunHistory({ a }: { a: Agent }) {
   // Old publishers only expose last_run. Never attach the prior good report to an incomplete attempt.
   const rows = a.history ?? (a.last_run ? [{ ...a.last_run, findings: a.last_run.failed || ['INCOMPLETE', 'FAILED', 'ERROR'].includes(a.last_run.result) ? null : a.findings }] : []);
   const groups = new Map<string, LastRun[]>();
   rows.forEach(run => {
     const date = new Date(run.at);
-    const day = Number.isNaN(date.getTime()) ? 'Fecha no informada' : date.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    const long = Number.isNaN(date.getTime()) ? 'Fecha no informada' : date.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const day = long.charAt(0).toUpperCase() + long.slice(1);
     groups.set(day, [...(groups.get(day) || []), run]);
   });
   return <section className="agents-history"><h2>Corridas</h2>
     {!rows.length && <p className="agents-empty">Esta tarea todavía no corrió.</p>}
     {Array.from(groups, ([day, runs]) => <section className="agents-day" key={day}><h3>{day}</h3>{runs.map((run, i) => <details className="agents-run-group" key={run.at + i}>
-      <summary><span className="agents-run-mark"><Zap size={16} /></span><span className="agents-run-copy"><strong>{resultLabel(run)}</strong><small>{when(run.at)}{run.model ? ` · ${run.model}` : ''}</small></span><ChevronDown size={17} /></summary>
+      <summary><span className="agents-run-time">{Number.isNaN(new Date(run.at).getTime()) ? '' : hhmm(new Date(run.at))}</span><span className={`agents-run-copy ${resultTone(run)}`}><strong>{resultLabel(run)}</strong></span>{run.model && <span className="agents-run-model">{run.model}</span>}<ChevronDown size={17} /></summary>
       <div className="agents-result">
         {run.findings ? <Markdown text={run.findings} fontSize={15} /> : <p className="agents-secondary">{run.result === 'INCOMPLETE' ? 'Se guardaron los datos de la corrida, pero no se pudo generar un análisis válido.' : 'Esta corrida no tiene un informe disponible.'}</p>}
         {run.truncated && <p className="agents-secondary">Vista resumida. El informe completo queda guardado en GaleCore-AI.</p>}
@@ -148,13 +173,13 @@ function AgentDetail({ a, title, publishedAt, onRequest, onSave, busy, onBack }:
   a: Agent; title: string; publishedAt: string; onRequest: (s: 'active' | 'paused') => void; onSave: (settings: NonNullable<AgentRequest['settings']>) => Promise<boolean>; busy: boolean; onBack: () => void;
 }) {
   return <>
-    <div className="agents-breadcrumb"><button onClick={onBack}><ArrowLeft size={15} />Tareas programadas</button><span>/</span><span>{title}</span></div>
-    <header className="agents-detail-heading"><div><h1>{title}</h1><p>{a.strategy ? a.strategy.replace(/_/g, ' ') : WHAT[a.capability] || 'Tarea programada'}</p></div><Toggle a={a} busy={busy} onRequest={onRequest} /></header>
+    <div className="agents-breadcrumb"><button onClick={onBack}><ArrowLeft size={15} />Agentes</button><span>/</span><span>{title}</span></div>
+    <header className="agents-detail-heading"><div><h1>{title}</h1><p>{a.strategy ? humanize(a.strategy) : WHAT[a.capability] || humanize(a.id)}</p></div><Toggle a={a} busy={busy} onRequest={onRequest} /></header>
     {a.request && <p className="agents-notice" role="status">{a.request.settings ? 'Cambios enviados.' : 'Pedido enviado.'} Tu PC los aplicará en hasta 5 minutos; tiene que estar encendida.</p>}
     {a.request_error && <p className="agents-error" role="alert">No se pudo aplicar: {a.request_error}</p>}
     {silent(a) && <p className="agents-notice">Sin noticias de tu PC desde {when(publishedAt)}. El resultado guardado es anterior a la corrida esperada.</p>}
     <div className="agents-detail-grid"><RunHistory a={a} /><aside className="agents-settings">
-      <section className="agents-schedule"><h2>Cuándo corre</h2><p><Clock3 size={18} />{a.schedule || 'Sin frecuencia publicada'}</p>{a.status === 'active' && !silent(a) && a.next_expected_at && <small>Próxima corrida: {when(a.next_expected_at)}</small>}</section>
+      <section className="agents-schedule"><h2>Cuándo corre</h2><p><Clock3 size={18} />{scheduleText(a.schedule)}</p>{a.status === 'active' && !silent(a) && a.next_expected_at && <small>Próxima corrida: {when(a.next_expected_at)}</small>}</section>
       <AgentSettings a={a} busy={busy} onSave={onSave} />
     </aside></div>
   </>;
@@ -244,17 +269,25 @@ export function Agentes() {
     {error && <div className="agents-error" role="alert">{error}<button className="agents-text-button" onClick={load}>Reintentar</button></div>}
     {current ? <AgentDetail key={current.item.key} a={current.a} title={taskTitle(current.a, current.item.title)}
       publishedAt={current.item.updatedAt} busy={busy === current.item.key} onRequest={status => request(current.item, current.a, { status })} onSave={settings => request(current.item, current.a, { settings })} onBack={() => setSelected(null)} /> : <>
-      <header className="agents-heading"><h1>Tareas programadas</h1></header>
-      <div className="agents-toolbar"><div className="agents-tabs" role="group" aria-label="Vista de tareas"><button aria-pressed={view === 'own'} onClick={() => setView('own')}>Tuyos</button><button aria-pressed={view === 'templates'} onClick={() => setView('templates')}>Plantillas</button></div><button className="agents-primary" onClick={() => setDraft('Quiero preparar un agente que… Ayudame a definir las instrucciones, las fuentes, la frecuencia y el costo antes de programarlo.')}><Plus size={15} />Nueva tarea</button></div>
-      {view === 'templates' ? <div className="agents-catalog">{TEMPLATES.map(t => <button className="agents-catalog-item" key={t.name} onClick={() => setDraft(t.prompt)}><span className="agents-icon"><t.Icon size={21} strokeWidth={1.5} /></span><span className="agents-item-copy"><strong>{t.name}</strong><span>{t.description}</span><small><Clock3 size={13} />{t.frequency}</small></span><ArrowUpRight className="agents-item-arrow" size={16} /></button>)}</div> : <>
+      <div className="strategy-list-heading"><h1 className="strategy-list-title">Agentes</h1>
+        <div className="agents-actions"><button className="agents-text-button agents-new" onClick={() => setDraft('Quiero preparar un agente que… Ayudame a definir las instrucciones, las fuentes, la frecuencia y el costo antes de programarlo.')}><Plus size={16} />Nueva tarea</button>
+          <div className="stage-switch" role="group" aria-label="Vista de tareas"><button aria-pressed={view === 'own'} aria-selected={view === 'own'} onClick={() => setView('own')}>Tuyos</button><button aria-pressed={view === 'templates'} aria-selected={view === 'templates'} onClick={() => setView('templates')}>Plantillas</button></div></div></div>
+      {view === 'templates' ? <div className="performance-table strategy-list agents-table"><table>
+        <thead><tr><th>Plantilla</th><th>Para qué</th><th>Cuándo</th></tr></thead>
+        <tbody>{TEMPLATES.map(t => <tr className="strategy-row" key={t.name} onClick={() => setDraft(t.prompt)}><td className="strategy-name"><button onClick={e => { e.stopPropagation(); setDraft(t.prompt); }}>{t.name}</button></td><td className="agents-what">{t.description}</td><td>{t.frequency}</td></tr>)}</tbody>
+      </table></div> : <>
         {items === null && !error && <p className="agents-empty" role="status">Cargando tareas…</p>}
-        {items !== null && agents.length === 0 && <div className="agents-empty-state"><span className="agents-icon"><Bot size={24} /></span><h2>Todavía no tenés tareas programadas</h2><p>Prepará una tarea con tus instrucciones o elegí una plantilla para empezar.</p><button className="agents-text-button" onClick={() => setView('templates')}>Explorar plantillas <ChevronRight size={15} /></button></div>}
-        <div className="agents-catalog">{agents.map(({ item, a }) => <article className="agents-task-card" key={item.key}>
-          <button className="agents-task-open" onClick={() => setSelected(item.key)}><AgentIcon capability={a.capability} /><span className="agents-item-copy"><strong>{taskTitle(a, item.title)}</strong><span className="agents-card-description">{a.objective || WHAT[a.capability] || 'Tarea programada'}</span></span><ChevronRight className="agents-item-arrow" size={16} /></button>
-          <div className="agents-card-schedule"><Clock3 size={16} /><span>{a.schedule || 'Sin frecuencia publicada'}</span></div>
-          <div className="agents-card-footer"><span>{silent(a) ? 'Sin noticias de tu PC' : a.last_run ? `Última: ${when(a.last_run.at)}` : 'Todavía no corrió'}</span><Toggle a={a} busy={busy === item.key} onRequest={status => request(item, a, { status })} /></div>
-          {a.request_error && <p className="agents-card-error" title={a.request_error}>No se pudo aplicar el cambio. Abrí la tarea para ver el motivo.</p>}
-        </article>)}</div>
+        {items !== null && agents.length === 0 && <div className="agents-empty-state"><h2>Todavía no tenés tareas programadas</h2><p>Prepará una tarea con tus instrucciones o elegí una plantilla para empezar.</p><button className="agents-text-button" onClick={() => setView('templates')}>Ver plantillas <ChevronRight size={15} /></button></div>}
+        {agents.length > 0 && <div className="performance-table strategy-list agents-table"><table>
+          <thead><tr><th>Agente</th><th>Qué hace</th><th>Cuándo</th><th>Última corrida</th><th>Estado</th></tr></thead>
+          <tbody>{agents.map(({ item, a }) => <tr className="strategy-row" key={item.key} onClick={() => setSelected(item.key)}>
+            <td className="strategy-name"><button onClick={e => { e.stopPropagation(); setSelected(item.key); }}>{taskTitle(a, item.title)}</button></td>
+            <td title={a.objective || undefined}><span className="agents-clip agents-what">{a.objective || WHAT[a.capability] || ''}</span></td>
+            <td title={scheduleText(a.schedule)}><span className="agents-clip">{scheduleText(a.schedule)}</span></td>
+            <td className={a.last_run?.failed ? 'agents-failed' : undefined}>{silent(a) ? 'Sin noticias de tu PC' : a.last_run ? `${when(a.last_run.at)}${a.last_run.failed ? ' · no se completó' : ''}` : 'Todavía no corrió'}{a.request_error && <span className="agents-failed"> · no se aplicó el cambio</span>}</td>
+            <td onClick={e => e.stopPropagation()}><Toggle a={a} busy={busy === item.key} onRequest={status => request(item, a, { status })} /></td>
+          </tr>)}</tbody>
+        </table></div>}
       </>}
     </>}
     {draft !== null && <TaskDraft initial={draft} onClose={() => setDraft(null)} />}

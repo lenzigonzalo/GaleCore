@@ -26,8 +26,8 @@ test('abre la tarea, muestra el único resultado publicado y vuelve al listado',
   expect(screen.getByText(task.findings)).not.toBeVisible();
   expect(screen.getByText(/8 corridas registradas/)).toHaveTextContent('historial anterior todavía no se publicó');
   expect(screen.queryByText('Al día')).not.toBeInTheDocument();
-  expect(screen.getByText(task.schedule)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Tareas programadas' }));
+  expect(screen.getByText('Días hábiles, 10:00')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
   expect(screen.getByRole('button', { name: 'Plantillas' })).toBeInTheDocument();
 });
 
