@@ -7,6 +7,7 @@ import { fetchGexRules } from '../api/gex';
 
 let mockEnabled = true;
 jest.mock('../api/gex', () => ({ GEX_SWITCH_ENDPOINT:'/test/switch', fetchGexRules:jest.fn(), fetchGexAnalysis:jest.fn() }));
+jest.mock('../api/marketdata', () => ({ ...jest.requireActual('../api/marketdata'), fetchMarketSummary: () => Promise.resolve({ symbol: 'SPY', last: 771.74, prevClose: 769.6, change: 2.14, changePct: 0.28, volume: 43300000, high: 772.87, low: 764.43, sessionDate: '2026-10-15' }) }));
 jest.mock('../store/useStrategySwitchStore', () => ({ useSwitchEnabled:()=>mockEnabled }));
 jest.mock('../store/useAppConfigStore', () => ({ useSwitchEndpoint:()=>'/test/switch', useAppConfigStore:(select:any)=>select({tickers:['SPY','QQQ']}) }));
 jest.mock('../components/common/StrategySwitch', () => ({ StrategySwitch:()=> <span>Barrido</span> }));
@@ -52,11 +53,12 @@ test('Precio sigue disponible con barrido OFF y no inicia un barrido', () => {
   expect(screen.getByTestId('chart')).toHaveTextContent('Velas de precio');
   expect(useGexStore.getState().fetchGex).not.toHaveBeenCalled();
 });
-test('sin precio válido o cierre previo no inventa variación y conserva errores', () => {
+test('la variación y el volumen del día salen de la API; sin ellos no se inventan y el error se conserva', async () => {
   useMarketStore.setState({tickers:{SPY:{symbol:'SPY',price:100,prevClose:0,loading:{},error:{price:'Proveedor no disponible'}} as any}});
   render(<Gex {...props}/>);
-  expect(screen.getByText('Variación —')).toBeInTheDocument();
+  expect(screen.queryByText(/\(\+0.28%\)/)).not.toBeInTheDocument();
   expect(screen.getByText('Proveedor no disponible')).toBeInTheDocument();
-  act(()=>useMarketStore.setState({tickers:{SPY:{symbol:'SPY',price:100,prevClose:98,loading:{},error:{}} as any}}));
-  expect(screen.getByText(/\+2.00/)).toBeInTheDocument();
+  expect(await screen.findByText(/\+2.14 \(\+0.28%\)/)).toBeInTheDocument();
+  expect(screen.getByText('43,3 M')).toBeInTheDocument();
+  expect(screen.getByText('769.60')).toBeInTheDocument();
 });

@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using System.IO;
@@ -110,6 +110,12 @@ namespace DataFeed.Controllers
                 AccountNumber = accountNumber,
                 RulesJson = await LoadFileOrNullAsync("galecore_rules_core.json"),
             });
+
+        /// <summary>Encabezado de Mercado (WS-0036): último, cierre anterior, variación, volumen, máximo y mínimo del día.</summary>
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/Market/Summary")]
+        public async Task<IActionResult> MarketSummaryAsync([FromQuery] string symbol)
+            => await Handle(new DataFeed.Application.App.Market.MarketSummaryRequest { Symbol = symbol });
 
         /// <summary>
         /// Aviso cerca del strike vendido (WS-0036): posiciones de la cuenta real con el precio a menos de la distancia

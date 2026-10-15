@@ -330,13 +330,13 @@ function GroupLabel({ label, hint }: { label: string; hint?: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
       <span className="gex-group-label" style={{
-        fontSize: 13, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
+        fontSize: 16, fontWeight: 600, 
         color: '#a78bfa', fontFamily: 'var(--font-sans)', whiteSpace: 'nowrap',
       }}>
         {label}
       </span>
       {hint && (
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
+        <span style={{ fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)' }}>
           {hint}
         </span>
       )}
@@ -374,13 +374,13 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
           {cell.tooltip.map((r) => (
             <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <span style={{
-                fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
-                fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em',
+                fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
+                fontWeight: 500,
               }}>
                 {r.label}
               </span>
               <span className="tabular-nums" style={{
-                fontSize: 12, color: 'var(--text-primary)',
+                fontSize: 14, color: 'var(--text-primary)',
                 fontFamily: 'var(--font-mono)', fontWeight: 600,
               }}>
                 {r.value}
@@ -391,7 +391,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
       )}
 
       <span className="gex-metric-label" style={{
-        fontSize: 12, fontWeight: 600, letterSpacing: '0.09em', textTransform: 'uppercase',
+        fontSize: 14, fontWeight: 600, 
         color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
         overflowWrap: 'anywhere',
       }}>
@@ -410,7 +410,7 @@ function MetricTile({ label, cell }: { label: string; cell: Cell }) {
           cortarla con puntos suspensivos ("put wall domina —…") deja justo la parte que no dice
           nada. El tile crece un renglón; el que no lo necesita no lo usa. */}
       <span className="gex-metric-reference" style={{
-        fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.25,
+        fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.25,
       }}>
         {cell.reference}
       </span>
@@ -448,14 +448,14 @@ export function DetailsPanel({ data, groups, subtitle, groupIds }: Props) {
     <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>
       {subtitle && (
         <span style={{
-          fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.3,
+          fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)', lineHeight: 1.3,
         }}>
           {subtitle}
         </span>
       )}
 
       {!data ? (
-        <span style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>
+        <span style={{ fontSize: 14, color: 'var(--text-muted)', padding: '6px 0' }}>
           Sin barrido todavia.
         </span>
       ) : (

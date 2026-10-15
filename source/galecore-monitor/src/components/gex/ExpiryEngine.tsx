@@ -30,8 +30,8 @@ function ListRow({ label, value, hint }: { label: string; value: string; hint?: 
       }}
     >
       <span style={{
-        fontSize: 13, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
-        fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.07em',
+        fontSize: 14, color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
+        fontWeight: 500,
       }}>
         {label}
       </span>
@@ -59,7 +59,7 @@ function ListRow({ label, value, hint }: { label: string; value: string; hint?: 
  * En `expiry` todos los valores son de ESE vencimiento, no del agregado. En `global` son del
  * agregado de toda la cadena — el mismo número que el cuadro Details.
  */
-export function ExpiryEngine({ scope, label = 'Expiry Engine' }: Props) {
+export function ExpiryEngine({ scope, label = 'Vencimiento elegido' }: Props) {
   if (scope.kind === 'global') return <GlobalRows scope={scope} label={label} />;
   const { expiry } = scope;
 
@@ -137,7 +137,7 @@ function Panel({ label, children }: { label: string; children: React.ReactNode }
         gap: 6,
       }}>
         <span style={{
-          fontSize: 13, fontWeight: 700, letterSpacing: '0.09em', textTransform: 'uppercase',
+          fontSize: 16, fontWeight: 600, 
           color: '#a78bfa', fontFamily: 'var(--font-sans)',
         }}>
           {label}

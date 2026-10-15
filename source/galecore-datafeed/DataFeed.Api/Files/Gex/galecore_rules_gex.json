@@ -268,18 +268,18 @@
         "_metric_reference_note": "La linea de referencia de cada celda se arma con lo que devuelve la API (checks.<x>.threshold / min / max), no se declara aca: duplicar el umbral en display_config seria una segunda fuente de verdad que puede quedar desalineada de macro_regime."
       },
       "options_chain": {
-        "label": "Options Chain",
+        "label": "Vencimientos",
         "sort": "dte_asc",
         "columns": ["expiration", "dte", "net_gex"],
         "global_row": {
           "enabled": true,
-          "label": "GLOBAL",
+          "label": "Todos",
           "scope": "gex.global",
           "_note": "Fila fija arriba de la lista de vencimientos. Elegirla lleva el grafico y el Expiry Engine al agregado de TODA la cadena (gex.global), que es el mismo numero que muestra el cuadro Details. No es un vencimiento: el panel pasa a modo global y las filas que dependen de un vencimiento se apagan."
         }
       },
       "expiry_engine": {
-        "label": "Expiry Engine",
+        "label": "Vencimiento elegido",
         "rows": [
           { "id": "expiration",    "label": "Vencimiento", "source": "byExpiry.expiration" },
           { "id": "dte",           "label": "DTE",         "source": "byExpiry.dte" },

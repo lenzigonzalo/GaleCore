@@ -129,3 +129,14 @@ export async function fetchEquityCandles(
 
   return opts.limit ? candles.slice(-opts.limit) : candles;
 }
+
+/** El día de un símbolo (WS-0036): último, cierre anterior, variación, volumen, máximo y mínimo, calculados en la API. */
+export interface MarketSummary {
+  symbol: string; last: number | null; prevClose: number | null; change: number | null; changePct: number | null;
+  volume: number | null; high: number | null; low: number | null; sessionDate: string | null;
+}
+
+export async function fetchMarketSummary(symbol: string): Promise<MarketSummary> {
+  const { data } = await apiClient.get<MarketSummary>('/App/GaleCore/Market/Summary', { params: { symbol }, timeout: 15_000 });
+  return data;
+}

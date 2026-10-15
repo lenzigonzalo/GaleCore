@@ -8,6 +8,7 @@ import { DetailsPanel } from '../components/gex/DetailsPanel';
 import { OptionsChainList } from '../components/gex/OptionsChainList';
 import { CHAIN_COL_W } from '../components/gex/graphLayout';
 import { ExpiryEngine } from '../components/gex/ExpiryEngine';
+import { fetchMarketSummary, MarketSummary } from '../api/marketdata';
 import { GexChart } from '../components/chart/GexChart';
 import { StrategySwitch } from '../components/common/StrategySwitch';
 import { StrategyOffPanel } from '../components/common/StrategyOffPanel';
@@ -22,7 +23,7 @@ import { ConnectionStatus } from '../socket/useMarketSocket';
 import {
   GexChartData, GexExpiryApi, GexScopeApi, GexStrikeApi, GLOBAL_SCOPE,
 } from '../types/gex';
-import { calcChange, fmtPct, fmtPrice, fmtTime, isStale, tint } from '../utils/formatters';
+import { fmtPct, fmtPrice, fmtTime, isStale, tint } from '../utils/formatters';
 
 // Fallback si el JSON no declara refresh_seconds. Los barridos se serializan en el backend, así que
 // lo que manda es recorrer el universo entero (~383s medidos con 4 símbolos), no un barrido suelto.
@@ -237,7 +238,19 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   const stale = autoRefresh && isStale(updated, refreshSeconds * 1000 * 1.5);
 
   const hasPrice = !!ticker && Number.isFinite(ticker.price) && ticker.price > 0 && !ticker.error.price;
-  const change = hasPrice && ticker?.prevClose != null && Number.isFinite(ticker.prevClose) && ticker.prevClose > 0 ? calcChange(ticker!.price,ticker.prevClose) : null;
+  // Variación, volumen, máximo y mínimo del día: los calcula la API con las velas diarias (el socket sólo trae precio).
+  const [summary, setSummary] = useState<MarketSummary | null>(null);
+  useEffect(() => {
+    if (!active) return;
+    let alive = true;
+    setSummary(null);
+    const load = () => fetchMarketSummary(active).then(s => { if (alive) setSummary(s); }).catch(() => {});
+    load();
+    const id = setInterval(load, 30_000);
+    return () => { alive = false; clearInterval(id); };
+  }, [active]);
+  const change = summary?.change != null && summary.changePct != null ? { abs: summary.change, pct: summary.changePct } : null;
+  const volume = summary?.volume != null ? (summary.volume >= 1e6 ? `${(summary.volume / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })} M` : summary.volume.toLocaleString('es-AR')) : '—';
   const detailGroupIds = indicator === 'price' ? ['price'] : indicator === 'gamma' ? ['gamma'] : ['market','volatility'];
 
   if (rulesLoading) {
@@ -249,14 +262,14 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
 
   return (
     <div className={'market-workspace' + (compact ? ' market-workspace-compact' : '')}><div className="market-analysis">
-<header className="market-symbol-header"><div className="market-symbol-price"><span className="market-active-symbol">{active || "Mercado"}</span><strong>{hasPrice ? fmtPrice(ticker!.price) : "—"}</strong><span className={change && change.abs !== 0 ? (change.abs > 0 ? "market-up" : "market-down") : "market-neutral"}>{change ? (change.abs > 0 ? "+" : "")+fmtPrice(change.abs)+" ("+fmtPct(change.pct)+")" : "Variación —"}</span></div>        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+<header className="market-symbol-header"><div className="market-symbol-price"><span className="market-active-symbol">{active || "Mercado"}</span><strong>{hasPrice ? fmtPrice(ticker!.price) : "—"}</strong><span className={change && change.abs !== 0 ? (change.abs > 0 ? "market-up" : "market-down") : "market-neutral"}>{change ? (change.abs > 0 ? "+" : "")+fmtPrice(change.abs)+" ("+fmtPct(change.pct)+")" : ""}</span></div>        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
           <button
             onClick={() => setRefOpen(true)}
             title="Definiciones de la estrategia + JSON de reglas"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6,
               background: 'none', border: '1px solid var(--border)', cursor: 'pointer',
-              fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+              fontSize: 14, fontWeight: 500,
               color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)',
             }}
           >
@@ -267,7 +280,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
             title="Prender / apagar el barrido de la cadena. En OFF no se toca DXLink."
           />
         </span>
-<div className="market-quote-detail"><span>Bid <b>{ticker?.bid && ticker.bid > 0 ? fmtPrice(ticker.bid) : "—"}</b></span><span>Ask <b>{ticker?.ask && ticker.ask > 0 ? fmtPrice(ticker.ask) : "—"}</b></span><span>Volumen <b>{ticker?.volume != null ? ticker.volume.toLocaleString("en-US") : "—"}</b></span><span>{ticker?.lastUpdate ? "Recepción "+fmtTime(ticker.lastUpdate)+" ET" : "Sin cotización"}</span></div>{ticker?.error.price && <p className="market-price-error" role="status">{ticker.error.price}</p>}</header>
+<div className="market-quote-detail"><span>Bid <b>{ticker?.bid && ticker.bid > 0 ? fmtPrice(ticker.bid) : "—"}</b></span><span>Ask <b>{ticker?.ask && ticker.ask > 0 ? fmtPrice(ticker.ask) : "—"}</b></span><span>Volumen <b>{volume}</b></span><span>Máx. <b>{summary?.high != null ? fmtPrice(summary.high) : "—"}</b></span><span>Mín. <b>{summary?.low != null ? fmtPrice(summary.low) : "—"}</b></span><span>Cierre anterior <b>{summary?.prevClose != null ? fmtPrice(summary.prevClose) : "—"}</b></span><span>{ticker?.lastUpdate ? "Actualizado "+fmtTime(ticker.lastUpdate)+" ET" : "Sin cotización"}</span></div>{ticker?.error.price && <p className="market-price-error" role="status">{ticker.error.price}</p>}</header>
 <nav className="market-indicator-tabs" aria-label="Indicadores de mercado">{([{id:"price",label:"Precio"},{id:"gamma",label:"Gamma"},{id:"iv",label:"IV y volatilidad"}] as const).map(item => <button key={item.id} aria-pressed={indicator===item.id} onClick={()=>setIndicator(item.id)}>{item.label}</button>)}</nav>
 
       {GEX_REF && (
@@ -441,7 +454,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
               borderBottom: '1px solid var(--border-dark)',
             }}>
               <span style={{
-                fontSize: 13, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase',
+                fontSize: 16, fontWeight: 600,
                 color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
               }}>
                 {indicator === "gamma" ? "Estructura gamma · Global" : indicator === "iv" ? "Volatilidad" : "Contexto de precio"}
@@ -473,14 +486,14 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                       fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', cursor: 'help',
                     }}
                   >
-                    DETENIDO{data ? ' · DATO CONGELADO' : ''}
+                    Detenido{data ? ' · dato congelado' : ''}
                   </span>
                 )}
                 {/* Símbolo de paso: no lo refresca ningún intervalo, y la hora que está al lado no
                     se va a mover sola. Sin decirlo, esa hora quieta se lee como un dato colgado. */}
                 {isAdHoc && !frozen && (
                   <span
-                    title="Simbolo pineado con el buscador: no entra al auto-refresh del universo. Se rebarre con Reload."
+                    title="Simbolo pineado con el buscador: no entra al auto-refresh del universo. Se rebarre con Actualizar."
                     style={{
                       fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
                       padding: '2px 6px', borderRadius: 20,
@@ -489,7 +502,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                       fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', cursor: 'help',
                     }}
                   >
-                    MANUAL
+                    Manual
                   </span>
                 )}
                 {partialScan && (
@@ -505,7 +518,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                       fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', cursor: 'help',
                     }}
                   >
-                    PARCIAL {data!.gex.global.expirationsIncluded}/{data!.gex.global.expirationsRequested}
+                    Parcial {data!.gex.global.expirationsIncluded}/{data!.gex.global.expirationsRequested}
                   </span>
                 )}
                 {updated && (
@@ -524,7 +537,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                   style={frozen ? { opacity: 0.45, cursor: 'default' } : undefined}
                 >
                   <RefreshCw size={10} className={isLoading ? 'animate-spin' : ''} />
-                  Reload
+                  Actualizar
                 </button>
               </div>
             </div>
