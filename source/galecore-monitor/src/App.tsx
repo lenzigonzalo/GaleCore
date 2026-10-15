@@ -158,7 +158,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
           </>
-          {labVisited && <div className="lab-page-host" hidden={!isLabWorkspace}><Lab embedded projectRequest={projectRequest} onFollowStrategy={followStrategy} onMonitor={() => setTab('estrategias')} onNavigate={setTab}/></div>}
+          {labVisited && <div className="lab-page-host" hidden={!isLabWorkspace}><Lab projectRequest={projectRequest} onFollowStrategy={followStrategy} onMonitor={() => setTab('estrategias')} onNavigate={setTab}/></div>}
         </main>
       </div>
       <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>

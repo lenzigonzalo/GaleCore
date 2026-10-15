@@ -1,10 +1,11 @@
 import { createPortal } from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, ChevronRight, ChevronDown, FileText, FlaskConical, BookOpen, Settings, PanelLeftClose, PanelLeftOpen, Pencil, LogOut, ArrowUpRight } from 'lucide-react';
+import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, ChevronRight, ChevronDown, FileText, FlaskConical, BookOpen, Settings, PanelLeftClose, PanelLeftOpen, Pencil, LogOut, ArrowUpRight, Mic, Paperclip } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
-import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, WorkspaceFile, LabProjectKind } from '../api/lab';
+import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, WorkspaceFile, LabProjectKind, labUpload } from '../api/lab';
 import { LabShadow } from './LabShadow';
 import { LabMarkdown } from '../components/lab/LabMarkdown';
+import { strategyName } from '../components/shadow/panelPresentation';
 import { LabModelPicker } from '../components/lab/LabModelPicker';
 import './Lab.css';
 const KIND = { personal: 'Personal', analysis: 'Análisis', strategy: 'Estrategia' };
@@ -47,7 +48,8 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [aliases, setAliases] = useState<Record<string, string>>(() => { try { return JSON.parse(localStorage.getItem('galecore:lab:aliases') || '{}'); } catch { return {}; } });
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const name = (key: string, label: string) => aliases[key] || label;
+  // Nombres escritos todo en minúscula («iwm prima condor 30 45d») se muestran con el mismo formato que Estrategias.
+  const name = (key: string, label: string) => aliases[key] || (label === label.toLowerCase() ? strategyName(label.trim().replace(/\s+/g, '_')) : label);
   const startEdit = (key: string, label: string) => { setEditing(key); setEditValue(name(key, label)); };
   const saveEdit = (key: string, original: string) => {
     const value = editValue.trim(); const next = { ...aliases };
@@ -160,17 +162,43 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     catch(e) { setError(e instanceof Error ? e.message : 'No se pudo crear el proyecto.'); }
     finally { setBusy(false); }
   };
+  // Caja de texto estilo Claude (WS-0036): adjuntos, dictado y modo de permisos por mensaje.
+  const [mode, setMode] = useState<'manual' | 'auto'>('manual');
+  const [attachments, setAttachments] = useState<{ path: string; name: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const [listening, setListening] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const recognition = useRef<{ stop: () => void } | null>(null);
+  const Speech = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : undefined;
+  useEffect(() => { setMode('manual'); setAttachments([]); }, [chatId, projectId]);
+  const attach = async (files: FileList | null) => {
+    if (!files?.length) return; setUploading(true); setError('');
+    try { for (const file of Array.from(files)) { const up = await labUpload(projectId, file); setAttachments(list => [...list, { path: up.path, name: up.name }]); } }
+    catch (e) { setError(e instanceof Error ? e.message : 'No se pudo adjuntar el archivo.'); }
+    finally { setUploading(false); if (fileInput.current) fileInput.current.value = ''; }
+  };
+  const toggleDictation = () => {
+    if (listening) { recognition.current?.stop(); return; }
+    if (!Speech) return;
+    const rec = new Speech(); rec.lang = 'es-AR'; rec.continuous = true; rec.interimResults = false;
+    rec.onresult = (event: any) => { const said = Array.from(event.results as ArrayLike<any>).slice(event.resultIndex).filter((r: any) => r.isFinal).map((r: any) => r[0].transcript).join(' ').trim();
+      if (said) setDrafts(v => ({ ...v, [draftKey]: ((v[draftKey] || '') + ' ' + said).trim() })); };
+    rec.onend = () => { setListening(false); recognition.current = null; };
+    rec.onerror = () => { setListening(false); recognition.current = null; };
+    recognition.current = rec; rec.start(); setListening(true);
+  };
   const send = async (e: React.FormEvent) => {
     e.preventDefault(); if(!draft.trim() || busy || (chatId && !chat) || chat?.state === 'running' || !project) return; setBusy(true); setError(''); const sendingSelection = selection.current;
     try {
       const target = chat || await labRequest<WorkspaceChat>('/chats',{project:projectId,provider,...(state?.chatOptions?.[provider] ? chatSettings : {})});
-      const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text:draft});
+      const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text:draft,mode,attachments:attachments.map(a => a.path)}); setAttachments([]);
       if(sendingSelection === selection.current) { followBottom.current = true; setAwayFromBottom(false); setChatId(target.id); setChat(next); } setDrafts(v=>({...v,[draftKey]:''})); setExpanded(v=>({...v,[projectId]:true})); await refresh();
     } catch(e) { setError(e instanceof Error ? e.message : 'No se pudo enviar el mensaje.'); }
     finally { setBusy(false); }
   };
   const openFile = async (path:string) => { const sequence = ++fileSequence.current; setFilePath(path); setFileText(''); setFileError(''); setFileLoading(true); try { const f = await labRequest<{text:string}>('/workspaces/' + projectId + '/files?path=' + encodeURIComponent(path)); if(sequence === fileSequence.current) setFileText(f.text); } catch(e) { if(sequence === fileSequence.current) setFileError(e instanceof Error ? e.message : 'Archivo no disponible.'); } finally { if(sequence === fileSequence.current) setFileLoading(false); } };
   const stop = async () => { if(!chat) return; try { await labRequest('/chats/' + chat.id + '/stop',{}); } catch { setError('No se pudo detener la respuesta.'); } };
+  const composerForm = <form className="lab-chat-composer" onSubmit={send}>{attachments.length > 0 && <div className="lab-attachments">{attachments.map(a => <span key={a.path}><Paperclip size={13}/>{a.name}<button type="button" aria-label={'Quitar ' + a.name} onClick={() => setAttachments(list => list.filter(x => x.path !== a.path))}><X size={13}/></button></span>)}</div>}<textarea ref={composer} rows={1} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" title="Enter para enviar · Shift + Enter para otra línea" value={draft} onChange={e=>setDrafts(v=>({...v,[draftKey]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy&&chat?.state!=='running')e.currentTarget.form?.requestSubmit();}}}/><div className="lab-composer-bar"><div className="lab-composer-side"><button type="button" className="lab-tool" aria-label="Adjuntar archivo" title="Adjuntar archivo" disabled={busy || uploading || !project} onClick={() => fileInput.current?.click()}><Plus size={18}/></button><input ref={fileInput} type="file" multiple hidden onChange={e => void attach(e.target.files)}/>{Speech && <button type="button" className={'lab-tool' + (listening ? ' active' : '')} aria-label={listening ? 'Detener dictado' : 'Dictar'} title={listening ? 'Detener dictado' : 'Dictar'} onClick={toggleDictation}><Mic size={17}/></button>}{uploading && <span className="lab-uploading" role="status">Adjuntando…</span>}</div><div className="lab-composer-side"><LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><button type="button" className={'lab-mode ' + mode} aria-label={'Permisos: ' + (mode === 'auto' ? 'Auto' : 'Manual')} title={mode === 'auto' ? 'Auto: edita archivos y ejecuta comandos en la carpeta del proyecto sin preguntar' : 'Manual: lo que necesita permiso se frena y te avisa'} onClick={() => setMode(m => m === 'manual' ? 'auto' : 'manual')}>{mode === 'auto' ? 'Auto' : 'Manual'}</button>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div></div></form>;
   const projectSidebar = <aside className="lab-chat-sidebar" id="lab-project-sidebar">
       <div className="lab-sidebar-heading"><button className="lab-new-chat" onClick={newChat}><MessageSquare size={19}/><span>Nuevo chat</span></button>{!embedded && !onSidebarToggle && <button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>}</div>
       {!collapsed && <><div className="lab-project-heading"><span>Proyectos</span><button className="lab-icon" aria-label="Crear proyecto" onClick={()=>setCreating(true)}><Plus size={18}/></button></div>
@@ -178,7 +206,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}><button className="lab-project-select" onClick={()=>selectProject(p)} onDoubleClick={()=>startEdit(p.id,p.label)}><Folder size={18}/>{editing===p.id ? renameInput(p.id,p.label) : <span>{name(p.id,p.label)}</span>}</button><button className="lab-icon lab-pencil" aria-label={'Renombrar ' + name(p.id,p.label)} onClick={()=>startEdit(p.id,p.label)}><Pencil size={14}/></button><button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={()=>setExpanded(v=>({...v,[p.id]:!v[p.id]}))}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
         {expanded[p.id] && <div className="lab-project-chats">{state.chats.filter(c=>c.project===p.id && !/^test[_ -]/i.test(c.title)).slice().reverse().map(c=><div className="lab-chat-row" key={c.id}><button aria-current={chatId===c.id ? 'page' : undefined} onClick={()=>selectChat(p,c)} onDoubleClick={()=>startEdit(c.id,c.title)}><MessageSquare size={14}/>{editing===c.id ? renameInput(c.id,c.title) : <span>{name(c.id,c.title)}</span>}{c.state==='running' && <i aria-label="Respondiendo"/>}</button><button className="lab-icon lab-pencil" aria-label={'Renombrar ' + name(c.id,c.title)} onClick={()=>startEdit(c.id,c.title)}><Pencil size={13}/></button></div>)}<button className="lab-project-new" onClick={()=>{selectProject(p);newChat();}}><Plus size={14}/>Nuevo chat</button></div>}
       </div>)}</nav>
-      {!embedded && <footer className="lab-sidebar-footer"><button onClick={()=>onNavigate('inteligencia')}><BookOpen size={17}/>Biblioteca</button><button onClick={()=>onNavigate('config')}><Settings size={17}/>Configuración</button>{onLogout && <button onClick={onLogout}><LogOut size={17}/>Salir</button>}<span><i className={state && !error ? 'online' : ''}/>{state ? 'En tu equipo' : 'Conectando…'}</span></footer>}</>}
+      </>}
     </aside>;
   return <div ref={workspace} className={'lab-chat-workspace' + (embedded ? ' embedded' : '') + (sidebarHidden ? ' sidebar-hidden' : collapsed ? ' sidebar-collapsed' : '')} style={{ '--lab-sidebar-width': sidebarWidth + 'px' } as React.CSSProperties}>
     {embedded ? (projectHost && createPortal(projectSidebar, projectHost)) : projectSidebar}
@@ -195,8 +223,8 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         e.preventDefault();
         resizeSidebar(e.key === 'Home' ? 200 : e.key === 'End' ? 480 : sidebarWidth + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 40 : 10));
       }}/>}
-    <section className="lab-chat-main">
-      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && <span>{KIND[project.type]}</span>}</div><LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><div className="lab-header-actions">{embedded ? <>{project?.strategyName && <button className="lab-header-link" title="Resultados de esta estrategia en Estrategias" onClick={() => onFollowStrategy?.(project.strategyName!)}>Ver resultados<ArrowUpRight size={15}/></button>}</> : <nav aria-label="Vistas del proyecto"><button aria-current={view==='chat'?'page':undefined} onClick={()=>setView('chat')}>Chat</button>{project?.type==='strategy'&&<button aria-current={view==='design'?'page':undefined} onClick={()=>setView('design')}>Diseño</button>}<button aria-current={view==='shadow'?'page':undefined} onClick={()=>setView('shadow')}><FlaskConical size={15}/>Shadow</button></nav>}<button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Archivos</button></div></header>
+    <section className={'lab-chat-main' + (!chat?.messages.length && view === 'chat' ? ' empty' : '')}>
+      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && KIND[project.type] !== name(project.id, project.label) && <span>{KIND[project.type]}</span>}</div><div className="lab-header-actions">{project?.strategyName && <button className="lab-header-link" title="Resultados de esta estrategia en Estrategias" onClick={() => onFollowStrategy?.(project.strategyName!)}>Ver resultados<ArrowUpRight size={15}/></button>}<button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Archivos</button></div></header>
       {view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <>
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;
@@ -209,7 +237,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}<button onClick={refresh}>Reintentar conexión</button></div>}
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
-      <form className="lab-chat-composer" onSubmit={send}><textarea ref={composer} rows={1} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" aria-describedby="lab-composer-hint" title="Enter para enviar · Shift + Enter para otra línea" value={draft} onChange={e=>setDrafts(v=>({...v,[draftKey]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy&&chat?.state!=='running')e.currentTarget.form?.requestSubmit();}}}/><div className="lab-composer-toolbar">{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div><small id="lab-composer-hint" className="lab-composer-hint">Enter para enviar · Shift + Enter para otra línea</small></form>
+      {composerForm}
       </>}
     </section>
     {creating && <div className="lab-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="lab-create-title" className="lab-create-project"><header><h2 id="lab-create-title">Nuevo proyecto</h2><button className="lab-icon" aria-label="Cerrar" onClick={()=>setCreating(false)}><X size={19}/></button></header><form onSubmit={createProject}><label>Nombre<input autoFocus required maxLength={100} value={projectLabel} onChange={e=>setProjectLabel(e.target.value)} placeholder="Estrategia SPY"/></label><label>Tipo<select value={projectKind} onChange={e=>setProjectKind(e.target.value as LabProjectKind)}><option value="strategy">Estrategia</option><option value="analysis">Análisis</option><option value="personal">Personal</option></select></label><p>{projectKind==='strategy'?'El chat guía investigación, diseño y preparación para Shadow.':'Archivos, memoria y convenciones propias.'}</p>{error && <p role="alert">{error}</p>}<button className="btn" disabled={busy||!projectLabel.trim()}>Crear proyecto</button></form></section></div>}

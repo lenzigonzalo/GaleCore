@@ -280,3 +280,30 @@
 /* Encabezado del chat (14/10, Claude): acciones como enlaces de texto, sin cajas. */
 .lab-header-actions > button { display:inline-flex; align-items:center; gap:6px; background:none; border:0; color:var(--text-secondary); font:14px var(--font-sans); padding:6px 8px; border-radius:6px; cursor:pointer; }
 .lab-header-actions > button:hover { color:var(--text-primary); background:var(--bg-tertiary); }
+
+/* Caja de texto estilo Claude (WS-0036, 14/10). Chat nuevo: saludo y caja centrados; con conversación: abajo. */
+.lab-chat-main.empty .lab-messages { flex:0 0 auto; margin-top:auto; overflow:visible; padding-bottom:20px; }
+.lab-chat-main.empty .lab-chat-welcome { min-height:0; padding:0; }
+.lab-chat-main.empty .lab-chat-composer { margin-bottom:auto; }
+.lab-chat-composer { border-radius:22px; padding:14px 16px 10px; box-shadow:0 6px 24px rgba(0,0,0,.25); }
+.lab-chat-main.empty .lab-chat-composer textarea { min-height:56px; }
+.lab-composer-bar { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; }
+.lab-composer-side { display:flex; align-items:center; gap:6px; min-width:0; }
+.lab-tool { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:9px; border:1px solid var(--border); background:none; color:var(--text-secondary); cursor:pointer; }
+.lab-tool:hover:not(:disabled) { color:var(--text-primary); background:var(--bg-tertiary); }
+.lab-tool.active { color:var(--red-gc); border-color:var(--red-gc); }
+.lab-tool:disabled { opacity:.45; cursor:default; }
+.lab-mode { border:0; background:none; color:var(--text-secondary); font:500 13px var(--font-sans); padding:6px 10px; border-radius:8px; cursor:pointer; }
+.lab-mode:hover { background:var(--bg-tertiary); color:var(--text-primary); }
+.lab-mode.auto { color:var(--yellow-gc); }
+.lab-chat-composer .lab-provider-picker { margin:0; }
+.lab-attachments { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.lab-attachments span { display:inline-flex; align-items:center; gap:6px; padding:4px 6px 4px 10px; border:1px solid var(--border); border-radius:8px; font-size:13px; color:var(--text-secondary); }
+.lab-attachments button { display:inline-flex; border:0; background:none; color:var(--text-secondary); cursor:pointer; padding:2px; }
+.lab-uploading { font-size:13px; color:var(--text-secondary); }
+.lab-chat-header { grid-template-columns:minmax(0,1fr) auto; }
+/* Lista de proyectos compacta, un renglón por proyecto; selector de modelo como texto liso (14/10). */
+.lab-project-select { padding:8px 10px; font-size:15px; }
+.lab-project-select > span { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; overflow-wrap:normal; }
+.lab-chat-composer .lab-provider-trigger { border:0; background:none; box-shadow:none; color:var(--text-secondary); padding:6px 8px; border-radius:8px; }
+.lab-chat-composer .lab-provider-trigger:hover { background:var(--bg-tertiary); color:var(--text-primary); }

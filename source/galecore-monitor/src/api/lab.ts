@@ -39,3 +39,14 @@ export interface WorkspaceChat { id: string; project: string; provider: 'codex' 
 export interface ChatOptions { models: string[]; efforts: string[]; defaultModel?: string; modelEfforts?: Record<string, string[]> }
 export interface WorkspaceState { projects: WorkspaceProject[]; chats: Omit<WorkspaceChat, 'messages'>[]; providers: LabProvider[]; chatOptions?: Partial<Record<'codex' | 'claude', ChatOptions>> }
 export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'file'; children?: WorkspaceFile[] }
+
+/** Sube un adjunto del chat a adjuntos/ del proyecto (WS-0036); devuelve la ruta que se nombra en el mensaje. */
+export async function labUpload(projectId: string, file: File): Promise<{ path: string; name: string; size: number }> {
+  const send = async () => request('/workspaces/' + encodeURIComponent(projectId) + '/attachments', { method: 'POST',
+    headers: { Authorization: 'Bearer ' + await labToken(), 'X-File-Name': encodeURIComponent(file.name) }, body: file }, 120000);
+  let r = await send();
+  if (r.status === 401) { token = null; r = await send(); }
+  const value = await r.json();
+  if (!r.ok) throw new Error(value.error || 'No se pudo adjuntar el archivo.');
+  return value;
+}

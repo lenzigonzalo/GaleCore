@@ -471,3 +471,8 @@ summary:focus-visible, [role="button"]:focus-visible {
 .lab-dashboard-main { min-height: 0; overflow: hidden; }
 .lab-page-host { height: 100%; min-height: 0; }
 .lab-page-host[hidden] { display: none !important; }
+
+/* Barra general en íconos mientras se usa el Chat (14/10): el Chat tiene su propia barra de proyectos y chats. */
+.workspace-navigation.compact { width: 64px; padding-inline: 8px; }
+.workspace-navigation.compact .workspace-nav-entry { justify-content: center; }
+.workspace-navigation.compact .workspace-nav-entry span, .workspace-navigation.compact .workspace-group-label { display: none; }

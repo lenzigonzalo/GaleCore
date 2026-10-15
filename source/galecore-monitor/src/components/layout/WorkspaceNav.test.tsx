@@ -3,15 +3,15 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { WorkspaceNav } from './WorkspaceNav';
 let mockAdmin = false;
 jest.mock('../../store/useCurrentUserStore', () => ({ useCurrentUserStore: (select: any) => select({ user: { username: 'demo', isAdmin: mockAdmin } }) }));
-test('los seis destinos permanecen al entrar al chat, sin duplicados', () => {
+test('los destinos permanecen al entrar al chat, sin duplicados; en el chat la barra queda en íconos', () => {
   mockAdmin = false; const change = jest.fn();
   const { rerender } = render(<WorkspaceNav active="gex" onChange={change}/>);
-  for (const name of ['Inicio','Mercado','Posiciones','Estrategias','Chat','Agentes']) expect(screen.getAllByRole('button',{ name })).toHaveLength(1);
+  for (const name of ['Inicio','Mercado','Macro','Posiciones','Estrategias','Chat','Agentes']) expect(screen.getAllByRole('button',{ name })).toHaveLength(1);
   for (const name of ['Biblioteca','Mesa de operación','Cartera','Seguimiento RPF','Seguimiento SHADOW']) expect(screen.queryByRole('button',{ name })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{ name:'Posiciones' })); expect(change).toHaveBeenCalledWith('monitor');
   rerender(<WorkspaceNav active="lab" onChange={change}/>);
   expect(screen.getByRole('button',{ name:'Chat' })).toHaveAttribute('aria-current','page');
-  expect(document.getElementById('workspace-projects')).not.toHaveAttribute('hidden');
+  expect(document.querySelector('.workspace-navigation')).toHaveClass('compact');
   expect(screen.getByRole('button',{ name:'Estrategias' })).toBeInTheDocument();
 });
 test('administración sólo aparece en el menú de un admin; usuario puede salir', () => {
