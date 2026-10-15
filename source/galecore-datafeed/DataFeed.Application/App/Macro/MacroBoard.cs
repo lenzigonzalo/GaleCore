@@ -19,17 +19,29 @@ public class MacroBoardResponse
 {
     public DateTime AsOf { get; set; }
     public List<BoardRow> Strip { get; set; } = new();
-    /// <summary>Una sección por pregunta, de lo general a lo específico.</summary>
-    public List<BoardSection> Sections { get; set; } = new();
+    /// <summary>
+    /// Pestañas: la primera es el resumen (unas filas clave por pregunta) y las demás el detalle. Cada pestaña tiene
+    /// sus secciones, una por pregunta, de lo general a lo específico.
+    /// </summary>
+    public List<BoardTab> Tabs { get; set; } = new();
     public BoardCurve? Curve { get; set; }
     public List<BoardEvent> Events { get; set; } = new();
     /// <summary>Lo que no se pudo leer; se declara, no se inventa.</summary>
     public List<string> Missing { get; set; } = new();
 }
 
+public class BoardTab
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public List<BoardSection> Sections { get; set; } = new();
+}
+
 public class BoardSection
 {
     public string Question { get; set; } = "";
+    /// <summary>En el resumen: la pestaña donde está el detalle de esta pregunta.</summary>
+    public string? DetailTab { get; set; }
     public List<BoardGroup> Groups { get; set; } = new();
 }
 
@@ -58,6 +70,8 @@ public class BoardRow
     public string Source { get; set; } = "";
     /// <summary>El último mes (22 datos): mini gráfico de la fila y gráfico del detalle.</summary>
     public List<BoardPoint> Spark { get; set; } = new();
+    /// <summary>Sólo en «quién mueve el S&amp;P»: valor de mercado que sumó (o restó) en el mes, en USD.</summary>
+    public double? ValueAddedMonth { get; set; }
 }
 
 public record BoardPoint(string Date, double Value);
@@ -78,8 +92,9 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
     // Cada fila del panel se nombra por su fuente: fut: futuro (contrato vigente), eq: acción o ETF (DXLink),
     // ser: serie del snapshot Macro (Tesoro, FRED, CBOE), rel: cociente (desempeño relativo).
     private record Item(string Key, string Name);
-    private record Group(string Name, Item[] Items, bool SortByMonth = false);
+    private record Group(string Name, Item[] Items, bool SortByMonth = false, bool ByValueAdded = false);
     private record Section(string Question, Group[] Groups);
+    private record Tab(string Id, string Name, Section[] Sections);
     private record Relative(string Id, string Name, string[] Numerator, string Denominator);
 
     // Tastytrade no lista el índice dólar (/DX es de ICE): se usa el índice amplio de la Fed (FRED, diario).
@@ -103,37 +118,75 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
     private static Item S(string id, string name) => new("ser:" + id, name);
     private static Item R(string id) => new("rel:" + id, Relatives.First(r => r.Id == id).Name);
 
-    // El panel, de lo general a lo específico: las preguntas para leer la historia del mercado (owner 15/10).
-    private static readonly Section[] Layout =
+    /// <summary>
+    /// Las ~30 más grandes del S&amp;P (por capitalización, 15/10/2026). Sin la composición del índice, el valor de
+    /// mercado que suma cada una en el mes dice quién mueve la aguja.
+    /// </summary>
+    private static readonly string[] MegaCaps =
     {
-        new("¿Hay apetito por riesgo?", new[]
+        "NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "AVGO", "TSLA", "BRK/B", "JPM", "LLY", "WMT", "ORCL", "V", "MA",
+        "XOM", "NFLX", "COST", "JNJ", "PLTR", "HD", "ABBV", "BAC", "PG", "AMD", "UNH", "KO", "GE", "CSCO", "CVX",
+    };
+
+    // El panel por preguntas, de lo general a lo específico (owner 15/10). El resumen se arma con filas de acá.
+    private static readonly Tab[] Layout =
+    {
+        new("riesgo", "Riesgo y tasas", new[]
         {
-            new Group("Acciones", new[] { F("ES", "S&P 500"), F("NQ", "Nasdaq 100"), F("RTY", "Russell 2000"), F("YM", "Dow Jones") }),
-            new Group("Crédito", new[] { S("BAMLH0A0HYM2", "Spread high yield"), S("BAMLC0A0CM", "Spread grado de inversión") }),
-            new Group("Volatilidad", new[] { S("VIX", "VIX"), F("VX", "VIX futuro"), S("VVIX", "VVIX"), S("SKEW", "SKEW") }),
+            new Section("¿Hay apetito por riesgo?", new[]
+            {
+                new Group("Acciones", new[] { F("ES", "S&P 500"), F("NQ", "Nasdaq 100"), F("RTY", "Russell 2000"), F("YM", "Dow Jones") }),
+                new Group("Crédito", new[] { S("BAMLH0A0HYM2", "Spread high yield"), S("BAMLC0A0CM", "Spread grado de inversión") }),
+                new Group("Volatilidad", new[] { S("VIX", "VIX"), F("VX", "VIX futuro"), S("VVIX", "VVIX"), S("SKEW", "SKEW") }),
+            }),
+            new Section("¿Qué descuentan las tasas?", new[]
+            {
+                new Group("Tesoro", new[] { S("UST2", "Tesoro 2 años"), S("UST10", "Tesoro 10 años"), S("UST30", "Tesoro 30 años"), S("SLOPE2_10", "Pendiente 2–10") }),
+                new Group("Tasa real e inflación esperada", new[] { S("DFII10", "Tasa real 10 años"), S("T10YIE", "Breakeven 10 años") }),
+            }),
         }),
-        new("¿Qué descuentan las tasas?", new[]
+        new("liderazgo", "Liderazgo", new[]
         {
-            new Group("Tesoro", new[] { S("UST2", "Tesoro 2 años"), S("UST10", "Tesoro 10 años"), S("UST30", "Tesoro 30 años"), S("SLOPE2_10", "Pendiente 2–10") }),
-            new Group("Tasa real e inflación esperada", new[] { S("DFII10", "Tasa real 10 años"), S("T10YIE", "Breakeven 10 años") }),
+            new Section("¿Quién lidera?", new[]
+            {
+                new Group("Concentración y factores", new[] { R("RSP_SPY"), R("IWM_SPY"), R("QQQ_SPY"), R("IWF_IWD"), R("SMH_SPY"), R("AI_SPY") }),
+                new Group("Quién mueve el S&P · valor sumado en el mes", MegaCaps.Select(m => E(m, m)).ToArray(), ByValueAdded: true),
+                new Group("Sectores", new[] { E("XLK", "Tecnología"), E("SMH", "Semiconductores"), E("XLC", "Comunicaciones"), E("XLY", "Consumo discrecional"),
+                    E("XLF", "Finanzas"), E("XLI", "Industria"), E("XLV", "Salud"), E("XLP", "Consumo básico"), E("XLE", "Energía"),
+                    E("XLB", "Materiales"), E("XLU", "Servicios públicos"), E("XLRE", "Inmobiliario") }, SortByMonth: true),
+                new Group("Canasta IA", new[] { E("NVDA", "Nvidia"), E("MSFT", "Microsoft"), E("AVGO", "Broadcom"), E("GOOGL", "Alphabet"),
+                    E("META", "Meta"), E("AMZN", "Amazon"), E("AAPL", "Apple"), E("TSLA", "Tesla") }, SortByMonth: true),
+                new Group("Infraestructura de la IA", new[] { E("VST", "Vistra (energía)"), E("CEG", "Constellation (energía)"), E("VRT", "Vertiv (refrigeración)"),
+                    E("ANET", "Arista (redes)"), E("DELL", "Dell (servidores)"), E("SMCI", "Supermicro (servidores)"), E("EQIX", "Equinix (data centers)"),
+                    E("DLR", "Digital Realty (data centers)") }, SortByMonth: true),
+                new Group("Temas", new[] { E("IGV", "Software"), E("KRE", "Bancos regionales"), E("XBI", "Biotecnología"), E("ITA", "Defensa"),
+                    E("XHB", "Constructoras"), E("IYT", "Transporte") }, SortByMonth: true),
+            }),
         }),
-        new("¿Quién lidera?", new[]
+        new("mercados", "Mercados", new[]
         {
-            new Group("Concentración y factores", new[] { R("RSP_SPY"), R("IWM_SPY"), R("QQQ_SPY"), R("IWF_IWD"), R("SMH_SPY"), R("AI_SPY") }),
-            new Group("Sectores", new[] { E("XLK", "Tecnología"), E("SMH", "Semiconductores"), E("XLC", "Comunicaciones"), E("XLY", "Consumo discrecional"),
-                E("XLF", "Finanzas"), E("XLI", "Industria"), E("XLV", "Salud"), E("XLP", "Consumo básico"), E("XLE", "Energía"),
-                E("XLB", "Materiales"), E("XLU", "Servicios públicos"), E("XLRE", "Inmobiliario") }, SortByMonth: true),
-            new Group("Canasta IA", new[] { E("NVDA", "Nvidia"), E("MSFT", "Microsoft"), E("AVGO", "Broadcom"), E("GOOGL", "Alphabet"),
-                E("META", "Meta"), E("AMZN", "Amazon"), E("AAPL", "Apple"), E("TSLA", "Tesla") }, SortByMonth: true),
-        }),
-        new("¿Lo confirman los demás mercados?", new[]
-        {
-            new Group("Monedas", new[] { new Item("ser:" + Dollar, "Dólar amplio (Fed)"), F("6E", "Euro"), F("6J", "Yen"), F("6B", "Libra") }),
-            new Group("Commodities", new[] { F("HG", "Cobre"), F("CL", "Petróleo WTI"), F("GC", "Oro"), F("SI", "Plata"), F("NG", "Gas natural"),
-                F("ZS", "Soja"), F("ZC", "Maíz"), F("ZW", "Trigo") }),
+            new Section("¿Lo confirman los demás mercados?", new[]
+            {
+                new Group("Monedas", new[] { new Item("ser:" + Dollar, "Dólar amplio (Fed)"), F("6E", "Euro"), F("6J", "Yen"), F("6B", "Libra") }),
+                new Group("Commodities", new[] { F("HG", "Cobre"), F("CL", "Petróleo WTI"), F("GC", "Oro"), F("SI", "Plata"), F("NG", "Gas natural"),
+                    F("ZS", "Soja"), F("ZC", "Maíz"), F("ZW", "Trigo") }),
+                new Group("Bonos", new[] { F("ZN", "Bono 10 años (futuro)"), F("ZB", "Bono 30 años (futuro)"), E("TLT", "Tesoro largo (TLT)"),
+                    E("LQD", "Crédito grado de inversión (LQD)"), E("HYG", "High yield (HYG)") }),
+                new Group("Regiones", new[] { E("VGK", "Europa"), E("EWJ", "Japón"), E("EEM", "Emergentes"), E("FXI", "China"),
+                    E("KWEB", "China internet"), E("EWZ", "Brasil"), E("ARGT", "Argentina") }, SortByMonth: true),
+            }),
         }),
     };
     private static readonly string[] StripKeys = { "fut:ES", "ser:UST10", "ser:" + Dollar, "fut:GC", "fut:CL", "ser:VIX" };
+
+    /// <summary>El resumen: unas filas por pregunta; en «quién lidera» suma el mejor y el peor sector y quien más mueve.</summary>
+    private static readonly (string Question, string DetailTab, string[] Keys)[] Summary =
+    {
+        ("¿Hay apetito por riesgo?", "riesgo", new[] { "fut:ES", "ser:BAMLH0A0HYM2", "ser:VIX" }),
+        ("¿Qué descuentan las tasas?", "riesgo", new[] { "ser:UST10", "ser:DFII10", "ser:T10YIE" }),
+        ("¿Quién lidera?", "liderazgo", new[] { "rel:RSP_SPY", "rel:SMH_SPY", "rel:AI_SPY" }),
+        ("¿Lo confirman los demás mercados?", "mercados", new[] { "ser:" + Dollar, "fut:HG", "fut:GC", "fut:CL" }),
+    };
 
     private static readonly ConcurrentDictionary<string, (DateTime At, FutureItem Item)> Contracts = new();
     private static (DateTime At, MacroBoardResponse Board)? _last;
@@ -163,13 +216,15 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
         var contracts = await ContractsAsync(missing, ct);
 
         // Acciones y ETF: los de las filas más los que piden los cocientes.
-        var items = Layout.SelectMany(s => s.Groups).SelectMany(g => g.Items).ToList();
+        var items = Layout.SelectMany(t => t.Sections).SelectMany(s => s.Groups).SelectMany(g => g.Items).ToList();
         var equities = items.Where(i => i.Key.StartsWith("eq:")).Select(i => i.Key[3..])
             .Concat(Relatives.SelectMany(r => r.Numerator.Append(r.Denominator))).Distinct().ToList();
         var streamer = new Dictionary<string, string>();
         foreach (var (code, item) in contracts) streamer["fut:" + code] = item.StreamerSymbol!;
         foreach (var e in equities) streamer["eq:" + e] = e;
+        var capsTask = MarketCapsAsync(missing, ct);
         var daily = await DailyAsync(streamer, missing, ct);
+        var caps = await capsTask;
 
         var snapshot = await snapshotTask;
         var dollar = await dollarTask;
@@ -209,23 +264,74 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
 
         var response = new MacroBoardResponse { AsOf = DateTime.UtcNow, Missing = missing };
         var byKey = new Dictionary<string, BoardRow>();
-        foreach (var section in Layout)
+        BoardRow Cached(Item i) => byKey.TryGetValue(i.Key, out var r) ? r : byKey[i.Key] = Build(i);
+        var detail = new List<BoardTab>();
+        BoardGroup? bestWorst = null; BoardRow? topMover = null;
+        foreach (var tab in Layout)
         {
-            var boardSection = new BoardSection { Question = section.Question };
-            foreach (var g in section.Groups)
+            var boardTab = new BoardTab { Id = tab.Id, Name = tab.Name };
+            foreach (var section in tab.Sections)
             {
-                var rows = g.Items.Select(i => byKey[i.Key] = Build(i)).ToList();
-                if (g.SortByMonth) rows = rows.OrderByDescending(r => r.ChangeMonth ?? double.MinValue).ToList();
-                boardSection.Groups.Add(new BoardGroup { Name = g.Name, Rows = rows });
+                var boardSection = new BoardSection { Question = section.Question };
+                foreach (var g in section.Groups)
+                {
+                    List<BoardRow> rows;
+                    if (g.ByValueAdded)
+                    {
+                        rows = g.Items.Select(i => MacroBoardMath.WithValueAdded(Build(i), caps.TryGetValue(i.Key[3..], out var cap) ? cap : null))
+                            .OrderByDescending(r => Math.Abs(r.ValueAddedMonth ?? 0)).ToList();
+                        topMover = rows.FirstOrDefault(r => r.ValueAddedMonth != null);
+                    }
+                    else
+                    {
+                        rows = g.Items.Select(Cached).ToList();
+                        if (g.SortByMonth) rows = rows.OrderByDescending(r => r.ChangeMonth ?? double.MinValue).ToList();
+                    }
+                    if (g.Name == "Sectores" && rows.Count > 1)
+                        bestWorst = new BoardGroup { Name = "Sector que más sube y que más cae (mes)", Rows = new() { rows[0], rows[^1] } };
+                    boardSection.Groups.Add(new BoardGroup { Name = g.Name, Rows = rows });
+                }
+                boardTab.Sections.Add(boardSection);
             }
-            response.Sections.Add(boardSection);
+            detail.Add(boardTab);
         }
+
+        var summary = new BoardTab { Id = "resumen", Name = "Resumen" };
+        foreach (var (question, tabId, keys) in Summary)
+        {
+            var section = new BoardSection { Question = question, DetailTab = tabId };
+            section.Groups.Add(new BoardGroup { Name = "", Rows = keys.Where(byKey.ContainsKey).Select(k => byKey[k]).ToList() });
+            if (tabId == "liderazgo")
+            {
+                if (bestWorst != null) section.Groups.Add(bestWorst);
+                if (topMover != null) section.Groups.Add(new BoardGroup { Name = "Quién más mueve el S&P (mes)", Rows = new() { topMover } });
+            }
+            summary.Sections.Add(section);
+        }
+        response.Tabs.Add(summary);
+        response.Tabs.AddRange(detail);
         response.Strip = StripKeys.Where(byKey.ContainsKey).Select(k => byKey[k]).ToList();
         response.Curve = MacroBoardMath.Curve(snapshot.Observations);
         response.Events = snapshot.Events.Select(e => new BoardEvent(e.Date, e.Name)).ToList();
         foreach (var r in byKey.Values.Where(r => r.Source == "tastytrade" && r.Spark.Count == 0))
             missing.Add($"{r.Name} ({r.Symbol}): sin historia diaria de Tastytrade.");
         return response;
+    }
+
+    /// <summary>Capitalización de las más grandes (Tastytrade /market-metrics), en USD.</summary>
+    private async Task<Dictionary<string, double>> MarketCapsAsync(List<string> missing, CancellationToken ct)
+    {
+        try
+        {
+            var r = await mediator.Send(new DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility.MarketMetricsVolatilityRequest
+                { Symbols = string.Join(",", MegaCaps) }, ct);
+            return (r.Items ?? new()).Where(i => i.MarketCap is > 0).ToDictionary(i => i.Symbol, i => (double)i.MarketCap!.Value);
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            missing.Add("Capitalización de las más grandes (Tastytrade): no respondió; sin «quién mueve el S&P».");
+            return new();
+        }
     }
 
     private async Task<BoardRow> DollarAsync(List<string> missing, CancellationToken ct)
@@ -248,7 +354,7 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
     /// <summary>Contrato vigente de cada futuro del panel (marca <c>active-month</c> de Tastytrade), con caché de 6 h.</summary>
     private async Task<Dictionary<string, FutureItem>> ContractsAsync(List<string> missing, CancellationToken ct)
     {
-        var codes = Layout.SelectMany(s => s.Groups).SelectMany(g => g.Items).Where(i => i.Key.StartsWith("fut:")).Select(i => i.Key[4..]).ToList();
+        var codes = Layout.SelectMany(t => t.Sections).SelectMany(s => s.Groups).SelectMany(g => g.Items).Where(i => i.Key.StartsWith("fut:")).Select(i => i.Key[4..]).Distinct().ToList();
         var stale = codes.Where(c => !Contracts.TryGetValue(c, out var hit) || DateTime.UtcNow - hit.At > ContractTtl).ToList();
         if (stale.Count > 0)
         {
@@ -358,6 +464,23 @@ public static class MacroBoardMath
         if (dates.Count == 0) return new();
         var first = dates[0];
         return dates.Select(d => (d, maps.Average(m => m[d] / m[first]) / (den[d] / den[first]))).ToList();
+    }
+
+    /// <summary>
+    /// Valor de mercado que sumó en el mes: capitalización de hoy menos la de hace 21 ruedas (misma cantidad de
+    /// acciones). Devuelve una copia: la misma acción puede estar también en otra tabla.
+    /// </summary>
+    public static BoardRow WithValueAdded(BoardRow row, double? marketCap)
+    {
+        var copy = new BoardRow
+        {
+            Id = row.Id, Name = row.Name, Symbol = row.Symbol, Unit = row.Unit, ChangeUnit = row.ChangeUnit, Last = row.Last,
+            ChangeDay = row.ChangeDay, ChangeWeek = row.ChangeWeek, ChangeMonth = row.ChangeMonth, AsOf = row.AsOf,
+            Source = row.Source, Spark = row.Spark,
+        };
+        if (marketCap is > 0 && row.ChangeMonth is double m)
+            copy.ValueAddedMonth = Math.Round(marketCap.Value * (1 - 1 / (1 + m / 100)));
+        return copy;
     }
 
     public static BoardCurve? Curve(IEnumerable<MacroObservation> observations)

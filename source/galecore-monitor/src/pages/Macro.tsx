@@ -34,7 +34,13 @@ export function fmtChange(v: number | null, unit: string): string {
   return unit === '%' ? `${sign}${num(a, 2)} %` : unit === 'pb' ? `${sign}${a.toFixed(0)} pb` : `${sign}${num(a, 2)}`;
 }
 
-const tone = (v: number | null) => v == null || v === 0 ? undefined : v > 0 ? 'pos' : 'neg';
+/** Valor de mercado sumado: «+362 mil M» (miles de millones de USD). */
+export function fmtUsdB(v: number): string {
+  const b = v / 1e9;
+  return `${b > 0 ? '+' : b < 0 ? '−' : ''}US$ ${Math.abs(b).toLocaleString('es-AR', { maximumFractionDigits: 0 })} mil M`;
+}
+
+const tone = (v: number | null | undefined) => v == null || v === 0 ? undefined : v > 0 ? 'pos' : 'neg';
 
 function Spark({ row }: { row: BoardRow }) {
   const v = row.spark.map(p => p.value);
@@ -71,12 +77,21 @@ export function Macro() {
   useEffect(() => { if (detail) dialog.current?.focus(); else opener.current?.focus(); }, [detail]);
 
   const open = (row: BoardRow, target: HTMLElement) => { opener.current = target; setDetail(row); };
+  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('macro') || 'resumen');
+  const goTab = (id: string) => {
+    setTab(id);
+    const url = new URL(window.location.href); url.searchParams.set('macro', id); window.history.replaceState(null, '', url);
+    window.scrollTo({ top: 0 });
+  };
+  const current = board?.tabs.find(t => t.id === tab) ?? board?.tabs[0];
   const today = new Date().toISOString().slice(0, 10);
 
   return <div className="macro-page">
     {error && !board && <p role="alert" className="macro-attention">{error} <button onClick={() => load()}>Reintentar</button></p>}
     {!board && !error && <p role="status">Leyendo mercados…</p>}
-    {board && <>
+    {board && current && <>
+      <nav className="macro-tabs" aria-label="Secciones Macro">{board.tabs.map(t =>
+        <button key={t.id} aria-current={current.id === t.id ? 'page' : undefined} onClick={() => goTab(t.id)}>{t.name}</button>)}</nav>
       <div className="mb-strip">
         {board.strip.map(r => <button key={r.id} className="mb-stat" onClick={e => open(r, e.currentTarget)} title={dated(r)}>
           <span>{r.name}</span><strong>{fmtLast(r)}</strong><em className={tone(r.changeDay)}>{fmtChange(r.changeDay, r.changeUnit)}</em>
@@ -85,12 +100,13 @@ export function Macro() {
       <div className="mb-layout">
         <table className="mb-table">
           <thead><tr><th>Mercado</th><th>Último</th><th>Hoy</th><th>1 semana</th><th>1 mes</th><th aria-label="Último mes" /></tr></thead>
-          {board.sections.flatMap(sec => sec.groups.map((g, i) => <tbody key={sec.question + g.name}>
-            {i === 0 && <tr className="mb-question"><th colSpan={6}>{sec.question}</th></tr>}
-            <tr className="mb-group"><th colSpan={6}>{g.name}</th></tr>
+          {current.sections.flatMap(sec => sec.groups.map((g, i) => <tbody key={sec.question + g.name}>
+            {i === 0 && <tr className="mb-question"><th colSpan={6}><div>{sec.question}
+              {sec.detailTab && <button className="mb-more" onClick={() => goTab(sec.detailTab!)}>Ver detalle →</button>}</div></th></tr>}
+            {g.name && <tr className="mb-group"><th colSpan={6}>{g.name}</th></tr>}
             {g.rows.map(r => <tr key={r.id} onClick={e => open(r, e.currentTarget as HTMLElement)} title={dated(r)}>
               <th><button onClick={e => { e.stopPropagation(); open(r, e.currentTarget); }}>{r.name}{symbol(r)}</button></th>
-              <td>{r.unit === 'rel' ? '' : fmtLast(r)}</td>
+              <td>{r.valueAddedMonth != null ? <span className={tone(r.valueAddedMonth)}>{fmtUsdB(r.valueAddedMonth)}</span> : r.unit === 'rel' ? '' : fmtLast(r)}</td>
               <td className={tone(r.changeDay)}>{fmtChange(r.changeDay, r.changeUnit)}</td>
               <td className={tone(r.changeWeek)}>{fmtChange(r.changeWeek, r.changeUnit)}</td>
               <td className={tone(r.changeMonth)}>{fmtChange(r.changeMonth, r.changeUnit)}</td>

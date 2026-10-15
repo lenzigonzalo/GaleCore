@@ -38,6 +38,8 @@ namespace DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility
 
         // Otros indicadores de mercado
         public decimal? Beta { get; set; }
+        /// <summary>Capitalización de mercado en USD (Tastytrade), para pesar el aporte al índice.</summary>
+        public decimal? MarketCap { get; set; }
         public decimal? CorrSpy3Month { get; set; }
         public decimal? LiquidityRank { get; set; }
         public int? LiquidityRating { get; set; }

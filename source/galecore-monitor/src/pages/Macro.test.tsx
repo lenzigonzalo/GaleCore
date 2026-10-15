@@ -13,29 +13,37 @@ const row = (over: Partial<BoardRow>): BoardRow => ({ id: 'ES', name: 'S&P 500',
 const board: MacroBoard = {
   asOf: '2026-10-15T20:00:00Z',
   strip: [row({}), row({ id: 'UST10', name: 'Tesoro 10 años', symbol: 'UST10', unit: '%', changeUnit: 'pb', last: 5.1, changeDay: -9, source: 'treasury' })],
-  sections: [
-    { question: '¿Hay apetito por riesgo?', groups: [{ name: 'Índices', rows: [row({})] }] },
-    { question: '¿Quién lidera?', groups: [{ name: 'Concentración y factores', rows: [row({ id: 'RSP_SPY', name: 'Igual peso vs S&P', symbol: 'RSP/SPY', unit: 'rel', last: null, changeMonth: -1.05 })] }] },
-    { question: '¿Lo confirman los demás mercados?', groups: [{ name: 'Monedas', rows: [row({ id: '6J', name: 'Yen', symbol: '/6JZ6', last: 0.006398, changeDay: null })] }] },
+  tabs: [
+    { id: 'resumen', name: 'Resumen', sections: [
+      { question: '¿Hay apetito por riesgo?', detailTab: 'riesgo', groups: [{ name: '', rows: [row({})] }] },
+      { question: '¿Quién lidera?', detailTab: 'liderazgo', groups: [{ name: '', rows: [row({ id: 'RSP_SPY', name: 'Igual peso vs S&P', symbol: 'RSP/SPY', unit: 'rel', last: null, changeMonth: -1.05 })] }] },
+    ] },
+    { id: 'liderazgo', name: 'Liderazgo', sections: [
+      { question: '¿Quién lidera?', groups: [{ name: 'Quién mueve el S&P · valor sumado en el mes', rows: [row({ id: 'MSFT', name: 'MSFT', symbol: 'MSFT', valueAddedMonth: 361855389849 })] }] },
+    ] },
+    { id: 'mercados', name: 'Mercados', sections: [
+      { question: '¿Lo confirman los demás mercados?', groups: [{ name: 'Monedas', rows: [row({ id: '6J', name: 'Yen', symbol: '/6JZ6', last: 0.006398, changeDay: null })] }] },
+    ] },
   ],
   curve: { date: '2026-10-15', points: [{ tenor: '2 años', value: 4.77 }, { tenor: '5 años', value: 4.91 }, { tenor: '10 años', value: 5.1 }, { tenor: '30 años', value: 5.43 }] },
   events: [{ date: '2099-10-28', name: 'Reunión FOMC' }],
   missing: [],
 };
 
-beforeEach(() => { (fetchMacroBoard as jest.Mock).mockReset().mockResolvedValue(board); });
+beforeEach(() => { window.history.replaceState(null, '', '/'); (fetchMacroBoard as jest.Mock).mockReset().mockResolvedValue(board); });
 
-test('franja, grupos por clase de activo y valores formateados desde la API', async () => {
+test('resumen por preguntas y pestañas de detalle, todo desde la API', async () => {
   render(<Macro />);
-  await screen.findByText('Índices');
-  expect(screen.getByText('Monedas')).toBeInTheDocument();
-  expect(screen.getByText('¿Quién lidera?')).toBeInTheDocument();
-  expect(screen.getByText('−1,05 %')).toBeInTheDocument();
+  await screen.findByText('¿Hay apetito por riesgo?');
   expect(screen.getAllByText('7.791').length).toBeGreaterThan(0);
-  expect(screen.getByText('−9 pb')).toBeInTheDocument();
-  expect(screen.getByText('0,006398')).toBeInTheDocument();
+  expect(screen.getByText('−1,05 %')).toBeInTheDocument();
   expect(screen.getByText('Reunión FOMC')).toBeInTheDocument();
   expect(screen.getByRole('img', { name: /Curva 2026-10-15/ })).toBeInTheDocument();
+  fireEvent.click(screen.getAllByRole('button', { name: 'Ver detalle →' })[1]);
+  expect(screen.getByText('Quién mueve el S&P · valor sumado en el mes')).toBeInTheDocument();
+  expect(screen.getByText('+US$ 362 mil M')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Mercados' }));
+  expect(screen.getByText('0,006398')).toBeInTheDocument();
 });
 
 test('al tocar una fila abre el detalle y Escape lo cierra', async () => {

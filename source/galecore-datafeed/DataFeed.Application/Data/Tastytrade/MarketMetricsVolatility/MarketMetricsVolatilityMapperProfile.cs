@@ -26,6 +26,7 @@ namespace DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility
                 .ForMember(d => d.IvHv60DayDifference,          opt => opt.MapFrom(s => ParseDecimal(s.IvHv60DayDifference)))
                 .ForMember(d => d.IvHv90DayDifference,          opt => opt.MapFrom(s => ParseDecimal(s.IvHv90DayDifference)))
                 .ForMember(d => d.Beta,                          opt => opt.MapFrom(s => ParseDecimal(s.Beta)))
+                .ForMember(d => d.MarketCap,                     opt => opt.MapFrom(s => s.MarketCap))
                 .ForMember(d => d.CorrSpy3Month,                 opt => opt.MapFrom(s => ParseDecimal(s.CorrSpy3Month)))
                 .ForMember(d => d.LiquidityRank,                 opt => opt.MapFrom(s => ParseDecimal(s.LiquidityRank)));
 

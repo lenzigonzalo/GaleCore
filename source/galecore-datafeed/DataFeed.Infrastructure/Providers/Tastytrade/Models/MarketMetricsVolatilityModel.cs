@@ -74,6 +74,9 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade.Models
         [JsonPropertyName("beta")]
         public string Beta { get; set; }
 
+        [JsonPropertyName("market-cap")]
+        public decimal? MarketCap { get; set; }
+
         [JsonPropertyName("corr-spy-3month")]
         public string CorrSpy3Month { get; set; }
 

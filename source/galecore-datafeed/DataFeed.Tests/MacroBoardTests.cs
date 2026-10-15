@@ -73,5 +73,15 @@ namespace DataFeed.Tests
             Assert.Equal(((1.2 + 1.2) / 2) / 1.1, rel[1].Value, 6);
             Assert.Empty(MacroBoardMath.Relative(new List<List<(string, double)>> { new() }, den));
         }
+    
+        [Fact]
+        public void Valor_sumado_en_el_mes_sale_de_la_capitalizacion_y_la_suba()
+        {
+            var row = new BoardRow { Id = "NVDA", ChangeMonth = 10 };
+            // Hoy vale 1.100: hace un mes, 1.000. Sumó 100.
+            Assert.Equal(100, MacroBoardMath.WithValueAdded(row, 1100).ValueAddedMonth);
+            Assert.Null(MacroBoardMath.WithValueAdded(row, null).ValueAddedMonth);
+            Assert.Null(row.ValueAddedMonth);
+        }
     }
 }

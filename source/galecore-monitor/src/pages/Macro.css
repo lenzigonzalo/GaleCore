@@ -36,3 +36,7 @@
 @media(max-width:700px){.mb-table th:nth-child(4),.mb-table td:nth-child(4),.mb-table td:nth-child(6),.mb-table th:nth-child(6){display:none}.mb-side{grid-template-columns:1fr}.macro-detail{width:100%}.macro-detail-values{grid-template-columns:1fr 1fr!important}}
 .mb-question th{font-size:20px;font-weight:600!important;color:var(--text-primary);text-align:left;padding:30px 10px 4px!important;border-bottom:0!important}
 .mb-table tbody:first-of-type .mb-question th{padding-top:14px!important}
+.macro-tabs{display:flex;gap:26px;overflow-x:auto;border-bottom:1px solid var(--border);margin-bottom:18px}.macro-tabs button{padding:8px 0 12px;font-size:17px;font-weight:500;white-space:nowrap;color:var(--text-secondary);background:none;border:0;border-bottom:3px solid transparent;cursor:pointer}.macro-tabs button[aria-current]{color:var(--text-primary);border-bottom-color:var(--accent)}
+.mb-question th>div{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.mb-more{background:none;border:0;color:var(--accent);font-size:15px;font-weight:500;cursor:pointer;padding:0}
+.mb-question .mb-more{font-size:15px!important;font-weight:500!important}
