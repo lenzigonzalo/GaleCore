@@ -6,6 +6,7 @@ import { Database } from 'lucide-react';
 import { latestInstance } from '../components/shadow/InstanceState';
 import { PerformancePanel } from '../components/shadow/PerformancePanel';
 import { ModeSwitch } from '../components/common/ModeSwitch';
+import { StageModeChip, StrategyHeader } from '../components/shadow/StrategyHeader';
 import { fetchReferenceCapital } from '../api/space';
 import { amount, rate, readPanelError, stateLabel, strategyName, usd as panelUsd } from '../components/shadow/panelPresentation';
 import { NoticePanel } from '../components/common/NoticePanel';
@@ -151,10 +152,10 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
     .sort((a, b) => strategyName(a.strategyName!).localeCompare(strategyName(b.strategyName!)));
   const countIn = (id: Stage) => rows.filter(r => stageOf(r.spec) === id).length + (showRpf && stageOf('rpf') === id ? 1 : 0);
   const currentStage: Stage = stage ?? (countIn('LIVE') ? 'LIVE' : 'SHADOW');
+  const back = () => { setSpec(null); setRuntimeOpen(false); };
   return <div className="shadow-page">
     {spec ? <>
-      <button className="shadow-back" onClick={() => { setSpec(null); setRuntimeOpen(false); }}>← Estrategias</button>
-      {spec === 'rpf' && rpf ? <div className="performance-panel"><h2>{rpfName}</h2><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
+      {spec === 'rpf' && rpf ? <div className="performance-panel"><StrategyHeader title={rpfName} onBack={back} chips={<><StageState active={rpfActive} /><StageModeChip stage={stageOf('rpf')} mode={modeOf('rpf')} /></>} /><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} onBack={back} stage={stageOf(spec)} mode={modeOf(spec)} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
     </> : <div className="performance-panel">
       <div className="strategy-list-heading"><h2 className="strategy-list-title">Estrategias</h2>
         <div className="stage-switch" role="tablist" aria-label="Etapa">{stages.map(x => <button key={x.id} role="tab" aria-selected={currentStage === x.id} onClick={() => setStage(x.id)}>{x.label}<span className="stage-count">{countIn(x.id) || ''}</span></button>)}</div></div>

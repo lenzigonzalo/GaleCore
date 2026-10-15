@@ -195,7 +195,7 @@ test('Datos sólo consulta su API al abrir la pestaña, incluso en una estrategi
  await screen.findByText('Esta estrategia no tiene proyecto en el Lab');
  expect(panelApi).not.toHaveBeenCalled();expect(get).not.toHaveBeenCalled();
  fireEvent.click(screen.getByRole('tab',{name:'Datos'}));
- expect(await screen.findByText(/Sin historia/)).toBeInTheDocument();
+ expect(await screen.findByTitle('Sin historia')).toBeInTheDocument();
  expect(get).toHaveBeenCalledTimes(1);expect(get).toHaveBeenCalledWith('/App/Runtime/Performance/Data',{params:{spec:plain.spec}});
 });
 test('Abrir en el chat usa el id del proyecto asociado, no el nombre de la spec',async()=>{
