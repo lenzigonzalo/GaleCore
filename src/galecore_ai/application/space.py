@@ -327,7 +327,7 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
     from galecore_ai.application import alert_analysis
     from galecore_ai.application import supervisor as sv
 
-    shown = sv.view(kb, ALERTS_SHOWN)
+    shown = sv.view(kb, ALERTS_SHOWN, today=(now or datetime.now(UTC)).astimezone(sv.NEW_YORK).date(), today_only=True)
     analyses = alert_analysis.view(kb, [a["id"] for a in shown], now)
     pending = [a for a in shown if a["decision"] is None and a["needs_decision"]]
     failed = "error" in scan or bool(scan.get("problems"))

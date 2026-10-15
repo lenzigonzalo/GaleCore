@@ -356,9 +356,26 @@ def test_the_monitor_reads_one_line_per_release_in_plain_words(kb, research_ref)
     supervisor.scan(kb, reader(doc.spec_hash, [closed]), IN_SESSION + timedelta(minutes=10))
     shown = supervisor.view(kb, today=IN_SESSION.date())
     [event] = [a for a in shown if a["kind"] == "event"]
-    assert event["category"] == "eeuu" and event["title"] == "Inflación de EE. UU. (CPI) mañana"
-    assert "2 posiciones de SHADOW" in event["detail"] and len(event["positions"]) == 2
+    assert event["category"] == "eeuu" and event["title"].startswith("Inflación de EE. UU. (CPI) mañana")
+    assert event["title"].endswith("· 2 posiciones de SHADOW vencen después") and len(event["positions"]) == 2
     [close] = [a for a in shown if a["kind"] == "closed"]
     assert close["category"] == "estrategia"
     assert close["title"].endswith("733/728 · vence 13/11: SHADOW la cerró por toma de ganancia, +$23")
     assert supervisor.view(kb, today=date(2026, 9, 25)) == [close | {"title": close["title"]}]   # past release drops
+
+
+def test_the_monitor_shows_only_todays_alerts(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    supervisor.scan(kb, reader(doc.spec_hash, [position(maxRisk=960.0)]), IN_SESSION)
+    assert len(supervisor.view(kb, today=IN_SESSION.date(), today_only=True)) == 1
+    assert supervisor.view(kb, today=IN_SESSION.date() + timedelta(days=1), today_only=True) == []
+
+
+def test_a_release_announced_yesterday_still_counts_all_its_positions_today(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    other = position("bbbbbbbb-2", legs=[{"side": "SELL", "strike": 720.0, "expiration": "2026-11-13"},
+                                         {"side": "BUY", "strike": 715.0, "expiration": "2026-11-13"}])
+    supervisor.scan(kb, reader(doc.spec_hash, [position(), other], releases=[("2026-09-24", "Producer Price Index")]),
+                    IN_SESSION)
+    [event] = supervisor.view(kb, today=date(2026, 9, 24), today_only=True)
+    assert event["title"] == "Precios mayoristas de EE. UU. (PPI) hoy · 2 posiciones de SHADOW vencen después"

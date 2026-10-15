@@ -568,7 +568,7 @@ def _readable(a: Alert, today: date) -> tuple[str, str]:
     return a.motivo, a.propuesta
 
 
-def view(kb: KnowledgeBase, limit: int = 20, today: date | None = None) -> list[dict]:
+def view(kb: KnowledgeBase, limit: int = 20, today: date | None = None, today_only: bool = False) -> list[dict]:
     """The latest alerts with their decision, newest first: what the monitor shows.
 
     A macro release is one line however many positions it touches (it used to be one per position and per day:
@@ -579,6 +579,9 @@ def view(kb: KnowledgeBase, limit: int = 20, today: date | None = None) -> list[
     out: list[dict] = []
     groups: dict[tuple, dict] = {}
     for a in alerts(kb):
+        if today_only and a.kind != AlertKind.EVENT and a.detected_at.astimezone(NEW_YORK).date() != today:
+            continue                                  # the monitor shows today's alerts only (owner 15/10); a release
+                                                      # counts by its own date, so all its positions stay in its line
         group = (("event", a.dato.get("event"), a.dato.get("event_date")) if a.kind == AlertKind.EVENT
                  else ("no_price", a.detected_at.date()) if a.kind == AlertKind.NO_PRICE else None)
         if a.kind == AlertKind.EVENT and str(a.dato.get("event_date") or "9999") < today.isoformat():
@@ -611,11 +614,12 @@ def view(kb: KnowledgeBase, limit: int = 20, today: date | None = None) -> list[
         word = "posiciones" if n > 1 else "posición"
         if item["kind"] == AlertKind.EVENT.value:
             name = str(item["dato"].get("event") or "")
-            item["title"] = f"{EVENT_NAMES.get(name.lower(), name)} {_day(str(item['dato'].get('event_date')), today)}"
+            item["title"] = (f"{EVENT_NAMES.get(name.lower(), name)} {_day(str(item['dato'].get('event_date')), today)}"
+                             f" · {n} {word} de SHADOW {'vencen' if n > 1 else 'vence'} después")
             item["detail"] = (f"Antes del vencimiento de {n} {word} de SHADOW ({positions}). "
                               "Las salidas siguen siendo las de la regla.")
         else:
-            item["title"] = f"Sin precio para {n} {word} de SHADOW en sesión"
+            item["title"] = f"Sin precio para {n} {word} de SHADOW en sesión ({positions})"
             item["detail"] = (f"{positions}. Mientras no haya precio, las salidas no se evalúan; "
                               "suele ser la conexión de datos de GaleCore.")
     return out
