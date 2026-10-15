@@ -468,13 +468,14 @@ def context(client: SpaceClient) -> str:
             lines.append(f"  perfil: {p['title']}")
     for c in by_kind.get("convention", []):
         lines.append(f"  convención «{c['title']}»: " + " ".join(str(c.get("content", "")).split()))
-    labels = {"objective": "objetivos", "memory": "memoria", "agent": "agentes", "skill": "skills", "data": "datos"}
-    for kind, label in labels.items():
-        items = by_kind.get(kind, [])
-        if items:
-            n_shared = sum(1 for i in items if i.get("visibility") == "shared")
-            tag = f" ({n_shared} compartidas por vos)" if n_shared else ""
-            lines.append(f"  {label}{tag}: " + " · ".join(dict.fromkeys(i["title"] for i in items))[:300])
+    # Objectives are already in the profile; the rest is a count: the capability is picked per request and the
+    # detail is one `space list` away.
+    if not by_kind.get("profile") and by_kind.get("objective"):
+        lines.append("  objetivos: " + " · ".join(dict.fromkeys(i["title"] for i in by_kind["objective"])))
+    counts = [f"{len(by_kind[k])} {label}" for k, label in
+              {"agent": "agentes", "skill": "skills", "memory": "memorias", "data": "datos"}.items() if by_kind.get(k)]
+    if counts:
+        lines.append("  además: " + " · ".join(counts))
     shared_kinds = sorted({i["kind"] for i in shared})
     if shared_kinds:
         lines.append("  compartido: " + ", ".join(f"{k} ({sum(1 for i in shared if i['kind'] == k)})" for k in shared_kinds))

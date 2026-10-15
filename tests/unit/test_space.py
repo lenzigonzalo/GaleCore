@@ -89,7 +89,7 @@ def test_the_session_starts_with_who_the_trader_is(galecore):
     text = space.context(client)
     assert "demo: 3 piezas propias, 1 compartidas" in text
     assert "perfil v5" in text and "30 a 45 días" in text
-    assert "objetivos: Retorno anual de 10 a 15 %" in text and "agentes: oportunidades" in text
+    assert "Retorno anual de 10 a 15 %" not in text and "además: 1 agentes" in text   # objectives live in the profile
     assert "compartido: skill (1)" in text
 
 
