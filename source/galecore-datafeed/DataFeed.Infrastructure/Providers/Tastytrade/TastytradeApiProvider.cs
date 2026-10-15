@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using DataFeed.Infrastructure.Providers.Tastytrade.Models;
 using DataFeed.Infrastructure.Providers;
@@ -186,6 +186,26 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                 PropertyNameCaseInsensitive = true
             };
             return JsonSerializer.Deserialize<AccountPositionsModel>(content, options);
+        }
+
+        /// <summary>
+        /// GET /instruments/futures?product-code[]=ES&amp;... — los contratos listados de cada producto, con la marca
+        /// <c>active-month</c> de Tastytrade y el símbolo de DXLink (Macro, WS-0036).
+        /// </summary>
+        public async Task<FuturesModel?> GetFuturesAsync(IEnumerable<string> productCodes, CancellationToken cancellationToken)
+        {
+            _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            _client.DefaultRequestHeaders.UserAgent.ParseAdd("PostmanRuntime/7.36.0");
+            var query = string.Join("&", productCodes.Select(c => "product-code[]=" + Uri.EscapeDataString(c)));
+            var request = await _auth.CreateOAuthApiRequestAsync($"/instruments/futures?{query}");
+            var response = await _client.SendAsync(request, cancellationToken);
+            response.EnsureSuccessStatusCode();
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            return JsonSerializer.Deserialize<FuturesModel>(content, new JsonSerializerOptions
+            {
+                NumberHandling = JsonNumberHandling.AllowReadingFromString,
+                PropertyNameCaseInsensitive = true
+            });
         }
 
         public async Task<MarketMetricsVolatilityModel?> GetMarketMetricsVolatilityAsync(string symbols, CancellationToken cancellationToken)

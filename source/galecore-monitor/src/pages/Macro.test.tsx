@@ -1,46 +1,52 @@
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { Macro } from './Macro';
-import { fetchMacro } from '../api/macroData';
-import type { MacroSnapshot } from '../types/macroTypes';
-jest.mock('../api/macroData', () => ({ fetchMacro: jest.fn() }));
-jest.mock('../components/macro/MacroChart', () => ({ MacroChart: () => <div>Gráfico de prueba</div> }));
-const fetchMock = fetchMacro as jest.Mock;
-function sample(horizon = 'month'): MacroSnapshot {
-  return { id: 'a'.repeat(64), schemaVersion: '1.0', horizon, region: 'Global', currency: 'Local',
-    dataCutoff: '2026-10-13T17:00:00Z', generatedAt: '2026-10-13T17:01:00Z', contentHash: 'a'.repeat(64), historicalFidelity: 'revised-history-only', methodologyVersions: ['macro-v1'],
-    seriesDefinitions: ['rates', 'equities', 'credit', 'currencies', 'commodities', 'volatility'].map(f => ({ id: f, name: `Serie ${f}`, family: f, region: 'US', unit: '%', source: f, frequency: 'daily', calendarId: 'publication-dates', instrumentType: 'reference', currency: 'USD', methodologyVersion: 'macro-v1', supportedHorizons: ['month'], limitations: ['Historia revisada a hoy'] })),
-    observations: [{ id: 'rates:2026-10-12', seriesId: 'rates', value: 4.5, observationTime: '2026-10-12', publishedAt: null, availableAt: null, retrievedAt: '2026-10-13T17:00:00Z', timestampPrecision: 'day', sourceRef: 'https://example.test', vintageId: null, provenance: 'observed', qualityStatus: 'available', qualityReasons: ['Hora desconocida'] }],
-    metrics: [{ id: `rates:${horizon}`, seriesId: 'rates', levelRef: 'rates:2026-10-12', comparisonRef: null, value: null, unit: 'pb', horizon, actualFrom: null, actualTo: '2026-10-12', inputRefs: [], formulaVersion: 'difference-v1', qualityStatus: 'unavailable', limitations: ['Referencia ausente'] }],
-    events: [{ id: 'fed:2026-10-28', name: 'Reunión FOMC', date: '2026-10-28', source: 'fed', sourceRef: 'https://example.test', retrievedAt: '2026-10-13T17:00:00Z', timestampPrecision: 'day', limitations: ['Sin hora exacta'] }],
-    sourceStatuses: [{ id: 'fred-calendar', status: 'source-error', asOf: null, retrievedAt: null, reasons: ['Timeout'] }]
-  };
-}
-beforeEach(() => { window.history.replaceState(null, '', '/?macro=panorama'); fetchMock.mockReset(); fetchMock.mockImplementation((h: string) => Promise.resolve(sample(h))); });
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { Macro, fmtChange, fmtLast } from './Macro';
+import { fetchMacroBoard, BoardRow, MacroBoard } from '../api/macroData';
 
-test('seis familias, null no cero y presentación sin texto técnico ni copiar enlace', async () => {
-  render(<Macro />); await screen.findByText('Serie rates');
-  for (const name of ['Tasas','Acciones','Crédito','Monedas','Materias primas','Volatilidad']) expect(screen.getByText(name)).toBeInTheDocument();
-  expect(screen.getByText('4,50')).toBeInTheDocument(); expect(screen.getAllByText('N/D').length).toBeGreaterThan(0);
-  expect(screen.queryByRole('button',{name:'Copiar enlace'})).not.toBeInTheDocument();
-  expect(screen.queryByText('CONTEXTO DE MERCADO')).not.toBeInTheDocument();
-  expect(screen.queryByText(/P&L|Órdenes|Posiciones/)).not.toBeInTheDocument();
+jest.mock('../api/macroData', () => ({ fetchMacroBoard: jest.fn() }));
+jest.mock('../components/macro/MacroChart', () => ({ MacroChart: () => <div>Gráfico de prueba</div> }));
+
+const row = (over: Partial<BoardRow>): BoardRow => ({ id: 'ES', name: 'S&P 500', symbol: '/ESZ6', unit: 'pts', changeUnit: '%',
+  last: 7791, changeDay: 0.27, changeWeek: -0.32, changeMonth: 2.2, asOf: '2026-10-15', source: 'tastytrade',
+  spark: [{ date: '2026-10-14', value: 7770 }, { date: '2026-10-15', value: 7791 }], ...over });
+
+const board: MacroBoard = {
+  asOf: '2026-10-15T20:00:00Z',
+  strip: [row({}), row({ id: 'UST10', name: 'Tesoro 10 años', symbol: 'UST10', unit: '%', changeUnit: 'pb', last: 5.1, changeDay: -9, source: 'treasury' })],
+  groups: [{ name: 'Índices', rows: [row({})] }, { name: 'Monedas', rows: [row({ id: '6J', name: 'Yen', symbol: '/6JZ6', last: 0.006398, changeDay: null })] }],
+  curve: { date: '2026-10-15', points: [{ tenor: '2 años', value: 4.77 }, { tenor: '5 años', value: 4.91 }, { tenor: '10 años', value: 5.1 }, { tenor: '30 años', value: 5.43 }] },
+  events: [{ date: '2099-10-28', name: 'Reunión FOMC' }],
+  missing: [],
+};
+
+beforeEach(() => { (fetchMacroBoard as jest.Mock).mockReset().mockResolvedValue(board); });
+
+test('franja, grupos por clase de activo y valores formateados desde la API', async () => {
+  render(<Macro />);
+  await screen.findByText('Índices');
+  expect(screen.getByText('Monedas')).toBeInTheDocument();
+  expect(screen.getAllByText('7.791').length).toBeGreaterThan(0);
+  expect(screen.getByText('−9 pb')).toBeInTheDocument();
+  expect(screen.getByText('0,006398')).toBeInTheDocument();
+  expect(screen.getByText('Reunión FOMC')).toBeInTheDocument();
+  expect(screen.getByRole('img', { name: /Curva 2026-10-15/ })).toBeInTheDocument();
 });
-test('detalle conserva fuente y fechas detrás de disclosure, Escape restaura foco',async()=>{
-  render(<Macro />); const button=await screen.findByRole('button',{name:/Serie rates/});fireEvent.click(button);
-  const dialog=screen.getByRole('dialog');expect(dialog).toHaveFocus();
-  expect(within(dialog).getByRole('link',{name:/Ver fuente original/})).toHaveAttribute('href','https://example.test');
-  expect(dialog).toHaveTextContent('Último valor');expect(dialog).not.toHaveTextContent('Observaciones');
-  fireEvent.keyDown(dialog,{key:'Escape'});expect(screen.queryByRole('dialog')).not.toBeInTheDocument();expect(button).toHaveFocus();
+
+test('al tocar una fila abre el detalle y Escape lo cierra', async () => {
+  render(<Macro />);
+  const table = await screen.findByRole('table');
+  fireEvent.click(within(table).getAllByRole('button', { name: /S&P 500/ })[0]);
+  const dialog = screen.getByRole('dialog', { name: 'S&P 500' });
+  expect(dialog).toHaveTextContent('Tastytrade (contrato vigente)');
+  fireEvent.keyDown(dialog, { key: 'Escape' });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
-test('enlace de período antiguo descarta respuesta tardía incompatible',async()=>{
-  let resolveOld:(value:MacroSnapshot)=>void=()=>{};fetchMock.mockImplementationOnce(()=>new Promise(resolve=>{resolveOld=resolve;}));
-  render(<Macro />);act(()=>{window.history.replaceState(null,'','/?macro=panorama&horizon=session');window.dispatchEvent(new PopStateEvent('popstate'));});
-  await screen.findByText('Serie rates');await act(async()=>{resolveOld(sample('month'));});
-  expect(screen.getByText(/Este enlace usa un período/)).toBeInTheDocument();await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(2));
-});
-test('referencia inexistente no inventa un detalle y Eventos muestra calendario',async()=>{
-  window.history.replaceState(null,'','/?macro=events&detail=missing&snapshot='+'a'.repeat(64));render(<Macro />);
-  await screen.findByText('El dato de este enlace no está disponible.');expect(screen.getByRole('region',{name:'Calendario económico'})).toBeInTheDocument();
-  expect(fetchMock.mock.calls[0][3]).toBe('a'.repeat(64));
+
+test('formatos: cambios con signo por unidad y vacío sin dato', () => {
+  expect(fmtChange(0.27, '%')).toBe('+0,27 %');
+  expect(fmtChange(-9, 'pb')).toBe('−9 pb');
+  expect(fmtChange(1.6, 'pts')).toBe('+1,60');
+  expect(fmtChange(null, '%')).toBe('—');
+  expect(fmtLast(row({ unit: '%', last: 5.1 }))).toBe('5,10 %');
+  expect(fmtLast(row({ last: 1.1238 }))).toBe('1,1238');
 });

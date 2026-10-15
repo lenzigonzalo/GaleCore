@@ -18,6 +18,10 @@ public class MacroController(IMediator mediator, IConfiguration config) : Contro
         seriesDefinitions = MacroCatalog.Definitions, regions = new[] { "Global", "US" }, currencies = new[] { "Local" },
         limitations = new[] { "Cobertura US parcial; Global no implica cobertura mundial.", "Sin IA ni replay histórico fiel." } });
 
+    /// <summary>Panel de mercados (WS-0036): franja, tabla por clase de activo, curva y agenda, calculados acá.</summary>
+    [HttpGet("Board")]
+    public async Task<IActionResult> Board(CancellationToken ct) => Ok(await mediator.Send(new MacroBoardRequest(), ct));
+
     [HttpGet("Snapshot")]
     public async Task<IActionResult> Snapshot([FromQuery] MacroSnapshotRequest request, CancellationToken ct)
     {
