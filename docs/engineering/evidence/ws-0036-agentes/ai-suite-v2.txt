@@ -1,0 +1,76 @@
+........................................................................ [  5%]
+........................................................................ [ 10%]
+.....................................................F.................. [ 16%]
+........................................................................ [ 21%]
+.........F.............................................................. [ 26%]
+........................................................................ [ 32%]
+........................................................................ [ 37%]
+........................................................................ [ 43%]
+........................................................................ [ 48%]
+........................................................................ [ 53%]
+........................................................................ [ 59%]
+........................................................................ [ 64%]
+........................................................................ [ 69%]
+........................................................................ [ 75%]
+........................................................................ [ 80%]
+........................................................................ [ 86%]
+........................................................................ [ 91%]
+........................................................................ [ 96%]
+..........................................                               [100%]
+================================== FAILURES ===================================
+______________________ test_the_real_catalog_is_complete ______________________
+
+tmp_path = WindowsPath('C:/Users/lenzi/AppData/Local/Temp/pytest-of-lenzi/pytest-1402/test_the_real_catalog_is_compl0')
+
+    def test_the_real_catalog_is_complete(tmp_path):
+        # Cited feedback lives in the knowledge base (absent in CI); its resolution is tested in test_feedback.py.
+>       result = check_catalog(load_catalog(), commands=cli_commands(build_parser()), workspace=_workspace_root(WORKSPACE),
+                               registry=load_source_registry(), status_store=FileSourceStatusStore(tmp_path / "s"),
+                               feedback_check=lambda refs, skill_id, version, owner_decision: [])
+
+tests\unit\test_catalog_check.py:44:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+src\galecore_ai\application\catalog_check.py:170: in check_catalog
+    problems = check_entry(entry, described[entry.id], commands=commands, workspace=workspace,
+src\galecore_ai\application\catalog_check.py:155: in check_entry
+    problems += _flow_problems(entry, commands, workspace)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\galecore_ai\application\catalog_check.py:58: in _flow_problems
+    if len(tokens) < 2 or not tokens[1].endswith(".py") or not _script_path(tokens[1], workspace).is_file():
+                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+script = 'GaleCore/dev/galecore_dev.py', workspace = None
+
+    def _script_path(script: str, workspace: Path) -> Path:
+        """A flow script: ``GaleCore-AI/...`` is this checkout's own file (a worktree's new script counts before
+        it is merged); anything else is relative to the workspace root."""
+        head, _, rest = script.partition("/")
+>       return CHECKOUT / rest if head == "GaleCore-AI" and rest else workspace / script
+                                                                      ^^^^^^^^^^^^^^^^^^
+E       TypeError: unsupported operand type(s) for /: 'NoneType' and 'str'
+
+src\galecore_ai\application\catalog_check.py:47: TypeError
+_______________ test_repository_active_work_item_is_consistent ________________
+
+    def test_repository_active_work_item_is_consistent():
+        repository_root = Path(__file__).resolve().parents[2]
+
+        result = evaluate_repository(repository_root)
+
+>       assert result.passed, "\n".join(result.errors)
+E       AssertionError: missing the workspace ACTIVE_WORK_ITEM
+E       assert False
+E        +  where False = GateResult(work_item=None, metadata={}, errors=['missing the workspace ACTIVE_WORK_ITEM'], warnings=[]).passed
+
+tests\unit\test_engineering_gate.py:109: AssertionError
+============================== warnings summary ===============================
+..\..\..\Apli\Gonza\Lib\site-packages\fastapi\testclient.py:1
+  C:\Apli\Gonza\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/unit/test_catalog_check.py::test_the_real_catalog_is_complete - ...
+FAILED tests/unit/test_engineering_gate.py::test_repository_active_work_item_is_consistent
+2 failed, 1336 passed, 1 warning in 757.47s (0:12:37)
