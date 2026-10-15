@@ -465,6 +465,8 @@ namespace DataFeed.Repositories.Migrations
 
                             t.HasCheckConstraint("ck_strategy_settings_mode", "mode IN ('AUTO','MANUAL')");
 
+                            t.HasCheckConstraint("ck_strategy_settings_shadow_auto", "NOT (stage = 'SHADOW' AND mode = 'MANUAL')");
+
                             t.HasCheckConstraint("ck_strategy_settings_stage", "stage IN ('SHADOW','PAPER','LIVE')");
                         });
                 });

@@ -14,7 +14,7 @@ public class StrategySettingsTests
 
     [Theory]
     [InlineData("SHADOW", "AUTO", false)]
-    [InlineData("SHADOW", "MANUAL", false)]
+    [InlineData("SHADOW", "MANUAL", true)]
     [InlineData("PAPER", "AUTO", false)]
     [InlineData("LIVE", "MANUAL", false)]
     [InlineData("LIVE", "AUTO", true)]
@@ -27,7 +27,7 @@ public class StrategySettingsTests
     public void Resolve_UsesSavedRowsAndDefaults_OncePerName()
     {
         var at = new DateTime(2026, 10, 14, 23, 0, 0, DateTimeKind.Utc);
-        var saved = new Dictionary<string, (string, string, string, DateTime)> { ["a"] = ("SHADOW", "MANUAL", "u1", at) };
+        var saved = new Dictionary<string, (string, string, string, DateTime)> { ["a"] = ("PAPER", "MANUAL", "u1", at) };
         var rows = StrategySettings.Resolve(new[] { "rpf", "a", "a", "b" }, saved);
 
         Assert.Equal(new[] { "a", "b", "rpf" }, rows.Select(r => r.Name));

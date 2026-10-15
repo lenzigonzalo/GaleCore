@@ -35,6 +35,8 @@ namespace DataFeed.Application.App.Runtime
         {
             if (!Stages.Contains(stage)) return $"etapa es una de: {string.Join(", ", Stages)}";
             if (!Modes.Contains(mode)) return $"modo es uno de: {string.Join(", ", Modes)}";
+            if (stage == "SHADOW" && mode == "MANUAL")
+                return "SHADOW corre siempre en automático: es el banco de pruebas de la estrategia.";
             if (stage == "LIVE" && mode == "AUTO")
                 return "LIVE en automático mandaría órdenes reales solas: bloqueado hasta que exista la ejecución y lo apruebes.";
             return null;
@@ -43,7 +45,6 @@ namespace DataFeed.Application.App.Runtime
         public static string Effect(string stage, string mode) => (stage, mode) switch
         {
             ("SHADOW", "AUTO") => "Corre sola con fills simulados.",
-            ("SHADOW", "MANUAL") => "Evalúa y avisa; las entradas simuladas las decidís vos.",
             ("PAPER", _) => "Necesita la cuenta paper del bróker, que todavía no está conectada.",
             ("LIVE", "MANUAL") => "Avisa y vos operás en tu cuenta.",
             _ => "Bloqueado.",
