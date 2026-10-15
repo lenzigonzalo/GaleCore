@@ -1,5 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { LabProjectList } from './LabProjectList';
 import type { WorkspaceState } from '../../api/lab';
 
@@ -84,4 +85,69 @@ test('Escape cancela creación y devuelve el foco; storage no disponible lo avis
   expect(screen.queryByRole('form', { name: 'Nuevo grupo' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Crear grupo' })).toHaveFocus();
   spy.mockRestore();
+});
+function transfer() {
+  const values: Record<string, string> = {};
+  return { types: [] as string[], effectAllowed: '', dropEffect: '', setData(type: string, value: string) { values[type] = value; this.types.push(type); }, getData: (type: string) => values[type] || '' };
+}
+test('arrastra chat a grupo plegado, resalta destino, abre grupo y conserva contexto al sacarlo', () => {
+  render(<LabProjectList {...props}/>); createGroup('Lecturas');
+  fireEvent.click(screen.getByRole('button', { name: 'Contraer grupo Lecturas' }));
+  const dataTransfer = transfer(), destination = screen.getByRole('region', { name: 'Lecturas' });
+  expect(screen.getByRole('button', { name: 'Investigación' })).toHaveAttribute('draggable', 'true');
+  fireEvent.dragStart(screen.getByRole('button', { name: 'Investigación' }), { dataTransfer });
+  fireEvent.dragOver(destination, { dataTransfer });
+  expect(destination).toHaveClass('lab-drop-target');
+  fireEvent.drop(destination, { dataTransfer });
+  expect(screen.getByRole('button', { name: 'Contraer grupo Lecturas' })).toHaveAttribute('aria-expanded', 'true');
+  const chat = within(destination).getByRole('button', { name: 'Investigación SPY' });
+  fireEvent.click(chat); expect(props.onChat).toHaveBeenCalledWith(state.projects[0], state.chats[0]);
+  const back = transfer(); fireEvent.dragStart(chat, { dataTransfer: back });
+  const ungrouped = screen.getByRole('region', { name: 'Sin grupo' });
+  fireEvent.dragOver(ungrouped, { dataTransfer: back }); fireEvent.drop(ungrouped, { dataTransfer: back });
+  expect(within(ungrouped).getByRole('button', { name: 'Investigación' })).toBeInTheDocument();
+  expect(JSON.parse(localStorage.getItem(storage)!).members).toEqual({});
+});
+test('arrastra proyecto entre grupos y persiste la organización', () => {
+  const { unmount } = render(<LabProjectList {...props}/>); createGroup('Uno'); createGroup('Dos');
+  for (const label of ['Uno', 'Dos']) {
+    const dataTransfer = transfer(); fireEvent.dragStart(screen.getByRole('button', { name: 'SPY' }), { dataTransfer });
+    const group = screen.getByRole('region', { name: label }); fireEvent.dragOver(group, { dataTransfer }); fireEvent.drop(group, { dataTransfer });
+    expect(within(group).getByRole('button', { name: 'SPY' })).toBeInTheDocument();
+  }
+  unmount(); render(<LabProjectList {...props}/>);
+  expect(within(screen.getByRole('region', { name: 'Dos' })).getByRole('button', { name: 'SPY' })).toBeInTheDocument();
+});
+test('cancelar arrastre y soltar archivos externos no cambia organización', () => {
+  render(<LabProjectList {...props}/>); createGroup('Grupo');
+  const before = localStorage.getItem(storage), dataTransfer = transfer(), group = screen.getByRole('region', { name: 'Grupo' });
+  fireEvent.dragStart(screen.getByRole('button', { name: 'Investigación' }), { dataTransfer }); fireEvent.dragOver(group, { dataTransfer });
+  fireEvent.keyDown(document, { key: 'Escape' }); fireEvent.drop(group, { dataTransfer });
+  expect(group).not.toHaveClass('lab-drop-target'); expect(localStorage.getItem(storage)).toBe(before);
+  fireEvent.dragStart(screen.getByRole('button', { name: 'SPY' }), { dataTransfer }); fireEvent.dragOver(group, { dataTransfer });
+  fireEvent.dragEnd(screen.getByRole('button', { name: 'SPY' }), { dataTransfer });
+  const external = { types: ['Files'], getData: () => 'c:research' };
+  fireEvent.dragOver(group, { dataTransfer: external }); fireEvent.drop(group, { dataTransfer: external });
+  expect(group).not.toHaveClass('lab-drop-target'); expect(localStorage.getItem(storage)).toBe(before);
+});
+test('menú compacto fuera del scroll sólo permite grupo y color; chat conserva su color al recargar', () => {
+  const { unmount } = render(<LabProjectList {...props}/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Opciones de Investigación' }));
+  const panel = screen.getByRole('group', { name: 'Organizar Investigación' });
+  expect(panel.parentElement).toBe(document.body);
+  expect(within(panel).queryByRole('button', { name: /Crear grupo|Renombrar/ })).not.toBeInTheDocument();
+  expect(within(panel).getByRole('combobox', { name: 'Grupo de Investigación' })).toBeInTheDocument();
+  expect(within(panel).getByRole('combobox', { name: 'Grupo de Investigación' })).toHaveFocus();
+  userEvent.tab(); expect(within(panel).getByRole('button', { name: 'Gris' })).toHaveFocus();
+  fireEvent.pointerDown(within(panel).getByRole('button', { name: 'Violeta' }));
+  fireEvent.click(within(panel).getByRole('button', { name: 'Violeta' }));
+  expect(screen.getByRole('group', { name: 'Organizar Investigación' })).toBeInTheDocument();
+  expect(JSON.parse(localStorage.getItem(storage)!).colors['c:research']).toBe('violet');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.getByRole('button', { name: 'Opciones de Investigación' })).toHaveFocus();
+  unmount(); render(<LabProjectList {...props}/>);
+  expect(screen.getByRole('button', { name: 'Investigación' }).closest('.lab-organized-chat')).toHaveStyle('--group-color: #b9a4ed');
+  fireEvent.click(screen.getByRole('button', { name: 'Opciones de SPY' }));
+  fireEvent.scroll(screen.getByRole('navigation', { name: 'Proyectos y conversaciones' }));
+  expect(screen.queryByRole('group', { name: 'Organizar SPY' })).not.toBeInTheDocument();
 });
