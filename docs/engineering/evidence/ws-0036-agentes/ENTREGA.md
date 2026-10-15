@@ -34,6 +34,11 @@ Los tests de Agentes usan datos de prueba aislados y API/clipboard simulados: id
 pausa con pedido pendiente, preparación/copia sin crear una tarea, error/reintento/vacío, supervisor y publicación vieja.
 No acreditan el recorrido en Dev ni ejecución de un agente real.
 
+Revisión independiente del rango `6aa4541..a22b5d2`: APPROVE, sin hallazgos que bloqueen la integración local.
+Informe: `docs/engineering/reviews/ws-0036-agentes-independent.md`.
+Integración posterior de `local/integracion` (`a9d1b65`): sólo cambios de backend SHADOW del otro trabajo;
+sin conflictos ni cambios en el frontend probado. No se ejecutaron migraciones ni comandos de backend.
+
 ## Pendiente
 
 QA visual con datos de Dev, escritorio y 760 px: no ejecutada. CUA devolvió inventario sin navegadores;
