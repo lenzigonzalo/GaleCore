@@ -8,6 +8,7 @@ import { LivePositionRow } from '../positions/PositionRow';
 import { PnlCalendar } from './PnlCalendar';
 import { InstanceState } from './InstanceState';
 import { StrategyOverview } from './StrategyOverview';
+import { StageModeChip, StrategyHeader } from './StrategyHeader';
 import { StrategyData } from './StrategyData';
 import type { AlgorithmSpec } from './CompactStrategyDesign';
 import { StrategyDesign, useStrategyDesign } from './StrategyDesign';
@@ -70,7 +71,7 @@ function Curve({ rows }: { rows: PerformancePanelResponse['curve'] }) {
     {error && <p role="alert">No se pudo mostrar la curva.</p>}
   </>;
 }
-export function PerformancePanel({ spec, instance = null, referenceCapital, runtime, onOpenChat, inDesign = false }: { onOpenChat?: (projectId: string) => void; inDesign?: boolean; spec: string; instance?: ShadowInstance | null; referenceCapital?: number; runtime?: React.ReactNode }) {
+export function PerformancePanel({ spec, instance = null, referenceCapital, runtime, onOpenChat, inDesign = false, onBack, stage, mode }: { onOpenChat?: (projectId: string) => void; inDesign?: boolean; onBack?: () => void; stage?: string; mode?: string; spec: string; instance?: ShadowInstance | null; referenceCapital?: number; runtime?: React.ReactNode }) {
   const [panel, setPanel] = useState<PerformancePanelResponse | null>(null);
   const [versions, setVersions] = useState<string[]>([]);
   const [version, setVersion] = useState('');
@@ -98,8 +99,10 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
   const stat = (label: string, definition: string, metric: Metric, format: (n: number) => string = fmtPrice, signed = false) => <Stat key={label} label={label} definition={definition} metric={metric} format={format} signed={signed} />;
   const minimum = panel?.notes.map(note => /mínimo (\d+)/i.exec(note)?.[1]).find(Boolean);
   return <div className="performance-panel" aria-label="Panel de rendimiento">
-    <header className="performance-heading"><div><h2 title={spec}>{strategyName(spec)}</h2>{inDesign ? <span className="instance-state">En diseño</span> : <InstanceState instance={instance} />}</div>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</header>
-    <div className="strategy-chat-link">{design.projectId && onOpenChat && <button onClick={() => onOpenChat(design.projectId!)}>Abrir en el chat</button>}</div>
+    <StrategyHeader title={strategyName(spec)} hint={spec} onBack={onBack}
+      chips={<>{inDesign ? <span className="instance-state">En diseño</span> : <InstanceState instance={instance} />}<StageModeChip stage={inDesign ? undefined : stage} mode={mode} /></>}
+      onOpenChat={design.projectId && onOpenChat ? () => onOpenChat(design.projectId!) : undefined}
+      actions={<>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</>} />
     <StrategyOverview strategy={design.strategy} />
     <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Operaciones', 'Diseño', 'Datos'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
     {inDesign && (tab === 'Resumen' || tab === 'Operaciones') && <p>Esta estrategia está en diseño. Abrí su proyecto en el chat para prepararla para SHADOW.</p>}

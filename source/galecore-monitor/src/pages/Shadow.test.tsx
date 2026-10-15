@@ -21,7 +21,7 @@ jest.mock('../api/shadow', () => ({
   saveStrategySetting: jest.fn(),
 }));
 
-jest.mock('../components/shadow/PerformancePanel', () => ({ PerformancePanel: ({ spec, runtime }: { spec: string; runtime: React.ReactNode }) => <div data-testid="performance-panel">{spec}{runtime}</div> }));
+jest.mock('../components/shadow/PerformancePanel', () => ({ PerformancePanel: ({ spec, runtime, onBack }: { spec: string; runtime: React.ReactNode; onBack?: () => void }) => <div data-testid="performance-panel"><button onClick={onBack}>Estrategias</button>{spec}{runtime}</div> }));
 
 jest.mock('../api/lab', () => ({ labRequest: jest.fn().mockResolvedValue({ projects: [], chats: [], providers: [] }) }));
 
@@ -120,7 +120,7 @@ test('whole row supports keyboard navigation and returning preserves the list wi
   mocked.fetchPerformanceSummary.mockResolvedValue([summary(), summary('otra')]);
   render(<Shadow />); const row = (await screen.findByRole('button', { name: 'Otra' })).closest('tr')!;
   fireEvent.keyDown(row, { key: 'Enter' }); expect(screen.getByTestId('performance-panel')).toHaveTextContent('otra');
-  fireEvent.click(screen.getByRole('button', { name: '← Estrategias' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Estrategias' }));
   expect(screen.getByRole('button', { name: strategyName(instance.specName) })).toBeInTheDocument();
   expect(mocked.fetchPerformanceSummary).toHaveBeenCalledTimes(1); expect(mocked.fetchShadowStatus).toHaveBeenCalledTimes(1);
 });
@@ -197,7 +197,7 @@ test('RPF ocupa una fila en Producción y su monitor aparece en Hoy',async()=>{
 const preference = (hidden: string[], isOwn = true) => ({ kind: 'preference', key: 'estrategias', isOwn, content: JSON.stringify({ hidden }) });
 
 test('etapas Live | Paper | SHADOW: RPF en Live·Manual con Auto bloqueado; SHADOW siempre Auto', async () => {
-  useAppConfigStore.setState({ strategies: [{ id: 'rpf', tab: 'rpf', label: 'RPF', switch_endpoint: '/App/Rpf/Switch' } as any] });
+  useAppConfigStore.setState({ strategies: [{ id: 'rpf', tab: 'rpf', label: 'RPF' } as any] });
   (api.saveStrategySetting as jest.Mock).mockResolvedValue({ name: instance.specName, stage: 'SHADOW', mode: 'MANUAL', isDefault: false, effect: '' });
   render(<Shadow rpf={<div>Monitor real RPF</div>} />);
   const live = await screen.findByRole('tab', { name: /Live/ });
