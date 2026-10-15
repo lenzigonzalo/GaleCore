@@ -95,6 +95,9 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   const rpfName = rpfEntry?.label ? (rpfEntry.name ? `${rpfEntry.label} · ${rpfEntry.name}` : rpfEntry.label) : 'RPF';
   const rpfActive = useSwitchEnabled(rpfEntry?.switch_endpoint || '/App/Rpf/Switch');
   const readSwitch = useStrategySwitchStore(st => st.read);
+  const hasProduction = !!rpf && rpfEnabled;
+  const [stage, setStage] = useState<'produccion' | 'shadow'>('produccion');
+  const currentStage = hasProduction ? stage : 'shadow';
   useEffect(() => { if (rpfEntry?.switch_endpoint) void readSwitch(rpfEntry.switch_endpoint); }, [rpfEntry?.switch_endpoint, readSwitch]);
   useEffect(() => {
     let active = true;
@@ -133,24 +136,28 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
       <button className="shadow-back" onClick={() => { setSpec(null); setRuntimeOpen(false); }}>← Estrategias</button>
       {spec === 'rpf' && rpf ? <div className="performance-panel"><h2>{rpfName}</h2><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Runtime</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
     </> : <div className="performance-panel">
-      <h2 className="strategy-list-title">Estrategias</h2>
+      <div className="strategy-list-heading"><h2 className="strategy-list-title">Estrategias</h2>
+        <div className="stage-switch" role="tablist" aria-label="Etapa">
+          {hasProduction && <button role="tab" aria-selected={currentStage === 'produccion'} onClick={() => setStage('produccion')}>Producción</button>}
+          <button role="tab" aria-selected={currentStage === 'shadow'} onClick={() => setStage('shadow')}>SHADOW</button>
+        </div></div>
       {error && <div role="alert">{error}<button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
       {statusError && <p role="alert">{statusError}</p>}{projectsError && <p role="alert">{projectsError}</p>}
       <div className="performance-table strategy-list" aria-busy={loading}><table>
         <thead><tr><th>Estrategia</th><th>Estado</th><th className="numeric">Abiertas</th><th className="numeric">Resultado</th><th className="numeric">% ganadoras</th><th className="numeric">Operaciones</th><th className="numeric">Máx. caída</th></tr></thead>
         {loading ? <tbody>{Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia"><td colSpan={7}><div className="performance-skeleton row-skeleton" /></td></tr>)}</tbody> : <>
-          {rpf && rpfEnabled && <tbody><tr className="strategy-stage"><th colSpan={7}>Producción</th></tr>
+          {currentStage === 'produccion' && hasProduction && <tbody>
             <tr className="strategy-row" tabIndex={0} onClick={() => setSpec('rpf')} onKeyDown={event => { if (event.key === 'Enter') setSpec('rpf'); }}>
               <td className="strategy-name"><button onClick={event => { event.stopPropagation(); setSpec('rpf'); }}>{rpfName}</button></td><td><StageState active={rpfActive} /></td><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" />
             </tr></tbody>}
-          {rows.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={7}>SHADOW</th></tr>
+          {currentStage === 'shadow' && rows.length > 0 && <tbody>
             {sortByState(rows).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.key === 'Enter') setSpec(row.spec); }}>
               <td className="strategy-name"><button title={row.spec} onClick={event => { event.stopPropagation(); setSpec(row.spec); }}>{strategyName(row.spec)}</button></td>
               <td><StageState active={isRunning(row.spec)} /></td>
               <td className="numeric">{row.tradesOpen || ''}</td>
               {cell(row.realizedPnl, panelUsd, true)}{cell(row.winRate, rate)}<td className="numeric">{row.tradesClosed || ''}</td>{cell(row.maxDrawdown, amount)}
             </tr>)}</tbody>}
-          {designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={7}>En diseño</th></tr>
+          {currentStage === 'shadow' && designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={7}>En diseño</th></tr>
             {designOnly.map(project => <tr key={project.id} className="strategy-row" tabIndex={0} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.key === 'Enter') setSpec(project.strategyName); }}>
               <td className="strategy-name"><button title={project.strategyName!} onClick={event => { event.stopPropagation(); setSpec(project.strategyName); }}>{strategyName(project.strategyName!)}</button></td><td /><td colSpan={5} />
             </tr>)}</tbody>}

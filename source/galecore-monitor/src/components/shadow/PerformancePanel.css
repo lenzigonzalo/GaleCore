@@ -168,3 +168,8 @@
 .strategy-list tr.strategy-row td { height: 46px; padding-top: 0; padding-bottom: 0; }
 .strategy-list tr.strategy-row td { border-bottom: 1px solid var(--border-dark); }
 .strategy-list td.strategy-name button { background: none; border: 0; padding: 0; color: var(--text-primary); font: 500 14px var(--font-sans); cursor: pointer; text-align: left; }
+.strategy-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.strategy-list-heading .strategy-list-title { margin: 0; }
+.stage-switch { display: inline-flex; padding: 3px; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-secondary); }
+.stage-switch button { border: 0; background: none; color: var(--text-secondary); font: 500 14px var(--font-sans); padding: 7px 16px; border-radius: 7px; cursor: pointer; }
+.stage-switch button[aria-selected="true"] { background: var(--bg-tertiary); color: var(--text-primary); }
