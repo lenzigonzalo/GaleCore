@@ -10,7 +10,7 @@ import { useMarketStore } from '../../store/useMarketStore';
 import { buildLiveSpreads } from '../../utils/spreadBuilder';
 import { buildStreamerSymbol, parseOccSymbol } from '../../utils/streamerSymbol';
 import { fetchGammaExposure, fetchIVRank } from '../../api/analytics';
-import { fetchPositions, fetchBalances } from '../../api/account';
+import { fetchPositions, fetchBalances, fetchSpreadRisk, AccountSpreadRisk } from '../../api/account';
 import { ConnectionStatus } from '../../socket/useMarketSocket';
 
 const REFRESH_INTERVAL_MS = 60_000; // Auto-refresh account positions every 60s
@@ -33,6 +33,7 @@ export function PositionMonitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol,
   const [gexData,    setGexData]    = useState<Record<string, GammaExposureResponse>>({});
   const [refreshing, setRefreshing] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  const [risk, setRisk] = useState<Record<string, AccountSpreadRisk>>({});
   const subscribedLegsRef           = useRef<Set<string>>(new Set());
 
   // ── Rule thresholds ──────────────────────────────────────────────────────
@@ -141,7 +142,11 @@ export function PositionMonitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol,
       setBalances(bal);
     } catch { /* ignore */ }
     finally { setRefreshing(false); }
+    // Pérdida máxima, POP y griegas netas los calcula la API; si falla, quedan sin dato («—»).
+    fetchSpreadRisk().then(setRisk).catch(() => {});
   }, [setPositions, setBalances]);
+
+  useEffect(() => { fetchSpreadRisk().then(setRisk).catch(() => {}); }, []);
 
   // Auto-refresh every 60s
   useEffect(() => {
@@ -153,11 +158,11 @@ export function PositionMonitor({ subscribeLeg, unsubscribeLeg, subscribeSymbol,
   const current = spreads.find(s => s.id === selected) ?? null;
   return (
     <div className="cartera-page">
-      <PortfolioRiskBar spreads={spreads} onRefresh={doRefresh} refreshing={refreshing} />
+      <PortfolioRiskBar spreads={spreads} risk={risk} onRefresh={doRefresh} refreshing={refreshing} />
       <div className="cartera-body">
         {current ? <>
           <button className="shadow-back" onClick={() => setSelected(null)}>← Cartera</button>
-          <PositionCard spread={current} gexData={gexData} />
+          <PositionCard spread={current} risk={risk[current.id]} gexData={gexData} />
         </> : <>
           {spreads.length === 0 && <p className="cartera-empty">{positions.length === 0
             ? 'Sin posiciones abiertas en la cuenta.'

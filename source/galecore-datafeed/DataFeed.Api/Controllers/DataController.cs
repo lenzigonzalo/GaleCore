@@ -10,6 +10,7 @@ using DataFeed.Application.Data.Tastytrade.MarketDataGreeks;
 using DataFeed.Application.Data.Tastytrade.MarketDataTradeQuoteGreeks;
 using DataFeed.Application.Data.Tastytrade.AccountBalances;
 using DataFeed.Application.Data.Tastytrade.AccountPositions;
+using DataFeed.Application.Data.Tastytrade.AccountSpreads;
 using DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility;
 using DataFeed.Application.Data.Tastytrade.SymbolSearch;
 using DataFeed.Application.Data.Fred.ReleaseDates;
@@ -142,6 +143,13 @@ namespace DataFeed.Controllers
         [HttpGet("Tastytrade/Account/Positions")]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
         public async Task<IActionResult> AccountPositionsAsync([FromQuery] AccountPositionsRequest request) => await Handle(request);
+
+        // Las mismas posiciones armadas como spreads, con pérdida máxima, POP y griegas netas
+        // calculadas acá para que el Monitor sólo las muestre (WS-0036).
+        [Tags("Data.Account")]
+        [HttpGet("Tastytrade/Account/Spreads")]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
+        public async Task<IActionResult> AccountSpreadsAsync([FromQuery] AccountSpreadsRequest request) => await Handle(request);
 
         #endregion
     }

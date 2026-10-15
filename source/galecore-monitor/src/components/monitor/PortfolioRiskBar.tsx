@@ -4,14 +4,16 @@ import { useAccountStore } from '../../store/useAccountStore';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import { fmtCurrency, fmtPct } from '../../utils/formatters';
 import { computeCurrentNetCredit } from '../../utils/streamerSymbol';
+import { AccountSpreadRisk } from '../../api/account';
 
 interface Props {
   spreads: LiveSpread[];
+  risk: Record<string, AccountSpreadRisk>;
   onRefresh: () => void;
   refreshing: boolean;
 }
 
-export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
+export function PortfolioRiskBar({ spreads, risk, onRefresh, refreshing }: Props) {
   const { balances } = useAccountStore();
   const { config }   = useAppConfigStore();
 
@@ -43,18 +45,8 @@ export function PortfolioRiskBar({ spreads, onRefresh, refreshing }: Props) {
   const dailyPct   = netLiq > 0 ? (dailyPnl / netLiq) * 100 : 0;
   const hasAnyDaily = spreads.some(p => p.currentNetCredit != null);
 
-  // Portfolio heat = Σ max loss per spread / net liq
-  // Max loss per spread = (spread_width - initialCredit) × 100 × contracts
-  // Width = |shortStrike - longStrike| for each side
-  const totalMaxLoss = spreads.reduce((sum, s) => {
-    let width = 0;
-    if (s.shortPutStrike != null && s.longPutStrike != null)
-      width += Math.abs(s.shortPutStrike - s.longPutStrike);
-    if (s.shortCallStrike != null && s.longCallStrike != null)
-      width += Math.abs(s.longCallStrike - s.shortCallStrike);
-    const maxLoss = Math.max(0, (width - s.initialCredit)) * (s.multiplier ?? 100) * s.contracts;
-    return sum + maxLoss;
-  }, 0);
+  // Portfolio heat = Σ pérdida máxima de cada spread (la calcula la API) / net liq
+  const totalMaxLoss = spreads.reduce((sum, s) => sum + (risk[s.id]?.maxLoss ?? 0), 0);
 
   const heatPct = netLiq > 0 ? totalMaxLoss / netLiq : 0;
 

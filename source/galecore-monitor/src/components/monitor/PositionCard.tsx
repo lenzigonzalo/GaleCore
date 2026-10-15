@@ -6,11 +6,14 @@ import { StrikeLadder } from './StrikeLadder';
 import { PositionHeading, PositionLeg, useUnderlyingPrice } from '../positions/PositionRow';
 import { GammaExposureResponse } from '../../types/api';
 import { fmtPrice, fmtPnl } from '../../utils/formatters';
+import { AccountSpreadRisk } from '../../api/account';
 import { legMid } from '../../utils/streamerSymbol';
 import './PositionCard.css';
 
 interface Props {
   spread: LiveSpread;
+  /** Pérdida máxima, POP y griegas netas, calculados por la API. */
+  risk?: AccountSpreadRisk;
   gexData: Record<string, GammaExposureResponse>;
 }
 
@@ -23,7 +26,7 @@ const ALERT_CFG: Record<NonNullable<AlertType>, { label: string; bg: string; tex
   MACRO_PROXIMO: { label: 'Evento macro',      bg: '#d97706', text: '#fff' },
 };
 
-export function PositionCard({ spread: s, gexData }: Props) {
+export function PositionCard({ spread: s, risk, gexData }: Props) {
   const { config }    = useAppConfigStore();
   const spotPrice     = useUnderlyingPrice(s.underlyingSymbol);
   const tickers       = useMarketStore(st => st.tickers);
@@ -46,44 +49,8 @@ export function PositionCard({ spread: s, gexData }: Props) {
   if (s.shortCallStrike != null) ladderLegs.push({ side: 'SELL', type: 'CALL', strike: s.shortCallStrike });
   if (s.longCallStrike != null) ladderLegs.push({ side: 'BUY', type: 'CALL', strike: s.longCallStrike });
 
-  // Width of the spread
-  const putWidth  = (s.shortPutStrike  != null && s.longPutStrike  != null) ? Math.abs(s.shortPutStrike  - s.longPutStrike)  : 0;
-  const callWidth = (s.shortCallStrike != null && s.longCallStrike != null) ? Math.abs(s.longCallStrike  - s.shortCallStrike) : 0;
-  const totalWidth = putWidth + callWidth;
-  const mult       = s.multiplier ?? 100;
-  const maxLossPerContract = Math.max(0, totalWidth - s.initialCredit);
-
-  // ── POP (live, credit/width proxy — Tastytrade 1/3 rule) ──────────────────
-  // POP ≈ 1 − credit/width.  Uses live net credit so it updates as the trade moves.
-  // POP50 ≈ (1 + POP)/2  — touch-style approximation of reaching the 50% profit target.
-  // When there's no live quote we use the entry credit so POP reflects entry,
-  // not a stale previous-close value presented as "live".
-  const popCredit   = s.hasLiveQuote && s.currentNetCredit != null ? s.currentNetCredit : s.initialCredit;
-  const creditRatio = totalWidth > 0 ? popCredit / totalWidth : 0;
-  const pop   = clampPct((1 - creditRatio) * 100);
-  const pop50 = clampPct((100 + pop) / 2);
-  const popSub = s.hasLiveQuote ? 'al vencimiento' : 'a la entrada';
-
-  // Cost to close the spread right now (debit to buy it back)
-  // ── Position Greeks (aggregated from live per-leg Greeks via socket) ───────
-  // Position greek = Σ sign × legGreek × 100 × contracts.  sign: short −1, long +1.
-  const greekLegs: Array<{ sym?: string; sign: number }> = [];
-  if (s.shortPutStrike  != null) greekLegs.push({ sym: s.legSymbols.shortPut,  sign: -1 });
-  if (s.longPutStrike   != null) greekLegs.push({ sym: s.legSymbols.longPut,   sign: +1 });
-  if (s.shortCallStrike != null) greekLegs.push({ sym: s.legSymbols.shortCall, sign: -1 });
-  if (s.longCallStrike  != null) greekLegs.push({ sym: s.legSymbols.longCall,  sign: +1 });
-  const haveGreeks = greekLegs.length > 0 && greekLegs.every(l => l.sym != null && tickers[l.sym]?.delta != null);
-  const sumGreek = (field: 'delta' | 'gamma' | 'theta' | 'vega'): number =>
-    greekLegs.reduce((acc, l) => acc + l.sign * (l.sym ? (tickers[l.sym]?.[field] ?? 0) : 0), 0) * mult * s.contracts;
-  const netDelta = haveGreeks ? sumGreek('delta') : null;
-  const netGamma = haveGreeks ? sumGreek('gamma') : null;
-  const netTheta = haveGreeks ? sumGreek('theta') : null;
-  const netVega  = haveGreeks ? sumGreek('vega')  : null;
-
-  // IV Rank (underlying) + short-leg IV
+  const g = risk?.greeks ?? null;
   const ivRank = useMarketStore(st => st.tickers[s.underlyingSymbol]?.ivRank);
-  const shortSym = s.type === 'CALL_CS' ? s.legSymbols.shortCall : s.legSymbols.shortPut;
-  const shortIv  = shortSym ? tickers[shortSym]?.iv : undefined;
 
   // ── Management triggers — progress bars only (fill = current vs its limit) ─
   // Execution text comes later from the API/JSON, not computed in front.
@@ -126,19 +93,19 @@ export function PositionCard({ spread: s, gexData }: Props) {
     { group: 'Resultado', items: [
       ['Crédito', money(s.initialCredit * 100), s.contracts > 1 ? `${money(s.initialPremium)} en total` : undefined],
       ['Resultado', s.currentPnl != null && s.hasLiveQuote ? fmtPnl(s.currentPnl) : '—', s.hasLiveQuote && s.pnlPct != null ? `${s.pnlPct >= 0 ? '+' : ''}${s.pnlPct.toFixed(1)}%` : undefined, s.hasLiveQuote ? pnlColor : undefined],
-      ['Ganancia máxima', money(s.initialCredit * mult * s.contracts), undefined, 'var(--green)'],
-      ['Pérdida máxima', `−${money(maxLossPerContract * mult * s.contracts)}`, undefined, 'var(--red-gc)'],
+      ['Ganancia máxima', risk ? money(risk.maxProfit) : '—', undefined, 'var(--green)'],
+      ['Pérdida máxima', risk ? `−${money(risk.maxLoss)}` : '—', undefined, 'var(--red-gc)'],
     ] },
     { group: 'Griegas', items: [
-      ['Delta', fmtSigned(netDelta, 1)],
-      ['Theta por día', fmtMoney(netTheta), undefined, signColor(netTheta)],
-      ['Vega por punto de vol.', fmtMoney(netVega), undefined, signColor(netVega)],
-      ['Gamma', fmtSigned(netGamma, 1)],
+      ['Delta', fmtSigned(g?.delta ?? null, 1)],
+      ['Theta por día', fmtMoney(g?.theta ?? null), undefined, signColor(g?.theta ?? null)],
+      ['Vega por punto de vol.', fmtMoney(g?.vega ?? null), undefined, signColor(g?.vega ?? null)],
+      ['Gamma', fmtSigned(g?.gamma ?? null, 1)],
     ] },
     { group: 'Probabilidad', items: [
-      ['De ganar', `${pop.toFixed(0)}%`, popSub],
-      ['De llegar al 50%', `${pop50.toFixed(0)}%`],
-      ['IV Rank', ivRank != null ? ivRank.toFixed(0) : '—', shortIv != null ? `IV pata vendida ${(shortIv * 100).toFixed(0)}%` : undefined],
+      ['De ganar', risk?.pop != null ? `${risk.pop.toFixed(0)}%` : '—', risk?.pop != null ? (risk.popBasis === 'vivo' ? 'al vencimiento' : 'a la entrada') : undefined],
+      ['De llegar al 50%', risk?.pop50 != null ? `${risk.pop50.toFixed(0)}%` : '—'],
+      ['IV Rank', ivRank != null ? ivRank.toFixed(0) : '—', g?.shortLegIv != null ? `IV pata vendida ${(g.shortLegIv * 100).toFixed(0)}%` : undefined],
     ] },
   ];
   return (

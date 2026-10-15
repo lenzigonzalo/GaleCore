@@ -248,7 +248,8 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
     `universe.ad_hoc_search.allowed_instrument_types`—, porque el endpoint es de plataforma y lo
     consume cualquier pantalla. Hoy lo usa el buscador de símbolos de la pestaña GEX.
   * `Data.Stream` — datos vía socket/streaming: `Tastytrade/MarketData/{Candle,Trade,Quote,Greeks,TradeQuoteGreeks}`.
-  * `Data.Account` — cuenta: `Tastytrade/Account/{Balances,Positions}`. Van con la credencial DEL
+  * `Data.Account` — cuenta: `Tastytrade/Account/{Balances,Positions,Spreads}` (`Spreads`: las posiciones armadas
+    como spreads con pérdida máxima, POP y griegas netas calculadas en la API; el Monitor sólo las muestra). Van con la credencial DEL
     usuario que pregunta (ver `docs/GaleCore-arquitectura-datos.md` §5.4), así que tienen un estado
     que los de mercado no: **el operador todavía no vinculó su cuenta**. Eso es
     `409 Conflict` con `{ error, code: "broker_account_not_linked" }` —

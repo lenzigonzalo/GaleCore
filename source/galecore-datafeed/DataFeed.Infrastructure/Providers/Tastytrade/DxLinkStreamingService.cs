@@ -54,6 +54,13 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
         // Collectors activos para requests de snapshot (request/response sobre la conexión persistente)
         private readonly ConcurrentDictionary<Guid, SnapshotCollector> _collectors = new();
 
+        // Último evento de cada (símbolo, tipo) suscripto. DXLink manda el evento inicial sólo al
+        // suscribir: si el Monitor ya tenía la pata suscripta, un snapshot no recibía nada hasta el
+        // próximo cambio, y los Greeks de una opción quieta no cambian en segundos — el pedido
+        // agotaba su timeout sin griegas (WS-0036, /Account/Spreads). Se entrega este último valor
+        // sólo si la suscripción ya estaba viva, y se borra cuando su ref-count llega a cero.
+        private readonly ConcurrentDictionary<(string Symbol, string EventType), JObject> _lastEvents = new();
+
         // Reference-count de suscripciones Candle por símbolo (con la fromTime más vieja pedida).
         // Evita que un snapshot que termina desuscriba un Candle que otro request concurrente aún
         // necesita (ej. IVRank y MarketDataCandle pidiendo "SPY{=1d}" a la vez → el remove de uno
@@ -469,6 +476,7 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                         {
                             toRemove.Add(new { type = eventType, symbol });
                             _subscriptions.TryRemove(key, out _);
+                            _lastEvents.TryRemove(key, out _);
                         }
                     }
                 }
@@ -563,6 +571,9 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                     if (string.IsNullOrEmpty(eventType) || string.IsNullOrEmpty(eventSymbol))
                         continue;
 
+                    if (eventType != "Candle" && item is JObject last)
+                        _lastEvents[(eventSymbol, eventType)] = last;
+
                     // Fan-out a collectors de snapshot (request/response). Incluye Candle, que no se broadcastea.
                     if (!_collectors.IsEmpty && item is JObject jitem)
                     {
@@ -625,10 +636,18 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
             var refCountGroups = subs.Where(s => s.EventType != "Candle")
                                      .GroupBy(s => s.EventType)
                                      .ToList();
+            // Suscripciones que ya estaban vivas antes de este pedido: no van a mandar evento inicial.
+            var alreadyLive = subs.Where(s => s.EventType != "Candle"
+                                              && _subscriptions.TryGetValue((s.Symbol, s.EventType), out var c) && c > 0)
+                                  .ToList();
             try
             {
                 foreach (var grp in refCountGroups)
                     await SubscribeBatchAsync(grp.Select(s => s.Symbol), new[] { grp.Key });
+
+                foreach (var s in alreadyLive)
+                    if (_lastEvents.TryGetValue((s.Symbol, s.EventType), out var cached))
+                        collector.Offer(s.EventType, s.Symbol, cached);
 
                 foreach (var s in candleSubs)
                     await CandleSubscribeAsync(s.Symbol, s.FromTime ?? 0);

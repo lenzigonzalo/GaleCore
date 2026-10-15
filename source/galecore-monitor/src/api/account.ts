@@ -102,3 +102,21 @@ export async function fetchPositions(): Promise<PositionResponse[]> {
   if (!Array.isArray(arr)) throw new Error('La API no devolvió una lista de posiciones válida.');
   return arr as PositionResponse[];
 }
+
+/** Riesgo de cada spread de la cuenta, calculado en la API (pérdida máxima, POP y griegas netas). */
+export interface AccountSpreadRisk {
+  id: string;                 // "{subyacente}|{vencimiento}", igual que LiveSpread.id
+  structure: string;
+  width: number;
+  maxProfit: number;
+  maxLoss: number;
+  pop: number | null;
+  pop50: number | null;
+  popBasis: 'vivo' | 'entrada';
+  greeks: { delta: number; gamma: number; theta: number; vega: number; shortLegIv: number | null } | null;
+}
+
+export async function fetchSpreadRisk(): Promise<Record<string, AccountSpreadRisk>> {
+  const { data } = await apiClient.get<{ spreads?: AccountSpreadRisk[] }>('/Data/Tastytrade/Account/Spreads');
+  return Object.fromEntries((data?.spreads ?? []).map(s => [s.id, s]));
+}
