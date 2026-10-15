@@ -93,6 +93,16 @@ def test_the_session_starts_with_who_the_trader_is(galecore):
     assert "compartido: skill (1)" in text
 
 
+def test_the_profile_travels_whole():
+    long_limit = "pérdida máxima por operación 5 % del capital de referencia, " * 6
+    prof = {"version": 7, "reference_capital": {"amount": 10000.0, "currency": "USD"}, "risk_limits": [long_limit.strip()],
+            "exit_rule": "pausar al tocar el drawdown", "provisional": []}
+    lines = space._profile_lines(prof)
+    assert "    capital de referencia: 10.000 USD" in lines
+    assert any(long_limit.strip() in line for line in lines)                 # nothing cut at 160 characters
+    assert any(line.startswith("    sin declarar:") and "objetivos" in line for line in lines)
+
+
 def test_a_wrong_login_is_an_error_without_the_password(monkeypatch):
     monkeypatch.setenv("GALECORE_USERNAME", "demo")
     monkeypatch.setenv("GALECORE_PASSWORD", "otra-clave")

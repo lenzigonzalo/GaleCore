@@ -704,7 +704,7 @@ async def _cmd_space(args: argparse.Namespace) -> None:
             _json_out({"pieces": found})
         elif c == "put":
             kind, _, key = args.ref.partition("/")
-            content = sys.stdin.read()
+            content = _read_stdin()
             _json_out({"status": "SAVED", **client.put(kind, key, title=args.title, content=content, fmt=args.format,
                                                          visibility=args.visibility)})
         elif c == "delete":

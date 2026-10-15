@@ -427,8 +427,34 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     return {"requests": requests, "responses": responses, **sync(client, pieces, seen)}
 
 
-def context(client: SpaceClient, max_lines: int = 25) -> str:
-    """The session's opening summary: who the trader is and what they have, in a few lines."""
+_PROFILE_LABELS = {"reference_capital": "capital de referencia", "objectives": "objetivos", "horizon": "horizonte",
+                   "max_drawdown": "drawdown máximo", "risk_limits": "límites", "minimum_return": "retorno mínimo",
+                   "edge_criterion": "criterio de edge", "exit_rule": "regla de salida",
+                   "mandate_autonomous": "hace solo", "mandate_needs_approval": "espera tu ok",
+                   "delivery_format": "forma de entrega", "preferred_sources": "fuentes", "language": "idioma"}
+
+
+def _profile_lines(prof: dict) -> list[str]:
+    """The whole profile, one line per declared field: it governs every proposal, so none is cut."""
+    lines = [f"  perfil v{prof.get('version')} (manda sobre cualquier propuesta):"]
+    for key, label in _PROFILE_LABELS.items():
+        value = prof.get(key)
+        if key == "reference_capital" and value:
+            value = f"{value.get('amount', 0):,.0f} {value.get('currency', '')}".replace(",", ".")
+        if isinstance(value, list):
+            value = " · ".join(value)
+        if value:
+            lines.append(f"    {label}: {value}")
+    missing = [label for key, label in _PROFILE_LABELS.items() if not prof.get(key)]
+    if missing:
+        lines.append(f"    sin declarar: {', '.join(missing)}")
+    if prof.get("provisional"):
+        lines.append(f"    provisorios: {', '.join(_PROFILE_LABELS.get(k, k) for k in prof['provisional'])}")
+    return lines
+
+
+def context(client: SpaceClient) -> str:
+    """The session's opening summary: who the trader is (profile and conventions in full) and what they have."""
     space = client.items()
     own, shared = space["items"], space["shared"]
     by_kind: dict[str, list[dict]] = {}
@@ -437,23 +463,20 @@ def context(client: SpaceClient, max_lines: int = 25) -> str:
     lines = [f"[espacio] {client.user}: {len(own)} piezas propias, {len(shared)} compartidas por el equipo"]
     for p in by_kind.get("profile", []):
         try:
-            prof = json.loads(p["content"])
-            cap = prof.get("reference_capital") or {}
-            capital = f"{cap.get('amount', 0):,.0f} {cap.get('currency', '')}".replace(",", ".") if cap else "sin definir"
-            lines.append(f"  perfil v{prof.get('version')}: capital {capital}, "
-                         f"horizonte {prof.get('horizon')}, límites {'; '.join(prof.get('risk_limits', []))[:160]}")
-        except (json.JSONDecodeError, TypeError):
+            lines += _profile_lines(json.loads(p["content"]))
+        except (json.JSONDecodeError, TypeError, AttributeError):
             lines.append(f"  perfil: {p['title']}")
-    labels = {"objective": "objetivos", "convention": "convenciones", "memory": "memoria", "agent": "agentes",
-              "skill": "skills", "data": "datos"}
+    for c in by_kind.get("convention", []):
+        lines.append(f"  convención «{c['title']}»: " + " ".join(str(c.get("content", "")).split()))
+    labels = {"objective": "objetivos", "memory": "memoria", "agent": "agentes", "skill": "skills", "data": "datos"}
     for kind, label in labels.items():
         items = by_kind.get(kind, [])
         if items:
             n_shared = sum(1 for i in items if i.get("visibility") == "shared")
             tag = f" ({n_shared} compartidas por vos)" if n_shared else ""
-            lines.append(f"  {label}{tag}: " + " · ".join(i["title"] for i in items)[:300])
+            lines.append(f"  {label}{tag}: " + " · ".join(dict.fromkeys(i["title"] for i in items))[:300])
     shared_kinds = sorted({i["kind"] for i in shared})
     if shared_kinds:
         lines.append("  compartido: " + ", ".join(f"{k} ({sum(1 for i in shared if i['kind'] == k)})" for k in shared_kinds))
     lines.append("  detalle: `space list [--kind K]` · `space show K/clave`")
-    return "\n".join(lines[:max_lines])
+    return "\n".join(lines)
