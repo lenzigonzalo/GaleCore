@@ -19,11 +19,18 @@ public class MacroBoardResponse
 {
     public DateTime AsOf { get; set; }
     public List<BoardRow> Strip { get; set; } = new();
-    public List<BoardGroup> Groups { get; set; } = new();
+    /// <summary>Una sección por pregunta, de lo general a lo específico.</summary>
+    public List<BoardSection> Sections { get; set; } = new();
     public BoardCurve? Curve { get; set; }
     public List<BoardEvent> Events { get; set; } = new();
     /// <summary>Lo que no se pudo leer; se declara, no se inventa.</summary>
     public List<string> Missing { get; set; } = new();
+}
+
+public class BoardSection
+{
+    public string Question { get; set; } = "";
+    public List<BoardGroup> Groups { get; set; } = new();
 }
 
 public class BoardGroup
@@ -68,24 +75,65 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
     IHttpClientFactory client, IDxLinkStreamingService streaming)
     : IRequestHandler<MacroBoardRequest, MacroBoardResponse>
 {
-    private record Future(string Code, string Name);
-    private record Series(string Id, string Name);
+    // Cada fila del panel se nombra por su fuente: fut: futuro (contrato vigente), eq: acción o ETF (DXLink),
+    // ser: serie del snapshot Macro (Tesoro, FRED, CBOE), rel: cociente (desempeño relativo).
+    private record Item(string Key, string Name);
+    private record Group(string Name, Item[] Items, bool SortByMonth = false);
+    private record Section(string Question, Group[] Groups);
+    private record Relative(string Id, string Name, string[] Numerator, string Denominator);
 
-    // Grupos en el orden del panel. Futuros por código de producto de Tastytrade.
-    private static readonly (string Group, Future[] Futures, Series[] Series)[] Layout =
-    {
-        ("Índices", new[] { new Future("ES", "S&P 500"), new Future("NQ", "Nasdaq 100"), new Future("RTY", "Russell 2000"), new Future("YM", "Dow Jones") }, Array.Empty<Series>()),
-        ("Tasas", Array.Empty<Future>(), new[] { new Series("UST2", "Tesoro 2 años"), new Series("UST10", "Tesoro 10 años"), new Series("UST30", "Tesoro 30 años"),
-            new Series("DFII10", "Tasa real 10 años"), new Series("T10YIE", "Breakeven 10 años"), new Series("SLOPE2_10", "Pendiente 2–10") }),
-        ("Crédito", Array.Empty<Future>(), new[] { new Series("BAMLH0A0HYM2", "Spread high yield"), new Series("BAMLC0A0CM", "Spread grado de inversión") }),
-        ("Monedas", new[] { new Future("6E", "Euro"), new Future("6J", "Yen"), new Future("6B", "Libra") }, Array.Empty<Series>()),
-        ("Commodities", new[] { new Future("GC", "Oro"), new Future("SI", "Plata"), new Future("HG", "Cobre"), new Future("CL", "Petróleo WTI"),
-            new Future("NG", "Gas natural"), new Future("ZS", "Soja"), new Future("ZC", "Maíz"), new Future("ZW", "Trigo") }, Array.Empty<Series>()),
-        ("Volatilidad", new[] { new Future("VX", "VIX futuro") }, new[] { new Series("VIX", "VIX"), new Series("VVIX", "VVIX"), new Series("SKEW", "SKEW") }),
-    };
-    private static readonly string[] StripIds = { "ES", "UST10", Dollar, "GC", "CL", "VIX" };
     // Tastytrade no lista el índice dólar (/DX es de ICE): se usa el índice amplio de la Fed (FRED, diario).
     private const string Dollar = "DTWEXBGS";
+
+    /// <summary>Las 8 grandes de la historia IA: su promedio (igual peso) contra el S&amp;P.</summary>
+    private static readonly string[] AiBasket = { "NVDA", "MSFT", "AVGO", "GOOGL", "META", "AMZN", "AAPL", "TSLA" };
+
+    private static readonly Relative[] Relatives =
+    {
+        new("RSP_SPY", "Igual peso vs S&P", new[] { "RSP" }, "SPY"),
+        new("IWM_SPY", "Chicas vs S&P", new[] { "IWM" }, "SPY"),
+        new("QQQ_SPY", "Nasdaq vs S&P", new[] { "QQQ" }, "SPY"),
+        new("IWF_IWD", "Crecimiento vs valor", new[] { "IWF" }, "IWD"),
+        new("SMH_SPY", "Semiconductores vs S&P", new[] { "SMH" }, "SPY"),
+        new("AI_SPY", "Canasta IA vs S&P", AiBasket, "SPY"),
+    };
+
+    private static Item F(string code, string name) => new("fut:" + code, name);
+    private static Item E(string symbol, string name) => new("eq:" + symbol, name);
+    private static Item S(string id, string name) => new("ser:" + id, name);
+    private static Item R(string id) => new("rel:" + id, Relatives.First(r => r.Id == id).Name);
+
+    // El panel, de lo general a lo específico: las preguntas para leer la historia del mercado (owner 15/10).
+    private static readonly Section[] Layout =
+    {
+        new("¿Hay apetito por riesgo?", new[]
+        {
+            new Group("Acciones", new[] { F("ES", "S&P 500"), F("NQ", "Nasdaq 100"), F("RTY", "Russell 2000"), F("YM", "Dow Jones") }),
+            new Group("Crédito", new[] { S("BAMLH0A0HYM2", "Spread high yield"), S("BAMLC0A0CM", "Spread grado de inversión") }),
+            new Group("Volatilidad", new[] { S("VIX", "VIX"), F("VX", "VIX futuro"), S("VVIX", "VVIX"), S("SKEW", "SKEW") }),
+        }),
+        new("¿Qué descuentan las tasas?", new[]
+        {
+            new Group("Tesoro", new[] { S("UST2", "Tesoro 2 años"), S("UST10", "Tesoro 10 años"), S("UST30", "Tesoro 30 años"), S("SLOPE2_10", "Pendiente 2–10") }),
+            new Group("Tasa real e inflación esperada", new[] { S("DFII10", "Tasa real 10 años"), S("T10YIE", "Breakeven 10 años") }),
+        }),
+        new("¿Quién lidera?", new[]
+        {
+            new Group("Concentración y factores", new[] { R("RSP_SPY"), R("IWM_SPY"), R("QQQ_SPY"), R("IWF_IWD"), R("SMH_SPY"), R("AI_SPY") }),
+            new Group("Sectores", new[] { E("XLK", "Tecnología"), E("SMH", "Semiconductores"), E("XLC", "Comunicaciones"), E("XLY", "Consumo discrecional"),
+                E("XLF", "Finanzas"), E("XLI", "Industria"), E("XLV", "Salud"), E("XLP", "Consumo básico"), E("XLE", "Energía"),
+                E("XLB", "Materiales"), E("XLU", "Servicios públicos"), E("XLRE", "Inmobiliario") }, SortByMonth: true),
+            new Group("Canasta IA", new[] { E("NVDA", "Nvidia"), E("MSFT", "Microsoft"), E("AVGO", "Broadcom"), E("GOOGL", "Alphabet"),
+                E("META", "Meta"), E("AMZN", "Amazon"), E("AAPL", "Apple"), E("TSLA", "Tesla") }, SortByMonth: true),
+        }),
+        new("¿Lo confirman los demás mercados?", new[]
+        {
+            new Group("Monedas", new[] { new Item("ser:" + Dollar, "Dólar amplio (Fed)"), F("6E", "Euro"), F("6J", "Yen"), F("6B", "Libra") }),
+            new Group("Commodities", new[] { F("HG", "Cobre"), F("CL", "Petróleo WTI"), F("GC", "Oro"), F("SI", "Plata"), F("NG", "Gas natural"),
+                F("ZS", "Soja"), F("ZC", "Maíz"), F("ZW", "Trigo") }),
+        }),
+    };
+    private static readonly string[] StripKeys = { "fut:ES", "ser:UST10", "ser:" + Dollar, "fut:GC", "fut:CL", "ser:VIX" };
 
     private static readonly ConcurrentDictionary<string, (DateTime At, FutureItem Item)> Contracts = new();
     private static (DateTime At, MacroBoardResponse Board)? _last;
@@ -112,37 +160,71 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
         var missing = new List<string>();
         var snapshotTask = mediator.Send(new MacroSnapshotRequest(), ct);
         var dollarTask = DollarAsync(missing, ct);
-        var futures = await FuturesAsync(missing, ct);
+        var contracts = await ContractsAsync(missing, ct);
+
+        // Acciones y ETF: los de las filas más los que piden los cocientes.
+        var items = Layout.SelectMany(s => s.Groups).SelectMany(g => g.Items).ToList();
+        var equities = items.Where(i => i.Key.StartsWith("eq:")).Select(i => i.Key[3..])
+            .Concat(Relatives.SelectMany(r => r.Numerator.Append(r.Denominator))).Distinct().ToList();
+        var streamer = new Dictionary<string, string>();
+        foreach (var (code, item) in contracts) streamer["fut:" + code] = item.StreamerSymbol!;
+        foreach (var e in equities) streamer["eq:" + e] = e;
+        var daily = await DailyAsync(streamer, missing, ct);
+
         var snapshot = await snapshotTask;
         var dollar = await dollarTask;
-        foreach (var s in snapshot.SourceStatuses.Where(s => s.Status != "available"))
-            missing.Add($"{s.Id}: {(s.Status == "source-error" ? "la fuente falló" : "sin datos")}{(s.AsOf != null ? $" (último dato {s.AsOf})" : "")}.");
-
+        foreach (var st in snapshot.SourceStatuses.Where(st => st.Status != "available"))
+            missing.Add($"{st.Id}: {(st.Status == "source-error" ? "la fuente falló" : "sin datos")}{(st.AsOf != null ? $" (último dato {st.AsOf})" : "")}.");
         var definitions = snapshot.SeriesDefinitions.ToDictionary(d => d.Id);
-        var response = new MacroBoardResponse { AsOf = DateTime.UtcNow, Missing = missing };
-        foreach (var (group, futs, series) in Layout)
+        List<(string Date, double Value)> Daily(string key) => daily.TryGetValue(key, out var v) ? v : new();
+
+        BoardRow Build(Item item)
         {
-            var rows = new List<BoardRow>();
-            rows.AddRange(futs.Select(f => futures.TryGetValue(f.Code, out var row) ? row
-                : new BoardRow { Id = f.Code, Name = f.Name, Symbol = "/" + f.Code, Unit = "pts", ChangeUnit = "%", Source = "tastytrade" }));
-            foreach (var s in series)
+            var kind = item.Key[..3]; var id = item.Key[4..];
+            if (kind == "eq:") { kind = "eq"; id = item.Key[3..]; }
+            if (kind == "ser" && id == Dollar) return dollar;
+            if (kind == "ser")
             {
-                var unit = definitions.TryGetValue(s.Id, out var d) ? d.Unit : "";
-                var points = snapshot.Observations.Where(o => o.SeriesId == s.Id && o.Value != null)
-                    .OrderBy(o => o.ObservationTime, StringComparer.Ordinal)
-                    .Select(o => (o.ObservationTime, (double)o.Value!.Value)).ToList();
-                rows.Add(MacroBoardMath.Row(s.Id, s.Name, s.Id, unit, unit == "%" ? "pb" : unit == "pb" ? "pb" : "pts",
-                    unit == "%" ? 100 : 1, points, definitions.TryGetValue(s.Id, out var def) ? def.Source : ""));
+                definitions.TryGetValue(id, out var d);
+                var unit = d?.Unit ?? "";
+                var points = snapshot.Observations.Where(o => o.SeriesId == id && o.Value != null)
+                    .OrderBy(o => o.ObservationTime, StringComparer.Ordinal).Select(o => (o.ObservationTime, (double)o.Value!.Value)).ToList();
+                return MacroBoardMath.Row(id, item.Name, id, unit, unit is "%" or "pb" ? "pb" : "pts", unit == "%" ? 100 : 1, points, d?.Source ?? "");
             }
-            if (group == "Monedas") rows.Insert(0, dollar);
-            response.Groups.Add(new BoardGroup { Name = group, Rows = rows });
+            if (kind == "rel")
+            {
+                var rel = Relatives.First(r => r.Id == id);
+                var points = MacroBoardMath.Relative(rel.Numerator.Select(n => Daily("eq:" + n)).ToList(), Daily("eq:" + rel.Denominator));
+                var label = rel.Numerator.Length > 2 ? $"canasta/{rel.Denominator}" : $"{rel.Numerator[0]}/{rel.Denominator}";
+                var row = MacroBoardMath.Row(id, item.Name, label, "rel", "%", 0, points, "tastytrade");
+                row.Last = null;   // el nivel del cociente no dice nada; se lee cuánto le ganó o perdió
+                return row;
+            }
+            var pts = Daily(item.Key);
+            var symbol = kind == "fut" ? (contracts.TryGetValue(id, out var fc) ? fc.Symbol : "/" + id) : id;
+            // El VIX futuro se lee como el VIX: en puntos, no en %.
+            return id == "VX" ? MacroBoardMath.Row(id, item.Name, symbol, "pts", "pts", 1, pts, "tastytrade")
+                : MacroBoardMath.Row(id, item.Name, symbol, kind == "eq" ? "USD" : "pts", "%", 0, pts, "tastytrade");
         }
-        var all = response.Groups.SelectMany(g => g.Rows).ToDictionary(r => r.Id);
-        response.Strip = StripIds.Where(all.ContainsKey).Select(id => all[id]).ToList();
+
+        var response = new MacroBoardResponse { AsOf = DateTime.UtcNow, Missing = missing };
+        var byKey = new Dictionary<string, BoardRow>();
+        foreach (var section in Layout)
+        {
+            var boardSection = new BoardSection { Question = section.Question };
+            foreach (var g in section.Groups)
+            {
+                var rows = g.Items.Select(i => byKey[i.Key] = Build(i)).ToList();
+                if (g.SortByMonth) rows = rows.OrderByDescending(r => r.ChangeMonth ?? double.MinValue).ToList();
+                boardSection.Groups.Add(new BoardGroup { Name = g.Name, Rows = rows });
+            }
+            response.Sections.Add(boardSection);
+        }
+        response.Strip = StripKeys.Where(byKey.ContainsKey).Select(k => byKey[k]).ToList();
         response.Curve = MacroBoardMath.Curve(snapshot.Observations);
         response.Events = snapshot.Events.Select(e => new BoardEvent(e.Date, e.Name)).ToList();
-        foreach (var r in all.Values.Where(r => r.Last == null && r.Source == "tastytrade"))
-            missing.Add($"{r.Name} ({r.Symbol}): Tastytrade no devolvió el contrato o su historia.");
+        foreach (var r in byKey.Values.Where(r => r.Source == "tastytrade" && r.Spark.Count == 0))
+            missing.Add($"{r.Name} ({r.Symbol}): sin historia diaria de Tastytrade.");
         return response;
     }
 
@@ -163,11 +245,11 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
         return MacroBoardMath.Row(Dollar, "Dólar amplio (Fed)", Dollar, "índice", "%", 0, points, "fred");
     }
 
-    /// <summary>Contrato vigente de cada futuro (marca <c>active-month</c> de Tastytrade) y sus velas diarias de ~45 días.</summary>
-    private async Task<Dictionary<string, BoardRow>> FuturesAsync(List<string> missing, CancellationToken ct)
+    /// <summary>Contrato vigente de cada futuro del panel (marca <c>active-month</c> de Tastytrade), con caché de 6 h.</summary>
+    private async Task<Dictionary<string, FutureItem>> ContractsAsync(List<string> missing, CancellationToken ct)
     {
-        var all = Layout.SelectMany(l => l.Futures).ToList();
-        var stale = all.Where(f => !Contracts.TryGetValue(f.Code, out var c) || DateTime.UtcNow - c.At > ContractTtl).Select(f => f.Code).ToList();
+        var codes = Layout.SelectMany(s => s.Groups).SelectMany(g => g.Items).Where(i => i.Key.StartsWith("fut:")).Select(i => i.Key[4..]).ToList();
+        var stale = codes.Where(c => !Contracts.TryGetValue(c, out var hit) || DateTime.UtcNow - hit.At > ContractTtl).ToList();
         if (stale.Count > 0)
         {
             try
@@ -184,41 +266,33 @@ public class MacroBoardHandler(IMediator mediator, Microsoft.Extensions.Configur
                 missing.Add("Contratos de futuros (Tastytrade): no respondió; se usan los últimos conocidos.");
             }
         }
+        return codes.Where(Contracts.ContainsKey).Select(c => (Code: c, Item: Contracts[c].Item))
+            .Where(x => !string.IsNullOrEmpty(x.Item.StreamerSymbol)).ToDictionary(x => x.Code, x => x.Item);
+    }
 
-        var active = all.Where(f => Contracts.ContainsKey(f.Code))
-            .Select(f => (f, item: Contracts[f.Code].Item)).Where(x => !string.IsNullOrEmpty(x.item.StreamerSymbol)).ToList();
+    /// <summary>Velas diarias de ~45 días por DXLink, en un solo pedido: clave del panel → (fecha, cierre).</summary>
+    private async Task<Dictionary<string, List<(string Date, double Value)>>> DailyAsync(Dictionary<string, string> streamer,
+        List<string> missing, CancellationToken ct)
+    {
         var from = new DateTimeOffset(DateTime.UtcNow.Date.AddDays(-45)).ToUnixTimeMilliseconds();
         var candles = new List<JObject>();
-        if (active.Count > 0)
+        try
         {
-            try
-            {
-                var items = await streaming.RequestSnapshotAsync(
-                    active.Select(x => (x.item.StreamerSymbol! + "{=d}", "Candle", (long?)from)).ToList(),
-                    isSymbolComplete: item => (((int?)item["eventFlags"] ?? 0) & 0x18) != 0,
-                    timeout: TimeSpan.FromSeconds(15), cancellationToken: ct);
-                candles.AddRange(items);
-            }
-            catch (Exception) when (!ct.IsCancellationRequested)
-            {
-                missing.Add("Velas diarias de futuros (DXLink): no respondieron a tiempo.");
-            }
+            candles.AddRange(await streaming.RequestSnapshotAsync(
+                streamer.Values.Distinct().Select(sym => (sym + "{=d}", "Candle", (long?)from)).ToList(),
+                isSymbolComplete: item => (((int?)item["eventFlags"] ?? 0) & 0x18) != 0,
+                timeout: TimeSpan.FromSeconds(25), cancellationToken: ct));
         }
-
-        var rows = new Dictionary<string, BoardRow>();
-        foreach (var (f, item) in active)
+        catch (Exception) when (!ct.IsCancellationRequested)
         {
-            var key = item.StreamerSymbol + "{=d}";
-            var points = candles.Where(c => (string?)c["eventSymbol"] == key)
-                .Select(c => (Time: (long?)c["time"] ?? 0, Close: ToDouble(c["close"])))
-                .Where(p => p.Time > 0 && p.Close is > 0)
-                .GroupBy(p => p.Time).Select(g => g.Last()).OrderBy(p => p.Time)
-                .Select(p => (DateTimeOffset.FromUnixTimeMilliseconds(p.Time).UtcDateTime.ToString("yyyy-MM-dd"), p.Close!.Value)).ToList();
-            // El VIX futuro se lee como el VIX: en puntos, no en %.
-            rows[f.Code] = f.Code == "VX" ? MacroBoardMath.Row(f.Code, f.Name, item.Symbol, "pts", "pts", 1, points, "tastytrade")
-                : MacroBoardMath.Row(f.Code, f.Name, item.Symbol, "pts", "%", 0, points, "tastytrade");
+            missing.Add("Velas diarias (DXLink): no respondieron a tiempo.");
         }
-        return rows;
+        var bySymbol = candles.GroupBy(c => (string?)c["eventSymbol"] ?? "").ToDictionary(g => g.Key, g => g.ToList());
+        return streamer.ToDictionary(kv => kv.Key, kv => (bySymbol.TryGetValue(kv.Value + "{=d}", out var list) ? list : new List<JObject>())
+            .Select(c => (Time: (long?)c["time"] ?? 0, Close: ToDouble(c["close"])))
+            .Where(x => x.Time > 0 && x.Close is > 0)
+            .GroupBy(x => x.Time).Select(g => g.Last()).OrderBy(x => x.Time)
+            .Select(x => (DateTimeOffset.FromUnixTimeMilliseconds(x.Time).UtcDateTime.ToString("yyyy-MM-dd"), x.Close!.Value)).ToList());
     }
 
     private static double? ToDouble(JToken? t)
@@ -268,6 +342,22 @@ public static class MacroBoardMath
             ChangeDay = Change(1), ChangeWeek = Change(5), ChangeMonth = Change(21),
             Spark = points.TakeLast(22).Select(p => new BoardPoint(p.Date, Math.Round(p.Value, 6))).ToList(),
         };
+    }
+
+    /// <summary>
+    /// Desempeño relativo: el promedio (igual peso) de los numeradores normalizados a la primera fecha común, sobre el
+    /// denominador normalizado. Sube cuando el numerador le gana al denominador. Sólo fechas con todos los datos.
+    /// </summary>
+    public static List<(string Date, double Value)> Relative(IReadOnlyList<List<(string Date, double Value)>> numerators,
+        List<(string Date, double Value)> denominator)
+    {
+        if (numerators.Count == 0 || numerators.Any(n => n.Count == 0) || denominator.Count == 0) return new();
+        var maps = numerators.Select(n => n.GroupBy(x => x.Date).ToDictionary(g => g.Key, g => g.Last().Value)).ToList();
+        var den = denominator.GroupBy(x => x.Date).ToDictionary(g => g.Key, g => g.Last().Value);
+        var dates = den.Keys.Where(d => maps.All(m => m.ContainsKey(d))).OrderBy(d => d, StringComparer.Ordinal).ToList();
+        if (dates.Count == 0) return new();
+        var first = dates[0];
+        return dates.Select(d => (d, maps.Average(m => m[d] / m[first]) / (den[d] / den[first]))).ToList();
     }
 
     public static BoardCurve? Curve(IEnumerable<MacroObservation> observations)

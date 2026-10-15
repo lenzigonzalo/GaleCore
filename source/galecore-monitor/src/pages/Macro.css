@@ -34,3 +34,5 @@
 .macro-detail .macro-chart{height:320px;margin:10px 0}.macro-detail-values{grid-template-columns:repeat(4,1fr)!important}
 @media(max-width:1100px){.mb-layout{grid-template-columns:1fr}.mb-side{display:grid;grid-template-columns:1fr 1fr}}
 @media(max-width:700px){.mb-table th:nth-child(4),.mb-table td:nth-child(4),.mb-table td:nth-child(6),.mb-table th:nth-child(6){display:none}.mb-side{grid-template-columns:1fr}.macro-detail{width:100%}.macro-detail-values{grid-template-columns:1fr 1fr!important}}
+.mb-question th{font-size:20px;font-weight:600!important;color:var(--text-primary);text-align:left;padding:30px 10px 4px!important;border-bottom:0!important}
+.mb-table tbody:first-of-type .mb-question th{padding-top:14px!important}

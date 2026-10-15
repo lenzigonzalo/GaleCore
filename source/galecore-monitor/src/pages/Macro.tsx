@@ -6,8 +6,10 @@ import { eventName } from '../components/macro/MacroCalendar';
 import './Macro.css';
 
 /**
- * Macro como el panel de mercados de un bróker (WS-0036, ok del owner 15/10): seis números arriba, una tabla por clase
- * de activo (último, hoy, 1 semana, 1 mes y el mes en un mini gráfico) y al costado la curva del Tesoro y la agenda.
+ * Macro como el panel de mercados de un bróker (WS-0036, ok del owner 15/10): seis números arriba y una tabla ordenada
+ * por las preguntas que cuentan la historia del mercado, de lo general a lo específico (apetito por riesgo, tasas,
+ * quién lidera, si lo confirman los demás); al costado la curva del Tesoro y la agenda. En «quién lidera», los
+ * cocientes se leen como cuánto le ganó o perdió uno al otro.
  * Todo viene calculado de `GET /App/Macro/Board`; acá sólo se muestra.
  */
 
@@ -83,17 +85,18 @@ export function Macro() {
       <div className="mb-layout">
         <table className="mb-table">
           <thead><tr><th>Mercado</th><th>Último</th><th>Hoy</th><th>1 semana</th><th>1 mes</th><th aria-label="Último mes" /></tr></thead>
-          {board.groups.map(g => <tbody key={g.name}>
+          {board.sections.flatMap(sec => sec.groups.map((g, i) => <tbody key={sec.question + g.name}>
+            {i === 0 && <tr className="mb-question"><th colSpan={6}>{sec.question}</th></tr>}
             <tr className="mb-group"><th colSpan={6}>{g.name}</th></tr>
             {g.rows.map(r => <tr key={r.id} onClick={e => open(r, e.currentTarget as HTMLElement)} title={dated(r)}>
               <th><button onClick={e => { e.stopPropagation(); open(r, e.currentTarget); }}>{r.name}{symbol(r)}</button></th>
-              <td>{fmtLast(r)}</td>
+              <td>{r.unit === 'rel' ? '' : fmtLast(r)}</td>
               <td className={tone(r.changeDay)}>{fmtChange(r.changeDay, r.changeUnit)}</td>
               <td className={tone(r.changeWeek)}>{fmtChange(r.changeWeek, r.changeUnit)}</td>
               <td className={tone(r.changeMonth)}>{fmtChange(r.changeMonth, r.changeUnit)}</td>
               <td><Spark row={r} /></td>
             </tr>)}
-          </tbody>)}
+          </tbody>))}
         </table>
         <aside className="mb-side">
           <MacroCurve curve={board.curve} />
@@ -112,7 +115,7 @@ export function Macro() {
         <button className="macro-close" onClick={() => setDetail(null)}>Cerrar · Esc</button>
         <h2>{detail.name} {symbol(detail)}</h2>
         <div className="macro-detail-values">
-          <div><span>Último</span><strong>{fmtLast(detail)}</strong></div>
+          {detail.unit !== 'rel' && <div><span>Último</span><strong>{fmtLast(detail)}</strong></div>}
           <div><span>Hoy</span><strong className={tone(detail.changeDay)}>{fmtChange(detail.changeDay, detail.changeUnit)}</strong></div>
           <div><span>1 semana</span><strong className={tone(detail.changeWeek)}>{fmtChange(detail.changeWeek, detail.changeUnit)}</strong></div>
           <div><span>1 mes</span><strong className={tone(detail.changeMonth)}>{fmtChange(detail.changeMonth, detail.changeUnit)}</strong></div>

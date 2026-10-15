@@ -60,5 +60,18 @@ namespace DataFeed.Tests
             Assert.Null(empty.Last);
             Assert.Empty(empty.Spark);
         }
+    
+        [Fact]
+        public void Relativo_sube_cuando_la_canasta_le_gana_al_denominador_y_usa_solo_fechas_comunes()
+        {
+            var a = new List<(string, double)> { ("2026-10-01", 100), ("2026-10-02", 110), ("2026-10-03", 120) };
+            var b = new List<(string, double)> { ("2026-10-01", 50), ("2026-10-03", 60) };
+            var den = new List<(string, double)> { ("2026-10-01", 10), ("2026-10-02", 10), ("2026-10-03", 11) };
+            var rel = MacroBoardMath.Relative(new List<List<(string, double)>> { a, b }, den);
+            Assert.Equal(new[] { "2026-10-01", "2026-10-03" }, rel.Select(r => r.Date));
+            Assert.Equal(1.0, rel[0].Value, 6);
+            Assert.Equal(((1.2 + 1.2) / 2) / 1.1, rel[1].Value, 6);
+            Assert.Empty(MacroBoardMath.Relative(new List<List<(string, double)>> { new() }, den));
+        }
     }
 }

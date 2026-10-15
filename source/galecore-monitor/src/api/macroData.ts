@@ -15,7 +15,9 @@ export interface BoardRow {
   asOf: string | null; source: string; spark: BoardPoint[];
 }
 export interface MacroBoard {
-  asOf: string; strip: BoardRow[]; groups: { name: string; rows: BoardRow[] }[];
+  asOf: string; strip: BoardRow[];
+  /** Una sección por pregunta (¿apetito por riesgo?, ¿tasas?, ¿quién lidera?, ¿confirman?), con sus grupos. */
+  sections: { question: string; groups: { name: string; rows: BoardRow[] }[] }[];
   curve: { date: string; points: { tenor: string; value: number }[] } | null;
   events: { date: string; name: string }[]; missing: string[];
 }
