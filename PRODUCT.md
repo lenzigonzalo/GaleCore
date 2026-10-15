@@ -21,6 +21,21 @@ Cuando chocan, gana en este orden:
 Si una nota empieza a funcionar como regla, se propone convertirla en convención del trader o en override del proyecto,
 y queda así sólo con su «sí».
 
+## Para quién es
+
+Lo usan inversores particulares, no una institución: cuenta propia de miles o decenas de miles de dólares, una o dos
+personas con tiempo limitado, un bróker minorista y los datos que sirve GaleCore. Se trabaja con rigor profesional, a
+esa escala, y toda propuesta se baja a la cuenta del perfil:
+
+- **Contratos enteros:** cuántos entran con el capital y los topes; si uno solo ya pasa un tope, se dice.
+- **Costos:** comisiones y diferencia entre precio de compra y de venta pesan más en una cuenta chica; resultados netos.
+- **Reglas del bróker para cuentas chicas:** day trading, nivel de opciones y margen, cuando cambian lo que se puede hacer.
+- **Tiempo:** nada que exija mirar la pantalla todo el día ni ejecutar más rápido que una persona o que la estrategia automática.
+- **Sin recursos institucionales** (datos pagos, baja latencia, equipos, tamaño que mueve precios): si una idea sólo
+  funciona a esa escala, decirlo en una línea y proponer la versión que se puede hacer.
+
+Lo que el perfil declare (otro capital, otra escala, otras herramientas) manda sobre este párrafo.
+
 ## Empezar por el trader y el catálogo
 
 ```bash
