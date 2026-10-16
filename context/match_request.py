@@ -42,7 +42,10 @@ def preload(text):
     for sym, proc in runs.items():
         try:
             x = json.loads(proc.communicate(timeout=20)[0])["data"]["items"][0]
-        except (ValueError, KeyError, IndexError, TypeError, subprocess.TimeoutExpired):
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            continue
+        except (ValueError, KeyError, IndexError, TypeError):
             continue
         e = x.get("earnings") or {}
         parts = [f"{x.get('sector') or 's/sector'}"]
@@ -51,7 +54,9 @@ def preload(text):
             parts.append(f"próximo balance {e['expectedReportDate']} {hora}"
                          + (f", consenso EPS {e['consensusEps']}" if e.get("consensusEps") is not None else ""))
         if x.get("impliedVolatility30Day") is not None:
-            parts.append(f"IV 30 d {x['impliedVolatility30Day']} % vs histórica {x.get('historicalVolatility30Day')} %")
+            hv = x.get("historicalVolatility30Day")
+            vs = f" vs histórica {hv} %" if hv is not None else ""
+            parts.append(f"IV 30 d {x['impliedVolatility30Day']} %{vs}")
         if x.get("priceEarningsRatio"):
             parts.append(f"P/E {round(x['priceEarningsRatio'], 1)}")
         lines.append(f"- {sym}: " + " · ".join(parts) + f" (GaleCore, {str(x.get('updatedAt', ''))[:16]} UTC)")
@@ -61,12 +66,14 @@ def preload(text):
 
 PRELOAD_FOR = {"strategy_design", "context_research", "on_demand_analysis", "research", "gex_interpretation"}
 NOT_TICKERS = {"OK", "EPS", "IV", "HV", "ETF", "USD", "EEUU", "NY", "PCS", "CCS", "IC", "GEX", "CPI", "FOMC", "PBI",
-               "DTE", "OTM", "ITM", "ATM", "IA", "AI", "CEO", "YO", "Y", "A", "O", "SEC", "PE", "UTC", "NFP"}
+               "DTE", "OTM", "ITM", "ATM", "IA", "AI", "CEO", "YO", "Y", "A", "O", "SEC", "PE", "UTC", "NFP",
+               "HOY", "SI", "NO", "VS", "ES", "EN", "DE", "LA", "EL", "QUE", "UN", "MI", "TU", "PARA", "CON", "POR"}
 # Por la intención del turno, no por el lugar ni por una palabra suelta (revisión de Astra, 16/10): «armemos una
 # estrategia» es diseño; «¿por qué perdió esta estrategia?» no. En un proyecto de estrategia, diseño es el default
-# cuando el catálogo no reconoce otra cosa clara.
+# cuando el catálogo no reconoce otra cosa clara. Exige una estrategia nueva («una/otra/nueva»): «quiero ver cómo va
+# la estrategia» o «cambiar de tema» no son diseño (revisión interna, 16/10).
 BUILD = re.compile(r"\b(armar|arm[aá]|armemos|hacer|hagamos|desarrollar|desarroll[aá]|dise[nñ]ar|crear|construir|"
-                   r"pensar|probar|ajustar|cambiar|mejorar|quiero)\b[^.?!]*\bestrateg", re.I)
+                   r"pensar|pensemos)\b\s+(?:\w+\s+){0,3}?(?:una|otra|nueva)\s+(?:\w+\s+){0,2}?estrateg", re.I)
 in_project = "strategies" in Path(event.get("cwd") or ".").parts
 if BUILD.search(prompt):
     top = DESIGN
