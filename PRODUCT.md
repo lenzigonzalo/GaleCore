@@ -118,7 +118,7 @@ de responder. El trader la ve al lado del chat y es lo que se retoma en otra con
 - <la próxima decisión primero>
 ```
 
-Sólo lo dicho en la conversación, con las cifras como las dio GaleCore. Una idea, una página; otra idea, otra página. No
+Se lee de un vistazo: cada renglón una frase corta (hasta ~15 palabras), de vos («elegiste», nunca «el owner»), sin aclaraciones ni condicionales; el detalle queda en el chat. Sólo lo dicho en la conversación, con las cifras como las dio GaleCore. Una idea, una página; otra idea, otra página. No
 aprueba nada ni reemplaza los registros formales. No nombres el archivo en la respuesta. Ofrecé abrir un proyecto de
 estrategia una sola vez por conversación.
 
