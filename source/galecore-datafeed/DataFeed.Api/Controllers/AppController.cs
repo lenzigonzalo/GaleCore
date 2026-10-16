@@ -117,6 +117,12 @@ namespace DataFeed.Controllers
         public async Task<IActionResult> MarketSummaryAsync([FromQuery] string symbol)
             => await Handle(new DataFeed.Application.App.Market.MarketSummaryRequest { Symbol = symbol });
 
+        /// <summary>Sugerencias del chat nuevo (WS-0039): hasta cuatro temas del momento con su número, grafiquito y pregunta.</summary>
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/Lab/Suggestions")]
+        public async Task<IActionResult> ChatSuggestionsAsync()
+            => await Handle(new DataFeed.Application.App.Market.ChatSuggestionsRequest());
+
         /// <summary>
         /// Aviso cerca del strike vendido (WS-0036): posiciones de la cuenta real con el precio a menos de la distancia
         /// que el usuario configuró (`preference/aviso-strike` de su espacio). La campana del Monitor lo consulta y suena.

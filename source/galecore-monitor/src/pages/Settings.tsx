@@ -6,6 +6,7 @@ import { LocalMcp } from '../components/settings/LocalMcp';
 import { localMcpAvailable } from '../api/localMcp';
 import { ProfileForm } from '../components/settings/ProfileForm';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
+import { SUGGESTIONS_KEY, suggestionsEnabled, saveSuggestionsEnabled } from '../components/lab/LabSuggestions';
 import { STRIKE_ALERT_KEY } from '../api/account';
 import { MyPasswordCard } from '../components/account/MyPasswordCard';
 import { Markdown } from '../components/settings/Markdown';
@@ -276,6 +277,11 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
         <div style={muted}>Usuario</div><div style={{ color: 'var(--text-primary)' }}>{user?.username ?? '—'}</div>
         <div style={muted}>Email</div><div style={{ color: 'var(--text-primary)' }}>{user?.email ?? '—'}</div>
         <div style={muted}>Rol</div><div style={{ color: 'var(--text-primary)' }}>{user?.isAdmin ? 'Administrador' : 'Operador'}</div>
+        <div style={muted}>Chat nuevo</div><label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-primary)', cursor: 'pointer' }}>
+          <input type="checkbox" checked={suggestionsEnabled(items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY))}
+            onChange={e => { void saveSuggestionsEnabled(e.target.checked).then(load).catch(() => setError('No se pudo guardar la preferencia.')); }} />
+          Sugerir temas del momento al abrir un chat
+        </label>
       </div>
     );
   } else if (section === 'contrasena') {
