@@ -59,11 +59,16 @@ def preload(text):
         print("[ya traído por código, no lo vuelvas a pedir]\n" + "\n".join(lines))
 
 
+PRELOAD_FOR = {"strategy_design", "context_research", "on_demand_analysis", "research", "gex_interpretation"}
 NOT_TICKERS = {"OK", "EPS", "IV", "HV", "ETF", "USD", "EEUU", "NY", "PCS", "CCS", "IC", "GEX", "CPI", "FOMC", "PBI",
                "DTE", "OTM", "ITM", "ATM", "IA", "AI", "CEO", "YO", "Y", "A", "O", "SEC", "PE", "UTC", "NFP"}
-preload(prompt)
-if "strategies" in Path(event.get("cwd") or ".").parts or re.search(r"estrateg", prompt, re.I):
-    # en un proyecto de estrategia todo es diseño (H8, 13/10); fuera, «estrategia» lo es también (WS-0039)
+# Por la intención del turno, no por el lugar ni por una palabra suelta (revisión de Astra, 16/10): «armemos una
+# estrategia» es diseño; «¿por qué perdió esta estrategia?» no. En un proyecto de estrategia, diseño es el default
+# cuando el catálogo no reconoce otra cosa clara.
+BUILD = re.compile(r"\b(armar|arm[aá]|armemos|hacer|hagamos|desarrollar|desarroll[aá]|dise[nñ]ar|crear|construir|"
+                   r"pensar|probar|ajustar|cambiar|mejorar|quiero)\b[^.?!]*\bestrateg", re.I)
+in_project = "strategies" in Path(event.get("cwd") or ".").parts
+if BUILD.search(prompt):
     top = DESIGN
 else:
     out = subprocess.run([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "catalog", "--match", prompt],
@@ -72,7 +77,11 @@ else:
         found = json.loads(out.stdout)
     except ValueError:
         sys.exit(0)
-    if not found.get("confident"):  # el cruce de palabras no alcanza: que el modelo elija por el sentido (WS-0037)
+    if found.get("confident"):
+        top = found["matches"][0]
+    elif in_project:
+        top = DESIGN
+    else:  # el cruce de palabras no alcanza: que el modelo elija por el sentido (WS-0037)
         if len(prompt.split()) < 3:  # «sí», «dale», «gracias»: respuesta dentro de la conversación, no un pedido nuevo
             sys.exit(0)
         print("[capacidades] Ninguna coincide clara con el pedido. Elegí por el sentido (o ninguna: ofrecé crearla); "
@@ -80,7 +89,9 @@ else:
         for o in found.get("options", []):
             print(f"- {o['capability']}: {o['serves'][:70]} (p. ej. «{o['example']}»)")
         sys.exit(0)
-    top = found["matches"][0]
+# La precarga sólo cuando aporta: una idea o un análisis de un símbolo, no una pregunta de cartera ni una explicación.
+if top["capability"] in PRELOAD_FOR:
+    preload(prompt)
 if top["score"] >= MIN_SCORE:
     print(f"[capacidad para este pedido] {top['capability']}. Su «cómo responder» va abajo; "
           "`catalog --match` sólo cuando necesites su flujo completo (comandos, guardar). No nombres la skill.")

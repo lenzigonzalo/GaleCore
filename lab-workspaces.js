@@ -30,18 +30,36 @@ function tree(dir, prefix = '', depth = 0) {
     return TEXT.test(e.name) ? [{path:rel,name:e.name,kind:'file'}] : [];
   });
 }
+// Qué está haciendo el motor, en palabras del trader (WS-0039: «mostrá qué se está haciendo», owner 16/10). Sólo la
+// línea de actividad; el comando y su salida no se muestran.
+const THINGS={option_chains:'la cadena de opciones',volatility_metrics:'volatilidad y próximo balance',candles:'la historia de precios',quote:'la cotización',trade:'el último precio',option_greeks:'los precios teóricos',earnings_history:'los balances pasados',gamma_exposure:'el GEX',gex_analysis:'el GEX',iv_rank:'el IV rank',implied_volatility:'la volatilidad por vencimiento',put_skew:'el skew'};
+const KINDS={technical:'técnico',fundamental:'fundamental',macro:'macro',flow:'de flujo'};
+function describeStep(tool,input){
+  const cmd=String(input?.command||input?.cmd||''),file=String(input?.file_path||input?.path||'');
+  if(/mapa-[\w-]+\.md/.test(file)||/mapa-[\w-]+\.md/.test(cmd)&&/>|Set-Content|write/i.test(cmd))return 'Actualizando el mapa';
+  if(/Write|Edit/.test(tool||''))return /memory[\/]/.test(file)?'Actualizando la memoria del proyecto':'Guardando '+path.basename(file);
+  if(tool==='Read')return 'Leyendo '+path.basename(file);
+  let m=cmd.match(/galecore get ([\w.]+)(?:[^|;&]*?--symbol[ =]"?([\w$]+))?/);
+  if(m){const [area,name]=m[1].split('.'),sym=m[2]?' de '+m[2].replace('$',''):'';
+    const thing=THINGS[name]||(area==='calendar'?'el calendario':area==='macro'||area==='rates'?'datos macro':area==='filings'?'los informes a la SEC':area==='account'?'tu cuenta real':area==='history'?'la historia del índice':'datos de GaleCore');
+    return 'Trayendo '+thing+sym;}
+  if((m=cmd.match(/analyze pack --kind (\w+)(?:[^|;&]*?--symbol[ =]"?(\w+))?/)))return 'Armando el perfil '+(KINDS[m[1]]||m[1])+(m[2]?' de '+m[2]:'');
+  const steps=[[/kb search/,'Buscando antecedentes'],[/catalog --match/,'Eligiendo cómo responder'],[/state/,'Mirando el estado de tus estrategias'],[/profile show/,'Leyendo tu perfil'],[/story pack/,'Leyendo la historia del mercado'],[/gap add/,'Anotando un dato que falta'],[/(research|strategy) save|project add/,'Guardando el avance'],[/strategy (check|critique|sheet|controls)/,'Revisando la propuesta'],[/python[^|]*( -c | -\s|<<)/,'Calculando'],[/grep|cat|ls|find|Get-Content/,'Revisando archivos']];
+  for(const [re,label] of steps)if(re.test(cmd))return label;
+  return 'Trabajando';
+}
 function consumeEvent(chat, event, provider) {
   if(provider === 'codex') {
     if(event.type === 'thread.started') chat.nativeId = event.thread_id;
     if(event.type === 'item.completed' && event.item?.type === 'agent_message') chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.item.text,at:new Date().toISOString()});
-    if(event.type === 'item.started') chat.activity = event.item?.type === 'command_execution' ? 'Consultando el workspace' : 'Trabajando';
+    if(event.type === 'item.started') chat.activity = event.item?.type === 'command_execution' ? describeStep('Bash',{command:event.item.command}) : event.item?.type === 'file_change' ? describeStep('Write',{file_path:(event.item.changes||[])[0]?.path}) : 'Pensando';
     if(event.type === 'turn.failed' || event.type === 'error') chat.error = event.error?.message || event.message || 'El motor no pudo completar el pedido.';
   } else {
     if(event.session_id) chat.nativeId = event.session_id;
     if(event.type === 'assistant') {
       // WS-0027: los textos intermedios son narración interna («Now try the CLI…»), llegan en eventos propios y no
       // van al chat. En el chat queda sólo la respuesta final del turno (evento `result`).
-      if((event.message?.content || []).some(c=>c.type==='tool_use')) chat.activity='Consultando el workspace';
+      const step=(event.message?.content || []).find(c=>c.type==='tool_use');if(step) chat.activity=describeStep(step.name,step.input);
     }
     if(event.type === 'result' && !event.is_error && event.result) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.result,at:new Date().toISOString()});
     if(event.type === 'result' && event.is_error) chat.error='Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
@@ -254,4 +272,4 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
-module.exports={createWorkspaces,safeFile,tree,consumeEvent,parseMapa};
+module.exports={createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep};
