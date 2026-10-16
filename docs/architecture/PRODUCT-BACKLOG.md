@@ -2575,3 +2575,43 @@ cuando algo se pasa, y vista en el front. Cálculo y vigilancia en GaleCore; cri
 
 **Aceptación:** con la cartera real de hoy, una vista dice riesgo total contra tope, riesgo por estrategia contra su
 presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y el Inicio muestran lo mismo.
+
+---
+
+## BL-031 — Backtest servido por GaleCore
+
+**Origen:** owner, 16/10 (WS-0039, casos de entrada): «si algo que se pide está, sugerirlo para hacer backtesting [...] si
+el dato está, es barato conseguirlo y sirve, usémoslo; si no está, le decimos que no está, no salimos a inventar
+datos [...] o le proponemos una alternativa». Pidió dejarlo como pieza con un análisis. **Reabre en parte el descarte
+del backtest del 04/10** (BL-004, U-46 «Después»): el lugar en el plan lo decide el owner.
+
+**Qué hay hoy (verificado 16/10):**
+
+| Recurso | Cobertura | Estado |
+|---|---|---|
+| Velas OHLCV de cualquier símbolo (`market_data.candles`, Tastytrade vía GaleCore) | Diarias e intradía; SPY desde 2021 confirmado, otros símbolos a verificar | Servido por GaleCore, en uso |
+| Cadenas EOD de opciones de SPY, QQQ e IWM (`GaleCore/research/data/*_options`) | 2013 → 12/12/2025, con greeks, IV, bid/ask, OI (dataset de Philipp Dubach) | Local, fuera de git, no servido por GaleCore; 2026 sin cubrir; quirks conocidos (`in_the_money` roto, 0DTE degenera greeks) |
+| Derivados de esas cadenas (`research/data/derived`: GEX diario, walls, skew25, calibración de probabilidades) | SPY y QQQ | Local, fuera de git |
+| Scripts de backtest BT-0…BT-17 (`GaleCore/research/backtesting`, jul-2026) | PCS, IC, CCS, wheel, diagonales, BWB, cartera con cash a T-bill | Ad hoc, rutas fijas a otra máquina; ventana fuera de muestra 2018–2025 declarada agotada |
+| Historia de índices Cboe, macro (FRED/BLS), informes a la SEC | Según serie | Servido por GaleCore |
+
+**Qué falta:** un backtest que el chat pueda pedir a GaleCore y que devuelva entradas, salidas y costos de una regla,
+sin mirar el futuro; historia point-in-time propia (BL-004); opciones fuera de SPY/QQQ/IWM y de 2026; calendario de
+balances histórico; universo histórico de acciones (sin las que dejaron de cotizar, un backtest de penny stocks sale
+optimista).
+
+**Riesgos que la pieza tiene que cuidar:** sobreajuste (la lección de BT-0…BT-17: hipótesis declarada antes, una
+corrida, veredicto tal cual); llenado al precio medio en vez de un crédito realista; datos EOD tomados como intradía;
+supervivencia en acciones. El backtest no reemplaza a SHADOW: SHADOW sigue probando la ejecución hacia adelante.
+
+**Corte propuesto, de lo barato a lo caro:**
+1. **Lectura de la historia con velas** (acciones y ETF): una capacidad de GaleCore que, dada una condición sobre
+   precio o volatilidad, devuelve cuántas veces se dio y qué pasó N días después, con costo estimado. Cubre impulso,
+   rotación de sectores y «cómo se comportó». Es lo que el chat ya ofrece de palabra desde WS-0039.
+2. **Backtest de spreads sobre SPY, QQQ e IWM** con el dataset EOD: llevar la maquinaria de `research/backtesting` a un
+   servicio de GaleCore que corra una spec del runtime (las mismas reglas que SHADOW), con crédito realista, gestión y
+   costos, declarando EOD y el corte en 12/2025.
+3. **Historia propia point-in-time** (BL-004) para cerrar 2026 y otros subyacentes.
+
+**Aceptación del paso 1:** desde el chat, «¿cómo le fue a comprar QQQ después de caer 5 % en una semana?» devuelve
+una tabla de GaleCore (casos, resultado a 5/20 días, peor caso) con período y fuente, sin cálculo del modelo.
