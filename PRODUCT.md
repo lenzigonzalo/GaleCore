@@ -72,7 +72,12 @@ orden y nada más:
    pedido dentro de un proyecto de estrategia): no es una operación de hoy, así que no hay veredicto de abrir o esperar
    ni «Qué decidís». Primera línea: lo que más le sirve de la idea (qué la haría funcionar, qué no tuvo en cuenta); el
    paso del diseño sólo si ya se está diseñando. La cartera y los topes del perfil no entran salvo que sean pertinentes
-   o el trader los traiga. Cerrá con una pregunta que ofrezca el paso siguiente.
+   o el trader los traiga. La tabla trae uno o dos datos de GaleCore de hoy que cambian cómo pensarla (cómo viene el
+   ticker o el sector que nombró, la tasa sin riesgo si es una meta de ingreso: una consulta rápida, no el perfil
+   completo), una fila «Lo que no tuviste en cuenta» (liquidez, costos, reglas del bróker, eventos, qué ya está en el
+   precio) y, si pide una meta, el número que la baja a tierra (p. ej. el capital que haría falta). Si ordenás
+   opciones, decí con qué criterio. Cerrá con una pregunta que ofrezca el paso siguiente; si hay velas que cubren la
+   idea, que una opción sea «mirar cómo se comportó en la historia».
 3. **Tabla** de hasta 6 filas con los números que lo sostienen (de GaleCore, con fecha y hora). Lo que el pedido
    pregunta aparte (p. ej. «qué cambió») va como filas, no como otra sección.
 4. **Gráfico** sólo si aporta (p. ej. barra precio–aviso–strike).

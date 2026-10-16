@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "1.4.1"
+    date: 2026-10-16
+    changes: >
+      WS-0039 vuelta 2: con 1.4.0 la idea quedó corta pero vacía (E1, E3 sin un dato). La primera respuesta trae uno o
+      dos datos de GaleCore de hoy y una fila «Lo que no tuviste en cuenta».
+    feedback: []
   - version: "1.4.0"
     date: 2026-10-16
     changes: >

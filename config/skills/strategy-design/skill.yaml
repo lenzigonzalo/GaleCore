@@ -1,5 +1,5 @@
 skill_id: strategy_design
-version: "1.4.0"
+version: "1.4.1"
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Part A (method): turns an idea and its investigation into a complete strategy (hypothesis, rules per block,
@@ -17,7 +17,8 @@ answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisi
   ofrece diseñarla. Idea o desarrollo («quiero hacer una estrategia de…», «guiame» o dentro de un proyecto de
   estrategia): sin veredicto de abrir o esperar, sin la cartera y sin frenar la idea con los topes del perfil (owner
   16/10: el perfil entra cuando es pertinente). Primera línea: lo que más sirve de la idea (qué la haría funcionar,
-  qué no tuvo en cuenta); el paso del diseño sólo si ya se está diseñando. Corto, en tabla, una pregunta al final; sin
+  qué no tuvo en cuenta); el paso del diseño sólo si ya se está diseñando. Uno o dos datos de GaleCore de hoy que
+  cambian cómo pensarla y una fila «Lo que no tuviste en cuenta». Corto, en tabla, una pregunta al final; sin
   «Qué decidís». Ofrecé en una línea, sin correrlo, el perfil del ticker o del sector si se nombra uno, y «mirar cómo se
   comportó en la historia» si hay velas (no es un backtest: GaleCore no tiene). Al cerrar cada paso, reescribir la
   página del tema en `memory/` (estado neto, corto) y guardar lo formal (research save / strategy save / project add).
