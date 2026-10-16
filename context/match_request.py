@@ -1,6 +1,7 @@
 """Lleva el pedido del trader a la capacidad que corresponde (`catalog --match`). Lo corre el Lab en cada turno, para
 cualquier motor (D-0014); recibe por stdin `{"prompt": ..., "cwd": ...}`."""
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -22,7 +23,47 @@ except ValueError:
 prompt = event.get("prompt", "")
 if not prompt.strip():
     sys.exit(0)
-if "strategies" in Path(event.get("cwd") or ".").parts:  # en un proyecto de estrategia todo es diseño (H8, 13/10)
+
+
+
+def preload(text):
+    """Lo básico de cada ticker nombrado (hasta 3), traído por código en paralelo antes del turno (WS-0039: que el
+    primer mensaje responda rápido y pregunte bien, sin que el modelo salga a buscar)."""
+    seen = []
+    for word in re.findall(r"\$?\b[A-Z]{1,5}\b", text):
+        sym = word.lstrip("$")
+        if sym not in NOT_TICKERS and sym not in seen:
+            seen.append(sym)
+    runs = {s: subprocess.Popen([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "galecore", "get",
+                                 "market_data.volatility_metrics", "--symbol", s], stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace")
+            for s in seen[:3]}
+    lines = []
+    for sym, proc in runs.items():
+        try:
+            x = json.loads(proc.communicate(timeout=20)[0])["data"]["items"][0]
+        except (ValueError, KeyError, IndexError, TypeError, subprocess.TimeoutExpired):
+            continue
+        e = x.get("earnings") or {}
+        parts = [f"{x.get('sector') or 's/sector'}"]
+        if e.get("expectedReportDate"):
+            hora = {"AMC": "después del cierre", "BMO": "antes de la apertura"}.get(e.get("timeOfDay"), "hora s/d")
+            parts.append(f"próximo balance {e['expectedReportDate']} {hora}"
+                         + (f", consenso EPS {e['consensusEps']}" if e.get("consensusEps") is not None else ""))
+        if x.get("impliedVolatility30Day") is not None:
+            parts.append(f"IV 30 d {x['impliedVolatility30Day']} % vs histórica {x.get('historicalVolatility30Day')} %")
+        if x.get("priceEarningsRatio"):
+            parts.append(f"P/E {round(x['priceEarningsRatio'], 1)}")
+        lines.append(f"- {sym}: " + " · ".join(parts) + f" (GaleCore, {str(x.get('updatedAt', ''))[:16]} UTC)")
+    if lines:
+        print("[ya traído por código, no lo vuelvas a pedir]\n" + "\n".join(lines))
+
+
+NOT_TICKERS = {"OK", "EPS", "IV", "HV", "ETF", "USD", "EEUU", "NY", "PCS", "CCS", "IC", "GEX", "CPI", "FOMC", "PBI",
+               "DTE", "OTM", "ITM", "ATM", "IA", "AI", "CEO", "YO", "Y", "A", "O", "SEC", "PE", "UTC", "NFP"}
+preload(prompt)
+if "strategies" in Path(event.get("cwd") or ".").parts or re.search(r"estrateg", prompt, re.I):
+    # en un proyecto de estrategia todo es diseño (H8, 13/10); fuera, «estrategia» lo es también (WS-0039)
     top = DESIGN
 else:
     out = subprocess.run([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "catalog", "--match", prompt],
@@ -41,9 +82,8 @@ else:
         sys.exit(0)
     top = found["matches"][0]
 if top["score"] >= MIN_SCORE:
-    print(f"[capacidad para este pedido] {top['capability']}. Corré primero "
-          f"`python -B -m galecore_ai.adapters.cli catalog --match \"<el pedido>\"`, decí en lenguaje del trader "
-          "qué vas a hacer (sin nombrar la skill) y seguí su flujo.")
+    print(f"[capacidad para este pedido] {top['capability']}. Su «cómo responder» va abajo; "
+          "`catalog --match` sólo cuando necesites su flujo completo (comandos, guardar). No nombres la skill.")
     answer = None
     if yaml is not None:
         try:  # el «cómo responder» corto de la skill (decisión del owner 13/10: la sesión casi nunca lee la skill)
