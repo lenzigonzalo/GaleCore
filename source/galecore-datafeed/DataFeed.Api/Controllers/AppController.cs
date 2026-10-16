@@ -104,10 +104,12 @@ namespace DataFeed.Controllers
         [Tags("App.GaleCore")]
         [HttpGet("GaleCore/Account/Overview")]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
-        public async Task<IActionResult> AccountOverviewAsync([FromQuery] string? accountNumber)
+        public async Task<IActionResult> AccountOverviewAsync([FromQuery] string? accountNumber,
+            [FromQuery] double? maxRiskPerTradePct, [FromQuery] double? maxOpenRiskPct)
             => await Handle(new DataFeed.Application.Data.Tastytrade.AccountOverview.AccountOverviewRequest
             {
                 AccountNumber = accountNumber,
+                MaxRiskPerTradePct = maxRiskPerTradePct, MaxOpenRiskPct = maxOpenRiskPct,
                 RulesJson = await LoadFileOrNullAsync("galecore_rules_core.json"),
             });
 

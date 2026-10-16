@@ -47,7 +47,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
             var rules = string.IsNullOrWhiteSpace(request.RulesJson) ? null : JsonNode.Parse(request.RulesJson)?.AsObject();
             var response = AccountOverviewBuilder.Build(
                 (double)balances.NetLiquidatingValue, (double)balances.CashBalance, (double)balances.DerivativeBuyingPower,
-                account, betas, rules, today, events, missing);
+                account, betas, rules, today, events, missing, request.MaxRiskPerTradePct, request.MaxOpenRiskPct);
             response.MarginUsed = (double)balances.MaintenanceRequirement;
             response.MarginUsedPct = balances.NetLiquidatingValue > 0
                 ? Math.Round((double)(balances.MaintenanceRequirement / balances.NetLiquidatingValue) * 100, 1) : null;

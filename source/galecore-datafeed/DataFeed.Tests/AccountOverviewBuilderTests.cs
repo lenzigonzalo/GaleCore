@@ -49,6 +49,31 @@ public class AccountOverviewBuilderTests
         Assert.Equal((70.0, -280.0, "reglas"), (line.TakeProfit!.Value, line.StopLoss!.Value, line.TargetSource));
     }
 
+    [Fact]
+    public void TopesDelPerfil_MarcanLoQueLosPasa_YMandanSobreLasReglas()
+    {
+        var o = AccountOverviewBuilder.Build(2500, 2600, 660,
+            new AccountSpreadsResponse { Spreads = { Spread(4) }, UnderlyingPrices = { ["SPY"] = 770 } },
+            new Dictionary<string, double> { ["SPY"] = 1.0 }, Rules, Today, Array.Empty<CalendarEvent>(), new List<string>(),
+            maxRiskPerTradePct: 5, maxOpenRiskPct: 15);
+
+        Assert.Equal(15, o.MaxRiskLimitPct);
+        Assert.Equal(new[] { "riesgo", "riesgo" }, o.Attention.Select(a => a.Kind));
+        Assert.Contains("arriesga 1.860 USD", o.Attention[0].Title);
+        Assert.Contains("125 USD (5 %)", o.Attention[0].Title);
+        Assert.Contains("tope sumado es 375 USD (15 %)", o.Attention[1].Title);
+    }
+
+    [Fact]
+    public void TopesDelPerfil_DentroDeLimite_NoMarcanNada()
+    {
+        var o = AccountOverviewBuilder.Build(50000, 50000, 20000,
+            new AccountSpreadsResponse { Spreads = { Spread(4) }, UnderlyingPrices = { ["SPY"] = 770 } },
+            new Dictionary<string, double> { ["SPY"] = 1.0 }, Rules, Today, Array.Empty<CalendarEvent>(), new List<string>(),
+            maxRiskPerTradePct: 5, maxOpenRiskPct: 15);
+        Assert.Empty(o.Attention);
+    }
+
     [Theory]
     [InlineData(75.0, "2026-11-20", "SPY put spread · vence 20/11: llegó a la toma de ganancia (54 % del crédito)")]
     [InlineData(-300.0, "2026-11-20", "SPY put spread · vence 20/11: la pérdida llegó a 2,1× el crédito (defensa)")]

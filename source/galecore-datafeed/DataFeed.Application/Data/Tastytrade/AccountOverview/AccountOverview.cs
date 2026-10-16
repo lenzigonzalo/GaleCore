@@ -17,6 +17,12 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public string? AccountNumber { get; set; }
         /// <summary>galecore_rules_core.json: lo pone el controller (gestión y límites del nodo `monitor`).</summary>
         public string? RulesJson { get; set; }
+        /// <summary>
+        /// Topes del perfil del trader (WS-0043), en % del valor de la cuenta: pérdida máxima por operación y riesgo
+        /// abierto sumado. Si vienen, mandan sobre `monitor.risk_limits` de las reglas y lo que los pase se marca.
+        /// </summary>
+        public double? MaxRiskPerTradePct { get; set; }
+        public double? MaxOpenRiskPct { get; set; }
     }
 
     public class AccountOverviewResponse
@@ -126,7 +132,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
 
     public class AttentionDto
     {
-        /// <summary>"gestion" (una regla de la posición) o "evento" (algo que puede mover lo que tenemos).</summary>
+        /// <summary>"riesgo" (pasa un tope del perfil), "gestion" (una regla de la posición) o "evento" (algo que puede mover lo que tenemos).</summary>
         public string Kind { get; set; } = "";
         public string Title { get; set; } = "";
     }
@@ -152,7 +158,8 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public static AccountOverviewResponse Build(
             double netLiq, double cash, double buyingPower, AccountSpreadsResponse account,
             IReadOnlyDictionary<string, double> betas, JsonObject? rules, DateOnly today,
-            IReadOnlyList<CalendarEvent> events, List<string> missing)
+            IReadOnlyList<CalendarEvent> events, List<string> missing,
+            double? maxRiskPerTradePct = null, double? maxOpenRiskPct = null)
         {
             var spreads = account.Spreads;
             var equities = account.Equities;
@@ -176,13 +183,14 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
                 OpenPnl = openPnl == null ? null : R(openPnl.Value),
                 MaxRisk = R(maxRisk),
                 MaxRiskPct = netLiq > 0 ? R(maxRisk / netLiq * 100) : null,
-                MaxRiskLimitPct = heat == null ? null : R(heat.Value * 100),
+                MaxRiskLimitPct = maxOpenRiskPct ?? (heat == null ? null : R(heat.Value * 100)),
                 Exposure = Exposure(spreads, equities, prices, betas),
                 Missing = missing,
             };
             if (dayPnl == null && (spreads.Count > 0 || equities.Count > 0))
                 response.Missing.Add("Resultado del día: sin cotización en vivo de alguna posición.");
 
+            response.Attention.AddRange(RiskLimits(spreads, netLiq, maxRisk, maxRiskPerTradePct, maxOpenRiskPct));
             response.Attention.AddRange(Management(spreads, monitor, today));
             response.Positions.AddRange(Lines(spreads, equities, prices, monitor, today));
             if (spreads.Count > 0 || equities.Count > 0)   // hay exposición a EE. UU.: los datos y la Fed la mueven
@@ -222,6 +230,26 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
                 Vega = allGreeks ? R(greeks.Sum(g => g!.Vega)) : null,
                 ByUnderlying = rows.OrderByDescending(r => Math.Abs(r.DollarDelta ?? 0)).ThenByDescending(r => r.MaxRisk).ToList(),
             };
+        }
+
+        /// <summary>
+        /// Topes del perfil sobre el valor real de la cuenta: cada spread contra el máximo por operación (su pérdida
+        /// máxima) y la suma contra el riesgo abierto permitido. Sin topes, no marca nada.
+        /// </summary>
+        public static IEnumerable<AttentionDto> RiskLimits(List<AccountSpreadDto> spreads, double netLiq, double openRisk,
+            double? perTradePct, double? openPct)
+        {
+            if (netLiq <= 0) yield break;
+            if (perTradePct is > 0)
+            {
+                var cap = netLiq * perTradePct.Value / 100;
+                foreach (var s in spreads.Where(s => s.MaxLoss > cap))
+                    yield return new AttentionDto { Kind = "riesgo", Title = string.Create(Es,
+                        $"{Label(s)}: arriesga {s.MaxLoss:N0} USD ({s.MaxLoss / netLiq * 100:0} % de la cuenta); el tope por operación es {cap:N0} USD ({perTradePct:0.##} %)") };
+            }
+            if (openPct is > 0 && openRisk > netLiq * openPct.Value / 100)
+                yield return new AttentionDto { Kind = "riesgo", Title = string.Create(Es,
+                    $"Riesgo abierto {openRisk:N0} USD ({openRisk / netLiq * 100:0} % de la cuenta); el tope sumado es {netLiq * openPct.Value / 100:N0} USD ({openPct:0.##} %)") };
         }
 
         /// <summary>
