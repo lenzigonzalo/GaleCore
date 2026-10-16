@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, FileText, PanelLeftClose, PanelLeftOpen, ArrowUpRight, Mic, Paperclip } from 'lucide-react';
+import { Plus, Folder, MessageSquare, Files, X, ArrowUp, Square, FileText, PanelLeftClose, PanelLeftOpen, ArrowUpRight, Mic, Paperclip, Map as MapIcon } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
 import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, WorkspaceFile, LabProjectKind, labUpload } from '../api/lab';
 import { LabShadow } from './LabShadow';
@@ -8,8 +8,11 @@ import { LabMarkdown } from '../components/lab/LabMarkdown';
 import { strategyName } from '../components/shadow/panelPresentation';
 import { LabModelPicker } from '../components/lab/LabModelPicker';
 import { LabProjectList } from '../components/lab/LabProjectList';
+import { LabMapa } from '../components/lab/LabMapa';
 import './Lab.css';
 const KIND = { personal: 'Personal', analysis: 'Análisis', strategy: 'Estrategia' };
+const limitMapaWidth = (width: number) => Math.max(280, Math.min(width, 640));
+const NARROW = '(max-width: 1100px)';
 const limitSidebarWidth = (width: number, available: number) => Math.max(200, Math.min(width, 480, Math.max(200, available - 420)));
 function FileTree({ nodes, selected, onSelect }: { nodes: WorkspaceFile[]; selected: string; onSelect: (path: string) => void }) {
   return <ul className="lab-file-tree">{nodes.map(n => <li key={n.path}>{n.kind === 'folder' ? <details open><summary><Folder size={16}/>{n.name}</summary><FileTree nodes={n.children || []} selected={selected} onSelect={onSelect}/></details> : <button aria-pressed={selected === n.path} onClick={() => onSelect(n.path)}><FileText size={16}/>{n.name}</button>}</li>)}</ul>;
@@ -32,6 +35,13 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       return limitSidebarWidth(stored >= 200 && Number.isFinite(stored) ? stored : 310, window.innerWidth);
     } catch { return 310; }
   });
+  // Mapa de la idea (WS-0039): un solo botón; al lado del chat en escritorio, alternando con el chat si no caben.
+  const [mapaOpen, setMapaOpen] = useState(() => { try { return localStorage.getItem('galecore:lab:mapa') === '1'; } catch { return false; } });
+  const [mapaWidth, setMapaWidth] = useState(() => { try { const v = Number(localStorage.getItem('galecore:lab:mapa-width')); return limitMapaWidth(v > 0 ? v : 380); } catch { return 380; } });
+  const [narrow, setNarrow] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(NARROW).matches);
+  useEffect(() => { const q = window.matchMedia?.(NARROW); if (!q) return; const on = () => setNarrow(q.matches); q.addEventListener('change', on); return () => q.removeEventListener('change', on); }, []);
+  useEffect(() => { try { localStorage.setItem('galecore:lab:mapa', mapaOpen ? '1' : '0'); localStorage.setItem('galecore:lab:mapa-width', String(mapaWidth)); } catch { /* vale hasta recargar */ } }, [mapaOpen, mapaWidth]);
+  const chatBody = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [drafts, setDrafts] = useState<Record<string,string>>({});
   const [busy, setBusy] = useState(false);
@@ -223,8 +233,8 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         resizeSidebar(e.key === 'Home' ? 200 : e.key === 'End' ? 480 : sidebarWidth + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 40 : 10));
       }}/>}
     <section className={'lab-chat-main' + (!chat?.messages.length && view === 'chat' ? ' empty' : '')}>
-      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && KIND[project.type] !== name(project.id, project.label) && <span>{KIND[project.type]}</span>}</div><div className="lab-header-actions">{project?.strategyName && <button className="lab-header-link" title="Resultados de esta estrategia en Estrategias" onClick={() => onFollowStrategy?.(project.strategyName!)}>Ver resultados<ArrowUpRight size={15}/></button>}<button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Archivos</button></div></header>
-      {view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <>
+      <header className="lab-chat-header"><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && KIND[project.type] !== name(project.id, project.label) && <span>{KIND[project.type]}</span>}</div><div className="lab-header-actions">{project?.strategyName && <button className="lab-header-link" title="Resultados de esta estrategia en Estrategias" onClick={() => onFollowStrategy?.(project.strategyName!)}>Ver resultados<ArrowUpRight size={15}/></button>}{view==='chat' && (narrow ? <div className="lab-mapa-switch" role="group" aria-label="Vista"><button aria-pressed={!mapaOpen} onClick={()=>setMapaOpen(false)}>Chat</button><button aria-pressed={mapaOpen} onClick={()=>setMapaOpen(true)}>Mapa</button></div> : <button className="lab-files-button" aria-pressed={mapaOpen} onClick={()=>setMapaOpen(v=>!v)}><MapIcon size={17}/>Mapa</button>)}<button className="lab-files-button" aria-expanded={filesOpen} onClick={()=>setFilesOpen(true)}><Files size={17}/>Archivos</button></div></header>
+      {view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (mapaOpen ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column">
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;
         const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
@@ -237,7 +247,16 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
       {composerForm}
-      </>}
+      </div>
+      {mapaOpen && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label="Ancho del mapa" aria-orientation="vertical" aria-valuemin={280} aria-valuemax={640} aria-valuenow={mapaWidth}
+        title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
+        onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); }}
+        onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) setMapaWidth(limitMapaWidth((chatBody.current?.getBoundingClientRect().right || 0) - e.clientX)); }}
+        onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
+        onDoubleClick={() => setMapaWidth(380)}
+        onKeyDown={e => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); setMapaWidth(w => limitMapaWidth(w + (e.key === 'ArrowLeft' ? 1 : -1) * (e.shiftKey ? 40 : 10))); }}/>}
+      {mapaOpen && <LabMapa chatId={chatId} running={chat?.state === 'running'}/>}
+      </div>}
     </section>
     {creating && <div className="lab-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="lab-create-title" className="lab-create-project"><header><h2 id="lab-create-title">Nuevo proyecto</h2><button className="lab-icon" aria-label="Cerrar" onClick={()=>setCreating(false)}><X size={19}/></button></header><form onSubmit={createProject}><label>Nombre<input autoFocus required maxLength={100} value={projectLabel} onChange={e=>setProjectLabel(e.target.value)} placeholder="Estrategia SPY"/></label><label>Tipo<select value={projectKind} onChange={e=>setProjectKind(e.target.value as LabProjectKind)}><option value="strategy">Estrategia</option><option value="analysis">Análisis</option><option value="personal">Personal</option></select></label><p>{projectKind==='strategy'?'El chat guía investigación, diseño y preparación para Shadow.':'Archivos, memoria y convenciones propias.'}</p>{error && <p role="alert">{error}</p>}<button className="btn" disabled={busy||!projectLabel.trim()}>Crear proyecto</button></form></section></div>}
     {filesOpen && <div className="lab-modal-backdrop"><section className="lab-explorer" role="dialog" aria-modal="true" aria-labelledby="lab-files-title"><header><div><h2 id="lab-files-title">Archivos</h2><span>{project?.label}</span></div><button autoFocus className="lab-icon" aria-label="Cerrar archivos" onClick={()=>setFilesOpen(false)}><X size={20}/></button></header><div className="lab-explorer-body"><aside><FileTree nodes={tree} selected={filePath} onSelect={openFile}/>{!tree.length && <p>Sin archivos disponibles.</p>}</aside><div className="lab-file-preview">{fileError?<p role="alert">{fileError}</p>:filePath?<><h3>{filePath}</h3><pre>{fileLoading ? 'Leyendo…' : fileText || 'Archivo vacío'}</pre></>:<div className="lab-explorer-empty"><Folder size={30}/><p>Elegí un archivo para verlo.</p><span>{project?.relative}</span></div>}</div></div></section></div>}

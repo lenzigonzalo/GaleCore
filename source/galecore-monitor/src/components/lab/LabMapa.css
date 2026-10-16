@@ -1,0 +1,16 @@
+.lab-mapa { display:flex; flex-direction:column; min-width:0; min-height:0; overflow-y:auto; border-left:1px solid var(--border-dark); background:var(--bg-primary); }
+.lab-mapa > header { display:grid; gap:2px; padding:14px 20px 12px; border-bottom:1px solid var(--border-dark); }
+.lab-mapa > header h2 { margin:0; font-size:17px; font-weight:500; }
+.lab-mapa > header span { color:var(--text-muted); font-size:var(--font-label); }
+.lab-mapa-cells { display:grid; gap:10px; padding:16px 20px 24px; }
+.lab-mapa-cell { border:1px solid var(--border); border-radius:10px; padding:12px 14px; background:var(--bg-secondary); }
+.lab-mapa-cell.open { border-color:var(--yellow-border); }
+.lab-mapa-cell h3 { margin:0 0 6px; font-size:12px; font-weight:500; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); }
+.lab-mapa-cell p { margin:0; font-size:15px; line-height:1.55; color:var(--text-primary); }
+.lab-mapa-cell p + p { margin-top:4px; color:var(--text-secondary); font-size:14px; }
+.lab-mapa-cell ul { margin:0; padding:0; list-style:none; display:grid; gap:4px; }
+.lab-mapa-cell li { display:grid; grid-template-columns:18px minmax(0,1fr); gap:4px; font-size:14.5px; line-height:1.5; color:var(--text-secondary); }
+.lab-mapa-cell li.ok > span:first-child { color:var(--green); }
+.lab-mapa-cell li.missing > span:first-child { color:var(--yellow-gc); }
+.lab-mapa-empty { margin:auto; padding:32px 24px; max-width:300px; text-align:center; color:var(--text-muted); font-size:15px; }
+.lab-mapa .sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
