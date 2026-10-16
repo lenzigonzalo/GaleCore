@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { LabMapa } from './LabMapa';
 import { labRequest } from '../../api/lab';
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
@@ -22,12 +22,12 @@ test('muestra los casilleros del mapa con lo que hay y lo que falta, sin botones
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
 });
 
-test('sin idea todavía o sin conversación, lo dice; mientras responde no relee', async () => {
+test('sin idea todavía o sin conversación, lo dice; mientras responde vuelve a leer', async () => {
   (labRequest as jest.Mock).mockResolvedValue({ mapa: null });
   const { rerender } = render(<LabMapa chatId="c1" running={false} />);
   expect(await screen.findByText(/aparece cuando la conversación arma una idea/)).toBeInTheDocument();
   rerender(<LabMapa chatId="c1" running={true} />);
-  expect(labRequest).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(labRequest).toHaveBeenCalledTimes(2));
   rerender(<LabMapa chatId={null} running={false} />);
   expect(await screen.findByText(/aparece cuando la conversación arma una idea/)).toBeInTheDocument();
 });

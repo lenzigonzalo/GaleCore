@@ -16,12 +16,15 @@ export function LabMapa({ chatId, running }: { chatId: string | null; running: b
   useEffect(() => {
     // Otra conversación: no mostrar el mapa de la anterior mientras se lee el suyo.
     if (shown.current !== chatId) { shown.current = chatId; setMapa(null); setState(chatId ? 'loading' : 'ready'); }
-    if (!chatId || running) return;
+    if (!chatId) return;
     let active = true;
-    labRequest<{ mapa: Mapa | null }>('/chats/' + chatId + '/mapa')
-      .then(v => { if (active) { setMapa(v.mapa); setState('ready'); } })
+    const read = () => labRequest<{ mapa: Mapa | null }>('/chats/' + chatId + '/mapa')
+      .then(v => { if (active) { setMapa(m => v.mapa || m); setState('ready'); } })
       .catch(() => { if (active) setState('error'); });
-    return () => { active = false; };
+    read();
+    // Mientras responde, el mapa aparece apenas el agente lo escribe; al terminar se relee una vez más.
+    const timer = running ? window.setInterval(read, 4000) : undefined;
+    return () => { active = false; if (timer) window.clearInterval(timer); };
   }, [chatId, running]);
 
   return <aside className="lab-mapa" aria-label="Mapa de la idea">
