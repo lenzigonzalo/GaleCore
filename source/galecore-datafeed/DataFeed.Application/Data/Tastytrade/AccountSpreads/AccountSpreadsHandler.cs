@@ -40,9 +40,11 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
                 .ToList();
 
             var market = await SnapshotAsync(optionSymbols, quoteOnly, cancellationToken);
+            var (spreads, unpaired) = AccountSpreadBuilder.Analyze(positions, market);
             return new AccountSpreadsResponse
             {
-                Spreads = AccountSpreadBuilder.Build(positions, market),
+                Spreads = spreads,
+                Unpaired = unpaired,
                 Equities = AccountSpreadBuilder.Equities(positions, market),
                 UnderlyingPrices = quoteOnly
                     .Select(s => (s, Mid: market.TryGetValue(s, out var m) ? AccountSpreadBuilder.MidOf(m.Bid, m.Ask) : null))

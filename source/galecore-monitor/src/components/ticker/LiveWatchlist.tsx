@@ -38,7 +38,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   const openRef = useRef(open);
   openRef.current = open;
   // El aviso del strike pide decidir ya: suena y abre la campana, esté donde esté el usuario.
-  const strike = useStrikeAlerts(enabled, () => { setPanelMode('alerts'); if (!openRef.current) (onToggle ?? onClose)(); });
+  const { alerts: strike, notice: strikeNotice } = useStrikeAlerts(enabled, () => { setPanelMode('alerts'); if (!openRef.current) (onToggle ?? onClose)(); });
   const panel = useRef<HTMLElement>(null);
   const drag = useRef<{x:number; width:number} | null>(null);
   const resize = (next:number) => onWidthChange?.(Math.max(360, Math.min(720, next)));
@@ -106,7 +106,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   return <>
     {enabled && <nav className="lw-tools" aria-label="Paneles de mercado"><button aria-label="Abrir watchlist" aria-expanded={open && panelMode === 'watchlist'} aria-controls="lw-panel" className={open && panelMode === 'watchlist' ? "active" : ""} onClick={() => togglePanel('watchlist')}><Bookmark size={23}/></button>
       <button aria-label="Abrir calendario" aria-expanded={open && calendarMode} aria-controls="lw-panel" className={open && calendarMode ? 'active' : ''} onClick={() => togglePanel('calendar')}><CalendarDays size={23}/></button>
-      <button aria-label="Abrir avisos" aria-expanded={open && alertsMode} aria-controls="lw-panel" className={open && alertsMode ? 'active' : ''} onClick={() => togglePanel('alerts')}><Bell size={23}/>{strike.length > 0 && <i className="lw-badge" aria-label={`${strike.length} cerca del strike`} />}</button>
+      <button aria-label="Abrir avisos" aria-expanded={open && alertsMode} aria-controls="lw-panel" className={open && alertsMode ? 'active' : ''} onClick={() => togglePanel('alerts')}><Bell size={23}/>{(strike.length > 0 || strikeNotice) && <i className="lw-badge" aria-label={`${strike.length} cerca del strike`} />}</button>
       {onOpenSettings&&<div className="lw-account"><AccountMenu docked onOpenSettings={onOpenSettings} onLogout={onLogout} active={accountActive}/></div>}</nav>}
     <aside id="lw-panel" ref={panel} className="lw-drawer" style={{width}} aria-labelledby="lw-title" hidden={!open || !enabled}>
       <div className="lw-resize" role="separator" tabIndex={0} aria-label={alertsMode ? 'Ancho de avisos' : calendarMode ? 'Ancho de calendario' : 'Ancho de watchlist'} aria-orientation="vertical" aria-valuemin={360} aria-valuemax={720} aria-valuenow={width}
@@ -120,7 +120,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
       <header><h2 id="lw-title">{alertsMode ? 'Avisos' : calendarMode ? 'Calendario' : 'Watchlist'}</h2><div>{panelMode === 'watchlist' && <><button className="lw-close" aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones" onClick={() => setRefreshKey(v => v + 1)}><RefreshCw size={18}/></button><button className="lw-close" aria-label="Agregar símbolo a la watchlist" aria-expanded={searchOpen} onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button></>}<button className="lw-close" data-close aria-label={alertsMode ? 'Cerrar avisos' : calendarMode ? 'Cerrar calendario' : 'Cerrar panel de watchlist'} onClick={onClose}><X size={21}/></button></div></header>
       <div className="lw-content">
         {enabled && open && calendarMode && <CalendarDock />}
-        {enabled && alertsMode && <SupervisorAlerts embedded strike={strike} />}
+        {enabled && alertsMode && <SupervisorAlerts embedded strike={strike} strikeNotice={strikeNotice} />}
         {enabled && panelMode === 'watchlist' && <>
           {searchOpen && <WatchlistSearch groups={list.groups.map(g => g.name)} onPick={pick} onClose={() => setSearchOpen(false)}
             minQueryLength={adHocSearch?.min_query_length} maxResults={adHocSearch?.max_results} instrumentTypes={adHocSearch?.allowed_instrument_types} />}

@@ -31,6 +31,8 @@ namespace DataFeed.Application.Data.Tastytrade.StrikeAlerts
         /// <summary>False fuera de la rueda cuando el usuario lo pidió sólo en horario de mercado: no se evaluó.</summary>
         public bool Evaluated { get; set; }
         public List<StrikeAlertDto> Alerts { get; set; } = new();
+        /// <summary>Posiciones que no se pudieron vigilar (sin cotización del subyacente, p. ej. raíz SPXW, o sin pareja): sin aviso no es lo mismo que lejos del strike.</summary>
+        public List<string> Unevaluated { get; set; } = new();
     }
 
     public class StrikeAlertSettings
@@ -91,6 +93,7 @@ namespace DataFeed.Application.Data.Tastytrade.StrikeAlerts
             response.Evaluated = true;
             response.Alerts = StrikeProximity.Evaluate(account.Spreads, account.UnderlyingPrices, settings,
                 DateOnly.FromDateTime(CascadeUtils.TodayEt())).ToList();
+            response.Unevaluated = StrikeProximity.Unevaluated(account.Spreads, account.UnderlyingPrices).Concat(account.Unpaired).ToList();
             return response;
         }
     }
@@ -116,6 +119,11 @@ namespace DataFeed.Application.Data.Tastytrade.StrikeAlerts
                     yield return Alert(s, "call", call, spot, call - spot, threshold, today);
             }
         }
+
+        /// <summary>Spreads con strike vendido a los que no se les pudo mirar el precio: no hay cotización del subyacente.</summary>
+        public static IEnumerable<string> Unevaluated(IEnumerable<AccountSpreadDto> spreads, IReadOnlyDictionary<string, double> prices) =>
+            spreads.Where(s => !prices.TryGetValue(s.UnderlyingSymbol, out var spot) || spot <= 0)
+                .Select(s => $"{AccountOverviewBuilder.Label(s)} (sin cotización de {s.UnderlyingSymbol})");
 
         private static StrikeAlertDto Alert(AccountSpreadDto s, string side, double strike, double spot, double gap,
             double threshold, DateOnly today)

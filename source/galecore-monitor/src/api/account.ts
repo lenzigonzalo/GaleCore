@@ -168,9 +168,15 @@ export interface StrikeAlert {
   distancePoints: number; distancePct: number; thresholdPoints: number; title: string;
 }
 
-export async function fetchStrikeAlerts(): Promise<StrikeAlert[]> {
-  const { data } = await apiClient.get<{ alerts?: StrikeAlert[] }>('/App/GaleCore/Account/StrikeAlerts', { timeout: 30_000 });
-  return data?.alerts ?? [];
+export interface StrikeAlertsResult {
+  alerts: StrikeAlert[];
+  /** Posiciones que la API no pudo vigilar (sin cotización del subyacente o sin pareja): «sin aviso» no es «lejos del strike». */
+  unevaluated: string[];
+}
+
+export async function fetchStrikeAlerts(): Promise<StrikeAlertsResult> {
+  const { data } = await apiClient.get<{ alerts?: StrikeAlert[]; unevaluated?: string[] }>('/App/GaleCore/Account/StrikeAlerts', { timeout: 30_000 });
+  return { alerts: data?.alerts ?? [], unevaluated: data?.unevaluated ?? [] };
 }
 
 export async function fetchAccountOverview(): Promise<AccountOverview> {

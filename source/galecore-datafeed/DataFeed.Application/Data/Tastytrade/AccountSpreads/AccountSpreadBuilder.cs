@@ -12,8 +12,9 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
 
     /// <summary>
     /// Arma los spreads de crédito a partir de las patas sueltas de la cuenta y les calcula riesgo,
-    /// POP y griegas netas. Es la misma agrupación que hacía el Monitor (subyacente + vencimiento:
-    /// 2 puts → PUT_CS, 2 calls → CALL_CS, 2+2 → IC); lo demás se ignora. Puro, sin red: el handler
+    /// POP y griegas netas. Agrupa por subyacente y vencimiento y empareja las patas por strike
+    /// y cantidad (put vendido + put comprado más abajo → PUT_CS, call vendido + call comprado más arriba → CALL_CS, los dos
+    /// de igual cantidad → IC); varios spreads del mismo vencimiento salen separados y lo que no empareja se declara. Puro, sin red: el handler
     /// le pasa las cotizaciones.
     /// </summary>
     public static class AccountSpreadBuilder
@@ -23,7 +24,18 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
             public bool IsShort => string.Equals(Position.QuantityDirection, "Short", StringComparison.OrdinalIgnoreCase);
         }
 
-        public static List<AccountSpreadDto> Build(IEnumerable<AccountPositionDto> positions, IReadOnlyDictionary<string, LegMarket> market)
+        /// <summary>Un lado armado: la vendida y la comprada de la misma cantidad.</summary>
+        private sealed record Pair(Leg Short, Leg Long);
+
+        public static List<AccountSpreadDto> Build(IEnumerable<AccountPositionDto> positions, IReadOnlyDictionary<string, LegMarket> market) =>
+            Analyze(positions, market).Spreads;
+
+        /// <summary>
+        /// Los spreads y, aparte, las patas que no pudo emparejar (sin la otra punta o con otra cantidad): lo que no se
+        /// arma se declara, no se descarta en silencio ni se suma mal.
+        /// </summary>
+        public static (List<AccountSpreadDto> Spreads, List<string> Unpaired) Analyze(
+            IEnumerable<AccountPositionDto> positions, IReadOnlyDictionary<string, LegMarket> market)
         {
             var legs = positions
                 .Where(p => p.Symbol != null && TastytradeHelper.IsOptionSymbol(p.Symbol))
@@ -31,78 +43,124 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
                 .ToList();
 
             var spreads = new List<AccountSpreadDto>();
+            var unpaired = new List<string>();
             foreach (var group in legs.GroupBy(l => (l.Underlying, l.Expiration)))
             {
-                var shortPut = group.FirstOrDefault(l => l.Type == 'P' && l.IsShort);
-                var longPut = group.FirstOrDefault(l => l.Type == 'P' && !l.IsShort);
-                var shortCall = group.FirstOrDefault(l => l.Type == 'C' && l.IsShort);
-                var longCall = group.FirstOrDefault(l => l.Type == 'C' && !l.IsShort);
+                var puts = PairSide(group.Where(l => l.Type == 'P').ToList(), isPut: true, unpaired);
+                var calls = PairSide(group.Where(l => l.Type == 'C').ToList(), isPut: false, unpaired);
 
-                var hasPut = shortPut != null && longPut != null;
-                var hasCall = shortCall != null && longCall != null;
-                if (!hasPut && !hasCall) continue; // estructura incompleta o desconocida
-
-                var structure = hasPut && hasCall ? "IC" : hasPut ? "PUT_CS" : "CALL_CS";
-                var used = new[] { hasPut ? shortPut : null, hasPut ? longPut : null, hasCall ? shortCall : null, hasCall ? longCall : null }
-                    .Where(l => l != null).Select(l => l!).ToList();
-
-                var shortLeg = (hasPut ? shortPut : shortCall)!;
-                var contracts = (double)shortLeg.Position.Quantity;
-                var multiplier = shortLeg.Position.Multiplier > 0 ? (double)shortLeg.Position.Multiplier : 100;
-                var size = contracts * multiplier;
-
-                double Sign(Leg l) => l.IsShort ? -1 : 1;
-
-                // Crédito por acción: lo cobrado por las vendidas menos lo pagado por las compradas.
-                var initialCredit = used.Sum(l => -Sign(l) * (double)l.Position.AverageOpenPrice);
-
-                var putWidth = hasPut ? Math.Abs(shortPut!.Strike - longPut!.Strike) : 0;
-                var callWidth = hasCall ? Math.Abs(longCall!.Strike - shortCall!.Strike) : 0;
-                var width = Math.Max(putWidth, callWidth);
-
-                double? Mid(Leg l) => market.TryGetValue(l.StreamerSymbol, out var m) ? MidOf(m.Bid, m.Ask) : null;
-                var hasLive = used.Where(l => l.IsShort).All(l => Mid(l) != null);
-                var currentPrices = used.Select(l => Mid(l) ?? (l.Position.ClosePrice > 0 ? (double)l.Position.ClosePrice : (double?)null)).ToList();
-                double? currentCredit = currentPrices.All(p => p != null)
-                    ? used.Select((l, i) => -Sign(l) * currentPrices[i]!.Value).Sum()
-                    : null;
-
-                var closes = used.Select(l => l.Position.ClosePrice > 0 ? (double)l.Position.ClosePrice : (double?)null).ToList();
-                double? previousCredit = closes.All(c => c != null) ? used.Select((l, i) => -Sign(l) * closes[i]!.Value).Sum() : null;
-                double? openPnl = hasLive && currentCredit != null ? (initialCredit - currentCredit.Value) * size : null;
-                double? dayPnl = hasLive && currentCredit != null && previousCredit != null ? (previousCredit.Value - currentCredit.Value) * size : null;
-
-                var popCredit = hasLive && currentCredit != null ? currentCredit.Value : initialCredit;
-                double? pop = width > 0 ? Clamp((1 - popCredit / width) * 100) : null;
-
-                spreads.Add(new AccountSpreadDto
+                // Un iron condor es un put spread y un call spread de la misma cantidad; lo que sobra queda como spread simple.
+                var built = new List<(Pair? Put, Pair? Call)>();
+                foreach (var put in puts)
                 {
-                    Id = $"{shortLeg.Underlying}|{shortLeg.Expiration}",
-                    UnderlyingSymbol = shortLeg.Underlying,
-                    Expiration = shortLeg.Expiration,
-                    Structure = structure,
-                    Contracts = shortLeg.Position.Quantity,
-                    Multiplier = (decimal)multiplier,
-                    Width = width,
-                    ShortPutStrike = hasPut ? shortPut!.Strike : null,
-                    LongPutStrike = hasPut ? longPut!.Strike : null,
-                    ShortCallStrike = hasCall ? shortCall!.Strike : null,
-                    LongCallStrike = hasCall ? longCall!.Strike : null,
-                    InitialCredit = Round(initialCredit, 4),
-                    CurrentNetCredit = currentCredit == null ? null : Round(currentCredit.Value, 4),
-                    HasLiveQuote = hasLive,
-                    PreviousNetCredit = previousCredit == null ? null : Round(previousCredit.Value, 4),
-                    OpenPnl = openPnl == null ? null : Round(openPnl.Value, 2),
-                    DayPnl = dayPnl == null ? null : Round(dayPnl.Value, 2),
-                    MaxProfit = Round(initialCredit * size, 2),
-                    MaxLoss = Round(Math.Max(0, width - initialCredit) * size, 2),
-                    Pop = pop == null ? null : Round(pop.Value, 1),
-                    Pop50 = pop == null ? null : Round(Clamp((100 + pop.Value) / 2), 1),
-                    PopBasis = hasLive && currentCredit != null ? "vivo" : "entrada",
-                    Greeks = NetGreeks(used, market, Sign, size, shortLeg),
-                });
+                    var call = calls.FirstOrDefault(c => c.Short.Position.Quantity == put.Short.Position.Quantity);
+                    if (call != null) calls.Remove(call);
+                    built.Add((put, call));
+                }
+                built.AddRange(calls.Select(c => ((Pair?)null, (Pair?)c)));
+
+                foreach (var (put, call) in built)
+                    spreads.Add(BuildSpread(put, call, market, unique: built.Count > 1));
             }
-            return spreads;
+            return (spreads, unpaired);
+        }
+
+        /// <summary>
+        /// Empareja cada vendida con la comprada de igual cantidad más cercana del lado que protege (put: strike menor;
+        /// call: mayor). Las vendidas más cerca del dinero eligen primero. Lo que no encuentra pareja va a `unpaired`.
+        /// </summary>
+        private static List<Pair> PairSide(List<Leg> legs, bool isPut, List<string> unpaired)
+        {
+            var longs = legs.Where(l => !l.IsShort).ToList();
+            var shorts = legs.Where(l => l.IsShort);
+            var pairs = new List<Pair>();
+            foreach (var s in (isPut ? shorts.OrderByDescending(l => l.Strike) : shorts.OrderBy(l => l.Strike)).ToList())
+            {
+                var candidates = longs.Where(l => l.Position.Quantity == s.Position.Quantity && (isPut ? l.Strike < s.Strike : l.Strike > s.Strike));
+                var match = (isPut ? candidates.OrderByDescending(l => l.Strike) : candidates.OrderBy(l => l.Strike)).FirstOrDefault();
+                if (match == null) { unpaired.Add(Describe(s)); continue; }
+                longs.Remove(match);
+                pairs.Add(new Pair(s, match));
+            }
+            unpaired.AddRange(longs.Select(Describe));
+            return pairs;
+        }
+
+        private static string Describe(Leg l) =>
+            $"{l.Underlying} {l.Expiration} {(l.Type == 'P' ? "put" : "call")} {l.Strike.ToString("0.##", CultureInfo.InvariantCulture)} {(l.IsShort ? "vendido" : "comprado")} ×{l.Position.Quantity:0.##}";
+
+        private static AccountSpreadDto BuildSpread(Pair? putPair, Pair? callPair, IReadOnlyDictionary<string, LegMarket> market, bool unique)
+        {
+            var shortPut = putPair?.Short; var longPut = putPair?.Long;
+            var shortCall = callPair?.Short; var longCall = callPair?.Long;
+            var hasPut = putPair != null;
+            var hasCall = callPair != null;
+
+            var structure = hasPut && hasCall ? "IC" : hasPut ? "PUT_CS" : "CALL_CS";
+            var used = new[] { shortPut, longPut, shortCall, longCall }.Where(l => l != null).Select(l => l!).ToList();
+
+            var shortLeg = (hasPut ? shortPut : shortCall)!;
+            var contracts = (double)shortLeg.Position.Quantity;
+            var multiplier = shortLeg.Position.Multiplier > 0 ? (double)shortLeg.Position.Multiplier : 100;
+            var size = contracts * multiplier;
+
+            double Sign(Leg l) => l.IsShort ? -1 : 1;
+
+            // Crédito por acción: lo cobrado por las vendidas menos lo pagado por las compradas.
+            var initialCredit = used.Sum(l => -Sign(l) * (double)l.Position.AverageOpenPrice);
+
+            var putWidth = hasPut ? Math.Abs(shortPut!.Strike - longPut!.Strike) : 0;
+            var callWidth = hasCall ? Math.Abs(longCall!.Strike - shortCall!.Strike) : 0;
+            var width = Math.Max(putWidth, callWidth);
+
+            double? Mid(Leg l) => market.TryGetValue(l.StreamerSymbol, out var m) ? MidOf(m.Bid, m.Ask) : null;
+            var hasLive = used.Where(l => l.IsShort).All(l => Mid(l) != null);
+            var currentPrices = used.Select(l => Mid(l) ?? (l.Position.ClosePrice > 0 ? (double)l.Position.ClosePrice : (double?)null)).ToList();
+            double? currentCredit = currentPrices.All(p => p != null)
+                ? used.Select((l, i) => -Sign(l) * currentPrices[i]!.Value).Sum()
+                : null;
+
+            var closes = used.Select(l => l.Position.ClosePrice > 0 ? (double)l.Position.ClosePrice : (double?)null).ToList();
+            double? previousCredit = closes.All(c => c != null) ? used.Select((l, i) => -Sign(l) * closes[i]!.Value).Sum() : null;
+            double? openPnl = hasLive && currentCredit != null ? (initialCredit - currentCredit.Value) * size : null;
+            double? dayPnl = hasLive && currentCredit != null && previousCredit != null ? (previousCredit.Value - currentCredit.Value) * size : null;
+
+            var popCredit = hasLive && currentCredit != null ? currentCredit.Value : initialCredit;
+            double? pop = width > 0 ? Clamp((1 - popCredit / width) * 100) : null;
+
+            // Con un solo spread por subyacente y vencimiento el id es el de siempre; con varios, se suman los strikes
+            // para que ninguno pise a otro.
+            static string K(double v) => v.ToString("0.##", CultureInfo.InvariantCulture);
+            var id = $"{shortLeg.Underlying}|{shortLeg.Expiration}";
+            if (unique)
+                id += (hasPut ? $"|P{K(shortPut!.Strike)}-{K(longPut!.Strike)}" : "") + (hasCall ? $"|C{K(shortCall!.Strike)}-{K(longCall!.Strike)}" : "");
+
+            return new AccountSpreadDto
+            {
+                Id = id,
+                UnderlyingSymbol = shortLeg.Underlying,
+                Expiration = shortLeg.Expiration,
+                Structure = structure,
+                Contracts = shortLeg.Position.Quantity,
+                Multiplier = (decimal)multiplier,
+                Width = width,
+                ShortPutStrike = hasPut ? shortPut!.Strike : null,
+                LongPutStrike = hasPut ? longPut!.Strike : null,
+                ShortCallStrike = hasCall ? shortCall!.Strike : null,
+                LongCallStrike = hasCall ? longCall!.Strike : null,
+                InitialCredit = Round(initialCredit, 4),
+                CurrentNetCredit = currentCredit == null ? null : Round(currentCredit.Value, 4),
+                HasLiveQuote = hasLive,
+                PreviousNetCredit = previousCredit == null ? null : Round(previousCredit.Value, 4),
+                OpenPnl = openPnl == null ? null : Round(openPnl.Value, 2),
+                DayPnl = dayPnl == null ? null : Round(dayPnl.Value, 2),
+                MaxProfit = Round(initialCredit * size, 2),
+                MaxLoss = Round(Math.Max(0, width - initialCredit) * size, 2),
+                Pop = pop == null ? null : Round(pop.Value, 1),
+                Pop50 = pop == null ? null : Round(Clamp((100 + pop.Value) / 2), 1),
+                PopBasis = hasLive && currentCredit != null ? "vivo" : "entrada",
+                Greeks = NetGreeks(used, market, Sign, size, shortLeg),
+            };
         }
 
         /// <summary>Acciones y ETFs (no opciones), con su resultado si hay cotización.</summary>

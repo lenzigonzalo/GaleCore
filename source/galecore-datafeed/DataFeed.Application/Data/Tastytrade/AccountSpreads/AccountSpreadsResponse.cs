@@ -11,6 +11,8 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
         /// <summary>Mid de cada subyacente y acción de la cuenta (para la exposición en dólares).</summary>
         public Dictionary<string, double> UnderlyingPrices { get; set; } = new();
         public DateTime AsOf { get; set; }
+        /// <summary>Patas de opciones que no se pudieron emparejar en un spread (no entran en riesgo, griegas ni avisos).</summary>
+        public List<string> Unpaired { get; set; } = new();
     }
 
     /// <summary>
@@ -19,7 +21,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountSpreads
     /// </summary>
     public class AccountSpreadDto
     {
-        /// <summary>"{subyacente}|{vencimiento}", el mismo id con el que el Monitor agrupa las patas.</summary>
+        /// <summary>"{subyacente}|{vencimiento}"; con varios spreads del mismo vencimiento se le suman los strikes (`|P640-635`, `|C720-725`).</summary>
         public string Id { get; set; } = "";
         public string UnderlyingSymbol { get; set; } = "";
         public string Expiration { get; set; } = "";

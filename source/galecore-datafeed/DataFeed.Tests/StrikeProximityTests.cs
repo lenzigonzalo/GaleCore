@@ -21,6 +21,17 @@ namespace DataFeed.Tests
             StrikeProximity.Evaluate(spreads, new Dictionary<string, double> { ["SPY"] = spot }, s, Today).ToList();
 
         [Fact]
+        public void Sin_cotizacion_del_subyacente_se_declara_sin_evaluar()
+        {
+            var spxw = Ic("SPXW|2026-11-20");
+            spxw.UnderlyingSymbol = "SPXW";
+            var prices = new Dictionary<string, double> { ["SPY"] = 670 };
+
+            var sin = Assert.Single(StrikeProximity.Unevaluated(new[] { Ic(), spxw }, prices));
+            Assert.Contains("SPXW", sin);
+        }
+
+        [Fact]
         public void Lejos_de_los_dos_strikes_no_avisa()
         {
             Assert.Empty(Run(670, new StrikeAlertSettings { Enabled = true, Distance = 15 }, Ic()));

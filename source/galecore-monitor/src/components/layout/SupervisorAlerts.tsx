@@ -36,37 +36,48 @@ function writeSeen(ids: Set<string>, key = SEEN) {
 }
 
 const STRIKE_MS = 30_000;
+const STRIKE_FAILURES = 3;
 const STRIKE_SEEN = 'galecore.strike.seen';
 
 /**
  * Aviso cerca del strike vendido (WS-0036): lo evalúa la API con la preferencia del usuario; acá se consulta cada 30 s
- * desde cualquier pestaña y suena una vez por posición, lado y día. Sin cuenta vinculada o con la API caída, calla.
+ * desde cualquier pestaña y suena una vez por posición, lado y día. Sin cuenta vinculada calla; con la API caída o posiciones sin vigilar, lo dice (`notice`).
  */
-export function useStrikeAlerts(active: boolean, onNew?: () => void): StrikeAlert[] {
+export function useStrikeAlerts(active: boolean, onNew?: () => void): { alerts: StrikeAlert[]; notice: string | null } {
   const [alerts, setAlerts] = useState<StrikeAlert[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
   const onNewRef = useRef(onNew);
   onNewRef.current = onNew;
   useEffect(() => {
     if (!active) return;
     let alive = true;
     const seen = new Set<string>(readSeen(STRIKE_SEEN));
+    let failures = 0;
     const load = async () => {
       try {
-        const list = await fetchStrikeAlerts();
+        const { alerts: list, unevaluated } = await fetchStrikeAlerts();
         if (!alive) return;
+        failures = 0;
+        setNotice(unevaluated.length ? `Aviso de strike sin evaluar: ${unevaluated.join('; ')}.` : null);
         setAlerts(list);
         const fresh = list.filter(a => !seen.has(a.id));
         if (fresh.length) {
           chime(); onNewRef.current?.();
           fresh.forEach(a => seen.add(a.id)); writeSeen(seen, STRIKE_SEEN);
         }
-      } catch { /* sin cuenta o sin API: no hay aviso que dar */ }
+      } catch (err: any) {
+        if (!alive) return;
+        // Sin cuenta vinculada (409) no hay nada que vigilar; con la API caída varias veces seguidas, se avisa que no se está evaluando.
+        failures = err?.response?.status === 409 ? 0 : failures + 1;
+        if (failures >= STRIKE_FAILURES) setNotice('Aviso de strike sin evaluar: la API no responde.');
+        else if (failures === 0) setNotice(null);
+      }
     };
     load();
     const id = setInterval(load, STRIKE_MS);
     return () => { alive = false; clearInterval(id); };
   }, [active]);
-  return alerts;
+  return { alerts, notice };
 }
 
 /** Dos tonos cortos. Sin archivo de audio: Web Audio. Si el navegador lo bloquea, queda el aviso visual. */
@@ -127,7 +138,7 @@ function AlertCard({ alert }: { alert: Alert }) {
   );
 }
 
-export function SupervisorAlerts({ embedded = false, strike = [] }: { embedded?: boolean; strike?: StrikeAlert[] }) {
+export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice = null }: { embedded?: boolean; strike?: StrikeAlert[]; strikeNotice?: string | null }) {
   const [loading, setLoading] = useState(true);
   const [item, setItem] = useState<SpaceItem | null>(null);
   const [piece, setPiece] = useState<Piece>({});
@@ -162,7 +173,9 @@ export function SupervisorAlerts({ embedded = false, strike = [] }: { embedded?:
   // Los del strike van primero: piden decidir ya (rolear o no). Se muestran mientras la API los siga viendo.
   const strikeCards: Alert[] = strike.map(a => ({ id: a.id, kind: 'watch', detected_at: new Date().toISOString(), motivo: a.title,
     decision: null, category: 'strike', title: a.title }));
-  const alerts = [...strikeCards, ...(piece.alerts ?? []).filter(a => a.kind === 'watch')];
+  const noticeCard: Alert[] = strikeNotice ? [{ id: 'strike-notice', kind: 'watch', detected_at: new Date().toISOString(), motivo: strikeNotice,
+    decision: null, category: 'strike', title: strikeNotice }] : [];
+  const alerts = [...noticeCard, ...strikeCards, ...(piece.alerts ?? []).filter(a => a.kind === 'watch')];
   const failed = !!piece.last_run?.failed;          // lo decide GaleCore-AI: la última revisión no leyó todo
   const status = <p className="alert-status">Última revisión: {when(piece.last_run?.at)}
     {failed ? ` · falló: ${piece.state_detail || piece.last_run?.result}` : ''}</p>;

@@ -83,6 +83,70 @@ public class AccountSpreadBuilderTests
     }
 
     [Fact]
+    public void DosPutSpreads_MismoVencimiento_NoSeColapsan()
+    {
+        var legs = new[]
+        {
+            Leg("SPY   261120P00640000", "Short", 3.10m, qty: 1),
+            Leg("SPY   261120P00635000", "Long", 2.00m, qty: 1),
+            Leg("SPY   261120P00620000", "Short", 1.50m, qty: 2),
+            Leg("SPY   261120P00610000", "Long", 0.80m, qty: 2),
+        };
+
+        var (spreads, unpaired) = AccountSpreadBuilder.Analyze(legs, new Dictionary<string, LegMarket>());
+
+        Assert.Empty(unpaired);
+        Assert.Equal(2, spreads.Count);
+        Assert.All(spreads, s => Assert.Equal("PUT_CS", s.Structure));
+        Assert.Equal(2, spreads.Select(s => s.Id).Distinct().Count());
+        Assert.Contains(spreads, s => s.Id == "SPY|2026-11-20|P640-635" && s.MaxLoss == 390);   // (5 − 1.10) × 100 × 1
+        Assert.Contains(spreads, s => s.Id == "SPY|2026-11-20|P620-610" && s.MaxLoss == 1860);  // (10 − 0.70) × 100 × 2
+        Assert.Equal(2250, spreads.Sum(s => s.MaxLoss));                                         // suma de las dos
+    }
+
+    [Fact]
+    public void IronCondor_MasPutSpread_ArmaLosDosYSumaTodo()
+    {
+        var legs = new[]
+        {
+            Leg("SPY   261120P00640000", "Short", 2.00m, qty: 1),
+            Leg("SPY   261120P00635000", "Long", 1.20m, qty: 1),
+            Leg("SPY   261120C00720000", "Short", 1.50m, qty: 1),
+            Leg("SPY   261120C00725000", "Long", 0.90m, qty: 1),
+            Leg("SPY   261120P00600000", "Short", 1.00m, qty: 1),
+            Leg("SPY   261120P00595000", "Long", 0.50m, qty: 1),
+        };
+
+        var (spreads, unpaired) = AccountSpreadBuilder.Analyze(legs, new Dictionary<string, LegMarket>());
+
+        Assert.Empty(unpaired);
+        Assert.Equal(2, spreads.Count);
+        var ic = Assert.Single(spreads, s => s.Structure == "IC");
+        Assert.Equal(640, ic.ShortPutStrike);                // el put más cercano al dinero forma el IC
+        Assert.Equal(720, ic.ShortCallStrike);
+        var put = Assert.Single(spreads, s => s.Structure == "PUT_CS");
+        Assert.Equal(600, put.ShortPutStrike);
+        Assert.Equal(360 + 450, spreads.Sum(s => s.MaxLoss));
+    }
+
+    [Fact]
+    public void PataSinPareja_OCantidadDistinta_SeDeclara()
+    {
+        var legs = new[]
+        {
+            Leg("SPY   261120P00640000", "Short", 3.10m, qty: 2),
+            Leg("SPY   261120P00635000", "Long", 2.00m, qty: 1),   // otra cantidad: no es el mismo spread
+            Leg("SPY   261120C00720000", "Long", 0.90m, qty: 1),   // sin vendida
+        };
+
+        var (spreads, unpaired) = AccountSpreadBuilder.Analyze(legs, new Dictionary<string, LegMarket>());
+
+        Assert.Empty(spreads);
+        Assert.Equal(3, unpaired.Count);
+        Assert.Contains(unpaired, u => u.Contains("put 640 vendido"));
+    }
+
+    [Fact]
     public void PataSuelta_NoArmaSpread()
     {
         Assert.Empty(AccountSpreadBuilder.Build(new[] { Leg("SPY   261120P00640000", "Short", 3m) }, new Dictionary<string, LegMarket>()));

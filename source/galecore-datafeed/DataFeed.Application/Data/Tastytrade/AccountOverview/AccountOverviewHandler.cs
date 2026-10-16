@@ -36,6 +36,9 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
             var balances = await balancesTask;
             var account = await accountTask;
 
+            if (account.Unpaired.Count > 0)
+                missing.Add("Patas sin emparejar (no suman a riesgo ni exposición): " + string.Join("; ", account.Unpaired) + ".");
+
             var symbols = account.Spreads.Select(s => s.UnderlyingSymbol).Concat(account.Equities.Select(e => e.Symbol))
                 .Append("SPY").Distinct().ToList();
             var betas = await BetasAsync(symbols, missing, ct);

@@ -101,6 +101,7 @@ namespace DataFeed.Controllers
         /// Inicio de la cuenta real (WS-0036): valor, resultado del día, riesgo máximo, exposición en SPY y lo que
         /// pide atención hoy (reglas de gestión del nodo `monitor` y agenda de EE. UU.). El Monitor sólo lo muestra.
         /// </summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
         [Tags("App.GaleCore")]
         [HttpGet("GaleCore/Account/Overview")]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]

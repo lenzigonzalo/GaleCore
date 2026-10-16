@@ -128,7 +128,8 @@ function Overview({ o, strike, onStrike }: { o: AccountOverview; strike: StrikeA
       <div className="rs-hero-side">
         <div className="rs-hero-value"><span>Valor de la cuenta</span><strong>{money(o.netLiq)}</strong></div>
         <div className="rs-periods" role="tablist" aria-label="Resultado por período">
-          {periods.map(p => <button key={p.label} role="tab" aria-selected={period === p.label} onClick={() => setPeriod(p.label)}>
+          {periods.map(p => <button key={p.label} role="tab" aria-selected={period === p.label} onClick={() => setPeriod(p.label)}
+            title={p.label === 'Hoy' ? undefined : 'Diferencia del valor de la cuenta: incluye depósitos y retiros'}>
             <span>{p.label}</span><strong className={tone(p.pnl)}>{p.pnl == null ? '—' : fmtPnl(p.pnl)}</strong>
             <em className={tone(p.pct)}>{p.pct == null ? '' : fmtPct(p.pct)}</em></button>)}
         </div>
@@ -247,7 +248,7 @@ function PositionDetail({ p }: { p: PositionLine }) {
     ['Crédito cobrado', p.credit == null ? '—' : `$${p.credit.toFixed(2)}`],
     ['Valor para cerrar', p.currentValue == null ? '—' : `$${p.currentValue.toFixed(2)}`],
     ['Riesgo máximo', p.maxLoss == null ? '—' : money(p.maxLoss)],
-    ['Prob. de ganar', p.pop == null ? '—' : `${p.pop.toFixed(0)} %`],
+    ['Prob. de ganar (aprox.)', p.pop == null ? '—' : `${p.pop.toFixed(0)} %`],
     ['Al strike vendido', p.shortDistance == null ? '—' : <span className={p.shortDistance < 0 ? 'neg' : undefined}>{p.shortDistance.toFixed(1)} pts</span>],
     ['Delta', p.delta == null ? '—' : p.delta.toFixed(1)],
     ['Theta', p.theta == null ? '—' : <span className={tone(p.theta)}>{signed(p.theta)}/día</span>],
