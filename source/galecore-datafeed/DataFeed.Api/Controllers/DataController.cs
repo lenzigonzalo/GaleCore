@@ -146,7 +146,6 @@ namespace DataFeed.Controllers
 
         // Las mismas posiciones armadas como spreads, con pérdida máxima, POP y griegas netas
         // calculadas acá para que el Monitor sólo las muestre (WS-0036).
-        [Microsoft.AspNetCore.Authorization.Authorize]
         [Tags("Data.Account")]
         [HttpGet("Tastytrade/Account/Spreads")]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
