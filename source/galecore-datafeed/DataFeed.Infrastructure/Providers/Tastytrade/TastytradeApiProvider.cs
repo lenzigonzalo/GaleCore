@@ -253,5 +253,21 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
             };
             return JsonSerializer.Deserialize<MarketMetricsVolatilityModel>(content, options);
         }
+
+        public async Task<EarningsReportsModel?> GetEarningsReportsAsync(string symbol, CancellationToken cancellationToken)
+        {
+            _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            _client.DefaultRequestHeaders.UserAgent.ParseAdd("PostmanRuntime/7.36.0");
+            var request = await _auth.CreateOAuthApiRequestAsync($"/market-metrics/historic-corporate-events/earnings-reports/{Uri.EscapeDataString(symbol)}?start-date={DateTime.UtcNow.AddYears(-3):yyyy-MM-dd}");
+            var response = await _client.SendAsync(request, cancellationToken);
+            var content = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"{(int)response.StatusCode}: {content}");
+            return JsonSerializer.Deserialize<EarningsReportsModel>(content, new JsonSerializerOptions
+            {
+                NumberHandling = JsonNumberHandling.AllowReadingFromString,
+                PropertyNameCaseInsensitive = true
+            });
+        }
     }
 }

@@ -23,6 +23,7 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
         Task<AccountPositionsModel?> GetAccountPositionsAsync(string accountNumber, CancellationToken cancellationToken, TastytradeCredential? credential = null);
 
         Task<MarketMetricsVolatilityModel?> GetMarketMetricsVolatilityAsync(string symbols, CancellationToken cancellationToken);
+        Task<EarningsReportsModel?> GetEarningsReportsAsync(string symbol, CancellationToken cancellationToken);
         Task<FuturesModel?> GetFuturesAsync(IEnumerable<string> productCodes, CancellationToken cancellationToken);
     }
 }

@@ -47,6 +47,35 @@ namespace DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility
         public string UpdatedAt { get; set; }
 
         public List<ExpirationImpliedVolatilityDto> ExpirationImpliedVolatilities { get; set; }
+
+        // Próximo balance y consenso (Tastytrade). Null en ETF e índices.
+        public EarningsDto Earnings { get; set; }
+
+        // Perfil
+        public string Sector { get; set; }
+        public string Industry { get; set; }
+        public string ListedMarket { get; set; }
+        public decimal? EarningsPerShare { get; set; }
+        public decimal? PriceEarningsRatio { get; set; }
+
+        // Dividendos: ExDate es el ÚLTIMO ex-dividendo, no el próximo (dividend-next-date viene viejo y no se usa)
+        public string DividendExDate { get; set; }
+        public string DividendPayDate { get; set; }
+        public decimal? DividendRatePerShare { get; set; }
+        public decimal? DividendYield { get; set; }
+    }
+
+    public class EarningsDto
+    {
+        public string ExpectedReportDate { get; set; }
+        /// <summary>BMO = antes de la apertura, AMC = después del cierre.</summary>
+        public string TimeOfDay { get; set; }
+        /// <summary>true si la fecha es una estimación del proveedor y no está confirmada.</summary>
+        public bool? Estimated { get; set; }
+        public string QuarterEndDate { get; set; }
+        public decimal? ConsensusEps { get; set; }
+        /// <summary>Campo actual-eps del proveedor. En AAPL (16/10/2026) coincide con el EPS reportado en oct-2025, es decir el trimestre comparable del año anterior; no es el último reportado. Para eso, EarningsHistory.</summary>
+        public decimal? ActualEps { get; set; }
     }
 
     public class ExpirationImpliedVolatilityDto

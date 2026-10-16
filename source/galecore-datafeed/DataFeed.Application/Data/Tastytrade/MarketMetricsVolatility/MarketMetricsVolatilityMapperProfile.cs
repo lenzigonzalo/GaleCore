@@ -28,12 +28,39 @@ namespace DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility
                 .ForMember(d => d.Beta,                          opt => opt.MapFrom(s => ParseDecimal(s.Beta)))
                 .ForMember(d => d.MarketCap,                     opt => opt.MapFrom(s => s.MarketCap))
                 .ForMember(d => d.CorrSpy3Month,                 opt => opt.MapFrom(s => ParseDecimal(s.CorrSpy3Month)))
-                .ForMember(d => d.LiquidityRank,                 opt => opt.MapFrom(s => ParseDecimal(s.LiquidityRank)));
+                .ForMember(d => d.LiquidityRank,                 opt => opt.MapFrom(s => ParseDecimal(s.LiquidityRank)))
+                .ForMember(d => d.Earnings,                      opt => opt.MapFrom(s => ToEarnings(s.Earnings)))
+                .ForMember(d => d.EarningsPerShare,              opt => opt.MapFrom(s => ParseNonZero(s.EarningsPerShare)))
+                .ForMember(d => d.PriceEarningsRatio,            opt => opt.MapFrom(s => ParseNonZero(s.PriceEarningsRatio)))
+                .ForMember(d => d.DividendRatePerShare,          opt => opt.MapFrom(s => ParseDecimal(s.DividendRatePerShare)))
+                .ForMember(d => d.DividendYield,                 opt => opt.MapFrom(s => ParseDecimal(s.DividendYield)));
 
             CreateMap<ExpirationImpliedVolatility, ExpirationImpliedVolatilityDto>()
                 .ForMember(d => d.LowVolatility,      opt => opt.MapFrom(s => ParseDecimal(s.LowVolatility)))
                 .ForMember(d => d.HighVolatility,     opt => opt.MapFrom(s => ParseDecimal(s.HighVolatility)))
                 .ForMember(d => d.ImpliedVolatility,  opt => opt.MapFrom(s => ParseDecimal(s.ImpliedVolatility)));
+        }
+
+        // ETF e índices vienen con visible=false o sin fecha: no hay balance que informar.
+        private static EarningsDto ToEarnings(MarketMetricsEarnings e)
+        {
+            if (e == null || e.Visible == false || string.IsNullOrWhiteSpace(e.ExpectedReportDate)) return null;
+            return new EarningsDto
+            {
+                ExpectedReportDate = e.ExpectedReportDate,
+                TimeOfDay = e.TimeOfDay,
+                Estimated = e.Estimated,
+                QuarterEndDate = e.QuarterEndDate,
+                ConsensusEps = ParseDecimal(e.ConsensusEstimate),
+                ActualEps = ParseDecimal(e.ActualEps),
+            };
+        }
+
+        // ETF e índices traen 0 en EPS y P/E: no es un dato, es ausencia.
+        private static decimal? ParseNonZero(string value)
+        {
+            var d = ParseDecimal(value);
+            return d == 0m ? null : d;
         }
 
         private static decimal? ParseDecimal(string value)
