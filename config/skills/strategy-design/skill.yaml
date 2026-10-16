@@ -17,7 +17,8 @@ answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisi
   ofrece diseñarla. Idea o desarrollo («quiero hacer una estrategia de…», «guiame» o dentro de un proyecto de
   estrategia), en dos tiempos (owner 16/10). ACLARAR, en segundos: si el pedido no dice qué quiere capturar, en qué
   plazo o con qué estructura, no salgas a buscar; con lo que ya está en el contexto (perfil, reloj, datos traídos por
-  código) respondé una línea con lo que más define la idea, una tabla con 2-3 preguntas cerradas y sus opciones, y
+  código) respondé una línea con lo que más define la idea, 2-3 preguntas cerradas en un bloque `opciones` (formato en
+  PRODUCT.md, una recomendada por pregunta), y
   «Para responderte voy a buscar»: dato · para qué · cuánto tarda; cerrá con «¿lo busco?». BUSCAR: cuando responde o
   confirma, o si el pedido ya era específico, traé todo lo anunciado de una vez (consultas en paralelo) y respondé en
   tabla. Sin veredicto de abrir o esperar, sin la cartera, sin frenar la idea con los topes del perfil, sin «Qué
