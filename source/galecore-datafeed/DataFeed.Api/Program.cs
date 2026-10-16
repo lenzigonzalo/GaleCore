@@ -401,6 +401,18 @@ namespace DataFeed
             app.MapHub<MarketDataHub>("/hubs/marketdata");
             app.MapMcp("/mcp");
 
+            // El calendario del monitor (FRED y Fed) se lee una vez por día: se precalienta al arrancar para que
+            // la primera apertura no espere a las fuentes (WS-0038). Si falla, el primer pedido vuelve a intentar.
+            app.Lifetime.ApplicationStarted.Register(() => _ = Task.Run(async () =>
+            {
+                using var scope = app.Services.CreateScope();
+                var sender = scope.ServiceProvider.GetRequiredService<IMediator>();
+                var today = DataFeed.Application.Shared.DailyCache.Today.ToDateTime(TimeOnly.MinValue);
+                await Task.WhenAll(
+                    sender.Send(new DataFeed.Application.Data.Fred.ReleaseDates.FredReleaseDatesRequest { From = today, To = today.AddDays(45), ReleaseIds = "10,50,46,53" }),
+                    sender.Send(new DataFeed.Application.Data.Fed.FomcMeetings.FomcMeetingsRequest()));
+            }).ContinueWith(t => app.Logger.LogWarning(t.Exception?.GetBaseException(), "Calendario: no se pudo precalentar"), TaskContinuationOptions.OnlyOnFaulted));
+
             app.Run();
         }
     }

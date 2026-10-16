@@ -32,8 +32,15 @@ namespace DataFeed.Application.Data.Fed.FomcMeetings
             if (years.Count == 0)
                 years.AddRange(new[] { thisYear, thisYear + 1 });
 
+            var distinct = years.Distinct().OrderBy(y => y).ToList();
+            // El calendario de la Fed cambia muy rara vez: una lectura diaria (7,4 s en frío, WS-0038).
+            return await DailyCache.GetAsync($"fomc-meetings:{string.Join(',', distinct)}", token => Read(distinct, token), cancellationToken);
+        }
+
+        private async Task<SourcedResponse<List<FomcMeeting>>> Read(List<int> years, CancellationToken cancellationToken)
+        {
             var provider = new FedCalendarProvider(_client.CreateClient());
-            var (byYear, sha) = await provider.GetMeetingsAsync(years.Distinct().ToList(), cancellationToken);
+            var (byYear, sha) = await provider.GetMeetingsAsync(years, cancellationToken);
 
             return new SourcedResponse<List<FomcMeeting>>
             {

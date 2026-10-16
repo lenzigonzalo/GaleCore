@@ -40,7 +40,14 @@ namespace DataFeed.Application.Data.Fred.ReleaseDates
             if (request.From == default || request.To == default || to < from || to.DayNumber - from.DayNumber > MaxDays)
                 throw new ValidationException($"Rango inválido: From <= To y como mucho {MaxDays} días.");
             var ids = ParseIds(request.ReleaseIds);
+            // Las fechas programadas cambian a lo sumo una vez por día: una lectura diaria por rango (el calendario del
+            // monitor tardaba 1,6–5,3 s en cada apertura, WS-0038).
+            var key = $"fred-release-dates:{from:yyyy-MM-dd}:{to:yyyy-MM-dd}:{string.Join(',', ids.OrderBy(i => i))}";
+            return await DailyCache.GetAsync(key, token => Read(from, to, ids, token), cancellationToken);
+        }
 
+        private async Task<SourcedResponse<List<FredReleaseDateDto>>> Read(DateOnly from, DateOnly to, HashSet<int> ids, CancellationToken cancellationToken)
+        {
             var provider = new FredApiProvider(_config, _client.CreateClient());
             // Con ReleaseIds se piden sólo esas publicaciones: el listado de todas tarda ~35 s por dos meses y FRED
             // corta con 504 en rangos más largos (WS-0015, historia de reacción a los datos).
