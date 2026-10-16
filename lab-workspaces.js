@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn, spawnSync, execFile } = require('child_process');
+const os = require('os');
+const { spawn, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -47,7 +48,7 @@ function consumeEvent(chat, event, provider) {
     if(event.permission_denials?.length) chat.error='Una herramienta necesita permiso. Retomá en la terminal para autorizarla; este chat no omite permisos.';
   }
 }
-function createWorkspaces({ root, kb, local, binaries, environment, instructions, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn }) {
+function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats');
   fs.mkdirSync(chatDir,{recursive:true});
   let registry=read(metadata,[]);
@@ -122,12 +123,41 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     const tail=prev.messages.slice(-4).map(m=>(m.role==='user'?'Trader: ':'Respuesta: ')+m.text).join('\n\n').slice(-4000);
     return 'Final de la conversación anterior de este proyecto («'+prev.title+'»), para retomar sin preguntar (lo vigente está en memory/ y en los registros):\n'+tail;
   }
-  // Los hooks del producto (knowledge/.claude/hooks) para motores que no los leen solos (Codex). Sin el script, nada.
-  function hook(name,input){
-    const file=path.join(kb,'.claude','hooks',name);
-    if(!fs.existsSync(file))return '';
-    const r=spawnSync('python',[file],{input:JSON.stringify(input),cwd:input.cwd,env:{...environment(),GALECORE_KNOWLEDGE_DIR:kb},encoding:'utf8',timeout:60000,windowsHide:true});
-    return (r.stdout||'').trim();
+  // Los scripts de contexto del producto (tools/terminal/context) los corre el Lab, no el motor (D-0014). Asíncrono para
+  // no frenar el servidor; sin el script, si falla o tarda más de un minuto, nada: el turno sigue sin esa parte.
+  function script(name,input){
+    const file=path.join(root,'tools','terminal','context',name);
+    if(!fs.existsSync(file))return Promise.resolve('');
+    return new Promise(done=>{
+      let out='';const proc=spawn('python',[file],{cwd:input.cwd,env:{...environment(),GALECORE_KNOWLEDGE_DIR:kb},windowsHide:true});
+      const timer=setTimeout(()=>proc.kill(),60000);
+      proc.stdout.setEncoding('utf8');proc.stdout.on('data',d=>{out+=d;});proc.stderr.on('data',()=>{});
+      proc.on('error',()=>{clearTimeout(timer);done('');});proc.on('close',()=>{clearTimeout(timer);done(out.trim());});
+      proc.stdin.end(JSON.stringify(input));
+    });
+  }
+  // Lo único propio de cada motor: cómo recibe el contexto, cómo se le apagan navegador y conectores, y cómo retoma
+  // (D-0014). El resto (qué contexto, qué datos, qué se guarda) es igual para todos. El contexto va por archivo, no por
+  // la línea de comando (Windows la corta en ~32.000 caracteres); el archivo se borra al terminar el turno.
+  function engineArgs(chat,p,context,auto){
+    if(chat.provider==='codex'){
+      // Codex no lee instrucciones de un archivo suelto: van como perfil (<CODEX_HOME>/<nombre>.config.toml, -p).
+      const name='galecore-lab-'+chat.id, file=path.join(environment().CODEX_HOME||path.join(os.homedir(),'.codex'),name+'.config.toml');
+      fs.writeFileSync(file,'developer_instructions = '+JSON.stringify(context)+'\n');
+      // Búsqueda web sí (GaleCore primero, PRODUCT.md); navegador y conectores no; red para la API local de GaleCore;
+      // escribe en el proyecto y en knowledge/.
+      const sandbox=['-c','web_search="live"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser','--disable','apps',
+        '-c','sandbox_workspace_write.network_access=true','-c','sandbox_workspace_write.writable_roots='+JSON.stringify([kb])];
+      const args=['--no-daemon','exec','--json','-p',name,...modelFlags(chat),...(auto?['--approve-for-me']:[]),...sandbox];
+      return {file,args:chat.nativeId?[...args,'resume',chat.nativeId,'-']:[...args,'--sandbox','workspace-write','-C',p.dir,'-']};
+    }
+    // Claude: sin la configuración del usuario ni conectores; los permisos (web después de GaleCore, sin tocar el código)
+    // salen de knowledge/.claude/settings.json. Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
+    const file=path.join(local,'contexts',chat.id+'.md');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,context);
+    const args=['-p',...modelFlags(chat),'--output-format','stream-json','--verbose','--append-system-prompt-file',file,
+      ...(auto?['--permission-mode','auto']:['--permission-prompts','none']),'--strict-mcp-config',
+      '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
+    return {file,args:chat.nativeId?[...args,'--resume',chat.nativeId]:args};
   }
   function send(chat, words, options={}){
     const auto=options.mode==='auto';
@@ -139,47 +169,30 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     // Legacy chats have no recoverable original model metadata. Freeze the fallback once,
     // before the next send; subsequent environment changes cannot alter this selection.
     if(chat.model === undefined || chat.effort === undefined){Object.assign(chat,normalize(chat.provider,chat),{selectionSource:'legacy-fallback'});saveChat(chat);}
-    chat.messages.push({id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()});
+    const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()};chat.messages.push(ask);
     if(chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
     chat.state='running';chat.error=null;chat.activity='Pensando';saveChat(chat);
     const skill=path.join(root,'tools','terminal','skills','lab-strategy-bootstrap','SKILL.md');
-    // WS-0037: el mismo harness para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el proveedor
-    // ni el modelo»; Personal también, sin filtro). Capas (D-0012): núcleo PRODUCT.md, final de la conversación anterior
-    // (estrategia), proyecto; Claude suma reloj/mapa/perfil y la capacidad del pedido por sus hooks de knowledge/.claude;
-    // Codex no los lee, así que el Lab corre esos mismos scripts y se los pasa como instrucciones del turno.
-    const product=fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8')+'\n\n';
+    // El contexto del turno, igual para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el
+    // proveedor ni el modelo»; Personal sin filtro). Capas (D-0012, D-0014): final de la conversación anterior
+    // (estrategia), núcleo PRODUCT.md, proyecto, hechos del momento y capacidad del pedido. Las reglas del entorno
+    // (knowledge/AGENTS.md) y las del proyecto (su AGENTS.md) las lee cada motor solo desde la carpeta.
+    const product=fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8');
     const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-    const brief=(resume?resume+'\n\n':'')+product+'Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' y, si el proyecto no es de estrategia, ofrecé abrir uno. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.';
-    let args;
-    if(chat.provider==='codex'){
-      const facts=hook('session_context.py',{source:chat.nativeId?'resume':'startup',cwd:p.dir});
-      const asked=hook('match_request.py',{prompt:words,cwd:p.dir});
-      // knowledge/CLAUDE.md es lo que Claude carga solo en esta carpeta; Codex lee AGENTS.md, así que va acá (y no
-      // instructions(p), que apunta al CLAUDE.md de desarrollo que Claude tiene excluido).
-      const kbRules=path.join(kb,'CLAUDE.md');
-      const developer=brief+(fs.existsSync(kbRules)?'\n\n'+fs.readFileSync(kbRules,'utf8'):'')+(facts?'\n\n'+facts:'')+(asked?'\n\n'+asked:'')+
-        '\n\nDatos sólo de GaleCore por el CLI de GaleCore-AI: nada de la web ni del navegador. Lo que cambie en knowledge/ lo commitea el Lab al terminar el turno.';
-      // Sin web ni navegador (como knowledge/.claude/settings.json); escribe en knowledge/ y llega a la API local de GaleCore.
-      const sandbox=['-c','web_search="disabled"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser','--disable','apps',
-        '-c','sandbox_workspace_write.network_access=true','-c','sandbox_workspace_write.writable_roots='+JSON.stringify([kb])];
-      args=['--no-daemon','exec','--json',...modelFlags(chat),...(auto?['--approve-for-me']:[]),...sandbox,'-c','developer_instructions='+JSON.stringify(developer)];
-      if(chat.nativeId)args.push('resume',chat.nativeId,'-');else args.push('--sandbox','workspace-write','-C',p.dir,'-');
-    } else {
-      // WS-0028 (plan v2): el CLI abierto en la carpeta del proyecto con el contexto de producto de knowledge/ (sin el de
-      // desarrollo ni ~/.claude). Permisos, hooks y commit automático salen de knowledge/.claude/settings.json.
-      // Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT). Sin conectores de la cuenta.
-      // D-0012: el núcleo del producto (GaleCore-AI/PRODUCT.md) va como instrucción de sistema; un import desde
-      // knowledge/CLAUDE.md no carga en -p por estar fuera de la carpeta, y en el hook de inicio se recortaba.
-      args=['-p',...modelFlags(chat),
-        '--output-format','stream-json','--verbose','--append-system-prompt',brief,...(auto?['--permission-mode','auto']:['--permission-prompts','none']),'--strict-mcp-config',
-        '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
-      if(chat.nativeId)args.push('--resume',chat.nativeId);
-    }
-    const proc=spawnProcess(binaries[chat.provider],args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});
-    jobs.set(chat.id,{proc,project:p.id,chat});const decoder=new StringDecoder('utf8');let pending='',done=false;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);if(chat.provider==='codex')hook('commit_knowledge.py',{cwd:p.dir});chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';saveChat(chat);}
-    proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{consumeEvent(chat,JSON.parse(line),chat.provider);saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
-    proc.stderr.on('data',()=>{});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});proc.stdin.end(words+'\n');return chat;
+    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' y, si el proyecto no es de estrategia, ofrecé abrir uno. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.';
+    const job={proc:null,project:p.id,chat};jobs.set(chat.id,job);let done=false;
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
+    Promise.all([script('session_context.py',{cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
+      if(chat.state==='cancelled')return finish(1);
+      ask.context={facts,asked};saveChat(chat);  // lo mide tools/caso.py, sea cual sea el motor
+      const context=[resume,product,here,facts,asked].filter(Boolean).join('\n\n');
+      const engine=engineArgs(chat,p,context,auto);job.file=engine.file;
+      const proc=job.proc=spawnProcess(binaries[chat.provider],engine.args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});
+      const decoder=new StringDecoder('utf8');let pending='';
+      proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{consumeEvent(chat,JSON.parse(line),chat.provider);saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
+      proc.stderr.on('data',()=>{});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});proc.stdin.end(words+'\n');
+    }).catch(()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});
+    return chat;
   }
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
@@ -210,10 +223,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
         for(const rel of files){if(!/^adjuntos\/[\w.\- ]+$/.test(rel)||!fs.existsSync(path.join(dir,rel)))throw fail('Adjunto no encontrado: '+rel,404);}
         const text=files.length?words+'\n\nArchivos adjuntos (en la carpeta del proyecto): '+files.join(', '):words;
         json(res,202,send(c,text,{mode:b.mode==='auto'?'auto':'manual'}));return true;}
-      if(req.method==='POST'&&parts[2]==='stop'){const j=jobs.get(c.id);if(j){j.chat.state='cancelled';saveChat(j.chat);j.proc.kill();}json(res,200,{requested:!!j});return true;}
+      if(req.method==='POST'&&parts[2]==='stop'){const j=jobs.get(c.id);if(j){j.chat.state='cancelled';saveChat(j.chat);j.proc?.kill();}json(res,200,{requested:!!j});return true;}
     }
     return false;
   }
-  return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc.kill();}};
+  return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
 module.exports={createWorkspaces,safeFile,tree,consumeEvent};

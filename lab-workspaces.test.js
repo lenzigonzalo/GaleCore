@@ -15,8 +15,10 @@ test('claude: la narración junto a una consulta no entra al chat; la respuesta 
 test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el permiso al motor',async t=>{
  const {base,kb,local}=setup(t);const calls=[];const {EventEmitter}=require('events');
  fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo de test');
- const spawnProcess=(bin,args)=>{calls.push(args);const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={end(){}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
- const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude',codex:'codex'},environment:()=>({}),instructions:()=>'',legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
+ // El contexto va por archivo (D-0014): se lee al lanzar el motor, porque se borra al terminar el turno.
+ const codexHome=path.join(base,'codex');fs.mkdirSync(codexHome);const contexts=[];
+ const spawnProcess=(bin,args)=>{calls.push(args);const f=args.includes('-p')&&bin==='codex'?path.join(codexHome,args[args.indexOf('-p')+1]+'.config.toml'):args[args.indexOf('--append-system-prompt-file')+1];contexts.push(fs.readFileSync(f,'utf8'));const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={end(){}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
+ const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude',codex:'codex'},environment:()=>({CODEX_HOME:codexHome}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
  const req=Object.assign(new EventEmitter(),{method:'POST',headers:{'x-file-name':encodeURIComponent('nota ñ.txt')}});
  let up;const pending=service.route(req,{},new URL('http://localhost/workspaces/personal/attachments'),(res,status,value)=>{up={status,value};},async()=>({}));
  setImmediate(()=>{req.emit('data',Buffer.from('hola'));req.emit('end');});await pending;
@@ -27,10 +29,14 @@ test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el per
  await route(service,'POST','/chats/'+chat.id+'/messages',{text:'mirá esto',attachments:[up.value.path],mode:'auto'});
  const args=calls.at(-1);assert.deepEqual(args.slice(args.indexOf('--permission-mode'),args.indexOf('--permission-mode')+2),['--permission-mode','auto']);assert.ok(!args.includes('--permission-prompts'));
  // WS-0037: Personal también lleva el núcleo del producto, con Claude y con Codex.
- assert.match(args[args.indexOf('--append-system-prompt')+1],/núcleo de test/);
+ assert.match(contexts.at(-1),/núcleo de test/);
  await new Promise(r=>setTimeout(r,50));
  const cx=(await route(service,'POST','/chats',{project:'personal',provider:'codex'})).value;
  await route(service,'POST','/chats/'+cx.id+'/messages',{text:'hola'});
- const cargs=calls.at(-1);assert.match(cargs.find(a=>a.startsWith('developer_instructions=')),/núcleo de test/);assert.ok(cargs.includes('web_search="disabled"'));
+ const cargs=calls.at(-1);assert.ok(cargs.includes('web_search="live"'));assert.ok(cargs.includes('browser_use'));
+ // D-0014: el mismo contexto para los dos motores; nada del contexto en la línea de comando.
+ assert.equal(contexts.at(-1),'developer_instructions = '+JSON.stringify(contexts.at(-2))+'\n');
+ assert.ok(!cargs.some(a=>a.includes('núcleo de test')));
  await new Promise(r=>setTimeout(r,50));
+ assert.deepEqual(fs.readdirSync(codexHome),[]);  // el perfil del turno se borra al terminar
 });

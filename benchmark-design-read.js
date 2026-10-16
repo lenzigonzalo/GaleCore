@@ -8,7 +8,7 @@ async function main(){
   fs.mkdirSync(dest,{recursive:true});fs.mkdirSync(local,{recursive:true});
   for(const file of fs.readdirSync(source).filter(f=>/\.(proposal|approval|critique)\.json$/.test(f)))fs.copyFileSync(path.join(source,file),path.join(dest,file));
   let calls=0;
-  const service=createWorkspaces({root,kb,local,binaries:{},instructions:()=>'',legacySessions:()=>[],
+  const service=createWorkspaces({root,kb,local,binaries:{},legacySessions:()=>[],
     legacyProjects:()=>[{id:name,label:'IWM snapshot',dir:dest,relative:'strategies/'+name}],
     environment:()=>({...process.env,PYTHONPATH:path.join(root,'.worktrees','galecore-ai','WS-0028-design','src'),GALECORE_KNOWLEDGE_DIR:kb,GALECORE_BASE_URL:'http://127.0.0.1:1'}),
     execute:(...args)=>{calls++;return execFile(...args);}});

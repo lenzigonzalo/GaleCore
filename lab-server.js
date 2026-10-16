@@ -179,7 +179,7 @@ function readBody(req) {
     req.on('error', reject);
   });
 }
-const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, instructions, legacyProjects:projects, legacySessions:()=>[...sessions.values()] });
+const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()] });
 const server = http.createServer(async (req, res) => {
   if (!validHost(req) || !validOrigin(req)) return json(res, 403, { error: 'Sólo se admite el monitor local de esta PC.' });
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
