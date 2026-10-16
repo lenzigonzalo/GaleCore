@@ -1,4 +1,4 @@
-.macro-page{padding:22px 28px 32px;margin:auto;width:100%;font-size:16px;color:var(--text-primary)}
+.macro-page{padding:22px 28px 32px;margin:auto;width:100%;font-size:16px;color:var(--text-primary);container-type:inline-size}
 .macro-page button:disabled{cursor:default}
 .macro-page button:focus-visible,.macro-page a:focus-visible,.macro-page summary:focus-visible{outline:2px solid var(--focus-ring);outline-offset:3px}
 .macro-attention{color:var(--warning,#e6b464);font-size:15px;margin:16px 0;line-height:1.6}
@@ -32,8 +32,10 @@
 .mb-agenda ol{list-style:none;padding:0;margin:0}.mb-agenda li{display:flex;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-dark);font-size:15px}
 .mb-agenda time{color:var(--text-secondary);white-space:nowrap}
 .macro-detail .macro-chart{height:320px;margin:10px 0}.macro-detail-values{grid-template-columns:repeat(4,1fr)!important}
-@media(max-width:1100px){.mb-layout{grid-template-columns:1fr}.mb-side{display:grid;grid-template-columns:1fr 1fr}}
-@media(max-width:700px){.mb-table th:nth-child(4),.mb-table td:nth-child(4),.mb-table td:nth-child(6),.mb-table th:nth-child(6){display:none}.mb-side{grid-template-columns:1fr}.macro-detail{width:100%}.macro-detail-values{grid-template-columns:1fr 1fr!important}}
+/* Se acomoda al ancho que le queda al centro (panel lateral abierto o no), no al de la ventana. */
+@container (max-width:1040px){.mb-layout{grid-template-columns:1fr}.mb-table td,.mb-table thead th,.mb-table tbody th{padding-left:6px;padding-right:6px}.mb-side{display:grid;grid-template-columns:1fr 1fr}}
+@container (max-width:640px){.mb-table th:nth-child(4),.mb-table td:nth-child(4),.mb-table td:nth-child(6),.mb-table th:nth-child(6){display:none}.mb-side{grid-template-columns:1fr}}
+@media(max-width:700px){.macro-detail{width:100%}.macro-detail-values{grid-template-columns:1fr 1fr!important}}
 .mb-question th{font-size:20px;font-weight:600!important;color:var(--text-primary);text-align:left;padding:30px 10px 4px!important;border-bottom:0!important}
 .mb-table tbody:first-of-type .mb-question th{padding-top:14px!important}
 .macro-tabs{display:flex;gap:26px;overflow-x:auto;border-bottom:1px solid var(--border);margin-bottom:18px}.macro-tabs button{padding:8px 0 12px;font-size:17px;font-weight:500;white-space:nowrap;color:var(--text-secondary);background:none;border:0;border-bottom:3px solid transparent;cursor:pointer}.macro-tabs button[aria-current]{color:var(--text-primary);border-bottom-color:var(--accent)}
