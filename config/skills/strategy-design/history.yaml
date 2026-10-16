@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "1.4.2"
+    date: 2026-10-16
+    changes: >
+      WS-0039 (panel Mapa): el mapa de la idea (`memory/mapa-<tema>.md`, cinco secciones) se reescribe en cada turno
+      que cambia la idea, también sin proyecto; en la prueba de varios turnos de Apple la retoma perdió el último turno.
+    feedback: []
   - version: "1.4.1"
     date: 2026-10-16
     changes: >

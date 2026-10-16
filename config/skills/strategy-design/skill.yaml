@@ -1,5 +1,5 @@
 skill_id: strategy_design
-version: "1.4.1"
+version: "1.4.2"
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Part A (method): turns an idea and its investigation into a complete strategy (hypothesis, rules per block,
@@ -62,7 +62,9 @@ system_prompt: >
       Project memory (`memory/` of the Lab project): a few pages by topic (hipotesis-y-reglas.md,
       decisiones-y-pendientes.md, datos-que-faltan.md), each the net current state, rewritten (never appended,
       never by date), short, pointing to the records (research:, strategy:, decision) instead of copying them;
-      one line per page in `memory/README.md`. Update the page of the topic at the end of every step that changes it,
+      one line per page in `memory/README.md`. The idea's map (`memory/mapa-<tema>.md`, format in PRODUCT.md «Mapa de
+      la idea») is rewritten in every turn that changes the idea, also before a project exists (in Personal); it is
+      what the owner sees beside the chat and what a new conversation resumes from. Update the page of the topic at the end of every step that changes it,
       in the same turn. Memory orients, never decides: versions, critique and approval stay in the records.
       «Me quedo con la mejor» names the one you recommended: record it, do not ask which.
       Offer the instrument's context in one line (owner 16/10: propose it, do not run it unasked): the ticker or sector
