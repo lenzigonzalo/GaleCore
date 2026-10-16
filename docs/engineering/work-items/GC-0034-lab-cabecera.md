@@ -1,3 +1,8 @@
+---
+status: CLOSED
+approval_result: APPROVED
+---
+
 # GC-0034 - Selector de proveedor/modelo en cabecera del Lab
 
 Estado: IN_PROGRESS. Flag: frontend-local. Implementer: Codex; owner: usuario.
@@ -23,3 +28,7 @@ Workspace backend: .worktrees/workspace/WS-0035, feature/WS-0035.
 API 7002 y MCP 8772 siguen sin cambios; interfaz permanece 3039.
 No se toca ACTIVE_WORK_ITEM (WS-0031 de Claude), ni GaleCore-AI.
 Metadatos y parametros de modelos necesitan recarga del bridge 8771 solo cuando esta sin sesiones activas.
+
+## Cierre (15/10/2026, ok del owner al orden de piezas)
+
+Cerrada: integrada (feature/GC-0034 sin commits fuera de local/integracion); el selector siguió en el Chat de WS-0036.

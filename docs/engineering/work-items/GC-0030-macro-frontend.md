@@ -1,3 +1,8 @@
+---
+status: CLOSED
+approval_result: APPROVED
+---
+
 # GC-0030 — Macro M0/M1 · frontend
 
 Estado: READY_FOR_REVIEW. Flag: `frontend`. Contrato/aceptación: workspace WS-0030.
@@ -30,3 +35,7 @@ Review: ../reviews/GC-0030-visual-feedback.md. CHANGES_REQUESTED en rango revisa
 documentadas, sin recheck ni APPROVE. QA navegador con datos reales guardados y sesión sintética, declarada.
 Login Dev real rechazado con la credencial guardada: no se reseteó contraseña. Pendiente repetir ese recorrido.
 Para retomar: recargar 3039, Macro, Ctrl K, calendario junto a watchlist y detalle de un indicador.
+
+## Cierre (15/10/2026, ok del owner al orden de piezas)
+
+Cerrada: superada: integrada (feature/GC-0030 sin commits fuera de local/integracion); Macro se rehízo el 15/10 en WS-0036.

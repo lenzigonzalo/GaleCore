@@ -1,10 +1,10 @@
 ---
 id: GC-0012
 title: Monitor con cuenta real, watchlist ajustable y reloj argentino
-status: READY_FOR_REVIEW
+status: CLOSED
 implementer: codex
 review_result: CHANGES_REQUESTED
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-0012 — Monitor real y watchlist ajustable
@@ -47,3 +47,7 @@ Monitor servido: consulta HTTP a `http://localhost:3039/static/js/bundle.js` (ex
 Pendiente: verificación visual del watchlist en la sesión autenticada (CUA sigue sin iniciar por ejecutable del sandbox faltante), revisión independiente y aprobación del owner. Se conserva READY_FOR_REVIEW.
 
 Revisión independiente realizada en `docs/engineering/reviews/GC-0012-watchlist-quotes.md`: CHANGES_REQUESTED. Hallazgo corregido por implementer: tras fallo, cotización omitida o `last` inválido, el último precio real se conserva con etiqueta visible «Lectura anterior» y Chg/Chg% quedan sin cálculo; también se informa el fallo en polling. Test agregado de lectura válida → fallo → respuesta parcial. Corrida final tras corrección: 4 suites y 18 pruebas aprobadas. Sin segunda pasada del reviewer, según ENGINEERING.md; el informe original no se modifica. Pendientes QA visual y aprobación del owner.
+
+## Cierre (15/10/2026, ok del owner al orden de piezas)
+
+Cerrada: superada: ancho de la watchlist y reloj ARG están en el código; cuenta real e Inicio se rehicieron en WS-0036.

@@ -1,12 +1,12 @@
 ---
 id: GC-0011
 title: Estructura integral del front — exploración local
-status: CHANGES_REQUESTED
+status: CLOSED
 implementer: codex
 reviewer: review_front_estructura (Codex independiente)
 approver: user
 review_result: CHANGES_REQUESTED
-approval_result: PENDING
+approval_result: APPROVED
 ---
 
 # GC-0011 — Estructura integral del front, exploración local
@@ -344,3 +344,7 @@ Owner pide ordenar la mezcla de GEX en submenús tipo Unusual Whales y precio m�
 Para retomar: recargar :3039 → Mercado; Gamma abre por defecto. Probar Precio e IV y volatilidad con el mismo símbolo seleccionado desde watchlist. Recoger feedback de distribución antes de extender gráficos IV (requieren historia/contrato apropiado). Estado CHANGES_REQUESTED y aprobación PENDING intactos; sin cierre/push.
 
 Chequeo final de tipos: npx tsc --noEmit --pretty false, exit 0. Primer intento detectó opciones exact no soportadas en getByRole de los tests nuevos; retiradas antes del chequeo verde. Rerun Gex.test.tsx: 3 PASS, exit 0.
+
+## Cierre (15/10/2026, ok del owner al orden de piezas)
+
+Cerrada: superada: exploración sin commits propios; la estructura del front la rehízo WS-0036.

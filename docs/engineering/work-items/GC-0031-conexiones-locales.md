@@ -1,3 +1,8 @@
+---
+status: CLOSED
+approval_result: APPROVED
+---
+
 # GC-0031 — Conexiones MCP locales
 
 Estado: CHANGES_REQUESTED. Flag: `frontend-local`. Implementer: Codex. Owner: usuario.
@@ -50,3 +55,7 @@ Seleccion inicial de las conexiones que el owner menciono (Alpha Vantage, Google
 Todas conserva inventario completo; estrellas no cambian autorizaciones del CLI.
 6 tests de componente pasan; recorrido real + fixture verifica favoritos, filtros y mobile.
 Build: ../evidence/GC-0031/build-compact-favorites.txt. No se modifica backend/harness.
+
+## Cierre (15/10/2026, ok del owner al orden de piezas)
+
+Cerrada: integrada (feature/GC-0031 sin commits fuera de local/integracion); en uso en Configuración (LocalMcp).
