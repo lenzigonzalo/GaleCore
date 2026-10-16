@@ -35,7 +35,8 @@ test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el per
  await route(service,'POST','/chats/'+cx.id+'/messages',{text:'hola'});
  const cargs=calls.at(-1);assert.ok(cargs.includes('web_search="live"'));assert.ok(cargs.includes('browser_use'));
  // D-0014: el mismo contexto para los dos motores; nada del contexto en la línea de comando.
- assert.equal(contexts.at(-1),'developer_instructions = '+JSON.stringify(contexts.at(-2))+'\n');
+ const sameMap=t=>t.replace(/mapa-[0-9a-f]{8}\.md/g,'mapa-<chat>.md');  // la ruta del mapa es de cada conversación
+ assert.equal(sameMap(contexts.at(-1)),'developer_instructions = '+JSON.stringify(sameMap(contexts.at(-2)))+'\n');
  assert.ok(!cargs.some(a=>a.includes('núcleo de test')));
  await new Promise(r=>setTimeout(r,50));
  assert.deepEqual(fs.readdirSync(codexHome),[]);  // el perfil del turno se borra al terminar

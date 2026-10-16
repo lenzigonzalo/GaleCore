@@ -10,9 +10,29 @@ import sys
 sys.stdout.reconfigure(encoding="utf-8")
 
 
+def start(*args):
+    return subprocess.Popen([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", *args], stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
+
+
+# Las tres consultas corren a la vez y el reloj una sola vez: en serie eran ~7 s antes de cada turno (WS-0039).
+_RUNS = {"clock": start("clock"), "list": start("galecore", "list"), "space": start("space", "context")}
+
+
+class _Out:
+    def __init__(self, proc):
+        self.stdout, self.stderr = proc.communicate()
+        self.returncode = proc.returncode
+
+
+_DONE = {}
+
+
 def cli(*args):
-    return subprocess.run([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", *args],
-                          capture_output=True, text=True, encoding="utf-8", errors="replace")
+    key = {"clock": "clock", "galecore": "list", "space": "space"}[args[0]]
+    if key not in _DONE:
+        _DONE[key] = _Out(_RUNS[key])
+    return _DONE[key]
 
 
 def clock_line():
@@ -37,9 +57,11 @@ def galecore_map():
     lines = ["[mapa de GaleCore] Lo que GaleCore sirve (`galecore get <área.nombre> --param k=v`; "
              "el detalle: `galecore list`):"]
     lines += [f"- {a}: {', '.join(n)}" for a, n in areas.items()]
-    lines.append("No lo sirve (no está abordado por GaleCore): consenso de analistas, calendario de resultados de "
-                 "empresas, noticias, objetivos de precio, fundamentales fuera de SEC. Ante eso: `gap add` y decirlo; "
-                 "la web sólo si el trader la pide o para un dato puntual, con fuente y fecha.")
+    lines.append("Próximo balance, hora y consenso de EPS, sector e industria, ex-dividendo: "
+                 "`market_data.volatility_metrics`; balances pasados: `market_data.earnings_history`. "
+                 "No lo sirve (no está abordado por GaleCore): noticias, objetivos de precio, consenso fuera del EPS. "
+                 "Ante eso: `gap add` y decirlo; la web sólo si el trader la pide o para un dato puntual, "
+                 "con fuente y fecha.")
     return chr(10).join(lines)
 
 
