@@ -126,7 +126,7 @@ sólo lo que cambia la propuesta:
 - estructura temporal de la volatilidad: si el vencimiento elegido está caro o barato contra los otros
   (`compute.implied_volatility`);
 - liquidez de cada pata: precio real de compra/venta y su diferencia; si no hay cotización de una pata, no hay propuesta;
-- ex-dividendo: `dividendExDate` de `volatility_metrics` es el ÚLTIMO, no el próximo; con ciclo trimestral el próximo cae ~3 meses después (decilo como estimación). Con un call vendido en el dinero cerca de ese día, avisá el riesgo de asignación;
+- ex-dividendo: `dividendExDate` de `volatility_metrics` es el ÚLTIMO, no el próximo; con ciclo trimestral el próximo cae ~3 meses después (decilo como estimación). Con un call vendido en el dinero cerca de ese día, avisá el riesgo de asignación.
 
 Errores que no se cometen: suponer que se llena al precio medio (el crédito realista está entre el medio y el precio
 real de venta); ignorar la asignación anticipada de un call vendido en el dinero antes del ex-dividendo; tratar 0DTE
