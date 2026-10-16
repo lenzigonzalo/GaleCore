@@ -74,7 +74,7 @@ namespace DataFeed.Application.App.Runtime
                 Note = "Compararlo con días anteriores requiere guardar su historia; hoy no se guarda",
             },
             ["market_data.volatility_metrics"] = new() { Name = "Métricas de volatilidad", Source = "Tastytrade (market-metrics)", Kind = "calculado por el proveedor sobre historia", History = "No hace falta: las calcula el proveedor" },
-            ["market_data.earnings"] = new() { Name = "Balances: próximo, consenso e historial", Source = "Tastytrade (market-metrics y earnings-reports)", Kind = "calendario y serie del proveedor", History = "Se pide al proveedor cada vez", Note = "Fecha estimada o confirmada según el campo estimated; en ETF e índices no hay balance" },
+            ["market_data.earnings_history"] = new() { Name = "Historial de balances", Source = "Tastytrade (earnings-reports)", Kind = "serie histórica del proveedor", History = "Se pide al proveedor cada vez", Note = "El próximo balance y el consenso vienen en volatility_metrics (earnings); en ETF e índices no hay balance" },
             ["market_data.candles"] = new() { Name = "Velas de precio", Source = "Tastytrade", Kind = "serie histórica del proveedor", History = "Se pide al proveedor cada vez" },
             ["history.index_daily"] = new() { Name = "Historia diaria de índices", Source = "Cboe", Kind = "serie histórica del proveedor", History = "Se pide al proveedor cada vez" },
             ["rates.treasury_curve"] = new() { Name = "Curva del Tesoro", Source = "Tesoro de EE. UU.", Kind = "serie histórica del proveedor", History = "Se pide al proveedor cada vez" },

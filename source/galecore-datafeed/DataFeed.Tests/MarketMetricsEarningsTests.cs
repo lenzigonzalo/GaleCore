@@ -21,7 +21,8 @@ namespace DataFeed.Tests
                "dividend-ex-date":"2026-08-10","dividend-pay-date":"2026-08-13","dividend-rate-per-share":"0.27","dividend-yield":"0.004",
                "earnings":{"visible":true,"expected-report-date":"2026-11-02","estimated":false,"time-of-day":"AMC",
                            "quarter-end-date":"2026-09-01","consensus-estimate":"1.98","actual-eps":"1.85"}},
-              {"symbol":"SPY","earnings":{"visible":false}}
+              {"symbol":"SPY","earnings-per-share":"0","price-earnings-ratio":"0","earnings":{"visible":false}},
+              {"symbol":"QQQ","earnings":{"visible":true}}
             ]}}
             """;
 
@@ -59,7 +60,11 @@ namespace DataFeed.Tests
         [Fact]
         public void ETF_sin_balance_devuelve_earnings_nulo()
         {
-            Assert.Null(Map().Single(i => i.Symbol == "SPY").Earnings);
+            var spy = Map().Single(i => i.Symbol == "SPY");
+            Assert.Null(spy.Earnings);
+            Assert.Null(spy.PriceEarningsRatio);
+            Assert.Null(spy.EarningsPerShare);
+            Assert.Null(Map().Single(i => i.Symbol == "QQQ").Earnings); // visible pero sin fecha
         }
     }
 }
