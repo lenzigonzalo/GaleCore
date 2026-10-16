@@ -13,7 +13,8 @@ test('workspace se recupera desde su descriptor versionable aunque falte el índ
 test('claude: la narración junto a una consulta no entra al chat; la respuesta sí',()=>{const chat={messages:[]};consumeEvent(chat,{type:'assistant',message:{content:[{type:'text',text:'Now try the CLI'},{type:'tool_use',name:'Bash'}]}},'claude');assert.equal(chat.messages.length,0);assert.equal(chat.activity,'Consultando el workspace');consumeEvent(chat,{type:'assistant',message:{content:[{type:'text',text:'Mi recomendación: esperá.'}]}},'claude');assert.equal(chat.messages.length,0);consumeEvent(chat,{type:'result',is_error:false,result:'Mi recomendación: esperá.'},'claude');assert.deepEqual(chat.messages.map(m=>m.text),['Mi recomendación: esperá.']);});
 
 test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el permiso al motor',async t=>{
- const {kb,local}=setup(t);const calls=[];const {EventEmitter}=require('events');
+ const {base,kb,local}=setup(t);const calls=[];const {EventEmitter}=require('events');
+ fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo de test');
  const spawnProcess=(bin,args)=>{calls.push(args);const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={end(){}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
  const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude',codex:'codex'},environment:()=>({}),instructions:()=>'',legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
  const req=Object.assign(new EventEmitter(),{method:'POST',headers:{'x-file-name':encodeURIComponent('nota ñ.txt')}});
@@ -25,5 +26,11 @@ test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el per
  await assert.rejects(route(service,'POST','/chats/'+chat.id+'/messages',{text:'mirá',attachments:['../secreto.txt']}),/Adjunto no encontrado/);
  await route(service,'POST','/chats/'+chat.id+'/messages',{text:'mirá esto',attachments:[up.value.path],mode:'auto'});
  const args=calls.at(-1);assert.deepEqual(args.slice(args.indexOf('--permission-mode'),args.indexOf('--permission-mode')+2),['--permission-mode','auto']);assert.ok(!args.includes('--permission-prompts'));
+ // WS-0037: Personal también lleva el núcleo del producto, con Claude y con Codex.
+ assert.match(args[args.indexOf('--append-system-prompt')+1],/núcleo de test/);
+ await new Promise(r=>setTimeout(r,50));
+ const cx=(await route(service,'POST','/chats',{project:'personal',provider:'codex'})).value;
+ await route(service,'POST','/chats/'+cx.id+'/messages',{text:'hola'});
+ const cargs=calls.at(-1);assert.match(cargs.find(a=>a.startsWith('developer_instructions=')),/núcleo de test/);assert.ok(cargs.includes('web_search="disabled"'));
  await new Promise(r=>setTimeout(r,50));
 });

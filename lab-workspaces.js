@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { spawn, execFile } = require('child_process');
+const { spawn, spawnSync, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -106,7 +106,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     if(!fs.realpathSync(path.dirname(dir)).startsWith(fs.realpathSync(kb)+path.sep))throw fail('Carpeta fuera del conocimiento local.',403);
     fs.mkdirSync(dir);
     fs.writeFileSync(path.join(dir,'README.md'),'# '+label+'\n\nWorkspace de '+(type==='strategy'?'estrategia':type==='personal'?'trabajo personal':'análisis')+'.\n\nLos resultados y memorias se guardan acá. Las conversaciones permanecen en el historial local del Lab.\n',{flag:'wx'});
-    fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y memory/README.md (el criterio vigente, por tema) y recuperá antecedentes antes de preguntar.\n'+(type==='personal'?'No incorpores cuenta, perfil financiero ni otros proyectos salvo pedido explícito.\n':'Usá GaleCore-AI para memoria canónica y GaleCore para datos/cálculos financieros.\n')+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
+    fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y memory/README.md (el criterio vigente, por tema) y recuperá antecedentes antes de preguntar.\nUsá GaleCore-AI para memoria canónica y GaleCore para datos/cálculos financieros.\n'+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
     fs.mkdirSync(path.join(dir,'memory'),{recursive:true});if(type!=='personal')fs.writeFileSync(path.join(dir,'memory','README.md'),'# Memoria de '+label+'\n\nCriterio vigente del proyecto, una página por tema. Índice:\n\n',{flag:'wx'});fs.mkdirSync(path.join(dir,'files'),{recursive:true});
     const p={id:slug,label,type,relative,strategyName:type==='strategy'?slug:null};fs.writeFileSync(path.join(dir,'workspace.json'),JSON.stringify(p,null,2)+'\n',{flag:'wx'});registry.push(p);atomic(metadata,registry);return p;
   }
@@ -122,6 +122,13 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     const tail=prev.messages.slice(-4).map(m=>(m.role==='user'?'Trader: ':'Respuesta: ')+m.text).join('\n\n').slice(-4000);
     return 'Final de la conversación anterior de este proyecto («'+prev.title+'»), para retomar sin preguntar (lo vigente está en memory/ y en los registros):\n'+tail;
   }
+  // Los hooks del producto (knowledge/.claude/hooks) para motores que no los leen solos (Codex). Sin el script, nada.
+  function hook(name,input){
+    const file=path.join(kb,'.claude','hooks',name);
+    if(!fs.existsSync(file))return '';
+    const r=spawnSync('python',[file],{input:JSON.stringify(input),cwd:input.cwd,env:{...environment(),GALECORE_KNOWLEDGE_DIR:kb},encoding:'utf8',timeout:60000,windowsHide:true});
+    return (r.stdout||'').trim();
+  }
   function send(chat, words, options={}){
     const auto=options.mode==='auto';
     const p=project(chat.project);
@@ -136,10 +143,26 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     if(chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
     chat.state='running';chat.error=null;chat.activity='Pensando';saveChat(chat);
     const skill=path.join(root,'tools','terminal','skills','lab-strategy-bootstrap','SKILL.md');
-    const context=p.type==='personal' ? 'Proyecto personal '+p.label+'. Leé las convenciones y memoria de este workspace. No consultes cuenta ni harness financiero salvo pedido explícito. No continúes ACTIVE_WORK_ITEM. No guardes secretos ni cambios ajenos.' : instructions(p)+'\nTipo del proyecto: '+p.type+'. Leé AGENTS.md de este workspace. Si el usuario quiere construir una estrategia o pide trabajar una estrategia en un símbolo, aplicá la skill '+skill+'. No confundir crear carpeta con estrategia aprobada. El bootstrap no despliega. Sólo guardá memoria de este proyecto.';
+    // WS-0037: el mismo harness para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el proveedor
+    // ni el modelo»; Personal también, sin filtro). Capas (D-0012): núcleo PRODUCT.md, final de la conversación anterior
+    // (estrategia), proyecto; Claude suma reloj/mapa/perfil y la capacidad del pedido por sus hooks de knowledge/.claude;
+    // Codex no los lee, así que el Lab corre esos mismos scripts y se los pasa como instrucciones del turno.
+    const product=fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8')+'\n\n';
+    const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
+    const brief=(resume?resume+'\n\n':'')+product+'Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' y, si el proyecto no es de estrategia, ofrecé abrir uno. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.';
     let args;
     if(chat.provider==='codex'){
-      args=['--no-daemon','exec','--json',...modelFlags(chat),...(auto?['--approve-for-me']:[]),'-c','developer_instructions='+JSON.stringify(context)];
+      const facts=hook('session_context.py',{source:chat.nativeId?'resume':'startup',cwd:p.dir});
+      const asked=hook('match_request.py',{prompt:words,cwd:p.dir});
+      // knowledge/CLAUDE.md es lo que Claude carga solo en esta carpeta; Codex lee AGENTS.md, así que va acá (y no
+      // instructions(p), que apunta al CLAUDE.md de desarrollo que Claude tiene excluido).
+      const kbRules=path.join(kb,'CLAUDE.md');
+      const developer=brief+(fs.existsSync(kbRules)?'\n\n'+fs.readFileSync(kbRules,'utf8'):'')+(facts?'\n\n'+facts:'')+(asked?'\n\n'+asked:'')+
+        '\n\nDatos sólo de GaleCore por el CLI de GaleCore-AI: nada de la web ni del navegador. Lo que cambie en knowledge/ lo commitea el Lab al terminar el turno.';
+      // Sin web ni navegador (como knowledge/.claude/settings.json); escribe en knowledge/ y llega a la API local de GaleCore.
+      const sandbox=['-c','web_search="disabled"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser','--disable','apps',
+        '-c','sandbox_workspace_write.network_access=true','-c','sandbox_workspace_write.writable_roots='+JSON.stringify([kb])];
+      args=['--no-daemon','exec','--json',...modelFlags(chat),...(auto?['--approve-for-me']:[]),...sandbox,'-c','developer_instructions='+JSON.stringify(developer)];
       if(chat.nativeId)args.push('resume',chat.nativeId,'-');else args.push('--sandbox','workspace-write','-C',p.dir,'-');
     } else {
       // WS-0028 (plan v2): el CLI abierto en la carpeta del proyecto con el contexto de producto de knowledge/ (sin el de
@@ -147,9 +170,6 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
       // Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT). Sin conectores de la cuenta.
       // D-0012: el núcleo del producto (GaleCore-AI/PRODUCT.md) va como instrucción de sistema; un import desde
       // knowledge/CLAUDE.md no carga en -p por estar fuera de la carpeta, y en el hook de inicio se recortaba.
-      const product=p.type==='personal'?'':fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8')+'\n\n';
-      const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-      const brief=p.type==='personal'?context:(resume?resume+'\n\n':'')+product+'Proyecto: '+p.id+' ('+p.type+').'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+(p.type==='strategy'?' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.':'');
       args=['-p',...modelFlags(chat),
         '--output-format','stream-json','--verbose','--append-system-prompt',brief,...(auto?['--permission-mode','auto']:['--permission-prompts','none']),'--strict-mcp-config',
         '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
@@ -157,7 +177,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, instructions
     }
     const proc=spawnProcess(binaries[chat.provider],args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});
     jobs.set(chat.id,{proc,project:p.id,chat});const decoder=new StringDecoder('utf8');let pending='',done=false;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';saveChat(chat);}
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);if(chat.provider==='codex')hook('commit_knowledge.py',{cwd:p.dir});chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';saveChat(chat);}
     proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{consumeEvent(chat,JSON.parse(line),chat.provider);saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
     proc.stderr.on('data',()=>{});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});proc.stdin.end(words+'\n');return chat;
   }
