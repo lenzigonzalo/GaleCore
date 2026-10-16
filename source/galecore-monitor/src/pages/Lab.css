@@ -319,3 +319,4 @@
 .lab-mapa-switch { display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
 .lab-mapa-switch button { padding:6px 12px; border:0; background:transparent; color:var(--text-secondary); font:inherit; font-size:14px; cursor:pointer; }
 .lab-mapa-switch button[aria-pressed=true] { background:var(--bg-hover); color:var(--text-primary); }
+.lab-chat-header .lab-project-title strong { overflow-wrap:normal; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }

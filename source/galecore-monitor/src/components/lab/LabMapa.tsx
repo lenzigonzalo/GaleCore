@@ -7,7 +7,7 @@ import './LabMapa.css';
 export interface MapaLine { mark: 'ok' | 'missing' | null; text: string }
 export interface Mapa { path: string; updatedAt: string; title: string; sections: { heading: string; lines: MapaLine[] }[] }
 
-const time = (iso: string) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+const time = (iso: string) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 
 export function LabMapa({ chatId, running }: { chatId: string | null; running: boolean }) {
   const [mapa, setMapa] = useState<Mapa | null>(null);
