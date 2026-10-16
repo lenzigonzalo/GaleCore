@@ -201,12 +201,14 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     rec.onerror = () => { setListening(false); recognition.current = null; };
     recognition.current = rec; rec.start(); setListening(true);
   };
-  const send = async (e: React.FormEvent) => {
-    e.preventDefault(); if(!draft.trim() || busy || (chatId && !chat) || chat?.state === 'running' || !project) return; setBusy(true); setError(''); const sendingSelection = selection.current;
+  const send = (e: React.FormEvent) => { e.preventDefault(); void submit(draft, true); };
+  // Lo que escribió el trader o lo que eligió en una tarjeta de opciones (WS-0039): el mismo envío.
+  const submit = async (text: string, fromDraft: boolean) => {
+    if(!text.trim() || busy || (chatId && !chat) || chat?.state === 'running' || !project) return; setBusy(true); setError(''); const sendingSelection = selection.current;
     try {
       const target = chat || await labRequest<WorkspaceChat>('/chats',{project:projectId,provider,...(state?.chatOptions?.[provider] ? chatSettings : {})});
-      const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text:draft,mode,attachments:attachments.map(a => a.path)}); setAttachments([]);
-      if(sendingSelection === selection.current) { followBottom.current = true; setAwayFromBottom(false); setChatId(target.id); setChat(next); } setDrafts(v=>({...v,[draftKey]:''})); setExpanded(v=>({...v,[projectId]:true})); await refresh();
+      const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text,mode,attachments:fromDraft?attachments.map(a => a.path):[]}); if(fromDraft) setAttachments([]);
+      if(sendingSelection === selection.current) { followBottom.current = true; setAwayFromBottom(false); setChatId(target.id); setChat(next); } if(fromDraft) setDrafts(v=>({...v,[draftKey]:''})); setExpanded(v=>({...v,[projectId]:true})); await refresh();
     } catch(e) { setError(e instanceof Error ? e.message : 'No se pudo enviar el mensaje.'); }
     finally { setBusy(false); }
   };
@@ -245,7 +247,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         followBottom.current = nearBottom; setAwayFromBottom(!nearBottom);
       }}>
         {!chat?.messages.length && <div className="lab-chat-welcome"><h1>{project?.type==='strategy' ? '¿Qué estrategia querés construir?' : project?.type==='personal' ? 'Tu espacio personal' : '¿Qué querés investigar?'}</h1>{project?.type==='strategy' && <p>De la idea a una estrategia lista para probar en Shadow.</p>}</div>}
-        {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text}/> : <div>{m.text}</div>}</article>)}
+        {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>void submit(text,false)}/> : <div>{m.text}</div>}</article>)}
         {chat?.state==='running' && <div className="lab-chat-activity" role="status"><i/>{chat.activity || 'Pensando' }…</div>}
         {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}<button onClick={refresh}>Reintentar conexión</button></div>}
       </div>
