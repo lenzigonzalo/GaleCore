@@ -121,9 +121,16 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
     CapabilityDefinition(
         capability_id="market_data.volatility_metrics",
         semantic_class=SemanticClass.PURE_QUERY,
-        description="Tastytrade market metrics: IV index and its changes, IV percentile, HV, beta, liquidity, earnings",
+        description="Tastytrade market metrics: IV index and its changes, IV percentile, HV, beta, liquidity; next earnings (date, AMC/BMO, estimated or confirmed, EPS consensus), sector, P/E and last ex-dividend",
         parameters=[CapabilityParameter(name="symbol", type="string", description="One or more symbols, comma-separated")],
-        returns="items[symbol, impliedVolatilityIndex, impliedVolatilityPercentile, ...]",
+        returns="items[symbol, impliedVolatilityIndex, impliedVolatilityPercentile, earnings{expectedReportDate, timeOfDay, estimated, consensusEps}, sector, industry, dividendExDate, ...]",
+    ),
+    CapabilityDefinition(
+        capability_id="market_data.earnings_history",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Past earnings reports of a symbol (last 3 years): report date and reported EPS, most recent first",
+        parameters=[CapabilityParameter(name="symbol", type="string", description="Underlying symbol")],
+        returns="symbol, items[occurredDate, eps]",
     ),
     CapabilityDefinition(
         capability_id="market_data.candles",

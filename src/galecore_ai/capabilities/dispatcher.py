@@ -12,6 +12,7 @@ Endpoint mapping (from GaleCore controllers):
   market_data.trade         → GET /Data/Tastytrade/MarketData/Trade?symbol={symbol}
   compute.put_skew          → GET /App.Analytics/PutSkew?symbol={symbol}
   market_data.volatility_metrics → GET /Data/Tastytrade/Market-metrics/VolatilityData?symbols={symbol}
+  market_data.earnings_history → GET /Data/Tastytrade/Market-metrics/EarningsHistory?symbol={symbol}
   market_data.candles       → GET /Data/Tastytrade/MarketData/Candle?symbol={symbol}&interval=..&fromTime=..
   market_data.option_greeks → GET /Data/Tastytrade/MarketData/Greeks?symbol={OCC option symbol}
 """
@@ -122,6 +123,12 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
         "method": "GET",
         "path": "/Data/Tastytrade/Market-metrics/VolatilityData",
         "param_key": "symbols",
+        "source_param": "symbol",
+    },
+    "market_data.earnings_history": {
+        "method": "GET",
+        "path": "/Data/Tastytrade/Market-metrics/EarningsHistory",
+        "param_key": "symbol",
         "source_param": "symbol",
     },
     "market_data.candles": {
