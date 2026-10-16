@@ -38,3 +38,31 @@
 @media(max-width:480px) { .lw-resize { display:none; } .lw-drawer .ticker-watchlist table { font-size:14px; } .lw-drawer .ticker-watchlist th,.lw-drawer .ticker-watchlist td { padding:8px 4px; } .watchlist-ticker-icon { display:none; } }
 .lw-tools > button { position:relative; }
 .lw-badge { position:absolute; top:5px; right:4px; width:9px; height:9px; border-radius:50%; background:#f87171; box-shadow:0 0 0 2px var(--bg-secondary); }
+.lw-add { position:relative; margin:12px 4px 4px; }
+.lw-add-row { display:flex; align-items:center; gap:8px; height:40px; padding:0 4px 0 10px; background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:6px; color:var(--text-secondary); }
+.lw-add-row:focus-within { border-color:var(--accent); }
+.lw-add-row input { flex:1; min-width:0; background:none; border:0; outline:none; color:var(--text-primary); font:inherit; font-size:15px; text-transform:uppercase; }
+.lw-add-row input::placeholder { text-transform:none; color:var(--text-muted); }
+.lw-add-row select { max-width:130px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:4px; color:var(--text-primary); font:inherit; font-size:13px; padding:4px 6px; }
+.lw-add-results { position:absolute; left:0; right:0; top:44px; z-index:5; margin:0; padding:4px; list-style:none; background:var(--bg-elevated, var(--bg-secondary)); border:1px solid var(--border-light); border-radius:6px; box-shadow:0 12px 30px #0008; max-height:300px; overflow:auto; }
+.lw-add-results li { display:flex; align-items:baseline; gap:10px; padding:8px 10px; border-radius:4px; cursor:pointer; }
+.lw-add-results li.active { background:var(--bg-hover); }
+.lw-add-results li b { font-weight:600; min-width:56px; }
+.lw-add-results li span { color:var(--text-secondary); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lw-add-results li.lw-add-note { color:var(--text-secondary); cursor:default; }
+.lw-warn { color:var(--yellow-gc); font-size:13px; margin:8px 4px; }
+.watchlist-group-row { display:flex; align-items:center; justify-content:space-between; }
+.watchlist-group-tools { display:flex; gap:2px; opacity:0; }
+.watchlist-group:hover .watchlist-group-tools,.watchlist-group:focus-within .watchlist-group-tools { opacity:1; }
+.watchlist-group-tools button { padding:3px 5px; text-transform:none; }
+.watchlist-group.drop td { background:var(--bg-hover); }
+.watchlist-rename { width:100%; background:var(--bg-secondary); border:1px solid var(--accent); border-radius:4px; color:var(--text-primary); font:inherit; font-size:13px; padding:3px 6px; }
+.lw-drawer .watchlist-action { width:auto; white-space:nowrap; }
+.lw-drawer .watchlist-move td { padding:6px 8px 10px!important; background:var(--bg-secondary); }
+.watchlist-move span { color:var(--text-secondary); font-size:13px; margin-right:8px; }
+.watchlist-move button { margin:2px 6px 2px 0; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:4px; padding:4px 9px; color:var(--text-primary); font:inherit; font-size:13px; cursor:pointer; }
+.lw-drawer .watchlist-empty td { color:var(--text-secondary); font-size:13px; padding:10px 8px; }
+.lw-drawer tr[draggable="true"] { cursor:grab; }
+.lw-new-group { display:flex; align-items:center; gap:7px; margin:14px 4px 0; background:none; border:0; color:var(--text-secondary); font:inherit; font-size:14px; cursor:pointer; padding:4px 0; }
+.lw-new-group:hover { color:var(--text-primary); }
+.lw-add-row input:focus,.lw-add-row input:focus-visible { outline:none!important; box-shadow:none!important; border:0!important; }

@@ -20,4 +20,6 @@ export function resetUserScopedStores() {
   useCurrentUserStore.getState().reset();
   useAccountStore.getState().reset();
   useGexStore.getState().resetSession();
+  // Copia local de la watchlist de la cuenta (la fuente es la preferencia `watchlist`).
+  try { localStorage.removeItem('galecore.watchlist'); } catch { /* sin almacenamiento */ }
 }

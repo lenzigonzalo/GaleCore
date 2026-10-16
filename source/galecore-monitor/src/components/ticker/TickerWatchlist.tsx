@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ChevronDown, ChevronRight } from 'lucide-react';
+import { X, ChevronDown, ChevronRight, ArrowRightLeft, Pencil, Trash2 } from 'lucide-react';
 import { TickerState } from '../../types/market';
 import { calcChange, fmtPct, fmtPrice, fmtTime, isStale } from '../../utils/formatters';
 
@@ -10,11 +10,23 @@ interface Props {
   onSelect: (symbol: string | null) => void;
   removableSymbols?: string[];
   onRemoveSymbol?: (symbol: string) => void;
+  /** Grupos editables (watchlist guardada): mover tickers, renombrar y borrar grupos. */
+  groupActions?: { onMove: (symbol: string, group: string) => void; onRename: (from: string, to: string) => void; onDelete: (name: string) => void };
 }
 
 /** Presentación compacta del mismo store de las tarjetas; no consulta ni suscribe datos. */
-export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSymbols, onRemoveSymbol, sections }: Props) {
+export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSymbols, onRemoveSymbol, sections, groupActions }: Props) {
   const [collapsed,setCollapsed] = useState<string[]>([]);
+  const [moving,setMoving] = useState<string | null>(null);
+  const [renaming,setRenaming] = useState<string | null>(null);
+  const [dropOn,setDropOn] = useState<string | null>(null);
+  const names = sections?.map(s => s.label) ?? [];
+  const groupOf = (symbol:string) => sections?.find(s => s.symbols.includes(symbol))?.label;
+  const drop = (group:string) => ({
+    onDragOver: (e:React.DragEvent) => { if (groupActions && e.dataTransfer.types.includes('text/x-ticker')) { e.preventDefault(); setDropOn(group); } },
+    onDragLeave: () => setDropOn(null),
+    onDrop: (e:React.DragEvent) => { const symbol = e.dataTransfer.getData('text/x-ticker'); setDropOn(null); if (symbol && groupActions && groupOf(symbol) !== group) groupActions.onMove(symbol, group); },
+  });
   const renderTicker = (ticker:TickerState) => {
           const hasPrice = Number.isFinite(ticker.price) && ticker.price > 0;
           const hasClose = ticker.prevClose != null && Number.isFinite(ticker.prevClose) && ticker.prevClose > 0;
@@ -24,7 +36,11 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
           const selected = selectedSymbol === ticker.symbol;
           const removable = removableSymbols?.includes(ticker.symbol) && onRemoveSymbol;
           return (
-            <tr key={ticker.symbol} className={selected ? 'selected' : undefined} title={ticker.lastUpdate ? 'Recepción ' + fmtTime(ticker.lastUpdate) + ' ET' + (isStale(ticker.lastUpdate) ? ' · lectura anterior' : '') : 'Sin fecha de recepción'}>
+            <React.Fragment key={ticker.symbol}>
+            <tr className={selected ? 'selected' : undefined} draggable={!!groupActions || undefined}
+              onDragStart={groupActions ? e => { e.dataTransfer.setData('text/x-ticker', ticker.symbol); e.dataTransfer.effectAllowed = 'move'; } : undefined}
+              {...(groupActions && groupOf(ticker.symbol) ? drop(groupOf(ticker.symbol)!) : {})}
+              title={ticker.lastUpdate ? 'Recepción ' + fmtTime(ticker.lastUpdate) + ' ET' + (isStale(ticker.lastUpdate) ? ' · lectura anterior' : '') : 'Sin fecha de recepción'}>
               <th scope="row">
                 <button className="watchlist-symbol" aria-label={ticker.symbol} aria-pressed={selected}
                   onClick={() => onSelect(selected ? null : ticker.symbol)}><span className="watchlist-ticker-icon" aria-hidden="true">{ticker.symbol.slice(0,1)}</span>{ticker.symbol}</button>
@@ -43,11 +59,33 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
                 {ticker.lastUpdate ? fmtTime(ticker.lastUpdate) : '—'}
               </td>
               <td className="watchlist-action">
+                {groupActions && names.length > 1 && <button className="watchlist-remove" aria-label={'Mover ' + ticker.symbol + ' a otro grupo'} aria-expanded={moving === ticker.symbol}
+                  onClick={() => setMoving(m => m === ticker.symbol ? null : ticker.symbol)}><ArrowRightLeft size={15} /></button>}
                 {removable && <button className="watchlist-remove" aria-label={'Quitar ' + ticker.symbol + ' del seguimiento'}
                   onClick={() => onRemoveSymbol?.(ticker.symbol)}><X size={16} /></button>}
               </td>
             </tr>
+            {moving === ticker.symbol && groupActions && <tr className="watchlist-move"><td colSpan={6}>
+              <span>Mover a</span>{names.filter(n => n !== groupOf(ticker.symbol)).map(n => <button key={n} onClick={() => { groupActions.onMove(ticker.symbol, n); setMoving(null); }}>{n}</button>)}
+            </td></tr>}
+            </React.Fragment>
           );
+  };
+  const header = (label:string) => {
+    const open = !collapsed.includes(label);
+    const toggle = <button aria-expanded={open} onClick={() => setCollapsed(v => v.includes(label) ? v.filter(s => s !== label) : [...v,label])}>{open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}{label}</button>;
+    if (!groupActions) return <tr className="watchlist-group"><td colSpan={6}>{toggle}</td></tr>;
+    return <tr className={'watchlist-group' + (dropOn === label ? ' drop' : '')} {...drop(label)}><td colSpan={6}>
+      {renaming === label
+        ? <input className="watchlist-rename" aria-label={'Nombre del grupo ' + label} defaultValue={label} autoFocus
+            onBlur={e => { groupActions.onRename(label, e.target.value); setRenaming(null); }}
+            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { e.stopPropagation(); setRenaming(null); } }} />
+        : <div className="watchlist-group-row">{toggle}
+            <span className="watchlist-group-tools">
+              <button aria-label={'Renombrar grupo ' + label} onClick={() => setRenaming(label)}><Pencil size={13}/></button>
+              {names.length > 1 && <button aria-label={'Borrar grupo ' + label} title="Sus tickers pasan al primer grupo" onClick={() => groupActions.onDelete(label)}><Trash2 size={13}/></button>}
+            </span></div>}
+    </td></tr>;
   };
   return (
     <div className="ticker-watchlist">
@@ -60,7 +98,7 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
           <th scope="col" className="numeric watchlist-received">Recepción (ET)</th>
           <th scope="col"><span className="sr-only">Acciones</span></th>
         </tr></thead>
-        <tbody>{sections ? sections.map(section => <React.Fragment key={section.label}><tr className="watchlist-group"><td colSpan={6}><button aria-expanded={!collapsed.includes(section.label)} onClick={() => setCollapsed(v => v.includes(section.label) ? v.filter(s => s !== section.label) : [...v,section.label])}>{collapsed.includes(section.label) ? <ChevronRight size={13}/> : <ChevronDown size={13}/>}{section.label}</button></td></tr>{!collapsed.includes(section.label) && tickers.filter(t => section.symbols.includes(t.symbol)).map(renderTicker)}</React.Fragment>) : tickers.map(renderTicker)}</tbody>
+        <tbody>{sections ? sections.map(section => <React.Fragment key={section.label}>{header(section.label)}{!collapsed.includes(section.label) && section.symbols.map(symbol => tickers.find(t => t.symbol === symbol)).filter((t): t is TickerState => !!t).map(renderTicker)}{groupActions && !section.symbols.length && <tr className="watchlist-empty"><td colSpan={6}>Vacío · arrastrá un ticker acá o agregalo con el buscador</td></tr>}</React.Fragment>) : tickers.map(renderTicker)}</tbody>
       </table>
       <details className="watchlist-note"><summary>Datos</summary>GaleCore · Cambio contra cierre previo · La hora indica recepción, no origen del precio (ET).</details>
     </div>

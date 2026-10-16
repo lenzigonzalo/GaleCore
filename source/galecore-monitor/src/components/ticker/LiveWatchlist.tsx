@@ -1,16 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, RotateCcw, Bookmark, Plus, RefreshCw, CalendarDays, Bell } from 'lucide-react';
+import { X, RotateCcw, Bookmark, Plus, RefreshCw, CalendarDays, Bell, FolderPlus } from 'lucide-react';
 import { SupervisorAlerts, useStrikeAlerts } from '../layout/SupervisorAlerts';
 import { CalendarDock } from '../macro/CalendarDock';
 import { TickerGrid } from './TickerGrid';
-import { SymbolSearchCard } from './SymbolSearchCard';
+import { WatchlistSearch } from './WatchlistSearch';
+import { fetchSpace, saveSpaceItem } from '../../api/space';
+import { Watchlist, WATCHLIST_KEY, parseWatchlist, resolveWatchlist, addSymbol, removeSymbol, restoreSymbol, moveSymbol, createGroup, renameGroup, deleteGroup } from './watchlistPrefs';
 import { useGexStore } from '../../store/useGexStore';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import type { ConnectionStatus } from '../../socket/useMarketSocket';
 import './LiveWatchlist.css';
 import { AccountMenu } from '../layout/AccountMenu';
 
-/** Lista real del universo existente. Quitar un ticker del JSON sólo oculta su fila en esta sesión. */
+const CACHE = 'galecore.watchlist';
+const readCache = (): Watchlist | null => { try { return parseWatchlist(JSON.parse(localStorage.getItem(CACHE) || 'null')); } catch { return null; } };
+
+/** Watchlist de la cuenta (preferencia `watchlist`): grupos, agregados y quitados sobreviven a recargar. Quitar un
+ *  ticker de la plataforma no toca su universo: sólo lo saca de esta lista. */
 export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, socketStatus, subscribeSymbol, unsubscribeSymbol, onOpenSettings, onLogout, accountActive, width = 420, onWidthChange }: {
   open:boolean; enabled:boolean; onClose:()=>void; onToggle?:()=>void; onSelect:()=>void; socketStatus:ConnectionStatus;
   subscribeSymbol:(symbol:string)=>void; unsubscribeSymbol:(symbol:string)=>void;
@@ -19,8 +25,9 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
 }) {
   const { tickers, rules, rulesLoading, rulesError, loadRules, adHocSearch, adHocSymbols, pinAdHoc, unpinAdHoc, selectedSymbol, setSelectedSymbol } = useGexStore();
   const { tickers: platformTickers, loading: platformLoading, error: platformError } = useAppConfigStore();
-  const [hidden,setHidden] = useState<string[]>([]);
-  const [added,setAdded] = useState<string[]>([]);
+  const [saved,setSaved] = useState<Watchlist | null>(readCache);
+  const [storageError,setStorageError] = useState(false);
+  const changed = useRef(false);
   const [searchOpen,setSearchOpen] = useState(false);
   const [message,setMessage] = useState('');
   const [refreshKey,setRefreshKey] = useState(0);
@@ -38,8 +45,33 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
   useEffect(() => { if (enabled && open && panelMode === 'watchlist' && !rules && !rulesError) loadRules(); },[enabled,open,panelMode,rules,rulesError,loadRules]);
-  const baseSymbols = Array.from(new Set([...platformTickers,...tickers]));
-  const symbols = Array.from(new Set([...baseSymbols,...added,...adHocSymbols])).filter(s => !hidden.includes(s));
+  const baseSymbols = Array.from(new Set([...platformTickers,...tickers,...adHocSymbols]));
+  const list = resolveWatchlist(saved, baseSymbols);
+  const symbols = Array.from(new Set(list.groups.flatMap(g => g.symbols)));
+  const edit = (change:(old:Watchlist)=>Watchlist) => { changed.current = true; setSaved(change(list)); };
+  // Lo guardado en la cuenta manda; hasta que llega se muestra la copia local. Sólo se escribe lo que el usuario cambió.
+  // Se lee al abrir el panel (ya con sesión) hasta lograrlo; antes de leer la cuenta no se escribe, para no pisarla.
+  const [accountRead,setAccountRead] = useState(false);
+  useEffect(() => {
+    if (!enabled || !open || accountRead) return;
+    let alive = true;
+    fetchSpace().then(({ items }) => {
+      if (!alive) return;
+      const item = items.find(i => i.kind === 'preference' && i.key === WATCHLIST_KEY && i.isOwn);
+      if (item && !changed.current) { try { const parsed = parseWatchlist(JSON.parse(item.content)); if (parsed) setSaved(parsed); } catch { /* ilegible: queda la local */ } }
+      setAccountRead(true);
+    }).catch(() => undefined);
+    return () => { alive = false; };
+  },[enabled,open,accountRead]);
+  useEffect(() => {
+    if (!saved || !changed.current || !accountRead) return;
+    try { localStorage.setItem(CACHE, JSON.stringify(saved)); } catch { /* sólo caché */ }
+    const timer = setTimeout(() => {
+      saveSpaceItem('preference', WATCHLIST_KEY, { title: 'Watchlist', content: JSON.stringify(saved), format: 'json', visibility: 'private' })
+        .then(() => setStorageError(false)).catch(() => setStorageError(true));
+    }, 600);
+    return () => clearTimeout(timer);
+  },[saved,accountRead]);
   const extrasKey = symbols.filter(s => !platformTickers.includes(s)).join(',');
   // Un único dueño de suscripciones extra: Gex usa externalWatchlist en este recorrido.
   useEffect(() => {
@@ -59,12 +91,11 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
     document.addEventListener('keydown',keys);
     return () => { document.removeEventListener('keydown',keys); previous?.focus(); };
   },[open,enabled]);
-  const pick = (symbol:string) => {
+  const pick = (symbol:string, group:string) => {
     const normalized=symbol.trim().toUpperCase();
     if (!normalized) return;
     // La lista de cotizaciones no limita su tamaño por max_pinned del barrido GEX.
-    if (!baseSymbols.includes(normalized)) setAdded(v => v.includes(normalized) ? v : [...v,normalized]);
-    setHidden(v => v.filter(s => s !== normalized)); setMessage(''); setSearchOpen(false);
+    edit(old => addSymbol(old, normalized, group)); setMessage('');
   };
   const select = (symbol:string|null) => {
     if (!symbol) return;
@@ -86,21 +117,25 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
         onPointerCancel={() => { drag.current=null; }} onLostPointerCapture={() => { drag.current=null; }}
         onDoubleClick={() => resize(420)}
         onKeyDown={e => { if (['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) { e.preventDefault(); resize(e.key==='Home' ? 360 : e.key==='End' ? 720 : width + (e.key==='ArrowLeft' ? 20 : -20)); } }}/>
-      <header><h2 id="lw-title">{alertsMode ? 'Avisos' : calendarMode ? 'Calendario' : 'Watchlist'}</h2><div>{panelMode === 'watchlist' && <><button className="lw-close" aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones" onClick={() => setRefreshKey(v => v + 1)}><RefreshCw size={18}/></button>{adHocSearch?.enabled && <button className="lw-close" aria-label="Agregar símbolo a la watchlist" onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button>}</>}<button className="lw-close" data-close aria-label={alertsMode ? 'Cerrar avisos' : calendarMode ? 'Cerrar calendario' : 'Cerrar panel de watchlist'} onClick={onClose}><X size={21}/></button></div></header>
+      <header><h2 id="lw-title">{alertsMode ? 'Avisos' : calendarMode ? 'Calendario' : 'Watchlist'}</h2><div>{panelMode === 'watchlist' && <><button className="lw-close" aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones" onClick={() => setRefreshKey(v => v + 1)}><RefreshCw size={18}/></button><button className="lw-close" aria-label="Agregar símbolo a la watchlist" aria-expanded={searchOpen} onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button></>}<button className="lw-close" data-close aria-label={alertsMode ? 'Cerrar avisos' : calendarMode ? 'Cerrar calendario' : 'Cerrar panel de watchlist'} onClick={onClose}><X size={21}/></button></div></header>
       <div className="lw-content">
         {enabled && open && calendarMode && <CalendarDock />}
         {enabled && alertsMode && <SupervisorAlerts embedded strike={strike} />}
         {enabled && panelMode === 'watchlist' && <>
-          {adHocSearch?.enabled && searchOpen && <div className="lw-search"><SymbolSearchCard compact initialOpen minQueryLength={adHocSearch.min_query_length} maxResults={adHocSearch.max_results} instrumentTypes={adHocSearch.allowed_instrument_types} onPick={pick}/></div>}
+          {searchOpen && <WatchlistSearch groups={list.groups.map(g => g.name)} onPick={pick} onClose={() => setSearchOpen(false)}
+            minQueryLength={adHocSearch?.min_query_length} maxResults={adHocSearch?.max_results} instrumentTypes={adHocSearch?.allowed_instrument_types} />}
+          {storageError && <p role="status" className="lw-warn">No se pudo guardar en la cuenta; queda en este navegador y se reintenta con el próximo cambio.</p>}
           {message && <p role="status">{message}</p>}
           <TickerGrid layout="list" active={open && enabled} refreshKey={refreshKey} symbols={symbols} selectedSymbol={selectedSymbol}
             loading={!symbols.length && platformLoading && rulesLoading} error={!symbols.length ? platformError || rulesError : null}
             onSelect={select}
-            sections={[{label:"ETF",symbols:symbols.filter(s => ["SPY","QQQ","IWM","TLT"].includes(s))},{label:"Instrumentos",symbols:symbols.filter(s => !["SPY","QQQ","IWM","TLT"].includes(s))}].filter(g => g.symbols.length > 0)}
+            sections={list.groups.map(g => ({label:g.name,symbols:g.symbols}))}
             removableSymbols={symbols}
-            onRemoveSymbol={symbol => { setAdded(v => v.filter(s => s !== symbol)); if (adHocSymbols.includes(symbol)) unpinAdHoc(symbol); if (baseSymbols.includes(symbol)) setHidden(v => [...v,symbol]); if (selectedSymbol === symbol) setSelectedSymbol(null); }}
+            onRemoveSymbol={symbol => { edit(old => removeSymbol(old, symbol, baseSymbols)); if (adHocSymbols.includes(symbol)) unpinAdHoc(symbol); if (selectedSymbol === symbol) setSelectedSymbol(null); }}
+            groupActions={{ onMove: (symbol, group) => edit(old => moveSymbol(old, symbol, group)), onRename: (from, to) => edit(old => renameGroup(old, from, to)), onDelete: name => edit(old => deleteGroup(old, name)) }}
           />
-          {hidden.length > 0 && <div className="lw-hidden"><span>Quitados de esta lista</span>{hidden.map(s => <button key={s} onClick={() => setHidden(v => v.filter(x => x !== s))}><RotateCcw size={14}/>{s}</button>)}</div>}
+          <button className="lw-new-group" onClick={() => edit(old => createGroup(old))}><FolderPlus size={15}/>Nuevo grupo</button>
+          {list.hidden.length > 0 && <div className="lw-hidden"><span>Quitados de esta lista</span>{list.hidden.map(s => <button key={s} onClick={() => edit(old => restoreSymbol(old, s))}><RotateCcw size={14}/>{s}</button>)}</div>}
           {rulesError && <button className="btn" onClick={loadRules}>Reintentar lectura</button>}
         </>}
       </div>

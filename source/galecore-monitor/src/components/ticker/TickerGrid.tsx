@@ -21,6 +21,7 @@ interface Props {
   /** Los que se pueden sacar de la grilla. La grilla no sabe por qué uno lo es y otro no. */
   removableSymbols?: string[];
   onRemoveSymbol?: (symbol: string) => void;
+  groupActions?: React.ComponentProps<typeof TickerWatchlist>['groupActions'];
 }
 
 function needsRestPrice(symbol: string) {
@@ -40,7 +41,7 @@ function applyMarketData(d: { symbol: string; open: number; prevClose?: number; 
 
 export function TickerGrid({
   selectedSymbol, onSelect, symbols, loading, error,
-  trailing, removableSymbols, onRemoveSymbol, sections, layout = 'cards', active = true, refreshKey = 0,
+  trailing, removableSymbols, onRemoveSymbol, groupActions, sections, layout = 'cards', active = true, refreshKey = 0,
 }: Props) {
   // El estado de carga es el de quien pasa el universo — la grilla no lo deriva de ningún store.
   const rulesLoading = loading ?? false;
@@ -152,7 +153,7 @@ export function TickerGrid({
       symbol, price: 0, open: 0, bid: 0, ask: 0, lastUpdate: null, isStreaming: false,
       loading: { price: true, ivRank: true, iv: true, gex: false }, error: {},
     })} selectedSymbol={selectedSymbol} onSelect={onSelect}
-      removableSymbols={removableSymbols} onRemoveSymbol={onRemoveSymbol} />
+      removableSymbols={removableSymbols} onRemoveSymbol={onRemoveSymbol} groupActions={groupActions} />
     {trailing}
   </>;
 

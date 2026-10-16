@@ -7,10 +7,15 @@ import { useMarketStore } from '../../store/useMarketStore';
 import { fetchMarketDataBatch, searchSymbols } from '../../api/marketdata';
 jest.mock('../../api/gex',()=>({fetchGexRules:jest.fn(),fetchGexAnalysis:jest.fn()}));
 jest.mock('../../api/marketdata',()=>({fetchMarketDataBatch:jest.fn(),searchSymbols:jest.fn()}));
+jest.mock('../../api/space',()=>({fetchSpace:jest.fn(async()=>({items:[],shared:[]})),saveSpaceItem:jest.fn(async()=>undefined)}));
+import { fetchSpace, saveSpaceItem } from '../../api/space';
 const batch=fetchMarketDataBatch as jest.Mock;
 const props={open:true,enabled:true,onClose:jest.fn(),onSelect:jest.fn(),socketStatus:'connected' as const,subscribeSymbol:jest.fn(),unsubscribeSymbol:jest.fn()};
 beforeEach(()=>{
   jest.clearAllMocks();
+  localStorage.clear();
+  (fetchSpace as jest.Mock).mockResolvedValue({items:[],shared:[]});
+  (saveSpaceItem as jest.Mock).mockResolvedValue(undefined);
   useMarketStore.setState({tickers:{}});
   useAppConfigStore.setState({tickers:['SPY'],loading:false,error:null});
   // Universo sintético de prueba, no una lectura financiera real.
@@ -87,10 +92,11 @@ test('agregar dos cotizaciones no desplaza la anterior por el límite de un barr
   render(<LiveWatchlist {...props}/>);
   for (const symbol of ['MSFT','TSLA']) {
     fireEvent.click(screen.getByRole('button',{name:'Agregar símbolo a la watchlist'}));
-    const search=screen.getByPlaceholderText('Símbolo…');
+    const search=screen.getByRole('textbox',{name:'Buscar ticker'});
     fireEvent.change(search,{target:{value:symbol}});
-    await screen.findByText(symbol);
+    await within(await screen.findByRole('listbox',{name:'Resultados'})).findByRole('option');
     fireEvent.keyDown(search,{key:'Enter'});
+    fireEvent.click(screen.getByRole('button',{name:'Cerrar buscador'}));
     await waitFor(()=>expect(screen.getByRole('button',{name:symbol})).toBeInTheDocument());
   }
   expect(screen.getByRole('button',{name:'MSFT'})).toBeInTheDocument();
@@ -173,4 +179,42 @@ test('una respuesta REST tardía no pisa un trade válido reciente',async()=>{
   await act(async()=>resolve([{symbol:'SPY',last:101,prevClose:100,open:99,bid:100,ask:102,volume:1000}]));
   expect(screen.getByText('105.00')).toBeInTheDocument();
   expect(useMarketStore.getState().tickers.SPY.isStreaming).toBe(true);
+});
+
+test('lo agregado, quitado y los grupos se guardan en la cuenta y vuelven al recargar',async()=>{
+  (searchSymbols as jest.Mock).mockImplementation(async(query:string)=>[{symbol:query,description:'Instrumento de prueba'}]);
+  const {unmount}=render(<LiveWatchlist {...props}/>);
+  await waitFor(()=>expect(screen.getAllByText('101.00')).toHaveLength(2));
+  fireEvent.click(screen.getByRole('button',{name:'Agregar símbolo a la watchlist'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Buscar ticker'}),{target:{value:'MSFT'}});
+  await within(await screen.findByRole('listbox',{name:'Resultados'})).findByRole('option');
+  fireEvent.change(screen.getByRole('combobox',{name:'Grupo donde se agrega'}),{target:{value:'ETF'}});
+  fireEvent.keyDown(screen.getByRole('textbox',{name:'Buscar ticker'}),{key:'Enter'});
+  fireEvent.click(screen.getByRole('button',{name:'Quitar AAPL del seguimiento'}));
+  fireEvent.click(screen.getByRole('button',{name:'Nuevo grupo'}));
+  await waitFor(()=>expect(saveSpaceItem).toHaveBeenCalled());
+  const [kind,key,body]=(saveSpaceItem as jest.Mock).mock.calls.at(-1);
+  expect([kind,key]).toEqual(['preference','watchlist']);
+  const saved=JSON.parse(body.content);
+  expect(saved).toEqual({groups:[{name:'ETF',symbols:['SPY','MSFT']},{name:'Instrumentos',symbols:[]},{name:'Grupo',symbols:[]}],hidden:['AAPL']});
+  unmount();
+  localStorage.clear();
+  (fetchSpace as jest.Mock).mockResolvedValue({items:[{kind:'preference',key:'watchlist',isOwn:true,content:body.content}],shared:[]});
+  render(<LiveWatchlist {...props}/>);
+  expect(await screen.findByRole('button',{name:'MSFT'})).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Quitar AAPL del seguimiento'})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Grupo'})).toBeInTheDocument();
+});
+
+test('mover un ticker de grupo y renombrar un grupo',async()=>{
+  render(<LiveWatchlist {...props}/>);
+  await waitFor(()=>expect(screen.getAllByText('101.00')).toHaveLength(2));
+  fireEvent.click(screen.getByRole('button',{name:'Mover AAPL a otro grupo'}));
+  fireEvent.click(within(screen.getByText('Mover a').closest('tr')!).getByRole('button',{name:'ETF'}));
+  fireEvent.click(screen.getByRole('button',{name:'Renombrar grupo ETF'}));
+  const name=screen.getByRole('textbox',{name:'Nombre del grupo ETF'});
+  fireEvent.change(name,{target:{value:'Principales'}});
+  fireEvent.keyDown(name,{key:'Enter'});
+  await waitFor(()=>expect(saveSpaceItem).toHaveBeenCalled());
+  expect(JSON.parse((saveSpaceItem as jest.Mock).mock.calls.at(-1)[2].content).groups[0]).toEqual({name:'Principales',symbols:['SPY','AAPL']});
 });
