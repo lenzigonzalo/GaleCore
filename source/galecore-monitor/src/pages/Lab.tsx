@@ -9,6 +9,7 @@ import { strategyName } from '../components/shadow/panelPresentation';
 import { LabModelPicker } from '../components/lab/LabModelPicker';
 import { LabProjectList } from '../components/lab/LabProjectList';
 import { LabMapa } from '../components/lab/LabMapa';
+import { LabSuggestions } from '../components/lab/LabSuggestions';
 import './Lab.css';
 const KIND = { personal: 'Personal', analysis: 'Análisis', strategy: 'Estrategia' };
 const limitMapaWidth = (width: number) => Math.max(280, Math.min(width, 640));
@@ -253,6 +254,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
       {composerForm}
+      {!chat?.messages.length && !busy && <LabSuggestions disabled={chat?.state==='running'} onPick={question => void submit(question, false)}/>}
       </div>
       {mapaOpen && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label="Ancho del mapa" aria-orientation="vertical" aria-valuemin={280} aria-valuemax={640} aria-valuenow={mapaWidth}
         title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
