@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "1.5.0"
+    date: 2026-10-16
+    changes: >
+      WS-0039 (owner 16/10: «no sé qué está haciendo, está tardando mucho»): una idea va en dos tiempos. Aclarar en
+      segundos, sin buscar, con 2-3 preguntas cerradas y lo que va a buscar; buscar todo de una vez cuando el trader
+      responde o si el pedido ya era específico.
+    feedback: []
   - version: "1.4.2"
     date: 2026-10-16
     changes: >

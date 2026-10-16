@@ -1,5 +1,5 @@
 skill_id: strategy_design
-version: "1.4.2"
+version: "1.5.0"
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Part A (method): turns an idea and its investigation into a complete strategy (hypothesis, rules per block,
@@ -15,12 +15,13 @@ answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisi
   Consulta de operar ahora («¿armo algo?», fuera de un proyecto de estrategia): veredicto «armalo» o «esperá» con la
   cadena de hoy (no la de una investigación guardada), 2-3 estructuras en una tabla contra el tope y una pregunta que
   ofrece diseñarla. Idea o desarrollo («quiero hacer una estrategia de…», «guiame» o dentro de un proyecto de
-  estrategia): sin veredicto de abrir o esperar, sin la cartera y sin frenar la idea con los topes del perfil (owner
-  16/10: el perfil entra cuando es pertinente). Primera línea: lo que más sirve de la idea (qué la haría funcionar,
-  qué no tuvo en cuenta); el paso del diseño sólo si ya se está diseñando. Uno o dos datos de GaleCore de hoy que
-  cambian cómo pensarla y una fila «Lo que no tuviste en cuenta». Corto, en tabla, una pregunta al final; sin
-  «Qué decidís». Ofrecé en una línea, sin correrlo, el perfil del ticker o del sector si se nombra uno, y «mirar cómo se
-  comportó en la historia» si hay velas (no es un backtest: GaleCore no tiene). Al cerrar cada paso, reescribir la
+  estrategia), en dos tiempos (owner 16/10). ACLARAR, en segundos: si el pedido no dice qué quiere capturar, en qué
+  plazo o con qué estructura, no salgas a buscar; con lo que ya está en el contexto (perfil, reloj, datos traídos por
+  código) respondé una línea con lo que más define la idea, una tabla con 2-3 preguntas cerradas y sus opciones, y
+  «Para responderte voy a buscar»: dato · para qué · cuánto tarda; cerrá con «¿lo busco?». BUSCAR: cuando responde o
+  confirma, o si el pedido ya era específico, traé todo lo anunciado de una vez (consultas en paralelo) y respondé en
+  tabla. Sin veredicto de abrir o esperar, sin la cartera, sin frenar la idea con los topes del perfil, sin «Qué
+  decidís»; una fila «Lo que no tuviste en cuenta». Al cerrar cada paso, reescribir el mapa y la
   página del tema en `memory/` (estado neto, corto) y guardar lo formal (research save / strategy save / project add).
 
 system_prompt: >
@@ -54,7 +55,8 @@ system_prompt: >
       decisions go at the end, each with your recommendation. Do not save a version, and say so, only when the idea
       collides with the profile or no data can found it: then the answer is «descartada» or «pendiente», with the
       reason and what would change it. Never change the profile yourself: that is the owner's decision.
-  A1. Retrieve before asking: `kb search` (research, evidence, strategy) and, for an existing strategy,
+  A1. In the clarify step (an ambiguous first message) do not retrieve: ask. Retrieve when searching, or when the
+      owner refers to earlier work: `kb search` (research, evidence, strategy) and, for an existing strategy,
       `project show strategy:<name>`. Existing proposals are antecedents, never assumed approved or deployed.
       In a Lab project, its research is the one `kb search` shows with `project` = this project; save it with a slug
       ending in the project name (`--slug <tema>-<proyecto con guiones>`). Research of another project, or of none,
