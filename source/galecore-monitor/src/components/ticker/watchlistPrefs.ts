@@ -58,8 +58,9 @@ export const moveSymbol = (list: Watchlist, symbol: string, group: string): Watc
 
 /** Nombre libre: «Grupo», «Grupo 2»… */
 export function createGroup(list: Watchlist, name = 'Grupo'): Watchlist {
+  const taken = new Set(list.groups.map(g => g.name));
   let candidate = name; let n = 2;
-  while (list.groups.some(g => g.name === candidate)) candidate = `${name} ${n++}`;
+  while (taken.has(candidate)) candidate = `${name} ${n++}`;
   return { ...list, groups: [...list.groups, { name: candidate, symbols: [] }] };
 }
 
