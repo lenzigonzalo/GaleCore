@@ -40,3 +40,25 @@ test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el per
  await new Promise(r=>setTimeout(r,50));
  assert.deepEqual(fs.readdirSync(codexHome),[]);  // el perfil del turno se borra al terminar
 });
+test('mapa de la idea: el Lab anota la página que tocó el turno y la sirve por secciones (WS-0039)',async t=>{
+ const {base,kb,local}=setup(t);const {EventEmitter}=require('events');
+ fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo');
+ const mem=path.join(kb,'workspaces/personal/memory');
+ fs.mkdirSync(mem,{recursive:true});fs.writeFileSync(path.join(mem,'mapa-vieja.md'),'# Vieja\n## Idea\nno\n');
+ const old=new Date(Date.now()-60000);fs.utimesSync(path.join(mem,'mapa-vieja.md'),old,old);
+ let write=true;
+ const spawnProcess=()=>{const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={end(){}};proc.kill=()=>{};
+  setImmediate(()=>{if(write)fs.writeFileSync(path.join(mem,'mapa-apple-earnings.md'),'# Earnings de Apple\n\n## Idea\nVender prima en el balance\n## Con qué datos\n- ✓ Balance 02/11\n- ✗ Comisiones\n');proc.emit('close',0);});return proc;};
+ const service=createWorkspaces({root:base,kb,local,binaries:{claude:'claude'},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
+ const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ assert.deepEqual((await route(service,'GET','/chats/'+chat.id+'/mapa')).value,{mapa:null});
+ await route(service,'POST','/chats/'+chat.id+'/messages',{text:'estrategia de earnings de Apple'});
+ await new Promise(r=>setTimeout(r,300));
+ const m=(await route(service,'GET','/chats/'+chat.id+'/mapa')).value.mapa;
+ assert.equal(m.path,'memory/mapa-apple-earnings.md');assert.equal(m.title,'Earnings de Apple');
+ assert.deepEqual(m.sections.map(s=>s.heading),['Idea','Con qué datos']);
+ assert.deepEqual(m.sections[1].lines,[{mark:'ok',text:'Balance 02/11'},{mark:'missing',text:'Comisiones'}]);
+ // Un turno que no toca el mapa conserva el último (la página vieja de otra idea no lo reemplaza).
+ write=false;await route(service,'POST','/chats/'+chat.id+'/messages',{text:'gracias'});await new Promise(r=>setTimeout(r,300));
+ assert.equal((await route(service,'GET','/chats/'+chat.id+'/mapa')).value.mapa.path,'memory/mapa-apple-earnings.md');
+});

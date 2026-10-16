@@ -48,6 +48,25 @@ function consumeEvent(chat, event, provider) {
     if(event.permission_denials?.length) chat.error='Una herramienta necesita permiso. Retomá en la terminal para autorizarla; este chat no omite permisos.';
   }
 }
+// Mapa de la idea (WS-0039): una página memory/mapa-<tema>.md que el agente reescribe en el turno. El Lab sólo anota
+// cuál tocó cada chat y la sirve separada en secciones; no hay otra llamada al modelo.
+const MAPA=/^mapa-[\w-]+\.md$/;
+function latestMapa(dir,since){
+  const mem=path.join(dir,'memory');if(!fs.existsSync(mem))return null;
+  const found=fs.readdirSync(mem).filter(f=>MAPA.test(f)).map(f=>({f,t:fs.statSync(path.join(mem,f)).mtimeMs})).filter(x=>x.t>=since).sort((a,b)=>b.t-a.t)[0];
+  return found?'memory/'+found.f:null;
+}
+function parseMapa(text){
+  let title='';const sections=[];
+  for(const raw of text.split(/\r?\n/)){const line=raw.trim();if(!line)continue;
+    if(/^# /.test(line)&&!title&&!sections.length){title=line.slice(2).trim();continue;}
+    if(/^## /.test(line)){sections.push({heading:line.slice(3).trim(),lines:[]});continue;}
+    if(!sections.length)continue;
+    const item=line.replace(/^[-*]\s+/,''),mark=/^✓/.test(item)?'ok':/^✗/.test(item)?'missing':null;
+    sections.at(-1).lines.push({mark,text:mark?item.slice(1).trim():item});
+  }
+  return {title,sections};
+}
 function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats');
   fs.mkdirSync(chatDir,{recursive:true});
@@ -179,9 +198,9 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // (knowledge/AGENTS.md) y las del proyecto (su AGENTS.md) las lee cada motor solo desde la carpeta.
     const product=fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8');
     const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' y, si el proyecto no es de estrategia, ofrecé abrir uno. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.';
-    const job={proc:null,project:p.id,chat};jobs.set(chat.id,job);let done=false;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
+    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' y, si el proyecto no es de estrategia, ofrecé abrir uno una sola vez por conversación. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.';
+    const job={proc:null,project:p.id,chat};jobs.set(chat.id,job);let done=false;const started=Date.now()-1000;
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide tools/caso.py, sea cual sea el motor
@@ -217,6 +236,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);
       if(req.method==='GET'&&parts.length===2){json(res,200,c);return true;}
+      if(req.method==='GET'&&parts[2]==='mapa'){
+        if(!c.mapa){json(res,200,{mapa:null});return true;}
+        const file=safeFile(project(c.project).dir,c.mapa);
+        json(res,200,{mapa:{path:c.mapa,updatedAt:fs.statSync(file).mtime.toISOString(),...parseMapa(fs.readFileSync(file,'utf8'))}});return true;}
       if(req.method==='POST'&&parts[2]==='messages'){const b=await readBody(req);const words=String(b.text||'').trim();if(!words||words.length>12000)throw fail('El mensaje debe tener entre 1 y 12000 caracteres.');
         // Adjuntos subidos antes a /workspaces/<id>/attachments: sólo rutas de adjuntos/ del proyecto, que existan.
         const dir=project(c.project).dir, files=(Array.isArray(b.attachments)?b.attachments:[]).slice(0,10).map(String);
@@ -229,4 +252,4 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
-module.exports={createWorkspaces,safeFile,tree,consumeEvent};
+module.exports={createWorkspaces,safeFile,tree,consumeEvent,parseMapa};
