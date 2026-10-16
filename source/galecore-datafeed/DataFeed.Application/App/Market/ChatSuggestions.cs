@@ -154,7 +154,7 @@ public static class ChatSuggestionsRules
             var threshold = q.Symbol == "VIX" ? VixThresholdPct : MoveThresholdPct;
             var hot = Math.Abs(pct) >= threshold;
             var asOf = q.Session == today ? "hoy" : q.Session is { } s ? "cierre del " + s.ToString("dd/MM", Es) : "";
-            var verb = pct >= 0 ? "sube" : "baja";
+            var verb = Math.Abs(pct) < 0.05 ? "sin cambios" : pct > 0 ? "sube" : "baja";
             scored.Add(((hot ? 2 : 0) + Math.Abs(pct) / threshold, new ChatSuggestion
             {
                 Id = "move-" + q.Symbol, Kind = "move", Title = q.Name + " " + verb, Value = Pct(pct),

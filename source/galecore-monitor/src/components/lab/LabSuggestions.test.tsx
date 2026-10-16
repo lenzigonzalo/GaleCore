@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { LabSuggestions, SUGGESTIONS_KEY } from './LabSuggestions';
+import { clearSuggestionsCache, LabSuggestions, SUGGESTIONS_KEY } from './LabSuggestions';
 import apiClient from '../../api/client';
 import { fetchSpace } from '../../api/space';
 jest.mock('../../api/client', () => ({ __esModule: true, default: { get: jest.fn() } }));
@@ -10,7 +10,7 @@ const spy = { id: 'move-SPY', kind: 'move', title: 'SPY baja', value: '−1,12 %
   question: 'SPY baja 1,12 % hoy: ayudame a entender qué está pasando.' };
 const pref = (enabled: boolean) => ({ kind: 'preference', key: SUGGESTIONS_KEY, title: '', content: JSON.stringify({ enabled }) });
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => { jest.clearAllMocks(); clearSuggestionsCache(); });
 
 test('sin preferencia están prendidas y un clic manda la pregunta', async () => {
   (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
@@ -19,6 +19,17 @@ test('sin preferencia están prendidas y un clic manda la pregunta', async () =>
   render(<LabSuggestions onPick={onPick}/>);
   fireEvent.click(await screen.findByRole('button', { name: /SPY baja/ }));
   expect(onPick).toHaveBeenCalledWith(spy.question);
+});
+
+test('volver a montarlas reusa la consulta', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
+  (apiClient.get as jest.Mock).mockResolvedValue({ data: { items: [spy] } });
+  const first = render(<LabSuggestions onPick={jest.fn()}/>);
+  await screen.findByRole('button', { name: /SPY baja/ });
+  first.unmount();
+  render(<LabSuggestions onPick={jest.fn()}/>);
+  await screen.findByRole('button', { name: /SPY baja/ });
+  expect(apiClient.get).toHaveBeenCalledTimes(1);
 });
 
 test('apagadas no consultan la API ni muestran nada', async () => {

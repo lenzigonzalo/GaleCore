@@ -21,6 +21,12 @@ test('la recomendada viene marcada y «Responder» manda la elección como mensa
   expect(screen.queryByRole('button', { name: 'Responder' })).not.toBeInTheDocument();
 });
 
+test('si el envío no sale, la tarjeta vuelve a habilitarse', async () => {
+  render(<LabChoices block={block} active onAnswer={() => Promise.resolve(false)} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Responder' }));
+  expect(await screen.findByRole('button', { name: 'Responder' })).toBeInTheDocument();
+});
+
 test('una tarjeta vieja o mientras responde no se puede usar', () => {
   render(<LabChoices block={block} active={false} onAnswer={jest.fn()} />);
   expect(screen.queryByRole('button', { name: 'Responder' })).not.toBeInTheDocument();

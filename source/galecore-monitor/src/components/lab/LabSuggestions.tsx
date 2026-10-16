@@ -15,6 +15,7 @@ export function suggestionsEnabled(item?: SpaceItem): boolean {
   try { return item ? JSON.parse(item.content).enabled !== false : true; } catch { return true; }
 }
 export async function saveSuggestionsEnabled(enabled: boolean): Promise<void> {
+  cached = null;
   await saveSpaceItem('preference', SUGGESTIONS_KEY, {
     title: 'Sugerencias en el chat nuevo', content: JSON.stringify({ enabled }), format: 'json', visibility: 'private',
   });
@@ -27,15 +28,30 @@ function Sparkline({ series }: { series: number[] }) {
   return <svg className="lab-suggestion-spark" viewBox="0 0 100 30" preserveAspectRatio="none" aria-hidden="true"><polyline points={points}/></svg>;
 }
 
+// El panel se monta cada vez que el chat queda vacío (Nuevo chat, cambio de proyecto) y la API tarda segundos en
+// armar las tarjetas: se reusa la misma consulta por dos minutos.
+const CACHE_MS = 120_000;
+let cached: { at: number; items: Promise<ChatSuggestion[]> } | null = null;
+export function clearSuggestionsCache() { cached = null; }
+
+function loadSuggestions(): Promise<ChatSuggestion[]> {
+  if (cached && Date.now() - cached.at < CACHE_MS) return cached.items;
+  const items = fetchSpace()
+    .then(space => suggestionsEnabled(space.items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY)))
+    .catch(() => true)
+    .then(enabled => enabled ? apiClient.get<{ items?: ChatSuggestion[] }>('/App/GaleCore/Lab/Suggestions', { timeout: 20_000 }) : null)
+    .then(r => r?.data?.items ?? []);
+  cached = { at: Date.now(), items };
+  items.catch(() => { cached = null; });
+  return items;
+}
+
 export function LabSuggestions({ onPick, disabled }: { onPick: (question: string) => void; disabled?: boolean }) {
   const [items, setItems] = useState<ChatSuggestion[]>([]);
   useEffect(() => {
     let active = true;
-    fetchSpace()
-      .then(space => suggestionsEnabled(space.items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY)))
-      .catch(() => true)
-      .then(enabled => enabled ? apiClient.get<{ items?: ChatSuggestion[] }>('/App/GaleCore/Lab/Suggestions', { timeout: 20_000 }) : null)
-      .then(r => { if (active && r) setItems(r.data?.items ?? []); })
+    loadSuggestions()
+      .then(list => { if (active) setItems(list); })
       .catch(() => { /* Sin sugerencias el chat nuevo sigue igual: no es un error para el trader. */ });
     return () => { active = false; };
   }, []);

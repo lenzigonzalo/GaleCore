@@ -15,7 +15,9 @@ export function parseChoices(raw: string): ChoiceBlock | null {
   } catch { return null; }
 }
 
-export function LabChoices({ block, active, onAnswer }: { block: ChoiceBlock; active: boolean; onAnswer?: (text: string) => void }) {
+export type AnswerHandler = (text: string) => boolean | void | Promise<boolean | void>;
+
+export function LabChoices({ block, active, onAnswer }: { block: ChoiceBlock; active: boolean; onAnswer?: AnswerHandler }) {
   const [picked, setPicked] = useState<string[][]>(() => block.preguntas.map(q => q.opciones.filter(o => o.recomendada).map(o => o.texto).slice(0, q.multiple ? undefined : 1)));
   const [sent, setSent] = useState(false);
   const toggle = (qi: number, texto: string, multiple?: boolean) => setPicked(all => all.map((sel, i) => i !== qi ? sel
@@ -26,12 +28,14 @@ export function LabChoices({ block, active, onAnswer }: { block: ChoiceBlock; ac
     if (!usable || !complete) return;
     const lines = block.preguntas.map((q, i) => q.pregunta.replace(/^¿|\?$/g, '') + ': ' + picked[i].join(', '));
     setSent(true);
-    onAnswer!([...lines, block.enviar].filter(Boolean).join('\n'));
+    // Si el envío no salió (red, chat ocupado), la tarjeta vuelve a habilitarse para reintentar.
+    Promise.resolve(onAnswer!([...lines, block.enviar].filter(Boolean).join('\n')))
+      .then(ok => { if (ok === false) setSent(false); }, () => setSent(false));
   };
   return <form className="lab-choices" onSubmit={e => { e.preventDefault(); answer(); }}>
     {block.preguntas.map((q, qi) => <fieldset key={qi} disabled={!usable}>
       <legend>{q.pregunta}</legend>
-      {q.opciones.map(o => <label key={o.texto} className={picked[qi].includes(o.texto) ? 'on' : ''}>
+      {q.opciones.map((o, oi) => <label key={oi}className={picked[qi].includes(o.texto) ? 'on' : ''}>
         <input type={q.multiple ? 'checkbox' : 'radio'} name={'q' + qi} checked={picked[qi].includes(o.texto)} onChange={() => toggle(qi, o.texto, q.multiple)} />
         <span>{o.texto}</span>{o.recomendada && <em>Recomendada</em>}
       </label>)}

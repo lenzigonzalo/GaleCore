@@ -204,13 +204,15 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   };
   const send = (e: React.FormEvent) => { e.preventDefault(); void submit(draft, true); };
   // Lo que escribió el trader o lo que eligió en una tarjeta de opciones (WS-0039): el mismo envío.
-  const submit = async (text: string, fromDraft: boolean) => {
-    if(!text.trim() || busy || (chatId && !chat) || chat?.state === 'running' || !project) return; setBusy(true); setError(''); const sendingSelection = selection.current;
+  // Devuelve si se envió: la tarjeta de opciones vuelve a habilitarse si no salió.
+  const submit = async (text: string, fromDraft: boolean): Promise<boolean> => {
+    if(!text.trim() || busy || (chatId && !chat) || chat?.state === 'running' || !project) return false; setBusy(true); setError(''); const sendingSelection = selection.current;
     try {
       const target = chat || await labRequest<WorkspaceChat>('/chats',{project:projectId,provider,...(state?.chatOptions?.[provider] ? chatSettings : {})});
       const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text,mode,attachments:fromDraft?attachments.map(a => a.path):[]}); if(fromDraft) setAttachments([]);
       if(sendingSelection === selection.current) { followBottom.current = true; setAwayFromBottom(false); setChatId(target.id); setChat(next); } if(fromDraft) setDrafts(v=>({...v,[draftKey]:''})); setExpanded(v=>({...v,[projectId]:true})); await refresh();
-    } catch(e) { setError(e instanceof Error ? e.message : 'No se pudo enviar el mensaje.'); }
+      return true;
+    } catch(e) { setError(e instanceof Error ? e.message : 'No se pudo enviar el mensaje.'); return false; }
     finally { setBusy(false); }
   };
   const openFile = async (path:string) => { const sequence = ++fileSequence.current; setFilePath(path); setFileText(''); setFileError(''); setFileLoading(true); try { const f = await labRequest<{text:string}>('/workspaces/' + projectId + '/files?path=' + encodeURIComponent(path)); if(sequence === fileSequence.current) setFileText(f.text); } catch(e) { if(sequence === fileSequence.current) setFileError(e instanceof Error ? e.message : 'Archivo no disponible.'); } finally { if(sequence === fileSequence.current) setFileLoading(false); } };
@@ -248,13 +250,13 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         followBottom.current = nearBottom; setAwayFromBottom(!nearBottom);
       }}>
         {!chat?.messages.length && <div className="lab-chat-welcome"><h1>{project?.type==='strategy' ? '¿Qué estrategia querés construir?' : project?.type==='personal' ? 'Tu espacio personal' : '¿Qué querés investigar?'}</h1>{project?.type==='strategy' && <p>De la idea a una estrategia lista para probar en Shadow.</p>}</div>}
-        {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>void submit(text,false)}/> : <div>{m.text}</div>}</article>)}
+        {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>submit(text,false)}/> : <div>{m.text}</div>}</article>)}
         {chat?.state==='running' && <div className="lab-chat-activity" role="status"><i/>{chat.activity || 'Pensando' }…</div>}
         {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}<button onClick={refresh}>Reintentar conexión</button></div>}
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
       {composerForm}
-      {!chat?.messages.length && !busy && <LabSuggestions disabled={chat?.state==='running'} onPick={question => void submit(question, false)}/>}
+      {!chat?.messages.length && !busy && !(chatId && !chat) && <LabSuggestions disabled={chat?.state==='running'} onPick={question => void submit(question, false)}/>}
       </div>
       {mapaOpen && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label="Ancho del mapa" aria-orientation="vertical" aria-valuemin={280} aria-valuemax={640} aria-valuenow={mapaWidth}
         title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"

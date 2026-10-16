@@ -1,13 +1,13 @@
 import React, { memo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { LabChoices, parseChoices } from './LabChoices';
+import { AnswerHandler, LabChoices, parseChoices } from './LabChoices';
 
 const CHOICES = /```opciones[ \t]*\r?\n([\s\S]*?)```/g;
 
 /** Renderiza la respuesta sin ejecutar HTML ni cargar imágenes externas del modelo. Un bloque ```opciones válido se
  *  muestra como preguntas para tildar; si no es válido, queda como texto. */
-export const LabMarkdown = memo(function LabMarkdown({ text, active = false, onAnswer }: { text: string; active?: boolean; onAnswer?: (text: string) => void }) {
+export const LabMarkdown = memo(function LabMarkdown({ text, active = false, onAnswer }: { text: string; active?: boolean; onAnswer?: AnswerHandler }) {
   const parts: React.ReactNode[] = [];
   let last = 0, n = 0;
   for (const m of Array.from(text.matchAll(CHOICES))) {
