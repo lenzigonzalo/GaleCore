@@ -2550,3 +2550,28 @@ y las que se sumen), sus posiciones y evaluaciones; chats y proyectos de prueba 
 
 **Aceptación:** inventario de lo que se borra revisado por el owner antes de borrar; en Dev primero; nada real ni de
 SHADOW productivo; producción sólo con aprobación explícita.
+
+## BL-030 — Gestor de riesgo integral
+
+**Origen:** owner, 16/10 (WS-0037), al ver dos topes distintos en un mismo caso: «el riesgo debería ser por cartera
+total y por estrategia [...] tenemos que tener una especie de gestor de riesgo que nos monitoree de forma integral todo
+[...] laburarlo como un punto en profundidad e importante». Retoma el «gestor de riesgo» del addendum 30/09 de BL-007 y
+cruza con BL-008 (cartera integral). **Prioridad: alta (owner); lugar en el plan, a decidir por el owner.**
+
+**Hoy hay tres juegos de topes que no se hablan** (verificado 16/10):
+
+| Dónde | Por operación | Total | Sobre qué |
+|---|---|---|---|
+| Perfil del trader v10 (GaleCore-AI) | 5 % | 50 % | Valor real de la cuenta (`netLiq`, owner 15/10) |
+| Reglas core de GaleCore (`galecore_rules_core.json`, `risk_limits`) | 1,5 % | 4,5 % («calor de cartera»), máx. 2 posiciones | Valor de la cuenta |
+| RPF (`galecore_rules_rpf.json`) | 3,5 % | 7 % | Valor de la cuenta |
+
+El modelo los muestra juntos y el trader no sabe cuál manda (caso `cuenta-real-codex`, 15/10: perfil 5 % y GaleCore 4,5 %).
+
+**Lo que tiene que resolver:** un solo lugar que defina y vigile el riesgo de la cuenta real y de SHADOW por separado
+(nunca se mezclan, `PRODUCT.md` «Límites»): tope total de la cartera, tope por estrategia (cada una con su presupuesto dentro del total), tope
+por operación y reserva para ajustes; qué tope manda cuando chocan; vigilancia continua (no sólo al preguntar) con aviso
+cuando algo se pasa, y vista en el front. Cálculo y vigilancia en GaleCore; criterio y explicación en GaleCore-AI.
+
+**Aceptación:** con la cartera real de hoy, una vista dice riesgo total contra tope, riesgo por estrategia contra su
+presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y el Inicio muestran lo mismo.
