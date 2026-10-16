@@ -1,4 +1,4 @@
-﻿using MediatR;
+using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using DataFeed.Application.Data.Tastytrade.MarketDataByType;
@@ -11,6 +11,7 @@ using DataFeed.Application.Data.Tastytrade.MarketDataTradeQuoteGreeks;
 using DataFeed.Application.Data.Tastytrade.AccountBalances;
 using DataFeed.Application.Data.Tastytrade.AccountPositions;
 using DataFeed.Application.Data.Tastytrade.AccountSpreads;
+using DataFeed.Application.Data.Tastytrade.EarningsHistory;
 using DataFeed.Application.Data.Tastytrade.MarketMetricsVolatility;
 using DataFeed.Application.Data.Tastytrade.SymbolSearch;
 using DataFeed.Application.Data.Fred.ReleaseDates;
@@ -99,6 +100,10 @@ namespace DataFeed.Controllers
         [Tags("Data.Api")]
         [HttpGet("Tastytrade/Market-metrics/VolatilityData")]
         public async Task<IActionResult> MarketMetricsVolatilityAsync([FromQuery] MarketMetricsVolatilityRequest request) => await Handle(request);
+
+        [Tags("Data.Api")]
+        [HttpGet("Tastytrade/Market-metrics/EarningsHistory")]
+        public async Task<IActionResult> EarningsHistoryAsync([FromQuery] EarningsHistoryRequest request) => await Handle(request);
 
         #endregion
 

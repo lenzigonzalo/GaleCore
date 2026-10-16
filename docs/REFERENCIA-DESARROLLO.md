@@ -247,6 +247,10 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
     sirven lo decide quien pregunta —GEX lo declara en su
     `universe.ad_hoc_search.allowed_instrument_types`—, porque el endpoint es de plataforma y lo
     consume cualquier pantalla. Hoy lo usa el buscador de símbolos de la pestaña GEX.
+    `VolatilityData` además de la volatilidad trae (WS-0042) `earnings` (próximo balance: fecha, `AMC`/`BMO`,
+    si está estimada, consenso de EPS; nulo en ETF), `sector`/`industry`, P/E y EPS, y el último ex-dividendo
+    (`dividendExDate`, no el próximo). `Tastytrade/Market-metrics/EarningsHistory?Symbol=` devuelve los balances
+    de los últimos 3 años (fecha y EPS reportado).
   * `Data.Stream` — datos vía socket/streaming: `Tastytrade/MarketData/{Candle,Trade,Quote,Greeks,TradeQuoteGreeks}`.
   * `Data.Account` — cuenta: `Tastytrade/Account/{Balances,Positions,Spreads}` (`Spreads`: las posiciones armadas
     como spreads con pérdida máxima, POP y griegas netas calculadas en la API; el Monitor sólo las muestra). Van con la credencial DEL

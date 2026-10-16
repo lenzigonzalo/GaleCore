@@ -94,6 +94,82 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade.Models
 
         [JsonPropertyName("option-expiration-implied-volatilities")]
         public List<ExpirationImpliedVolatility> ExpirationImpliedVolatilities { get; set; }
+
+        [JsonPropertyName("earnings")]
+        public MarketMetricsEarnings Earnings { get; set; }
+
+        [JsonPropertyName("sector")]
+        public string Sector { get; set; }
+
+        [JsonPropertyName("industry")]
+        public string Industry { get; set; }
+
+        [JsonPropertyName("listed-market")]
+        public string ListedMarket { get; set; }
+
+        [JsonPropertyName("earnings-per-share")]
+        public string EarningsPerShare { get; set; }
+
+        [JsonPropertyName("price-earnings-ratio")]
+        public string PriceEarningsRatio { get; set; }
+
+        [JsonPropertyName("dividend-ex-date")]
+        public string DividendExDate { get; set; }
+
+        [JsonPropertyName("dividend-pay-date")]
+        public string DividendPayDate { get; set; }
+
+        [JsonPropertyName("dividend-rate-per-share")]
+        public string DividendRatePerShare { get; set; }
+
+        [JsonPropertyName("dividend-yield")]
+        public string DividendYield { get; set; }
+    }
+
+    public class MarketMetricsEarnings
+    {
+        [JsonPropertyName("visible")]
+        public bool? Visible { get; set; }
+
+        [JsonPropertyName("expected-report-date")]
+        public string ExpectedReportDate { get; set; }
+
+        /// <summary>BMO (antes de la apertura), AMC (después del cierre) o similar.</summary>
+        [JsonPropertyName("time-of-day")]
+        public string TimeOfDay { get; set; }
+
+        [JsonPropertyName("estimated")]
+        public bool? Estimated { get; set; }
+
+        [JsonPropertyName("quarter-end-date")]
+        public string QuarterEndDate { get; set; }
+
+        [JsonPropertyName("consensus-estimate")]
+        public string ConsensusEstimate { get; set; }
+
+        [JsonPropertyName("actual-eps")]
+        public string ActualEps { get; set; }
+    }
+
+    public class EarningsReportsModel
+    {
+        [JsonPropertyName("data")]
+        public EarningsReportsData Data { get; set; }
+    }
+
+    public class EarningsReportsData
+    {
+        [JsonPropertyName("items")]
+        public List<EarningsReportItem> Items { get; set; }
+    }
+
+    public class EarningsReportItem
+    {
+        [JsonPropertyName("occurred-date")]
+        public string OccurredDate { get; set; }
+
+        [JsonPropertyName("eps")]
+        public string Eps { get; set; }
     }
 
     public class ExpirationImpliedVolatility
