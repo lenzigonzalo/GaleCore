@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import type { IChartApi, Time } from 'lightweight-charts';
 import { labRequest } from '../../api/lab';
 import './LabMapa.css';
+import '../shadow/PerformancePanel.css';
 
 // Mapa de la idea (WS-0039): lo escribe el agente en memory/mapa-<tema>.md y el Lab lo sirve por secciones.
-// El panel sólo lee: sin botones ni edición; se relee al abrir la conversación y al terminar cada respuesta.
-// WS-0044 (owner: tablero): arriba dónde estamos y qué falta, las cifras grandes y el gráfico de la evidencia con su fuente.
+// El panel sólo lee; se relee al abrir la conversación y al terminar cada respuesta.
+// Owner 17/10: se ve como la solapa Diseño de Estrategias — hipótesis, objetivo, las reglas por bloque en las mismas
+// tablas, los datos como la solapa Datos y la evidencia con sus gráficos. Lo que todavía no se habló queda vacío.
 export interface MapaLine { mark: 'ok' | 'missing' | null; text: string }
 export interface MapaChart { fuente?: string; unidad?: string; corte?: string; calculo?: string; series: { nombre: string; puntos: [string, number][] }[] }
-export interface MapaSection { heading: string; lines: MapaLine[]; chart?: MapaChart }
+export interface MapaSection { heading: string; lines: MapaLine[]; chart?: MapaChart; table?: { head: string[]; rows: string[][] } }
 export interface Mapa { path: string; updatedAt: string; title: string; intro?: string[]; sections: MapaSection[] }
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -53,7 +55,26 @@ function Numeros({ lines }: { lines: MapaLine[] }) {
   })}</div>;
 }
 
-export function LabMapa({ chatId, running }: { chatId: string | null; running: boolean }) {
+// Las secciones del diseño, en el orden de la solapa Diseño; Datos y Evidencia al final.
+const STATEMENTS = ['Hipótesis', 'Objetivo'];
+const RULES = ['Entrada', 'Construcción', 'Gestión', 'Salida', 'Riesgo y tamaño'];
+const RULE_HEAD = ['Concepto', 'Condición', 'Umbral', 'Acción'];
+const DATA_HEAD = ['Dato', 'Para qué', 'Fuente', 'Historia'];
+const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+// «valor · qué es» con un valor corto que lleva cifras = número grande de la evidencia.
+const isNumber = (t: string) => { const [v, ...rest] = t.split('·'); return rest.length > 0 && /\d/.test(v) && v.trim().length <= 24; };
+
+function DesignTable({ title, head, section, strategy }: { title: string; head: string[]; section?: MapaSection; strategy: boolean }) {
+  if (!section && !strategy) return null;
+  const rows = section?.table?.rows || [], columns = section?.table?.head?.length ? section.table.head : head;
+  return <section className="algorithm-section lab-mapa-block"><h3>{title}</h3>
+    {rows.length ? <table><thead><tr>{columns.map(c => <th key={c}>{c}</th>)}</tr></thead><tbody>{rows.map((r, i) => <tr key={i}>{columns.map((_, j) => <td key={j}>{r[j] || '—'}</td>)}</tr>)}</tbody></table>
+      : section?.lines.length ? section.lines.map((l, i) => <p key={i}>{l.text}</p>)
+      : <p className="lab-mapa-blank">Sin definir todavía</p>}
+  </section>;
+}
+
+export function LabMapa({ chatId, running, strategy = false }: { chatId: string | null; running: boolean; strategy?: boolean }) {
   const [mapa, setMapa] = useState<Mapa | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>(() => (chatId ? 'loading' : 'ready'));
   const shown = useRef<string | null>(null);
@@ -77,20 +98,22 @@ export function LabMapa({ chatId, running }: { chatId: string | null; running: b
       : !mapa ? <p className="lab-mapa-empty">El mapa aparece cuando la conversación arma una idea.</p>
       : <>
         <header><h2>{mapa.title || 'Idea'}</h2><span>{running ? 'Actualizando…' : 'Actualizado ' + time(mapa.updatedAt)}{state === 'error' ? ' · no se pudo releer' : ''}</span></header>
-        {mapa.intro && mapa.intro.length > 0 && <div className="lab-mapa-intro">{mapa.intro.map((l, i) => {
-          const [k, ...rest] = l.split(':');
-          return rest.length ? <p key={i}><b>{k.trim()}:</b> {rest.join(':').trim()}</p> : <p key={i}>{l}</p>;
-        })}</div>}
-        <div className="lab-mapa-cells">
-          {mapa.sections.map(s => <section key={s.heading} className={'lab-mapa-cell' + (/falta decidir|próxima decisión/i.test(s.heading) ? ' open' : '')}>
-            <h3>{s.heading}</h3>
-            {s.chart && <MapaChartView chart={s.chart} label={s.heading} />}
-            {/^números/i.test(s.heading) ? <Numeros lines={s.lines} />
-              : s.lines.some(l => l.mark) || s.lines.length > 2
-              ? <ul>{s.lines.map((l, i) => <li key={i} className={l.mark || ''}><span aria-hidden="true">{l.mark === 'ok' ? '✓' : l.mark === 'missing' ? '✗' : '·'}</span><span>{l.mark === 'missing' && <span className="sr-only">Falta: </span>}{l.text}</span></li>)}</ul>
-              : s.lines.map((l, i) => <p key={i}>{l.text}</p>)}
-          </section>)}
-        </div>
+        {(() => {
+          const find = (name: string) => mapa.sections.find(x => norm(x.heading) === norm(name));
+          const known = [...STATEMENTS, ...RULES, 'Datos', 'Evidencia'].map(norm);
+          const evidence = [find('Evidencia'), ...mapa.sections.filter(x => !known.includes(norm(x.heading)))].filter((x): x is MapaSection => !!x);
+          return <div className="algorithm-design lab-mapa-design">
+            {STATEMENTS.map(name => { const sec = find(name); return (sec || strategy) && <section key={name} className="lab-mapa-statement"><h3>{name}</h3>{sec?.lines.length ? sec.lines.map((l, k) => <p key={k}>{l.text}</p>) : <p className="lab-mapa-blank">Sin definir todavía</p>}</section>; })}
+            {RULES.map(name => <DesignTable key={name} title={name} head={RULE_HEAD} section={find(name)} strategy={strategy}/>)}
+            <DesignTable title="Datos" head={DATA_HEAD} section={find('Datos')} strategy={strategy}/>
+            {evidence.map(sec => <section key={sec.heading} className="lab-mapa-block lab-mapa-evidence"><h3>{sec.heading}</h3>
+              {sec.lines.some(l => isNumber(l.text)) && <Numeros lines={sec.lines.filter(l => isNumber(l.text))}/>}
+              {sec.chart && <MapaChartView chart={sec.chart} label={sec.heading}/>}
+              {sec.table && <table><thead><tr>{sec.table.head.map(c => <th key={c}>{c}</th>)}</tr></thead><tbody>{sec.table.rows.map((r, k) => <tr key={k}>{sec.table!.head.map((_, m) => <td key={m}>{r[m] || '—'}</td>)}</tr>)}</tbody></table>}
+              {sec.lines.filter(l => !isNumber(l.text)).map((l, k) => <p key={k}>{l.text}</p>)}
+            </section>)}
+          </div>;
+        })()}
       </>}
   </aside>;
 }

@@ -25,3 +25,14 @@
 .lab-mapa-chart > div { height:200px; }
 .lab-mapa-chart figcaption { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:6px; font-size:13px; }
 .lab-mapa-source { margin-left:auto; color:var(--text-secondary); }
+/* El mapa como la solapa Diseño (owner 17/10) */
+.lab-mapa-design { display:grid; gap:22px; padding:16px 20px 28px; }
+.lab-mapa-design h3 { margin:0 0 8px; font-size:15px; font-weight:600; color:var(--text-primary); }
+.lab-mapa-design p { margin:0; font-size:14.5px; line-height:1.55; color:var(--text-secondary); }
+.lab-mapa-design p + p { margin-top:4px; }
+.lab-mapa-statement p { color:var(--text-primary); font-size:15px; }
+.lab-mapa-design .algorithm-section + .algorithm-section { margin-top:0; }
+.lab-mapa-design td:first-child { width:auto; }
+.lab-mapa-blank { color:var(--text-disabled)!important; font-size:14px!important; }
+.lab-mapa-evidence { display:grid; gap:10px; }
+.lab-mapa-evidence table { width:100%; border-collapse:collapse; font-size:14px; }

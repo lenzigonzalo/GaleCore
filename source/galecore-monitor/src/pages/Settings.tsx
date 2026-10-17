@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, BookOpen, Brain, Database, FileText, Lock, Plug, Scale, Target, User, Users } from 'lucide-react';
+import { Bell, BookOpen, Brain, Database, FileText, Lock, Plug, Power, Scale, Target, User, Users } from 'lucide-react';
 import { Connections } from '../components/settings/Connections';
+import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
 import { LocalMcp } from '../components/settings/LocalMcp';
 import { localMcpAvailable } from '../api/localMcp';
@@ -28,7 +29,7 @@ import {
  * El estado vive en esta pantalla (no en un store de módulo): muere con la sesión, como pide la regla de la persona.
  */
 export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'perfil' | 'objetivos' | 'convenciones' | 'memoria' | 'skills'
-  | 'agentes' | 'datos' | 'compartido' | 'avisos';
+  | 'agentes' | 'datos' | 'compartido' | 'avisos' | 'servicios';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
   { group: 'General', items: [{ id: 'usuario', label: 'Usuario', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }] },
@@ -36,6 +37,7 @@ const NAV: { group: string; items: { id: Section; label: string; Icon: React.Com
   { group: 'Mi trading', items: [{ id: 'perfil', label: 'Perfil y límites', Icon: Scale }, { id: 'objetivos', label: 'Objetivos', Icon: Target }, { id: 'convenciones', label: 'Convenciones', Icon: FileText }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Conocimiento', items: [{ id: 'memoria', label: 'Memoria', Icon: Brain }, { id: 'skills', label: 'Métodos y skills', Icon: BookOpen }, { id: 'datos', label: 'Fuentes', Icon: Database }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
+  { group: 'Plataforma', items: [{ id: 'servicios', label: 'Servicios', Icon: Power }] },
 ];
 
 const SECTION_KIND: Partial<Record<Section, SpaceKind>> = {
@@ -45,6 +47,7 @@ const SECTION_KIND: Partial<Record<Section, SpaceKind>> = {
 
 const INTRO: Partial<Record<Section, string>> = {
   perfil: 'Lo que GaleCore-AI tiene en cuenta en cada respuesta: tu capital, horizonte y límites de riesgo.',
+  servicios: 'Los servicios que corren solos para toda la plataforma. Las estrategias se prenden en su ficha de Estrategias y las tareas en Agentes.',
   objetivos: 'Qué querés lograr. GaleCore-AI los usa para priorizar y para decir si algo te acerca o no.',
   convenciones: 'Cómo trabajás y qué no se hace. Valen para todo lo que GaleCore-AI arma para vos.',
   memoria: 'Lo que GaleCore-AI tiene que recordar entre sesiones. También se agrega desde el chat («acordate de…»).',
@@ -284,6 +287,8 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
         </label>
       </div>
     );
+  } else if (section === 'servicios') {
+    body = <PlatformServices />;
   } else if (section === 'contrasena') {
     body = <div style={card}><MyPasswordCard embedded /></div>;
   } else if (section === 'broker') {
@@ -317,7 +322,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
   const group = NAV.find(group => group.items.some(item => item.id === section)) || NAV[0];
   const changeStep = (next: number) => { setStep(next); setSection((['conexiones', 'perfil', 'datos'] as Section[])[next]); };
   return <div className={'settings-page' + (wizard ? ' settings-wizard' : '')}>
-    <aside className="settings-nav" aria-label="Secciones de configuración">{wizard ? <ol>{['Conectar la IA', 'Tu perfil', 'Fuentes'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined}>{index + 1}. {label}</li>)}</ol> : NAV.map(group => <button key={group.group} onClick={() => setSection(group.items[0].id)} className={group.items.some(item => item.id === section) ? 'is-selected' : ''} aria-current={group.items.some(item => item.id === section) ? 'page' : undefined}>{group.group}</button>)}</aside>
+    <aside className="settings-nav" aria-label="Secciones de configuración">{wizard ? <ol>{['Conectar la IA', 'Tu perfil', 'Fuentes'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined}>{index + 1}. {label}</li>)}</ol> : NAV.filter(group => group.group !== 'Plataforma' || user?.isAdmin).map(group => <button key={group.group} onClick={() => setSection(group.items[0].id)} className={group.items.some(item => item.id === section) ? 'is-selected' : ''} aria-current={group.items.some(item => item.id === section) ? 'page' : undefined}>{group.group}</button>)}</aside>
     <main className="settings-main"><h1>{wizard ? ['Conectar la IA', 'Tu perfil', 'Fuentes'][step] : group.group}</h1>
       {!wizard && group.items.length > 1 && <nav className="settings-subsections" aria-label={group.group}>{group.items.map(item => <button key={item.id} aria-current={section === item.id ? 'page' : undefined} onClick={() => setSection(item.id)}>{item.label}</button>)}</nav>}
       {INTRO[section] && <p>{INTRO[section]}</p>}

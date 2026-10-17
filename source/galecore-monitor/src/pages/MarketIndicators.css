@@ -24,3 +24,5 @@
 .market-workspace .gex-group-label { color:var(--text-primary)!important; letter-spacing:0!important; text-transform:none!important; font-size:16px!important; }
 .market-workspace .gex-metrics-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr))!important; gap:12px!important; }
 @media(max-width:600px) { .market-symbol-header { padding:16px; } .market-symbol-price > strong { font-size:30px; } .market-indicator-tabs { margin:0 16px 16px; gap:20px; } .market-quote-detail { gap:8px 14px; } .market-gamma-chart { flex-direction:column; height:auto!important; } .market-gamma-chart > div:first-child { width:100%!important; max-height:240px; } .market-gamma-chart > div:last-child { height:450px; flex:none!important; width:100%; } }
+.market-indicator-tabs .market-indicator-help { margin-left:auto; display:grid; place-items:center; color:var(--text-muted); }
+.market-indicator-tabs .market-indicator-help:hover { color:var(--text-primary); }

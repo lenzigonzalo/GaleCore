@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, BookOpen, Crosshair } from 'lucide-react';
+import { RefreshCw, Crosshair, HelpCircle } from 'lucide-react';
 import { MarketWatchlist } from '../components/ticker/MarketWatchlist';
 import { TickerGrid } from '../components/ticker/TickerGrid';
 import { SymbolSearchCard } from '../components/ticker/SymbolSearchCard';
@@ -10,7 +10,6 @@ import { CHAIN_COL_W } from '../components/gex/graphLayout';
 import { ExpiryEngine } from '../components/gex/ExpiryEngine';
 import { fetchMarketSummary, MarketSummary } from '../api/marketdata';
 import { GexChart } from '../components/chart/GexChart';
-import { StrategySwitch } from '../components/common/StrategySwitch';
 import { StrategyOffPanel } from '../components/common/StrategyOffPanel';
 import { ReferencesModal } from '../components/common/ReferencesModal';
 import { getStrategyReference } from '../components/strategy/strategyReferences';
@@ -262,32 +261,15 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
 
   return (
     <div className={'market-workspace' + (compact ? ' market-workspace-compact' : '')}><div className="market-analysis">
-<header className="market-symbol-header"><div className="market-symbol-price"><span className="market-active-symbol">{active || "Mercado"}</span><strong>{hasPrice ? fmtPrice(ticker!.price) : "—"}</strong><span className={change && change.abs !== 0 ? (change.abs > 0 ? "market-up" : "market-down") : "market-neutral"}>{change ? (change.abs > 0 ? "+" : "")+fmtPrice(change.abs)+" ("+fmtPct(change.pct)+")" : ""}</span></div>        <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-          <button
-            onClick={() => setRefOpen(true)}
-            title="Definiciones de la estrategia + JSON de reglas"
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: 6,
-              background: 'none', border: '1px solid var(--border)', cursor: 'pointer',
-              fontSize: 14, fontWeight: 500,
-              color: 'var(--text-secondary)', fontFamily: 'var(--font-sans)',
-            }}
-          >
-            <BookOpen size={12} /> Referencias
-          </button>
-          <StrategySwitch
-            endpoint={switchEndpoint}
-            title="Prender / apagar el barrido de la cadena. En OFF no se toca DXLink."
-          />
-        </span>
-<div className="market-quote-detail"><span>Bid <b>{ticker?.bid && ticker.bid > 0 ? fmtPrice(ticker.bid) : "—"}</b></span><span>Ask <b>{ticker?.ask && ticker.ask > 0 ? fmtPrice(ticker.ask) : "—"}</b></span><span>Volumen <b>{volume}</b></span><span>Máx. <b>{summary?.high != null ? fmtPrice(summary.high) : "—"}</b></span><span>Mín. <b>{summary?.low != null ? fmtPrice(summary.low) : "—"}</b></span><span>Cierre anterior <b>{summary?.prevClose != null ? fmtPrice(summary.prevClose) : "—"}</b></span><span>{ticker?.lastUpdate ? "Actualizado "+fmtTime(ticker.lastUpdate)+" ET" : "Sin cotización"}</span></div>{ticker?.error.price && <p className="market-price-error" role="status">{ticker.error.price}</p>}</header>
-<nav className="market-indicator-tabs" aria-label="Indicadores de mercado">{([{id:"price",label:"Precio"},{id:"gamma",label:"Gamma"},{id:"iv",label:"IV y volatilidad"}] as const).map(item => <button key={item.id} aria-pressed={indicator===item.id} onClick={()=>setIndicator(item.id)}>{item.label}</button>)}</nav>
+<header className="market-symbol-header"><div className="market-symbol-price"><span className="market-active-symbol">{active || "Mercado"}</span><strong>{hasPrice ? fmtPrice(ticker!.price) : "—"}</strong><span className={change && change.abs !== 0 ? (change.abs > 0 ? "market-up" : "market-down") : "market-neutral"}>{change ? (change.abs > 0 ? "+" : "")+fmtPrice(change.abs)+" ("+fmtPct(change.pct)+")" : ""}</span></div><div className="market-quote-detail"><span>Bid <b>{ticker?.bid && ticker.bid > 0 ? fmtPrice(ticker.bid) : "—"}</b></span><span>Ask <b>{ticker?.ask && ticker.ask > 0 ? fmtPrice(ticker.ask) : "—"}</b></span><span>Volumen <b>{volume}</b></span><span>Máx. <b>{summary?.high != null ? fmtPrice(summary.high) : "—"}</b></span><span>Mín. <b>{summary?.low != null ? fmtPrice(summary.low) : "—"}</b></span><span>Cierre anterior <b>{summary?.prevClose != null ? fmtPrice(summary.prevClose) : "—"}</b></span><span>{ticker?.lastUpdate ? "Actualizado "+fmtTime(ticker.lastUpdate)+" ET" : "Sin cotización"}</span></div>{ticker?.error.price && <p className="market-price-error" role="status">{ticker.error.price}</p>}</header>
+{/* Owner 17/10: el ON/OFF del barrido pasó a Configuración → Plataforma; las definiciones, a un «?» junto a los indicadores. */}
+<nav className="market-indicator-tabs" aria-label="Indicadores de mercado">{([{id:"price",label:"Precio"},{id:"gamma",label:"Gamma"},{id:"iv",label:"IV y volatilidad"}] as const).map(item => <button key={item.id} aria-pressed={indicator===item.id} onClick={()=>setIndicator(item.id)}>{item.label}</button>)}{GEX_REF && <button className="market-indicator-help" aria-label="Qué es cada indicador" title="Qué es cada indicador" onClick={() => setRefOpen(true)}><HelpCircle size={17}/></button>}</nav>
 
       {GEX_REF && (
         <ReferencesModal
           open={refOpen}
           onClose={() => setRefOpen(false)}
-          title="GEX · Referencias"
+          title="Qué es cada indicador"
           accentColor={GEX_REF.accentColor}
           definitions={GEX_REF.definitions}
           fetchJson={GEX_REF.fetchJson}
