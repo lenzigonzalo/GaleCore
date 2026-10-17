@@ -974,6 +974,8 @@ def test_capital_sizes_each_strategy_with_its_own_amount(kb, research_ref):  # n
     asked = []
 
     def read(path):
+        if path == "/App/Runtime/Instances":   # which version runs (none here)
+            return []
         asked.append(path)
         return exposure() if path.startswith("/App/Runtime/Exposure") else allocation()
     out = capital.report(kb, read)

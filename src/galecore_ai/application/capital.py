@@ -276,19 +276,35 @@ def real_account(kb: KnowledgeBase, read: supervisor.Reader, *, width: float | N
     return out
 
 
-def _simulated_amounts(kb: KnowledgeBase, names: list[str]) -> dict[str, dict]:
-    """The amount each strategy simulates with, from its latest *approved* version (what SHADOW runs); a later draft
-    does not move it. With no approved version, the latest saved one, said as a draft. `monto` None: not declared."""
+def _simulated_amounts(kb: KnowledgeBase, names: list[str], running: set[str] | None = None) -> dict[str, dict]:
+    """The amount each strategy simulates with, from the version SHADOW is running (its hash among `running`, the
+    RUNNING instances of GaleCore); with none running, the latest *approved* one (a newer approval or a later draft
+    does not move what runs). With no approved version, the latest saved one, said as a draft. `monto` None: not
+    declared."""
     out: dict[str, dict] = {}
     for name in names:
         keys = sorted((k for k in kb.strategies.versions() if k.split("/")[0] == name),
                       key=lambda k: tuple(int(x) for x in k.split("/")[1].split(".")))
+        docs = {k: kb.strategies.load(k) for k in keys}
+        live = [k for k in keys if docs[k] and docs[k].spec_hash in (running or set())]
         approved = [k for k in keys if kb.strategies.load_approval(k)]
-        key = approved[-1] if approved else keys[-1] if keys else None
-        doc = kb.strategies.load(key) if key else None
-        out[name] = {"version": key.split("/")[1] if key else None, "aprobada": bool(approved),
-                     "monto": doc.content.simulated_amount_usd if doc else None}
+        key = live[-1] if live else approved[-1] if approved else keys[-1] if keys else None
+        doc = docs.get(key) if key else None
+        out[name] = {"version": key.split("/")[1] if key else None, "aprobada": bool(live or approved),
+                     "corriendo": bool(live), "monto": doc.content.simulated_amount_usd if doc else None}
     return out
+
+
+def _running_hashes(read: supervisor.Reader) -> set[str] | None:
+    """Hashes of the versions SHADOW is running; None when GaleCore does not say (then the latest approved stands)."""
+    try:
+        instances = read("/App/Runtime/Instances")
+    except Exception:  # noqa: BLE001 - without it the approved version is the best guess, said in `corriendo`
+        return None
+    if not isinstance(instances, list):
+        return None
+    return {i.get("versionHash", "") for i in instances
+            if i.get("mode") == "SHADOW" and i.get("lifecycleState") == "RUNNING"}
 
 
 def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None = None,
@@ -300,7 +316,7 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None 
     if capital is not None and capital <= 0:
         raise supervisor.SupervisorError("el capital debe ser > 0")
     names = strategies or sorted({k.split("/")[0] for k in kb.strategies.versions()})
-    amounts = _simulated_amounts(kb, names)   # WS-0043 (1e): what is simulated is sized with its own amount
+    amounts = _simulated_amounts(kb, names, _running_hashes(read))   # WS-0043 (1e): sized with its own amount
     sized = {n: a["monto"] for n, a in amounts.items() if a["monto"] is not None}
     whatif = capital is not None
     # The reference capital is the real account's: simulated amounts do not need it (only a what-if or no amounts do).
@@ -341,5 +357,6 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None 
     return {"al": exp.get("asOf"), "limites": lim, "disponible": available(exp), "concentracion": concentration(exp),
             "reparto": repartos[0] if whatif else repartos, "faltantes": missing,
             "montos_simulados": [{"estrategia": n, "version": a["version"], "aprobada": a["aprobada"],
-                                  "monto_usd": a["monto"]} for n, a in sorted(amounts.items())],
+                                  "corriendo": a["corriendo"], "monto_usd": a["monto"]}
+                                 for n, a in sorted(amounts.items())],
             "fuente": "GaleCore GET /App/Runtime/Exposure y /App/Runtime/Allocation; " + source}

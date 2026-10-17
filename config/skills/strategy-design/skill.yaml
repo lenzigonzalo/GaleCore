@@ -132,6 +132,7 @@ system_prompt: >
 
 instructions: |
   Chain (one strategy, A -> B). Content goes on stdin as JSON; every command prints structured JSON.
+    schema proposal | critique | research                 -> the exact JSON each save takes (never read the source code)
     strategy check --spec <file> < {content}               -> {verdict, design_gaps}   (repeat until no gaps)
     strategy save --spec <file> --prompt "..." < {content, host_provider, host_model}   -> {ref: strategy:<name>/<ver>, spec_hash, check}
     strategy critique --ref <ref> < {content: {verdict, missing, biases, alternative_explanation, why_not,

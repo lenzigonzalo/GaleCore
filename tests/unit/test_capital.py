@@ -111,6 +111,8 @@ def test_report_passes_the_profile_percentages_and_the_amount(kb):  # noqa: F811
     asked = []
 
     def read(path):
+        if path == "/App/Runtime/Instances":   # which version runs (none here)
+            return []
         asked.append(path)
         return exposure() if path.startswith("/App/Runtime/Exposure") else allocation(fits=False)
 
@@ -206,8 +208,9 @@ def test_complete_account_within_both_caps_says_so(kb):  # noqa: F811
 
 
 class _Doc:
-    def __init__(self, amount):
+    def __init__(self, amount, spec_hash=""):
         self.content = type("C", (), {"simulated_amount_usd": amount})()
+        self.spec_hash = spec_hash
 
 
 class _Store:
@@ -230,10 +233,26 @@ def test_simulated_amount_comes_from_the_approved_version_not_a_later_draft():
             "b/1.0.0": _Doc(2000.0), "c/1.0.0": _Doc(3000.0)}     # several strategies, different amounts
     fake = type("KB", (), {"strategies": _Store(docs, {"a/1.0.3", "b/1.0.0"})})()
     out = capital._simulated_amounts(fake, ["a", "old", "b", "c", "none"])
-    assert out["a"] == {"version": "1.0.3", "aprobada": True, "monto": 4000.0}
+    assert out["a"] == {"version": "1.0.3", "aprobada": True, "corriendo": False, "monto": 4000.0}
     assert out["old"]["monto"] is None and out["b"]["monto"] == 2000.0
-    assert out["c"] == {"version": "1.0.0", "aprobada": False, "monto": 3000.0}   # only a draft: said as such
-    assert out["none"] == {"version": None, "aprobada": False, "monto": None}
+    assert out["c"] == {"version": "1.0.0", "aprobada": False, "corriendo": False, "monto": 3000.0}   # a draft
+    assert out["none"] == {"version": None, "aprobada": False, "corriendo": False, "monto": None}
+
+
+def test_simulated_amount_comes_from_the_version_shadow_runs_not_a_newer_approval():
+    # Batería 17/10 (revisión de Codex): 1.0.1 approved after 1.0.0 was deployed; SHADOW still runs 1.0.0.
+    docs = {"a/1.0.0": _Doc(4000.0, "sha256:old"), "a/1.0.1": _Doc(9000.0, "sha256:new")}
+    fake = type("KB", (), {"strategies": _Store(docs, {"a/1.0.0", "a/1.0.1"})})()
+    out = capital._simulated_amounts(fake, ["a"], running={"sha256:old"})
+    assert out["a"] == {"version": "1.0.0", "aprobada": True, "corriendo": True, "monto": 4000.0}
+    assert capital._simulated_amounts(fake, ["a"], running=set())["a"]["version"] == "1.0.1"   # none running
+
+
+def test_running_hashes_are_the_running_shadow_instances():
+    rows = [{"mode": "SHADOW", "lifecycleState": "RUNNING", "versionHash": "h1"},
+            {"mode": "SHADOW", "lifecycleState": "STOPPED", "versionHash": "h2"}]
+    assert capital._running_hashes(lambda path: rows) == {"h1"}
+    assert capital._running_hashes(lambda path: (_ for _ in ()).throw(RuntimeError("down"))) is None
 
 
 def test_report_sized_by_declared_amounts_does_not_need_the_real_accounts_reference_capital(kb):  # noqa: F811
@@ -243,6 +262,8 @@ def test_report_sized_by_declared_amounts_does_not_need_the_real_accounts_refere
     asked = []
 
     def read(path):
+        if path == "/App/Runtime/Instances":   # which version runs (none here)
+            return []
         asked.append(path)
         return exposure() if path.startswith("/App/Runtime/Exposure") else allocation()
 

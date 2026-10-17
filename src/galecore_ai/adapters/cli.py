@@ -303,8 +303,8 @@ async def _cmd_accept(args: argparse.Namespace) -> None:
         request = AcceptanceRequest(
             run_id=payload["run_id"],
             interpretation=payload["interpretation"],
-            host_provider=payload.get("host_provider"),
-            host_model=payload.get("host_model"),
+            host_provider=_declared(payload, "host_provider"),
+            host_model=_declared(payload, "host_model"),
         )
     except (ValueError, TypeError, KeyError) as exc:
         _error_out(f"Invalid acceptance request: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
@@ -432,14 +432,40 @@ def _read_research_request() -> tuple[ResearchContent, RecordHost]:
         _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
         raise AssertionError("unreachable") from exc
     if not isinstance(payload, dict) or "content" not in payload:
-        _error_out("Input must be a JSON object with a 'content' key", exit_code=_EXIT_VALIDATION_ERROR)
+        _error_out("Input must be a JSON object with a 'content' key (see `schema <kind>`)",
+                   exit_code=_EXIT_VALIDATION_ERROR)
     try:
         content = ResearchContent.model_validate(payload["content"])
     except ValueError as exc:
         _error_out(f"Invalid research content: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
         raise AssertionError("unreachable") from exc
-    host = RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model"))
+    host = RecordHost(provider=_declared(payload, "host_provider"), model=_declared(payload, "host_model"))
     return content, host
+
+
+def _declared(payload: dict, key: str):
+    """Who wrote it (batería 17/10: a model declared «gpt-6» running as gpt-6.1-sol): the Lab knows the engine and
+    model it launched and passes them; that wins over what the host types. Without the Lab, the declared value."""
+    return os.environ.get({"host_model": "GALECORE_HOST_MODEL", "host_provider": "GALECORE_HOST_PROVIDER"}[key])         or payload.get(key)
+
+
+def _cmd_schema(args: argparse.Namespace) -> None:
+    """What goes on stdin for each save, from the same contracts that validate it (batería 17/10: GC15 read the
+    source code to learn it). References in `sources`/`antecedents`: regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>,
+    evidence:<id> (`galecore get … --keep`), strategy:<name>/<version>, profile:v<N>, feedback:<id>, project:<name>."""
+    from galecore_ai.contracts.strategy import CritiqueContent
+    model = {"research": ResearchContent, "evidence": EvidenceContent, "proposal": ProposalContent,
+             "critique": CritiqueContent}[args.kind]
+    _json_out({"stdin": {"content": "<este esquema>", "host_provider": "opcional", "host_model": "opcional"},
+               "referencias": "regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id> (galecore get … --keep), "
+                              "strategy:<name>/<version>, profile:v<N>, feedback:<id>, project:<name>",
+               "spec": "strategy save --spec: partí de un spec existente (`kb show strategy:<name>/<version>`, "
+                       "campo spec_json)" if args.kind == "proposal" else None,
+               "ademas": ["antecedents incluye el perfil vigente (profile:vN, de `profile show`)",
+                          "al menos una limitación en limitations",
+                          "status open o test_planned: al menos un next_step; test_planned además hypothesis y test_plan"]
+                         if args.kind == "research" else None,
+               "schema": model.model_json_schema()})
 
 
 def _read_evidence_request() -> tuple[EvidenceContent, RecordHost]:
@@ -449,13 +475,14 @@ def _read_evidence_request() -> tuple[EvidenceContent, RecordHost]:
         _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
         raise AssertionError("unreachable") from exc
     if not isinstance(payload, dict) or "content" not in payload:
-        _error_out("Input must be a JSON object with a 'content' key", exit_code=_EXIT_VALIDATION_ERROR)
+        _error_out("Input must be a JSON object with a 'content' key (see `schema <kind>`)",
+                   exit_code=_EXIT_VALIDATION_ERROR)
     try:
         content = EvidenceContent.model_validate(payload["content"])
     except ValueError as exc:
         _error_out(f"Invalid evidence content: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
         raise AssertionError("unreachable") from exc
-    host = RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model"))
+    host = RecordHost(provider=_declared(payload, "host_provider"), model=_declared(payload, "host_model"))
     return content, host
 
 
@@ -583,7 +610,7 @@ async def _cmd_kb_mark(args: argparse.Namespace) -> None:
     try:
         document, path = save_mark(kb=kb, slug=args.slug, ref=args.ref, mark=MarkKind(args.mark), reason=args.reason,
                                    by=args.by or "", prompt=args.prompt,
-                                   host=RecordHost(provider="claude-code", model=args.host_model))
+                                   host=RecordHost(provider=os.environ.get("GALECORE_HOST_PROVIDER") or "claude-code", model=args.host_model))
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
         return
@@ -747,7 +774,7 @@ async def _cmd_space(args: argparse.Namespace) -> None:
                        "requests": agents["requests"], **result})
         elif c == "pull-profile":
             _json_out(space.pull_profile(client, _build_knowledge_base(),
-                                        RecordHost(provider="claude-code", model=args.host_model)))
+                                        RecordHost(provider=os.environ.get("GALECORE_HOST_PROVIDER") or "claude-code", model=args.host_model)))
         elif c == "agents":
             from galecore_ai.application.tasks import (
                 SYNC_MINUTES,
@@ -1001,7 +1028,7 @@ async def _cmd_feedback(args: argparse.Namespace) -> None:
         document, path = save_feedback(
             kb=kb, slug=args.slug, words=payload["words"], formulation=str(payload.get("formulation") or ""),
             classification=FeedbackKind(args.classification), research=args.research, revision=args.revision,
-            prompt=args.prompt, host=RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model")))
+            prompt=args.prompt, host=RecordHost(provider=_declared(payload, "host_provider"), model=_declared(payload, "host_model")))
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
         return
@@ -1168,13 +1195,14 @@ def _read_proposal_request() -> tuple[ProposalContent, RecordHost]:
         _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
         raise AssertionError("unreachable") from exc
     if not isinstance(payload, dict) or "content" not in payload:
-        _error_out("Input must be a JSON object with a 'content' key", exit_code=_EXIT_VALIDATION_ERROR)
+        _error_out("Input must be a JSON object with a 'content' key (see `schema <kind>`)",
+                   exit_code=_EXIT_VALIDATION_ERROR)
     try:
         content = ProposalContent.model_validate(payload["content"])
     except ValueError as exc:
         _error_out(f"Invalid proposal: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
         raise AssertionError("unreachable") from exc
-    return content, RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model"))
+    return content, RecordHost(provider=_declared(payload, "host_provider"), model=_declared(payload, "host_model"))
 
 
 def _runtime_specs_dir() -> Path:
@@ -1230,7 +1258,7 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
                 raise AssertionError("unreachable") from exc
             review, path = strategy_critique(
                 kb=kb, key=key, content=content,
-                host=RecordHost(provider=payload.get("host_provider"), model=payload.get("host_model")))
+                host=RecordHost(provider=_declared(payload, "host_provider"), model=_declared(payload, "host_model")))
             _json_out({"status": "RECORDED", "ref": review.strategy_ref, "path": path,
                        "verdict": review.content.verdict.value, "content_hash": review.content_hash})
         if args.strategy_command == "controls":
@@ -1660,7 +1688,9 @@ def build_parser() -> _JsonArgumentParser:
     p_st_hash.add_argument("--spec", required=True)
     p_st_check = st_sub.add_parser("check", help="Check a proposal (stdin) against a spec and the runtime")
     p_st_check.add_argument("--spec", required=True)
-    p_st_save = st_sub.add_parser("save", help="Check and store a version (create-only)")
+    p_st_save = st_sub.add_parser("save", help="Check and store a version (create-only)",
+                                  description="stdin: {content, host_provider, host_model}; `schema proposal` gives "
+                                              "the exact content")
     p_st_save.add_argument("--spec", required=True)
     p_st_save.add_argument("--prompt", required=True, help="What the user asked")
     p_st_approve = st_sub.add_parser("approve", help="Record the owner's approval of an exact version and hash")
@@ -1690,6 +1720,8 @@ def build_parser() -> _JsonArgumentParser:
     p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", default=None,
                              help="contentHash that App/Runtime/Specs/<name> reports (default: asked to GaleCore)")
 
+    p_schema = sub.add_parser("schema", help="The JSON a save takes on stdin (research, evidence, proposal, critique)")
+    p_schema.add_argument("kind", choices=["research", "evidence", "proposal", "critique"])
     p_evidence = sub.add_parser("evidence", help="Keep a source response with its provenance (content on stdin)")
     ev_sub = p_evidence.add_subparsers(dest="evidence_command", required=True)
     p_ev_add = ev_sub.add_parser("add", help="Store one response; never overwrites (HOST_DECLARED)")
@@ -1719,7 +1751,9 @@ def build_parser() -> _JsonArgumentParser:
 
     p_research = sub.add_parser("research", help="Save or continue an investigation (content on stdin)")
     res_sub = p_research.add_subparsers(dest="research_command", required=True)
-    p_save = res_sub.add_parser("save", help="Start a new investigation")
+    p_save = res_sub.add_parser("save", help="Start a new investigation",
+                                description="stdin: {content, host_provider, host_model}; `schema research` gives "
+                                            "the exact content and what else the save checks")
     p_save.add_argument("--slug", required=True, help="Short name; the id is <date>-<slug>")
     p_save.add_argument("--prompt", required=True, help="What the user asked")
     p_save.add_argument("--capability", default="research",
@@ -1739,6 +1773,9 @@ def build_parser() -> _JsonArgumentParser:
 def main() -> None:
     parser = build_parser()
     args = parser.parse_args()
+    for key in ("host_model", "host_provider"):   # same rule as _declared for the flags
+        if hasattr(args, key):
+            setattr(args, key, _declared({key: getattr(args, key, None)}, key))
 
     try:
         if args.command == "prepare":
@@ -1773,6 +1810,8 @@ def main() -> None:
             asyncio.run(_cmd_research_save(args))
         elif args.command == "research" and args.research_command == "revise":
             asyncio.run(_cmd_research_revise(args))
+        elif args.command == "schema":
+            _cmd_schema(args)
         elif args.command == "evidence" and args.evidence_command == "add":
             asyncio.run(_cmd_evidence_add(args))
         elif args.command == "sources":
