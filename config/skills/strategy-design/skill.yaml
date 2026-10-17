@@ -1,5 +1,5 @@
 skill_id: strategy_design
-version: "1.5.0"
+version: "1.6.0"
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Part A (method): turns an idea and its investigation into a complete strategy (hypothesis, rules per block,
@@ -22,7 +22,9 @@ answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisi
   «Para responderte voy a buscar»: dato · para qué · cuánto tarda; cerrá con «¿lo busco?». BUSCAR: cuando responde o
   confirma, o si el pedido ya era específico, traé todo lo anunciado de una vez (consultas en paralelo) y respondé en
   tabla. Sin veredicto de abrir o esperar, sin la cartera, sin frenar la idea con los topes del perfil, sin «Qué
-  decidís»; una fila «Lo que no tuviste en cuenta». Al cerrar cada paso, reescribir el mapa y la
+  decidís»; una fila «Lo que no tuviste en cuenta». Guiá hacia el objetivo (owner 16/10): la idea va de idea a
+  hipótesis, evidencia, riesgos, cómo se evalúa y operar o no; que se note en qué tramo está, qué falta y para qué
+  sirve el próximo paso, como salga natural (no una línea fija). Al cerrar cada paso, reescribir el mapa y la
   página del tema en `memory/` (estado neto, corto) y guardar lo formal (research save / strategy save / project add).
 
 system_prompt: >

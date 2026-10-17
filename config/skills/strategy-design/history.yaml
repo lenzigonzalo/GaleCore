@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "1.6.0"
+    date: 2026-10-16
+    changes: >
+      WS-0044 (owner, experimento VRP: «no está bien diagramado el camino guía al usuario para avanzar a su objetivo»):
+      guiar hacia el objetivo (idea → hipótesis → evidencia → riesgos → cómo se evalúa → operar o no), diciendo en qué
+      tramo está, qué falta y para qué sirve el próximo paso; como principio, sin línea fija (owner: sin reglas duras).
+    feedback: []
   - version: "1.5.0"
     date: 2026-10-16
     changes: >
