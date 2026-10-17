@@ -236,6 +236,24 @@ def test_simulated_amount_comes_from_the_approved_version_not_a_later_draft():
     assert out["none"] == {"version": None, "aprobada": False, "monto": None}
 
 
+def test_report_sized_by_declared_amounts_does_not_need_the_real_accounts_reference_capital(kb):  # noqa: F811
+    from types import SimpleNamespace
+    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)   # no capital
+    fake = SimpleNamespace(profile=kb.profile, strategies=_Store({"spy_pcs/1.0.5": _Doc(4000.0)}, {"spy_pcs/1.0.5"}))
+    asked = []
+
+    def read(path):
+        asked.append(path)
+        return exposure() if path.startswith("/App/Runtime/Exposure") else allocation()
+
+    out = capital.report(fake, read)
+    assert "status" not in out and asked[0].startswith("/App/Runtime/Exposure?capital=4000.0&")
+    assert out["montos_simulados"][0]["monto_usd"] == 4000.0
+    # a what-if has no declared amount to stand on: the reference capital is still needed there
+    what_if = capital.report(fake, read, capital=3000.0)
+    assert what_if["status"] == "MISSING_LIMITS" and "capital de referencia" in what_if["error"]
+
+
 def test_real_account_refuses_half_a_candidate_and_missing_limits(kb):  # noqa: F811
     set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
     try:

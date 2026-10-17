@@ -297,17 +297,19 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None 
     doc = kb.profile.latest()
     lim = limits(doc.content if doc else None)
     source = "perfil " + (doc.ref if doc else "ninguno")
-    if lim["no_leidos"]:
-        return {"status": "MISSING_LIMITS", "limites": lim, "fuente": source,
-                "error": "No puedo calcular sin estos límites del perfil: " + ", ".join(lim["no_leidos"])
-                         + ". Se agregan con `profile review` (cambiar límites necesita tu aprobación)."}
     if capital is not None and capital <= 0:
         raise supervisor.SupervisorError("el capital debe ser > 0")
-    ref = lim["capital_referencia"]
     names = strategies or sorted({k.split("/")[0] for k in kb.strategies.versions()})
     amounts = _simulated_amounts(kb, names)   # WS-0043 (1e): what is simulated is sized with its own amount
     sized = {n: a["monto"] for n, a in amounts.items() if a["monto"] is not None}
     whatif = capital is not None
+    # The reference capital is the real account's: simulated amounts do not need it (only a what-if or no amounts do).
+    unread = [x for x in lim["no_leidos"] if not (x == "capital de referencia" and sized and not whatif)]
+    if unread:
+        return {"status": "MISSING_LIMITS", "limites": lim, "fuente": source,
+                "error": "No puedo calcular sin estos límites del perfil: " + ", ".join(unread)
+                         + ". Se agregan con `profile review` (cambiar límites necesita tu aprobación)."}
+    ref = lim["capital_referencia"]
     base = sum(sized.values()) if sized and not whatif else ref
     exp = read("/App/Runtime/Exposure?" + _query(base, lim))
     if whatif:
