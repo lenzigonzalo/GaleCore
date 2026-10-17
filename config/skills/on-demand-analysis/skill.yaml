@@ -1,5 +1,5 @@
 skill_id: on_demand_analysis
-version: "0.1.0"
+version: "0.1.1"
 display_name: Análisis a pedido — macro, técnico, fundamental y flow
 description: >
   Answers «explicame la macro», «análisis técnico de QQQ», «analizame NVDA» and «el flow de SPY» from GaleCore's data.
@@ -13,8 +13,8 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 required_capabilities: []
 
 answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisión del owner 13/10)
-  Concepto («¿qué es X?»): sin veredicto ni opciones. Qué es en palabras simples, por qué le importa a sus estrategias,
-  el dato actual fechado y una línea de si importa hoy. Análisis: tabla corta primero (3+ datos), después 2-3 líneas
+  Concepto («¿qué es X?», «¿qué pasó en…?»): sin veredicto ni opciones. Qué es en palabras simples; el dato actual
+  fechado o el vínculo con sus estrategias sólo si responde lo que preguntó (como PRODUCT.md, pedidos para entender). Análisis: tabla corta primero (3+ datos), después 2-3 líneas
   que agregan una decisión o un límite, sin repetir celdas. Cada número del pack con su fecha. Lo que GaleCore no
   sirve: una línea y `gap add`.
 

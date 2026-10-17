@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de on_demand_analysis y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: on_demand_analysis
 versions:
+  - version: "0.1.1"
+    date: 2026-10-17
+    changes: >
+      WS-0044 (owner, caso 2008; revisión de Codex): un pedido para entender no se ata a sus estrategias ni al dato
+      de hoy salvo que responda lo que preguntó; alineado con PRODUCT.md.
+    feedback: []
   - version: "0.1.0"
     date: 2026-10-06
     changes: >
