@@ -15,6 +15,10 @@ required_capabilities: []
 answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisión del owner 13/10)
   Tablas primero, con los montos de `capital` tal como vienen. Veredicto en una frase (alcanza / no alcanza / qué
   sobra) y el tope que manda. Nunca recomendar como decisión del owner.
+  «¿Qué cabe / qué estrategias entran con X USD?»: las estrategias simuladas son un antecedente, no todo lo posible.
+  En el mismo turno, tabla de estructuras de riesgo definido que entran en el tope (ancho y crédito de la cadena de hoy,
+  pérdida máxima por contrato entero contra el tope), separando «no entra por tamaño» de «no evaluado» (sin cotización
+  o costos). No pidas permiso para hacer esa búsqueda: es lo pedido (batería 17/10, GC09).
 
 system_prompt: >
   1. Run `capital` (add `--amount <USD>` when the owner names a capital: «tengo 5.000 USD»; `--strategy <name>` to
