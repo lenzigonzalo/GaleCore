@@ -38,6 +38,7 @@ public class AccountOverviewBuilderTests
         Assert.Equal(1860, o.MaxRisk);
         Assert.Equal(74.4, o.MaxRiskPct);
         Assert.Equal(4.5, o.MaxRiskLimitPct);
+        Assert.Equal("monitor.risk_limits", o.RiskLimitsSource);
         Assert.Equal(3, o.DayPnl);
         Assert.Equal(6, o.Exposure.SpyEquivalentShares);
         Assert.Equal(4620, o.Exposure.SpyEquivalentDollars);
@@ -58,6 +59,7 @@ public class AccountOverviewBuilderTests
             maxRiskPerTradePct: 5, maxOpenRiskPct: 15);
 
         Assert.Equal(15, o.MaxRiskLimitPct);
+        Assert.Equal("perfil", o.RiskLimitsSource);
         Assert.Equal(new[] { "riesgo", "riesgo" }, o.Attention.Select(a => a.Kind));
         Assert.Contains("arriesga 1.860 USD", o.Attention[0].Title);
         Assert.Contains("125 USD (5 %)", o.Attention[0].Title);

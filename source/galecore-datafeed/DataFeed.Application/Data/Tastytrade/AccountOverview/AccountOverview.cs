@@ -48,6 +48,9 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public double? MaxRiskPct { get; set; }
         /// <summary>Límite de riesgo de cartera de la config (portfolio_heat_max_pct), en %.</summary>
         public double? MaxRiskLimitPct { get; set; }
+        /// <summary>De dónde salen los topes con que se juzgó: "perfil" (vinieron como parámetros) o
+        /// "monitor.risk_limits" (las reglas, sin topes del perfil). La misma cuenta no se juzga distinto sin decirlo.</summary>
+        public string RiskLimitsSource { get; set; } = "monitor.risk_limits";
         public ExposureDto Exposure { get; set; } = new();
         public List<AttentionDto> Attention { get; set; } = new();
         /// <summary>Una fila por posición (spread o acción), lista para mostrar.</summary>
@@ -184,6 +187,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
                 MaxRisk = R(maxRisk),
                 MaxRiskPct = netLiq > 0 ? R(maxRisk / netLiq * 100) : null,
                 MaxRiskLimitPct = maxOpenRiskPct ?? (heat == null ? null : R(heat.Value * 100)),
+                RiskLimitsSource = maxRiskPerTradePct != null || maxOpenRiskPct != null ? "perfil" : "monitor.risk_limits",
                 Exposure = Exposure(spreads, equities, prices, betas),
                 Missing = missing,
             };
