@@ -38,6 +38,8 @@ public class GexUnitsTests
         var json = JsonConvert.SerializeObject(new GexAnalysisResponse());
 
         Assert.Contains("\"Units\":{", json);
+        Assert.Contains("\"Method\":{", json);   // WS-0045: la fórmula viaja con el dato
+        Assert.Contains("gamma × OI × 100 × spot²", GexMethod.Current.StrikeFormula);
         Assert.Contains("\"Net\":\"USD_BILLIONS\"", json);
     }
 }

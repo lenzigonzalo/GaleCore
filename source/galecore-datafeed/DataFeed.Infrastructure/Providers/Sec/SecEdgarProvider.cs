@@ -140,6 +140,15 @@ namespace DataFeed.Infrastructure.Providers.Sec
             });
         }
 
+        /// <summary>El documento principal de una presentación (HTML de sec.gov), con su hash (WS-0045: leer el 10-K).</summary>
+        public async Task<(string Html, string Sha256)> GetDocumentAsync(string url, CancellationToken cancellationToken)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Host != "www.sec.gov")
+                throw new UpstreamSourceException("sec", $"documento fuera de sec.gov: {url}");
+            var html = await GetAsync(url, "documento", cancellationToken);
+            return (html, Sha(html));
+        }
+
         private async Task<string> GetAsync(string url, string what, CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(_userAgent))

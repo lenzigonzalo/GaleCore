@@ -30,6 +30,22 @@ namespace DataFeed.Application.Data.Sec
         public DateTime? Since { get; set; }
     }
 
+    /// <summary>El último 10-K (u otro formulario) de la empresa como texto por ítems (WS-0045).</summary>
+    public class SecDocumentRequest : SecCompanyQuery, IRequest<SourcedResponse<SecDocument>>
+    {
+        /// <summary>Formulario (10-K, 10-Q, 20-F). Vacío = 10-K.</summary>
+        public string? Form { get; set; }
+
+        /// <summary>Ítems separados por coma (ej: 1,1A,7). Vacío = 1 (negocio), 1A (riesgos), 7 (análisis de la gerencia).</summary>
+        public string? Items { get; set; }
+
+        /// <summary>Tope de caracteres por ítem. Vacío = 30000.</summary>
+        public int? MaxChars { get; set; }
+    }
+
+    public record SecDocument(string Cik, string Name, string Form, string FilingDate, string? ReportDate, string Url,
+        IReadOnlyList<SecDocumentItem> Items, IReadOnlyList<string> NotFound);
+
     public class SecFactsRequest : SecCompanyQuery, IRequest<SourcedResponse<SecCompanyConcept>>
     {
         /// <summary>Taxonomía XBRL (us-gaap, dei, ifrs-full). Vacío = us-gaap.</summary>
@@ -134,6 +150,49 @@ namespace DataFeed.Application.Data.Sec
                     "En un 8-K, Items lista los ítems del formulario: 2.02 = resultados, 5.02 = cambios de directivos, 7.01/8.01 = otros anuncios.",
                 },
                 Data = all with { Filings = filings },
+            };
+        }
+    }
+
+    public class SecDocumentHandler : IRequestHandler<SecDocumentRequest, SourcedResponse<SecDocument>>
+    {
+        private readonly IConfiguration _config;
+        private readonly IHttpClientFactory _client;
+
+        public SecDocumentHandler(IConfiguration config, IHttpClientFactory client)
+        {
+            _config = config;
+            _client = client;
+        }
+
+        public async Task<SourcedResponse<SecDocument>> Handle(SecDocumentRequest request, CancellationToken cancellationToken)
+        {
+            var form = string.IsNullOrWhiteSpace(request.Form) ? "10-K" : request.Form.Trim().ToUpperInvariant();
+            var wanted = (string.IsNullOrWhiteSpace(request.Items) ? "1,1A,7" : request.Items)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var max = Math.Clamp(request.MaxChars ?? 30000, 1000, 200000);
+            var provider = new SecEdgarProvider(_config, _client.CreateClient());
+            var (cik, _) = await SecCommon.ResolveAsync(request, provider, cancellationToken);
+            var (all, _) = await provider.GetFilingsAsync(cik, cancellationToken);
+            var filing = all.Filings.Where(f => f.Form == form).OrderByDescending(f => f.FilingDate).FirstOrDefault()
+                ?? throw new ValidationException($"{all.Name} no tiene un {form} en el bloque reciente de EDGAR.");
+            var (html, sha) = await provider.GetDocumentAsync(filing.Url, cancellationToken);
+            var items = SecDocumentText.Items(SecDocumentText.ToText(html), wanted, max);
+            var notFound = wanted.Where(w => !items.Any(i => i.Item.Equals(w, StringComparison.OrdinalIgnoreCase))).ToList();
+
+            return new SourcedResponse<SecDocument>
+            {
+                Source = "sec",
+                UpstreamUrl = filing.Url,
+                RetrievedAt = DateTime.UtcNow,
+                AsOf = filing.FilingDate,
+                Sha256 = sha,
+                Notes = new(SecCommon.Notes)
+                {
+                    "Texto del documento principal tal como se presentó, sin el encabezado XBRL oculto; las celdas de las tablas van separadas por «|».",
+                    "10-K: Item 1 = negocio (productos, segmentos, clientes), 1A = riesgos, 7 = análisis de la gerencia (ventas por producto y región, márgenes).",
+                },
+                Data = new SecDocument(cik, all.Name, filing.Form, filing.FilingDate, filing.ReportDate, filing.Url, items, notFound),
             };
         }
     }

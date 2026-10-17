@@ -17,7 +17,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString('es-AR', { hour: 
 const day = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : d;
 const COLORS = ['--accent', '--yellow-gc', '--green', '--red'];
 
-function MapaChartView({ chart, label }: { chart: MapaChart; label: string }) {
+export function MapaChartView({ chart, label }: { chart: MapaChart; label: string }) {
   const host = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!host.current || !chart.series.some(s => s.puntos?.length)) return;

@@ -57,6 +57,9 @@ namespace DataFeed.Application.App.Gex
 
         /// <summary>Escala de CallGex/PutGex/NetGex de Global, ByExpiry y sus strikes (BL-002).</summary>
         public GexUnits Units => GexUnits.Current;
+
+        /// <summary>Fórmula, signos, fuentes y definiciones del cálculo (WS-0045).</summary>
+        public GexMethod Method => GexMethod.Current;
     }
 
     public class GexScope

@@ -70,6 +70,9 @@ namespace DataFeed.Controllers
         public async Task<IActionResult> SecFilingsAsync([FromQuery] SecFilingsRequest request) => await Handle(request);
 
         [Tags("Data.Sources")]
+        [HttpGet("Sec/Document")]
+        public async Task<IActionResult> SecDocumentAsync([FromQuery] SecDocumentRequest request) => await Handle(request);
+
         [HttpGet("Sec/Facts")]
         public async Task<IActionResult> SecFactsAsync([FromQuery] SecFactsRequest request) => await Handle(request);
 

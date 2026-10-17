@@ -130,6 +130,25 @@ namespace DataFeed.Application.App.GammaExposure
     /// Es descriptivo: cambiar un número acá no reescala nada. Si cambia la fórmula o una división
     /// del handler, se cambia esto en el mismo commit (lo congela GexUnitsTests).
     /// </summary>
+    /// <summary>
+    /// Cómo se calcula el GEX, declarado en el contrato (WS-0045, Biblioteca): para que quien lo lea pueda decir la
+    /// fórmula y de dónde viene cada dato sin leer este código. Descriptivo, como <see cref="GexUnits"/>: si cambia el
+    /// cálculo del handler, se cambia esto en el mismo commit.
+    /// </summary>
+    public sealed class GexMethod
+    {
+        public static readonly GexMethod Current = new();
+
+        public string StrikeFormula { get; } = "GEX = gamma × OI × 100 × spot², dividido por 1.000.000 (millones de USD); calls con signo +, puts con signo −";
+        public string SignConvention { get; } = "Supuesto de mercado: los dealers están comprados de los calls y vendidos de los puts que el público opera, así que el gamma de calls suma y el de puts resta";
+        public string GammaSource { get; } = "Gamma, delta e IV de cada contrato: greeks de DXLink (Tastytrade) al momento del cálculo";
+        public string OpenInterestSource { get; } = "OI: la vela diaria más reciente que trae OI, hasta 30 días atrás (DXLink); OI inválido o negativo se descarta";
+        public string Aggregation { get; } = "Un strike se suma entre vencimientos; el global suma todos los vencimientos ≤ max_dte, incluido 0DTE; neto = (calls + puts) / 1.000 (miles de millones de USD)";
+        public string MoveScale { get; } = "Es la exposición para un movimiento de 1 (100 %) del subyacente; para un movimiento del 1 % se divide por 100";
+        public string GammaZero { get; } = "Interpolación lineal entre strikes donde el GEX neto pasa de negativo a positivo; si hay varios cruces, el más cercano al spot";
+        public string Walls { get; } = "Muro de calls: strike sobre el spot con mayor GEX de calls y neto positivo. Muro de puts: strike bajo el spot con mayor |GEX de puts| y neto negativo";
+    }
+
     public sealed class GexUnits
     {
         public static readonly GexUnits Current = new();

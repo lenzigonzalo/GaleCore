@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, MoreHorizontal, RefreshCw, Upload } from 'lucide-react';
 import { labRequest, labUpload, WorkspaceFile } from '../../api/lab';
+import { LabMarkdown } from './LabMarkdown';
 
 /**
  * Archivos del proyecto como un explorador (owner 17/10): abrir y editar texto, crear archivo o carpeta, subir,
@@ -10,6 +11,7 @@ import { labRequest, labUpload, WorkspaceFile } from '../../api/lab';
 type Pending = { kind: 'file' | 'folder'; parent: string } | null;
 const parentOf = (p: string) => p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
 const readOnly = (p: string) => /\.json$/i.test(p);
+const isMarkdown = (p: string) => /\.md$/i.test(p);
 export function LabFiles({ projectId, folder }: { projectId: string; folder?: string }) {
   const [tree, setTree] = useState<WorkspaceFile[]>([]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
@@ -22,6 +24,7 @@ export function LabFiles({ projectId, folder }: { projectId: string; folder?: st
   const [confirm, setConfirm] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  const [editing, setEditing] = useState(false);   // WS-0045: los .md se abren para leer (tablas y gráficos)
   const upload = useRef<HTMLInputElement>(null);
   const base = '/workspaces/' + encodeURIComponent(projectId) + '/files';
   const reload = useCallback(async () => {
@@ -39,7 +42,7 @@ export function LabFiles({ projectId, folder }: { projectId: string; folder?: st
     setSelected({ path: node.path, kind: 'file', text: node.text }); setError(''); setStatus('');
     if (node.text === false) { setFile(null); return; }
     if (dirty && !window.confirm('Hay cambios sin guardar. ¿Descartarlos?')) return;
-    try { const f = await labRequest<{ text: string }>(base + '?path=' + encodeURIComponent(node.path)); setFile({ path: node.path, saved: f.text, text: f.text }); }
+    try { const f = await labRequest<{ text: string }>(base + '?path=' + encodeURIComponent(node.path)); setFile({ path: node.path, saved: f.text, text: f.text }); setEditing(!isMarkdown(node.path)); }
     catch (e) { setFile(null); setError(e instanceof Error ? e.message : 'Archivo no disponible.'); }
   };
   const save = async () => { if (!file || !dirty) return; if (await act('write', { path: file.path, text: file.text }, 'Guardado')) setFile({ ...file, saved: file.text }); };
@@ -112,10 +115,10 @@ export function LabFiles({ projectId, folder }: { projectId: string; folder?: st
     </aside>
     <section className="lab-files-main">
       {file ? <>
-        <header><strong>{file.path}</strong>{readOnly(file.path) ? <span>Sólo lectura: lo escribe el harness</span> : <span>{dirty ? 'Sin guardar' : status === 'Guardado' ? 'Guardado' : ''}</span>}{!readOnly(file.path) && <button type="button" className="lab-files-save" disabled={!dirty} onClick={save}>Guardar</button>}</header>
-        <textarea className="lab-files-editor" spellCheck={false} readOnly={readOnly(file.path)} value={file.text} aria-label={'Contenido de ' + file.path}
+        <header><strong>{file.path}</strong>{readOnly(file.path) ? <span>Sólo lectura: lo escribe el harness</span> : <span>{dirty ? 'Sin guardar' : status === 'Guardado' ? 'Guardado' : ''}</span>}{isMarkdown(file.path) && <button type="button" className="lab-files-save" onClick={() => setEditing(!editing)}>{editing ? 'Leer' : 'Editar'}</button>}{!readOnly(file.path) && editing && <button type="button" className="lab-files-save" disabled={!dirty} onClick={save}>Guardar</button>}</header>
+        {isMarkdown(file.path) && !editing ? <div className="lab-files-read"><LabMarkdown text={file.text} /></div> : <textarea className="lab-files-editor" spellCheck={false} readOnly={readOnly(file.path)} value={file.text} aria-label={'Contenido de ' + file.path}
           onChange={e => setFile({ ...file, text: e.target.value })}
-          onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); } }}/>
+          onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); } }}/>}
       </> : <div className="lab-files-blank"><Folder size={30}/><p>{selected?.text === false ? 'Este archivo no se puede ver acá. Podés renombrarlo o eliminarlo.' : 'Elegí un archivo para verlo y editarlo.'}</p><span>Clic derecho o ⋯ para renombrar o eliminar · F2 renombra · Supr elimina</span></div>}
       {error && <p className="lab-files-error" role="alert">{error}</p>}
     </section>
