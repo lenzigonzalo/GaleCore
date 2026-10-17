@@ -80,3 +80,12 @@ test('mapa como tablero: dónde estamos, números y gráfico con su fuente (WS-0
  assert.equal(m.sections[1].chart.fuente,'GaleCore');assert.deepEqual(m.sections[1].lines,[]);
  assert.equal(m.sections[2].chart,undefined);
 });
+test('proyecto de estrategia: una conversación nueva ve el último mapa del proyecto (WS-0044)',async t=>{
+ const {kb,service}=setup(t);const p=(await route(service,'POST','/workspaces',{label:'VRP',type:'strategy'})).value;
+ const mem=path.join(kb,'strategies',p.strategyName,'memory');fs.mkdirSync(mem,{recursive:true});fs.writeFileSync(path.join(mem,'mapa-vrp.md'),'# VRP\nEstamos: midiendo\n');
+ const chat=(await route(service,'POST','/chats',{project:p.id,provider:'claude'})).value;
+ const m=(await route(service,'GET','/chats/'+chat.id+'/mapa')).value.mapa;
+ assert.equal(m.path,'memory/mapa-vrp.md');assert.deepEqual(m.intro,['Estamos: midiendo']);
+ const personal=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ assert.equal((await route(service,'GET','/chats/'+personal.id+'/mapa')).value.mapa,null);
+});

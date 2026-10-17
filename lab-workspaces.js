@@ -261,7 +261,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       if(req.method==='GET'&&parts.length===2){json(res,200,c);return true;}
       if(req.method==='GET'&&parts[2]==='mapa'){
         // Mientras responde, el mapa que se escribió en este turno ya se muestra (no espera al final).
-        const dir=project(c.project).dir, live=c.state==='running'&&c.turnStartedAt?latestMapa(dir,c.turnStartedAt):null, rel=live||c.mapa;
+        // WS-0044: en un proyecto de estrategia (una idea), una conversación que todavía no tocó el mapa ve el último del proyecto.
+        const p=project(c.project), dir=p.dir, live=c.state==='running'&&c.turnStartedAt?latestMapa(dir,c.turnStartedAt):null, rel=live||c.mapa||(p.type==='strategy'?latestMapa(dir,0):null);
         if(!rel){json(res,200,{mapa:null});return true;}
         const file=safeFile(dir,rel);
         json(res,200,{mapa:{path:rel,updatedAt:fs.statSync(file).mtime.toISOString(),...parseMapa(fs.readFileSync(file,'utf8'))}});return true;}
