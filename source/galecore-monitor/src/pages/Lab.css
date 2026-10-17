@@ -334,3 +334,12 @@
 .lab-choices em { margin-left:auto; font-style:normal; font-size:12px; color:var(--accent); border:1px solid var(--accent); border-radius:999px; padding:1px 8px; }
 .lab-choices-send { justify-self:start; padding:7px 16px; border:0; border-radius:8px; background:var(--text-primary); color:var(--bg-primary); font:inherit; font-size:14px; font-weight:500; cursor:pointer; }
 .lab-choices-send:disabled { opacity:.4; cursor:default; }
+
+/* WS-0044 (owner: más aire, títulos cuando ayudan): separación entre bloques y renglones en negrita como títulos. */
+.lab-message { margin-bottom: 44px; }
+.lab-markdown p { margin: 0 0 1.15em; }
+.lab-markdown p:has(> strong:only-child) { margin: 1.7em 0 .6em; }
+.lab-markdown > p:first-child:has(> strong:only-child) { margin-top: 0; }
+.lab-markdown h2, .lab-markdown h3 { margin: 1.8em 0 .7em; }
+.lab-table-scroll { margin: 1.3em 0 1.8em; }
+.lab-markdown ul, .lab-markdown ol { margin: .8em 0 1.5em; }

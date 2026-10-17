@@ -105,7 +105,9 @@ export function LabProjectList(props: Props) {
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); window.removeEventListener('resize', dismiss); window.removeEventListener('scroll', dismiss, true); };
   }, []);
   const projects = state?.projects.filter(p => !p.strategyName?.startsWith('shadow_runtime_test_')) || [];
-  const chats = state?.chats.filter(c => !/^test[_ -]/i.test(c.title) && projects.some(p => p.id === c.project)) || [];
+  // WS-0044: la más reciente arriba (último turno, o creación si todavía no respondió).
+  const recent = (c: { createdAt?: string; turnStartedAt?: number }) => Math.max(c.turnStartedAt || 0, Date.parse(c.createdAt || '') || 0);
+  const chats = (state?.chats.filter(c => !/^test[_ -]/i.test(c.title) && projects.some(p => p.id === c.project)) || []).sort((a, b) => recent(b) - recent(a));
   const move = (key: string, group: string) => {
     organize(old => {
       const members = { ...old.members }; if (group) members[key] = group; else delete members[key];
@@ -154,7 +156,7 @@ export function LabProjectList(props: Props) {
     return <div className="lab-project-group" key={key} style={color ? { '--group-color': COLORS[color][1] } as React.CSSProperties : undefined}>
       <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}><button className="lab-project-select lab-draggable" {...dragProps(key)} onClick={() => onProject(p)} onDoubleClick={() => onRename(p.id, p.label)}><Folder size={18} style={{ color: 'var(--group-color, currentColor)' }}/>{editing === p.id ? renameInput(p.id, p.label) : <span>{label}</span>}</button>{optionsButton(key, label)}<button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={() => onToggle(p.id)}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
       {itemOptions(key, label)}
-      {expanded[p.id] && <div className="lab-project-chats">{chats.filter(c => c.project === p.id && !organization.members['c:' + c.id]).slice().reverse().map(c => renderChat(c))}<button className="lab-project-new" onClick={() => onNewChat(p)}><Plus size={14}/>Nuevo chat</button></div>}
+      {expanded[p.id] && <div className="lab-project-chats">{chats.filter(c => c.project === p.id && !organization.members['c:' + c.id]).map(c => renderChat(c))}<button className="lab-project-new" onClick={() => onNewChat(p)}><Plus size={14}/>Nuevo chat</button></div>}
     </div>;
   };
   const saveGroup = (event: React.FormEvent) => {
@@ -174,7 +176,7 @@ export function LabProjectList(props: Props) {
         const count = groupedProjects.length + groupedChats.length;
         return <section className={'lab-sidebar-group' + (dropTarget === g.id ? ' lab-drop-target' : '')} {...dropProps(g.id)} key={g.id} aria-label={g.label} style={{ '--group-color': COLORS[g.color][1] } as React.CSSProperties}><div className="lab-sidebar-group-heading"><button className="lab-group-toggle" aria-label={(g.collapsed ? 'Expandir grupo ' : 'Contraer grupo ') + g.label} aria-expanded={!g.collapsed} aria-controls={'lab-group-' + g.id} onClick={() => organize(old => ({ ...old, groups: old.groups.map(group => group.id === g.id ? { ...group, collapsed: !group.collapsed } : group) }))}><i className="lab-group-dot" aria-hidden="true"/><span>{g.label}</span><small>{count}</small>{g.collapsed ? <ChevronRight size={15}/> : <ChevronDown size={15}/>}</button>{optionsButton('g:' + g.id, 'grupo ' + g.label)}</div>
           {menu === 'g:' + g.id && optionsPanel('Organizar grupo ' + g.label, <><button onClick={() => { setEditor({ id: g.id, label: g.label, color: g.color }); setMenu(null); }}>Editar nombre y color</button><button onClick={() => { organize(old => ({ ...old, groups: old.groups.filter(group => group.id !== g.id), members: Object.fromEntries(Object.entries(old.members).filter(([, id]) => id !== g.id)) })); setMenu(null); }}>Eliminar grupo (conservar contenido)</button></>)}
-          <div className="lab-sidebar-group-content" hidden={g.collapsed} id={'lab-group-' + g.id}>{groupedProjects.map(p => renderProject(p, g.color))}<div className="lab-project-chats lab-group-loose-chats">{groupedChats.slice().reverse().map(c => renderChat(c, true, g.color))}</div>{!count && <p className="lab-group-empty">Arrastrá proyectos o chats aquí.</p>}</div>
+          <div className="lab-sidebar-group-content" hidden={g.collapsed} id={'lab-group-' + g.id}>{groupedProjects.map(p => renderProject(p, g.color))}<div className="lab-project-chats lab-group-loose-chats">{groupedChats.map(c => renderChat(c, true, g.color))}</div>{!count && <p className="lab-group-empty">Arrastrá proyectos o chats aquí.</p>}</div>
         </section>;
       })}
       <section className={'lab-ungrouped' + (dropTarget === '' ? ' lab-drop-target' : '')} aria-label="Sin grupo" {...dropProps('')}>
