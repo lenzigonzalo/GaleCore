@@ -656,6 +656,12 @@ async def _cmd_galecore(args: argparse.Namespace) -> None:
         if not sep or not key:
             _error_out(f"--param must be key=value: {item!r}", exit_code=_EXIT_VALIDATION_ERROR)
         params[key] = value
+    if args.capability == "account.overview" and not {"maxRiskPerTradePct", "maxOpenRiskPct"} & params.keys():
+        # WS-0043 (owner 16/10): the real account is judged with the profile caps, like the Monitor (its own space)
+        from galecore_ai.application.capital import limits
+        doc = _build_knowledge_base().profile.latest()
+        lim = limits(doc.content if doc else None)
+        params |= {k: lim[k] for k in ("maxRiskPerTradePct", "maxOpenRiskPct") if lim.get(k) is not None}
     result = await _build_dispatcher().invoke(args.capability, params)
     if not result.ok:
         from galecore_ai.application import gap_log

@@ -264,9 +264,11 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         capability_id="account.overview",
         semantic_class=SemanticClass.PURE_QUERY,
         description="REAL account (Tastytrade, read-only) at a glance: value, cash, buying power, today's and open "
-        "result, max risk against the limit, SPY-equivalent exposure, theta, vega and what needs attention today",
+        "result, max risk against the profile caps (`galecore get` passes them), SPY-equivalent exposure, theta, vega "
+        "and what needs attention today",
         parameters=[],
         returns="asOf, netLiq, cash, buyingPower, dayPnl, dayPnlPct, openPnl, maxRisk, maxRiskPct, maxRiskLimitPct, "
+        "riskLimitsSource, "
         "exposure (SPY delta x beta, theta, vega), attention[], positions[], missing[]",
     ),
     CapabilityDefinition(
