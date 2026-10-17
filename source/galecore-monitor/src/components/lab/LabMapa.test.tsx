@@ -50,11 +50,12 @@ test('un error de lectura no aparenta un mapa', async () => {
 test('tablero: dónde estamos, cifras grandes y gráfico con su fuente (WS-0044)', async () => {
   (labRequest as jest.Mock).mockResolvedValue({ mapa: { ...mapa, intro: ['Estamos: probando si se cobra'], sections: [
     { heading: 'Números', lines: [{ mark: null, text: '84 % · días con prima' }] },
-    { heading: 'Implícita vs realizada', lines: [], chart: { fuente: 'GaleCore', series: [{ nombre: 'VIX', puntos: [['2020-01-31', 14]] }] } },
+    { heading: 'Implícita vs realizada', lines: [], chart: { fuente: 'GaleCore', corte: '2026-10-16', calculo: 'memory/calculos/vrp.py', series: [{ nombre: 'VIX', puntos: [['2020-01-31', 14]] }] } },
   ] } });
   render(<LabMapa chatId="c1" running={false} />);
   expect(await screen.findByText('probando si se cobra')).toBeInTheDocument();
   expect(screen.getByText('84 %').tagName).toBe('STRONG');
   expect(screen.getByRole('img', { name: 'Implícita vs realizada' })).toBeInTheDocument();
-  expect(screen.getByText('Fuente: GaleCore')).toBeInTheDocument();
+  expect(screen.getByText('Fuente: GaleCore · hasta el 16/10/2026')).toBeInTheDocument();
+  expect(screen.getByText('Cálculo guardado en Archivos: vrp.py')).toBeInTheDocument();
 });

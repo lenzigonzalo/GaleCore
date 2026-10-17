@@ -7,11 +7,12 @@ import './LabMapa.css';
 // El panel sólo lee: sin botones ni edición; se relee al abrir la conversación y al terminar cada respuesta.
 // WS-0044 (owner: tablero): arriba dónde estamos y qué falta, las cifras grandes y el gráfico de la evidencia con su fuente.
 export interface MapaLine { mark: 'ok' | 'missing' | null; text: string }
-export interface MapaChart { fuente?: string; unidad?: string; series: { nombre: string; puntos: [string, number][] }[] }
+export interface MapaChart { fuente?: string; unidad?: string; corte?: string; calculo?: string; series: { nombre: string; puntos: [string, number][] }[] }
 export interface MapaSection { heading: string; lines: MapaLine[]; chart?: MapaChart }
 export interface Mapa { path: string; updatedAt: string; title: string; intro?: string[]; sections: MapaSection[] }
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+const day = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : d;
 const COLORS = ['--accent', '--yellow-gc', '--green', '--red'];
 
 function MapaChartView({ chart, label }: { chart: MapaChart; label: string }) {
@@ -39,7 +40,8 @@ function MapaChartView({ chart, label }: { chart: MapaChart; label: string }) {
     <div ref={host} role="img" aria-label={label} />
     <figcaption>
       {chart.series.map((s, i) => <span key={s.nombre} className="lab-mapa-legend" style={{ color: `var(${COLORS[i % COLORS.length]})` }}>— {s.nombre}</span>)}
-      {chart.fuente && <span className="lab-mapa-source">Fuente: {chart.fuente}</span>}
+      {chart.fuente && <span className="lab-mapa-source">Fuente: {chart.fuente}{chart.corte ? ' · hasta el ' + day(chart.corte) : ''}</span>}
+      {chart.calculo && <span className="lab-mapa-source">Cálculo guardado en Archivos: {chart.calculo.split('/').pop()}</span>}
     </figcaption>
   </figure>;
 }
