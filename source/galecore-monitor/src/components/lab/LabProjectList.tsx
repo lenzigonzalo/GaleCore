@@ -47,12 +47,18 @@ interface Props {
   onRename: (id: string, label: string) => void;
   editing: string | null;
   renameInput: (id: string, label: string) => React.ReactNode;
+  onDelete?: (kind: 'project' | 'chat', id: string) => void;
 }
 export function LabProjectList(props: Props) {
-  const { state, projectId, chatId, expanded, onToggle, onProject, onChat, onNewChat, onCreateProject, name, onRename, editing, renameInput } = props;
+  const { state, projectId, chatId, expanded, onToggle, onProject, onChat, onNewChat, onCreateProject, name, onRename, editing, renameInput, onDelete } = props;
+  // Proyectos (carpetas con sus chats) o Conversaciones (todas, la más nueva arriba) — owner 17/10.
+  const [tab, setTab] = useState<'projects' | 'chats'>(() => { try { return localStorage.getItem('galecore:lab:list') === 'chats' ? 'chats' : 'projects'; } catch { return 'projects'; } });
+  useEffect(() => { try { localStorage.setItem('galecore:lab:list', tab); } catch { /* preferencia de vista */ } }, [tab]);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [organization, setOrganization] = useState(readOrganization);
   const [storageError, setStorageError] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
+  useEffect(() => { setConfirmDelete(null); }, [menu]);
   const [editor, setEditor] = useState<{ id?: string; label: string; color: Color } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const lastTrigger = useRef<HTMLButtonElement | null>(null);
@@ -138,6 +144,11 @@ export function LabProjectList(props: Props) {
   const optionsButton = (key: string, label: string) => <button type="button" className="lab-icon lab-more" aria-label={'Opciones de ' + label} aria-expanded={menu === key} aria-controls={menu === key ? 'lab-group-options' : undefined} onClick={e => { lastTrigger.current = e.currentTarget; setMenu(menu === key ? null : key); setEditor(null); }}><MoreHorizontal size={17}/></button>;
   const optionsPanel = (label: string, children: React.ReactNode) => createPortal(<div ref={menuPanel} className="lab-group-options" style={menuPosition} id="lab-group-options" role="group" aria-label={label}>{children}</div>, document.body);
   const itemOptions = (key: string, label: string) => menu === key && optionsPanel('Organizar ' + label, <>
+    <button type="button" onClick={() => { const id = key.slice(2); const original = key.startsWith('c:') ? state?.chats.find(c => c.id === id)?.title : state?.projects.find(p => p.id === id)?.label; lastTrigger.current = null; setMenu(null); onRename(id, original || label); }}>Renombrar</button>
+    {onDelete && key !== 'p:personal' && (confirmDelete === key
+      ? <button type="button" className="lab-option-danger" onClick={() => { setMenu(null); onDelete(key.startsWith('c:') ? 'chat' : 'project', key.slice(2)); }}>{key.startsWith('c:') ? 'Sí, eliminar la conversación' : 'Sí, quitar el proyecto (los archivos quedan)'}</button>
+      : <button type="button" className="lab-option-danger" onClick={() => setConfirmDelete(key)}>Eliminar</button>)}
+    <hr/>
     <label>Mover a grupo<select aria-label={'Grupo de ' + label} value={organization.members[key] || ''} onChange={e => move(key, e.target.value)}><option value="">{key.startsWith('c:') ? 'Dentro de su proyecto' : 'Sin grupo'}</option>{organization.groups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
     {organization.members[key] && <button type="button" onClick={() => move(key, '')}>Sacar del grupo</button>}
     <span>{key.startsWith('p:') ? 'Color de carpeta' : 'Color del chat'}</span><Palette value={organization.colors[key] || organization.groups.find(g => g.id === organization.members[key])?.color || 'neutral'} onChange={color => organize(old => ({ ...old, colors: { ...old.colors, [key]: color } }))}/>{organization.colors[key] && <button type="button" onClick={() => organize(old => { const colors = { ...old.colors }; delete colors[key]; return { ...old, colors }; })}>Usar color del grupo</button>}
@@ -166,6 +177,8 @@ export function LabProjectList(props: Props) {
     setEditor(null); lastTrigger.current?.focus();
   };
   return <div className="lab-project-list" ref={root}>
+    <div className="lab-list-tabs" role="tablist" aria-label="Lista"><button role="tab" aria-selected={tab === 'projects'} onClick={() => setTab('projects')}>Proyectos</button><button role="tab" aria-selected={tab === 'chats'} onClick={() => setTab('chats')}>Conversaciones</button></div>
+    {tab === 'chats' ? <nav aria-label="Conversaciones" className="lab-project-chats lab-all-chats">{chats.map(c => renderChat(c, true))}{!chats.length && <p className="lab-group-empty">Todavía no hay conversaciones.</p>}</nav> : <>
     <div className="lab-project-heading"><span>Proyectos</span><div><button className="lab-icon" aria-label="Crear grupo" title="Crear grupo" onClick={e => { lastTrigger.current = e.currentTarget; setEditor({ label: '', color: 'neutral' }); setMenu(null); }}><Folder size={17}/><Plus size={11}/></button><button className="lab-icon" aria-label="Crear proyecto" onClick={onCreateProject}><Plus size={18}/></button></div></div>
     {editor && <form className="lab-group-editor" aria-label={editor.id ? 'Editar grupo' : 'Nuevo grupo'} onSubmit={saveGroup}><header><strong>{editor.id ? 'Editar grupo' : 'Nuevo grupo'}</strong><button type="button" className="lab-icon" aria-label="Cancelar grupo" onClick={() => { setEditor(null); lastTrigger.current?.focus(); }}><X size={16}/></button></header><label>Nombre del grupo<input autoFocus required maxLength={100} value={editor.label} onChange={e => setEditor({ ...editor, label: e.target.value })}/></label><Palette value={editor.color} onChange={color => setEditor({ ...editor, color })}/><button className="lab-group-save" disabled={!editor.label.trim()}>{editor.id ? 'Guardar grupo' : 'Crear grupo'}</button></form>}
     {storageError && <p className="lab-group-empty" role="status">No se pudo guardar la organización en tu cuenta; queda en este navegador.</p>}
@@ -183,6 +196,6 @@ export function LabProjectList(props: Props) {
         {organization.groups.length > 0 && <div className="lab-ungrouped-heading">{dragging ? 'Soltá aquí para sacar del grupo' : 'Sin grupo'}</div>}
         {projects.filter(p => !organization.members['p:' + p.id]).map(p => renderProject(p))}
       </section>
-    </nav>
+    </nav></>}
   </div>;
 }

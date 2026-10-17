@@ -12,8 +12,6 @@ import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
 import './components/layout/SingleWorkspace.css';
 import { Lab } from './pages/Lab';
 import { useGexStore } from './store/useGexStore';
-import { ClaudeTerminal } from './components/layout/ClaudeTerminal';
-import { useTerminalStore } from './store/useTerminalStore';
 import { SettingsModal, needsSetup } from './components/settings/SettingsModal';
 import { fetchSpace } from './api/space';
 import { fetchProviderAuth } from './api/terminal';
@@ -36,7 +34,9 @@ interface DashboardProps {
 }
 
 function Dashboard({ onLogout }: DashboardProps) {
-  const [tab, setCurrentTab] = useState<Tab>(new URLSearchParams(window.location.search).has('macro') ? 'macro' : 'inicio');
+  // Siempre arranca en Inicio (owner 17/10): la dirección no guarda en qué pantalla quedaste.
+  const [tab, setCurrentTab] = useState<Tab>('inicio');
+  useEffect(() => { if (window.location.search) window.history.replaceState(null, '', window.location.pathname); }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [setup, setSetup] = useState(false);
   const [strategiesVisited, setStrategiesVisited] = useState(false);
@@ -104,7 +104,7 @@ function Dashboard({ onLogout }: DashboardProps) {
       .catch((e) => setConfigError(e.message ?? 'Error cargando la configuración'))
       .finally(() => setConfigLoading(false));
 
-    if (!new URLSearchParams(window.location.search).has('macro')) refreshAccount();
+    refreshAccount();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -114,8 +114,6 @@ function Dashboard({ onLogout }: DashboardProps) {
     }).catch(() => { /* Una lectura fallida no equivale a una cuenta sin configurar. */ });
     return () => { active = false; };
   }, []);
-
-  const terminalOpen = useTerminalStore((t) => t.open);
 
   const { status, subscribeSymbol, unsubscribeSymbol, subscribeLeg, unsubscribeLeg, acceptSuggestion, dismissSuggestion } = useMarketSocket(tickers);
   useEffect(() => { setSocketStatus(status); }, [status]);
@@ -131,7 +129,7 @@ function Dashboard({ onLogout }: DashboardProps) {
             const selected = store.pinAdHoc(symbol);
             if (!selected) throw new Error('No se pudo abrir el símbolo.');
             store.setSelectedSymbol(selected); setTab('gex');
-          }} conversationOpen={terminalOpen} onConversation={() => useTerminalStore.getState().setOpen(!terminalOpen)} navHidden={navHidden} onNavToggle={() => setNavHidden(v => !v)} />
+          }} navHidden={navHidden} onNavToggle={() => setNavHidden(v => !v)} />
       <div className="workspace-body flex flex-1">
       {!navHidden && <WorkspaceNav active={tab} onChange={setTab} onLogout={onLogout} width={navWidth} onResize={setNavWidth} />}
       <div className="flex flex-col flex-1 min-w-0" style={{ position: 'relative' }}>
@@ -161,7 +159,6 @@ function Dashboard({ onLogout }: DashboardProps) {
         </main>
       </div>
       <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
-      <ClaudeTerminal onOpenSettings={() => setTab('config')} />
       </div>
       {settingsOpen && <SettingsModal wizard={setup} onClose={() => setSettingsOpen(false)} />}
     </div>

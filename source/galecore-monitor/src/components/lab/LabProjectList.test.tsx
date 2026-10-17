@@ -133,15 +133,14 @@ test('cancelar arrastre y soltar archivos externos no cambia organización', () 
   fireEvent.dragOver(group, { dataTransfer: external }); fireEvent.drop(group, { dataTransfer: external });
   expect(group).not.toHaveClass('lab-drop-target'); expect(localStorage.getItem(storage)).toBe(before);
 });
-test('menú compacto fuera del scroll sólo permite grupo y color; chat conserva su color al recargar', () => {
+test('menú compacto fuera del scroll: renombrar, eliminar, grupo y color; chat conserva su color al recargar', () => {
   const { unmount } = render(<LabProjectList {...props}/>);
   fireEvent.click(screen.getByRole('button', { name: 'Opciones de Investigación' }));
   const panel = screen.getByRole('group', { name: 'Organizar Investigación' });
   expect(panel.parentElement).toBe(document.body);
-  expect(within(panel).queryByRole('button', { name: /Crear grupo|Renombrar/ })).not.toBeInTheDocument();
+  expect(within(panel).queryByRole('button', { name: /Crear grupo/ })).not.toBeInTheDocument();
+  expect(within(panel).getByRole('button', { name: 'Renombrar' })).toHaveFocus();
   expect(within(panel).getByRole('combobox', { name: 'Grupo de Investigación' })).toBeInTheDocument();
-  expect(within(panel).getByRole('combobox', { name: 'Grupo de Investigación' })).toHaveFocus();
-  userEvent.tab(); expect(within(panel).getByRole('button', { name: 'Gris' })).toHaveFocus();
   fireEvent.pointerDown(within(panel).getByRole('button', { name: 'Violeta' }));
   fireEvent.click(within(panel).getByRole('button', { name: 'Violeta' }));
   expect(screen.getByRole('group', { name: 'Organizar Investigación' })).toBeInTheDocument();

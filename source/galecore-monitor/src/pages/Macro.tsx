@@ -77,10 +77,9 @@ export function Macro() {
   useEffect(() => { if (detail) dialog.current?.focus(); else opener.current?.focus(); }, [detail]);
 
   const open = (row: BoardRow, target: HTMLElement) => { opener.current = target; setDetail(row); };
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('macro') || 'resumen');
+  const [tab, setTab] = useState('resumen');
   const goTab = (id: string) => {
     setTab(id);
-    const url = new URL(window.location.href); url.searchParams.set('macro', id); window.history.replaceState(null, '', url);
     window.scrollTo({ top: 0 });
   };
   const current = board?.tabs.find(t => t.id === tab) ?? board?.tabs[0];

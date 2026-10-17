@@ -48,3 +48,10 @@
   .lab-sidebar-group-heading:hover .lab-group-toggle > svg,.lab-sidebar-group-heading:focus-within .lab-group-toggle > svg,
   .lab-project-list .lab-more[aria-expanded=true] { opacity:1; pointer-events:auto; }
 }
+/* Proyectos | Conversaciones (owner 17/10) */
+.lab-list-tabs { display:flex; gap:2px; margin:0 4px 12px; padding:2px; border:1px solid var(--border-dark); border-radius:8px; }
+.lab-list-tabs button { flex:1; padding:6px 8px; border:0; border-radius:6px; background:transparent; color:var(--text-muted); font:var(--font-label) var(--font-sans); cursor:pointer; }
+.lab-list-tabs button[aria-selected=true] { background:var(--bg-hover); color:var(--text-primary); }
+.lab-project-chats.lab-all-chats { margin:0; padding:0; border-left:0; }
+.lab-group-options > .lab-option-danger { color:var(--red-gc); }
+.lab-group-options > hr { width:100%; margin:4px 0; border:0; border-top:1px solid var(--border); }

@@ -18,14 +18,21 @@
 .lw-content { flex:1; min-height:0; overflow:auto; padding:0 8px 16px; }
 .lw-search { margin:12px 4px; }
 .lw-drawer .ticker-watchlist table { font-size:16px; }
-.lw-drawer .ticker-watchlist th,.lw-drawer .ticker-watchlist td { padding:8px 7px; border-right:1px solid var(--border-dark); }
-.lw-drawer .ticker-watchlist th:last-child,.lw-drawer .ticker-watchlist td:last-child { border-right:0; }
+/* Sin cuadrícula y números centrados en su celda (owner 17/10); las acciones aparecen sobre la fila al pasar. */
+.lw-drawer .ticker-watchlist th,.lw-drawer .ticker-watchlist td { padding:10px 7px; border:0; }
+.lw-drawer .ticker-watchlist .numeric { text-align:center; }
+.lw-drawer .ticker-watchlist tbody tr:not(.watchlist-group):not(.watchlist-move):hover { background:var(--bg-secondary); }
+.lw-drawer .ticker-watchlist tbody tr { position:relative; }
+.lw-drawer .ticker-watchlist td.watchlist-action { position:absolute; right:4px; top:50%; transform:translateY(-50%); width:auto; padding:0!important; display:flex; gap:2px; border-radius:6px; }
+.lw-drawer .ticker-watchlist tr:hover td.watchlist-action,.lw-drawer .ticker-watchlist tr:focus-within td.watchlist-action { background:var(--bg-secondary); }
+.lw-drawer .ticker-watchlist thead th:last-child { width:0; padding:0; }
 .lw-drawer .ticker-watchlist thead th { font-size:14px; color:var(--text-secondary); background:var(--bg-primary); position:sticky; top:0; z-index:1; }
-.lw-drawer .ticker-watchlist .watchlist-group td { border-top:1px solid var(--border); border-bottom:0; padding:16px 4px 5px; }
+.lw-drawer .ticker-watchlist .watchlist-group td { border:0; padding:16px 4px 5px; }
 .watchlist-group button { display:flex; align-items:center; gap:7px; border:0; background:none; color:var(--text-secondary); font:inherit; font-size:12px; text-transform:uppercase; cursor:pointer; }
 .lw-drawer .watchlist-symbol { display:flex; align-items:center; gap:8px; padding:0; }
 .watchlist-price-error { display:block; font-size:12px; font-weight:400; color:var(--yellow-gc); }
-.watchlist-ticker-icon { display:grid; place-items:center; width:22px; height:22px; background:var(--bg-elevated); color:var(--text-secondary); border-radius:50%; font-size:12px; font-weight:500; }
+.watchlist-ticker-icon { display:grid; place-items:center; flex-shrink:0; width:24px; height:24px; overflow:hidden; background:var(--bg-elevated); color:var(--text-secondary); border-radius:50%; font-size:12px; font-weight:500; }
+.watchlist-ticker-icon img { width:100%; height:100%; object-fit:contain; }
 .lw-drawer .watchlist-action { width:22px; padding:8px 3px!important; }
 .lw-drawer .watchlist-remove { opacity:0; }
 .lw-drawer tr:hover .watchlist-remove,.lw-drawer tr:focus-within .watchlist-remove { opacity:1; }

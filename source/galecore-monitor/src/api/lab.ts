@@ -38,11 +38,12 @@ export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: str
 export interface WorkspaceChat { id: string; project: string; provider: 'codex' | 'claude'; model?: string; effort?: string; title: string; createdAt?: string; turnStartedAt?: number; state: 'idle' | 'running' | 'interrupted' | 'failed' | 'cancelled'; activity: string; error: string | null; messages: ChatMessage[] }
 export interface ChatOptions { models: string[]; efforts: string[]; defaultModel?: string; modelEfforts?: Record<string, string[]> }
 export interface WorkspaceState { projects: WorkspaceProject[]; chats: Omit<WorkspaceChat, 'messages'>[]; providers: LabProvider[]; chatOptions?: Partial<Record<'codex' | 'claude', ChatOptions>> }
-export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'file'; children?: WorkspaceFile[] }
+export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'file'; text?: false; children?: WorkspaceFile[] }
 
 /** Sube un adjunto del chat a adjuntos/ del proyecto (WS-0036); devuelve la ruta que se nombra en el mensaje. */
-export async function labUpload(projectId: string, file: File): Promise<{ path: string; name: string; size: number }> {
-  const send = async () => request('/workspaces/' + encodeURIComponent(projectId) + '/attachments', { method: 'POST',
+export async function labUpload(projectId: string, file: File, dir?: string): Promise<{ path: string; name: string; size: number }> {
+  // Con `dir` (Archivos → Subir) va a esa carpeta con su nombre; sin él, a adjuntos/.
+  const send = async () => request('/workspaces/' + encodeURIComponent(projectId) + '/attachments' + (dir !== undefined ? '?dir=' + encodeURIComponent(dir) : ''), { method: 'POST',
     headers: { Authorization: 'Bearer ' + await labToken(), 'X-File-Name': encodeURIComponent(file.name) }, body: file }, 120000);
   let r = await send();
   if (r.status === 401) { token = null; r = await send(); }
@@ -50,3 +51,6 @@ export async function labUpload(projectId: string, file: File): Promise<{ path: 
   if (!r.ok) throw new Error(value.error || 'No se pudo adjuntar el archivo.');
   return value;
 }
+
+/** Shell del proyecto (owner 17/10): PowerShell en la carpeta del proyecto, por WebSocket con el token del Lab. */
+export const labShellUrl = () => LAB_URL.replace(/^http/, 'ws') + '/shell';

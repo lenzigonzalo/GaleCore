@@ -14,6 +14,13 @@ interface Props {
   groupActions?: { onMove: (symbol: string, group: string) => void; onRename: (from: string, to: string) => void; onDelete: (name: string) => void };
 }
 
+/** Logo del instrumento, como en TradingView (owner 17/10); si la imagen no está, la inicial. */
+function TickerLogo({ symbol }: { symbol: string }) {
+  const [failed, setFailed] = useState(false);
+  return <span className="watchlist-ticker-icon" aria-hidden="true">{failed ? symbol.slice(0, 1)
+    : <img src={'https://financialmodelingprep.com/image-stock/' + encodeURIComponent(symbol.split(/[ /]/)[0]) + '.png'} alt="" loading="lazy" onError={() => setFailed(true)}/>}</span>;
+}
+
 /** Presentación compacta del mismo store de las tarjetas; no consulta ni suscribe datos. */
 export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSymbols, onRemoveSymbol, sections, groupActions }: Props) {
   const [collapsed,setCollapsed] = useState<string[]>([]);
@@ -43,7 +50,7 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
               title={ticker.lastUpdate ? 'Recepción ' + fmtTime(ticker.lastUpdate) + ' ET' + (isStale(ticker.lastUpdate) ? ' · lectura anterior' : '') : 'Sin fecha de recepción'}>
               <th scope="row">
                 <button className="watchlist-symbol" aria-label={ticker.symbol} aria-pressed={selected}
-                  onClick={() => onSelect(selected ? null : ticker.symbol)}><span className="watchlist-ticker-icon" aria-hidden="true">{ticker.symbol.slice(0,1)}</span>{ticker.symbol}</button>
+                  onClick={() => onSelect(selected ? null : ticker.symbol)}><TickerLogo symbol={ticker.symbol}/>{ticker.symbol}</button>
                 {hasPrice && ticker.error.price && <span className="watchlist-price-error" role="status" title={ticker.error.price}>Lectura anterior</span>}
               </th>
               <td className="numeric tabular-nums" title={ticker.error.price || undefined}>
