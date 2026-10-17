@@ -258,6 +258,21 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         returns="source=sec, asOf (last filed), notes, data[cik, entityName, label, facts[unit, start, end, value, form, "
         "fiscalYear, fiscalPeriod, filed, frame, accession]]",
     ),
+    CapabilityDefinition(
+        capability_id="filings.sec_document",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="The latest 10-K (or 10-Q/20-F) of a company as text by item: 1 business (products, segments), "
+        "1A risks, 7 management's discussion (net sales by product and region, margins); tables with cells split by |",
+        parameters=[
+            CapabilityParameter(name="Ticker", type="string", required=False, description="Ticker or Cik"),
+            CapabilityParameter(name="Cik", type="string", required=False, description="Ticker or Cik"),
+            CapabilityParameter(name="Form", type="string", required=False, description="default 10-K"),
+            CapabilityParameter(name="Items", type="string", required=False, description="e.g. 1,1A,7 (default)"),
+            CapabilityParameter(name="MaxChars", type="string", required=False, description="per item, default 30000"),
+        ],
+        returns="source=sec, upstreamUrl (the document), asOf (filing date), notes, data[cik, name, form, filingDate, "
+        "reportDate, url, items[item, title, text, chars, truncated], notFound]",
+    ),
     # WS-0037: la cuenta real (Tastytrade, sólo lectura) y Macro, que el monitor ya muestra. Cuenta real ≠ SHADOW:
     # nunca se suman ni se cruzan sus decisiones (PRODUCT.md «Límites»).
     CapabilityDefinition(

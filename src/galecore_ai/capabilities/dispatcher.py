@@ -149,6 +149,7 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
     "filings.sec_company": {"method": "GET", "path": "/Data/Sec/Company", "param_key": "", "source_param": ""},
     "filings.sec_filings": {"method": "GET", "path": "/Data/Sec/Filings", "param_key": "", "source_param": ""},
     "filings.sec_facts": {"method": "GET", "path": "/Data/Sec/Facts", "param_key": "", "source_param": ""},
+    "filings.sec_document": {"method": "GET", "path": "/Data/Sec/Document", "param_key": "", "source_param": ""},
     # WS-0037: cuenta real (sólo lectura) y Macro.
     "account.overview": {"method": "GET", "path": "/App/GaleCore/Account/Overview", "param_key": "", "source_param": ""},
     "account.balances": {"method": "GET", "path": "/Data/Tastytrade/Account/Balances", "param_key": "", "source_param": ""},
