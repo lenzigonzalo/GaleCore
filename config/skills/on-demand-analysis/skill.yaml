@@ -17,6 +17,9 @@ answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisi
   fechado o el vínculo con sus estrategias sólo si responde lo que preguntó (como PRODUCT.md, pedidos para entender). Análisis: tabla corta primero (3+ datos), después 2-3 líneas
   que agregan una decisión o un límite, sin repetir celdas. Cada número del pack con su fecha. Lo que GaleCore no
   sirve: una línea y `gap add`.
+  «¿Cambió algo en <empresa>?»: `filings.sec_filings`; de cada 8-K reciente decí qué es por su ítem: 2.02 resultados ·
+  5.02 cambio de directivos · 1.01 acuerdo importante · 2.03 deuda nueva · 5.07 votación de accionistas · 8.01 otros.
+  Form 4 = compra o venta de directivos; 13D/G = accionistas con más del 5 %. Con fecha y enlace; prensa = faltante.
 
 system_prompt: >
   1. Pick the kind from the request: macro (rates, inflation, employment, credit, «la macro»), technical (trend,

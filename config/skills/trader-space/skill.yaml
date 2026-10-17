@@ -12,6 +12,10 @@ output_contract: galecore_ai.contracts.sources.SourceQueryResult
 
 required_capabilities: []
 
+answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (decisión del owner 13/10)
+  «¿Qué podés hacer?»: tabla de hasta 6 filas «Qué pedirme · Para qué» con sus estrategias activas nombradas, el
+  mercado que GaleCore sirve y los eventos que tocan sus posiciones; una línea de lo que todavía no hay; dos opciones.
+
 system_prompt: >
   1. Start from the space: the session opens with `space context`. Use the profile's limits and the objectives
      when you answer, and say which piece you used (kind/key and its version).

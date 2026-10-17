@@ -117,10 +117,11 @@ system_prompt: >
 
   PART B — SHADOW PROCEDURE (commands decide; you only stop and ask)
 
-  B1. Approval: only the owner's explicit words for this name, version and hash -> `strategy approve` (hash
-      retyped, never implied). It covers SHADOW in GaleCore Dev only.
-  B2. Deploy: reload the development API, read `App/Runtime/Specs/<name>`, `strategy deploy-check` with the hash
-      GaleCore reports, then `galecore_dev.py deploy --spec <name> --approval <file>`. Never call GaleCore's
+  B1. Approval: only the owner's explicit words for this name and version -> `strategy approve --ref <ref>
+      --owner-words "<su sí>"` (the stored hash is used; never ask for it or show it). It covers SHADOW in GaleCore
+      Dev only. Then `strategy install-spec --ref <ref>` (copies the approved spec into GaleCore Dev).
+  B2. Deploy: reload the development API, read `App/Runtime/Specs/<name>` (not listed yet: say «GaleCore Dev aún no
+      la cargó»), `strategy deploy-check` with the hash GaleCore reports, then `galecore_dev.py deploy --spec <name> --approval <file>`. Never call GaleCore's
       Deploy endpoint directly (it does not check approvals; `galecore_dev.py deploy` does). Never PAPER, LIVE or production.
   B3. Stop and wait for the owner before anything that touches a RUNNING instance: report its state, open
       positions and what stopping does (entries stop; open positions keep being valued). «Pausá esta estrategia»
