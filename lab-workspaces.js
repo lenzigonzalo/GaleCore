@@ -261,7 +261,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       ask.context={facts,asked};saveChat(chat);  // lo mide tools/caso.py, sea cual sea el motor
       const context=[resume,product,here,facts,asked].filter(Boolean).join('\n\n');
       const engine=engineArgs(chat,p,context,auto);job.file=engine.file;
-      const proc=job.proc=spawnProcess(binaries[chat.provider],engine.args,{cwd:p.dir,env:environment(),windowsHide:true,stdio:['pipe','pipe','pipe']});
+      const proc=job.proc=spawnProcess(binaries[chat.provider],engine.args,{cwd:p.dir,env:{...environment(),GALECORE_HOST_PROVIDER:chat.provider||'',GALECORE_HOST_MODEL:chat.model||''},windowsHide:true,stdio:['pipe','pipe','pipe']});
       const decoder=new StringDecoder('utf8');let pending='';
       proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{consumeEvent(chat,JSON.parse(line),chat.provider);saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
       proc.stderr.on('data',()=>{});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});proc.stdin.end(words+'\n');
