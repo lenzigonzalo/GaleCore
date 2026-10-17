@@ -68,6 +68,7 @@ def proposal_data() -> dict:
 
 def proposal(mutate=None, research_ref: str | None = None) -> ProposalContent:
     data = proposal_data()
+    data["simulated_amount_usd"] = 10000.0   # WS-0043 (1e): a closed design declares the amount it is simulated with
     if research_ref:
         data["research_refs"] = [research_ref]
         data["hypothesis"]["sources"] = []
@@ -546,7 +547,8 @@ def test_versions_stored_without_the_new_fields_keep_their_hash(kb, research_ref
     """1.0.0–1.0.5 were stored before WS-0016: adding the fields must not make them INTEGRITY_FAILED."""
     _, path = stored(kb, research_ref, criticised=False)
     data = json.loads(Path(path).read_text(encoding="utf-8"))
-    del data["content"]["parameters"], data["content"]["management"], data["content"]["change"]
+    del (data["content"]["parameters"], data["content"]["management"], data["content"]["change"],
+         data["content"]["simulated_amount_usd"])
     old = {k: v for k, v in data.items() if k != "content_hash"}
     from galecore_ai.contracts.strategy import compute_document_hash
     data["content_hash"] = compute_document_hash(old)   # the hash as the old contract computed it
@@ -835,11 +837,12 @@ def test_sheet_compares_structures_with_what_galecore_returns(kb, research_ref):
 
 def test_a_cap_above_the_profile_is_flagged(kb, research_ref):  # noqa: F811
     from galecore_ai.application.profile import set_profile
+    from galecore_ai.application.strategy_sheet import risk
     from tests.unit.test_capital import LIMITS
-    set_profile(kb.profile, changes={"reference_capital": {"amount": 4000.0, "currency": "USD"},
-                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
-    stored(kb, research_ref)
-    rows = sheet(kb, KEY)["risk"]["rows"]
+    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    doc, _ = stored(kb, research_ref)
+    smaller = doc.model_copy(update={"content": doc.content.model_copy(update={"simulated_amount_usd": 4000.0})})
+    rows = risk(kb, smaller)["rows"]
     assert rows[0][2] == "200 USD (5 %)" and rows[0][3] == "EXCEDE"
     lim = json.loads(spec_text())["risk_limits"]
     worst = lim["max_loss_per_trade_usd"] * lim["max_concurrent_positions"]
@@ -948,3 +951,32 @@ def test_install_spec_needs_approval_and_copies_the_exact_bytes(kb, research_ref
     (tmp_path / doc.spec_file).write_text("{}", encoding="utf-8")
     with pytest.raises(KnowledgeError, match="not overwritten"):
         install_spec(kb=kb, key=KEY, target_dir=tmp_path)
+
+
+def test_a_design_without_a_simulated_amount_is_missing_it(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.controls import classify
+    from galecore_ai.application.strategy_sheet import risk
+    doc, _ = stored(kb, research_ref)
+    assert classify(doc)["monto_simulado_usd"] == 10000.0
+    bare = doc.model_copy(update={"content": doc.content.model_copy(update={"simulated_amount_usd": None})})
+    verdict = classify(bare)
+    assert verdict["recomendar_aprobacion"] is False and "monto simulado (falta" in verdict["motivo"]
+    assert any("monto simulado: el diseño no lo declara" in m for m in risk(kb, bare)["missing"])
+
+
+def test_capital_sizes_each_strategy_with_its_own_amount(kb, research_ref):  # noqa: F811
+    from galecore_ai.application import capital
+    from galecore_ai.application.profile import set_profile
+    from tests.unit.test_capital import LIMITS, allocation, exposure
+    set_profile(kb.profile, changes={"reference_capital": {"amount": 2500.0, "currency": "USD"},
+                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    stored(kb, research_ref)
+    asked = []
+
+    def read(path):
+        asked.append(path)
+        return exposure() if path.startswith("/App/Runtime/Exposure") else allocation()
+    out = capital.report(kb, read)
+    assert asked[0].startswith("/App/Runtime/Exposure?capital=10000.0&")      # the strategy's amount, not the profile's
+    assert asked[1].startswith("/App/Runtime/Allocation?capital=10000.0&") and asked[1].endswith(f"&spec={NAME}")
+    assert isinstance(out["reparto"], list) and len(out["reparto"]) == 1

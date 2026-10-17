@@ -76,11 +76,15 @@ def classify(doc: StrategyDocument) -> dict:
             state = "ejecutado" if runs else "no ejecutado por el runtime"
         indispensables.append({"control": name, "estado": state})
     missing = [i["control"] + f" ({i['estado']})" for i in indispensables if i["estado"] != "ejecutado"]
+    amount = doc.content.simulated_amount_usd
+    if amount is None:   # WS-0043 (1e): the design closes with the amount it is simulated with
+        missing.append("monto simulado (falta: el diseño no lo declara)")
     return {
         "estrategia": f"strategy:{doc.name}/{doc.version}", "spec_hash": doc.spec_hash,
         "reglas": rules,
         "vigilancia_del_supervisor": [{"control": c, "como": how, "clase": "vigilada"} for c, how in SUPERVISED],
         "indispensables": indispensables,
+        "monto_simulado_usd": amount,
         "recomendar_aprobacion": not missing,
         "motivo": ("Todos los controles indispensables los ejecuta el runtime." if not missing else
                    "No se recomienda aprobar: faltan controles indispensables ejecutados — " + "; ".join(missing)

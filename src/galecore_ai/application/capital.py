@@ -185,6 +185,72 @@ def split(plan: dict, capital: float) -> dict:
             "lectura": reading, "aviso": NOT_AN_ORDER}
 
 
+def real_account(kb: KnowledgeBase, read: supervisor.Reader, *, width: float | None = None, credit: float | None = None,
+                 contracts: int = 1, symbol: str | None = None) -> dict:
+    """The real account (Tastytrade, read-only) against the profile limits, and optionally a candidate spread.
+
+    The profile percentages apply to the account's own value (`netLiq`, owner 15/10). Advisor only: what is traded in
+    Tastytrade does not go through GaleCore, so nothing here blocks; it says whether the limits would hold and why not.
+    A candidate is judged by its maximum loss ((width − credit) × 100 × contracts); quotes of each leg, events and a
+    realistic fill are not read here and are declared missing.
+    """
+    doc = kb.profile.latest()
+    lim = limits(doc.content if doc else None)
+    source = "perfil " + (doc.ref if doc else "ninguno")
+    unread = [x for x in lim["no_leidos"] if x not in ("capital de referencia", "reserva para ajustes", "tope de una apuesta")]
+    if unread:
+        return {"status": "MISSING_LIMITS", "limites": lim, "fuente": source,
+                "error": "No puedo calcular sin estos límites del perfil: " + ", ".join(unread)}
+    if (width is None) != (credit is None):
+        raise supervisor.SupervisorError("un candidato necesita ancho y crédito (o ninguno)")
+    per_pct, open_pct = lim["maxRiskPerTradePct"], lim["maxOpenRiskPct"]
+    ov = read("/App/GaleCore/Account/Overview?" + urlencode([("maxRiskPerTradePct", per_pct), ("maxOpenRiskPct", open_pct)]))
+    if not isinstance(ov, dict) or not ov.get("netLiq"):
+        raise supervisor.SupervisorError("GaleCore devolvió una cuenta sin valor: no se calculan los topes")
+    net = float(ov["netLiq"])
+    per_cap, open_cap = round(net * per_pct / 100, 2), round(net * open_pct / 100, 2)
+    open_risk = float(ov.get("maxRisk") or 0)
+    rows = [{"posicion": f"{p.get('symbol')} {p.get('structure')} {p.get('expiration') or ''}".strip(),
+             "perdida_maxima_usd": p["maxLoss"], "tope_usd": per_cap, "dentro": p["maxLoss"] <= per_cap}
+            for p in ov.get("positions", []) if p.get("maxLoss") is not None]
+    out = {"estado": "cuenta real", "al": ov.get("asOf"), "valor_cuenta_usd": net,
+           "tope_por_operacion_usd": per_cap, "tope_sumado_usd": open_cap, "riesgo_abierto_usd": open_risk,
+           "margen_sumado_usd": round(open_cap - open_risk, 2), "posiciones": rows,
+           "atencion": [a["title"] for a in ov.get("attention", []) if a.get("kind") == "riesgo"]}
+    parts = [(f"Cuenta real {_usd(net)} USD: riesgo abierto {_usd(open_risk)} USD contra un tope sumado de {_usd(open_cap)}"
+              f" ({_pct(open_pct)} %); por operación el tope es {_usd(per_cap)} ({_pct(per_pct)} %).")]
+    if width is not None and credit is not None:
+        if width <= 0 or credit < 0 or credit >= width or contracts < 1:
+            raise supervisor.SupervisorError("candidato inválido: ancho > 0, 0 ≤ crédito < ancho, contratos ≥ 1")
+        loss = round((width - credit) * 100 * contracts, 2)
+        after = round(open_risk + loss, 2)
+        reasons = []
+        if loss > per_cap:
+            reasons.append(f"arriesga {_usd(loss)} USD y el tope por operación es {_usd(per_cap)}")
+        if after > open_cap:
+            reasons.append(f"el riesgo abierto pasaría a {_usd(after)} USD y el tope sumado es {_usd(open_cap)}")
+        out["candidato"] = {"simbolo": symbol, "ancho": width, "credito": credit, "contratos": contracts,
+                            "perdida_maxima_usd": loss, "riesgo_abierto_despues_usd": after,
+                            "pasa": not reasons, "motivos": reasons}
+        parts.append("El candidato " + ("pasa los dos topes." if not reasons else "no pasa: " + "; ".join(reasons) + "."))
+    out["faltantes"] = ["cotización de cada pata, eventos, balance, ex-dividendo y crédito realista: no se leen acá"
+                        if width is not None else "candidato: sin spread para evaluar"]
+    out |= {"lectura": " ".join(parts), "aviso": "Asesor: lo que se opera en Tastytrade no pasa por GaleCore y nada lo bloquea.",
+            "fuente": "GaleCore GET /App/GaleCore/Account/Overview; " + source}
+    return out
+
+
+def _simulated_amounts(kb: KnowledgeBase, names: list[str]) -> dict[str, float | None]:
+    """The amount each strategy's latest saved version declares for its simulation (None: the design does not say)."""
+    out: dict[str, float | None] = {}
+    for name in names:
+        keys = [k for k in kb.strategies.versions() if k.split("/")[0] == name]
+        latest = max(keys, key=lambda k: tuple(int(x) for x in k.split("/")[1].split("."))) if keys else None
+        doc = kb.strategies.load(latest) if latest else None
+        out[name] = doc.content.simulated_amount_usd if doc else None
+    return out
+
+
 def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None = None,
            strategies: list[str] | None = None) -> dict:
     """The whole answer: limits read, capital available, concentration, and the split of `capital` (default: reference)."""
@@ -199,21 +265,31 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None 
         raise supervisor.SupervisorError("el capital debe ser > 0")
     ref = lim["capital_referencia"]
     names = strategies or sorted({k.split("/")[0] for k in kb.strategies.versions()})
-    exp = read("/App/Runtime/Exposure?" + _query(ref, lim))
-    plan = read("/App/Runtime/Allocation?" + _query(capital or ref, lim, names))
-    if not isinstance(exp, dict) or not isinstance(plan, dict):
+    amounts = _simulated_amounts(kb, names)   # WS-0043 (1e): what is simulated is sized with its own amount
+    sized = {n: a for n, a in amounts.items() if a is not None}
+    whatif = capital is not None
+    base = sum(sized.values()) if sized and not whatif else ref
+    exp = read("/App/Runtime/Exposure?" + _query(base, lim))
+    if whatif:
+        plans = [(capital, read("/App/Runtime/Allocation?" + _query(capital, lim, names)))]
+    else:
+        plans = [(a, read("/App/Runtime/Allocation?" + _query(a, lim, [n]))) for n, a in sized.items()]
+    if not isinstance(exp, dict) or not all(isinstance(p, dict) for _, p in plans):
         raise supervisor.SupervisorError("GaleCore devolvió algo que no es exposición o reparto")
-    missing = ["cuenta real: lo disponible es sobre el capital de referencia y lo abierto en SHADOW (sin broker)",
+    missing = ["cuenta real: esto es lo simulado en SHADOW (sin broker); la cuenta real se mide con `capital --real`",
                "correlación entre subyacentes: se agrupa por subyacente, dirección y semana; no se mide la correlación",
                "costos: el riesgo es el máximo del spread, sin comisiones"]
+    unsized = sorted(n for n, a in amounts.items() if a is None)
+    if unsized and not whatif:
+        missing.append("monto simulado no declarado en el diseño (no se reparte): " + ", ".join(unsized))
     if exp.get("openNotValued"):
         missing.append(f"{exp['openNotValued']} abierta(s) sin valuación: su no realizado no está")
-    if capital is None or capital == ref:
+    if whatif:
+        missing.append(f"el reparto de {_usd(capital)} es aparte de lo abierto en SHADOW (que va contra {_usd(base)})")
+    else:
         missing.append(f"el reparto no descuenta lo ya abierto ({_usd(exp['openMaxRisk'])} en riesgo): hoy entra riesgo "
                        f"nuevo por {_usd(exp['availableForNewRiskUsd'])}, y cada apuesta abierta ya usa parte de su tope")
-    else:
-        missing.append(f"el reparto de {_usd(capital)} es aparte de lo abierto en SHADOW (que va contra la referencia "
-                       f"de {_usd(ref)})")
+    repartos = [split(p, a) for a, p in plans]
     return {"al": exp.get("asOf"), "limites": lim, "disponible": available(exp), "concentracion": concentration(exp),
-            "reparto": split(plan, capital or ref), "faltantes": missing,
+            "reparto": repartos[0] if whatif else repartos, "faltantes": missing,
             "fuente": "GaleCore GET /App/Runtime/Exposure y /App/Runtime/Allocation; " + source}

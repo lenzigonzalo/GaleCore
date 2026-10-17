@@ -257,7 +257,7 @@ class ManagementStep(BaseModel):
 
 
 MANAGED_BLOCKS = (Block.EXIT, Block.ADJUSTMENT)
-PROPOSAL_FIELDS_ADDED = ("parameters", "management", "change")  # WS-0016
+PROPOSAL_FIELDS_ADDED = ("parameters", "management", "change", "simulated_amount_usd")  # WS-0016; WS-0043 (1e)
 
 
 def design_gaps(content: ProposalContent) -> list[str]:
@@ -309,6 +309,9 @@ class ProposalContent(BaseModel):
     parameters: list[Parameter] = Field(default_factory=list)   # WS-0016; required at save (design_gaps)
     management: list[ManagementStep] = Field(default_factory=list)
     change: VersionChange | None = None                         # WS-0016; required at save after the first version
+    # WS-0043 (1e): the amount this strategy is simulated with, declared when its design closes. The profile's capital
+    # is only the real account; controls list this as missing when it is not there.
+    simulated_amount_usd: float | None = Field(default=None, gt=0)
 
     check_not_blank = field_validator("display_name", "purpose")(_non_blank)
 

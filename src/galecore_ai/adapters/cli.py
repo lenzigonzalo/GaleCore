@@ -849,7 +849,11 @@ async def _cmd_capital(args: argparse.Namespace) -> None:
     from galecore_ai.application import capital, supervisor
     kb = _build_knowledge_base()
     try:
-        out = capital.report(kb, supervisor.api_reader(), capital=args.amount, strategies=args.strategy)
+        if args.real:
+            out = capital.real_account(kb, supervisor.api_reader(), width=args.width, credit=args.credit,
+                                       contracts=args.contracts, symbol=args.symbol)
+        else:
+            out = capital.report(kb, supervisor.api_reader(), capital=args.amount, strategies=args.strategy)
         _json_out(out, exit_code=_EXIT_INSUFFICIENT_DATA if out.get("status") == "MISSING_LIMITS" else 0)
     except supervisor.SupervisorError as exc:
         _json_out({"status": "ERROR", "error": str(exc)}, exit_code=_EXIT_INTERNAL_ERROR)
@@ -1466,6 +1470,12 @@ def build_parser() -> _JsonArgumentParser:
                                            "hago?» Exposición contra límites y reparto con reserva y escalera (P1-04)")
     p_cap.add_argument("--amount", type=float, help="Capital to split (USD); default: the profile's reference capital")
     p_cap.add_argument("--strategy", action="append", help="Split among these strategies (repeatable); default: all known")
+    p_cap.add_argument("--real", action="store_true", help="The real account against the profile limits (advisor); "
+                                                           "with --width and --credit, also a candidate spread")
+    p_cap.add_argument("--width", type=float, help="Candidate spread width in points (with --real)")
+    p_cap.add_argument("--credit", type=float, help="Candidate credit per share (with --real)")
+    p_cap.add_argument("--contracts", type=int, default=1, help="Candidate contracts (with --real)")
+    p_cap.add_argument("--symbol", help="Candidate underlying (with --real)")
 
     p_supervise = sub.add_parser("supervise", help="Supervisor of SHADOW: alerts on existing rules and the owner's "
                                                    "decisions with their context (WS-0007)")

@@ -65,8 +65,10 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
     per_trade, per_trade_src = (cap, "tope de la spec; el runtime no abre por encima") if cap is not None else (
         (width * 100, "ancho completo × 100; la spec no fija tope") if width is not None else (None, "no calculable"))
     positions = _num(limits_.get("max_concurrent_positions"))
-    ref = lim.get("capital_referencia")
-    rows, missing = [], [x if x.startswith("perfil") else f"perfil: {x}" for x in lim["no_leidos"]]
+    ref = doc.content.simulated_amount_usd   # WS-0043 (1e): what is simulated is sized with its own amount
+    rows, missing = [], [x if x.startswith("perfil") else f"perfil: {x}" for x in lim["no_leidos"] if x != "capital de referencia"]
+    if ref is None:
+        missing.append("monto simulado: el diseño no lo declara, no se miden los topes")
     if ref is not None and lim.get("maxRiskPerTradePct") is not None and per_trade is not None:
         allowed = ref * lim["maxRiskPerTradePct"] / 100
         rows.append(("Pérdida máxima por operación (1 contrato)", f"{capital._usd(per_trade)} USD ({per_trade_src})",

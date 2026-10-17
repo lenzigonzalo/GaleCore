@@ -149,3 +149,40 @@ def test_missing_spec_data_is_not_said_as_a_limit():
     assert "faltan datos de la spec" in out["lectura"] and any("falta un dato, no es un límite" in n for n in out["notas"])
     none = capital.split({**allocation(fits=False), "strategies": [], "strategiesNotFound": ["spy_pcs"]}, 10000.0)
     assert "no encontró spy_pcs" in none["lectura"] and "no es por los límites" in none["lectura"]
+
+
+def _overview(**kw):
+    base = {"asOf": "2026-10-16T20:00:00Z", "netLiq": 2500.0, "maxRisk": 1860.0, "attention": [],
+            "positions": [{"symbol": "SPY", "structure": "PUT_CS", "expiration": "2026-11-20", "maxLoss": 1860.0}]}
+    return {**base, **kw}
+
+
+def test_real_account_is_measured_on_its_own_value_and_judges_a_candidate(kb):  # noqa: F811
+    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    asked = []
+
+    def read(path):
+        asked.append(path)
+        return _overview()
+
+    out = capital.real_account(kb, read, width=5, credit=4.0, symbol="SPY")
+    assert asked == ["/App/GaleCore/Account/Overview?maxRiskPerTradePct=5.0&maxOpenRiskPct=50.0"]
+    assert out["tope_por_operacion_usd"] == 125.0 and out["tope_sumado_usd"] == 1250.0
+    assert out["posiciones"][0]["dentro"] is False and out["margen_sumado_usd"] == -610.0
+    c = out["candidato"]
+    assert c["perdida_maxima_usd"] == 100.0 and c["riesgo_abierto_despues_usd"] == 1960.0 and c["pasa"] is False
+    assert len(c["motivos"]) == 1 and "tope sumado" in c["motivos"][0]
+    assert "nada lo bloquea" in out["aviso"]
+
+
+def test_real_account_refuses_half_a_candidate_and_missing_limits(kb):  # noqa: F811
+    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    try:
+        capital.real_account(kb, lambda path: _overview(), width=5)
+    except supervisor.SupervisorError as exc:
+        assert "ancho y crédito" in str(exc)
+    else:
+        raise AssertionError("expected SupervisorError")
+    set_profile(kb.profile, changes={"risk_limits": LIMITS[:1]}, note="n", prompt="p", host=HOST, now=NOW)
+    out = capital.real_account(kb, lambda path: (_ for _ in ()).throw(AssertionError(path)))
+    assert out["status"] == "MISSING_LIMITS" and "riesgo máximo sumado" in out["error"]
