@@ -45,9 +45,17 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
             var events = await eventsTask;
 
             var rules = string.IsNullOrWhiteSpace(request.RulesJson) ? null : JsonNode.Parse(request.RulesJson)?.AsObject();
+            var (perTrade, openPct, source) = (request.MaxRiskPerTradePct, request.MaxOpenRiskPct, (string?)null);
+            if (perTrade == null && openPct == null && request.ProfileJson != null)
+            {
+                var p = ProfileRiskLimits.Parse(request.ProfileJson);
+                (perTrade, openPct) = (p.PerTrade, p.Open);
+                if (perTrade != null || openPct != null) source = $"perfil v{p.Version} (espacio)";
+                else missing.Add("Topes del perfil: no se leen de su texto; se juzga con las reglas del Monitor.");
+            }
             var response = AccountOverviewBuilder.Build(
                 (double)balances.NetLiquidatingValue, (double)balances.CashBalance, (double)balances.DerivativeBuyingPower,
-                account, betas, rules, today, events, missing, request.MaxRiskPerTradePct, request.MaxOpenRiskPct);
+                account, betas, rules, today, events, missing, perTrade, openPct, source);
             response.MarginUsed = (double)balances.MaintenanceRequirement;
             response.MarginUsedPct = balances.NetLiquidatingValue > 0
                 ? Math.Round((double)(balances.MaintenanceRequirement / balances.NetLiquidatingValue) * 100, 1) : null;

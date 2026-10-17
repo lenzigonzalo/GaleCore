@@ -127,4 +127,24 @@ public class AccountOverviewBuilderTests
         Assert.Equal(27.5, p[3].Pct);
         Assert.Null(AccountOverviewBuilder.Periods(2550, null, null, null, today)[2].Pnl);
     }
+
+    [Fact]
+    public void TopesDelPerfilDelEspacio_SeLeenDeSusPalabras()
+    {
+        var json = """
+            {"version": 12, "risk_limits": ["capital de referencia: el valor real de la cuenta",
+              "pérdida máxima por operación 5 % del capital de referencia",
+              "riesgo máximo sumado de las posiciones abiertas 15 % del capital de referencia",
+              "reserva para ajustes 10 %"]}
+            """;
+        Assert.Equal(((double?)5.0, (double?)15.0, (int?)12), ProfileRiskLimits.Parse(json));
+        var none = ProfileRiskLimits.Parse("""{"version": 3, "risk_limits": ["sin números"]}""");
+        Assert.True(none.PerTrade == null && none.Open == null && none.Version == 3);
+        Assert.Null(ProfileRiskLimits.Parse("no es json").PerTrade);
+        var o = AccountOverviewBuilder.Build(2500, 2600, 660,
+            new AccountSpreadsResponse { Spreads = { Spread(4) }, UnderlyingPrices = { ["SPY"] = 770 } },
+            new Dictionary<string, double> { ["SPY"] = 1.0 }, Rules, Today, Array.Empty<CalendarEvent>(), new List<string>(),
+            maxRiskPerTradePct: 5, maxOpenRiskPct: 15, limitsSource: "perfil v12 (espacio)");
+        Assert.Equal("perfil v12 (espacio)", o.RiskLimitsSource);
+    }
 }

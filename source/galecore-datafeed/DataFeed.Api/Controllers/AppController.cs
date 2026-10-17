@@ -105,13 +105,24 @@ namespace DataFeed.Controllers
         [HttpGet("GaleCore/Account/Overview")]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status409Conflict)]
         public async Task<IActionResult> AccountOverviewAsync([FromQuery] string? accountNumber,
-            [FromQuery] double? maxRiskPerTradePct, [FromQuery] double? maxOpenRiskPct)
-            => await Handle(new DataFeed.Application.Data.Tastytrade.AccountOverview.AccountOverviewRequest
+            [FromQuery] double? maxRiskPerTradePct, [FromQuery] double? maxOpenRiskPct,
+            [FromServices] IServiceProvider services, CancellationToken ct)
+        {
+            // WS-0043 (owner 16/10): sin topes en la consulta, los del perfil del espacio del usuario logueado.
+            string? profile = null;
+            var userId = _currentUser.UserId;
+            if (maxRiskPerTradePct == null && maxOpenRiskPct == null && userId != null
+                && services.GetService<DataFeed.Repositories.GaleCoreDbContext>() is { } db)
+                profile = await db.TraderSpaceItems.AsNoTracking()
+                    .Where(i => i.OwnerId == userId.Value && i.Kind == "profile" && i.Key == "perfil")
+                    .Select(i => i.Content).FirstOrDefaultAsync(ct);
+            return await Handle(new DataFeed.Application.Data.Tastytrade.AccountOverview.AccountOverviewRequest
             {
                 AccountNumber = accountNumber,
-                MaxRiskPerTradePct = maxRiskPerTradePct, MaxOpenRiskPct = maxOpenRiskPct,
+                MaxRiskPerTradePct = maxRiskPerTradePct, MaxOpenRiskPct = maxOpenRiskPct, ProfileJson = profile,
                 RulesJson = await LoadFileOrNullAsync("galecore_rules_core.json"),
             });
+        }
 
         /// <summary>Encabezado de Mercado (WS-0036): último, cierre anterior, variación, volumen, máximo y mínimo del día.</summary>
         [Tags("App.GaleCore")]

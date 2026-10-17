@@ -23,6 +23,41 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         /// </summary>
         public double? MaxRiskPerTradePct { get; set; }
         public double? MaxOpenRiskPct { get; set; }
+        /// <summary>
+        /// La pieza `profile/perfil` del espacio del usuario logueado (JSON): sin topes en la consulta, se leen de sus
+        /// `risk_limits` (owner 16/10: una sola fuente, el Monitor y el chat juzgan igual). La pone el controller.
+        /// </summary>
+        public string? ProfileJson { get; set; }
+    }
+
+    /// <summary>
+    /// Los topes del perfil del espacio, leídos de sus palabras con la misma regla que GaleCore-AI (`capital.limits`):
+    /// la línea que dice «por operación» y la que dice «sumado», el primer «N %» de cada una. Lo que no se lee es null.
+    /// </summary>
+    public static class ProfileRiskLimits
+    {
+        private static readonly System.Text.RegularExpressions.Regex Pct =
+            new(@"([-+−]?\s*\d+(?:[.,]\d+)?)\s*%", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+        public static (double? PerTrade, double? Open, int? Version) Parse(string? profileJson)
+        {
+            if (string.IsNullOrWhiteSpace(profileJson)) return (null, null, null);
+            JsonNode? doc;
+            try { doc = JsonNode.Parse(profileJson); } catch (System.Text.Json.JsonException) { return (null, null, null); }
+            var lines = (doc?["risk_limits"] as JsonArray)?.Select(x => x?.GetValue<string>() ?? "").ToList() ?? new();
+            int? version = doc?["version"] is JsonValue v && v.TryGetValue<int>(out var n) ? n : null;
+            return (Read(lines, "por operaci"), Read(lines, "sumado"), version);
+        }
+
+        private static double? Read(List<string> lines, string word)
+        {
+            var line = lines.FirstOrDefault(l => l.ToLowerInvariant().Contains(word));
+            var m = line == null ? null : Pct.Match(line);
+            if (m == null || !m.Success) return null;
+            var text = System.Text.RegularExpressions.Regex.Replace(m.Groups[1].Value, @"\s", "").Replace("−", "-").Replace(",", ".");
+            return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && value > 0 && value <= 100
+                ? value : null;
+        }
     }
 
     public class AccountOverviewResponse
@@ -48,8 +83,8 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public double? MaxRiskPct { get; set; }
         /// <summary>Límite de riesgo de cartera de la config (portfolio_heat_max_pct), en %.</summary>
         public double? MaxRiskLimitPct { get; set; }
-        /// <summary>De dónde salen los topes con que se juzgó: "perfil" (vinieron como parámetros) o
-        /// "monitor.risk_limits" (las reglas, sin topes del perfil). La misma cuenta no se juzga distinto sin decirlo.</summary>
+        /// <summary>De dónde salen los topes con que se juzgó: "perfil" (vinieron en la consulta), "perfil vN (espacio)"
+        /// (los leyó del espacio del usuario) o "monitor.risk_limits" (las reglas: sin usuario ni topes). Se dice siempre.</summary>
         public string RiskLimitsSource { get; set; } = "monitor.risk_limits";
         public ExposureDto Exposure { get; set; } = new();
         public List<AttentionDto> Attention { get; set; } = new();
@@ -162,7 +197,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
             double netLiq, double cash, double buyingPower, AccountSpreadsResponse account,
             IReadOnlyDictionary<string, double> betas, JsonObject? rules, DateOnly today,
             IReadOnlyList<CalendarEvent> events, List<string> missing,
-            double? maxRiskPerTradePct = null, double? maxOpenRiskPct = null)
+            double? maxRiskPerTradePct = null, double? maxOpenRiskPct = null, string? limitsSource = null)
         {
             var spreads = account.Spreads;
             var equities = account.Equities;
@@ -187,7 +222,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
                 MaxRisk = R(maxRisk),
                 MaxRiskPct = netLiq > 0 ? R(maxRisk / netLiq * 100) : null,
                 MaxRiskLimitPct = maxOpenRiskPct ?? (heat == null ? null : R(heat.Value * 100)),
-                RiskLimitsSource = maxRiskPerTradePct != null || maxOpenRiskPct != null ? "perfil" : "monitor.risk_limits",
+                RiskLimitsSource = limitsSource ?? (maxRiskPerTradePct != null || maxOpenRiskPct != null ? "perfil" : "monitor.risk_limits"),
                 Exposure = Exposure(spreads, equities, prices, betas),
                 Missing = missing,
             };

@@ -6,7 +6,8 @@ namespace DataFeed.Repositories.Entities
     /// (y no la edita). GaleCore-AI la carga al iniciar cada sesión para responder según los objetivos del trader.
     ///
     /// Una sola tabla genérica a propósito: el contenido es texto (markdown o JSON) que escribe el trader o
-    /// GaleCore-AI, y ningún proceso de GaleCore lo interpreta. Si un tipo necesita estructura propia, se separa.
+    /// GaleCore-AI, y GaleCore no lo interpreta, salvo dos lecturas acotadas: `preference/aviso-strike` y los topes de
+    /// `profile/perfil` en el resumen de la cuenta (WS-0043). Si un tipo necesita estructura propia, se separa.
     /// </summary>
     public class TraderSpaceItem
     {
