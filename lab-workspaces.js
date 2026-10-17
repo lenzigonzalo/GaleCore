@@ -9,7 +9,10 @@ const fail = (message, status = 400) => Object.assign(new Error(message), { stat
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
 const TYPES = ['personal', 'analysis', 'strategy'];
-const TEXT = /\.(md|txt|json|yaml|yml|csv|tsv)$/i;
+const TEXT = /\.(md|txt|json|yaml|yml|csv|tsv|py|log)$/i;
+// Desde Archivos no se tocan los registros: JSON (con hash, los escribe el harness) ni el descriptor del proyecto.
+const LOCKED = /\.json$/i;
+const BAD_NAME = /[<>:"|?*\x00-\x1f]|(^|[\/\\])\.\.?($|[\/\\])/;
 const PRIVATE = /(^|[\/\\])(?:\.|node_modules|auth|credentials|secrets|tokens|env\.json)/i;
 function atomic(file, value) { const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 }); fs.renameSync(tmp, file); }
 function read(file, fallback) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch(e) { if (e.code === 'ENOENT') return fallback; throw fail('No se pudo leer el registro local; no se sobrescribió.', 500); } }
@@ -27,8 +30,25 @@ function tree(dir, prefix = '', depth = 0) {
   return fs.readdirSync(dir, { withFileTypes: true }).filter(e => !e.isSymbolicLink() && !PRIVATE.test(e.name)).slice(0,200).flatMap(e => {
     const rel = prefix + e.name;
     if(e.isDirectory()) return [{ path:rel, name:e.name, kind:'folder', children:tree(path.join(dir,e.name),rel+'/',depth+1) }];
-    return TEXT.test(e.name) ? [{path:rel,name:e.name,kind:'file'}] : [];
+    return [{path:rel,name:e.name,kind:'file',...(TEXT.test(e.name)?{}:{text:false})}];
   });
+}
+// Una ruta del explorador de Archivos (owner 17/10: crear, editar, renombrar, eliminar como en el explorador): dentro
+// del proyecto, sin archivos privados ni enlaces, con la carpeta de arriba ya existente.
+function projectPath(dir, relative, { exists = false, editable = false } = {}) {
+  relative = String(relative || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!relative || relative.length > 300 || path.isAbsolute(relative) || PRIVATE.test(relative) || BAD_NAME.test(relative)) throw fail('Nombre o ruta no válida.');
+  if (editable && LOCKED.test(relative)) throw fail('Los registros JSON los escribe el harness; no se editan desde Archivos.', 403);
+  const base = fs.realpathSync(dir), target = path.resolve(base, relative);
+  if (!target.startsWith(base + path.sep)) throw fail('Ruta fuera del proyecto.', 403);
+  let parent; try { parent = fs.realpathSync(path.dirname(target)); } catch { throw fail('La carpeta no existe.', 404); }
+  if (parent !== base && !parent.startsWith(base + path.sep)) throw fail('Ruta fuera del proyecto.', 403);
+  if (exists) { if (!fs.existsSync(target)) throw fail('No existe.', 404); if (fs.lstatSync(target).isSymbolicLink()) throw fail('Ruta fuera del proyecto.', 403); }
+  return target;
+}
+function holdsRecords(target) {
+  if (!fs.statSync(target).isDirectory()) return LOCKED.test(target);
+  return fs.readdirSync(target, { withFileTypes: true }).some(e => LOCKED.test(e.name) || (e.isDirectory() && holdsRecords(path.join(target, e.name))));
 }
 // Qué está haciendo el motor, en palabras del trader (WS-0039: «mostrá qué se está haciendo», owner 16/10). Sólo la
 // línea de actividad; el comando y su salida no se muestran.
@@ -91,7 +111,9 @@ function parseMapa(text){
   return {title,intro,sections};
 }
 function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn }) {
-  const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats');
+  const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
+  // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
+  const overridesFile=path.join(local,'lab-project-overrides.json');
   fs.mkdirSync(chatDir,{recursive:true});
   let registry=read(metadata,[]);
   const jobs=new Map();
@@ -134,9 +156,11 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     const all=old.map(p=>({...p,...registry.find(r=>r.id===p.id),...descriptors.find(d=>d.id===p.id)}));
     for(const p of descriptors)if(!all.some(o=>o.id===p.id))all.push(p);
-    for(const p of registry){if(all.some(o=>o.id===p.id))continue;const dir=path.join(kb,p.relative);if(fs.existsSync(dir) && fs.realpathSync(dir).startsWith(fs.realpathSync(kb)+path.sep))all.push({...p,dir});}
-    return all;
+    for(const p of registry){if(all.some(o=>o.id===p.id)||!p.relative)continue;const dir=path.join(kb,p.relative);if(fs.existsSync(dir) && fs.realpathSync(dir).startsWith(fs.realpathSync(kb)+path.sep))all.push({...p,dir});}
+    const overrides=read(overridesFile,{});
+    return all.map(p=>({...p,...(overrides[p.id]?.label?{label:overrides[p.id].label}:{}),...(overrides[p.id]?.archived?{archived:true}:{})}));
   }
+  function setOverride(id,change){const all=read(overridesFile,{});all[id]={...all[id],...change};atomic(overridesFile,all);}
   function project(id){const p=listProjects().find(p=>p.id===id);if(!p)throw fail('Proyecto desconocido.',404);return p;}
   function createProject(body){
     const label=String(body.label||'').trim(), type=body.type;
@@ -156,7 +180,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   // Un workspace personal explícito y separado del conocimiento financiero compartido.
   if(!listProjects().some(p=>p.id==='personal'))createProject({label:'Personal',type:'personal'});
   const publicProject=({dir,...p})=>p;
-  function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(Boolean).map(({messages,...c})=>({...c,messageCount:messages.length}));}
+  // Las conversaciones que abre tools/caso.py (origin «prueba») no se listan: el trader ve sólo las suyas.
+  function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.origin!=='prueba').map(({messages,...c})=>({...c,messageCount:messages.length}));}
   // Al abrir una conversación nueva en un proyecto, el final de la anterior del mismo proyecto (ya guardada por el Lab):
   // retomar sin depender de que el modelo haya guardado (WS-0029 H8). No genera datos nuevos.
   function previousTail(chat){
@@ -212,7 +237,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // before the next send; subsequent environment changes cannot alter this selection.
     if(chat.model === undefined || chat.effort === undefined){Object.assign(chat,normalize(chat.provider,chat),{selectionSource:'legacy-fallback'});saveChat(chat);}
     const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()};chat.messages.push(ask);
-    if(chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
+    if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
     chat.state='running';chat.error=null;chat.activity='Pensando';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'tools','terminal','skills','lab-strategy-bootstrap','SKILL.md');
     // El contexto del turno, igual para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el
@@ -238,8 +263,40 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
-    if(req.method==='GET' && url.pathname==='/workspaces'){json(res,200,{projects:listProjects().map(publicProject),chats:listChats(),chatOptions:modelOptions(),providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
+    if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
+    if(req.method==='POST'&&parts[0]==='workspaces'&&parts[1]&&(parts[2]==='rename'||parts[2]==='archive')&&parts.length===3){
+      const p=project(parts[1]);
+      if(parts[2]==='rename'){const label=String((await readBody(req)).label||'').trim();if(!label||label.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');setOverride(p.id,{label});json(res,200,{...publicProject(p),label});return true;}
+      // Eliminar un proyecto lo saca de la lista; su carpeta y sus registros quedan en knowledge/ (se recupera).
+      if(p.id==='personal')throw fail('El espacio personal no se elimina.');
+      if([...jobs.values()].some(j=>j.project===p.id))throw fail('El proyecto tiene una conversación respondiendo.',409);
+      setOverride(p.id,{archived:true});json(res,200,{archived:true});return true;
+    }
+    if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='files'&&parts[3]&&parts.length===4){
+      const p=project(parts[1]), b=await readBody(req), op=parts[3];
+      if(p.id==='portfolio'&&[b.path,b.from,b.to].some(x=>/^(workspaces|strategies|projects)(\/|$)/i.test(String(x||'').replace(/\\/g,'/'))))throw fail('Eso es de otro proyecto: abrilo desde su proyecto.',403);
+      if(op==='write'){
+        const target=projectPath(p.dir,b.path,{editable:true});const text=String(b.text??'');
+        if(!TEXT.test(target))throw fail('Sólo se editan archivos de texto (md, txt, csv, yaml, py).');
+        if(Buffer.byteLength(text)>512*1024)throw fail('El archivo supera 512 KB.',413);
+        if(b.create&&fs.existsSync(target))throw fail('Ya existe un archivo con ese nombre.',409);
+        if(!b.create&&!fs.existsSync(target))throw fail('No existe.',404);
+        fs.writeFileSync(target,text);json(res,200,{path:b.path});return true;
+      }
+      if(op==='mkdir'){const target=projectPath(p.dir,b.path);if(fs.existsSync(target))throw fail('Ya existe.',409);fs.mkdirSync(target);json(res,201,{path:b.path});return true;}
+      if(op==='rename'){
+        const from=projectPath(p.dir,b.from,{exists:true,editable:true}), to=projectPath(p.dir,b.to,{editable:true});
+        if(fs.existsSync(to))throw fail('Ya existe uno con ese nombre.',409);if(holdsRecords(from))throw fail('La carpeta tiene registros del harness; no se mueve desde Archivos.',403);
+        fs.renameSync(from,to);json(res,200,{path:b.to});return true;
+      }
+      if(op==='delete'){
+        const target=projectPath(p.dir,b.path,{exists:true,editable:true});
+        if(holdsRecords(target))throw fail('Tiene registros del harness; no se borra desde Archivos.',403);
+        fs.rmSync(target,{recursive:true});json(res,200,{deleted:b.path});return true;
+      }
+      throw fail('Operación desconocida.',404);
+    }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='strategy'){
       const p=project(parts[1]); if(p.type!=='strategy')throw fail('Este proyecto no es una estrategia.');
       const value=await readStrategy(p,url.searchParams.get('view')==='design');json(res,200,value);return true;
@@ -250,13 +307,16 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const safe=raw.replace(/[^\w.\- ]+/g,'_').replace(/^[.\s]+/,'').slice(-80)||'archivo';
       const chunks=[];let size=0;
       await new Promise((ok,ko)=>{req.on('data',d=>{size+=d.length;if(size>15*1024*1024){ko(fail('El archivo supera 15 MB.',413));req.destroy();}else chunks.push(d);});req.on('end',ok);req.on('error',ko);});
+      // Desde Archivos («Subir») va a la carpeta elegida, con su nombre; desde el chat, a adjuntos/.
+      const folder=url.searchParams.get('dir');
+      if(folder!==null){const rel=(folder?folder.replace(/\/+$/,'')+'/':'')+safe;const target=projectPath(p.dir,rel,{editable:true});if(fs.existsSync(target))throw fail('Ya existe un archivo con ese nombre.',409);fs.writeFileSync(target,Buffer.concat(chunks));json(res,201,{path:rel,name:safe,size});return true;}
       const rel='adjuntos/'+Date.now()+'-'+safe;fs.mkdirSync(path.join(p.dir,'adjuntos'),{recursive:true});
       fs.writeFileSync(path.join(p.dir,rel),Buffer.concat(chunks));json(res,201,{path:rel,name:safe,size});return true;
     }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='files'){
       const p=project(parts[1]), rel=url.searchParams.get('path');const target=rel?safeFile(p.dir,rel):null;if(p.id==='portfolio'&&target&&target.toLowerCase().startsWith(path.join(fs.realpathSync(p.dir),'workspaces').toLowerCase()+path.sep))throw fail('Elegí el proyecto personal para leer sus archivos.',403);json(res,200,rel?{path:rel,text:fs.readFileSync(target,'utf8')}:{tree:tree(p.dir).filter(n=>p.id!=='portfolio'||n.name!=='workspaces'),folder:p.relative});return true;
     }
-    if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
+    if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,...(b.origin==='prueba'?{origin:'prueba'}:{}),title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);
       if(req.method==='GET'&&parts.length===2){json(res,200,c);return true;}
       if(req.method==='GET'&&parts[2]==='mapa'){
@@ -272,6 +332,9 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         for(const rel of files){if(!/^adjuntos\/[\w.\- ]+$/.test(rel)||!fs.existsSync(path.join(dir,rel)))throw fail('Adjunto no encontrado: '+rel,404);}
         const text=files.length?words+'\n\nArchivos adjuntos (en la carpeta del proyecto): '+files.join(', '):words;
         json(res,202,send(c,text,{mode:b.mode==='auto'?'auto':'manual'}));return true;}
+      if(req.method==='POST'&&parts[2]==='rename'){const title=String((await readBody(req)).title||'').trim();if(!title||title.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');c.title=title;c.titleLocked=true;saveChat(c);json(res,200,{id:c.id,title});return true;}
+      // Eliminar saca la conversación del historial; el archivo pasa a chats-borradas/ (local, no se muestra).
+      if(req.method==='POST'&&parts[2]==='delete'){if(jobs.has(c.id))throw fail('La conversación está respondiendo. Detenela antes de eliminarla.',409);fs.mkdirSync(removedDir,{recursive:true});fs.renameSync(path.join(chatDir,c.id+'.json'),path.join(removedDir,c.id+'.json'));json(res,200,{deleted:c.id});return true;}
       if(req.method==='POST'&&parts[2]==='stop'){const j=jobs.get(c.id);if(j){j.chat.state='cancelled';saveChat(j.chat);j.proc?.kill();}json(res,200,{requested:!!j});return true;}
     }
     return false;

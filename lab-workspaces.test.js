@@ -89,3 +89,33 @@ test('proyecto de estrategia: una conversación nueva ve el último mapa del pro
  const personal=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
  assert.equal((await route(service,'GET','/chats/'+personal.id+'/mapa')).value.mapa,null);
 });
+test('Archivos como explorador: crea, edita, renombra y borra dentro del proyecto; los JSON no se tocan (owner 17/10)',async t=>{
+ const {kb,service}=setup(t);const dir=path.join(kb,'workspaces/personal');
+ await route(service,'POST','/workspaces/personal/files/mkdir',{path:'notas'});
+ await route(service,'POST','/workspaces/personal/files/write',{path:'notas/idea.md',text:'hola',create:true});
+ await assert.rejects(route(service,'POST','/workspaces/personal/files/write',{path:'notas/idea.md',text:'x',create:true}),/Ya existe/);
+ await route(service,'POST','/workspaces/personal/files/write',{path:'notas/idea.md',text:'chau'});
+ assert.equal(fs.readFileSync(path.join(dir,'notas/idea.md'),'utf8'),'chau');
+ await route(service,'POST','/workspaces/personal/files/rename',{from:'notas/idea.md',to:'notas/tesis.md'});
+ assert.ok(fs.existsSync(path.join(dir,'notas/tesis.md')));
+ await assert.rejects(route(service,'POST','/workspaces/personal/files/write',{path:'../afuera.md',text:'x',create:true}),/no válida|fuera/);
+ await assert.rejects(route(service,'POST','/workspaces/personal/files/write',{path:'workspace.json',text:'{}'}),/harness/);
+ await assert.rejects(route(service,'POST','/workspaces/personal/files/delete',{path:'workspace.json'}),/harness/);
+ await route(service,'POST','/workspaces/personal/files/delete',{path:'notas'});
+ assert.equal(fs.existsSync(path.join(dir,'notas')),false);
+});
+test('proyectos y conversaciones: renombrar, eliminar y ocultar las de prueba',async t=>{
+ const {kb,service}=setup(t);const p=(await route(service,'POST','/workspaces',{label:'Idea',type:'analysis'})).value;
+ await route(service,'POST','/workspaces/'+p.id+'/rename',{label:'Idea nueva'});
+ let state=(await route(service,'GET','/workspaces')).value;assert.equal(state.projects.find(x=>x.id===p.id).label,'Idea nueva');
+ const a=(await route(service,'POST','/chats',{project:p.id,provider:'claude'})).value;
+ await route(service,'POST','/chats',{project:p.id,provider:'claude',origin:'prueba'});
+ await route(service,'POST','/chats/'+a.id+'/rename',{title:'Mi charla'});
+ state=(await route(service,'GET','/workspaces')).value;assert.deepEqual(state.chats.map(c=>c.title),['Mi charla']);
+ await route(service,'POST','/chats/'+a.id+'/delete',{});
+ state=(await route(service,'GET','/workspaces')).value;assert.equal(state.chats.length,0);
+ await assert.rejects(route(service,'POST','/workspaces/personal/archive',{}),/no se elimina/);
+ await route(service,'POST','/workspaces/'+p.id+'/archive',{});
+ state=(await route(service,'GET','/workspaces')).value;assert.equal(state.projects.some(x=>x.id===p.id),false);
+ assert.ok(fs.existsSync(path.join(kb,'workspaces',p.id)));  // la carpeta queda
+});

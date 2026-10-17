@@ -210,8 +210,39 @@ const server = http.createServer(async (req, res) => {
   } catch (e) { json(res, e.status || 500, { error: e.status ? e.message : 'No se pudo completar la operación local. Revisá el servicio del Lab.' }); }
 });
 const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
+// Shell (owner 17/10): una terminal común (PowerShell) en la carpeta del proyecto, al lado de Archivos. Vive mientras
+// el panel está abierto; al cerrar el socket se corta. Mismo token y mismas reglas de origen que el resto del Lab.
+let shells = 0;
+function openShell(ws) {
+  let term = null;
+  const timer = setTimeout(() => ws.close(4001, 'autenticación requerida'), 5000);
+  ws.on('error', () => {});
+  ws.on('message', raw => {
+    let m;
+    try { m = JSON.parse(String(raw)); } catch { ws.close(4000, 'mensaje inválido'); return; }
+    if (!term) {
+      const project = m.type === 'open' && m.token === TOKEN && workspaces.listProjects().find(p => p.id === m.project);
+      if (!project) { ws.close(4003, 'proyecto no autorizado'); return; }
+      if (shells >= 4) { ws.close(4029, 'hay cuatro terminales abiertas'); return; }
+      clearTimeout(timer); shells++;
+      term = pty.spawn(process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || 'bash'), process.platform === 'win32' ? ['-NoLogo'] : [], {
+        cwd: project.dir, env: environment(), name: 'xterm-256color',
+        cols: dimension(m.cols, 20, 400, 100), rows: dimension(m.rows, 5, 200, 30),
+      });
+      term.onData(data => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'output', data })); });
+      term.onExit(() => { term = null; shells--; if (ws.readyState === 1) ws.close(1000, 'terminal cerrada'); });
+      return;
+    }
+    try {
+      if (m.type === 'input' && typeof m.data === 'string') term.write(m.data);
+      if (m.type === 'resize') term.resize(dimension(m.cols, 20, 400, 100), dimension(m.rows, 5, 200, 30));
+    } catch { /* la terminal ya terminó */ }
+  });
+  ws.on('close', () => { clearTimeout(timer); if (term) { try { term.kill(); } catch {} } });
+}
 server.on('upgrade', (req, socket, head) => {
-  if (!validHost(req) || !validOrigin(req) || req.url !== '/attach') { socket.destroy(); return; }
+  if (!validHost(req) || !validOrigin(req) || !['/attach', '/shell'].includes(req.url)) { socket.destroy(); return; }
+  if (req.url === '/shell') { wss.handleUpgrade(req, socket, head, openShell); return; }
   wss.handleUpgrade(req, socket, head, ws => {
     let s = null;
     const timer = setTimeout(() => ws.close(4001, 'autenticación requerida'), 5000);
