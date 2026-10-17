@@ -1,32 +1,55 @@
 import { useEffect, useRef, useState } from 'react';
+import type { IChartApi, Time } from 'lightweight-charts';
 import { labRequest } from '../../api/lab';
 import './LabMapa.css';
 
 // Mapa de la idea (WS-0039): lo escribe el agente en memory/mapa-<tema>.md y el Lab lo sirve por secciones.
 // El panel sólo lee: sin botones ni edición; se relee al abrir la conversación y al terminar cada respuesta.
-export interface MapaLine { mark: 'ok' | 'missing' | 'now' | null; text: string }
-export interface MapaSection { heading: string; lines: MapaLine[]; table?: { header: string[]; rows: string[][] } }
-export interface Mapa { path: string; updatedAt: string; title: string; sections: MapaSection[] }
-
-// WS-0044: «Camino» es por dónde va la idea (✓ hecho, → acá, resto por hacer); las tablas (hipótesis H1, H2…) se
-// muestran como tabla y cada fila se puede señalar desde el chat por su primera celda (#mapa-h1).
-const rowId = (cell: string) => 'mapa-' + cell.toLowerCase().replace(/[^a-z0-9]+/g, '');
-
-function Camino({ lines }: { lines: MapaLine[] }) {
-  return <ol className="lab-mapa-camino">{lines.map((l, i) => {
-    const [step, ...rest] = l.text.split(':');
-    return <li key={i} className={l.mark || 'todo'} aria-current={l.mark === 'now' ? 'step' : undefined}>
-      <span aria-hidden="true">{l.mark === 'ok' ? '✓' : i + 1}</span><b>{step.trim()}</b>{rest.length > 0 && <em>{rest.join(':').trim()}</em>}
-    </li>;
-  })}</ol>;
-}
-
-function Tabla({ table }: { table: NonNullable<MapaSection['table']> }) {
-  return <table className="lab-mapa-table"><thead><tr>{table.header.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
-    <tbody>{table.rows.map((r, i) => <tr key={i} id={rowId(r[0] || '')}>{r.map((c, j) => j === 0 ? <th key={j} scope="row">{c}</th> : <td key={j}>{c}</td>)}</tr>)}</tbody></table>;
-}
+// WS-0044 (owner: tablero): arriba dónde estamos y qué falta, las cifras grandes y el gráfico de la evidencia con su fuente.
+export interface MapaLine { mark: 'ok' | 'missing' | null; text: string }
+export interface MapaChart { fuente?: string; unidad?: string; series: { nombre: string; puntos: [string, number][] }[] }
+export interface MapaSection { heading: string; lines: MapaLine[]; chart?: MapaChart }
+export interface Mapa { path: string; updatedAt: string; title: string; intro?: string[]; sections: MapaSection[] }
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+const COLORS = ['--accent', '--yellow-gc', '--green', '--red'];
+
+function MapaChartView({ chart, label }: { chart: MapaChart; label: string }) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!host.current || !chart.series.some(s => s.puntos?.length)) return;
+    let api: IChartApi | undefined, alive = true;
+    void import('lightweight-charts').then(({ createChart, LineSeries, ColorType }) => {
+      if (!alive || !host.current) return;
+      const css = getComputedStyle(host.current), v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+      api = createChart(host.current, { autoSize: true, height: 200,
+        layout: { background: { type: ColorType.Solid, color: v('--bg-secondary', '#141414') }, textColor: v('--text-secondary', '#b5b5b5'), fontSize: 12 },
+        grid: { vertLines: { visible: false }, horzLines: { color: '#262626' } },
+        timeScale: { borderVisible: false }, rightPriceScale: { borderVisible: false }, handleScroll: false, handleScale: false });
+      chart.series.forEach((s, i) => {
+        const line = api!.addSeries(LineSeries, { color: v(COLORS[i % COLORS.length], '#c7d2cb'), lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+          priceFormat: { type: 'custom', formatter: (x: number) => x.toLocaleString('es-AR', { maximumFractionDigits: 1 }) + (chart.unidad ? ' ' + chart.unidad : '') } });
+        line.setData((s.puntos || []).filter(p => Number.isFinite(p[1])).map(([t, value]) => ({ time: t as Time, value })));
+      });
+      api.timeScale().fitContent();
+    });
+    return () => { alive = false; api?.remove(); };
+  }, [chart]);
+  return <figure className="lab-mapa-chart">
+    <div ref={host} role="img" aria-label={label} />
+    <figcaption>
+      {chart.series.map((s, i) => <span key={s.nombre} className="lab-mapa-legend" style={{ color: `var(${COLORS[i % COLORS.length]})` }}>— {s.nombre}</span>)}
+      {chart.fuente && <span className="lab-mapa-source">Fuente: {chart.fuente}</span>}
+    </figcaption>
+  </figure>;
+}
+
+function Numeros({ lines }: { lines: MapaLine[] }) {
+  return <div className="lab-mapa-numbers">{lines.map((l, i) => {
+    const [value, ...what] = l.text.split('·');
+    return <div key={i}><strong>{value.trim()}</strong>{what.length > 0 && <span>{what.join('·').trim()}</span>}</div>;
+  })}</div>;
+}
 
 export function LabMapa({ chatId, running }: { chatId: string | null; running: boolean }) {
   const [mapa, setMapa] = useState<Mapa | null>(null);
@@ -52,11 +75,15 @@ export function LabMapa({ chatId, running }: { chatId: string | null; running: b
       : !mapa ? <p className="lab-mapa-empty">El mapa aparece cuando la conversación arma una idea.</p>
       : <>
         <header><h2>{mapa.title || 'Idea'}</h2><span>{running ? 'Actualizando…' : 'Actualizado ' + time(mapa.updatedAt)}{state === 'error' ? ' · no se pudo releer' : ''}</span></header>
+        {mapa.intro && mapa.intro.length > 0 && <div className="lab-mapa-intro">{mapa.intro.map((l, i) => {
+          const [k, ...rest] = l.split(':');
+          return rest.length ? <p key={i}><b>{k.trim()}:</b> {rest.join(':').trim()}</p> : <p key={i}>{l}</p>;
+        })}</div>}
         <div className="lab-mapa-cells">
-          {mapa.sections.map(s => <section key={s.heading} className={'lab-mapa-cell' + (/falta decidir/i.test(s.heading) ? ' open' : '')}>
+          {mapa.sections.map(s => <section key={s.heading} className={'lab-mapa-cell' + (/falta decidir|próxima decisión/i.test(s.heading) ? ' open' : '')}>
             <h3>{s.heading}</h3>
-            {s.table && <Tabla table={s.table} />}
-            {/^camino/i.test(s.heading) ? <Camino lines={s.lines} />
+            {s.chart && <MapaChartView chart={s.chart} label={s.heading} />}
+            {/^números/i.test(s.heading) ? <Numeros lines={s.lines} />
               : s.lines.some(l => l.mark) || s.lines.length > 2
               ? <ul>{s.lines.map((l, i) => <li key={i} className={l.mark || ''}><span aria-hidden="true">{l.mark === 'ok' ? '✓' : l.mark === 'missing' ? '✗' : '·'}</span><span>{l.mark === 'missing' && <span className="sr-only">Falta: </span>}{l.text}</span></li>)}</ul>
               : s.lines.map((l, i) => <p key={i}>{l.text}</p>)}

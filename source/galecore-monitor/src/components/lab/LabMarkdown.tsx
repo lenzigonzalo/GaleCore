@@ -21,25 +21,10 @@ export const LabMarkdown = memo(function LabMarkdown({ text, active = false, onA
   return <div className="lab-markdown">{parts}</div>;
 });
 
-// WS-0044: «H1», «H2»… se definen una vez en la tabla de hipótesis del mapa; en el chat, nombrarlas lleva a su fila.
-const HYPOTHESIS = /(?<![\w[`])H(\d{1,2})\b(?![\]`])/g;
-function showInMapa(id: string) {
-  const row = document.getElementById(id);
-  if (!row) return;
-  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  row.classList.add('lab-mapa-flash');
-  window.setTimeout(() => row.classList.remove('lab-mapa-flash'), 2500);
-}
-
-// Fuera de los bloques de código (```), que se muestran tal cual.
-const linkHypotheses = (text: string) => text.split('```').map((part, i) => i % 2 ? part : part.replace(HYPOTHESIS, (h, n) => '[' + h + '](#mapa-h' + n + ')')).join('```');
-
 function Markdown({ text }: { text: string }) {
   return <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={{
     table: ({ children }) => <div className="lab-table-scroll" role="region" aria-label="Tabla de la respuesta" tabIndex={0}><table>{children}</table></div>,
-    a: ({ href, children }) => href?.startsWith('#mapa-')
-      ? <button type="button" className="lab-hypothesis-ref" title="Ver en el mapa" onClick={() => showInMapa(href.slice(1))}>{children}</button>
-      : <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
+    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
     img: ({ alt }) => <span className="lab-image-description">{alt || 'Imagen'}</span>,
-  }}>{linkHypotheses(text)}</ReactMarkdown>;
+  }}>{text}</ReactMarkdown>;
 }

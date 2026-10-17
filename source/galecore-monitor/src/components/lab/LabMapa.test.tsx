@@ -3,6 +3,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { LabMapa } from './LabMapa';
 import { labRequest } from '../../api/lab';
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
+jest.mock('lightweight-charts', () => ({ ColorType: { Solid: 'solid' }, LineSeries: {},
+  createChart: jest.fn(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() })),
+}));
 
 const mapa = { path: 'memory/mapa-apple.md', updatedAt: '2026-10-16T17:04:00Z', title: 'Earnings de Apple', sections: [
   { heading: 'Idea', lines: [{ mark: null, text: 'Vender prima alrededor del balance del 02/11' }] },
@@ -44,13 +47,14 @@ test('un error de lectura no aparenta un mapa', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo leer el mapa');
 });
 
-test('camino con el tramo actual y las hipótesis en tabla, cada una señalable (WS-0044)', async () => {
-  (labRequest as jest.Mock).mockResolvedValue({ mapa: { ...mapa, sections: [
-    { heading: 'Camino', lines: [{ mark: 'ok', text: 'Idea' }, { mark: 'now', text: 'Evidencia: falta H2' }, { mark: null, text: 'Operar o no' }] },
-    { heading: 'Hipótesis', lines: [], table: { header: ['', 'Qué dice', 'Estado'], rows: [['H1', 'La implícita supera a la realizada', 'Se sostiene']] } },
+test('tablero: dónde estamos, cifras grandes y gráfico con su fuente (WS-0044)', async () => {
+  (labRequest as jest.Mock).mockResolvedValue({ mapa: { ...mapa, intro: ['Estamos: probando si se cobra'], sections: [
+    { heading: 'Números', lines: [{ mark: null, text: '84 % · días con prima' }] },
+    { heading: 'Implícita vs realizada', lines: [], chart: { fuente: 'GaleCore', series: [{ nombre: 'VIX', puntos: [['2020-01-31', 14]] }] } },
   ] } });
-  const { container } = render(<LabMapa chatId="c1" running={false} />);
-  expect(await screen.findByText('Evidencia')).toBeInTheDocument();
-  expect(container.querySelector('[aria-current="step"]')).toHaveTextContent('Evidenciafalta H2');
-  expect(container.querySelector('#mapa-h1')).toHaveTextContent('Se sostiene');
+  render(<LabMapa chatId="c1" running={false} />);
+  expect(await screen.findByText('probando si se cobra')).toBeInTheDocument();
+  expect(screen.getByText('84 %').tagName).toBe('STRONG');
+  expect(screen.getByRole('img', { name: 'Implícita vs realizada' })).toBeInTheDocument();
+  expect(screen.getByText('Fuente: GaleCore')).toBeInTheDocument();
 });
