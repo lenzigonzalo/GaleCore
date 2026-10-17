@@ -72,3 +72,10 @@ test('la actividad dice en palabras del trader qué está haciendo el motor (WS-
  consumeEvent(c,{type:'assistant',message:{content:[{type:'tool_use',name:'Write',input:{file_path:'C:/k/memory/mapa-ab12cd34.md'}}]}},'claude');
  assert.equal(c.activity,'Actualizando el mapa');
 });
+test('mapa: camino con el tramo actual y tabla de hipótesis (WS-0044)',()=>{
+ const {parseMapa}=require('./lab-workspaces');
+ const m=parseMapa('# VRP\n## Camino\n- ✓ Idea\n- → Evidencia: falta H2\n- Operar o no\n## Hipótesis\n| | Qué dice | Estado |\n|---|---|---|\n| H1 | La implícita supera a la realizada | Se sostiene |\n');
+ assert.deepEqual(m.sections[0].lines.map(l=>l.mark),['ok','now',null]);
+ assert.deepEqual(m.sections[1].table,{header:['','Qué dice','Estado'],rows:[['H1','La implícita supera a la realizada','Se sostiene']]});
+ assert.deepEqual(m.sections[1].lines,[]);
+});

@@ -80,7 +80,11 @@ function parseMapa(text){
     if(/^# /.test(line)&&!title&&!sections.length){title=line.slice(2).trim();continue;}
     if(/^## /.test(line)){sections.push({heading:line.slice(3).trim(),lines:[]});continue;}
     if(!sections.length)continue;
-    const item=line.replace(/^[-*]\s+/,''),mark=/^✓/.test(item)?'ok':/^✗/.test(item)?'missing':null;
+    // Tabla markdown (WS-0044: hipótesis H1, H2… definidas una vez): primera fila = encabezado; la de guiones se salta.
+    if(/^\|.*\|$/.test(line)){const s=sections.at(-1),cells=line.slice(1,-1).split('|').map(c=>c.trim());
+      if(cells.every(c=>/^:?-{2,}:?$/.test(c)))continue;
+      if(!s.table)s.table={header:cells,rows:[]};else s.table.rows.push(cells);continue;}
+    const item=line.replace(/^[-*]\s+/,''),mark=/^✓/.test(item)?'ok':/^✗/.test(item)?'missing':/^→/.test(item)?'now':null;
     sections.at(-1).lines.push({mark,text:mark?item.slice(1).trim():item});
   }
   return {title,sections};
