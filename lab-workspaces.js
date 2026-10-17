@@ -95,8 +95,8 @@ function latestMapa(dir,since){
   return found?'memory/'+found.f:null;
 }
 function parseMapa(text){
-  // WS-0044 (owner: tablero): renglones antes de la primera sección = dónde estamos y qué falta; «- valor · qué es» en
-  // «Números» = cifra grande; un bloque ```grafico con JSON = la serie que sostiene la evidencia, con su fuente.
+  // Secciones fijas del diseño (Hipótesis, Objetivo, Entrada… Datos, Evidencia); las reglas y los datos van en tablas.
+  // «- valor · qué es» = cifra grande; un bloque ```grafico con JSON = la serie que sostiene la evidencia, con su fuente.
   let title='';const intro=[],sections=[];let chart=null;
   for(const raw of text.split(/\r?\n/)){const line=raw.trim();
     if(chart!==null){if(line.startsWith('```')){try{const c=JSON.parse(chart);if(sections.length&&Array.isArray(c.series))sections.at(-1).chart=c;}catch{ /* JSON roto: sin gráfico */ }chart=null;}else chart+=raw+'\n';continue;}
@@ -105,6 +105,9 @@ function parseMapa(text){
     if(/^# /.test(line)&&!title&&!sections.length){title=line.slice(2).trim();continue;}
     if(/^## /.test(line)){sections.push({heading:line.slice(3).trim(),lines:[]});continue;}
     if(!sections.length){intro.push(line);continue;}
+    // Tablas markdown (owner 17/10: el mapa como la solapa Diseño): primera fila = encabezado, la de guiones se salta.
+    if(line.startsWith('|')){const cells=line.replace(/^\||\|$/g,'').split('|').map(c=>c.trim());const sec=sections.at(-1);
+      if(cells.every(c=>/^:?-{2,}:?$/.test(c)))continue;if(!sec.table)sec.table={head:cells,rows:[]};else sec.table.rows.push(cells);continue;}
     const item=line.replace(/^[-*]\s+/,''),mark=/^✓/.test(item)?'ok':/^✗/.test(item)?'missing':null;
     sections.at(-1).lines.push({mark,text:mark?item.slice(1).trim():item});
   }
@@ -246,7 +249,11 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // (knowledge/AGENTS.md) y las del proyecto (su AGENTS.md) las lee cada motor solo desde la carpeta.
     const product=fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8');
     const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' y, si el proyecto no es de estrategia, ofrecé abrir uno una sola vez por conversación. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.'+' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea») en '+path.join(p.dir,chat.mapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.';
+    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' y, si el proyecto no es de estrategia, ofrecé abrir uno una sola vez por conversación. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.'+(p.type==='strategy'
+      // Owner 17/10: el mapa es el diseño que se va armando; se reescribe en cada turno con el formato vigente (también
+      // si el de memory/ tiene otro formato) y la respuesta cierra proponiendo la próxima pieza del diseño.
+      ?' Antes de responder, reescribí el mapa del proyecto (el mapa-*.md de memory/, o '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md')+' si no hay) con el formato de «Mapa de la idea», aunque nada haya cambiado: pasá lo que ya estaba a sus secciones (hipótesis, objetivo, reglas, datos, evidencia). Cerrá la respuesta según «Construir una estrategia es avanzar el diseño».'
+      :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea») en '+path.join(p.dir,chat.mapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
     const job={proc:null,project:p.id,chat};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
     function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{

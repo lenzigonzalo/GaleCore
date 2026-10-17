@@ -119,3 +119,10 @@ test('proyectos y conversaciones: renombrar, eliminar y ocultar las de prueba',a
  state=(await route(service,'GET','/workspaces')).value;assert.equal(state.projects.some(x=>x.id===p.id),false);
  assert.ok(fs.existsSync(path.join(kb,'workspaces',p.id)));  // la carpeta queda
 });
+test('mapa como diseño: secciones con tablas de reglas y datos, gráfico en Evidencia (owner 17/10)',()=>{
+ const {parseMapa}=require('./lab-workspaces');
+ const m=parseMapa('# Prima SPY\n## Hipótesis\nLa implícita supera a la realizada.\n## Entrada\n| Concepto | Condición | Umbral | Acción |\n|---|---|---|---|\n| VIX menos realizada | > | 2 puntos | Abrir |\n## Salida\n## Evidencia\n- 83 % · días con VIX arriba\n```grafico\n{"series":[{"nombre":"x","puntos":[["2026-01-01",1]]}]}\n```\n');
+ assert.equal(m.title,'Prima SPY');assert.deepEqual(m.sections.map(s=>s.heading),['Hipótesis','Entrada','Salida','Evidencia']);
+ assert.deepEqual(m.sections[1].table,{head:['Concepto','Condición','Umbral','Acción'],rows:[['VIX menos realizada','>','2 puntos','Abrir']]});
+ assert.equal(m.sections[2].lines.length,0);assert.ok(m.sections[3].chart);assert.equal(m.sections[3].lines[0].text,'83 % · días con VIX arriba');
+});
