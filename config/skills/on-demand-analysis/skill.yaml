@@ -63,6 +63,7 @@ system_prompt: >
 
 instructions: |
   analyze pack --kind macro|technical|fundamental|flow [--symbol SYM] --prompt "<pedido>"
+  galecore get <capacidad> --keep "<pedido>"   # otro dato de GaleCore, citable: devuelve ref evidence:<id>
   profile show
   kb search --kind research --text "análisis <kind> <symbol>" ; kb show <ref>
   research save --capability on_demand_analysis --slug analisis-<kind>-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}

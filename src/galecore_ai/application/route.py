@@ -15,6 +15,7 @@ from galecore_ai.application.source_query import _STOPWORDS_FOLDED, _fold
 from galecore_ai.harness.catalog import Catalog
 
 MIN_SCORE = 6  # below this the overlap is chance; the host chooses from `options`
+MARGIN = 2  # a first that barely beats the second is a guess (batería MVP 17/10: «¿entra en mi cuenta?» → market_watch)
 
 _EXTRA_STOP = {_fold(w) for w in (
     "mi", "mis", "me", "te", "hoy", "ahora", "esta", "este", "semana", "quiero", "podes", "podés", "haceme", "armame",
@@ -47,15 +48,19 @@ def match(request: str, catalog: Catalog, limit: int = 3) -> dict:
     ranked.sort(key=lambda r: (-r[0], r[1]))
     best = [{"capability": cid, "score": score, "matched": hits, "serves": e.serves.strip(), "flow": e.flow,
              "skill": e.skill, "model": _model(e)} for score, cid, hits, e in ranked[:limit]]
-    sure = bool(best) and best[0]["score"] >= MIN_SCORE
+    strong = bool(best) and best[0]["score"] >= MIN_SCORE
+    rival = best[1]["score"] if len(best) > 1 and best[1]["score"] >= MIN_SCORE else 0
+    sure = strong and best[0]["score"] - rival >= MARGIN
     out = {"request": request, "matches": best, "missing": not best, "confident": sure,
            "next": ("Leé el archivo de la skill de la primera (o la que mejor sirva), bajo config/, y seguí su método y su flow; "
                     "ahí está cómo se responde ese tipo de pedido." if sure else
                     "El cruce de palabras no alcanza: elegí por el sentido del pedido entre `options` y corré "
                     "`catalog --match` con el ejemplo de esa capacidad para ver su flow; si ninguna sirve, ofrecé crearla "
                     "con capability_builder; no improvises.")}
-    if not sure:
-        out["options"] = options(catalog)
+    if not sure:  # close call: only the candidates; nothing near: the whole catalog
+        out["options"] = ([{"capability": m["capability"], "serves": m["serves"].split(". ")[0][:140]} for m in best]
+                          if strong else options(catalog))
+        out["ambiguous"] = strong
     return out
 
 

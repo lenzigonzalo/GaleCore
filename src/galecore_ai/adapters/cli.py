@@ -671,8 +671,25 @@ async def _cmd_galecore(args: argparse.Namespace) -> None:
         _json_out({"capability": args.capability, "ok": False, "error": first_line,
                    "latency_ms": result.latency_ms, "gap": {"id": noted["id"], "count": noted["count"]}}, exit_code=1)
         return
+    retrieved = datetime.now(UTC)
     body = {"capability": args.capability, "ok": True, "params": params, "latency_ms": result.latency_ms,
-            "source": "GALECORE_VERIFIED", "retrieved_at": datetime.now(UTC).isoformat()}
+            "source": "GALECORE_VERIFIED", "retrieved_at": retrieved.isoformat()}
+    if args.keep:   # batería 17/10: a citable `evidence:<id>` in one call, instead of hand-writing the evidence JSON
+        from galecore_ai.contracts.evidence import EvidenceSeries, PayloadScope
+        content = EvidenceContent(
+            source="galecore", tool=f"galecore get {args.capability}",
+            params={k: v for k, v in params.items() if isinstance(v, str | int | float | bool)}, retrieved_at=retrieved,
+            series=[EvidenceSeries(name=args.capability, unit="ver cada campo", frequency="snapshot",
+                                   observation_dates=retrieved.isoformat())],
+            payload=json.dumps(result.data, ensure_ascii=False), payload_scope=PayloadScope.FULL)
+        try:
+            doc, _ = save_evidence(kb=_build_knowledge_base(), slug=f"galecore-{args.capability.replace('.', '-').replace('_', '-')}-{retrieved:%H%M%S}",
+                                   prompt=args.keep, host=RecordHost(provider="galecore-ai galecore get", model=None),
+                                   content=content, now=retrieved)
+        except KnowledgeError as exc:
+            _knowledge_error_out(exc)
+            return
+        body["ref"] = f"evidence:{doc.id}"   # cite this in a research's sources
     if args.out:   # big answers (a chain is ~1 MB) go to a file; the host reads only what it needs
         out = Path(args.out).resolve()
         run_dir = os.environ.get("GALECORE_AI_RUN_DIR")   # a scheduled run writes only inside its own directory
@@ -1427,6 +1444,8 @@ def build_parser() -> _JsonArgumentParser:
     p_gc_get.add_argument("--symbol", help="Symbol (an OCC option symbol for option_greeks); calendars take none")
     p_gc_get.add_argument("--param", action="append", help="Extra parameter key=value (e.g. interval=1d)")
     p_gc_get.add_argument("--out", help="Write the payload to this file and print only a summary")
+    p_gc_get.add_argument("--keep", metavar="PROMPT", help="Also keep the answer as evidence (the trader's request "
+                          "here) and print its `ref`, ready to cite as a source of a research")
 
     p_space = sub.add_parser("space", help="Your space in GaleCore: profile, objectives, conventions, memory, skills, "
                                            "agents, data; own or shared (GC-AI-0021)")

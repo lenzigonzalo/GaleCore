@@ -58,3 +58,20 @@ def test_a_weak_match_hands_every_capability_to_choose_by_meaning():
     out = match("¿En qué quedamos la última vez?", catalog)
     assert not out["confident"] and len(out["options"]) == len(catalog.entries)
     assert all(o["serves"] and o["example"] for o in out["options"])
+
+
+# Batería MVP 17/10 (Codex): a first that barely beats a strong second is a guess; the host gets only those few.
+@pytest.mark.parametrize("request_text", [
+    "Me interesa SPY. ¿Vale la pena vender prima sobre SPY?",
+    "Decime con certeza si vender prima en SPY va a ser rentable y mostrame un backtest de spreads de los últimos diez años.",
+])
+def test_a_close_call_hands_only_the_candidates(request_text):
+    out = match(request_text, load_catalog())
+    assert not out["confident"] and out["ambiguous"]
+    assert 1 < len(out["options"]) <= 3
+
+
+def test_does_it_fit_my_account_is_capital_risk():
+    out = match("Estoy pensando en agregar un put credit spread de SPY de 20 dólares de ancho cobrando 1 dólar, "
+                "un contrato. ¿Entra en mi cuenta?", load_catalog())
+    assert out["matches"][0]["capability"] == "capital_risk" and out["confident"]

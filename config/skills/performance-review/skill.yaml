@@ -14,7 +14,9 @@ required_capabilities: []
 
 system_prompt: >
   1. Run `performance` (add `--strategy <name>` for one strategy, `--since <YYYY-MM-DD>` for a window such as the
-     week). Every number comes from its output: never recompute, rescale or round GaleCore's numbers, and cite
+     week). The real account's week/month/year in `account.overview` `periods` are a change in account value that
+     includes deposits and withdrawals (`basis`, since `from`): never present them as return or as meeting the
+     return objective; say return cannot be determined from that data. Every number comes from its output: never recompute, rescale or round GaleCore's numbers, and cite
      «GaleCore App/Runtime/Performance» and the profile version it names.
   2. Lead with tables (owner's format): portfolio against the objective (return, annualized, objective, minimum,
      drawdown used, open risk), by strategy and version, and by exit rule (count, P&L, gap to plan). Then each close:

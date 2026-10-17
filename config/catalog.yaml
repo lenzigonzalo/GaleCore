@@ -694,7 +694,8 @@ entries:
       - ¿Varias posiciones chicas son una sola apuesta?
       - ¿Cuánto riesgo tengo abierto contra mis límites?
       - ¿Qué exposición tengo?
-      - Tengo 5000 USD, ¿qué puedo hacer?
+      - Tengo 5.000 USD, ¿qué puedo hacer?
+      - Estoy pensando en agregar un spread, ¿entra en mi cuenta?
     skill: skills/capital-risk/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [App/Runtime/Exposure, App/Runtime/Allocation]
