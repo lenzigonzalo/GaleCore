@@ -43,3 +43,14 @@ test('un error de lectura no aparenta un mapa', async () => {
   render(<LabMapa chatId="c1" running={false} />);
   expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo leer el mapa');
 });
+
+test('camino con el tramo actual y las hipótesis en tabla, cada una señalable (WS-0044)', async () => {
+  (labRequest as jest.Mock).mockResolvedValue({ mapa: { ...mapa, sections: [
+    { heading: 'Camino', lines: [{ mark: 'ok', text: 'Idea' }, { mark: 'now', text: 'Evidencia: falta H2' }, { mark: null, text: 'Operar o no' }] },
+    { heading: 'Hipótesis', lines: [], table: { header: ['', 'Qué dice', 'Estado'], rows: [['H1', 'La implícita supera a la realizada', 'Se sostiene']] } },
+  ] } });
+  const { container } = render(<LabMapa chatId="c1" running={false} />);
+  expect(await screen.findByText('Evidencia')).toBeInTheDocument();
+  expect(container.querySelector('[aria-current="step"]')).toHaveTextContent('Evidenciafalta H2');
+  expect(container.querySelector('#mapa-h1')).toHaveTextContent('Se sostiene');
+});
