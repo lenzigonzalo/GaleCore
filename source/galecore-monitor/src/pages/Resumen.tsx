@@ -39,6 +39,8 @@ const NAMES: Record<string, string> = {
   'Personal Income and Outlays': 'Gasto personal (PCE)', 'Employment Situation': 'Empleo (NFP)',
 };
 
+const ATTENTION_LABEL = { gestion: 'Posición', riesgo: 'Riesgo', evento: 'EE. UU.' } as const;
+
 /** Calendario macro: fechas civiles de EE. UU., sin convertirlas al huso del navegador. */
 export function Calendario({ page = false }: { page?: boolean }) {
   const [events, setEvents] = useState<CalEvent[] | null>();
@@ -164,7 +166,7 @@ function Overview({ o, strike, onStrike }: { o: AccountOverview; strike: StrikeA
     {o.attention.length > 0 && <section className="rs-card rs-attention-card" aria-label="Atención">
       <h2>Qué pide atención</h2>
       {o.attention.map(a => <div className="rs-attention" key={a.title}>
-        <span className={'rs-tag ' + a.kind}>{a.kind === 'gestion' ? 'Posición' : 'EE. UU.'}</span>{a.title}</div>)}
+        <span className={'rs-tag ' + a.kind}>{ATTENTION_LABEL[a.kind]}</span>{a.title}</div>)}
     </section>}
     <section className="rs-card rs-lines" aria-label="Posiciones">
       <h2>Posiciones</h2>

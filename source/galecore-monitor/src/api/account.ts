@@ -137,7 +137,7 @@ export interface AccountOverview {
     spyEquivalentShares: number | null; spyEquivalentDollars: number | null; theta: number | null; vega: number | null;
     byUnderlying: { symbol: string; dollarDelta: number | null; beta: number | null; maxRisk: number }[];
   };
-  attention: { kind: 'gestion' | 'evento'; title: string }[];
+  attention: { kind: 'gestion' | 'riesgo' | 'evento'; title: string }[];
   positions: PositionLine[];
   missing: string[];
 }
