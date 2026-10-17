@@ -86,6 +86,12 @@ else:
         sys.exit(0)
     if found.get("confident"):
         top = found["matches"][0]
+    elif found.get("ambiguous"):  # dos o tres parecidas (batería 17/10): la lista corta, sin forzar diseño
+        print("[capacidades] Puede ser una de estas; elegí por el sentido del pedido "
+              "(`catalog --match` trae su flujo):")
+        for o in found.get("options", []):
+            print(f"- {o['capability']}: {o['serves'][:90]}")
+        sys.exit(0)
     elif in_project:
         top = DESIGN
     else:  # el cruce de palabras no alcanza: que el modelo elija por el sentido (WS-0037)
