@@ -185,14 +185,38 @@ def split(plan: dict, capital: float) -> dict:
             "lectura": reading, "aviso": NOT_AN_ORDER}
 
 
+SCOPE = ("Chequeo de dos topes del perfil (por operación y sumado), no una revisión de la operación: no lee la "
+         "cotización de cada pata, eventos, balance, ex-dividendo ni un crédito realista.")
+STATE = {True: "cumple", False: "no cumple", None: "no evaluable"}
+
+
+def _risk_gaps(ov: dict) -> tuple[list[str], list[str]]:
+    """GaleCore's missing list split by impact: what leaves the open risk incomplete, and what does not change it."""
+    risk, other = [], []
+    for m in ov.get("missing") or []:
+        (risk if "sin emparejar" in m.lower() else other).append(m)
+    if ov.get("maxRisk") is None:
+        risk.append("GaleCore no informó el riesgo abierto de la cuenta.")
+    risk += [f"{p.get('symbol')} {p.get('structure')}: sin pérdida máxima, no suma al riesgo abierto."
+             for p in ov.get("positions", []) if p.get("maxLoss") is None and p.get("structure")]
+    return risk, other
+
+
+def _cap_check(used: float, cap: float, complete: bool) -> bool | None:
+    """Within the cap, over it, or unknown: an incomplete total that is already over is over; under it, unknown."""
+    if used > cap:
+        return False
+    return True if complete else None
+
+
 def real_account(kb: KnowledgeBase, read: supervisor.Reader, *, width: float | None = None, credit: float | None = None,
                  contracts: int = 1, symbol: str | None = None) -> dict:
     """The real account (Tastytrade, read-only) against the profile limits, and optionally a candidate spread.
 
     The profile percentages apply to the account's own value (`netLiq`, owner 15/10). Advisor only: what is traded in
-    Tastytrade does not go through GaleCore, so nothing here blocks; it says whether the limits would hold and why not.
-    A candidate is judged by its maximum loss ((width − credit) × 100 × contracts); quotes of each leg, events and a
-    realistic fill are not read here and are declared missing.
+    Tastytrade does not go through GaleCore, so nothing here blocks. Each cap is «cumple», «no cumple» or «no
+    evaluable»: GaleCore's missing items are kept, and those that leave the open risk incomplete (unpaired legs, a
+    risk not reported) make the summed cap unknown instead of passing it. It checks two caps, not the whole trade.
     """
     doc = kb.profile.latest()
     lim = limits(doc.content if doc else None)
@@ -209,45 +233,61 @@ def real_account(kb: KnowledgeBase, read: supervisor.Reader, *, width: float | N
         raise supervisor.SupervisorError("GaleCore devolvió una cuenta sin valor: no se calculan los topes")
     net = float(ov["netLiq"])
     per_cap, open_cap = round(net * per_pct / 100, 2), round(net * open_pct / 100, 2)
-    open_risk = float(ov.get("maxRisk") or 0)
+    risk_gaps, other_gaps = _risk_gaps(ov)
+    complete = not risk_gaps
+    open_risk = float(ov["maxRisk"]) if ov.get("maxRisk") is not None else None
     rows = [{"posicion": f"{p.get('symbol')} {p.get('structure')} {p.get('expiration') or ''}".strip(),
-             "perdida_maxima_usd": p["maxLoss"], "tope_usd": per_cap, "dentro": p["maxLoss"] <= per_cap}
+             "perdida_maxima_usd": p["maxLoss"], "tope_usd": per_cap, "estado": STATE[p["maxLoss"] <= per_cap]}
             for p in ov.get("positions", []) if p.get("maxLoss") is not None]
+    open_ok = _cap_check(open_risk, open_cap, complete) if open_risk is not None else None
     out = {"estado": "cuenta real", "al": ov.get("asOf"), "valor_cuenta_usd": net,
            "tope_por_operacion_usd": per_cap, "tope_sumado_usd": open_cap, "riesgo_abierto_usd": open_risk,
-           "margen_sumado_usd": round(open_cap - open_risk, 2), "posiciones": rows,
-           "atencion": [a["title"] for a in ov.get("attention", []) if a.get("kind") == "riesgo"]}
-    parts = [(f"Cuenta real {_usd(net)} USD: riesgo abierto {_usd(open_risk)} USD contra un tope sumado de {_usd(open_cap)}"
-              f" ({_pct(open_pct)} %); por operación el tope es {_usd(per_cap)} ({_pct(per_pct)} %).")]
+           "riesgo_abierto_completo": complete, "tope_sumado": STATE[open_ok],
+           "margen_sumado_usd": round(open_cap - open_risk, 2) if open_risk is not None and complete else None,
+           "posiciones": rows, "atencion": [a["title"] for a in ov.get("attention", []) if a.get("kind") == "riesgo"]}
+    risk_txt = (f"{_usd(open_risk)} USD" + ("" if complete else " (incompleto)")) if open_risk is not None else "sin dato"
+    parts = [(f"Cuenta real {_usd(net)} USD: riesgo abierto {risk_txt} contra un tope sumado de {_usd(open_cap)}"
+              f" ({_pct(open_pct)} %): {STATE[open_ok]}; por operación el tope es {_usd(per_cap)} ({_pct(per_pct)} %).")]
     if width is not None and credit is not None:
         if width <= 0 or credit < 0 or credit >= width or contracts < 1:
             raise supervisor.SupervisorError("candidato inválido: ancho > 0, 0 ≤ crédito < ancho, contratos ≥ 1")
         loss = round((width - credit) * 100 * contracts, 2)
-        after = round(open_risk + loss, 2)
-        reasons = []
-        if loss > per_cap:
-            reasons.append(f"arriesga {_usd(loss)} USD y el tope por operación es {_usd(per_cap)}")
-        if after > open_cap:
-            reasons.append(f"el riesgo abierto pasaría a {_usd(after)} USD y el tope sumado es {_usd(open_cap)}")
+        after = round(open_risk + loss, 2) if open_risk is not None else None
+        per_ok = loss <= per_cap
+        sum_ok = _cap_check(after, open_cap, complete) if after is not None else None
+        caps = [{"tope": "por operación", "estado": STATE[per_ok],
+                 "detalle": f"arriesga {_usd(loss)} USD; tope {_usd(per_cap)}"},
+                {"tope": "sumado", "estado": STATE[sum_ok],
+                 "detalle": (f"el riesgo abierto pasaría a {_usd(after)} USD; tope {_usd(open_cap)}" if after is not None
+                             else "sin riesgo abierto informado") + ("" if complete else " (riesgo abierto incompleto)")}]
+        both = False if False in (per_ok, sum_ok) else None if sum_ok is None else True
         out["candidato"] = {"simbolo": symbol, "ancho": width, "credito": credit, "contratos": contracts,
-                            "perdida_maxima_usd": loss, "riesgo_abierto_despues_usd": after,
-                            "pasa": not reasons, "motivos": reasons}
-        parts.append("El candidato " + ("pasa los dos topes." if not reasons else "no pasa: " + "; ".join(reasons) + "."))
-    out["faltantes"] = ["cotización de cada pata, eventos, balance, ex-dividendo y crédito realista: no se leen acá"
-                        if width is not None else "candidato: sin spread para evaluar"]
-    out |= {"lectura": " ".join(parts), "aviso": "Asesor: lo que se opera en Tastytrade no pasa por GaleCore y nada lo bloquea.",
-            "fuente": "GaleCore GET /App/GaleCore/Account/Overview; " + source}
+                            "perdida_maxima_usd": loss, "riesgo_abierto_despues_usd": after, "topes": caps,
+                            "cumple_los_dos_topes": both}
+        verdict = {True: "cumple los dos topes", False: "no cumple: " + "; ".join(
+            c["detalle"] for c in caps if c["estado"] == "no cumple"),
+            None: "cumple el tope por operación; el sumado no es evaluable (riesgo abierto incompleto)"}[both]
+        parts.append(f"El candidato {verdict}.")
+    out["faltantes"] = ([f"afecta el tope sumado: {m}" for m in risk_gaps] + other_gaps
+                        + ([] if width is not None else ["candidato: sin spread para evaluar"]))
+    out |= {"lectura": " ".join(parts), "alcance": SCOPE,
+            "aviso": "Asesor: lo que se opera en Tastytrade no pasa por GaleCore y nada lo bloquea.",
+            "fuente": f"GaleCore GET /App/GaleCore/Account/Overview con los topes del {source}"}
     return out
 
 
-def _simulated_amounts(kb: KnowledgeBase, names: list[str]) -> dict[str, float | None]:
-    """The amount each strategy's latest saved version declares for its simulation (None: the design does not say)."""
-    out: dict[str, float | None] = {}
+def _simulated_amounts(kb: KnowledgeBase, names: list[str]) -> dict[str, dict]:
+    """The amount each strategy simulates with, from its latest *approved* version (what SHADOW runs); a later draft
+    does not move it. With no approved version, the latest saved one, said as a draft. `monto` None: not declared."""
+    out: dict[str, dict] = {}
     for name in names:
-        keys = [k for k in kb.strategies.versions() if k.split("/")[0] == name]
-        latest = max(keys, key=lambda k: tuple(int(x) for x in k.split("/")[1].split("."))) if keys else None
-        doc = kb.strategies.load(latest) if latest else None
-        out[name] = doc.content.simulated_amount_usd if doc else None
+        keys = sorted((k for k in kb.strategies.versions() if k.split("/")[0] == name),
+                      key=lambda k: tuple(int(x) for x in k.split("/")[1].split(".")))
+        approved = [k for k in keys if kb.strategies.load_approval(k)]
+        key = approved[-1] if approved else keys[-1] if keys else None
+        doc = kb.strategies.load(key) if key else None
+        out[name] = {"version": key.split("/")[1] if key else None, "aprobada": bool(approved),
+                     "monto": doc.content.simulated_amount_usd if doc else None}
     return out
 
 
@@ -266,7 +306,7 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None 
     ref = lim["capital_referencia"]
     names = strategies or sorted({k.split("/")[0] for k in kb.strategies.versions()})
     amounts = _simulated_amounts(kb, names)   # WS-0043 (1e): what is simulated is sized with its own amount
-    sized = {n: a for n, a in amounts.items() if a is not None}
+    sized = {n: a["monto"] for n, a in amounts.items() if a["monto"] is not None}
     whatif = capital is not None
     base = sum(sized.values()) if sized and not whatif else ref
     exp = read("/App/Runtime/Exposure?" + _query(base, lim))
@@ -279,9 +319,15 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None 
     missing = ["cuenta real: esto es lo simulado en SHADOW (sin broker); la cuenta real se mide con `capital --real`",
                "correlación entre subyacentes: se agrupa por subyacente, dirección y semana; no se mide la correlación",
                "costos: el riesgo es el máximo del spread, sin comisiones"]
-    unsized = sorted(n for n, a in amounts.items() if a is None)
+    unsized = sorted(n for n, a in amounts.items() if a["monto"] is None)
     if unsized and not whatif:
         missing.append("monto simulado no declarado en el diseño (no se reparte): " + ", ".join(unsized))
+    drafts = sorted(f"{n} {a['version']}" for n, a in amounts.items() if a["monto"] is not None and not a["aprobada"])
+    if drafts and not whatif:
+        missing.append("monto de un borrador (ninguna versión aprobada): " + ", ".join(drafts))
+    if not sized and not whatif:
+        missing.append(f"ninguna estrategia declara monto simulado: lo abierto en SHADOW se mide contra el capital de "
+                       f"referencia de la cuenta real ({_usd(ref)}), sólo como referencia")
     if exp.get("openNotValued"):
         missing.append(f"{exp['openNotValued']} abierta(s) sin valuación: su no realizado no está")
     if whatif:
@@ -292,4 +338,6 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None 
     repartos = [split(p, a) for a, p in plans]
     return {"al": exp.get("asOf"), "limites": lim, "disponible": available(exp), "concentracion": concentration(exp),
             "reparto": repartos[0] if whatif else repartos, "faltantes": missing,
+            "montos_simulados": [{"estrategia": n, "version": a["version"], "aprobada": a["aprobada"],
+                                  "monto_usd": a["monto"]} for n, a in sorted(amounts.items())],
             "fuente": "GaleCore GET /App/Runtime/Exposure y /App/Runtime/Allocation; " + source}

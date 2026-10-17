@@ -168,11 +168,72 @@ def test_real_account_is_measured_on_its_own_value_and_judges_a_candidate(kb):  
     out = capital.real_account(kb, read, width=5, credit=4.0, symbol="SPY")
     assert asked == ["/App/GaleCore/Account/Overview?maxRiskPerTradePct=5.0&maxOpenRiskPct=50.0"]
     assert out["tope_por_operacion_usd"] == 125.0 and out["tope_sumado_usd"] == 1250.0
-    assert out["posiciones"][0]["dentro"] is False and out["margen_sumado_usd"] == -610.0
+    assert out["posiciones"][0]["estado"] == "no cumple" and out["margen_sumado_usd"] == -610.0
+    assert out["tope_sumado"] == "no cumple" and out["riesgo_abierto_completo"] is True
     c = out["candidato"]
-    assert c["perdida_maxima_usd"] == 100.0 and c["riesgo_abierto_despues_usd"] == 1960.0 and c["pasa"] is False
-    assert len(c["motivos"]) == 1 and "tope sumado" in c["motivos"][0]
-    assert "nada lo bloquea" in out["aviso"]
+    assert c["perdida_maxima_usd"] == 100.0 and c["riesgo_abierto_despues_usd"] == 1960.0
+    assert c["cumple_los_dos_topes"] is False and [t["estado"] for t in c["topes"]] == ["cumple", "no cumple"]
+    assert "nada lo bloquea" in out["aviso"] and "no una revisión de la operación" in out["alcance"]
+    assert "no cumple: el riesgo abierto pasaría" in out["lectura"]
+
+
+def test_real_account_with_unpaired_legs_or_no_risk_is_not_evaluable_and_keeps_galecore_missing(kb):  # noqa: F811
+    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    unpaired = "Patas sin emparejar (no suman a riesgo ni exposición): SPY 251121P00700000."
+    small = {"maxRisk": 100.0, "positions": [], "missing": [unpaired, "Historia del valor de la cuenta: sin dato."]}
+    out = capital.real_account(kb, lambda path: _overview(**small), width=5, credit=4.5)
+    assert out["riesgo_abierto_completo"] is False and out["tope_sumado"] == "no evaluable"
+    assert out["margen_sumado_usd"] is None and "(incompleto)" in out["lectura"]
+    assert out["faltantes"][:2] == ["afecta el tope sumado: " + unpaired, "Historia del valor de la cuenta: sin dato."]
+    c = out["candidato"]
+    assert c["cumple_los_dos_topes"] is None and [t["estado"] for t in c["topes"]] == ["cumple", "no evaluable"]
+    assert "el sumado no es evaluable" in out["lectura"]
+    # an incomplete total that is already over the cap is over it
+    assert capital.real_account(kb, lambda path: _overview(missing=[unpaired]))["tope_sumado"] == "no cumple"
+    # no risk reported is not zero
+    none = capital.real_account(kb, lambda path: _overview(maxRisk=None, positions=[]), width=5, credit=4.5)
+    assert none["riesgo_abierto_usd"] is None and none["tope_sumado"] == "no evaluable"
+    assert none["candidato"]["cumple_los_dos_topes"] is None
+    assert any("no informó el riesgo abierto" in f for f in none["faltantes"])
+
+
+def test_complete_account_within_both_caps_says_so(kb):  # noqa: F811
+    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    ok = {"maxRisk": 100.0, "positions": [{"symbol": "SPY", "structure": "PUT_CS", "maxLoss": 100.0}], "missing": []}
+    out = capital.real_account(kb, lambda path: _overview(**ok), width=5, credit=4.5)
+    assert out["tope_sumado"] == "cumple" and out["candidato"]["cumple_los_dos_topes"] is True
+    assert "cumple los dos topes" in out["lectura"]
+
+
+class _Doc:
+    def __init__(self, amount):
+        self.content = type("C", (), {"simulated_amount_usd": amount})()
+
+
+class _Store:
+    def __init__(self, docs, approved):
+        self.docs, self.approved = docs, approved
+
+    def versions(self):
+        return list(self.docs)
+
+    def load(self, key):
+        return self.docs.get(key)
+
+    def load_approval(self, key):
+        return key in self.approved or None
+
+
+def test_simulated_amount_comes_from_the_approved_version_not_a_later_draft():
+    docs = {"a/1.0.3": _Doc(4000.0), "a/1.0.10": _Doc(9000.0),   # approved A, later draft B
+            "old/1.0.0": _Doc(None),                              # an old design without an amount
+            "b/1.0.0": _Doc(2000.0), "c/1.0.0": _Doc(3000.0)}     # several strategies, different amounts
+    fake = type("KB", (), {"strategies": _Store(docs, {"a/1.0.3", "b/1.0.0"})})()
+    out = capital._simulated_amounts(fake, ["a", "old", "b", "c", "none"])
+    assert out["a"] == {"version": "1.0.3", "aprobada": True, "monto": 4000.0}
+    assert out["old"]["monto"] is None and out["b"]["monto"] == 2000.0
+    assert out["c"] == {"version": "1.0.0", "aprobada": False, "monto": 3000.0}   # only a draft: said as such
+    assert out["none"] == {"version": None, "aprobada": False, "monto": None}
 
 
 def test_real_account_refuses_half_a_candidate_and_missing_limits(kb):  # noqa: F811
