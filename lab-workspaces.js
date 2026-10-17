@@ -75,19 +75,20 @@ function latestMapa(dir,since){
   return found?'memory/'+found.f:null;
 }
 function parseMapa(text){
-  let title='';const sections=[];
-  for(const raw of text.split(/\r?\n/)){const line=raw.trim();if(!line)continue;
+  // WS-0044 (owner: tablero): renglones antes de la primera sección = dónde estamos y qué falta; «- valor · qué es» en
+  // «Números» = cifra grande; un bloque ```grafico con JSON = la serie que sostiene la evidencia, con su fuente.
+  let title='';const intro=[],sections=[];let chart=null;
+  for(const raw of text.split(/\r?\n/)){const line=raw.trim();
+    if(chart!==null){if(line.startsWith('```')){try{const c=JSON.parse(chart);if(sections.length&&Array.isArray(c.series))sections.at(-1).chart=c;}catch{ /* JSON roto: sin gráfico */ }chart=null;}else chart+=raw+'\n';continue;}
+    if(!line)continue;
+    if(/^```grafico/.test(line)){chart='';continue;}
     if(/^# /.test(line)&&!title&&!sections.length){title=line.slice(2).trim();continue;}
     if(/^## /.test(line)){sections.push({heading:line.slice(3).trim(),lines:[]});continue;}
-    if(!sections.length)continue;
-    // Tabla markdown (WS-0044: hipótesis H1, H2… definidas una vez): primera fila = encabezado; la de guiones se salta.
-    if(/^\|.*\|$/.test(line)){const s=sections.at(-1),cells=line.slice(1,-1).split('|').map(c=>c.trim());
-      if(cells.every(c=>/^:?-{2,}:?$/.test(c)))continue;
-      if(!s.table)s.table={header:cells,rows:[]};else s.table.rows.push(cells);continue;}
-    const item=line.replace(/^[-*]\s+/,''),mark=/^✓/.test(item)?'ok':/^✗/.test(item)?'missing':/^→/.test(item)?'now':null;
+    if(!sections.length){intro.push(line);continue;}
+    const item=line.replace(/^[-*]\s+/,''),mark=/^✓/.test(item)?'ok':/^✗/.test(item)?'missing':null;
     sections.at(-1).lines.push({mark,text:mark?item.slice(1).trim():item});
   }
-  return {title,sections};
+  return {title,intro,sections};
 }
 function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats');

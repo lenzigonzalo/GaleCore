@@ -72,10 +72,11 @@ test('la actividad dice en palabras del trader qué está haciendo el motor (WS-
  consumeEvent(c,{type:'assistant',message:{content:[{type:'tool_use',name:'Write',input:{file_path:'C:/k/memory/mapa-ab12cd34.md'}}]}},'claude');
  assert.equal(c.activity,'Actualizando el mapa');
 });
-test('mapa: camino con el tramo actual y tabla de hipótesis (WS-0044)',()=>{
+test('mapa como tablero: dónde estamos, números y gráfico con su fuente (WS-0044)',()=>{
  const {parseMapa}=require('./lab-workspaces');
- const m=parseMapa('# VRP\n## Camino\n- ✓ Idea\n- → Evidencia: falta H2\n- Operar o no\n## Hipótesis\n| | Qué dice | Estado |\n|---|---|---|\n| H1 | La implícita supera a la realizada | Se sostiene |\n');
- assert.deepEqual(m.sections[0].lines.map(l=>l.mark),['ok','now',null]);
- assert.deepEqual(m.sections[1].table,{header:['','Qué dice','Estado'],rows:[['H1','La implícita supera a la realizada','Se sostiene']]});
- assert.deepEqual(m.sections[1].lines,[]);
+ const m=parseMapa('# VRP\nEstamos: probando si se cobra\nFalta: 30 operaciones\n## Números\n- 84 % · días con prima\n## Implícita vs realizada\n```grafico\n{"fuente":"GaleCore","series":[{"nombre":"VIX","puntos":[["2020-01-31",14.1]]}]}\n```\n## Roto\n```grafico\n{no\n```\n');
+ assert.deepEqual(m.intro,['Estamos: probando si se cobra','Falta: 30 operaciones']);
+ assert.deepEqual(m.sections[0].lines,[{mark:null,text:'84 % · días con prima'}]);
+ assert.equal(m.sections[1].chart.fuente,'GaleCore');assert.deepEqual(m.sections[1].lines,[]);
+ assert.equal(m.sections[2].chart,undefined);
 });
