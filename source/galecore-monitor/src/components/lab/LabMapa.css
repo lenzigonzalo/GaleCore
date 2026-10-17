@@ -36,3 +36,5 @@
 .lab-mapa-blank { color:var(--text-disabled)!important; font-size:14px!important; }
 .lab-mapa-evidence { display:grid; gap:10px; }
 .lab-mapa-evidence table { width:100%; border-collapse:collapse; font-size:14px; }
+
+.lab-mapa-bars { width:100%; height:auto; display:block; background:var(--bg-secondary, #141414); }

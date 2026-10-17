@@ -17,10 +17,30 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString('es-AR', { hour: 
 const day = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : d;
 const COLORS = ['--accent', '--yellow-gc', '--green', '--red'];
 
+const isDate = (x: string) => /^\d{4}-\d{2}-\d{2}$/.test(x);
+
+// WS-0045: una serie cuyo eje no son fechas (p. ej. GEX por strike) va en barras: el gráfico de tiempo no la entiende.
+function CategoryBars({ chart, label }: { chart: MapaChart; label: string }) {
+  const pts = chart.series[0]?.puntos?.filter(p => Number.isFinite(p[1])) || [];
+  const W = 640, H = 200, pad = 28, max = Math.max(...pts.map(p => Math.abs(p[1])), 1);
+  const neg = pts.some(p => p[1] < 0), zero = neg ? H / 2 : H - pad, scale = (neg ? H / 2 - pad : H - 2 * pad) / max;
+  const bw = (W - 2 * pad) / Math.max(pts.length, 1);
+  const every = Math.ceil(pts.length / 12);
+  return <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className="lab-mapa-bars">
+    <line x1={pad} x2={W - pad} y1={zero} y2={zero} stroke="var(--border-subtle, #333)" />
+    {pts.map(([x, v], i) => <g key={x + i}>
+      <rect x={pad + i * bw + bw * 0.15} width={bw * 0.7} y={v >= 0 ? zero - v * scale : zero} height={Math.abs(v) * scale}
+        fill={v >= 0 ? 'var(--green, #4caf50)' : 'var(--red, #e5534b)'}><title>{x}: {v.toLocaleString('es-AR')}{chart.unidad ? ' ' + chart.unidad : ''}</title></rect>
+      {i % every === 0 && <text x={pad + i * bw + bw / 2} y={H - 6} textAnchor="middle" fontSize="10" fill="var(--text-secondary, #b5b5b5)">{x}</text>}
+    </g>)}
+  </svg>;
+}
+
 export function MapaChartView({ chart, label }: { chart: MapaChart; label: string }) {
   const host = useRef<HTMLDivElement>(null);
+  const bars = chart.series.some(s => s.puntos?.some(p => !isDate(String(p[0]))));
   useEffect(() => {
-    if (!host.current || !chart.series.some(s => s.puntos?.length)) return;
+    if (bars || !host.current || !chart.series.some(s => s.puntos?.length)) return;
     let api: IChartApi | undefined, alive = true;
     void import('lightweight-charts').then(({ createChart, LineSeries, ColorType }) => {
       if (!alive || !host.current) return;
@@ -37,9 +57,9 @@ export function MapaChartView({ chart, label }: { chart: MapaChart; label: strin
       api.timeScale().fitContent();
     });
     return () => { alive = false; api?.remove(); };
-  }, [chart]);
+  }, [chart, bars]);
   return <figure className="lab-mapa-chart">
-    <div ref={host} role="img" aria-label={label} />
+    {bars ? <CategoryBars chart={chart} label={label} /> : <div ref={host} role="img" aria-label={label} />}
     <figcaption>
       {chart.series.map((s, i) => <span key={s.nombre} className="lab-mapa-legend" style={{ color: `var(${COLORS[i % COLORS.length]})` }}>— {s.nombre}</span>)}
       {chart.fuente && <span className="lab-mapa-source">Fuente: {chart.fuente}{chart.corte ? ' · hasta el ' + day(chart.corte) : ''}</span>}
