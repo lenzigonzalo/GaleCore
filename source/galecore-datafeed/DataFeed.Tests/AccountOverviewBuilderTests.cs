@@ -125,6 +125,9 @@ public class AccountOverviewBuilderTests
         Assert.Equal(150, p[2].Pnl);    // contra el 14/09
         Assert.Equal(550, p[3].Pnl);    // cuenta nueva en el año: contra su primer cierre
         Assert.Equal(27.5, p[3].Pct);
+        Assert.Equal(new DateOnly(2026, 3, 2), p[3].From);     // no es el 01/01: la cuenta empezó después
+        Assert.Contains("depósitos", p[3].Basis);
+        Assert.Equal(new DateOnly(2026, 10, 7), p[1].From);
         Assert.Null(AccountOverviewBuilder.Periods(2550, null, null, null, today)[2].Pnl);
     }
 

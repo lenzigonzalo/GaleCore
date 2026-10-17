@@ -131,6 +131,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public double? LongPutStrike { get; set; }
         public double? ShortCallStrike { get; set; }
         public double? LongCallStrike { get; set; }
+        /// <summary>Medio entre compra y venta del subyacente al consultar (DXLink); sin hora de la cotización: no es un cierre ni un último trade.</summary>
         public double? Spot { get; set; }
         public double? Pnl { get; set; }
         /// <summary>En un spread, % del crédito cobrado; en acciones, % del costo.</summary>
@@ -166,6 +167,10 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public string Label { get; set; } = "";
         public double? Pnl { get; set; }
         public double? Pct { get; set; }
+        /// <summary>Fecha del cierre contra el que se mide (en el año puede ser el primer cierre de la cuenta, no el 01/01).</summary>
+        public DateOnly? From { get; set; }
+        /// <summary>Qué mide: Hoy, resultado de las posiciones; el resto, variación del valor de la cuenta, que incluye depósitos y retiros: no es retorno.</summary>
+        public string Basis { get; set; } = "";
     }
 
     public class AttentionDto
@@ -364,14 +369,17 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
         public static List<PeriodPnlDto> Periods(double netLiq, double? dayPnl, double? dayPct,
             IReadOnlyList<(DateOnly Date, double Close)>? history, DateOnly today)
         {
-            var list = new List<PeriodPnlDto> { new() { Label = "Hoy", Pnl = dayPnl, Pct = dayPct } };
+            const string valueChange = "variación del valor de la cuenta; incluye depósitos y retiros (no separados): no es retorno de trading";
+            var list = new List<PeriodPnlDto> { new() { Label = "Hoy", Pnl = dayPnl, Pct = dayPct, Basis = "resultado de las posiciones abiertas" } };
             foreach (var (label, from) in new[] { ("Semana", today.AddDays(-7)), ("Mes", today.AddMonths(-1)), ("Año", new DateOnly(today.Year, 1, 1)) })
             {
                 // El cierre del último día antes del período; en el año, si la cuenta es más nueva, su primer cierre.
-                var anchor = history?.Where(h => h.Date < from).Select(h => (double?)h.Close).LastOrDefault()
-                    ?? (label == "Año" ? history?.Select(h => (double?)h.Close).FirstOrDefault() : null);
-                list.Add(anchor is > 0 ? new() { Label = label, Pnl = R(netLiq - anchor.Value), Pct = R((netLiq / anchor.Value - 1) * 100) }
-                    : new() { Label = label });
+                var before = history?.Where(h => h.Date < from).ToList();
+                (DateOnly Date, double Close)? anchor = before is { Count: > 0 } ? before[^1]
+                    : label == "Año" && history is { Count: > 0 } ? history[0] : null;
+                list.Add(anchor is { Close: > 0 } a
+                    ? new() { Label = label, Pnl = R(netLiq - a.Close), Pct = R((netLiq / a.Close - 1) * 100), From = a.Date, Basis = valueChange }
+                    : new() { Label = label, Basis = valueChange });
             }
             return list;
         }
