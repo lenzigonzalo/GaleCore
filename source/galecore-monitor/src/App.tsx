@@ -7,6 +7,7 @@ import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
 import { Resumen } from './pages/Resumen';
 import { Macro } from './pages/Macro';
+import { Biblioteca } from './pages/Biblioteca';
 import { WorkspaceNav } from './components/layout/WorkspaceNav';
 import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
 import './components/layout/SingleWorkspace.css';
@@ -149,6 +150,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {tab === 'gex' && <Gex externalWatchlist subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
           {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
           {tab === 'macro' && <Macro />}
+          {tab === 'biblioteca' && <Biblioteca />}
           {strategiesVisited && <div hidden={tab !== 'estrategias'}><Shadow selectedSpec={selectedSpec} onSelectSpec={setSelectedSpec} onOpenChat={openProject} rpf={<Rpf acceptSuggestion={acceptSuggestion} dismissSuggestion={dismissSuggestion} subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg} socketStatus={socketStatus}/>} /></div>}
           {/* Inteligencia se monta al entrar: lee el adapter local de GaleCore-AI, no la API. */}
           {tab === 'inteligencia' && <Inteligencia />}
