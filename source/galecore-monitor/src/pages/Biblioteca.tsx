@@ -11,7 +11,10 @@ import './Biblioteca.css';
  */
 const BASE = '/workspaces/biblioteca/files';
 const title = (text: string, file: string) => text.match(/^#\s+(.+)$/m)?.[1]?.trim() || file.replace(/^\d+-/, '').replace(/\.md$/, '').replace(/-/g, ' ');
-const summary = (text: string) => (text.split('\n').find(l => l.startsWith('**')) || '').replace(/\*\*/g, '').slice(0, 140);
+const summary = (text: string) => {
+  const line = (text.split('\n').find(l => l.startsWith('**')) || '').replace(/\*\*/g, '').trim();
+  return line.length <= 140 ? line : line.slice(0, line.lastIndexOf(' ', 140)) + '…';
+};
 
 interface Report { path: string; title: string; summary: string; text: string }
 
