@@ -1,27 +1,34 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { Biblioteca } from './Biblioteca';
+import { Biblioteca, splitSections } from './Biblioteca';
 import { labRequest } from '../api/lab';
 
 jest.mock('../api/lab', () => ({ labRequest: jest.fn() }));
 jest.mock('../components/lab/LabMarkdown', () => ({ LabMarkdown: ({ text }: { text: string }) => <div>{text}</div> }));
 
 const files: Record<string, string> = {
-  'informes/2-gex.md': '# GEX: qué mide\n\n**GEX estima cuánto cubren los dealers.**',
-  'informes/1-historia-macro.md': '# Historia macro\n\n**Tasas largas altas.**',
+  'informes/mercado/gex.md': '# GEX: qué mide\n\n**GEX estima cuánto cubren los dealers.**\n\n## La fórmula\n\n| a | b |\n\n## Hoy en SPY\n\n| c | d |',
+  'informes/macro/historia-macro.md': '# Historia macro\n\n**Tasas largas altas.**\n\n## Cómo se ve hoy\n\n| x | y |',
 };
+const folder = (name: string) => ({ name, path: 'informes/' + name, kind: 'folder',
+  children: Object.keys(files).filter(p => p.split('/')[1] === name).map(p => ({ name: p.split('/')[2], path: p, kind: 'file' })) });
 
-test('lista los informes en orden, abre el primero y cambia con un clic', async () => {
+test('agrupa por tipo con sólo el título, abre el primero y cambia con un clic', async () => {
   (labRequest as jest.Mock).mockImplementation(async (path: string) => {
-    if (path.endsWith('/files')) return { tree: [{ name: 'informes', path: 'informes', kind: 'folder', children: Object.keys(files).map(p => ({ name: p.split('/')[1], path: p, kind: 'file' })) }] };
+    if (path.endsWith('/files')) return { tree: [{ name: 'informes', path: 'informes', kind: 'folder', children: [folder('mercado'), folder('macro'), { name: 'calculos', path: 'informes/calculos', kind: 'folder', children: [] }] }] };
     return { text: files[decodeURIComponent(path.split('path=')[1])] };
   });
   render(<Biblioteca />);
   const items = await screen.findAllByRole('button');
-  expect(items.map(b => b.querySelector('strong')?.textContent)).toEqual(['Historia macro', 'GEX: qué mide']);
-  expect(screen.getByText(/# Historia macro/)).toBeInTheDocument();
+  expect(screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent)).toEqual(['Macro', 'Mercado']);
+  expect(items.map(b => b.textContent)).toEqual(['Historia macro', 'GEX: qué mide']);   // sólo títulos, sin resumen
+  expect(screen.getByText(/## Cómo se ve hoy/)).toBeInTheDocument();
   fireEvent.click(items[1]);
-  expect(screen.getByText(/# GEX: qué mide/)).toBeInTheDocument();
+  expect(document.querySelectorAll('.biblioteca-card')).toHaveLength(2);               // una tarjeta por sección
   expect(items[1]).toHaveAttribute('aria-current', 'page');
+});
+
+test('separa el encabezado de las secciones', () => {
+  expect(splitSections('# T\n\n**C.**\n\n## A\n\nx\n\n## B\n\ny')).toEqual({ head: '# T\n\n**C.**\n\n', sections: ['## A\n\nx\n\n', '## B\n\ny'] });
 });
 
 test('sin el Lab lo dice, sin inventar informes', async () => {
