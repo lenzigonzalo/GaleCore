@@ -41,6 +41,7 @@ FACTS = {"Revenues": "ingresos", "RevenueFromContractWithCustomerExcludingAssess
          "NetIncomeLoss": "resultado neto", "EarningsPerShareDiluted": "EPS diluido",
          "NetCashProvidedByUsedInOperatingActivities": "flujo operativo",
          "PaymentsToAcquirePropertyPlantAndEquipment": "inversión en activos fijos",
+         "PaymentsToAcquireProductiveAssets": "inversión en activos fijos",
          "ShareBasedCompensation": "remuneración en acciones",
          "WeightedAverageNumberOfDilutedSharesOutstanding": "acciones diluidas (promedio del trimestre)",
          "DepreciationDepletionAndAmortization": "amortizaciones", "DepreciationAmortizationAndOther": "amortizaciones",
@@ -50,8 +51,9 @@ FACTS = {"Revenues": "ingresos", "RevenueFromContractWithCustomerExcludingAssess
          "PaymentsOfDividends": "dividendos pagados", "PaymentsOfDividendsCommonStock": "dividendos pagados"}
 REVENUE_TAGS = ("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax")
 # Concepts that say the same under different names: the one with the latest quarter is kept.
+CAPEX_TAGS = ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets")
 ALIASES = (REVENUE_TAGS, ("DepreciationDepletionAndAmortization", "DepreciationAmortizationAndOther"),
-           ("InterestExpenseNonoperating", "InterestExpense"), ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock"))
+           ("InterestExpenseNonoperating", "InterestExpense"), ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock"), CAPEX_TAGS)
 NOT_ADDITIVE = {"WeightedAverageNumberOfDilutedSharesOutstanding"}   # an average: never summed nor derived
 # Balance sheet concepts: a balance at a date, not a period.
 BALANCE = {"LongTermDebt": "deuda de largo plazo (total)", "LongTermDebtNoncurrent": "deuda de largo plazo no corriente",
@@ -208,9 +210,14 @@ def technical_view(bars) -> dict | None:
             window = vals[-n:]
             out[f"high_{n}"], out[f"low_{n}"] = max(window), min(window)
             out[f"from_high_{n}_pct"] = _round((last / max(window) - 1) * 100)
-    for n in (5, 20, 60):
+    for n in (5, 20, 60, 63, 126):
         if len(vals) > n:
             out[f"chg_{n}d_pct"] = _round((last / vals[-1 - n] - 1) * 100)
+    if (before := _sma(vals[:-20], 200)) is not None and out.get("sma200"):
+        out["sma200_chg_20d_pct"] = _round((out["sma200"] / before - 1) * 100)       # is the 200 average rising?
+    if len(vals) > 20:
+        out["avg_move_20d_pct"] = round(statistics.fmean(abs(b / a - 1) for a, b in
+                                                          zip(vals[-21:-1], vals[-20:], strict=True)) * 100, 2)
     for n in (20, 60):
         if (rv := _realized(vals, n)) is not None:
             out[f"realized_vol_{n}d_pct"] = round(rv, 2)
@@ -370,6 +377,8 @@ def _net_debt(balance: dict, fcf: float | None) -> dict | None:
         years, reading = None, "caja neta: la caja supera la deuda"
     elif fcf and fcf > 0:
         years, reading = _ratio(net, fcf, pct=False), None
+    elif fcf is None:
+        years, reading = None, "sin flujo libre (falta flujo operativo o inversión en activos fijos): no se puede medir en años"
     else:
         years, reading = None, "flujo libre no positivo: la deuda no se puede medir en años de flujo"
     return {"date": cash_b["date"], "debt": debt, "cash_and_short_term": cash, "net_debt": net,
@@ -391,9 +400,10 @@ def _quality(out: dict, balance: dict) -> dict:
         if now is not None:
             qd[name] = {"last_4_pct": now, "prior_4_pct": before,
                         "change_pts": _round(now - before) if before is not None else None}
-    ocf, capex = s("NetCashProvidedByUsedInOperatingActivities"), s("PaymentsToAcquirePropertyPlantAndEquipment")
+    capex_tag = next((t for t in CAPEX_TAGS if t in out), CAPEX_TAGS[0])      # the pruned alias leaves one
+    ocf, capex = s("NetCashProvidedByUsedInOperatingActivities"), s(capex_tag)
     ocf_p = s("NetCashProvidedByUsedInOperatingActivities", "prior_4_quarters")
-    capex_p = s("PaymentsToAcquirePropertyPlantAndEquipment", "prior_4_quarters")
+    capex_p = s(capex_tag, "prior_4_quarters")
     fcf = round(ocf - capex, 4) if ocf is not None and capex is not None else None
     fcf_p = round(ocf_p - capex_p, 4) if ocf_p is not None and capex_p is not None else None
     if fcf is not None:
@@ -529,9 +539,11 @@ def fundamental_view(facts_by_tag: dict[str, list[dict]], price: float | None,
     quarters = {t: q for t, fs in facts_by_tag.items() if (q := _quarters(fs, additive=t not in NOT_ADDITIVE))}
     for group in ALIASES:
         present = [t for t in group if t in quarters]
-        for t in present:
-            if t != max(present, key=lambda x: quarters[x][-1]["end"]):
-                del quarters[t]
+        if present:
+            keep = max(present, key=lambda x: quarters[x][-1]["end"])
+            for t in present:
+                if t != keep:
+                    del quarters[t]
     for tag, q in quarters.items():
         out[tag] = _flow_row(tag, q)
     balance = {t: b for t, fs in (balance_facts or {}).items() if (b := _balance(fs))}
@@ -706,7 +718,8 @@ def save_pack(kb: KnowledgeBase, pack: dict, *, prompt: str, host: RecordHost,
     prev = previous(kb, pack["kind"], pack["symbol"], gathered)
     pack = {**pack, "previous": f"evidence:{prev[0]}" if prev else None}
     content = EvidenceContent(
-        source="galecore", tool=f"analyze pack --kind {pack['kind']}", params={"symbol": pack["symbol"]},
+        source="galecore", tool="analyze company" if pack["kind"] == "company" else f"analyze pack --kind {pack['kind']}",
+        params={"symbol": pack["symbol"]},
         retrieved_at=gathered,
         series=[EvidenceSeries(name=f"análisis {pack['kind']} de {pack['symbol']}", unit="ver cada campo",
                                frequency="daily / monthly / quarterly / snapshot",

@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: company_research
 versions:
+  - version: "0.2.5"
+    date: 2026-10-19
+    changes: >
+      F1b: Seleccionar usa `analyze company --symbols`, que devuelve la matriz en 4 bloques ya calculada (encaje
+      técnico, calidad y salud financiera, valoración, entrada y eventos) en lugar de correr los packs de a uno.
+    feedback: []
   - version: "0.2.4"
     date: 2026-10-19
     changes: >

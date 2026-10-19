@@ -31,6 +31,7 @@ Usage:
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
     python -m galecore_ai.adapters.cli analyze pack --kind macro|technical|fundamental|flow [--symbol SYM] --prompt "..."
+    python -m galecore_ai.adapters.cli analyze company --symbols A,B,C --prompt "..."
     python -m galecore_ai.adapters.cli galecore list | get CAPABILITY --symbol SYM [--param k=v ...] [--out FILE]
     python -m galecore_ai.adapters.cli space context | list [--kind K] | show K/KEY | put K/KEY --title T [--visibility V] [--format F] < content | delete K/KEY | import
     python -m galecore_ai.adapters.cli profile review
@@ -513,10 +514,21 @@ async def _cmd_story(args: argparse.Namespace) -> None:
 
 async def _cmd_analyze(args: argparse.Namespace) -> None:
     """An on-demand analysis pack (P1-05): macro, technical, fundamental or flow, from GaleCore, kept as evidence."""
-    from galecore_ai.application import analysis
+    from galecore_ai.application import analysis, company_matrix
 
     kb = _build_knowledge_base()
-    pack = await analysis.gather(_build_dispatcher(), args.kind, symbol=args.symbol.upper())
+    if args.analyze_command == "company":
+        try:
+            symbols = company_matrix.parse_symbols(args.symbols)
+        except ValueError as exc:
+            _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
+            return
+        pack = await company_matrix.gather(_build_dispatcher(), symbols)
+        if not any(c["state"] != "sin datos" for r in pack["matrix"] for c in r["tecnico"].values()):
+            _json_out({"status": "INSUFFICIENT_DATA", "missing": pack["missing"]}, exit_code=_EXIT_INSUFFICIENT_DATA)
+            return
+    else:
+        pack = await analysis.gather(_build_dispatcher(), args.kind, symbol=args.symbol.upper())
     if not analysis.has_data(pack):
         _json_out({"status": "INSUFFICIENT_DATA", "missing": pack["missing"]}, exit_code=_EXIT_INSUFFICIENT_DATA)
         return
@@ -1418,6 +1430,10 @@ def build_parser() -> _JsonArgumentParser:
     p_an_pack.add_argument("--kind", required=True, choices=["macro", "technical", "fundamental", "flow"])
     p_an_pack.add_argument("--symbol", default="SPY", help="Ignored for macro")
     p_an_pack.add_argument("--prompt", required=True, help="The user's request, verbatim")
+    p_an_company = an_sub.add_parser("company", help="Selection matrix of several companies in four blocks (WS-0047): "
+                                                     "technical fit, quality, valuation, entry and events")
+    p_an_company.add_argument("--symbols", required=True, help="Up to 10 tickers, comma separated: A,B,C")
+    p_an_company.add_argument("--prompt", required=True, help="The user's request, verbatim")
 
     p_story = sub.add_parser("story", help="The market story (GC-AI-0024)")
     st_sub = p_story.add_subparsers(dest="story_command", required=True)
