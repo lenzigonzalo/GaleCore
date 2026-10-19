@@ -24,3 +24,12 @@ test('proyecto recibido desde Estrategias comparte la lateral y abre su seguimie
  fireEvent.click(screen.getByRole('button',{name:'Ver resultados'}));expect(follow).toHaveBeenCalledWith('spy_spec');
  unmount();host.remove();
 });
+
+test('mientras responde muestra los pasos ya hechos y el actual (owner 18/10)',async()=>{
+ sessionStorage.setItem('galecore:lab:chat','chat-1');
+ (labRequest as jest.Mock).mockImplementation(async(path:string)=>{if(path==='/workspaces')return {projects,chats:[{id:'chat-1',project:'spy',provider:'codex',title:'Vieja',state:'running'}],providers:[{id:'codex',label:'Codex',installed:true}]};if(path.endsWith('/mapa'))return {mapa:null};return {id:'chat-1',project:'spy',provider:'codex',state:'running',activity:'Trayendo la cadena de SPY',steps:[{label:'Leyendo tu perfil',at:''},{label:'Trayendo la cadena de SPY',at:''}],messages:[{id:'m',role:'user',text:'hola'}]};});
+ render(<Lab onMonitor={()=>{}}/>);
+ expect(await screen.findByText('✓ Leyendo tu perfil')).toBeInTheDocument();
+ expect(screen.getByText('Trayendo la cadena de SPY…')).toBeInTheDocument();
+ expect(screen.queryByText('✓ Trayendo la cadena de SPY')).not.toBeInTheDocument();
+});

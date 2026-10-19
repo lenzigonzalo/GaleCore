@@ -55,7 +55,9 @@
 .lab-message.user { margin-left:auto; max-width:85%; }
 .lab-message.user > span { text-align:right; }
 .lab-message.user > div { padding:14px 20px; border-radius:16px; background:var(--bg-tertiary); }
-.lab-chat-activity { display:flex; gap:9px; align-items:center; font-size:var(--font-label); color:var(--text-muted); margin-bottom:24px; }
+.lab-chat-activity { display:grid; gap:5px; font-size:14px; color:var(--text-secondary); margin-bottom:24px; }
+.lab-step-done { color:var(--text-muted); }
+.lab-step-now { display:flex; gap:9px; align-items:center; color:var(--text-primary); }
 .lab-chat-error { border-left:2px solid var(--red-gc); padding:12px 16px; color:var(--text-secondary); font-size:14px; line-height:1.7; margin:16px 0; }
 .lab-chat-error button { display:block; border:0; background:transparent; color:var(--text-primary); font:inherit; margin-top:10px; padding:0; cursor:pointer; }
 .lab-chat-composer { flex-shrink:0; width:calc(100% - 48px); max-width:760px; margin:0 auto 24px; border:1px solid var(--border); border-radius:18px; padding:16px 18px 12px; background:var(--bg-secondary); }

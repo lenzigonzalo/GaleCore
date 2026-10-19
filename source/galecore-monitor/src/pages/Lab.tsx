@@ -253,7 +253,9 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       }}>
         {!chat?.messages.length && <div className="lab-chat-welcome"><h1>{project?.type==='strategy' ? '¿Qué estrategia querés construir?' : project?.type==='personal' ? 'Tu espacio personal' : '¿Qué querés investigar?'}</h1>{project?.type==='strategy' && <p>De la idea a una estrategia lista para probar en Shadow.</p>}</div>}
         {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>submit(text,false)}/> : <div>{m.text}</div>}</article>)}
-        {chat?.state==='running' && <div className="lab-chat-activity" role="status"><i/>{chat.activity || 'Pensando' }…</div>}
+        {chat?.state==='running' && <div className="lab-chat-activity" role="status">
+          {(chat.steps || []).filter(st => st.label !== chat.activity).map((st, i) => <span key={i} className="lab-step-done">✓ {st.label}</span>)}
+          <span className="lab-step-now"><i/>{chat.activity || 'Pensando'}…</span></div>}
         {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}<button onClick={refresh}>Reintentar conexión</button></div>}
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
