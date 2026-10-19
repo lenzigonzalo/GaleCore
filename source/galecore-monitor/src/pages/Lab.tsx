@@ -15,7 +15,8 @@ import { LabShell } from '../components/lab/LabShell';
 import './Lab.css';
 const KIND = { personal: 'Personal', analysis: 'Análisis', strategy: 'Estrategia' };
 // Owner 18/10: el mapa se abre lo que se quiera; el chat conserva al menos 360 px.
-const limitMapaWidth = (width: number) => Math.max(280, Math.min(width, (typeof window !== 'undefined' ? window.innerWidth : 1600) - 360));
+// El chat nunca queda por debajo de 420 px (revisión 19/10): el tope se mide sobre el contenedor del chat, no la ventana.
+const limitMapaWidth = (width: number, room = (typeof window !== 'undefined' ? window.innerWidth : 1600)) => Math.max(280, Math.min(width, room - 420));
 const NARROW = '(max-width: 1100px)';
 const limitSidebarWidth = (width: number, available: number) => Math.max(200, Math.min(width, 480, Math.max(200, available - 420)));
 export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, onSidebarToggle, onLogout, embedded = false, active = false, projectRequest, onFollowStrategy }: { embedded?: boolean; active?: boolean; projectRequest?: { id: string; sequence: number }; onFollowStrategy?: (spec: string) => void; onMonitor: () => void; onNavigate?: (tab: Tab) => void; sidebarHidden?: boolean; onSidebarToggle?: () => void; onLogout?: () => void }) {
@@ -270,10 +271,10 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       {mapaOpen && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label="Ancho del mapa" aria-orientation="vertical" aria-valuemin={280} aria-valuemax={Math.max(280, (chatBody.current?.clientWidth || 1600) - 420)} aria-valuenow={mapaWidth}
         title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
         onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); }}
-        onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) { const box = chatBody.current?.getBoundingClientRect(); setMapaWidth(limitMapaWidth(Math.min((box?.right || 0) - e.clientX, (box?.width || 1600) - 420))); } }}
+        onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) { const box = chatBody.current?.getBoundingClientRect(); setMapaWidth(limitMapaWidth((box?.right || 0) - e.clientX, box?.width)); } }}
         onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
         onDoubleClick={() => setMapaWidth(380)}
-        onKeyDown={e => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); setMapaWidth(w => limitMapaWidth(w + (e.key === 'ArrowLeft' ? 1 : -1) * (e.shiftKey ? 40 : 10))); }}/>}
+        onKeyDown={e => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); setMapaWidth(w => limitMapaWidth(w + (e.key === 'ArrowLeft' ? 1 : -1) * (e.shiftKey ? 40 : 10), chatBody.current?.clientWidth)); }}/>}
       {mapaOpen && <LabMapa chatId={chatId} running={chat?.state === 'running'} onResults={project?.strategyName ? () => onFollowStrategy?.(project.strategyName!) : undefined}/>}
       </div>}
     </section>
