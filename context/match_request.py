@@ -88,7 +88,7 @@ else:
         top = found["matches"][0]
     elif found.get("ambiguous"):  # dos o tres parecidas (batería 17/10): la lista corta, sin forzar diseño
         print("[capacidades] Puede ser una de estas; elegí por el sentido del pedido "
-              "(`catalog --match` trae su flujo):")
+              "(`catalog --match` trae su flujo; no busques archivos de skills):")
         for o in found.get("options", []):
             print(f"- {o['capability']}: {o['serves'][:90]}")
         sys.exit(0)
@@ -98,7 +98,8 @@ else:
         if len(prompt.split()) < 3:  # «sí», «dale», «gracias»: respuesta dentro de la conversación, no un pedido nuevo
             sys.exit(0)
         print("[capacidades] Ninguna coincide clara con el pedido. Elegí por el sentido (o ninguna: ofrecé crearla); "
-              "después `catalog --match \"<el ejemplo de esa capacidad>\"` trae su flujo:")
+              "después `catalog --match \"<el ejemplo de esa capacidad>\"` trae su flujo "
+              "(no busques archivos de skills):")
         for o in found.get("options", []):
             print(f"- {o['capability']}: {o['serves'][:70]} (p. ej. «{o['example']}»)")
         sys.exit(0)
