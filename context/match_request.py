@@ -64,7 +64,8 @@ def preload(text):
         print("[ya traído por código, no lo vuelvas a pedir]\n" + "\n".join(lines))
 
 
-PRELOAD_FOR = {"strategy_design", "context_research", "on_demand_analysis", "research", "gex_interpretation"}
+PRELOAD_FOR = {"strategy_design", "context_research", "on_demand_analysis", "company_research", "research",
+               "gex_interpretation"}
 NOT_TICKERS = {"OK", "EPS", "IV", "HV", "ETF", "USD", "EEUU", "NY", "PCS", "CCS", "IC", "GEX", "CPI", "FOMC", "PBI",
                "DTE", "OTM", "ITM", "ATM", "IA", "AI", "CEO", "YO", "Y", "A", "O", "SEC", "PE", "UTC", "NFP",
                "HOY", "SI", "NO", "VS", "ES", "EN", "DE", "LA", "EL", "QUE", "UN", "MI", "TU", "PARA", "CON", "POR"}
