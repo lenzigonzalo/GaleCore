@@ -207,7 +207,7 @@ Sólo lo que se habló; una sección vacía queda con su título. Valores sin ma
 Evidencia y Datos. Evidencia: 2-4 cifras y el gráfico cuando una serie sostiene lo que se afirma (hasta ~300 puntos;
 en riesgo, los extremos, no sólo promedios); si la cuenta es tuya, fuente «calculado sobre datos de GaleCore» y el
 script en `calculo`. El mapa no aprueba nada, no se nombra en la respuesta.
-Ofrecé abrir un proyecto de estrategia una sola vez por conversación.
+Si la conversación va hacia una estrategia, proponé armarla en el mismo proyecto una sola vez por conversación (el Lab dice cómo registrarla).
 
 ## Memoria y feedback
 
