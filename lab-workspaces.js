@@ -56,9 +56,14 @@ const THINGS={option_chains:'la cadena de opciones',volatility_metrics:'volatili
 const KINDS={technical:'técnico',fundamental:'fundamental',macro:'macro',flow:'de flujo'};
 function describeStep(tool,input){
   const cmd=String(input?.command||input?.cmd||''),file=String(input?.file_path||input?.path||'');
-  if(/mapa-[\w-]+\.md/.test(file)||/mapa-[\w-]+\.md/.test(cmd)&&/>|Set-Content|write/i.test(cmd))return 'Actualizando el mapa';
+  if(tool==='Read'&&/mapa-[\w-]+\.md/.test(file))return 'Leyendo el mapa';
+  if(/Write|Edit/.test(tool||'')&&/mapa-[\w-]+\.md/.test(file)||/mapa-[\w-]+\.md/.test(cmd)&&/>\s*["']?\S*mapa-[\w-]+\.md|Set-Content|Out-File|write_text|\.write\(/i.test(cmd))return 'Actualizando el mapa';
+  if(/mapa-[\w-]+\.md/.test(cmd))return 'Leyendo el mapa';
   if(/Write|Edit/.test(tool||''))return /memory[\/]/.test(file)?'Actualizando la memoria del proyecto':'Guardando '+path.basename(file);
   if(tool==='Read')return 'Leyendo '+path.basename(file);
+  if(tool==='Grep'||tool==='Glob')return 'Buscando en archivos';
+  if(tool==='WebSearch'||tool==='WebFetch')return 'Buscando en la web';
+  if(tool==='Skill')return 'Abriendo el método '+String(input?.skill||'');
   let m=cmd.match(/galecore get ([\w.]+)(?:[^|;&]*?--symbol[ =]"?([\w$]+))?/);
   if(m){const [area,name]=m[1].split('.'),sym=m[2]?' de '+m[2].replace('$',''):'';
     const thing=THINGS[name]||(area==='calendar'?'el calendario':area==='macro'||area==='rates'?'datos macro':area==='filings'?'los informes a la SEC':area==='account'?'tu cuenta real':area==='history'?'la historia del índice':'datos de GaleCore');
@@ -68,20 +73,37 @@ function describeStep(tool,input){
   for(const [re,label] of steps)if(re.test(cmd))return label;
   return 'Trabajando';
 }
-// Owner 18/10: mientras piensa, que se vea qué hizo (como Claude Code): los últimos pasos del turno, no sólo el actual.
-function setActivity(chat,label){chat.activity=label;if(!label||label==='Pensando'||label==='Trabajando')return;const steps=chat.steps||(chat.steps=[]);if(steps.at(-1)?.label!==label)steps.push({label,at:new Date().toISOString()});if(steps.length>8)steps.splice(0,steps.length-8);}
+// Owner 18/10-19/10: mientras trabaja, que se vea qué hace como en Claude Code: cada herramienta con su detalle
+// (comando o archivo) y lo que el modelo va diciendo entre una y otra. Los últimos pasos del turno, no sólo el actual.
+function stepDetail(tool,input){
+  const file=String(input?.file_path||input?.path||'');
+  if(file)return file.replace(/\\/g,'/').split('/').slice(-2).join('/');
+  if(input?.pattern)return String(input.pattern);
+  if(input?.query||input?.url)return String(input.query||input.url);
+  const cmd=String(input?.command||input?.cmd||'').replace(/^"?[^"]*powershell(\.exe)?"?\s+-Command\s+(['"])([\s\S]*)\2\s*$/i,'$3').split(/\r?\n/)[0].replace(/^cd\s+("[^"]*"|\S+)\s*(&&|;)\s*/,'').replace(/python -B -m galecore_ai\.adapters\.cli/g,'galecore-ai').trim();
+  return cmd.length>110?cmd.slice(0,107)+'…':cmd;
+}
+function pushStep(chat,step){const steps=chat.steps||(chat.steps=[]);const last=steps.at(-1);if(last&&last.label===step.label&&last.detail===step.detail)return;steps.push({...step,at:new Date().toISOString()});if(steps.length>14)steps.splice(0,steps.length-14);}
+function setActivity(chat,label,detail=''){chat.activity=label;if(!label||label==='Pensando'||(label==='Trabajando'&&!detail))return;pushStep(chat,{label,detail});}
+function setNote(chat,text){const t=String(text||'').replace(/\s+/g,' ').trim();if(!t)return;pushStep(chat,{label:t.length>160?t.slice(0,157)+'…':t,detail:'',kind:'note'});}
 function consumeEvent(chat, event, provider) {
   if(provider === 'codex') {
     if(event.type === 'thread.started') chat.nativeId = event.thread_id;
     if(event.type === 'item.completed' && event.item?.type === 'agent_message') chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.item.text,at:new Date().toISOString()});
-    if(event.type === 'item.started') setActivity(chat, event.item?.type === 'command_execution' ? describeStep('Bash',{command:event.item.command}) : event.item?.type === 'file_change' ? describeStep('Write',{file_path:(event.item.changes||[])[0]?.path}) : 'Pensando');
+    if(event.type === 'item.started') { const input=event.item?.type === 'command_execution' ? {command:event.item.command} : event.item?.type === 'file_change' ? {file_path:(event.item.changes||[])[0]?.path} : null;
+      setActivity(chat, input ? describeStep(input.command ? 'Bash' : 'Write', input) : 'Pensando', input ? stepDetail('Bash', input) : ''); }
+    if(event.type === 'item.completed' && event.item?.type === 'reasoning') setNote(chat, event.item.text);
     if(event.type === 'turn.failed' || event.type === 'error') chat.error = event.error?.message || event.message || 'El motor no pudo completar el pedido.';
   } else {
     if(event.session_id) chat.nativeId = event.session_id;
     if(event.type === 'assistant') {
       // WS-0027: los textos intermedios son narración interna («Now try the CLI…»), llegan en eventos propios y no
       // van al chat. En el chat queda sólo la respuesta final del turno (evento `result`).
-      const step=(event.message?.content || []).find(c=>c.type==='tool_use');if(step) setActivity(chat,describeStep(step.name,step.input));
+      // Owner 19/10: la narración intermedia no va al chat como mensaje, pero sí a los pasos, como en Claude Code.
+      for(const c of event.message?.content || []){
+        if(c.type==='text'&&(event.message.content.some(x=>x.type==='tool_use')||event.message.stop_reason==='tool_use')) setNote(chat,c.text);
+        if(c.type==='tool_use') setActivity(chat,describeStep(c.name,c.input),stepDetail(c.name,c.input));
+      }
     }
     if(event.type === 'result' && !event.is_error && event.result) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.result,at:new Date().toISOString()});
     if(event.type === 'result' && event.is_error) chat.error='Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
