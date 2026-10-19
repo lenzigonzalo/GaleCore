@@ -1,6 +1,15 @@
 # Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: company_research
 versions:
+  - version: "0.2.0"
+    date: 2026-10-19
+    changes: >
+      Revisión de Codex pedida por el owner: valoración según el modelo de negocio (EV/EBIT, EV/ventas, EV/FCF,
+      precio sobre valor tangible y ROE para bancos; P/E sólo donde corresponde), asignación de capital aparte,
+      drivers como centro de la tesis (ficha por motor y cadena demanda → caja), competidores con las mismas
+      métricas, market share sólo con mercado definido, mercado del negocio separado del bursátil, riesgos como
+      cadena riesgo → driver → impacto → señal, y la limitación dicha en la conclusión.
+    feedback: []
   - version: "0.1.0"
     date: 2026-10-19
     changes: >

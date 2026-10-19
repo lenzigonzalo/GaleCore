@@ -42,14 +42,23 @@ FACTS = {"Revenues": "ingresos", "RevenueFromContractWithCustomerExcludingAssess
          "NetCashProvidedByUsedInOperatingActivities": "flujo operativo",
          "PaymentsToAcquirePropertyPlantAndEquipment": "inversión en activos fijos",
          "ShareBasedCompensation": "remuneración en acciones",
-         "WeightedAverageNumberOfDilutedSharesOutstanding": "acciones diluidas (promedio del trimestre)"}
+         "WeightedAverageNumberOfDilutedSharesOutstanding": "acciones diluidas (promedio del trimestre)",
+         "DepreciationDepletionAndAmortization": "amortizaciones", "DepreciationAmortizationAndOther": "amortizaciones",
+         "InterestExpenseNonoperating": "intereses pagados", "InterestExpense": "intereses pagados",
+         "PaymentsForRepurchaseOfCommonStock": "recompra de acciones",
+         "ProceedsFromIssuanceOfCommonStock": "emisión de acciones",
+         "PaymentsOfDividends": "dividendos pagados", "PaymentsOfDividendsCommonStock": "dividendos pagados"}
 REVENUE_TAGS = ("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax")
+# Concepts that say the same under different names: the one with the latest quarter is kept.
+ALIASES = (REVENUE_TAGS, ("DepreciationDepletionAndAmortization", "DepreciationAmortizationAndOther"),
+           ("InterestExpenseNonoperating", "InterestExpense"), ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock"))
 NOT_ADDITIVE = {"WeightedAverageNumberOfDilutedSharesOutstanding"}   # an average: never summed nor derived
 # Balance sheet concepts: a balance at a date, not a period.
 BALANCE = {"LongTermDebt": "deuda de largo plazo (total)", "LongTermDebtNoncurrent": "deuda de largo plazo no corriente",
            "LongTermDebtCurrent": "deuda de largo plazo que vence en 12 meses",
            "CashAndCashEquivalentsAtCarryingValue": "caja", "ShortTermInvestments": "inversiones de corto plazo",
-           "MarketableSecuritiesCurrent": "títulos negociables corrientes"}
+           "MarketableSecuritiesCurrent": "títulos negociables corrientes", "StockholdersEquity": "patrimonio neto",
+           "Goodwill": "llave de negocio (goodwill)", "IntangibleAssetsNetExcludingGoodwill": "intangibles"}
 FUNDAMENTAL_DAYS = 1500        # ~4 years of filings: four quarters, the four before and the P/E history
 PE_HISTORY_DAYS = 1100         # ~3 years of closes for the own P/E range
 
@@ -401,6 +410,26 @@ def _quality(out: dict, balance: dict) -> dict:
         qd["dilution_yoy_pct"] = sh["yoy_pct"]
     if nd := _net_debt(balance, fcf):
         qd["net_debt"] = nd
+    buy, issue = s("PaymentsForRepurchaseOfCommonStock"), s("ProceedsFromIssuanceOfCommonStock")
+    div = s("PaymentsOfDividends") if "PaymentsOfDividends" in out else s("PaymentsOfDividendsCommonStock")
+    if buy is not None or div is not None:
+        net_buy = (buy or 0) - (issue or 0)
+        qd["capital_returned"] = {"dividends_last_4": div, "buybacks_last_4": buy, "issuance_last_4": issue,
+                                  "net_buybacks_last_4": round(net_buy, 4),
+                                  "share_of_fcf_pct": _ratio((div or 0) + net_buy, fcf) if fcf and fcf > 0 else None,
+                                  "formula": "dividendos + recompras − emisión, 4 trimestres; ÷ flujo libre"}
+    interest = s("InterestExpenseNonoperating") if "InterestExpenseNonoperating" in out else s("InterestExpense")
+    if interest and s("OperatingIncomeLoss") is not None:
+        qd["interest_coverage"] = _ratio(s("OperatingIncomeLoss"), interest, pct=False)
+    eq = balance.get("StockholdersEquity")
+    if eq and ni is not None and eq.get("year_ago"):
+        avg = (eq["value"] + eq["year_ago"]) / 2
+        qd["roe_pct"] = _ratio(ni, avg) if avg > 0 else None
+        tang = eq["value"] - sum((balance.get(t) or {}).get("value") or 0
+                                 for t in ("Goodwill", "IntangibleAssetsNetExcludingGoodwill")
+                                 if (balance.get(t) or {}).get("date") == eq["date"])
+        if tang > 0:
+            qd["tangible_equity"] = round(tang, 4)
     if rev is None or "OperatingIncomeLoss" not in out:
         qd.pop("cash_conversion", None)
         qd["coverage"] = ("evaluación fundamental incompleta con este método: la empresa no reporta ingresos o "
@@ -414,6 +443,40 @@ def _eps_known_at(eps_q: list[dict], day: str) -> float | None:
     return _four(known, len(known)) if len(known) >= 4 else None
 
 
+def _multiples(cap: float, out: dict, qd: dict) -> dict:
+    """What the shareholder pays (P/E elsewhere, price over free cash flow, over book) and what the business is worth
+    to everyone who finances it (EV = capitalización + deuda neta) over a coherent magnitude. Each one is meaningful
+    for some businesses only; the reading picks two or three by business model."""
+    def s(tag):
+        return (out.get(tag) or {}).get("last_4_quarters")
+    rev = next((s(t) for t in REVENUE_TAGS if t in out), None)
+    ebit = s("OperatingIncomeLoss")
+    da = next((s(t) for t in ALIASES[1] if t in out), None)
+    fcf = (qd.get("free_cash_flow") or {}).get("last_4")
+    m: dict = {"market_cap_at_close": round(cap, 0),
+               "market_cap_note": "cierre × acciones diluidas promedio del último trimestre (aproximado)"}
+    if fcf is not None:
+        m["fcf_yield_pct"] = _round(fcf / cap * 100)
+        m["price_to_fcf"] = _ratio(cap, fcf, pct=False) if fcf > 0 else None
+    if (nd := qd.get("net_debt")) is not None:
+        ev = cap + nd["net_debt"]
+        m["enterprise_value"] = round(ev, 0)
+        m["ev_note"] = "capitalización + deuda neta; no incluye arrendamientos, minoritarios ni preferidas"
+        m["ev_to_sales"] = _ratio(ev, rev, pct=False) if rev and rev > 0 else None
+        m["ev_to_ebit"] = _ratio(ev, ebit, pct=False) if ebit and ebit > 0 else None
+        if ebit is not None and da is not None and ebit + da > 0:
+            m["ev_to_ebitda"] = _ratio(ev, ebit + da, pct=False)
+        m["ev_to_fcf"] = _ratio(ev, fcf, pct=False) if fcf and fcf > 0 else None
+    eq = ((out.get("balance") or {}).get("StockholdersEquity") or {}).get("value")
+    if eq and eq > 0:
+        m["price_to_book"] = _ratio(cap, eq, pct=False)
+    if (tang := qd.get("tangible_equity")) and tang > 0:
+        m["price_to_tangible_book"] = _ratio(cap, tang, pct=False)
+    if (cr := qd.get("capital_returned")):
+        m["shareholder_yield_pct"] = _round(((cr["dividends_last_4"] or 0) + cr["net_buybacks_last_4"]) / cap * 100)
+    return m
+
+
 def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd: dict) -> dict:
     """P/E on the last close, the own P/E range (EPS known at each date) and 12-month scenarios. Scenarios are
     rules over reported numbers, not a forecast: EPS growth and exit P/E are stated assumptions."""
@@ -422,10 +485,7 @@ def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd
     day, close = bars[-1][0], bars[-1][1]
     v: dict = {"close": close, "close_date": day}
     if shares:
-        cap = close * shares
-        v["market_cap_at_close"] = round(cap, 0)
-        if (fcf := (qd.get("free_cash_flow") or {}).get("last_4")) is not None:
-            v["fcf_yield_pct"] = _round(fcf / cap * 100)
+        v |= _multiples(close * shares, out, qd)
     eps = _four(eps_q, len(eps_q)) if len(eps_q) >= 4 else None
     if eps is None:
         return v
@@ -455,7 +515,8 @@ def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd
         "rule": ("EPS de 4 trim. × (1 + crecimiento supuesto) × P/E de salida. Adverso: EPS sin crecer y el menor entre "
                  "el P/E de hoy y su percentil 25 · central: crece como los ingresos de 4 trim. y P/E igual al de hoy · "
                  "favorable: el mayor crecimiento entre ingresos y EPS de 4 trim., y el mayor entre el P/E de hoy y su "
-                 "percentil 75. Supuestos, no pronóstico; sin dividendos ni probabilidades"),
+                 "percentil 75. Supuestos, no pronóstico; sin dividendos ni probabilidades. Sobre P/E: pertinente "
+                 "en empresas no financieras con ganancias estables, no en bancos, cíclicas en su pico ni pérdidas"),
         "cases": [{"case": n, "eps_growth_pct": g, "exit_pe": pe, "price": round(eps * (1 + g / 100) * pe, 2),
                    "return_pct": _round((eps * (1 + g / 100) * pe / close - 1) * 100)} for n, g, pe in cases]}
     return v
@@ -465,11 +526,12 @@ def fundamental_view(facts_by_tag: dict[str, list[dict]], price: float | None,
                      balance_facts: dict[str, list[dict]] | None = None, bars: list | None = None) -> dict:
     out: dict = {}
     quarters = {t: q for t, fs in facts_by_tag.items() if (q := _quarters(fs, additive=t not in NOT_ADDITIVE))}
-    revs = [t for t in REVENUE_TAGS if t in quarters]
-    keep_rev = max(revs, key=lambda t: quarters[t][-1]["end"]) if revs else None
+    for group in ALIASES:
+        present = [t for t in group if t in quarters]
+        for t in present:
+            if t != max(present, key=lambda x: quarters[x][-1]["end"]):
+                del quarters[t]
     for tag, q in quarters.items():
-        if tag in REVENUE_TAGS and tag != keep_rev:
-            continue
         out[tag] = _flow_row(tag, q)
     balance = {t: b for t, fs in (balance_facts or {}).items() if (b := _balance(fs))}
     if balance:
@@ -516,8 +578,8 @@ async def _fundamental(ask, symbol: str, today: date, missing: list[str]) -> dic
     val = view.get("valuation") or {}
     out: dict = {"statements": view, "price_used": val.get("close"), "price_date": val.get("close_date")}
     missing[:] = [x for x in missing if not (x.startswith("filings.sec_facts") and "(404)" in x)]
-    absent = [FACTS[t] for t in FACTS
-              if t not in view and not (t in REVENUE_TAGS and any(r in view for r in REVENUE_TAGS))]
+    group_of = {t: g for g in ALIASES for t in g}
+    absent = [FACTS[t] for t in FACTS if t not in view and not any(r in view for r in group_of.get(t, ()))]
     if absent:
         missing.append(f"filings.sec_facts {symbol}: sin valores trimestrales de {', '.join(dict.fromkeys(absent))} "
                        "(la empresa puede usar otros conceptos)")

@@ -212,3 +212,27 @@ def test_the_own_pe_uses_only_the_eps_already_filed_and_scenarios_state_their_as
     assert cases["central"]["eps_growth_pct"] == 10.0 and cases["central"]["exit_pe"] == v["pe_trailing"]
     assert cases["adverso"]["exit_pe"] <= v["pe_trailing"] <= cases["favorable"]["exit_pe"]
     assert "no pronóstico" in v["scenarios_12m"]["rule"]
+
+
+def test_enterprise_value_multiples_book_value_and_capital_returned():
+    facts = {"RevenueFromContractWithCustomerExcludingAssessedTax": eight([100.0] * 8),
+             "OperatingIncomeLoss": eight([40.0] * 8), "NetIncomeLoss": eight([30.0] * 8),
+             "DepreciationDepletionAndAmortization": eight([10.0] * 8),
+             "NetCashProvidedByUsedInOperatingActivities": eight([45.0] * 8),
+             "PaymentsToAcquirePropertyPlantAndEquipment": eight([20.0] * 8),
+             "PaymentsForRepurchaseOfCommonStock": eight([10.0] * 8), "ProceedsFromIssuanceOfCommonStock": eight([2.5] * 8),
+             "PaymentsOfDividendsCommonStock": eight([5.0] * 8), "InterestExpenseNonoperating": eight([4.0] * 8),
+             "WeightedAverageNumberOfDilutedSharesOutstanding": eight([10.0] * 8)}
+    balance = {"LongTermDebt": [bal("2026-06-30", 300.0)], "CashAndCashEquivalentsAtCarryingValue": [bal("2026-06-30", 100.0)],
+               "StockholdersEquity": [bal("2025-06-30", 500.0), bal("2026-06-30", 700.0)],
+               "Goodwill": [bal("2026-06-30", 100.0)]}
+    bars = [("2026-08-0" + str(d), 200.0, None) for d in range(1, 6)]
+    view = analysis.fundamental_view(facts, None, balance, bars)
+    qd, v = view["quality"], view["valuation"]
+    assert qd["capital_returned"]["net_buybacks_last_4"] == 30.0 and qd["capital_returned"]["share_of_fcf_pct"] == 50.0
+    assert qd["interest_coverage"] == 10.0 and qd["roe_pct"] == 20.0 and qd["tangible_equity"] == 600.0
+    # cap = 200 × 10 = 2.000; EV = 2.000 + (300 − 100) = 2.200
+    assert v["enterprise_value"] == 2200 and v["ev_to_sales"] == 5.5 and v["ev_to_ebit"] == 13.75
+    assert v["ev_to_ebitda"] == 11.0 and v["ev_to_fcf"] == 22.0 and v["price_to_fcf"] == 20.0
+    assert v["price_to_book"] == round(2000 / 700, 2) and v["price_to_tangible_book"] == round(2000 / 600, 2)
+    assert v["shareholder_yield_pct"] == 2.5                                    # (dividendos 20 + recompra neta 30) ÷ 2.000

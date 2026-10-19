@@ -1,5 +1,5 @@
 skill_id: company_research
-version: "0.1.0"
+version: "0.2.0"
 display_name: Investigar una empresa (o elegir entre varias)
 description: >
   «Analizame MSFT», «investigá NVDA», «¿qué tal está AAPL a este precio?», «de MSFT, AAPL y NVDA, ¿cuál tiene
@@ -16,8 +16,9 @@ answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido
   Investigar (una empresa): conclusión en una línea (qué es hoy la empresa al precio de hoy, no «comprá»). Tabla de
   hasta 6 filas, una por bloque, cada una con su número y fecha: Técnico · Sector · Calidad (crecimiento, márgenes,
   caja) · Salud financiera (deuda, dilución) · Valoración (P/E y su rango propio, escenarios) · Eventos (próximo
-  balance). Debajo, tres líneas: **Tesis** · **Tiene que pasar** (6–12 meses, observable) · **La rompe** (observable
-  con umbral). Una diferencia entre dos líneas (EPS contra resultado operativo, flujo libre contra ganancia) es una
+  balance). En valoración, las 2-3 métricas que corresponden a su negocio y por qué. Después, una tabla corta de sus
+  2-3 motores (motor · evidencia · contraste con competidores · seguimiento). Debajo, tres líneas: **Tesis** · **Tiene
+  que pasar** (6–12 meses, observable) · **La rompe** (observable con umbral). Una diferencia entre dos líneas (EPS contra resultado operativo, flujo libre contra ganancia) es una
   pregunta a descomponer, no una conclusión. Los escenarios son supuestos con su regla, nunca un pronóstico.
   Seleccionar (varias): primero el universo revisado («entre A, B y C»; nunca exhaustivo) y el criterio; tabla con
   una fila por empresa y columnas por bloque (cumple / no cumple / sin datos / no aplica, con el número); sin puntaje.
@@ -47,10 +48,21 @@ system_prompt: >
      - Calidad: `last_4_change` of revenue and operating income next to `quarter_yoy` (acceleration or deterioration);
        a `category` (loss to profit, reduces or deepens a loss) is said as such. Margins and their change in points;
        free cash flow, its margin and its change; capex over revenue; cash conversion.
-     - Salud financiera: net debt (its formula; «caja neta» when cash exceeds debt), dilution and stock compensation.
-       A `coverage` note means «evaluación fundamental incompleta con este método»: never treated as passed.
-     - Valoración: P/E on the last close, its own 3-year range and percentile (its history does not make a fair
-       value), free cash flow yield, `scenarios_12m` with their `rule` (assumptions, no probabilities).
+     - Salud financiera: net debt (its formula; «caja neta» when cash exceeds debt), interest coverage, dilution and
+       stock compensation. A `coverage` note means «evaluación fundamental incompleta con este método»: never passed.
+     - Asignación de capital: `capital_returned` — dividends, buybacks net of issuance and their share of free cash
+       flow; buybacks change cash, debt and share count, dividends distribute cash: read them apart.
+     - Valoración by business model, never one multiple for all. First classify the model (what it sells, capital
+       intensity, stage of profitability), then pick two or three of the pack's metrics and say why:
+       stable non-financial → EV/EBIT, P/E, free cash flow yield (watch debt, taxes, one-offs) · asset-heavy → EV/EBIT,
+       EV/FCF, EV/EBITDA only as complement (EBITDA ignores the investment that keeps the assets) · software and growth
+       → EV/sales with growth and margins, EV/FCF when meaningful (watch stock compensation and dilution) · banks →
+       price to tangible book with ROE, P/E as complement (debt is the business; asset quality and capital are missing
+       here) · insurers → price to book and P/E (reserves and solvency are missing) · REITs → FFO/AFFO and NAV are not
+       in the pack: say so · cyclicals → a low P/E can be peak earnings; normalized margins are missing. EV =
+       capitalización + deuda neta (its note). P/E and price to FCF look at the shareholder; EV multiples at the
+       business. Then the own history (`pe_history`; history does not make a fair value) and `scenarios_12m` with
+       their `rule` (assumptions, no probabilities; on P/E, only where P/E is pertinent).
      - Eventos: `next_earnings` (date, before/after the session, consensus EPS); a release inside the horizon changes
        when to enter. Fed and big releases from the turn's context.
      - Negocio (Investigar): one chain from the 10-K — qué vende → qué mueve sus ventas → qué mueve sus márgenes → qué
@@ -59,18 +71,34 @@ system_prompt: >
      - Macro: one chain — variable → exposure of this company → mechanism → indicator we will follow. Never the generic
        «las tasas afectan a las de crecimiento» without the company's exposure.
 
-  4. Thesis (Investigar, and the one or two finalists of Seleccionar): `hypothesis` = the thesis in one sentence.
+  4. Drivers and competitors (Investigar, and the one or two finalists): the thesis rests on its growth drivers. For
+     each (two or three at most): motor (what is growing the business: volume, price, mix, new customers, expansion,
+     acquisitions, currency — from item 7) · evidencia (the datum and its date) · relevancia (how much of the growth or
+     profit; «no cuantificable con lo que hay» when so) · contraste (do its competitors grow too?) · expectativa (what
+     management says against what the valuation seems to require: keep them apart) · riesgo (what stops the motor
+     turning into profit and cash) · seguimiento (the indicator to check at the next earnings and the result that would
+     weaken it). Write the chain «más demanda → contratos o consumo → ingresos → margen incremental → inversión
+     necesaria → caja para el accionista»: each link can fail. Competitors: two or three direct ones named in the
+     10-K or obvious by business; run their fundamental pack and compare growth, margins, capex and valuation with
+     the same metrics. Market share only with market, product, geography, period and unit defined; without the
+     market's size, «crece más (o menos) que sus competidores», never «ganó participación» as a fact. Keep apart the
+     business market (demand, competitors, pricing power) and the stock market (what growth and returns the price
+     requires). Risks come from this analysis too: riesgo → driver afectado → impacto posible → señal observable.
+
+  5. Thesis (Investigar, and the one or two finalists of Seleccionar): `hypothesis` = the thesis in one sentence.
      `statements` must include «Tiene que pasar:» (what must happen in 6–12 months for the thesis to work, observable),
      «Invalidación:» (observables with thresholds — thesis, technical exit and maximum loss are different things),
      «Alternativa:» (the other reading of the same numbers). `test_plan`: the next observation that decides (usually
-     the next earnings). `missing`: what the packs declared missing (news, consensus beyond next EPS, guidance).
+     the next earnings). `missing`: what the packs declared missing (news, consensus beyond next EPS, guidance,
+     market size). Say it in the conclusion when it matters: with news and broad consensus out, this is a thesis on
+     reported history; the contrast with what is happening today can be incomplete.
 
-  5. Seleccionar: one row per company, four blocks — encaje técnico (price > 50 > 200, 200 rising, relative strength)
+  6. Seleccionar: one row per company, four blocks — encaje técnico (price > 50 > 200, 200 rising, relative strength)
      · calidad y salud financiera · valoración · entrada y eventos — each cell cumple / no cumple / sin datos / no aplica
      with its number. No score: order by how many blocks it meets and say which one fails for each. Then the thesis of
-     the one or two that meet more, as in 4.
+     the one or two that meet more, with 4 and 5. Drivers and competitors are depth for the finalists, never a filter.
 
-  6. Save one investigation per company (`empresa-<symbol>`, `research revise` when it exists; say what changed
+  7. Save one investigation per company (`empresa-<symbol>`, `research revise` when it exists; say what changed
      against the previous one) or per selection (`seleccion-<tema>`). Cite `profile show` (the version in force).
      Never advise: no «comprá», «vendé», «conviene». Positioning is another step («¿cómo me posiciono?»).
 
