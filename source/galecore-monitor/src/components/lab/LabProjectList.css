@@ -55,3 +55,12 @@
 .lab-project-chats.lab-all-chats { margin:0; padding:0; border-left:0; }
 .lab-group-options > .lab-option-danger { color:var(--red-gc); }
 .lab-group-options > hr { width:100%; margin:4px 0; border:0; border-top:1px solid var(--border); }
+
+/* Buscador (owner 19/10): como el de la plataforma, liviano, sin caja marcada */
+.lab-search { display:flex; align-items:center; gap:8px; margin:0 4px 10px; padding:7px 10px; border-radius:8px; background:var(--bg-secondary); color:var(--text-muted); cursor:text; transition:background .15s; }
+.lab-search:focus-within { background:var(--bg-tertiary); color:var(--text-secondary); }
+.lab-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:var(--text-primary); font-size:14px; }
+.lab-search input::placeholder { color:var(--text-muted); }
+.lab-search input:focus-visible { outline:none; box-shadow:none; }
+.lab-search button { display:grid; place-items:center; padding:2px; border:0; border-radius:4px; background:transparent; color:var(--text-muted); cursor:pointer; }
+.lab-search button:hover { color:var(--text-primary); }

@@ -167,3 +167,20 @@ test('la organización guardada en la cuenta manda sobre la de este navegador y 
   expect(JSON.parse(saved[0][2].content).groups[0].collapsed).toBe(true);
   spaceItems.length = 0; saved.length = 0; jest.useRealTimers();
 });
+
+test('buscador por pestaña: Proyectos busca proyectos y Conversaciones busca conversaciones, sin tildes (owner 19/10)', () => {
+  render(<LabProjectList {...props}/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Buscar proyectos' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Buscar proyectos' }), { target: { value: 'person' } });
+  const results = screen.getByRole('navigation', { name: 'Resultados de la búsqueda' });
+  expect(within(results).getByRole('button', { name: 'Personal' })).toBeInTheDocument();
+  expect(within(results).queryByRole('button', { name: /^Investigación/ })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox', { name: 'Buscar proyectos' }), { target: { value: 'investigacion' } });
+  expect(screen.getByText('Ningún proyecto con «investigacion».')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Conversaciones' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Buscar conversaciones' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Buscar conversaciones' }), { target: { value: 'INVESTIGACION' } });
+  expect(within(screen.getByRole('navigation', { name: 'Conversaciones' })).getByRole('button', { name: /^Investigación/ })).toBeInTheDocument();
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Buscar conversaciones' }), { key: 'Escape' });
+  expect(screen.queryByRole('textbox', { name: 'Buscar conversaciones' })).not.toBeInTheDocument();
+});

@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronRight, Folder, MessageSquare, MoreHorizontal, Plus, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, MessageSquare, MoreHorizontal, Plus, Search, X } from 'lucide-react';
 import type { WorkspaceProject, WorkspaceState } from '../../api/lab';
 import { fetchSpace, saveSpaceItem } from '../../api/space';
 import './LabProjectList.css';
@@ -52,6 +52,7 @@ interface Props {
 export function LabProjectList(props: Props) {
   const { state, projectId, chatId, expanded, onToggle, onProject, onChat, onNewChat, onCreateProject, name, onRename, editing, renameInput, onDelete } = props;
   // Proyectos (carpetas con sus chats) o Conversaciones (todas, la más nueva arriba) — owner 17/10.
+  const [query, setQuery] = useState<string | null>(null);   // owner 19/10: ya son muchos; buscar proyectos y conversaciones
   const [tab, setTab] = useState<'projects' | 'chats'>(() => { try { return localStorage.getItem('galecore:lab:list') === 'chats' ? 'chats' : 'projects'; } catch { return 'projects'; } });
   useEffect(() => { try { localStorage.setItem('galecore:lab:list', tab); } catch { /* preferencia de vista */ } }, [tab]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -114,6 +115,9 @@ export function LabProjectList(props: Props) {
   // WS-0044: la más reciente arriba (último turno, o creación si todavía no respondió).
   const recent = (c: { createdAt?: string; turnStartedAt?: number }) => Math.max(c.turnStartedAt || 0, Date.parse(c.createdAt || '') || 0);
   const chats = (state?.chats.filter(c => !/^test[_ -]/i.test(c.title) && projects.some(p => p.id === c.project)) || []).sort((a, b) => recent(b) - recent(a));
+  const fold = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const terms = fold(query || '').split(/\s+/).filter(Boolean);
+  const hit = (text: string) => terms.every(t => fold(text).includes(t));
   const move = (key: string, group: string) => {
     organize(old => {
       const members = { ...old.members }; if (group) members[key] = group; else delete members[key];
@@ -176,13 +180,23 @@ export function LabProjectList(props: Props) {
     organize(old => ({ ...old, groups: editor.id ? old.groups.map(g => g.id === id ? { ...g, label: editor.label.trim(), color: editor.color } : g) : [...old.groups, { id, label: editor.label.trim(), color: editor.color, collapsed: false }] }));
     setEditor(null); lastTrigger.current?.focus();
   };
+  const what = tab === 'chats' ? 'conversaciones' : 'proyectos';
+  const searchButton = <button className="lab-icon" aria-label={'Buscar ' + what} title={'Buscar ' + what} aria-pressed={query !== null} onClick={() => setQuery(q => q === null ? '' : null)}><Search size={16}/></button>;
+  const searchBox = query !== null && <label className="lab-search"><Search size={15} aria-hidden="true"/><input autoFocus aria-label={'Buscar ' + what} placeholder={'Buscar ' + what} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setQuery(null); }}/>{query && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQuery('')}><X size={14}/></button>}</label>;
   return <div className="lab-project-list" ref={root}>
-    <div className="lab-list-tabs" role="tablist" aria-label="Lista"><button role="tab" aria-selected={tab === 'projects'} onClick={() => setTab('projects')}>Proyectos</button><button role="tab" aria-selected={tab === 'chats'} onClick={() => setTab('chats')}>Conversaciones</button></div>
-    {tab === 'chats' ? <nav aria-label="Conversaciones" className="lab-project-chats lab-all-chats">{chats.map(c => renderChat(c, true))}{!chats.length && <p className="lab-group-empty">Todavía no hay conversaciones.</p>}</nav> : <>
-    <div className="lab-project-heading"><span>Proyectos</span><div><button className="lab-icon" aria-label="Crear grupo" title="Crear grupo" onClick={e => { lastTrigger.current = e.currentTarget; setEditor({ label: '', color: 'neutral' }); setMenu(null); }}><Folder size={17}/><Plus size={11}/></button><button className="lab-icon" aria-label="Crear proyecto" onClick={onCreateProject}><Plus size={18}/></button></div></div>
+    <div className="lab-list-tabs" role="tablist" aria-label="Lista"><button role="tab" aria-selected={tab === 'projects'} onClick={() => { setTab('projects'); setQuery(null); }}>Proyectos</button><button role="tab" aria-selected={tab === 'chats'} onClick={() => { setTab('chats'); setQuery(null); }}>Conversaciones</button></div>
+    {tab === 'chats' ? <>
+    <div className="lab-project-heading"><span>Conversaciones</span><div>{searchButton}</div></div>
+    {searchBox}
+    <nav aria-label="Conversaciones" className="lab-project-chats lab-all-chats">{chats.filter(c => hit(c.title)).map(c => renderChat(c, true))}{!chats.some(c => hit(c.title)) && <p className="lab-group-empty">{terms.length ? 'Ninguna conversación con «' + query + '».' : 'Todavía no hay conversaciones.'}</p>}</nav></> : <>
+    <div className="lab-project-heading"><span>Proyectos</span><div>{searchButton}<button className="lab-icon" aria-label="Crear grupo" title="Crear grupo" onClick={e => { lastTrigger.current = e.currentTarget; setEditor({ label: '', color: 'neutral' }); setMenu(null); }}><Folder size={17}/><Plus size={11}/></button><button className="lab-icon" aria-label="Crear proyecto" onClick={onCreateProject}><Plus size={18}/></button></div></div>
     {editor && <form className="lab-group-editor" aria-label={editor.id ? 'Editar grupo' : 'Nuevo grupo'} onSubmit={saveGroup}><header><strong>{editor.id ? 'Editar grupo' : 'Nuevo grupo'}</strong><button type="button" className="lab-icon" aria-label="Cancelar grupo" onClick={() => { setEditor(null); lastTrigger.current?.focus(); }}><X size={16}/></button></header><label>Nombre del grupo<input autoFocus required maxLength={100} value={editor.label} onChange={e => setEditor({ ...editor, label: e.target.value })}/></label><Palette value={editor.color} onChange={color => setEditor({ ...editor, color })}/><button className="lab-group-save" disabled={!editor.label.trim()}>{editor.id ? 'Guardar grupo' : 'Crear grupo'}</button></form>}
     {storageError && <p className="lab-group-empty" role="status">No se pudo guardar la organización en tu cuenta; queda en este navegador.</p>}
-    <nav aria-label="Proyectos y conversaciones">
+    {searchBox}
+    {terms.length ? <nav aria-label="Resultados de la búsqueda">
+      {projects.filter(p => hit(p.label)).map(p => renderProject(p))}
+      {!projects.some(p => hit(p.label)) && <p className="lab-group-empty">Ningún proyecto con «{query}».</p>}
+    </nav> : <nav aria-label="Proyectos y conversaciones">
       {organization.groups.map(g => {
         const groupedProjects = projects.filter(p => organization.members['p:' + p.id] === g.id);
         const groupedChats = chats.filter(c => organization.members['c:' + c.id] === g.id);
@@ -196,6 +210,6 @@ export function LabProjectList(props: Props) {
         {organization.groups.length > 0 && <div className="lab-ungrouped-heading">{dragging ? 'Soltá aquí para sacar del grupo' : 'Sin grupo'}</div>}
         {projects.filter(p => !organization.members['p:' + p.id]).map(p => renderProject(p))}
       </section>
-    </nav></>}
+    </nav>}</>}
   </div>;
 }
