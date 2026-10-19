@@ -261,7 +261,8 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
         cite(a.ref, f"antecedents[{i}]")
     for i, s in enumerate(content.statements):
         if s.kind == StatementKind.FACT and not s.sources:
-            problems.append(f"statements[{i}]: a fact must cite at least one source")
+            problems.append(f"statements[{i}]: a fact must cite at least one source (a market or record ref); "
+                            "what the owner said or prefers in the conversation is kind 'decision', not a fact")
         if s.kind == StatementKind.FACT and _OWN_CALCULATION.match(s.text):
             # Codex C1 of GC-AI-0015: the skill said so in prose and a fresh session still typed it as a fact.
             problems.append(f"statements[{i}]: own arithmetic ('Cálculo propio') is an interpretation, not a fact")

@@ -600,6 +600,9 @@ async def _cmd_kb_search(args: argparse.Namespace) -> None:
     kb = _build_knowledge_base()
     result = kb_search(kb, text=args.text or "", kind=args.kind, status=args.status, symbol=args.symbol,
                        include_marked=args.include_marked, since=args.since)
+    if args.limit and len(result["results"]) > args.limit:  # lote 4 de Codex: búsquedas de decenas de miles de tokens
+        result["results"] = result["results"][:args.limit]
+        result["shown"] = args.limit
     result["knowledge_base"] = str(kb.base)
     result["searched_at"] = datetime.now(UTC).isoformat()
     _json_out(result, exit_code=_EXIT_VALIDATION_ERROR if result["integrity_failed"] else _EXIT_SUCCESS)
@@ -1428,6 +1431,8 @@ def build_parser() -> _JsonArgumentParser:
     p_search.add_argument("--since", help="YYYY-MM-DD: only items updated on or after that day")
     p_search.add_argument("--include-marked", dest="include_marked", action="store_true",
                           help="Also list items marked corrected, superseded or retired (left out by default)")
+    p_search.add_argument("--limit", type=int, default=15,
+                          help="Best matches shown (default 15; 0 = all); count keeps the total")
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
     p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id>, "
                                     "strategy:<name>/<version>, profile:v<N>, feedback:<id>, project:<name> or file:<path>")
