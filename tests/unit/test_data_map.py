@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -75,3 +76,13 @@ def test_a_scheduled_run_cannot_write_outside_its_directory(tmp_path):
     proc = _cli("galecore", "get", "compute.iv_rank", "--symbol", "SPY", "--out", str(tmp_path / "elsewhere.json"),
                 env=env)
     assert proc.returncode != 0 and not (tmp_path / "elsewhere.json").exists()
+
+
+def test_kept_reads_in_the_same_second_do_not_collide():
+    # Codex lote 5 (19/10): candles of AAPL and MSFT kept in the same second got the same name
+    from galecore_ai.adapters.cli import _evidence_slug
+    at = datetime(2026, 10, 19, 11, 20, 5, tzinfo=UTC)
+    a, b = (_evidence_slug("market_data.candles", {"symbol": s}, at) for s in ("AAPL", "MSFT"))
+    again = _evidence_slug("market_data.candles", {"symbol": "AAPL"}, at)
+    assert a.startswith("galecore-market-data-candles-aapl-112005-") and "-msft-" in b
+    assert len({a, b, again}) == 3

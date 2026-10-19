@@ -65,7 +65,9 @@ import asyncio
 import json
 import logging
 import os
+import re
 import sys
+import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -673,6 +675,14 @@ async def _cmd_evidence_add(args: argparse.Namespace) -> None:
                "provenance": document.provenance, "content_hash": document.content_hash})
 
 
+
+def _evidence_slug(capability: str, params: dict, retrieved: datetime) -> str:
+    """Name of a `galecore get --keep` record. Codex lote 5 (19/10): two reads of the same capability in the same
+    second collided; the symbol and a short random suffix keep concurrent reads apart (records stay immutable)."""
+    symbol = re.sub(r"[^a-z0-9]+", "", str(params.get("symbol") or params.get("Symbol") or "").lower())
+    parts = ("galecore", capability.replace(".", "-").replace("_", "-"), symbol, f"{retrieved:%H%M%S}", uuid.uuid4().hex[:4])
+    return "-".join(x for x in parts if x)
+
 async def _cmd_galecore(args: argparse.Namespace) -> None:
     """Read-only GaleCore data the harness declares (GC-AI-0019): `list` what can be asked, `get` one capability."""
     if args.galecore_command == "list":
@@ -713,7 +723,7 @@ async def _cmd_galecore(args: argparse.Namespace) -> None:
                                    observation_dates=retrieved.isoformat())],
             payload=json.dumps(result.data, ensure_ascii=False), payload_scope=PayloadScope.FULL)
         try:
-            doc, _ = save_evidence(kb=_build_knowledge_base(), slug=f"galecore-{args.capability.replace('.', '-').replace('_', '-')}-{retrieved:%H%M%S}",
+            doc, _ = save_evidence(kb=_build_knowledge_base(), slug=_evidence_slug(args.capability, params, retrieved),
                                    prompt=args.keep, host=RecordHost(provider="galecore-ai galecore get", model=None),
                                    content=content, now=retrieved)
         except KnowledgeError as exc:
