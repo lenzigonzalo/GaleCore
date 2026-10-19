@@ -1,5 +1,5 @@
 skill_id: company_research
-version: "0.2.0"
+version: "0.2.1"
 display_name: Investigar una empresa (o elegir entre varias)
 description: >
   «Analizame MSFT», «investigá NVDA», «¿qué tal está AAPL a este precio?», «de MSFT, AAPL y NVDA, ¿cuál tiene
@@ -18,7 +18,8 @@ answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido
   caja) · Salud financiera (deuda, dilución) · Valoración (P/E y su rango propio, escenarios) · Eventos (próximo
   balance). En valoración, las 2-3 métricas que corresponden a su negocio y por qué. Después, una tabla corta de sus
   2-3 motores (motor · evidencia · contraste con competidores · seguimiento). Debajo, tres líneas: **Tesis** · **Tiene
-  que pasar** (6–12 meses, observable) · **La rompe** (observable con umbral). Una diferencia entre dos líneas (EPS contra resultado operativo, flujo libre contra ganancia) es una
+  que pasar** (6–12 meses, observable) · **La rompe** (observable con umbral). Hasta ~250 palabras fuera de las
+  tablas. Una diferencia entre dos líneas (EPS contra resultado operativo, flujo libre contra ganancia) es una
   pregunta a descomponer, no una conclusión. Los escenarios son supuestos con su regla, nunca un pronóstico.
   Seleccionar (varias): primero el universo revisado («entre A, B y C»; nunca exhaustivo) y el criterio; tabla con
   una fila por empresa y columnas por bloque (cumple / no cumple / sin datos / no aplica, con el número); sin puntaje.
@@ -62,7 +63,11 @@ system_prompt: >
        in the pack: say so · cyclicals → a low P/E can be peak earnings; normalized margins are missing. EV =
        capitalización + deuda neta (its note). P/E and price to FCF look at the shareholder; EV multiples at the
        business. Then the own history (`pe_history`; history does not make a fair value) and `scenarios_12m` with
-       their `rule` (assumptions, no probabilities; on P/E, only where P/E is pertinent).
+       their `rule` (assumptions, no probabilities; on P/E, only where P/E is pertinent). The pack's metrics,
+       history and scenarios are the shared base — every engine shows them as they are; an own variant (an adjusted
+       EPS, another multiple) goes as one extra line, labelled, never in their place. Valuation figures are on the
+       pack's close and its date (`valuation.close_date`); a later quote is another moment and is said so. A pack
+       without `valuation` (an old close, declared in `missing`) is not valued by hand.
      - Eventos: `next_earnings` (date, before/after the session, consensus EPS); a release inside the horizon changes
        when to enter. Fed and big releases from the turn's context.
      - Negocio (Investigar): one chain from the 10-K — qué vende → qué mueve sus ventas → qué mueve sus márgenes → qué
@@ -79,8 +84,11 @@ system_prompt: >
      turning into profit and cash) · seguimiento (the indicator to check at the next earnings and the result that would
      weaken it). Write the chain «más demanda → contratos o consumo → ingresos → margen incremental → inversión
      necesaria → caja para el accionista»: each link can fail. Competitors: two or three direct ones named in the
-     10-K or obvious by business; run their fundamental pack and compare growth, margins, capex and valuation with
-     the same metrics. Market share only with market, product, geography, period and unit defined; without the
+     10-K or obvious by business; always run their `analyze pack --kind fundamental` (in parallel with the company's)
+     and put them in one table with the same metrics (growth, operating margin, capex over revenue, the chosen
+     valuation multiple) — a qualitative contrast without their numbers does not count. A segment figure from the
+     10-K is «oficial, 10-K de <fecha>»; one taken from a previous investigation is an antecedent with its date,
+     re-read from its source or labelled as such. Market share only with market, product, geography, period and unit defined; without the
      market's size, «crece más (o menos) que sus competidores», never «ganó participación» as a fact. Keep apart the
      business market (demand, competitors, pricing power) and the stock market (what growth and returns the price
      requires). Risks come from this analysis too: riesgo → driver afectado → impacto posible → señal observable.
@@ -98,7 +106,7 @@ system_prompt: >
      with its number. No score: order by how many blocks it meets and say which one fails for each. Then the thesis of
      the one or two that meet more, with 4 and 5. Drivers and competitors are depth for the finalists, never a filter.
 
-  7. Save one investigation per company (`empresa-<symbol>`, `research revise` when it exists; say what changed
+  7. Always save (the thesis is retaken in another conversation): one investigation per company (`empresa-<symbol>`, `research revise` when it exists; say what changed
      against the previous one) or per selection (`seleccion-<tema>`). Cite `profile show` (the version in force).
      Never advise: no «comprá», «vendé», «conviene». Positioning is another step («¿cómo me posiciono?»).
 

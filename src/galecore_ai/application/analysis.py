@@ -61,6 +61,7 @@ BALANCE = {"LongTermDebt": "deuda de largo plazo (total)", "LongTermDebtNoncurre
            "Goodwill": "llave de negocio (goodwill)", "IntangibleAssetsNetExcludingGoodwill": "intangibles"}
 FUNDAMENTAL_DAYS = 1500        # ~4 years of filings: four quarters, the four before and the P/E history
 PE_HISTORY_DAYS = 1100         # ~3 years of closes for the own P/E range
+STALE_CLOSE_DAYS = 5           # a last close older than this is a cut history, not the market
 
 KIND_LABELS = {
     "hecho": "valor publicado por la fuente (FRED, BLS, SEC, Tastytrade vía GaleCore) con su fecha",
@@ -497,9 +498,9 @@ def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd
     hist = [c / e for d, c, _ in bars if d >= cut and (e := _eps_known_at(eps_q, d)) and e > 0]
     if len(hist) < 120:
         return v
-    qs = statistics.quantiles(hist, n=4)
-    ph = {"sessions": len(hist), "from": cut, "min": round(min(hist), 1), "p25": round(qs[0], 1),
-          "median": round(qs[1], 1), "p75": round(qs[2], 1), "max": round(max(hist), 1),
+    qs, dec = statistics.quantiles(hist, n=4), statistics.quantiles(hist, n=10)
+    ph = {"sessions": len(hist), "from": cut, "min": round(min(hist), 1), "p10": round(dec[0], 1),
+          "p25": round(qs[0], 1), "median": round(qs[1], 1), "p75": round(qs[2], 1), "max": round(max(hist), 1),
           "percentile_today": round(sum(x <= v["pe_trailing"] for x in hist) / len(hist) * 100, 1),
           "note": "P/E de cada rueda con el EPS ya publicado ese día; su propia historia no garantiza un valor razonable"}
     v["pe_history"] = ph
@@ -509,11 +510,11 @@ def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd
     if g_rev is None:
         return v
     pe = v["pe_trailing"]
-    cases = [("adverso", 0.0, min(pe, ph["p25"])), ("central", g_rev, pe),
+    cases = [("adverso", 0.0, min(pe, ph["p10"])), ("central", g_rev, pe),
              ("favorable", max(g_rev, g_eps if g_eps is not None else g_rev), max(pe, ph["p75"]))]
     v["scenarios_12m"] = {
         "rule": ("EPS de 4 trim. × (1 + crecimiento supuesto) × P/E de salida. Adverso: EPS sin crecer y el menor entre "
-                 "el P/E de hoy y su percentil 25 · central: crece como los ingresos de 4 trim. y P/E igual al de hoy · "
+                 "el P/E de hoy y su percentil 10 · central: crece como los ingresos de 4 trim. y P/E igual al de hoy · "
                  "favorable: el mayor crecimiento entre ingresos y EPS de 4 trim., y el mayor entre el P/E de hoy y su "
                  "percentil 75. Supuestos, no pronóstico; sin dividendos ni probabilidades. Sobre P/E: pertinente "
                  "en empresas no financieras con ganancias estables, no en bancos, cíclicas en su pico ni pérdidas"),
@@ -574,6 +575,11 @@ async def _fundamental(ask, symbol: str, today: date, missing: list[str]) -> dic
     filings, metrics, candles = raws[n + m:]
     from galecore_ai.application import drivers
     bars = drivers.daily_bars(candles, exclude=story.open_session_day(today)) if candles is not None else []
+    if bars and (today - date.fromisoformat(bars[-1][0])).days > STALE_CLOSE_DAYS:
+        # GaleCore once served a long history cut months short (F5, 19/10): never value on an old close
+        missing.append(f"market_data.candles {symbol}: el último cierre es del {bars[-1][0]}; sin valoración "
+                       "(velas incompletas)")
+        bars = []
     view = fundamental_view(facts, None, bal, bars)
     val = view.get("valuation") or {}
     out: dict = {"statements": view, "price_used": val.get("close"), "price_date": val.get("close_date")}

@@ -1,6 +1,14 @@
 # Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: company_research
 versions:
+  - version: "0.2.1"
+    date: 2026-10-19
+    changes: >
+      F5 con MSFT (Claude y Codex): la valoración del pack es la base común (Codex armó sus propios múltiplos y
+      escenarios); competidores siempre con su pack y en una tabla con las mismas métricas (ninguno lo hizo); cifras
+      de una investigación anterior como antecedente con fecha; guardar siempre (Claude no guardó); hasta ~250
+      palabras fuera de las tablas; sin valoración a mano si el pack no la trae.
+    feedback: []
   - version: "0.2.0"
     date: 2026-10-19
     changes: >

@@ -236,3 +236,18 @@ def test_enterprise_value_multiples_book_value_and_capital_returned():
     assert v["ev_to_ebitda"] == 11.0 and v["ev_to_fcf"] == 22.0 and v["price_to_fcf"] == 20.0
     assert v["price_to_book"] == round(2000 / 700, 2) and v["price_to_tangible_book"] == round(2000 / 600, 2)
     assert v["shareholder_yield_pct"] == 2.5                                    # (dividendos 20 + recompra neta 30) ÷ 2.000
+
+
+class Candles:
+    """Only what the fundamental pack asks; the candles end months ago (a cut history, F5 19/10)."""
+
+    async def invoke(self, cap, params):
+        if cap == "market_data.candles":
+            return CapabilityResult(cap, data={"data": [{"timeStamp": "2025-12-31T00:00:00", "close": 483.62}]})
+        return CapabilityResult(cap, data={})
+
+
+def test_an_old_last_close_is_declared_and_never_valued():
+    pack = asyncio.run(analysis.gather(Candles(), "fundamental", symbol="MSFT", today=date(2026, 10, 19)))
+    assert "valuation" not in pack["statements"] and pack["price_used"] is None
+    assert any("2025-12-31" in m and "sin valoración" in m for m in pack["missing"])
