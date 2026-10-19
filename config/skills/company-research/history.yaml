@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: company_research
 versions:
+  - version: "0.2.3"
+    date: 2026-10-19
+    changes: >
+      F5 tercera vuelta: Codex sigue el «cómo responder» (lo único que el Lab inyecta a todos los motores) y no el
+      método completo; las reglas de datos, valoración y competidores pasan al «cómo responder» (D-0014).
+    feedback: []
   - version: "0.2.2"
     date: 2026-10-19
     changes: >

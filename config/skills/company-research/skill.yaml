@@ -1,5 +1,5 @@
 skill_id: company_research
-version: "0.2.2"
+version: "0.2.3"
 display_name: Investigar una empresa (o elegir entre varias)
 description: >
   «Analizame MSFT», «investigá NVDA», «¿qué tal está AAPL a este precio?», «de MSFT, AAPL y NVDA, ¿cuál tiene
@@ -12,7 +12,14 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 
 required_capabilities: []
 
-answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido
+answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (lo único que reciben todos los motores)
+  Datos, siempre de nuevo y en paralelo: `analyze pack --kind fundamental` y `--kind technical` de la empresa y de
+  2-3 competidores directos (también fundamental), técnico de SPY y del ETF de su sector, macro; el 10-K
+  (`filings.sec_document`, ítems 1, 1A, 7). Una investigación anterior es antecedente, nunca la fuente de los números.
+  Valoración: las métricas, el P/E propio (`pe_history`) y `scenarios_12m` del pack tal cual, con su regla; una
+  variante propia (EPS ajustado, otro múltiplo) va como una línea extra rotulada, nunca en su lugar.
+  Competidores: una tabla con los mismos números (crecimiento, margen operativo, capex ÷ ingresos, el múltiplo
+  elegido); sin sus packs no hay contraste.
   Investigar (una empresa): conclusión en una línea (qué es hoy la empresa al precio de hoy, no «comprá»). Tabla de
   hasta 6 filas, una por bloque, cada una con su número y fecha: Técnico · Sector · Calidad (crecimiento, márgenes,
   caja) · Salud financiera (deuda, dilución) · Valoración (P/E y su rango propio, escenarios) · Eventos (próximo
