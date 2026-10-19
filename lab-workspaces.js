@@ -190,8 +190,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   function setOverride(id,change){const all=read(overridesFile,{});all[id]={...all[id],...change};atomic(overridesFile,all);}
   function project(id){const p=listProjects().find(p=>p.id===id);if(!p)throw fail('Proyecto desconocido.',404);return p;}
   function createProject(body){
-    const label=String(body.label||'').trim(), type=body.type;
-    if(!label || label.length>100 || !TYPES.includes(type))throw fail('Indicá nombre y tipo de proyecto.');
+    const label=String(body.label||'').trim(), type=body.type||'analysis';   // owner 19/10: se crea sólo con nombre; la estrategia llega por intención (mark_strategy.py)
+    if(!label || label.length>100 || !TYPES.includes(type))throw fail('Indicá el nombre del proyecto.');
     const slug=label.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'').slice(0,60);
     if(!ID.test(slug) || listProjects().some(p=>p.id===slug))throw fail('Ya existe ese proyecto o el nombre no es válido.',409);
     const relative=(type==='strategy'?'strategies/':'workspaces/')+slug, dir=path.join(kb,relative);
@@ -273,10 +273,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // (knowledge/AGENTS.md) y las del proyecto (su AGENTS.md) las lee cada motor solo desde la carpeta.
     const product=fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8');
     const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' y, si el proyecto no es de estrategia, ofrecé abrir uno una sola vez por conversación. Crear la carpeta no es estrategia aprobada; el bootstrap no despliega.'+(p.type==='strategy'
+    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'.'+(p.type==='strategy'||p.type==='personal'?'':' Si la conversación va hacia una estrategia, proponé una sola vez «¿armamos esta estrategia acá?»; con el sí, corré python "'+path.join(root,'tools','terminal','mark_strategy.py')+'" desde esta carpeta (activa el mapa de estrategia y su seguimiento) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+(p.type==='strategy'
       // Owner 17/10: el mapa es el diseño que se va armando; se reescribe en cada turno con el formato vigente (también
       // si el de memory/ tiene otro formato) y la respuesta cierra proponiendo la próxima pieza del diseño.
-      ?' Antes de responder, reescribí el mapa del proyecto (el mapa-*.md de memory/, o '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md')+' si no hay) con el formato de «Mapa de la idea», aunque nada haya cambiado: pasá lo que ya estaba a sus secciones (hipótesis, objetivo, reglas, datos, evidencia). Cerrá la respuesta según «Construir una estrategia es avanzar el diseño».'
+      ?' Antes de responder, reescribí el mapa del proyecto (el mapa-*.md de memory/, o '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md')+' si no hay) con el formato de «Mapa de la idea», aunque nada haya cambiado: pasá lo que ya estaba a sus 8 partes. Cerrá la respuesta con la próxima parte, según «Estrategias».'
       :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea») en '+path.join(p.dir,chat.mapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
     const job={proc:null,project:p.id,chat};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
     function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
