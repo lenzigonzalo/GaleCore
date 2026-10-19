@@ -51,6 +51,8 @@ sources:
         description: CPI y breakevens (T10YIE) de FRED (macro.fred_series) y valores oficiales del BLS con el detalle por componente (macro.bls_series, p. ej. CUUR0000SA0, CUSR0000SA0)
       - category: activity_employment
         description: empleo y actividad — desempleo LNS14000000 y nóminas CES0000000001 del BLS (macro.bls_series) y las series de FRED (macro.fred_series)
+      - category: policy_uncertainty
+        description: índice de incertidumbre de política económica de EEUU, diario (macro.fred_series con SeriesId=USEPUINDXD; WS-0042). Termómetro de contexto, no señal; el día suelto es muy ruidoso, se lee su promedio de 30 días contra el de 12 meses
       - category: filings_fundamentals
         description: presentaciones ante la SEC por empresa (filings.sec_filings; en los 8-K, el ítem 2.02 es el comunicado de resultados) y fundamentales XBRL reportados — ingresos, resultado, deuda (filings.sec_facts, p. ej. Revenues, EarningsPerShareDiluted); ticker → CIK con filings.sec_company
         any_symbol: true
@@ -87,6 +89,8 @@ sources:
         description: nonfarm payroll, desempleo y otras series de actividad (macro.fred_series)
       - category: macro_calendar
         description: calendario de publicaciones macro programadas — empleo, CPI, PPI, PIB, ingresos y gasto, ventas minoristas (calendar.macro_releases)
+      - category: policy_uncertainty
+        description: incertidumbre de política económica de EEUU (EPU, USEPUINDXD, diaria; macro.fred_series). La versión global GEPUCURRENT es mensual y sin dato reciente
     limits:
       - "Calendario de publicaciones: no trae el día de reunión del comité de la Fed (calendar.fomc_meetings); «FOMC Press Release» (release 101) figura todos los días (verificado el 30/09, GC-AI-0016)"
       - "Fechas programadas por la agencia; se pueden mover y FRED lo refleja cuando la agencia lo publica. Las series macro se revisan: la respuesta dice el vintage leído"

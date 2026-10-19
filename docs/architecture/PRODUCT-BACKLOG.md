@@ -2359,6 +2359,17 @@ se activa (no se reimplementa). Antes de elegir: ver si es gratis y qué cubre (
 Claude que cubren parte (FMP, Alpha Vantage: balances, ETFs, noticias); falta decidir si se usan y cómo entran sin romper
 «los datos vienen de GaleCore».
 
+**Addendum 19/10 — qué quedó de WS-0042 (balances y noticias).** Hecho: calendario de balances, consenso, sector y
+dividendos (tajada 1, 16/10) y EPU declarada (19/10: `USEPUINDXD` por `macro.fred_series`; se lee el promedio de 30 días
+contra el de 12 meses porque el día suelto es muy ruidoso). Queda acá, sin fecha, lo que el owner decidió no abrir
+todavía (análisis de valor y esfuerzo en `docs/engineering/work-items/WS-0042-fuentes-balances-y-noticias.md`):
+
+| Pieza | Fuente y límite | Se abre cuando |
+|---|---|---|
+| Noticias por ticker (AC-4 de WS-0042) | Finnhub, clave gratuita que saca el owner: 60/min, 1 año de noticias de empresa; **licencia no comercial**, revisarla antes de abrir a otros usuarios. Respaldo: Marketaux (~100/día). Hace falta endpoint con procedencia, caché y límite | Un caso real falla por no saber qué pasó con una empresa |
+| Composición de ETF | SSGA publica el xlsx diario de SPY (probado 15/10); QQQ (Invesco) e IWM (iShares) sin probar; un formato por emisor | El owner quiere medir la exposición de la cartera por empresa |
+| Agenda de la Fed | RSS de discursos (200); la agenda futura está en HTML | Un caso de aviso de evento la necesita; valor bajo |
+
 ---
 
 ## BL-018 — Orden de los tres repos pensando en la forma de trabajo final
