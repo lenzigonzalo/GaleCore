@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json.Nodes;
@@ -42,9 +43,15 @@ namespace DataFeed.Application.App.Gex
         // de dos respuestas incompletas.
         private static readonly SemaphoreSlim _scanGate = new(1, 1);
 
-        public GexAnalysisHandler(IMediator mediator)
+        // Símbolos con un recálculo en segundo plano en curso: un solo recálculo por símbolo.
+        private static readonly ConcurrentDictionary<string, bool> _refreshing = new();
+
+        private readonly IServiceScopeFactory? _scopes;
+
+        public GexAnalysisHandler(IMediator mediator, IServiceScopeFactory? scopes = null)
         {
             _mediator = mediator;
+            _scopes = scopes;
         }
 
         public async Task<GexAnalysisResponse> Handle(GexAnalysisRequest request, CancellationToken cancellationToken)
@@ -63,6 +70,15 @@ namespace DataFeed.Application.App.Gex
 
             if (!request.Refresh && TryGetFresh(symbol, scan.CacheSeconds, rulesHash, out var hit))
                 return hit!;
+
+            // Lo último calculado, aunque esté vencido (o sea de antes de reiniciar la API): sale al
+            // instante con su propia hora y el barrido corre aparte. Un barrido en frío tarda
+            // minutos (SPY ~106 s, QQQ ~128 s) y el gráfico quedaba vacío todo ese tiempo.
+            if (!request.Refresh && _scopes != null && TryGetStored(symbol, out var stored))
+            {
+                StartBackgroundRefresh(request, symbol, rules, scan, rulesHash);
+                return stored!;
+            }
 
             await _scanGate.WaitAsync(cancellationToken);
             try
@@ -133,6 +149,47 @@ namespace DataFeed.Application.App.Gex
             cached.Response.FromCache = true;
             hit = cached.Response;
             return true;
+        }
+
+        private bool TryGetStored(string symbol, out GexAnalysisResponse? stored)
+        {
+            stored = null;
+            if (_cache.TryGetValue(symbol, out var cached)) stored = cached.Response;
+            else if ((stored = GexAnalysisDisk.Load(symbol)) != null) _cache[symbol] = (stored, stored.Timestamp, string.Empty);
+            if (stored == null) return false;
+
+            stored.SwitchEnabled = true;
+            stored.Frozen = false;
+            stored.FromCache = true;
+            return true;
+        }
+
+        private void StartBackgroundRefresh(
+            GexAnalysisRequest request, string symbol, JsonObject rules, ScanConfig scan, string rulesHash)
+        {
+            if (!_refreshing.TryAdd(symbol, true)) return;
+
+            var scopes = _scopes!;
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // El request ya terminó: el barrido necesita su propio scope.
+                    using var scope = scopes.CreateScope();
+                    var handler = new GexAnalysisHandler(scope.ServiceProvider.GetRequiredService<IMediator>(), scopes);
+                    await _scanGate.WaitAsync();
+                    try { await handler.ScanAsync(request, symbol, rules, scan, rulesHash, CancellationToken.None); }
+                    finally { _scanGate.Release(); }
+                }
+                catch
+                {
+                    // Sin recálculo se sigue sirviendo lo guardado; el próximo pedido reintenta.
+                }
+                finally
+                {
+                    _refreshing.TryRemove(symbol, out _);
+                }
+            });
         }
 
         private async Task<GexAnalysisResponse> ScanAsync(
@@ -245,7 +302,10 @@ namespace DataFeed.Application.App.Gex
                             && g.CoveragePct >= scan.CacheMinCoveragePct;
 
             if (complete && !cancellationToken.IsCancellationRequested)
+            {
                 _cache[symbol] = (response, DateTime.UtcNow, rulesHash);
+                GexAnalysisDisk.Save(symbol, response);
+            }
 
             return response;
         }

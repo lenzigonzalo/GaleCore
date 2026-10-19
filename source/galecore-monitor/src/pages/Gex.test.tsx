@@ -45,6 +45,12 @@ test('separa indicadores conservando símbolo y scope elegido', () => {
   fireEvent.click(screen.getByRole('button',{name:'Gamma'}));
   expect(useGexStore.getState().selectedExpiry.SPY).toBe('global');
 });
+test('si el vencimiento elegido ya no está en la cadena pasa al más cercano', () => {
+  useGexStore.setState({selectedExpiry:{SPY:'2026-10-09'}});
+  render(<Gex {...props}/>);
+  expect(screen.queryByText('Sin datos GEX disponibles')).not.toBeInTheDocument();
+  expect(screen.getByTestId('chart')).toBeInTheDocument();
+});
 test('Precio sigue disponible con barrido OFF y no inicia un barrido', () => {
   mockEnabled=false;
   render(<Gex {...props}/>);

@@ -42,4 +42,22 @@ public class GexUnitsTests
         Assert.Contains("gamma × OI × 100 × spot²", GexMethod.Current.StrikeFormula);
         Assert.Contains("\"Net\":\"USD_BILLIONS\"", json);
     }
+
+    [Fact]
+    public void ElUltimoBarridoSobreviveAlDisco_ConSuHora()
+    {
+        var symbol = "TST" + Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+        var at = new DateTime(2026, 10, 19, 15, 30, 0, DateTimeKind.Utc);
+        var r = new GexAnalysisResponse { Symbol = symbol, Timestamp = at, SpotPrice = 710.5 };
+        r.Gex.ByExpiry.Add(new GexExpiryScope { Expiration = "2026-10-20", Dte = 1, NetGex = 2.5 });
+
+        GexAnalysisDisk.Save(symbol, r);
+        var back = GexAnalysisDisk.Load(symbol);
+
+        Assert.NotNull(back);
+        Assert.Equal(at, back!.Timestamp);
+        Assert.Equal(710.5, back.SpotPrice);
+        Assert.Equal("2026-10-20", back.Gex.ByExpiry[0].Expiration);
+        Assert.Null(GexAnalysisDisk.Load("NOEXISTE"));
+    }
 }

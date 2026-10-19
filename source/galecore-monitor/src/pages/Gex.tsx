@@ -198,7 +198,11 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   const expiries = useMemo(() => data?.gex.byExpiry ?? [], [data]);
   // Sin elección explícita manda el más cercano — que en día hábil es el 0DTE. El agregado global
   // NO es el default: es una lectura distinta (sin vencimiento, sin DTE) y se pide a mano.
-  const activeExpiration = (active ? selectedExpiry[active] : null) ?? expiries[0]?.expiration ?? null;
+  // Si el elegido ya no está en la cadena (p. ej. el 0DTE después del cierre), pasa al más cercano.
+  const picked = active ? selectedExpiry[active] : null;
+  const activeExpiration = picked && (picked === GLOBAL_SCOPE || expiries.some((e) => e.expiration === picked))
+    ? picked
+    : expiries[0]?.expiration ?? null;
   const isGlobalScope = activeExpiration === GLOBAL_SCOPE;
   const activeExpiry = useMemo(
     () => (isGlobalScope ? null : expiries.find((e) => e.expiration === activeExpiration) ?? null),
