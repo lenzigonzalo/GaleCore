@@ -17,7 +17,7 @@ import { GEX_SWITCH_ENDPOINT } from '../api/gex';
 import { useGexStore } from '../store/useGexStore';
 import { useMarketStore } from '../store/useMarketStore';
 import { useAppConfigStore, useSwitchEndpoint } from '../store/useAppConfigStore';
-import { useSwitchEnabled } from '../store/useStrategySwitchStore';
+import { useSwitchEnabled, useStrategySwitchStore } from '../store/useStrategySwitchStore';
 import { ConnectionStatus } from '../socket/useMarketSocket';
 import {
   GexChartData, GexExpiryApi, GexScopeApi, GexStrikeApi, GLOBAL_SCOPE,
@@ -119,6 +119,9 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   // El switch es el mismo que muestra la card de GEX en Main: mismo endpoint, mismo store.
   const switchEndpoint = useSwitchEndpoint('gex', GEX_SWITCH_ENDPOINT);
   const switchEnabled = useSwitchEnabled(switchEndpoint);
+  // Mercado puede ser lo primero que se abre: sin leer el switch acá quedaba «desconocido» y no se pedía nada.
+  const readSwitch = useStrategySwitchStore((s) => s.read);
+  useEffect(() => { readSwitch(switchEndpoint); }, [readSwitch, switchEndpoint]);
 
   const [refOpen, setRefOpen] = useState(false);
   const [indicator, setIndicator] = useState<'price' | 'gamma' | 'iv'>('gamma');

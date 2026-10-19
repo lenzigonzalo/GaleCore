@@ -205,6 +205,7 @@ namespace DataFeed
             builder.Services.AddSingleton<IDxLinkStreamingService>(sp => sp.GetRequiredService<DxLinkStreamingService>());
             builder.Services.AddHostedService(sp => sp.GetRequiredService<DxLinkStreamingService>());
             builder.Services.AddHostedService<SkewSnapshotService>();
+            builder.Services.AddHostedService<GexWarmService>();
 
             // Orquestación RPF (Fase 6a) — store in-memory + loop. El loop arranca INERTE:
             // no corre la cascada ni emite hasta state_machine.enabled=true en galecore_rules_rpf.json.
