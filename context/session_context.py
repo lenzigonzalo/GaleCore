@@ -16,7 +16,17 @@ def start(*args):
 
 
 # Las tres consultas corren a la vez y el reloj una sola vez: en serie eran ~7 s antes de cada turno (WS-0039).
-_RUNS = {"clock": start("clock"), "list": start("galecore", "list"), "space": start("space", "context")}
+_TODAY = __import__("datetime").date.today()
+_FROM = (_TODAY - __import__("datetime").timedelta(days=12)).isoformat()
+# Owner 19/10: «Mercado hoy» no puede salir vacío al retomar; SPY, VIX y eventos de GaleCore (~1,5 s, en paralelo).
+_RUNS = {"clock": start("clock"), "list": start("galecore", "list"), "space": start("space", "context"),
+         "spy": start("galecore", "get", "market_data.candles", "--param", "symbol=SPY", "--param", "interval=1d",
+                      "--param", "fromTime=" + _FROM),
+         "vix": start("galecore", "get", "history.index_daily", "--param", "Index=VIX", "--param", "From=" + _FROM),
+         "fomc": start("galecore", "get", "calendar.fomc_meetings", "--param", f"Years={_TODAY.year}"),
+         "macro": start("galecore", "get", "calendar.macro_releases", "--param", f"From={_TODAY}",
+                        "--param", f"To={_TODAY + __import__('datetime').timedelta(days=21)}",
+                        "--param", "ReleaseIds=50,10,46,53,54,9")}
 
 
 class _Out:
@@ -29,7 +39,7 @@ _DONE = {}
 
 
 def cli(*args):
-    key = {"clock": "clock", "galecore": "list", "space": "space"}[args[0]]
+    key = args[0] if args[0] in _RUNS else {"galecore": "list"}[args[0]]
     if key not in _DONE:
         _DONE[key] = _Out(_RUNS[key])
     return _DONE[key]
@@ -80,8 +90,49 @@ def week_line():
     return "[calendario NY] " + " · ".join(days)
 
 
+def _data(key):
+    try:
+        body = json.loads(cli(key).stdout)
+        return body["data"]["data"] if isinstance(body.get("data"), dict) else body["data"]
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def _num(x):
+    return f"{x:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+
+
+def market_line():
+    """Cómo viene el mercado: SPY y VIX de las últimas ruedas y los próximos eventos. Sin datos, se omite la parte."""
+    parts = []
+    spy = sorted((c for c in _data("spy") or [] if c.get("close")), key=lambda c: c["time"])
+    if len(spy) >= 2:
+        last, base = spy[-1], spy[-6] if len(spy) >= 6 else spy[0]
+        top = max(spy[-6:], key=lambda c: c["high"])
+        day = lambda c: c["timeStamp"][8:10] + "/" + c["timeStamp"][5:7]  # noqa: E731
+        change = (last["close"] / base["close"] - 1) * 100
+        parts.append(f"SPY {_num(last['close'])} (cierre {day(last)}), {_num(change)} % en {min(5, len(spy) - 1)} "
+                     f"ruedas, máximo {_num(top['high'])} el {day(top)}")
+    vix = sorted((r for r in _data("vix") or [] if r.get("close")), key=lambda r: r["date"])
+    if len(vix) >= 2:
+        last, base = vix[-1], vix[-6] if len(vix) >= 6 else vix[0]
+        parts.append(f"VIX {_num(last['close'])} ({last['date'][8:10]}/{last['date'][5:7]}), "
+                     f"desde {_num(base['close'])} el {base['date'][8:10]}/{base['date'][5:7]}")
+    events = [(m["start"][:10], "Fed " + m["start"][8:10] + "-" + m["end"][8:10] + "/" + m["end"][5:7])
+              for m in _data("fomc") or [] if str(m.get("start", ""))[:10] >= _TODAY.isoformat()][:1]
+    events += [(r["date"][:10], r["releaseName"][:40] + " " + r["date"][8:10] + "/" + r["date"][5:7])
+               for r in _data("macro") or [] if r.get("date")]
+    if events:
+        parts.append("próximos: " + ", ".join(e for _, e in sorted(events)[:4]))
+    return ("[mercado] " + " · ".join(parts) + ". Para «Mercado hoy» y para no dar el mercado por quieto; "
+            "lo demás (cadena, GEX, curva) se trae si hace falta.") if parts else ""
+
+
 print(clock_line())
 print(week_line())
+line = market_line()
+if line:
+    print(line)
 print(galecore_map())
 print()
 out = cli("space", "context")
