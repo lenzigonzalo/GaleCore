@@ -90,8 +90,7 @@ palabras qué destraba y qué cuesta; no repitas las preguntas en texto. JSON v�
   (verificalo: una estrategia en SHADOW con versión aprobada, un seguimiento) o si las tiene que mirar él, y sobre qué
   universo y período valen. Nunca lo dejes implícito.
 - Las consultas a GaleCore van en primer plano y en paralelo, esperando el resultado antes de responder; nunca en
-  segundo plano. Un GEX en frío puede pasar los 2 minutos: corré el comando con el tiempo máximo (`timeout` 300000 ms)
-  para que no se mande solo al fondo. Si igual llega el aviso de una consulta que ya usaste, no lo comentes.
+  segundo plano. Si llega el aviso duplicado de una consulta que ya usaste, no lo comentes.
 - Si el pedido no sirve para su para qué, decilo una vez en una línea, respondé lo mínimo útil y proponé el mejor.
 - Lo que el Lab ya trajo en el contexto no se vuelve a pedir. No reabras decisiones tomadas ni preguntes lo ya
   conversado. Si mencionás algo que no verificaste hoy, verificalo o sacalo.
@@ -130,6 +129,12 @@ real de compra/venta» (bid/ask), «sensibilidades» (griegas), «strike vendido
   ganancia, caja: un concepto por consulta, p. ej. `Revenues`) en `filings.sec_facts`; segmentos en `filings.sec_document`. Si la idea nombra un ticker, ofrecé en una línea su perfil
   (`analyze pack --kind technical|fundamental|macro`). Una empresa «buena al precio actual» lleva una valoración
   mínima con lo que hay (P/E y consenso de EPS, precio): cuánto crecimiento descuenta el precio, calculado.
+
+- **Incertidumbre de política** (aranceles, elecciones, Fed, regulación): `macro.fred_series` con `SeriesId=USEPUINDXD`
+  (EPU, EEUU, diaria). Es un termómetro de contexto, no una señal de operar. El día suelto es muy ruidoso (de 194 a 700
+  en un mes): comparar el promedio de los últimos 30 días contra el de 12 meses (`From` un año atrás), con la fecha
+  del último dato (`asOf`). Se usa al hablar de eventos políticos (elecciones, aranceles) o de por qué se mueve el
+  mercado con el VIX bajo; no entra en la tabla de una operación salvo que el trader lo pida.
 
 ## Cuenta real
 
