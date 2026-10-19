@@ -35,3 +35,15 @@ test('mientras responde muestra los pasos ya hechos y el actual (owner 18/10)',a
  expect(screen.getByText('Trayendo la cadena de SPY…')).toBeInTheDocument();                    // el actual, sin repetirse
  expect(screen.queryByText('Trayendo la cadena de SPY')).not.toBeInTheDocument();
 });
+
+test('nuevo proyecto pide sólo el nombre; la estrategia llega después, por intención (owner 19/10)',async()=>{
+ const base=(labRequest as jest.Mock).getMockImplementation()!;
+ (labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>path==='/workspaces'&&body?{id:'idea_qqq',label:'Idea QQQ',type:'analysis',relative:'workspaces/idea_qqq',strategyName:null}:base(path,body));
+ render(<Lab onMonitor={()=>{}}/>);await screen.findByRole('button',{name:'Personal'});
+ fireEvent.click(screen.getByRole('button',{name:'Crear proyecto'}));
+ const dialog=await screen.findByRole('dialog');
+ expect(dialog.querySelector('select')).toBeNull();
+ fireEvent.change(screen.getByRole('textbox',{name:'Nombre'}),{target:{value:'Idea QQQ'}});
+ fireEvent.submit(dialog.querySelector('form')!);
+ await waitFor(()=>expect(labRequest).toHaveBeenCalledWith('/workspaces',{label:'Idea QQQ'}));
+});

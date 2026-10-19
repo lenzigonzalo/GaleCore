@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Plus, MessageSquare, Files, X, ArrowUp, Square, PanelLeftClose, PanelLeftOpen, Mic, Paperclip, Map as MapIcon, SquareTerminal } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
-import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, LabProjectKind, labUpload } from '../api/lab';
+import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, labUpload } from '../api/lab';
 import { LabShadow } from './LabShadow';
 import { LabMarkdown } from '../components/lab/LabMarkdown';
 import { strategyName } from '../components/shadow/panelPresentation';
@@ -55,7 +55,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [projectLabel, setProjectLabel] = useState('');
-  const [projectKind, setProjectKind] = useState<LabProjectKind>('analysis');
   const [aliases, setAliases] = useState<Record<string, string>>(() => { try { return JSON.parse(localStorage.getItem('galecore:lab:aliases') || '{}'); } catch { return {}; } });
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -177,7 +176,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const newChat = () => { selection.current++; setChatId(null); setChat(null); setView('chat'); setError(''); };
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true);
-    try { const p = await labRequest<WorkspaceProject>('/workspaces',{ label:projectLabel,type:projectKind }); await refresh(); selectProject(p); setProjectLabel(''); setCreating(false); }
+    try { const p = await labRequest<WorkspaceProject>('/workspaces',{ label:projectLabel }); await refresh(); selectProject(p); setProjectLabel(''); setCreating(false); }
     catch(e) { setError(e instanceof Error ? e.message : 'No se pudo crear el proyecto.'); }
     finally { setBusy(false); }
   };
@@ -278,6 +277,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       {mapaOpen && <LabMapa chatId={chatId} running={chat?.state === 'running'} onResults={project?.strategyName ? () => onFollowStrategy?.(project.strategyName!) : undefined}/>}
       </div>}
     </section>
-    {creating && <div className="lab-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="lab-create-title" className="lab-create-project"><header><h2 id="lab-create-title">Nuevo proyecto</h2><button className="lab-icon" aria-label="Cerrar" onClick={()=>setCreating(false)}><X size={19}/></button></header><form onSubmit={createProject}><label>Nombre<input autoFocus required maxLength={100} value={projectLabel} onChange={e=>setProjectLabel(e.target.value)} placeholder="Estrategia SPY"/></label><label>Tipo<select value={projectKind} onChange={e=>setProjectKind(e.target.value as LabProjectKind)}><option value="strategy">Estrategia</option><option value="analysis">Análisis</option><option value="personal">Personal</option></select></label><p>{projectKind==='strategy'?'El chat guía investigación, diseño y preparación para Shadow.':'Archivos, memoria y convenciones propias.'}</p>{error && <p role="alert">{error}</p>}<button className="btn" disabled={busy||!projectLabel.trim()}>Crear proyecto</button></form></section></div>}
+    {creating && <div className="lab-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="lab-create-title" className="lab-create-project"><header><h2 id="lab-create-title">Nuevo proyecto</h2><button className="lab-icon" aria-label="Cerrar" onClick={()=>setCreating(false)}><X size={19}/></button></header><form onSubmit={createProject}><label>Nombre<input autoFocus required maxLength={100} value={projectLabel} onChange={e=>setProjectLabel(e.target.value)} placeholder="Prima en SPY"/></label><p>Una idea, un activo o un tema. Si en la conversación arman una estrategia, el proyecto la sigue desde ahí.</p>{error && <p role="alert">{error}</p>}<button className="btn" disabled={busy||!projectLabel.trim()}>Crear proyecto</button></form></section></div>}
   </div>;
 }
