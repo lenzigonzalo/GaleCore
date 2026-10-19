@@ -33,13 +33,12 @@
 .lab-source-hint > span { position:absolute; right:0; top:26px; z-index:5; width:max-content; max-width:min(420px, 80vw); padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-primary); color:var(--text-secondary); font-size:12.5px; line-height:1.45; box-shadow:0 6px 18px rgba(0,0,0,.35); }
 /* El mapa como la solapa Diseño (owner 17/10) */
 .lab-mapa-design { display:grid; gap:22px; padding:16px 20px 28px; }
-.lab-mapa-design h3 { margin:0 0 8px; padding-left:9px; border-left:3px solid var(--accent); font-size:15px; font-weight:600; color:var(--accent); }
+.lab-mapa-design h3 { margin:0 0 8px; font-size:15px; font-weight:600; color:var(--text-primary); }
 .lab-mapa-block { display:grid; gap:10px; }
 .lab-mapa-table { overflow-x:auto; border:1px solid var(--border-dark); border-radius:8px; }
 .lab-mapa-table table { width:100%; border-collapse:collapse; font-size:14px; }
-.lab-mapa-table th { text-align:left; padding:7px 10px; background:rgba(163,216,108,.08); color:var(--text-primary); font-weight:600; font-size:13px; }
+.lab-mapa-table th { text-align:left; padding:7px 10px; color:var(--text-primary); font-weight:600; font-size:13px; }
 .lab-mapa-table td { padding:7px 10px; border-top:1px solid var(--border-dark); color:var(--text-primary); vertical-align:top; line-height:1.45; }
-.lab-mapa-table td:first-child { color:var(--yellow-gc); font-weight:500; }
 .lab-mapa-results { display:inline-flex; align-items:center; gap:4px; flex-shrink:0; padding:6px 10px; border:1px solid var(--border); border-radius:7px; background:transparent; color:var(--text-primary); font-size:13px; cursor:pointer; }
 .lab-mapa-results:hover { border-color:var(--accent); color:var(--accent); }
 .lab-mapa-design p { margin:0; font-size:15px; line-height:1.55; color:var(--text-primary); }

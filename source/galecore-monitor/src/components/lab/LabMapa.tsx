@@ -40,11 +40,14 @@ export function MapaChartView({ chart, label }: { chart: MapaChart; label: strin
   const bars = chart.series.some(s => s.puntos?.some(p => !isDate(String(p[0]))));
   useEffect(() => {
     if (bars || !host.current || !chart.series.some(s => s.puntos?.length)) return;
-    let api: IChartApi | undefined, alive = true;
+    let api: IChartApi | undefined, alive = true, frame = 0;
+    // Tamaño a mano y un cuadro después: autoSize medía un contenedor que el propio gráfico agrandaba
+    // («ResizeObserver loop completed», owner 19/10).
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { cancelAnimationFrame(frame); frame = requestAnimationFrame(() => { if (host.current) api?.resize(host.current.clientWidth, 200); }); }) : undefined;
     void import('lightweight-charts').then(({ createChart, LineSeries, ColorType }) => {
       if (!alive || !host.current) return;
       const css = getComputedStyle(host.current), v = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
-      api = createChart(host.current, { autoSize: true, height: 200,
+      api = createChart(host.current, { width: host.current.clientWidth, height: 200,
         layout: { background: { type: ColorType.Solid, color: v('--bg-secondary', '#141414') }, textColor: v('--text-secondary', '#b5b5b5'), fontSize: 12 },
         grid: { vertLines: { visible: false }, horzLines: { color: '#262626' } },
         timeScale: { borderVisible: false }, rightPriceScale: { borderVisible: false }, handleScroll: false, handleScale: false });
@@ -54,11 +57,12 @@ export function MapaChartView({ chart, label }: { chart: MapaChart; label: strin
         line.setData((s.puntos || []).filter(p => Number.isFinite(p[1])).map(([t, value]) => ({ time: t as Time, value })));
       });
       api.timeScale().fitContent();
+      observer?.observe(host.current);
     });
-    return () => { alive = false; api?.remove(); };
+    return () => { alive = false; cancelAnimationFrame(frame); observer?.disconnect(); api?.remove(); };
   }, [chart, bars]);
   return <figure className="lab-mapa-chart">
-    {bars ? <CategoryBars chart={chart} label={label} /> : <div ref={host} role="img" aria-label={label} />}
+    {bars ? <CategoryBars chart={chart} label={label} /> : <div ref={host} role="img" aria-label={label} style={{ height: 200 }} />}
     <figcaption>
       {chart.series.map((s, i) => <span key={s.nombre} className="lab-mapa-legend" style={{ color: `var(${COLORS[i % COLORS.length]})` }}>— {s.nombre}</span>)}
       {chart.unidad && <span className="lab-mapa-unit">{chart.unidad}</span>}
