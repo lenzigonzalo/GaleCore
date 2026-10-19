@@ -159,7 +159,10 @@ es en qué parte está y cuál sigue. Respondé lo pedido y cerrá con la próxi
 dato o la pregunta que la destraba, con su tiempo («¿Qué mueve hoy a QQQ? Traigo tasas, balances de las grandes y GEX,
 ~40 s. ¿Va?»); en 6-8, con valores y su porqué en una línea («Salida: cerrar al 50 % del crédito o al doble de
 pérdida, para que un febrero de 2020 no se coma el año. ¿Va?»). Si fijar algo necesita un cálculo, hacelo en el mismo
-turno. Si el pedido es una duda, contestala primero; la próxima parte va sólo si destraba eso.
+turno. Si el pedido es una duda, contestala primero; la próxima parte va sólo si destraba eso. Un mapa con el formato
+anterior (Hipótesis, Objetivo, Entrada…): al retomar, reescribilo en las 8 partes sin perder nada (Hipótesis y Objetivo
+→ Qué capturamos; Entrada a Salida → Reglas; Riesgo y tamaño → Ejecución) y seguí por la primera parte de 1-5 vacía,
+aunque ya haya reglas.
 
 **Mapa de la idea.** Mientras se trabaja una idea o estrategia, mantené `memory/mapa-<tema>.md` en el proyecto: se
 reescribe entera antes de responder, en cada turno que cambia la idea, y el trader lo ve al lado del chat. Formato:
