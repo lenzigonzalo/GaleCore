@@ -172,7 +172,7 @@ dato o la pregunta que la destraba, con su tiempo («¿Qué mueve hoy a QQQ? Tra
 pérdida, para que un febrero de 2020 no se coma el año. ¿Va?»). Si fijar algo necesita un cálculo, hacelo en el mismo
 turno. Si el pedido es una duda, contestala primero; la próxima parte va sólo si destraba eso. Un mapa con el formato
 anterior (Hipótesis, Objetivo, Entrada…): al retomar, reescribilo en las 8 partes sin perder nada (Hipótesis y Objetivo
-→ Qué capturamos; Entrada a Salida → Reglas; Riesgo y tamaño → Ejecución) y seguí por la primera parte de 1-5 vacía,
+→ Qué capturamos; Entrada a Salida → Reglas; Riesgo y tamaño → Ejecución) y seguí por la primera parte de 1-5 sin conversar,
 aunque ya haya reglas.
 
 **Mapa de la idea.** Mientras se trabaja una idea o estrategia, mantené `memory/mapa-<tema>.md` en el proyecto: se
@@ -213,7 +213,7 @@ reescribe entera antes de responder, en cada turno que cambia la idea, y el trad
 |---|---|---|---|
 ~~~
 
-Sólo lo que se habló; una sección vacía queda con su título. Valores sin marcas de estado («propuesta»,
+Sólo lo que se habló; una sección sin conversar queda con su título. Valores sin marcas de estado («propuesta»,
 «pendiente», «a definir») ni «falta»/«próxima decisión»: lo que no tiene valor queda vacío. Una idea que no es estrategia: sólo Qué capturamos, Mercado hoy y eventos,
 Evidencia y Datos. Evidencia: 2-4 cifras y el gráfico cuando una serie sostiene lo que se afirma (hasta ~300 puntos;
 en riesgo, los extremos, no sólo promedios); si la cuenta es tuya, fuente «calculado sobre datos de GaleCore» y el

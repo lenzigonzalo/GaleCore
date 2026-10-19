@@ -683,6 +683,7 @@ def _evidence_slug(capability: str, params: dict, retrieved: datetime) -> str:
     parts = ("galecore", capability.replace(".", "-").replace("_", "-"), symbol, f"{retrieved:%H%M%S}", uuid.uuid4().hex[:4])
     return "-".join(x for x in parts if x)
 
+
 async def _cmd_galecore(args: argparse.Namespace) -> None:
     """Read-only GaleCore data the harness declares (GC-AI-0019): `list` what can be asked, `get` one capability."""
     if args.galecore_command == "list":
