@@ -136,12 +136,14 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     };
     fit();
     let width = element.clientWidth;
+    // Un cuadro después: ajustar el alto dentro del propio aviso daba «ResizeObserver loop completed» (owner 19/10).
+    let frame = 0;
     const observer = new ResizeObserver(() => {
       if (element.clientWidth === width) return;
-      width = element.clientWidth; fit();
+      width = element.clientWidth; cancelAnimationFrame(frame); frame = requestAnimationFrame(fit);
     });
     observer.observe(element);
-    return () => observer.disconnect();
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); };
   }, [draft, view]);
   const jumpToLatest = () => {
     followBottom.current = true; setAwayFromBottom(false);
@@ -254,18 +256,22 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         {!chat?.messages.length && <div className="lab-chat-welcome"><h1>{project?.type==='strategy' ? '¿Qué estrategia querés construir?' : project?.type==='personal' ? 'Tu espacio personal' : '¿Qué querés investigar?'}</h1>{project?.type==='strategy' && <p>De la idea a una estrategia lista para probar en Shadow.</p>}</div>}
         {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>submit(text,false)}/> : <div>{m.text}</div>}</article>)}
         {chat?.state==='running' && <div className="lab-chat-activity" role="status">
-          {(chat.steps || []).filter(st => st.label !== chat.activity).map((st, i) => <span key={i} className="lab-step-done">✓ {st.label}</span>)}
-          <span className="lab-step-now"><i/>{chat.activity || 'Pensando'}…</span></div>}
+          {(() => { const steps = chat.steps || [], last = steps.length - 1;   // como Claude Code: qué hizo, con qué, y qué hace ahora
+            return <>{steps.map((st, i) => st.kind === 'note'
+              ? <span key={i} className="lab-step-note">{st.label}</span>
+              : <span key={i} className={i === last ? 'lab-step-now' : 'lab-step-done'}>{i === last ? <i/> : <b>●</b>}<span>{st.label}{i === last ? '…' : ''}</span>{st.detail && <code>{st.detail}</code>}</span>)}
+              {(last < 0 || steps[last].kind === 'note') && <span className="lab-step-now"><i/><span>{chat.activity && chat.activity !== 'Trabajando' ? chat.activity : 'Pensando'}…</span></span>}</>; })()}
+        </div>}
         {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}<button onClick={refresh}>Reintentar conexión</button></div>}
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
       {composerForm}
       {!chat?.messages.length && !busy && !(chatId && !chat) && <LabSuggestions disabled={chat?.state==='running'} onPick={question => void submit(question, false)}/>}
       </div>
-      {mapaOpen && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label="Ancho del mapa" aria-orientation="vertical" aria-valuemin={280} aria-valuemax={typeof window !== 'undefined' ? window.innerWidth - 360 : 1240} aria-valuenow={mapaWidth}
+      {mapaOpen && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label="Ancho del mapa" aria-orientation="vertical" aria-valuemin={280} aria-valuemax={Math.max(280, (chatBody.current?.clientWidth || 1600) - 420)} aria-valuenow={mapaWidth}
         title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
         onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); }}
-        onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) setMapaWidth(limitMapaWidth((chatBody.current?.getBoundingClientRect().right || 0) - e.clientX)); }}
+        onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) { const box = chatBody.current?.getBoundingClientRect(); setMapaWidth(limitMapaWidth(Math.min((box?.right || 0) - e.clientX, (box?.width || 1600) - 420))); } }}
         onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
         onDoubleClick={() => setMapaWidth(380)}
         onKeyDown={e => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); setMapaWidth(w => limitMapaWidth(w + (e.key === 'ArrowLeft' ? 1 : -1) * (e.shiftKey ? 40 : 10))); }}/>}

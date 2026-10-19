@@ -35,7 +35,7 @@ export async function labRequest<T>(url: string, body?: object, timeout = 12000)
 export type LabProjectKind = 'personal' | 'analysis' | 'strategy';
 export interface WorkspaceProject { id: string; label: string; type: LabProjectKind; relative: string; strategyName: string | null }
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; at: string }
-export interface WorkspaceChat { id: string; project: string; provider: 'codex' | 'claude'; model?: string; effort?: string; title: string; createdAt?: string; turnStartedAt?: number; state: 'idle' | 'running' | 'interrupted' | 'failed' | 'cancelled'; activity: string; steps?: { label: string; at: string }[]; error: string | null; messages: ChatMessage[] }
+export interface WorkspaceChat { id: string; project: string; provider: 'codex' | 'claude'; model?: string; effort?: string; title: string; createdAt?: string; turnStartedAt?: number; state: 'idle' | 'running' | 'interrupted' | 'failed' | 'cancelled'; activity: string; steps?: { label: string; detail?: string; kind?: 'note'; at: string }[]; error: string | null; messages: ChatMessage[] }
 export interface ChatOptions { models: string[]; efforts: string[]; defaultModel?: string; modelEfforts?: Record<string, string[]> }
 export interface WorkspaceState { projects: WorkspaceProject[]; chats: Omit<WorkspaceChat, 'messages'>[]; providers: LabProvider[]; chatOptions?: Partial<Record<'codex' | 'claude', ChatOptions>> }
 export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'file'; text?: false; children?: WorkspaceFile[] }

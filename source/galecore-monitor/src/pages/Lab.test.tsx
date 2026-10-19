@@ -27,9 +27,11 @@ test('proyecto recibido desde Estrategias comparte la lateral y abre su seguimie
 
 test('mientras responde muestra los pasos ya hechos y el actual (owner 18/10)',async()=>{
  sessionStorage.setItem('galecore:lab:chat','chat-1');
- (labRequest as jest.Mock).mockImplementation(async(path:string)=>{if(path==='/workspaces')return {projects,chats:[{id:'chat-1',project:'spy',provider:'codex',title:'Vieja',state:'running'}],providers:[{id:'codex',label:'Codex',installed:true}]};if(path.endsWith('/mapa'))return {mapa:null};return {id:'chat-1',project:'spy',provider:'codex',state:'running',activity:'Trayendo la cadena de SPY',steps:[{label:'Leyendo tu perfil',at:''},{label:'Trayendo la cadena de SPY',at:''}],messages:[{id:'m',role:'user',text:'hola'}]};});
+ (labRequest as jest.Mock).mockImplementation(async(path:string)=>{if(path==='/workspaces')return {projects,chats:[{id:'chat-1',project:'spy',provider:'codex',title:'Vieja',state:'running'}],providers:[{id:'codex',label:'Codex',installed:true}]};if(path.endsWith('/mapa'))return {mapa:null};return {id:'chat-1',project:'spy',provider:'codex',state:'running',activity:'Trayendo la cadena de SPY',steps:[{label:'Primero miro tu perfil.',kind:'note',at:''},{label:'Leyendo tu perfil',detail:'galecore-ai profile show',at:''},{label:'Trayendo la cadena de SPY',detail:'galecore-ai galecore get market.option_chains --symbol SPY',at:''}],messages:[{id:'m',role:'user',text:'hola'}]};});
  render(<Lab onMonitor={()=>{}}/>);
- expect(await screen.findByText('✓ Leyendo tu perfil')).toBeInTheDocument();
- expect(screen.getByText('Trayendo la cadena de SPY…')).toBeInTheDocument();
- expect(screen.queryByText('✓ Trayendo la cadena de SPY')).not.toBeInTheDocument();
+ expect(await screen.findByText('Leyendo tu perfil')).toBeInTheDocument();
+ expect(screen.getByText('Primero miro tu perfil.')).toBeInTheDocument();                       // la narración, como Claude Code
+ expect(screen.getByText('galecore-ai profile show')).toBeInTheDocument();                      // con qué
+ expect(screen.getByText('Trayendo la cadena de SPY…')).toBeInTheDocument();                    // el actual, sin repetirse
+ expect(screen.queryByText('Trayendo la cadena de SPY')).not.toBeInTheDocument();
 });
