@@ -13,10 +13,11 @@ test('Archivos y Shell son vistas del proyecto seleccionado, al lado del chat; s
 test('borradores separados por proyecto y envío usa el chat real con el proyecto exacto',async()=>{render(<Lab onMonitor={()=>{}}/>);await screen.findByRole('button',{name:'Personal'});fireEvent.change(screen.getByRole('textbox',{name:'Mensaje al proyecto'}),{target:{value:'Pedido personal'}});fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));expect(screen.getByRole('textbox',{name:'Mensaje al proyecto'})).toHaveValue('');fireEvent.change(screen.getByRole('textbox',{name:'Mensaje al proyecto'}),{target:{value:'Trabajemos una estrategia en SPY'}});fireEvent.click(screen.getByRole('button',{name:'Personal'}));expect(screen.getByRole('textbox',{name:'Mensaje al proyecto'})).toHaveValue('Pedido personal');fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));fireEvent.click(screen.getByRole('button',{name:'Enviar mensaje'}));await waitFor(()=>expect(labRequest).toHaveBeenCalledWith('/chats',{project:'spy',provider:'codex'}));expect(labRequest).toHaveBeenCalledWith('/chats/chat-1/messages',{text:'Trabajemos una estrategia en SPY',mode:'manual',attachments:[]});});
 test('falla de conexión visible, sin historial ni respuestas inventadas',async()=>{(labRequest as jest.Mock).mockRejectedValue(new Error('offline'));render(<Lab onMonitor={()=>{}}/>);expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo conectar');expect(screen.getByRole('button',{name:'Enviar mensaje'})).toBeDisabled();});
 
-test('proyecto recibido desde Estrategias comparte la lateral y abre su seguimiento',async()=>{
+test('proyecto recibido desde Estrategias comparte la lateral y abre su seguimiento desde el mapa',async()=>{
  const host=document.createElement('div');host.id='workspace-projects';document.body.appendChild(host);
+ localStorage.setItem('galecore:lab:mapa','1');
  const follow=jest.fn();const {unmount}=render(<Lab embedded projectRequest={{id:'spy',sequence:1}} onFollowStrategy={follow} onMonitor={()=>{}}/>);
- await screen.findByRole('button',{name:'Ver resultados'});
+ await screen.findByRole('button',{name:'Ver resultados'});localStorage.removeItem('galecore:lab:mapa');
  expect(host.querySelector('.lab-chat-sidebar')).toBeInTheDocument();
  expect(document.querySelectorAll('.lab-chat-sidebar')).toHaveLength(1);
  expect(screen.queryByRole('button',{name:'Configuración'})).not.toBeInTheDocument();

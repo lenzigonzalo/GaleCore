@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { IChartApi, Time } from 'lightweight-charts';
+import { ArrowUpRight } from 'lucide-react';
 import { labRequest } from '../../api/lab';
 import './LabMapa.css';
 import '../shadow/PerformancePanel.css';
 
 // Mapa de la idea (WS-0039): lo escribe el agente en memory/mapa-<tema>.md y el Lab lo sirve por secciones.
 // El panel sólo lee; se relee al abrir la conversación y al terminar cada respuesta.
-// Owner 17/10: se ve como la solapa Diseño de Estrategias — hipótesis, objetivo, las reglas por bloque en las mismas
-// tablas, los datos como la solapa Datos y la evidencia con sus gráficos. Lo que todavía no se habló queda vacío.
 export interface MapaLine { mark: 'ok' | 'missing' | null; text: string }
 export interface MapaChart { fuente?: string; unidad?: string; corte?: string; calculo?: string; series: { nombre: string; puntos: [string, number][] }[] }
 export interface MapaSection { heading: string; lines: MapaLine[]; chart?: MapaChart; table?: { head: string[]; rows: string[][] } }
@@ -51,7 +50,7 @@ export function MapaChartView({ chart, label }: { chart: MapaChart; label: strin
         timeScale: { borderVisible: false }, rightPriceScale: { borderVisible: false }, handleScroll: false, handleScale: false });
       chart.series.forEach((s, i) => {
         const line = api!.addSeries(LineSeries, { color: v(COLORS[i % COLORS.length], '#c7d2cb'), lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
-          priceFormat: { type: 'custom', formatter: (x: number) => x.toLocaleString('es-AR', { maximumFractionDigits: 1 }) + (chart.unidad ? ' ' + chart.unidad : '') } });
+          priceFormat: { type: 'custom', formatter: (x: number) => x.toLocaleString('es-AR', { maximumFractionDigits: 1 }) } });
         line.setData((s.puntos || []).filter(p => Number.isFinite(p[1])).map(([t, value]) => ({ time: t as Time, value })));
       });
       api.timeScale().fitContent();
@@ -62,10 +61,16 @@ export function MapaChartView({ chart, label }: { chart: MapaChart; label: strin
     {bars ? <CategoryBars chart={chart} label={label} /> : <div ref={host} role="img" aria-label={label} />}
     <figcaption>
       {chart.series.map((s, i) => <span key={s.nombre} className="lab-mapa-legend" style={{ color: `var(${COLORS[i % COLORS.length]})` }}>— {s.nombre}</span>)}
-      {chart.fuente && <span className="lab-mapa-source">Fuente: {chart.fuente}{chart.corte ? ' · hasta el ' + day(chart.corte) : ''}</span>}
-      {chart.calculo && <span className="lab-mapa-source">Cálculo guardado en Archivos: {chart.calculo.split('/').pop()}</span>}
+      {chart.unidad && <span className="lab-mapa-unit">{chart.unidad}</span>}
+      {(chart.fuente || chart.calculo) && <SourceHint text={[chart.fuente && 'Fuente: ' + chart.fuente + (chart.corte ? ', hasta el ' + day(chart.corte) : ''),
+        chart.calculo && 'Cálculo en Archivos: ' + chart.calculo.split('/').pop()].filter(Boolean).join(' · ')} />}
     </figcaption>
   </figure>;
+}
+
+// Owner 18/10: las fuentes no ocupan lugar; quedan detrás de un «?» que se abre al pasar o tocar.
+export function SourceHint({ text }: { text: string }) {
+  return <details className="lab-source-hint"><summary aria-label="Fuente" title={text}>?</summary><span>{text}</span></details>;
 }
 
 function Numeros({ lines }: { lines: MapaLine[] }) {
@@ -75,26 +80,25 @@ function Numeros({ lines }: { lines: MapaLine[] }) {
   })}</div>;
 }
 
-// Las secciones del diseño, en el orden de la solapa Diseño; Datos y Evidencia al final.
-const STATEMENTS = ['Hipótesis', 'Objetivo'];
-const RULES = ['Entrada', 'Construcción', 'Gestión', 'Salida', 'Riesgo y tamaño'];
-const RULE_HEAD = ['Concepto', 'Condición', 'Umbral', 'Acción'];
-const DATA_HEAD = ['Dato', 'Para qué', 'Fuente', 'Historia'];
-const norm = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+// Las secciones en el orden en que las escribe el agente (PRODUCT.md «Mapa de la idea», owner 18/10): cada una con su
+// texto, su tabla y su gráfico. Un mapa viejo (Hipótesis, Entrada…) se ve igual de bien.
 // «valor · qué es» con un valor corto que lleva cifras = número grande de la evidencia.
 const isNumber = (t: string) => { const [v, ...rest] = t.split('·'); return rest.length > 0 && /\d/.test(v) && v.trim().length <= 24; };
 
-function DesignTable({ title, head, section, strategy }: { title: string; head: string[]; section?: MapaSection; strategy: boolean }) {
-  if (!section && !strategy) return null;
-  const rows = section?.table?.rows || [], columns = section?.table?.head?.length ? section.table.head : head;
-  return <section className="algorithm-section lab-mapa-block"><h3>{title}</h3>
-    {rows.length ? <table><thead><tr>{columns.map(c => <th key={c}>{c}</th>)}</tr></thead><tbody>{rows.map((r, i) => <tr key={i}>{columns.map((_, j) => <td key={j}>{r[j] || '—'}</td>)}</tr>)}</tbody></table>
-      : section?.lines.length ? section.lines.map((l, i) => <p key={i}>{l.text}</p>)
-      : <p className="lab-mapa-blank">Sin definir todavía</p>}
+function Section({ sec }: { sec: MapaSection }) {
+  const numbers = sec.lines.filter(l => isNumber(l.text)), text = sec.lines.filter(l => !isNumber(l.text));
+  const empty = !sec.lines.length && !sec.table?.rows.length && !sec.chart;
+  return <section className="lab-mapa-block"><h3>{sec.heading}</h3>
+    {text.map((l, k) => <p key={k}>{l.text}</p>)}
+    {numbers.length > 0 && <Numeros lines={numbers}/>}
+    {sec.table && sec.table.rows.length > 0 && <div className="lab-mapa-table"><table><thead><tr>{sec.table.head.map(c => <th key={c}>{c}</th>)}</tr></thead>
+      <tbody>{sec.table.rows.map((r, k) => <tr key={k}>{sec.table!.head.map((_, m) => <td key={m}>{r[m] || '—'}</td>)}</tr>)}</tbody></table></div>}
+    {sec.chart && <MapaChartView chart={sec.chart} label={sec.heading}/>}
+    {empty && <p className="lab-mapa-blank">Todavía no se habló</p>}
   </section>;
 }
 
-export function LabMapa({ chatId, running, strategy = false }: { chatId: string | null; running: boolean; strategy?: boolean }) {
+export function LabMapa({ chatId, running, onResults }: { chatId: string | null; running: boolean; onResults?: () => void }) {
   const [mapa, setMapa] = useState<Mapa | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>(() => (chatId ? 'loading' : 'ready'));
   const shown = useRef<string | null>(null);
@@ -112,28 +116,16 @@ export function LabMapa({ chatId, running, strategy = false }: { chatId: string 
     return () => { active = false; if (timer) window.clearInterval(timer); };
   }, [chatId, running]);
 
+  const results = onResults && <button type="button" className="lab-mapa-results" title="Resultados de esta estrategia en Estrategias" onClick={onResults}>Ver resultados<ArrowUpRight size={15}/></button>;
   return <aside className="lab-mapa" aria-label="Mapa de la idea">
+    {!mapa && results && <header>{results}</header>}
     {state === 'error' && !mapa ? <p className="lab-mapa-empty" role="alert">No se pudo leer el mapa. Se vuelve a intentar al terminar la próxima respuesta.</p>
       : state === 'loading' && !mapa ? <p className="lab-mapa-empty" role="status">Leyendo el mapa…</p>
       : !mapa ? <p className="lab-mapa-empty">El mapa aparece cuando la conversación arma una idea.</p>
       : <>
-        <header><h2>{mapa.title || 'Idea'}</h2><span>{running ? 'Actualizando…' : 'Actualizado ' + time(mapa.updatedAt)}{state === 'error' ? ' · no se pudo releer' : ''}</span></header>
-        {(() => {
-          const find = (name: string) => mapa.sections.find(x => norm(x.heading) === norm(name));
-          const known = [...STATEMENTS, ...RULES, 'Datos', 'Evidencia'].map(norm);
-          const evidence = [find('Evidencia'), ...mapa.sections.filter(x => !known.includes(norm(x.heading)))].filter((x): x is MapaSection => !!x);
-          return <div className="algorithm-design lab-mapa-design">
-            {STATEMENTS.map(name => { const sec = find(name); return (sec || strategy) && <section key={name} className="lab-mapa-statement"><h3>{name}</h3>{sec?.lines.length ? sec.lines.map((l, k) => <p key={k}>{l.text}</p>) : <p className="lab-mapa-blank">Sin definir todavía</p>}</section>; })}
-            {RULES.map(name => <DesignTable key={name} title={name} head={RULE_HEAD} section={find(name)} strategy={strategy}/>)}
-            <DesignTable title="Datos" head={DATA_HEAD} section={find('Datos')} strategy={strategy}/>
-            {evidence.map(sec => <section key={sec.heading} className="lab-mapa-block lab-mapa-evidence"><h3>{sec.heading}</h3>
-              {sec.lines.some(l => isNumber(l.text)) && <Numeros lines={sec.lines.filter(l => isNumber(l.text))}/>}
-              {sec.chart && <MapaChartView chart={sec.chart} label={sec.heading}/>}
-              {sec.table && <table><thead><tr>{sec.table.head.map(c => <th key={c}>{c}</th>)}</tr></thead><tbody>{sec.table.rows.map((r, k) => <tr key={k}>{sec.table!.head.map((_, m) => <td key={m}>{r[m] || '—'}</td>)}</tr>)}</tbody></table>}
-              {sec.lines.filter(l => !isNumber(l.text)).map((l, k) => <p key={k}>{l.text}</p>)}
-            </section>)}
-          </div>;
-        })()}
+        <header><div><h2>{mapa.title || 'Idea'}</h2><span>{running ? 'Actualizando…' : 'Actualizado ' + time(mapa.updatedAt)}{state === 'error' ? ' · no se pudo releer' : ''}</span></div>
+          {results}</header>
+        <div className="lab-mapa-design">{mapa.sections.map((sec, i) => <Section key={sec.heading + i} sec={sec}/>)}</div>
       </>}
   </aside>;
 }

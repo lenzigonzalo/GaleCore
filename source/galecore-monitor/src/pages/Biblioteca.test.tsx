@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { Biblioteca, splitSections } from './Biblioteca';
+import { Biblioteca, splitSections, splitSources } from './Biblioteca';
 import { labRequest } from '../api/lab';
 
 jest.mock('../api/lab', () => ({ labRequest: jest.fn() }));
@@ -18,17 +18,28 @@ test('agrupa por tipo con sólo el título, abre el primero y cambia con un clic
     return { text: files[decodeURIComponent(path.split('path=')[1])] };
   });
   render(<Biblioteca />);
-  const items = await screen.findAllByRole('button');
+  await screen.findByRole('button', { name: 'GEX' });
+  const items = Array.from(document.querySelectorAll('.biblioteca-group button'));
   expect(screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent)).toEqual(['Macro', 'Mercado']);
-  expect(items.map(b => b.textContent)).toEqual(['Historia macro', 'GEX: qué mide']);   // sólo títulos, sin resumen
+  expect(items.map(b => b.textContent)).toEqual(['Historia macro', 'GEX']);   // títulos cortos (owner 18/10), sin resumen
   expect(screen.getByText(/## Cómo se ve hoy/)).toBeInTheDocument();
   fireEvent.click(items[1]);
+  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('GEX');
+  expect(screen.getByText('qué mide')).toBeInTheDocument();                       // el resto del título, como bajada
   expect(document.querySelectorAll('.biblioteca-card')).toHaveLength(2);               // una tarjeta por sección
   expect(items[1]).toHaveAttribute('aria-current', 'page');
+  fireEvent.click(screen.getByRole('button', { name: 'Ocultar la lista' }));          // el informe solo, como el chat
+  expect(screen.queryByRole('complementary', { name: 'Informes de la Biblioteca' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Mostrar la lista' }));
+  expect(screen.getByRole('complementary', { name: 'Informes de la Biblioteca' })).toBeInTheDocument();
 });
 
 test('separa el encabezado de las secciones', () => {
   expect(splitSections('# T\n\n**C.**\n\n## A\n\nx\n\n## B\n\ny')).toEqual({ head: '# T\n\n**C.**\n\n', sections: ['## A\n\nx\n\n', '## B\n\ny'] });
+});
+
+test('las fuentes salen del texto y van detrás del «?»', () => {
+  expect(splitSources('| a |\n\nFuente: GaleCore `x`, 17/10.\n\nTexto')).toEqual({ body: '| a |\n\n\nTexto', sources: ['GaleCore `x`, 17/10.'] });
 });
 
 test('sin el Lab lo dice, sin inventar informes', async () => {

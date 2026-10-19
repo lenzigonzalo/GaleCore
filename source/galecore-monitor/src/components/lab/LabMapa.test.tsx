@@ -15,20 +15,23 @@ const mapa = { path: 'memory/mapa-apple.md', updatedAt: '2026-10-16T17:04:00Z', 
 
 beforeEach(() => jest.clearAllMocks());
 
-test('como la solapa Diseño: hipótesis, reglas en tablas y bloques vacíos en una estrategia, sin botones (owner 17/10)', async () => {
+test('secciones en el orden del archivo, con texto y tablas; vacías dicen que no se habló; sin estados (owner 18/10)', async () => {
   (labRequest as jest.Mock).mockResolvedValue({ mapa: { ...mapa, sections: [
-    { heading: 'Hipótesis', lines: [{ mark: null, text: 'La implícita supera a la realizada' }] },
-    { heading: 'Entrada', lines: [], table: { head: ['Concepto', 'Condición', 'Umbral', 'Acción'], rows: [['VIX menos realizada', '>', '2 puntos', 'Abrir']] } },
+    { heading: 'Qué capturamos', lines: [{ mark: null, text: 'La implícita supera a la realizada' }] },
+    { heading: 'Universo', lines: [], table: { head: ['Activo', 'Qué lo mueve hoy', 'Dato'], rows: [['SPY', 'Fed 28/10', 'IV 19,9 %']] } },
+    { heading: 'Reglas', lines: [] },
   ] } });
-  render(<LabMapa chatId="c1" running={false} strategy />);
+  const follow = jest.fn();
+  render(<LabMapa chatId="c1" running={false} onResults={follow} />);
   expect(await screen.findByRole('heading', { name: 'Earnings de Apple' })).toBeInTheDocument();
   expect(labRequest).toHaveBeenCalledWith('/chats/c1/mapa');
+  expect(screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent)).toEqual(['Qué capturamos', 'Universo', 'Reglas']);
   expect(screen.getByText('La implícita supera a la realizada')).toBeInTheDocument();
-  expect(screen.getByRole('cell', { name: 'VIX menos realizada' })).toBeInTheDocument();
-  for (const name of ['Objetivo', 'Construcción', 'Gestión', 'Salida', 'Riesgo y tamaño', 'Datos']) expect(screen.getByRole('heading', { name })).toBeInTheDocument();
-  expect(screen.getAllByText('Sin definir todavía').length).toBeGreaterThan(3);
+  expect(screen.getByRole('cell', { name: 'Fed 28/10' })).toBeInTheDocument();
+  expect(screen.getByText('Todavía no se habló')).toBeInTheDocument();
   expect(screen.queryByText(/propuesta|definida|abierta/i)).not.toBeInTheDocument();
-  expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  screen.getByRole('button', { name: /Ver resultados/ }).click();
+  expect(follow).toHaveBeenCalled();
 });
 
 test('sin idea todavía o sin conversación, lo dice; mientras responde vuelve a leer', async () => {
@@ -53,7 +56,7 @@ test('un error de lectura no aparenta un mapa', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo leer el mapa');
 });
 
-test('evidencia: cifras grandes y gráfico con su fuente; un mapa viejo no muestra «Estamos»', async () => {
+test('evidencia: cifras grandes y gráfico con su fuente detrás del «?»; un mapa viejo no muestra «Estamos»', async () => {
   (labRequest as jest.Mock).mockResolvedValue({ mapa: { ...mapa, intro: ['Estamos: probando si se cobra'], sections: [
     { heading: 'Evidencia', lines: [{ mark: null, text: '84 % · días con prima' }] },
     { heading: 'Implícita vs realizada', lines: [], chart: { fuente: 'GaleCore', corte: '2026-10-16', calculo: 'memory/calculos/vrp.py', series: [{ nombre: 'VIX', puntos: [['2020-01-31', 14]] }] } },
@@ -62,6 +65,5 @@ test('evidencia: cifras grandes y gráfico con su fuente; un mapa viejo no muest
   expect((await screen.findByText('84 %')).tagName).toBe('STRONG');
   expect(screen.queryByText(/probando si se cobra/)).not.toBeInTheDocument();
   expect(screen.getByRole('img', { name: 'Implícita vs realizada' })).toBeInTheDocument();
-  expect(screen.getByText('Fuente: GaleCore · hasta el 16/10/2026')).toBeInTheDocument();
-  expect(screen.getByText('Cálculo guardado en Archivos: vrp.py')).toBeInTheDocument();
+  expect(screen.getByText('Fuente: GaleCore, hasta el 16/10/2026 · Cálculo en Archivos: vrp.py')).toBeInTheDocument();
 });

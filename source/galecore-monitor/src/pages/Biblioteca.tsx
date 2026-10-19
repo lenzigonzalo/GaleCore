@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { labRequest, WorkspaceFile } from '../api/lab';
 import { LabMarkdown } from '../components/lab/LabMarkdown';
+import { SourceHint } from '../components/lab/LabMapa';
 import './Biblioteca.css';
 
 /**
@@ -11,8 +12,23 @@ import './Biblioteca.css';
  * una grilla, para que no quede una columna larga.
  */
 const BASE = '/workspaces/biblioteca/files';
-const GROUPS: Record<string, string> = { macro: 'Macro', mercado: 'Mercado', estrategias: 'Estrategias', empresas: 'Empresas', uso: 'Uso del harness' };
-const title = (text: string, file: string) => text.match(/^#\s+(.+)$/m)?.[1]?.trim() || file.replace(/\.md$/, '').replace(/-/g, ' ');
+const GROUPS: Record<string, string> = { macro: 'Macro', mercado: 'Mercado', estrategias: 'Estrategias', empresas: 'Empresas', uso: 'Casos de uso' };
+// Owner 18/10: títulos, no oraciones. «# GEX: qué mide…» → título «GEX» y el resto como bajada.
+const heading = (text: string) => text.match(/^#\s+(.+)$/m)?.[1]?.trim() || '';
+const title = (text: string, file: string) => heading(text).split(':')[0].trim() || file.replace(/\.md$/, '').replace(/-/g, ' ');
+/** Saca las líneas «Fuente: …» del texto: van detrás de un «?» (owner 18/10, ocupaban media pantalla). */
+export function splitSources(text: string): { body: string; sources: string[] } {
+  const sources: string[] = [];
+  const body = text.split(/\r?\n/).filter(l => { const m = l.match(/^\s*\*{0,2}Fuentes?:\*{0,2}\s*(.+)$/); if (m) sources.push(m[1].trim()); return !m; }).join('\n');
+  return { body, sources };
+}
+function Card({ text, className }: { text: string; className: string }) {
+  const { body, sources } = splitSources(text);
+  return <section className={className + (/^\|/m.test(body) ? ' wide' : '')}>
+    {sources.length > 0 && <SourceHint text={sources.join(' · ')} />}
+    <LabMarkdown text={body} />
+  </section>;
+}
 
 interface Report { path: string; group: string; title: string; text: string }
 
@@ -31,6 +47,8 @@ export function Biblioteca() {
   const [reports, setReports] = useState<Report[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [listOpen, setListOpen] = useState(() => { try { return localStorage.getItem('galecore:biblioteca:lista') !== '0'; } catch { return true; } });
+  const toggleList = () => setListOpen(v => { try { localStorage.setItem('galecore:biblioteca:lista', v ? '0' : '1'); } catch { /* sin storage */ } return !v; });
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -53,9 +71,11 @@ export function Biblioteca() {
     .map(g => ({ id: g, label: GROUPS[g] || g || 'Otros', items: (reports || []).filter(r => r.group === g) })).filter(g => g.items.length);
   const open = reports?.find(r => r.path === selected);
   const parts = open ? splitSections(open.text) : null;
+  const sub = open ? heading(open.text).split(':').slice(1).join(':').trim() : '';
+  const head = parts ? parts.head.replace(/^#\s+.+$/m, '') : '';
   return <div className="biblioteca">
-    <aside className="biblioteca-list" aria-label="Informes de la Biblioteca">
-      <h2><BookOpen size={18}/>Biblioteca</h2>
+    {listOpen && <aside className="biblioteca-list" aria-label="Informes de la Biblioteca">
+      <h2><BookOpen size={18}/>Biblioteca<button type="button" className="biblioteca-toggle" aria-label="Ocultar la lista" title="Ocultar la lista" onClick={toggleList}><PanelLeftClose size={17}/></button></h2>
       {error && <p className="biblioteca-error" role="alert">{error}</p>}
       {!reports && !error && <p className="biblioteca-empty">Cargando…</p>}
       {reports?.length === 0 && <p className="biblioteca-empty">Todavía no hay informes.</p>}
@@ -63,10 +83,14 @@ export function Biblioteca() {
         <h3>{g.label}</h3>
         {g.items.map(r => <button key={r.path} type="button" aria-current={r.path === selected ? 'page' : undefined} onClick={() => setSelected(r.path)}>{r.title}</button>)}
       </section>)}
-    </aside>
-    {parts && <article className="biblioteca-report">
-      <header className="biblioteca-head"><LabMarkdown text={parts.head} /></header>
-      <div className="biblioteca-grid">{parts.sections.map((s, i) => <section key={i} className="biblioteca-card"><LabMarkdown text={s} /></section>)}</div>
+    </aside>}
+    {parts && open && <article className="biblioteca-report">
+      <header className="biblioteca-head">
+        {!listOpen && <button type="button" className="biblioteca-toggle" aria-label="Mostrar la lista" title="Mostrar la lista" onClick={toggleList}><PanelLeftOpen size={17}/></button>}
+        <h1>{open.title}</h1>{sub && <p className="biblioteca-sub">{sub}</p>}
+        <Card text={head} className="biblioteca-lead" />
+      </header>
+      <div className="biblioteca-grid">{parts.sections.map((s, i) => <Card key={i} text={s} className="biblioteca-card" />)}</div>
     </article>}
   </div>;
 }

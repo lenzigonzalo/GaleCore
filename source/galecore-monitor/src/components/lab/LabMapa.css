@@ -1,5 +1,6 @@
 .lab-mapa { display:flex; flex-direction:column; min-width:0; min-height:0; overflow-y:auto; border-left:1px solid var(--border-dark); background:var(--bg-primary); }
-.lab-mapa > header { display:grid; gap:2px; padding:14px 20px 12px; border-bottom:1px solid var(--border-dark); }
+.lab-mapa > header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 20px 12px; border-bottom:1px solid var(--border-dark); }
+.lab-mapa > header > div { display:grid; gap:2px; }
 .lab-mapa > header h2 { margin:0; font-size:17px; font-weight:500; }
 .lab-mapa > header span { color:var(--text-muted); font-size:var(--font-label); }
 .lab-mapa-cells { display:grid; gap:10px; padding:16px 20px 24px; }
@@ -20,20 +21,33 @@
 .lab-mapa-numbers { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:10px; }
 .lab-mapa-numbers > div { display:grid; gap:2px; }
 .lab-mapa-numbers strong { font-size:26px; font-weight:600; line-height:1.15; color:var(--text-primary); }
-.lab-mapa-numbers span { font-size:13.5px; line-height:1.35; color:var(--text-secondary); }
+.lab-mapa-numbers span { font-size:14px; line-height:1.4; color:var(--text-primary); }
 .lab-mapa-chart { margin:0; }
 .lab-mapa-chart > div { height:200px; }
 .lab-mapa-chart figcaption { display:flex; flex-wrap:wrap; gap:4px 14px; margin-top:6px; font-size:13px; }
-.lab-mapa-source { margin-left:auto; color:var(--text-secondary); }
+.lab-mapa-unit { color:var(--text-secondary); }
+.lab-source-hint { position:relative; margin-left:auto; }
+.lab-source-hint summary { list-style:none; display:grid; place-items:center; width:20px; height:20px; border:1px solid var(--border); border-radius:50%; font-size:12px; color:var(--text-secondary); cursor:pointer; }
+.lab-source-hint summary::-webkit-details-marker { display:none; }
+.lab-source-hint[open] summary, .lab-source-hint summary:hover { border-color:var(--accent); color:var(--accent); }
+.lab-source-hint > span { position:absolute; right:0; top:26px; z-index:5; width:max-content; max-width:min(420px, 80vw); padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-primary); color:var(--text-secondary); font-size:12.5px; line-height:1.45; box-shadow:0 6px 18px rgba(0,0,0,.35); }
 /* El mapa como la solapa Diseño (owner 17/10) */
 .lab-mapa-design { display:grid; gap:22px; padding:16px 20px 28px; }
-.lab-mapa-design h3 { margin:0 0 8px; font-size:15px; font-weight:600; color:var(--text-primary); }
-.lab-mapa-design p { margin:0; font-size:14.5px; line-height:1.55; color:var(--text-secondary); }
+.lab-mapa-design h3 { margin:0 0 8px; padding-left:9px; border-left:3px solid var(--accent); font-size:15px; font-weight:600; color:var(--accent); }
+.lab-mapa-block { display:grid; gap:10px; }
+.lab-mapa-table { overflow-x:auto; border:1px solid var(--border-dark); border-radius:8px; }
+.lab-mapa-table table { width:100%; border-collapse:collapse; font-size:14px; }
+.lab-mapa-table th { text-align:left; padding:7px 10px; background:rgba(163,216,108,.08); color:var(--text-primary); font-weight:600; font-size:13px; }
+.lab-mapa-table td { padding:7px 10px; border-top:1px solid var(--border-dark); color:var(--text-primary); vertical-align:top; line-height:1.45; }
+.lab-mapa-table td:first-child { color:var(--yellow-gc); font-weight:500; }
+.lab-mapa-results { display:inline-flex; align-items:center; gap:4px; flex-shrink:0; padding:6px 10px; border:1px solid var(--border); border-radius:7px; background:transparent; color:var(--text-primary); font-size:13px; cursor:pointer; }
+.lab-mapa-results:hover { border-color:var(--accent); color:var(--accent); }
+.lab-mapa-design p { margin:0; font-size:15px; line-height:1.55; color:var(--text-primary); }
 .lab-mapa-design p + p { margin-top:4px; }
 .lab-mapa-statement p { color:var(--text-primary); font-size:15px; }
 .lab-mapa-design .algorithm-section + .algorithm-section { margin-top:0; }
 .lab-mapa-design td:first-child { width:auto; }
-.lab-mapa-blank { color:var(--text-disabled)!important; font-size:14px!important; }
+.lab-mapa-blank { color:var(--text-muted)!important; font-size:14px!important; }
 .lab-mapa-evidence { display:grid; gap:10px; }
 .lab-mapa-evidence table { width:100%; border-collapse:collapse; font-size:14px; }
 
