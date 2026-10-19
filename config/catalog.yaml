@@ -521,7 +521,6 @@ entries:
       - Explicame la macro
       - ¿Cómo están las tasas largas, los breakevens y el empleo?
       - Análisis técnico de QQQ
-      - Analizame NVDA
       - El flow de opciones de SPY
       - ¿Qué mueve a SPY?
       - ¿Qué es el skew y por qué me tendría que importar?
@@ -550,6 +549,49 @@ entries:
       - The pack is kept as one evidence item and points at the previous one of the same kind and symbol
       - The research controls; every reported number cites the pack; a save must cite the profile in force
       - "Not checked - that the reading is right; consensus and estimates are missing, so surprises are not measured"
+
+  - id: company_research
+    kind: investigation
+    serves: >-
+      Investigar una empresa o elegir entre varias acciones con datos de GaleCore: técnico (tendencia, medias,
+      fuerza relativa contra SPY y su sector), fundamentos (crecimiento de ingresos y resultado operativo, márgenes,
+      flujo libre, inversión, dilución, deuda neta), valoración (P/E contra su propia historia, escenarios a 12 meses),
+      próximo balance, negocio y riesgos del 10-K y la macro que la afecta. Cierra con la tesis, qué tiene que pasar en
+      6-12 meses y qué la rompe; elegir entre varias es una tabla por bloques, sin puntaje.
+    example_requests:
+      - Analizame NVDA
+      - Investigá la empresa MSFT
+      - ¿Qué tal está AAPL a este precio? ¿Está cara?
+      - Buscá una empresa con tendencia alcista y buenos fundamentos para 6 a 12 meses
+      - De MSFT, AAPL y NVDA, ¿cuál tiene tendencia alcista y fundamentos que la sostengan?
+      - ¿Cómo vienen los fundamentos de esta acción?
+    skill: skills/company-research/skill.yaml
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [market_data.candles, filings.sec_facts, filings.sec_filings, filings.sec_document, market_data.volatility_metrics, macro.fred_series, macro.bls_series]
+    data_needs:
+      - need: velas
+      - need: fundamentales XBRL
+      - need: presentaciones ante la SEC
+      - need: noticias de la empresa
+        missing: fuera de esta pieza (WS-0042)
+      - need: consenso y guía más allá del próximo EPS
+        missing: ninguna fuente registrada lo trae
+    flow:
+      - analyze pack --kind fundamental --symbol SYM --prompt "<pedido>"
+      - analyze pack --kind technical --symbol SYM --prompt "<pedido>"
+      - analyze pack --kind macro --prompt "<pedido>"
+      - galecore get filings.sec_document --param Ticker=SYM --param Items=1,1A,7 --param MaxChars=30000 --keep "<pedido>"
+      - profile show
+      - kb search --kind research --text "empresa <symbol>"
+      - research save --capability company_research --slug empresa-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability company_research --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - "Numbers are gathered and computed by code from GaleCore (analyze pack); the model interprets and cites the packs"
+      - "Two routes: Investigar explains a company whatever its numbers; Seleccionar compares a stated list against one declared profile"
+      - "A company outside the method (banks, insurers) is an incomplete evaluation, never a pass"
+      - The research controls; every reported number cites the pack; a save must cite the profile in force
+      - "Not checked - that the thesis is right; news, consensus beyond next EPS and guidance are missing"
 
   - id: scheduled_report
     kind: investigation

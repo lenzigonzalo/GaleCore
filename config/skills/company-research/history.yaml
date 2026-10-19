@@ -1,0 +1,10 @@
+# Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: company_research
+versions:
+  - version: "0.1.0"
+    date: 2026-10-19
+    changes: >
+      Primera versión (WS-0047, pedido del owner tras EMP01): recorridos Investigar y Seleccionar sobre `analyze pack`
+      (fundamental con caja, dilución, deuda y escenarios; técnico; macro) y el 10-K; tesis con qué tiene que pasar y
+      qué la rompe; selección por bloques sin puntaje; tabla fija de ETF por sector.
+    feedback: []

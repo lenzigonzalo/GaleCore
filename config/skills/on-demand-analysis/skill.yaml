@@ -1,5 +1,5 @@
 skill_id: on_demand_analysis
-version: "0.1.1"
+version: "0.1.2"
 display_name: Análisis a pedido — macro, técnico, fundamental y flow
 description: >
   Answers «explicame la macro», «análisis técnico de QQQ», «analizame NVDA» and «el flow de SPY» from GaleCore's data.
