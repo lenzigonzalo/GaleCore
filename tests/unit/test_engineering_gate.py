@@ -1,6 +1,15 @@
 from pathlib import Path
 
+import pytest
+
 from tools.engineering_gate import evaluate_repository
+
+
+@pytest.fixture(autouse=True)
+def _no_session_item(request, monkeypatch):
+    """Tests on a temporary workspace ignore this session's item; the repository check keeps it."""
+    if "tmp_path" in request.fixturenames:
+        monkeypatch.delenv("GALECORE_WORK_ITEM", raising=False)
 
 
 def _write_work_item(
@@ -130,3 +139,12 @@ def test_the_active_item_is_the_workspace_pointer_seen_from_a_worktree(tmp_path)
 
     (tmp_path / "ACTIVE_WORK_ITEM").unlink()
     assert any("ACTIVE_WORK_ITEM" in e for e in evaluate_repository(checkout).errors)
+
+
+def test_a_session_item_set_by_the_environment_wins_over_the_pointer(tmp_path, monkeypatch):
+    """Parallel sessions (owner 15/10): GALECORE_WORK_ITEM names this session's item, as the workspace hooks do."""
+    _write_work_item(tmp_path, status="IN_PROGRESS", blocked=True)
+    (tmp_path / "ACTIVE_WORK_ITEM").write_text("docs/engineering/work-items/otro.md", encoding="utf-8")
+    assert not evaluate_repository(tmp_path).passed
+    monkeypatch.setenv("GALECORE_WORK_ITEM", "docs/engineering/work-items/item.md")
+    assert evaluate_repository(tmp_path).passed

@@ -6,6 +6,7 @@ the main checkout and its worktrees under `.worktrees/` share it). It is the onl
 
 from __future__ import annotations
 
+import os
 import re
 import sys
 from dataclasses import dataclass, field
@@ -80,7 +81,8 @@ def evaluate_repository(root: Path) -> GateResult:
         result.errors.append("missing the workspace ACTIVE_WORK_ITEM")
         return result
 
-    raw = pointer.read_text(encoding="utf-8").strip()
+    # `GALECORE_WORK_ITEM` fixes the item of one session (parallel sessions, owner 15/10), as the workspace hooks do.
+    raw = os.environ.get("GALECORE_WORK_ITEM", "").strip() or pointer.read_text(encoding="utf-8").strip()
     if not raw or len(raw.splitlines()) != 1:
         result.errors.append("ACTIVE_WORK_ITEM must contain one path")
         return result

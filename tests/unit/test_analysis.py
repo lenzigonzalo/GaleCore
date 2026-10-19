@@ -135,3 +135,80 @@ def test_a_missing_month_of_this_year_is_listed_and_a_negative_eps_has_no_pe():
              q("2026-01-26", "2026-04-26", 0.5), q("2026-04-27", "2026-07-26", 0.4)]
     view = analysis.fundamental_view({"EarningsPerShareDiluted": facts}, price=70.0)
     assert view["pe_trailing"] is None and "no es positivo" in view["pe_note"]
+
+
+# ── WS-0047: cash, dilution, debt and valuation ────────────────────────
+
+
+def ytd(start: str, end: str, value: float, fp: str, filed: str) -> dict:
+    return {"start": start, "end": end, "value": value, "filed": filed, "unit": "USD",
+            "form": "10-K" if fp == "FY" else "10-Q", "fiscalYear": 2026, "fiscalPeriod": fp}
+
+
+def test_flows_reported_as_amounts_accumulated_since_the_start_of_the_year_become_quarters():
+    facts = [ytd("2025-09-28", "2025-12-27", 30.0, "Q1", "2026-01-30"), ytd("2025-09-28", "2026-03-28", 55.0, "Q2", "2026-05-01"),
+             ytd("2025-09-28", "2026-06-27", 90.0, "Q3", "2026-07-31"), ytd("2025-09-28", "2026-09-26", 130.0, "FY", "2026-10-30"),
+             ytd("2025-09-28", "2026-03-28", 55.0, "Q2", "2027-05-01")]                     # the same, filed again
+    qs = analysis._quarters(facts)
+    assert [(x["end"], x["value"], x.get("derived")) for x in qs] == [
+        ("2025-12-27", 30.0, None), ("2026-03-28", 25.0, True), ("2026-06-27", 35.0, True), ("2026-09-26", 40.0, True)]
+    assert qs[1]["start"] == "2025-12-28" and qs[1]["first_filed"] == "2026-05-01" and qs[3]["fiscalPeriod"] == "Q4"
+    shares = [ytd("2025-09-28", "2025-12-27", 10.0, "Q1", "2026-01-30"), ytd("2025-09-28", "2026-03-28", 10.0, "Q2", "2026-05-01")]
+    assert [x["end"] for x in analysis._quarters(shares, additive=False)] == ["2025-12-27"]   # an average: not derived
+
+
+def test_growth_against_a_loss_is_a_category_not_a_percentage():
+    assert analysis.change(120.0, 100.0) == {"pct": 20.0}
+    assert analysis.change(-5.0, 100.0)["category"] == "pasa de ganancia a pérdida"
+    assert analysis.change(5.0, -10.0) == {"category": "pasa de pérdida a ganancia"}
+    assert analysis.change(-5.0, -10.0) == {"category": "reduce la pérdida"}
+    assert analysis.change(-15.0, -10.0) == {"category": "profundiza la pérdida"}
+    assert analysis.change(None, 1.0) is None
+
+
+def eight(tag_values: list[float]) -> list[dict]:
+    ends = ["2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "2025-09-30", "2025-12-31", "2026-03-31", "2026-06-30"]
+    starts = ["2024-07-01", "2024-10-01", "2025-01-01", "2025-04-01", "2025-07-01", "2025-10-01", "2026-01-01", "2026-04-01"]
+    filed = ["2024-10-30", "2025-01-29", "2025-04-30", "2025-07-30", "2025-10-29", "2026-01-28", "2026-04-29", "2026-07-29"]
+    return [{**q(s, e, v, f)} for s, e, v, f in zip(starts, ends, tag_values, filed, strict=True)]
+
+
+def bal(end: str, value: float) -> dict:
+    return {"end": end, "value": value, "filed": "2026-07-29", "form": "10-Q", "unit": "USD"}
+
+
+def test_margins_free_cash_flow_dilution_and_net_debt_come_from_four_quarters():
+    facts = {"RevenueFromContractWithCustomerExcludingAssessedTax": eight([100.0] * 4 + [120.0] * 4),
+             "OperatingIncomeLoss": eight([40.0] * 4 + [50.0] * 4), "NetIncomeLoss": eight([30.0] * 4 + [36.0] * 4),
+             "NetCashProvidedByUsedInOperatingActivities": eight([45.0] * 4 + [50.0] * 4),
+             "PaymentsToAcquirePropertyPlantAndEquipment": eight([20.0] * 4 + [30.0] * 4),
+             "WeightedAverageNumberOfDilutedSharesOutstanding": eight([100.0] * 4 + [98.0] * 4)}
+    balance = {"LongTermDebtNoncurrent": [bal("2026-06-30", 90.0)], "LongTermDebtCurrent": [bal("2026-06-30", 10.0)],
+               "CashAndCashEquivalentsAtCarryingValue": [bal("2026-06-30", 20.0)],
+               "ShortTermInvestments": [bal("2026-06-30", 0.0)]}
+    view = analysis.fundamental_view(facts, None, balance)
+    rev = view["RevenueFromContractWithCustomerExcludingAssessedTax"]
+    assert rev["last_4_quarters"] == 480.0 and rev["prior_4_quarters"] == 400.0 and rev["last_4_change"] == {"pct": 20.0}
+    qd = view["quality"]
+    assert qd["operating_margin"] == {"last_4_pct": 41.67, "prior_4_pct": 40.0, "change_pts": 1.67}
+    assert qd["free_cash_flow"]["last_4"] == 80.0 and qd["free_cash_flow"]["change"] == {"pct": -20.0}
+    assert qd["capex_to_revenue"] == {"last_4_pct": 25.0, "prior_4_pct": 20.0} and qd["dilution_yoy_pct"] == -2.0
+    assert qd["net_debt"]["net_debt"] == 80.0 and qd["net_debt"]["years_of_fcf"] == 1.0 and "coverage" not in qd
+    bank = analysis.fundamental_view({"NetIncomeLoss": eight([30.0] * 8),
+                                      "NetCashProvidedByUsedInOperatingActivities": eight([-50.0] * 8)}, None, {})
+    assert "incompleta" in bank["quality"]["coverage"] and "cash_conversion" not in bank["quality"]
+
+
+def test_the_own_pe_uses_only_the_eps_already_filed_and_scenarios_state_their_assumptions():
+    eps = eight([1.0] * 4 + [1.5] * 4)
+    facts = {"EarningsPerShareDiluted": eps, "RevenueFromContractWithCustomerExcludingAssessedTax": eight([100.0] * 4 + [110.0] * 4)}
+    day0 = date(2025, 7, 30)
+    bars = [((day0 + timedelta(days=i)).isoformat(), 100.0, None) for i in range(400)]   # past the last filing
+    v = analysis.fundamental_view(facts, None, {}, bars)["valuation"]
+    assert v["pe_trailing"] == round(100.0 / 6.0, 1)
+    # before 2025-10-29 the known EPS is 4.0 (P/E 25); each filing after it lifts the EPS: no look-ahead
+    assert v["pe_history"]["max"] == 25.0 and v["pe_history"]["min"] == round(100.0 / 6.0, 1)
+    cases = {c["case"]: c for c in v["scenarios_12m"]["cases"]}
+    assert cases["central"]["eps_growth_pct"] == 10.0 and cases["central"]["exit_pe"] == v["pe_trailing"]
+    assert cases["adverso"]["exit_pe"] <= v["pe_trailing"] <= cases["favorable"]["exit_pe"]
+    assert "no pronóstico" in v["scenarios_12m"]["rule"]

@@ -50,9 +50,15 @@ system_prompt: >
        refutaría», with the horizon. The consensus is missing: the size of a surprise is never stated.
      - technical: trend against the 20/50/200-session averages, distance to highs and lows, changes, realized
        volatility against IV (who is paid). Levels are where the price was, not support that will hold.
-     - fundamental: last quarter's revenue, net income and EPS with year-on-year growth, last four quarters (a derived
-       fourth quarter says so), trailing P/E (a calculation against reported numbers, without estimates), the last
-       earnings release (8-K item 2.02), beta and correlation with SPY. The main risk, from the numbers.
+     - fundamental: growth of the last four quarters against the four before (`last_4_change`) next to the last
+       quarter against a year ago (`quarter_yoy`) — a `category` (loss to profit, reduces or deepens a loss) is said as
+       such, never as a percentage; a derived quarter says so. `quality`: margins and their change in points, free
+       cash flow and its margin, capex over revenue, cash conversion, stock compensation, dilution and net debt (with
+       its formula); a `coverage` note means the evaluation is incomplete with this method, never passed.
+       `valuation`: P/E on the last close, its own range (`pe_history`, EPS known at each date) and `scenarios_12m`
+       with their stated rule — assumptions, not a forecast. A gap between two lines (EPS growing faster than
+       operating income, free cash flow falling while profit grows) is a question to decompose, not a conclusion.
+       Next earnings (`next_earnings`), the last release (8-K item 2.02), beta and correlation with SPY.
      - flow: GEX regime and spot against zero gamma, call and put walls, 25-delta put skew against its threshold, IV
        term and rank. What they imply for the next sessions and what they do not (flow by participant is missing).
 

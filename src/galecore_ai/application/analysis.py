@@ -10,6 +10,7 @@ prices imply, the consensus (missing) and its hypothesis, with an alternative an
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 import math
 import statistics
@@ -33,8 +34,24 @@ FRED_DAYS = 120
 # BLS monthly official values (U-04).
 BLS = {"CUSR0000SA0": "CPI general (índice, desestacionalizado)", "CUSR0000SA0L1E": "CPI núcleo (índice, desest.)",
        "LNS14000000": "desempleo (%)", "CES0000000001": "nóminas no agrícolas (miles)"}
-# XBRL concepts (U-07), quarterly values from the 10-Q/10-K.
-FACTS = {"Revenues": "ingresos", "NetIncomeLoss": "resultado neto", "EarningsPerShareDiluted": "EPS diluido"}
+# XBRL concepts (U-07, WS-0047), quarterly values from the 10-Q/10-K. Of the two revenue concepts, the one with the
+# latest quarter is used (most companies report under the second).
+FACTS = {"Revenues": "ingresos", "RevenueFromContractWithCustomerExcludingAssessedTax": "ingresos",
+         "GrossProfit": "resultado bruto", "OperatingIncomeLoss": "resultado operativo",
+         "NetIncomeLoss": "resultado neto", "EarningsPerShareDiluted": "EPS diluido",
+         "NetCashProvidedByUsedInOperatingActivities": "flujo operativo",
+         "PaymentsToAcquirePropertyPlantAndEquipment": "inversión en activos fijos",
+         "ShareBasedCompensation": "remuneración en acciones",
+         "WeightedAverageNumberOfDilutedSharesOutstanding": "acciones diluidas (promedio del trimestre)"}
+REVENUE_TAGS = ("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax")
+NOT_ADDITIVE = {"WeightedAverageNumberOfDilutedSharesOutstanding"}   # an average: never summed nor derived
+# Balance sheet concepts: a balance at a date, not a period.
+BALANCE = {"LongTermDebt": "deuda de largo plazo (total)", "LongTermDebtNoncurrent": "deuda de largo plazo no corriente",
+           "LongTermDebtCurrent": "deuda de largo plazo que vence en 12 meses",
+           "CashAndCashEquivalentsAtCarryingValue": "caja", "ShortTermInvestments": "inversiones de corto plazo",
+           "MarketableSecuritiesCurrent": "títulos negociables corrientes"}
+FUNDAMENTAL_DAYS = 1500        # ~4 years of filings: four quarters, the four before and the P/E history
+PE_HISTORY_DAYS = 1100         # ~3 years of closes for the own P/E range
 
 KIND_LABELS = {
     "hecho": "valor publicado por la fuente (FRED, BLS, SEC, Tastytrade vía GaleCore) con su fecha",
@@ -211,23 +228,46 @@ async def _technical(ask, symbol: str, today: date, missing: list[str]) -> dict:
 # ── fundamental ─────────────────────────────────────────────────────────
 
 
-def _quarters(facts: list[dict]) -> list[dict]:
-    """Quarterly values, one per period end (the latest filing wins). The fourth fiscal quarter usually comes only
-    inside the 10-K's annual value: it is derived as the year minus its three quarters and marked `derived`."""
-    by_end: dict[str, dict] = {}
-    annual: list[dict] = []
+def _latest(facts: list[dict]) -> dict[tuple, dict]:
+    """One fact per (start, end), the latest filing winning (a restatement), keeping the first filing date."""
+    out: dict[tuple, dict] = {}
     for f in facts:
-        start, end = f.get("start"), f.get("end")
-        if not (start and end and isinstance(f.get("value"), int | float)):
-            continue
-        days = (date.fromisoformat(end) - date.fromisoformat(start)).days
-        if 80 <= days <= 100:
-            prev = by_end.get(end)
-            if prev is None or (f.get("filed") or "") > (prev.get("filed") or ""):
-                by_end[end] = f
-        elif 350 <= days <= 380:
-            annual.append(f)
-    annual.sort(key=lambda f: f.get("filed") or "", reverse=True)   # the latest filing of each year first
+        key = (f.get("start"), f.get("end"))
+        filed = f.get("filed") or ""
+        prev = out.get(key)
+        first = min((x for x in (filed, (prev or {}).get("first_filed")) if x), default=None)
+        if prev is None or filed > (prev.get("filed") or ""):
+            out[key] = {**f, "first_filed": first or None}
+        else:
+            prev["first_filed"] = first or None
+    return out
+
+
+def _quarters(facts: list[dict], additive: bool = True) -> list[dict]:
+    """Quarterly values, one per period end (the latest filing wins). Many companies report flows only as amounts
+    accumulated since the start of the fiscal year (3, 6, 9, 12 months): each quarter is then the accumulated amount
+    minus the previous one; the fourth fiscal quarter is the annual minus the nine months, or minus its three quarters.
+    Derived quarters are marked `derived`. An average (shares) is never derived."""
+    rows = [f for f in _latest(facts).values()
+            if f.get("start") and f.get("end") and isinstance(f.get("value"), int | float)]
+    days = {id(f): (date.fromisoformat(f["end"]) - date.fromisoformat(f["start"])).days for f in rows}
+    by_end = {f["end"]: f for f in rows if 80 <= days[id(f)] <= 100}
+    if not additive:
+        return [by_end[k] for k in sorted(by_end)]
+    by_start: dict[str, list[dict]] = {}
+    for f in rows:
+        if 80 <= days[id(f)] <= 380:
+            by_start.setdefault(f["start"], []).append(f)
+    for group in by_start.values():
+        group.sort(key=lambda f: f["end"])
+        for a, b in itertools.pairwise(group):
+            gap = (date.fromisoformat(b["end"]) - date.fromisoformat(a["end"])).days
+            if 80 <= gap <= 100 and b["end"] not in by_end:
+                start = (date.fromisoformat(a["end"]) + timedelta(days=1)).isoformat()
+                by_end[b["end"]] = {**b, "start": start, "value": b["value"] - a["value"], "derived": True,
+                                    "fiscalPeriod": "Q4" if b.get("fiscalPeriod") == "FY" else b.get("fiscalPeriod"),
+                                    "first_filed": max(a.get("first_filed") or "", b.get("first_filed") or "") or None}
+    annual = sorted((f for f in rows if 350 <= days[id(f)] <= 380), key=lambda f: f.get("filed") or "", reverse=True)
     for y in annual:
         if y["end"] in by_end:
             continue
@@ -240,31 +280,208 @@ def _quarters(facts: list[dict]) -> list[dict]:
     return [by_end[k] for k in sorted(by_end)]
 
 
-def fundamental_view(facts_by_tag: dict[str, list[dict]], price: float | None) -> dict:
-    out: dict = {}
-    for tag, facts in facts_by_tag.items():
-        q = _quarters(facts)
-        if not q:
-            continue
-        last = q[-1]
-        row = {"what": FACTS[tag], "period_end": last["end"], "value": last["value"], "unit": last.get("unit"),
-               "fiscal": f"{last.get('fiscalYear')} {last.get('fiscalPeriod')}", "form": last.get("form"),
-               "filed": last.get("filed"), **({"derived": True} if last.get("derived") else {})}
-        year_ago = next((x for x in q if abs((date.fromisoformat(last["end"]) - date.fromisoformat(x["end"])).days
-                                            - 364) <= 20), None)
-        if year_ago and year_ago["value"]:
-            row["yoy_pct"] = _round((last["value"] / year_ago["value"] - 1) * 100)
-        span = (date.fromisoformat(q[-1]["end"]) - date.fromisoformat(q[-4]["start"])).days if len(q) >= 4 else 0
-        if 350 <= span <= 380:                             # four consecutive quarters; Q4 often comes only annual
-            row["last_4_quarters"] = round(sum(x["value"] for x in q[-4:]), 4)
-            if any(x.get("derived") for x in q[-4:]):
-                row["q4_derived"] = ("4.º trimestre = anual del 10-K menos sus tres trimestres (cálculo; en el EPS "
-                                     "es aproximado porque cambia la cantidad de acciones)")
-        elif len(q) >= 4:
-            row["last_4_quarters"] = None
+def _four(q: list[dict], upto: int) -> float | None:
+    """Sum of the four consecutive quarters ending at index `upto` (exclusive), or None."""
+    if upto < 4:
+        return None
+    span = (date.fromisoformat(q[upto - 1]["end"]) - date.fromisoformat(q[upto - 4]["start"])).days
+    return round(sum(x["value"] for x in q[upto - 4:upto]), 4) if 350 <= span <= 380 else None
+
+
+def change(now: float | None, before: float | None) -> dict | None:
+    """Growth from `before` to `now`. Against a negative or zero base a percentage misleads: a category instead."""
+    if now is None or before is None:
+        return None
+    if before > 0:
+        out = {"pct": _round((now / before - 1) * 100)}
+        return out | {"category": "pasa de ganancia a pérdida"} if now < 0 else out
+    if before == 0:
+        return {"category": "sin base (el período anterior es cero)"}
+    if now >= 0:
+        return {"category": "pasa de pérdida a ganancia"}
+    return {"category": "reduce la pérdida" if now > before else "profundiza la pérdida"}
+
+
+def _year_ago(q: list[dict]) -> dict | None:
+    end = date.fromisoformat(q[-1]["end"])
+    return next((x for x in q if abs((end - date.fromisoformat(x["end"])).days - 364) <= 20), None)
+
+
+def _flow_row(tag: str, q: list[dict]) -> dict:
+    last = q[-1]
+    row = {"what": FACTS[tag], "concept": tag, "period_end": last["end"], "value": last["value"],
+           "unit": last.get("unit"), "fiscal": f"{last.get('fiscalYear')} {last.get('fiscalPeriod')}",
+           "form": last.get("form"), "filed": last.get("filed"), **({"derived": True} if last.get("derived") else {})}
+    if (ya := _year_ago(q)) and ya["value"]:
+        row["yoy_pct"] = _round((last["value"] / ya["value"] - 1) * 100)      # the last quarter against a year ago
+        row["quarter_yoy"] = change(last["value"], ya["value"])
+    if tag in NOT_ADDITIVE:
+        return row
+    if len(q) >= 4:
+        row["last_4_quarters"] = _four(q, len(q))
+        if row["last_4_quarters"] is None:
             row["note"] = "sin cuatro trimestres consecutivos (el 4.º fiscal suele venir sólo en el anual del 10-K)"
-        out[tag] = row
-    eps = out.get("EarningsPerShareDiluted", {}).get("last_4_quarters")
+        elif any(x.get("derived") for x in q[-4:]):
+            row["q4_derived"] = ("trimestre calculado = acumulado del año menos lo anterior (cálculo; en el EPS es "
+                                 "aproximado porque cambia la cantidad de acciones)")
+        row["prior_4_quarters"] = _four(q, len(q) - 4)
+        row["last_4_change"] = change(row["last_4_quarters"], row["prior_4_quarters"])
+    return row
+
+
+def _balance(facts: list[dict]) -> dict | None:
+    """A balance at a date: the latest one and the one a year before."""
+    rows = sorted((f for f in _latest(facts).values() if f.get("end") and isinstance(f.get("value"), int | float)),
+                  key=lambda f: f["end"])
+    if not rows:
+        return None
+    last = rows[-1]
+    end = date.fromisoformat(last["end"])
+    ya = next((x for x in rows if abs((end - date.fromisoformat(x["end"])).days - 365) <= 20), None)
+    return {"date": last["end"], "value": last["value"], "form": last.get("form"), "filed": last.get("filed"),
+            **({"year_ago": ya["value"]} if ya else {})}
+
+
+def _ratio(a: float | None, b: float | None, pct: bool = True) -> float | None:
+    return _round(a / b * (100 if pct else 1)) if a is not None and b else None
+
+
+def _net_debt(balance: dict, fcf: float | None) -> dict | None:
+    nc, cur = balance.get("LongTermDebtNoncurrent"), balance.get("LongTermDebtCurrent")
+    debt = (nc["value"] + cur["value"] if nc and cur and nc["date"] == cur["date"]
+            else (balance.get("LongTermDebt") or {}).get("value"))
+    cash_b = balance.get("CashAndCashEquivalentsAtCarryingValue")
+    if debt is None or not cash_b:
+        return None
+    inv = balance.get("ShortTermInvestments") or balance.get("MarketableSecuritiesCurrent")
+    cash = cash_b["value"] + (inv["value"] if inv and inv["date"] == cash_b["date"] else 0)
+    net = round(debt - cash, 4)
+    if net <= 0:
+        years, reading = None, "caja neta: la caja supera la deuda"
+    elif fcf and fcf > 0:
+        years, reading = _ratio(net, fcf, pct=False), None
+    else:
+        years, reading = None, "flujo libre no positivo: la deuda no se puede medir en años de flujo"
+    return {"date": cash_b["date"], "debt": debt, "cash_and_short_term": cash, "net_debt": net,
+            "years_of_fcf": years, **({"reading": reading} if reading else {}),
+            "formula": "deuda de largo plazo (incl. la que vence en 12 meses) − caja e inversiones de corto plazo; "
+                       "÷ flujo libre de 4 trimestres"}
+
+
+def _quality(out: dict, balance: dict) -> dict:
+    """Margins, cash, dilution and debt from the rows (all calculations on reported numbers)."""
+    def s(tag, k="last_4_quarters"):
+        return (out.get(tag) or {}).get(k)
+    rev = next((t for t in REVENUE_TAGS if t in out), None)
+    r, rp = (s(rev), s(rev, "prior_4_quarters")) if rev else (None, None)
+    qd: dict = {}
+    for name, tag in (("gross_margin", "GrossProfit"), ("operating_margin", "OperatingIncomeLoss"),
+                      ("net_margin", "NetIncomeLoss")):
+        now, before = _ratio(s(tag), r), _ratio(s(tag, "prior_4_quarters"), rp)
+        if now is not None:
+            qd[name] = {"last_4_pct": now, "prior_4_pct": before,
+                        "change_pts": _round(now - before) if before is not None else None}
+    ocf, capex = s("NetCashProvidedByUsedInOperatingActivities"), s("PaymentsToAcquirePropertyPlantAndEquipment")
+    ocf_p = s("NetCashProvidedByUsedInOperatingActivities", "prior_4_quarters")
+    capex_p = s("PaymentsToAcquirePropertyPlantAndEquipment", "prior_4_quarters")
+    fcf = round(ocf - capex, 4) if ocf is not None and capex is not None else None
+    fcf_p = round(ocf_p - capex_p, 4) if ocf_p is not None and capex_p is not None else None
+    if fcf is not None:
+        qd["free_cash_flow"] = {"last_4": fcf, "prior_4": fcf_p, "change": change(fcf, fcf_p),
+                                "margin_pct": _ratio(fcf, r), "prior_margin_pct": _ratio(fcf_p, rp),
+                                "formula": "flujo operativo − inversión en activos fijos, 4 trimestres"}
+        qd["capex_to_revenue"] = {"last_4_pct": _ratio(capex, r), "prior_4_pct": _ratio(capex_p, rp)}
+    ni = s("NetIncomeLoss")
+    if ocf is not None and ni and ni > 0:
+        qd["cash_conversion"] = {"ocf_to_net_income": _ratio(ocf, ni, pct=False),
+                                 "fcf_to_net_income": _ratio(fcf, ni, pct=False) if fcf is not None else None}
+    if (sbc := s("ShareBasedCompensation")) is not None:
+        qd["stock_comp_to_revenue_pct"] = _ratio(sbc, r)
+    if (sh := out.get("WeightedAverageNumberOfDilutedSharesOutstanding")) and "yoy_pct" in sh:
+        qd["dilution_yoy_pct"] = sh["yoy_pct"]
+    if nd := _net_debt(balance, fcf):
+        qd["net_debt"] = nd
+    if rev is None or "OperatingIncomeLoss" not in out:
+        qd.pop("cash_conversion", None)
+        qd["coverage"] = ("evaluación fundamental incompleta con este método: la empresa no reporta ingresos o "
+                          "resultado operativo con los conceptos habituales (bancos, aseguradoras, modelos especiales)")
+    return qd
+
+
+def _eps_known_at(eps_q: list[dict], day: str) -> float | None:
+    """EPS of the last four consecutive quarters already filed on `day` (no look-ahead)."""
+    known = [x for x in eps_q if (x.get("first_filed") or x.get("filed") or "9999") <= day]
+    return _four(known, len(known)) if len(known) >= 4 else None
+
+
+def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd: dict) -> dict:
+    """P/E on the last close, the own P/E range (EPS known at each date) and 12-month scenarios. Scenarios are
+    rules over reported numbers, not a forecast: EPS growth and exit P/E are stated assumptions."""
+    if not bars:
+        return {}
+    day, close = bars[-1][0], bars[-1][1]
+    v: dict = {"close": close, "close_date": day}
+    if shares:
+        cap = close * shares
+        v["market_cap_at_close"] = round(cap, 0)
+        if (fcf := (qd.get("free_cash_flow") or {}).get("last_4")) is not None:
+            v["fcf_yield_pct"] = _round(fcf / cap * 100)
+    eps = _four(eps_q, len(eps_q)) if len(eps_q) >= 4 else None
+    if eps is None:
+        return v
+    if eps <= 0:
+        return v | {"pe_trailing": None, "pe_note": "sin P/E: el EPS de los últimos cuatro trimestres no es positivo"}
+    v["eps_last_4"] = eps
+    v["pe_trailing"] = round(close / eps, 1)
+    cut = (date.fromisoformat(day) - timedelta(days=PE_HISTORY_DAYS)).isoformat()
+    hist = [c / e for d, c, _ in bars if d >= cut and (e := _eps_known_at(eps_q, d)) and e > 0]
+    if len(hist) < 120:
+        return v
+    qs = statistics.quantiles(hist, n=4)
+    ph = {"sessions": len(hist), "from": cut, "min": round(min(hist), 1), "p25": round(qs[0], 1),
+          "median": round(qs[1], 1), "p75": round(qs[2], 1), "max": round(max(hist), 1),
+          "percentile_today": round(sum(x <= v["pe_trailing"] for x in hist) / len(hist) * 100, 1),
+          "note": "P/E de cada rueda con el EPS ya publicado ese día; su propia historia no garantiza un valor razonable"}
+    v["pe_history"] = ph
+    rev = next((out[t] for t in REVENUE_TAGS if t in out), {})
+    g_rev = (rev.get("last_4_change") or {}).get("pct")
+    g_eps = ((out.get("EarningsPerShareDiluted") or {}).get("last_4_change") or {}).get("pct")
+    if g_rev is None:
+        return v
+    pe = v["pe_trailing"]
+    cases = [("adverso", 0.0, min(pe, ph["p25"])), ("central", g_rev, pe),
+             ("favorable", max(g_rev, g_eps if g_eps is not None else g_rev), max(pe, ph["p75"]))]
+    v["scenarios_12m"] = {
+        "rule": ("EPS de 4 trim. × (1 + crecimiento supuesto) × P/E de salida. Adverso: EPS sin crecer y el menor entre "
+                 "el P/E de hoy y su percentil 25 · central: crece como los ingresos de 4 trim. y P/E igual al de hoy · "
+                 "favorable: el mayor crecimiento entre ingresos y EPS de 4 trim., y el mayor entre el P/E de hoy y su "
+                 "percentil 75. Supuestos, no pronóstico; sin dividendos ni probabilidades"),
+        "cases": [{"case": n, "eps_growth_pct": g, "exit_pe": pe, "price": round(eps * (1 + g / 100) * pe, 2),
+                   "return_pct": _round((eps * (1 + g / 100) * pe / close - 1) * 100)} for n, g, pe in cases]}
+    return v
+
+
+def fundamental_view(facts_by_tag: dict[str, list[dict]], price: float | None,
+                     balance_facts: dict[str, list[dict]] | None = None, bars: list | None = None) -> dict:
+    out: dict = {}
+    quarters = {t: q for t, fs in facts_by_tag.items() if (q := _quarters(fs, additive=t not in NOT_ADDITIVE))}
+    revs = [t for t in REVENUE_TAGS if t in quarters]
+    keep_rev = max(revs, key=lambda t: quarters[t][-1]["end"]) if revs else None
+    for tag, q in quarters.items():
+        if tag in REVENUE_TAGS and tag != keep_rev:
+            continue
+        out[tag] = _flow_row(tag, q)
+    balance = {t: b for t, fs in (balance_facts or {}).items() if (b := _balance(fs))}
+    if balance:
+        out["balance"] = {t: {"what": BALANCE[t], **b} for t, b in balance.items()}
+    if balance_facts is not None:
+        out["quality"] = _quality(out, balance)
+    eps_q = quarters.get("EarningsPerShareDiluted", [])
+    if bars:
+        shares = (out.get("WeightedAverageNumberOfDilutedSharesOutstanding") or {}).get("value")
+        out["valuation"] = valuation(eps_q, bars, shares, out, out.get("quality") or {})
+        price = bars[-1][1]
+    eps = (out.get("EarningsPerShareDiluted") or {}).get("last_4_quarters")
     if price and eps and eps > 0:
         out["pe_trailing"] = round(price / eps, 1)          # cálculo: last close over the last four diluted EPS
     elif eps is not None and eps <= 0:
@@ -274,30 +491,52 @@ def fundamental_view(facts_by_tag: dict[str, list[dict]], price: float | None) -
 
 
 async def _fundamental(ask, symbol: str, today: date, missing: list[str]) -> dict:
-    since = (today - timedelta(days=800)).isoformat()
-    raws = await asyncio.gather(*(ask("filings.sec_facts", {"Ticker": symbol, "Tag": t, "Taxonomy": "us-gaap",
-                                                           "Since": since}) for t in FACTS),
-                                ask("filings.sec_filings", {"Ticker": symbol, "Forms": "10-Q,10-K,8-K",
-                                                            "Since": (today - timedelta(days=200)).isoformat()}),
-                                ask("market_data.volatility_metrics", {"symbol": symbol}),
-                                ask("market_data.quote", {"symbol": symbol}))
-    *fact_raws, filings, metrics, quote = raws
-    facts = {t: ((r or {}).get("data") or {}).get("facts") or [] for t, r in zip(FACTS, fact_raws, strict=True)}
-    q = (quote or {}).get("data") if isinstance(quote, dict) else None
-    price = next((e["midPrice"] for e in (q if isinstance(q, list) else [])
-                  if isinstance(e.get("midPrice"), int | float) and e["midPrice"] > 0), None)
-    out: dict = {"statements": fundamental_view(facts, price), "price_used": price}
-    for t in FACTS:
-        if t not in out["statements"]:
-            missing.append(f"filings.sec_facts {symbol} {t}: sin valores trimestrales (la empresa puede usar otro tag)")
+    since = (today - timedelta(days=FUNDAMENTAL_DAYS)).isoformat()
+
+    def sec(tag: str):
+        return ask("filings.sec_facts", {"Ticker": symbol, "Tag": tag, "Taxonomy": "us-gaap", "Since": since})
+
+    def facts_of(r) -> list[dict]:
+        return ((r or {}).get("data") or {}).get("facts") or []
+
+    raws = await asyncio.gather(
+        *(sec(t) for t in FACTS), *(sec(t) for t in BALANCE),
+        ask("filings.sec_filings", {"Ticker": symbol, "Forms": "10-Q,10-K,8-K",
+                                    "Since": (today - timedelta(days=200)).isoformat()}),
+        ask("market_data.volatility_metrics", {"symbol": symbol}),
+        ask("market_data.candles", {"symbol": symbol, "interval": "1d",
+                                    "fromTime": (today - timedelta(days=PE_HISTORY_DAYS + 30)).isoformat()}))
+    n, m = len(FACTS), len(BALANCE)
+    facts = {t: facts_of(r) for t, r in zip(FACTS, raws[:n], strict=True)}
+    bal = {t: facts_of(r) for t, r in zip(BALANCE, raws[n:n + m], strict=True)}
+    filings, metrics, candles = raws[n + m:]
+    from galecore_ai.application import drivers
+    bars = drivers.daily_bars(candles, exclude=story.open_session_day(today)) if candles is not None else []
+    view = fundamental_view(facts, None, bal, bars)
+    val = view.get("valuation") or {}
+    out: dict = {"statements": view, "price_used": val.get("close"), "price_date": val.get("close_date")}
+    missing[:] = [x for x in missing if not (x.startswith("filings.sec_facts") and "(404)" in x)]
+    absent = [FACTS[t] for t in FACTS
+              if t not in view and not (t in REVENUE_TAGS and any(r in view for r in REVENUE_TAGS))]
+    if absent:
+        missing.append(f"filings.sec_facts {symbol}: sin valores trimestrales de {', '.join(dict.fromkeys(absent))} "
+                       "(la empresa puede usar otros conceptos)")
     out["recent_filings"] = [{"form": f.get("form"), "date": f.get("filingDate"), "items": f.get("items"),
                               "earnings_release": "2.02" in (f.get("items") or [])}
                              for f in ((filings or {}).get("data") or {}).get("filings") or []][:8]
     item = next(iter((metrics or {}).get("items") or []), {})
-    out["market"] = {k: item.get(k) for k in ("beta", "corrSpy3Month", "impliedVolatility30Day",
+    out["market"] = {k: item.get(k) for k in ("sector", "industry", "beta", "corrSpy3Month", "impliedVolatility30Day",
                                               "historicalVolatility30Day") if item.get(k) is not None} or None
-    missing.append("fecha del próximo resultado: GaleCore no la trae; el último comunicado es el 8-K con ítem 2.02")
-    missing.append("estimaciones de analistas y guía de la empresa: sin fuente; la valuación es sólo contra lo reportado")
+    e = item.get("earnings")
+    if isinstance(e, dict) and (e.get("expectedReportDate") or "") >= today.isoformat():
+        out["next_earnings"] = {"date": e.get("expectedReportDate"), "time": e.get("timeOfDay"),
+                                "confirmed": not e.get("estimated"), "consensus_eps": e.get("consensusEps")}
+    else:
+        missing.append("fecha del próximo resultado: GaleCore no la trae para este símbolo (sólo el último publicado)"
+                       if isinstance(e, dict) and e.get("expectedReportDate") else
+                       "fecha del próximo resultado: GaleCore no la trae para este símbolo")
+    missing.append("estimaciones de analistas más allá del próximo EPS y guía de la empresa: sin fuente; la valuación "
+                   "es sólo contra lo reportado")
     return out
 
 
