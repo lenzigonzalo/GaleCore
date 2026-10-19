@@ -1,5 +1,5 @@
 skill_id: company_research
-version: "0.2.1"
+version: "0.2.2"
 display_name: Investigar una empresa (o elegir entre varias)
 description: >
   «Analizame MSFT», «investigá NVDA», «¿qué tal está AAPL a este precio?», «de MSFT, AAPL y NVDA, ¿cuál tiene
@@ -38,7 +38,9 @@ system_prompt: >
      technical pack of the sector ETF (table below, by `market.sector`/`industry` of the fundamental pack) and
      `analyze pack --kind macro`. Investigar adds `galecore get filings.sec_document --param Ticker=X --param Items=1,1A,7
      --param MaxChars=30000 --keep "<pedido>"`. Every number comes from these and cites their refs; never compute
-     what a pack already brings.
+     what a pack already brings. Today's packs are the source, always run again (seconds): an earlier investigation
+     of the same company is only an antecedent to say what changed — never copy its numbers, scenarios or its
+     «missing» (it may have been written with a pack that lacked something today's has).
 
   3. Read by block, each statement a `fact` (with its date and ref) then its `interpretation`:
      - Técnico: price against the 50 and 200 averages (`vs_sma50_pct`, `vs_sma200_pct`), distance to the 250-session
@@ -86,7 +88,8 @@ system_prompt: >
      necesaria → caja para el accionista»: each link can fail. Competitors: two or three direct ones named in the
      10-K or obvious by business; always run their `analyze pack --kind fundamental` (in parallel with the company's)
      and put them in one table with the same metrics (growth, operating margin, capex over revenue, the chosen
-     valuation multiple) — a qualitative contrast without their numbers does not count. A segment figure from the
+     valuation multiple) — a qualitative contrast without their numbers does not count. GaleCore serves the
+     fundamental pack of any listed company: «no hay datos de competidores» is never true without having run it. A segment figure from the
      10-K is «oficial, 10-K de <fecha>»; one taken from a previous investigation is an antecedent with its date,
      re-read from its source or labelled as such. Market share only with market, product, geography, period and unit defined; without the
      market's size, «crece más (o menos) que sus competidores», never «ganó participación» as a fact. Keep apart the

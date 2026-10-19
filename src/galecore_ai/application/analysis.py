@@ -574,8 +574,17 @@ async def _fundamental(ask, symbol: str, today: date, missing: list[str]) -> dic
     bal = {t: facts_of(r) for t, r in zip(BALANCE, raws[n:n + m], strict=True)}
     filings, metrics, candles = raws[n + m:]
     from galecore_ai.application import drivers
-    bars = drivers.daily_bars(candles, exclude=story.open_session_day(today)) if candles is not None else []
-    if bars and (today - date.fromisoformat(bars[-1][0])).days > STALE_CLOSE_DAYS:
+    def closes(raw) -> list:
+        return drivers.daily_bars(raw, exclude=story.open_session_day(today)) if raw is not None else []
+
+    def stale(b: list) -> bool:
+        return bool(b) and (today - date.fromisoformat(b[-1][0])).days > STALE_CLOSE_DAYS
+
+    bars = closes(candles)
+    if stale(bars):     # once more: the cut is intermittent
+        bars = closes(await ask("market_data.candles", {"symbol": symbol, "interval": "1d",
+                                                        "fromTime": (today - timedelta(days=PE_HISTORY_DAYS + 30)).isoformat()}))
+    if stale(bars):
         # GaleCore once served a long history cut months short (F5, 19/10): never value on an old close
         missing.append(f"market_data.candles {symbol}: el último cierre es del {bars[-1][0]}; sin valoración "
                        "(velas incompletas)")

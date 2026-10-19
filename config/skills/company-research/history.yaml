@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: company_research
 versions:
+  - version: "0.2.2"
+    date: 2026-10-19
+    changes: >
+      F5 segunda vuelta: Claude corrió el pack pero copió los números de una investigación anterior (hecha con velas
+      cortadas); los dos dijeron que no había datos de competidores. El pack del día manda siempre; la investigación
+      anterior es antecedente; competidores siempre con su pack.
+    feedback: []
   - version: "0.2.1"
     date: 2026-10-19
     changes: >
