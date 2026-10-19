@@ -1,5 +1,5 @@
 skill_id: company_research
-version: "0.2.3"
+version: "0.2.4"
 display_name: Investigar una empresa (o elegir entre varias)
 description: >
   «Analizame MSFT», «investigá NVDA», «¿qué tal está AAPL a este precio?», «de MSFT, AAPL y NVDA, ¿cuál tiene
@@ -32,6 +32,11 @@ answer: |  # cómo responder, corto; lo agrega el hook del Lab al pedido (lo ún
   una fila por empresa y columnas por bloque (cumple / no cumple / sin datos / no aplica, con el número); sin puntaje.
   Sin lista, preguntá cuáles (bloque `opciones`). Cierre: el paso siguiente con su para qué («¿profundizo MSFT?» o
   «¿cómo me posiciono?»).
+  Guardar siempre, antes de responder (la tesis se retoma en otra conversación): `kb search --kind research --text
+  "empresa <symbol>"`; si hay una, `research revise --capability company_research --id <id> --reason continuation
+  --note "<qué cambió>"`; si no, `research save --capability company_research --slug empresa-<symbol>` (selección:
+  `seleccion-<tema>`), con el ResearchContent por stdin. Que exista una del mismo día no exime: se revisa con los
+  números de hoy.
 
 system_prompt: >
   1. Route. Investigar: one company to understand («analizame», «investigá», «qué tal está», «¿está cara?»). Seleccionar:

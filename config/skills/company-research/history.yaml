@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: company_research
 versions:
+  - version: "0.2.4"
+    date: 2026-10-19
+    changes: >
+      F5 cuarta vuelta: ningún motor guardó (Claude: «la de hoy ya tiene estas conclusiones»); el guardado pasa al
+      «cómo responder», con `research revise` cuando ya hay una, aunque sea del mismo día.
+    feedback: []
   - version: "0.2.3"
     date: 2026-10-19
     changes: >
