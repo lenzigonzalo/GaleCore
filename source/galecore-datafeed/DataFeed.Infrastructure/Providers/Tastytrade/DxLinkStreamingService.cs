@@ -68,6 +68,11 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
         private readonly Dictionary<string, (int Count, long FromTime)> _candleSubs = new();
         private readonly object _candleLock = new();
 
+        // Un snapshot de Candle a la vez por símbolo. Dos pedidos simultáneos del mismo símbolo compartían
+        // la suscripción (el segundo no recibe un snapshot propio) y el colector, que filtra por símbolo sin
+        // agregación: cada uno se quedaba con un pedazo del otro (WS-0047: 3 años de velas cortados al 27/05).
+        private readonly ConcurrentDictionary<string, SemaphoreSlim> _candleSnapshotGates = new();
+
         // ── Throttle de FEED_SUBSCRIPTION (add) ────────────────────────────────────────────────
         // DXLink limita la CANTIDAD de items por suscripción y la VELOCIDAD a la que se mandan; al
         // pasarse responde BAD_ACTION ("subscription size too big" / "subscription rate is too
@@ -624,6 +629,29 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
 
             await EnsureConnectedAsync();
 
+            var gates = subs.Where(s => s.EventType == "Candle")
+                            .Select(s => SnapshotCollector.Normalize(s.Symbol))
+                            .Distinct().OrderBy(s => s, StringComparer.Ordinal)
+                            .Select(s => _candleSnapshotGates.GetOrAdd(s, _ => new SemaphoreSlim(1, 1)))
+                            .ToList();
+            var held = new List<SemaphoreSlim>();
+            try
+            {
+                foreach (var g in gates) { await g.WaitAsync(cancellationToken); held.Add(g); }
+                return await RequestSnapshotCoreAsync(subs, isSymbolComplete, timeout, cancellationToken);
+            }
+            finally
+            {
+                foreach (var g in held) g.Release();
+            }
+        }
+
+        private async Task<IReadOnlyList<JObject>> RequestSnapshotCoreAsync(
+            IReadOnlyList<(string Symbol, string EventType, long? FromTime)> subs,
+            Func<JObject, bool> isSymbolComplete,
+            TimeSpan timeout,
+            CancellationToken cancellationToken)
+        {
             var interest = subs.Select(s => (s.Symbol, s.EventType));
             var collector = new SnapshotCollector(interest, isSymbolComplete);
             var id = Guid.NewGuid();
@@ -690,7 +718,7 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
                 _isSymbolComplete = isSymbolComplete;
             }
 
-            private static string Normalize(string symbol)
+            public static string Normalize(string symbol)
             {
                 var idx = symbol.IndexOf("{=", StringComparison.Ordinal);
                 return idx >= 0 ? symbol.Substring(0, idx) : symbol;
