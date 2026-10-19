@@ -81,7 +81,8 @@ function stepDetail(tool,input){
   if(input?.pattern)return String(input.pattern);
   if(input?.query||input?.url)return String(input.query||input.url);
   const cmd=String(input?.command||input?.cmd||'').replace(/^"?[^"]*powershell(\.exe)?"?\s+-Command\s+(['"])([\s\S]*)\2\s*$/i,'$3').split(/\r?\n/)[0].replace(/^cd\s+("[^"]*"|\S+)\s*(&&|;)\s*/,'').replace(/python -B -m galecore_ai\.adapters\.cli/g,'galecore-ai').trim();
-  return cmd.length>110?cmd.slice(0,107)+'…':cmd;
+  const safe=cmd.replace(/(bearer|basic)\s+[^\s"']+/gi,'$1 •••').replace(/(api[_-]?key|token|password|secret)(\s*[:=]\s*)[^\s&"']+/gi,'$1$2•••');   // revisión 19/10: el detalle se guarda en el chat
+  return safe.length>110?safe.slice(0,107)+'…':safe;
 }
 function pushStep(chat,step){const steps=chat.steps||(chat.steps=[]);const last=steps.at(-1);if(last&&last.label===step.label&&last.detail===step.detail)return;steps.push({...step,at:new Date().toISOString()});if(steps.length>14)steps.splice(0,steps.length-14);}
 function setActivity(chat,label,detail=''){chat.activity=label;if(!label||label==='Pensando'||(label==='Trabajando'&&!detail))return;pushStep(chat,{label,detail});}

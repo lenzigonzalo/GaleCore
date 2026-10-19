@@ -3,6 +3,7 @@
 Lo corre el Lab antes de cada turno, para cualquier motor (D-0014). Lo estable (`GaleCore-AI/PRODUCT.md`) va aparte;
 acá sólo lo que cambia, con tope de diseño de 6.000 caracteres (D-0012).
 """
+import datetime
 import json
 import subprocess
 import sys
@@ -15,17 +16,17 @@ def start(*args):
                             stderr=subprocess.PIPE, text=True, encoding="utf-8", errors="replace")
 
 
-# Las tres consultas corren a la vez y el reloj una sola vez: en serie eran ~7 s antes de cada turno (WS-0039).
-_TODAY = __import__("datetime").date.today()
-_FROM = (_TODAY - __import__("datetime").timedelta(days=12)).isoformat()
-# Owner 19/10: «Mercado hoy» no puede salir vacío al retomar; SPY, VIX y eventos de GaleCore (~1,5 s, en paralelo).
+# Las consultas corren a la vez y el reloj una sola vez: en serie eran ~7 s antes de cada turno (WS-0039).
+# Owner 19/10: «Mercado hoy» no puede salir vacío al retomar: SPY, VIX y eventos de GaleCore, en paralelo con el resto.
+_TODAY = datetime.date.today()
+_FROM = (_TODAY - datetime.timedelta(days=12)).isoformat()
 _RUNS = {"clock": start("clock"), "list": start("galecore", "list"), "space": start("space", "context"),
          "spy": start("galecore", "get", "market_data.candles", "--param", "symbol=SPY", "--param", "interval=1d",
                       "--param", "fromTime=" + _FROM),
          "vix": start("galecore", "get", "history.index_daily", "--param", "Index=VIX", "--param", "From=" + _FROM),
          "fomc": start("galecore", "get", "calendar.fomc_meetings", "--param", f"Years={_TODAY.year}"),
          "macro": start("galecore", "get", "calendar.macro_releases", "--param", f"From={_TODAY}",
-                        "--param", f"To={_TODAY + __import__('datetime').timedelta(days=21)}",
+                        "--param", f"To={_TODAY + datetime.timedelta(days=21)}",
                         "--param", "ReleaseIds=50,10,46,53,54,9")}
 
 
@@ -77,7 +78,6 @@ def galecore_map():
 
 def week_line():
     """Días de la semana de los próximos 7 días, para decir fechas relativas sin errores."""
-    import datetime
     names = ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"]
     out = cli("clock")
     try:
@@ -93,8 +93,9 @@ def week_line():
 def _data(key):
     try:
         body = json.loads(cli(key).stdout)
-        return body["data"]["data"] if isinstance(body.get("data"), dict) else body["data"]
-    except (ValueError, KeyError, TypeError):
+        data = body["data"]
+        return data["data"] if isinstance(data, dict) else data
+    except (ValueError, KeyError, TypeError, AttributeError):
         return None
 
 
@@ -102,28 +103,50 @@ def _num(x):
     return f"{x:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
 
 
-def market_line():
-    """Cómo viene el mercado: SPY y VIX de las últimas ruedas y los próximos eventos. Sin datos, se omite la parte."""
-    parts = []
+def _day(iso: str) -> str:
+    return iso[8:10] + "/" + iso[5:7]
+
+
+def _spy():
     spy = sorted((c for c in _data("spy") or [] if c.get("close")), key=lambda c: c["time"])
-    if len(spy) >= 2:
-        last, base = spy[-1], spy[-6] if len(spy) >= 6 else spy[0]
-        top = max(spy[-6:], key=lambda c: c["high"])
-        day = lambda c: c["timeStamp"][8:10] + "/" + c["timeStamp"][5:7]  # noqa: E731
-        change = (last["close"] / base["close"] - 1) * 100
-        parts.append(f"SPY {_num(last['close'])} (cierre {day(last)}), {_num(change)} % en {min(5, len(spy) - 1)} "
-                     f"ruedas, máximo {_num(top['high'])} el {day(top)}")
+    if len(spy) < 2:
+        return ""
+    last, base = spy[-1], spy[-6] if len(spy) >= 6 else spy[0]
+    top = max(spy[-6:], key=lambda c: c["high"])
+    # Revisión 19/10: con el mercado abierto la vela de hoy está en curso; no es un «cierre».
+    live = last["timeStamp"][:10] == _TODAY.isoformat() and "ABIERTO" in clock_line()
+    label = f"último {_day(last['timeStamp'])}, intradía" if live else f"cierre {_day(last['timeStamp'])}"
+    change = (last["close"] / base["close"] - 1) * 100
+    return (f"SPY {_num(last['close'])} ({label}), {_num(change)} % en {min(5, len(spy) - 1)} ruedas, "
+            f"máximo {_num(top['high'])} el {_day(top['timeStamp'])}")
+
+
+def _vix():
     vix = sorted((r for r in _data("vix") or [] if r.get("close")), key=lambda r: r["date"])
-    if len(vix) >= 2:
-        last, base = vix[-1], vix[-6] if len(vix) >= 6 else vix[0]
-        parts.append(f"VIX {_num(last['close'])} ({last['date'][8:10]}/{last['date'][5:7]}), "
-                     f"desde {_num(base['close'])} el {base['date'][8:10]}/{base['date'][5:7]}")
-    events = [(m["start"][:10], "Fed " + m["start"][8:10] + "-" + m["end"][8:10] + "/" + m["end"][5:7])
+    if len(vix) < 2:
+        return ""
+    last, base = vix[-1], vix[-6] if len(vix) >= 6 else vix[0]
+    return f"VIX {_num(last['close'])} ({_day(last['date'])}), desde {_num(base['close'])} el {_day(base['date'])}"
+
+
+def _events():
+    events = [(m["start"][:10], f"Fed {m['start'][8:10]}-{_day(m['end'])}")
               for m in _data("fomc") or [] if str(m.get("start", ""))[:10] >= _TODAY.isoformat()][:1]
-    events += [(r["date"][:10], r["releaseName"][:40] + " " + r["date"][8:10] + "/" + r["date"][5:7])
-               for r in _data("macro") or [] if r.get("date")]
-    if events:
-        parts.append("próximos: " + ", ".join(e for _, e in sorted(events)[:4]))
+    events += [(r["date"][:10], f"{r['releaseName'][:40]} {_day(r['date'])}") for r in _data("macro") or []
+               if r.get("date")]
+    return "próximos: " + ", ".join(e for _, e in sorted(events)[:4]) if events else ""
+
+
+def market_line():
+    """Cómo viene el mercado: SPY y VIX de las últimas ruedas y los próximos eventos. Una parte que falla o cambia de
+    forma se omite; nunca tumba el resto del contexto (revisión 19/10)."""
+    parts = []
+    for part in (_spy, _vix, _events):
+        try:
+            if text := part():
+                parts.append(text)
+        except (ValueError, KeyError, TypeError, AttributeError, IndexError, ZeroDivisionError):
+            continue
     return ("[mercado] " + " · ".join(parts) + ". Para «Mercado hoy» y para no dar el mercado por quieto; "
             "lo demás (cadena, GEX, curva) se trae si hace falta.") if parts else ""
 
