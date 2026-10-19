@@ -68,18 +68,20 @@ function describeStep(tool,input){
   for(const [re,label] of steps)if(re.test(cmd))return label;
   return 'Trabajando';
 }
+// Owner 18/10: mientras piensa, que se vea qué hizo (como Claude Code): los últimos pasos del turno, no sólo el actual.
+function setActivity(chat,label){chat.activity=label;if(!label||label==='Pensando'||label==='Trabajando')return;const steps=chat.steps||(chat.steps=[]);if(steps.at(-1)?.label!==label)steps.push({label,at:new Date().toISOString()});if(steps.length>8)steps.splice(0,steps.length-8);}
 function consumeEvent(chat, event, provider) {
   if(provider === 'codex') {
     if(event.type === 'thread.started') chat.nativeId = event.thread_id;
     if(event.type === 'item.completed' && event.item?.type === 'agent_message') chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.item.text,at:new Date().toISOString()});
-    if(event.type === 'item.started') chat.activity = event.item?.type === 'command_execution' ? describeStep('Bash',{command:event.item.command}) : event.item?.type === 'file_change' ? describeStep('Write',{file_path:(event.item.changes||[])[0]?.path}) : 'Pensando';
+    if(event.type === 'item.started') setActivity(chat, event.item?.type === 'command_execution' ? describeStep('Bash',{command:event.item.command}) : event.item?.type === 'file_change' ? describeStep('Write',{file_path:(event.item.changes||[])[0]?.path}) : 'Pensando');
     if(event.type === 'turn.failed' || event.type === 'error') chat.error = event.error?.message || event.message || 'El motor no pudo completar el pedido.';
   } else {
     if(event.session_id) chat.nativeId = event.session_id;
     if(event.type === 'assistant') {
       // WS-0027: los textos intermedios son narración interna («Now try the CLI…»), llegan en eventos propios y no
       // van al chat. En el chat queda sólo la respuesta final del turno (evento `result`).
-      const step=(event.message?.content || []).find(c=>c.type==='tool_use');if(step) chat.activity=describeStep(step.name,step.input);
+      const step=(event.message?.content || []).find(c=>c.type==='tool_use');if(step) setActivity(chat,describeStep(step.name,step.input));
     }
     if(event.type === 'result' && !event.is_error && event.result) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.result,at:new Date().toISOString()});
     if(event.type === 'result' && event.is_error) chat.error='Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
@@ -241,7 +243,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(chat.model === undefined || chat.effort === undefined){Object.assign(chat,normalize(chat.provider,chat),{selectionSource:'legacy-fallback'});saveChat(chat);}
     const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()};chat.messages.push(ask);
     if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
-    chat.state='running';chat.error=null;chat.activity='Pensando';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
+    chat.state='running';chat.error=null;chat.activity='Pensando';chat.steps=[];chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'tools','terminal','skills','lab-strategy-bootstrap','SKILL.md');
     // El contexto del turno, igual para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el
     // proveedor ni el modelo»; Personal sin filtro). Capas (D-0012, D-0014): final de la conversación anterior
