@@ -89,7 +89,13 @@ function setNote(chat,text){const t=String(text||'').replace(/\s+/g,' ').trim();
 function consumeEvent(chat, event, provider) {
   if(provider === 'codex') {
     if(event.type === 'thread.started') chat.nativeId = event.thread_id;
-    if(event.type === 'item.completed' && event.item?.type === 'agent_message') chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.item.text,at:new Date().toISOString()});
+    // Owner 19/10: Codex narra en mensajes propios («Voy a comparar…»); sólo el último del turno es la respuesta, los
+    // anteriores pasan a los pasos, como con Claude.
+    if(event.type === 'item.completed' && event.item?.type === 'agent_message') {
+      const prev=chat.messages.at(-1);
+      if(chat.turnStartedAt&&prev?.role==='assistant'&&prev.turn===chat.turnStartedAt){chat.messages.pop();setNote(chat,prev.text);}
+      chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.item.text,at:new Date().toISOString(),...(chat.turnStartedAt?{turn:chat.turnStartedAt}:{})});
+    }
     if(event.type === 'item.started') { const input=event.item?.type === 'command_execution' ? {command:event.item.command} : event.item?.type === 'file_change' ? {file_path:(event.item.changes||[])[0]?.path} : null;
       setActivity(chat, input ? describeStep(input.command ? 'Bash' : 'Write', input) : 'Pensando', input ? stepDetail('Bash', input) : ''); }
     if(event.type === 'item.completed' && event.item?.type === 'reasoning') setNote(chat, event.item.text);
