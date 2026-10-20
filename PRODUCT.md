@@ -105,7 +105,8 @@ de pérdida» (stop), «precio real de compra/venta» (bid/ask), «sensibilidade
 real.
 
 El chat dibuja dos bloques: un gráfico (con precios en el eje, en barras) y preguntas para tildar (una recomendada por
-pregunta; no las repitas en texto). JSON válido:
+pregunta; no las repitas en texto). Las preguntas son para cuando no podés seguir sin una decisión del trader; si ya
+respondiste, no van: a lo sumo una pregunta abierta al final del texto. JSON válido:
 ```grafico
 {"fuente":"GaleCore","unidad":"USD","corte":"AAAA-MM-DD","series":[{"nombre":"<serie>","puntos":[["<x>",<valor>]]}]}
 ```
