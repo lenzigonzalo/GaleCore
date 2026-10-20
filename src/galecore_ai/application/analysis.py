@@ -705,7 +705,9 @@ def previous(kb: KnowledgeBase, kind: str, symbol: str, before: datetime) -> tup
             p = json.loads(doc.content.payload) if doc else {}
         except Exception:  # noqa: BLE001 - unreadable items are reported by the integrity check
             p = {}
-        at = p.get("gathered_at") or "" if isinstance(p, dict) else ""
+        if not isinstance(p, dict) or str(p.get("symbol", "")).upper() != symbol.upper():
+            continue  # el marcador también calza con «-msft-aapl-…»: manda el símbolo del payload
+        at = p.get("gathered_at") or ""
         if at and at < before.isoformat() and (best is None or at > best[1].get("gathered_at", "")):
             best = (eid, p)
     return best

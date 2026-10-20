@@ -127,6 +127,17 @@ def test_the_pack_is_kept_as_evidence_and_points_at_the_previous_one(kb):
     assert not analysis.has_data({**first, "technical": None})
 
 
+def test_previous_compares_the_exact_symbol_not_the_slug_prefix(kb):
+    at = datetime(2026, 10, 6, 20, 0, tzinfo=UTC)
+    host = RecordHost(provider="test")
+    base = {"kind": "company", "gathered_at": at.isoformat(), "missing": [], "kinds_of_datum": analysis.KIND_LABELS}
+    ref_msft, _ = analysis.save_pack(kb, {**base, "symbol": "MSFT"}, prompt="msft", host=host, now=at)
+    ref_pair, _ = analysis.save_pack(kb, {**base, "symbol": "MSFT-AAPL"}, prompt="par", host=host, now=at)
+    later = at + timedelta(hours=1)
+    assert analysis.previous(kb, "company", "MSFT", later)[0] == ref_msft.removeprefix("evidence:")
+    assert analysis.previous(kb, "company", "MSFT-AAPL", later)[0] == ref_pair.removeprefix("evidence:")
+
+
 def test_a_missing_month_of_this_year_is_listed_and_a_negative_eps_has_no_pe():
     months = {f"2025-{m:02d}": 100.0 + m for m in range(9, 13)} | {"2026-01": 113.0, "2026-03": 114.0}
     v = analysis._bls_view("LNS14000000", analysis._months(bls("LNS14000000", months)))
