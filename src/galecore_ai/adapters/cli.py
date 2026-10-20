@@ -524,7 +524,7 @@ async def _cmd_analyze(args: argparse.Namespace) -> None:
             _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
             return
         pack = await company_matrix.gather(_build_dispatcher(), symbols)
-        if not any(c["state"] != "sin datos" for r in pack["matrix"] for c in r["tecnico"].values()):
+        if not any(r["tecnico"] for r in pack["matrix"]):
             _json_out({"status": "INSUFFICIENT_DATA", "missing": pack["missing"]}, exit_code=_EXIT_INSUFFICIENT_DATA)
             return
     else:
