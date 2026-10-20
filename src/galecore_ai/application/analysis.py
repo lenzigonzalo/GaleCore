@@ -34,6 +34,10 @@ FRED_DAYS = 120
 # BLS monthly official values (U-04).
 BLS = {"CUSR0000SA0": "CPI general (índice, desestacionalizado)", "CUSR0000SA0L1E": "CPI núcleo (índice, desest.)",
        "LNS14000000": "desempleo (%)", "CES0000000001": "nóminas no agrícolas (miles)"}
+# Pre-tax income of continuing operations: two names for the same line (GOOGL, MSFT, AAPL use the first; AMZN the second).
+PRETAX_TAGS = ("IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+               "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments")
+NON_OPERATING_PE_LIMIT_PCT = 10.0     # above this share of pre-tax income the EPS is not read as the business's earnings
 # XBRL concepts (U-07, WS-0047), quarterly values from the 10-Q/10-K. Of the two revenue concepts, the one with the
 # latest quarter is used (most companies report under the second).
 FACTS = {"Revenues": "ingresos", "RevenueFromContractWithCustomerExcludingAssessedTax": "ingresos",
@@ -48,12 +52,14 @@ FACTS = {"Revenues": "ingresos", "RevenueFromContractWithCustomerExcludingAssess
          "InterestExpenseNonoperating": "intereses pagados", "InterestExpense": "intereses pagados",
          "PaymentsForRepurchaseOfCommonStock": "recompra de acciones",
          "ProceedsFromIssuanceOfCommonStock": "emisión de acciones",
-         "PaymentsOfDividends": "dividendos pagados", "PaymentsOfDividendsCommonStock": "dividendos pagados"}
+         "PaymentsOfDividends": "dividendos pagados", "PaymentsOfDividendsCommonStock": "dividendos pagados",
+         PRETAX_TAGS[0]: "resultado antes de impuestos", PRETAX_TAGS[1]: "resultado antes de impuestos"}
 REVENUE_TAGS = ("Revenues", "RevenueFromContractWithCustomerExcludingAssessedTax")
 # Concepts that say the same under different names: the one with the latest quarter is kept.
 CAPEX_TAGS = ("PaymentsToAcquirePropertyPlantAndEquipment", "PaymentsToAcquireProductiveAssets")
 ALIASES = (REVENUE_TAGS, ("DepreciationDepletionAndAmortization", "DepreciationAmortizationAndOther"),
-           ("InterestExpenseNonoperating", "InterestExpense"), ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock"), CAPEX_TAGS)
+           ("InterestExpenseNonoperating", "InterestExpense"), ("PaymentsOfDividends", "PaymentsOfDividendsCommonStock"), CAPEX_TAGS,
+           PRETAX_TAGS)
 NOT_ADDITIVE = {"WeightedAverageNumberOfDilutedSharesOutstanding"}   # an average: never summed nor derived
 # Balance sheet concepts: a balance at a date, not a period.
 BALANCE = {"LongTermDebt": "deuda de largo plazo (total)", "LongTermDebtNoncurrent": "deuda de largo plazo no corriente",
@@ -422,6 +428,14 @@ def _quality(out: dict, balance: dict) -> dict:
                                 "margin_pct": _ratio(fcf, r), "prior_margin_pct": _ratio(fcf_p, rp),
                                 "formula": "flujo operativo − inversión en activos fijos, 4 trimestres"}
         qd["capex_to_revenue"] = {"last_4_pct": _ratio(capex, r), "prior_4_pct": _ratio(capex_p, rp)}
+    pretax_tag = next((t for t in PRETAX_TAGS if t in out), None)
+    pretax, ebit = (s(pretax_tag) if pretax_tag else None), s("OperatingIncomeLoss")
+    if pretax and pretax > 0 and ebit is not None:
+        share = _round((pretax - ebit) / pretax * 100)
+        qd["non_operating"] = {"pretax_last_4": pretax, "operating_income_last_4": ebit, "share_pct": share,
+                               "limit_pct": NON_OPERATING_PE_LIMIT_PCT,
+                               "formula": "(resultado antes de impuestos − resultado operativo) ÷ resultado antes de "
+                                          "impuestos, 4 trimestres; incluye inversiones, intereses y otros no operativos"}
     ni = s("NetIncomeLoss")
     if ocf is not None and ni and ni > 0:
         qd["cash_conversion"] = {"ocf_to_net_income": _ratio(ocf, ni, pct=False),
@@ -509,6 +523,11 @@ def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd
     v: dict = {"close": close, "close_date": day}
     if shares:
         v |= _multiples(close * shares, out, qd)
+    if no := qd.get("non_operating"):
+        v["non_operating_share_pct"] = no["share_pct"]
+        if abs(no["share_pct"]) > no["limit_pct"]:
+            v["pe_flag"] = (f"P/E distorsionado: el resultado no operativo es {no['share_pct']:.1f} % del resultado "
+                            f"antes de impuestos (límite {no['limit_pct']:.0f} %); se lee con EV/EBIT")
     eps = _four(eps_q, len(eps_q)) if len(eps_q) >= 4 else None
     if eps is None:
         return v

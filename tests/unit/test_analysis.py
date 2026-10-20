@@ -138,6 +138,22 @@ def test_previous_compares_the_exact_symbol_not_the_slug_prefix(kb):
     assert analysis.previous(kb, "company", "MSFT-AAPL", later)[0] == ref_pair.removeprefix("evidence:")
 
 
+def test_non_operating_income_over_the_limit_flags_the_pe_and_under_it_does_not():
+    def view(pretax: float):
+        facts = {"RevenueFromContractWithCustomerExcludingAssessedTax": eight([100.0] * 8),
+                 "OperatingIncomeLoss": eight([40.0] * 8), "NetIncomeLoss": eight([30.0] * 8),
+                 "EarningsPerShareDiluted": eight([1.0] * 8),
+                 analysis.PRETAX_TAGS[1 if pretax > 50 else 0]: eight([pretax] * 8),
+                 "WeightedAverageNumberOfDilutedSharesOutstanding": eight([100.0] * 8)}
+        bars = [((date(2026, 1, 1) + timedelta(days=i)).isoformat(), 20.0, 1.0) for i in range(200)]
+        return analysis.fundamental_view(facts, None, {}, bars)
+    hot = view(60.0)                                   # (60 − 40) ÷ 60 = 33,3 %: both pre-tax names are one concept
+    assert hot["quality"]["non_operating"]["share_pct"] == 33.33
+    assert hot["valuation"]["non_operating_share_pct"] == 33.33 and "distorsionado" in hot["valuation"]["pe_flag"]
+    calm = view(42.0)                                  # 4,76 %
+    assert calm["valuation"]["non_operating_share_pct"] == 4.76 and "pe_flag" not in calm["valuation"]
+
+
 def test_a_change_whose_base_month_is_missing_is_declared_and_never_taken_from_the_neighbour():
     months = {f"2025-{m:02d}": 100.0 + m for m in range(1, 13) if m != 10} | {f"2026-{m:02d}": 120.0 + m for m in range(1, 11)}
     v = analysis._bls_view("CUSR0000SA0", analysis._months(bls("CUSR0000SA0", months)))
