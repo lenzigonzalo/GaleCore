@@ -38,7 +38,7 @@ CRITERIA = {
     "F2": "resultado operativo de 4 trimestres contra los 4 anteriores > 0 (pasar de pérdida a ganancia cuenta)",
     "F3": "margen operativo de 4 trimestres no baja más de 1 punto contra los 4 anteriores",
     "F4": "flujo libre (flujo operativo − inversión en activos fijos) de 4 trimestres > 0",
-    "F5": "deuda neta (deuda de largo plazo − caja y las inversiones de corto plazo que el informe separa; puede exagerarla si hay muchos títulos de otro tipo) menor a 3 años de flujo libre; caja neta cumple",
+    "F5": "deuda neta (deuda de largo plazo − caja, inversiones de corto plazo y títulos negociables de largo plazo, si el informe los separa; puede exagerarla si hay otras inversiones sin separar) menor a 3 años de flujo libre; caja neta cumple",
     "valoración": "informa, no filtra: es contexto de la tesis; los escenarios son supuestos, no pronóstico",
     "entrada y eventos": "informa, no filtra: dónde está el precio respecto de sus medias y qué viene en el calendario",
 }
@@ -146,7 +146,8 @@ def quality_block(statements: dict | None, financial: bool = False) -> tuple[dic
         unknown = nd["net_debt"] > 0 and years is None and not nd.get("reading", "").startswith("flujo libre no positivo")
         ok = nd["net_debt"] <= 0 or (years is not None and years < 3)
         cells["F5"] = _cell(SIN_DATOS if unknown else CUMPLE if ok else NO_CUMPLE, {"net_debt": nd["net_debt"], "years_of_fcf": years,
-                                                            "reading": nd.get("reading"), "date": nd["date"]})
+                                                            "reading": nd.get("reading"), "date": nd["date"]},
+                                  note=nd.get("includes"))
     data = {k: qd[k] for k in ("gross_margin", "capex_to_revenue", "cash_conversion", "dilution_yoy_pct",
                                "stock_comp_to_revenue_pct", "interest_coverage") if k in qd}
     return cells, data

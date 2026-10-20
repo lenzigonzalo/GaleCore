@@ -188,6 +188,18 @@ def bal(end: str, value: float) -> dict:
     return {"end": end, "value": value, "filed": "2026-07-29", "form": "10-Q", "unit": "USD"}
 
 
+def test_net_debt_counts_long_term_marketable_securities_only_when_the_report_separates_them():
+    base = {"LongTermDebtNoncurrent": [bal("2026-06-30", 90.0)], "LongTermDebtCurrent": [bal("2026-06-30", 10.0)],
+            "CashAndCashEquivalentsAtCarryingValue": [bal("2026-06-30", 20.0)]}
+    plain = analysis._quality({}, {k: analysis._balance(v) for k, v in base.items()})["net_debt"]
+    assert plain["net_debt"] == 80.0 and plain["long_term_securities"] == 0 and "sólo caja" in plain["includes"]
+    with_lt = {**base, "MarketableSecuritiesNoncurrent": [bal("2026-06-30", 50.0)]}
+    nd = analysis._quality({}, {k: analysis._balance(v) for k, v in with_lt.items()})["net_debt"]
+    assert nd["net_debt"] == 30.0 and nd["long_term_securities"] == 50.0 and "largo plazo" in nd["includes"]
+    stale = {**base, "MarketableSecuritiesNoncurrent": [bal("2026-03-31", 50.0)]}      # another date: not mixed
+    assert analysis._quality({}, {k: analysis._balance(v) for k, v in stale.items()})["net_debt"]["net_debt"] == 80.0
+
+
 def test_margins_free_cash_flow_dilution_and_net_debt_come_from_four_quarters():
     facts = {"RevenueFromContractWithCustomerExcludingAssessedTax": eight([100.0] * 4 + [120.0] * 4),
              "OperatingIncomeLoss": eight([40.0] * 4 + [50.0] * 4), "NetIncomeLoss": eight([30.0] * 4 + [36.0] * 4),

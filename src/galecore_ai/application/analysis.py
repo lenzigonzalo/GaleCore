@@ -59,7 +59,8 @@ NOT_ADDITIVE = {"WeightedAverageNumberOfDilutedSharesOutstanding"}   # an averag
 BALANCE = {"LongTermDebt": "deuda de largo plazo (total)", "LongTermDebtNoncurrent": "deuda de largo plazo no corriente",
            "LongTermDebtCurrent": "deuda de largo plazo que vence en 12 meses",
            "CashAndCashEquivalentsAtCarryingValue": "caja", "ShortTermInvestments": "inversiones de corto plazo",
-           "MarketableSecuritiesCurrent": "títulos negociables corrientes", "StockholdersEquity": "patrimonio neto",
+           "MarketableSecuritiesCurrent": "títulos negociables corrientes",
+           "MarketableSecuritiesNoncurrent": "títulos negociables de largo plazo", "StockholdersEquity": "patrimonio neto",
            "Goodwill": "llave de negocio (goodwill)", "IntangibleAssetsNetExcludingGoodwill": "intangibles"}
 FUNDAMENTAL_DAYS = 1500        # ~4 years of filings: four quarters, the four before and the P/E history
 PE_HISTORY_DAYS = 1100         # ~3 years of closes for the own P/E range
@@ -372,6 +373,9 @@ def _net_debt(balance: dict, fcf: float | None) -> dict | None:
         return None
     inv = balance.get("ShortTermInvestments") or balance.get("MarketableSecuritiesCurrent")
     cash = cash_b["value"] + (inv["value"] if inv and inv["date"] == cash_b["date"] else 0)
+    lt = balance.get("MarketableSecuritiesNoncurrent")
+    lt_value = lt["value"] if lt and lt["date"] == cash_b["date"] else 0
+    cash += lt_value
     net = round(debt - cash, 4)
     if net <= 0:
         years, reading = None, "caja neta: la caja supera la deuda"
@@ -382,9 +386,12 @@ def _net_debt(balance: dict, fcf: float | None) -> dict | None:
     else:
         years, reading = None, "flujo libre no positivo: la deuda no se puede medir en años de flujo"
     return {"date": cash_b["date"], "debt": debt, "cash_and_short_term": cash, "net_debt": net,
-            "years_of_fcf": years, **({"reading": reading} if reading else {}),
-            "formula": "deuda de largo plazo (incl. la que vence en 12 meses) − caja e inversiones de corto plazo; "
-                       "÷ flujo libre de 4 trimestres"}
+            "years_of_fcf": years, "long_term_securities": lt_value, **({"reading": reading} if reading else {}),
+            "formula": "deuda de largo plazo (incl. la que vence en 12 meses) − caja, inversiones de corto plazo y "
+                       "títulos negociables de largo plazo; ÷ flujo libre de 4 trimestres",
+            "includes": ("caja, corto plazo y títulos negociables de largo plazo" if lt_value else
+                         "sólo caja e inversiones de corto plazo: el informe no separa títulos negociables de largo "
+                         "plazo (otras inversiones de largo plazo, mezcladas con participaciones, no se cuentan)")}
 
 
 def _quality(out: dict, balance: dict) -> dict:
