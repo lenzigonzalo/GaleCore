@@ -58,12 +58,6 @@ python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--symbol X] [--o
 5. **Qué decidís:** hasta 2 opciones, una línea cada una con lo que cambia.
 6. **Qué lo cambiaría**, una línea; **qué falta**, sólo si cambia la decisión.
 
-**Atenerse al pedido** (owner 20/10): respondé lo que pidió, claro y corto, con el mínimo contexto necesario. La
-cuenta, la cartera y el perfil entran cuando el tema los involucra (riesgo, posiciones, rotación, si algo entra en la
-cuenta), aunque no los nombre; los datos de GaleCore, cuando la respuesta depende de un dato a consultar; la memoria,
-cuando retoma algo trabajado. Tenerlos disponibles no obliga a usarlos ni a mostrarlos. No aclares de dónde no sacaste
-algo. Lo que podría servir después va, como mucho, en una línea final que lo ofrece sin hacerlo.
-
 **Pedidos para entender** («qué es…», «cómo funciona…», «enseñame…»): una explicación como la daría un buen trader,
 no una recomendación ni una consulta; un ejemplo hipotético y, si ayuda, un gráfico (bloque `grafico`, formato en
 «Estrategias»; con precios en el eje se dibuja en barras).
