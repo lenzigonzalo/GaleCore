@@ -17,7 +17,9 @@ _OPENER = re.compile(r"^(?:explica(?:me)?\s+|explicar\s+)?"
 _ARTICLE = {"un", "una", "unos", "unas", "el", "la", "los", "las"}
 _PREPOSITION = {"de", "del", "en", "con", "sobre", "a", "al"}
 _PERSONAL = re.compile(r"\b(?:cuenta|cartera|posicion|posiciones|mi|mis|hoy|ahora|actual|actuales|conviene|deberia"
-                       r"|ayer|semana|mes|esto|eso|este|esta)\b")
+                       r"|ayer|manana|semana|mes|esto|eso|este|esta|anterior|antes|recien|ultimo|ultima|proximo"
+                       r"|proxima|nuevo|nueva|mercado|ticker)\b")
+_CLAUSE = {"que", "entre"}  # «el spread que vimos», «el spread entre spy y qqq»: no es una definición suelta
 MAX_WORDS = 8  # «un put credit spread con un ejemplo» = 7
 
 
@@ -31,7 +33,7 @@ def es_concepto(prompt, cwd):
     if not opener or _PERSONAL.search(text) or "strategies" in Path(cwd or ".").parts:
         return False
     words = re.findall(r"[a-z0-9]+", text[opener.end():])
-    if not words or len(words) > MAX_WORDS or words[0] not in _ARTICLE:
+    if not words or len(words) > MAX_WORDS or words[0] not in _ARTICLE or _CLAUSE & set(words):
         return False
     pairs = zip(words, words[1:], strict=False)
     if any(w in _PREPOSITION and nxt not in _ARTICLE and len(nxt) <= 5 for w, nxt in pairs):

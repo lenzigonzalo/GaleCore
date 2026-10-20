@@ -12,7 +12,7 @@ from concepto import es_concepto
 
 sys.stdout.reconfigure(encoding="utf-8")
 try:  # el Lab pasa {"prompt","cwd"}; sin eso (o sin JSON) el contexto es el completo de siempre
-    _EVENT = json.load(sys.stdin)
+    _EVENT = {} if sys.stdin is None or sys.stdin.isatty() else json.load(sys.stdin)
 except ValueError:
     _EVENT = {}
 _LIGHT = isinstance(_EVENT, dict) and es_concepto(_EVENT.get("prompt") or "", _EVENT.get("cwd"))
