@@ -28,7 +28,7 @@ def start(*args):
 _TODAY = datetime.date.today()
 _FROM = (_TODAY - datetime.timedelta(days=12)).isoformat()
 _RUNS = {"clock": start("clock"), "space": start("space", "context")}
-# Una pregunta de concepto no usa el mercado ni el mapa: no se consultan (WS-0050).
+# Una pregunta de concepto no usa el mercado, el mapa ni la cuenta: no se consultan (WS-0050).
 if not _LIGHT:
     _RUNS |= {"list": start("galecore", "list"),
          "spy": start("galecore", "get", "market_data.candles", "--param", "symbol=SPY", "--param", "interval=1d",
@@ -170,6 +170,10 @@ if not _LIGHT:
     print(galecore_map())
 print()
 out = cli("space", "context")
-print(out.stdout)
+if _LIGHT:  # Owner 20/10: una definición no involucra la cuenta; del perfil sólo idioma y forma de entrega.
+    print("\n".join(line for line in out.stdout.splitlines()
+                    if line.strip().startswith(("[espacio]", "forma de entrega:", "idioma:"))))
+else:
+    print(out.stdout)
 if out.returncode != 0:
     print(out.stderr, file=sys.stderr)
