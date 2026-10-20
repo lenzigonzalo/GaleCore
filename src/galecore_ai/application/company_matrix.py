@@ -39,7 +39,7 @@ CRITERIA = {
     "F3": "margen operativo de 4 trimestres no baja más de 1 punto contra los 4 anteriores",
     "F4": "flujo libre (flujo operativo − inversión en activos fijos) de 4 trimestres > 0",
     "F5": "deuda neta (deuda de largo plazo − caja, inversiones de corto plazo y títulos negociables de largo plazo, si el informe los separa; puede exagerarla si hay otras inversiones sin separar) menor a 3 años de flujo libre; caja neta cumple",
-    "valoración": "informa, no filtra: es contexto de la tesis; los escenarios son supuestos, no pronóstico",
+    "valoración": "informa, no filtra: es contexto de la tesis",
     "entrada y eventos": "informa, no filtra: dónde está el precio respecto de sus medias y qué viene en el calendario",
 }
 FILTER_BLOCKS = ("tecnico", "calidad")
@@ -157,13 +157,12 @@ def valuation_block(statements: dict | None) -> dict:
     v = (statements or {}).get("valuation") or {}
     if not v:
         return {"state": SIN_DATOS, "note": "sin valoración (cierre viejo o sin informes)"}
-    ph, sc = v.get("pe_history") or {}, (v.get("scenarios_12m") or {}).get("cases") or []
+    ph = v.get("pe_history") or {}
     return {"state": DATO, "close": v.get("close"), "close_date": v.get("close_date"), "pe_trailing": v.get("pe_trailing"),
             "pe_note": v.get("pe_note"), "pe_percentile_own_history": ph.get("percentile_today"),
             "pe_median_own_history": ph.get("median"),
             **{k: v.get(k) for k in ("fcf_yield_pct", "ev_to_ebit", "ev_to_sales", "price_to_fcf", "price_to_book",
-                                     "shareholder_yield_pct") if v.get(k) is not None},
-            **({"scenarios_12m_return_pct": {c["case"]: c["return_pct"] for c in sc}} if sc else {})}
+                                     "shareholder_yield_pct") if v.get(k) is not None}}
 
 
 def entry_block(tech: dict | None, pack: dict | None, today: date) -> dict:

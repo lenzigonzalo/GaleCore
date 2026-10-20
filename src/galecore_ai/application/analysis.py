@@ -37,7 +37,6 @@ BLS = {"CUSR0000SA0": "CPI general (índice, desestacionalizado)", "CUSR0000SA0L
 # Pre-tax income of continuing operations: two names for the same line (GOOGL, MSFT, AAPL use the first; AMZN the second).
 PRETAX_TAGS = ("IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
                "IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments")
-NON_OPERATING_PE_LIMIT_PCT = 10.0     # above this share of pre-tax income the EPS is not read as the business's earnings
 # XBRL concepts (U-07, WS-0047), quarterly values from the 10-Q/10-K. Of the two revenue concepts, the one with the
 # latest quarter is used (most companies report under the second).
 FACTS = {"Revenues": "ingresos", "RevenueFromContractWithCustomerExcludingAssessedTax": "ingresos",
@@ -433,7 +432,6 @@ def _quality(out: dict, balance: dict) -> dict:
     if pretax and pretax > 0 and ebit is not None:
         share = _round((pretax - ebit) / pretax * 100)
         qd["non_operating"] = {"pretax_last_4": pretax, "operating_income_last_4": ebit, "share_pct": share,
-                               "limit_pct": NON_OPERATING_PE_LIMIT_PCT,
                                "formula": "(resultado antes de impuestos − resultado operativo) ÷ resultado antes de "
                                           "impuestos, 4 trimestres; incluye inversiones, intereses y otros no operativos"}
     ni = s("NetIncomeLoss")
@@ -515,8 +513,8 @@ def _multiples(cap: float, out: dict, qd: dict) -> dict:
 
 
 def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd: dict) -> dict:
-    """P/E on the last close, the own P/E range (EPS known at each date) and 12-month scenarios. Scenarios are
-    rules over reported numbers, not a forecast: EPS growth and exit P/E are stated assumptions."""
+    """P/E on the last close and its own range (EPS known at each date). No scenarios nor verdicts: whether the P/E
+    is the right lens and what a sensitivity should assume is the reader's call, on these numbers."""
     if not bars:
         return {}
     day, close = bars[-1][0], bars[-1][1]
@@ -524,10 +522,7 @@ def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd
     if shares:
         v |= _multiples(close * shares, out, qd)
     if no := qd.get("non_operating"):
-        v["non_operating_share_pct"] = no["share_pct"]
-        if abs(no["share_pct"]) > no["limit_pct"]:
-            v["pe_flag"] = (f"P/E distorsionado: el resultado no operativo es {no['share_pct']:.1f} % del resultado "
-                            f"antes de impuestos (límite {no['limit_pct']:.0f} %); se lee con EV/EBIT")
+        v["non_operating_share_pct"] = no["share_pct"]       # how much of the EPS is not the business: a number, no flag
     eps = _four(eps_q, len(eps_q)) if len(eps_q) >= 4 else None
     if eps is None:
         return v
@@ -545,22 +540,6 @@ def valuation(eps_q: list[dict], bars: list, shares: float | None, out: dict, qd
           "percentile_today": round(sum(x <= v["pe_trailing"] for x in hist) / len(hist) * 100, 1),
           "note": "P/E de cada rueda con el EPS ya publicado ese día; su propia historia no garantiza un valor razonable"}
     v["pe_history"] = ph
-    rev = next((out[t] for t in REVENUE_TAGS if t in out), {})
-    g_rev = (rev.get("last_4_change") or {}).get("pct")
-    g_eps = ((out.get("EarningsPerShareDiluted") or {}).get("last_4_change") or {}).get("pct")
-    if g_rev is None:
-        return v
-    pe = v["pe_trailing"]
-    cases = [("adverso", 0.0, min(pe, ph["p10"])), ("central", g_rev, pe),
-             ("favorable", max(g_rev, g_eps if g_eps is not None else g_rev), max(pe, ph["p75"]))]
-    v["scenarios_12m"] = {
-        "rule": ("EPS de 4 trim. × (1 + crecimiento supuesto) × P/E de salida. Adverso: EPS sin crecer y el menor entre "
-                 "el P/E de hoy y su percentil 10 · central: crece como los ingresos de 4 trim. y P/E igual al de hoy · "
-                 "favorable: el mayor crecimiento entre ingresos y EPS de 4 trim., y el mayor entre el P/E de hoy y su "
-                 "percentil 75. Supuestos, no pronóstico; sin dividendos ni probabilidades. Sobre P/E: pertinente "
-                 "en empresas no financieras con ganancias estables, no en bancos, cíclicas en su pico ni pérdidas"),
-        "cases": [{"case": n, "eps_growth_pct": g, "exit_pe": pe, "price": round(eps * (1 + g / 100) * pe, 2),
-                   "return_pct": _round((eps * (1 + g / 100) * pe / close - 1) * 100)} for n, g, pe in cases]}
     return v
 
 

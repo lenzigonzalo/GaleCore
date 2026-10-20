@@ -138,7 +138,7 @@ def test_previous_compares_the_exact_symbol_not_the_slug_prefix(kb):
     assert analysis.previous(kb, "company", "MSFT-AAPL", later)[0] == ref_pair.removeprefix("evidence:")
 
 
-def test_non_operating_income_over_the_limit_flags_the_pe_and_under_it_does_not():
+def test_the_non_operating_share_is_a_number_next_to_the_pe_never_a_verdict():
     def view(pretax: float):
         facts = {"RevenueFromContractWithCustomerExcludingAssessedTax": eight([100.0] * 8),
                  "OperatingIncomeLoss": eight([40.0] * 8), "NetIncomeLoss": eight([30.0] * 8),
@@ -149,9 +149,9 @@ def test_non_operating_income_over_the_limit_flags_the_pe_and_under_it_does_not(
         return analysis.fundamental_view(facts, None, {}, bars)
     hot = view(60.0)                                   # (60 − 40) ÷ 60 = 33,3 %: both pre-tax names are one concept
     assert hot["quality"]["non_operating"]["share_pct"] == 33.33
-    assert hot["valuation"]["non_operating_share_pct"] == 33.33 and "distorsionado" in hot["valuation"]["pe_flag"]
+    assert hot["valuation"]["non_operating_share_pct"] == 33.33 and "pe_flag" not in hot["valuation"]
     calm = view(42.0)                                  # 4,76 %
-    assert calm["valuation"]["non_operating_share_pct"] == 4.76 and "pe_flag" not in calm["valuation"]
+    assert calm["valuation"]["non_operating_share_pct"] == 4.76
 
 
 def test_a_change_whose_base_month_is_missing_is_declared_and_never_taken_from_the_neighbour():
@@ -247,7 +247,7 @@ def test_margins_free_cash_flow_dilution_and_net_debt_come_from_four_quarters():
     assert "incompleta" in bank["quality"]["coverage"] and "cash_conversion" not in bank["quality"]
 
 
-def test_the_own_pe_uses_only_the_eps_already_filed_and_scenarios_state_their_assumptions():
+def test_the_own_pe_uses_only_the_eps_already_filed_and_there_are_no_coded_scenarios():
     eps = eight([1.0] * 4 + [1.5] * 4)
     facts = {"EarningsPerShareDiluted": eps, "RevenueFromContractWithCustomerExcludingAssessedTax": eight([100.0] * 4 + [110.0] * 4)}
     day0 = date(2025, 7, 30)
@@ -256,10 +256,7 @@ def test_the_own_pe_uses_only_the_eps_already_filed_and_scenarios_state_their_as
     assert v["pe_trailing"] == round(100.0 / 6.0, 1)
     # before 2025-10-29 the known EPS is 4.0 (P/E 25); each filing after it lifts the EPS: no look-ahead
     assert v["pe_history"]["max"] == 25.0 and v["pe_history"]["min"] == round(100.0 / 6.0, 1)
-    cases = {c["case"]: c for c in v["scenarios_12m"]["cases"]}
-    assert cases["central"]["eps_growth_pct"] == 10.0 and cases["central"]["exit_pe"] == v["pe_trailing"]
-    assert cases["adverso"]["exit_pe"] <= v["pe_trailing"] <= cases["favorable"]["exit_pe"]
-    assert "no pronóstico" in v["scenarios_12m"]["rule"]
+    assert "scenarios_12m" not in v
 
 
 def test_enterprise_value_multiples_book_value_and_capital_returned():

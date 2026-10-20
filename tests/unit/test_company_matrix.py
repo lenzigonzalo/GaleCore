@@ -142,14 +142,12 @@ def test_entry_block_reports_extension_invalidation_and_the_days_to_earnings():
     assert cm.entry_block(t, {}, TODAY)["next_earnings"]["state"] == "sin datos"
 
 
-def test_valuation_block_is_data_with_the_own_range_and_scenario_returns():
+def test_valuation_block_is_data_with_the_own_range():
     v = {"valuation": {"close": 100.0, "close_date": "2026-10-16", "pe_trailing": 20.0, "fcf_yield_pct": 3.0,
-                       "pe_history": {"percentile_today": 80.0, "median": 18.0},
-                       "scenarios_12m": {"cases": [{"case": "adverso", "return_pct": -10.0},
-                                                   {"case": "central", "return_pct": 8.0}]}}}
+                       "pe_history": {"percentile_today": 80.0, "median": 18.0}}}
     out = cm.valuation_block(v)
     assert out["state"] == "dato" and out["pe_percentile_own_history"] == 80.0
-    assert out["scenarios_12m_return_pct"] == {"adverso": -10.0, "central": 8.0}
+    assert out["pe_median_own_history"] == 18.0 and "scenarios_12m_return_pct" not in out
 
 
 def test_symbols_are_cleaned_deduplicated_and_capped():
