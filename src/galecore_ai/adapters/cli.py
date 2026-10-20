@@ -1430,8 +1430,8 @@ def build_parser() -> _JsonArgumentParser:
     p_an_pack.add_argument("--kind", required=True, choices=["macro", "technical", "fundamental", "flow"])
     p_an_pack.add_argument("--symbol", default="SPY", help="Ignored for macro")
     p_an_pack.add_argument("--prompt", required=True, help="The user's request, verbatim")
-    p_an_company = an_sub.add_parser("company", help="Selection matrix of several companies in four blocks (WS-0047): "
-                                                     "technical fit, quality, valuation, entry and events")
+    p_an_company = an_sub.add_parser("company", help="Several companies side by side as figures (WS-0047): "
+                                                     "technical, fundamentals, valuation, next earnings")
     p_an_company.add_argument("--symbols", required=True, help="Up to 10 tickers, comma separated: A,B,C")
     p_an_company.add_argument("--prompt", required=True, help="The user's request, verbatim")
 

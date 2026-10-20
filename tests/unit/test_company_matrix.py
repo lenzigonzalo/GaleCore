@@ -50,6 +50,9 @@ def test_relative_strength_is_points_against_the_reference_and_only_on_the_same_
     assert vs["126d_pts"] < 0 and set(vs) == {"63d_pts", "126d_pts"}
     other_day = {**tech(1.0), "date": "2026-10-15"}
     assert cm.relative(tech(0.5), other_day) is None and cm.relative(tech(0.5), None) is None
+    row = cm.build_row("AAA", None, tech(0.5), other_day, "XLK", None, TODAY)
+    assert "último cierre distinto" in row["tecnico"]["vs_spy"]["unavailable"]
+    assert row["tecnico"]["vs_etf"] == {"unavailable": "sin velas de XLK"}
 
 
 def test_a_row_is_figures_side_by_side_with_no_state_nor_verdict():

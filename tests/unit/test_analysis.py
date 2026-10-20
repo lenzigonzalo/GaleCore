@@ -159,6 +159,8 @@ def test_a_change_whose_base_month_is_missing_is_declared_and_never_taken_from_t
     v = analysis._bls_view("CUSR0000SA0", analysis._months(bls("CUSR0000SA0", months)))
     assert v["month"] == "2026-10" and "yoy_pct" not in v and v["change_without_base"] == {"12m": "2025-10"}
     assert v["mom_pct"] is not None and v["three_month_annualized_pct"] is not None
+    rate = analysis._bls_view("LNS14000000", analysis._months(bls("LNS14000000", months)))
+    assert rate["change_without_base"] == {"12m": "2025-10"}         # a rate never asks for the 1-month base
     ok = analysis._bls_view("CUSR0000SA0", analysis._months(bls("CUSR0000SA0", months | {"2025-10": 110.0})))
     assert ok["yoy_pct"] == round((130.0 / 110.0 - 1) * 100, 2) and "change_without_base" not in ok
 
@@ -222,7 +224,8 @@ def test_net_debt_counts_long_term_marketable_securities_only_when_the_report_se
     nd = analysis._quality({}, {k: analysis._balance(v) for k, v in with_lt.items()})["net_debt"]
     assert nd["net_debt"] == 30.0 and nd["long_term_securities"] == 50.0 and "largo plazo" in nd["includes"]
     stale = {**base, "MarketableSecuritiesNoncurrent": [bal("2026-03-31", 50.0)]}      # another date: not mixed
-    assert analysis._quality({}, {k: analysis._balance(v) for k, v in stale.items()})["net_debt"]["net_debt"] == 80.0
+    nd = analysis._quality({}, {k: analysis._balance(v) for k, v in stale.items()})["net_debt"]
+    assert nd["net_debt"] == 80.0 and "otra fecha (2026-03-31)" in nd["includes"]
 
 
 def test_margins_free_cash_flow_dilution_and_net_debt_come_from_four_quarters():

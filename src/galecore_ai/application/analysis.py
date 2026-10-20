@@ -125,7 +125,10 @@ def _bls_view(series_id: str, months: list[tuple[str, float, bool]]) -> dict | N
     last_m, last, prelim = months[-1]
     y, mo = map(int, last_m.split("-"))
 
+    asked: list[int] = []
+
     def back(k: int) -> float | None:
+        asked.append(k)
         yy, mm = y, mo - k
         while mm <= 0:
             yy, mm = yy - 1, mm + 12
@@ -150,7 +153,7 @@ def _bls_view(series_id: str, months: list[tuple[str, float, bool]]) -> dict | N
         if (m12 := back(12)) is not None:
             view["chg_12m_pts"] = _round(last - m12)
     # A change is against the exact month, never the neighbour: when that month was not published, say which one.
-    no_base = {f"{k}m": _month_back(y, mo, k) for k in (1, 3, 12) if _month_back(y, mo, k) not in by}
+    no_base = {f"{k}m": _month_back(y, mo, k) for k in asked if _month_back(y, mo, k) not in by}
     if no_base:
         view["change_without_base"] = no_base
     gaps = [m for m in (_month_back(y, mo, k) for k in range(12, 0, -1)) if m not in by]   # the last 12 months
@@ -384,6 +387,7 @@ def _net_debt(balance: dict, fcf: float | None) -> dict | None:
     cash = cash_b["value"] + (inv["value"] if inv and inv["date"] == cash_b["date"] else 0)
     lt = balance.get("MarketableSecuritiesNoncurrent")
     lt_value = lt["value"] if lt and lt["date"] == cash_b["date"] else 0
+    lt_other_date = bool(lt) and not lt_value and lt["date"] != cash_b["date"]
     cash += lt_value
     net = round(debt - cash, 4)
     if net <= 0:
@@ -394,11 +398,13 @@ def _net_debt(balance: dict, fcf: float | None) -> dict | None:
         years, reading = None, "sin flujo libre (falta flujo operativo o inversión en activos fijos): no se puede medir en años"
     else:
         years, reading = None, "flujo libre no positivo: la deuda no se puede medir en años de flujo"
-    return {"date": cash_b["date"], "debt": debt, "cash_and_short_term": cash, "net_debt": net,
+    return {"date": cash_b["date"], "debt": debt, "cash_and_investments": cash, "net_debt": net,
             "years_of_fcf": years, "long_term_securities": lt_value, **({"reading": reading} if reading else {}),
             "formula": "deuda de largo plazo (incl. la que vence en 12 meses) − caja, inversiones de corto plazo y "
                        "títulos negociables de largo plazo; ÷ flujo libre de 4 trimestres",
             "includes": ("caja, corto plazo y títulos negociables de largo plazo" if lt_value else
+                         f"sólo caja e inversiones de corto plazo: los títulos negociables de largo plazo son de otra "
+                         f"fecha ({lt['date']}) y no se mezclan" if lt_other_date else
                          "sólo caja e inversiones de corto plazo: el informe no separa títulos negociables de largo "
                          "plazo (otras inversiones de largo plazo, mezcladas con participaciones, no se cuentan)")}
 

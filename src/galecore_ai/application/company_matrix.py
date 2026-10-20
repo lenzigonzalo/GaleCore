@@ -67,14 +67,18 @@ def build_row(symbol: str, fund: dict | None, tech: dict | None, spy: dict | Non
     statements = (fund or {}).get("statements") or {}
     rev = next((statements[t] for t in analysis.REVENUE_TAGS if t in statements), None)
     technical = _pick(tech, TECH_FIELDS)
-    if (vs := relative(tech, spy)) and symbol != "SPY":
-        technical["vs_spy"] = vs
-    if etf and etf != symbol and (vs := relative(tech, etf_tech)):
-        technical["vs_etf"] = vs
+    for key, name, ref in (("vs_spy", "SPY", spy), ("vs_etf", etf, etf_tech)):
+        if not name or name == symbol or not tech:
+            continue
+        if vs := relative(tech, ref):
+            technical[key] = vs
+        else:       # say why it is absent: no candles, or another last close
+            technical[key] = {"unavailable": f"sin velas de {name}" if not ref else
+                              f"último cierre distinto: {tech.get('date')} contra {name} {ref.get('date')}"}
     ne = (fund or {}).get("next_earnings")
     return {"symbol": symbol, "market": (fund or {}).get("market"),
             "comparable": {"etf": etf, **({"etf_" + k: v for k, v in _pick(etf_tech, ("date", "vs_sma200_pct",
-                                                                                          "chg_126d_pct")).items()})},
+                                                                                          "chg_63d_pct", "chg_126d_pct")).items()})},
             "tecnico": technical,
             "fundamentales": {"revenue": _growth(rev), "operating_income": _growth(statements.get("OperatingIncomeLoss")),
                               **_pick(statements.get("quality"), QUALITY_FIELDS)},
