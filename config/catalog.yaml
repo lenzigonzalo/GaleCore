@@ -565,6 +565,7 @@ entries:
       - Buscá una empresa con tendencia alcista y buenos fundamentos para 6 a 12 meses
       - De MSFT, AAPL y NVDA, ¿cuál tiene tendencia alcista y fundamentos que la sostengan?
       - ¿Cómo vienen los fundamentos de esta acción?
+      - Hacé un análisis de qué tecnológicas tienen más potencial de crecimiento, con tendencia y oportunidad de entrada
     skill: skills/company-research/skill.yaml
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [market_data.candles, filings.sec_facts, filings.sec_filings, filings.sec_document, market_data.volatility_metrics, macro.fred_series, macro.bls_series]

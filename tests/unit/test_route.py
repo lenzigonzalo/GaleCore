@@ -51,6 +51,7 @@ def test_nothing_matches_and_it_says_so():
     ("Buscá una empresa con tendencia alcista y buenos fundamentos para 6-12 meses", "company_research"),
     ("Elegí entre MSFT, AAPL y NVDA para comprar acciones", "company_research"),
     ("¿Está cara AAPL?", "company_research"),
+    ("Quiero un análisis de qué tecnológicas tienen más potencial de crecimiento: tendencia, oportunidad de entrada, acumulación o distribución", "company_research"),  # WS-0052
     ("Análisis técnico de QQQ", "on_demand_analysis"),
 ])
 def test_the_closing_test_requests_find_their_capability(request_text, expected):
