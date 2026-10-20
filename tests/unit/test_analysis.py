@@ -138,6 +138,15 @@ def test_previous_compares_the_exact_symbol_not_the_slug_prefix(kb):
     assert analysis.previous(kb, "company", "MSFT-AAPL", later)[0] == ref_pair.removeprefix("evidence:")
 
 
+def test_a_change_whose_base_month_is_missing_is_declared_and_never_taken_from_the_neighbour():
+    months = {f"2025-{m:02d}": 100.0 + m for m in range(1, 13) if m != 10} | {f"2026-{m:02d}": 120.0 + m for m in range(1, 11)}
+    v = analysis._bls_view("CUSR0000SA0", analysis._months(bls("CUSR0000SA0", months)))
+    assert v["month"] == "2026-10" and "yoy_pct" not in v and v["change_without_base"] == {"12m": "2025-10"}
+    assert v["mom_pct"] is not None and v["three_month_annualized_pct"] is not None
+    ok = analysis._bls_view("CUSR0000SA0", analysis._months(bls("CUSR0000SA0", months | {"2025-10": 110.0})))
+    assert ok["yoy_pct"] == round((130.0 / 110.0 - 1) * 100, 2) and "change_without_base" not in ok
+
+
 def test_a_missing_month_of_this_year_is_listed_and_a_negative_eps_has_no_pe():
     months = {f"2025-{m:02d}": 100.0 + m for m in range(9, 13)} | {"2026-01": 113.0, "2026-03": 114.0}
     v = analysis._bls_view("LNS14000000", analysis._months(bls("LNS14000000", months)))

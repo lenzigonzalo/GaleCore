@@ -144,6 +144,10 @@ def _bls_view(series_id: str, months: list[tuple[str, float, bool]]) -> dict | N
             view["chg_3m_pts"] = _round(last - m3)
         if (m12 := back(12)) is not None:
             view["chg_12m_pts"] = _round(last - m12)
+    # A change is against the exact month, never the neighbour: when that month was not published, say which one.
+    no_base = {f"{k}m": _month_back(y, mo, k) for k in (1, 3, 12) if _month_back(y, mo, k) not in by}
+    if no_base:
+        view["change_without_base"] = no_base
     gaps = [m for m in (_month_back(y, mo, k) for k in range(12, 0, -1)) if m not in by]   # the last 12 months
     if gaps:
         view["months_without_value"] = gaps                # e.g. a shutdown month the agency never published
