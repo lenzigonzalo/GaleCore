@@ -83,7 +83,7 @@ function instructions(project) {
     'Para pasar contenido por stdin, escribí el JSON en un archivo de este proyecto (files/) y corré el comando con `< files/<archivo>.json`; sin cd, heredocs ni pipes.',
     'Después de un hito útil, guardá su evidencia y próximos pasos con las herramientas de GaleCore-AI. No hagas commit: el guardado alcanza (el commit de ' + KB + ' lo hace el mantenimiento).',
     'No uses git add . ni incluyas cambios ajenos. No pushees. No guardes secretos ni transcripciones completas en Git. No inventes evidencia ni aprobación.',
-    'Respondé con el formato de «Cómo responder» de GaleCore-AI/CLAUDE.md: corto, sin códigos internos. Si guardaste algo, una sola línea al final («Guardado: …»); si no, nada.',
+    'Corto y sin códigos internos. Si guardaste algo, una sola línea al final («Guardado: …»); si no, nada.',
     'Los datos y cálculos financieros provienen de GaleCore. Nunca uses los mocks del front. No hagas órdenes LIVE ni cambios en producción.',
     'El usuario mantiene autoridad sobre reglas, mandato y aprobaciones. Conservá permisos, sandbox y confirmaciones del CLI.',
     'No lances trabajo autónomo al arrancar: esperá el pedido del usuario.',
