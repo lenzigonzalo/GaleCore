@@ -47,8 +47,8 @@ python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--symbol X] [--o
 
 - **Fuentes, en orden** (owner 19/10): 1. GaleCore (también fundamentos: informes a la SEC); 2. oficial del emisor u
   organismo para lo que GaleCore no trae; 3. prensa reconocida (AP, Reuters, Bloomberg, WSJ, FT) para noticias y
-  contexto, no para una cifra; 4. blogs, foros y redes: pista que se confirma, marcada «sin verificar». La web, si el
-  trader la pide o para un faltante puntual, con su escalón y fecha.
+  contexto, no para una cifra; 4. blogs, foros y redes: pista que se confirma, marcada «sin verificar». La web, después
+  de GaleCore, si el trader la pide o para un faltante puntual, con su escalón y fecha.
 - **La hora de un dato es la suya**, no la de la consulta. Con el mercado cerrado no hay precio «de ahora»: el último
   registrado, con su fecha. Si `eventTime` es 0, usá `time` o `timeStamp` del mismo registro; si ninguno trae hora,
   «último registrado, sin fecha de la fuente», nunca «cierre».
@@ -70,8 +70,8 @@ python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--symbol X] [--o
 va aparte de lo simulado, nunca sumado.
 - **Topes del perfil** sobre el valor de la cuenta (`netLiq`) del día, con el monto (5 % de 2.542 USD = 127 USD).
   `capital --real --symbol --width --credit [--contracts]` dice tope por tope «cumple», «no cumple» o «no evaluable»:
-  es un chequeo de topes; lo que se opera en Tastytrade no pasa por GaleCore.
-- **`periods`** (semana, mes, año) es variación del valor e incluye depósitos y retiros: no es retorno.
+  es un chequeo de topes: no digas que la operación «pasa» (lo que se opera en Tastytrade no pasa por GaleCore).
+- **`periods`** (semana, mes, año) es variación del valor e incluye depósitos y retiros: no es retorno ni se compara con el objetivo.
 - **`spot`** de cada posición es el medio compra/venta al consultar, sin hora: no es un cierre.
 - **`takeProfit` / `stopLoss`** son niveles de las reglas, no órdenes en el bróker: no limitan la pérdida; la pérdida
   máxima sigue siendo `maxLoss` mientras no haya una orden puesta.

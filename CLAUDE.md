@@ -19,7 +19,7 @@ implementer no marca su trabajo `VALIDATED` ni `CLOSED`. Antes de presentar una 
 
 ## Uso del producto
 
-Las secciones de uso (empezar por el trader, cómo responder, estado, límites) están en `PRODUCT.md`:
+Las secciones de uso (contexto, herramientas, datos, cuenta, memoria, límites) están en `PRODUCT.md`:
 
 @PRODUCT.md
 
