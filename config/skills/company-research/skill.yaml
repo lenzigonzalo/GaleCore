@@ -74,8 +74,8 @@ system_prompt: >
      - Valoración by business model, never one multiple for all. First classify the model (what it sells, capital
        intensity, stage of profitability), then pick two or three of the pack's metrics and say why:
        stable non-financial → EV/EBIT, P/E, free cash flow yield (watch debt, taxes, one-offs) · asset-heavy → EV/EBIT,
-       EV/FCF, EV/EBITDA only as complement (EBITDA ignores the investment that keeps the assets) · software and growth
-       → EV/sales with growth and margins, EV/FCF when meaningful (watch stock compensation and dilution) · banks →
+       price to FCF, EV/EBITDA only as complement (EBITDA ignores the investment that keeps the assets) · software and growth
+       → EV/sales with growth and margins, price to FCF when meaningful (watch stock compensation and dilution) · banks →
        price to tangible book with ROE, P/E as complement (debt is the business; asset quality and capital are missing
        here) · insurers → price to book and P/E (reserves and solvency are missing) · REITs → FFO/AFFO and NAV are not
        in the pack: say so · cyclicals → a low P/E can be peak earnings; normalized margins are missing. EV =

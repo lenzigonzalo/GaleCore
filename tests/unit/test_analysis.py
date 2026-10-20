@@ -265,7 +265,7 @@ def test_enterprise_value_multiples_book_value_and_capital_returned():
     assert qd["interest_coverage"] == 10.0 and qd["roe_pct"] == 20.0 and qd["tangible_equity"] == 600.0
     # cap = 200 × 10 = 2.000; EV = 2.000 + (300 − 100) = 2.200
     assert v["enterprise_value"] == 2200 and v["ev_to_sales"] == 5.5 and v["ev_to_ebit"] == 13.75
-    assert v["ev_to_ebitda"] == 11.0 and v["ev_to_fcf"] == 22.0 and v["price_to_fcf"] == 20.0
+    assert v["ev_to_ebitda"] == 11.0 and "ev_to_fcf" not in v and v["price_to_fcf"] == 20.0 and "accionista" in v["ev_note"]
     assert v["price_to_book"] == round(2000 / 700, 2) and v["price_to_tangible_book"] == round(2000 / 600, 2)
     assert v["shareholder_yield_pct"] == 2.5                                    # (dividendos 20 + recompra neta 30) ÷ 2.000
 

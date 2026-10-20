@@ -483,12 +483,13 @@ def _multiples(cap: float, out: dict, qd: dict) -> dict:
     if (nd := qd.get("net_debt")) is not None:
         ev = cap + nd["net_debt"]
         m["enterprise_value"] = round(ev, 0)
-        m["ev_note"] = "capitalización + deuda neta; no incluye arrendamientos, minoritarios ni preferidas"
+        m["ev_note"] = ("capitalización + deuda neta; no incluye arrendamientos, minoritarios ni preferidas; "
+                        "no hay flujo libre para la firma: el flujo libre del pack es del accionista (después de "
+                        "intereses), por eso va contra la capitalización (price_to_fcf, fcf_yield_pct) y no contra el EV")
         m["ev_to_sales"] = _ratio(ev, rev, pct=False) if rev and rev > 0 else None
         m["ev_to_ebit"] = _ratio(ev, ebit, pct=False) if ebit and ebit > 0 else None
         if ebit is not None and da is not None and ebit + da > 0:
             m["ev_to_ebitda"] = _ratio(ev, ebit + da, pct=False)
-        m["ev_to_fcf"] = _ratio(ev, fcf, pct=False) if fcf and fcf > 0 else None
     eq = ((out.get("balance") or {}).get("StockholdersEquity") or {}).get("value")
     if eq and eq > 0:
         m["price_to_book"] = _ratio(cap, eq, pct=False)

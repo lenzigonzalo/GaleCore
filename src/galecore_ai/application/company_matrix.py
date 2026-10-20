@@ -161,7 +161,7 @@ def valuation_block(statements: dict | None) -> dict:
     return {"state": DATO, "close": v.get("close"), "close_date": v.get("close_date"), "pe_trailing": v.get("pe_trailing"),
             "pe_note": v.get("pe_note"), "pe_percentile_own_history": ph.get("percentile_today"),
             "pe_median_own_history": ph.get("median"),
-            **{k: v.get(k) for k in ("fcf_yield_pct", "ev_to_ebit", "ev_to_sales", "ev_to_fcf", "price_to_book",
+            **{k: v.get(k) for k in ("fcf_yield_pct", "ev_to_ebit", "ev_to_sales", "price_to_fcf", "price_to_book",
                                      "shareholder_yield_pct") if v.get(k) is not None},
             **({"scenarios_12m_return_pct": {c["case"]: c["return_pct"] for c in sc}} if sc else {})}
 
