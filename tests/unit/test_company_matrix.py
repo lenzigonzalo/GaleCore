@@ -113,6 +113,10 @@ def test_the_sector_comparable_is_a_fixed_table_industry_first():
     assert cm.sector_etf({"sector": "Technology", "industry": "Computer Hardware"}) == "XLK"
     assert cm.sector_etf({"sector": "Consumer Cyclical", "industry": "Internet Retail"}) == "XLY"
     assert cm.sector_etf({"sector": "Mystery"}) is None and cm.sector_etf(None) is None
+    # GaleCore's real labels: GOOGL is «Services», NVDA «Computer Hardware» (the symbol table decides semiconductors)
+    assert cm.sector_etf({"sector": "Services", "industry": "Business Services"}, "GOOGL") == "XLC"
+    assert cm.sector_etf({"sector": "Technology", "industry": "Computer Hardware"}, "NVDA") == "SOXX"
+    assert cm.sector_etf({"sector": "Technology", "industry": "Computer Hardware"}, "AAPL") == "XLK"
 
 
 def test_a_row_orders_by_filter_blocks_met_names_what_fails_and_has_no_score():

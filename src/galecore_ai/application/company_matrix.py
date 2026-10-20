@@ -23,7 +23,11 @@ INDUSTRY_ETF = (("software", "IGV"), ("semiconductor", "SOXX"), ("retail", "XLY"
 SECTOR_ETF = (("technology", "XLK"), ("financ", "XLF"), ("health", "XLV"), ("energy", "XLE"), ("industrial", "XLI"),
               ("consumer cyclical", "XLY"), ("consumer discretionary", "XLY"), ("consumer non-cyclical", "XLP"),
               ("consumer defensive", "XLP"), ("consumer staples", "XLP"), ("utilit", "XLU"), ("basic materials", "XLB"),
-              ("materials", "XLB"), ("real estate", "XLRE"), ("communication", "XLC"), ("telecom", "XLC"))
+              ("materials", "XLB"), ("real estate", "XLRE"), ("communication", "XLC"), ("telecom", "XLC"),
+              ("services", "XLC"))      # GaleCore files GOOGL under «Services»; retail goes first by industry
+# GaleCore's table has no semiconductor industry (NVDA is «Computer Hardware»): the known names are fixed by symbol.
+SYMBOL_ETF = {s: "SOXX" for s in ("NVDA", "AMD", "AVGO", "TSM", "INTC", "MU", "QCOM", "TXN", "AMAT", "LRCX", "KLAC",
+                                  "MRVL", "ASML", "ADI", "NXPI", "ON")}
 
 CRITERIA = {
     "T1": "estructura de medias: precio > media 50 > media 200",
@@ -41,9 +45,11 @@ CRITERIA = {
 FILTER_BLOCKS = ("tecnico", "calidad")
 
 
-def sector_etf(market: dict | None) -> str | None:
-    """The comparable for a company, from `volatility_metrics` sector and industry (None when the table has none)."""
+def sector_etf(market: dict | None, symbol: str | None = None) -> str | None:
+    """The comparable for a company: the symbol table, else `volatility_metrics` industry and sector (None if none)."""
     market = market or {}
+    if symbol and symbol.upper() in SYMBOL_ETF:
+        return SYMBOL_ETF[symbol.upper()]
     industry, sector = (market.get("industry") or "").lower(), (market.get("sector") or "").lower()
     if "health" in sector or "medical" in sector:
         industry = ""                       # "Pharmaceutical Retailers" is not consumer discretionary
@@ -245,7 +251,7 @@ async def gather(dispatcher, symbols: list[str], *, today: date | None = None) -
     funds, techs, spy, macro = await asyncio.gather(
         asyncio.gather(*(fundamental(s) for s in symbols)), asyncio.gather(*(technical(s) for s in symbols)),
         technical("SPY"), analysis.gather(dispatcher, "macro", today=today))
-    etfs = {s: sector_etf(f.get("market")) for s, f in zip(symbols, funds, strict=True)}
+    etfs = {s: sector_etf(f.get("market"), s) for s, f in zip(symbols, funds, strict=True)}
     wanted = sorted({e for e in etfs.values() if e and e not in symbols and e != "SPY"})
     etf_packs = dict(zip(wanted, await asyncio.gather(*(technical(e) for e in wanted)), strict=True))
     by_symbol = dict(zip(symbols, techs, strict=True))
