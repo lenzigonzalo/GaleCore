@@ -8,7 +8,14 @@ import json
 import subprocess
 import sys
 
+from concepto import es_concepto
+
 sys.stdout.reconfigure(encoding="utf-8")
+try:  # el Lab pasa {"prompt","cwd"}; sin eso (o sin JSON) el contexto es el completo de siempre
+    _EVENT = json.load(sys.stdin)
+except ValueError:
+    _EVENT = {}
+_LIGHT = isinstance(_EVENT, dict) and es_concepto(_EVENT.get("prompt") or "", _EVENT.get("cwd"))
 
 
 def start(*args):
@@ -20,7 +27,10 @@ def start(*args):
 # Owner 19/10: «Mercado hoy» no puede salir vacío al retomar: SPY, VIX y eventos de GaleCore, en paralelo con el resto.
 _TODAY = datetime.date.today()
 _FROM = (_TODAY - datetime.timedelta(days=12)).isoformat()
-_RUNS = {"clock": start("clock"), "list": start("galecore", "list"), "space": start("space", "context"),
+_RUNS = {"clock": start("clock"), "space": start("space", "context")}
+# Una pregunta de concepto no usa el mercado ni el mapa: no se consultan (WS-0050).
+if not _LIGHT:
+    _RUNS |= {"list": start("galecore", "list"),
          "spy": start("galecore", "get", "market_data.candles", "--param", "symbol=SPY", "--param", "interval=1d",
                       "--param", "fromTime=" + _FROM),
          "vix": start("galecore", "get", "history.index_daily", "--param", "Index=VIX", "--param", "From=" + _FROM),
@@ -153,10 +163,11 @@ def market_line():
 
 print(clock_line())
 print(week_line())
-line = market_line()
-if line:
-    print(line)
-print(galecore_map())
+if not _LIGHT:
+    line = market_line()
+    if line:
+        print(line)
+    print(galecore_map())
 print()
 out = cli("space", "context")
 print(out.stdout)

@@ -287,7 +287,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea») en '+path.join(p.dir,chat.mapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
     const job={proc:null,project:p.id,chat};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
     function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
-    Promise.all([script('session_context.py',{cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
+    Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide tools/caso.py, sea cual sea el motor
       const context=[resume,product,here,facts,asked].filter(Boolean).join('\n\n');

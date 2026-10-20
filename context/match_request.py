@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from concepto import NOT_TICKERS, es_concepto
+
 try:
     import yaml
 except ImportError:  # sin PyYAML se pierde el «cómo responder», no el aviso de capacidad
@@ -23,7 +25,8 @@ except ValueError:
 prompt = event.get("prompt", "")
 if not prompt.strip():
     sys.exit(0)
-
+if es_concepto(prompt, event.get("cwd")):  # una explicación no usa mercado ni vigilancia (WS-0050)
+    sys.exit(0)
 
 
 def preload(text):
@@ -66,9 +69,6 @@ def preload(text):
 
 PRELOAD_FOR = {"strategy_design", "context_research", "on_demand_analysis", "company_research", "research",
                "gex_interpretation"}
-NOT_TICKERS = {"OK", "EPS", "IV", "HV", "ETF", "USD", "EEUU", "NY", "PCS", "CCS", "IC", "GEX", "CPI", "FOMC", "PBI",
-               "DTE", "OTM", "ITM", "ATM", "IA", "AI", "CEO", "YO", "Y", "A", "O", "SEC", "PE", "UTC", "NFP",
-               "HOY", "SI", "NO", "VS", "ES", "EN", "DE", "LA", "EL", "QUE", "UN", "MI", "TU", "PARA", "CON", "POR"}
 # Por la intención del turno, no por el lugar ni por una palabra suelta (revisión de Astra, 16/10): «armemos una
 # estrategia» es diseño; «¿por qué perdió esta estrategia?» no. En un proyecto de estrategia, diseño es el default
 # cuando el catálogo no reconoce otra cosa clara. Exige una estrategia nueva («una/otra/nueva»): «quiero ver cómo va
