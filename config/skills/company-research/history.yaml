@@ -1,6 +1,14 @@
 # Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: company_research
 versions:
+  - version: "0.3.0"
+    date: 2026-10-20
+    changes: >
+      F6 replanteado por el owner (harness liviano): sin esqueleto de respuesta, bloques fijos, estados de selección,
+      escenarios por regla ni tabla de ETF; quedan las herramientas, qué trae cada pack y los cuidados que nacieron de
+      errores observados (números del día, competidores con su pack, P/E con no operativo, flujo del accionista,
+      guardar). De ~150 a ~45 líneas; `answer` y `system_prompt` dicen lo mismo.
+    feedback: []
   - version: "0.2.5"
     date: 2026-10-19
     changes: >
