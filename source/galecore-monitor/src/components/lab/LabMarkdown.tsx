@@ -25,6 +25,8 @@ export const LabMarkdown = memo(function LabMarkdown({ text, active = false, onA
 function Markdown({ text }: { text: string }) {
   return <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={{
     table: ({ children }) => <div className="lab-table-scroll" role="region" aria-label="Tabla de la respuesta" tabIndex={0}><table>{children}</table></div>,
+    // WS-0051: número con signo (+6,80 % / −2,13 %) en verde o rojo; regla genérica, sin mirar el nombre de la columna.
+    td: ({ children }) => <td className={signClass(children)}>{children}</td>,
     a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>,
     // WS-0045: un bloque ```grafico (formato del Mapa) se dibuja; si el JSON no sirve, queda como código.
     code: ({ className, children }) => {
@@ -34,6 +36,18 @@ function Markdown({ text }: { text: string }) {
     pre: ({ children }) => <>{children}</>,
     img: ({ alt }) => <span className="lab-image-description">{alt || 'Imagen'}</span>,
   }}>{text}</ReactMarkdown>;
+}
+
+const SIGNED = /^\s*([+−-])\s?\d[\d.,]*\s?%?\s*$/;
+
+function plainText(node: React.ReactNode): string {
+  return React.Children.toArray(node).map(c => typeof c === 'string' ? c : React.isValidElement<{ children?: React.ReactNode }>(c) ? plainText(c.props.children) : '').join('');
+}
+
+function signClass(children: React.ReactNode): string | undefined {
+  const text = plainText(children);
+  const m = SIGNED.exec(text);
+  return m ? (m[1] === '+' ? 'lab-pos' : 'lab-neg') : undefined;
 }
 
 function parseChart(text: string): MapaChart | null {

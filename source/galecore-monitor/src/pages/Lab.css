@@ -404,3 +404,17 @@
 .lab-confirm div { display:flex; justify-content:flex-end; gap:8px; }
 .lab-confirm button { padding:7px 14px; border:1px solid var(--border); border-radius:7px; background:transparent; color:var(--text-primary); font:13px var(--font-sans); cursor:pointer; }
 @media (max-width: 760px) { .lab-files { grid-template-columns:1fr; grid-template-rows:minmax(160px,40%) 1fr; } .lab-files-side { border-right:0; border-bottom:1px solid var(--border-dark); } .lab-view-switch button { padding:5px 8px; } }
+
+/* WS-0051: tablas del chat legibles (títulos cortos, primera columna fija, texto ancho visible) y variaciones con signo en color. */
+.lab-table-scroll { scrollbar-width: thin; scrollbar-color: var(--text-muted) var(--bg-tertiary); }
+.lab-table-scroll::-webkit-scrollbar { height: 10px; }
+.lab-table-scroll::-webkit-scrollbar-track { background: var(--bg-tertiary); }
+.lab-table-scroll::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 5px; }
+.lab-markdown table { width: max-content; min-width: 100%; }
+.lab-markdown th, .lab-markdown td { min-width: 0; overflow-wrap: normal; word-break: normal; }
+.lab-markdown th { min-width: 96px; max-width: 150px; line-height: 1.35; font-size: .85em; }
+.lab-markdown td:last-child { min-width: 280px; }
+.lab-markdown th:first-child, .lab-markdown td:first-child { position: sticky; left: 0; z-index: 1; min-width: 0; border-right: 1px solid var(--border-dark); }
+.lab-markdown th:first-child { z-index: 2; }
+.lab-markdown td.lab-pos { color: var(--green); }
+.lab-markdown td.lab-neg { color: var(--red-gc); }
