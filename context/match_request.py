@@ -27,6 +27,17 @@ if not prompt.strip():
     sys.exit(0)
 if es_concepto(prompt, event.get("cwd")):  # una explicación no usa mercado ni vigilancia (WS-0050)
     sys.exit(0)
+in_project = "strategies" in Path(event.get("cwd") or ".").parts
+METHOD = SKILLS / "skills" / "strategy-design" / "method.md"  # sólo en turnos de idea o estrategia (WS-0050)
+
+
+def method():
+    if METHOD.is_file():
+        print(METHOD.read_text(encoding="utf-8").strip())
+
+
+if in_project:
+    method()
 
 
 def preload(text):
@@ -75,7 +86,6 @@ PRELOAD_FOR = {"strategy_design", "context_research", "on_demand_analysis", "com
 # la estrategia» o «cambiar de tema» no son diseño (revisión interna, 16/10).
 BUILD = re.compile(r"\b(armar|arm[aá]|armemos|hacer|hagamos|desarrollar|desarroll[aá]|dise[nñ]ar|crear|construir|"
                    r"pensar|pensemos)\b\s+(?:\w+\s+){0,3}?(?:una|otra|nueva)\s+(?:\w+\s+){0,2}?estrateg", re.I)
-in_project = "strategies" in Path(event.get("cwd") or ".").parts
 if BUILD.search(prompt):
     top = DESIGN
 else:
@@ -118,3 +128,5 @@ if top["score"] >= MIN_SCORE:
             answer = None
     if answer:
         print("[cómo responder]\n" + answer.strip())
+    if top["capability"] == "strategy_design" and not in_project:
+        method()
