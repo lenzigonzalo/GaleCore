@@ -1,4 +1,4 @@
-﻿# WS-0028 · Conexiones mínimas y reautenticación
+# WS-0028 · Conexiones mínimas y reautenticación
 
 Owner 13/10/2026: simplificar Conexiones a Claude Code y Codex, estado y botón Reautenticar; enviar automáticamente el comando a la terminal. Sustituye la composición amplia anterior, documentada en WS-0028-settings-connections.md como antecedente. WS-0029 sigue activo; esta continuación de interfaz fue autorizada, sin alterar su evidencia ni pruebas.
 
@@ -21,4 +21,4 @@ El servidor vuelve a validar proveedor y usa argv fijo, sin shell ni comandos ar
 
 ## Para retomar
 
-Abrir Configuración → Conexiones y elegir Reautenticar en el proveedor deseado. Completar su acceso oficial en el navegador y comprobar el estado al terminar. Pendientes: recorrido con login real y aceptación visual del owner. No VALIDATED/CLOSED, push/PR ni cambios de ACTIVE_WORK_ITEM. Integración/activación y bundle servido se registran después de ejecutarse.
+Abrir Configuración → Conexiones y elegir Reautenticar en el proveedor deseado. Completar su acceso oficial en el navegador y comprobar el estado al terminar. Pendientes: recorrido con login real y aceptación visual del owner. No VALIDATED/CLOSED, push/PR ni cambios de ACTIVE_WORK_ITEM. Verificación posterior de sólo lectura: git merge-base --is-ancestor 93eb407 local/integracion devolvió 0 y git log -1 mostró 93eb407. La implementación ya estaba integrada antes de este registro. Terminal :8770 iniciada con puerto libre, sin reiniciar otros servicios. GET real /auth/status HTTP 200: ambos proveedores authenticated; Origin ajeno HTTP 403. Bundle :3039 HTTP 200 con vista simplificada, cero errores JS en login. Artefacto live-result.json; sin E2E autenticado ni login real.
