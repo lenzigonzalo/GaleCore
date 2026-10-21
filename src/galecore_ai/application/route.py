@@ -11,8 +11,12 @@ from __future__ import annotations
 
 import re
 
+import yaml
+
 from galecore_ai.application.source_query import _STOPWORDS_FOLDED, _fold
+from galecore_ai.harness.assets import load_asset
 from galecore_ai.harness.catalog import Catalog
+from galecore_ai.harness.definitions import SkillDefinition
 
 MIN_SCORE = 6  # below this the overlap is chance; the host chooses from `options`
 MARGIN = 2  # a first that barely beats the second is a guess (batería MVP 17/10: «¿entra en mi cuenta?» → market_watch)
@@ -51,9 +55,11 @@ def match(request: str, catalog: Catalog, limit: int = 3) -> dict:
     strong = bool(best) and best[0]["score"] >= MIN_SCORE
     rival = best[1]["score"] if len(best) > 1 and best[1]["score"] >= MIN_SCORE else 0
     sure = strong and best[0]["score"] - rival >= MARGIN
+    if sure:  # the method travels with the match (WS-0054): the host never has to look for skill files
+        best[0]["pasos"] = _method(best[0]["skill"])
     out = {"request": request, "matches": best, "missing": not best, "confident": sure,
-           "next": ("Leé el archivo de la skill de la primera (o la que mejor sirva), bajo config/, y seguí su método y su flow; "
-                    "ahí está cómo se responde ese tipo de pedido." if sure else
+           "next": ("Seguí los `pasos` y el `flow` de la primera: ahí está cómo se resuelve y se responde ese pedido."
+                    if sure else
                     "El cruce de palabras no alcanza: elegí por el sentido del pedido entre `options` y corré "
                     "`catalog --match` con el ejemplo de esa capacidad para ver su flow; si ninguna sirve, ofrecé crearla "
                     "con capability_builder; no improvises.")}
@@ -62,6 +68,13 @@ def match(request: str, catalog: Catalog, limit: int = 3) -> dict:
                           if strong else options(catalog))
         out["ambiguous"] = strong
     return out
+
+
+def _method(skill_path: str) -> str | None:
+    try:
+        return load_asset(skill_path, SkillDefinition).system_prompt or None
+    except (OSError, ValueError, yaml.YAMLError):
+        return None
 
 
 def options(catalog: Catalog) -> list[dict]:

@@ -56,6 +56,7 @@ class SkillDefinition(BaseModel):
     output_contract: str  # fully qualified class name of the Pydantic output model
     system_prompt: str = ""
     instructions: str = ""
+    answer: str = ""  # «cómo responder»: what the Lab pastes into the turn
     examples: list[SkillExample] = Field(default_factory=list)
 
 

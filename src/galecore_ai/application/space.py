@@ -22,7 +22,9 @@ import yaml
 
 from galecore_ai.adapters.galecore_space import SpaceClient
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
+from galecore_ai.harness.assets import load_asset
 from galecore_ai.harness.catalog import load_catalog
+from galecore_ai.harness.definitions import SkillDefinition
 
 CONVENTIONS = Path(__file__).resolve().parents[3] / "config" / "conventions"
 
@@ -139,9 +141,16 @@ def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
                                              ensure_ascii=False),
                        "format": "json", "visibility": "private"})
     for entry in load_catalog().entries:
-        lines = [entry.serves.strip(), "", "Pedidos de ejemplo:", *(f"- {r}" for r in entry.example_requests)]
-        pieces.append({"kind": "skill", "key": _slug(entry.id.replace("_", "-")), "title": entry.id,
-                       "content": "\n".join(lines), "format": "markdown", "visibility": "shared"})
+        if entry.skill.endswith(".md"):  # the skill itself, as written (WS-0054), not a summary of the catalog
+            skill = load_asset(entry.skill, SkillDefinition)
+            content, title = f"{skill.description.strip()}\n\n{skill.system_prompt}", skill.display_name
+            if skill.answer:
+                content += f"\n\n## Cómo responder\n{skill.answer}"
+        else:
+            lines = [entry.serves.strip(), "", "Pedidos de ejemplo:", *(f"- {r}" for r in entry.example_requests)]
+            content, title = "\n".join(lines), entry.id
+        pieces.append({"kind": "skill", "key": _slug(entry.id.replace("_", "-")), "title": title,
+                       "content": content, "format": "markdown", "visibility": "shared"})
     return pieces
 
 
