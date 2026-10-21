@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, BookOpen, Brain, Lock, Pencil, Plug, Power, SlidersHorizontal, Trash2, User, Users } from 'lucide-react';
+import { Bell, BookOpen, Brain, Lock, Pencil, Plug, Power, Trash2, User, Users } from 'lucide-react';
 import { Connections } from '../components/settings/Connections';
 import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
 import { LocalMcp } from '../components/settings/LocalMcp';
 import { localMcpAvailable } from '../api/localMcp';
-import { PreferencesForm, Switch } from '../components/settings/PreferencesForm';
+import { LanguageSetting, Switch } from '../components/settings/LanguageSetting';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
 import { SUGGESTIONS_KEY, suggestionsEnabled, saveSuggestionsEnabled } from '../components/lab/LabSuggestions';
 import { STRIKE_ALERT_KEY } from '../api/account';
@@ -19,33 +19,30 @@ import {
 /**
  * Configuración (GC-0007): todo lo que es de la persona, con navegación lateral, como la de cualquier app de IA.
  *
- *   GENERAL          usuario · contraseña
+ *   GENERAL          usuario e idioma · contraseña · avisos
  *   CONEXIONES       IA, GaleCore, bróker
- *   PERSONALIZACIÓN  preferencias (idioma, forma de las respuestas, fuentes) · avisos
- *   MEMORIA          lo que GaleCore-AI recuerda (notas, objetivos y reglas, juntos) · métodos y skills
+ *   MEMORIA          lo que GaleCore-AI recuerda de la persona (una lista) · métodos y skills
  *   EQUIPO           compartido conmigo
  *
  * Nada se muestra como JSON ni como caja libre cuando se puede elegir: las opciones son interruptores y listas, y se
  * guardan solas. El estado vive en esta pantalla (no en un store de módulo): muere con la sesión.
  */
-export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'perfil' | 'memoria' | 'skills'
+export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'memoria' | 'skills'
   | 'compartido' | 'avisos' | 'servicios';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
-  { group: 'General', items: [{ id: 'usuario', label: 'Usuario', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }] },
+  { group: 'General', items: [{ id: 'usuario', label: 'Usuario', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Conexiones', items: [{ id: 'conexiones', label: 'Conexiones', Icon: Plug }] },
-  { group: 'Personalización', items: [{ id: 'perfil', label: 'Preferencias', Icon: SlidersHorizontal }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
-  { group: 'Memoria', items: [{ id: 'memoria', label: 'Lo que recuerda', Icon: Brain }, { id: 'skills', label: 'Métodos y skills', Icon: BookOpen }] },
+  { group: 'Memoria', items: [{ id: 'memoria', label: 'Memoria', Icon: Brain }, { id: 'skills', label: 'Métodos y skills', Icon: BookOpen }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
   { group: 'Plataforma', items: [{ id: 'servicios', label: 'Servicios', Icon: Power }] },
 ];
 
-const SECTION_KIND: Partial<Record<Section, SpaceKind>> = { perfil: 'profile', memoria: 'memory', skills: 'skill' };
+const SECTION_KIND: Partial<Record<Section, SpaceKind>> = { memoria: 'memory', skills: 'skill' };
 
 const INTRO: Partial<Record<Section, string>> = {
-  perfil: 'Cómo responde GaleCore-AI y de dónde saca los datos. Se guarda solo.',
   servicios: 'Los servicios que corren solos para toda la plataforma. Las estrategias se prenden en su ficha de Estrategias y las tareas en Agentes.',
-  memoria: 'Todo lo que GaleCore-AI tiene en cuenta en cada chat: notas, objetivos y reglas. También se agrega desde el chat («acordate de…»).',
+  memoria: 'Lo que GaleCore-AI recuerda de vos y tiene en cuenta en cada chat. También se agrega desde el chat («acordate de…»).',
   skills: 'Los métodos que GaleCore-AI sabe aplicar. Se leen en texto y se pueden ajustar en markdown.',
   avisos: 'Avisos de la cuenta real que suenan en la campana.',
   compartido: 'Lo que otros del equipo compartieron. Se lee, no se edita.',
@@ -106,27 +103,17 @@ function ConventionBody({ item }: { item: SpaceItem }) {
   return <Markdown text={item.content} />;
 }
 
-// ── memoria: notas, objetivos y reglas en una sola lista ────────
+// ── memoria: una sola lista de lo que GaleCore-AI recuerda (como la de ChatGPT o Claude) ──
 
-const MEMORY_TYPES: { kind: SpaceKind; label: string; plural: string }[] = [
-  { kind: 'memory', label: 'Nota', plural: 'Notas' },
-  { kind: 'objective', label: 'Objetivo', plural: 'Objetivos' },
-  { kind: 'convention', label: 'Regla', plural: 'Reglas' },
-];
-const typeOf = (kind: SpaceKind) => MEMORY_TYPES.find((t) => t.kind === kind);
-const PLACEHOLDER: Partial<Record<SpaceKind, string>> = {
-  memory: 'Ej.: prefiero vencimientos de 30 a 45 días',
-  objective: 'Ej.: retorno anual de 10 a 15 % vendiendo prima con riesgo definido',
-  convention: 'Ej.: no abrir posiciones nuevas la semana del FOMC',
-};
+// Notas, objetivos y reglas guardados antes se muestran juntos; lo nuevo se guarda como nota.
+const MEMORY_KINDS: SpaceKind[] = ['memory', 'objective', 'convention'];
 
 function MemoryEditor({ item, taken, onDone }: { item?: SpaceItem; taken: Set<string>; onDone: (saved: boolean) => void }) {
-  const [kind, setKind] = useState<SpaceKind>(item?.kind ?? 'memory');
   const [content, setContent] = useState(item?.content ?? '');
   const [shared, setShared] = useState(item?.visibility === 'shared');
   const [error, setError] = useState<string | null>(null);
   const save = async () => {
-    // El título sale de la primera línea: se escribe una sola cosa, como en la memoria de ChatGPT o de Claude.
+    const kind = item?.kind ?? 'memory';
     const title = item?.title ?? content.trim().split('\n')[0].slice(0, 60);
     let key = item?.key ?? keyFromTitle(title);
     if (!item && taken.has(`${kind}/${key}`)) key = `${key.slice(0, 50)}-${Date.now().toString(36)}`;
@@ -137,10 +124,8 @@ function MemoryEditor({ item, taken, onDone }: { item?: SpaceItem; taken: Set<st
   };
   return (
     <div className="mem-editor">
-      {!item && <div className="mem-chips" role="radiogroup" aria-label="Tipo">
-        {MEMORY_TYPES.map((t) => <button key={t.kind} role="radio" aria-checked={kind === t.kind} className={kind === t.kind ? 'is-on' : ''} onClick={() => setKind(t.kind)}>{t.label}</button>)}
-      </div>}
-      <textarea autoFocus rows={3} aria-label="Contenido" value={content} onChange={(e) => setContent(e.target.value)} placeholder={PLACEHOLDER[kind]} />
+      <textarea autoFocus rows={3} aria-label="Contenido" value={content} onChange={(e) => setContent(e.target.value)}
+        placeholder="Ej.: prefiero vencimientos de 30 a 45 días" />
       <div className="mem-editor-bar">
         <label className="mem-share"><Switch on={shared} label="Compartir con el equipo" onChange={setShared} />Compartir con el equipo</label>
         <span style={{ flex: 1 }} />
@@ -153,32 +138,26 @@ function MemoryEditor({ item, taken, onDone }: { item?: SpaceItem; taken: Set<st
 }
 
 function MemoryView({ items, onChanged }: { items: SpaceItem[]; onChanged: () => void }) {
-  const [filter, setFilter] = useState<SpaceKind | 'all'>('all');
   const [editing, setEditing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
-  const list = useMemo(() => items.filter((i) => i.isOwn && typeOf(i.kind)), [items]);
-  const shown = filter === 'all' ? list : list.filter((i) => i.kind === filter);
+  const list = useMemo(() => items.filter((i) => i.isOwn && MEMORY_KINDS.includes(i.kind)), [items]);
   const taken = useMemo(() => new Set(list.map((i) => `${i.kind}/${i.key}`)), [list]);
   const done = (saved: boolean) => { setEditing(null); if (saved) onChanged(); };
   const remove = async (i: SpaceItem) => { setConfirming(null); await deleteSpaceItem(i.kind, i.key); onChanged(); };
   return (
     <div className="mem">
       <div className="mem-top">
-        <div className="mem-chips" role="tablist" aria-label="Filtrar">
-          <button role="tab" aria-selected={filter === 'all'} className={filter === 'all' ? 'is-on' : ''} onClick={() => setFilter('all')}>Todo <span>{list.length}</span></button>
-          {MEMORY_TYPES.map((t) => <button key={t.kind} role="tab" aria-selected={filter === t.kind} className={filter === t.kind ? 'is-on' : ''} onClick={() => setFilter(t.kind)}>{t.plural} <span>{list.filter((i) => i.kind === t.kind).length}</span></button>)}
-        </div>
+        <span className="mem-count">{list.length === 1 ? '1 recuerdo' : `${list.length} recuerdos`}</span>
         <button className="settings-action is-primary" onClick={() => setEditing('__new__')}>+ Agregar</button>
       </div>
       {editing === '__new__' && <MemoryEditor taken={taken} onDone={done} />}
-      {shown.length === 0 && editing !== '__new__' && <div style={muted}>Todavía no hay nada. Agregá una nota, un objetivo o una regla, o pedile al chat «acordate de…».</div>}
+      {list.length === 0 && editing !== '__new__' && <div style={muted}>Todavía no hay nada. Agregá algo para que lo recuerde, o pedile al chat «acordate de…».</div>}
       <ul className="mem-list">
-        {shown.map((i) => {
+        {list.map((i) => {
           const id = `${i.kind}/${i.key}`;
           if (editing === id) return <li key={id}><MemoryEditor item={i} taken={taken} onDone={done} /></li>;
           return (
             <li key={id} className="mem-item">
-              <span className="mem-type">{typeOf(i.kind)?.label}</span>
               <div className="mem-body">{i.format === 'json' ? <ConventionBody item={i} /> : <Markdown text={i.content} />}</div>
               {i.visibility === 'shared' && <span className="mem-shared">Equipo</span>}
               <div className="mem-actions">
@@ -295,6 +274,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
         <div style={muted}>Usuario</div><div style={{ color: 'var(--text-primary)' }}>{user?.username ?? '—'}</div>
         <div style={muted}>Email</div><div style={{ color: 'var(--text-primary)' }}>{user?.email ?? '—'}</div>
         <div style={muted}>Rol</div><div style={{ color: 'var(--text-primary)' }}>{user?.isAdmin ? 'Administrador' : 'Operador'}</div>
+        <LanguageSetting item={items.find(i => i.kind === 'profile' && i.isOwn)} onChanged={reload} />
         <div style={muted}>Chat nuevo</div><label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-primary)', cursor: 'pointer' }}>
           <input type="checkbox" checked={suggestionsEnabled(items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY))}
             onChange={e => { void saveSuggestionsEnabled(e.target.checked).then(reload).catch(() => setError('No se pudo guardar la preferencia.')); }} />
@@ -308,8 +288,6 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
     body = <div style={card}><MyPasswordCard embedded /></div>;
   } else if (section === 'broker') {
     body = <p>Cuenta de bróker: próximamente.</p>;
-  } else if (section === 'perfil') {
-    body = <PreferencesForm item={own.find(item => item.isOwn)} onChanged={reload} />;
   } else if (section === 'avisos') {
     body = loading && !items.length ? <p role="status">Cargando avisos…</p>
       : <StrikeAlertForm item={items.find(i => i.kind === 'preference' && i.key === STRIKE_ALERT_KEY)} onChanged={load} />;
@@ -334,10 +312,10 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
   }
 
   const group = NAV.find(group => group.items.some(item => item.id === section)) || NAV[0];
-  const changeStep = (next: number) => { setStep(next); setSection((['conexiones', 'perfil'] as Section[])[next]); };
+  const changeStep = (next: number) => { setStep(next); setSection((['conexiones', 'usuario'] as Section[])[next]); };
   return <div className={'settings-page' + (wizard ? ' settings-wizard' : '')}>
-    <aside className="settings-nav" aria-label="Secciones de configuración">{wizard ? <ol>{['Conectar la IA', 'Tus preferencias'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined}>{index + 1}. {label}</li>)}</ol> : NAV.filter(group => group.group !== 'Plataforma' || user?.isAdmin).map(group => <button key={group.group} onClick={() => setSection(group.items[0].id)} className={group.items.some(item => item.id === section) ? 'is-selected' : ''} aria-current={group.items.some(item => item.id === section) ? 'page' : undefined}>{group.group}</button>)}</aside>
-    <main className="settings-main"><h1>{wizard ? ['Conectar la IA', 'Tus preferencias'][step] : group.group}</h1>
+    <aside className="settings-nav" aria-label="Secciones de configuración">{wizard ? <ol>{['Conectar la IA', 'Tus datos'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined}>{index + 1}. {label}</li>)}</ol> : NAV.filter(group => group.group !== 'Plataforma' || user?.isAdmin).map(group => <button key={group.group} onClick={() => setSection(group.items[0].id)} className={group.items.some(item => item.id === section) ? 'is-selected' : ''} aria-current={group.items.some(item => item.id === section) ? 'page' : undefined}>{group.group}</button>)}</aside>
+    <main className="settings-main"><h1>{wizard ? ['Conectar la IA', 'Tus datos'][step] : group.group}</h1>
       {!wizard && group.items.length > 1 && <nav className="settings-subsections" aria-label={group.group}>{group.items.map(item => <button key={item.id} aria-current={section === item.id ? 'page' : undefined} onClick={() => setSection(item.id)}>{item.label}</button>)}</nav>}
       {INTRO[section] && <p>{INTRO[section]}</p>}
       {kind && loading ? <p role="status">Cargando {label.toLowerCase()}…</p> : error && kind ? <div role="alert"><p>{error}</p><button style={btn()} onClick={() => load()}>Reintentar</button></div> : body}
