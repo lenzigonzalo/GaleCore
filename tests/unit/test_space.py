@@ -93,6 +93,19 @@ def test_the_session_starts_with_who_the_trader_is(galecore):
     assert "compartido: skill (1)" in text
 
 
+def test_the_traders_own_skills_are_named_for_the_chat(galecore):  # WS-0054: created in the monitor, private
+    _, client = galecore
+    own = {"kind": "skill", "title": "Volatilidad de SPY", "format": "markdown", "visibility": "private",
+           "content": "\nResume la volatilidad de SPY en una línea.\n\n## Pasos\n1. Traer los datos."}
+    product = {**own, "key": "capital-risk", "title": "Riesgo y capital", "visibility": "shared"}
+    space.sync(client, [{**own, "key": "volatilidad-spy"}, product])
+    client.login()
+    text = space.context(client)
+    assert ("skill propia «Volatilidad de SPY» (`space show skill/volatilidad-spy`): "
+            "Resume la volatilidad de SPY en una línea.") in text
+    assert "Riesgo y capital" not in text                      # the product's skills come through the catalog
+
+
 def test_the_profile_travels_whole():
     long_limit = "pérdida máxima por operación 5 % del capital de referencia, " * 6
     prof = {"version": 7, "reference_capital": {"amount": 10000.0, "currency": "USD"}, "risk_limits": [long_limit.strip()],

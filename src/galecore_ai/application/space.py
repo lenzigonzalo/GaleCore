@@ -485,6 +485,11 @@ def context(client: SpaceClient) -> str:
               {"agent": "agentes", "skill": "skills", "memory": "memorias", "data": "datos"}.items() if by_kind.get(k)]
     if counts:
         lines.append("  además: " + " · ".join(counts))
+    # The trader's own skills (created in the monitor, private) are not in the catalog: name them so a request can
+    # use one (WS-0054); the product's skills are shared and reached through the catalog.
+    for s in (i for i in by_kind.get("skill", []) if i.get("visibility") == "private"):
+        first = next((ln.strip() for ln in str(s.get("content", "")).splitlines() if ln.strip()), "")
+        lines.append(f"  skill propia «{s['title']}» (`space show skill/{s['key']}`): {first[:140]}")
     shared_kinds = sorted({i["kind"] for i in shared})
     if shared_kinds:
         lines.append("  compartido: " + ", ".join(f"{k} ({sum(1 for i in shared if i['kind'] == k)})" for k in shared_kinds))

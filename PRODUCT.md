@@ -32,7 +32,8 @@ python -B -m galecore_ai.adapters.cli galecore list             # qué datos sir
 python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--symbol X] [--out .scratch/x.json] [--keep "<pedido>"]
 ```
 
-- Si el Lab ya indicó la capacidad del pedido, usala; `catalog --match` si no la indicó o necesitás su flujo. Si
+- Si el Lab ya indicó la capacidad del pedido, usala; `catalog --match` si no la indicó o necesitás su flujo. Una
+  skill propia del trader (`skill propia` en `[espacio]`) se lee con `space show skill/<clave>` y se sigue igual. Si
   ninguna sirve, ofrecé `capability_builder`. El trader no nombra skills ni hace falta anunciarlas.
 - Cómo se pide un dato: `galecore list` (no `docs/` ni `GaleCore/`). Lo pesado (una cadena ~1 MB) va con
   `--out .scratch/<nombre>.json`. Lo que el Lab ya trajo en el contexto no se vuelve a pedir.
