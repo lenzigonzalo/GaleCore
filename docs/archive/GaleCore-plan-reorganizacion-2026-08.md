@@ -1,3 +1,5 @@
+> **Archivado el 21/10/2026 (WS-0048).** Registro histórico, no se sigue. Forma de trabajo vigente: `ENGINEERING.md` del workspace.
+
 # Plan de reorganización — switch global, administración y login por usuario
 
 **Estado:** etapas 1 y 2 **COMPLETAS y verificadas en vivo** (2026-08-12) · etapa 3 **escrita entera

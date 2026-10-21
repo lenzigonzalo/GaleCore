@@ -430,7 +430,7 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   eliminó: con dos operadores, poder silenciar una estrategia en el tablero propio no justificaba
   que el loop consultara la base en cada tick para preguntar si le servía a alguien, ni el catálogo
   duplicado entre el JSON y una tabla que nadie leía. Ver
-  [`docs/GaleCore-plan-reorganizacion-2026-08.md`](docs/GaleCore-plan-reorganizacion-2026-08.md).
+  [`docs/archive/GaleCore-plan-reorganizacion-2026-08.md`](archive/GaleCore-plan-reorganizacion-2026-08.md) (histórico).
 
   **Sin base configurada no hay permisos que consultar**, y eso no es un error: la API arranca sin
   base a propósito (`Program.cs`). Ahí el `POST` no exige admin y todo se comporta como antes de que

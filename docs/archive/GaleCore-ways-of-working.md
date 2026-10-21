@@ -1,3 +1,5 @@
+> **Archivado el 21/10/2026 (WS-0048).** Registro histórico, no se sigue. Forma de trabajo vigente: `ENGINEERING.md` del workspace.
+
 # GaleCore — Sistema de trabajo (2 personas, poco tiempo, IA-first)
 
 > **Superado (2026-09-16):** la forma de trabajo del ecosistema vive en el workspace, `../../ENGINEERING.md` (github.com/lenzigonzalo/galecore-workspace). Este archivo se conserva por sus secciones específicas de GaleCore (fuentes de verdad de la plataforma §1, harness de research §3, agente pre-market §4, cadencia de paper §5). Si contradice a `ENGINEERING.md`, gana `ENGINEERING.md`.

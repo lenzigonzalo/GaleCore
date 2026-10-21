@@ -8,9 +8,7 @@ superado va a [`archive/`](archive/) con cabecera que lo marca.
 | Doc | Rol |
 |---|---|
 | [`REFERENCIA-DESARROLLO.md`](REFERENCIA-DESARROLLO.md) (mapa corto en [`../CLAUDE.md`](../CLAUDE.md)) | **Contrato de arquitectura** (plataforma, backend, front, endpoints, convención de estrategias). |
-| [`GaleCore-ways-of-working.md`](GaleCore-ways-of-working.md) | **Sistema de trabajo**: git, harness, agentes IA, cadencia. |
 | [`GaleCore-arquitectura-datos.md`](GaleCore-arquitectura-datos.md) | **PROPUESTA** (no implementada): cómo sostener N estrategias sobre un feed compartido, con las mediciones de capacidad de DXLink del 2026-08-11. Incluye por qué la base de datos entra por multi-usuario y no por el feed, y las decisiones tomadas y pendientes. |
-| [`GaleCore-plan-reorganizacion-2026-08.md`](GaleCore-plan-reorganizacion-2026-08.md) | **PLAN en ejecución**: el JSON vuelve a ser la única fuente de verdad del catálogo (se van las tablas `strategies`/`user_strategies`), el switch pasa a dos niveles, y el login pasa a username. Tres etapas independientes. |
 | [`rpf/`](rpf/) | Estrategia **RPF** ("disparo por prima real", operativa): definición, research, reconciliación. |
 | [`gex/`](gex/) | Estrategia **GEX** (Gamma Exposure, informativa): definición + referencia del endpoint. |
 

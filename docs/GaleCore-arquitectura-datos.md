@@ -406,7 +406,7 @@ admin-only — el agujero que el gate de `is_admin` tapó (un operador apagándo
 resto) existe igual con el switch global, así que ese chequeo no se toca. `users` y `accounts` se
 quedan: son dominio de verdad y ahora tienen UI planificada.
 
-Plan completo y etapas siguientes: [`GaleCore-plan-reorganizacion-2026-08.md`](GaleCore-plan-reorganizacion-2026-08.md).
+Plan completo y etapas siguientes: [`archive/GaleCore-plan-reorganizacion-2026-08.md`](archive/GaleCore-plan-reorganizacion-2026-08.md) (histórico).
 
 ### Tomadas (2026-08-14) — la división de §5.4 también rige en el cliente
 
