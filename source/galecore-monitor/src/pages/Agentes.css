@@ -129,3 +129,18 @@
 .agents-clip { display: block; max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agents-clip.agents-what { max-width: 280px; }
 .agents-page .stage-switch button[aria-pressed="true"] { background: var(--bg-tertiary); color: var(--text-primary); }
+
+/* Formulario de tareas: frecuencia, días, hora, herramientas y entrega (WS-0055). */
+.agents-edit-form input[type='text'], .agents-edit-form input:not([type]), .agents-edit-form input[type='time'] { display: block; width: 100%; min-width: 0; font: inherit; font-size: 15px; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.agents-modal .agents-edit-form input[type='text'], .agents-modal .agents-edit-form input:not([type]), .agents-modal .agents-edit-form input[type='time'], .agents-modal .agents-edit-form select { background: var(--bg-primary); }
+.agents-fieldset { border: 0; padding: 0; margin: 18px 0 0; min-width: 0; }
+.agents-fieldset legend { font-size: 14px; padding: 0; margin-bottom: 8px; }
+.agents-fieldset select { margin-bottom: 10px; display: block; width: 100%; font: inherit; font-size: 15px; color: var(--text-primary); background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+.agents-days { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.agents-edit-form .agents-days label { display: inline-flex; margin: 0; padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; cursor: pointer; }
+.agents-days label.on { border-color: var(--text-primary); color: var(--text-primary); }
+.agents-days input { position: absolute; opacity: 0; pointer-events: none; }
+.agents-when { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.agents-edit-form .agents-when label { margin: 0 0 4px; }
+.agents-edit-form .agents-check { display: flex; align-items: center; gap: 10px; margin: 6px 0; font-size: 14px; }
+.agents-check code { font-size: 12.5px; word-break: break-word; }
