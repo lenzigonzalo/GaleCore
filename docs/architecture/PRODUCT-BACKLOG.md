@@ -1511,6 +1511,65 @@ datos), para distinguir prima sobrepagada en entorno neutro de prima alta por ri
 `market_story` + `daily_contrast` y como punto 2 de las mejoras de `strategy_design` (arriba).
 **Límites:** no abre item; el owner decide si va antes o después de la pieza 4.
 
+### Addendum 2026-10-20 — Hub agéntico de estrategias: SHADOW → PAPER → LIVE
+
+**Origen:** conversación del owner con Codex tras evaluar WS-0050 y revisar el circuito actual:
+«mi objetivo es trabajar en desarrollar estrategias rentables, en gestionar el portafolio, y hacerlo de forma
+agéntica»; estrategias desarrolladas por agentes que nacen en SHADOW y pueden avanzar solas a PAPER y LIVE
+mediante umbrales de éxito. Pedido explícito: «Dejalo esto guardado como BL».
+
+**Estado:** `CAPTURED`. **Target:** ecosistema completo (GaleCore-AI, backend y frontend de GaleCore), después
+del cierre de Producto 1; prioridad y piezas a decidir. Este addendum conserva una propuesta de evolución,
+no una segunda secuencia vigente ni autorización de implementación, promoción o ejecución real.
+Las referencias a fases históricas de BL-007 no sustituyen el roadmap vigente.
+
+**Resultado buscado:** un hub donde el usuario define hipótesis, criterios de éxito y mandato de portafolio;
+los agentes investigan, desarrollan, prueban y siguen estrategias; el sistema ejecuta dentro del mandato y
+rinde cuentas. «Finalizado» significa un circuito completo para una familia concreta de estrategias,
+incluyendo pausa y retiro, no soporte universal ni garantía de rentabilidad.
+
+**Autonomía objetivo:** mandato previo con instrumentos, capital, riesgos, presupuesto de investigación y
+condiciones de ejecución real. Dentro de ese alcance puede existir promoción automática hasta LIVE sin
+aprobar cada operación. El desarrollador no puede modificar los umbrales de evaluación, los permisos ni los
+límites para hacer pasar su estrategia. Cambios de mandato y excepciones quedan en manos del owner.
+
+**Encaje:** reutilizar proyectos, investigaciones, specs, hashes, crítica/aprobación, runtime SHADOW,
+persistencia y vistas existentes. Completar sus límites observados antes de ampliar familias. BL-001 cubre
+evolución de capacidades; BL-008, cartera integral; BL-030, riesgo integral; BL-031, evaluación histórica.
+Este addendum conecta sus resultados en el ciclo de vida, sin duplicar sus implementaciones.
+
+**Cortes candidatos para incorporar al único roadmap cuando el owner lo priorice:**
+
+| Corte | Entrega y criterio de salida propuestos |
+|---|---|
+| 1. Cierre de P1 y uso del SHADOW existente | Terminar compromisos vigentes; usar una familia soportada y observar entradas, descartes, salidas, detención y recuperación. La prueba SHADOW en vivo sigue con su alcance vigente de Producto 2; no reabre P1. |
+| 2. Contrato ejecutable completo | Hipótesis, datos, señales, construcción, tamaño, gestión, salidas, límites y evaluación versionados. Ninguna regla indispensable se presenta como automática si sólo está declarada; incompatibilidades bloquean activación o requieren excepción explícita. |
+| 3. Laboratorio de evaluación | Experimentos reproducibles, datos versionados, comparación, costos y supuestos de ejecución; evaluación histórica cuando haya datos adecuados. Informe con incertidumbre, límites y razones para continuar o descartar. |
+| 4. PAPER fiable | Integración con el entorno de prueba disponible del broker, órdenes, fills parciales, cancelaciones, reconexión y conciliación; diferencias con LIVE declaradas. Fallos recuperables y estado consistente. |
+| 5. LIVE acotado | Mismo contrato, permisos y límites obligatorios, trazabilidad y detención. Circuito real autorizado y conciliado antes de automatizar su promoción. |
+| 6. Ciclo de vida automático | Promoción, permanencia, pausa y retiro por versión, con evidencia suficiente. Decisiones reproducibles y explicables, independientes del agente creador. |
+| 7. Portafolio agéntico | Asignación de capital, concentración, riesgos compartidos, redundancia, reservas y prioridad. Límites globales respetados incluso con entradas concurrentes. |
+| 8. Desarrollo agéntico continuo | Investigación e implementación aisladas, pruebas, evaluación separada, reemplazos versionados y reversibles. Sin alterar silenciosamente versiones en operación. |
+
+**Evaluación y promoción:** SHADOW comprueba comportamiento con mercado observado; PAPER comprueba integración
+operativa; LIVE aporta ejecución y costos reales. Ninguna etapa por sí sola acredita ventaja económica.
+Los criterios se fijan antes de evaluar resultados y combinan comportamiento, fiabilidad operativa, evidencia
+económica contra referencia y suficiencia de muestra/condiciones. Registrar variantes ensayadas para no
+ocultar selección y sobreajuste. No fijar un umbral universal del tipo «ganar un mes». Incluir no promoción,
+pausa y retiro; las posiciones abiertas conservan una política explícita de gestión.
+
+**Responsabilidades:** GaleCore-AI investiga, diseña, desarrolla y explica; GaleCore calcula, ejecuta,
+concilia y aplica límites; el frontend muestra etapas, evidencia, asignaciones e incidentes. El motor de
+promoción aplica políticas verificables sobre evidencia guardada; la recomendación del modelo no reemplaza
+la autorización efectiva.
+
+**Primer vertical recomendado:** una familia de opciones ya soportada, desde idea hasta LIVE, resolviendo
+sus faltantes concretos antes de extender el catálogo. **Entry gate:** owner prioriza el diseño dentro del
+roadmap vigente y define el mandato; cualquier permiso operativo posterior conserva su gate específico.
+**Aceptación global propuesta:** una estrategia completa el ciclo autorizado con identidad de versión,
+evidencia reproducible, conciliación, límites de cartera, recuperación y retiro; el usuario puede explicar
+por qué avanzó o se detuvo y qué ejecutó. Éxito funcional, utilidad y rentabilidad se evalúan por separado.
+
 ## BL-008 — Gestión integral del portfolio y espacio financiero personal y compartido
 
 > **Destino (propuesta única, 05/10/2026):** briefing resuelto (U-11) · supervisor de posiciones (U-31, U-32) → P1-01 · capital (U-17, U-34) → P1-04 · U-36, U-59, U-61 → Después · coherencia del perfil: se verifica en C0. Índice: `roadmap/README.md` §5.
