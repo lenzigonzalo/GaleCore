@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de context_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: context_research
 versions:
+  - version: "1.0.1"
+    date: 2026-10-21
+    changes: >
+      Sin «fuentes» del perfil (owner 21/10): GaleCore es la base siempre y una fuente externa con clave se le pide
+      al usuario; el perfil ya no elige fuentes.
+    feedback: []
   - version: "1.0.0"
     date: 2026-10-21
     changes: >

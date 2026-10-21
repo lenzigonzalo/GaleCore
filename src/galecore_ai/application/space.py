@@ -482,7 +482,7 @@ _PROFILE_LABELS = {"reference_capital": "capital de referencia", "objectives": "
                    "max_drawdown": "drawdown máximo", "risk_limits": "límites", "minimum_return": "retorno mínimo",
                    "edge_criterion": "criterio de edge", "exit_rule": "regla de salida",
                    "mandate_autonomous": "hace solo", "mandate_needs_approval": "espera tu ok",
-                   "delivery_format": "forma de entrega", "preferred_sources": "fuentes", "language": "idioma"}
+                   "delivery_format": "forma de entrega", "language": "idioma"}
 
 
 def _profile_lines(prof: dict) -> list[str]:

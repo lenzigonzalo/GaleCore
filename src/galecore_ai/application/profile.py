@@ -26,7 +26,6 @@ from galecore_ai.adapters.profile_store import (
     ProfileIntegrityError,
     ProfileStoreError,
 )
-from galecore_ai.adapters.source_registry_store import SourceRegistryError, load_source_registry
 from galecore_ai.contracts.profile import ProfileContent, ProfileVersion, compute_profile_hash
 from galecore_ai.contracts.regime_record import RecordHost
 from galecore_ai.contracts.strategy import Basis
@@ -93,14 +92,6 @@ def history(store: FileProfileStore) -> list[dict]:
     return out
 
 
-def _check_sources(ids: list[str]) -> list[str]:
-    try:
-        registry = load_source_registry()
-    except SourceRegistryError as exc:
-        return [f"preferred_sources cannot be checked: {exc}"]
-    return [f"preferred_sources: {_safe(sid)} is not in config/sources.yaml" for sid in ids if registry.get(sid) is None]
-
-
 def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: str, host: RecordHost,
                 now: datetime | None = None, feedback: list[str] | None = None) -> tuple[ProfileVersion, Path | None]:
     """New version with ``changes`` applied; (current, None) when nothing actually changes.
@@ -113,6 +104,9 @@ def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: st
         raise ProfileError("Refusing to change the profile", [f"unknown fields: {', '.join(map(_safe, unknown))}"])
     current = _current(store)
     base = current.content.model_dump(mode="json") if current else {}
+    # Sources are not a profile choice (owner 21/10): GaleCore always, an external source asks for its key.
+    changes = {k: v for k, v in changes.items() if k != "preferred_sources"}
+    base.pop("preferred_sources", None)
     if "provisional" not in changes and base.get("provisional"):
         base["provisional"] = [f for f in base["provisional"] if f not in changes]
     try:
@@ -125,9 +119,6 @@ def set_profile(store: FileProfileStore, *, changes: dict, note: str, prompt: st
                                feedback=list(feedback or []), content_hash="")
     except ValidationError as exc:
         raise ProfileError("Refusing to change the profile", _errors(exc)) from exc
-    problems = _check_sources(content.preferred_sources)
-    if problems:
-        raise ProfileError("Refusing to change the profile", problems)
     if current is not None and content == current.content and not feedback:
         # With feedback the version is still written: it records that the preference is applied.
         return current, None

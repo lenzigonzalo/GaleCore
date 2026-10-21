@@ -70,7 +70,7 @@ sources:
       description: GET de bajo costo (market_data.trade de SPY) evaluando el código de estado HTTP
       command: python -B -m galecore_ai.adapters.cli sources check --source galecore
 
-  # FRED sigue como fuente propia del mapa (el perfil la nombra en preferred_sources), pero desde WS-0014 se lee sólo a
+  # FRED sigue como fuente propia del mapa, pero desde WS-0014 se lee sólo a
   # través de GaleCore: este código ya no llama a FRED ni usa su clave.
   - id: fred
     display_name: FRED (St. Louis Fed), servido por GaleCore

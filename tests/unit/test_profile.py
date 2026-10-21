@@ -50,8 +50,7 @@ def put(store: FileProfileStore, changes: dict, *, at: datetime = NOW, note: str
 
 
 SEED = {"reference_capital": {"amount": 10000, "currency": "USD"},
-        "delivery_format": ["tablas y gráficos primero, texto mínimo"], "language": "español",
-        "preferred_sources": ["galecore", "fred"]}
+        "delivery_format": ["tablas y gráficos primero, texto mínimo"], "language": "español"}
 
 
 class TestContent:
@@ -63,7 +62,6 @@ class TestContent:
                                      {"reference_capital": {"amount": 10, "currency": "usd"}},
                                      {"reference_capital": {"amount": float("inf"), "currency": "USD"}},
                                      {"reference_capital": {"amount": True, "currency": "USD"}},
-                                     {"preferred_sources": ["fred", "fred"]},
                                      {"provisional": ["horizon"]},
                                      {"provisional": ["provisional"]},
                                      {"unknown": 1}])
@@ -93,7 +91,7 @@ class TestSetAndShow:
         assert doc.content.reference_capital.amount == 10000
         assert kb.profile.load("v1").content.max_drawdown is None  # v1 untouched
 
-    @pytest.mark.parametrize("field", ["language", "delivery_format", "preferred_sources", "reference_capital"])
+    @pytest.mark.parametrize("field", ["language", "delivery_format", "reference_capital"])
     def test_null_clears_a_field_back_to_missing(self, kb, field):
         # Internal review GC-AI-0013: null on a list field was rejected.
         put(kb.profile, SEED)
@@ -121,12 +119,15 @@ class TestSetAndShow:
         assert path is None and doc.version == 1
         assert kb.profile.versions() == ["v1"]
 
-    def test_unknown_field_and_unknown_source_are_refused(self, kb):
+    def test_unknown_field_is_refused(self, kb):
         with pytest.raises(ProfileError, match="unknown fields"):
             put(kb.profile, {"capital": 5})
-        with pytest.raises(ProfileError, match="not in config/sources.yaml"):
-            put(kb.profile, {"preferred_sources": ["bloomberg"]})
         assert kb.profile.versions() == []
+
+    def test_sources_are_no_longer_kept(self, kb):
+        doc, _ = put(kb.profile, {"language": "español", "preferred_sources": ["galecore", "fred"]})
+        assert doc.content.preferred_sources == []
+        assert "preferred_sources" not in ProfileContent().missing()
 
     @pytest.mark.parametrize("text", ["api_key=SYNTHETIC_SECRET_123456", "contraseña: Abcdefgh12345",
                                       "mi clave IBKR es sk-ant-api03-AAAAAAAAAAAAAAAA"])
@@ -260,7 +261,6 @@ class TestCitationIsEnforced:
 
 @pytest.mark.parametrize("changes", [{"provisional": ["api_key=SYNTHETIC_SECRET_123456"]},
                                      {"api_key=SYNTHETIC_SECRET_123456": 1},
-                                     {"preferred_sources": ["api_key=SYNTHETIC_SECRET_123456"]},
                                      {"reference_capital": {"amount": 1, "currency": "USD",
                                                             "api_key=SYNTHETIC_SECRET_123456": 1}}])
 def test_no_rejection_path_echoes_the_value(kb, changes):

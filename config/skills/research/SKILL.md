@@ -1,6 +1,6 @@
 ---
 name: research
-version: 2.0.0
+version: 2.0.1
 display_name: Investigación retomable
 description: >
   Lleva una idea un paso honesto hacia algo decidible: la pregunta, los antecedentes que pesan, qué es hecho y qué es
@@ -15,7 +15,7 @@ X», una idea que necesita antecedentes, hipótesis y una prueba antes de decidi
 
 ## Qué necesita
 - `profile show`: aplicá lo que declara sin volver a preguntar (capital de referencia para tamaños y ejemplos;
-  objetivos, horizonte, drawdown y límites como marco; fuentes preferidas para desempatar; formato e idioma). Citalo
+  objetivos, horizonte, drawdown y límites como marco; formato e idioma). Citalo
   como antecedente `profile:v<N>` (qué aplicaste y cómo pesa). Un campo que falta y que importa va a `missing`, nunca
   supuesto; sin perfil, decilo y seguí. Los campos en `provisional` se usan, pero toda conclusión que dependa de ellos
   se marca provisoria.

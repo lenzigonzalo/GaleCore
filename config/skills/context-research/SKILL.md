@@ -1,6 +1,6 @@
 ---
 name: context-research
-version: 1.0.0
+version: 1.0.1
 display_name: Contexto de mercado para una idea
 description: >
   Arma el contexto de mercado que necesita una idea, para su instrumento y plazo: qué factores importan y por qué, qué
@@ -16,7 +16,7 @@ de diseñar una estrategia cuando hace falta medir el entorno con datos reales.
 
 ## Qué necesita
 - `profile show`: aplicar sin volver a preguntar (capital para tamaños, objetivos, horizonte, drawdown y topes como
-  marco, fuentes preferidas para desempatar, formato e idioma). Citar `profile:v<N>`. Lo que falta y pesa, a
+  marco, formato e idioma). Citar `profile:v<N>`. Lo que falta y pesa, a
   `missing`; lo `provisional`, marcado como provisorio.
 - `kb search` con los términos de la idea (research y evidence): una investigación abierta sobre lo mismo se sigue.
 - Fuentes del registro, no de memoria: `sources query --need "<factor>"` (qué fuentes lo cubren, en orden de uso:

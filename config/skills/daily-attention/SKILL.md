@@ -1,6 +1,6 @@
 ---
 name: daily-attention
-version: 1.0.0
+version: 1.0.1
 display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
 description: >
   Responde «¿qué merece mi atención hoy sobre lo que tengo en SHADOW?»: exposición simulada contra los topes de
@@ -20,7 +20,7 @@ Una **pregunta puntual** («¿qué hago con SPY antes del CPI?», «¿cierro, ro
 revisión diaria: ir directo al paso 10.
 
 ## Qué necesita
-- `profile show`: capital de referencia, topes (pérdida por operación y sumada), drawdown, horizonte, fuentes y
+- `profile show`: capital de referencia, topes (pérdida por operación y sumada), drawdown, horizonte y
   formato. Lo que está en `provisional` es provisorio y toda comparación que dependa de eso se marca así. Citar
   `profile:v<N>` al guardar (si no, se rechaza).
 - Estrategias: `kb search --kind strategy` y `kb show strategy:<nombre>/<versión>` de cada versión aprobada.

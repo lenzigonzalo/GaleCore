@@ -61,7 +61,7 @@ class ProfileContent(BaseModel):
     horizon: str | None = None                               # e.g. "operaciones de 30 a 45 días"
     reference_capital: ReferenceCapital | None = None
     risk_limits: list[str] = Field(default_factory=list)     # e.g. "no más de 2 % por operación"
-    preferred_sources: list[str] = Field(default_factory=list)  # source ids of config/sources.yaml, in order
+    preferred_sources: list[str] = Field(default_factory=list)  # retired (owner 21/10): only read from old versions
     delivery_format: list[str] = Field(default_factory=list)    # e.g. "tablas y gráficos primero, texto mínimo"
     language: str | None = None
     minimum_return: str | None = None                      # e.g. "8 % anual; por debajo, no vale el riesgo"
@@ -105,7 +105,7 @@ class ProfileContent(BaseModel):
 
     @classmethod
     def declared_fields(cls) -> list[str]:
-        return [name for name in cls.model_fields if name != "provisional"]
+        return [name for name in cls.model_fields if name not in ("provisional", "preferred_sources")]
 
     def missing(self) -> list[str]:
         return [name for name in self.declared_fields() if getattr(self, name) in (None, [])]
