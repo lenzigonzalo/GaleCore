@@ -1,9 +1,0 @@
-# Qué cambió en cada versión de idea_inbox y qué feedback lo originó (GC-AI-0016). La más nueva primero.
-skill_id: idea_inbox
-versions:
-  - version: "1.0.0"
-    date: 2026-09-30
-    changes: >
-      Primera versión (GC-AI-0018): «anotá esto» guarda la idea tal cual y se sigue; la revisión con el owner la
-      manda al roadmap, al backlog, a un work item, a hecha o a descartada, con el motivo.
-    feedback: []

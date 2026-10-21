@@ -12,15 +12,23 @@ from galecore_ai.harness.catalog import load_catalog
     ("¿Hay algo para vender prima esta semana en SPY o QQQ sin meterme en el CPI?", "market_watch"),
     ("¿Qué merece mi atención hoy?", "daily_attention"),
     ("Armame un agente que revise IWM cada hora", "market_watch"),
-    ("¿Cuál es el IV rank de NVDA?", "data_sources"),
     ("Quiero probar una estrategia de call credit spreads", "strategy_design"),
     ("¿Cómo le fue a mi estrategia en SHADOW?", "strategy_followup"),
-    ("¿Qué sabés de mis objetivos?", "trader_space"),
-    ("Anotá esto: mirar el VIX antes de abrir", "idea_inbox"),
     ("Analizame el contexto macro para una idea alcista en tasas", "context_research"),
 ])
 def test_the_request_finds_its_capability(request_text, expected):
     assert match(request_text, load_catalog())["matches"][0]["capability"] == expected
+
+
+# WS-0054: profile, sources, inbox, watches, agents, projects and the space are commands in PRODUCT.md, not skills:
+# their requests must not be captured by a skill with confidence (the host chooses by meaning).
+@pytest.mark.parametrize("request_text", [
+    "¿Cuál es el IV rank de NVDA?", "¿Qué sabés de mis objetivos?", "Anotá esto: mirar el VIX antes de abrir",
+    "Retomemos lo que trabajamos", "¿Dónde habíamos quedado con la estrategia?", "Mis objetivos, ¿están claros?",
+    "Avisame si SPY baja de 650", "¿Qué podés hacer?", "¿Qué perfil tengo?", "¿Qué datos tengo?",
+])
+def test_a_command_request_is_not_taken_by_a_skill(request_text):
+    assert not match(request_text, load_catalog())["confident"]
 
 
 def test_nothing_matches_and_it_says_so():
@@ -30,23 +38,18 @@ def test_nothing_matches_and_it_says_so():
 
 # WS-0037: the requests of the closing test (roadmap §2, C0–C12) reach their capability above the hook's threshold.
 @pytest.mark.parametrize("request_text,expected", [
-    ("Retomemos lo que trabajamos", "strategy_project"),                          # C0
-    ("¿Dónde habíamos quedado con la estrategia?", "strategy_project"),
     ("¿Qué cambió y me afecta?", "daily_attention"),                              # C1
     ("Explicame la macro", "on_demand_analysis"),                                 # C2
     ("¿Qué mueve a SPY?", "on_demand_analysis"),
-    ("Mis objetivos, ¿están claros?", "user_profile"),                            # C3
     ("¿Qué haría que esta tesis deje de servir?", "strategy_design"),             # C4
     ("Tengo una idea, pensemos si sirve", "strategy_design"),                     # C5
     ("¿Prendo, pauso o espero la estrategia?", "strategy_design"),                # C6
-    ("Avisame si SPY baja de 650", "watch_alerts"),                               # C7
     ("¿La dejo abierta antes del CPI?", "daily_attention"),
     ("¿Qué exposición tengo?", "capital_risk"),                                   # C8
     ("Tengo 5.000 USD, ¿qué puedo hacer?", "capital_risk"),
     ("¿Cómo viene mi cartera?", "performance_review"),                            # C9
     ("Esto no me sirvió porque usaste datos viejos", "capability_builder"),       # C10
     ("Este trabajo me sirvió, quiero reutilizarlo", "capability_builder"),        # C11
-    ("¿Qué podés hacer?", "trader_space"),                                        # C12 / U-14
     ("Analizame MSFT", "company_research"),                                       # WS-0047
     ("Buscá una empresa con tendencia alcista y buenos fundamentos para 6-12 meses", "company_research"),
     ("Elegí entre MSFT, AAPL y NVDA para comprar acciones", "company_research"),

@@ -27,7 +27,8 @@ ANSWER_SECTION = "Cómo responder"
 def skill_md(text: str) -> dict:
     """A SKILL.md (WS-0054, owner 21/10): frontmatter + sections in Spanish. «Cómo responder» is what the Lab pastes
     into the turn (`answer`); the rest of the body is the method (`system_prompt`), the same for any engine."""
-    found = re.match(r"\A---\r?\n(.*?)\r?\n---\r?\n(.*)\Z", text, re.DOTALL)
+    text = text.replace("\r\n", "\n")  # the same hash on any checkout (git may write CRLF on Windows)
+    found = re.match(r"\A---\n(.*?)\n---\n(.*)\Z", text, re.DOTALL)
     if not found:
         raise ValueError("SKILL.md without frontmatter (--- ... ---)")
     meta, body = yaml.safe_load(found.group(1)) or {}, found.group(2)

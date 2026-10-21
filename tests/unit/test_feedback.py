@@ -163,7 +163,7 @@ class TestApplied:
             {"version": "9.9.9", "date": date(2026, 9, 30), "changes": "dice qué macro viene", "feedback": [fb.ref]}])
         real = knowledge.load_skill_history
         monkeypatch.setattr(knowledge, "load_skill_history",
-                            lambda path: history if path == "skills/research/skill.yaml" else real(path))
+                            lambda path: history if path == "skills/research/SKILL.md" else real(path))
         item = feedback_status(kb)["feedback"][0]
         assert item["status"] == "applied"
         assert item["applied_in"] == [{"where": "skill", "skill": skill.asset_id, "version": "9.9.9",
@@ -234,7 +234,7 @@ class TestReviewR1:
             {"version": older, "date": date(2026, 9, 30), "changes": "x", "feedback": [fb.ref]}])
         real = knowledge.load_skill_history
         monkeypatch.setattr(knowledge, "load_skill_history",
-                            lambda path: history if path == "skills/research/skill.yaml" else real(path))
+                            lambda path: history if path == "skills/research/SKILL.md" else real(path))
         item = feedback_status(kb)["feedback"][0]
         assert item["status"] == "pending" and item["cited_elsewhere"][0]["version"] == older
 

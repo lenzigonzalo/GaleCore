@@ -68,7 +68,7 @@ python -B -m galecore_ai.adapters.cli query --symbol SPY --since <YYYY-MM-DD> [-
 
 ## Capability 3: resumable investigation (`research`, GC-AI-0005)
 
-No GaleCore needed. Method: `config/skills/research/skill.yaml`.
+No GaleCore needed. Method: `config/skills/research/SKILL.md`.
 
 ```bash
 python -B -m galecore_ai.adapters.cli kb search --text "<idea>"          # antecedents; --status unfinished = open or test_planned
@@ -86,7 +86,7 @@ and hashed. Storing does not validate the reasoning; it is not a strategy.
 
 ## Capability 4: context of a trading idea (`context_research`, GC-AI-0007)
 
-Method: `config/skills/context-research/skill.yaml` (factors by idea and horizon, sources by verified
+Method: `config/skills/context-research/SKILL.md` (factors by idea and horizon, sources by verified
 access, observation / implied expectation / consensus / hypothesis, competing scenarios). Each source
 response used is stored first, then cited; the investigation itself is `research` with the method stamped:
 
@@ -113,7 +113,7 @@ did not fetch it and never labels it GaleCore-verified. Params that may carry cr
 | TradingAgent | `config/agents/trading-agent.yaml` | Agent definition: mission, capabilities, restrictions |
 | GEX Skill | `config/skills/gex-analysis/skill.yaml` | Instructions, output contract, examples |
 | Regime Skill | `config/skills/regime-analysis/skill.yaml` | Daily regime: GEX + put skew + VIX/VVIX, output contract, examples |
-| Research Skill | `config/skills/research/skill.yaml` | Resumable investigation: antecedents, typed statements, test plan, next steps |
+| Research Skill | `config/skills/research/SKILL.md` | Resumable investigation: antecedents, typed statements, test plan, next steps |
 | Catalog | `config/catalog.yaml` | Every capability: request served, skill, contract, flow, storage, controls |
 | Facts Discipline | `config/protocols/facts-discipline.yaml` | Guardrails: no invented numbers, facts match source, no trading recommendation, no numbers in prose, quantitative claims valid |
 | Trading Defaults | `config/conventions/trading-defaults.yaml` | Near-zero threshold, timezone, currency |

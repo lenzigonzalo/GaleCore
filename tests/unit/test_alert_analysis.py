@@ -69,7 +69,7 @@ def test_an_alert_is_analysed_with_the_context_the_code_gathered(kb):  # noqa: F
     assert ctx["aviso"]["motivo"] == alert.motivo and ctx["ahora"]["precio de SPY"] == 750.0
     assert ctx["ahora"]["nivel gamma cero de SPY"] == 771.1 and ctx["ahora"]["IV rank de SPY"] == 16.5
     assert "posicion" not in ctx                      # a watch alert has no position
-    assert alert.motivo in client.prompts[0] and "Describe, never advise" in client.prompts[0]
+    assert alert.motivo in client.prompts[0] and "Aconsejar: nada de" in client.prompts[0]
     # GaleCore's GEX did not give the walls: declared, not invented
     assert "GaleCore no dio muro de calls de SPY" in a.missing
     # one done analysis per alert

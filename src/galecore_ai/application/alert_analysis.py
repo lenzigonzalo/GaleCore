@@ -36,7 +36,7 @@ from galecore_ai.harness.assets import load_asset
 from galecore_ai.harness.catalog import Schedulable
 from galecore_ai.harness.definitions import SkillDefinition
 
-SKILL = "skills/alert-analysis/skill.yaml"
+SKILL = "skills/alert-analysis/SKILL.md"
 # The policy's model for reading work (the code gathers the data; the model only reads it). No tools: 2 turns are
 # enough for the structured answer; the correction round has its own.
 RUN = Schedulable(runs="model", work="reading", max_turns=3, timeout_minutes=5)

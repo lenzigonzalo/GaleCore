@@ -46,5 +46,6 @@ Con 5.000 USD el tope que manda es el riesgo por operación: 250 USD por spread.
 - Mezclar SHADOW y cuenta real en un mismo número.
 
 ## Cómo responder
+Primero `capital` (`--amount <USD>` si nombra un monto).
 Tablas primero, montos de `capital` tal como vienen. Veredicto en una frase (alcanza / no alcanza / qué sobra) y el
 tope que manda. «¿Qué entra con X?»: también estructuras de riesgo definido de la cadena de hoy. Nunca como orden.

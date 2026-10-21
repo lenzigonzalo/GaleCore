@@ -5,4 +5,4 @@ from galecore_ai.harness.definitions import SkillDefinition
 
 
 def build_gex_interpretation_skill() -> SkillDefinition:
-    return load_asset("skills/gex-analysis/skill.yaml", SkillDefinition)
+    return load_asset("skills/gex-analysis/SKILL.md", SkillDefinition)

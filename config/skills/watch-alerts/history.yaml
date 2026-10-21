@@ -1,9 +1,0 @@
-# Qué cambió en cada versión de watch_alerts y qué feedback lo originó (GC-AI-0016). La más nueva primero.
-skill_id: watch_alerts
-versions:
-  - version: "1.0.0"
-    date: 2026-10-06
-    changes: >
-      Primera versión (WS-0008, P1-01b): «avisame si SPY baja a 760» queda como regla que el supervisor revisa por
-      código cada 5 minutos en la sesión regular y avisa una vez en el monitor; el modelo sólo la traduce y la guarda.
-    feedback: []

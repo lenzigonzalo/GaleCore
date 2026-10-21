@@ -18,8 +18,8 @@ class TestGexInterpretationSkill:
 
     def test_has_system_prompt(self):
         skill = build_gex_interpretation_skill()
-        assert "NEVER invent" in skill.system_prompt
-        assert "regime" in skill.instructions
+        assert "NUNCA inventar" in skill.system_prompt
+        assert "positive_gamma" in skill.system_prompt
 
     def test_has_examples(self):
         skill = build_gex_interpretation_skill()

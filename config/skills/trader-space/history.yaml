@@ -1,9 +1,0 @@
-# Qué cambió en cada versión de trader_space y qué feedback lo originó (GC-AI-0016). La más nueva primero.
-skill_id: trader_space
-versions:
-  - version: "0.1.0"
-    date: 2026-10-03
-    changes: >
-      Primera versión (GC-AI-0021, fase 3b del Producto 1): el espacio del trader vive en GaleCore por usuario; GaleCore-AI
-      lo resume al iniciar la sesión, lo lee y escribe lo que el trader pide guardar, e importa lo local.
-    feedback: []

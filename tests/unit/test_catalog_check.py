@@ -20,7 +20,7 @@ WORKSPACE = Path(__file__).resolve().parents[2]  # the checkout root; only used 
 def entry(**overrides) -> CatalogEntry:
     data = {
         "id": "research", "kind": "investigation", "serves": "Investigar una idea.",
-        "skill": "skills/research/skill.yaml", "output_contract": "galecore_ai.contracts.research.ResearchContent",
+        "skill": "skills/research/SKILL.md", "output_contract": "galecore_ai.contracts.research.ResearchContent",
         "data_needs": [{"need": "curva de tasas"}],
         "flow": ["kb search --text x", "research save --slug s --prompt p"],
         "stored_as": "research", "controls": ["Not checked - whether the reasoning is right"],
@@ -97,7 +97,7 @@ def test_a_blank_missing_reason_is_refused():
 
 
 def scheduled(**overrides) -> CatalogEntry:
-    base = {"id": "daily_attention", "skill": "skills/daily-attention/skill.yaml", "data_needs": [],
+    base = {"id": "daily_attention", "skill": "skills/daily-attention/SKILL.md", "data_needs": [],
             "flow": ["profile show", "kb search --kind strategy", "followup run --strategy x --prompt p",
                      "galecore get calendar.fomc_meetings", "evidence add --slug s --prompt p",
                      "research save --capability daily_attention --slug s --prompt p"],

@@ -11,7 +11,7 @@ entries:
     serves: Interpretar la exposición gamma (GEX) actual de un símbolo con datos de GaleCore.
     example_requests:
       - Analizá el GEX actual de SPY.
-    skill: skills/gex-analysis/skill.yaml
+    skill: skills/gex-analysis/SKILL.md
     output_contract: galecore_ai.contracts.gex_analysis.GexInterpretation
     galecore_capabilities: [compute.gex_analysis]
     data_needs:
@@ -37,7 +37,7 @@ entries:
     example_requests:
       - Analizá el régimen de hoy de SPY y guardalo.
       - ¿Qué dijimos del régimen la semana pasada y qué pasó?
-    skill: skills/regime-analysis/skill.yaml
+    skill: skills/regime-analysis/SKILL.md
     output_contract: galecore_ai.contracts.regime_analysis.RegimeInterpretation
     galecore_capabilities: [compute.gex_analysis, compute.put_skew, market_data.trade]
     data_needs:
@@ -61,111 +61,6 @@ entries:
       - Not checked - that the regime reading anticipates what happens next; outcomes and reviews exist to judge that
     guide: docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md
 
-  - id: data_sources
-    kind: harness
-    serves: >-
-      Saber qué fuentes de datos hay disponibles, qué cubre cada una, su costo y
-      límites conocidos, su último estado de acceso comprobado y cuál conviene usar
-      primero para un dato dado.
-    example_requests:
-      - ¿Qué datos tengo?
-      - ¿De dónde saco la cadena de opciones de SPY?
-      - ¿Cuál es el IV rank de NVDA?
-      - Traeme las velas diarias de QQQ del último mes
-      - ¿Cómo está mi cuenta real?
-      - ¿Cómo están los futuros, el oro y el dólar hoy?
-    skill: skills/data-sources/skill.yaml
-    output_contract: galecore_ai.contracts.sources.SourceQueryResult
-    galecore_capabilities: []
-    data_needs: []
-    flow:
-      - sources list
-      - sources query --need "<qué dato hace falta>"
-      - galecore list
-      - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
-      - sources check [--source galecore|fred]   # FRED por GaleCore desde WS-0014
-      - sources declare --source <id> --state available|denied|limited|down --note "..." --observed-at <ISO8601> --host-model <model> [--category <cat>] [--evidence evidence:<id>]
-    stored_as: none
-    controls:
-      - The registry (config/sources.yaml) rejects a source missing coverage, cost or a probe where one is required
-      - GaleCore and FRED (through GaleCore) are checked with a minimal call this code runs; other sources are HOST_DECLARED only
-      - "declare requires --observed-at (the moment the access was actually observed, e.g. an evidence item's retrieved_at); it is never the time the command ran"
-      - A declared observation never carries a key or token; a cited evidence ref must resolve
-      - Status history is append-only; an edited or reordered source's file is reported as integrity_failed, never a crash
-      - Query orders matching sources by usage (free, own/GaleCore, daily_quota, plan) then preference, flags daily-quota sources to use only when needed, and shows the most recent status that bears on the matched category, not an unrelated endpoint's; a need with no match is reported missing, never guessed
-      - output_contract names SourceQueryResult, the shape `sources query` answers with (the entry's primary output); `sources list` answers with the related SourceCatalogSummary
-      - "`galecore get` reaches only capabilities in KNOWN_CAPABILITIES (PURE_QUERY/COMPUTE: read-only); a scheduled run may write --out only inside its own run directory"
-      - A need covered only by requested sources (pending in GaleCore) is reported missing, naming who brings it
-      - Not checked - whether a source's own data is correct
-
-  - id: trader_space
-    kind: harness
-    serves: >-
-      Tu espacio de trader en GaleCore: perfil, objetivos, convenciones, memoria, skills, agentes y datos, propios o
-      compartidos con el equipo. GaleCore-AI lo carga al empezar cada sesión para responder según tus objetivos y
-      límites, y guarda lo que le pedís conservar.
-    example_requests:
-      - ¿Qué sabés de mí y de mis objetivos?
-      - ¿Qué podés hacer? ¿Qué te puedo pedir?
-      - ¿Qué skills y agentes tengo?
-      - Guardá como convención que opero sólo spreads de riesgo definido
-      - Acordate de que el NFP me sacó de una posición la semana pasada
-      - Compartí con el equipo mi agente de oportunidades
-    skill: skills/trader-space/skill.yaml
-    output_contract: galecore_ai.contracts.sources.SourceQueryResult
-    galecore_capabilities: [App/GaleCore/Space]
-    data_needs: []
-    flow:
-      - space context
-      - space list [--kind <tipo>]
-      - space show <tipo>/<clave>
-      - space put <tipo>/<clave> --title "<título>" [--visibility private|shared] < contenido
-      - space delete <tipo>/<clave>
-      - space import
-    stored_as: none
-    controls:
-      - "GaleCore keeps it per user: the owner comes from the login token, never from the request; shared pieces from others are read-only"
-      - The login comes from GALECORE_USERNAME/GALECORE_PASSWORD or, on GaleCore Dev only, the demo user; no credential is stored by GaleCore-AI
-      - A piece's version goes up only when its content changes; `space import` writes only what changed
-      - "Not checked - that a piece's content is true or current; it is what the trader (or an import) wrote"
-
-  - id: user_profile
-    kind: harness
-    serves: >-
-      Tus objetivos, capital de referencia, horizonte, drawdown y límites de riesgo,
-      fuentes preferidas y formato de entrega, versionados, para que cada capacidad los
-      aplique sin que los repitas y deje registrado qué versión usó. También tus criterios
-      y tu mandato: utilidad mínima, cuándo es edge y no suerte, qué pasa al tocar un
-      límite y qué hace solo el sistema y qué te pide aprobar; te los discute y los deja medibles.
-    example_requests:
-      - ¿Qué perfil tengo?
-      - Revisemos mis objetivos, ¿qué está vago o falta?
-      - Mis objetivos, ¿están claros y son compatibles?
-      - ¿Qué puede hacer el sistema solo y qué necesita mi aprobación?
-      - Mi capital de referencia es 10.000 USD
-      - Los informes, tablas y gráficos primero
-    skill: skills/user-profile/skill.yaml
-    output_contract: galecore_ai.contracts.profile.ProfileVersion
-    galecore_capabilities: []
-    data_needs: []
-    flow:
-      - profile show
-      - profile review
-      - 'profile set --note "<qué cambia>" --prompt "<tus palabras>" --host-model <model> < {"changes": {...}}'
-      - profile history
-    stored_as: profile
-    controls:
-      - Create-only versions; every read re-checks the hash, an edited version is INTEGRITY_FAILED and blocks changes
-      - Partial changes on top of the current version; no real change creates no version
-      - Unknown fields, blank values and sources outside config/sources.yaml are refused
-      - Refuses text that looks like a key or token (heuristic, English and Spanish labels plus common key prefixes); a refused value is not echoed back
-      - Missing fields are declared, never defaulted; placeholders the user asked for are listed in `provisional` and reported as such
-      - "`profile review` flags criteria that are missing, have no number (objectives, drawdown, limits, minimum return, edge) or are provisional, and lists each strategy's pending parameters and owner decisions; it proposes nothing by code, the user decides"
-      - Fields added later stay out of the hash while empty, so earlier versions keep verifying
-      - "While a profile exists, research and context_research refuse to save unless an antecedent cites the version in force (profile:v<N>), so the stored revision records the version (hash) used"
-      - "Consumers today: research, context_research, strategy_followup and daily_attention; GEX, regime, strategy design and tasks do not read the profile yet"
-      - Not checked - whether the declared objectives or limits are sensible
-
   - id: capability_builder
     kind: harness
     serves: >-
@@ -184,7 +79,7 @@ entries:
       - Retirá esa regla, ya no la uso.
       - Esto no me sirvió porque usaste datos viejos.
       - Este trabajo me sirvió, quiero reutilizarlo o delegarlo.
-    skill: skills/capability-builder/skill.yaml
+    skill: skills/capability-builder/SKILL.md
     output_contract: galecore_ai.harness.catalog.CatalogEntry
     galecore_capabilities: []
     data_needs: []
@@ -218,7 +113,7 @@ entries:
     example_requests:
       - Investigá si el 0DTE vencido distorsiona el GEX post-cierre y cómo lo probaríamos.
       - Retomá la investigación sobre el GEX post-cierre.
-    skill: skills/research/skill.yaml
+    skill: skills/research/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: []
     data_needs: []
@@ -248,7 +143,7 @@ entries:
       - Quiero investigar una estrategia sobre SPY. ¿Qué contexto importa para esta idea y horizonte?
       - Retomá la investigación de contexto de SPY e incorporá lo nuevo.
       - Analizame el contexto de mi idea (tasas, macro, eventos) antes de diseñarla.
-    skill: skills/context-research/skill.yaml
+    skill: skills/context-research/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: []
     data_needs:
@@ -295,7 +190,7 @@ entries:
       - ¿Activamos la estrategia o conviene esperar?
       - Quiero vender prima en QQQ, ¿armo algo?
       - ¿La prendemos ya? ¿Apruebo esta estrategia o le falta algo?
-    skill: skills/strategy-design/skill.yaml
+    skill: skills/strategy-design/SKILL.md
     output_contract: galecore_ai.contracts.strategy.ProposalContent
     galecore_capabilities: [App/Runtime/Specs, App/Runtime/Deploy]
     data_needs:
@@ -345,7 +240,7 @@ entries:
       - ¿Qué hizo la versión aprobada desde que la desplegamos?
       - Mostrame mi estrategia, qué está ejecutando, qué pasó desde la última revisión y qué merece mi atención.
       - ¿Qué hizo esta estrategia desde la última revisión, por qué entró o no entró, cómo evolucionaron sus posiciones y qué cambia en nuestra hipótesis?
-    skill: skills/strategy-followup/skill.yaml
+    skill: skills/strategy-followup/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics]
     data_needs:
@@ -380,7 +275,7 @@ entries:
       - ¿Qué cambió y me afecta?
       - ¿Qué hago con mi apuesta de SPY antes del CPI?
       - ¿Cierro, roleo o dejo mis posiciones antes del FOMC?
-    skill: skills/daily-attention/skill.yaml
+    skill: skills/daily-attention/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics, compute.gex_analysis, compute.put_skew, market_data.trade, calendar.macro_releases, calendar.fomc_meetings, calendar.treasury_auctions, rates.treasury_curve, history.index_daily]
     data_needs:
@@ -436,7 +331,7 @@ entries:
       - ¿Qué encontró hoy mi agente de oportunidades?
       - ¿Hay algo para vender prima esta semana en SPY o QQQ?
       - ¿Dónde hay una oportunidad de put credit spread hoy?
-    skill: skills/market-watch/skill.yaml
+    skill: skills/market-watch/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [compute.iv_rank, compute.implied_volatility, market_data.volatility_metrics, market_data.option_chains, market_data.option_greeks, market_data.candles, calendar.macro_releases, calendar.fomc_meetings, compute.gex_analysis, compute.put_skew, history.index_daily, rates.treasury_curve]
     data_needs:
@@ -479,7 +374,7 @@ entries:
       - ¿Qué está descontando hoy el mercado?
       - Contame qué narrativa hay detrás de los precios de hoy
       - ¿El mercado está priceando calma o miedo?
-    skill: skills/market-story/skill.yaml
+    skill: skills/market-story/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [market_data.candles, compute.put_skew, compute.implied_volatility, compute.iv_rank, market_data.volatility_metrics, compute.gex_analysis, calendar.macro_releases, calendar.fomc_meetings]
     data_needs:
@@ -525,7 +420,7 @@ entries:
       - ¿Qué mueve a SPY?
       - ¿Qué es el skew y por qué me tendría que importar?
       - ¿Qué es el gamma exposure?
-    skill: skills/on-demand-analysis/skill.yaml
+    skill: skills/on-demand-analysis/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [macro.fred_series, macro.bls_series, market_data.candles, filings.sec_facts, filings.sec_filings, market_data.volatility_metrics, market_data.quote, compute.put_skew, compute.implied_volatility, compute.iv_rank, compute.gex_analysis]
     data_needs:
@@ -566,7 +461,7 @@ entries:
       - De MSFT, AAPL y NVDA, ¿cuál tiene tendencia alcista y fundamentos que la sostengan?
       - ¿Cómo vienen los fundamentos de esta acción?
       - Hacé un análisis de qué tecnológicas tienen más potencial de crecimiento, con tendencia y oportunidad de entrada
-    skill: skills/company-research/skill.yaml
+    skill: skills/company-research/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [market_data.candles, filings.sec_facts, filings.sec_filings, filings.sec_document, market_data.volatility_metrics, macro.fred_series, macro.bls_series]
     data_needs:
@@ -603,7 +498,7 @@ entries:
     example_requests:
       - Armame un informe diario antes de la apertura con el VIX y el calendario macro
       - Mostrame el último informe de gamma
-    skill: skills/scheduled-report/skill.yaml
+    skill: skills/scheduled-report/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [compute.gex_analysis, market_data.volatility_metrics, calendar.macro_releases, calendar.fomc_meetings, market_data.trade]
     data_needs:
@@ -627,69 +522,6 @@ entries:
       - Not checked - that the report answers what the owner wanted or that its reading is right; the first real run shows it
     schedulable: {runs: model, work: reading, max_turns: 20, timeout_minutes: 10}
 
-  - id: recurring_followup
-    kind: task
-    serves: >-
-      Delegar un seguimiento: convertirlo en una tarea recurrente (objetivo, frecuencia, zona horaria, fuentes,
-      resultado esperado) que corre sola en el Programador de tareas de Windows, y gestionarla desde el chat:
-      estado, último resultado e historial, cambiar frecuencia, pausar, reanudar, cancelar.
-    example_requests:
-      - Hacé este seguimiento diariamente y guardalo.
-      - Mostrame el último resultado y el historial.
-      - Cambiá la frecuencia.
-      - Pausalo. / Cancelalo.
-    skill: skills/recurring-followup/skill.yaml
-    output_contract: galecore_ai.contracts.task.TaskDefinition
-    galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics]
-    data_needs:
-      - need: posiciones SHADOW
-      - need: evaluaciones SHADOW
-      - need: metricas SHADOW
-    flow:
-      - task create --id <id> [--capability <schedulable id>] --strategy <name> --objective "<qué querés saber>" --expected "<resultado>" --source "<fuente>" --frequency daily --time 17:05 --timezone America/New_York --prompt "<pedido>"
-      - task status <id>
-      - task history <id>
-      - task set-frequency <id> --frequency <...> [--time HH:MM | --minutes N] --timezone <tz> --prompt "<pedido>"
-      - task pause <id> --prompt "<pedido>" · task resume <id> --prompt "<pedido>" · task cancel <id> --prompt "<pedido>"
-    stored_as: task
-    controls:
-      - A task runs only a capability declared schedulable in this catalog (read-only; `catalog --check` refuses one whose flow writes beyond its own result); it cannot write strategy versions, approvals, deployments or the profile
-      - A model run has a turn cap and a time cap from the catalog; its duration and outcome (OK, INCOMPLETE, FAILED with the reason) go to the events log
-      - One run at a time (exclusive lock; a stale lock is broken and noted); a paused or cancelled task never runs
-      - Every change and run is appended to a hash-chained events log; each run leaves a hashed follow-up record naming the task, the strategy version and its sources
-      - Runs depend on the PC on, the user logged on, GaleCore Dev's API up and its credentials; failures are recorded, never silent
-      - Not checked - that the schedule suits the owner, or the interpretation of each result
-
-  - id: watch_alerts
-    kind: harness
-    serves: >-
-      Dejar una alerta pedida en tus palabras («avisame si SPY baja a 760», «si cruza el gamma cero») que el
-      supervisor revisa por código cada 5 minutos en la sesión regular y avisa una vez, con sonido, en el monitor. El
-      modelo sólo traduce el pedido y guarda la regla; nunca vigila. Ver y cancelar las alertas.
-    example_requests:
-      - Avisame si SPY baja a 760.
-      - Seteame una alerta si el SPY pasa 790.
-      - Alertame si SPY cruza para abajo el nivel gamma cero de 771.
-      - ¿Qué alertas tengo?
-      - Sacá la alerta de SPY.
-    skill: skills/watch-alerts/skill.yaml
-    output_contract: galecore_ai.contracts.supervision.WatchRule
-    galecore_capabilities: [Data/Tastytrade/MarketData/Quote, App/Gex/Analysis, App.Analytics/IVRank]
-    data_needs:
-      - need: cotizacion
-      - need: GEX de SPY
-      - need: IV rank de SPY
-    flow:
-      - supervise watch --symbol <SYM> [--metric price|gamma_zero|call_wall|put_wall|iv_rank] --below|--above <nivel> --text "<tus palabras>" --prompt "<pedido>"
-      - supervise watches
-      - supervise unwatch <id> --prompt "<pedido>"
-    stored_as: supervision
-    controls:
-      - The rule keeps the owner's words and request; it is create-only and hashed, an edited one is INTEGRITY_FAILED and stops the pass
-      - Evaluated by code in the supervisor's pass, only in the regular session; it alerts once (key watch:<rule>) and then is met
-      - A number GaleCore cannot give (no quote, NaN, a cold GEX past the timeout) is a problem of the pass, never «not met»
-      - "Not checked - NYSE holidays (a holiday has no quotes: the pass reports a problem); prices between two 5-minute passes"
-
   - id: performance_review
     kind: investigation
     serves: >-
@@ -705,7 +537,7 @@ entries:
       - ¿Qué esperábamos cuando decidimos, qué ocurrió y qué corresponde revisar?
       - Resumime la semana de mi cartera.
       - ¿Cómo viene mi cartera?
-    skill: skills/performance-review/skill.yaml
+    skill: skills/performance-review/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: [App/Runtime/Performance]
     data_needs:
@@ -765,7 +597,7 @@ entries:
       - Analizá este aviso.
       - ¿Qué significa el aviso de SPY que me llegó?
       - Explicame el aviso de la posición cerca del stop.
-    skill: skills/alert-analysis/skill.yaml
+    skill: skills/alert-analysis/SKILL.md
     output_contract: galecore_ai.contracts.supervision.AlertAnalysis
     galecore_capabilities: [Data/Tastytrade/MarketData/Quote, App/Gex/Analysis, App.Analytics/IVRank, App/Runtime/Instances]
     data_needs:
@@ -785,35 +617,6 @@ entries:
       - One done analysis per alert, create-only and hashed; a failed one says why and can be asked again
       - "Not checked - that the reading is right; it describes what the numbers say, the decision is the owner's"
 
-  - id: idea_inbox
-    kind: harness
-    serves: >-
-      Anotar una idea tuya en el momento, con tus palabras, sin cortar lo que estamos haciendo ni evaluarla, y
-      revisarla después: cada idea termina en el roadmap, en el backlog, en un work item, hecha o descartada, con el
-      motivo.
-    example_requests:
-      - "Anotá esto: probar la estrategia con acciones en vez de opciones."
-      - ¿Qué hay en el buzón?
-      - Revisemos el buzón.
-    skill: skills/idea-inbox/skill.yaml
-    output_contract: galecore_ai.contracts.inbox.InboxItem
-    galecore_capabilities: []
-    data_needs: []
-    flow:
-      - inbox add --text "<tus palabras>" [--context "<qué estábamos haciendo>"] [--ref <ref>]
-      - inbox list [--status pending]
-      - inbox show <id>
-      - inbox resolve <id> --to roadmap|backlog:BL-NNN|work-item:<id>|done|discarded --note "<por qué>" --prompt "<tus palabras>"
-    stored_as: inbox
-    controls:
-      - The idea is kept verbatim with when and what we were doing; the noted part is hashed and an edit is INTEGRITY_FAILED
-      - References must resolve; text that looks like a key or token is refused
-      - A review appends where the idea went and why; a backlog item or work item must exist; nothing is deleted
-      - Reviews are hash-chained to the idea; rewriting one or removing an earlier one is INTEGRITY_FAILED
-      - Text that looks like a key or token is refused in every field (words, context, request, review note)
-      - "Not checked - that the most recent reviews were not removed by hand: the file alone cannot show it; the knowledge base's git history does"
-      - "Not checked - that the idea is good or that the destination chosen in the review is the right one"
-
   - id: knowledge_curator
     kind: investigation
     serves: >-
@@ -827,7 +630,7 @@ entries:
       - Poné al día la memoria.
       - ¿Hay algo guardado que ya no valga?
       - ¿Qué feedback se repite y podría ser regla?
-    skill: skills/knowledge-curator/skill.yaml
+    skill: skills/knowledge-curator/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: []
     data_needs: []
@@ -848,40 +651,6 @@ entries:
       - "Not checked - that what it kept is what matters most, or that a proposal to mark is right; the owner decides"
     schedulable: {runs: model, work: reading, max_turns: 20, timeout_minutes: 12}
 
-  - id: strategy_project
-    kind: harness
-    serves: >-
-      Trabajar «en la estrategia X» o «en mi cartera» con todo cargado: tesis, reglas y parámetros de la versión
-      vigente, versiones y aprobaciones, último seguimiento, investigaciones con sus pendientes, decisiones, feedback y
-      en qué historia del mercado funciona; y guardar en tus palabras lo que no tenía lugar (tesis, historia,
-      decisiones, pendientes). La cartera suma el perfil vigente (el del espacio en GaleCore) y el estado de cada
-      estrategia.
-    example_requests:
-      - Estemos en la estrategia spy_prima_varianza.
-      - Abrí mi cartera.
-      - Retomemos lo que trabajamos.
-      - ¿Dónde habíamos quedado?
-      - ¿Qué tengo pendiente en la estrategia de prima de varianza?
-      - "Decisión para la estrategia: no operar con VIX arriba de 30."
-      - ¿En qué historia del mercado funciona esta estrategia?
-    skill: skills/strategy-project/skill.yaml
-    output_contract: galecore_ai.contracts.project.ProjectLog
-    galecore_capabilities: []
-    data_needs: []
-    flow:
-      - project show strategy:<name>
-      - project show portfolio
-      - project add <name>|portfolio --kind thesis|story|decision|pending|done --text "<tus palabras>" [--ref <ref>] [--closes <hash>] --prompt "<pedido>"
-      - space pull-profile
-    stored_as: project
-    controls:
-      - Every item of the view carries its reference; nothing is copied, what is missing is declared
-      - The owner's entries are kept verbatim, hash-chained and append-only; an edit is INTEGRITY_FAILED
-      - References must resolve; a strategy project needs the strategy to exist; done must close an open item
-      - The portfolio's profile is the space's (GaleCore rules); an edit made in the monitor is not overwritten by an import and is declared until pulled; without GaleCore the local profile is shown as unconfirmed
-      - "Not checked - live open risk: the view shows what the last follow-up reported, with its date"
-      - "Not checked - that the thesis or the story is right"
-
   - id: daily_contrast
     kind: investigation
     serves: >-
@@ -894,7 +663,7 @@ entries:
       - ¿Mis estrategias encajan con la historia de hoy?
       - Contrastá la historia del mercado con mi cartera.
       - ¿Qué conviene prender o apagar en SHADOW según el contexto?
-    skill: skills/daily-contrast/skill.yaml
+    skill: skills/daily-contrast/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
     galecore_capabilities: []
     data_needs: []

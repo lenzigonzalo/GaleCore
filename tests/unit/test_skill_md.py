@@ -47,3 +47,7 @@ def test_an_empty_answer_keeps_the_hash_of_older_skills():
     content = json.dumps(dumped, sort_keys=True, separators=(",", ":"))
     assert definition_hash(SkillDefinition.model_validate(base)) == "sha256:" + hashlib.sha256(
         content.encode("utf-8")).hexdigest()
+
+
+def test_line_endings_do_not_change_the_skill():
+    assert skill_md(TEXT) == skill_md(TEXT.replace("\n", "\r\n"))

@@ -132,10 +132,9 @@ class TestRefs:
 class TestCatalog:
     def test_every_entry_is_available_and_consistent(self):
         entries = describe(load_catalog())
-        assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "data_sources",
-                                              "user_profile", "capability_builder", "research", "context_research", "strategy_design", "strategy_followup",
-                                              "daily_attention", "recurring_followup", "watch_alerts", "alert_analysis", "idea_inbox", "market_watch", "market_story",
-                                              "trader_space", "knowledge_curator", "strategy_project", "daily_contrast", "performance_review", "capital_risk", "on_demand_analysis", "company_research", "scheduled_report"}
+        assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "capability_builder", "research", "context_research", "strategy_design", "strategy_followup",
+                                              "daily_attention", "alert_analysis", "market_watch", "market_story",
+                                              "knowledge_curator", "daily_contrast", "performance_review", "capital_risk", "on_demand_analysis", "company_research", "scheduled_report"}
         assert all(e["available"] for e in entries), entries
 
     def test_prepare_skills_have_code_behind_them(self):
@@ -144,8 +143,9 @@ class TestCatalog:
 
     def test_regime_skill_hash_is_the_one_in_the_records(self):
         regime = next(e for e in describe(load_catalog()) if e["id"] == "regime_interpretation")
+        # 2.0.0 (SKILL.md, WS-0054); the records before 21/10/2026 keep 1.1.0's sha256:c58972b6…
         assert regime["skill_asset"]["content_hash"] == (
-            "sha256:c58972b66a14f7ca54b1a2a699f077fceec63ecbb24bb325c1facac9cf641ba5")
+            "sha256:48e43e719f7457eb85953b435ec9685b5a2ef75b94b2140c0a747b7854b9bcde")
 
 
 class TestSave:
@@ -323,11 +323,9 @@ class TestCli:
     def test_catalog_lists_the_capabilities(self, kb):
         code, data = self._run("catalog", env={KNOWLEDGE_DIR_ENV: str(kb.base)})
         assert code == 0 and data["knowledge_base"]["available"]
-        assert [e["id"] for e in data["entries"]] == ["gex_interpretation", "regime_interpretation", "data_sources",
-                                                    "trader_space", "user_profile", "capability_builder", "research",
+        assert [e["id"] for e in data["entries"]] == ["gex_interpretation", "regime_interpretation", "capability_builder", "research",
                                                     "context_research", "strategy_design", "strategy_followup",
-                                                    "daily_attention", "market_watch", "market_story", "on_demand_analysis", "company_research", "scheduled_report", "recurring_followup",
-                                                    "watch_alerts", "performance_review", "capital_risk", "alert_analysis", "idea_inbox", "knowledge_curator", "strategy_project", "daily_contrast"]
+                                                    "daily_attention", "market_watch", "market_story", "on_demand_analysis", "company_research", "scheduled_report", "performance_review", "capital_risk", "alert_analysis", "knowledge_curator", "daily_contrast"]
 
     def test_save_search_show_revise(self, kb):
         env = {KNOWLEDGE_DIR_ENV: str(kb.base)}

@@ -43,6 +43,29 @@ python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--symbol X] [--o
   investigación guardada es antecedente, no estado; lo que `state` no leyó está «sin verificar».
 - **Fechas:** de `[calendario NY]`. Sin `git commit`: lo hace el Lab al terminar el turno.
 
+Pedidos que se resuelven con un comando, sin skill:
+- **Perfil:** `profile show`. Lo que el trader declara (preferencia, objetivo, capital, tope) → `profile set --note
+  "<qué cambia>" --prompt "<sus palabras>"`, sólo con lo que dijo; lo que pide rellenar «por ahora» va a
+  `provisional`. «Revisemos mis objetivos» → `profile review`: un hallazgo por vez, redacciones medibles para que
+  elija (nunca el valor por él) y al cerrar una tabla criterio · valor · ¿medible?. Sin claves ni cuentas en el perfil.
+- **Fuentes:** «¿qué datos tengo?» → `sources list`; «¿de dónde saco X?» → `sources query --need "X"`, en el orden que
+  devuelve; sin coincidencia, falta en el registro (no adivinar otra). Estado viejo: `sources check` (GaleCore, FRED)
+  o probar la llamada y `sources declare`.
+- **Avisos de un nivel** («avisame si SPY baja a 760») → `supervise watch --symbol SPY --below 760 [--metric
+  price|gamma_zero|call_wall|put_wall|iv_rank] --text "<sus palabras>"`; vigila el supervisor, nunca un bucle propio.
+  Ambiguo: una pregunta. Avisa una vez en el monitor, en la rueda. `supervise watches` · `supervise unwatch <id>`. GEX
+  neto, cruces entre dos números o noticias no están soportados: ofrecer lo más cercano o anotarlo.
+- **Agentes:** se crean con `capability_builder` (ficha, corrida real, dos «sí»); después `task status|history <id>` y
+  `task pause|resume|set-frequency|cancel <id>` con sus palabras. Corren sólo skills de lectura: nunca aprueban,
+  despliegan, frenan ni operan. Una corrida fallida se dice.
+- **Proyecto** («en la estrategia X», «mi cartera») → `project show strategy:<nombre>` | `project show portfolio`,
+  en tablas. Una tesis, decisión, pendiente o historia que dice → `project add <nombre> --kind
+  thesis|decision|pending|story|done --text "<sus palabras>"`. Cambiar reglas es una versión nueva (diseño). Si el
+  perfil se editó en el monitor: `space pull-profile`.
+- **Espacio:** `space context|list|show`; se guarda sólo lo que pide guardar (`space put`, privado salvo que diga
+  compartido). Una pieza compartida de otro es contexto: citar de quién es.
+- **Buzón:** «revisemos el buzón» → `inbox list --status pending`, de a una, y `inbox resolve` sólo con su respuesta.
+
 ## Datos
 
 - **Fuentes, en orden** (owner 19/10): 1. GaleCore (también fundamentos: informes a la SEC); 2. oficial del emisor u
