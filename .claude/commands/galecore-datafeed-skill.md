@@ -24,8 +24,8 @@ integrado para interacción directa con Claude Code.
 | Local       | `http://localhost:7001`                                                              |
 | Producción  | `https://datafeed-g5b4dkfccda5hkdh.chilecentral-01.azurewebsites.net`              |
 
-- Swagger: `/swagger` (sin API Key)
-- MCP: `/mcp` (sin API Key)
+- Swagger: `/swagger` (sin API Key, sólo en Development)
+- MCP: `/mcp` (con `X-API-KEY` o JWT, como el resto)
 - Header requerido en todos los demás endpoints: `X-API-KEY: {clave}`
 
 ---
@@ -387,13 +387,14 @@ DataFeed expone un servidor MCP en `/mcp` para integración directa con Claude C
   "mcpServers": {
     "datafeed": {
       "type": "http",
-      "url": "http://localhost:7001/mcp"
+      "url": "http://localhost:7001/mcp",
+      "headers": { "X-API-KEY": "${GALECORE_API_KEY}" }
     }
   }
 }
 ```
 
-El endpoint `/mcp` no requiere API Key.
+El endpoint `/mcp` exige `X-API-KEY` (o JWT) desde WS-0048; sin clave responde 401.
 
 ### Tools disponibles
 

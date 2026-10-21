@@ -14,7 +14,9 @@
         {
             var path = context.Request.Path.Value ?? string.Empty;
 
-            if (path.StartsWith("/swagger") || path.StartsWith("/favicon.ico") || path.StartsWith("/mcp") || path.StartsWith("/hubs"))
+            // /mcp NO está exento (WS-0048): sus herramientas leen datos de mercado y cuenta, así que pide clave o JWT como el resto.
+            // /swagger sólo existe en Development (Program.cs); en otros entornos la ruta ni se publica.
+            if (path.StartsWith("/swagger") || path.StartsWith("/favicon.ico") || path.StartsWith("/hubs"))
             {
                 await _next(context);
                 return;

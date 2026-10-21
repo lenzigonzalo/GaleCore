@@ -308,13 +308,13 @@ namespace DataFeed
             if (app.Environment.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
+                // Swagger sólo en Development (WS-0048): en otros entornos no se publica el mapa de la API.
+                app.UseSwagger();
+                app.UseSwaggerUI(c =>
+                {
+                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "DataFeed v1");
+                });
             }
-
-            app.UseSwagger();
-            app.UseSwaggerUI(c =>
-            {
-                c.SwaggerEndpoint("/swagger/v1/swagger.json", "DataFeed v1");
-            });
 
             app.UseStaticFiles();
             app.UseCors("ReactAppPolicy");
