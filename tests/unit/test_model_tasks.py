@@ -518,3 +518,17 @@ def test_news_is_an_open_position_a_notice_or_a_new_event():
     assert has_news(rec(attention=["GaleCore respondió sin estado del runtime"]))
     assert has_news(rec(shadow=["2026-10-10T18:39 POSITION_OPENED: {}"]))
     assert not has_news(rec(shadow=["2026-10-10T18:39 GATES_NOT_PASSED: iv", "2026-10-10T18:40 ENTRY_SKIPPED: x"]))
+
+
+def test_delivery_biblioteca_leaves_the_report_and_history_alone_does_not(briefing):
+    kb, _, follow = briefing
+    result = run(kb, follow, model_ok(output()), invoked_by="scheduler")
+    assert "library" not in result
+    assert not (kb.base / "workspaces" / "biblioteca").exists()
+    t.set_settings(kb=kb, task_id="atencion-diaria", settings={"delivery": ["historial", "biblioteca"]}, prompt="test",
+                   expected_updated_at=t.load(kb, "atencion-diaria").updated_at)
+    result = run(kb, follow, model_ok(output(title="Informe del día")), invoked_by="scheduler")
+    assert result["library"] == "workspaces/biblioteca/informes/agentes/atencion-diaria.md"
+    text = (kb.base / result["library"]).read_text("utf-8")
+    assert text.startswith("# Atencion diaria: Informe del día")
+    assert "corrida de la tarea `atencion-diaria`" in text

@@ -48,7 +48,10 @@ Construís con el molde, no a mano ni improvisando. El trader pidió armar algo:
 5. **Con el «sí»:**
    - **Agente sobre una skill genérica** (sin escribir config): `scheduled_report` (un reporte) o `market_watch`
      (condiciones sobre símbolos), con `task create --capability <id> --objective "<método en palabras del trader>"`.
-     No programar todavía: primero el paso 6.
+     No programar todavía: primero el paso 6. En la ficha, además del horario: **qué días** (todos, lunes a viernes o
+     elegidos: `--frequency days --days mon,thu`), **qué herramientas** de lectura usa (`task tools <id>` las lista;
+     sólo se pueden quitar, con `--tool`) y **dónde deja el resultado** (`--delivery historial,biblioteca`: el
+     historial siempre; la Biblioteca si lo quiere como informe). El monitor (página Agentes) hace lo mismo con un formulario.
    - **Skill nueva** (sólo si ninguna genérica sirve y la sesión puede escribir config; una conversación del Lab no
      puede: decir que queda pendiente y `gap add --kind action`, nunca prometerla creada): escribir
      `config/skills/<id con guiones>/SKILL.md` con el formato de abajo (versión 0.1.0, mismo `output_contract`), su
@@ -63,8 +66,9 @@ Construís con el molde, no a mano ni improvisando. El trader pidió armar algo:
 7. **Programar:** sólo con un segundo «sí» a ese resultado real, `task create` (hora propuesta según el calendario del
    mercado, zona Nueva York) y `task status`. La primera corrida programada es al día siguiente y se revisa entonces
    (`task status`, `task history`).
-8. **Control después:** «pausalo», «cambialo a las 8», «borralo» → `task pause|resume|set-frequency|cancel` con sus
-   palabras; «cambiá cómo lo hace» es una versión nueva de la skill. Borrar conserva la historia.
+8. **Control después:** «pausalo», «cambialo a las 8», «sólo lunes y jueves», «borralo» →
+   `task pause|resume|set-frequency|cancel` con sus palabras; «cambiá las instrucciones», «usá menos herramientas» o
+   «dejalo en la Biblioteca» → `task set-settings` (objetivo, modelo, herramientas, entrega); «cambiá cómo lo hace» es una versión nueva de la skill. Borrar conserva la historia.
 
 ### Formato de una skill (WS-0054, aprobado por el owner 21/10)
 ```markdown

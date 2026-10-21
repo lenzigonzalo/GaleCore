@@ -45,7 +45,8 @@ Usage:
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|days|every_minutes [--days mon,wed] [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
     python -m galecore_ai.adapters.cli task set-scan ID --symbols SPY,QQQ --iv-rank-min 30 [--quiet-days 3] | --off --prompt "..."
-    python -m galecore_ai.adapters.cli task set-frequency ID --frequency ... [--time HH:MM | --minutes N] --timezone TZ --prompt "..."
+    python -m galecore_ai.adapters.cli task set-frequency ID --frequency ...
+    python -m galecore_ai.adapters.cli task tools ID | set-settings ID [--objective "..."] [--model haiku|sonnet|opus|auto] [--tool X ...|--all-tools] [--delivery historial,biblioteca] --prompt "..." [--time HH:MM | --minutes N] --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task pause|resume|cancel ID --prompt "..."
     python -m galecore_ai.adapters.cli task rebind ID --code-path CHECKOUT --prompt "..."
 
@@ -1350,7 +1351,8 @@ async def _cmd_task(args: argparse.Namespace) -> None:
         if c == "create":
             task = t.create(kb=kb, scheduler=sch, task_id=args.id, strategy=args.strategy, objective=args.objective,
                             expected_result=args.expected, sources=args.source, schedule=schedule(), prompt=args.prompt,
-                            capability=args.capability, result_slug=args.result_slug)
+                            capability=args.capability, result_slug=args.result_slug, model=args.model,
+                            tools=args.tool or None, delivery=args.delivery.split(",") if args.delivery else None)
             _json_out({"status": "CREATED", "task": task.model_dump(mode="json"), "schedule": task.schedule.describe(),
                        "scheduler": sch.query(task.scheduler_name)})
         elif c == "list":
@@ -1366,6 +1368,26 @@ async def _cmd_task(args: argparse.Namespace) -> None:
         elif c == "set-frequency":
             task = t.set_frequency(kb=kb, scheduler=sch, task_id=args.id, schedule=schedule(), prompt=args.prompt)
             _json_out({"status": "CHANGED", "schedule": task.schedule.describe(), "scheduler": sch.query(task.scheduler_name)})
+        elif c == "tools":
+            task = t.load(kb, args.id)
+            _json_out({"task": args.id, "capability": task.kind, "available": t.available_tools(task.kind),
+                       "in_use": t.effective_tools(task, t.available_tools(task.kind)), "delivery": task.delivery})
+        elif c == "set-settings":
+            change: dict = {}
+            if args.objective is not None:
+                change["objective"] = args.objective
+            if args.model is not None:
+                change["model"] = None if args.model == "auto" else args.model
+            if args.all_tools:
+                change["tools"] = None
+            elif args.tool:
+                change["tools"] = args.tool
+            if args.delivery:
+                change["delivery"] = args.delivery.split(",")
+            task = t.set_settings(kb=kb, task_id=args.id, settings=change, prompt=args.prompt,
+                                  expected_updated_at=t.load(kb, args.id).updated_at)
+            _json_out({"status": "CHANGED", "task": args.id, "settings": sorted(change),
+                       "tools": task.tools, "delivery": task.delivery, "model": task.model})
         elif c == "set-scan":
             from galecore_ai.contracts.task import ScanRule
             if not args.off and (not args.symbols or args.iv_rank_min is None):
@@ -1697,6 +1719,9 @@ def build_parser() -> _JsonArgumentParser:
     p_tc.add_argument("--objective", required=True)
     p_tc.add_argument("--expected", required=True, help="What each run must leave")
     p_tc.add_argument("--source", action="append", required=True)
+    p_tc.add_argument("--model", choices=["haiku", "sonnet", "opus"], help="Owner's choice; default follows the catalog")
+    p_tc.add_argument("--tool", action="append", help="Keep only this read tool of the skill (repeat); default all (see `task tools`)")
+    p_tc.add_argument("--delivery", help="historial (always) and/or biblioteca, comma-separated")
     schedule_args(p_tc)
     t_sub.add_parser("list", help="All tasks")
     for name in ("status", "run"):
@@ -1704,6 +1729,15 @@ def build_parser() -> _JsonArgumentParser:
     p_th = t_sub.add_parser("history", help="Runs (follow-up records) and events of a task")
     p_th.add_argument("id")
     p_th.add_argument("--limit", type=int, default=10)
+    t_sub.add_parser("tools", help="The read tools a task may use and the ones it uses now").add_argument("id")
+    p_tset = t_sub.add_parser("set-settings", help="Change instructions, model, tools (only remove) or delivery")
+    p_tset.add_argument("id")
+    p_tset.add_argument("--objective")
+    p_tset.add_argument("--model", choices=["haiku", "sonnet", "opus", "auto"])
+    p_tset.add_argument("--tool", action="append", help="Tools to keep (repeat)")
+    p_tset.add_argument("--all-tools", dest="all_tools", action="store_true", help="Back to every tool of the skill")
+    p_tset.add_argument("--delivery", help="historial,biblioteca")
+    p_tset.add_argument("--prompt", required=True)
     p_tf = t_sub.add_parser("set-frequency", help="Change the schedule")
     p_tf.add_argument("id")
     schedule_args(p_tf)

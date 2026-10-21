@@ -762,6 +762,30 @@ def _screen(task: TaskDefinition, now: datetime) -> dict:
         return pool.submit(asyncio.run, coro).result()
 
 
+def _publish_library(kb: KnowledgeBase, task: TaskDefinition, ref: str, revision: int, now: datetime,
+                     written: list[Path]) -> str | None:
+    """Delivery «biblioteca» (WS-0055): the run's result as the agent's report in the Biblioteca (the newest replaces the
+    previous one; every revision stays in research). A failure to write never fails the run: it is said in the event."""
+    if "biblioteca" not in task.delivery:
+        return None
+    from galecore_ai.application.space import (
+        _research_findings,  # lazy: space imports this module lazily too
+    )
+
+    try:
+        lines = (_research_findings(kb, ref, revision) or "").splitlines()
+        title = lines[0].strip("* ") if lines else task.objective[:80]
+        path = kb.base / "workspaces" / "biblioteca" / "informes" / "agentes" / f"{task.id}.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        head = [f"# {task.id.replace('-', ' ').capitalize()}: {title}", "",
+                f"*{now:%Y-%m-%d %H:%M} UTC · corrida de la tarea `{task.id}` · {ref} rev {revision}*", ""]
+        path.write_text("\n".join(head + lines[1:]).rstrip() + "\n", encoding="utf-8", newline="\n")
+        written.append(path)
+        return path.relative_to(kb.base).as_posix()
+    except (OSError, KnowledgeError) as exc:
+        return f"error: {exc}"[:200]
+
+
 def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, now: datetime, invoked_by: str,
                client: model_run.ModelClient, followup, written: list[Path]) -> dict:
     """One model run. The runner first keeps the day's data (the code follow-up), then the model reads and returns the
@@ -868,8 +892,10 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
             problem = f"output refused: {exc}"
         else:
             written += paths
+            library = _publish_library(kb, task, ref, revision, now, written)
             return {**base, "result": out.status, "research": ref, "revision": revision,
                     "evidence_saved": len(paths) - 1, **({"reason": out.reason} if out.reason else {}),
+                    **({"library": library} if library else {}),
                     "duration_s": round(time.monotonic() - t0, 1)}
     if limit := model_run.engine_limit(problem):   # the engine's quota, not the agent: said as such, never a fault
         return {**base, "result": "FAILED", "engine_limit": True, "duration_s": round(time.monotonic() - t0, 1),
