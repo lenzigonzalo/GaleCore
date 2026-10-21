@@ -20,7 +20,6 @@ import { Admin } from './pages/Admin';
 import { Rpf } from './pages/Rpf';
 import { Gex } from './pages/Gex';
 import { Shadow } from './pages/Shadow';
-import { Inteligencia } from './pages/Inteligencia';
 import { Agentes } from './pages/Agentes';
 import { useMarketSocket, ConnectionStatus } from './socket/useMarketSocket';
 import { useAppConfigStore } from './store/useAppConfigStore';
@@ -152,8 +151,6 @@ function Dashboard({ onLogout }: DashboardProps) {
           {tab === 'macro' && <Macro />}
           {tab === 'biblioteca' && <Biblioteca />}
           {strategiesVisited && <div hidden={tab !== 'estrategias'}><Shadow selectedSpec={selectedSpec} onSelectSpec={setSelectedSpec} onOpenChat={openProject} rpf={<Rpf acceptSuggestion={acceptSuggestion} dismissSuggestion={dismissSuggestion} subscribeLeg={subscribeLeg} unsubscribeLeg={unsubscribeLeg} socketStatus={socketStatus}/>} /></div>}
-          {/* Inteligencia se monta al entrar: lee el adapter local de GaleCore-AI, no la API. */}
-          {tab === 'inteligencia' && <Inteligencia />}
           {/* Agentes (GC-0009) se monta al entrar y se refresca cada minuto mientras está abierta. */}
           {tab === 'agentes' && <Agentes />}
           </>

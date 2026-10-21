@@ -19,7 +19,7 @@ forma de trabajo: `../ENGINEERING.md`. Este archivo es el mapa; el detalle está
 | Ruta | Qué |
 |---|---|
 | `source/galecore-datafeed/` | API .NET 8 (`DataFeed.sln`: Api, Application, Infrastructure, Repositories, Tests); MediatR/CQRS; hub SignalR |
-| `source/galecore-monitor/` | Monitor React 18 + TypeScript (CRA) + Tailwind; pestañas Main, Monitor, GEX, RPF, SHADOW, Inteligencia, Agentes, Admin |
+| `source/galecore-monitor/` | Monitor React 18 + TypeScript (CRA) + Tailwind; pestañas Main, Monitor, GEX, RPF, SHADOW, Agentes, Admin |
 | `source/galecore-datafeed/DataFeed.Api/Files/` | `galecore_rules_core.json` (config de la plataforma) y `Files/<Prefijo>/` (JSON de cada estrategia: su fuente de verdad) |
 | `dev/galecore_dev.py` | Entorno de desarrollo contra Supabase «GaleCore Dev» (misma implementación que producción, otra base) |
 | `docs/` | Referencia de desarrollo, arquitectura de datos, una carpeta por estrategia (`docs/<prefijo>/`), work items y reviews |
