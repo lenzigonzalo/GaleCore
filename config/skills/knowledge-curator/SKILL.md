@@ -40,7 +40,8 @@ La corre el agente programado de curaduría; a mano: «¿Qué quedó viejo en la
 5. Guardar: `research save --capability knowledge_curator --slug curaduria` la primera vez, después `research revise
    --capability knowledge_curator --id <id> --reason continuation`. Si el owner marcó algo citado antes, el guardado lo
    rechaza y nombra el reemplazo: citar el reemplazo (o sacar la afirmación). Una decisión o entrada de bitácora del
-   owner se cita como `project:<nombre de estrategia>` o `project:portfolio`.
+   owner se cita como `project:<nombre de estrategia>` o `project:portfolio`, sólo si `project show` de ese proyecto
+   devolvió entradas: uno vacío lo rechaza el guardado (falló la corrida del 17/10).
 
 ## Qué entrega
 Ejemplo de forma:

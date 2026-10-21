@@ -649,7 +649,7 @@ entries:
       - A save must cite the profile in force (profile:v<N>); each revision records this skill's version and hash
       - "Read-only besides its own result: a scheduled run cannot mark, apply feedback or change a skill (the flow allows only reads and its research); marks and rules are proposals for the owner"
       - "Not checked - that what it kept is what matters most, or that a proposal to mark is right; the owner decides"
-    schedulable: {runs: model, work: reading, max_turns: 20, timeout_minutes: 12}
+    schedulable: {runs: model, work: reading, max_turns: 20, timeout_minutes: 20}
 
   - id: daily_contrast
     kind: investigation
