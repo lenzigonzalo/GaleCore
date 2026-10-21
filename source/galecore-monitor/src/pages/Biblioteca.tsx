@@ -12,7 +12,7 @@ import './Biblioteca.css';
  * una grilla, para que no quede una columna larga.
  */
 const BASE = '/workspaces/biblioteca/files';
-const GROUPS: Record<string, string> = { macro: 'Macro', mercado: 'Mercado', estrategias: 'Estrategias', empresas: 'Empresas', uso: 'Casos de uso' };
+const GROUPS: Record<string, string> = { macro: 'Macro', mercado: 'Mercado', estrategias: 'Estrategias', empresas: 'Empresas', uso: 'Casos de uso', agentes: 'Agentes' };
 // Owner 18/10: títulos, no oraciones. «# GEX: qué mide…» → título «GEX» y el resto como bajada.
 const heading = (text: string) => text.match(/^#\s+(.+)$/m)?.[1]?.trim() || '';
 const title = (text: string, file: string) => heading(text).split(':')[0].trim() || file.replace(/\.md$/, '').replace(/-/g, ' ');
