@@ -122,6 +122,14 @@ class ModelReply:
     model: str | None = None
     error: str | None = None
     tokens: dict | None = None     # input, output, cache_read, cache_write (GC-AI-0024: consumption per capability)
+    denied: list[str] | None = None  # commands the engine refused (outside the allowed prefixes)
+
+
+def denials_of(out: dict) -> list[str] | None:
+    """The commands a print-mode run had refused, as written by the model; None when none."""
+    found = [str((d.get("tool_input") or {}).get("command") or d.get("tool_name"))[:200]
+             for d in out.get("permission_denials") or [] if isinstance(d, dict)]
+    return list(dict.fromkeys(found)) or None
 
 
 def usage_of(out: dict) -> dict | None:
@@ -227,14 +235,15 @@ class ClaudeCodeClient:
         if not isinstance(out, dict):
             return ModelReply(ok=False, duration_s=wall, error=f"exit {proc.returncode}, output is not a JSON object")
         turns, model, tokens = out.get("num_turns"), next(iter(out.get("modelUsage") or {}), None), usage_of(out)
+        denied = denials_of(out)
         if proc.returncode != 0 or out.get("is_error") or not isinstance(out.get("structured_output"), dict):
             why = out.get("subtype") or "error"
             if why == "error_max_turns":
                 why = f"turn cap reached ({max_turns})"
-            return ModelReply(ok=False, turns=turns, duration_s=wall, model=model, tokens=tokens,
+            return ModelReply(ok=False, turns=turns, duration_s=wall, model=model, tokens=tokens, denied=denied,
                               error=f"{why}: {str(out.get('result') or '')[:300]}".rstrip(": "))
         return ModelReply(ok=True, structured=out["structured_output"], turns=turns, duration_s=wall, model=model,
-                          tokens=tokens)
+                          tokens=tokens, denied=denied)
 
 
 def allowed_tools(entry: CatalogEntry, commands: dict[str, set[str]]) -> list[str]:
@@ -264,7 +273,8 @@ Nobody is present; do not ask questions. Task objective, in the owner's words: {
 Strategy: {task.strategy or 'none: this agent watches the market'}. Now: {now.isoformat()} (UTC).
 
 Follow the method below ({entry.id}, skill {skill.version}). Run the CLI exactly as `{CLI} <command> ...` from the
-current directory and scripts as `python -B tools/<script>.py ...`; a script writes only under {run_dir} (use it as
+current directory and scripts as `python -B tools/<script>.py ...`, with nothing added (no `2>&1`, pipes, `cd`,
+`&&` or inline code: such a command is denied); a script writes only under {run_dir} (use it as
 <dir>; any other directory is refused). Commands outside this list that change anything are denied:
 {tools}
 {followup_note}

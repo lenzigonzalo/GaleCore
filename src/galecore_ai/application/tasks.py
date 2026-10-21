@@ -875,6 +875,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
             "route": (f"modelo elegido por el owner: {task.model}" if task.model else
                       caps.route_reason() + (f"; la historia marcó: {escalated}" if escalated else "")),
             "duration_model_s": reply.duration_s, **_tokens(reply.tokens), **({"followup": rec.id} if rec else {}),
+            **({"denied": reply.denied} if reply.denied else {}),
             **({"pack": kept} if kept else {})}
     if reply.ok:
         reply, base = _repair_if_refused(kb, task, target, reply, base, client, scratch)
