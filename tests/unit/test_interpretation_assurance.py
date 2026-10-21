@@ -389,4 +389,3 @@ class TestEvidence:
         """Documented limit: a wrong-but-numberless claim on a valid path passes."""
         payload = output(evidence=[{"fact_path": "facts.net_gex", "claim": "Dealers are short gamma"}])
         assert validate(payload).accepted
-

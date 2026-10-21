@@ -35,6 +35,8 @@ def skill_md(text: str) -> dict:
     parts = re.split(r"(?m)^## +", body)
     answer = next((p.split("\n", 1)[1].strip() for p in parts[1:] if p.startswith(ANSWER_SECTION)), "")
     method = parts[0] + "".join("## " + p for p in parts[1:] if not p.startswith(ANSWER_SECTION))
+    if not isinstance(meta, dict) or not meta.get("name"):
+        raise ValueError("SKILL.md frontmatter needs a name")
     name = meta.pop("name")
     return {"skill_id": meta.pop("skill_id", name.replace("-", "_")), "display_name": meta.pop("display_name", name),
             **meta, "system_prompt": method.strip(), "answer": answer}

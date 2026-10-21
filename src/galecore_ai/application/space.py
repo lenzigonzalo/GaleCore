@@ -163,7 +163,8 @@ def _same_profile(remote: dict, local) -> bool:
     """Same content once both carry every field: a piece published before a field existed is not an edit."""
     from galecore_ai.contracts.profile import ProfileContent
     try:
-        return ProfileContent.model_validate(remote) == local
+        same = ProfileContent.model_validate(remote).model_copy(update={"preferred_sources": []})
+        return same == local.model_copy(update={"preferred_sources": []})
     except ValueError:
         return False
 
@@ -272,7 +273,7 @@ def _create_agent(kb: KnowledgeBase, scheduler, item: dict, content: dict, creat
         at = datetime.fromisoformat(str(req.get("at", "")))
         if at.tzinfo is None or at > datetime.now(UTC) + timedelta(minutes=10):
             raise ValueError("pedido sin hora válida")
-        if not isinstance(create, dict) or _slug(str(create.get("id", ""))) != item["key"] or                 set(create) - {"id", "kind", "objective", "schedule", "strategy", "model", "tools", "delivery"}:
+        if not isinstance(create, dict) or _slug(str(create.get("id", ""))) != item["key"] or set(create) - {"id", "kind", "objective", "schedule", "strategy", "model", "tools", "delivery"}:
             raise ValueError("pedido de alta inválido")
         kind = str(create.get("kind", ""))
         if t.schedulable_entry(kind).schedulable.runs != "model":

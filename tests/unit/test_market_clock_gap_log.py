@@ -83,3 +83,6 @@ def test_repeated_server_faults_are_raised_as_bugfix_but_caller_mistakes_are_not
     assert gap_log.bugfixes(tmp_path) == []
     again = gap_log.add(tmp_path, need="Error de API en calendar.macro_releases", kind="api_error", why="HTTP 502: fred")
     assert "bugfix" in again   # failing again after being closed raises it again
+    gap_log.close(tmp_path, "error-de-api-en-calendar-macro-releases", resolution="arreglado")
+    timeout = gap_log.add(tmp_path, need="Error de API en calendar.macro_releases", kind="api_error", why="HTTP 400")
+    assert "bugfix" not in timeout   # the closed 5xx do not count for a new non-5xx failure

@@ -24,4 +24,3 @@ def test_mapper_rejects_future_market_data():
     raw["timestamp"] = (datetime.now(UTC) + timedelta(days=1)).isoformat()
     with pytest.raises(GexMappingError, match="future"):
         map_to_gex_facts(parse_gex_response(raw), requested_symbol="SPY")
-

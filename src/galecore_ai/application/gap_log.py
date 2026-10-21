@@ -71,7 +71,8 @@ def add(kb: Path, *, need: str, kind: str, why: str = "", instead: str = "", pro
     now = datetime.now(UTC).isoformat(timespec="seconds")
     item = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {
         "id": path.stem, "need": need, "kind": kind, "first_seen": now, "count": 0, "occurrences": []}
-    if "closed_at" in item:                 # asked again after being closed: it can be raised again
+    reopened = "closed_at" in item
+    if reopened:                            # asked again after being closed: it can be raised again
         item.pop("bugfix", None)
     item.pop("closed_at", None)
     item.pop("resolution", None)
@@ -80,6 +81,8 @@ def add(kb: Path, *, need: str, kind: str, why: str = "", instead: str = "", pro
     occurrence = {"at": now, "why": why, "instead": instead, "project": project}
     item["occurrences"] = (item["occurrences"] + [occurrence])[-MAX_OCCURRENCES:]
     faults = sum(1 for o in item["occurrences"] if _SERVER_FAULT.search(o.get("why", "")))
+    if reopened and not _SERVER_FAULT.search(why or ""):
+        faults = 0                          # the old faults were closed: only a new 5xx raises it again
     if kind == "api_error" and "bugfix" not in item and faults >= BUGFIX_AFTER:
         item["bugfix"] = {"raised_at": now, "state": "open"}   # GaleCore is failing, not the caller: to be fixed first
     _write(path, item)

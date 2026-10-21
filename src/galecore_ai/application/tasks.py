@@ -426,7 +426,7 @@ def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str | None, 
         raise TaskError("esta tarea corre por código, sin modelo ni herramientas para elegir")
     if tools is not None and (bad := [x for x in tools if x not in available_tools(capability)]):
         raise TaskError(f"herramientas fuera de la skill {capability}: {bad}")
-    extra.update({k: v for k, v in (("model", model), ("tools", tools), ("delivery", delivery)) if v})
+    extra.update({k: v for k, v in (("model", model), ("tools", tools), ("delivery", delivery)) if v is not None and (v or k == "tools")})
     task = TaskDefinition(kind=capability, id=task_id, objective=objective, strategy=strategy,
                           sources=sources, expected_result=expected_result, schedule=schedule, created_at=now,
                           updated_at=now, created_by_prompt=prompt, scheduler_name=f"{SCHEDULER_FOLDER}\\{task_id}",
