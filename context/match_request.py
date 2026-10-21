@@ -15,7 +15,7 @@ except ImportError:  # sin PyYAML se pierde el «cómo responder», no el aviso 
 
 MIN_SCORE = 6  # debajo de esto el cruce de palabras es casualidad («hacer» ≠ perfil)
 SKILLS = Path(__file__).resolve().parents[3] / "GaleCore-AI" / "config"
-DESIGN = {"capability": "strategy_design", "skill": "skills/strategy-design/skill.yaml", "score": MIN_SCORE}
+DESIGN = {"capability": "strategy_design", "skill": "skills/strategy-design/SKILL.md", "score": MIN_SCORE}
 
 sys.stdout.reconfigure(encoding="utf-8")
 try:
@@ -124,7 +124,7 @@ if top["score"] >= MIN_SCORE:
     try:  # el «cómo responder» corto de la skill (decisión del owner 13/10: la sesión casi nunca lee la skill)
         text = (SKILLS / top["skill"]).read_text(encoding="utf-8")
         if top["skill"].endswith(".md"):  # SKILL.md (WS-0054): su sección «Cómo responder»
-            found = re.search(r"(?ms)^## +Cómo responder *\n(.*?)(?=^## |\Z)", text)
+            found = re.search(r"(?ms)^## +Cómo responder *\n(.*?)(?=^## |\Z)", text.replace("\r\n", "\n"))
             answer = found.group(1) if found else None
         elif yaml is not None:
             answer = (yaml.safe_load(text) or {}).get("answer")
