@@ -121,11 +121,15 @@ if top["score"] >= MIN_SCORE:
     print(f"[capacidad para este pedido] {top['capability']}. Su «cómo responder» va abajo; "
           "`catalog --match` sólo cuando necesites su flujo completo (comandos, guardar). No nombres la skill.")
     answer = None
-    if yaml is not None:
-        try:  # el «cómo responder» corto de la skill (decisión del owner 13/10: la sesión casi nunca lee la skill)
-            answer = (yaml.safe_load((SKILLS / top["skill"]).read_text(encoding="utf-8")) or {}).get("answer")
-        except (OSError, KeyError, TypeError, AttributeError, yaml.YAMLError):
-            answer = None
+    try:  # el «cómo responder» corto de la skill (decisión del owner 13/10: la sesión casi nunca lee la skill)
+        text = (SKILLS / top["skill"]).read_text(encoding="utf-8")
+        if top["skill"].endswith(".md"):  # SKILL.md (WS-0054): su sección «Cómo responder»
+            found = re.search(r"(?ms)^## +Cómo responder *\n(.*?)(?=^## |\Z)", text)
+            answer = found.group(1) if found else None
+        elif yaml is not None:
+            answer = (yaml.safe_load(text) or {}).get("answer")
+    except (OSError, KeyError, TypeError, AttributeError, ValueError):
+        answer = None
     if answer:
         print("[cómo responder]\n" + answer.strip())
     if top["capability"] == "strategy_design" and not in_project:
