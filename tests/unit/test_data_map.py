@@ -72,10 +72,16 @@ def test_galecore_list_names_every_capability():
 
 def test_a_scheduled_run_cannot_write_outside_its_directory(tmp_path):
     import os
-    env = {**os.environ, "GALECORE_AI_RUN_DIR": str(tmp_path / "run"), "GALECORE_BASE_URL": "http://localhost:9"}
+
+    from galecore_ai.adapters.knowledge_base import KNOWLEDGE_DIR_ENV
+    # the refused call notes a gap: in a scratch knowledge base, never the owner's (it showed up as ~80 iv_rank faults)
+    env = {**os.environ, "GALECORE_AI_RUN_DIR": str(tmp_path / "run"), "GALECORE_BASE_URL": "http://localhost:9",
+           KNOWLEDGE_DIR_ENV: str(tmp_path / "kb")}
+    (tmp_path / "kb").mkdir()
     proc = _cli("galecore", "get", "compute.iv_rank", "--symbol", "SPY", "--out", str(tmp_path / "elsewhere.json"),
                 env=env)
     assert proc.returncode != 0 and not (tmp_path / "elsewhere.json").exists()
+    assert (tmp_path / "kb" / "gaps").is_dir()
 
 
 def test_kept_reads_in_the_same_second_do_not_collide():
