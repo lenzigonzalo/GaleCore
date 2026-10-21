@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-1. **GaleCore** (.NET) running on `http://localhost:5000` with Tastytrade session active
+1. **GaleCore** (.NET) running on `http://localhost:7001` with Tastytrade session active
 2. **GaleCore-AI** (Python) dependencies installed: `pip install -e ".[dev]"`
 3. An interactive host capable of reading facts and producing a `GexInterpretation` JSON (Claude Code, Claude Work, or equivalent)
 
@@ -13,7 +13,7 @@
 Fetch live GEX data from GaleCore and produce an immutable identified snapshot:
 
 ```powershell
-$env:GALECORE_BASE_URL = "http://localhost:5000"
+$env:GALECORE_BASE_URL = "http://localhost:7001"
 $env:GALECORE_API_KEY = "<your GaleCore ApiKey from user-secrets>"
 $env:ALLOW_UNKNOWN_FRESHNESS = "true"
 $env:MAX_STALENESS_SECONDS = "3600"
@@ -338,7 +338,7 @@ Reproduced by `python tools/e2e_interactive_cases.py --out docs/evidence/increme
 
 | Variable | Default | Description |
 |---|---|---|
-| `GALECORE_BASE_URL` | `http://localhost:5000` | GaleCore API URL |
+| `GALECORE_BASE_URL` | `http://localhost:7001` | GaleCore API URL |
 | `GALECORE_API_KEY` | — | Must match GaleCore user-secrets `ApiKey` |
 | `LOCAL_VALIDATION` | `true` | Restrict to localhost |
 | `MAX_STALENESS_SECONDS` | `300` | Max age before rejection |

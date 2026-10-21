@@ -50,8 +50,10 @@ python -B -m galecore_ai.adapters.cli catalog --check   # cada capacidad carga y
 
 ## Referencia
 
+- Uso del producto, capas de contexto y motor: `PRODUCT.md` (arriba) con D-0012 y D-0014 (`../decisiones/`)
 - Uso desde el host, capacidad por capacidad: `docs/HOST-REFERENCE.md`
-- Arquitectura: `docs/architecture/GaleCore-AI-arquitectura-v5.md` · contratos: `docs/architecture/P0-CONTRACTS.md`
-- Guías de validación: `docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md`, `docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md`
+- Contratos del código (anteriores a D-0012/D-0014; en capas y motor manda `PRODUCT.md`):
+  `docs/architecture/P0-CONTRACTS.md`, `docs/architecture/GaleCore-AI-arquitectura-v5.md`
+- Reglas de payload de GEX y régimen: `docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md`, `docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md`
 - Visor de registros: `docs/LOCAL-REGIME-VIEWER.md`
 - Backlog: `docs/architecture/PRODUCT-BACKLOG.md` · histórico (no se sigue): `docs/archive/`

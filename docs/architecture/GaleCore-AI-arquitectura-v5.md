@@ -4,6 +4,8 @@
 > estado vigentes están en `roadmap/README.md` del workspace; donde este texto hable de fases, estado u objetivo,
 > manda el roadmap. Los documentos de estado que cita (`PHASE3/4-ALIGNMENT.md`, `SESSION_HANDOFF.md`,
 > `ARCHITECTURE-EXECUTIVE-SUMMARY.md`) están en `docs/archive/` y no se siguen.
+> Es anterior a D-0012 y D-0014 (`decisiones/` del workspace): las capas de contexto de cada turno y el Lab
+> agnóstico del motor están en `PRODUCT.md` «Capas»; donde este texto hable de host, contexto o motor, mandan ellos.
 
 **Fecha:** 2026-09-15
 

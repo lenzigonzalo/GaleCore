@@ -9,7 +9,7 @@ autonomous runtime is not involved; the validator never calls a model.
 
 ## 1. Prerequisites
 
-- GaleCore API running on `http://localhost:5000` with Tastytrade market data available.
+- GaleCore API running on `http://localhost:7001` with Tastytrade market data available.
 - The GaleCore ApiKey from `dotnet user-secrets` (project `DataFeed.Api`). It is passed as
   `GALECORE_API_KEY` and is never written to records, evidence, fixtures or docs.
 - The workspace knowledge base `<workspace>/knowledge/` (must exist; `GALECORE_KNOWLEDGE_DIR`
@@ -17,7 +17,7 @@ autonomous runtime is not involved; the validator never calls a model.
   (2026-09-23) the default was `../GaleCore/research/regime`; the records were moved from there.
 
 ```bash
-export GALECORE_BASE_URL=http://localhost:5000
+export GALECORE_BASE_URL=http://localhost:7001
 export GALECORE_API_KEY=<ApiKey>
 export ALLOW_UNKNOWN_FRESHNESS=true    # required: PutSkew publishes no as-of timestamp → snapshot freshness is UNKNOWN at best
 export MAX_STALENESS_SECONDS=36000     # daily records are produced AFTER the cash session (16:30–20:00 ET, owner decision F-2); the last prints are then minutes to a few hours old
