@@ -39,7 +39,7 @@ Usage:
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
     python -m galecore_ai.adapters.cli clock [--at ISO]
-    python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list
+    python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list [--bugfix]
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
     python -m galecore_ai.adapters.cli project add NAME|portfolio --kind thesis|story|decision|pending|done --text "..." [--ref REF] [--closes HASH] --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|days|every_minutes [--days mon,wed] [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
@@ -838,7 +838,8 @@ def _cmd_gap(args: argparse.Namespace) -> None:
             item = gap_log.close(kb, args.id, resolution=args.resolution)
             _json_out({"status": "CLOSED", **gap_log.summary(item), "resolution": item["resolution"]})
         else:
-            _json_out({"gaps": [gap_log.summary(i) for i in gap_log.items(kb)]})
+            found = gap_log.bugfixes(kb) if args.bugfix else gap_log.items(kb)
+            _json_out({"gaps": [gap_log.summary(i) for i in found]})
     except ValueError as exc:
         _error_out(str(exc), exit_code=3)
 
@@ -1638,7 +1639,8 @@ def build_parser() -> _JsonArgumentParser:
     p_gap_add.add_argument("--why", help="What the user needed it for")
     p_gap_add.add_argument("--instead", help="What was done in its place")
     p_gap_add.add_argument("--project")
-    gap_sub.add_parser("list", help="Gaps by frequency")
+    p_gap_list = gap_sub.add_parser("list", help="Gaps by frequency")
+    p_gap_list.add_argument("--bugfix", action="store_true", help="Only GaleCore server faults raised as bugfix")
     p_gap_close = gap_sub.add_parser("close", help="Mark a gap solved, with its cause; it reopens if asked again")
     p_gap_close.add_argument("id")
     p_gap_close.add_argument("--resolution", required=True, help="What fixed it, or why it no longer applies")

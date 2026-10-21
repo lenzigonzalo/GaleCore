@@ -14,6 +14,8 @@ from pathlib import Path
 
 KINDS = ("data", "calc", "analysis", "cross", "action", "api_error")
 MAX_OCCURRENCES = 20
+BUGFIX_AFTER = 3            # server faults (HTTP 5xx) of the same request before it becomes a bugfix to attend
+_SERVER_FAULT = re.compile(r"HTTP 5\d\d")   # a 4xx is the caller's mistake (bad range, missing parameter), not a bug
 
 
 def _slug(text: str) -> str:
@@ -69,14 +71,24 @@ def add(kb: Path, *, need: str, kind: str, why: str = "", instead: str = "", pro
     now = datetime.now(UTC).isoformat(timespec="seconds")
     item = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {
         "id": path.stem, "need": need, "kind": kind, "first_seen": now, "count": 0, "occurrences": []}
+    if "closed_at" in item:                 # asked again after being closed: it can be raised again
+        item.pop("bugfix", None)
     item.pop("closed_at", None)
     item.pop("resolution", None)
     item["count"] += 1
     item["last_seen"] = now
     occurrence = {"at": now, "why": why, "instead": instead, "project": project}
     item["occurrences"] = (item["occurrences"] + [occurrence])[-MAX_OCCURRENCES:]
+    faults = sum(1 for o in item["occurrences"] if _SERVER_FAULT.search(o.get("why", "")))
+    if kind == "api_error" and "bugfix" not in item and faults >= BUGFIX_AFTER:
+        item["bugfix"] = {"raised_at": now, "state": "open"}   # GaleCore is failing, not the caller: to be fixed first
     _write(path, item)
     return item
+
+
+def bugfixes(kb: Path) -> list[dict]:
+    """The open server faults to fix before new work, most repeated first."""
+    return [i for i in items(kb) if "bugfix" in i]
 
 
 def close(kb: Path, gap_id: str, *, resolution: str) -> dict:
@@ -112,4 +124,4 @@ def items(kb: Path, *, include_closed: bool = False) -> list[dict]:
 
 
 def summary(item: dict) -> dict:
-    return {k: item[k] for k in ("id", "need", "kind", "count", "first_seen", "last_seen")}
+    return {k: item[k] for k in ("id", "need", "kind", "count", "first_seen", "last_seen", "bugfix") if k in item}
