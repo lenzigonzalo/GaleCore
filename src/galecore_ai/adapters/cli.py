@@ -834,6 +834,9 @@ def _cmd_gap(args: argparse.Namespace) -> None:
             item = gap_log.add(kb, need=args.need, kind=args.kind, why=args.why or "", instead=args.instead or "",
                                project=args.project or "")
             _json_out({"status": "NOTED", "count": item["count"], **gap_log.summary(item)})
+        elif args.gap_command == "close":
+            item = gap_log.close(kb, args.id, resolution=args.resolution)
+            _json_out({"status": "CLOSED", **gap_log.summary(item), "resolution": item["resolution"]})
         else:
             _json_out({"gaps": [gap_log.summary(i) for i in gap_log.items(kb)]})
     except ValueError as exc:
@@ -1635,6 +1638,9 @@ def build_parser() -> _JsonArgumentParser:
     p_gap_add.add_argument("--instead", help="What was done in its place")
     p_gap_add.add_argument("--project")
     gap_sub.add_parser("list", help="Gaps by frequency")
+    p_gap_close = gap_sub.add_parser("close", help="Mark a gap solved, with its cause; it reopens if asked again")
+    p_gap_close.add_argument("id")
+    p_gap_close.add_argument("--resolution", required=True, help="What fixed it, or why it no longer applies")
 
     p_inbox = sub.add_parser("inbox", help="Idea inbox: note the owner's idea now, review it later (GC-AI-0018)")
     in_sub = p_inbox.add_subparsers(dest="inbox_command", required=True)

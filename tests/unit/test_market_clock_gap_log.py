@@ -1,5 +1,7 @@
 from datetime import UTC, date, datetime
 
+import pytest
+
 from galecore_ai.application import gap_log, market_clock
 
 
@@ -56,3 +58,14 @@ def test_gap_log_rejects_unknown_kind(tmp_path):
     except ValueError:
         return
     raise AssertionError("expected ValueError")
+
+
+def test_gap_log_close_hides_it_and_a_new_ask_reopens_it(tmp_path):
+    item = gap_log.add(tmp_path, need="Volumen en velas diarias", kind="data")
+    closed = gap_log.close(tmp_path, item["id"], resolution="ParseLong arreglado")
+    assert closed["resolution"] == "ParseLong arreglado" and gap_log.items(tmp_path) == []
+    assert len(gap_log.items(tmp_path, include_closed=True)) == 1
+    again = gap_log.add(tmp_path, need="Volumen en velas diarias", kind="data")
+    assert "closed_at" not in again and again["count"] == 2 and len(gap_log.items(tmp_path)) == 1
+    with pytest.raises(ValueError):
+        gap_log.close(tmp_path, "no-existe", resolution="x")

@@ -1,7 +1,8 @@
 """Registro de faltantes hacia el desarrollo de GaleCore (BL-022).
 
 Cuando el usuario pide algo que GaleCore no cubre (dato, cálculo, análisis, cruce, acción) o la API falla, el harness lo
-anota acá sin pedir permiso: una pieza por necesidad, con contador. `gap list` dice qué construir primero.
+anota acá sin pedir permiso: una pieza por necesidad, con contador. `gap list` dice qué construir primero; `gap close`
+lo marca resuelto con su causa (queda el registro) y, si se vuelve a pedir, se reabre.
 """
 from __future__ import annotations
 
@@ -68,24 +69,45 @@ def add(kb: Path, *, need: str, kind: str, why: str = "", instead: str = "", pro
     now = datetime.now(UTC).isoformat(timespec="seconds")
     item = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {
         "id": path.stem, "need": need, "kind": kind, "first_seen": now, "count": 0, "occurrences": []}
+    item.pop("closed_at", None)
+    item.pop("resolution", None)
     item["count"] += 1
     item["last_seen"] = now
     occurrence = {"at": now, "why": why, "instead": instead, "project": project}
     item["occurrences"] = (item["occurrences"] + [occurrence])[-MAX_OCCURRENCES:]
+    _write(path, item)
+    return item
+
+
+def close(kb: Path, gap_id: str, *, resolution: str) -> dict:
+    path = gap_dir(kb) / f"{gap_id}.json"
+    if not path.exists():
+        raise ValueError(f"no gap {gap_id}")
+    if not resolution.strip():
+        raise ValueError("resolution is required")
+    item = json.loads(path.read_text(encoding="utf-8"))
+    item["closed_at"] = datetime.now(UTC).isoformat(timespec="seconds")
+    item["resolution"] = resolution.strip()
+    _write(path, item)
+    return item
+
+
+def _write(path: Path, item: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(item, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
-    return item
 
 
-def items(kb: Path) -> list[dict]:
+def items(kb: Path, *, include_closed: bool = False) -> list[dict]:
     out = []
     for f in sorted(gap_dir(kb).glob("*.json")) if gap_dir(kb).exists() else []:
         try:
-            out.append(json.loads(f.read_text(encoding="utf-8")))
+            item = json.loads(f.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
+        if include_closed or "closed_at" not in item:
+            out.append(item)
     return sorted(out, key=lambda i: (-i["count"], i["first_seen"]))
 
 
