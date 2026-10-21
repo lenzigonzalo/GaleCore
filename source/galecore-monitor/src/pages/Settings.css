@@ -44,22 +44,22 @@
 .platform-services td:first-child { color:var(--text-primary); white-space:nowrap; }
 .platform-services td:last-child { white-space:nowrap; }
 
-/* Preferencias y Memoria (estilo «Personalización» de ChatGPT / Claude): opciones para elegir, no cajas de texto */
+/* Memoria (una lista, como la de ChatGPT / Claude) e idioma */
 .settings-action.is-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .settings-action.is-primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
 .settings-action.is-danger { border-color: var(--red-gc); color: var(--red-gc); }
+.settings-language { display: flex; align-items: center; gap: 12px; }
+.settings-language select { padding: 8px 12px; font-size: 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); }
+.settings-language small { color: var(--text-secondary); }
 .pref-switch { flex-shrink: 0; position: relative; width: 42px; height: 24px; padding: 0; border: 0; border-radius: 999px; cursor: pointer; background: var(--border-light); transition: background .15s; }
 .pref-switch i { position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--text-primary); transition: transform .15s; }
 .pref-switch[aria-checked="true"] { background: var(--accent); }
 .pref-switch[aria-checked="true"] i { transform: translateX(18px); background: var(--accent-ink); }
 .mem { display: grid; gap: 16px; max-width: 860px; }
 .mem-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.mem-count { font-size: 14px; color: var(--text-secondary); }
 .mem-list { list-style: none; margin: 0; padding: 0; }
 .mem-item { display: flex; align-items: flex-start; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--border-dark); }
-.mem-count { font-size: 14px; color: var(--text-secondary); }
-.settings-language { display: flex; align-items: center; gap: 12px; }
-.settings-language select { padding: 8px 12px; font-size: 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); }
-.settings-language small { color: var(--text-secondary); }
 .mem-body { flex: 1; min-width: 0; font-size: 15px; line-height: 1.5; color: var(--text-primary); }
 .mem-body p { margin: 0; }
 .mem-shared { flex-shrink: 0; font-size: 12px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--green-border); color: var(--green); }
@@ -70,7 +70,4 @@
 .mem-editor textarea { width: 100%; padding: 10px 12px; font: 15px/1.5 var(--font-sans); border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); resize: vertical; }
 .mem-editor-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mem-share { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary); }
-@media (max-width: 700px) { .mem-item { flex-wrap: wrap; } .mem-count { font-size: 14px; color: var(--text-secondary); }
-.settings-language { display: flex; align-items: center; gap: 12px; }
-.settings-language select { padding: 8px 12px; font-size: 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); }
-.settings-language small { color: var(--text-secondary); }
+@media (max-width: 700px) { .mem-item { flex-wrap: wrap; } }
