@@ -216,9 +216,6 @@ def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime
         if inst.get("lifecycleState") == "RUNNING":
             others.append(f"{inst.get('specName')} ({inst.get('versionHash', '')[:19]}…) {inst.get('lifecycleState')}"
                           f"/{inst.get('schedulerState')} — otra versión, no se mezcla con esta estrategia")
-            if not any(i.get("instance", {}).get("lifecycleState") == "RUNNING" for i in mine):
-                attention.append(f"{inst.get('specName')} ocupa el único lugar RUNNING del runtime: desplegar {ref} "
-                                 "requiere pararla (decisión tuya; su posición abierta se sigue valuando)")
     # Earlier versions of this strategy and other specs (GC-AI-0017, run 7 of 30/09: a STOPPED instance's open
     # position was left out of the record, so the briefing reported zero exposure).
     for item in report.get("instances", []):

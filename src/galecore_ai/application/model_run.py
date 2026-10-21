@@ -141,6 +141,16 @@ def add_tokens(a: dict | None, b: dict | None) -> dict | None:
     return {k: a.get(k, 0) + b.get(k, 0) for k in {**a, **b}}
 
 
+ENGINE_LIMIT_RE = re.compile(r"hit your (?:session|weekly|usage|daily)? ?limit[^;\n]*", re.IGNORECASE)
+
+
+def engine_limit(error: str | None) -> str | None:
+    """«límite del motor» with its reset time when the engine refused for quota (not a fault of the agent)."""
+    if not error or not (m := ENGINE_LIMIT_RE.search(error)):
+        return None
+    return f"límite del motor: {m.group(0).strip()}"
+
+
 class ModelClient(Protocol):
     def run(self, *, prompt: str, allowed: list[str], max_turns: int, schema: dict, cwd: Path,
             timeout_s: int, add_dir: Path) -> ModelReply: ...

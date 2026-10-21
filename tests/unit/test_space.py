@@ -400,3 +400,67 @@ def test_combined_settings_and_current_status_are_refused_instead_of_discarded(e
     assert space.publish_agents(client, kb_, sch)["requests"][0]["result"] == "refused"
     assert t.load(kb_, task.id) == task
     assert "por separado" in _agent(fake)["request_error"]
+
+
+# ── WS-0055: days, tools, delivery and new agents from the monitor ─────
+
+
+def _market_agent(env_):
+    kb_, sch, _ = env_
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    return make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+
+
+def test_schedule_tools_and_delivery_are_edited_from_the_monitor(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    task = _market_agent(env)
+    space.publish_agents(client, kb_, sch)
+    published = _agent(fake)
+    assert published["tools_available"] and published["tools"] == published["tools_available"]
+    fewer = published["tools_available"][:2]
+    settings = {"schedule": {"frequency": "days", "days": ["wed", "mon"], "time": "10:00",
+                             "timezone": "America/New_York"}, "tools": fewer, "delivery": ["historial", "biblioteca"]}
+    client.put("agent", task.id, title="x", fmt="json",
+               content=json.dumps({**published, "request": {"settings": settings, "at": _now()}}))
+    assert space.publish_agents(client, kb_, sch)["requests"][0]["result"] == "applied"
+    saved = t.load(kb_, task.id)
+    assert saved.schedule.days == ["mon", "wed"] and saved.tools == fewer and saved.delivery == ["historial", "biblioteca"]
+    assert "lunes y miércoles" in saved.schedule.describe()
+    assert sch.calls[-1][2] == "days"
+    assert _agent(fake)["schedule_spec"]["days"] == ["mon", "wed"]
+
+
+@pytest.mark.parametrize("settings", [{"tools": ["Bash(rm:*)"]}, {"delivery": ["biblioteca"]},
+                                     {"schedule": {"frequency": "days", "days": [], "time": "10:00",
+                                                   "timezone": "America/New_York"}}])
+def test_tools_outside_the_skill_and_bad_schedule_are_refused(env, galecore, settings):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    task = _market_agent(env)
+    space.publish_agents(client, kb_, sch)
+    client.put("agent", task.id, title="x", fmt="json", content=json.dumps({**_agent(fake), "request": {
+        "settings": settings, "at": _now()}}))
+    assert space.publish_agents(client, kb_, sch)["requests"][0]["result"] == "refused"
+    assert t.load(kb_, task.id) == task
+
+
+def test_a_new_agent_is_created_from_a_monitor_request(env, galecore):  # noqa: F811
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    create = {"id": "gamma-qqq", "kind": "market_watch", "objective": "Mirar el gamma de QQQ",
+              "schedule": {"frequency": "days", "days": ["tue", "thu"], "time": "09:00", "timezone": "America/New_York"},
+              "delivery": ["historial", "biblioteca"]}
+    client.put("agent", "gamma-qqq", title="x", fmt="json",
+               content=json.dumps({"request": {"create": create, "at": _now()}}))
+    assert space.publish_agents(client, kb_, sch)["requests"][0]["result"] == "applied"
+    task = t.load(kb_, "gamma-qqq")
+    assert task.kind == "market_watch" and task.schedule.days == ["tue", "thu"] and "Alta desde el monitor" in task.created_by_prompt
+    assert _agent(fake, "gamma-qqq")["objective"] == "Mirar el gamma de QQQ"
+    bad = {**create, "id": "otro", "kind": "strategy_followup"}
+    client.put("agent", "otro", title="x", fmt="json", content=json.dumps({"request": {"create": bad, "at": _now()}}))
+    assert space.publish_agents(client, kb_, sch)["requests"][0]["result"] == "refused"

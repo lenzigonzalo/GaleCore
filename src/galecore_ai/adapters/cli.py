@@ -42,7 +42,7 @@ Usage:
     python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
     python -m galecore_ai.adapters.cli project add NAME|portfolio --kind thesis|story|decision|pending|done --text "..." [--ref REF] [--closes HASH] --prompt "..."
-    python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|every_minutes [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
+    python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|days|every_minutes [--days mon,wed] [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
     python -m galecore_ai.adapters.cli task set-scan ID --symbols SPY,QQQ --iv-rank-min 30 [--quiet-days 3] | --off --prompt "..."
     python -m galecore_ai.adapters.cli task set-frequency ID --frequency ... [--time HH:MM | --minutes N] --timezone TZ --prompt "..."
@@ -1343,7 +1343,8 @@ async def _cmd_task(args: argparse.Namespace) -> None:
     c = args.task_command
 
     def schedule() -> Schedule:
-        return Schedule(frequency=args.frequency, time=args.time, minutes=args.minutes, timezone=args.timezone)
+        return Schedule(frequency=args.frequency, time=args.time, minutes=args.minutes, timezone=args.timezone,
+                        days=args.days.split(",") if args.days else None)
     try:
         if c == "create":
             task = t.create(kb=kb, scheduler=sch, task_id=args.id, strategy=args.strategy, objective=args.objective,
@@ -1678,7 +1679,8 @@ def build_parser() -> _JsonArgumentParser:
     t_sub = p_task.add_subparsers(dest="task_command", required=True)
 
     def schedule_args(p):
-        p.add_argument("--frequency", required=True, choices=["daily", "weekdays", "every_minutes", "market_hours"])
+        p.add_argument("--frequency", required=True, choices=["daily", "weekdays", "days", "every_minutes", "market_hours"])
+        p.add_argument("--days", help="for days: comma-separated mon,tue,wed,thu,fri,sat,sun")
         p.add_argument("--time", help="HH:MM in --timezone (daily, weekdays)")
         p.add_argument("--minutes", type=int, help="period for every_minutes (15..1440) or market_hours (15..240, "
                                                    "Mon-Fri 09:30-16:00 America/New_York)")

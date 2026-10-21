@@ -39,9 +39,17 @@ from galecore_ai.application.followup import run_followup
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.followup import FollowupRecord
 from galecore_ai.contracts.regime_record import RecordHost
-from galecore_ai.contracts.task import MARKET_CLOSE, MARKET_OPEN, ScanRule, Schedule, TaskDefinition
+from galecore_ai.contracts.task import (
+    MARKET_CLOSE,
+    MARKET_OPEN,
+    WEEKDAYS,
+    ScanRule,
+    Schedule,
+    TaskDefinition,
+)
 from galecore_ai.harness.catalog import CatalogEntry, CatalogError, load_catalog
 
+NO_STRATEGY = "sin estrategia: no hay seguimiento"   # not a fault: an agent without strategy has no follow-up
 LOCK_STALE_MINUTES = 30
 REPAIR_SECONDS = 240         # the correction round
 LOCK_MARGIN_SECONDS = 120    # what a model run leaves free under the stale-lock age (saving, LATEST.md, commit)
@@ -85,6 +93,8 @@ class WindowsScheduler:
                   "/du", _session_length()]
         elif schedule.frequency == "weekdays":
             sc = ["/sc", "weekly", "/d", "MON,TUE,WED,THU,FRI", "/st", local_time]
+        elif schedule.frequency == "days":
+            sc = ["/sc", "weekly", "/d", ",".join(d.upper() for d in schedule.days), "/st", local_time]
         else:
             sc = ["/sc", "daily", "/st", local_time]
         self._run(["/create", "/tn", name, "/tr", tr, *sc, "/f"])
@@ -146,7 +156,9 @@ def _save(kb: KnowledgeBase, task: TaskDefinition) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".tmp")
     # Absent optional fields stay out of the file: a checkout that predates them still reads the task.
-    drop = {f for f in ("result_slug", "scan", "model") if getattr(task, f) is None}
+    drop = {f for f in ("result_slug", "scan", "model", "tools") if getattr(task, f) is None}
+    if task.delivery == ["historial"]:
+        drop.add("delivery")
     data = task.model_dump(mode="json", exclude=drop or None)
     tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     os.replace(tmp, path)
@@ -234,7 +246,7 @@ def local_time_for(schedule: Schedule, now: datetime) -> str | None:
     if target <= now:
         target += timedelta(days=1)
     local = target.astimezone()
-    if schedule.frequency in ("weekdays", "market_hours") and local.date() != target.date():
+    if schedule.frequency in ("weekdays", "days", "market_hours") and local.date() != target.date():
         raise TaskError(f"{schedule.time} {schedule.timezone} is another calendar day on this PC "
                         f"({local:%a %H:%M}); a weekdays schedule would fire on the wrong days. Use daily or another time")
     return local.strftime("%H:%M")
@@ -258,6 +270,8 @@ MISSED_GRACE = timedelta(minutes=30)
 
 
 def _fires_on(schedule: Schedule, day) -> bool:
+    if schedule.frequency == "days":
+        return WEEKDAYS[day.weekday()] in schedule.days
     return schedule.frequency == "daily" or day.weekday() < 5
 
 
@@ -372,10 +386,25 @@ def schedulable_entry(capability: str) -> CatalogEntry:
     return entry
 
 
+def available_tools(capability: str) -> list[str]:
+    """The read tools a model task of this capability may use (the skill's flow); the owner can only remove some."""
+    from galecore_ai.adapters.cli import build_parser  # lazy: the CLI imports this module
+
+    return model_run.allowed_tools(schedulable_entry(capability), cli_commands(build_parser()))
+
+
+def effective_tools(task: TaskDefinition, allowed: list[str]) -> list[str]:
+    """`allowed` narrowed to the owner's choice; Read stays (the run reads its own scratch files)."""
+    if task.tools is None:
+        return allowed
+    return [r for r in allowed if r == "Read" or r in task.tools]
+
+
 def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str | None, objective: str, expected_result: str,
            sources: list[str], schedule: Schedule, prompt: str, code_path: Path | None = None,
            now: datetime | None = None, capability: str = "strategy_followup",
-           result_slug: str | None = None) -> TaskDefinition:
+           result_slug: str | None = None, model: str | None = None, tools: list[str] | None = None,
+           delivery: list[str] | None = None) -> TaskDefinition:
     now = now or datetime.now(UTC)
     if (_dir(kb, task_id) / "task.json").exists():
         raise TaskError(f"task {task_id} already exists (a cancelled task keeps its id and history)")
@@ -393,6 +422,11 @@ def create(*, kb: KnowledgeBase, scheduler, task_id: str, strategy: str | None, 
                               "guarda su resultado y la evidencia que usó")]}
     elif result_slug:
         raise TaskError(f"{capability} runs as code; it has no result_slug")
+    if entry.schedulable.runs == "code" and (model or tools):
+        raise TaskError("esta tarea corre por código, sin modelo ni herramientas para elegir")
+    if tools is not None and (bad := [x for x in tools if x not in available_tools(capability)]):
+        raise TaskError(f"herramientas fuera de la skill {capability}: {bad}")
+    extra.update({k: v for k, v in (("model", model), ("tools", tools), ("delivery", delivery)) if v})
     task = TaskDefinition(kind=capability, id=task_id, objective=objective, strategy=strategy,
                           sources=sources, expected_result=expected_result, schedule=schedule, created_at=now,
                           updated_at=now, created_by_prompt=prompt, scheduler_name=f"{SCHEDULER_FOLDER}\\{task_id}",
@@ -448,8 +482,8 @@ def set_settings(*, kb: KnowledgeBase, task_id: str, settings: dict, prompt: str
                  expected_updated_at: datetime, now: datetime | None = None) -> TaskDefinition:
     """Apply an owner edit without changing schedule, tools, budgets or task status."""
     now = now or datetime.now(UTC)
-    if not settings or set(settings) - {"objective", "model"}:
-        raise TaskError("sólo se pueden editar instrucciones y modelo")
+    if not settings or set(settings) - {"objective", "model", "tools", "delivery"}:
+        raise TaskError("sólo se pueden editar instrucciones, modelo, herramientas y entrega")
     with _state_lock(kb, task_id):
         task = load(kb, task_id)
         if task.status == "cancelled" or task.updated_at != expected_updated_at:
@@ -459,6 +493,12 @@ def set_settings(*, kb: KnowledgeBase, task_id: str, settings: dict, prompt: str
         if "objective" in settings and (not isinstance(settings["objective"], str)
                                         or len(settings["objective"]) > 12000):
             raise TaskError("las instrucciones deben tener entre 1 y 12000 caracteres")
+        if "tools" in settings:
+            if task.kind in CODE_RUNNERS:
+                raise TaskError("esta tarea corre por código, sin herramientas para elegir")
+            if settings["tools"] is not None and (not isinstance(settings["tools"], list) or (
+                    bad := [x for x in settings["tools"] if x not in available_tools(task.kind)])):
+                raise TaskError(f"herramientas fuera de la skill {task.kind}: {bad if settings['tools'] else ''}")
         updated = TaskDefinition.model_validate({**task.model_dump(), **settings, "updated_at": now})
         _save(kb, updated)
         _append(kb, task_id, "settings_changed", now, before={k: getattr(task, k) for k in settings},
@@ -753,7 +793,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
                     "read with `kb show` only the refs listed for them, and name the stale pending feedback to the "
                     "owner as listed. Do not search for more. The screen, verbatim:\n```json\n"
                     f"{json.dumps(found, ensure_ascii=False)}\n```")
-            followup_error = "sin estrategia: no hay seguimiento"
+            followup_error = NO_STRATEGY
         elif task.scan is not None:  # screened by code first; the model only with a finding (P1-05)
             from galecore_ai.application import scan
             screened = _screen(task, now)
@@ -767,9 +807,9 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
                     f"are findings: {', '.join(screened['findings'])}; build and check the candidate only for them, "
                     "and report the others as the screen left them. The screen, verbatim:\n```json\n"
                     f"{json.dumps(screened, ensure_ascii=False)}\n```")
-            followup_error = "sin estrategia: no hay seguimiento"
+            followup_error = NO_STRATEGY
         elif task.strategy is None:  # an agent that watches the market: no strategy, no runtime follow-up (GC-AI-0020)
-            followup_error = "sin estrategia: no hay seguimiento"
+            followup_error = NO_STRATEGY
             note = "This agent follows no strategy: there is no runtime follow-up; read the market with your commands."
         else:
             rec, path = followup(kb=kb, strategy=task.strategy, prompt=task.objective, host=INVOKERS[invoked_by],
@@ -796,7 +836,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
     target = _latest_research(kb, task)
     scratch = _scratch(task.id, now)
     scratch.mkdir(parents=True, exist_ok=True)
-    allowed = model_run.allowed_tools(entry, cli_commands(build_parser()))
+    allowed = effective_tools(task, model_run.allowed_tools(entry, cli_commands(build_parser())))
     prompt = model_run.build_prompt(entry=entry, task=task, target=target, run_dir=scratch, now=now, allowed=allowed,
                                     followup_note=note)
     (scratch / "prompt.txt").write_text(prompt, encoding="utf-8")
@@ -831,9 +871,12 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
             return {**base, "result": out.status, "research": ref, "revision": revision,
                     "evidence_saved": len(paths) - 1, **({"reason": out.reason} if out.reason else {}),
                     "duration_s": round(time.monotonic() - t0, 1)}
+    if limit := model_run.engine_limit(problem):   # the engine's quota, not the agent: said as such, never a fault
+        return {**base, "result": "FAILED", "engine_limit": True, "duration_s": round(time.monotonic() - t0, 1),
+                "error": limit[:800]}
     if rec is None and kept is None:
         return {**base, "result": "FAILED", "duration_s": round(time.monotonic() - t0, 1),
-                "error": f"model: {problem}; follow-up: {followup_error}"[:800]}
+                "error": (f"model: {problem}" + ("" if followup_error == NO_STRATEGY else f"; follow-up: {followup_error}"))[:800]}
     return {**base, "result": "INCOMPLETE", "duration_s": round(time.monotonic() - t0, 1),
             "reason": f"sin resultado del modelo ({problem}); se guardaron los datos del día "
                       f"({rec.status if rec else kept})"[:800]}

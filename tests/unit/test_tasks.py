@@ -359,3 +359,32 @@ def test_a_busy_state_lock_times_out_instead_of_racing(env):
     (kb.base / "tasks" / "seguimiento-spy" / "state.lock").write_text("held", encoding="utf-8")
     with pytest.raises(t.TaskError, match="being changed"), t._state_lock(kb, "seguimiento-spy", timeout=0.2):
         pass
+
+
+def test_chosen_days_schedule_fires_only_on_those_days():
+    s = Schedule(frequency="days", days=["fri", "mon"], time="09:00", timezone="America/New_York")
+    assert s.days == ["mon", "fri"]
+    assert t.next_due(s, _ny(2026, 10, 5, 10, 0)) == _ny(2026, 10, 9, 9, 0)   # Monday after 09:00 -> Friday
+    assert t.last_due(s, _ny(2026, 10, 8, 12, 0)) == _ny(2026, 10, 5, 9, 0)
+    for bad in ({"days": []}, {"days": ["mon", "mon"]}, {"days": ["lun"]}, {"days": None}):
+        with pytest.raises(ValidationError):
+            Schedule(frequency="days", time="09:00", timezone="America/New_York", **bad)
+    with pytest.raises(ValidationError):
+        Schedule(frequency="daily", days=["mon"], time="09:00", timezone="America/New_York")
+
+
+def test_windows_scheduler_registers_chosen_days(monkeypatch):
+    seen = {}
+    monkeypatch.setattr(t.WindowsScheduler, "_run", lambda self, args: seen.setdefault("args", args) or "")
+    monkeypatch.setattr(t.WindowsScheduler, "_settings", lambda self, name: None)
+    s = Schedule(frequency="days", days=["wed", "mon"], time="09:00", timezone="America/New_York")
+    t.WindowsScheduler().create("GaleCore-x", ["py"], s, "10:30")
+    a = seen["args"]
+    assert a[a.index("/sc") + 1] == "weekly" and a[a.index("/d") + 1] == "MON,WED" and a[a.index("/st") + 1] == "10:30"
+
+
+def test_engine_limit_is_named_and_not_blamed_on_the_agent():
+    from galecore_ai.application import model_run
+    msg = "success: You've hit your session limit · resets 9:30pm (America/Argentina/Buenos_Aires)"
+    assert model_run.engine_limit(msg).startswith("límite del motor: hit your session limit")
+    assert model_run.engine_limit("turn cap reached (12)") is None

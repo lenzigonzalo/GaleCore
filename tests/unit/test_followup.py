@@ -62,7 +62,7 @@ def test_unapproved_undeployed_strategy_is_reported_as_such(kb, research_ref, tm
     assert rec.strategy_ref == f"strategy:{KEY}" and rec.spec_hash == doc.spec_hash and not rec.approved
     assert rec.status == "DEGRADED"
     assert any("no está aprobada" in a for a in rec.attention)
-    assert any("ocupa el único lugar RUNNING" in a for a in rec.attention)
+    assert not any("único lugar RUNNING" in a for a in rec.attention)   # GaleCore allows one RUNNING per version (08/10)
     assert any("no está desplegada" in o for o in rec.operation)
     assert rec.other_versions and "no se mezcla" in rec.other_versions[0]
     assert rec.sources[0].startswith("evidence:") and rec.research_ref == research_ref

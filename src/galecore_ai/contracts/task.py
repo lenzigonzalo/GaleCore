@@ -21,7 +21,11 @@ TASK_SCHEMA_VERSION = "1"
 TASK_ID_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+){0,7}$")
 KIND_RE = re.compile(r"^[a-z][a-z0-9_]{2,63}$")  # a catalog id; that it is schedulable is checked when creating and running
 STATUSES = ("active", "paused", "cancelled")
-FREQUENCIES = ("daily", "weekdays", "every_minutes", "market_hours")
+DELIVERIES = ("historial", "biblioteca")   # where a run leaves its result; mail by Gmail comes later
+FREQUENCIES = ("daily", "weekdays", "days", "every_minutes", "market_hours")
+WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+DAY_NAMES = {"mon": "lunes", "tue": "martes", "wed": "miércoles", "thu": "jueves", "fri": "viernes", "sat": "sábado",
+             "sun": "domingo"}
 # market_hours (GC-AI-0020): every N minutes, Monday to Friday, inside the US cash session only.
 MARKET_TZ, MARKET_OPEN, MARKET_CLOSE = "America/New_York", "09:30", "16:00"
 
@@ -29,8 +33,9 @@ MARKET_TZ, MARKET_OPEN, MARKET_CLOSE = "America/New_York", "09:30", "16:00"
 class Schedule(BaseModel):
     model_config = {"extra": "forbid"}
 
-    frequency: str                         # daily | weekdays | every_minutes
-    time: str | None = None                # HH:MM in `timezone` (daily, weekdays)
+    frequency: str                         # daily | weekdays | days | every_minutes | market_hours
+    time: str | None = None                # HH:MM in `timezone` (daily, weekdays, days)
+    days: list[str] | None = None          # days: the chosen weekdays (mon..sun), in week order
     minutes: int | None = None             # period (every_minutes): for short supervised trials, 15..1440
     timezone: str
 
@@ -47,6 +52,12 @@ class Schedule(BaseModel):
     def _shape(self) -> Schedule:
         if self.frequency not in FREQUENCIES:
             raise ValueError(f"frequency is one of {FREQUENCIES}")
+        if self.frequency == "days":
+            if not self.days or any(d not in WEEKDAYS for d in self.days) or len(set(self.days)) != len(self.days):
+                raise ValueError(f"days needs one or more different days of {WEEKDAYS}")
+            self.days = sorted(self.days, key=WEEKDAYS.index)
+        elif self.days is not None:
+            raise ValueError("days is only for the days frequency")
         if self.frequency == "market_hours":
             if self.minutes is None or not 15 <= self.minutes <= 240 or self.time is not None:
                 raise ValueError("market_hours needs minutes between 15 and 240 and no time")
@@ -64,6 +75,10 @@ class Schedule(BaseModel):
             return f"cada {self.minutes} minutos"
         if self.frequency == "market_hours":
             return f"cada {self.minutes} minutos en horario de mercado (L–V {MARKET_OPEN}–{MARKET_CLOSE} Nueva York)"
+        if self.frequency == "days":
+            names = [DAY_NAMES[d] for d in self.days]
+            when = names[0] if len(names) == 1 else f"{', '.join(names[:-1])} y {names[-1]}"
+            return f"{when} a las {self.time} ({self.timezone})"
         return f"{'todos los días' if self.frequency == 'daily' else 'de lunes a viernes'} a las {self.time} ({self.timezone})"
 
 
@@ -119,6 +134,8 @@ class TaskDefinition(BaseModel):
     result_slug: str | None = None          # model runs: the investigation each run revises (research:<date>-<slug>)
     scan: ScanRule | None = None            # market agents: screened by code; the model only with a finding (P1-05)
     model: Literal["haiku", "sonnet", "opus"] | None = None  # owner's override; None follows the catalog policy
+    tools: list[str] | None = None          # owner's subset of the skill's read tools (WS-0055); None = all of them
+    delivery: list[str] = Field(default_factory=lambda: ["historial"])   # history always; the library when chosen
 
     @field_validator("id")
     @classmethod
@@ -140,6 +157,13 @@ class TaskDefinition(BaseModel):
         if v is not None and not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", v):
             raise ValueError("result_slug is lowercase words separated by hyphens")
         return v
+
+    @field_validator("delivery")
+    @classmethod
+    def _delivery(cls, v: list[str]) -> list[str]:
+        if any(d not in DELIVERIES for d in v) or "historial" not in v or len(set(v)) != len(v):
+            raise ValueError(f"delivery is {DELIVERIES} without repeats and always includes historial")
+        return sorted(v, key=DELIVERIES.index)
 
     @field_validator("status")
     @classmethod

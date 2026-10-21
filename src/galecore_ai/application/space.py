@@ -22,6 +22,7 @@ import yaml
 
 from galecore_ai.adapters.galecore_space import SpaceClient
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
+from galecore_ai.contracts.task import Schedule
 from galecore_ai.harness.assets import load_asset
 from galecore_ai.harness.catalog import load_catalog
 from galecore_ai.harness.definitions import SkillDefinition
@@ -102,6 +103,10 @@ def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) ->
         "model": task.model, "model_default": (t.schedulable_entry(task.kind).schedulable.model
                                                 if task.kind not in t.CODE_RUNNERS else None),
         "editable": True, "model_editable": task.kind not in t.CODE_RUNNERS,
+        "schedule_spec": task.schedule.model_dump(exclude_none=True), "delivery": task.delivery,
+        "tools": ((task.tools if task.tools is not None else t.available_tools(task.kind))
+                  if task.kind not in t.CODE_RUNNERS else None),
+        "tools_available": t.available_tools(task.kind) if task.kind not in t.CODE_RUNNERS else None,
         "history": _agent_history(kb, task, outcomes), "history_total": len(outcomes),
         "state": fresh["state"], "state_detail": fresh.get("detail"), "next_expected_at": fresh.get("next_expected_at"),
         "last_run": ({k: last[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error")
@@ -257,6 +262,33 @@ def _agent_items(client: SpaceClient) -> list[tuple[dict, dict]]:
     return out
 
 
+def _create_agent(kb: KnowledgeBase, scheduler, item: dict, content: dict, create, req: dict, user, now) -> dict:
+    """A new agent asked for in the monitor (WS-0055): the piece's key is the slug of its id; only skills that run
+    through the model, read-only, from the catalog's schedulable ones."""
+    from galecore_ai.application import tasks as t
+
+    out = {"agent": item["key"], "status": None, "result": "refused"}
+    try:
+        at = datetime.fromisoformat(str(req.get("at", "")))
+        if at.tzinfo is None or at > datetime.now(UTC) + timedelta(minutes=10):
+            raise ValueError("pedido sin hora válida")
+        if not isinstance(create, dict) or _slug(str(create.get("id", ""))) != item["key"] or                 set(create) - {"id", "kind", "objective", "schedule", "strategy", "model", "tools", "delivery"}:
+            raise ValueError("pedido de alta inválido")
+        kind = str(create.get("kind", ""))
+        if t.schedulable_entry(kind).schedulable.runs != "model":
+            raise t.TaskError("sólo se crean agentes de skills que corren por el modelo")
+        t.create(kb=kb, scheduler=scheduler, task_id=item["key"], strategy=create.get("strategy"),
+                 objective=str(create.get("objective", "")), sources=["GaleCore"],
+                 expected_result=f"Una corrida completa de {kind} con su resultado guardado",
+                 schedule=Schedule.model_validate(create.get("schedule") or {}), capability=kind,
+                 prompt=f"Alta desde el monitor por {user} ({req['at']})", now=now, model=create.get("model"),
+                 tools=create.get("tools"), delivery=create.get("delivery"))
+        out["result"] = "applied"
+    except (t.TaskError, OSError, ValueError) as exc:
+        out["error"] = str(exc)[:300]
+    return out
+
+
 def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None,
                    items: list[tuple[dict, dict]] | None = None) -> list[dict]:
     """Carry out the on/off requests the monitor wrote into the agent pieces; return what was done or refused.
@@ -274,7 +306,11 @@ def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
             continue
         wanted = req.get("status")
         settings = req.get("settings")
-        if wanted not in ("active", "paused") and settings is None:
+        create = req.get("create")
+        if wanted not in ("active", "paused") and settings is None and create is None:
+            continue
+        if create is not None and item["key"] not in known:
+            done.append(_create_agent(kb, scheduler, item, content, create, req, client.user, now))
             continue
         task_id = known.get(item["key"])
         if task_id is None or task_id != content.get("id"):
@@ -309,8 +345,14 @@ def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
             if settings is not None:
                 if wanted is not None or not isinstance(settings, dict):
                     raise t.TaskError("pedido de configuración inválido; enviá instrucciones/modelo por separado del estado")
-                t.set_settings(kb=kb, task_id=task_id, settings=settings, prompt=prompt,
-                               expected_updated_at=task.updated_at, now=now)
+                settings = dict(settings)
+                schedule = Schedule.model_validate(settings.pop("schedule")) if "schedule" in settings else None
+                if settings:
+                    t.set_settings(kb=kb, task_id=task_id, settings=settings, prompt=prompt,
+                                   expected_updated_at=task.updated_at, now=now)
+                if schedule is not None:
+                    t.set_frequency(kb=kb, scheduler=scheduler, task_id=task_id, schedule=schedule, prompt=prompt,
+                                    now=now)
             else:
                 change = t.resume if wanted == "active" else t.pause
                 change(kb=kb, scheduler=scheduler, task_id=task_id, now=now, prompt=prompt)
