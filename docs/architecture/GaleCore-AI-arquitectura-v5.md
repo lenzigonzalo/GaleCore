@@ -6,6 +6,8 @@
 > `ARCHITECTURE-EXECUTIVE-SUMMARY.md`) están en `docs/archive/` y no se siguen.
 > Es anterior a D-0012 y D-0014 (`decisiones/` del workspace): las capas de contexto de cada turno y el Lab
 > agnóstico del motor están en `PRODUCT.md` «Capas»; donde este texto hable de host, contexto o motor, mandan ellos.
+> Retirados el 21/10/2026 (WS-0048/WS-0055, ok del owner): la API FastAPI, `CognitiveRuntime`, `AnalyzeGexUseCase`,
+> `ModelProvider` y sus providers, y el visor `regime_viewer`; lo que este texto diga de ellos es historia.
 
 **Fecha:** 2026-09-15
 

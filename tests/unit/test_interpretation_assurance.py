@@ -390,24 +390,3 @@ class TestEvidence:
         payload = output(evidence=[{"fact_path": "facts.net_gex", "claim": "Dealers are short gamma"}])
         assert validate(payload).accepted
 
-
-@pytest.mark.asyncio
-async def test_runtime_validates_returned_value_not_different_raw_text():
-    from galecore_ai.models.provider import ModelResult
-    from tests.unit.test_runtime import _agent, _build_runtime, _request
-
-    class MismatchedProvider:
-        provider_name = "test"
-        model_id = "test"
-
-        async def generate_structured(self, request, schema):
-            return ModelResult(
-                value=GexInterpretation.model_validate(output(observations=["Target 999"])),
-                raw_text=GexInterpretation.model_validate(output()).model_dump_json(),
-            )
-
-    result = await _build_runtime(provider=MismatchedProvider()).execute(
-        _request(), agent_definition=_agent(), facts=FACTS, output_schema=GexInterpretation,
-    )
-    assert result.status.value == "VALIDATION_ERROR"
-    assert result.result is None

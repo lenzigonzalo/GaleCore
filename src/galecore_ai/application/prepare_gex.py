@@ -3,7 +3,7 @@
 Fetches from GaleCore, validates, requires all cognitive assets,
 stores the authoritative snapshot, and returns only the view for the host.
 
-Does not invoke a model. Does not require CognitiveRuntime.
+Does not invoke a model.
 """
 
 from __future__ import annotations
