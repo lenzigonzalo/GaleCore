@@ -60,6 +60,18 @@ namespace DataFeed.Tests
             new(r => Json(r.RequestUri!.AbsolutePath.EndsWith("/observations") ? Obs : Meta));
 
         [Fact]
+        public async Task Serie_PaginaHtmlDeMantenimientoSeDiceAsiYNoCambioDeForma()
+        {
+            var http = new Recorded(_ => new HttpResponseMessage(HttpStatusCode.OK)
+            { Content = new StringContent("<!doctype html><title>Site Maintenance</title>", Encoding.UTF8, "text/html") });
+            var handler = new FredSeriesHandler(Config(), new Factory(http));
+            var ex = await Assert.ThrowsAsync<UpstreamSourceException>(() => handler.Handle(
+                new FredSeriesRequest { SeriesId = "dgs10", From = new DateTime(2026, 10, 1), To = new DateTime(2026, 10, 6) }, default));
+            Assert.Contains("mantenimiento", ex.Message);
+            Assert.DoesNotContain("cambió de forma", ex.Message);
+        }
+
+        [Fact]
         public async Task Serie_TraeMetadatosVintageYObservacionesSinLaClaveEnLaProcedencia()
         {
             var http = Answers();

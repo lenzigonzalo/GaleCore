@@ -80,6 +80,7 @@ namespace DataFeed.Infrastructure.Providers.Fred
                     var response = await _httpClient.GetAsync($"{baseUrl}&offset={page * pageSize}&api_key={_apiKey}", cancellationToken);
                     if (!response.IsSuccessStatusCode)
                         throw new UpstreamSourceException("fred", $"releases/dates respondió {(int)response.StatusCode}");
+                    ThrowIfHtml(response, "releases/dates");
                     body = await JsonSerializer.DeserializeAsync<FredReleaseDatesResponseModel>(
                         await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
                 }
@@ -175,6 +176,13 @@ namespace DataFeed.Infrastructure.Providers.Fred
             }
         }
 
+        /// <summary>FRED en mantenimiento responde 200 con una página HTML: se dice así, no como «cambió de forma».</summary>
+        private static void ThrowIfHtml(HttpResponseMessage response, string what)
+        {
+            if (response.Content.Headers.ContentType?.MediaType?.Contains("html", StringComparison.OrdinalIgnoreCase) == true)
+                throw new UpstreamSourceException("fred", $"{what} respondió una página HTML (FRED en mantenimiento o sin servicio): reintentar más tarde");
+        }
+
         private async Task<JsonDocument> GetJsonAsync(string url, string what, CancellationToken cancellationToken)
         {
             try
@@ -184,6 +192,7 @@ namespace DataFeed.Infrastructure.Providers.Fred
                     // FRED responde 400 cuando la serie no existe: el motivo viene en error_message, sin la clave.
                     throw new UpstreamSourceException("fred", $"{what} respondió {(int)response.StatusCode}"
                         + (await ErrorMessage(response, cancellationToken) is { } m ? $": {m}" : ""));
+                ThrowIfHtml(response, what);
                 return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
             }
             catch (Exception ex) when (ex is HttpRequestException || (ex is TaskCanceledException && !cancellationToken.IsCancellationRequested))
