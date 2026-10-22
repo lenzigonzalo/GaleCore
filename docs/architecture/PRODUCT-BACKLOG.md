@@ -970,6 +970,16 @@ No se cambia el roadmap, el item activo ni se autoriza implementación o ejecuci
 
 **Estado:** el owner pidió corregirlos ahora; implementación y evidencia en [GC-0013](../../../GaleCore/docs/engineering/work-items/GC-0013-watchlist-foco-ultimo-precio.md). Este addendum queda como procedencia; el seguimiento vive en ese work item.
 
+### Addendum 2026-10-21 — vistas del chat que piden renderer nuevo (WS-0057 G, sin prioridad)
+
+Del caso tecnológicas (`docs/engineering/evidence/2026-10-21-revision-respuesta-tecnologicas.md` del workspace). WS-0057 G
+resolvió lo que el chat ya tenía (tablas, color, scroll, enlaces a archivos, criterio en el núcleo y la skill). Quedan,
+y sirven para más de un tipo de pedido: (1) gráficos chicos de precio con medias y volumen por símbolo, con fecha común
+y niveles (empresas, ETF, seguimiento técnico); (2) dispersión de dos métricas por grupo, que marque denominadores
+negativos y períodos incompatibles (comparaciones y selección); (3) eventos próximos como línea de tiempo en el chat
+(calendario, cartera, balances); (4) detalle desplegable dentro de la respuesta; (5) CMF y otros indicadores de
+volumen como cálculo de GaleCore con parámetros, período y fuente (hoy sólo es un script del caso).
+
 ---
 
 ## BL-006 — Federación MCP, trust y routing de tools externas
