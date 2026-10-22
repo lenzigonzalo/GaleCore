@@ -167,14 +167,14 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     window.addEventListener('keydown',trap);
     return () => { window.removeEventListener('keydown',trap); previous?.focus(); };
   },[creating]);
-  const selectProject = (p: WorkspaceProject) => { selection.current++; setProjectId(p.id); setChatId(null); setChat(null); setView(v => v === 'files' || v === 'shell' ? v : 'chat'); setExpanded(v=>({...v,[p.id]:true})); setError(''); };
+  const selectProject = (p: WorkspaceProject) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(null); setChat(null); setView(v => v === 'files' || v === 'shell' ? v : 'chat'); setExpanded(v=>({...v,[p.id]:true})); setError(''); };
   useEffect(() => {
     if (!projectRequest || handledRequest.current === projectRequest.sequence || !state) return;
     const target = state.projects.find(item => item.id === projectRequest.id);
     if (!target) return;
     handledRequest.current = projectRequest.sequence; selectProject(target);
   }, [projectRequest, state]);
-  const selectChat = (p: WorkspaceProject, c: WorkspaceState['chats'][number]) => { selection.current++; setProjectId(p.id); setChatId(c.id); setChat(null); setView('chat'); setError(''); };
+  const selectChat = (p: WorkspaceProject, c: WorkspaceState['chats'][number]) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(c.id); setChat(null); setView('chat'); setError(''); };
   const newChat = () => { selection.current++; setChatId(null); setChat(null); setView('chat'); setError(''); };
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true);

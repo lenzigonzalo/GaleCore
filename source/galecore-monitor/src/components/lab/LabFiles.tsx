@@ -45,12 +45,12 @@ export function LabFiles({ projectId, folder, openPath }: { projectId: string; f
     try { const f = await labRequest<{ text: string }>(base + '?path=' + encodeURIComponent(node.path)); setFile({ path: node.path, saved: f.text, text: f.text }); setEditing(!isMarkdown(node.path)); }
     catch (e) { setFile(null); setError(e instanceof Error ? e.message : 'Archivo no disponible.'); }
   };
-  // Un enlace del chat a un archivo del proyecto lo abre acá, con sus carpetas desplegadas.
-  useEffect(() => {
-    if (!openPath) return;
-    const parts = openPath.split('/'); setOpen(v => ({ ...v, ...Object.fromEntries(parts.slice(0, -1).map((_, i) => [parts.slice(0, i + 1).join('/'), true])) }));
-    void openFile({ path: openPath, name: parts[parts.length - 1], kind: 'file' });
-  }, [openPath]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Un enlace a un archivo del proyecto (desde el chat o desde otro archivo) lo abre acá, con sus carpetas desplegadas.
+  const openByPath = (p: string) => {
+    const parts = p.split('/'); setOpen(v => ({ ...v, ...Object.fromEntries(parts.slice(0, -1).map((_, i) => [parts.slice(0, i + 1).join('/'), true])) }));
+    void openFile({ path: p, name: parts[parts.length - 1], kind: 'file' });
+  };
+  useEffect(() => { if (openPath) openByPath(openPath); }, [openPath]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => { if (!file || !dirty) return; if (await act('write', { path: file.path, text: file.text }, 'Guardado')) setFile({ ...file, saved: file.text }); };
   // Dónde se crea lo nuevo: la carpeta elegida, o la carpeta del archivo elegido.
   const target = selected ? (selected.kind === 'folder' ? selected.path : parentOf(selected.path)) : '';
@@ -122,7 +122,7 @@ export function LabFiles({ projectId, folder, openPath }: { projectId: string; f
     <section className="lab-files-main">
       {file ? <>
         <header><strong>{file.path}</strong>{readOnly(file.path) ? <span>Sólo lectura: lo escribe el harness</span> : <span>{dirty ? 'Sin guardar' : status === 'Guardado' ? 'Guardado' : ''}</span>}{isMarkdown(file.path) && <button type="button" className="lab-files-save" onClick={() => setEditing(!editing)}>{editing ? 'Leer' : 'Editar'}</button>}{!readOnly(file.path) && editing && <button type="button" className="lab-files-save" disabled={!dirty} onClick={save}>Guardar</button>}</header>
-        {isMarkdown(file.path) && !editing ? <div className="lab-files-read"><LabMarkdown text={file.text} /></div> : <textarea className="lab-files-editor" spellCheck={false} readOnly={readOnly(file.path)} value={file.text} aria-label={'Contenido de ' + file.path}
+        {isMarkdown(file.path) && !editing ? <div className="lab-files-read"><LabMarkdown text={file.text} files={{ folder: folder || '.', open: openByPath }} /></div> : <textarea className="lab-files-editor" spellCheck={false} readOnly={readOnly(file.path)} value={file.text} aria-label={'Contenido de ' + file.path}
           onChange={e => setFile({ ...file, text: e.target.value })}
           onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); } }}/>}
       </> : <div className="lab-files-blank"><Folder size={30}/><p>{selected?.text === false ? 'Este archivo no se puede ver acá. Podés renombrarlo o eliminarlo.' : 'Elegí un archivo para verlo y editarlo.'}</p><span>Clic derecho o ⋯ para renombrar o eliminar · F2 renombra · Supr elimina</span></div>}
