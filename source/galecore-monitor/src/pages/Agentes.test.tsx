@@ -118,3 +118,66 @@ test('edita instrucciones y modelo mediante un pedido pendiente, sin cambiar fre
   expect(await screen.findByText('Guardando cambios…')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Editar' })).toBeDisabled();
 });
+
+const fullTask = {
+  ...task, schedule_spec: { frequency: 'weekdays', time: '10:00', timezone: 'America/New_York' },
+  tools: ['Read', 'Bash(python -B -m galecore_ai.adapters.cli state:*)', 'Bash(python -B -m galecore_ai.adapters.cli kb search:*)'],
+  tools_available: ['Read', 'Bash(python -B -m galecore_ai.adapters.cli state:*)', 'Bash(python -B -m galecore_ai.adapters.cli kb search:*)'],
+  delivery: ['historial'],
+};
+const openEditor = async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...item, content: JSON.stringify(fullTask) }], shared: [] });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mi vigilancia de SPY/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+};
+const savedSettings = async () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
+  return JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content).request.settings;
+};
+
+test('cambiar a días elegidos pide la frecuencia con esos días y no deja guardar sin ninguno', async () => {
+  await openEditor();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Frecuencia' }), { target: { value: 'days' } });
+  expect(screen.getByRole('checkbox', { name: 'Lun' })).toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Lun' }));
+  expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Mié' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Jue' }));
+  const settings = await savedSettings();
+  expect(settings.schedule).toEqual({ frequency: 'days', days: ['wed', 'thu'], time: '10:00', timezone: 'America/New_York' });
+  expect(settings.tools).toBeUndefined();
+  expect(settings.delivery).toBeUndefined();
+});
+
+test('quitar una herramienta manda sólo las que quedan; dejar todas no manda nada', async () => {
+  await openEditor();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'kb search' }));
+  const settings = await savedSettings();
+  expect(settings.tools).toEqual(['Read', 'Bash(python -B -m galecore_ai.adapters.cli state:*)']);
+  expect(settings.schedule).toBeUndefined();
+});
+
+test('volver a marcar todas las herramientas manda null (todas las de la skill)', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...item, content: JSON.stringify({ ...fullTask, tools: ['Read', 'Bash(python -B -m galecore_ai.adapters.cli state:*)'] }) }], shared: [] });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mi vigilancia de SPY/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: 'kb search' }));
+  expect((await savedSettings()).tools).toBeNull();
+});
+
+test('pedir el informe en la Biblioteca manda la entrega, y el historial no se puede quitar', async () => {
+  await openEditor();
+  expect(screen.getByRole('checkbox', { name: 'Historial de corridas' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Informe en la Biblioteca' }));
+  expect((await savedSettings()).delivery).toEqual(['historial', 'biblioteca']);
+});
+
+test('guardar sin cambiar nada cierra el editor y no escribe ningún pedido', async () => {
+  await openEditor();
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  expect(await screen.findByRole('button', { name: 'Editar' })).toBeEnabled();
+  expect(saveSpaceItem).not.toHaveBeenCalled();
+});

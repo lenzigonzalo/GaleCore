@@ -217,11 +217,13 @@ function AgentSettings({ a, busy, onSave }: { a: Agent; busy: boolean; onSave: (
   const edit = () => { setObjective(a.objective); setModel(a.model || ''); if (a.schedule_spec) setSchedule(a.schedule_spec); setTools(a.tools ?? []); setDelivery(a.delivery ?? ['historial']); setEditing(true); };
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    const change: AgentSettingsChange = { objective: objective.trim() };
-    if (a.model_editable) change.model = model || null;
+    const change: AgentSettingsChange = {};
+    if (objective.trim() !== a.objective.trim()) change.objective = objective.trim();
+    if (a.model_editable && model !== (a.model || '')) change.model = model || null;
     if (scheduleEditable && JSON.stringify(schedule) !== JSON.stringify(a.schedule_spec)) change.schedule = schedule;
     if (a.tools_available && !sameList(tools, a.tools ?? [])) change.tools = sameList(tools, a.tools_available) ? null : tools;
     if (a.delivery && !sameList(delivery, a.delivery)) change.delivery = delivery;
+    if (!Object.keys(change).length) { setEditing(false); return; }
     void onSave(change).then(saved => { if (saved) setEditing(false); });
   };
   return <section><div className="agents-section-heading"><h2>Instrucciones y modelo</h2>{!editing && a.editable && <button className="agents-text-button" onClick={edit} disabled={busy || pending}><Pencil size={14} />Editar</button>}</div>
