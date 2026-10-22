@@ -12,7 +12,7 @@ type Pending = { kind: 'file' | 'folder'; parent: string } | null;
 const parentOf = (p: string) => p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
 const readOnly = (p: string) => /\.json$/i.test(p);
 const isMarkdown = (p: string) => /\.md$/i.test(p);
-export function LabFiles({ projectId, folder }: { projectId: string; folder?: string }) {
+export function LabFiles({ projectId, folder, openPath }: { projectId: string; folder?: string; openPath?: string }) {
   const [tree, setTree] = useState<WorkspaceFile[]>([]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<{ path: string; kind: 'file' | 'folder'; text?: false } | null>(null);
@@ -45,6 +45,12 @@ export function LabFiles({ projectId, folder }: { projectId: string; folder?: st
     try { const f = await labRequest<{ text: string }>(base + '?path=' + encodeURIComponent(node.path)); setFile({ path: node.path, saved: f.text, text: f.text }); setEditing(!isMarkdown(node.path)); }
     catch (e) { setFile(null); setError(e instanceof Error ? e.message : 'Archivo no disponible.'); }
   };
+  // Un enlace del chat a un archivo del proyecto lo abre acá, con sus carpetas desplegadas.
+  useEffect(() => {
+    if (!openPath) return;
+    const parts = openPath.split('/'); setOpen(v => ({ ...v, ...Object.fromEntries(parts.slice(0, -1).map((_, i) => [parts.slice(0, i + 1).join('/'), true])) }));
+    void openFile({ path: openPath, name: parts[parts.length - 1], kind: 'file' });
+  }, [openPath]); // eslint-disable-line react-hooks/exhaustive-deps
   const save = async () => { if (!file || !dirty) return; if (await act('write', { path: file.path, text: file.text }, 'Guardado')) setFile({ ...file, saved: file.text }); };
   // Dónde se crea lo nuevo: la carpeta elegida, o la carpeta del archivo elegido.
   const target = selected ? (selected.kind === 'folder' ? selected.path : parentOf(selected.path)) : '';
