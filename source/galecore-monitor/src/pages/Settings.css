@@ -102,3 +102,12 @@
 .platform-admin { padding: 5px 10px; font-size: 13px; color: var(--text-secondary); }
 .platform-confirm { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
 .platform-confirm .settings-action { padding: 5px 10px; font-size: 13px; }
+.profile-group { margin-top: 12px; }
+.profile-group h3 { margin: 18px 0 0; font-size: 13px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.profile-row > span { flex: 1; min-width: 0; }
+.profile-row > span > strong { font-weight: 500; color: var(--text-muted); font-size: 14px; }
+.profile-value { display: block; font-size: 16px; color: var(--text-primary); line-height: 1.5; }
+.profile-value ul { margin: 2px 0 0; padding-left: 20px; display: grid; gap: 4px; list-style: disc; }
+.profile-version { font-size: 14px; color: var(--text-muted); }
+.profile-confirm { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--text-secondary); }
+.settings-language { flex-direction: row; }

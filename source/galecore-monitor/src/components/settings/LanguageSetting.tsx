@@ -26,14 +26,16 @@ export function LanguageSetting({ item, onChanged }: { item?: SpaceItem; onChang
       setState('saved'); onChanged();
     } catch { setState('error'); }
   };
-  return <>
-    <div style={{ fontSize: 14, color: "var(--text-muted)" }}>Idioma</div>
-    <div className="settings-language">
-      <select aria-label="Idioma" value={language} onChange={e => { void choose(e.target.value); }}>
-        {!language && <option value="">Sin definir</option>}
-        {options.map(l => <option key={l} value={l}>{l.replace(/^\w/, c => c.toUpperCase())}</option>)}
-      </select>
-      <small role="status">{state === 'saving' ? 'Guardando…' : state === 'saved' ? 'Guardado' : state === 'error' ? 'No se pudo guardar' : ''}</small>
+  return (
+    <div className="prefs-row">
+      <label htmlFor="profile-language">Idioma</label>
+      <div className="settings-language">
+        <small role="status">{state === 'saving' ? 'Guardando…' : state === 'saved' ? 'Guardado' : state === 'error' ? 'No se pudo guardar' : ''}</small>
+        <select id="profile-language" aria-label="Idioma" value={language} onChange={e => { void choose(e.target.value); }}>
+          {!language && <option value="">Sin definir</option>}
+          {options.map(l => <option key={l} value={l}>{l.replace(/^\w/, c => c.toUpperCase())}</option>)}
+        </select>
+      </div>
     </div>
-  </>;
+  );
 }

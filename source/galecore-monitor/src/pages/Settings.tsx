@@ -6,6 +6,7 @@ import './Settings.css';
 import { LocalMcp } from '../components/settings/LocalMcp';
 import { localMcpAvailable } from '../api/localMcp';
 import { LanguageSetting } from '../components/settings/LanguageSetting';
+import { ProfileSettings, NAME_KEY } from '../components/settings/ProfileSettings';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
 import { SUGGESTIONS_KEY, suggestionsEnabled, saveSuggestionsEnabled } from '../components/lab/LabSuggestions';
 import { STRIKE_ALERT_KEY } from '../api/account';
@@ -19,7 +20,7 @@ import {
 /**
  * Configuración (GC-0007): todo lo que es de la persona, con navegación lateral, como la de cualquier app de IA.
  *
- *   GENERAL          usuario e idioma · contraseña · avisos
+ *   GENERAL          perfil (cuenta, idioma y perfil de trading) · contraseña · avisos
  *   CONEXIONES       IA, GaleCore, bróker
  *   MEMORIA          cómo trabajás, preferencias y recuerdos · skills
  *   EQUIPO           compartido conmigo (sólo si alguien compartió algo)
@@ -32,7 +33,7 @@ export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'b
   | 'compartido' | 'avisos' | 'servicios';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
-  { group: 'General', items: [{ id: 'usuario', label: 'Usuario', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
+  { group: 'General', items: [{ id: 'usuario', label: 'Perfil', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Conexiones', items: [{ id: 'conexiones', label: 'Conexiones', Icon: Plug }] },
   { group: 'Memoria', items: [{ id: 'memoria', label: 'Memoria', Icon: Brain }, { id: 'skills', label: 'Skills', Icon: BookOpen }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
@@ -108,13 +109,11 @@ function ConventionBody({ item }: { item: SpaceItem }) {
 // «Cómo te llamo» e «Instrucciones» son convenciones: entran enteras en cada chat. Las notas son recuerdos. Los objetivos
 // viven en el perfil y no se repiten acá.
 
-const NAME_KEY = 'como-te-llamo';
 const INSTRUCTIONS_KEY = 'instrucciones';
 const PREF_LABELS: Record<string, string> = {
   timezone: 'Zona horaria', currency: 'Moneda', precision_decimal_places: 'Decimales',
   gex_near_zero_threshold_pct: 'Umbral de GEX «cerca de cero» (%)',
 };
-const nameFrom = (item?: SpaceItem) => item?.content.match(/«(.+?)»/)?.[1] ?? '';
 
 function MemoryEditor({ item, taken, onDone }: { item?: SpaceItem; taken: Set<string>; onDone: (saved: boolean) => void }) {
   const [content, setContent] = useState(item?.content ?? '');
@@ -144,30 +143,18 @@ function MemoryEditor({ item, taken, onDone }: { item?: SpaceItem; taken: Set<st
 
 function MemoryView({ items, onChanged }: { items: SpaceItem[]; onChanged: () => void }) {
   const own = useMemo(() => items.filter((i) => i.isOwn), [items]);
-  const nameItem = own.find((i) => i.kind === 'convention' && i.key === NAME_KEY);
   // Instrucciones: la pieza propia o, si todavía no existe, la convención escrita que ya tenías (no se duplica).
   const instructions = own.find((i) => i.kind === 'convention' && i.key === INSTRUCTIONS_KEY)
     ?? own.find((i) => i.kind === 'convention' && i.format !== 'json' && i.key !== NAME_KEY);
   const prefs = own.filter((i) => i.kind === 'convention' && i.format === 'json');
   const memories = useMemo(() => own.filter((i) => i.kind === 'memory'), [own]);
-  const [name, setName] = useState(nameFrom(nameItem));
   const [text, setText] = useState(instructions?.content ?? '');
   const [state, setState] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
-  const savedName = nameFrom(nameItem);
   const savedText = instructions?.content ?? '';
-  useEffect(() => { setName(savedName); }, [savedName]);
   useEffect(() => { setText(savedText); }, [savedText]);
   const taken = useMemo(() => new Set(memories.map((i) => `memory/${i.key}`)), [memories]);
-  const saveName = async () => {
-    if (name.trim() === savedName) return;
-    try {
-      if (!name.trim()) await deleteSpaceItem('convention', NAME_KEY);
-      else await saveSpaceItem('convention', NAME_KEY, { title: 'Cómo te llamo', content: `Llamame «${name.trim()}».`, format: 'markdown', visibility: 'private' });
-      setState('Guardado'); onChanged();
-    } catch { setState('No se pudo guardar el nombre'); }
-  };
   const saveInstructions = async () => {
     try {
       await saveSpaceItem('convention', instructions?.key ?? INSTRUCTIONS_KEY, {
@@ -180,11 +167,7 @@ function MemoryView({ items, onChanged }: { items: SpaceItem[]; onChanged: () =>
   return (
     <div className="prefs">
       <section className="prefs-group">
-        <h2>Cómo trabajás</h2>
-        <div className="prefs-row">
-          <label htmlFor="mem-name">¿Cómo querés que GaleCore-AI te llame?</label>
-          <input id="mem-name" className="prefs-input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onBlur={() => void saveName()} />
-        </div>
+        <h2>Instrucciones</h2>
         <div className="prefs-block">
           <label htmlFor="mem-instructions">Instrucciones para GaleCore-AI</label>
           <small>Las tiene en cuenta en todos los chats y agentes: cómo querés las respuestas, qué evitar, cómo trabajás.</small>
@@ -394,17 +377,10 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
     body = <div className="settings-connections"><Connections /><section style={card}><h2>GaleCore</h2><p>{loading ? 'Comprobando conexión…' : error ? 'No disponible' : 'Conectado'}</p>{error && <><p role="alert">{error}</p><button style={btn()} onClick={() => load()}>Reintentar</button></>}</section>{localMcpAvailable() && <section><h2>MCP</h2><LocalMcp /></section>}<section style={card}><h2>Cuenta de bróker</h2><p>Próximamente</p></section></div>;
   } else if (section === 'usuario') {
     body = (
-      <div style={{ ...card, display: 'grid', gridTemplateColumns: '160px 1fr', rowGap: 10, fontSize: 13 }}>
-        <div style={muted}>Usuario</div><div style={{ color: 'var(--text-primary)' }}>{user?.username ?? '—'}</div>
-        <div style={muted}>Email</div><div style={{ color: 'var(--text-primary)' }}>{user?.email ?? '—'}</div>
-        <div style={muted}>Rol</div><div style={{ color: 'var(--text-primary)' }}>{user?.isAdmin ? 'Administrador' : 'Operador'}</div>
-        <LanguageSetting item={items.find(i => i.kind === 'profile' && i.isOwn)} onChanged={reload} />
-        <div style={muted}>Chat nuevo</div><label style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-primary)', cursor: 'pointer' }}>
-          <input type="checkbox" checked={suggestionsEnabled(items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY))}
-            onChange={e => { void saveSuggestionsEnabled(e.target.checked).then(reload).catch(() => setError('No se pudo guardar la preferencia.')); }} />
-          Sugerir temas del momento al abrir un chat
-        </label>
-      </div>
+      <ProfileSettings user={user} items={items} onChanged={reload}
+        language={<LanguageSetting item={items.find(i => i.kind === 'profile' && i.isOwn)} onChanged={reload} />}
+        suggestions={suggestionsEnabled(items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY))}
+        onSuggestions={next => { void saveSuggestionsEnabled(next).then(reload).catch(() => setError('No se pudo guardar la preferencia.')); }} />
     );
   } else if (section === 'servicios') {
     body = <PlatformServices />;
