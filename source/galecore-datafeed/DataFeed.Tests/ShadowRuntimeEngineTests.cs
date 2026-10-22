@@ -417,6 +417,26 @@ public class ShadowRuntimeEngineTests
         Assert.Contains("VALUATION_NO_DATA", EventTypes(store));
     }
 
+    [Theory]
+    [InlineData(0.0, 20.0)]   // cotización de apertura sin mercado: mid 10 → débito −9,35 (caso IWM 19/10)
+    [InlineData(9.0, 11.0)]
+    public async Task Valuation_DebitOutsideZeroToWidth_IsNoData_AndNeverCloses(double longBid, double longAsk)
+    {
+        var (store, pos, data) = await OpenPosition();
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.10, 0.20, Now);
+        data.Quotes[".SPY261030P715"] = new LegQuote(longBid, longAsk, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(store, data, pos, Spec().Exits.Deterministic, Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoData, outcome);
+        var same = store.GetPosition(pos.PositionId)!;
+        Assert.Equal("OPEN", same.Status);
+        Assert.Null(same.ExitDebit);
+        Assert.Null(same.LastSpreadValue);
+        Assert.Contains(same.ValuationProblems!, p => p.Contains("fuera de [0, 5]"));
+        Assert.Contains("VALUATION_NO_DATA", EventTypes(store));
+    }
+
     [Fact]
     public async Task Valuation_DoesNotDependOnTimeElapsed()
     {

@@ -180,6 +180,9 @@ namespace DataFeed.Application.App.Runtime
 
         // ── Valuación y salidas ─────────────────────────────────────
 
+        /// <summary>Tolerancia (USD) del rango [0, ancho] del débito: los mids redondeados pueden pasarse unos centavos.</summary>
+        private const double ValueTolerance = 0.05;
+
         /// <summary>
         /// Valúa una posición abierta con el mid real de cada pata y evalúa sus salidas. Si falta el
         /// precio de alguna pata (o su vencimiento), no evalúa salidas y registra NO_DATA; el evento
@@ -229,6 +232,10 @@ namespace DataFeed.Application.App.Runtime
             int? dte = CurrentDte(pos, nowUtc);
             if (dte == null) problems.Add("sin fecha de vencimiento en las patas");
             if (problems.Count == 0 && !double.IsFinite(spreadValue)) problems.Add($"valor del spread no finito ({spreadValue})");
+            // El débito de un spread de crédito de riesgo definido está en [0, ancho]. Fuera de eso alguna pata
+            // trae una cotización sin sentido (p. ej. bid 0 / ask 20 en la apertura): no se valúa ni se cierra con ese precio.
+            if (problems.Count == 0 && pos.Width > 0 && (spreadValue < -ValueTolerance || spreadValue > pos.Width + ValueTolerance))
+                problems.Add($"valor del spread {spreadValue:0.00} fuera de [0, {pos.Width:0.##}]: cotización inválida en alguna pata");
 
             if (problems.Count > 0)
             {
