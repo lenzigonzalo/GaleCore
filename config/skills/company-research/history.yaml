@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: company_research
 versions:
+  - version: "1.1.0"
+    date: 2026-10-21
+    changes: >
+      Caso tecnológicas (WS-0057 G, owner 21/10): un pedido amplio sin lista empieza por el universo (qué se revisó,
+      por qué y con qué criterio, supuestos del perfil dichos); primero las pocas que pasan, cada conclusión con su
+      cifra, el resto en la investigación enlazada. Se saca la contradicción «sin tabla» / «cifras en tabla».
+    feedback: []
   - version: "1.0.0"
     date: 2026-10-21
     changes: >

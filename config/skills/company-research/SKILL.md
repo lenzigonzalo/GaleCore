@@ -1,6 +1,6 @@
 ---
 name: company-research
-version: 1.0.0
+version: 1.1.0
 display_name: Investigar o seleccionar empresas
 description: >
   «Analizame MSFT», «investigá NVDA», «¿qué tal está AAPL a este precio?», «de MSFT, AAPL y NVDA, ¿cuál tiene
@@ -13,7 +13,7 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 ---
 ## Cuándo se usa
 Una empresa a entender («analizame MSFT») o varias a comparar contra un criterio («¿cuál de estas tiene tendencia y
-fundamentos?»). El pedido fija el objetivo, el plazo y el criterio; la respuesta lo sigue, sin tabla ni bloques fijos.
+fundamentos?»). El pedido fija el objetivo, el plazo y el criterio; la respuesta lo sigue, sin bloques fijos.
 
 ## Qué necesita
 - Datos del día, siempre de nuevo: `analyze pack --kind fundamental --symbol SYM --prompt "<pedido>"`, `analyze pack
@@ -27,7 +27,9 @@ fundamentos?»). El pedido fija el objetivo, el plazo y el criterio; la respuest
 
 ## Pasos
 1. Decidir el recorrido: **Investigar** (una empresa: negocio, calidad, salud financiera, valoración, eventos,
-   riesgos) o **Seleccionar** (una lista contra un criterio declarado).
+   riesgos) o **Seleccionar** (una lista contra un criterio declarado). Si el pedido es amplio y no trae lista («qué
+   tecnológicas tienen más potencial»), Seleccionar empieza por el universo: qué se revisa, por qué esas y con qué
+   criterio, con el plazo y el riesgo del perfil como supuestos dichos; preguntar sólo si cambian la respuesta.
 2. Traer los packs. Lo que da el fundamental: trimestres reportados a la SEC (crecimiento, márgenes, flujo libre,
    capex, deuda neta con lo que incluye, dilución, capital devuelto, P/E con su propia historia, múltiplos EV, parte no
    operativa del resultado antes de impuestos, próximo balance). Técnico: promedios, rendimientos, volatilidad
@@ -44,7 +46,9 @@ fundamentos?»). El pedido fija el objetivo, el plazo y el criterio; la respuest
    --reason continuation --note "<qué cambia>"`.
 
 ## Qué entrega
-Lo que pide el pedido, con las cifras en tabla. Ejemplo de forma (Seleccionar):
+Lo que pide el pedido. En Seleccionar, primero las pocas que pasan y por qué; las cifras decisivas lado a lado, en
+una tabla corta y en el mismo orden en toda la respuesta; el resto y el detalle técnico, en la investigación guardada,
+enlazada. Ejemplo (Seleccionar):
 
 De las tres, sólo MSFT tiene tendencia y fundamentos que la sostienen; NVDA tiene tendencia pero el flujo libre no
 acompaña la ganancia (pregunta abierta).
@@ -64,6 +68,7 @@ Después: qué tiene que pasar en 6-12 meses, qué lo rompe y qué falta.
 
 ## Cómo responder
 Datos del día, siempre de nuevo (`analyze pack` o `analyze company` para varias). Competidores, ETF de comparación y
-10-K cuando el pedido los necesita. Valorar por modelo de negocio; el flujo libre del pack es del accionista; la media
+10-K cuando el pedido los necesita. Sin lista dada, decí qué universo revisaste y con qué criterio; primero las pocas
+que pasan, cada conclusión con la cifra que la sostiene; el resto, en la investigación enlazada. Valorar por modelo de negocio; el flujo libre del pack es del accionista; la media
 200 no es un corte de pérdida; escenarios con supuestos y cuenta a la vista. Lectura, no consejo de compra o venta.
 Si es una investigación, guardala o revisá la anterior.
