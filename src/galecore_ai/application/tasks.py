@@ -480,7 +480,7 @@ def set_frequency(*, kb: KnowledgeBase, scheduler, task_id: str, schedule: Sched
 
 def set_settings(*, kb: KnowledgeBase, task_id: str, settings: dict, prompt: str,
                  expected_updated_at: datetime, now: datetime | None = None) -> TaskDefinition:
-    """Apply an owner edit without changing schedule, tools, budgets or task status."""
+    """Apply an owner edit (objective, model, tools, delivery) without changing schedule, budgets or task status."""
     now = now or datetime.now(UTC)
     if not settings or set(settings) - {"objective", "model", "tools", "delivery"}:
         raise TaskError("sólo se pueden editar instrucciones, modelo, herramientas y entrega")
@@ -496,9 +496,11 @@ def set_settings(*, kb: KnowledgeBase, task_id: str, settings: dict, prompt: str
         if "tools" in settings:
             if task.kind in CODE_RUNNERS:
                 raise TaskError("esta tarea corre por código, sin herramientas para elegir")
-            if settings["tools"] is not None and (not isinstance(settings["tools"], list) or (
-                    bad := [x for x in settings["tools"] if x not in available_tools(task.kind)])):
-                raise TaskError(f"herramientas fuera de la skill {task.kind}: {bad if settings['tools'] else ''}")
+            if settings["tools"] is not None:
+                if not isinstance(settings["tools"], list):
+                    raise TaskError("las herramientas deben ser una lista")
+                if bad := [x for x in settings["tools"] if x not in available_tools(task.kind)]:
+                    raise TaskError(f"herramientas fuera de la skill {task.kind}: {bad}")
         updated = TaskDefinition.model_validate({**task.model_dump(), **settings, "updated_at": now})
         _save(kb, updated)
         _append(kb, task_id, "settings_changed", now, before={k: getattr(task, k) for k in settings},

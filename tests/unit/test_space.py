@@ -441,7 +441,7 @@ def test_schedule_tools_and_delivery_are_edited_from_the_monitor(env, galecore):
     assert _agent(fake)["schedule_spec"]["days"] == ["mon", "wed"]
 
 
-@pytest.mark.parametrize("settings", [{"tools": ["Bash(rm:*)"]}, {"delivery": ["biblioteca"]},
+@pytest.mark.parametrize("settings", [{"tools": ["Bash(rm:*)"]}, {"tools": "abc"}, {"delivery": ["biblioteca"]},
                                      {"schedule": {"frequency": "days", "days": [], "time": "10:00",
                                                    "timezone": "America/New_York"}}])
 def test_tools_outside_the_skill_and_bad_schedule_are_refused(env, galecore, settings):  # noqa: F811

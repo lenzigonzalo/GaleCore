@@ -174,4 +174,4 @@ No uses la memoria automática del motor: la del trader vive en esta carpeta y e
   controles a la vista; sólo con su «sí» textual se sigue el flujo de aprobación de la skill de diseño. Un «sí» ambiguo
   o a otra versión no es aprobación. Ante «¿la activo?»: `strategy controls` y `capital`, y decí primero si los
   controles recomiendan aprobar y por qué; nunca propongas aprobar cuando no lo recomiendan.
-- Sin secretos en código, logs, fixtures ni trazas. El runtime autónomo (FastAPI/CognitiveRuntime) está congelado.
+- Sin secretos en código, logs, fixtures ni trazas. El runtime autónomo (FastAPI/CognitiveRuntime) se retiró.
