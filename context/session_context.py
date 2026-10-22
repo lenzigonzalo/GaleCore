@@ -5,11 +5,10 @@ acá sólo lo que cambia, con tope de diseño de 6.000 caracteres (D-0012).
 """
 import datetime
 import json
-import re
 import subprocess
 import sys
 
-from concepto import _plain, es_concepto
+from concepto import es_concepto
 
 sys.stdout.reconfigure(encoding="utf-8")
 try:  # el Lab pasa {"prompt","cwd"}; sin eso (o sin JSON) el contexto es el completo de siempre
@@ -17,26 +16,6 @@ try:  # el Lab pasa {"prompt","cwd"}; sin eso (o sin JSON) el contexto es el com
 except ValueError:
     _EVENT = {}
 _LIGHT = isinstance(_EVENT, dict) and es_concepto(_EVENT.get("prompt") or "", _EVENT.get("cwd"))
-# Un análisis (empresa, sector, mercado) no es operar: el perfil llega sin objetivos ni horizonte, que sesgan (WS-0052).
-_ANALYSIS = {"company_research", "on_demand_analysis", "context_research", "research"}
-_SIZE = re.compile(r"\b(?:tamano|size|sizing|capital|exposicion|arriesg|invertir|cuanto (?:pongo|compro|invierto))")
-
-
-def _is_analysis(prompt):
-    if not prompt.strip():
-        return False
-    out = subprocess.run([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "catalog", "--match", prompt],
-                         capture_output=True, text=True, encoding="utf-8", errors="replace")
-    try:
-        found = json.loads(out.stdout)
-    except ValueError:
-        return False
-    return bool(found.get("confident")) and found["matches"][0]["capability"] in _ANALYSIS
-
-
-_PROMPT = _EVENT.get("prompt") or "" if isinstance(_EVENT, dict) else ""
-_PARTS = str(_EVENT.get("cwd") or "").replace("\\", "/").split("/") if isinstance(_EVENT, dict) else []
-_ANALYZING = not _LIGHT and "strategies" not in _PARTS and _is_analysis(_PROMPT)
 
 
 def start(*args):
@@ -191,15 +170,6 @@ if not _LIGHT:
     print(galecore_map())
 print()
 out = cli("space", "context")
-if _LIGHT:  # Owner 20/10: una definición no involucra la cuenta; del perfil sólo idioma y forma de entrega.
-    print("\n".join(line for line in out.stdout.splitlines()
-                    if line.strip().startswith(("[espacio]", "forma de entrega:", "idioma:"))))
-elif _ANALYZING:  # sin objetivos ni horizonte; el capital y los topes sólo si se habla de tamaño
-    keep = ["[espacio]", "forma de entrega:", "idioma:", "perfil v"]
-    if _SIZE.search(_plain(_PROMPT)):
-        keep += ["capital de referencia:", "límites:"]
-    print(chr(10).join(line for line in out.stdout.splitlines() if line.strip().startswith(tuple(keep))))
-else:
-    print(out.stdout)
+print(out.stdout)
 if out.returncode != 0:
     print(out.stderr, file=sys.stderr)
