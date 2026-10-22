@@ -176,10 +176,11 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
   const noticeCard: Alert[] = strikeNotice ? [{ id: 'strike-notice', kind: 'watch', detected_at: new Date().toISOString(), motivo: strikeNotice,
     decision: null, category: 'strike', title: strikeNotice }] : [];
   const alerts = [...noticeCard, ...strikeCards, ...(piece.alerts ?? []).filter(a => a.kind === 'watch')];
-  const failed = !!piece.last_run?.failed;          // lo decide GaleCore-AI: la última revisión no leyó todo
-  const status = <p className="alert-status">Última revisión: {when(piece.last_run?.at)}
-    {failed ? ` · falló: ${piece.state_detail || piece.last_run?.result}` : ''}</p>;
-  const empty = <p className="alert-status">{item ? 'Sin avisos hoy.' : 'Todavía no hay avisos del supervisor en tu espacio.'}</p>;
+  // WS-0057 A (owner 21/10): una falla del sistema (p. ej. FRED caído) no es un aviso para el trader; se ve en
+  // Configuración → Plataforma. Acá sólo la hora de la última revisión, discreta.
+  const status = piece.last_run?.at ? <p className="alert-status">Revisado {when(piece.last_run.at)}</p> : null;
+  const empty = <div className="alert-empty"><strong>{item ? 'Sin avisos de tu cuenta' : 'Todavía no hay avisos'}</strong>
+    <span>{item ? 'Cuando una posición quede cerca de su strike o un evento la mueva fuerte, aparece acá.' : 'Se activan cuando tu PC publica la primera revisión.'}</span></div>;
 
   if (embedded) return <section className="supervisor-dock" aria-label="Avisos del supervisor">
     {loading ? <p role="status">Leyendo avisos…</p>
@@ -208,9 +209,9 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button onClick={() => setOpen(o => !o)}
           style={{ fontSize: 13, padding: '8px 14px', borderRadius: 999, cursor: 'pointer', backgroundColor: 'var(--bg-secondary)',
-            color: failed ? 'var(--red-gc)' : 'var(--text-secondary)',
-            border: `1px solid ${failed ? 'var(--red-border)' : 'var(--border-dark)'}` }}>
-          {alerts.length ? `Avisos (${alerts.length})` : 'Avisos'}{failed ? ' · la última revisión falló' : ''}
+            color: alerts.length ? 'var(--text-primary)' : 'var(--text-secondary)',
+            border: `1px solid ${alerts.length ? 'var(--yellow-gc)' : 'var(--border-dark)'}` }}>
+          {alerts.length ? `Avisos (${alerts.length})` : 'Avisos'}
         </button>
       </div>
     </div>

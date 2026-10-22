@@ -2,6 +2,8 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Lab } from './Lab';
 jest.mock('../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: [], shared: [] }), saveSpaceItem: () => Promise.resolve() }));
+// Sin red en el test: las sugerencias del chat pedían /Lab/Suggestions de verdad (y Node 20.9 se cae al cerrar el socket).
+jest.mock('../api/client', () => ({ __esModule: true, default: { get: jest.fn().mockResolvedValue({ data: { items: [] } }) } }));
 import { labRequest } from '../api/lab';
 jest.mock('../api/lab', () => ({ labRequest: jest.fn() }));
 jest.mock('../components/lab/LabMarkdown', () => ({ LabMarkdown: () => null }));

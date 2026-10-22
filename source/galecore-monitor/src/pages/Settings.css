@@ -71,3 +71,34 @@
 .mem-editor-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .mem-share { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-secondary); }
 @media (max-width: 700px) { .mem-item { flex-wrap: wrap; } }
+
+/* Memoria y Apariencia (WS-0057 A): grupos con filas etiqueta–valor, como Configuración de claude.ai */
+.prefs { display: grid; gap: 32px; max-width: 860px; }
+.prefs-group { display: grid; }
+.prefs-group h2 { margin: 0 0 8px; font-size: 17px; font-weight: 600; color: var(--text-primary); }
+.prefs-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.prefs-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--border-dark); font-size: 16px; color: var(--text-primary); }
+.prefs-row > span { display: grid; gap: 4px; }
+.prefs-row small, .prefs-block small { font-size: 14px; color: var(--text-muted); }
+.prefs-row strong { font-weight: 500; }
+.prefs-block { display: grid; gap: 8px; padding: 16px 0; border-bottom: 1px solid var(--border-dark); font-size: 16px; color: var(--text-primary); }
+.prefs-input { width: 280px; max-width: 100%; padding: 10px 12px; font: 16px var(--font-sans); border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); }
+.prefs-textarea { width: 100%; padding: 12px 14px; font: 16px/1.55 var(--font-sans); border-radius: 10px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); resize: vertical; }
+.prefs-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.prefs-state { margin-right: auto; font-size: 14px; color: var(--green); }
+.prefs-empty { font-size: 15px; color: var(--text-muted); margin: 8px 0; }
+.prefs-segmented { display: inline-flex; padding: 3px; border-radius: 10px; background: var(--bg-tertiary); border: 1px solid var(--border-dark); }
+.prefs-segmented button { padding: 8px 16px; border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font-size: 15px; cursor: pointer; }
+.prefs-segmented button[aria-pressed="true"] { background: var(--text-primary); color: var(--bg-primary); font-weight: 600; }
+.prefs .mem-body { font-size: 16px; }
+@media (max-width: 700px) { .prefs-row { flex-wrap: wrap; } .prefs-input { width: 100%; } }
+.platform-state { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text-primary); white-space: nowrap; }
+.platform-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+.platform-state small { font-size: 13px; color: var(--text-muted); margin-left: 4px; }
+.platform-state.is-good i { background: var(--green); }
+.platform-state.is-off i { background: var(--red-gc); }
+.platform-state.is-warn { color: var(--yellow-gc); }
+.platform-state.is-warn i { background: var(--yellow-gc); }
+.platform-admin { padding: 5px 10px; font-size: 13px; color: var(--text-secondary); }
+.platform-confirm { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-secondary); }
+.platform-confirm .settings-action { padding: 5px 10px; font-size: 13px; }

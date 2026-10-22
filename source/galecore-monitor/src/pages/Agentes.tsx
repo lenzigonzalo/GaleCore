@@ -276,6 +276,7 @@ function NewAgentForm({ initial, existing, onCreate, onClose }: { initial: { kin
   return <div className="agents-modal-backdrop" onClick={onClose}><div className="agents-modal" role="dialog" aria-modal="true" aria-labelledby="agent-new-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
     <div className="agents-modal-title"><h2 id="agent-new-title">Nueva tarea</h2><button ref={closeRef} aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
     <form className="agents-edit-form" onSubmit={submit}>
+      <label htmlFor="agent-template">Partir de una plantilla</label><select id="agent-template" defaultValue="" onChange={e => { const t = TEMPLATES.find(x => x.name === e.target.value); if (t) { setKind(t.kind); setObjective(t.objective); if (!name.trim()) setName(t.name); } }}><option value="">Ninguna: la escribo yo</option>{TEMPLATES.map(t => <option key={t.name} value={t.name}>{t.name} — {t.description}</option>)}</select>
       <label htmlFor="agent-name">Nombre</label><input id="agent-name" value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
       {taken && <small className="agents-failed">Ya existe una tarea con ese nombre.</small>}
       <label htmlFor="agent-kind">Qué tipo de tarea</label><select id="agent-kind" value={kind} onChange={e => setKind(e.target.value)}>{KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
@@ -294,7 +295,6 @@ export function Agentes() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [view, setView] = useState<'own' | 'templates'>('own');
   const [draft, setDraft] = useState<{ kind: string; objective: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -315,7 +315,8 @@ export function Agentes() {
 
   const agents = (items ?? [])
     .map((i) => ({ item: i, a: parse(i.content) }))
-    .filter((x): x is { item: SpaceItem; a: Agent } => !!x.a && !!x.a.id && x.a.status !== 'cancelled')
+    // El supervisor es de la plataforma (Configuración → Plataforma), no una tarea del usuario (WS-0057 A).
+    .filter((x): x is { item: SpaceItem; a: Agent } => !!x.a && !!x.a.id && x.a.status !== 'cancelled' && x.a.capability !== 'supervisor')
     .sort((x, y) => (x.a.status === y.a.status ? x.a.id.localeCompare(y.a.id) : x.a.status === 'active' ? -1 : 1));
   const current = agents.find((x) => x.item.key === selected);
 
@@ -355,13 +356,10 @@ export function Agentes() {
       publishedAt={current.item.updatedAt} busy={busy === current.item.key} onRequest={status => request(current.item, current.a, { status })} onSave={settings => request(current.item, current.a, { settings })} onBack={() => setSelected(null)} /> : <>
       <div className="strategy-list-heading"><h1 className="strategy-list-title">Agentes</h1>
         <div className="agents-actions"><button className="agents-text-button agents-new" onClick={() => setDraft({ kind: 'scheduled_report', objective: '' })}><Plus size={16} />Nueva tarea</button>
-          <div className="stage-switch" role="group" aria-label="Vista de tareas"><button aria-pressed={view === 'own'} onClick={() => setView('own')}>Tuyos</button><button aria-pressed={view === 'templates'} onClick={() => setView('templates')}>Plantillas</button></div></div></div>
-      {view === 'templates' ? <div className="performance-table strategy-list agents-table"><table>
-        <thead><tr><th>Plantilla</th><th>Para qué</th><th>Cuándo</th></tr></thead>
-        <tbody>{TEMPLATES.map(t => <tr className="strategy-row" key={t.name} onClick={() => setDraft({ kind: t.kind, objective: t.objective })}><td className="strategy-name"><button onClick={e => { e.stopPropagation(); setDraft({ kind: t.kind, objective: t.objective }); }}>{t.name}</button></td><td className="agents-what">{t.description}</td><td>{t.frequency}</td></tr>)}</tbody>
-      </table></div> : <>
+          </div></div>
+      <>
         {items === null && !error && <p className="agents-empty" role="status">Cargando tareas…</p>}
-        {items !== null && agents.length === 0 && <div className="agents-empty-state"><h2>Todavía no tenés tareas programadas</h2><p>Creá una tarea con tus instrucciones o elegí una plantilla para empezar.</p><button className="agents-text-button" onClick={() => setView('templates')}>Ver plantillas <ChevronRight size={15} /></button></div>}
+        {items !== null && agents.length === 0 && <div className="agents-empty-state"><h2>Todavía no tenés tareas programadas</h2><p>Creá una tarea con tus instrucciones; podés partir de una plantilla.</p><button className="agents-text-button" onClick={() => setDraft({ kind: 'scheduled_report', objective: '' })}>Nueva tarea <ChevronRight size={15} /></button></div>}
         {agents.length > 0 && <div className="performance-table strategy-list agents-table"><table>
           <thead><tr><th>Agente</th><th>Qué hace</th><th>Cuándo</th><th>Última corrida</th><th>Estado</th></tr></thead>
           <tbody>{agents.map(({ item, a }) => <tr className="strategy-row" key={item.key} onClick={() => setSelected(item.key)}>
@@ -372,7 +370,7 @@ export function Agentes() {
             <td onClick={e => e.stopPropagation()}><Toggle a={a} busy={busy === item.key} onRequest={status => request(item, a, { status })} /></td>
           </tr>)}</tbody>
         </table></div>}
-      </>}
+      </>
     </>}
     {draft !== null && <NewAgentForm initial={draft} existing={(items ?? []).map(i => i.key)} onCreate={create} onClose={() => setDraft(null)} />}
   </div>;

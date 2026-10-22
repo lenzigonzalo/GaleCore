@@ -5,7 +5,7 @@ import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
 import { LocalMcp } from '../components/settings/LocalMcp';
 import { localMcpAvailable } from '../api/localMcp';
-import { LanguageSetting, Switch } from '../components/settings/LanguageSetting';
+import { LanguageSetting } from '../components/settings/LanguageSetting';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
 import { SUGGESTIONS_KEY, suggestionsEnabled, saveSuggestionsEnabled } from '../components/lab/LabSuggestions';
 import { STRIKE_ALERT_KEY } from '../api/account';
@@ -21,8 +21,9 @@ import {
  *
  *   GENERAL          usuario e idioma · contraseña · avisos
  *   CONEXIONES       IA, GaleCore, bróker
- *   MEMORIA          lo que GaleCore-AI recuerda de la persona (una lista) · métodos y skills
- *   EQUIPO           compartido conmigo
+ *   MEMORIA          cómo trabajás, preferencias y recuerdos · skills
+ *   EQUIPO           compartido conmigo (sólo si alguien compartió algo)
+ *   PLATAFORMA       estado de los servicios (admin)
  *
  * Nada se muestra como JSON ni como caja libre cuando se puede elegir: las opciones son interruptores y listas, y se
  * guardan solas. El estado vive en esta pantalla (no en un store de módulo): muere con la sesión.
@@ -33,7 +34,7 @@ export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'b
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
   { group: 'General', items: [{ id: 'usuario', label: 'Usuario', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Conexiones', items: [{ id: 'conexiones', label: 'Conexiones', Icon: Plug }] },
-  { group: 'Memoria', items: [{ id: 'memoria', label: 'Memoria', Icon: Brain }, { id: 'skills', label: 'Métodos y skills', Icon: BookOpen }] },
+  { group: 'Memoria', items: [{ id: 'memoria', label: 'Memoria', Icon: Brain }, { id: 'skills', label: 'Skills', Icon: BookOpen }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
   { group: 'Plataforma', items: [{ id: 'servicios', label: 'Servicios', Icon: Power }] },
 ];
@@ -41,9 +42,9 @@ const NAV: { group: string; items: { id: Section; label: string; Icon: React.Com
 const SECTION_KIND: Partial<Record<Section, SpaceKind>> = { memoria: 'memory', skills: 'skill' };
 
 const INTRO: Partial<Record<Section, string>> = {
-  servicios: 'Los servicios que corren solos para toda la plataforma. Las estrategias se prenden en su ficha de Estrategias y las tareas en Agentes.',
-  memoria: 'Lo que GaleCore-AI recuerda de vos y tiene en cuenta en cada chat. También se agrega desde el chat («acordate de…»).',
-  skills: 'Los métodos que GaleCore-AI sabe aplicar. Los del producto se leen; los tuyos se crean y se editan acá, y el chat los usa.',
+  servicios: 'Lo que GaleCore corre solo, para todos: no lo crea el usuario. Tus tareas están en Agentes y las estrategias en Estrategias.',
+  memoria: 'Lo que GaleCore-AI tiene en cuenta en cada chat. También se agrega desde el chat («acordate de…»).',
+  skills: 'Lo que GaleCore-AI sabe hacer. Las de la plataforma se leen; las tuyas se crean y se editan acá, y el chat las usa sin nombrarlas.',
   avisos: 'Avisos de la cuenta real que suenan en la campana.',
   compartido: 'Lo que otros del equipo compartieron. Se lee, no se edita.',
 };
@@ -103,22 +104,27 @@ function ConventionBody({ item }: { item: SpaceItem }) {
   return <Markdown text={item.content} />;
 }
 
-// ── memoria: una sola lista de lo que GaleCore-AI recuerda (como la de ChatGPT o Claude) ──
+// ── memoria (WS-0057 A, como Configuración de claude.ai): cómo trabajás, preferencias y recuerdos ──
+// «Cómo te llamo» e «Instrucciones» son convenciones: entran enteras en cada chat. Las notas son recuerdos. Los objetivos
+// viven en el perfil y no se repiten acá.
 
-// Notas, objetivos y reglas guardados antes se muestran juntos; lo nuevo se guarda como nota.
-const MEMORY_KINDS: SpaceKind[] = ['memory', 'objective', 'convention'];
+const NAME_KEY = 'como-te-llamo';
+const INSTRUCTIONS_KEY = 'instrucciones';
+const PREF_LABELS: Record<string, string> = {
+  timezone: 'Zona horaria', currency: 'Moneda', precision_decimal_places: 'Decimales',
+  gex_near_zero_threshold_pct: 'Umbral de GEX «cerca de cero» (%)',
+};
+const nameFrom = (item?: SpaceItem) => item?.content.match(/«(.+?)»/)?.[1] ?? '';
 
 function MemoryEditor({ item, taken, onDone }: { item?: SpaceItem; taken: Set<string>; onDone: (saved: boolean) => void }) {
   const [content, setContent] = useState(item?.content ?? '');
-  const [shared, setShared] = useState(item?.visibility === 'shared');
   const [error, setError] = useState<string | null>(null);
   const save = async () => {
-    const kind = item?.kind ?? 'memory';
     const title = item?.title ?? content.trim().split('\n')[0].slice(0, 60);
     let key = item?.key ?? keyFromTitle(title);
-    if (!item && taken.has(`${kind}/${key}`)) key = `${key.slice(0, 50)}-${Date.now().toString(36)}`;
+    if (!item && taken.has(`memory/${key}`)) key = `${key.slice(0, 50)}-${Date.now().toString(36)}`;
     try {
-      await saveSpaceItem(kind, key, { title, content: content.trim(), format: 'markdown', visibility: shared ? 'shared' : 'private' });
+      await saveSpaceItem(item?.kind ?? 'memory', key, { title, content: content.trim(), format: 'markdown', visibility: item?.visibility ?? 'private' });
       onDone(true);
     } catch (e: any) { setError(e?.response?.data?.error ?? 'No se pudo guardar'); }
   };
@@ -127,7 +133,6 @@ function MemoryEditor({ item, taken, onDone }: { item?: SpaceItem; taken: Set<st
       <textarea autoFocus rows={3} aria-label="Contenido" value={content} onChange={(e) => setContent(e.target.value)}
         placeholder="Ej.: prefiero vencimientos de 30 a 45 días" />
       <div className="mem-editor-bar">
-        <label className="mem-share"><Switch on={shared} label="Compartir con el equipo" onChange={setShared} />Compartir con el equipo</label>
         <span style={{ flex: 1 }} />
         <button className="settings-action" onClick={() => onDone(false)}>Cancelar</button>
         <button className="settings-action is-primary" disabled={!content.trim()} onClick={save}>Guardar</button>
@@ -138,41 +143,96 @@ function MemoryEditor({ item, taken, onDone }: { item?: SpaceItem; taken: Set<st
 }
 
 function MemoryView({ items, onChanged }: { items: SpaceItem[]; onChanged: () => void }) {
+  const own = useMemo(() => items.filter((i) => i.isOwn), [items]);
+  const nameItem = own.find((i) => i.kind === 'convention' && i.key === NAME_KEY);
+  // Instrucciones: la pieza propia o, si todavía no existe, la convención escrita que ya tenías (no se duplica).
+  const instructions = own.find((i) => i.kind === 'convention' && i.key === INSTRUCTIONS_KEY)
+    ?? own.find((i) => i.kind === 'convention' && i.format !== 'json' && i.key !== NAME_KEY);
+  const prefs = own.filter((i) => i.kind === 'convention' && i.format === 'json');
+  const memories = useMemo(() => own.filter((i) => i.kind === 'memory'), [own]);
+  const [name, setName] = useState(nameFrom(nameItem));
+  const [text, setText] = useState(instructions?.content ?? '');
+  const [state, setState] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
-  const list = useMemo(() => items.filter((i) => i.isOwn && MEMORY_KINDS.includes(i.kind)), [items]);
-  const taken = useMemo(() => new Set(list.map((i) => `${i.kind}/${i.key}`)), [list]);
+  const savedName = nameFrom(nameItem);
+  const savedText = instructions?.content ?? '';
+  useEffect(() => { setName(savedName); }, [savedName]);
+  useEffect(() => { setText(savedText); }, [savedText]);
+  const taken = useMemo(() => new Set(memories.map((i) => `memory/${i.key}`)), [memories]);
+  const saveName = async () => {
+    if (name.trim() === savedName) return;
+    try {
+      if (!name.trim()) await deleteSpaceItem('convention', NAME_KEY);
+      else await saveSpaceItem('convention', NAME_KEY, { title: 'Cómo te llamo', content: `Llamame «${name.trim()}».`, format: 'markdown', visibility: 'private' });
+      setState('Guardado'); onChanged();
+    } catch { setState('No se pudo guardar el nombre'); }
+  };
+  const saveInstructions = async () => {
+    try {
+      await saveSpaceItem('convention', instructions?.key ?? INSTRUCTIONS_KEY, {
+        title: instructions?.title ?? 'Instrucciones', content: text.trim(), format: 'markdown', visibility: instructions?.visibility ?? 'private' });
+      setState('Instrucciones guardadas'); onChanged();
+    } catch { setState('No se pudieron guardar las instrucciones'); }
+  };
   const done = (saved: boolean) => { setEditing(null); if (saved) onChanged(); };
   const remove = async (i: SpaceItem) => { setConfirming(null); await deleteSpaceItem(i.kind, i.key); onChanged(); };
   return (
-    <div className="mem">
-      <div className="mem-top">
-        <span className="mem-count">{list.length === 1 ? '1 recuerdo' : `${list.length} recuerdos`}</span>
-        <button className="settings-action is-primary" onClick={() => setEditing('__new__')}>+ Agregar</button>
-      </div>
-      {editing === '__new__' && <MemoryEditor taken={taken} onDone={done} />}
-      {list.length === 0 && editing !== '__new__' && <div style={muted}>Todavía no hay nada. Agregá algo para que lo recuerde, o pedile al chat «acordate de…».</div>}
-      <ul className="mem-list">
-        {list.map((i) => {
-          const id = `${i.kind}/${i.key}`;
-          if (editing === id) return <li key={id}><MemoryEditor item={i} taken={taken} onDone={done} /></li>;
-          return (
-            <li key={id} className="mem-item">
-              <div className="mem-body">{i.format === 'json' ? <ConventionBody item={i} /> : <Markdown text={i.content} />}</div>
-              {i.visibility === 'shared' && <span className="mem-shared">Equipo</span>}
-              <div className="mem-actions">
-                {confirming === id ? <>
-                  <button className="settings-action" onClick={() => setConfirming(null)}>No</button>
-                  <button className="settings-action is-danger" onClick={() => remove(i)}>Borrar</button>
-                </> : <>
-                  {i.format !== 'json' && <button className="mem-icon" aria-label="Editar" onClick={() => setEditing(id)}><Pencil size={15} /></button>}
-                  <button className="mem-icon" aria-label="Borrar" onClick={() => setConfirming(id)}><Trash2 size={15} /></button>
-                </>}
-              </div>
-            </li>
-          );
+    <div className="prefs">
+      <section className="prefs-group">
+        <h2>Cómo trabajás</h2>
+        <div className="prefs-row">
+          <label htmlFor="mem-name">¿Cómo querés que GaleCore-AI te llame?</label>
+          <input id="mem-name" className="prefs-input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} onBlur={() => void saveName()} />
+        </div>
+        <div className="prefs-block">
+          <label htmlFor="mem-instructions">Instrucciones para GaleCore-AI</label>
+          <small>Las tiene en cuenta en todos los chats y agentes: cómo querés las respuestas, qué evitar, cómo trabajás.</small>
+          <textarea id="mem-instructions" className="prefs-textarea" rows={5} value={text} onChange={(e) => setText(e.target.value)}
+            placeholder="Ej.: empezá por la conclusión en una línea y seguí con una tabla; todo monto de estrategia dice si es SHADOW o cuenta real." />
+          <div className="prefs-actions">
+            {state && <span role="status" className="prefs-state">{state}</span>}
+            <button className="settings-action" disabled={text === savedText} onClick={() => setText(savedText)}>Descartar</button>
+            <button className="settings-action is-primary" disabled={!text.trim() || text === savedText} onClick={() => void saveInstructions()}>Guardar</button>
+          </div>
+        </div>
+      </section>
+
+      {prefs.length > 0 && <section className="prefs-group">
+        <h2>Preferencias</h2>
+        {prefs.map((p) => {
+          const d = parse(p.content);
+          return d && typeof d === 'object' && !Array.isArray(d) ? Object.entries(d).map(([k, v]) => (
+            <div className="prefs-row" key={`${p.key}/${k}`}><span>{PREF_LABELS[k] ?? human(k)}</span><strong className="tabular-nums">{String(v)}</strong></div>
+          )) : null;
         })}
-      </ul>
+      </section>}
+
+      <section className="prefs-group">
+        <div className="prefs-heading"><h2>Recuerdos</h2><button className="settings-action" onClick={() => setEditing('__new__')}>+ Agregar</button></div>
+        {editing === '__new__' && <MemoryEditor taken={taken} onDone={done} />}
+        {memories.length === 0 && editing !== '__new__' && <p className="prefs-empty">Todavía no hay recuerdos. Pedile al chat «acordate de…» o agregalo acá.</p>}
+        <ul className="mem-list">
+          {memories.map((i) => {
+            const id = `${i.kind}/${i.key}`;
+            if (editing === id) return <li key={id}><MemoryEditor item={i} taken={taken} onDone={done} /></li>;
+            return (
+              <li key={id} className="mem-item">
+                <div className="mem-body"><Markdown text={i.content} /></div>
+                <div className="mem-actions">
+                  {confirming === id ? <>
+                    <button className="settings-action" onClick={() => setConfirming(null)}>No</button>
+                    <button className="settings-action is-danger" onClick={() => void remove(i)}>Borrar</button>
+                  </> : <>
+                    <button className="mem-icon" aria-label="Editar" onClick={() => setEditing(id)}><Pencil size={16} /></button>
+                    <button className="mem-icon" aria-label="Borrar" onClick={() => setConfirming(id)}><Trash2 size={16} /></button>
+                  </>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
     </div>
   );
 }
@@ -248,7 +308,7 @@ function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged: () =>
       <div style={{ ...card, padding: 6 }}>
         <button style={{ ...btn(true), width: '100%', marginBottom: 6 }} onClick={startNew}>Nueva skill</button>
         {mine.length > 0 && <>{heading('Tuyas')}{mine.map(entry)}</>}
-        {product.length > 0 && <>{heading('Del producto')}{product.map(entry)}</>}
+        {product.length > 0 && <>{heading('De la plataforma')}{product.map(entry)}</>}
       </div>
       {creating ? (
         <div style={card}>
@@ -378,7 +438,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
   const group = NAV.find(group => group.items.some(item => item.id === section)) || NAV[0];
   const changeStep = (next: number) => { setStep(next); setSection((['conexiones', 'usuario'] as Section[])[next]); };
   return <div className={'settings-page' + (wizard ? ' settings-wizard' : '')}>
-    <aside className="settings-nav" aria-label="Secciones de configuración">{wizard ? <ol>{['Conectar la IA', 'Tus datos'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined}>{index + 1}. {label}</li>)}</ol> : NAV.filter(group => group.group !== 'Plataforma' || user?.isAdmin).map(group => <button key={group.group} onClick={() => setSection(group.items[0].id)} className={group.items.some(item => item.id === section) ? 'is-selected' : ''} aria-current={group.items.some(item => item.id === section) ? 'page' : undefined}>{group.group}</button>)}</aside>
+    <aside className="settings-nav" aria-label="Secciones de configuración">{wizard ? <ol>{['Conectar la IA', 'Tus datos'].map((label, index) => <li key={label} aria-current={step === index ? 'step' : undefined}>{index + 1}. {label}</li>)}</ol> : NAV.filter(group => (group.group !== 'Plataforma' || user?.isAdmin) && (group.group !== 'Equipo' || shared.length > 0)).map(group => <button key={group.group} onClick={() => setSection(group.items[0].id)} className={group.items.some(item => item.id === section) ? 'is-selected' : ''} aria-current={group.items.some(item => item.id === section) ? 'page' : undefined}>{group.group}</button>)}</aside>
     <main className="settings-main"><h1>{wizard ? ['Conectar la IA', 'Tus datos'][step] : group.group}</h1>
       {!wizard && group.items.length > 1 && <nav className="settings-subsections" aria-label={group.group}>{group.items.map(item => <button key={item.id} aria-current={section === item.id ? 'page' : undefined} onClick={() => setSection(item.id)}>{item.label}</button>)}</nav>}
       {INTRO[section] && <p>{INTRO[section]}</p>}

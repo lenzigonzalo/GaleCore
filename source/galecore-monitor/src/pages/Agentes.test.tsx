@@ -28,7 +28,7 @@ test('abre la tarea, muestra el único resultado publicado y vuelve al listado',
   expect(screen.queryByText('Al día')).not.toBeInTheDocument();
   expect(screen.getByText('Días hábiles, 10:00')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
-  expect(screen.getByRole('button', { name: 'Plantillas' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Nueva tarea' })).toBeInTheDocument();
 });
 
 test('pausar conserva la tarea y escribe un pedido sin fingir que ya se aplicó', async () => {
@@ -44,20 +44,21 @@ test('pausar conserva la tarea y escribe un pedido sin fingir que ya se aplicó'
   expect(screen.queryByRole('switch')).not.toBeInTheDocument();
 });
 
-test('una plantilla prepara un pedido editable sin crear ni activar una tarea', async () => {
-  const writeText = jest.fn().mockResolvedValue(undefined);
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+test('una plantilla completa la nueva tarea sin crearla hasta guardar', async () => {
   render(<Agentes />);
-  fireEvent.click(screen.getByRole('button', { name: 'Plantillas' }));
-  fireEvent.click(screen.getByRole('button', { name: /Briefing diario/ }));
-  const draft = screen.getByRole('textbox', { name: 'Tu pedido' });
-  fireEvent.change(draft, { target: { value: 'Preparar mi briefing' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Copiar pedido para el chat' }));
-  expect(await screen.findByText('Pedido copiado')).toBeInTheDocument();
-  expect(writeText).toHaveBeenCalledWith('Preparar mi briefing');
+  fireEvent.click(await screen.findByRole('button', { name: 'Nueva tarea' }));
+  fireEvent.change(screen.getByLabelText('Partir de una plantilla'), { target: { value: 'Briefing diario' } });
+  expect(screen.getByLabelText('Nombre')).toHaveValue('Briefing diario');
+  expect((screen.getByLabelText('Qué debe hacer') as HTMLTextAreaElement).value).toMatch(/briefing antes de la apertura/);
   expect(saveSpaceItem).not.toHaveBeenCalled();
-  fireEvent.keyDown(draft, { key: 'Escape' });
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
+test('el supervisor de SHADOW no aparece entre tus tareas', async () => {
+  const sup = { ...item, key: 'supervisor', title: 'supervisor', content: JSON.stringify({ ...task, id: 'supervisor', capability: 'supervisor' }) };
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [item, sup], shared: [] });
+  render(<Agentes />);
+  expect(await screen.findByRole('button', { name: /Mi vigilancia de SPY/ })).toBeInTheDocument();
+  expect(screen.queryByText(/Avisos de estrategias|^supervisor$/)).not.toBeInTheDocument();
 });
 
 test('muestra el vacío y permite reintentar una lectura fallida', async () => {
@@ -66,15 +67,6 @@ test('muestra el vacío y permite reintentar una lectura fallida', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo leer');
   fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
   expect(await screen.findByText('Todavía no tenés tareas programadas')).toBeInTheDocument();
-});
-
-test('el supervisor conserva su ejecución permanente y no ofrece pausa', async () => {
-  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...item, content: JSON.stringify({ ...task, capability: 'supervisor', last_run: null }) }], shared: [] });
-  render(<Agentes />);
-  fireEvent.click(await screen.findByRole('button', { name: /Mi vigilancia de SPY/ }));
-  expect(screen.getByText('Siempre activo')).toBeInTheDocument();
-  expect(screen.queryByRole('switch')).not.toBeInTheDocument();
-  expect(screen.getByText('Esta tarea todavía no corrió.')).toBeInTheDocument();
 });
 
 test('un resultado viejo conserva el aviso de falta de publicación', async () => {
