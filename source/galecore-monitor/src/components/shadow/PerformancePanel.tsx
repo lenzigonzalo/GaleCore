@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { IChartApi, UTCTimestamp, Time, TickMarkType as ChartTickMarkType } from 'lightweight-charts';
 import { fetchPerformancePanel } from '../../api/shadow';
-import { Metric, PerformanceGroup, PerformancePanelParams, PerformancePanelResponse, ShadowInstance } from '../../types/shadow';
+import { Metric, PerformancePanelParams, PerformancePanelResponse, ShadowInstance } from '../../types/shadow';
 import { fmtPrice, fmtTime, MARKET_TZ } from '../../utils/formatters';
 import { amount, date, days, exitLabel, metricText, pct, rate, readPanelError, usd, strategyName } from './panelPresentation';
 import { LivePositionRow } from '../positions/PositionRow';
@@ -20,16 +20,6 @@ function Stat({ label, definition, metric, format = fmtPrice, signed = false }: 
 }
 function Block({ title, children }: { title: string; children: React.ReactNode }) {
   return <section className="performance-block"><h3>{title}</h3>{children}</section>;
-}
-function Table({ headers, children, className = '' }: { headers: string[]; children: React.ReactNode; className?: string }) {
-  return <div className={`performance-table ${className}`}><table><thead><tr>{headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{children}</tbody></table></div>;
-}
-const value = (n: number | null, format: (n: number) => string = amount) => n === null ? '—' : format(n);
-function Groups({ title, rows }: { title: string; rows: PerformanceGroup[] }) {
-  return <div><h4>{title}</h4><Table headers={['Grupo', 'Operaciones', 'Acierto', 'Promedio USD', 'Realizado USD']}>
-    {rows.map(row => <tr key={row.key}><td>{row.key}</td><td>{row.trades}</td><td>{value(row.winRate, rate)}</td><td>{value(row.avgPnl, usd)}</td><td>{value(row.realizedPnl, usd)}</td></tr>)}
-    {!rows.length && <tr><td colSpan={5}>Sin operaciones</td></tr>}
-  </Table></div>;
 }
 function Curve({ rows }: { rows: PerformancePanelResponse['curve'] }) {
   const host = useRef<HTMLDivElement>(null);
@@ -152,11 +142,10 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
       <Block title="Posiciones abiertas">{panel.openPositions.map(position => <LivePositionRow key={position.positionId} position={{ structure: position.structure, symbol: position.symbol, expiration: position.legList[0]?.expiration ?? null, dte: position.currentDte, legs: position.legList, entryAt: position.entryAt, credit: position.entryCredit, currentValue: position.lastSpreadValue, pnl: position.unrealizedPnl, risk: position.maxRisk, reason: position.valuationProblems?.join(' · ') }} />)}{!panel.openPositions.length && <p>Sin posiciones abiertas</p>}</Block>
     </div>}
     {panel && !loading && !error && tab === 'Operaciones' && <div role="tabpanel" id="pane-Operaciones" aria-labelledby="tab-Operaciones">
-      <TradeLog trades={panel.closedTrades} spec={spec} exits={panel.byExitRule} />
-      <Block title="Régimen y versión"><div className="performance-breakdowns"><div><Groups title="VIX" rows={panel.regime.byVix} /><Groups title="IV Rank" rows={panel.regime.byIvRank} /><Groups title="Gamma" rows={panel.regime.byGamma} />{panel.regime.tradesWithoutContext > 0 && <p>{panel.regime.tradesWithoutContext} cerradas sin contexto de régimen</p>}</div><Groups title="Versión" rows={panel.byVersion} /></div></Block>
-      {runtime}
+      {/* WS-0057 C (owner 21/10): una sola tabla de operaciones; el detalle de cada una en el panel de la derecha. */}
+      <TradeLog trades={panel.closedTrades} open={panel.openPositions} spec={spec} exits={panel.byExitRule} />
     </div>}
-    {tab === 'Datos' && <div role="tabpanel" id="pane-Datos" aria-labelledby="tab-Datos"><StrategyData spec={spec} quality={(design.strategy?.current?.spec as AlgorithmSpec | undefined)?.data_quality}/></div>}
+    {tab === 'Datos' && <div role="tabpanel" id="pane-Datos" aria-labelledby="tab-Datos"><StrategyData spec={spec} quality={(design.strategy?.current?.spec as AlgorithmSpec | undefined)?.data_quality}/>{runtime}</div>}
     {tab === 'Diseño' && <div role="tabpanel" id="pane-Diseño" aria-labelledby="tab-Diseño"><StrategyDesign design={design} /></div>}
   </div>;
 }

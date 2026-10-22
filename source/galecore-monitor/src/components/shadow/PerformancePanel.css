@@ -205,3 +205,41 @@
 .strategy-data-table table { table-layout: auto; }
 .strategy-data-table td { white-space: normal !important; word-break: normal; }
 .strategy-data-table th:nth-child(3), .strategy-data-table td:nth-child(3) { max-width: 260px; }
+
+/* WS-0057 C (owner 21/10): letra más grande en SHADOW; Datos con endpoint, frecuencia y ¿se guarda? */
+.performance-panel .performance-table table { font-size: 15.5px; }
+.performance-panel .performance-table th { font-size: 14px; }
+.performance-panel .strategy-data td, .performance-panel .strategy-data-table td { font-size: 15px; padding: 12px; white-space: normal; }
+.performance-panel .strategy-data-storage { font-size: 15px; }
+.data-need { font-weight: 600; color: var(--text-primary); min-width: 180px; }
+.data-endpoint { font-family: var(--font-mono); font-size: 13px; color: var(--text-secondary); white-space: nowrap; }
+.data-stored { white-space: nowrap; }
+.data-stored strong { font-weight: 600; margin-right: 6px; }
+.data-stored small { font-size: 13px; color: var(--text-muted); }
+.data-purpose { color: var(--text-secondary); min-width: 160px; }
+/* Operaciones: tabla + panel a la derecha (WS-0057 C) */
+.op-layout { display: flex; gap: 16px; align-items: flex-start; }
+.op-layout > .trade-log { flex: 1; min-width: 0; }
+.op-row { cursor: pointer; }
+.op-row:hover td { background: var(--bg-hover); }
+.op-row.is-selected td { background: var(--bg-tertiary); }
+.op-state { display: inline-block; font-size: 13px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.op-state.is-open { border-color: var(--green-border); color: var(--green); }
+.op-panel { position: fixed; top: 64px; right: 48px; bottom: 0; width: 480px; max-width: calc(100vw - 48px); z-index: 40; overflow: auto; padding: 20px 24px; border-left: 1px solid var(--border); background: var(--bg-secondary); box-shadow: -12px 0 32px rgba(0,0,0,.35); display: grid; align-content: start; gap: 20px; }
+.op-panel header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.op-panel h3 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: var(--text-primary); text-transform: capitalize; }
+.op-panel header button { background: transparent; border: 0; color: var(--text-secondary); cursor: pointer; padding: 4px; border-radius: 6px; }
+.op-panel header button:hover { background: var(--bg-hover); color: var(--text-primary); }
+.op-panel h4 { margin: 0 0 10px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.op-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+.op-fact { display: grid; gap: 2px; }
+.op-fact span { font-size: 13px; color: var(--text-muted); }
+.op-fact strong { font-size: 16px; font-weight: 600; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.op-gates { width: 100%; margin-top: 12px; border-collapse: collapse; font-size: 14px; }
+.op-gates th { text-align: left; font-size: 12px; font-weight: 500; color: var(--text-muted); padding: 6px 4px; border-bottom: 1px solid var(--border); }
+.op-gates td { padding: 7px 4px; border-bottom: 1px solid var(--border-dark); color: var(--text-primary); }
+.op-gates td.numeric { font-family: var(--font-mono); font-size: 13px; }
+.op-pass { color: var(--green); font-weight: 700; }
+.op-fail { color: var(--red-gc); font-weight: 700; }
+
+.data-stored small { display: block; }

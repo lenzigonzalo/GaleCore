@@ -146,7 +146,7 @@ test('Runtime plegado carga sólo instancias y lecturas de la estrategia', async
   mocked.fetchShadowPositions.mockImplementation(async id => [position({ positionId: `p-${id}`, instanceId: id })]);
   render(<Shadow />); fireEvent.click(await screen.findByRole('button', { name: strategyName(instance.specName) }));
   expect(mocked.fetchShadowPositions).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByText('Runtime')); await screen.findByText('Guardado en base');
+  fireEvent.click(screen.getByText('Detalle técnico del motor')); await screen.findByText('Guardado en base');
   expect(mocked.fetchShadowPositions).toHaveBeenCalledWith('i-1');
   expect(mocked.fetchShadowPositions).toHaveBeenCalledWith('i-2');
   expect(mocked.fetchShadowPositions).not.toHaveBeenCalledWith('other');
@@ -156,7 +156,7 @@ test('Runtime plegado carga sólo instancias y lecturas de la estrategia', async
 });
 test('el error del runtime no desmonta el panel', async () => {
   render(<Shadow />); fireEvent.click(await screen.findByRole('button', { name: strategyName(instance.specName) }));
-  mocked.fetchShadowStatus.mockRejectedValue(new Error('offline')); fireEvent.click(screen.getByText('Runtime'));
+  mocked.fetchShadowStatus.mockRejectedValue(new Error('offline')); fireEvent.click(screen.getByText('Detalle técnico del motor'));
   await screen.findByText('No se pudo leer el runtime'); expect(screen.getByTestId('performance-panel')).toBeInTheDocument();
 });
 test('summary errors do not invent zero values and can be retried', async () => {

@@ -160,9 +160,11 @@ test('exports raw API trades as JSON and CSV with escaped text and nullable cont
   render(<PerformancePanel spec={plain.spec} />); await screen.findByText('Ganancia total');
   fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
   const log = screen.getByRole('region', { name: 'Log de operaciones' });
-  expect(within(log).getAllByRole('columnheader')).toHaveLength(10);
+  expect(within(log).getAllByRole('columnheader')).toHaveLength(7);
   const row = within(log).getByText('+$22.00').closest('tr')!;
-  expect(row.title).toContain('Entrada:'); expect(row.title).toContain('Versión: 1.0.3');
+  fireEvent.click(row);   // WS-0057 C: el detalle de la operación se abre en el panel de la derecha
+  const panel = screen.getByRole('dialog', { name: /Operación/ });
+  expect(panel).toHaveTextContent('v1.0.3'); expect(panel).toHaveTextContent('Toma de ganancia'); expect(panel).toHaveTextContent('Entrada');
   expect(log.querySelector('.position-row')).toBeNull();
   expect(log.querySelector('.strike-ladder-inline')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Copiar JSON' })); await screen.findByText('JSON copiado');

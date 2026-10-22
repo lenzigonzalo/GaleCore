@@ -73,4 +73,14 @@ public class StrategyDataTests
         Assert.All(rep.Items, i => Assert.Null(i.LastAt));
         Assert.False(string.IsNullOrEmpty(rep.Storage));
     }
+
+    [Fact]
+    public void Every_catalog_entry_names_its_endpoint_and_only_the_skew_is_stored()
+    {
+        Assert.All(StrategyData.Catalog, kv => Assert.StartsWith("/", kv.Value.Endpoint));
+        Assert.Equal(new[] { "compute.put_skew" }, StrategyData.Catalog.Where(kv => kv.Value.StoredBy != null).Select(kv => kv.Key));
+        var rep = StrategyData.Build(Spec(new GateDefinition { Id = "G1", Label = "VIX", MetricRef = "capability:market_data.trade.VIX.price" }), null, Now);
+        Assert.All(rep.Items, i => Assert.False(string.IsNullOrEmpty(i.Frequency)));
+        Assert.Equal("/Data/Tastytrade/MarketData/Trade", rep.Items.Single(i => i.GateId == "G1").Endpoint);
+    }
 }

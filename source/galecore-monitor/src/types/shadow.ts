@@ -147,6 +147,8 @@ export interface PerformanceSummary {
   takeProfitExits: number; stopLossExits: number; otherExits: number; lastExitAt: string | null;
 }
 export interface PanelLeg { side: string; type: string; strike: number; expiration: string | null }
+/** Una regla de entrada con el valor que vio al abrir la posición (WS-0057 C). */
+export interface PanelGate { gateId: string; label: string; status: string; value: number | null; threshold: number | null; operator: string; onFail: string }
 export interface PerformancePanelResponse {
   asOf: string; mode: string; source: string; spec: string; version: string | null;
   from: string | null; to: string | null;
@@ -159,13 +161,14 @@ export interface PerformancePanelResponse {
   openPositions: { positionId: string; version: string; structure: string; legs: string; symbol: string; legList: PanelLeg[];
     entryAt: string; entryDte: number; currentDte: number | null; entryCredit: number;
     lastSpreadValue: number | null; unrealizedPnl: number | null; maxRisk: number;
-    lastValuedAt: string | null; valuationProblems: string[] | null }[];
+    lastValuedAt: string | null; valuationProblems: string[] | null;
+    entryGates?: PanelGate[]; entryVix?: number | null; entryIvRank?: number | null; entryUnderlyingPrice?: number | null }[];
   closedTrades: { positionId: string; version: string; structure: string; legs: string; symbol: string; legList: PanelLeg[];
     entryAt: string; exitAt: string | null; daysHeld: number | null; entryCredit: number;
     exitDebit: number | null; exitReason: string | null; realizedPnl: number | null;
     maxRisk: number; pnlPctOfCredit: number | null; pnlPctOfMaxRisk: number | null;
     gapToPlan: number | null; entryVix: number | null; entryIvRank: number | null;
-    entryUnderlyingPrice: number | null; exitDte: number | null }[];
+    entryUnderlyingPrice: number | null; exitDte: number | null; entryGates?: PanelGate[] }[];
   realizedPnl: Metric; unrealizedPnl: Metric; maxDrawdown: Metric;
   winRate: Metric; avgWin: Metric; avgLoss: Metric; profitFactor: Metric; expectancy: Metric;
   sharpe: Metric; sortino: Metric; avgDaysHeld: Metric; worstTrade: Metric; lossStreak: Metric;

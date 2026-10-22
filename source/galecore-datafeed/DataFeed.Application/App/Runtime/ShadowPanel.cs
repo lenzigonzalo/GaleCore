@@ -136,6 +136,11 @@ namespace DataFeed.Application.App.Runtime
         public double MaxRisk { get; init; }
         public DateTime? LastValuedAt { get; init; }
         public List<string>? ValuationProblems { get; init; }
+        /// <summary>Las reglas de entrada con el valor que vio cada una al abrir (WS-0057 C); vacía en posiciones viejas.</summary>
+        public List<GateResult> EntryGates { get; init; } = new();
+        public double? EntryVix { get; init; }
+        public double? EntryIvRank { get; init; }
+        public double? EntryUnderlyingPrice { get; init; }
     }
 
     /// <summary>Operación SHADOW cerrada del período, con su motivo de salida.</summary>
@@ -165,6 +170,8 @@ namespace DataFeed.Application.App.Runtime
         public double? EntryIvRank { get; init; }
         public double? EntryUnderlyingPrice { get; init; }
         public int? ExitDte { get; init; }
+        /// <summary>Las reglas de entrada con el valor que vio cada una al abrir (WS-0057 C); vacía en posiciones viejas.</summary>
+        public List<GateResult> EntryGates { get; init; } = new();
     }
 
     /// <summary>Una fila de la lista de estrategias SHADOW: las cifras del panel de cada una, en un solo pedido.</summary>
@@ -310,6 +317,9 @@ namespace DataFeed.Application.App.Runtime
                     CurrentDte = x.p.CurrentDte, EntryCredit = x.p.EntryCredit, LastSpreadValue = x.p.LastSpreadValue,
                     UnrealizedPnl = x.p.UnrealizedPnl, MaxRisk = x.p.MaxRisk, LastValuedAt = x.p.LastValuedAt,
                     ValuationProblems = x.p.ValuationProblems,
+                    EntryGates = x.p.EntryContext?.Gates ?? new List<GateResult>(),
+                    EntryVix = x.p.EntryContext?.Vix, EntryIvRank = x.p.EntryContext?.IvRank,
+                    EntryUnderlyingPrice = x.p.EntryContext?.UnderlyingPrice,
                 }).ToList(),
                 ClosedTrades = trades.AsEnumerable().Reverse().Select(t => new ClosedTradeRow
                 {
@@ -323,6 +333,7 @@ namespace DataFeed.Application.App.Runtime
                     EntryIvRank = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.IvRank,
                     EntryUnderlyingPrice = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.UnderlyingPrice,
                     ExitDte = positions.GetValueOrDefault(t.PositionId)?.ExitContext?.Dte,
+                    EntryGates = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.Gates ?? new List<GateResult>(),
                 }).ToList(),
                 RealizedPnl = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(pnls.Sum()),
                 UnrealizedPnl = Unrealized(open),
