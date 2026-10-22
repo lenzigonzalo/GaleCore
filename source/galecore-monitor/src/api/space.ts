@@ -31,18 +31,32 @@ export const SPACE_KINDS: { id: SpaceKind; label: string; hint: string }[] = [
   { id: 'data',       label: 'Datos',        hint: 'fuentes que ponés a disposición' },
 ];
 
-export async function fetchSpace(): Promise<{ items: SpaceItem[]; shared: SpaceItem[] }> {
-  const { data } = await apiClient.get<{ items: SpaceItem[]; shared: SpaceItem[] }>('/App/GaleCore/Space');
-  return { items: data.items ?? [], shared: data.shared ?? [] };
+// WS-0057 D: varias pantallas piden el espacio a la vez (Inicio, avisos, Chat, watchlist); se comparte el pedido en curso
+// y la respuesta vale unos segundos. Guardar o borrar la invalida.
+const SPACE_TTL_MS = 10_000;
+let spaceCache: { at: number; promise: Promise<{ items: SpaceItem[]; shared: SpaceItem[] }> } | null = null;
+
+/** Para tests: cada caso arranca sin la respuesta del anterior. */
+export function clearSpaceCache(): void { spaceCache = null; }
+
+export function fetchSpace(): Promise<{ items: SpaceItem[]; shared: SpaceItem[] }> {
+  if (spaceCache && Date.now() - spaceCache.at < SPACE_TTL_MS) return spaceCache.promise;
+  const promise = apiClient.get<{ items: SpaceItem[]; shared: SpaceItem[] }>('/App/GaleCore/Space')
+    .then(({ data }) => ({ items: data.items ?? [], shared: data.shared ?? [] }));
+  spaceCache = { at: Date.now(), promise };
+  promise.catch(() => { if (spaceCache?.promise === promise) spaceCache = null; });
+  return promise;
 }
 
 export async function saveSpaceItem(kind: SpaceKind, key: string, body: {
   title: string; content: string; format: SpaceFormat; visibility: SpaceVisibility;
 }): Promise<void> {
+  spaceCache = null;
   await apiClient.put(`/App/GaleCore/Space/${kind}/${encodeURIComponent(key)}`, body);
 }
 
 export async function deleteSpaceItem(kind: SpaceKind, key: string): Promise<void> {
+  spaceCache = null;
   await apiClient.delete(`/App/GaleCore/Space/${kind}/${encodeURIComponent(key)}`);
 }
 

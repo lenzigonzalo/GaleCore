@@ -179,7 +179,17 @@ export async function fetchStrikeAlerts(): Promise<StrikeAlertsResult> {
   return { alerts: data?.alerts ?? [], unevaluated: data?.unevaluated ?? [] };
 }
 
-export async function fetchAccountOverview(): Promise<AccountOverview> {
-  const { data } = await apiClient.get<AccountOverview>('/App/GaleCore/Account/Overview', { timeout: 30_000 });
-  return data;
+// WS-0057 D: el resumen de la cuenta tarda 1–4 s y lo piden Inicio y otras vistas a la vez: un pedido compartido.
+const OVERVIEW_TTL_MS = 15_000;
+let overviewCache: { at: number; promise: Promise<AccountOverview> } | null = null;
+
+/** Para tests: cada caso arranca sin la respuesta del anterior. */
+export function clearAccountOverviewCache(): void { overviewCache = null; }
+
+export function fetchAccountOverview(): Promise<AccountOverview> {
+  if (overviewCache && Date.now() - overviewCache.at < OVERVIEW_TTL_MS) return overviewCache.promise;
+  const promise = apiClient.get<AccountOverview>('/App/GaleCore/Account/Overview', { timeout: 30_000 }).then(r => r.data);
+  overviewCache = { at: Date.now(), promise };
+  promise.catch(() => { if (overviewCache?.promise === promise) overviewCache = null; });
+  return promise;
 }

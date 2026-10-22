@@ -3,9 +3,11 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { Resumen, Calendario } from './Resumen';
 import { useAccountStore } from '../store/useAccountStore';
 import { useMarketStore } from '../store/useMarketStore';
+import { clearAccountOverviewCache } from '../api/account';
+import { clearSpaceCache } from '../api/space';
 jest.mock('../api/client', () => ({ __esModule: true, default: { get: jest.fn().mockResolvedValue({ data: { data: [] } }) } }));
 
-beforeEach(() => { useAccountStore.getState().reset(); useMarketStore.setState({ tickers: {} }); });
+beforeEach(() => { clearAccountOverviewCache(); clearSpaceCache(); useAccountStore.getState().reset(); useMarketStore.setState({ tickers: {} }); });
 
 const overview = {
   asOf: '2026-10-15T17:00:00Z', netLiq: 2525.63, cash: 2663.63, buyingPower: 663.63, dayPnl: 6.5, dayPnlPct: 0.26, openPnl: 3.5,
