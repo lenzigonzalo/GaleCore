@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, BookOpen, Brain, Lock, Pencil, Plug, Power, Trash2, User, Users } from 'lucide-react';
+import { Bell, BookOpen, Plug, Power, Trash2, User, UserCog, Users } from 'lucide-react';
 import { Connections } from '../components/settings/Connections';
 import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
 import { LocalMcp } from '../components/settings/LocalMcp';
 import { LanguageSetting } from '../components/settings/LanguageSetting';
-import { ProfileSettings, NAME_KEY } from '../components/settings/ProfileSettings';
+import { ProfileSettings } from '../components/settings/ProfileSettings';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
 import { SUGGESTIONS_KEY, suggestionsEnabled, saveSuggestionsEnabled } from '../components/lab/LabSuggestions';
 import { STRIKE_ALERT_KEY } from '../api/account';
-import { MyPasswordCard } from '../components/account/MyPasswordCard';
+import { AccountSettings } from '../components/settings/AccountSettings';
 import { Markdown } from '../components/settings/Markdown';
 import { useCurrentUserStore } from '../store/useCurrentUserStore';
 import {
@@ -19,31 +19,31 @@ import {
 /**
  * Configuración (GC-0007): todo lo que es de la persona, con navegación lateral, como la de cualquier app de IA.
  *
- *   GENERAL          perfil (cuenta, idioma y perfil de trading) · contraseña · avisos
+ *   GENERAL          perfil (nombre, intereses y memoria) · cuenta (usuario, idioma, contraseña) · avisos
  *   CONEXIONES       IA, GaleCore, bróker
- *   MEMORIA          cómo trabajás, preferencias y recuerdos · skills
+ *   SKILLS           las de la plataforma y las tuyas
  *   EQUIPO           compartido conmigo (sólo si alguien compartió algo)
  *   PLATAFORMA       estado de los servicios (admin)
  *
  * Nada se muestra como JSON ni como caja libre cuando se puede elegir: las opciones son interruptores y listas, y se
  * guardan solas. El estado vive en esta pantalla (no en un store de módulo): muere con la sesión.
  */
-export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'broker' | 'memoria' | 'skills'
+export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'cuenta' | 'broker' | 'skills'
   | 'compartido' | 'avisos' | 'servicios';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
-  { group: 'General', items: [{ id: 'usuario', label: 'Perfil', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
+  { group: 'General', items: [{ id: 'usuario', label: 'Perfil', Icon: User }, { id: 'cuenta', label: 'Cuenta', Icon: UserCog }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Proveedores de IA', items: [{ id: 'conexiones', label: 'Proveedores de IA', Icon: Plug }] },
-  { group: 'Memoria', items: [{ id: 'memoria', label: 'Memoria', Icon: Brain }, { id: 'skills', label: 'Skills', Icon: BookOpen }] },
+  { group: 'Skills', items: [{ id: 'skills', label: 'Skills', Icon: BookOpen }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
   { group: 'Plataforma', items: [{ id: 'servicios', label: 'Servicios', Icon: Power }] },
 ];
 
-const SECTION_KIND: Partial<Record<Section, SpaceKind>> = { memoria: 'memory', skills: 'skill' };
+const SECTION_KIND: Partial<Record<Section, SpaceKind>> = { skills: 'skill' };
 
 const INTRO: Partial<Record<Section, string>> = {
   servicios: 'Lo que GaleCore corre solo, para todos: no lo crea el usuario. Tus tareas están en Agentes y las estrategias en Estrategias.',
-  memoria: 'Lo que GaleCore-AI tiene en cuenta en cada chat. También se agrega desde el chat («acordate de…»).',
+  usuario: 'Lo que GaleCore-AI sabe de vos en cada chat: cómo llamarte, qué te interesa y lo que quieras que recuerde.',
   skills: 'Lo que GaleCore-AI sabe hacer. Las de la plataforma se leen; las tuyas se crean y se editan acá, y el chat las usa sin nombrarlas.',
   avisos: 'Avisos de la cuenta real que suenan en la campana.',
   compartido: 'Lo que otros del equipo compartieron. Se lee, no se edita.',
@@ -102,121 +102,6 @@ function ConventionBody({ item }: { item: SpaceItem }) {
     );
   }
   return <Markdown text={item.content} />;
-}
-
-// ── memoria (WS-0057 A, como Configuración de claude.ai): cómo trabajás, preferencias y recuerdos ──
-// «Cómo te llamo» e «Instrucciones» son convenciones: entran enteras en cada chat. Las notas son recuerdos. Los objetivos
-// viven en el perfil y no se repiten acá.
-
-const INSTRUCTIONS_KEY = 'instrucciones';
-const PREF_LABELS: Record<string, string> = {
-  timezone: 'Zona horaria', currency: 'Moneda', precision_decimal_places: 'Decimales',
-  gex_near_zero_threshold_pct: 'Umbral de GEX «cerca de cero» (%)',
-};
-
-function MemoryEditor({ item, taken, onDone }: { item?: SpaceItem; taken: Set<string>; onDone: (saved: boolean) => void }) {
-  const [content, setContent] = useState(item?.content ?? '');
-  const [error, setError] = useState<string | null>(null);
-  const save = async () => {
-    const title = item?.title ?? content.trim().split('\n')[0].slice(0, 60);
-    let key = item?.key ?? keyFromTitle(title);
-    if (!item && taken.has(`memory/${key}`)) key = `${key.slice(0, 50)}-${Date.now().toString(36)}`;
-    try {
-      await saveSpaceItem(item?.kind ?? 'memory', key, { title, content: content.trim(), format: 'markdown', visibility: item?.visibility ?? 'private' });
-      onDone(true);
-    } catch (e: any) { setError(e?.response?.data?.error ?? 'No se pudo guardar'); }
-  };
-  return (
-    <div className="mem-editor">
-      <textarea autoFocus rows={3} aria-label="Contenido" value={content} onChange={(e) => setContent(e.target.value)}
-        placeholder="Ej.: prefiero vencimientos de 30 a 45 días" />
-      <div className="mem-editor-bar">
-        <span style={{ flex: 1 }} />
-        <button className="settings-action" onClick={() => onDone(false)}>Cancelar</button>
-        <button className="settings-action is-primary" disabled={!content.trim()} onClick={save}>Guardar</button>
-      </div>
-      {error && <div className="settings-error" role="alert">{error}</div>}
-    </div>
-  );
-}
-
-function MemoryView({ items, onChanged }: { items: SpaceItem[]; onChanged: () => void }) {
-  const own = useMemo(() => items.filter((i) => i.isOwn), [items]);
-  // Instrucciones: la pieza propia o, si todavía no existe, la convención escrita que ya tenías (no se duplica).
-  const instructions = own.find((i) => i.kind === 'convention' && i.key === INSTRUCTIONS_KEY)
-    ?? own.find((i) => i.kind === 'convention' && i.format !== 'json' && i.key !== NAME_KEY);
-  const prefs = own.filter((i) => i.kind === 'convention' && i.format === 'json');
-  const memories = useMemo(() => own.filter((i) => i.kind === 'memory'), [own]);
-  const [text, setText] = useState(instructions?.content ?? '');
-  const [state, setState] = useState<string | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
-  const savedText = instructions?.content ?? '';
-  useEffect(() => { setText(savedText); }, [savedText]);
-  const taken = useMemo(() => new Set(memories.map((i) => `memory/${i.key}`)), [memories]);
-  const saveInstructions = async () => {
-    try {
-      await saveSpaceItem('convention', instructions?.key ?? INSTRUCTIONS_KEY, {
-        title: instructions?.title ?? 'Instrucciones', content: text.trim(), format: 'markdown', visibility: instructions?.visibility ?? 'private' });
-      setState('Instrucciones guardadas'); onChanged();
-    } catch { setState('No se pudieron guardar las instrucciones'); }
-  };
-  const done = (saved: boolean) => { setEditing(null); if (saved) onChanged(); };
-  const remove = async (i: SpaceItem) => { setConfirming(null); await deleteSpaceItem(i.kind, i.key); onChanged(); };
-  return (
-    <div className="prefs">
-      <section className="prefs-group">
-        <h2>Instrucciones</h2>
-        <div className="prefs-block">
-          <label htmlFor="mem-instructions">Instrucciones para GaleCore-AI</label>
-          <small>Las tiene en cuenta en todos los chats y agentes: cómo querés las respuestas, qué evitar, cómo trabajás.</small>
-          <textarea id="mem-instructions" className="prefs-textarea" rows={5} value={text} onChange={(e) => setText(e.target.value)}
-            placeholder="Ej.: empezá por la conclusión en una línea y seguí con una tabla; todo monto de estrategia dice si es SHADOW o cuenta real." />
-          <div className="prefs-actions">
-            {state && <span role="status" className="prefs-state">{state}</span>}
-            <button className="settings-action" disabled={text === savedText} onClick={() => setText(savedText)}>Descartar</button>
-            <button className="settings-action is-primary" disabled={!text.trim() || text === savedText} onClick={() => void saveInstructions()}>Guardar</button>
-          </div>
-        </div>
-      </section>
-
-      {prefs.length > 0 && <section className="prefs-group">
-        <h2>Preferencias</h2>
-        {prefs.map((p) => {
-          const d = parse(p.content);
-          return d && typeof d === 'object' && !Array.isArray(d) ? Object.entries(d).map(([k, v]) => (
-            <div className="prefs-row" key={`${p.key}/${k}`}><span>{PREF_LABELS[k] ?? human(k)}</span><strong className="tabular-nums">{String(v)}</strong></div>
-          )) : null;
-        })}
-      </section>}
-
-      <section className="prefs-group">
-        <div className="prefs-heading"><h2>Recuerdos</h2><button className="settings-action" onClick={() => setEditing('__new__')}>+ Agregar</button></div>
-        {editing === '__new__' && <MemoryEditor taken={taken} onDone={done} />}
-        {memories.length === 0 && editing !== '__new__' && <p className="prefs-empty">Todavía no hay recuerdos. Pedile al chat «acordate de…» o agregalo acá.</p>}
-        <ul className="mem-list">
-          {memories.map((i) => {
-            const id = `${i.kind}/${i.key}`;
-            if (editing === id) return <li key={id}><MemoryEditor item={i} taken={taken} onDone={done} /></li>;
-            return (
-              <li key={id} className="mem-item">
-                <div className="mem-body"><Markdown text={i.content} /></div>
-                <div className="mem-actions">
-                  {confirming === id ? <>
-                    <button className="settings-action" onClick={() => setConfirming(null)}>No</button>
-                    <button className="settings-action is-danger" onClick={() => void remove(i)}>Borrar</button>
-                  </> : <>
-                    <button className="mem-icon" aria-label="Editar" onClick={() => setEditing(id)}><Pencil size={16} /></button>
-                    <button className="mem-icon" aria-label="Borrar" onClick={() => setConfirming(id)}><Trash2 size={16} /></button>
-                  </>}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-    </div>
-  );
 }
 
 // La plantilla de una skill (WS-0054): la primera línea dice qué pedido atiende; el chat la ve en tu espacio.
@@ -376,22 +261,22 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
     body = <Connections skills={loading ? <p role="status">Cargando skills…</p> : error ? <p role="alert">{error}</p> : <SkillsView items={items.filter(i => i.kind === 'skill')} onChanged={reload} />} />;
   } else if (section === 'usuario') {
     body = (
-      <ProfileSettings user={user} items={items} onChanged={reload}
+      <ProfileSettings items={items} onChanged={reload} />
+    );
+  } else if (section === 'cuenta') {
+    body = (
+      <AccountSettings user={user}
         language={<LanguageSetting item={items.find(i => i.kind === 'profile' && i.isOwn)} onChanged={reload} />}
         suggestions={suggestionsEnabled(items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY))}
         onSuggestions={next => { void saveSuggestionsEnabled(next).then(reload).catch(() => setError('No se pudo guardar la preferencia.')); }} />
     );
   } else if (section === 'servicios') {
     body = <PlatformServices />;
-  } else if (section === 'contrasena') {
-    body = <div style={card}><MyPasswordCard embedded /></div>;
   } else if (section === 'broker') {
     body = <p>Cuenta de bróker: próximamente.</p>;
   } else if (section === 'avisos') {
     body = loading && !items.length ? <p role="status">Cargando avisos…</p>
       : <StrikeAlertForm item={items.find(i => i.kind === 'preference' && i.key === STRIKE_ALERT_KEY)} onChanged={load} />;
-  } else if (section === 'memoria') {
-    body = <MemoryView items={items} onChanged={reload} />;
   } else if (section === 'skills') {
     body = <SkillsView items={own} onChanged={reload} />;
   } else if (section === 'compartido') {

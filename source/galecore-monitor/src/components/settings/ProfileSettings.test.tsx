@@ -1,45 +1,60 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { ProfileSettings } from './ProfileSettings';
-import { saveSpaceItem, SpaceItem } from '../../api/space';
-jest.mock('../../api/space', () => ({ saveSpaceItem: jest.fn(), deleteSpaceItem: jest.fn() }));
+import { deleteSpaceItem, saveSpaceItem, SpaceItem } from '../../api/space';
+jest.mock('../../api/space', () => ({
+  saveSpaceItem: jest.fn(), deleteSpaceItem: jest.fn(), keyFromTitle: (t: string) => t.toLowerCase().replace(/\W+/g, '-'),
+}));
 
-const profile = { kind: 'profile', key: 'perfil', title: 'Perfil', format: 'json', visibility: 'private', isOwn: true, content: JSON.stringify({
-  version: 15, reference_capital: { amount: 2479.13, currency: 'USD' }, horizon: '30 a 45 días', max_drawdown: '15 %',
-  risk_limits: ['5 % por operación', '15 % sumado'], language: 'español' }) } as SpaceItem;
-const view = (changed = jest.fn()) => render(<ProfileSettings user={{ username: 'demo', email: 'd@x.com', isAdmin: false }} items={[profile]}
-  language={null} suggestions={false} onSuggestions={jest.fn()} onChanged={changed} />);
+const item = (kind: string, key: string, title: string, content: string) =>
+  ({ kind, key, title, content, format: 'markdown', visibility: 'private', isOwn: true } as SpaceItem);
+const items = [
+  item('convention', 'como-te-llamo', 'Cómo te llamo', 'Llamame «Gonza».'),
+  item('convention', 'intereses', 'Intereses', 'opciones sobre SPY'),
+  item('memory', 'riesgo', 'Riesgo por posición', 'nunca más del 20 % del riesgo del portfolio'),
+  item('profile', 'perfil', 'Perfil', '{"version":12}'),
+];
+const view = (changed = jest.fn()) => render(<ProfileSettings items={items} onChanged={changed} />);
 
-test('muestra el perfil de trading legible por campo con su versión vigente', () => {
+beforeEach(() => { (saveSpaceItem as jest.Mock).mockReset().mockResolvedValue(undefined); (deleteSpaceItem as jest.Mock).mockReset().mockResolvedValue(undefined); });
+
+test('muestra sólo nombre, intereses y memoria', () => {
   view();
-  expect(screen.getByText('Versión vigente: v15')).toBeInTheDocument();
-  expect(screen.getByText('2.479,13 USD')).toBeInTheDocument();
-  expect(screen.getByText('5 % por operación')).toBeInTheDocument();
-  expect(screen.getByText('30 a 45 días')).toBeInTheDocument();
+  expect(screen.getByLabelText('¿Cómo querés que te llame?')).toHaveValue('Gonza');
+  expect(screen.getByLabelText('Qué te interesa')).toHaveValue('opciones sobre SPY');
+  expect(screen.getByText('Riesgo por posición')).toBeInTheDocument();
+  expect(screen.getByText('nunca más del 20 % del riesgo del portfolio')).toBeInTheDocument();
+  expect(screen.queryByText(/Versión vigente|Capital de referencia|Límites/)).toBeNull();
 });
 
-test('editar un campo común guarda sólo ese campo y conserva el resto', async () => {
-  (saveSpaceItem as jest.Mock).mockResolvedValue(undefined);
+test('agregar un ítem de memoria guarda título y un renglón', async () => {
   const changed = jest.fn(); view(changed);
-  fireEvent.click(screen.getByLabelText('Editar Horizonte'));
-  fireEvent.change(screen.getByLabelText('Horizonte'), { target: { value: '45 a 60 días' } });
+  fireEvent.click(screen.getByText('+ Agregar'));
+  expect(screen.getByText('Guardar')).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'Horizonte' } });
+  fireEvent.change(screen.getByLabelText('Un renglón'), { target: { value: 'operaciones de 30 a 45 días' } });
   fireEvent.click(screen.getByText('Guardar'));
   await waitFor(() => expect(changed).toHaveBeenCalled());
-  const saved = JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content);
-  expect(saved.horizon).toBe('45 a 60 días');
-  expect(saved.reference_capital).toEqual({ amount: 2479.13, currency: 'USD' });
-  expect(saved.risk_limits).toEqual(['5 % por operación', '15 % sumado']);
-  expect(saved.version).toBe(15);
+  expect(saveSpaceItem).toHaveBeenCalledWith('memory', 'horizonte', expect.objectContaining({ title: 'Horizonte', content: 'operaciones de 30 a 45 días' }));
 });
 
-test('un límite sólo se guarda con el ok explícito', async () => {
-  (saveSpaceItem as jest.Mock).mockClear().mockResolvedValue(undefined);
-  view();
-  fireEvent.click(screen.getByLabelText('Editar Límites de riesgo'));
-  fireEvent.change(screen.getByLabelText('Límites de riesgo'), { target: { value: '3 % por operación\n10 % sumado' } });
-  expect(screen.getByText('Guardar')).toBeDisabled();
-  fireEvent.click(screen.getByLabelText(/Confirmo el cambio/));
+test('editar y borrar un ítem de memoria', async () => {
+  const changed = jest.fn(); view(changed);
+  fireEvent.click(screen.getByLabelText('Editar Riesgo por posición'));
+  fireEvent.change(screen.getByLabelText('Un renglón'), { target: { value: 'nunca más del 15 %' } });
   fireEvent.click(screen.getByText('Guardar'));
-  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalled());
-  expect(JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content).risk_limits).toEqual(['3 % por operación', '10 % sumado']);
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledWith('memory', 'riesgo', expect.objectContaining({ content: 'nunca más del 15 %' })));
+  fireEvent.click(await screen.findByLabelText('Borrar Riesgo por posición'));
+  fireEvent.click(screen.getByText('Borrar'));
+  await waitFor(() => expect(deleteSpaceItem).toHaveBeenCalledWith('memory', 'riesgo'));
+});
+
+test('el nombre y los intereses se guardan al salir del campo', async () => {
+  view();
+  fireEvent.change(screen.getByLabelText('Qué te interesa'), { target: { value: 'volatilidad' } });
+  fireEvent.blur(screen.getByLabelText('Qué te interesa'));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledWith('convention', 'intereses', expect.objectContaining({ content: 'volatilidad' })));
+  fireEvent.change(screen.getByLabelText('¿Cómo querés que te llame?'), { target: { value: '' } });
+  fireEvent.blur(screen.getByLabelText('¿Cómo querés que te llame?'));
+  await waitFor(() => expect(deleteSpaceItem).toHaveBeenCalledWith('convention', 'como-te-llamo'));
 });
