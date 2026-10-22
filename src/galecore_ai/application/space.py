@@ -479,53 +479,22 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     return {"requests": requests, "responses": responses, **sync(client, pieces, seen)}
 
 
-_PROFILE_LABELS = {"reference_capital": "capital de referencia", "objectives": "objetivos", "horizon": "horizonte",
-                   "max_drawdown": "drawdown máximo", "risk_limits": "límites", "minimum_return": "retorno mínimo",
-                   "edge_criterion": "criterio de edge", "exit_rule": "regla de salida",
-                   "mandate_autonomous": "hace solo", "mandate_needs_approval": "espera tu ok",
-                   "delivery_format": "forma de entrega", "language": "idioma"}
-
-
-def _profile_lines(prof: dict) -> list[str]:
-    """The whole profile, one line per declared field: it governs every proposal, so none is cut."""
-    lines = [f"  perfil v{prof.get('version')} (manda sobre cualquier propuesta):"]
-    for key, label in _PROFILE_LABELS.items():
-        value = prof.get(key)
-        if key == "reference_capital" and value:
-            value = f"{value.get('amount', 0):,.0f} {value.get('currency', '')}".replace(",", ".")
-        if isinstance(value, list):
-            value = " · ".join(value)
-        if value:
-            lines.append(f"    {label}: {value}")
-    missing = [label for key, label in _PROFILE_LABELS.items() if not prof.get(key)]
-    if missing:
-        lines.append(f"    sin declarar: {', '.join(missing)}")
-    if prof.get("provisional"):
-        lines.append(f"    provisorios: {', '.join(_PROFILE_LABELS.get(k, k) for k in prof['provisional'])}")
-    return lines
-
-
 def context(client: SpaceClient) -> str:
-    """The session's opening summary: who the trader is (profile and conventions in full) and what they have."""
+    """The session's opening summary: the trader's name, interests and memory (the whole profile, WS-0058), and what they have."""
     space = client.items()
     own, shared = space["items"], space["shared"]
     by_kind: dict[str, list[dict]] = {}
     for i in own:
         by_kind.setdefault(i["kind"], []).append(i)
     lines = [f"[espacio] {client.user}: {len(own)} piezas propias, {len(shared)} compartidas por el equipo"]
-    for p in by_kind.get("profile", []):
-        try:
-            lines += _profile_lines(json.loads(p["content"]))
-        except (json.JSONDecodeError, TypeError, AttributeError):
-            lines.append(f"  perfil: {p['title']}")
-    for c in by_kind.get("convention", []):
-        lines.append(f"  convención «{c['title']}»: " + " ".join(str(c.get("content", "")).split()))
-    # Objectives are already in the profile; the rest is a count: the capability is picked per request and the
-    # detail is one `space list` away.
-    if not by_kind.get("profile") and by_kind.get("objective"):
-        lines.append("  objetivos: " + " · ".join(dict.fromkeys(i["title"] for i in by_kind["objective"])))
+    conventions = {c["key"]: c for c in by_kind.get("convention", [])}
+    for key, label in {"como-te-llamo": "nombre", "intereses": "intereses"}.items():
+        if text := " ".join(str(conventions.get(key, {}).get("content", "")).split()):
+            lines.append(f"  {label}: {text}")
+    for m in by_kind.get("memory", []):  # title + one line each: short enough to go whole
+        lines.append(f"  memoria — {m['title']}: " + " ".join(str(m.get("content", "")).split()))
     counts = [f"{len(by_kind[k])} {label}" for k, label in
-              {"agent": "agentes", "skill": "skills", "memory": "memorias", "data": "datos"}.items() if by_kind.get(k)]
+              {"agent": "agentes", "skill": "skills", "data": "datos"}.items() if by_kind.get(k)]
     if counts:
         lines.append("  además: " + " · ".join(counts))
     # The trader's own skills (created in the monitor, private) are not in the catalog: name them so a request can

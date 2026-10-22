@@ -88,8 +88,7 @@ def test_the_session_starts_with_who_the_trader_is(galecore):
     client.login()
     text = space.context(client)
     assert "demo: 3 piezas propias, 1 compartidas" in text
-    assert "perfil v5" in text and "30 a 45 días" in text
-    assert "Retorno anual de 10 a 15 %" not in text and "además: 1 agentes" in text   # objectives live in the profile
+    assert "perfil" not in text and "30 a 45 días" not in text and "además: 1 agentes" in text   # WS-0058: no trading profile
     assert "compartido: skill (1)" in text
 
 
@@ -106,14 +105,23 @@ def test_the_traders_own_skills_are_named_for_the_chat(galecore):  # WS-0054: cr
     assert "Riesgo y capital" not in text                      # the product's skills come through the catalog
 
 
-def test_the_profile_travels_whole():
-    long_limit = "pérdida máxima por operación 5 % del capital de referencia, " * 6
-    prof = {"version": 7, "reference_capital": {"amount": 10000.0, "currency": "USD"}, "risk_limits": [long_limit.strip()],
-            "exit_rule": "pausar al tocar el drawdown", "provisional": []}
-    lines = space._profile_lines(prof)
-    assert "    capital de referencia: 10.000 USD" in lines
-    assert any(long_limit.strip() in line for line in lines)                 # nothing cut at 160 characters
-    assert any(line.startswith("    sin declarar:") and "objetivos" in line for line in lines)
+def test_the_context_brings_name_interests_and_memory_only(galecore):  # WS-0058
+    _, client = galecore
+    space.sync(client, [
+        {"kind": "convention", "key": "como-te-llamo", "title": "Cómo te llamo", "content": "Llamame «Gonza».",
+         "format": "markdown", "visibility": "private"},
+        {"kind": "convention", "key": "intereses", "title": "Intereses", "content": "opciones sobre SPY",
+         "format": "markdown", "visibility": "private"},
+        {"kind": "convention", "key": "formato", "title": "Formato de respuesta", "content": "conclusión primero",
+         "format": "markdown", "visibility": "private"},
+        {"kind": "memory", "key": "riesgo", "title": "Riesgo por posición",
+         "content": "nunca más del 20 % del riesgo del portfolio", "format": "markdown", "visibility": "private"},
+    ])
+    client.login()
+    text = space.context(client)
+    assert "nombre: Llamame «Gonza»." in text and "intereses: opciones sobre SPY" in text
+    assert "memoria — Riesgo por posición: nunca más del 20 % del riesgo del portfolio" in text
+    assert "Formato de respuesta" not in text and "memorias" not in text
 
 
 def test_a_wrong_login_is_an_error_without_the_password(monkeypatch):
