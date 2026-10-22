@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronRight, Folder, MessageSquare, MoreHorizontal, Plus, Search, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, MessageSquare, MoreHorizontal, Plus, Search, Star, X } from 'lucide-react';
 import type { WorkspaceProject, WorkspaceState } from '../../api/lab';
 import { fetchSpace, saveSpaceItem } from '../../api/space';
 import './LabProjectList.css';
@@ -10,12 +10,12 @@ const DRAG_TYPE = 'application/x-galecore-lab-item';
 const COLORS = { neutral: ['Gris', 'var(--text-secondary)'], green: ['Verde', 'var(--green)'], blue: ['Azul', '#8ebcff'], amber: ['Ámbar', '#edc477'], rose: ['Rosa', '#eda1bb'], violet: ['Violeta', '#b9a4ed'] };
 type Color = keyof typeof COLORS;
 type Group = { id: string; label: string; color: Color; collapsed: boolean };
-type Organization = { groups: Group[]; members: Record<string, string>; colors: Record<string, Color> };
+type Organization = { groups: Group[]; members: Record<string, string>; colors: Record<string, Color>; favorites: string[] };
 type Chat = WorkspaceState['chats'][number];
 /** La organización es del usuario (preferencia en su espacio); la copia local sólo evita el parpadeo al abrir. */
 const PREFERENCE_KEY = 'chat-grupos';
 function readOrganization(): Organization {
-  try { return parseOrganization(JSON.parse(localStorage.getItem(STORAGE) || 'null')); } catch { return { groups: [], members: {}, colors: {} }; }
+  try { return parseOrganization(JSON.parse(localStorage.getItem(STORAGE) || 'null')); } catch { return { groups: [], members: {}, colors: {}, favorites: [] }; }
 }
 function parseOrganization(value: any): Organization {
   try {
@@ -27,8 +27,9 @@ function parseOrganization(value: any): Organization {
     }).map((g: Group) => ({ id: g.id, label: g.label, color: g.color, collapsed: g.collapsed === true }));
     const members = Object.fromEntries(Object.entries(value.members || {}).filter(([key, id]) => /^(p|c):/.test(key) && typeof id === 'string' && ids.has(id)));
     const colors = Object.fromEntries(Object.entries(value.colors || {}).filter(([key, color]) => /^(p|c):/.test(key) && typeof color === 'string' && Object.prototype.hasOwnProperty.call(COLORS, color)));
-    return { groups, members, colors } as Organization;
-  } catch { return { groups: [], members: {}, colors: {} }; }
+    const favorites = Array.isArray(value.favorites) ? Array.from(new Set(value.favorites.filter((key: unknown) => typeof key === 'string' && /^(p|c):/.test(key)))) as string[] : [];
+    return { groups, members, colors, favorites } as Organization;
+  } catch { return { groups: [], members: {}, colors: {}, favorites: [] }; }
 }
 function Palette({ value, onChange }: { value: Color; onChange: (color: Color) => void }) {
   return <div className="lab-group-palette" role="group" aria-label="Paleta de colores">{(Object.keys(COLORS) as Color[]).map(color => <button type="button" key={color} aria-label={COLORS[color][0]} title={COLORS[color][0]} aria-pressed={value === color} style={{ '--group-color': COLORS[color][1] } as React.CSSProperties} onClick={() => onChange(color)}><span/>{value === color && <b aria-hidden="true">✓</b>}</button>)}</div>;
@@ -85,24 +86,38 @@ export function LabProjectList(props: Props) {
   }, [menu, editor]);
   // Lo guardado en el espacio manda; hasta que llega se muestra la copia local. Sólo se escribe lo que el usuario cambió.
   const changed = useRef(false);
+  const hydrated = useRef(false);
+  const pendingUpdates = useRef<Array<(old: Organization) => Organization>>([]);
+  const [syncReady, setSyncReady] = useState(false);
   useEffect(() => {
     let alive = true;
     fetchSpace().then(({ items }) => {
       const item = items.find(i => i.kind === 'preference' && i.key === PREFERENCE_KEY && i.isOwn);
-      if (alive && item && !changed.current) { try { setOrganization(parseOrganization(JSON.parse(item.content))); } catch { /* preferencia ilegible: queda la local */ } }
-    }).catch(() => undefined);
+      if (!alive) return;
+      if (item) {
+        try {
+          const canonical = parseOrganization(JSON.parse(item.content));
+          setOrganization(pendingUpdates.current.reduce((value, update) => update(value), canonical));
+        } catch { setStorageError(true); return; }
+      }
+      pendingUpdates.current = []; hydrated.current = true; setSyncReady(true);
+    }).catch(() => { if (alive) setStorageError(true); });
     return () => { alive = false; };
   }, []);
   useEffect(() => {
     try { localStorage.setItem(STORAGE, JSON.stringify(organization)); } catch { /* sólo caché */ }
-    if (!changed.current) return;
+    if (!changed.current || !syncReady) return;
     const timer = setTimeout(() => {
       saveSpaceItem('preference', PREFERENCE_KEY, { title: 'Grupos del chat', content: JSON.stringify(organization), format: 'json', visibility: 'private' })
         .then(() => setStorageError(false)).catch(() => setStorageError(true));
     }, 600);
     return () => clearTimeout(timer);
-  }, [organization]);
-  const organize = (update: (old: Organization) => Organization) => { changed.current = true; setOrganization(update); };
+  }, [organization, syncReady]);
+  const organize = (update: (old: Organization) => Organization) => {
+    changed.current = true;
+    if (!hydrated.current) pendingUpdates.current.push(update);
+    setOrganization(update);
+  };
   useEffect(() => {
     const close = (event: PointerEvent) => { if (menuPanel.current && !menuPanel.current.contains(event.target as Node) && !lastTrigger.current?.contains(event.target as Node)) { lastTrigger.current = null; setMenu(null); } };
     const dismiss = (event: Event) => { if (event.target instanceof Node && menuPanel.current?.contains(event.target)) return; lastTrigger.current = null; setMenu(null); };
@@ -111,10 +126,11 @@ export function LabProjectList(props: Props) {
     window.addEventListener('resize', dismiss); window.addEventListener('scroll', dismiss, true);
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); window.removeEventListener('resize', dismiss); window.removeEventListener('scroll', dismiss, true); };
   }, []);
-  const projects = state?.projects.filter(p => !p.strategyName?.startsWith('shadow_runtime_test_')) || [];
+  const favoriteOrder = (a: string, b: string) => Number(organization.favorites.includes(b)) - Number(organization.favorites.includes(a));
+  const projects = state?.projects.filter(p => !p.strategyName?.startsWith('shadow_runtime_test_')).sort((a, b) => favoriteOrder('p:' + a.id, 'p:' + b.id)) || [];
   // WS-0044: la más reciente arriba (último turno, o creación si todavía no respondió).
   const recent = (c: { createdAt?: string; turnStartedAt?: number }) => Math.max(c.turnStartedAt || 0, Date.parse(c.createdAt || '') || 0);
-  const chats = (state?.chats.filter(c => !/^test[_ -]/i.test(c.title) && projects.some(p => p.id === c.project)) || []).sort((a, b) => recent(b) - recent(a));
+  const chats = (state?.chats.filter(c => !/^test[_ -]/i.test(c.title) && projects.some(p => p.id === c.project)) || []).sort((a, b) => favoriteOrder('c:' + a.id, 'c:' + b.id) || recent(b) - recent(a));
   const fold = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
   const terms = fold(query || '').split(/\s+/).filter(Boolean);
   const hit = (text: string) => terms.every(t => fold(text).includes(t));
@@ -157,19 +173,20 @@ export function LabProjectList(props: Props) {
     {organization.members[key] && <button type="button" onClick={() => move(key, '')}>Sacar del grupo</button>}
     <span>{key.startsWith('p:') ? 'Color de carpeta' : 'Color del chat'}</span><Palette value={organization.colors[key] || organization.groups.find(g => g.id === organization.members[key])?.color || 'neutral'} onChange={color => organize(old => ({ ...old, colors: { ...old.colors, [key]: color } }))}/>{organization.colors[key] && <button type="button" onClick={() => organize(old => { const colors = { ...old.colors }; delete colors[key]; return { ...old, colors }; })}>Usar color del grupo</button>}
   </>);
+  const favoriteButton = (key: string, label: string) => <button type="button" className="lab-favorite" aria-label={'Favorito: ' + label} title={organization.favorites.includes(key) ? 'Quitar de favoritos' : 'Marcar favorito'} aria-pressed={organization.favorites.includes(key)} onClick={() => { const selected = !organization.favorites.includes(key); organize(old => ({ ...old, favorites: selected ? Array.from(new Set([...old.favorites, key])) : old.favorites.filter(id => id !== key) })); }}><Star size={16}/></button>;
   const renderChat = (c: Chat, standalone = false, color?: Color) => {
     const p = projects.find(project => project.id === c.project)!;
     const label = name(c.id, c.title), key = 'c:' + c.id;
     const chatColor = organization.colors[key] || color;
     return <div key={key} className="lab-organized-chat" style={chatColor ? { '--group-color': COLORS[chatColor][1] } as React.CSSProperties : undefined}>
-      <div className="lab-chat-row"><button className="lab-draggable" {...dragProps(key)} aria-current={chatId === c.id ? 'page' : undefined} onClick={() => onChat(p, c)} onDoubleClick={() => onRename(c.id, c.title)}><MessageSquare size={14}/>{editing === c.id ? renameInput(c.id, c.title) : <span>{label}{standalone && <small>{name(p.id, p.label)}</small>}</span>}{c.state === 'running' && <i aria-label="Respondiendo"/>}</button>{optionsButton(key, label)}</div>{itemOptions(key, label)}
+      <div className="lab-chat-row">{favoriteButton(key, label)}<button className="lab-draggable lab-chat-select" {...dragProps(key)} aria-label={label + (standalone ? ' ' + name(p.id, p.label) : '')} aria-current={chatId === c.id ? 'page' : undefined} onClick={() => onChat(p, c)} onDoubleClick={() => onRename(c.id, c.title)}><MessageSquare size={14}/>{editing === c.id ? renameInput(c.id, c.title) : <span>{label}<small className="lab-chat-provider">{c.provider === 'claude' ? 'Claude Code' : 'Codex'}{standalone && ' · ' + name(p.id, p.label)}</small></span>}{c.state === 'running' && <i aria-label="Respondiendo"/>}</button>{optionsButton(key, label)}</div>{itemOptions(key, label)}
     </div>;
   };
   const renderProject = (p: WorkspaceProject, groupColor?: Color) => {
     const key = 'p:' + p.id, label = name(p.id, p.label);
     const color = organization.colors[key] || groupColor;
     return <div className="lab-project-group" key={key} style={color ? { '--group-color': COLORS[color][1] } as React.CSSProperties : undefined}>
-      <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}><button className="lab-project-select lab-draggable" {...dragProps(key)} onClick={() => onProject(p)} onDoubleClick={() => onRename(p.id, p.label)}><Folder size={18} style={{ color: 'var(--group-color, currentColor)' }}/>{editing === p.id ? renameInput(p.id, p.label) : <span>{label}</span>}</button>{optionsButton(key, label)}<button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={() => onToggle(p.id)}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
+      <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}>{favoriteButton(key, label)}<button className="lab-project-select lab-draggable" {...dragProps(key)} onClick={() => onProject(p)} onDoubleClick={() => onRename(p.id, p.label)}><Folder size={18} style={{ color: 'var(--group-color, currentColor)' }}/>{editing === p.id ? renameInput(p.id, p.label) : <span>{label}</span>}</button>{optionsButton(key, label)}<button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={() => onToggle(p.id)}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
       {itemOptions(key, label)}
       {expanded[p.id] && <div className="lab-project-chats">{chats.filter(c => c.project === p.id && !organization.members['c:' + c.id]).map(c => renderChat(c))}<button className="lab-project-new" onClick={() => onNewChat(p)}><Plus size={14}/>Nuevo chat</button></div>}
     </div>;
@@ -185,13 +202,13 @@ export function LabProjectList(props: Props) {
   const searchBox = query !== null && <label className="lab-search"><Search size={15} aria-hidden="true"/><input autoFocus aria-label={'Buscar ' + what} placeholder={'Buscar ' + what} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setQuery(null); }}/>{query && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQuery('')}><X size={14}/></button>}</label>;
   return <div className="lab-project-list" ref={root}>
     <div className="lab-list-tabs" role="tablist" aria-label="Lista"><button role="tab" aria-selected={tab === 'projects'} onClick={() => { setTab('projects'); setQuery(null); }}>Proyectos</button><button role="tab" aria-selected={tab === 'chats'} onClick={() => { setTab('chats'); setQuery(null); }}>Conversaciones</button></div>
+    {storageError && <p className="lab-group-empty" role="status">No se pudo sincronizar la organización con tu cuenta; queda en este navegador.</p>}
     {tab === 'chats' ? <>
     <div className="lab-project-heading"><span>Conversaciones</span><div>{searchButton}</div></div>
     {searchBox}
     <nav aria-label="Conversaciones" className="lab-project-chats lab-all-chats">{chats.filter(c => hit(c.title)).map(c => renderChat(c, true))}{!chats.some(c => hit(c.title)) && <p className="lab-group-empty">{terms.length ? 'Ninguna conversación con «' + query + '».' : 'Todavía no hay conversaciones.'}</p>}</nav></> : <>
     <div className="lab-project-heading"><span>Proyectos</span><div>{searchButton}<button className="lab-icon" aria-label="Crear grupo" title="Crear grupo" onClick={e => { lastTrigger.current = e.currentTarget; setEditor({ label: '', color: 'neutral' }); setMenu(null); }}><Folder size={17}/><Plus size={11}/></button><button className="lab-icon" aria-label="Crear proyecto" onClick={onCreateProject}><Plus size={18}/></button></div></div>
     {editor && <form className="lab-group-editor" aria-label={editor.id ? 'Editar grupo' : 'Nuevo grupo'} onSubmit={saveGroup}><header><strong>{editor.id ? 'Editar grupo' : 'Nuevo grupo'}</strong><button type="button" className="lab-icon" aria-label="Cancelar grupo" onClick={() => { setEditor(null); lastTrigger.current?.focus(); }}><X size={16}/></button></header><label>Nombre del grupo<input autoFocus required maxLength={100} value={editor.label} onChange={e => setEditor({ ...editor, label: e.target.value })}/></label><Palette value={editor.color} onChange={color => setEditor({ ...editor, color })}/><button className="lab-group-save" disabled={!editor.label.trim()}>{editor.id ? 'Guardar grupo' : 'Crear grupo'}</button></form>}
-    {storageError && <p className="lab-group-empty" role="status">No se pudo guardar la organización en tu cuenta; queda en este navegador.</p>}
     {searchBox}
     {terms.length ? <nav aria-label="Resultados de la búsqueda">
       {projects.filter(p => hit(p.label)).map(p => renderProject(p))}

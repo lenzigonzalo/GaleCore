@@ -4,7 +4,6 @@ import { Connections } from '../components/settings/Connections';
 import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
 import { LocalMcp } from '../components/settings/LocalMcp';
-import { localMcpAvailable } from '../api/localMcp';
 import { LanguageSetting } from '../components/settings/LanguageSetting';
 import { ProfileSettings, NAME_KEY } from '../components/settings/ProfileSettings';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
@@ -34,7 +33,7 @@ export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'contrasena' | 'b
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
   { group: 'General', items: [{ id: 'usuario', label: 'Perfil', Icon: User }, { id: 'contrasena', label: 'Contraseña', Icon: Lock }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
-  { group: 'Conexiones', items: [{ id: 'conexiones', label: 'Conexiones', Icon: Plug }] },
+  { group: 'Proveedores de IA', items: [{ id: 'conexiones', label: 'Proveedores de IA', Icon: Plug }] },
   { group: 'Memoria', items: [{ id: 'memoria', label: 'Memoria', Icon: Brain }, { id: 'skills', label: 'Skills', Icon: BookOpen }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
   { group: 'Plataforma', items: [{ id: 'servicios', label: 'Servicios', Icon: Power }] },
@@ -374,7 +373,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
   if (section === 'mcp-local') {
     body = <LocalMcp />;
   } else if (section === 'conexiones') {
-    body = <div className="settings-connections"><Connections /><section style={card}><h2>GaleCore</h2><p>{loading ? 'Comprobando conexión…' : error ? 'No disponible' : 'Conectado'}</p>{error && <><p role="alert">{error}</p><button style={btn()} onClick={() => load()}>Reintentar</button></>}</section>{localMcpAvailable() && <section><h2>MCP</h2><LocalMcp /></section>}<section style={card}><h2>Cuenta de bróker</h2><p>Próximamente</p></section></div>;
+    body = <Connections skills={loading ? <p role="status">Cargando skills…</p> : error ? <p role="alert">{error}</p> : <SkillsView items={items.filter(i => i.kind === 'skill')} onChanged={reload} />} />;
   } else if (section === 'usuario') {
     body = (
       <ProfileSettings user={user} items={items} onChanged={reload}

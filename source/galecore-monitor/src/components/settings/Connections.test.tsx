@@ -11,12 +11,14 @@ beforeEach(() => {
 test('dos proveedores, estado y terminal con comando correcto; no textos del Lab ni Git', async () => {
   render(<Connections/>);
   await screen.findByText('Cuenta conectada');
+  fireEvent.click(screen.getByRole('tab', { name: 'Codex' }));
   expect(screen.getByText('Sin autenticar')).toBeInTheDocument();
   expect(screen.queryByText(/Lab|Git|Antes de empezar/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Reautenticar Codex' }));
   expect(screen.getByText('codex login')).toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Reautenticar Claude Code' })).toBeDisabled();
+  expect(screen.getByRole('tab', { name: 'Claude Code' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Claude Code' }));
   await waitFor(() => expect(screen.getByRole('button', { name: 'Reautenticar Claude Code' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Reautenticar Claude Code' }));
   expect(screen.getByText('claude auth login')).toBeInTheDocument();
@@ -32,5 +34,18 @@ test('no instalado y fallo de servicio no se muestran como cuenta conectada; rei
   fireEvent.click(screen.getByRole('button', { name: 'Actualizar conexiones' }));
   await screen.findByRole('alert');
   expect(screen.queryByText('Cuenta conectada')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Codex' }));
   expect(screen.getByRole('button', { name: 'Reautenticar Codex' })).toBeDisabled();
+});
+
+test('cada proveedor conserva las cuatro opciones y skills comunes', async () => {
+  render(<Connections skills={<p>Skill compartida de prueba</p>}/>);
+  await screen.findByText('Cuenta conectada');
+  fireEvent.click(screen.getByRole('button', { name: 'Permisos' }));
+  expect(screen.getByText('Permisos de Claude Code')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Codex' }));
+  expect(screen.getByText('Permisos de Codex')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+  expect(screen.getByText('Skill compartida de prueba')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Servidores MCP' })).toBeInTheDocument();
 });

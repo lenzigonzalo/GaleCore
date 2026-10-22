@@ -76,3 +76,9 @@ test('account connectors and plugins are shown in the active workspace rather th
   expect(screen.queryByRole('heading', { name: 'Google Drive' })).toBeNull();
   expect(screen.getByText(/Requiere autenticaci/)).toBeInTheDocument();
 });
+
+test('embedded inventory follows selected provider without a second provider selector', async () => {
+  render(<LocalMcp selectedProvider="codex"/>);
+  expect(await screen.findByRole('switch', { name: 'Habilitar sample' })).toHaveAttribute('aria-checked', 'true');
+  expect(screen.queryByRole('group', { name: 'CLI de las conexiones' })).not.toBeInTheDocument();
+});

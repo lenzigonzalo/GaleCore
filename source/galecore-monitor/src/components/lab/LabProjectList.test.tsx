@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { LabProjectList } from './LabProjectList';
 const spaceItems: any[] = [];
 const saved: any[] = [];
-jest.mock('../../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: spaceItems, shared: [] }), saveSpaceItem: (...args: any[]) => { saved.push(args); return Promise.resolve(); } }));
+jest.mock('../../api/space', () => ({ fetchSpace: jest.fn(() => Promise.resolve({ items: spaceItems, shared: [] })), saveSpaceItem: (...args: any[]) => { saved.push(args); return Promise.resolve(); } }));
+import { fetchSpace } from '../../api/space';
 import type { WorkspaceState } from '../../api/lab';
 
 const storage = 'galecore:lab:groups:v1';
@@ -23,7 +24,7 @@ function move(label: string, group: string) {
   fireEvent.click(screen.getByRole('button', { name: 'Opciones de ' + label }));
   fireEvent.change(screen.getByRole('combobox', { name: 'Grupo de ' + label }), { target: { value: group } });
 }
-beforeEach(() => { localStorage.clear(); jest.clearAllMocks(); });
+beforeEach(() => { localStorage.clear(); jest.clearAllMocks(); saved.length = 0; (fetchSpace as jest.Mock).mockImplementation(() => Promise.resolve({ items: spaceItems, shared: [] })); });
 test('crea varios grupos, mueve proyecto y chat, persiste pliegue y conserva contexto', () => {
   const { unmount } = render(<LabProjectList {...props}/>);
   createGroup('Estrategias'); createGroup('Lecturas');
@@ -183,4 +184,50 @@ test('buscador por pestaña: Proyectos busca proyectos y Conversaciones busca co
   expect(within(screen.getByRole('navigation', { name: 'Conversaciones' })).getByRole('button', { name: /^Investigación/ })).toBeInTheDocument();
   fireEvent.keyDown(screen.getByRole('textbox', { name: 'Buscar conversaciones' }), { key: 'Escape' });
   expect(screen.queryByRole('textbox', { name: 'Buscar conversaciones' })).not.toBeInTheDocument();
+});
+
+test('favoritos se guardan en el espacio, sobreviven recarga y conservan grupos y proveedor', async () => {
+  const { unmount } = render(<LabProjectList {...props}/>);
+  await act(async () => {});
+  fireEvent.click(screen.getByRole('button', { name: 'Favorito: Investigación' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Favorito: SPY' }));
+  expect(screen.getByRole('button', { name: 'Favorito: Investigación' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByText('Codex')).toBeInTheDocument();
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 650)); });
+  expect(saved[saved.length - 1][0]).toBe('preference');
+  expect(JSON.parse(saved[saved.length - 1][2].content).favorites).toEqual(['c:research', 'p:spy']);
+  unmount(); render(<LabProjectList {...props}/>);
+  expect(screen.getByRole('button', { name: 'Favorito: Investigación' })).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Favorito: Investigación' }));
+  expect(screen.getByRole('button', { name: 'Favorito: Investigación' })).toHaveAttribute('aria-pressed', 'false');
+  fireEvent.click(screen.getByRole('tab', { name: 'Conversaciones' }));
+  expect(screen.getByText('Codex · SPY')).toBeInTheDocument();
+});
+
+test('favorite clicked before account loads merges with canonical groups before saving', async () => {
+  let resolveSpace: (value: any) => void = () => {};
+  (fetchSpace as jest.Mock).mockReturnValue(new Promise(resolve => { resolveSpace = resolve; }));
+  render(<LabProjectList {...props}/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Favorito: SPY' }));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 650)); });
+  expect(saved).toHaveLength(0);
+  const canonical = { groups: [{ id: 'canonical', label: 'Cuenta', color: 'blue', collapsed: false }], members: { 'p:spy': 'canonical' }, colors: { 'p:spy': 'green' }, favorites: ['p:personal', 'p:spy'] };
+  await act(async () => { resolveSpace({ items: [{ kind: 'preference', key: 'chat-grupos', isOwn: true, content: JSON.stringify(canonical) }], shared: [] }); });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 650)); });
+  const stored = JSON.parse(saved[saved.length - 1][2].content);
+  expect(stored.groups).toEqual(canonical.groups);
+  expect(stored.members).toEqual(canonical.members);
+  expect(stored.colors).toEqual(canonical.colors);
+  expect(stored.favorites).toEqual(['p:personal', 'p:spy']);
+});
+
+test('failed account read keeps favorites local and never overwrites remote preference', async () => {
+  (fetchSpace as jest.Mock).mockRejectedValue(new Error('offline'));
+  render(<LabProjectList {...props}/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Favorito: SPY' }));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 650)); });
+  expect(saved).toHaveLength(0);
+  expect(JSON.parse(localStorage.getItem(storage)!).favorites).toContain('p:spy');
+  expect(screen.getAllByRole('status')).toHaveLength(1);
+  expect(screen.getByRole('status')).toHaveTextContent(/sincronizar/);
 });

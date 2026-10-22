@@ -111,3 +111,20 @@
 .profile-version { font-size: 14px; color: var(--text-muted); }
 .profile-confirm { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; color: var(--text-secondary); }
 .settings-language { flex-direction: row; }
+
+.settings-agent-providers { display:flex; gap:6px; flex-wrap:wrap; }
+.settings-agent-providers button { display:flex; align-items:center; gap:9px; padding:9px 15px; border:1px solid var(--border-dark); border-radius:8px; background:transparent; color:var(--text-secondary); font:500 15px var(--font-sans); cursor:pointer; }
+.settings-agent-providers button[aria-selected=true] { background:var(--bg-elevated); border-color:var(--border-light); color:var(--text-primary); }
+.settings-agent-providers img { width:20px; height:20px; }
+.settings-agent-tabs { display:flex; gap:20px; overflow-x:auto; border-bottom:1px solid var(--border-dark); }
+.settings-agent-tabs button { flex-shrink:0; padding:12px 0; border:0; border-bottom:2px solid transparent; background:transparent; color:var(--text-muted); font:14px var(--font-sans); cursor:pointer; }
+.settings-agent-tabs button[aria-current=page] { border-bottom-color:var(--accent); color:var(--text-primary); }
+.settings-agent-account { display:grid; gap:20px; padding-top:8px; }
+.settings-agent-account > header { display:flex; align-items:center; gap:12px; }
+.settings-agent-account > header > div { flex:1; }
+.settings-agent-account h2 { font-size:19px; margin:0; font-weight:600; }
+.settings-agent-account h3 { font-size:15px; margin:0 0 7px; font-weight:500; }
+.settings-agent-account p,.settings-agent-note { font-size:14px; line-height:1.6; color:var(--text-muted); margin:4px 0; }
+.settings-agent-card { padding:20px; border:1px solid var(--border); border-radius:10px; background:var(--bg-secondary); }
+.settings-agent-login { display:flex; align-items:center; justify-content:space-between; gap:16px; border-top:1px solid var(--border-dark); padding-top:18px; margin-top:18px; flex-wrap:wrap; }
+.settings-agent-note { margin-bottom:18px; }

@@ -23,13 +23,13 @@ const favoriteId = (server: LocalMcpServer) => server.provider + ':' + server.na
 const initialFavorite = (server: LocalMcpServer) => server.origin === 'account'
   && /alpha|google drive|google calendar|gmail|ibkr|iol/i.test(server.name);
 
-export function LocalMcp() {
+export function LocalMcp({ selectedProvider }: { selectedProvider?: 'claude' | 'codex' }) {
   const [inventory, setInventory] = useState<LocalMcpInventory | null>(null);
-  const [provider, setProvider] = useState<'claude' | 'codex'>('claude');
+  const [provider, setProvider] = useState<'claude' | 'codex'>(selectedProvider || 'claude');
   const [context, setContext] = useState('');
   const [query, setQuery] = useState('');
   const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
-  const [view, setView] = useState<'galecore' | 'all'>('galecore');
+  const [view, setView] = useState<'galecore' | 'all'>(selectedProvider === 'codex' ? 'all' : 'galecore');
   const [favorites, setFavorites] = useState<string[] | null>(savedFavorites);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -82,10 +82,10 @@ export function LocalMcp() {
   return <div className="local-mcp">
     <p className="local-mcp-intro">Tus conexiones de Claude y Codex: cuenta, plugins y configuración local.</p>
     <div className="local-mcp-toolbar">
-      <div className="local-mcp-tabs" role="group" aria-label="CLI de las conexiones">
+      {!selectedProvider && <div className="local-mcp-tabs" role="group" aria-label="CLI de las conexiones">
         {(['claude', 'codex'] as const).map(id => <button key={id} aria-pressed={provider === id} disabled={busy}
           onClick={() => { setProvider(id); setContext(''); setQuery(''); setMessage(''); setView(id === 'claude' ? 'galecore' : 'all'); }}>{id === 'claude' ? 'Claude Code' : 'Codex'}</button>)}
-      </div>
+      </div>}
       <button className="settings-action" disabled={busy || (provider === 'claude' && inventory?.refreshing)} onClick={refresh}><RefreshCw size={16}/>Actualizar</button>
     </div>
     {provider === 'claude' && contexts.length > 0 && <label className="local-mcp-context">Proyecto donde se aplica el interruptor

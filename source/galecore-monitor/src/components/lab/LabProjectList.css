@@ -14,7 +14,7 @@
 .lab-group-empty { margin:6px 8px 12px; color:var(--text-secondary); font-size:var(--font-label); line-height:1.6; }
 .lab-project-list .lab-more { width:28px; height:30px; }
 .lab-project-list .lab-chat-row > .lab-more { flex:0 0 28px; width:28px; padding:0; justify-content:center; }
-.lab-organized-chat .lab-chat-row > button:first-child { min-width:0; }
+.lab-organized-chat .lab-chat-row > .lab-chat-select { min-width:0; }
 .lab-organized-chat small { display:block; color:var(--text-muted); font-size:var(--font-label); overflow:hidden; text-overflow:ellipsis; }
 .lab-group-loose-chats { border:0; padding:0; margin:0; }
 .lab-group-loose-chats .lab-chat-row svg { color:var(--group-color); }
@@ -38,8 +38,8 @@
 .lab-draggable[draggable=true]:active { cursor:grabbing; }
 .lab-drop-target { outline:1px dashed var(--group-color,var(--focus-ring)); outline-offset:-1px; border-radius:7px; background:var(--bg-hover); }
 .lab-ungrouped { min-height:44px; }
-.lab-project-list .lab-project-select,.lab-project-list .lab-chat-row > button:first-child,.lab-project-list .lab-project-new,.lab-chat-sidebar .lab-new-chat { font:var(--font-label) var(--font-sans); }
-.lab-organized-chat .lab-chat-row > button:first-child > svg { color:var(--group-color,var(--text-secondary)); }
+.lab-project-list .lab-project-select,.lab-project-list .lab-chat-row > .lab-chat-select,.lab-project-list .lab-project-new,.lab-chat-sidebar .lab-new-chat { font:var(--font-label) var(--font-sans); }
+.lab-organized-chat .lab-chat-row > .lab-chat-select > svg { color:var(--group-color,var(--text-secondary)); }
 @media (hover:hover) and (pointer:fine) {
   .lab-project-row > .lab-icon,.lab-chat-row > .lab-more,.lab-sidebar-group-heading > .lab-more,.lab-group-toggle > svg { opacity:0; pointer-events:none; transition:opacity 100ms; }
   .lab-project-row:hover > .lab-icon,.lab-project-row:focus-within > .lab-icon,
@@ -64,3 +64,15 @@
 .lab-search input:focus-visible { outline:none; box-shadow:none; }
 .lab-search button { display:grid; place-items:center; padding:2px; border:0; border-radius:4px; background:transparent; color:var(--text-muted); cursor:pointer; }
 .lab-search button:hover { color:var(--text-primary); }
+
+/* Nombres legibles y favorito visible a la izquierda de cada elemento. */
+.lab-project-list .lab-project-select { font:500 16px/1.45 var(--font-sans); padding:10px 6px; }
+.lab-project-list .lab-chat-row > .lab-chat-select { flex:1; min-width:0; font:15px/1.45 var(--font-sans); padding:9px 6px; }
+.lab-project-list .lab-chat-select > span { flex:1; }
+.lab-project-list .lab-chat-provider { font:12px/1.5 var(--font-sans); margin-top:2px; color:var(--text-muted); }
+.lab-project-list .lab-favorite { flex:0 0 26px; display:grid; place-items:center; width:26px; padding:4px; border:0; background:transparent; color:var(--text-muted); cursor:pointer; }
+.lab-project-list .lab-favorite[aria-pressed=true] { color:var(--yellow-gc); }
+.lab-project-list .lab-favorite[aria-pressed=true] svg { fill:currentColor; }
+.lab-project-list .lab-favorite:hover { color:var(--text-primary); }
+.lab-project-list .lab-favorite:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
+.lab-project-list .lab-list-tabs button,.lab-project-list .lab-group-toggle { font-size:14px; }
