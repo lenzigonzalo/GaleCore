@@ -13,6 +13,9 @@ interface Props {
   maxDte?: number;
   /** Etiqueta de la fila GLOBAL (display_config.gex_tab.options_chain.global_row.label). */
   globalLabel?: string;
+  /** Vencimientos incluidos en la comparación (sus muros se dibujan junto a los del elegido). */
+  compared?: string[];
+  onToggleCompare?: (expiration: string) => void;
 }
 
 /**
@@ -25,7 +28,7 @@ interface Props {
  */
 export function OptionsChainList({
   expiries, selected, onSelect, label = 'Vencimientos',
-  globalNetGex, maxDte, globalLabel = 'Todos',
+  globalNetGex, maxDte, globalLabel = 'Todos', compared = [], onToggleCompare,
 }: Props) {
   const isGlobal = selected === GLOBAL_SCOPE;
   return (
@@ -93,9 +96,16 @@ export function OptionsChainList({
               // Los mensuales (Regular) concentran el OI y son los que anclan el gamma: van en
               // bold y con check. Los diarios/semanales (Weekly) quedan marcados con W.
               const isRegular = e.expirationType === 'Regular';
+              const isCompared = compared.includes(e.expiration);
               return (
+                <div key={e.expiration} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                {onToggleCompare && !isGlobal && (
+                  <input type="checkbox" aria-label={`Comparar ${fmtExpiry(e.expiration)}`}
+                    title={isActive ? 'Es el vencimiento elegido' : 'Mostrar también los muros de este vencimiento'}
+                    checked={isActive || isCompared} disabled={isActive} onChange={() => onToggleCompare(e.expiration)}
+                    style={{ cursor: isActive ? 'default' : 'pointer', flexShrink: 0 }} />
+                )}
                 <button
-                  key={e.expiration}
                   onClick={() => onSelect(e.expiration)}
                   style={{
                     display: 'flex',
@@ -144,6 +154,7 @@ export function OptionsChainList({
                     {e.dte === 0 ? '0DTE' : `${e.dte}d`} · {fmtGex(e.netGex)}
                   </span>
                 </button>
+                </div>
               );
             })}
           </div>

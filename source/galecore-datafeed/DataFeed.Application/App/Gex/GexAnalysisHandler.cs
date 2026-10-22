@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.ImpliedVolatility;
 using DataFeed.Application.App.IVRank;
+using DataFeed.Application.App.PutSkew;
 using DataFeed.Application.App.Shared.Dtos;
 using DataFeed.Application.Data.Tastytrade.MarketDataCandle;
 using DataFeed.Application.Data.Tastytrade.MarketDataTrade;
@@ -268,22 +269,26 @@ namespace DataFeed.Application.App.Gex
                     },
                     ByExpiry = gex.ByExpiry
                         .OrderBy(e => e.DTE)
-                        .Select(e => new GexExpiryScope
+                        .Select(e => (e, skew: PutSkewCalculator.Compute(new GammaExposureResponse
+                            { Symbol = symbol, Spot = gex.Spot, DTE = e.DTE, Expiration = e.Expiration, Strikes = e.Strikes })))
+                        .Select(x => new GexExpiryScope
                         {
-                            Expiration = e.Expiration,
-                            Dte = e.DTE,
-                            ExpirationType = e.ExpirationType,
-                            CallGex = e.CallGEX,
-                            PutGex = e.PutGEX,
-                            NetGex = e.NetGEX,
-                            GammaZeroLevel = e.GammaZeroLevel,
-                            CallWall = e.CallWall,
-                            PutWall = e.PutWall,
-                            CallBand = e.CallBand,
-                            PutBand = e.PutBand,
-                            AtmIv = e.AtmIv,
-                            ExpectedMove = e.ExpectedMove,
-                            Strikes = e.Strikes.Select(MapStrike).ToList(),
+                            Expiration = x.e.Expiration,
+                            Dte = x.e.DTE,
+                            ExpirationType = x.e.ExpirationType,
+                            CallGex = x.e.CallGEX,
+                            PutGex = x.e.PutGEX,
+                            NetGex = x.e.NetGEX,
+                            GammaZeroLevel = x.e.GammaZeroLevel,
+                            CallWall = x.e.CallWall,
+                            PutWall = x.e.PutWall,
+                            CallBand = x.e.CallBand,
+                            PutBand = x.e.PutBand,
+                            AtmIv = x.e.AtmIv,
+                            ExpectedMove = x.e.ExpectedMove,
+                            PutSkew25d = x.skew.PutSkew25d,
+                            Put25DeltaStrike = x.skew.PutSkew25d != null ? x.skew.Put25DeltaStrike : null,
+                            Strikes = x.e.Strikes.Select(MapStrike).ToList(),
                         })
                         .ToList(),
                 },

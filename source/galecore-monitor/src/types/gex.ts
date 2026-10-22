@@ -96,6 +96,9 @@ export interface GexExpiryApi {
   putBand: GammaBandApi | null;
   atmIv: number | null;
   expectedMove: number | null;
+  /** Skew 25Δ put (IV del put de delta ≈ −0,25 / IV ATM), servido por la API. Opcional: barridos viejos no lo traen. */
+  putSkew25d?: number | null;
+  put25DeltaStrike?: number | null;
   strikes: GexStrikeApi[];
 }
 
@@ -156,6 +159,19 @@ export interface GexChartData {
    */
   expectedMove: number | null;
   strikes: GexStrike[];
+  /**
+   * Otros vencimientos elegidos para comparar: sólo sus niveles (muros y ZGL), que ya vienen
+   * calculados por la API para cada uno. Las barras son siempre las del vencimiento principal.
+   */
+  others?: GexOtherLevels[];
+}
+
+/** Los niveles de un vencimiento que se dibujan como líneas junto a los del principal. */
+export interface GexOtherLevels {
+  expiration: string;
+  callWall: number;
+  putWall: number;
+  zeroGammaLevel: number;
 }
 
 /**

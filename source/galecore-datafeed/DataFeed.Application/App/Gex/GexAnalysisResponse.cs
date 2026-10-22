@@ -110,6 +110,13 @@ namespace DataFeed.Application.App.Gex
         public double? AtmIv { get; set; }
         /// <summary>spot * atmIv * sqrt(dte/365) — ver definitions.expected_move.</summary>
         public double? ExpectedMove { get; set; }
+        /// <summary>
+        /// Skew 25Δ put del vencimiento: IV del put de delta ≈ −0,25 sobre la IV ATM (&gt; 1 = cola más cara que el centro).
+        /// null si el vencimiento no tiene IV válida para resolverlo. Mismo cálculo que /App.Analytics/PutSkew.
+        /// </summary>
+        public double? PutSkew25d { get; set; }
+        /// <summary>Strike del put de delta ≈ −0,25 con el que se calculó <see cref="PutSkew25d"/>.</summary>
+        public double? Put25DeltaStrike { get; set; }
         public List<GexStrike> Strikes { get; set; } = new();
     }
 

@@ -7,6 +7,7 @@ import './MarketIndicators.css';
 import { DetailsPanel } from '../components/gex/DetailsPanel';
 import { OptionsChainList } from '../components/gex/OptionsChainList';
 import { CHAIN_COL_W } from '../components/gex/graphLayout';
+import { VolSmile } from '../components/gex/VolSmile';
 import { ExpiryEngine } from '../components/gex/ExpiryEngine';
 import { fetchMarketSummary, MarketSummary } from '../api/marketdata';
 import { GexChart } from '../components/chart/GexChart';
@@ -147,6 +148,9 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
    * volver de otro ticker, y el botón no tendría dónde leerlo.
    */
   const [alineado, setAlineado] = useState(false);
+  /** Vencimientos que se comparan con el elegido (sus muros van como líneas). Es del símbolo: se vacía al cambiar. */
+  const [compare, setCompare] = useState<string[]>([]);
+  useEffect(() => { setCompare([]); }, [selectedSymbol]);
 
   useEffect(() => { if (!useGexStore.getState().rules) loadRules(); }, [loadRules]);
 
@@ -215,14 +219,16 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   // Memoizado: sin esto el objeto se rehace en CADA render de la pantalla —o sea con cada tick de
   // precio— y el gráfico lo ve como datos nuevos. El encuadre del eje cuelga de ese cambio, así que
   // se recalculaba varias veces por segundo y le peleaba la escala al operador mientras la movía.
-  const chartData = useMemo(
-    () => (!active || !data
-      ? null
-      : isGlobalScope
-        ? globalToChartData(active, data.spotPrice ?? 0, data.gex.global)
-        : toChartData(active, data.spotPrice ?? 0, activeExpiry)),
-    [active, data, isGlobalScope, activeExpiry],
-  );
+  const chartData = useMemo(() => {
+    if (!active || !data) return null;
+    if (isGlobalScope) return globalToChartData(active, data.spotPrice ?? 0, data.gex.global);
+    const main = toChartData(active, data.spotPrice ?? 0, activeExpiry);
+    if (!main) return null;
+    const others = expiries
+      .filter((e) => compare.includes(e.expiration) && e.expiration !== activeExpiration)
+      .map((e) => ({ expiration: e.expiration, callWall: e.callWall ?? 0, putWall: e.putWall ?? 0, zeroGammaLevel: e.gammaZeroLevel ?? 0 }));
+    return others.length ? { ...main, others } : main;
+  }, [active, data, isGlobalScope, activeExpiry, expiries, compare, activeExpiration]);
 
   // IV del vencimiento seleccionado, anualizada en % — alimenta las bandas ±1σ/±2σ del gráfico.
   // En global queda undefined y las bandas no se dibujan: el agregado no tiene IV ATM (ni un solo
@@ -362,7 +368,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
               </div>
             </div>
 
-            <div className="market-gamma-chart" style={{ display: 'flex', height: compact ? 350 : DETAIL_HEIGHT }}>
+            <div className="market-gamma-chart" style={{ display: 'flex', height: compact ? 350 : `clamp(320px, calc(100vh - 540px), ${DETAIL_HEIGHT}px)` }}>
               {/* Izquierda: cadena + lectura numérica del vencimiento elegido */}
               <div style={{
                 width: CHAIN_COL_W,
@@ -374,6 +380,8 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                   expiries={expiries}
                   selected={activeExpiration}
                   onSelect={(scope) => selectExpiry(active, scope)}
+                  compared={compare}
+                  onToggleCompare={(exp) => setCompare((c) => (c.includes(exp) ? c.filter((x) => x !== exp) : [...c, exp]))}
                   label={display?.options_chain?.label}
                   globalNetGex={data?.gex.global.netGex}
                   maxDte={data?.gex.config.maxDte}
@@ -428,6 +436,34 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
             </div>
           </div>
           </>}
+          {indicator === 'iv' && (() => {
+            const smileMain = activeExpiry ?? expiries[0] ?? null;
+            const smileOthers = expiries.filter((e) => compare.includes(e.expiration) && e.expiration !== smileMain?.expiration);
+            return (
+              <section className="market-iv-graph" aria-label="Smile y skew">
+                <div className="market-iv-chain" style={{ width: CHAIN_COL_W }}>
+                  <OptionsChainList
+                    expiries={expiries}
+                    selected={smileMain?.expiration ?? null}
+                    onSelect={(scope) => selectExpiry(active, scope)}
+                    label={display?.options_chain?.label}
+                    maxDte={data?.gex.config.maxDte}
+                    compared={compare}
+                    onToggleCompare={(exp) => setCompare((c) => (c.includes(exp) ? c.filter((x) => x !== exp) : [...c, exp]))}
+                  />
+                </div>
+                <div className="market-iv-main">
+                  <h2>Smile y skew · {active}</h2>
+                  <div className="market-iv-skew">
+                    <span>Skew 25Δ put / ATM<b className="tabular-nums">{smileMain?.putSkew25d != null ? smileMain.putSkew25d.toFixed(2) : '—'}</b></span>
+                    {smileMain?.put25DeltaStrike != null && <span>Put 25Δ<b className="tabular-nums">{smileMain.put25DeltaStrike}</b></span>}
+                    <span>IV ATM<b className="tabular-nums">{smileMain?.atmIv != null ? `${(smileMain.atmIv * 100).toFixed(1)}%` : '—'}</b></span>
+                  </div>
+                  <VolSmile main={smileMain} others={smileOthers} spot={ticker?.price || data?.spotPrice || 0} />
+                </div>
+              </section>
+            );
+          })()}
           {/* ── Cuadro Details — GEX global + contexto. Sin columna Microstructure. ── */}
           <div style={{
             margin: '0 12px 12px',
