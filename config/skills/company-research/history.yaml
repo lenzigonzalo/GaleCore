@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: company_research
 versions:
+  - version: "1.1.1"
+    date: 2026-10-21
+    changes: >
+      Revisión del owner sobre 1.1.0: la forma queda a criterio del pedido (sin «tabla corta» ni «el resto a la
+      investigación guardada», que forzaban tabla y archivo en una comparación sencilla); lo que no cambia la
+      conclusión no entra. El guardado sigue el paso 5.
+    feedback: []
   - version: "1.1.0"
     date: 2026-10-21
     changes: >

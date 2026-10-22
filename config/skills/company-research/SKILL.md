@@ -1,6 +1,6 @@
 ---
 name: company-research
-version: 1.1.0
+version: 1.1.1
 display_name: Investigar o seleccionar empresas
 description: >
   «Analizame MSFT», «investigá NVDA», «¿qué tal está AAPL a este precio?», «de MSFT, AAPL y NVDA, ¿cuál tiene
@@ -46,9 +46,9 @@ fundamentos?»). El pedido fija el objetivo, el plazo y el criterio; la respuest
    --reason continuation --note "<qué cambia>"`.
 
 ## Qué entrega
-Lo que pide el pedido. En Seleccionar, primero las pocas que pasan y por qué; las cifras decisivas lado a lado, en
-una tabla corta y en el mismo orden en toda la respuesta; el resto y el detalle técnico, en la investigación guardada,
-enlazada. Ejemplo (Seleccionar):
+Lo que pide el pedido, como se entienda mejor. En Seleccionar, primero las que pasan y por qué, con las cifras que
+deciden la comparación, en el mismo orden en toda la respuesta; lo que no cambia la conclusión no entra. Una forma
+posible (Seleccionar):
 
 De las tres, sólo MSFT tiene tendencia y fundamentos que la sostienen; NVDA tiene tendencia pero el flujo libre no
 acompaña la ganancia (pregunta abierta).
@@ -68,7 +68,7 @@ Después: qué tiene que pasar en 6-12 meses, qué lo rompe y qué falta.
 
 ## Cómo responder
 Datos del día, siempre de nuevo (`analyze pack` o `analyze company` para varias). Competidores, ETF de comparación y
-10-K cuando el pedido los necesita. Sin lista dada, decí qué universo revisaste y con qué criterio; primero las pocas
-que pasan, cada conclusión con la cifra que la sostiene; el resto, en la investigación enlazada. Valorar por modelo de negocio; el flujo libre del pack es del accionista; la media
+10-K cuando el pedido los necesita. Sin lista dada, decí qué universo revisaste y con qué criterio; primero las que
+pasan, cada conclusión con la cifra que la sostiene; lo que no cambia la conclusión, afuera. Valorar por modelo de negocio; el flujo libre del pack es del accionista; la media
 200 no es un corte de pérdida; escenarios con supuestos y cuenta a la vista. Lectura, no consejo de compra o venta.
 Si es una investigación, guardala o revisá la anterior.
