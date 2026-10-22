@@ -313,6 +313,9 @@ def apply_requests(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
         if create is not None and item["key"] not in known:
             done.append(_create_agent(kb, scheduler, item, content, create, req, client.user, now))
             continue
+        if create is not None:
+            done.append({"agent": item["key"], "status": wanted, "result": "refused", "error": "el agente ya existe"})
+            continue
         task_id = known.get(item["key"])
         if task_id is None or task_id != content.get("id"):
             done.append({"agent": item["key"], "status": wanted, "result": "refused",

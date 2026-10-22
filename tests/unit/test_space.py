@@ -472,3 +472,6 @@ def test_a_new_agent_is_created_from_a_monitor_request(env, galecore):  # noqa: 
     bad = {**create, "id": "otro", "kind": "strategy_followup"}
     client.put("agent", "otro", title="x", fmt="json", content=json.dumps({"request": {"create": bad, "at": _now()}}))
     assert space.publish_agents(client, kb_, sch)["requests"][0]["result"] == "refused"
+    client.put("agent", "gamma-qqq", title="x", fmt="json", content=json.dumps({"request": {"create": create, "at": _now()}}))
+    again = [r for r in space.publish_agents(client, kb_, sch)["requests"] if r["agent"] == "gamma-qqq"]
+    assert again and again[0]["result"] == "refused" and "ya existe" in again[0]["error"]
