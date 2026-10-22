@@ -4,7 +4,7 @@ import './MacroCalendar.css';
 
 const names: Record<string, string> = { 'Consumer Price Index': 'Inflación · CPI', 'Producer Price Index': 'Precios al productor · PPI', 'Gross Domestic Product': 'Actividad · PIB', 'Employment Situation': 'Empleo' };
 export const eventName = (name: string) => names[name] || name;
-const shortName = (name: string) => name.includes('Consumer') ? 'CPI' : name.includes('Producer') ? 'PPI' : name.includes('Domestic') ? 'PIB' : name.includes('Employment') ? 'Empleo' : name.includes('FOMC') ? 'FOMC' : name;
+const shortName = (name: string) => name.includes('Consumer') ? 'CPI' : name.includes('Producer') ? 'PPI' : name.includes('Domestic') ? 'PIB' : name.includes('Employment') ? 'Empleo' : name.includes('FOMC') ? 'FOMC' : name.endsWith(' · balance') ? name.split(' ')[0] : name;
 export function MacroCalendar({ events, onSelect }: { events: MacroEvent[]; onSelect: (event: MacroEvent, target: HTMLElement) => void }) {
   const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const first = (month.getDay() + 6) % 7;

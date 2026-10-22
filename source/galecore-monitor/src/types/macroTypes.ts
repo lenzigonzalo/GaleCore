@@ -17,6 +17,8 @@ export interface MacroMetric {
 export interface MacroEvent {
   id: string; name: string; date: string; source: string; sourceRef: string;
   retrievedAt: string; timestampPrecision: string; limitations: string[];
+  /** Balance de una empresa de la watchlist (Tastytrade): el panel de detalle muestra estos datos en vez del texto de fecha programada. */
+  earnings?: { symbol: string; timeOfDay: string | null; estimated: boolean | null; consensusEps: number | null };
 }
 export interface MacroSnapshot {
   id: string; schemaVersion: string; horizon: string; region: string; currency: string;

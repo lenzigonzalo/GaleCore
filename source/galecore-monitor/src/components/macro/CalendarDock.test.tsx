@@ -17,3 +17,19 @@ test('una fuente fallida conserva el calendario de la otra y muestra detalle leg
   expect(screen.getByRole('link', { name: 'Ver publicación original ↗' })).toHaveAttribute('href', 'https://example.test/fed');
   expect(screen.getByText(/El horario aún no está disponible/)).toBeInTheDocument();
 });
+
+test('los balances de la watchlist aparecen en el calendario y el detalle dice cuándo y qué se espera', async () => {
+  const day = new Date(); day.setDate(day.getDate() + 2);
+  const date = day.toISOString().slice(0, 10);
+  (api.get as jest.Mock).mockImplementation((path: string, opts?: any) => path.includes('VolatilityData')
+    ? Promise.resolve({ data: { items: [
+      { symbol: 'AAPL', earnings: { expectedReportDate: date, timeOfDay: 'AMC', estimated: false, consensusEps: 1.98 } },
+      { symbol: 'SPY', earnings: null }] } })
+    : Promise.resolve({ data: { data: [], retrievedAt: new Date().toISOString() } }));
+  render(<CalendarDock symbols={['AAPL', 'SPY']} />);
+  const event = await screen.findByRole('button', { name: `${date} · AAPL · balance` });
+  expect((api.get as jest.Mock).mock.calls.find(c => String(c[0]).includes('VolatilityData'))[1].params).toEqual(expect.objectContaining({ symbols: 'AAPL,SPY' }));
+  expect(screen.queryByRole('button', { name: /SPY/ })).toBeNull();
+  fireEvent.click(event);
+  expect(screen.getByText(/Fecha confirmada · después del cierre · EPS esperado 1.98/)).toBeInTheDocument();
+});

@@ -119,7 +119,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
         onKeyDown={e => { if (['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) { e.preventDefault(); resize(e.key==='Home' ? 360 : e.key==='End' ? 720 : width + (e.key==='ArrowLeft' ? 20 : -20)); } }}/>
       <header><h2 id="lw-title">{alertsMode ? 'Avisos' : calendarMode ? 'Calendario' : 'Watchlist'}</h2><div>{panelMode === 'watchlist' && <><button className="lw-close" aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones" onClick={() => setRefreshKey(v => v + 1)}><RefreshCw size={18}/></button><button className="lw-close" aria-label="Agregar símbolo a la watchlist" aria-expanded={searchOpen} onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button></>}<button className="lw-close" data-close aria-label={alertsMode ? 'Cerrar avisos' : calendarMode ? 'Cerrar calendario' : 'Cerrar panel de watchlist'} onClick={onClose}><X size={21}/></button></div></header>
       <div className="lw-content">
-        {enabled && open && calendarMode && <CalendarDock />}
+        {enabled && open && calendarMode && <CalendarDock symbols={symbols} />}
         {enabled && alertsMode && <SupervisorAlerts embedded strike={strike} strikeNotice={strikeNotice} />}
         {enabled && panelMode === 'watchlist' && <>
           {searchOpen && <WatchlistSearch groups={list.groups.map(g => g.name)} onPick={pick} onClose={() => setSearchOpen(false)}
