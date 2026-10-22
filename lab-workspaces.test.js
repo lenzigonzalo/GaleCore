@@ -130,3 +130,18 @@ test('pasos como Claude Code: cada herramienta con su detalle y la narración en
 test('proyecto sin tipo: se crea sólo con nombre y pasa a estrategia cuando el trader dice sí (owner 19/10)',async t=>{const {kb,service}=setup(t);const p=(await route(service,'POST','/workspaces',{label:'Idea QQQ'})).value;assert.equal(p.type,'analysis');assert.equal(p.strategyName,null);const dir=path.join(kb,'workspaces','idea_qqq');const out=require('child_process').execFileSync('python',[path.join(__dirname,'mark_strategy.py')],{cwd:dir,encoding:'utf8'});assert.equal(JSON.parse(out).ok,true);const again=(await route(service,'GET','/workspaces')).value.projects.find(x=>x.id==='idea_qqq');assert.equal(again.type,'strategy');assert.equal(again.strategyName,'idea_qqq');assert.equal(again.relative,'workspaces/idea_qqq');assert.equal(fs.existsSync(path.join(kb,'strategies','idea_qqq')),false);});
 test('codex: la narración intermedia pasa a los pasos; en el chat queda sólo la respuesta del turno (owner 19/10)',()=>{const chat={messages:[{id:'a',role:'assistant',text:'Respuesta de antes',turn:1}],turnStartedAt:2};for(const text of ['Voy a comparar las cinco.','MSFT es la candidata.','**MSFT es la mejor candidata.**'])consumeEvent(chat,{type:'item.completed',item:{type:'agent_message',text}},'codex');assert.deepEqual(chat.messages.map(m=>m.text),['Respuesta de antes','**MSFT es la mejor candidata.**']);assert.deepEqual(chat.steps.map(s=>s.label),['Voy a comparar las cinco.','MSFT es la candidata.']);});
 test('el detalle de un paso no guarda secretos (revisión 19/10)',()=>{const c={messages:[]};consumeEvent(c,{type:'assistant',message:{content:[{type:'tool_use',name:'Bash',input:{command:'curl -H "Authorization: Bearer abc123" http://x?token=zzz'}}]}},'claude');assert.doesNotMatch(c.steps[0].detail,/abc123|zzz/);});
+
+test('varias conversaciones a la vez: el mismo proyecto y Cartera no se bloquean; el tope global y la propia conversación sí (WS-0057 J)',async t=>{
+ const {base,kb,local}=setup(t);const {EventEmitter}=require('events');const procs=[];
+ fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo de test');
+ const spawnProcess=()=>{const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={end(){}};proc.kill=()=>{};procs.push(proc);return proc;};
+ const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude'},environment:()=>({}),legacyProjects:()=>[{id:'portfolio',label:'Cartera',dir:kb,relative:'.'}],legacySessions:()=>[{id:'s',state:'running',project:'portfolio'}],spawnProcess});
+ const mk=async project=>(await route(service,'POST','/chats',{project,provider:'claude'})).value;
+ const [a,b,c,d,e]=[await mk('personal'),await mk('personal'),await mk('portfolio'),await mk('personal'),await mk('personal')];
+ const say=ch=>route(service,'POST','/chats/'+ch.id+'/messages',{text:'hola'});
+ await say(a);await say(b);await say(c);          // dos del mismo proyecto y una de Cartera, todas corriendo
+ await assert.rejects(say(a),/está respondiendo/);   // la propia conversación sigue protegida
+ await say(d);
+ await assert.rejects(say(e),/cuatro conversaciones/); // tope global
+ for(const p of procs)p.emit('close',0);
+});

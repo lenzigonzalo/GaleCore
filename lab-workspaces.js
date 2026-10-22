@@ -264,7 +264,6 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const auto=options.mode==='auto';
     const p=project(chat.project);
     if(jobs.has(chat.id))throw fail('La conversación está respondiendo.',409);
-    if([...jobs.values()].some(j=>j.project===p.id || j.project==='portfolio' || p.id==='portfolio') || legacySessions().some(s=>s.state==='running'&&(s.project===p.id||s.project==='portfolio'||p.id==='portfolio')))throw fail('Otra sesión está trabajando en este workspace. Esperá a que termine.',409);
     if(jobs.size>=4)throw fail('Hay cuatro conversaciones trabajando.',409);
     if(!binaries[chat.provider])throw fail('El motor no está instalado.',409);
     // Legacy chats have no recoverable original model metadata. Freeze the fallback once,
