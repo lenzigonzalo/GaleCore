@@ -2658,6 +2658,18 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 
 ---
 
+## BL-032 — Cambiar modelo o proveedor dentro de una conversación del Lab
+
+**Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.
+**Origen:** pedido explícito del owner, 23/10/2026, tras comprobar que el selector queda bloqueado en un chat existente aunque Claude y Codex estén conectados.
+**Target:** GaleCore front (monitor) y host del workspace (`tools/terminal/`); registro de producto en GaleCore-AI. GaleCore se trabaja sólo en local.
+**Encaje:** evolución del chat existente; reutilizar selector, catálogo y contexto del Lab. No requiere otra capacidad del modelo.
+**Hoy:** `Lab.tsx` pasa `locked={!!chatId || busy}` a `LabModelPicker`; el host fija proveedor/modelo al crear `/chats` y no ofrece una operación para cambiarlos. Estar conectado no elimina ese bloqueo.
+**Entry gate:** cuando el owner priorice esta mejora; definir antes cómo conservar el contexto al cambiar entre sesiones nativas de Claude y Codex.
+**Aceptación:** desde un chat existente, elegir otro modelo o proveedor disponible y continuar con el contexto previo; mostrar qué selección se aplicará al próximo mensaje; bloquear el cambio mientras responde y explicar fallos de disponibilidad sin perder el historial ni afirmar que se aplicó un cambio fallido. Conservar la procedencia del modelo de cada respuesta.
+
+---
+
 ## BL-031 — Backtest servido por GaleCore
 
 **Origen:** owner, 16/10 (WS-0039, casos de entrada): «si algo que se pide está, sugerirlo para hacer backtesting [...] si
