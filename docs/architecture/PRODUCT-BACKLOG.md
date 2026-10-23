@@ -766,6 +766,25 @@ aprueba todavía PostgreSQL, object storage, Parquet ni un servicio concreto.
 
 ## BL-005 — Dashboards declarativos y artifacts interactivos en vivo
 
+**Addendum 2026-10-23 — Mercado / Gamma: muros frente a máximos de las barras (owner, captura tras WS-0057 B):**
+dejar para revisar, sin implementar ahora. En la captura del owner, Call Wall 770 y Put Wall 758
+caen sobre barras pequeñas mientras una barra put alrededor de 767 domina el perfil, con spot 758,86.
+El front dibuja GEX bruto por lado; el backend selecciona Call Wall sólo entre strikes sobre spot
+con net GEX positivo y Put Wall sólo bajo spot con net GEX negativo. Por eso no necesariamente
+coinciden con las barras más largas. Referencias: GaleCore
+`source/galecore-monitor/src/components/chart/GexBarsPanel.tsx` y
+`source/galecore-datafeed/DataFeed.Application/App/GammaExposure/GammaExposureHandler.cs`,
+`SelectCallWall` / `SelectPutWall`. La consulta posterior tiene otra foto de mercado; no reconstruye la captura.
+
+**Target:** GaleCore, monitor y definición compartida de muros si se decide cambiarla.
+**A revisar:** distinguir visualmente máximo GEX por lado y muro filtrado; decidir nombres, ayudas
+y qué niveles deben marcarse. La propuesta de mostrar ambos queda pendiente, no aprobada.
+**Entrada:** cuando el owner retome este BL y decida el criterio.
+**Aceptación:** cada línea se explica con los mismos datos y alcance del perfil; si representa el
+máximo de un lado, coincide con su barra máxima; si aplica filtros, los explicita y usa un nombre
+distinguible. Evaluar impacto sobre RPF antes de cambiar el cálculo compartido. No cambiar reglas
+ni cálculos operativos como parte de un ajuste meramente visual.
+
 > **Destino (propuesta única, 05/10/2026):** U-52, U-56, U-57 → P1-10 · U-53, U-58 → Después · skill «armar tablero»: Después. Índice: `roadmap/README.md` §5.
 
 **Estado:** `CAPTURED`
