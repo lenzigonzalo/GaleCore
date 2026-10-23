@@ -38,14 +38,13 @@ test('no instalado y fallo de servicio no se muestran como cuenta conectada; rei
   expect(screen.getByRole('button', { name: 'Reautenticar Codex' })).toBeDisabled();
 });
 
-test('cada proveedor conserva las cuatro opciones y skills comunes', async () => {
-  render(<Connections skills={<p>Skill compartida de prueba</p>}/>);
+test('cada proveedor muestra cuenta, permisos y MCP sin duplicar skills', async () => {
+  render(<Connections/>);
   await screen.findByText('Cuenta conectada');
   fireEvent.click(screen.getByRole('button', { name: 'Permisos' }));
   expect(screen.getByText('Permisos de Claude Code')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('tab', { name: 'Codex' }));
   expect(screen.getByText('Permisos de Codex')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
-  expect(screen.getByText('Skill compartida de prueba')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Skills' })).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Servidores MCP' })).toBeInTheDocument();
 });

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, BookOpen, Plug, Power, Trash2, User, UserCog, Users } from 'lucide-react';
+import { Bell, BookOpen, KeyRound, Plug, Wallet, Power, Trash2, User, UserCog, Users } from 'lucide-react';
 import { Connections } from '../components/settings/Connections';
 import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
@@ -9,6 +9,9 @@ import { ProfileSettings } from '../components/settings/ProfileSettings';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
 import { SUGGESTIONS_KEY, suggestionsEnabled, saveSuggestionsEnabled } from '../components/lab/LabSuggestions';
 import { STRIKE_ALERT_KEY } from '../api/account';
+import { BrokerAccountCard } from '../components/account/BrokerAccountCard';
+import { ApiConnections } from '../components/settings/ApiConnections';
+import { useAccountStore } from '../store/useAccountStore';
 import { AccountSettings } from '../components/settings/AccountSettings';
 import { Markdown } from '../components/settings/Markdown';
 import { useCurrentUserStore } from '../store/useCurrentUserStore';
@@ -29,11 +32,13 @@ import {
  * guardan solas. El estado vive en esta pantalla (no en un store de módulo): muere con la sesión.
  */
 export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'cuenta' | 'broker' | 'skills'
-  | 'compartido' | 'avisos' | 'servicios';
+  | 'apis' | 'compartido' | 'avisos' | 'servicios';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
   { group: 'General', items: [{ id: 'usuario', label: 'Perfil', Icon: User }, { id: 'cuenta', label: 'Cuenta', Icon: UserCog }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Proveedores de IA', items: [{ id: 'conexiones', label: 'Proveedores de IA', Icon: Plug }] },
+  { group: 'API y claves', items: [{ id: 'apis', label: 'API y claves', Icon: KeyRound }] },
+  { group: 'Cuenta de bróker', items: [{ id: 'broker', label: 'Cuenta de bróker', Icon: Wallet }] },
   { group: 'Skills', items: [{ id: 'skills', label: 'Skills', Icon: BookOpen }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
   { group: 'Plataforma', items: [{ id: 'servicios', label: 'Servicios', Icon: Power }] },
@@ -258,7 +263,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
   if (section === 'mcp-local') {
     body = <LocalMcp />;
   } else if (section === 'conexiones') {
-    body = <Connections skills={loading ? <p role="status">Cargando skills…</p> : error ? <p role="alert">{error}</p> : <SkillsView items={items.filter(i => i.kind === 'skill')} onChanged={reload} />} />;
+    body = <Connections />;
   } else if (section === 'usuario') {
     body = (
       <ProfileSettings items={items} onChanged={reload} />
@@ -273,7 +278,9 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
   } else if (section === 'servicios') {
     body = <PlatformServices />;
   } else if (section === 'broker') {
-    body = <p>Cuenta de bróker: próximamente.</p>;
+    body = <BrokerAccountCard onLinked={() => { useAccountStore.getState().reset(); }} />;
+  } else if (section === 'apis') {
+    body = <ApiConnections />;
   } else if (section === 'avisos') {
     body = loading && !items.length ? <p role="status">Cargando avisos…</p>
       : <StrikeAlertForm item={items.find(i => i.kind === 'preference' && i.key === STRIKE_ALERT_KEY)} onChanged={load} />;
