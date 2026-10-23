@@ -15,7 +15,7 @@ agente de reporte: el objetivo del agente ES el método.
 
 ## Qué necesita
 - El objetivo de la tarea, leído al pie de la letra.
-- `profile show` (citar la versión); `kb search --kind research --text "<slug del reporte>"` y la revisión anterior.
+- `kb search --kind research --text "<slug del reporte>"` y la revisión anterior.
 - Sólo GaleCore, lo más barato primero: `galecore list` una vez; `galecore get compute.gex_analysis --symbol <SYM>`,
   `galecore get market_data.volatility_metrics --symbol <SYM>`, `galecore get calendar.macro_releases --param
   From=<hoy> --param To=<hasta>` según pida el objetivo. Una cadena pesa ~1 MB: siempre `--out
@@ -31,10 +31,10 @@ agente de reporte: el objetivo del agente ES el método.
    Un dato viejo o faltante se declara, nunca se estima.
 4. Escribir: veredicto en una línea, tabla de 6 filas como máximo y qué cambió desde la corrida anterior. Si el
    objetivo pide un veredicto de abrir u operar, se da como lectura de las condiciones del owner, nunca como orden:
-   «con los datos de hoy se cumplen / no se cumplen estas condiciones de tu perfil» y cuáles. Toda afirmación de hecho
+   «con los datos de hoy se cumplen / no se cumplen estas condiciones» y cuáles. Toda afirmación de hecho
    (también en el veredicto) cita al menos una evidencia.
 5. Estado: OK si se leyó todo lo pedido; INCOMPLETE si algo no se pudo obtener (qué, en `reason` y `missing`). Un tope
-   del perfil que sólo aplica a una posición concreta (riesgo por operación, ancho, crédito) se nombra «no aplica sin
+   de los límites que sólo aplica a una posición concreta (riesgo por operación, ancho, crédito) se nombra «no aplica sin
    una estructura concreta», no como faltante, y no vuelve INCOMPLETE la corrida. Un dato macro que GaleCore todavía no
    tiene va con su fecha y hora, no como faltante. Corrida corta: la tarea tiene tope de turnos.
 6. Guardar con `research save|revise --capability scheduled_report`.

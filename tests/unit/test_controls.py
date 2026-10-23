@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from galecore_ai.application import controls, supervisor
-from galecore_ai.application.profile import set_profile
-from tests.unit.test_capital import LIMITS, exposure
-from tests.unit.test_knowledge import HOST, NOW, kb  # noqa: F401  (kb is a fixture)
+from tests.unit.test_capital import _Doc, _kb, exposure
+from tests.unit.test_knowledge import kb  # noqa: F401  (kb is a fixture)
 from tests.unit.test_strategy import research_ref, stored  # noqa: F401  (research_ref is a fixture)
 from tests.unit.test_supervisor import IID, IN_SESSION, NAME, position
 
@@ -50,8 +49,6 @@ def _reader(spec_hash, positions, exp):
 
 def test_a_bet_over_the_cap_is_one_alert_that_says_it_is_watched_not_blocked(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
-    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
-                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
     broken = {"limit": "bet:SPY bullish 2026-W46", "used": 1822.0, "max": 1500.0, "headroom": -322.0, "ok": False}
     exp = exposure(checks=[broken])
     out = supervisor.scan(kb, _reader(doc.spec_hash, [position()], exp), IN_SESSION)
@@ -68,18 +65,17 @@ def test_a_bet_over_the_cap_is_one_alert_that_says_it_is_watched_not_blocked(kb,
 
 def test_a_bet_within_the_cap_is_quiet_and_incomplete_limits_are_unverified(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
-    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
-                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
     assert supervisor.scan(kb, _reader(doc.spec_hash, [position()], exposure()), IN_SESSION)["new"] == []
-    set_profile(kb.profile, changes={"risk_limits": LIMITS[:2]}, note="n", prompt="p", host=HOST, now=NOW)
-    out = supervisor.scan(kb, _reader(doc.spec_hash, [position()], exposure()), IN_SESSION.replace(minute=10))
-    assert any(p.startswith("tope por apuesta sin verificar") for p in out["problems"])
+    from galecore_ai.contracts.strategy import StrategyLimits
+    partial = _kb(_Doc(10000.0, limits=StrategyLimits(max_risk_per_trade_pct=5.0, max_open_risk_pct=50.0)))
+    drafts, problems = supervisor.bet_limits(partial, lambda path: [])
+    assert drafts == [] and any(p.startswith("tope por apuesta sin verificar") for p in problems)
+    undeclared = _kb(_Doc(10000.0))                       # declares no limits at all: nothing to watch, no noise
+    assert supervisor.bet_limits(undeclared, lambda path: []) == ([], [])
 
 
 def test_a_bet_check_without_numbers_is_a_problem_not_a_crash(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
-    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
-                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
     broken = {"limit": "bet:SPY bullish 2026-W46", "used": None, "max": 1500.0, "headroom": None, "ok": False}
     out = supervisor.scan(kb, _reader(doc.spec_hash, [position()], exposure(checks=[broken])), IN_SESSION)
     assert out["new"] == [] and any("no dio lo usado" in p for p in out["problems"])

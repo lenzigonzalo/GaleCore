@@ -3,7 +3,7 @@ name: capital-risk
 version: 2.0.0
 display_name: Riesgo y capital
 description: >
-  Capital disponible u ocioso, concentración contra los límites del perfil y cómo repartir un monto («tengo X USD»).
+  Capital disponible u ocioso, concentración contra los límites que declara cada estrategia en su diseño y cómo repartir un monto («tengo X USD»).
   No para elegir una estrategia nueva (strategy-design) ni para ver cómo le fue a una (performance-review).
 output_contract: galecore_ai.contracts.research.ResearchContent
 ---
@@ -13,8 +13,8 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 
 ## Qué necesita
 - `capital` (con `--amount <USD>` si el owner nombra un monto; `--strategy <nombre>` para repartir entre algunas).
-- `profile show`: los topes son los % del perfil sobre el valor real de la cuenta.
-- Si `capital` devuelve `MISSING_LIMITS`: decir qué límite falta y ofrecer `profile review`. Nunca inventarlo.
+- Los límites son los de cada estrategia (en su diseño, como % de su monto simulado). La cuenta real se lee sin topes: si el trader escribió uno en su Memoria, se compara con ese, diciendo de dónde viene.
+- Si `capital` devuelve `MISSING_LIMITS`: decir qué límite falta y ofrecer declararlo en una versión nueva del diseño (necesita su aprobación). Nunca inventarlo.
 
 ## Pasos
 1. Correr `capital`. Todo número sale de su salida: no recalcular, reescalar ni redondear.
@@ -33,7 +33,7 @@ Conclusión en una línea → tabla → faltantes. Ejemplo de forma (los número
 
 Con 5.000 USD el tope que manda es el riesgo por operación: 250 USD por spread.
 
-| Concepto | USD | Límite del perfil |
+| Concepto | USD | Límite del diseño |
 |---|---|---|
 | Reserva | 500 | 10 % |
 | Riesgo por operación | 250 | 5 % |

@@ -16,7 +16,6 @@ de opciones de SPY», «Analizame NVDA», «¿Cambió algo en <empresa>?», «¿
 ## Qué necesita
 - `analyze pack --kind macro|technical|fundamental|flow [--symbol SYM] --prompt "<pedido>"`, una vez; citar el ref
   que imprime.
-- `profile show` (citar la versión vigente).
 - `kb search --kind research --text "análisis <kind> <símbolo>"`: si hay un análisis anterior, decir qué cambió (el
   `previous` del pack).
 - Otro dato de GaleCore, citable: `galecore get <capacidad> --keep "<pedido>"` (devuelve `evidence:<id>`).
@@ -29,7 +28,7 @@ de opciones de SPY», «Analizame NVDA», «¿Cambió algo en <empresa>?», «¿
    (opciones: GEX, walls, skew, estructura de IV).
 2. **Pregunta de concepto** («¿qué es X?», «¿qué pasó en…?»): se explica, no se analiza ni se guarda. Un párrafo
    corto en palabras simples (sin fórmula salvo que la pida), una línea de por qué le importa a sus estrategias
-   (`profile show` / `state`), el valor actual del pack con su fecha (tabla sólo con 3 datos o más) y un veredicto de
+   (`state`), el valor actual del pack con su fecha (tabla sólo con 3 datos o más) y un veredicto de
    una frase sobre si importa hoy. Unas 150 palabras fuera de la tabla.
 3. Todo número sale del pack y cita su ref, copiado tal cual. Cada dato con su tipo (`kinds_of_datum`): hecho (valor
    publicado con fecha), cálculo (variación, promedio, volatilidad realizada, crecimiento, P/E: nombrar insumos),

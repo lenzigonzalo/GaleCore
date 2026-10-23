@@ -18,7 +18,6 @@ agente programado de historia del mercado (el runner le da el pack ya juntado, c
 ## Qué necesita
 - El pack del día: en sesión, `story pack --symbol SPY --prompt "<pedido>"` una vez (~2 min) y usar el ref que
   imprime; en una corrida programada viene del runner. No volver a pedir sus datos con otros comandos.
-- `profile show` (citar la versión vigente).
 - La revisión anterior: `kb search --kind research --text "historia del mercado"` y `kb show research:<id>` (hace falta
   su historia para decir si cambió). Un pack se lee con `kb show evidence:<id>`.
 

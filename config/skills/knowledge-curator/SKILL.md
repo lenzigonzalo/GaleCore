@@ -4,7 +4,7 @@ version: 1.0.0
 display_name: Curaduría de la memoria
 description: >
   Mantiene la memoria al día sin que se lo pidan: lee qué cambió en la base de conocimiento desde su última corrida
-  (resultados, feedback, decisiones y bitácora de los proyectos, versiones de estrategias y del perfil) y guarda, como
+  (resultados, feedback, decisiones y bitácora de los proyectos, versiones de estrategias) y guarda, como
   revisión de una investigación de curaduría, lo que importa con su fuente: qué se aprendió, qué se decidió y por qué,
   qué contradice o reemplaza algo anterior y qué comentarios sobre un método ya se repiten. Sólo propone: marcar algo
   como corregido, reemplazado o retirado, o convertir comentarios repetidos en regla, lo decide el owner.
@@ -14,7 +14,7 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 La corre el agente programado de curaduría; a mano: «¿Qué quedó viejo en la memoria?», «¿Qué aprendimos esta semana?».
 
 ## Qué necesita
-- `profile show` (citar la versión) y `kb search --kind research --text "curaduria"`; la revisión anterior (`kb show
+- `kb search --kind research --text "curaduria"`; la revisión anterior (`kb show
   research:<id>`) dice desde cuándo leer y qué ya se propuso. Primera corrida: los últimos 14 días.
 - Lo que cambió: el runner ya filtró la memoria por código y da, en el pedido, los dominios a curar y los refs nuevos
   de cada uno. Leer sólo esos con `kb show <ref>`; no buscar más ni curar otros dominios. Completan: `feedback list

@@ -79,16 +79,14 @@ def _drivers(kb: KnowledgeBase, symbol: str, now: datetime) -> dict | None:
     }
 
 
-def pack(kb: KnowledgeBase, *, symbol: str = "SPY", space_state: dict | None = None,
-         space_error: str | None = None, now: datetime | None = None) -> dict:
+def pack(kb: KnowledgeBase, *, symbol: str = "SPY", now: datetime | None = None) -> dict:
     """Everything the contrast needs, each item with its reference; what is missing is declared."""
     now = now or datetime.now(UTC)
     broken: list[dict] = []
     story = _latest_story(kb, symbol, now, broken)
-    portfolio = project.portfolio_project(kb, space_state, space_error)
+    portfolio = project.portfolio_project(kb)
     broken += portfolio["integrity_failed"]
     strategies = [_strategy(kb, s["name"], broken) for s in portfolio["strategies"]]
-    profile = portfolio["profile"]
     missing = []
     if story is None:
         missing.append(f"sin lectura de la historia de {symbol}: correr market_story primero")
@@ -105,7 +103,6 @@ def pack(kb: KnowledgeBase, *, symbol: str = "SPY", space_state: dict | None = N
     return {
         "generated_at": now.isoformat(), "symbol": symbol, "story": story, "drivers": drivers,
         "strategies": strategies,
-        "profile": ({k: profile.get(k) for k in ("ref", "source", "content", "provisional")} if profile else None),
         "portfolio_log": portfolio["log"], "missing": missing, "integrity_failed": broken,
         "save_as": {"capability": "daily_contrast", "slug": CONTRAST_SLUG},
     }

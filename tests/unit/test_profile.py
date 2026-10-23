@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
@@ -201,22 +200,6 @@ def _cli(*args, kb_dir, stdin=None):
                           capture_output=True, text=True, encoding="utf-8", check=False, env=env)
 
 
-def test_cli_profile_set_show_history(tmp_path):
-    kb_dir = tmp_path / "knowledge"
-    kb_dir.mkdir()
-    set_args = ("profile", "set", "--note", "inicial", "--prompt", "Mi capital es 10.000 USD", "--host-model", "m")
-    out = _cli(*set_args, kb_dir=kb_dir, stdin=json.dumps({"changes": SEED}))
-    assert out.returncode == 0, out.stdout + out.stderr
-    assert json.loads(out.stdout)["ref"] == "profile:v1"
-    again = _cli(*set_args, kb_dir=kb_dir, stdin=json.dumps({"changes": {"language": "español"}}))
-    assert json.loads(again.stdout)["status"] == "UNCHANGED"
-    shown = json.loads(_cli("profile", "show", kb_dir=kb_dir).stdout)
-    assert shown["ref"] == "profile:v1" and "objectives" in shown["missing"]
-    assert len(json.loads(_cli("profile", "history", kb_dir=kb_dir).stdout)["versions"]) == 1
-    bad = _cli(*set_args, kb_dir=kb_dir, stdin=json.dumps({"changes": {}}))
-    assert bad.returncode != 0
-
-
 def test_versions_written_before_provisional_existed_keep_their_hash(kb):
     import json as _json
 
@@ -233,30 +216,6 @@ def test_edited_file_error_does_not_echo_the_value(kb):
     with pytest.raises(ProfileIntegrityError) as exc:
         kb.profile.load("v1")
     assert "SYNTHSECRETKEY_ABC123" not in str(exc.value)
-
-
-class TestCitationIsEnforced:
-    """Codex GC-AI-0013 C1: citing the profile was an instruction, not a control."""
-
-    def _content(self, ref=None) -> ResearchContent:
-        antecedents = [{"ref": ref, "summary": "perfil aplicado", "bearing": "marco del trabajo"}] if ref else []
-        return ResearchContent.model_validate({"title": "t", "question": "q", "status": "concluded",
-                                               "antecedents": antecedents, "limitations": ["l"]})
-
-    def test_no_profile_no_requirement(self, kb):
-        doc, _ = save_research(kb=kb, slug="sin-perfil", prompt="p", host=HOST, content=self._content(), now=NOW)
-        assert doc.current.resolved_refs == []
-
-    def test_missing_or_stale_citation_is_refused(self, kb):
-        put(kb.profile, SEED)
-        put(kb.profile, {"horizon": "30 a 45 días"})
-        with pytest.raises(KnowledgeError, match="cite the profile in force as an antecedent: profile:v2"):
-            save_research(kb=kb, slug="sin-cita", prompt="p", host=HOST, content=self._content(), now=NOW)
-        with pytest.raises(KnowledgeError, match=r"profile:v2 \(this cites profile:v1\)"):
-            save_research(kb=kb, slug="vieja", prompt="p", host=HOST, content=self._content("profile:v1"), now=NOW)
-        doc, _ = save_research(kb=kb, slug="vigente", prompt="p", host=HOST, content=self._content("profile:v2"),
-                               now=NOW)
-        assert [r.ref for r in doc.current.resolved_refs] == ["profile:v2"]
 
 
 @pytest.mark.parametrize("changes", [{"provisional": ["api_key=SYNTHETIC_SECRET_123456"]},
@@ -340,21 +299,3 @@ class TestCriteriaAndMandate:
         assert [p["rule"] for p in spy["pending_parameters"]] == ["R1"]
         assert [p["rule"] for p in spy["owner_decisions"]] == ["R2"]
 
-    def test_a_space_piece_published_before_the_new_fields_is_not_an_edit(self, kb):
-        from galecore_ai.application.space import _same_profile
-
-        doc, _ = put(kb.profile, SEED)
-        old = {k: v for k, v in doc.content.model_dump(mode="json").items()
-               if k not in ("minimum_return", "edge_criterion", "exit_rule", "mandate_autonomous",
-                            "mandate_needs_approval")}
-        assert _same_profile(old, doc.content)
-        assert not _same_profile({**old, "language": "inglés"}, doc.content)
-        assert not _same_profile({"nope": 1}, doc.content)
-
-    def test_cli_review_runs(self, kb):
-        put(kb.profile, SEED)
-        r = subprocess.run([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "profile", "review"],
-                           capture_output=True, text=True, encoding="utf-8", check=False)
-        assert r.returncode == 0, r.stderr
-        out = json.loads(r.stdout)
-        assert out["ref"] == "profile:v1" and any(f["field"] == "edge_criterion" for f in out["findings"])

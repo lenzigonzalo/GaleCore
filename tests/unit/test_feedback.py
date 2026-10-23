@@ -255,23 +255,6 @@ class TestReviewR1:
         assert feedback_status(kb)["feedback"][0]["status"] == "applied"
 
 
-def test_cli_profile_set_cites_only_preference_feedback(kb):  # noqa: F811
-    save(kb)
-    method, _ = comment(kb, kind=FeedbackKind.METHOD, slug="metodo")
-    pref, _ = comment(kb, kind=FeedbackKind.PREFERENCE, slug="preferencia")
-    cli = [sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "profile", "set", "--note", "n", "--prompt", "p",
-           "--host-model", "test"]
-    changes = json.dumps({"changes": {"delivery_format": ["tablas"]}})
-    refused = subprocess.run([*cli, "--feedback", method.ref], input=changes, capture_output=True, text=True,
-                             encoding="utf-8", check=False)
-    assert refused.returncode == 3 and "applied in skill" in refused.stdout
-    assert kb.profile.versions() == []
-    ok = subprocess.run([*cli, "--feedback", pref.ref], input=changes, capture_output=True, text=True,
-                        encoding="utf-8", check=False)
-    assert ok.returncode == 0, ok.stdout
-    assert kb.profile.load("v1").feedback == [pref.ref]
-
-
 def test_a_profile_version_without_feedback_is_written_without_the_field(kb):  # noqa: F811
     # Found 30/09: main (before GC-AI-0016) forbids the field and could not read a version written with "feedback": [].
     _, path = set_profile(kb.profile, changes={"delivery_format": ["tablas"]}, note="n", prompt="p", host=HOST, now=NOW)

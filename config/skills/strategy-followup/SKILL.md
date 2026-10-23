@@ -14,8 +14,7 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 algo en la hipótesis?». También la corre el agente programado de seguimiento de esa estrategia.
 
 ## Qué necesita
-- `profile show`: capital de referencia y topes para dimensionar lo que se informa (lo `provisional` se marca así).
-  Al guardar, citar `profile:v<N>` (si no, se rechaza).
+- Monto simulado y límites: los del diseño de la estrategia (`project show strategy:<nombre>`); si no los declara, se dice.
 - `kb search --kind strategy` y `kb show strategy:<ref>` (hash de la spec, aprobación); la última revisión de su
   investigación («la última revisión»).
 - `followup run --strategy <nombre> --prompt "<pedido>" --host-model <modelo>`: lee GaleCore Dev por su API, guarda la

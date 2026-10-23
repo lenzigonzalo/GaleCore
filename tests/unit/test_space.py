@@ -133,7 +133,7 @@ def test_a_wrong_login_is_an_error_without_the_password(monkeypatch):
     assert "otra-clave" not in str(exc.value)
 
 
-def test_local_pieces_bring_profile_objectives_conventions_agents_and_skills(env):  # noqa: F811
+def test_local_pieces_bring_agents_and_skills_and_no_profile(env):  # WS-0058  # noqa: F811
     kb_, sch, _ = env
     from galecore_ai.application import tasks as t
     from tests.unit.test_market_watch import MARKET
@@ -145,21 +145,8 @@ def test_local_pieces_bring_profile_objectives_conventions_agents_and_skills(env
     for p in space.local_pieces(kb_):
         kinds.setdefault(p["kind"], []).append(p)
     assert [p["key"] for p in kinds["agent"]] == ["oportunidades"]          # the cancelled one is history
-    assert kinds["convention"][0]["visibility"] == "shared"
+    assert not {"profile", "objective", "convention"} & kinds.keys()   # the profile is name, interests and memory
     assert all(p["visibility"] == "shared" for p in kinds["skill"]) and len(kinds["skill"]) > 5
-
-
-
-
-def test_two_long_objectives_with_the_same_start_keep_two_keys(env):  # noqa: F811
-    kb_, _, _ = env
-    from galecore_ai.application.profile import set_profile
-    from galecore_ai.contracts.regime_record import RecordHost
-    start = "retorno anual buscado de diez a quince por ciento sobre el capital de referencia "
-    set_profile(kb_.profile, changes={"objectives": [start + "en SPY", start + "en QQQ"]}, note="dos objetivos",
-                prompt="probar", host=RecordHost(provider="test", model="test"))
-    keys = [p["key"] for p in space.local_pieces(kb_) if p["kind"] == "objective"]
-    assert len(keys) == 2 and len(set(keys)) == 2
 
 
 # ── GC-AI-0023: the monitor's Agentes screen ─────────────────────

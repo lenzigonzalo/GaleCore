@@ -16,7 +16,6 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from galecore_ai.adapters.knowledge_base import parse_ref
-from galecore_ai.adapters.profile_store import ProfileIntegrityError, ProfileStoreError
 from galecore_ai.adapters.research_store import ResearchIntegrityError, ResearchStoreError
 from galecore_ai.adapters.strategy_store import StrategyIntegrityError, StrategyStoreError
 from galecore_ai.application import controls, followup
@@ -354,21 +353,8 @@ def _missing(view: dict) -> list[str]:
 # ── portfolio project ────────────────────────────────────────────
 
 
-def _profile(kb: KnowledgeBase, broken: list[dict]) -> dict | None:
-    try:
-        doc = kb.profile.latest()
-    except (ProfileIntegrityError, ProfileStoreError) as exc:
-        broken.append({"ref": "profile", "problems": [str(exc)]})
-        return None
-    if doc is None:
-        return None
-    return {"ref": doc.ref, "source": "knowledge (local)", "recorded_at": doc.recorded_at.isoformat(),
-            "content_hash": doc.content_hash, "content": doc.content.model_dump(mode="json"),
-            "missing": doc.content.missing(), "provisional": doc.content.provisional}
-
-
-def portfolio_project(kb: KnowledgeBase, space_state: dict | None = None, space_error: str | None = None) -> dict:
-    """The strategies with their state, the profile in force and the portfolio's own log."""
+def portfolio_project(kb: KnowledgeBase) -> dict:
+    """The strategies with their state and the portfolio's own log."""
     broken: list[dict] = []
     strategies = []
     for name in _strategy_names(kb):
@@ -385,24 +371,9 @@ def portfolio_project(kb: KnowledgeBase, space_state: dict | None = None, space_
             "last_followup": {k: fu[k] for k in ("recorded_at", "status", "attention", "shadow")} if fu else None,
             "open_items": open_items,
         })
-    profile = _profile(kb, broken)
-    if profile is not None:
-        if space_state is None:
-            profile["source"] = "knowledge (local), sin confirmar contra GaleCore"
-            profile["space"] = {"state": "unreachable", "detail": space_error or "no consultado"}
-        else:
-            profile["space"] = {k: v for k, v in space_state.items() if k != "remote"}
-            if space_state["state"] == "coherent":
-                profile["source"] = "galecore (igual a la versión local)"
-    view = {"project": "portfolio", "strategies": strategies, "profile": profile,
+    view = {"project": "portfolio", "strategies": strategies,
             "log": _log_view(_safe_log(kb, PORTFOLIO, broken), kb)}
     missing = []
-    if profile is None:
-        missing.append("sin perfil: límites y capital de referencia no se pueden contrastar")
-    elif profile["space"]["state"] == "edited_in_monitor":
-        missing.append("el perfil se editó en el monitor y no se trajo: `space pull-profile` antes de usarlo")
-    elif profile["space"]["state"] == "unreachable":
-        missing.append("GaleCore no respondió: el perfil mostrado es el local y puede no ser el vigente")
     missing.append("riesgo abierto en vivo: no se consulta acá; lo último que informó GaleCore está en cada "
                    "last_followup (fecha incluida)")
     view["missing"] = missing

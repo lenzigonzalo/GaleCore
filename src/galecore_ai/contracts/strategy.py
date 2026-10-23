@@ -257,7 +257,7 @@ class ManagementStep(BaseModel):
 
 
 MANAGED_BLOCKS = (Block.EXIT, Block.ADJUSTMENT)
-PROPOSAL_FIELDS_ADDED = ("parameters", "management", "change", "simulated_amount_usd")  # WS-0016; WS-0043 (1e)
+PROPOSAL_FIELDS_ADDED = ("parameters", "management", "change", "simulated_amount_usd", "limits")  # WS-0016; WS-0043 (1e); WS-0058
 
 
 def design_gaps(content: ProposalContent) -> list[str]:
@@ -290,6 +290,23 @@ def other_version_mentions(content: ProposalContent) -> list[str]:
                    if v != content.version})
 
 
+class StrategyLimits(BaseModel):
+    """The limits of one strategy (WS-0058): each strategy declares its own, as percentages of its simulated amount
+    (the profile no longer holds limits). Every field is optional: what is not declared is listed as missing."""
+
+    model_config = {"extra": "forbid"}
+
+    max_drawdown_pct: float | None = Field(default=None, gt=0, le=100)         # kill switch level (R2)
+    max_risk_per_trade_pct: float | None = Field(default=None, gt=0, le=100)
+    max_open_risk_pct: float | None = Field(default=None, gt=0, le=100)
+    reserve_pct: float | None = Field(default=None, ge=0, le=100)
+    max_bet_pct: float | None = Field(default=None, gt=0, le=100)              # of the open risk allowed
+    target_annual_return_pct: float | None = Field(default=None, gt=0)
+    minimum_annual_return_pct: float | None = Field(default=None, gt=0)
+    edge_min_trades: int | None = Field(default=None, gt=0)
+    edge_min_days: int | None = Field(default=None, gt=0)
+
+
 class ProposalContent(BaseModel):
     """What the host writes for one version. The check compares it with the spec and the runtime."""
 
@@ -312,6 +329,7 @@ class ProposalContent(BaseModel):
     # WS-0043 (1e): the amount this strategy is simulated with, declared when its design closes. The profile's capital
     # is only the real account; controls list this as missing when it is not there.
     simulated_amount_usd: float | None = Field(default=None, gt=0)
+    limits: StrategyLimits | None = None   # WS-0058: this strategy's own limits, declared when its design closes
 
     check_not_blank = field_validator("display_name", "purpose")(_non_blank)
 

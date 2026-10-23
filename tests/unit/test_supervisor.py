@@ -44,6 +44,8 @@ def reader(spec_hash, positions, *, fail=False, releases=(), fomc=(), calendar_f
         if path == "/App/Runtime/Instances":
             return [{"instanceId": IID, "mode": "SHADOW", "lifecycleState": "RUNNING", "specName": NAME,
                      "versionHash": spec_hash}]
+        if path.startswith("/App/Runtime/Exposure"):   # the cap per bet each design declares (WS-0058): nothing broken
+            return {"checks": []}
         assert path == f"/App/Runtime/Instances/{IID}/Positions"
         return positions
     return read

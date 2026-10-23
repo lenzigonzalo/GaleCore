@@ -4,7 +4,7 @@ version: 1.0.1
 display_name: Qué merece mi atención hoy sobre lo que tengo en SHADOW
 description: >
   Responde «¿qué merece mi atención hoy sobre lo que tengo en SHADOW?»: exposición simulada contra los topes de
-  referencia del perfil, qué dicen las reglas de la estrategia aprobada, qué cambió desde la última revisión, qué
+  referencia de la estrategia, qué dicen las reglas de la estrategia aprobada, qué cambió desde la última revisión, qué
   eventos (datos macro, FOMC, balances, subastas) caen antes del vencimiento o la salida de cada posición, el contexto
   de mercado y qué falta. Se guarda como revisión de una investigación de atención diaria por estrategia. Sólo
   lectura: ni órdenes ni cambios de asignación. Para la cuenta real, capital-risk; para cómo le fue a una estrategia,
@@ -20,9 +20,8 @@ Una **pregunta puntual** («¿qué hago con SPY antes del CPI?», «¿cierro, ro
 revisión diaria: ir directo al paso 10.
 
 ## Qué necesita
-- `profile show`: capital de referencia, topes (pérdida por operación y sumada), drawdown, horizonte y
-  formato. Lo que está en `provisional` es provisorio y toda comparación que dependa de eso se marca así. Citar
-  `profile:v<N>` al guardar (si no, se rechaza).
+- nombre, intereses y memoria del trader ya vienen en el contexto. Los límites (pérdida por operación, sumada, drawdown) son los del diseño de cada estrategia; si no los
+  declara, es un faltante.
 - Estrategias: `kb search --kind strategy` y `kb show strategy:<nombre>/<versión>` de cada versión aprobada.
 - Última revisión: `kb search --kind research --text "atencion diaria <estrategia>"` y `followup history --strategy
   <nombre>`.
@@ -38,7 +37,7 @@ revisión diaria: ir directo al paso 10.
 - Falta por registro (se declara, nunca se estima): griegas de las posiciones SHADOW.
 
 ## Pasos
-1. Perfil primero (arriba).
+1. Lo que el trader tiene en Memoria que toque lo de hoy (arriba).
 2. Qué hay en SHADOW y sus reglas, de la propuesta guardada de cada versión aprobada (hash, aprobación, reglas de
    entrada, seguimiento, ajuste, salida, invalidación). Nunca de memoria.
 3. Última revisión: la última revisión de atención diaria o, la primera vez, el último seguimiento. Decir cuál y su
@@ -48,13 +47,13 @@ revisión diaria: ir directo al paso 10.
 5. Exposición, por posición y sumada, sólo con lo que trae el registro (posiciones, valuaciones, resultado simulado,
    riesgo máximo), incluidas las de versiones anteriores u otras specs (`other_versions`). Una spec que no se pudo
    leer es «no verificada», nunca cero; un valor ausente es `missing`, nunca tomado de otro día. Se llama
-   «exposición SHADOW (simulada)»: no suma a la cartera real ni consume capital real. Los topes del perfil son la vara
-   de referencia («supera el tope de referencia del perfil», no «tu apuesta pasa tu tope»). La cartera real va en
+   «exposición SHADOW (simulada)»: no suma a la cartera real ni consume capital real. Los topes de la estrategia (su diseño) son la vara
+   de referencia («supera el tope de referencia de la estrategia», no «tu apuesta pasa tu tope»). La cartera real va en
    una línea aparte, nunca sumada. La comparación con los topes es «Cálculo propio», citando el registro.
 6. Reglas: por posición y por las evaluaciones de hoy, qué regla aplica ahora (salida, ajuste, invalidación, entrada
    bloqueada) y si el runtime hizo lo que dice. Las reglas que el runtime no ejecuta las vigila el owner: listarlas.
 7. Qué cambió desde la última revisión: entradas, descartes y por qué, cierres, bloqueos (NO_DATA, cotización vieja,
-   fuera de horario), cambios de versión o instancia, cambio de versión del perfil.
+   fuera de horario), cambios de versión o instancia.
 8. **Siempre, aunque nada más cambie: eventos contra posiciones.** Una fila por evento entre hoy y el último
    vencimiento: evento, fecha (con día de la semana), días desde hoy y, por posición, si cae antes del vencimiento,
    antes de la salida por tiempo (p. ej. 21 DTE) o después de ambos, con su evidencia. Después una línea por evento
@@ -67,7 +66,7 @@ revisión diaria: ir directo al paso 10.
    huecos de datos, contexto. Cada punto con su fuente. Guardar: la primera vez `research save --capability
    daily_attention --slug atencion-diaria-<estrategia>` (minúsculas con guiones), después `research revise
    --capability daily_attention --id <id> --reason continuation`; estado open, con próximos pasos, limitaciones y
-   antecedentes (profile, strategy, la revisión anterior y toda evidencia usada). Si la quiere todos los días, se
+   antecedentes (strategy, la revisión anterior y toda evidencia usada). Si la quiere todos los días, se
    programa como agente; sin conectores de balances en esa corrida, los balances salen de evidencia guardada o van a
    `missing`.
 10. **Pregunta puntual:** sin los pasos 1-9 y sin guardar. `supervise exposure --symbol <SYM> --event <texto>` (trae
@@ -104,6 +103,6 @@ Después: qué cambió, huecos (griegas: no las sirve ninguna fuente) y próximo
 Revisión: `followup run --strategy <nombre>` y los calendarios (`calendar.macro_releases`, `calendar.fomc_meetings`); `catalog --match` trae los pasos.
 Veredicto primero (qué hacer y por qué). Una tabla corta: posiciones contra topes y eventos dentro de su vida. Nunca
 recortar un tope superado ni un evento cercano (CPI, FOMC); fechas con día de la semana. SHADOW y real separados y con
-su nombre: lo simulado no es «tu exposición»; los topes del perfil son la vara de referencia, no un límite que la
+su nombre: lo simulado no es «tu exposición»; los topes de la estrategia son la vara de referencia, no un límite que la
 simulación consuma. Pregunta puntual («¿qué hago antes del CPI?»): `supervise exposure` + `capital`, una alternativa
 por opción con su número y el peor caso; no guardar.

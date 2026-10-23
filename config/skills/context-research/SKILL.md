@@ -15,9 +15,7 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 de diseñar una estrategia cuando hace falta medir el entorno con datos reales.
 
 ## Qué necesita
-- `profile show`: aplicar sin volver a preguntar (capital para tamaños, objetivos, horizonte, drawdown y topes como
-  marco, formato e idioma). Citar `profile:v<N>`. Lo que falta y pesa, a
-  `missing`; lo `provisional`, marcado como provisorio.
+- nombre, intereses y memoria del trader ya vienen en el contexto: tenerlos en cuenta sin volver a preguntar. Lo que falta y pesa, a `missing`.
 - `kb search` con los términos de la idea (research y evidence): una investigación abierta sobre lo mismo se sigue.
 - Fuentes del registro, no de memoria: `sources query --need "<factor>"` (qué fuentes lo cubren, en orden de uso:
   gratis, GaleCore, cupo diario, plan; con su último acceso y límites) y `sources list`. Para GaleCore y FRED,

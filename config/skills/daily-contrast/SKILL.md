@@ -18,7 +18,7 @@ estrategias?», «¿Qué ideas vale la pena probar con este mercado?».
   estructuras que ejecuta) y de los datos (conexión, frescura, cobertura) sale de esa lectura y su hora. Un contraste o
   seguimiento guardado es antecedente, nunca el estado; lo que `state` no leyó está «sin verificar».
 - `contrast pack [--symbol SPY]`. Si falta la historia, correr market-story antes; si está vieja, decirlo arriba.
-- `capital` para el riesgo contra los topes (si no responde, es faltante); `profile show` (citar `profile:vN`).
+- `capital` para el riesgo contra los topes (si no responde, es faltante).
 
 ## Pasos
 1. Por estrategia: comparar la historia (sus afirmaciones) con dónde trabaja la estrategia (las entradas `story` de su
@@ -34,13 +34,13 @@ estrategias?», «¿Qué ideas vale la pena probar con este mercado?».
    - «qué la cambiaría» nombra algo observable (resultado de un dato contra el movimiento implícito, un nivel, una
      correlación que se da vuelta, un resultado de seguimiento), nunca una sensación.
    - Si la estrategia no dice en qué historia trabaja: «sin datos» (igual con qué la cambiaría: que el owner lo diga).
-3. Cartera: chequear la propuesta contra el perfil vigente (topes, horizonte, objetivos).
+3. Cartera: chequear la propuesta contra los límites del diseño de cada estrategia y lo que el trader tiene en Memoria.
 4. Ideas: si la historia favorece una estructura que GaleCore no puede correr en SHADOW (las que corre son
    `estructuras_ejecutables` de `state`), decirlo como idea con lo que necesitaría; nunca diseñarla acá
    (strategy-design lo hace).
 5. Guardar una investigación por serie diaria: `research save --capability daily_contrast --slug contraste-diario` la
    primera vez, después `research revise --capability daily_contrast --id <id> --reason continuation --note "<qué
-   cambia>"`. Antecedentes: la historia, cada estrategia y el perfil.
+   cambia>"`. Antecedentes: la historia y cada estrategia.
 6. Cuando el owner decide, registrarlo: `project add <nombre> --kind decision --text "<sus palabras>" --prompt
    "<pedido>"`. Nunca desplegar, pausar ni cambiar nada acá.
 

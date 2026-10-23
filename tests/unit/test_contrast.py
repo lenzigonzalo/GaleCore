@@ -16,7 +16,7 @@ from tests.unit.test_strategy import (  # noqa: F401  (research_ref is a fixture
 def test_the_pack_gathers_story_strategies_and_declares_what_is_missing(kb, research_ref):  # noqa: F811
     stored(kb, research_ref)
     save(kb, slug="historia-del-mercado-spy", title="Historia del mercado SPY")
-    pack = contrast.pack(kb, space_error="sin red", now=NOW + timedelta(hours=2))
+    pack = contrast.pack(kb, now=NOW + timedelta(hours=2))
     assert pack["story"]["ref"] == "research:2026-09-23-historia-del-mercado-spy" and not pack["story"]["stale"]
     assert [s["name"] for s in pack["strategies"]] == [NAME] and pack["strategies"][0]["where_it_works"] == []
     assert any("no dice en qué historia funciona" in m for m in pack["missing"])
@@ -28,7 +28,7 @@ def test_the_strategy_story_and_decisions_reach_the_pack(kb, research_ref):  # n
     stored(kb, research_ref)
     project.add(kb=kb, name=NAME, kind="story", words="Funciona con gamma positiva y skew calmo", prompt="p", now=NOW)
     project.add(kb=kb, name=NAME, kind="decision", words="No operar con VIX arriba de 30", prompt="p", now=NOW)
-    s = contrast.pack(kb, space_error="sin red", now=NOW)["strategies"][0]
+    s = contrast.pack(kb, now=NOW)["strategies"][0]
     assert s["where_it_works"] == ["Funciona con gamma positiva y skew calmo"]
     assert s["decisions"] == ["No operar con VIX arriba de 30"]
 
@@ -97,7 +97,7 @@ def test_the_pack_brings_what_moves_the_symbol_from_the_latest_story_pack(kb, re
     pack = {"symbol": "SPY", "gathered_at": (NOW - timedelta(hours=1)).isoformat(), "prices": {}, "volatility": {},
             "missing": [], "drivers": drivers}
     ref, _ = story.save_pack(kb, pack, prompt="historia", host=RecordHost(provider="test"), now=NOW)
-    got = contrast.pack(kb, space_error="sin red", now=NOW)["drivers"]
+    got = contrast.pack(kb, now=NOW)["drivers"]
     assert got["ref"] == ref and got["upcoming"][0]["release"] == "CPI"
     assert got["by_release"]["CPI"] == {"n": 6, "median_ratio": 0.3, "premium": "la IV pagó de más",
                                         "vs_days_without_data": "mueve menos"}
@@ -106,5 +106,5 @@ def test_the_pack_brings_what_moves_the_symbol_from_the_latest_story_pack(kb, re
 
 def test_without_a_story_pack_the_contrast_declares_it(kb, research_ref):  # noqa: F811
     stored(kb, research_ref)
-    pack = contrast.pack(kb, space_error="sin red", now=NOW)
+    pack = contrast.pack(kb, now=NOW)
     assert pack["drivers"] is None and any("sin «qué mueve hoy»" in m for m in pack["missing"])

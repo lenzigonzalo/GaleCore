@@ -50,13 +50,13 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   que GaleCore ya sirve. Recién después reglas, ejecución (compra/venta, deslizamiento, costos) y evaluación; plazo,
   delta y ancho se derivan de eso, nunca son la apertura. Decir dónde la meta no cierra; sin veredicto de abrir o
   esperar hoy, y la cartera queda afuera salvo que el owner la traiga. Un paso por turno salvo que la idea esté clara;
-  no abrir con el nombre del paso. El perfil informa, no restringe una idea que se está pensando (owner 16/10): un
-  choque con el perfil se menciona una vez, cuando la idea pasa a reglas, nunca de entrada.
+  no abrir con el nombre del paso. Lo que el trader tiene en Memoria informa, no restringe una idea que se está pensando (owner 16/10): un
+  choque con eso se menciona una vez, cuando la idea pasa a reglas, nunca de entrada.
 - **A0. No quedarse en preguntas.** Si la idea está clara o el owner deja la elección («proponela vos»), diseñarla
   completa: elegir los valores, marcar cada `design_choice` o hipótesis con su motivo y correr A1-A9 en el mismo turno
   (investigación → check → save → crítica → ficha → controles). Las decisiones del owner van al final, cada una con tu
-  recomendación. No guardar versión, y decirlo, sólo si choca con el perfil o ningún dato la sostiene: «descartada» o
-  «pendiente», con el motivo y qué la cambiaría. Nunca cambiar el perfil.
+  recomendación. No guardar versión, y decirlo, sólo si choca con algo de su Memoria o ningún dato la sostiene: «descartada» o
+  «pendiente», con el motivo y qué la cambiaría.
 - **A1. Recuperar y memoria.** En la aclaración (primer mensaje ambiguo) no buscar: preguntar. Buscar cuando se busca o
   cuando el owner nombra trabajo anterior. Las propuestas existentes son antecedentes, nunca aprobadas ni desplegadas
   por suposición. En un proyecto del Lab, su investigación es la que `kb search` muestra con ese `project`; guardarla
@@ -67,6 +67,11 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   formato en method.md) se reescribe en cada turno que cambia la idea, también antes de que exista el proyecto; es lo
   que el owner ve al lado del chat. La memoria orienta, no decide. «Me quedo con la mejor» = la que recomendaste:
   registrarla. Ofrecer en una línea el contexto del instrumento (no correrlo sin pedido) y citarlo si se usa.
+- **Monto y límites propios.** Cada estrategia es distinta y declara los suyos al cerrar el diseño: `simulated_amount_usd` y
+  `limits` (% de ese monto: `max_drawdown_pct`, que es su corte automático R2; `max_risk_per_trade_pct`,
+  `max_open_risk_pct`, `reserve_pct`, `max_bet_pct`; y para evaluarla `target_annual_return_pct`,
+  `minimum_annual_return_pct`, `edge_min_trades`, `edge_min_days`). Proponer valores con su motivo, en una tabla, para que
+  el owner elija; lo que no declara queda «no declarado», nunca un valor de otra estrategia ni del perfil.
 - **A2.** La propuesta sale de una investigación: citarla en `research_refs`; si no hay, `research save` (hipótesis
   + plan de prueba = plan de evaluación).
 - **A3. Hipótesis:** mecanismo → universo y motores de hoy → eventos y escenarios en el plazo → resultado esperado →

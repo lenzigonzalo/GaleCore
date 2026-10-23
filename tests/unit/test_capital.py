@@ -1,19 +1,14 @@
-"""WS-0012 (P1-04): capital available, concentration against the limits and «tengo X USD», from GaleCore's numbers."""
+"""WS-0012 (P1-04): capital available, concentration against the limits and «tengo X USD», from GaleCore's numbers.
+WS-0058: the limits are the ones each strategy declares in its design; the real account is read without caps."""
 
 from __future__ import annotations
 
-from galecore_ai.application import capital, supervisor
-from galecore_ai.application.profile import set_profile
-from galecore_ai.contracts.profile import ProfileContent, ReferenceCapital
-from tests.unit.test_knowledge import HOST, NOW, kb  # noqa: F401  (kb is a fixture)
+from types import SimpleNamespace
 
-LIMITS = [
-    "pérdida máxima por operación 5 % del capital de referencia (500 USD)",
-    "riesgo máximo sumado de las posiciones abiertas 50 % del capital de referencia (5.000 USD)",
-    "reserva para ajustes 10 % del capital, sin asignar",
-    "una apuesta (mismo subyacente y dirección, vencimiento en la misma semana) no pasa el 30 % del riesgo abierto",
-]
-PROFILE = ProfileContent(reference_capital=ReferenceCapital(amount=10000.0, currency="USD"), risk_limits=LIMITS)
+from galecore_ai.application import capital, supervisor
+from galecore_ai.contracts.strategy import StrategyLimits
+
+SL = StrategyLimits(max_risk_per_trade_pct=5.0, max_open_risk_pct=50.0, reserve_pct=10.0, max_bet_pct=30.0)
 
 
 def exposure(**kw):
@@ -48,21 +43,18 @@ def allocation(fits=True):
             "strategies": [strat], "ladder": ladder, "assumptions": ["a"], "strategiesNotFound": []}
 
 
-def test_limits_are_read_from_the_profile_words():
-    lim = capital.limits(PROFILE)
+def test_limits_are_read_from_the_strategy_design():
+    lim = capital.limits(_Doc(10000.0, limits=SL))
     assert lim == {"capital_referencia": 10000.0, "no_leidos": [], "maxRiskPerTradePct": 5.0,
                    "maxOpenRiskPct": 50.0, "reservePct": 10.0, "maxBetPct": 30.0}
 
 
-def test_a_limit_the_profile_does_not_declare_is_listed_not_guessed():
-    lim = capital.limits(ProfileContent(risk_limits=LIMITS[:2]))
+def test_a_limit_the_design_does_not_declare_is_listed_not_guessed():
+    lim = capital.limits(_Doc(None, limits=StrategyLimits(max_risk_per_trade_pct=5.0, max_open_risk_pct=50.0)))
     assert lim["reservePct"] is None and "reserva para ajustes" in lim["no_leidos"]
-    assert "tope de una apuesta" in lim["no_leidos"] and "capital de referencia" in lim["no_leidos"]
-    assert capital.limits(None)["no_leidos"] == ["perfil: no hay perfil"]
-    odd = capital.limits(ProfileContent(risk_limits=[*LIMITS[:3], "una apuesta no pasa el 130 % del riesgo"]))
-    assert odd["maxBetPct"] is None and "tope de una apuesta" in odd["no_leidos"]
-    neg = capital.limits(ProfileContent(risk_limits=[*LIMITS[:2], "reserva para ajustes −10 %", LIMITS[3]]))
-    assert neg["reservePct"] is None and "reserva para ajustes" in neg["no_leidos"]
+    assert "tope de una apuesta" in lim["no_leidos"] and "monto simulado" in lim["no_leidos"]
+    assert len(capital.limits(_Doc(10000.0))["no_leidos"]) == 4          # no `limits` at all: nothing is guessed
+    assert capital.limits(None)["no_leidos"] == ["la estrategia no tiene diseño guardado"]
 
 
 def test_small_positions_of_the_same_week_are_said_as_one_bet():
@@ -105,9 +97,13 @@ def test_split_that_does_not_fit_says_why_and_the_alternatives():
     assert "ancho 2 entraría si cobrara el mismo crédito relativo" in note and "aprobación" in note and "esperar" in note
 
 
-def test_report_passes_the_profile_percentages_and_the_amount(kb):  # noqa: F811
-    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
-                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+def _kb(*docs):
+    store = {f"spy_pcs/1.0.{i}": d for i, d in enumerate(docs, 5)}
+    return SimpleNamespace(strategies=_Store(store, set(store)))
+
+
+def test_report_passes_the_strategy_percentages_and_the_amount():
+    kb = _kb(_Doc(10000.0, limits=SL))
     asked = []
 
     def read(path):
@@ -117,26 +113,25 @@ def test_report_passes_the_profile_percentages_and_the_amount(kb):  # noqa: F811
         return exposure() if path.startswith("/App/Runtime/Exposure") else allocation(fits=False)
 
     out = capital.report(kb, read, capital=5000.0, strategies=["spy_pcs"])
-    assert asked[0] == ("/App/Runtime/Exposure?capital=10000.0&maxRiskPerTradePct=5.0&maxOpenRiskPct=50.0"
+    assert asked[0] == ("/App/Runtime/Exposure?capital=5000.0&maxRiskPerTradePct=5.0&maxOpenRiskPct=50.0"
                         "&reservePct=10.0&maxBetPct=30.0")
     assert asked[1].startswith("/App/Runtime/Allocation?capital=5000.0&") and asked[1].endswith("&spec=spy_pcs")
-    assert out["reparto"]["capital"] == 5000.0 and out["disponible"]["capital"] == 10000.0
-    assert any("aparte de lo abierto" in f for f in out["faltantes"]) and "profile:v1" in out["fuente"]
+    assert out["reparto"]["capital"] == 5000.0 and "diseño de cada estrategia" in out["fuente"]
+    assert any("aparte de lo abierto" in f for f in out["faltantes"])
     same = capital.report(kb, read)
+    assert asked[-2].startswith("/App/Runtime/Exposure?capital=10000.0&")        # its own amount
     assert any("no descuenta lo ya abierto (1.368 en riesgo)" in f for f in same["faltantes"])
 
 
-def test_report_without_limits_says_which_and_does_not_call_galecore(kb):  # noqa: F811
-    set_profile(kb.profile, changes={"risk_limits": LIMITS[:2]}, note="n", prompt="p", host=HOST, now=NOW)
+def test_report_without_limits_says_which_and_does_not_call_galecore():
+    kb = _kb(_Doc(10000.0, limits=StrategyLimits(max_risk_per_trade_pct=5.0, max_open_risk_pct=50.0)))
     out = capital.report(kb, lambda path: (_ for _ in ()).throw(AssertionError(path)))
     assert out["status"] == "MISSING_LIMITS" and "reserva para ajustes" in out["error"]
 
 
-def test_report_refuses_what_is_not_exposure(kb):  # noqa: F811
-    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
-                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+def test_report_refuses_what_is_not_exposure():
     try:
-        capital.report(kb, lambda path: [])
+        capital.report(_kb(_Doc(10000.0, limits=SL)), lambda path: [])
     except supervisor.SupervisorError as exc:
         assert "no es exposición" in str(exc)
     else:
@@ -159,57 +154,36 @@ def _overview(**kw):
     return {**base, **kw}
 
 
-def test_real_account_is_measured_on_its_own_value_and_judges_a_candidate(kb):  # noqa: F811
-    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+def test_real_account_is_read_without_caps_and_describes_a_candidate():
     asked = []
 
     def read(path):
         asked.append(path)
         return _overview()
 
-    out = capital.real_account(kb, read, width=5, credit=4.0, symbol="SPY")
-    assert asked == ["/App/GaleCore/Account/Overview?maxRiskPerTradePct=5.0&maxOpenRiskPct=50.0"]
-    assert out["tope_por_operacion_usd"] == 125.0 and out["tope_sumado_usd"] == 1250.0
-    assert out["posiciones"][0]["estado"] == "no cumple" and out["margen_sumado_usd"] == -610.0
-    assert out["tope_sumado"] == "no cumple" and out["riesgo_abierto_completo"] is True
+    out = capital.real_account(read, width=5, credit=4.0, symbol="SPY")
+    assert asked == ["/App/GaleCore/Account/Overview"]                      # no caps are passed (WS-0058)
+    assert out["valor_cuenta_usd"] == 2500.0 and out["riesgo_abierto_pct_de_la_cuenta"] == 74.4
+    assert out["posiciones"][0]["pct_de_la_cuenta"] == 74.4 and out["riesgo_abierto_completo"] is True
     c = out["candidato"]
-    assert c["perdida_maxima_usd"] == 100.0 and c["riesgo_abierto_despues_usd"] == 1960.0
-    assert c["cumple_los_dos_topes"] is False and [t["estado"] for t in c["topes"]] == ["cumple", "no cumple"]
-    assert "nada lo bloquea" in out["aviso"] and "no una revisión de la operación" in out["alcance"]
-    assert "no cumple: el riesgo abierto pasaría" in out["lectura"]
+    assert c["perdida_maxima_usd"] == 100.0 and c["riesgo_abierto_despues_usd"] == 1960.0 and c["pct_de_la_cuenta"] == 4.0
+    assert "nada lo bloquea" in out["aviso"] and "tope" not in out["lectura"] and "cumple" not in out["lectura"]
 
 
-def test_real_account_with_unpaired_legs_or_no_risk_is_not_evaluable_and_keeps_galecore_missing(kb):  # noqa: F811
-    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+def test_real_account_with_unpaired_legs_or_no_risk_keeps_galecore_missing():
     unpaired = "Patas sin emparejar (no suman a riesgo ni exposición): SPY 251121P00700000."
     small = {"maxRisk": 100.0, "positions": [], "missing": [unpaired, "Historia del valor de la cuenta: sin dato."]}
-    out = capital.real_account(kb, lambda path: _overview(**small), width=5, credit=4.5)
-    assert out["riesgo_abierto_completo"] is False and out["tope_sumado"] == "no evaluable"
-    assert out["margen_sumado_usd"] is None and "(incompleto)" in out["lectura"]
-    assert out["faltantes"][:2] == ["afecta el tope sumado: " + unpaired, "Historia del valor de la cuenta: sin dato."]
-    c = out["candidato"]
-    assert c["cumple_los_dos_topes"] is None and [t["estado"] for t in c["topes"]] == ["cumple", "no evaluable"]
-    assert "el sumado no es evaluable" in out["lectura"]
-    # an incomplete total that is already over the cap is over it
-    assert capital.real_account(kb, lambda path: _overview(missing=[unpaired]))["tope_sumado"] == "no cumple"
-    # no risk reported is not zero
-    none = capital.real_account(kb, lambda path: _overview(maxRisk=None, positions=[]), width=5, credit=4.5)
-    assert none["riesgo_abierto_usd"] is None and none["tope_sumado"] == "no evaluable"
-    assert none["candidato"]["cumple_los_dos_topes"] is None
+    out = capital.real_account(lambda path: _overview(**small), width=5, credit=4.5)
+    assert out["riesgo_abierto_completo"] is False and "(incompleto)" in out["lectura"]
+    assert out["faltantes"][:2] == ["afecta el riesgo abierto: " + unpaired, "Historia del valor de la cuenta: sin dato."]
+    none = capital.real_account(lambda path: _overview(maxRisk=None, positions=[]), width=5, credit=4.5)
+    assert none["riesgo_abierto_usd"] is None and none["candidato"]["riesgo_abierto_despues_usd"] is None
     assert any("no informó el riesgo abierto" in f for f in none["faltantes"])
 
 
-def test_complete_account_within_both_caps_says_so(kb):  # noqa: F811
-    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
-    ok = {"maxRisk": 100.0, "positions": [{"symbol": "SPY", "structure": "PUT_CS", "maxLoss": 100.0}], "missing": []}
-    out = capital.real_account(kb, lambda path: _overview(**ok), width=5, credit=4.5)
-    assert out["tope_sumado"] == "cumple" and out["candidato"]["cumple_los_dos_topes"] is True
-    assert "cumple los dos topes" in out["lectura"]
-
-
 class _Doc:
-    def __init__(self, amount, spec_hash=""):
-        self.content = type("C", (), {"simulated_amount_usd": amount})()
+    def __init__(self, amount, spec_hash="", limits=None):
+        self.content = SimpleNamespace(simulated_amount_usd=amount, limits=limits)
         self.spec_hash = spec_hash
 
 
@@ -227,16 +201,20 @@ class _Store:
         return key in self.approved or None
 
 
+def _pick(a):
+    return {k: a[k] for k in ("version", "aprobada", "corriendo", "monto")}
+
+
 def test_simulated_amount_comes_from_the_approved_version_not_a_later_draft():
     docs = {"a/1.0.3": _Doc(4000.0), "a/1.0.10": _Doc(9000.0),   # approved A, later draft B
             "old/1.0.0": _Doc(None),                              # an old design without an amount
             "b/1.0.0": _Doc(2000.0), "c/1.0.0": _Doc(3000.0)}     # several strategies, different amounts
     fake = type("KB", (), {"strategies": _Store(docs, {"a/1.0.3", "b/1.0.0"})})()
     out = capital._simulated_amounts(fake, ["a", "old", "b", "c", "none"])
-    assert out["a"] == {"version": "1.0.3", "aprobada": True, "corriendo": False, "monto": 4000.0}
+    assert _pick(out["a"]) == {"version": "1.0.3", "aprobada": True, "corriendo": False, "monto": 4000.0}
     assert out["old"]["monto"] is None and out["b"]["monto"] == 2000.0
-    assert out["c"] == {"version": "1.0.0", "aprobada": False, "corriendo": False, "monto": 3000.0}   # a draft
-    assert out["none"] == {"version": None, "aprobada": False, "corriendo": False, "monto": None}
+    assert _pick(out["c"]) == {"version": "1.0.0", "aprobada": False, "corriendo": False, "monto": 3000.0}   # a draft
+    assert _pick(out["none"]) == {"version": None, "aprobada": False, "corriendo": False, "monto": None}
 
 
 def test_simulated_amount_comes_from_the_version_shadow_runs_not_a_newer_approval():
@@ -244,7 +222,7 @@ def test_simulated_amount_comes_from_the_version_shadow_runs_not_a_newer_approva
     docs = {"a/1.0.0": _Doc(4000.0, "sha256:old"), "a/1.0.1": _Doc(9000.0, "sha256:new")}
     fake = type("KB", (), {"strategies": _Store(docs, {"a/1.0.0", "a/1.0.1"})})()
     out = capital._simulated_amounts(fake, ["a"], running={"sha256:old"})
-    assert out["a"] == {"version": "1.0.0", "aprobada": True, "corriendo": True, "monto": 4000.0}
+    assert _pick(out["a"]) == {"version": "1.0.0", "aprobada": True, "corriendo": True, "monto": 4000.0}
     assert capital._simulated_amounts(fake, ["a"], running=set())["a"]["version"] == "1.0.1"   # none running
 
 
@@ -255,10 +233,8 @@ def test_running_hashes_are_the_running_shadow_instances():
     assert capital._running_hashes(lambda path: (_ for _ in ()).throw(RuntimeError("down"))) is None
 
 
-def test_report_sized_by_declared_amounts_does_not_need_the_real_accounts_reference_capital(kb):  # noqa: F811
-    from types import SimpleNamespace
-    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)   # no capital
-    fake = SimpleNamespace(profile=kb.profile, strategies=_Store({"spy_pcs/1.0.5": _Doc(4000.0)}, {"spy_pcs/1.0.5"}))
+def test_report_sized_by_declared_amounts_with_each_strategys_limits():
+    kb = _kb(_Doc(4000.0, limits=SL))
     asked = []
 
     def read(path):
@@ -267,22 +243,19 @@ def test_report_sized_by_declared_amounts_does_not_need_the_real_accounts_refere
         asked.append(path)
         return exposure() if path.startswith("/App/Runtime/Exposure") else allocation()
 
-    out = capital.report(fake, read)
+    out = capital.report(kb, read)
     assert "status" not in out and asked[0].startswith("/App/Runtime/Exposure?capital=4000.0&")
     assert out["montos_simulados"][0]["monto_usd"] == 4000.0
-    # a what-if has no declared amount to stand on: the reference capital is still needed there
-    what_if = capital.report(fake, read, capital=3000.0)
-    assert what_if["status"] == "MISSING_LIMITS" and "capital de referencia" in what_if["error"]
+    # a what-if brings its own capital: only the design's percentages are needed
+    assert capital.report(kb, read, capital=3000.0)["reparto"]["capital"] == 3000.0
+    bare = capital.report(_kb(_Doc(None, limits=SL)), read)                       # no amount declared: not split
+    assert bare["status"] == "MISSING_LIMITS" and "monto simulado" in bare["error"]
 
 
-def test_real_account_refuses_half_a_candidate_and_missing_limits(kb):  # noqa: F811
-    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+def test_real_account_refuses_half_a_candidate():
     try:
-        capital.real_account(kb, lambda path: _overview(), width=5)
+        capital.real_account(lambda path: _overview(), width=5)
     except supervisor.SupervisorError as exc:
         assert "ancho y crédito" in str(exc)
     else:
         raise AssertionError("expected SupervisorError")
-    set_profile(kb.profile, changes={"risk_limits": LIMITS[:1]}, note="n", prompt="p", host=HOST, now=NOW)
-    out = capital.real_account(kb, lambda path: (_ for _ in ()).throw(AssertionError(path)))
-    assert out["status"] == "MISSING_LIMITS" and "riesgo máximo sumado" in out["error"]

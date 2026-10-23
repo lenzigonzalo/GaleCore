@@ -49,13 +49,12 @@ def _num(v) -> float | None:
 
 
 def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object] | None = None) -> dict:
-    """The version's limits against the profile (AC-02). The per-trade loss is the spec's cap, which the runtime
+    """The version's limits against the ones its own design declares (AC-02, WS-0058). The per-trade loss is the spec's cap, which the runtime
     enforces ((width − credit) × 100); without a cap, the full width × 100 bounds it. The sum is the worst case of
     every allowed position at that loss. Both are per contract: a saved version always sizes one contract (the check
-    refuses any other sizing), and the profile limits are bounds computed here from its percentages. What is open
+    refuses any other sizing), and the design limits are bounds computed here from their percentages of its simulated amount. What is open
     now comes from GaleCore's Exposure, as it is."""
-    profile = kb.profile.latest()
-    lim = capital.limits(profile.content if profile else None)
+    lim = capital.limits(doc)
     spec = json.loads(doc.spec_json)
     limits_ = spec.get("risk_limits") or {}
     legs = (spec.get("candidate_construction") or {}).get("legs") or []
@@ -66,7 +65,7 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
         (width * 100, "ancho completo × 100; la spec no fija tope") if width is not None else (None, "no calculable"))
     positions = _num(limits_.get("max_concurrent_positions"))
     ref = doc.content.simulated_amount_usd   # WS-0043 (1e): what is simulated is sized with its own amount
-    rows, missing = [], [x if x.startswith("perfil") else f"perfil: {x}" for x in lim["no_leidos"] if x != "capital de referencia"]
+    rows, missing = [], [f"límites del diseño: {x}" for x in lim["no_leidos"] if x != "monto simulado"]
     if ref is None:
         missing.append("monto simulado: el diseño no lo declara, no se miden los topes")
     if ref is not None and lim.get("maxRiskPerTradePct") is not None and per_trade is not None:
@@ -102,8 +101,7 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
                 missing.append(f"lo abierto en SHADOW: respuesta inesperada de GaleCore ({exc!r})")
     elif read is None:
         missing.append("lo abierto en SHADOW: no se consultó GaleCore")
-    return {"rows": rows, "kill_switch": kill_text, "open_now": opened, "over_limit": broken, "missing": missing,
-            "profile": profile.ref if profile else None}
+    return {"rows": rows, "kill_switch": kill_text, "open_now": opened, "over_limit": broken, "missing": missing}
 
 
 STRUCTURE_LABEL = {"put_credit_spread": "PCS", "call_credit_spread": "CCS", "iron_condor": "Iron condor",
@@ -217,7 +215,7 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
                   for s in c.management]
     else:
         lines += ["Sin árbol de gestión (versión guardada antes de WS-0016)."]
-    lines += ["", f"## Riesgo contra el perfil ({r['profile'] or 'sin perfil'})", ""]
+    lines += ["", "## Riesgo contra los límites del diseño", ""]
     if r["rows"]:
         lines += ["| Qué | Esta versión | Límite del perfil (% × capital) | |", "|---|---|---|---|"]
         lines += [f"| {a} | {b} | {c} | {d} |" for a, b, c, d in r["rows"]]

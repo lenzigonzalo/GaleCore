@@ -6,7 +6,7 @@ description: >
   «¿Cómo viene la estrategia? ¿Cuánto rinde mi cartera contra mi objetivo? ¿Es edge o suerte? ¿Qué aprendo de cada
   cierre? ¿Qué esperábamos cuando decidimos?» GaleCore calcula (por estrategia, versión y regla de salida; la cartera
   contra el capital de referencia; cada cierre contra el nivel que planeaba su regla) y `performance` lo pone contra el
-  perfil (objetivo, utilidad mínima, criterio de edge, límites) y las decisiones guardadas. El modelo sólo lo presenta.
+  el diseño de la estrategia (objetivo, utilidad mínima, criterio de edge, límites) y las decisiones guardadas. El modelo sólo lo presenta.
   Para qué mirar hoy, daily-attention; para capital disponible, capital-risk.
 output_contract: galecore_ai.contracts.research.ResearchContent
 ---
@@ -20,7 +20,7 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 - Para la semana: `supervise list` (avisos), `story pack` o la última historia del mercado, `contrast pack` o el
   calendario del supervisor (eventos que vienen).
 - Todo número sale de su salida: nunca recalcular, reescalar ni redondear; citar «GaleCore App/Runtime/Performance» y
-  la versión del perfil que nombra.
+  la versión del diseño que nombra.
 
 ## Pasos
 1. **Tablas primero:** cartera contra el objetivo (rendimiento, anualizado, objetivo, mínimo, drawdown usado, riesgo
@@ -39,7 +39,7 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 5. **Semana** («resumime la semana»): `performance --since <lunes>`. La semana es `ventana` (cierres desde el lunes:
    resultado y por regla) y `operaciones`; `cartera`, `edge` y los desgloses quedan acumulados (ver `alcance`): decir
    cuál es cuál. Una sección corta por pieza (avisos, historia, eventos que vienen); decir cuál no se pudo leer.
-6. **«¿Cómo viene X? ¿Dónde falla?»** con `paneles.X` (`pedido_con` dice qué del perfil se le pasó): resultado y máxima
+6. **«¿Cómo viene X? ¿Dónde falla?»** con `paneles.X` (`pedido_con` dice qué del diseño se le pasó): resultado y máxima
    caída; acierto, ganancia y pérdida promedio, factor de ganancia, esperanza, peor operación y racha de pérdidas;
    `regime` (VIX, IV Rank, gamma), `byExitRule` y `byVersion` para decir DÓNDE gana y DÓNDE pierde; `references` contra
    el objetivo; `hypothesis` (muestra, no edge); `execution` (cruce del bid/ask). Un `Metric` con `value: null` va con

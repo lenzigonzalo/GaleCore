@@ -14,11 +14,7 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 X», una idea que necesita antecedentes, hipótesis y una prueba antes de decidir algo.
 
 ## Qué necesita
-- `profile show`: aplicá lo que declara sin volver a preguntar (capital de referencia para tamaños y ejemplos;
-  objetivos, horizonte, drawdown y límites como marco; formato e idioma). Citalo
-  como antecedente `profile:v<N>` (qué aplicaste y cómo pesa). Un campo que falta y que importa va a `missing`, nunca
-  supuesto; sin perfil, decilo y seguí. Los campos en `provisional` se usan, pero toda conclusión que dependa de ellos
-  se marca provisoria.
+- nombre, intereses y memoria del trader ya vienen en el contexto: tenelos en cuenta sin volver a preguntar. Un dato que falta y que importa va a `missing`, nunca supuesto.
 - `kb search --text "<términos>"` (y `--status unfinished` para lo abierto o con prueba planificada); `kb show <ref>`.
 
 ## Pasos
@@ -42,7 +38,7 @@ Un `ResearchContent` guardado y, al trader, lo esencial en tabla:
 |---|---|
 | title, question | nombre corto y la pregunta |
 | status | open · test_planned · concluded · abandoned |
-| antecedents | `{ref, summary, bearing}`; ref = `regime:<SYM>/<fecha>`, `research:<id>`, `profile:v<N>` o `file:<ruta>` |
+| antecedents | `{ref, summary, bearing}`; ref = `regime:<SYM>/<fecha>`, `research:<id>` o `file:<ruta>` |
 | statements | `{kind, text, sources}`; un hecho lleva al menos una fuente |
 | hypothesis | obligatoria con plan de prueba |
 | test_plan | `{step, data_needed, supports_if, weakens_if}` |

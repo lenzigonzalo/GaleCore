@@ -86,7 +86,6 @@ entries:
     flow:
       - catalog
       - sources query --need "<dato>"
-      - profile show
       - catalog --check
       - feedback add --research research:<id> --revision <N> --classification <kind> --slug <slug> --prompt "<pedido>"
       - feedback list
@@ -94,7 +93,6 @@ entries:
     stored_as: none
     controls:
       - "catalog --check rejects an entry whose skill or contract does not load, whose flow names a command this CLI does not have (or a script not in the workspace), whose data need no registered source covers without a declared reason, or whose controls do not say what is not checked"
-      - A result stored as research must cite the profile in force (enforced when saving)
       - "feedback add rejects a result or revision that does not exist and takes the skill and version from that revision; written once, hashed"
       - "A profile version or skill history may only cite feedback of its kind (preference / method), and a skill version only feedback about an earlier version of that skill; feedback list counts as applied only a citation where its kind belongs"
       - "One case is not a rule: a skill version citing method feedback needs comments on two different results or the owner's words in owner_decision (catalog --check)"
@@ -293,7 +291,6 @@ entries:
       - need: reuniones del FOMC
       - need: calendario macro
     flow:
-      - profile show
       - kb search --kind strategy
       - kb show strategy:<name>/<version>
       - kb search --kind research --text "atencion diaria <strategy>"
@@ -309,7 +306,7 @@ entries:
     controls:
       - The research, evidence and strategy_followup controls; the runtime report is kept verbatim as evidence
       - Only data of the instance whose version hash equals the approved spec hash
-      - A save must cite the profile in force (profile:v<N>); each revision records this skill's version and hash
+      - Each revision records this skill's version and hash
       - A data need no registered source covers is declared missing, never estimated
       - "Not checked - that exposure is compared against the right limits, that the rules were applied correctly to each position, or that the attention points are the right ones"
       - Not checked - that the events x positions table is present, complete for the range, or reads each event's bearing right; the next run shows it
@@ -340,7 +337,6 @@ entries:
       - need: velas de SPY
       - need: calendario macro
     flow:
-      - profile show
       - kb search --kind research --text "<agent slug>"
       - galecore list
       - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
@@ -352,7 +348,7 @@ entries:
     stored_as: research
     controls:
       - The research and evidence controls; every reported number comes from a stored response
-      - A save must cite the profile in force (profile:v<N>); each revision records this skill's version and hash
+      - Each revision records this skill's version and hash
       - "Read-only: a candidate is described, never advised (the runner refuses advice addressed to the reader); no orders"
       - A condition that cannot be evaluated with the data available is declared not evaluated, never assumed met
       - "A scheduled run calls the model (sonnet) with only the read commands of this flow and a turn cap; the runner validates and saves the result"
@@ -388,7 +384,6 @@ entries:
         missing: ninguna fuente registrada cubre noticias en una corrida programada; en sesión, Alpha Vantage NEWS_SENTIMENT sin probar (inventory)
     flow:
       - story pack --symbol <SYMBOL> --prompt "<pedido>"
-      - profile show
       - kb search --kind research --text "historia del mercado"
       - kb show <ref>
       - research save --capability market_story --slug historia-del-mercado-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}
@@ -397,7 +392,7 @@ entries:
     controls:
       - "The pack is gathered by code from GaleCore (no model): one call per capability, changes and term ratios computed here, a failed call declared in missing, never estimated"
       - The pack is kept as one evidence item and compared with the previous pack of the symbol (moves and sign flips)
-      - The research controls; every reported number cites the pack; a save must cite the profile in force
+      - The research controls; every reported number cites the pack
       - "A scheduled run: the runner gathers the pack, then the model (sonnet; what the code flags — a sign flip, a big SPY/VIX move, a macro release near today — goes in the run event) reads it with only read commands and a turn cap; the runner validates and saves"
       - "Read-only: describes, never advises (the runner refuses advice addressed to the reader); no orders"
       - "Not checked - that the story is right or anticipates anything; the next readings and the owner's feedback exist to judge that"
@@ -433,7 +428,6 @@ entries:
         missing: ninguna fuente registrada trae consenso ni estimaciones de analistas
     flow:
       - analyze pack --kind macro|technical|fundamental|flow [--symbol SYM] --prompt "<pedido>"
-      - profile show
       - kb search --kind research --text "<análisis, símbolo>"
       - kb show <ref>
       - research save --capability on_demand_analysis --slug analisis-<kind>-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}
@@ -442,7 +436,7 @@ entries:
     controls:
       - "The pack is gathered by code from GaleCore (no model); descriptive numbers computed here and labelled; a failed call or a source that does not exist is declared in missing"
       - The pack is kept as one evidence item and points at the previous one of the same kind and symbol
-      - The research controls; every reported number cites the pack; a save must cite the profile in force
+      - The research controls; every reported number cites the pack
       - "Not checked - that the reading is right; consensus and estimates are missing, so surprises are not measured"
 
   - id: company_research
@@ -477,7 +471,6 @@ entries:
       - analyze pack --kind technical --symbol SYM --prompt "<pedido>"
       - analyze pack --kind macro --prompt "<pedido>"
       - galecore get filings.sec_document --param Ticker=SYM --param Items=1,1A,7 --param MaxChars=30000 --keep "<pedido>"
-      - profile show
       - kb search --kind research --text "empresa <symbol>"
       - research save --capability company_research --slug empresa-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}
       - research revise --capability company_research --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
@@ -486,7 +479,7 @@ entries:
       - "Numbers are gathered and computed by code from GaleCore (analyze pack); the model interprets and cites the packs"
       - "Two routes: Investigar explains a company whatever its numbers; Seleccionar compares a stated list against one declared profile"
       - "A company outside the method (banks, insurers) is an incomplete evaluation, never a pass"
-      - The research controls; every reported number cites the pack; a save must cite the profile in force
+      - The research controls; every reported number cites the pack
       - "Not checked - that the thesis is right; news, consensus beyond next EPS and guidance are missing"
 
   - id: scheduled_report
@@ -505,7 +498,6 @@ entries:
       - need: GEX de SPY
       - need: calendario macro
     flow:
-      - profile show
       - kb search --kind research --text "<report slug>"
       - kb show research:<id>
       - galecore list
@@ -516,7 +508,7 @@ entries:
     stored_as: research
     controls:
       - The research and evidence controls; every reported number comes from a stored response
-      - A save must cite the profile in force (profile:v<N>); each revision records this skill's version and hash
+      - Each revision records this skill's version and hash
       - "Read-only: the report describes, never advises (the runner refuses advice addressed to the reader); no orders"
       - "A scheduled run calls the model (sonnet) with only the read commands of this flow and a turn cap; the runner validates and saves the result"
       - Not checked - that the report answers what the owner wanted or that its reading is right; the first real run shows it
@@ -546,12 +538,11 @@ entries:
       - performance [--strategy <name>] [--since <YYYY-MM-DD>]   # GaleCore calcula; el código lo pone contra el perfil y las decisiones
       - supervise list
       - story pack
-      - profile show
     stored_as: none
     controls:
-      - "Numbers come from GaleCore App/Runtime/Performance; the code only compares them with the profile's numbers, read from its words (what cannot be read is listed in criterios.no_leidos, never guessed)"
-      - "Edge: below the profile's sample (closes and days) the conclusion is «sin edge demostrado» whatever the result"
-      - "A close's diagnosis separates observado (rule of the profile not respected, fill worse than its rule's level beyond max(2 USD, 10 % of the credit)) from hipotesis (a loss inside the plan: thesis to review only if it repeats)"
+      - "Numbers come from GaleCore App/Runtime/Performance; the code only compares them with the numbers the strategy declares in its design (what it does not declare is listed in criterios.no_leidos, never guessed)"
+      - "Edge: below the strategy's declared sample (closes and days) the conclusion is «sin edge demostrado» whatever the result"
+      - "A close's diagnosis separates observado (limit of the design not respected, fill worse than its rule's level beyond max(2 USD, 10 % of the credit)) from hipotesis (a loss inside the plan: thesis to review only if it repeats)"
       - "Not checked - costs (SHADOW fills at mid, no commissions), comparison against cash (no risk-free rate in the report), positions closed before persistence existed"
 
   - id: capital_risk
@@ -578,11 +569,10 @@ entries:
       - need: exposición y reparto SHADOW
     flow:
       - capital [--amount <USD>] [--strategy <name>]   # GaleCore calcula; el código le pasa los % del perfil
-      - profile show
     stored_as: none
     controls:
-      - "Numbers come from GaleCore App/Runtime/Exposure and App/Runtime/Allocation; the limits are the profile's percentages, read from its words (a missing one stops with MISSING_LIMITS, never guessed); with another capital the same percentages apply to it (owner, 06/10)"
-      - "A bet is same underlying, direction and ISO expiry week; one bet is capped at the profile's % of the allowed open risk, and the ladder keeps each week under it"
+      - "Numbers come from GaleCore App/Runtime/Exposure and App/Runtime/Allocation; the limits are the percentages each strategy declares in its design (a missing one stops with MISSING_LIMITS, never guessed); with another capital the same percentages apply to it (owner, 06/10)"
+      - "A bet is same underlying, direction and ISO expiry week; one bet is capped at the strategy's % of the allowed open risk, and the ladder keeps each week under it"
       - "The split is never an order: a narrower width is a new version with approval; waiting in cash is always an alternative"
       - "Not checked - real account (no broker: on the reference capital), correlation between underlyings, costs, holidays in the ladder"
 
@@ -635,7 +625,6 @@ entries:
     galecore_capabilities: []
     data_needs: []
     flow:
-      - profile show
       - kb search --kind research --text "curaduria"
       - kb search --since <YYYY-MM-DD>
       - kb show <ref>
@@ -646,7 +635,7 @@ entries:
     stored_as: research
     controls:
       - The research controls; every statement cites the stored item it comes from, and a marked item cannot be cited
-      - A save must cite the profile in force (profile:v<N>); each revision records this skill's version and hash
+      - Each revision records this skill's version and hash
       - "Read-only besides its own result: a scheduled run cannot mark, apply feedback or change a skill (the flow allows only reads and its research); marks and rules are proposals for the owner"
       - "Not checked - that what it kept is what matters most, or that a proposal to mark is right; the owner decides"
     schedulable: {runs: model, work: reading, max_turns: 20, timeout_minutes: 20}
@@ -677,7 +666,7 @@ entries:
     stored_as: research
     controls:
       - The pack is built by code from stored items, each with its reference; a stale story or a strategy without its story is declared
-      - The research controls apply to the reading (cited refs resolve, facts cite a source, the profile in force is cited)
+      - The research controls apply to the reading (cited refs resolve, facts cite a source)
       - Each proposal is one of prender | mantener | esperar | apagar | sin datos and says «qué la cambiaría» (refused otherwise)
       - Proposals only; nothing is deployed, paused or changed here; the owner's decision is kept in the strategy's project
       - "Not checked - that the proposal is right; that the story read is still the market's"

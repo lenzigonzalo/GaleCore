@@ -34,7 +34,6 @@ Usage:
     python -m galecore_ai.adapters.cli analyze company --symbols A,B,C --prompt "..."
     python -m galecore_ai.adapters.cli galecore list | get CAPABILITY --symbol SYM [--param k=v ...] [--out FILE]
     python -m galecore_ai.adapters.cli space context | list [--kind K] | show K/KEY | put K/KEY --title T [--visibility V] [--format F] < content | delete K/KEY | import
-    python -m galecore_ai.adapters.cli profile review
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
@@ -108,10 +107,6 @@ from galecore_ai.application.knowledge import search as kb_search
 from galecore_ai.application.knowledge import show as kb_show
 from galecore_ai.application.prepare_gex import PrepareError, prepare_gex_snapshot
 from galecore_ai.application.prepare_regime import fetch_regime_facts, prepare_regime_snapshot
-from galecore_ai.application.profile import ProfileError, ProfileUnusable, set_profile
-from galecore_ai.application.profile import history as profile_history
-from galecore_ai.application.profile import review as profile_review
-from galecore_ai.application.profile import show as profile_show
 from galecore_ai.application.record_regime import (
     RecordError,
     query_records,
@@ -465,7 +460,7 @@ def _cmd_schema(args: argparse.Namespace) -> None:
                               "strategy:<name>/<version>, profile:v<N>, feedback:<id>, project:<name>",
                "spec": "strategy save --spec: partí de un spec existente (`kb show strategy:<name>/<version>`, "
                        "campo spec_json)" if args.kind == "proposal" else None,
-               "ademas": ["antecedents incluye el perfil vigente (profile:vN, de `profile show`)",
+               "ademas": [
                           "al menos una limitación en limitations",
                           "status open o test_planned: al menos un next_step; test_planned además hypothesis y test_plan"]
                          if args.kind == "research" else None,
@@ -710,12 +705,6 @@ async def _cmd_galecore(args: argparse.Namespace) -> None:
         if not sep or not key:
             _error_out(f"--param must be key=value: {item!r}", exit_code=_EXIT_VALIDATION_ERROR)
         params[key] = value
-    if args.capability == "account.overview" and not {"maxRiskPerTradePct", "maxOpenRiskPct"} & params.keys():
-        # WS-0043 (owner 16/10): the real account is judged with the profile caps, like the Monitor (its own space)
-        from galecore_ai.application.capital import limits
-        doc = _build_knowledge_base().profile.latest()
-        lim = limits(doc.content if doc else None)
-        params |= {k: lim[k] for k in ("maxRiskPerTradePct", "maxOpenRiskPct") if lim.get(k) is not None}
     result = await _build_dispatcher().invoke(args.capability, params)
     if not result.ok:
         from galecore_ai.application import gap_log
@@ -791,17 +780,12 @@ async def _cmd_space(args: argparse.Namespace) -> None:
         elif c == "import":
             from galecore_ai.application.tasks import WindowsScheduler
             kb = _build_knowledge_base()
-            pieces, held = space.guard_profile(client, kb, [p for p in space.local_pieces(kb) if p["kind"] != "agent"])
-            result = space.sync(client, pieces)
-            result["deferred"] = result.get("deferred", []) + held
+            result = space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] != "agent"])
             agents = space.publish_agents(client, kb, WindowsScheduler())   # agents keep the monitor's requests
             for k in ("created", "updated", "unchanged", "deferred"):
                 result[k] = result.get(k, []) + agents[k]
             _json_out({"status": "SYNCED", "user": client.user, "credentials": client.source,
                        "requests": agents["requests"], **result})
-        elif c == "pull-profile":
-            _json_out(space.pull_profile(client, _build_knowledge_base(),
-                                        RecordHost(provider=os.environ.get("GALECORE_HOST_PROVIDER") or "claude-code", model=args.host_model)))
         elif c == "agents":
             from galecore_ai.application.tasks import (
                 SYNC_MINUTES,
@@ -882,14 +866,7 @@ async def _cmd_project(args: argparse.Namespace) -> None:
                     raise KnowledgeError("project design needs strategy:<name>")
                 view = project.strategy_design_view(kb, target.split(":", 1)[1])
             elif target == "portfolio":
-                state, error = None, None
-                try:
-                    from galecore_ai.adapters.galecore_space import SpaceClient
-                    from galecore_ai.application.space import profile_state
-                    state = profile_state(SpaceClient(), kb)
-                except Exception as exc:  # noqa: BLE001 - any failure reaching GaleCore is declared, not fatal
-                    error = f"{type(exc).__name__}: {str(exc)[:200]}"
-                view = project.portfolio_project(kb, state, error)
+                view = project.portfolio_project(kb)
             elif target.startswith("strategy:"):
                 view = project.strategy_project(kb, target.split(":", 1)[1])
             else:
@@ -931,7 +908,7 @@ async def _cmd_capital(args: argparse.Namespace) -> None:
     kb = _build_knowledge_base()
     try:
         if args.real:
-            out = capital.real_account(kb, supervisor.api_reader(), width=args.width, credit=args.credit,
+            out = capital.real_account(supervisor.api_reader(), width=args.width, credit=args.credit,
                                        contracts=args.contracts, symbol=args.symbol)
         else:
             out = capital.report(kb, supervisor.api_reader(), capital=args.amount, strategies=args.strategy)
@@ -1024,15 +1001,8 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
 async def _cmd_contrast(args: argparse.Namespace) -> None:
     from galecore_ai.application import contrast
     kb = _build_knowledge_base()
-    state, error = None, None
     try:
-        from galecore_ai.adapters.galecore_space import SpaceClient
-        from galecore_ai.application.space import profile_state
-        state = profile_state(SpaceClient(), kb)
-    except Exception as exc:  # noqa: BLE001 - any failure reaching GaleCore is declared, not fatal
-        error = f"{type(exc).__name__}: {str(exc)[:200]}"
-    try:
-        view = contrast.pack(kb, symbol=args.symbol, space_state=state, space_error=error)
+        view = contrast.pack(kb, symbol=args.symbol)
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
         return
@@ -1066,43 +1036,6 @@ async def _cmd_feedback(args: argparse.Namespace) -> None:
     _json_out({"status": "RECORDED", "ref": document.ref, "path": str(path),
                "classification": document.classification.value, "target": document.target.model_dump(mode="json"),
                "content_hash": document.content_hash})
-
-
-async def _cmd_profile(args: argparse.Namespace) -> None:
-    kb = _build_knowledge_base()
-    store = kb.profile
-    try:
-        if args.profile_command == "show":
-            _json_out(profile_show(store))
-        elif args.profile_command == "history":
-            _json_out({"versions": profile_history(store)})
-        elif args.profile_command == "review":
-            _json_out(profile_review(kb))
-        else:
-            try:
-                payload = json.loads(_read_stdin())
-            except (json.JSONDecodeError, OSError, UnicodeDecodeError) as exc:
-                _error_out(f"Invalid JSON input: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
-                raise AssertionError("unreachable") from exc
-            if not isinstance(payload, dict) or not isinstance(payload.get("changes"), dict) or not payload["changes"]:
-                _error_out("Input must be a JSON object with a non-empty 'changes' object",
-                           exit_code=_EXIT_VALIDATION_ERROR)
-            problems = check_feedback_citations(kb, args.feedback, kind=FeedbackKind.PREFERENCE)
-            if problems:
-                raise ProfileError("Refusing to change the profile", problems)
-            doc, path = set_profile(store, changes=payload["changes"], note=args.note, prompt=args.prompt,
-                                    host=RecordHost(provider=args.host_provider, model=args.host_model),
-                                    feedback=args.feedback)
-            if path is None:
-                _json_out({"status": "UNCHANGED", "ref": doc.ref, "missing": doc.content.missing()})
-            else:
-                _json_out({"status": "RECORDED", "ref": doc.ref, "path": str(path),
-                           "content": doc.content.model_dump(mode="json"), "missing": doc.content.missing(),
-                           "content_hash": doc.content_hash})
-    except ProfileError as exc:
-        _json_out({"status": "INTEGRITY_FAILED" if isinstance(exc, ProfileUnusable) else "REJECTED",
-                   "error": str(exc), "problems": exc.problems,
-                   "timestamp": datetime.now(UTC).isoformat()}, exit_code=_EXIT_VALIDATION_ERROR)
 
 
 def _append_observation(store: FileSourceStatusStore, source_id: str,
@@ -1500,20 +1433,6 @@ def build_parser() -> _JsonArgumentParser:
     p_mark.add_argument("--prompt", required=True, help="The owner's words that asked for it")
     p_mark.add_argument("--host-model", dest="host_model")
 
-    p_profile = sub.add_parser("profile", help="Your profile: objectives, capital, horizon, limits, format")
-    prof_sub = p_profile.add_subparsers(dest="profile_command", required=True)
-    prof_sub.add_parser("show", help="Current version and what is still missing")
-    prof_sub.add_parser("history", help="All versions, newest first")
-    prof_sub.add_parser("review", help="What is missing, vague or provisional in your criteria and mandate, "
-                                       "and what your strategies leave open")
-    p_prof_set = prof_sub.add_parser("set", help="Change fields ({\"changes\": {...}} on stdin); a new version")
-    p_prof_set.add_argument("--note", required=True, help="What this version changes")
-    p_prof_set.add_argument("--prompt", required=True, help="The user's words that asked for it")
-    p_prof_set.add_argument("--host-provider", dest="host_provider", default="claude-code")
-    p_prof_set.add_argument("--host-model", dest="host_model", required=True)
-    p_prof_set.add_argument("--feedback", action="append", default=[],
-                            help="feedback:<id> (classified preference) that this version applies; repeatable")
-
     p_feedback = sub.add_parser("feedback", help="Your comment on a stored result, and whether it was applied")
     fb_sub = p_feedback.add_subparsers(dest="feedback_command", required=True)
     p_fb_add = fb_sub.add_parser("add", help="Keep a comment ({\"words\": ...} on stdin) tied to one revision")
@@ -1547,10 +1466,7 @@ def build_parser() -> _JsonArgumentParser:
     p_sp_put.add_argument("--format", default="markdown", choices=["markdown", "json"])
     p_sp_put.add_argument("--visibility", default="private", choices=["private", "shared"])
     sp_sub.add_parser("delete", help="Delete one of your pieces").add_argument("ref", help="kind/key")
-    sp_sub.add_parser("import", help="Bring the local profile, objectives, conventions, agents and skills (only changes)")
-    p_sp_pull = sp_sub.add_parser("pull-profile", help="Bring a profile edited in the monitor as a new local version "
-                                                       "(GC-AI-0026: the space rules)")
-    p_sp_pull.add_argument("--host-model", dest="host_model")
+    sp_sub.add_parser("import", help="Bring the local agents and skills (only changes)")
     p_sp_agents = sp_sub.add_parser("agents", help="Apply the monitor's on/off requests and publish each agent's state, "
                                                    "last run and findings (GC-AI-0023)")
     p_sp_agents.add_argument("--install", action="store_true",
@@ -1892,8 +1808,6 @@ def main() -> None:
             asyncio.run(_cmd_evidence_add(args))
         elif args.command == "sources":
             asyncio.run(_cmd_sources(args))
-        elif args.command == "profile":
-            asyncio.run(_cmd_profile(args))
         elif args.command == "feedback":
             asyncio.run(_cmd_feedback(args))
         elif args.command == "clock":

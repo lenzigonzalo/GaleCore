@@ -6,9 +6,8 @@ import json
 
 import pytest
 
-from galecore_ai.application import project, space
+from galecore_ai.application import project
 from galecore_ai.application.knowledge import KnowledgeError, search
-from galecore_ai.application.profile import set_profile
 from galecore_ai.application.strategy import approve
 from tests.unit.test_knowledge import HOST, NOW, kb, save  # noqa: F401  (kb is a fixture)
 from tests.unit.test_space import galecore  # noqa: F401  (fixture)
@@ -90,45 +89,13 @@ def test_kb_search_finds_project_entries(kb, research_ref):  # noqa: F811
     assert [r["ref"] for r in found] == [f"project:{NAME}"]
 
 
-def test_portfolio_without_galecore_declares_the_profile_unconfirmed(kb, research_ref):  # noqa: F811
+def test_the_portfolio_view_has_strategies_and_its_log_and_no_profile(kb, research_ref):  # noqa: F811
     stored(kb, research_ref)
-    set_profile(kb.profile, changes={"horizon": "30 a 45 días"}, note="horizonte", prompt="p", host=HOST)
     add(kb, "decision", "Máximo dos estrategias a la vez", name="portfolio")
-    view = project.portfolio_project(kb, None, "ConnectError: sin red")
+    view = project.portfolio_project(kb)
     assert [s["name"] for s in view["strategies"]] == [NAME] and view["strategies"][0]["approved"] is None
-    assert view["profile"]["ref"] == "profile:v1" and "sin confirmar" in view["profile"]["source"]
-    assert any("GaleCore no respondió" in m for m in view["missing"])
+    assert "profile" not in view
     assert view["log"]["decisions"][0]["words"] == "Máximo dos estrategias a la vez"
-
-
-def test_a_monitor_edit_is_not_overwritten_and_is_pulled(kb, galecore):  # noqa: F811
-    fake, client = galecore
-    set_profile(kb.profile, changes={"horizon": "30 a 45 días"}, note="horizonte", prompt="p", host=HOST)
-    pieces = space.local_pieces(kb)
-    space.sync(client, [p for p in pieces if p["kind"] != "agent"])
-    assert space.profile_state(client, kb)["state"] == "coherent"
-    row = fake.rows[("profile", "perfil")]                    # the owner edits the horizon in the monitor
-    row["content"] = json.dumps({**json.loads(row["content"]), "horizon": "60 días"})
-    state = space.profile_state(client, kb)
-    assert state["state"] == "edited_in_monitor" and state["ref"] is None
-    kept, held = space.guard_profile(client, kb, pieces)
-    assert not any(p["kind"] == "profile" for p in kept) and held
-    assert project.portfolio_project(kb, state)["missing"][0].startswith("el perfil se editó en el monitor")
-    result = space.pull_profile(client, kb, HOST)
-    assert result["status"] == "PULLED" and result["ref"] == "profile:v2"
-    assert kb.profile.latest().content.horizon == "60 días"
-    space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] != "agent"])
-    assert space.profile_state(client, kb)["state"] == "coherent"
-
-
-def test_a_local_version_not_imported_yet_is_local_newer(kb, galecore):  # noqa: F811
-    _, client = galecore
-    set_profile(kb.profile, changes={"horizon": "30 a 45 días"}, note="v1", prompt="p", host=HOST)
-    space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] == "profile"])
-    set_profile(kb.profile, changes={"horizon": "45 días"}, note="v2", prompt="p", host=HOST)
-    state = space.profile_state(client, kb)
-    assert state["state"] == "local_newer" and state["ref"] == "profile:v2"
-    assert space.guard_profile(client, kb, space.local_pieces(kb))[1] == []
 
 
 def test_a_damaged_log_does_not_hide_the_rest_of_the_view(kb, research_ref):  # noqa: F811
@@ -141,20 +108,6 @@ def test_a_damaged_log_does_not_hide_the_rest_of_the_view(kb, research_ref):  # 
     view = project.strategy_project(kb, NAME)
     assert view["current"]["ref"] == f"strategy:{KEY}" and view["log"]["decisions"] == []
     assert view["integrity_failed"][0]["ref"] == f"project:{NAME}"
-    pf = project.portfolio_project(kb, None, "sin red")
+    pf = project.portfolio_project(kb)
     assert {f["ref"] for f in pf["integrity_failed"]} == {f"project:{NAME}", "project:portfolio"}
     assert pf["strategies"][0]["open_items"] is None
-
-
-def test_a_field_removed_in_the_monitor_is_removed_when_pulled(kb, galecore):  # noqa: F811
-    fake, client = galecore
-    set_profile(kb.profile, changes={"horizon": "30 a 45 días"}, note="v1", prompt="p", host=HOST)
-    space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] == "profile"])
-    row = fake.rows[("profile", "perfil")]
-    content = json.loads(row["content"])
-    content.pop("horizon")
-    row["content"] = json.dumps(content)
-    assert space.pull_profile(client, kb, HOST)["status"] == "PULLED"
-    assert kb.profile.latest().content.horizon != "30 a 45 días"
-    space.sync(client, [p for p in space.local_pieces(kb) if p["kind"] == "profile"])
-    assert space.profile_state(client, kb)["state"] == "coherent"

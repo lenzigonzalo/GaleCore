@@ -17,7 +17,7 @@ símbolos», o la corrida de un agente de oportunidades: el objetivo del agente 
 
 ## Qué necesita
 - El objetivo de la tarea (símbolos, condiciones y qué es un hallazgo, en palabras del owner), leído al pie de la letra.
-- `profile show` (citar la versión); `kb search --kind research --text "<slug del agente>"` y la revisión anterior
+- `kb search --kind research --text "<slug del agente>"` y la revisión anterior
   (`kb show research:<id>`) para decir qué cambió desde la última corrida.
 - GaleCore, lo más barato primero: `galecore list` una vez; `galecore get compute.iv_rank --symbol <SYM>`, `galecore
   get market_data.volatility_metrics --symbol <SYM1,SYM2,...>`, `galecore get compute.implied_volatility --symbol
@@ -42,7 +42,7 @@ símbolos», o la corrida de un agente de oportunidades: el objetivo del agente 
 4. Hallazgos, símbolo por símbolo: CUMPLE (todas las condiciones, con el valor de cada una), CERCA (qué condición falla
    y por cuánto) o NO (una línea). Una estructura candidata (p. ej. un spread de venta de puts con strikes,
    vencimiento, crédito y pérdida máxima) se describe como lo que cumple, nunca como consejo.
-5. Respetar los topes del perfil al describir un candidato (pérdida máxima por operación, pérdida abierta sumada): uno
+5. Respetar los límites del diseño de la estrategia al describir un candidato (pérdida máxima por operación, pérdida abierta sumada): uno
    que pasa un tope va con esa marca, no se esconde.
 6. Estado: OK si se evaluaron todos los símbolos; INCOMPLETE si faltaron datos de alguno (cuál, en `reason` y
    `missing`). Corrida corta: la tarea tiene tope de turnos. Guardar con `research save|revise --capability
@@ -62,7 +62,7 @@ Un candidato cumple todo: QQQ; IWM quedó cerca (IV rank 44 contra 50 pedido).
 ## Errores a evitar
 - Dar por cumplida una condición que no se pudo evaluar, o agregar condiciones propias.
 - Bajar una cadena entera sin `--out`, o pedir griegas de toda la cadena.
-- Esconder un candidato que pasa un tope del perfil.
+- Esconder un candidato que pasa un límite del diseño.
 - Consejos («comprá», «vendé», «conviene», «deberías»): decide el owner.
 
 ## Cómo responder

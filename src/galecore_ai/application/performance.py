@@ -4,25 +4,24 @@
 
 GaleCore computes the numbers (``GET /App/Runtime/Performance``: by strategy, version and exit rule, the portfolio
 against the reference capital, and each closed trade against the level its rule planned). This module reads them
-and sets them against what the owner declared in the profile (objective, minimum return, edge criterion, limits)
+and sets them against what each strategy declares in its design (objective, minimum return, edge criterion, limits)
 and against what the owner said when deciding (the supervisor's alerts and the project's decisions). Deterministic,
-no model call, no financial arithmetic beyond comparing GaleCore's numbers with the profile's.
+no model call, no financial arithmetic beyond comparing GaleCore's numbers with the design's.
 
 The diagnosis of a closed trade follows the research of 05/10 (``knowledge/research/2026-10-05-modelos-de-decision``):
-a label does not prove a cause. Each review keeps apart what is *observed* (a rule of the profile not respected,
+a label does not prove a cause. Each review keeps apart what is *observed* (a limit of the design not respected,
 a close worse than its rule's level) from what is a *hypothesis* (the thesis may be failing), and a loss inside the
 plan is said to be compatible with the strategy. Labels: ``reglas``, ``ejecucion``, ``tesis``, ``todavia_nada``.
 """
 
 from __future__ import annotations
 
-import re
 from datetime import UTC, date, datetime
 from urllib.parse import urlencode
 
 from galecore_ai.application import capital, supervisor
 from galecore_ai.application.knowledge import KnowledgeBase
-from galecore_ai.contracts.profile import ProfileContent
+from galecore_ai.contracts.strategy import StrategyDocument
 
 QUARTER_DAYS = 90
 RULE_EXITS = ("TAKE_PROFIT", "STOP_LOSS", "TIME_EXIT")
@@ -31,54 +30,35 @@ GAP_TOLERANCE_USD = 2.0          # a close within 2 USD (or 10 % of the credit) 
 GAP_TOLERANCE_OF_CREDIT = 0.10
 COSTS_NOTE = "SHADOW llena al mid y sin comisiones: el resultado es antes de costos."
 
-_NUM = r"(\d+(?:[.,]\d+)?)"
-
-
-def _num(text: str) -> float:
-    return float(text.replace(",", "."))
-
-
-def _usd(text: str) -> float | None:
-    """«(1.500 USD)» -> 1500 (the profile writes thousands with a dot)."""
-    m = re.search(r"\(\s*([\d.]+)\s*USD\s*\)", text)
-    return float(m.group(1).replace(".", "")) if m else None
-
-
-def criteria(content: ProfileContent | None) -> dict:
-    """The numbers the profile declares, read from its words. What cannot be read is listed, never guessed."""
+def criteria(docs: dict[str, StrategyDocument | None]) -> dict:
+    """The numbers the strategy declares in its design (WS-0058: `limits` and its simulated amount). Only one strategy
+    at a time has criteria of its own; with several, none is picked for the portfolio. What is not declared is listed,
+    never guessed."""
     out: dict = {"capital": None, "objetivo_anual_pct": None, "minimo_anual_pct": None, "edge_min_cierres": None,
                  "edge_min_dias": None, "perdida_max_operacion_usd": None, "drawdown_max_usd": None, "no_leidos": []}
-    if content is None:
-        out["no_leidos"].append("perfil: no hay perfil")
+    if len(docs) != 1:
+        out["no_leidos"].append("criterios: cada estrategia declara los suyos; pedí una estrategia para compararla")
         return out
-    if content.reference_capital:
-        out["capital"] = content.reference_capital.amount
-    for objective in content.objectives:
-        if m := re.search(_NUM + r"\s*a\s*" + _NUM + r"\s*%", objective):
-            out["objetivo_anual_pct"] = [_num(m.group(1)), _num(m.group(2))]
-            break
-        if m := re.search(_NUM + r"\s*%", objective):
-            out["objetivo_anual_pct"] = [_num(m.group(1)), _num(m.group(1))]
-            break
-    if content.minimum_return and (m := re.search(_NUM + r"\s*%", content.minimum_return)):
-        out["minimo_anual_pct"] = _num(m.group(1))
-    edge = content.edge_criterion or ""
-    if m := re.search(r"(\d+)\s+operaciones", edge):
-        out["edge_min_cierres"] = int(m.group(1))
-    if "trimestre" in edge:
-        out["edge_min_dias"] = QUARTER_DAYS
-    elif m := re.search(r"(\d+)\s+d[ií]as", edge):
-        out["edge_min_dias"] = int(m.group(1))
-    for limit in content.risk_limits:
-        if "por operaci" in limit:
-            out["perdida_max_operacion_usd"] = _usd(limit)
-    if content.max_drawdown:
-        out["drawdown_max_usd"] = _usd(content.max_drawdown)
-    labels = {"capital": "capital de referencia", "objetivo_anual_pct": "objetivo (objectives)",
-              "minimo_anual_pct": "utilidad mínima (minimum_return)", "edge_min_cierres": "cierres del edge_criterion",
-              "edge_min_dias": "tiempo del edge_criterion", "perdida_max_operacion_usd": "pérdida máxima por operación",
-              "drawdown_max_usd": "drawdown máximo en USD"}
-    out["no_leidos"] = [label for key, label in labels.items() if out[key] is None]
+    (name, doc), = docs.items()
+    if doc is None:
+        out["no_leidos"].append(f"{name}: sin diseño guardado")
+        return out
+    amount, lim = doc.content.simulated_amount_usd, doc.content.limits
+    out["capital"] = amount
+    if lim:
+        if lim.target_annual_return_pct:
+            out["objetivo_anual_pct"] = [lim.target_annual_return_pct, lim.target_annual_return_pct]
+        out["minimo_anual_pct"] = lim.minimum_annual_return_pct
+        out["edge_min_cierres"], out["edge_min_dias"] = lim.edge_min_trades, lim.edge_min_days
+        if amount and lim.max_risk_per_trade_pct:
+            out["perdida_max_operacion_usd"] = round(amount * lim.max_risk_per_trade_pct / 100, 2)
+        if amount and lim.max_drawdown_pct:
+            out["drawdown_max_usd"] = round(amount * lim.max_drawdown_pct / 100, 2)
+    labels = {"capital": "monto simulado", "objetivo_anual_pct": "retorno anual buscado",
+              "minimo_anual_pct": "retorno mínimo", "edge_min_cierres": "cierres para el edge",
+              "edge_min_dias": "días para el edge", "perdida_max_operacion_usd": "pérdida máxima por operación",
+              "drawdown_max_usd": "drawdown máximo"}
+    out["no_leidos"] = [f"{name}: no declara {label} en su diseño" for key, label in labels.items() if out[key] is None]
     return out
 
 
@@ -87,13 +67,13 @@ def _within(days: float | None, need: int | None) -> bool:
 
 
 def edge(portfolio: dict, crit: dict) -> dict:
-    """«¿Esto es edge o suerte?»: the sample against the profile's criterion, and a prudent conclusion."""
+    """«¿Esto es edge o suerte?»: the sample against the strategy's criterion, and a prudent conclusion."""
     closed, days = portfolio.get("positionsClosed") or 0, portfolio.get("daysElapsed")
     need_n, need_d = crit["edge_min_cierres"], crit["edge_min_dias"]
     realized = portfolio.get("realizedPnl")
     sample_ok = need_n is not None and closed >= need_n and _within(days, need_d)
     if need_n is None:
-        conclusion = "No se puede concluir: el perfil no declara cuántos cierres hacen falta."
+        conclusion = "No se puede concluir: el diseño no declara cuántos cierres hacen falta."
     elif not sample_ok:
         pending = [f"{closed} de {need_n} cierres"]
         if need_d is not None:
@@ -109,7 +89,7 @@ def edge(portfolio: dict, crit: dict) -> dict:
 
 
 def against_objective(portfolio: dict, crit: dict, sample_ok: bool) -> dict:
-    """«¿Cuánto rinde mi cartera contra mi objetivo?»: GaleCore's return set against the profile's numbers."""
+    """«¿Cuánto rinde mi cartera contra mi objetivo?»: GaleCore's return set against the design's numbers."""
     annual = portfolio.get("annualizedReturnPct")
     goal, minimum = crit["objetivo_anual_pct"], crit["minimo_anual_pct"]
     if annual is None:
@@ -186,10 +166,10 @@ def pending_reviews(decisions: dict[str, dict], today: date) -> list[dict]:
     return sorted(due, key=lambda d: d["review_by"])
 
 
-def panel_query(name: str, content: ProfileContent | None, crit: dict, since: datetime | None) -> tuple[str, dict]:
-    """The panel's request (WS-0033) with what the profile declares; what it does not say is not passed, so GaleCore
+def panel_query(name: str, doc: StrategyDocument | None, crit: dict, since: datetime | None) -> tuple[str, dict]:
+    """The panel's request (WS-0033) with what the strategy's design declares; what it does not say is not passed, so GaleCore
     answers «falta …» for it. Also returns what was passed, so the answer can say it."""
-    lim = capital.limits(content)
+    lim = capital.limits(doc)
     passed: dict = {}
     if crit["capital"]:
         passed["referenceCapital"] = crit["capital"]
@@ -209,9 +189,9 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
            since: datetime | None = None, now: datetime | None = None) -> dict:
     """The whole answer: criteria, portfolio against the objective, edge, by strategy/version/rule, each close."""
     now = now or datetime.now(UTC)
-    doc = kb.profile.latest()
-    crit = criteria(doc.content if doc else None)
     names = strategies or sorted({k.split("/")[0] for k in kb.strategies.versions()})
+    designs = {n: a["doc"] for n, a in capital._simulated_amounts(kb, names).items()}
+    crit = criteria(designs)
     query = [("spec", n) for n in names]
     if crit["capital"]:
         query.append(("referenceCapital", crit["capital"]))
@@ -235,7 +215,7 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
 
     portfolio = perf.get("portfolio", {})
     verdict = edge(portfolio, crit)
-    missing = [f"perfil: no pude leer {x}" for x in crit["no_leidos"]]
+    missing = list(crit["no_leidos"])
     missing.append("comparación contra el efectivo: GaleCore no expone la tasa libre de riesgo en este informe")
     missing.append("drawdown: es del P&L realizado; las pérdidas abiertas no cuentan hasta cerrar")
     if not_valued := portfolio.get("openNotValued"):
@@ -246,7 +226,7 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
     panels: dict[str, dict] = {}
     if strategies:                                  # «¿cómo viene la estrategia X? ¿dónde falla?»: the SHADOW panel
         for n in names:
-            path, passed = panel_query(n, doc.content if doc else None, crit, since)
+            path, passed = panel_query(n, designs.get(n), crit, since)
             try:
                 panel = read(path)
             except supervisor.SupervisorError as exc:
@@ -257,7 +237,7 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
             else:
                 missing.append(f"panel de {n}: GaleCore devolvió algo que no es el panel")
         if panels:
-            missing.append("panel: efectivo y bono a 10 años no los declara el perfil; sus comparaciones salen sin valor")
+            missing.append("panel: efectivo y bono a 10 años no los declara el diseño; sus comparaciones salen sin valor")
     scope = ("cartera, contra_objetivo, edge, por_estrategia y por_version: acumulado desde la primera entrada"
              + (f"; ventana y operaciones: cierres desde {since.date().isoformat()}" if since else ""))
     return {"al": perf.get("asOf"), "estrategias_pedidas": names, "desde": since.isoformat() if since else None,
@@ -266,4 +246,4 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
             "edge": verdict, "por_estrategia": perf.get("strategies", []), "por_version": perf.get("versions", []),
             "operaciones": trades, "paneles": panels, "decisiones_a_revisar": pending_reviews(decisions, today),
             "costos": COSTS_NOTE, "faltantes": missing,
-            "fuente": "GaleCore GET /App/Runtime/Performance" + (" y /Performance/Panel" if panels else "") + "; perfil " + (doc.ref if doc else "ninguno")}
+            "fuente": "GaleCore GET /App/Runtime/Performance" + (" y /Performance/Panel" if panels else "") + "; criterios del diseño de la estrategia"}

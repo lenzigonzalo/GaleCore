@@ -22,14 +22,14 @@ fundamentos?»). El pedido fija el objetivo, el plazo y el criterio; la respuest
   SPY y un ETF del sector por defecto; ~1 min). Si ese ETF representa mal el negocio, pedir el pack técnico de otro.
 - El 10-K cuando el pedido lo necesita: `galecore get filings.sec_document --param Ticker=SYM --param Items=1,1A,7
   --param MaxChars=30000 --keep "<pedido>"`.
-- `profile show`; `kb search --kind research --text "empresa <símbolo>"` y `kb show <ref>`: una investigación guardada
+- `kb search --kind research --text "empresa <símbolo>"` y `kb show <ref>`: una investigación guardada
   es antecedente para decir qué cambió, nunca la fuente de los números.
 
 ## Pasos
 1. Decidir el recorrido: **Investigar** (una empresa: negocio, calidad, salud financiera, valoración, eventos,
    riesgos) o **Seleccionar** (una lista contra un criterio declarado). Si el pedido es amplio y no trae lista («qué
    tecnológicas tienen más potencial»), Seleccionar empieza por el universo: qué se revisa, por qué esas y con qué
-   criterio, con el plazo y el riesgo del perfil como supuestos dichos; preguntar sólo si cambian la respuesta.
+   criterio, con el plazo y el riesgo como supuestos dichos; preguntar sólo si cambian la respuesta.
 2. Traer los packs. Lo que da el fundamental: trimestres reportados a la SEC (crecimiento, márgenes, flujo libre,
    capex, deuda neta con lo que incluye, dilución, capital devuelto, P/E con su propia historia, múltiplos EV, parte no
    operativa del resultado antes de impuestos, próximo balance). Técnico: promedios, rendimientos, volatilidad

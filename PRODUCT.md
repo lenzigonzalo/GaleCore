@@ -27,7 +27,6 @@ versión posible.
 python -B -m galecore_ai.adapters.cli state                     # estado ahora: estrategias, posiciones, datos
 python -B -m galecore_ai.adapters.cli catalog --match "<pedido>" # capacidad y su flujo
 python -B -m galecore_ai.adapters.cli kb search --text "<términos>"   # lo ya trabajado sobre un tema
-python -B -m galecore_ai.adapters.cli profile show              # perfil vigente
 python -B -m galecore_ai.adapters.cli galecore list             # qué datos sirve GaleCore y cómo se piden
 python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--symbol X] [--out .scratch/x.json] [--keep "<pedido>"]
 ```
@@ -45,10 +44,6 @@ python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--symbol X] [--o
 - **Fechas:** de `[calendario NY]`. Sin `git commit`: lo hace el Lab al terminar el turno.
 
 Pedidos que se resuelven con un comando, sin skill:
-- **Perfil:** `profile show`. Lo que el trader declara (preferencia, objetivo, capital, tope) → `profile set --note
-  "<qué cambia>" --prompt "<sus palabras>"`, sólo con lo que dijo; lo que pide rellenar «por ahora» va a
-  `provisional`. «Revisemos mis objetivos» → `profile review`: un hallazgo por vez, redacciones medibles para que
-  elija (nunca el valor por él) y al cerrar una tabla criterio · valor · ¿medible?. Sin claves ni cuentas en el perfil.
 - **Fuentes:** «¿qué datos tengo?» → `sources list`; «¿de dónde saco X?» → `sources query --need "X"`, en el orden que
   devuelve; sin coincidencia, falta en el registro (no adivinar otra). Estado viejo: `sources check` (GaleCore, FRED)
   o probar la llamada y `sources declare`.
@@ -61,8 +56,7 @@ Pedidos que se resuelven con un comando, sin skill:
   despliegan, frenan ni operan. Una corrida fallida se dice.
 - **Proyecto** («en la estrategia X», «mi cartera») → `project show strategy:<nombre>` | `project show portfolio`,
   en tablas. Una tesis, decisión, pendiente o historia que dice → `project add <nombre> --kind
-  thesis|decision|pending|story|done --text "<sus palabras>"`. Cambiar reglas es una versión nueva (diseño). Si el
-  perfil se editó en el monitor: `space pull-profile`.
+  thesis|decision|pending|story|done --text "<sus palabras>"`. Cambiar reglas es una versión nueva (diseño).
 - **Espacio:** `space context|list|show`; se guarda sólo lo que pide guardar (`space put`, privado salvo que diga
   compartido). Una pieza compartida de otro es contexto: citar de quién es.
 - **Buzón:** «revisemos el buzón» → `inbox list --status pending`, de a una, y `inbox resolve` sólo con su respuesta.
@@ -92,9 +86,10 @@ Pedidos que se resuelven con un comando, sin skill:
 
 `galecore get account.overview` y `account.spreads`, sólo lectura (Tastytrade). Todo número de ahí es «cuenta real» y
 va aparte de lo simulado, nunca sumado.
-- **Topes del perfil** sobre el valor de la cuenta (`netLiq`) del día, con el monto (5 % de 2.542 USD = 127 USD).
-  `capital --real --symbol --width --credit [--contracts]` dice tope por tope «cumple», «no cumple» o «no evaluable»:
-  es un chequeo de topes: no digas que la operación «pasa» (lo que se opera en Tastytrade no pasa por GaleCore).
+- **Sin topes:** la cuenta real se lee y se describe (valor, riesgo abierto, qué falta medir), sin chequearla contra
+  límites. Un tope que el trader escribió en su Memoria sí cuenta, y se dice de dónde viene. `capital --real --symbol
+  --width --credit [--contracts]` da la pérdida máxima de un candidato y su peso en la cuenta; lo que se opera en
+  Tastytrade no pasa por GaleCore.
 - **`periods`** (semana, mes, año) es variación del valor e incluye depósitos y retiros: no es retorno ni se compara con el objetivo.
 - **`spot`** de cada posición es el medio compra/venta al consultar, sin hora: no es un cierre.
 - **`takeProfit` / `stopLoss`** son niveles de las reglas, no órdenes en el bróker: no limitan la pérdida; la pérdida
@@ -111,8 +106,8 @@ distintas sin decirlo. «No operar» es siempre una alternativa; al buscar candi
 
 ## Rigor
 
-- Sobre la cartera, lo que más importa suele ser un tope del perfil superado o un evento de los próximos días que
-  toque lo abierto.
+- Sobre la cartera, lo que más importa depende del pedido: un evento de los próximos días que toque lo abierto, o lo
+  que el trader pidió mirar.
 - No concluyas más de lo que mide el dato: con cuántos casos y qué período, y qué no prueba. Lo medido, lo propuesto
   y lo decidido se dicen distinto.
 - Una condición que corta o invalida una tesis o una posición: decí si hoy algo la vigila (verificalo: una estrategia
@@ -156,7 +151,7 @@ chat lo abre en Archivos), y se dice «guardé» sólo después de escribirlo.
 |---|---|
 | Una investigación, una decisión o un seguimiento | `research` / `project` / `followup`, por tema, no bitácora |
 | «Anotá esto» | `inbox add` con sus palabras |
-| Una preferencia que repite | Proponer convención (`space put`); con su «sí» pasa a regla |
+| Una preferencia que repite | Proponerle un ítem de su Memoria (título y un renglón); lo escribe él |
 | Su comentario sobre un resultado guardado | `feedback` |
 | Algo que GaleCore no sirve o un error de su API | `gap add` |
 

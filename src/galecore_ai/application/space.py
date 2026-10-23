@@ -1,7 +1,6 @@
 """The trader's space (GC-AI-0021): bring what GaleCore-AI already knows into GaleCore, and read it back at the start.
 
-`local_pieces` turns the local sources into pieces of the space: the profile in force (and each objective), the
-conventions, the scheduled agents (tasks) and the catalog's skills (shared: they are the team's methods). `sync` writes
+`local_pieces` turns the local sources into pieces of the space: the scheduled agents (tasks) and the catalog's skills (shared: they are the team's methods). `sync` writes
 only what changed (the version in GaleCore goes up only then). `context` is the short summary a session starts with.
 
 Agents (GC-AI-0023): each agent piece also carries what the monitor's Agentes screen shows: whether its latest
@@ -12,13 +11,9 @@ resume through the scheduler, recorded in the task's events) before the pieces a
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
-
-import yaml
 
 from galecore_ai.adapters.galecore_space import SpaceClient
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
@@ -26,8 +21,6 @@ from galecore_ai.contracts.task import Schedule
 from galecore_ai.harness.assets import load_asset
 from galecore_ai.harness.catalog import load_catalog
 from galecore_ai.harness.definitions import SkillDefinition
-
-CONVENTIONS = Path(__file__).resolve().parents[3] / "config" / "conventions"
 
 
 def _slug(text: str, limit: int = 48) -> str:
@@ -118,28 +111,10 @@ def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) ->
 
 
 def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
-    """Every piece the local sources hold today, as {kind, key, title, content, format, visibility}."""
+    """Every piece the local sources hold today (agents and skills; no profile since WS-0058), as {kind, key, title, content, format, visibility}."""
     from galecore_ai.application import tasks as t  # lazy: tasks imports the CLI side lazily too
 
     pieces: list[dict] = []
-    profile = kb.profile.latest()
-    if profile is not None:
-        content = profile.content.model_dump(mode="json")
-        pieces.append({"kind": "profile", "key": "perfil", "title": f"Perfil (profile:v{profile.version})",
-                       "content": json.dumps({"version": profile.version, **content}, ensure_ascii=False, indent=1),
-                       "format": "json", "visibility": "private"})
-        for text in profile.content.objectives:
-            key = _slug(text)
-            if len(_slug(text, 200)) > len(key):          # truncated: the full text's hash keeps it unique and stable
-                key = f"{key[:40]}-{hashlib.sha256(text.encode()).hexdigest()[:7]}"
-            pieces.append({"kind": "objective", "key": key, "title": text[:200], "content": text,
-                           "format": "markdown", "visibility": "private"})
-    for path in sorted(CONVENTIONS.glob("*.yaml")):
-        doc = yaml.safe_load(path.read_text(encoding="utf-8"))
-        entries = {e["key"]: e.get("value") for e in doc.get("entries", [])}
-        pieces.append({"kind": "convention", "key": _slug(doc.get("convention_id", path.stem)),
-                       "title": doc.get("display_name", path.stem), "content": json.dumps(entries, ensure_ascii=False),
-                       "format": "json", "visibility": "shared"})
     for task in (x for x in t.list_tasks(kb) if x["status"] != "cancelled"):   # a cancelled task is history
         pieces.append({"kind": "agent", "key": _slug(task["id"]), "title": f"{task['id']} ({task['capability']})",
                        "content": json.dumps({"id": task["id"], **agent_state(kb, task["id"], now)},
@@ -157,75 +132,6 @@ def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
         pieces.append({"kind": "skill", "key": _slug(entry.id.replace("_", "-")), "title": title,
                        "content": content, "format": "markdown", "visibility": "shared"})
     return pieces
-
-
-def _same_profile(remote: dict, local) -> bool:
-    """Same content once both carry every field: a piece published before a field existed is not an edit."""
-    from galecore_ai.contracts.profile import ProfileContent
-    try:
-        same = ProfileContent.model_validate(remote).model_copy(update={"preferred_sources": []})
-        return same == local.model_copy(update={"preferred_sources": []})
-    except ValueError:
-        return False
-
-
-def profile_state(client: SpaceClient, kb: KnowledgeBase) -> dict:
-    """Which profile is in force (GC-AI-0026, owner decision D-2: GaleCore's space rules).
-
-    coherent: the space and the local version hold the same content. edited_in_monitor: the space differs and is not
-    older than the local version (someone edited it there): `space pull-profile` brings it as a new local version and
-    `import` does not overwrite it. local_newer: a local version not yet imported. not_published: nothing in the space.
-    """
-    local = kb.profile.latest()
-    piece = next((i for i in client.items("profile")["items"] if i["key"] == "perfil"), None)
-    out = {"local_ref": local.ref if local else None, "source": "galecore"}
-    if piece is None:
-        return {**out, "state": "not_published", "source": "knowledge (local)", "ref": out["local_ref"]}
-    try:
-        remote = json.loads(piece["content"])
-        if not isinstance(remote, dict):
-            raise TypeError("not an object")
-    except (json.JSONDecodeError, TypeError) as exc:
-        return {**out, "state": "unreadable", "ref": None, "detail": f"la pieza del perfil no es JSON válido ({exc})"}
-    version = remote.pop("version", None)
-    out |= {"space_version": version, "space_piece_version": piece.get("version")}
-    if local is None:
-        return {**out, "state": "edited_in_monitor", "ref": None, "remote": remote}
-    if _same_profile(remote, local.content):
-        return {**out, "state": "coherent", "ref": local.ref}
-    if isinstance(version, int) and version < local.version:
-        return {**out, "state": "local_newer", "ref": local.ref,
-                "detail": f"profile:v{local.version} todavía no se importó al espacio (`space import`)"}
-    return {**out, "state": "edited_in_monitor", "ref": None, "remote": remote,
-            "detail": "el perfil se editó en el monitor; `space pull-profile` lo trae como versión nueva"}
-
-
-def pull_profile(client: SpaceClient, kb: KnowledgeBase, host) -> dict:
-    """Bring the monitor's edit as a new local version, so methods and monitor use the same content."""
-    from galecore_ai.application.profile import set_profile
-    from galecore_ai.contracts.profile import ProfileContent
-
-    state = profile_state(client, kb)
-    if state["state"] != "edited_in_monitor":
-        return {"status": "NOTHING_TO_PULL", **{k: v for k, v in state.items() if k != "remote"}}
-    try:   # the whole content, defaults included: a field removed in the monitor is removed here too
-        full = ProfileContent.model_validate(state["remote"]).model_dump(mode="json")
-    except ValueError as exc:
-        return {"status": "REFUSED", "detail": f"el perfil del monitor no es válido: {str(exc)[:300]}"}
-    doc, path = set_profile(kb.profile, changes=full, note="edición del perfil hecha en el monitor",
-                            prompt=f"space pull-profile ({client.user})", host=host)
-    return {"status": "PULLED" if path else "UNCHANGED", "ref": doc.ref, "path": str(path) if path else None}
-
-
-def guard_profile(client: SpaceClient, kb: KnowledgeBase, pieces: list[dict]) -> tuple[list[dict], list[str]]:
-    """Drop the profile and objective pieces from an import while the monitor holds an edit not pulled yet."""
-    state = profile_state(client, kb)["state"]
-    if state not in ("edited_in_monitor", "unreadable"):
-        return pieces, []
-    kept = [p for p in pieces if p["kind"] not in ("profile", "objective")]
-    why = ("el monitor tiene una edición sin traer; correr `space pull-profile`" if state == "edited_in_monitor"
-           else "la pieza del perfil en GaleCore no se puede leer; revisarla antes de pisarla")
-    return kept, [f"profile/perfil y objetivos: {why}"]
 
 
 def sync(client: SpaceClient, pieces: list[dict], seen: dict[tuple, int] | None = None) -> dict:

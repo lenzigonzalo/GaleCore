@@ -98,7 +98,7 @@ def test_a_blank_missing_reason_is_refused():
 
 def scheduled(**overrides) -> CatalogEntry:
     base = {"id": "daily_attention", "skill": "skills/daily-attention/SKILL.md", "data_needs": [],
-            "flow": ["profile show", "kb search --kind strategy", "followup run --strategy x --prompt p",
+            "flow": ["kb search --kind strategy", "followup run --strategy x --prompt p",
                      "galecore get calendar.fomc_meetings", "evidence add --slug s --prompt p",
                      "research save --capability daily_attention --slug s --prompt p"],
             "schedulable": {"runs": "model", "work": "reading", "max_turns": 30}}
@@ -116,7 +116,7 @@ def test_a_read_only_schedulable_entry_passes(tmp_path):
 
 @pytest.mark.parametrize("line", [
     "strategy save --spec f --prompt p", "strategy approve --ref r --spec-hash h --owner-words w --host-model m",
-    "profile set --note n --prompt p --host-model m", "sources declare --source fred --state down --note n",
+    "sources declare --source fred --state down --note n",
     "sources check", "feedback add --research r --revision 1 --classification case --slug s --prompt p",
     "task pause x --prompt p", "accept --record --prompt p",
     "python GaleCore/dev/galecore_dev.py deploy --spec x --approval a",

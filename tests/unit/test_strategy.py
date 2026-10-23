@@ -69,6 +69,8 @@ def proposal_data() -> dict:
 def proposal(mutate=None, research_ref: str | None = None) -> ProposalContent:
     data = proposal_data()
     data["simulated_amount_usd"] = 10000.0   # WS-0043 (1e): a closed design declares the amount it is simulated with
+    data["limits"] = {"max_risk_per_trade_pct": 5.0, "max_open_risk_pct": 50.0, "reserve_pct": 10.0,
+                      "max_bet_pct": 30.0}   # WS-0058: and its own limits
     if research_ref:
         data["research_refs"] = [research_ref]
         data["hypothesis"]["sources"] = []
@@ -548,7 +550,7 @@ def test_versions_stored_without_the_new_fields_keep_their_hash(kb, research_ref
     _, path = stored(kb, research_ref, criticised=False)
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     del (data["content"]["parameters"], data["content"]["management"], data["content"]["change"],
-         data["content"]["simulated_amount_usd"])
+         data["content"]["simulated_amount_usd"], data["content"]["limits"])
     old = {k: v for k, v in data.items() if k != "content_hash"}
     from galecore_ai.contracts.strategy import compute_document_hash
     data["content_hash"] = compute_document_hash(old)   # the hash as the old contract computed it
@@ -753,15 +755,12 @@ def test_cli_critique_with_invalid_input_is_a_validation_error(kb, research_ref)
     assert code == 3 and "Invalid critique" in out["error"]
 
 
-def test_sheet_puts_the_version_against_the_profile_and_what_is_open(kb, research_ref):  # noqa: F811
+def test_sheet_puts_the_version_against_its_own_limits_and_what_is_open(kb, research_ref):  # noqa: F811
     from galecore_ai.application import supervisor
-    from galecore_ai.application.profile import set_profile
-    from tests.unit.test_capital import LIMITS, exposure
+    from tests.unit.test_capital import exposure
     stored(kb, research_ref)
     md = sheet(kb, KEY)["markdown"]
-    assert "## Riesgo contra el perfil (sin perfil)" in md and "- Falta: perfil: no hay perfil" in md
-    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
-                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    assert "## Riesgo contra los límites del diseño" in md and "límites del diseño:" not in md
     asked = []
 
     def read(path):
@@ -835,11 +834,8 @@ def test_sheet_compares_structures_with_what_galecore_returns(kb, research_ref):
     assert "- Falta: estructuras: sin PCS: sin cadena" in sheet(kb, KEY, lambda path: failed)["markdown"]
 
 
-def test_a_cap_above_the_profile_is_flagged(kb, research_ref):  # noqa: F811
-    from galecore_ai.application.profile import set_profile
+def test_a_cap_above_the_design_limit_is_flagged(kb, research_ref):  # noqa: F811
     from galecore_ai.application.strategy_sheet import risk
-    from tests.unit.test_capital import LIMITS
-    set_profile(kb.profile, changes={"risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
     doc, _ = stored(kb, research_ref)
     smaller = doc.model_copy(update={"content": doc.content.model_copy(update={"simulated_amount_usd": 4000.0})})
     rows = risk(kb, smaller)["rows"]
@@ -856,13 +852,11 @@ def test_without_a_cap_the_full_width_bounds_the_loss(kb, research_ref):  # noqa
     spec["risk_limits"]["max_loss_per_trade_usd"] = None
     width = next(leg["strike_selection"]["width"] for leg in spec["candidate_construction"]["legs"]
                  if leg["side"].upper() == "BUY")
-    out = risk(kb, doc.model_copy(update={"spec_json": json.dumps(spec)}))
-    assert not out["rows"]   # no profile in this kb: nothing to compare, said as missing
-    assert out["missing"][0] == "perfil: no hay perfil"
-    from galecore_ai.application.profile import set_profile
-    from tests.unit.test_capital import LIMITS
-    set_profile(kb.profile, changes={"reference_capital": {"amount": 10000.0, "currency": "USD"},
-                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    bare = doc.model_copy(update={"spec_json": json.dumps(spec),
+                                  "content": doc.content.model_copy(update={"limits": None})})
+    out = risk(kb, bare)
+    assert not out["rows"]   # the design declares no limits: nothing to compare, said as missing
+    assert out["missing"][0].startswith("límites del diseño: ")
     row = risk(kb, doc.model_copy(update={"spec_json": json.dumps(spec)}))["rows"][0]
     assert row[1].startswith(f"{width * 100:g} USD (ancho completo × 100")
 
@@ -966,10 +960,7 @@ def test_a_design_without_a_simulated_amount_is_missing_it(kb, research_ref):  #
 
 def test_capital_sizes_each_strategy_with_its_own_amount(kb, research_ref):  # noqa: F811
     from galecore_ai.application import capital
-    from galecore_ai.application.profile import set_profile
-    from tests.unit.test_capital import LIMITS, allocation, exposure
-    set_profile(kb.profile, changes={"reference_capital": {"amount": 2500.0, "currency": "USD"},
-                                     "risk_limits": LIMITS}, note="n", prompt="p", host=HOST, now=NOW)
+    from tests.unit.test_capital import allocation, exposure
     stored(kb, research_ref)
     asked = []
 
@@ -979,6 +970,6 @@ def test_capital_sizes_each_strategy_with_its_own_amount(kb, research_ref):  # n
         asked.append(path)
         return exposure() if path.startswith("/App/Runtime/Exposure") else allocation()
     out = capital.report(kb, read)
-    assert asked[0].startswith("/App/Runtime/Exposure?capital=10000.0&")      # the strategy's amount, not the profile's
+    assert asked[0].startswith("/App/Runtime/Exposure?capital=10000.0&")      # the strategy's own amount
     assert asked[1].startswith("/App/Runtime/Allocation?capital=10000.0&") and asked[1].endswith(f"&spec={NAME}")
     assert isinstance(out["reparto"], list) and len(out["reparto"]) == 1

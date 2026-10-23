@@ -1,25 +1,25 @@
-"""WS-0011 (P1-03): performance against the profile, edge or luck, and the review of each close with its decision."""
+"""WS-0011 (P1-03): performance against the strategy's own design, edge or luck, and the review of each close with its decision."""
 
 from __future__ import annotations
 
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 from galecore_ai.application import performance, supervisor
-from galecore_ai.contracts.profile import ProfileContent, ReferenceCapital
+from galecore_ai.contracts.strategy import StrategyLimits
 from tests.unit.test_knowledge import NOW, kb  # noqa: F401  (kb is a fixture)
 from tests.unit.test_strategy import research_ref, stored  # noqa: F401  (research_ref is a fixture)
 from tests.unit.test_supervisor import IN_SESSION, position, reader
 
-PROFILE = ProfileContent(
-    objectives=["retorno anual buscado de 10 a 15 % sobre el capital de referencia"],
-    reference_capital=ReferenceCapital(amount=10000.0, currency="USD"),
-    max_drawdown="15 % del capital de referencia (1.500 USD)",
-    risk_limits=["pérdida máxima por operación 5 % del capital de referencia (500 USD)",
-                 "riesgo máximo sumado 50 % del capital de referencia (5.000 USD)"],
-    minimum_return="8 % anual sobre el capital de referencia (800 USD)",
-    edge_criterion="al menos 30 operaciones cerradas y un trimestre completo; resultado neto > 0",
-)
-CRIT = performance.criteria(PROFILE)
+LIMITS = StrategyLimits(max_drawdown_pct=15.0, max_risk_per_trade_pct=5.0, max_open_risk_pct=50.0,
+                        target_annual_return_pct=10.0, minimum_annual_return_pct=8.0, edge_min_trades=30, edge_min_days=90)
+
+
+def design(amount=10000.0, limits=LIMITS):
+    return SimpleNamespace(content=SimpleNamespace(simulated_amount_usd=amount, limits=limits))
+
+
+CRIT = performance.criteria({"s": design()})
 
 
 def trade(**kw):
@@ -31,18 +31,20 @@ def trade(**kw):
     return {**base, **kw}
 
 
-def test_the_profile_numbers_are_read_from_its_words():
-    assert CRIT["capital"] == 10000.0 and CRIT["objetivo_anual_pct"] == [10.0, 15.0]
+def test_the_numbers_are_the_ones_the_strategy_declares_in_its_design():
+    assert CRIT["capital"] == 10000.0 and CRIT["objetivo_anual_pct"] == [10.0, 10.0]
     assert CRIT["minimo_anual_pct"] == 8.0 and CRIT["edge_min_cierres"] == 30 and CRIT["edge_min_dias"] == 90
     assert CRIT["perdida_max_operacion_usd"] == 500.0 and CRIT["drawdown_max_usd"] == 1500.0
     assert CRIT["no_leidos"] == []
 
 
-def test_what_the_profile_does_not_say_is_listed_not_guessed():
-    crit = performance.criteria(ProfileContent(objectives=["vender prima"]))
+def test_what_the_design_does_not_say_is_listed_not_guessed():
+    crit = performance.criteria({"s": design(limits=StrategyLimits(max_risk_per_trade_pct=5.0))})
     assert crit["objetivo_anual_pct"] is None and crit["edge_min_cierres"] is None
-    assert "objetivo (objectives)" in crit["no_leidos"] and "capital de referencia" in crit["no_leidos"]
-    assert performance.criteria(None)["no_leidos"] == ["perfil: no hay perfil"]
+    assert "s: no declara retorno anual buscado en su diseño" in crit["no_leidos"]
+    assert performance.criteria({"s": None})["no_leidos"] == ["s: sin diseño guardado"]
+    several = performance.criteria({"a": design(), "b": design()})        # no criteria are picked for a portfolio
+    assert several["objetivo_anual_pct"] is None and "cada estrategia declara los suyos" in several["no_leidos"][0]
 
 
 def test_a_small_sample_is_anecdote_whatever_the_result():
@@ -148,7 +150,7 @@ def test_report_refuses_what_is_not_a_performance_report(kb):  # noqa: F811
         raise AssertionError("a list is not a performance report")
 
 
-def test_one_strategy_also_reads_the_shadow_panel_with_the_profiles_numbers(kb, research_ref):  # noqa: F811
+def test_one_strategy_also_reads_the_shadow_panel_with_the_designs_numbers(kb, research_ref):  # noqa: F811
     stored(kb, research_ref)
     asked = []
 
@@ -163,21 +165,18 @@ def test_one_strategy_also_reads_the_shadow_panel_with_the_profiles_numbers(kb, 
     panel_path = next(p for p in asked if "/Panel" in p)
     assert panel_path.startswith("/App/Runtime/Performance/Panel?spec=x") and "&from=" in panel_path
     assert out["paneles"]["x"]["mode"] == "SHADOW" and out["paneles"]["x"]["winRate"]["reason"] == "muestra chica"
-    assert out["paneles"]["x"]["pedido_con"] == {}          # the kb has no profile: nothing is invented
+    assert out["paneles"]["x"]["pedido_con"] == {}          # no design for «x»: nothing is invented
     assert "/Performance/Panel" in out["fuente"]
 
 
-def test_the_panel_request_carries_capital_limits_target_and_criterion_when_the_profile_declares_them():
-    full = PROFILE.model_copy(update={"risk_limits": [
-        "pérdida máxima por operación 5 % del capital de referencia (500 USD)",
-        "riesgo máximo sumado 50 % del capital de referencia (5.000 USD)",
-        "reserva para ajustes 20 % del capital de referencia", "tope de una apuesta 10 % del capital"]})
-    path, passed = performance.panel_query("x", full, performance.criteria(full), None)
+def test_the_panel_request_carries_capital_limits_target_and_criterion_when_the_design_declares_them():
+    full = design(limits=LIMITS.model_copy(update={"reserve_pct": 20.0, "max_bet_pct": 10.0}))
+    path, passed = performance.panel_query("x", full, performance.criteria({"x": full}), None)
     assert passed == {"referenceCapital": 10000.0, "maxRiskPerTradePct": 5.0, "maxOpenRiskPct": 50.0,
                       "reservePct": 20.0, "maxBetPct": 10.0, "targetAnnualPct": 10.0,
                       "hypothesisMinTrades": 30, "hypothesisMinDays": 90}
     assert "maxBetPct=10.0" in path and "from=" not in path
-    _, partial = performance.panel_query("x", PROFILE, CRIT, None)      # two limits only: GaleCore takes four or none
+    _, partial = performance.panel_query("x", design(), CRIT, None)      # two limits only: GaleCore takes four or none
     assert "reservePct" not in partial and partial["referenceCapital"] == 10000.0
 
 

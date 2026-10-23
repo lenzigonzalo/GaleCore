@@ -21,7 +21,6 @@ Construís con el molde, no a mano ni improvisando. El trader pidió armar algo:
 ## Qué necesita
 - `catalog` (qué existe; reutilizar antes de crear) y `catalog --check` (completa / problemas por entrada).
 - `sources query --need "<dato>"`, uno por dato (lo que ninguna fuente cubre: declarar por qué).
-- `profile show` (qué campos del perfil aplica la skill).
 - Para corregir: `kb search`, `kb show research:<id>`, `feedback add`, `feedback list [--status pending|applied]`.
 - Para retirar: `kb mark <ref> --as corrected|superseded|retired --reason "<motivo>" [--by <ref>] --slug <slug>
   --prompt "<palabras del owner>"`.
@@ -40,8 +39,7 @@ Construís con el molde, no a mano ni improvisando. El trader pidió armar algo:
    - una vista siempre en pantalla → front de GaleCore (no se arma acá; queda pendiente).
    Un pedido puede ser dos cosas (el reporte es un agente, el cruce del nivel es una vigilancia): ofrecer ambas.
 3. **Qué usa:** `catalog` (si una entrada ya sirve, usarla o extenderla, sin casi-duplicados; nombrar lo que
-   reutiliza); `sources query` por dato; lo que GaleCore no sirve, faltante con su `gap`. Perfil: qué campos aplica;
-   si guarda research, la skill dice que se cite `profile:v<N>` (si no, el guardado se rechaza).
+   reutiliza); `sources query` por dato; lo que GaleCore no sirve, faltante con su `gap`.
 4. **Ficha**, una tabla de hasta 6 filas y «¿la armo? sí / no»: Qué hace · Qué objeto es · Qué datos usa (y cuáles
    faltan) · Qué produce y dónde se guarda · Cuándo corre y cuánto cuesta (tokens por corrida; la PC prendida) · Cómo
    se controla desde el chat (ver, pausar, cambiar, borrar).
@@ -80,7 +78,7 @@ description: >  qué pedido atiende y cuándo NO usarla (qué skill va en su lug
 output_contract: galecore_ai.contracts.research.ResearchContent
 ---
 ## Cuándo se usa       pedidos típicos en palabras del trader
-## Qué necesita        comandos de GaleCore y del perfil; qué hacer si falta un dato
+## Qué necesita        comandos de GaleCore; qué hacer si falta un dato
 ## Pasos               numerados, imperativos, con el comando de cada paso
 ## Qué entrega         forma + un ejemplo corto
 ## Errores a evitar    de casos reales
@@ -93,13 +91,13 @@ trader.
 9. El comentario es sobre un resultado guardado: encontrarlo y la revisión que vio el trader. Sus palabras textuales;
    si se reformulan, el trader acepta la reformulación antes de registrarla y quedan las dos.
 10. Clasificar por lo que cambia y decirlo en una línea antes de registrar: **caso** (el dato o la lectura de ese
-    resultado estaba mal → sólo cambia ese resultado), **preferencia** (cómo quiere las cosas → cambia el perfil),
+    resultado estaba mal → sólo cambia ese resultado), **preferencia** (cómo quiere las cosas → un ítem de su Memoria, que escribe él),
     **método** (lo que la skill debería hacer siempre → versión nueva). Con duda: «¿sólo este resultado o siempre?».
 11. Registrar: `feedback add --research research:<id> --revision <N> --classification case|preference|method --slug
     <slug> --prompt "<palabras>" < {"words", "formulation"?, "host_provider", "host_model"}`. La skill y la versión
     salen de esa revisión.
 12. Aplicar donde corresponde, citando `feedback:<id>`: caso → `research revise --id <id> --reason correction` con el
-    feedback como antecedente; preferencia → `profile set --feedback feedback:<id>`; método → editar el SKILL.md,
+    feedback como antecedente; preferencia → proponerle el ítem de Memoria; método → editar el SKILL.md,
     subir la versión (menor para un comportamiento nuevo, parche para un arreglo), entrada en `history.yaml` con
     `feedback: [feedback:<id>]` y `catalog --check`. Un caso no es una regla: un cambio de método necesita comentarios
     sobre al menos dos resultados distintos (`same_skill_pending` en `feedback list`) o la decisión explícita del owner
@@ -112,7 +110,7 @@ trader.
     (algo más nuevo lo reemplaza; nombrarlo) o retirado (ya no se usa). Después `kb mark`. Nada se borra: queda legible
     con su marca, `kb search` lo deja afuera (`--include-marked` lo muestra) y un resultado nuevo no lo puede citar. Una
     regla equivocada de una skill se reemplaza con una versión nueva, no con una marca. Marcar sólo con palabras del
-    owner (la curaduría sólo propone). Un perfil no se marca: lo reemplaza uno nuevo (`profile set`).
+    owner (la curaduría sólo propone).
 
 ## Qué entrega
 - Crear: la ficha (tabla de 6 filas) y, con los dos «sí», el agente programado o la skill nueva con `catalog --check`

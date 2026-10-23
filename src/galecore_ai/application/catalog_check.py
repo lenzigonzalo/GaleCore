@@ -70,7 +70,7 @@ def _flow_problems(entry: CatalogEntry, commands: dict[str, set[str]], workspace
 
 # What a scheduled run may do (GC-AI-0017). Reads, plus writing its own result; anything else (strategy save|approve|
 # deploy, profile set, sources declare|check, feedback add, task changes, regime records, other scripts) is refused.
-SCHEDULED_READS = {("catalog", None), ("kb", "search"), ("kb", "show"), ("profile", "show"), ("profile", "history"),
+SCHEDULED_READS = {("catalog", None), ("kb", "search"), ("kb", "show"), 
                    ("sources", "list"), ("sources", "query"), ("followup", "history"), ("feedback", "list"),
                    ("query", None), ("prepare", None),
                    ("galecore", "list"), ("galecore", "get"), ("project", "show")}

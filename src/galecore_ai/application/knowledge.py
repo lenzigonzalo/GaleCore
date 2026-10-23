@@ -284,23 +284,9 @@ def check_content(content: ResearchContent, kb: KnowledgeBase, *, self_id: str |
         problems.append("a test plan needs the hypothesis it tests")
     if not content.limitations:
         problems.append("at least one limitation is required")
-    problems += _profile_problems(kb, set(resolved))
     if capability == "daily_contrast":
         problems += _contrast_problems(content, kb)
     return list(resolved.values()), problems
-
-
-def _profile_problems(kb: KnowledgeBase, cited: set[str]) -> list[str]:
-    """Work saved while a profile exists must cite the version in force (GC-AI-0013)."""
-    try:
-        current = kb.profile.latest()
-    except (ProfileIntegrityError, ProfileStoreError) as exc:
-        return [f"the profile is not usable ({exc}); fix it before saving work that must cite it"]
-    if current is None or current.ref in cited:
-        return []
-    stale = sorted(r for r in cited if r.startswith("profile:"))
-    return [f"cite the profile in force as an antecedent: {current.ref}"
-            + (f" (this cites {', '.join(stale)})" if stale else "")]
 
 
 RESEARCH_CONTRACT = "galecore_ai.contracts.research.ResearchContent"
