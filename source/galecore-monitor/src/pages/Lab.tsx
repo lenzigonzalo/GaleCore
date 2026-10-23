@@ -13,6 +13,7 @@ import { LabSuggestions } from '../components/lab/LabSuggestions';
 import { LabFiles } from '../components/lab/LabFiles';
 import { LabShell } from '../components/lab/LabShell';
 import './Lab.css';
+import { useChatFontSize } from '../components/settings/ChatFontSetting';
 const KIND = { personal: 'Personal', analysis: 'Análisis', strategy: 'Estrategia' };
 // Owner 18/10: el mapa se abre lo que se quiera; el chat conserva al menos 360 px.
 // El chat nunca queda por debajo de 420 px (revisión 19/10): el tope se mide sobre el contenedor del chat, no la ventana.
@@ -21,6 +22,7 @@ const NARROW = '(max-width: 1100px)';
 const limitSidebarWidth = (width: number, available: number) => Math.max(200, Math.min(width, 480, Math.max(200, available - 420)));
 export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, onSidebarToggle, onLogout, embedded = false, active = false, projectRequest, onFollowStrategy }: { embedded?: boolean; active?: boolean; projectRequest?: { id: string; sequence: number }; onFollowStrategy?: (spec: string) => void; onMonitor: () => void; onNavigate?: (tab: Tab) => void; sidebarHidden?: boolean; onSidebarToggle?: () => void; onLogout?: () => void }) {
   const [projectHost, setProjectHost] = useState<HTMLElement | null>(null);
+  const chatFontSize = useChatFontSize();
   useEffect(() => { if (embedded) setProjectHost(document.getElementById('workspace-projects')); }, [embedded]);
   // En la página del Lab el título y Mapa/Archivos van en la barra superior: una franja menos para el chat.
   const [headerHost, setHeaderHost] = useState<HTMLElement | null>(null);
@@ -230,7 +232,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         onNewChat={p => { selectProject(p); newChat(); }} onCreateProject={() => setCreating(true)}
         name={name} onRename={startEdit} editing={editing} renameInput={renameInput} onDelete={remove}/> }
     </aside>;
-  return <div ref={workspace} className={'lab-chat-workspace' + (embedded ? ' embedded' : '') + (sidebarHidden ? ' sidebar-hidden' : collapsed ? ' sidebar-collapsed' : '')} style={{ '--lab-sidebar-width': sidebarWidth + 'px' } as React.CSSProperties}>
+  return <div ref={workspace} className={'lab-chat-workspace' + (embedded ? ' embedded' : '') + (sidebarHidden ? ' sidebar-hidden' : collapsed ? ' sidebar-collapsed' : '')} style={{ '--lab-sidebar-width': sidebarWidth + 'px', '--lab-chat-font-size': chatFontSize } as React.CSSProperties}>
     {embedded ? (projectHost && createPortal(projectSidebar, projectHost)) : projectSidebar}
     {!embedded && !collapsed && !sidebarHidden && <div className="lab-sidebar-resize" role="separator" tabIndex={0} aria-label="Ancho de proyectos" aria-orientation="vertical" aria-controls="lab-project-sidebar"
       aria-valuemin={200} aria-valuemax={limitSidebarWidth(480, workspace.current?.clientWidth || window.innerWidth)} aria-valuenow={sidebarWidth}

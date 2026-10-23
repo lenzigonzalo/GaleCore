@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown, X } from 'lucide-react';
 import type { ChatOptions, LabProvider } from '../../api/lab';
 import './LabModelPicker.css';
@@ -18,17 +19,37 @@ export function LabModelPicker({ provider, model, effort, providers, options, lo
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<React.CSSProperties>({});
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = trigger.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.min(390, window.innerWidth - 32);
+      const above = rect.top - 16, below = window.innerHeight - rect.bottom - 16;
+      const upward = above >= below;
+      setPosition({ width, left: Math.max(16, Math.min(rect.right - width, window.innerWidth - width - 16)),
+        maxHeight: Math.max(0, Math.min(470, upward ? above : below)),
+        top: upward ? undefined : rect.bottom + 8,
+        bottom: upward ? window.innerHeight - rect.top + 8 : undefined });
+    };
+    place();
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
+  }, [open]);
   const displayed = model || (!locked && options?.[provider]?.defaultModel) || '';
   const availableEfforts = options?.[provider]?.modelEfforts?.[displayed] || options?.[provider]?.efforts || [];
   useEffect(() => {
     if (!open) return;
-    const outside = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const outside = (event: MouseEvent) => { if (!root.current?.contains(event.target as Node) && !menu.current?.contains(event.target as Node)) setOpen(false); };
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { setOpen(false); trigger.current?.focus(); }
     };
     document.addEventListener('mousedown', outside);
     document.addEventListener('keydown', escape);
-    root.current?.querySelector<HTMLButtonElement>('[role="option"]:not(:disabled)')?.focus();
+    menu.current?.querySelector<HTMLButtonElement>('[role="option"]:not(:disabled)')?.focus({ preventScroll: true });
     return () => { document.removeEventListener('mousedown', outside); document.removeEventListener('keydown', escape); };
   }, [open]);
   function choose(nextProvider: Provider, nextModel: string) {
@@ -45,7 +66,7 @@ export function LabModelPicker({ provider, model, effort, providers, options, lo
       <span>{label(provider)} <span className="lab-provider-separator">—</span> {displayed ? modelLabel(displayed) : 'Predeterminado'}</span>
       <ChevronDown size={15}/>
     </button>
-    {open && <div className="lab-provider-menu" role="dialog" aria-label="Elegir proveedor y modelo">
+    {open && createPortal(<div ref={menu} style={position} className="lab-provider-menu" role="dialog" aria-label="Elegir proveedor y modelo">
       <header><strong>Proveedor y modelo</strong><button type="button" aria-label="Cerrar selector" onClick={() => { setOpen(false); trigger.current?.focus(); }}><X size={16}/></button></header>
       <div role="listbox" aria-label="Modelos del chat" onKeyDown={event => {
         if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
@@ -79,6 +100,6 @@ export function LabModelPicker({ provider, model, effort, providers, options, lo
         </select>
       </label>}
       {locked && <p>Esta conversación conserva su selección. Abrí un nuevo chat para cambiarla.</p>}
-    </div>}
+    </div>, document.body)}
   </div>;
 }
