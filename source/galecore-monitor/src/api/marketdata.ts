@@ -112,7 +112,8 @@ export async function fetchEquityCandles(
   }
   const { data } = await apiClient.get<{ data: any[] }>(
     '/Data/Tastytrade/MarketData/Candle',
-    { params: { Symbol: symbol, Interval: interval, FromTime: fromTime }, timeout: 30_000 }
+    // El snapshot del backend espera hasta 30 s; dejar margen para transporte y autenticación.
+    { params: { Symbol: symbol, Interval: interval, FromTime: fromTime }, timeout: 45_000 }
   );
   console.debug(`[Candle] ${symbol}:`, data);
   const raw: any[] = Array.isArray(data) ? data : (data?.data ?? []);
@@ -124,10 +125,14 @@ export async function fetchEquityCandles(
         : 0;
       return { time: t, open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume };
     })
-    .filter((c) => c.time > 0 && c.close > 0 && c.open > 0)
+    .filter((c) => Number.isFinite(c.time) && c.time > 0
+      && [c.open, c.high, c.low, c.close].every(v => Number.isFinite(v) && v > 0)
+      && c.low <= Math.min(c.open, c.close) && c.high >= Math.max(c.open, c.close))
     .sort((a, b) => a.time - b.time);
 
-  return opts.limit ? candles.slice(-opts.limit) : candles;
+  // DXLink puede incluir más de una actualización del mismo bucket; conservar la última.
+  const unique = Array.from(new Map(candles.map(c => [c.time, c])).values());
+  return opts.limit ? unique.slice(-opts.limit) : unique;
 }
 
 /** El día de un símbolo (WS-0036): último, cierre anterior, variación, volumen, máximo y mínimo, calculados en la API. */

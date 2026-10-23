@@ -55,14 +55,15 @@ export const GexBarsPanel = React.memo(function GexBarsPanel({
 
   return (
     <div style={{
-      width: PANEL_W,
+      width: '48%',
+      maxWidth: PANEL_W,
       flexShrink: 0,
       borderLeft: '1px solid var(--border-dark)',
       backgroundColor: 'var(--bg-primary)',
       overflow: 'hidden',
       position: 'relative',
     }}>
-      <svg width={PANEL_W} height={height} style={{ display: 'block' }}>
+      <svg viewBox={`0 0 ${PANEL_W} ${height}`} preserveAspectRatio="none" width="100%" height={height} style={{ display: 'block' }}>
         {/* El sombreado de la banda va PRIMERO: es fondo, y las barras y los muros se leen encima.
             Pintado después taparía las barras que la banda justamente viene a describir. */}
         <BandShade band={callBand} color={CALL_COLOR} lineY={lineY} height={height} />
@@ -83,7 +84,9 @@ export const GexBarsPanel = React.memo(function GexBarsPanel({
 
           const callW = Math.max(1, (s.callGex / maxAbs) * HALF_BAR);
           const putW  = Math.max(1, (Math.abs(s.putGex) / maxAbs) * HALF_BAR);
-          const barH  = 6;
+          const neighbours = visible.map(v => priceToY(v.strike)).filter((v): v is number => v != null && v !== yPx);
+          const spacing = neighbours.length ? Math.min(...neighbours.map(v => Math.abs(v - yPx))) : 18;
+          const barH = Math.max(1, Math.min(14, spacing * 0.7));
 
           // Highlight the spot strike
           const isAtm = Math.abs(s.strike - spot) < 2.5;

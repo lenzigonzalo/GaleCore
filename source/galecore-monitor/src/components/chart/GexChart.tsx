@@ -164,6 +164,9 @@ export function GexChart({
   onDesalinear,
 }: Props) {
   const [historyState, setHistoryState] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
+  const [historyError, setHistoryError] = useState('');
+  const [historyAttempt, setHistoryAttempt] = useState(0);
+  const [seriesVersion, setSeriesVersion] = useState(0);
   const outerRef      = useRef<HTMLDivElement>(null);   // flex container
   const containerRef  = useRef<HTMLDivElement>(null);   // chart div
   const chartRef      = useRef<IChartApi | null>(null);
@@ -454,6 +457,9 @@ export function GexChart({
       // chart viejo. Con los refs en null, cualquier efecto que llegue tarde no hace nada.
       chartRef.current  = null;
       seriesRef.current = null;
+      useCandlesRef.current = false;
+      candlesRef.current = [];
+      gexLinesRef.current = [];
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -462,10 +468,10 @@ export function GexChart({
     if (!chartRef.current) return;
     let cancelled = false;
     setHistoryState('loading');
+    setHistoryError('');
     fetchEquityCandles(symbol, candleInterval, { fromDays: candleFromDays, limit: maxCandles }).then(candles => {
       if (cancelled || !chartRef.current) return;
       if (!candles.length) { setHistoryState('empty'); return; }
-      setHistoryState('ready');
       const chart = chartRef.current;
       if (seriesRef.current && !useCandlesRef.current) {
         chart.removeSeries(seriesRef.current);
@@ -479,6 +485,8 @@ export function GexChart({
         seriesRef.current    = cs;
         useCandlesRef.current = true;
         candlesRef.current   = candles;
+        gexLinesRef.current = [];
+        setSeriesVersion(v => v + 1);
         // El encuadre vive en la SERIE (es su proveedor de autoescala), así que cambiarla lo borra:
         // la serie de velas nace sin él y el eje se va al rango de las velas — 30 días de recorrido
         // en vez de la zona gamma. Se vuelve a aplicar acá, que es donde se pierde.
@@ -488,10 +496,21 @@ export function GexChart({
         if (gexRef.current) aplicarEncuadre(cs, gexRef.current, ivRef.current);
         fitView();
         bump();
+      } else if (seriesRef.current) {
+        seriesRef.current.setData(candles as any);
+        candlesRef.current = candles;
+        fitView();
       }
-    }).catch(() => { if (!cancelled) setHistoryState('error'); });
+      setHistoryState('ready');
+    }).catch((err) => {
+      if (cancelled) return;
+      const status = err?.response?.status;
+      setHistoryError(status ? `API HTTP ${status}` : err?.code === 'ECONNABORTED'
+        ? 'La API tardó más de 45 s' : err?.message || 'Error al cargar velas');
+      setHistoryState('error');
+    });
     return () => { cancelled = true; };
-  }, [symbol]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [symbol, candleInterval, candleFromDays, maxCandles, historyAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Live price update ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -531,25 +550,25 @@ export function GexChart({
 
     // El MURO es el nivel con nombre y valor: una línea de puntos suave a lo ancho del gráfico, con su etiqueta
     // en el eje. La franja de la banda ya no se sombrea acá: pisaba las velas y el propio muro (owner 21/10).
-    const SOFT = 0.75;
+    const SOFT = 0.32;
     add(gexData.callWall,       sideColorAlpha(CALL_COLOR, SOFT), `Call Wall ${fmtPrice(gexData.callWall, 0)}`, 1, LineStyle.Dotted);
     add(gexData.putWall,        sideColorAlpha(PUT_COLOR, SOFT),  `Put Wall ${fmtPrice(gexData.putWall, 0)}`,   1, LineStyle.Dotted);
-    add(gexData.zeroGammaLevel, 'rgba(148,163,184,0.75)',         `ZGL ${fmtPrice(gexData.zeroGammaLevel, 0)}`, 1, LineStyle.Dotted);
+    add(gexData.zeroGammaLevel, 'rgba(148,163,184,0.32)',         `ZGL ${fmtPrice(gexData.zeroGammaLevel, 0)}`, 1, LineStyle.Dotted);
     // Vencimientos comparados: sus muros y ZGL, más tenues y rotulados con su fecha.
     for (const o of gexData.others ?? []) {
       const tag = fmtExpiry(o.expiration);
-      add(o.callWall,       sideColorAlpha(CALL_COLOR, 0.4), `CW ${fmtPrice(o.callWall, 0)} · ${tag}`,       1, LineStyle.Dotted, false);
-      add(o.putWall,        sideColorAlpha(PUT_COLOR, 0.4),  `PW ${fmtPrice(o.putWall, 0)} · ${tag}`,        1, LineStyle.Dotted, false);
-      add(o.zeroGammaLevel, 'rgba(148,163,184,0.4)',         `ZGL ${fmtPrice(o.zeroGammaLevel, 0)} · ${tag}`, 1, LineStyle.Dotted, false);
+      add(o.callWall,       sideColorAlpha(CALL_COLOR, 0.18), `CW ${fmtPrice(o.callWall, 0)} · ${tag}`,       1, LineStyle.Dotted, false);
+      add(o.putWall,        sideColorAlpha(PUT_COLOR, 0.18),  `PW ${fmtPrice(o.putWall, 0)} · ${tag}`,        1, LineStyle.Dotted, false);
+      add(o.zeroGammaLevel, 'rgba(148,163,184,0.18)',         `ZGL ${fmtPrice(o.zeroGammaLevel, 0)} · ${tag}`, 1, LineStyle.Dotted, false);
     }
 
     const spot = gexData.spot;
     const em   = expectedMove(gexData, iv30);
     if (em > 0) {
-      add(spot + em,     '#60a5fa', `+1σ ${fmtPrice(spot+em, 0)}`,   1, LineStyle.Dotted);
-      add(spot - em,     '#60a5fa', `-1σ ${fmtPrice(spot-em, 0)}`,   1, LineStyle.Dotted);
-      add(spot + 2 * em, '#3b82f6', `+2σ ${fmtPrice(spot+2*em, 0)}`, 1, LineStyle.Dotted, false);
-      add(spot - 2 * em, '#3b82f6', `-2σ ${fmtPrice(spot-2*em, 0)}`, 1, LineStyle.Dotted, false);
+      add(spot + em,     'rgba(96,165,250,0.28)', `+1σ ${fmtPrice(spot+em, 0)}`,   1, LineStyle.Dotted);
+      add(spot - em,     'rgba(96,165,250,0.28)', `-1σ ${fmtPrice(spot-em, 0)}`,   1, LineStyle.Dotted);
+      add(spot + 2 * em, 'rgba(59,130,246,0.2)', `+2σ ${fmtPrice(spot+2*em, 0)}`, 1, LineStyle.Dotted, false);
+      add(spot - 2 * em, 'rgba(59,130,246,0.2)', `-2σ ${fmtPrice(spot-2*em, 0)}`, 1, LineStyle.Dotted, false);
     }
 
     // Datos vivos para el botón de encuadre, que corre fuera de este efecto.
@@ -572,7 +591,7 @@ export function GexChart({
 
     fitView();
     bump();
-  }, [gexData, iv30]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gexData, iv30, seriesVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // priceToY: maps any price → canvas Y coordinate (reads seriesRef, refreshes on renderTick)
   const priceToY = useCallback((price: number): number | null => {
@@ -588,7 +607,10 @@ export function GexChart({
           de la banda se posicione sobre el canvas; lightweight-charts no dibuja zonas entre dos
           precios, así que va como overlay traducido con priceToCoordinate. */}
       <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-        {readable && historyState !== 'ready' && <span role="status" style={{position:'absolute',top:8,left:112,zIndex:4,padding:'6px 10px',borderRadius:4,background:'#191919',color:historyState === 'error' ? '#ffb454' : '#e5e5df',fontSize:14,pointerEvents:'none'}}>{historyState === 'loading' ? 'Cargando velas…' : historyState === 'error' ? 'Histórico de velas no disponible' : 'Sin velas para este período'}</span>}
+        {readable && historyState !== 'ready' && <div role="status" className="chart-history-status">
+          <span title={historyError}>{historyState === 'loading' ? 'Cargando velas…' : historyState === 'error' ? `No se pudo cargar el precio: ${historyError}` : 'Sin velas para este período'}</span>
+          {historyState !== 'loading' && <button className="btn" onClick={() => setHistoryAttempt(v => v + 1)}>Reintentar</button>}
+        </div>}
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
         <button type="button" onClick={resetChart} className="chart-reset" aria-label="Reset chart">Reset chart</button>
       </div>

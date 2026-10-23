@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { GexExpiryApi } from '../../types/gex';
 import { fmtExpiry } from '../../utils/formatters';
 
@@ -7,7 +7,7 @@ import { fmtExpiry } from '../../utils/formatters';
  * Dibuja lo que la API sirve (IV por strike y por lado): del lado de las puts los strikes bajo el spot y del de las
  * calls los de arriba, que son las opciones fuera del dinero, como en cualquier smile. No calcula nada.
  */
-const W = 760, H = 300, PAD = { l: 46, r: 16, t: 16, b: 30 };
+const PAD = { l: 46, r: 16, t: 24, b: 30 };
 const COLORS = ['#60a5fa', '#a78bfa', '#f59e0b', '#34d399'];
 
 interface Point { strike: number; iv: number }
@@ -21,11 +21,21 @@ function otmPoints(e: GexExpiryApi, spot: number): Point[] {
 }
 
 export function VolSmile({ main, others, spot }: { main: GexExpiryApi | null; others: GexExpiryApi[]; spot: number }) {
+  const ref = useRef<HTMLElement>(null);
+  const [size, setSize] = useState({ width: 760, height: 300 });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => setSize({ width: Math.max(240, el.clientWidth), height: Math.max(260, el.clientHeight - 28) }));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const W = size.width, H = size.height;
   const series = [main, ...others].filter((e): e is GexExpiryApi => !!e)
     .map((e, i) => ({ e, pts: otmPoints(e, spot), color: COLORS[i % COLORS.length], primary: i === 0 }))
     .filter((s) => s.pts.length > 1);
   if (!series.length || !(spot > 0)) {
-    return <div className="vol-smile-empty">Sin IV por strike para este vencimiento.</div>;
+    return <figure ref={ref} className="vol-smile vol-smile-empty">Sin IV por strike para este vencimiento.</figure>;
   }
   const all = series.flatMap((s) => s.pts);
   const xs = all.map((p) => p.strike), ys = all.map((p) => p.iv);
@@ -37,7 +47,7 @@ export function VolSmile({ main, others, spot }: { main: GexExpiryApi | null; ot
   const yTicks = Array.from({ length: 5 }, (_, i) => y0 + ((y1 - y0) * i) / 4);
   const xTicks = Array.from({ length: 6 }, (_, i) => x0 + ((x1 - x0) * i) / 5);
   return (
-    <figure className="vol-smile" aria-label="Smile de volatilidad">
+    <figure ref={ref} className="vol-smile" aria-label="Smile de volatilidad">
       <svg viewBox={`0 0 ${W} ${H}`} role="img" preserveAspectRatio="xMidYMid meet">
         {yTicks.map((t) => <g key={t}><line x1={PAD.l} x2={W - PAD.r} y1={Y(t)} y2={Y(t)} stroke="rgba(255,255,255,.07)" /><text x={PAD.l - 6} y={Y(t) + 4} textAnchor="end" className="vol-axis">{t.toFixed(1)}%</text></g>)}
         {xTicks.map((t) => <text key={t} x={X(t)} y={H - 8} textAnchor="middle" className="vol-axis">{Math.round(t)}</text>)}

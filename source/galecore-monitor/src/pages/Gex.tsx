@@ -5,8 +5,7 @@ import { TickerGrid } from '../components/ticker/TickerGrid';
 import { SymbolSearchCard } from '../components/ticker/SymbolSearchCard';
 import './MarketIndicators.css';
 import { DetailsPanel } from '../components/gex/DetailsPanel';
-import { OptionsChainList } from '../components/gex/OptionsChainList';
-import { CHAIN_COL_W } from '../components/gex/graphLayout';
+import { ExpiryPicker } from '../components/gex/ExpiryPicker';
 import { VolSmile } from '../components/gex/VolSmile';
 import { ExpiryEngine } from '../components/gex/ExpiryEngine';
 import { fetchMarketSummary, MarketSummary } from '../api/marketdata';
@@ -28,7 +27,6 @@ import { fmtPct, fmtPrice, fmtTime, isStale, tint } from '../utils/formatters';
 // Fallback si el JSON no declara refresh_seconds. Los barridos se serializan en el backend, así que
 // lo que manda es recorrer el universo entero (~383s medidos con 4 símbolos), no un barrido suelto.
 const DEFAULT_REFRESH_SECONDS = 600;
-const DETAIL_HEIGHT = 500;
 
 const GEX_REF = getStrategyReference('gex');
 
@@ -304,169 +302,9 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
       {active && (
         <>
 
-          {indicator === 'price' && <section className="market-price-panel" aria-label="Gráfico de precio">
-            <header><h2>Precio</h2><span>{display?.candles?.interval ?? '1h'} · Velas</span></header>
-            <div className="market-price-chart"><GexChart key={'price-'+active} symbol={active}
-              currentPrice={hasPrice ? ticker!.price : 0} openPrice={ticker?.open ?? 0} gexData={null}
-              candleInterval={display?.candles?.interval ?? '1h'} candleBucketSeconds={3600}
-              maxCandles={display?.candles?.count ?? 100} candleFromDays={30}
-              rightPadBars={display?.candles?.right_pad_bars ?? 10} readable /></div>
-          </section>}
-
-          {indicator === "gamma" && <>
-          {/* ── Cuadro Graph — cadena por vencimiento ── */}
-          <div style={{
-            margin: '0 12px 12px',
-            borderRadius: 10,
-            overflow: 'hidden',
-            border: '1px solid var(--border)',
-            backgroundColor: 'var(--bg-secondary)',
-            boxShadow: 'var(--shadow-sm)',
-          }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '8px 14px',
-              borderBottom: '1px solid var(--border-dark)',
-              backgroundColor: 'var(--bg-tertiary)',
-            }}>
-              <span style={{
-                fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 15,
-                color: 'var(--text-primary)', letterSpacing: '0.04em',
-              }}>
-                {active} · {isGlobalScope ? 'Toda la cadena' : 'Por vencimiento'}
-              </span>
-              {/* A la derecha, y a la izquierda del spot: encuadrar la escala en la zona gamma.
-                  Es un toggle con estado a la vista —no el switch ON/OFF del proyecto, que significa
-                  otra cosa (kill switch de estrategia, global y de admin)— porque esto es una
-                  preferencia de quien mira el gráfico. Se apaga solo cuando mueven la escala. */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button
-                  onClick={() => setAlineado(v => !v)}
-                  disabled={!chartData}
-                  className="btn"
-                  aria-pressed={alineado}
-                  title={alineado
-                    ? 'Alineación activa — clic para soltar la escala'
-                    : (display?.chart_scale?.label ?? 'Encuadrar la escala en la zona gamma')}
-                  style={{
-                    padding: '3px 6px',
-                    ...(alineado ? {
-                      color: 'var(--blue-gc)',
-                      backgroundColor: 'var(--blue-muted)',
-                      borderColor: 'var(--blue-border)',
-                    } : null),
-                  }}
-                  aria-label="Encuadrar la escala en la zona gamma"
-                >
-                  <Crosshair size={11} />
-                </button>
-                <span className="tabular-nums" style={{
-                  fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
-                }}>
-                  Spot {fmtPrice(ticker?.price || data?.spotPrice || 0)}
-                </span>
-              </div>
-            </div>
-
-            <div className="market-gamma-chart" style={{ display: 'flex', height: compact ? 350 : `clamp(320px, calc(100vh - 540px), ${DETAIL_HEIGHT}px)` }}>
-              {/* Izquierda: cadena + lectura numérica del vencimiento elegido */}
-              <div style={{
-                width: CHAIN_COL_W,
-                flexShrink: 0,
-                borderRight: '1px solid var(--border-dark)',
-                overflowY: 'auto',
-              }}>
-                <OptionsChainList
-                  expiries={expiries}
-                  selected={activeExpiration}
-                  onSelect={(scope) => selectExpiry(active, scope)}
-                  compared={compare}
-                  onToggleCompare={(exp) => setCompare((c) => (c.includes(exp) ? c.filter((x) => x !== exp) : [...c, exp]))}
-                  label={display?.options_chain?.label}
-                  globalNetGex={data?.gex.global.netGex}
-                  maxDte={data?.gex.config.maxDte}
-                  globalLabel={display?.options_chain?.global_row?.label}
-                />
-                <ExpiryEngine
-                  scope={isGlobalScope && data
-                    ? { kind: 'global', global: data.gex.global, maxDte: data.gex.config.maxDte ?? null }
-                    : { kind: 'expiry', expiry: activeExpiry }}
-                  label={display?.expiry_engine?.label}
-                />
-              </div>
-
-              {/* Derecha: gráfico del vencimiento seleccionado */}
-              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                {isLoading && !chartData ? (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    height: '100%', gap: 8, fontSize: 14, color: 'var(--text-muted)',
-                  }}>
-                    <span className="spinner" /> Barriendo la cadena…
-                  </div>
-                ) : !chartData ? (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    height: '100%', fontSize: 14, color: 'var(--text-muted)',
-                  }}>
-                    Sin datos GEX disponibles
-                  </div>
-                ) : (
-                  <GexChart
-                    // Key por símbolo, no por vencimiento: cambiar de vencimiento redibuja muros y
-                    // barras sin remontar el chart (remontarlo volvería a pedir las velas).
-                    readable
-                    key={active}
-                    symbol={active}
-                    currentPrice={ticker?.price ?? data?.spotPrice ?? 0}
-                    openPrice={ticker?.open ?? 0}
-                    iv30={iv30}
-                    gexData={chartData}
-                    candleInterval={display?.candles?.interval ?? '1h'}
-                    candleBucketSeconds={3600}
-                    maxCandles={display?.candles?.count ?? 100}
-                    candleFromDays={30}
-                    rightPadBars={display?.candles?.right_pad_bars ?? 10}
-                    scaleConfig={display?.chart_scale}
-                    alineado={alineado}
-                    onDesalinear={() => setAlineado(false)}
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-          </>}
-          {indicator === 'iv' && (() => {
-            const smileMain = activeExpiry ?? expiries[0] ?? null;
-            const smileOthers = expiries.filter((e) => compare.includes(e.expiration) && e.expiration !== smileMain?.expiration);
-            return (
-              <section className="market-iv-graph" aria-label="Smile y skew">
-                <div className="market-iv-chain" style={{ width: CHAIN_COL_W }}>
-                  <OptionsChainList
-                    expiries={expiries}
-                    selected={smileMain?.expiration ?? null}
-                    onSelect={(scope) => selectExpiry(active, scope)}
-                    label={display?.options_chain?.label}
-                    maxDte={data?.gex.config.maxDte}
-                    compared={compare}
-                    onToggleCompare={(exp) => setCompare((c) => (c.includes(exp) ? c.filter((x) => x !== exp) : [...c, exp]))}
-                  />
-                </div>
-                <div className="market-iv-main">
-                  <h2>Smile y skew · {active}</h2>
-                  <div className="market-iv-skew">
-                    <span>Skew 25Δ put / ATM<b className="tabular-nums">{smileMain?.putSkew25d != null ? smileMain.putSkew25d.toFixed(2) : '—'}</b></span>
-                    {smileMain?.put25DeltaStrike != null && <span>Put 25Δ<b className="tabular-nums">{smileMain.put25DeltaStrike}</b></span>}
-                    <span>IV ATM<b className="tabular-nums">{smileMain?.atmIv != null ? `${(smileMain.atmIv * 100).toFixed(1)}%` : '—'}</b></span>
-                  </div>
-                  <VolSmile main={smileMain} others={smileOthers} spot={ticker?.price || data?.spotPrice || 0} />
-                </div>
-              </section>
-            );
-          })()}
           {/* ── Cuadro Details — GEX global + contexto. Sin columna Microstructure. ── */}
-          <div style={{
-            margin: '0 12px 12px',
+          <div className="market-context" style={{
+            margin: '0 12px 8px',
             borderRadius: 10,
             border: '1px solid var(--border)',
             backgroundColor: 'var(--bg-secondary)',
@@ -584,7 +422,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
                 )}
               </div>
             ) : (
-              <DetailsPanel
+              <DetailsPanel compact
                 data={data}
                 groups={display?.details_panel?.groups}
                 groupIds={detailGroupIds}
@@ -592,6 +430,146 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
               />
             )}
           </div>
+
+          {indicator === 'price' && <section className="market-price-panel" aria-label="Gráfico de precio">
+            <header><h2>Precio</h2><span>{display?.candles?.interval ?? '1h'} · Velas</span></header>
+            <div className="market-price-chart"><GexChart key={'price-'+active} symbol={active}
+              currentPrice={hasPrice ? ticker!.price : 0} openPrice={ticker?.open ?? 0} gexData={null}
+              candleInterval={display?.candles?.interval ?? '1h'} candleBucketSeconds={3600}
+              maxCandles={display?.candles?.count ?? 100} candleFromDays={30}
+              rightPadBars={display?.candles?.right_pad_bars ?? 10} readable /></div>
+          </section>}
+
+          {indicator === "gamma" && <>
+          {/* ── Cuadro Graph — cadena por vencimiento ── */}
+          <div className="market-gamma-panel" style={{
+            margin: '0 12px 12px',
+            borderRadius: 10,
+            border: '1px solid var(--border)',
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: 'var(--shadow-sm)',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 14px',
+              borderBottom: '1px solid var(--border-dark)',
+              backgroundColor: 'var(--bg-tertiary)',
+            }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 15,
+                color: 'var(--text-primary)', letterSpacing: '0.04em',
+              }}>
+                {active} · {isGlobalScope ? 'Toda la cadena' : 'Por vencimiento'}
+              </span>
+              <ExpiryPicker expiries={expiries} selected={activeExpiration}
+                onSelect={(scope) => selectExpiry(active, scope)} compared={compare} onCompare={setCompare}
+                globalNetGex={data?.gex.global.netGex} maxDte={data?.gex.config.maxDte} />
+              <details className="market-popover market-expiry-detail">
+                <summary>Vencimiento elegido</summary>
+                <div className="market-popover-content">
+                <ExpiryEngine
+                  scope={isGlobalScope && data
+                    ? { kind: 'global', global: data.gex.global, maxDte: data.gex.config.maxDte ?? null }
+                    : { kind: 'expiry', expiry: activeExpiry }}
+                  label={display?.expiry_engine?.label}
+                />
+                </div>
+              </details>
+              {/* A la derecha, y a la izquierda del spot: encuadrar la escala en la zona gamma.
+                  Es un toggle con estado a la vista —no el switch ON/OFF del proyecto, que significa
+                  otra cosa (kill switch de estrategia, global y de admin)— porque esto es una
+                  preferencia de quien mira el gráfico. Se apaga solo cuando mueven la escala. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  onClick={() => setAlineado(v => !v)}
+                  disabled={!chartData}
+                  className="btn"
+                  aria-pressed={alineado}
+                  title={alineado
+                    ? 'Alineación activa — clic para soltar la escala'
+                    : (display?.chart_scale?.label ?? 'Encuadrar la escala en la zona gamma')}
+                  style={{
+                    padding: '3px 6px',
+                    ...(alineado ? {
+                      color: 'var(--blue-gc)',
+                      backgroundColor: 'var(--blue-muted)',
+                      borderColor: 'var(--blue-border)',
+                    } : null),
+                  }}
+                  aria-label="Encuadrar la escala en la zona gamma"
+                >
+                  <Crosshair size={11} />
+                </button>
+                <span className="tabular-nums" style={{
+                  fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
+                }}>
+                  Spot {fmtPrice(ticker?.price || data?.spotPrice || 0)}
+                </span>
+              </div>
+            </div>
+
+            <div className="market-gamma-chart">
+              {/* Derecha: gráfico del vencimiento seleccionado */}
+              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                {isLoading && !chartData ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    height: '100%', gap: 8, fontSize: 14, color: 'var(--text-muted)',
+                  }}>
+                    <span className="spinner" /> Barriendo la cadena…
+                  </div>
+                ) : !chartData ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    height: '100%', fontSize: 14, color: 'var(--text-muted)',
+                  }}>
+                    Sin datos GEX disponibles
+                  </div>
+                ) : (
+                  <GexChart
+                    // Key por símbolo, no por vencimiento: cambiar de vencimiento redibuja muros y
+                    // barras sin remontar el chart (remontarlo volvería a pedir las velas).
+                    readable
+                    key={active}
+                    symbol={active}
+                    currentPrice={ticker?.price ?? data?.spotPrice ?? 0}
+                    openPrice={ticker?.open ?? 0}
+                    iv30={iv30}
+                    gexData={chartData}
+                    candleInterval={display?.candles?.interval ?? '1h'}
+                    candleBucketSeconds={3600}
+                    maxCandles={display?.candles?.count ?? 100}
+                    candleFromDays={30}
+                    rightPadBars={display?.candles?.right_pad_bars ?? 10}
+                    scaleConfig={display?.chart_scale}
+                    alineado={alineado}
+                    onDesalinear={() => setAlineado(false)}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+          </>}
+          {indicator === 'iv' && (() => {
+            const smileMain = activeExpiry ?? expiries[0] ?? null;
+            const smileOthers = expiries.filter((e) => compare.includes(e.expiration) && e.expiration !== smileMain?.expiration);
+            return (
+              <section className="market-iv-graph" aria-label="Smile y skew">
+                <div className="market-iv-main">
+                  <header className="market-iv-heading"><h2>Smile y skew · {active}</h2>
+                    <ExpiryPicker expiries={expiries} selected={smileMain?.expiration ?? null}
+                      onSelect={(scope) => selectExpiry(active, scope)} compared={compare} onCompare={setCompare} />
+                  </header>
+                  <div className="market-iv-skew">
+                    <span>Skew 25Δ put / ATM<b className="tabular-nums">{smileMain?.putSkew25d != null ? smileMain.putSkew25d.toFixed(2) : '—'}</b></span>
+                    {smileMain?.put25DeltaStrike != null && <span>Put 25Δ<b className="tabular-nums">{smileMain.put25DeltaStrike}</b></span>}
+                    <span>IV ATM<b className="tabular-nums">{smileMain?.atmIv != null ? `${(smileMain.atmIv * 100).toFixed(1)}%` : '—'}</b></span>
+                  </div>
+                  <VolSmile main={smileMain} others={smileOthers} spot={ticker?.price || data?.spotPrice || 0} />
+                </div>
+              </section>
+            );
+          })()}
 
         </>
       )}

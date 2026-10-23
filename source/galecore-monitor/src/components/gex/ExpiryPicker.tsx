@@ -1,0 +1,67 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { GexExpiryApi } from '../../types/gex';
+import { OptionsChainList } from './OptionsChainList';
+
+interface Props {
+  expiries: GexExpiryApi[];
+  selected: string | null;
+  onSelect: (scope: string) => void;
+  compared: string[];
+  onCompare: (expirations: string[]) => void;
+  globalNetGex?: number;
+  maxDte?: number;
+}
+
+/** Controles fuera del área del gráfico; el rango selecciona sólo vencimientos servidos. */
+export function ExpiryPicker({ expiries, selected, onSelect, compared, onCompare, globalNetGex, maxDte }: Props) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const [from, setFrom] = useState('1');
+  const [to, setTo] = useState('45');
+  const valid = from !== '' && to !== '' && Number(from) >= 0 && Number(to) >= Number(from)
+    && Number.isInteger(Number(from)) && Number.isInteger(Number(to));
+  const inRange = valid ? expiries.filter(e => e.dte >= Number(from) && e.dte <= Number(to)) : [];
+  useEffect(() => {
+    const close = (event: PointerEvent) => {
+      if (ref.current && !ref.current.contains(event.target as Node)) ref.current.open = false;
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && ref.current?.open) {
+        ref.current.open = false;
+        ref.current.querySelector('summary')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', escape);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', escape);
+    };
+  }, []);
+  const selectSet = (items: GexExpiryApi[]) => {
+    if (!items.length) return;
+    if (!items.some(e => e.expiration === selected)) onSelect(items[0].expiration);
+    onCompare(items.map(e => e.expiration));
+  };
+  return (
+    <details ref={ref} className="market-popover market-expiry-picker">
+      <summary>Vencimientos</summary>
+      <div className="market-popover-content">
+        <div className="market-expiry-actions">
+          <button className="btn" onClick={() => selectSet(expiries)} disabled={!expiries.length}>Seleccionar todos</button>
+          <button className="btn" onClick={() => onCompare([])}>Sólo elegido</button>
+        </div>
+        <div className="market-dte-range">
+          <label>Desde DTE<input type="number" min="0" step="1" value={from} onChange={e => setFrom(e.target.value)} /></label>
+          <label>Hasta DTE<input type="number" min="0" step="1" value={to} onChange={e => setTo(e.target.value)} /></label>
+          <button className="btn" disabled={!valid || !inRange.length} onClick={() => selectSet(inRange)}>Aplicar</button>
+        </div>
+        {!valid && <p role="status">Ingresá un rango de días válido.</p>}
+        {valid && !inRange.length && <p role="status">Sin vencimientos disponibles en ese rango.</p>}
+        <p className="market-expiry-hint">Elegí la fecha para las barras; marcá casillas para comparar sus muros y smiles. El rango usa la cadena disponible{maxDte != null ? ` (hasta ${maxDte} DTE)` : ''}.</p>
+        <OptionsChainList expiries={expiries} selected={selected} onSelect={onSelect}
+          compared={compared} onToggleCompare={exp => onCompare(compared.includes(exp) ? compared.filter(x => x !== exp) : [...compared, exp])}
+          globalNetGex={globalNetGex} maxDte={maxDte} />
+      </div>
+    </details>
+  );
+}

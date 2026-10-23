@@ -425,9 +425,12 @@ interface Props {
   subtitle?: string;
   /** Recorte visual de los grupos declarados, sin alterar métricas ni referencias. */
   groupIds?: string[];
+  compact?: boolean;
 }
 
-export function DetailsPanel({ data, groups, subtitle, groupIds }: Props) {
+export function DetailsPanel({ data, groups, subtitle, groupIds, compact = false }: Props) {
+  const [hoveredReference, setHoveredReference] = useState<string | null>(null);
+  const [focusedReference, setFocusedReference] = useState<string | null>(null);
   const declared = groups?.length ? groups : DEFAULT_DETAILS_GROUPS;
   const checks = data?.macroRegime?.checks;
   const inputs = data?.structureInputs ?? null;
@@ -443,6 +446,24 @@ export function DetailsPanel({ data, groups, subtitle, groupIds }: Props) {
         .filter((c): c is { label: string; cell: Cell } => c.cell !== null),
     }))
     .filter((g) => g.cells.length > 0);
+
+  if (compact) {
+    return <div className="market-context-metrics">
+      {!data ? <span>Sin barrido todavía.</span> : rendered.flatMap(({ group, cells }) =>
+        cells.map(({ label, cell }, index) => {
+          const referenceId = `market-context-${group.id}-${index}`;
+          return <span className="market-context-metric" key={`${group.id}-${label}`}
+            tabIndex={0} aria-describedby={referenceId}
+            onMouseEnter={() => setHoveredReference(referenceId)} onMouseLeave={() => setHoveredReference(null)}
+            onFocus={() => setFocusedReference(referenceId)} onBlur={() => setFocusedReference(null)}>
+            <span>{label}</span><b className="tabular-nums" style={{ color: cell.color }}>{cell.value}</b>
+            {(hoveredReference === referenceId || focusedReference === referenceId) && <span id={referenceId} role="tooltip" className="market-context-reference">
+              {[cell.reference, ...(cell.tooltip ?? []).map(r => `${r.label}: ${r.value}`)].join('\n')}
+            </span>}
+          </span>;
+        }))}
+    </div>;
+  }
 
   return (
     <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 10 }}>

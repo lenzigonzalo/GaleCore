@@ -1,0 +1,10 @@
+{
+  "endpoint": "localhost:7001/App/Gex/Analysis",
+  "symbol": "SPY",
+  "seconds": 4.91,
+  "spot": 760.76,
+  "expiries": 17,
+  "global_strikes": 362,
+  "expiries_with_iv": 17,
+  "has_skew25": 17
+}
