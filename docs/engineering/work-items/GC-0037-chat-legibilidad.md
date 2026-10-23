@@ -39,3 +39,5 @@ Ejecutado en `source/galecore-monitor`:
 QA visual y recorrido real pendientes: `cua.getState()` no encontró navegadores; intento de abrir `http://localhost:3039` con `cua.createBrowserTab('iab', ...)` devolvió `Browser is not available: iab`. Los tests de geometría acreditan posición calculada y portal, no apariencia real ni persistencia de extremo a extremo.
 
 Para retomar: comprobar Cuenta → Tamaño → chat y recarga, revisar menú en escritorio y móvil, revisión independiente y aprobación del owner. No VALIDATED/CLOSED. WS-0055 conserva su estado y pendientes propios.
+
+23/10/2026, seguimiento: el owner reportó TS2307 sobre `ChatFontSetting`. Archivo presente, árbol limpio y `npx tsc --noEmit` exit 0. Se identificó el monitor activo en la misma carpeta y se reinició sólo su proceso Dev con `python dev/galecore_dev.py monitor`. Resultado real: `webpack compiled successfully` y `No issues found.` en `dev/.local/monitor-font-restart.stdout.log` (stderr separado en el mismo directorio). Compatible con resolución obsoleta del verificador en caliente; no requirió cambiar código. No acredita QA visual.
