@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, BookOpen, KeyRound, Plug, Wallet, Power, Trash2, User, UserCog, Users } from 'lucide-react';
+import { Bell, BookOpen, KeyRound, Plug, Wallet, Power, User, UserCog, Users } from 'lucide-react';
 import { Connections } from '../components/settings/Connections';
 import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
+import { SkillsView } from '../components/settings/SkillsView';
 import { LocalMcp } from '../components/settings/LocalMcp';
 import { LanguageSetting } from '../components/settings/LanguageSetting';
 import { ProfileSettings } from '../components/settings/ProfileSettings';
@@ -17,7 +18,7 @@ import { ChatFontSetting } from '../components/settings/ChatFontSetting';
 import { Markdown } from '../components/settings/Markdown';
 import { useCurrentUserStore } from '../store/useCurrentUserStore';
 import {
-  SpaceItem, SpaceKind, deleteSpaceItem, fetchSpace, keyFromTitle, saveSpaceItem,
+  SpaceItem, SpaceKind, fetchSpace,
 } from '../api/space';
 
 /**
@@ -65,10 +66,6 @@ const btn = (primary = false): React.CSSProperties => ({
   border: `1px solid ${primary ? 'var(--accent)' : 'var(--border)'}`,
   backgroundColor: primary ? 'var(--accent)' : 'transparent', color: primary ? 'var(--accent-ink)' : 'var(--text-secondary)',
 });
-const field: React.CSSProperties = {
-  width: '100%', backgroundColor: 'var(--bg-primary)', color: 'var(--text-primary)', border: '1px solid var(--border-dark)',
-  borderRadius: 8, padding: '10px 12px', fontSize: 15, fontFamily: 'var(--font-sans)',
-};
 const muted: React.CSSProperties = { fontSize: 14, color: 'var(--text-muted)' };
 
 const parse = (s: string): any => { try { return JSON.parse(s); } catch { return null; } };
@@ -108,125 +105,6 @@ function ConventionBody({ item }: { item: SpaceItem }) {
     );
   }
   return <Markdown text={item.content} />;
-}
-
-// La plantilla de una skill (WS-0054): la primera línea dice qué pedido atiende; el chat la ve en tu espacio.
-const SKILL_TEMPLATE = `Qué pedido atiende y cuándo no usarla.
-
-## Cuándo se usa
-Pedidos típicos, con tus palabras.
-
-## Qué necesita
-Qué datos de GaleCore usa y qué hacer si falta alguno.
-
-## Pasos
-1. Primer paso, con el dato que trae.
-2. Segundo paso.
-
-## Qué entrega
-La forma de la respuesta y un ejemplo corto.
-
-## Errores a evitar
-- Lo que no tiene que hacer.
-
-## Cómo responder
-El dato principal primero; después la forma (conclusión, tabla).
-`;
-
-function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged: () => void }) {
-  const mine = items.filter((i) => i.visibility === 'private');
-  const product = items.filter((i) => i.visibility !== 'private');
-  const [selected, setSelected] = useState<string | null>(mine[0]?.key ?? product[0]?.key ?? null);
-  const [tab, setTab] = useState<'texto' | 'markdown'>('texto');
-  const [draft, setDraft] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [title, setTitle] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const skill = creating ? undefined : items.find((i) => i.key === selected) ?? items[0];
-  const editable = !!skill && skill.isOwn && skill.visibility === 'private';
-  useEffect(() => { if (!creating) { setDraft(skill?.content ?? ''); setTab('texto'); } }, [creating, skill?.key, skill?.content]);
-  const startNew = () => { setCreating(true); setTitle(''); setDraft(SKILL_TEMPLATE); setError(null); };
-  const create = async () => {
-    const key = keyFromTitle(title);
-    if (items.some((i) => i.key === key)) { setError('Ya hay una skill con ese nombre.'); return; }
-    try {
-      await saveSpaceItem('skill', key, { title: title.trim(), content: draft, format: 'markdown', visibility: 'private' });
-      setCreating(false); setSelected(key); onChanged();
-    } catch { setError('No se pudo guardar la skill.'); }
-  };
-  const save = async () => {
-    if (!skill) return;
-    await saveSpaceItem(skill.kind, skill.key, { title: skill.title, content: draft, format: 'markdown', visibility: skill.visibility });
-    onChanged();
-  };
-  const remove = async () => {
-    if (!skill) return;
-    await deleteSpaceItem(skill.kind, skill.key);
-    setSelected(null); onChanged();
-  };
-  const entry = (i: SpaceItem) => (
-    <button key={i.key} onClick={() => { setCreating(false); setSelected(i.key); }} style={{ display: 'block', width: '100%',
-      textAlign: 'left', padding: '7px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 12.5,
-      backgroundColor: !creating && i.key === skill?.key ? 'var(--bg-elevated)' : 'transparent',
-      color: !creating && i.key === skill?.key ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-      {i.title.replace(/_/g, ' ')}
-    </button>
-  );
-  const heading = (text: string) => (
-    <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--text-muted)',
-      padding: '8px 10px 4px' }}>{text}</div>
-  );
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 14, alignItems: 'start' }}>
-      <div style={{ ...card, padding: 6 }}>
-        <button style={{ ...btn(true), width: '100%', marginBottom: 6 }} onClick={startNew}>Nueva skill</button>
-        {mine.length > 0 && <>{heading('Tuyas')}{mine.map(entry)}</>}
-        {product.length > 0 && <>{heading('De la plataforma')}{product.map(entry)}</>}
-      </div>
-      {creating ? (
-        <div style={card}>
-          <input style={{ ...field, fontSize: 15, fontWeight: 600, marginBottom: 12 }} placeholder="Nombre de la skill"
-            value={title} onChange={(e) => { setTitle(e.target.value); setError(null); }} autoFocus />
-          <textarea style={{ ...field, minHeight: 360, fontFamily: 'var(--font-mono)', fontSize: 12 }}
-            value={draft} onChange={(e) => setDraft(e.target.value)} />
-          {error && <p role="alert" style={{ color: 'var(--red-gc)', fontSize: 13 }}>{error}</p>}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-            <button style={btn()} onClick={() => setCreating(false)}>Cancelar</button>
-            <button style={btn(true)} disabled={!title.trim() || !draft.trim()} onClick={create}>Crear</button>
-          </div>
-        </div>
-      ) : !skill ? <div style={muted}>Todavía no hay skills. Creá la primera con «Nueva skill».</div> : (
-        <div style={card}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', flex: 1 }}>{skill.title.replace(/_/g, ' ')}</span>
-            {editable && <button style={btn()} onClick={remove} aria-label="Borrar la skill"><Trash2 size={14} /></button>}
-            <span style={muted}>v{skill.version}</span>
-          </div>
-          {editable && (
-            <div style={{ display: 'flex', gap: 6, marginBottom: 12, borderBottom: '1px solid var(--border-dark)' }}>
-              {(['texto', 'markdown'] as const).map((t) => (
-                <button key={t} onClick={() => setTab(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12,
-                  padding: '6px 10px', color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
-                  borderBottom: tab === t ? '2px solid var(--blue-gc)' : '2px solid transparent' }}>
-                  {t === 'texto' ? 'Texto' : 'Markdown'}
-                </button>
-              ))}
-            </div>
-          )}
-          {tab === 'texto' || !editable ? <Markdown text={skill.content} /> : (
-            <>
-              <textarea style={{ ...field, minHeight: 360, fontFamily: 'var(--font-mono)', fontSize: 12 }}
-                value={draft} onChange={(e) => setDraft(e.target.value)} />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-                <button style={btn()} onClick={() => setDraft(skill.content)}>Descartar</button>
-                <button style={btn(true)} disabled={draft === skill.content} onClick={save}>Guardar</button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
 }
 
 // ── página ──────────────────────────────────────────────────────

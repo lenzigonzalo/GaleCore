@@ -20,6 +20,7 @@ const pre: React.CSSProperties = { fontFamily: 'var(--font-mono)', fontSize: 11.
   padding: '8px 10px', borderRadius: 4, overflowX: 'auto', margin: '4px 0 12px', whiteSpace: 'pre' };
 
 export function Markdown({ text, fontSize = 13 }: { text: string; fontSize?: number }) {
+  const codeStyle = { ...pre, fontSize: fontSize === 13 ? 11.5 : fontSize * 0.92 };
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   const out: React.ReactNode[] = [];
   let list: string[] = [];
@@ -54,7 +55,7 @@ export function Markdown({ text, fontSize = 13 }: { text: string; fontSize?: num
   for (const raw of lines) {
     const line = raw.trimEnd();
     if (line.trim().startsWith('```')) {  // bloque de código: tal cual, en monoespaciada
-      if (code) { out.push(<pre key={`c-${out.length}`} style={pre}>{code.join('\n')}</pre>); code = null; }
+      if (code) { out.push(<pre key={`c-${out.length}`} style={codeStyle}>{code.join('\n')}</pre>); code = null; }
       else { flushAll(); code = []; }
       continue;
     }
@@ -63,7 +64,7 @@ export function Markdown({ text, fontSize = 13 }: { text: string; fontSize?: num
     const item = line.match(/^\s*(?:[-*]|(\d+)[.)])\s+(.*)$/);
     if (h) {
       flushAll();
-      const size = [16, 14, 13][h[1].length - 1];
+      const size = [fontSize + 3, fontSize + 1, fontSize][h[1].length - 1];
       out.push(<div key={`h-${out.length}`} style={{ fontSize: size, fontWeight: 600, color: 'var(--text-primary)',
         margin: '12px 0 6px' }}>{inline(h[2], `h-${out.length}`)}</div>);
     } else if (line.trim().startsWith('|')) {
@@ -83,6 +84,6 @@ export function Markdown({ text, fontSize = 13 }: { text: string; fontSize?: num
     }
   }
   flushAll();
-  if (code) out.push(<pre key="c-end" style={pre}>{(code as string[]).join('\n')}</pre>);
+  if (code) out.push(<pre key="c-end" style={codeStyle}>{(code as string[]).join('\n')}</pre>);
   return <div style={{ fontSize, lineHeight: fontSize === 13 ? 1.55 : 1.65, fontFamily: 'var(--font-sans)', color: 'var(--text-secondary)' }}>{out}</div>;
 }
