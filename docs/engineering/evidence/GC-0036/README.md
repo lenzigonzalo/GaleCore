@@ -50,3 +50,16 @@ conservaba el estado anterior cuando fallaba la consulta. Corregido: cada lectur
 estado previo; DELETE exitoso limpia también ese estado antes de consultar; escrituras bloqueadas
 durante carga/guardado. Dos regresiones nuevas cubren GET fallido tras cuenta vinculada y tras
 DELETE exitoso. No se solicitó recheck ni se modificó el informe del reviewer.
+
+## Seguimiento: errores TS2307 en el monitor de desarrollo
+
+22/10/2026, reporte del owner: el monitor abierto decía no encontrar `BrokerAccountCard` ni
+`ApiConnections`. Ambos archivos estaban presentes, versionados y el árbol limpio en
+`local/integracion`; el build final anterior era verde. Se identificó el proceso del puerto 3039,
+levantado con `dev/galecore_dev.py monitor`, y se reinició sólo ese árbol de procesos con el mismo
+comando y entorno Dev. No se tocaron API, Lab, credenciales ni código.
+
+Verificación del compilador de desarrollo tras reinicio: WebSocket `ws://127.0.0.1:3039/ws`
+de webpack-dev-server devolvió `{"type":"ok"}` (comando diagnóstico exit 0).
+Logs locales ignorados: `dev/.local/monitor-restart.stdout.log` y `.stderr.log`.
+Esto acredita recompilación del servidor de desarrollo, no inspección visual del navegador.
