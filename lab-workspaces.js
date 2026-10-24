@@ -87,6 +87,12 @@ function stepDetail(tool,input){
 function pushStep(chat,step){const steps=chat.steps||(chat.steps=[]);const last=steps.at(-1);if(last&&last.label===step.label&&last.detail===step.detail)return;steps.push({...step,at:new Date().toISOString()});if(steps.length>14)steps.splice(0,steps.length-14);}
 function setActivity(chat,label,detail=''){chat.activity=label;if(!label||label==='Pensando'||(label==='Trabajando'&&!detail))return;pushStep(chat,{label,detail});}
 function setNote(chat,text){const t=String(text||'').replace(/\s+/g,' ').trim();if(!t)return;pushStep(chat,{label:t.length>160?t.slice(0,157)+'…':t,detail:'',kind:'note'});}
+function limitText(resetsAt){
+  if(typeof resetsAt !== 'number') return 'Se terminó tu límite de uso de Claude. Probá más tarde o seguí con Codex.';
+  const at = new Date(resetsAt * 1000), today = at.toDateString() === new Date().toDateString();
+  const hour = at.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+  return 'Se terminó tu límite de uso de Claude. Vuelve ' + (today ? 'a las ' + hour : 'el ' + at.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' }) + ' a las ' + hour) + '; hasta entonces podés seguir con Codex.';
+}
 function consumeEvent(chat, event, provider) {
   if(provider === 'codex') {
     if(event.type === 'thread.started') chat.nativeId = event.thread_id;
@@ -112,9 +118,14 @@ function consumeEvent(chat, event, provider) {
         if(c.type==='tool_use') setActivity(chat,describeStep(c.name,c.input),stepDetail(c.name,c.input));
       }
     }
+    // Owner 24/10: si se terminó el límite de la suscripción, decirlo y cuándo vuelve (no «revisá permisos»).
+    if(event.type === 'rate_limit_event' && event.rate_limit_info?.status === 'rejected') chat.limitResetsAt = event.rate_limit_info.resetsAt || true;
+    const limited = chat.limitResetsAt || (event.type === 'result' && event.is_error && /hit your .*limit|usage limit|rate.?limit/i.test(String(event.result || '')));
     if(event.type === 'result' && !event.is_error && event.result) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.result,at:new Date().toISOString()});
-    if(event.type === 'result' && event.is_error) chat.error='Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
-    if(event.permission_denials?.length) chat.error='Una herramienta necesita permiso. Retomá en la terminal para autorizarla; este chat no omite permisos.';
+    if(event.type === 'result' && event.is_error) chat.error = limited ? limitText(chat.limitResetsAt) : 'Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
+    // Con el Lab como host los permisos se preguntan en el chat; lo que el trader negó no es un error.
+    const refused = (event.permission_denials || []).filter(d => !(chat.refused || []).includes(d.tool_use_id));
+    if(event.type === 'result' && !event.is_error && refused.length) { const what = describeStep(refused[0].tool_name, refused[0].tool_input); chat.error = 'Quedó sin hacer «' + (what === 'Trabajando' ? refused[0].tool_name : what) + '»: lo bloqueó la regla de permisos del Lab.'; }
   }
 }
 // Mapa de la idea (WS-0039): una página memory/mapa-<tema>.md que el agente reescribe en el turno. El Lab sólo anota
@@ -257,8 +268,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // Claude: sin la configuración del usuario ni conectores; los permisos (web después de GaleCore, sin tocar el código)
     // salen de knowledge/.claude/settings.json. Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
     const file=path.join(local,'contexts',chat.id+'.md');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,context);
-    const args=['-p',...modelFlags(chat),'--output-format','stream-json','--verbose','--append-system-prompt-file',file,
-      ...(auto?['--permission-mode','auto']:['--permission-prompts','none']),'--strict-mcp-config',
+    // Owner 24/10: los permisos se responden en el chat como en el CLI. El Lab es el host (--permission-prompt-tool stdio):
+    // lo que necesita permiso llega como control_request y espera la respuesta del trader, en Manual y en Auto.
+    const args=['-p',...modelFlags(chat),'--input-format','stream-json','--output-format','stream-json','--verbose','--append-system-prompt-file',file,
+      '--permission-prompts','host','--permission-prompt-tool','stdio',...(auto?['--permission-mode','auto']:[]),'--strict-mcp-config',
       '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
     return {file,args:chat.nativeId?[...args,'--resume',chat.nativeId]:args};
   }
@@ -273,7 +286,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(chat.model === undefined || chat.effort === undefined){Object.assign(chat,normalize(chat.provider,chat),{selectionSource:'legacy-fallback'});saveChat(chat);}
     const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()};chat.messages.push(ask);
     if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
-    chat.state='running';chat.error=null;chat.activity='Pensando';chat.steps=[];chat.turnStartedAt=Date.now()-1000;saveChat(chat);
+    chat.state='running';chat.error=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'tools','terminal','skills','lab-strategy-bootstrap','SKILL.md');
     // El contexto del turno, igual para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el
     // proveedor ni el modelo»; Personal sin filtro). Capas (D-0012, D-0014): final de la conversación anterior
@@ -286,8 +299,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       // si el de memory/ tiene otro formato) y la respuesta cierra proponiendo la próxima pieza del diseño.
       ?' Antes de responder, reescribí el mapa del proyecto (el mapa-*.md de memory/, o '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md')+' si no hay) con el formato de «Mapa de la idea» (en el método de ideas y estrategias del contexto), aunque nada haya cambiado: pasá lo que ya estaba a sus 8 partes.'
       :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea», '+path.join(root,'GaleCore-AI','config','skills','strategy-design','method.md')+') en '+path.join(p.dir,chat.mapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
-    const job={proc:null,project:p.id,chat};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
+    const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide tools/caso.py, sea cual sea el motor
@@ -295,8 +308,20 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const engine=engineArgs(chat,p,context,auto);job.file=engine.file;
       const proc=job.proc=spawnProcess(binaries[chat.provider],engine.args,{cwd:p.dir,env:{...environment(),GALECORE_HOST_PROVIDER:chat.provider||'',GALECORE_HOST_MODEL:chat.model||'',...(chat.provider==='codex'?{}:{BASH_DEFAULT_TIMEOUT_MS:'300000',BASH_MAX_TIMEOUT_MS:'600000'})},windowsHide:true,stdio:['pipe','pipe','pipe']});
       const decoder=new StringDecoder('utf8');let pending='';
-      proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{consumeEvent(chat,JSON.parse(line),chat.provider);saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
-      proc.stderr.on('data',()=>{});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});proc.stdin.end(words+'\n');
+      const claude=chat.provider!=='codex';
+      job.write=o=>{if(!proc.stdin.destroyed&&!proc.stdin.writableEnded)proc.stdin.write(JSON.stringify(o)+'\n');};
+      // Un pedido de permiso queda en el chat hasta que el trader responde (POST /chats/<id>/permission); los otros pedidos
+      // de control no los usa el Lab y se contestan con error para que el motor no espere.
+      const control=e=>{
+        if(e.request?.subtype!=='can_use_tool'){job.write({type:'control_response',response:{subtype:'error',request_id:e.request_id,error:'El Lab no atiende '+e.request?.subtype}});return;}
+        const r=e.request;job.asks.set(e.request_id,r);
+        chat.permission={id:e.request_id,tool:r.tool_name,label:describeStep(r.tool_name,r.input),detail:stepDetail(r.tool_name,r.input)||r.description||'',always:(r.permission_suggestions||[]).length>0};
+        chat.activity='Esperando tu permiso';saveChat(chat);
+      };
+      proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{const e=JSON.parse(line);if(claude&&e.type==='control_request'){control(e);continue;}if(claude&&e.type==='control_response')continue;consumeEvent(chat,e,chat.provider);if(claude&&e.type==='result')proc.stdin.end();saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
+      proc.stderr.on('data',()=>{});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});
+      if(claude){job.write({type:'control_request',request_id:'init-'+chat.id,request:{subtype:'initialize'}});job.write({type:'user',message:{role:'user',content:words},parent_tool_use_id:null,session_id:''});}
+      else proc.stdin.end(words+'\n');
     }).catch(()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});
     return chat;
   }
@@ -374,6 +399,19 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       if(req.method==='POST'&&parts[2]==='rename'){const title=String((await readBody(req)).title||'').trim();if(!title||title.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');c.title=title;c.titleLocked=true;saveChat(c);json(res,200,{id:c.id,title});return true;}
       // Eliminar saca la conversación del historial; el archivo pasa a chats-borradas/ (local, no se muestra).
       if(req.method==='POST'&&parts[2]==='delete'){if(jobs.has(c.id))throw fail('La conversación está respondiendo. Detenela antes de eliminarla.',409);fs.mkdirSync(removedDir,{recursive:true});fs.renameSync(path.join(chatDir,c.id+'.json'),path.join(removedDir,c.id+'.json'));json(res,200,{deleted:c.id});return true;}
+      // Respuesta del trader a un pedido de permiso: permitir, permitir siempre (la sugerencia del motor, como «no volver a
+      // preguntar» del CLI) o no permitir.
+      if(req.method==='POST'&&parts[2]==='permission'){const b=await readBody(req),j=jobs.get(c.id),r=j?.asks.get(b.id);
+        if(!r)throw fail('Ese pedido de permiso ya no está activo.',409);
+        const decision=['allow','always','deny'].includes(b.decision)?b.decision:'deny';j.asks.delete(b.id);
+        const response=decision==='deny'?{behavior:'deny',message:'El trader no lo permitió. Seguí sin eso o proponé otra forma.'}:{behavior:'allow',updatedInput:r.input,...(decision==='always'&&r.permission_suggestions?.length?{updatedPermissions:r.permission_suggestions}:{})};
+        if(decision==='deny')j.chat.refused=[...(j.chat.refused||[]),r.tool_use_id];
+        j.write({type:'control_response',response:{subtype:'success',request_id:b.id,response}});
+        j.chat.permission=null;j.chat.activity='Trabajando';saveChat(j.chat);json(res,200,{decision});return true;}
+      // Cambiar Manual/Auto en medio de una respuesta (Claude): el motor sigue con el modo nuevo.
+      if(req.method==='POST'&&parts[2]==='mode'){const mode=(await readBody(req)).mode==='auto'?'auto':'manual',j=jobs.get(c.id),target=j?.chat||c;
+        if(j?.write&&c.provider!=='codex')j.write({type:'control_request',request_id:'mode-'+Date.now(),request:{subtype:'set_permission_mode',mode:mode==='auto'?'auto':'default'}});
+        target.mode=mode;saveChat(target);json(res,200,{mode,live:!!j});return true;}
       if(req.method==='POST'&&parts[2]==='stop'){const j=jobs.get(c.id);if(j){j.chat.state='cancelled';saveChat(j.chat);j.proc?.kill();}json(res,200,{requested:!!j});return true;}
     }
     return false;
