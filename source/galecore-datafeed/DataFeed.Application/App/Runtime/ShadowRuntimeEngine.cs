@@ -229,8 +229,9 @@ namespace DataFeed.Application.App.Runtime
                 else problems.Add($"{leg.StreamerSymbol}: lado de pata desconocido '{leg.Side}'");
             }
 
-            int? dte = CurrentDte(pos, nowUtc);
-            if (dte == null) problems.Add("sin fecha de vencimiento en las patas");
+            bool equity = pos.Structure == RuntimeStructures.LongEquity;
+            int? dte = equity ? null : CurrentDte(pos, nowUtc);   // las acciones no vencen
+            if (dte == null && !equity) problems.Add("sin fecha de vencimiento en las patas");
             if (problems.Count == 0 && !double.IsFinite(spreadValue)) problems.Add($"valor del spread no finito ({spreadValue})");
             // El débito de un spread de crédito de riesgo definido está en [0, ancho]. Fuera de eso alguna pata
             // trae una cotización sin sentido (p. ej. bid 0 / ask 20 en la apertura): no se valúa ni se cierra con ese precio.
@@ -249,14 +250,37 @@ namespace DataFeed.Application.App.Runtime
                 LastSpreadValue = spreadValue,
                 CurrentDte = dte,
                 LastValuedAt = nowUtc,
-                UnrealizedPnl = Math.Round((pos.EntryCredit - spreadValue) * 100, 2),
+                UnrealizedPnl = ShadowFillSimulator.Pnl(pos, spreadValue),
                 ValuationProblems = null,
                 UpdatedAt = nowUtc,
             };
+
+            // Salida por métrica (WS-0061): sólo con sesión abierta. Sin dato no se cierra y queda anotado en la posición.
+            bool metricMet = false;
+            if (evaluateExits && exits.MetricExit is MetricExit metricExit)
+            {
+                double? metricValue = null;
+                string? metricProblem = null;
+                try
+                {
+                    var resolved = await data.ResolveMetricsAsync(new[] { metricExit.MetricRef }, nowUtc, maxQuoteAge, ct);
+                    metricValue = resolved.GetValueOrDefault(metricExit.MetricRef);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException) { metricProblem = ex.Message; }
+                if (metricValue is double mv) metricMet = GenericGateEvaluator.EvaluateOperator(metricExit.Operator, mv, metricExit.Threshold);
+                else
+                {
+                    var problems2 = new List<string> { $"salida por métrica sin dato: {metricExit.MetricRef}" + (metricProblem == null ? "" : $" ({metricProblem})") };
+                    valued = valued with { ValuationProblems = problems2 };
+                    if (pos.ValuationProblems == null || !pos.ValuationProblems.SequenceEqual(problems2))
+                        store.AddEvent(NewEvent(pos.InstanceId, "VALUATION_NO_DATA", pos.Symbol, nowUtc,
+                            ("position_id", pos.PositionId), ("problems", problems2)));
+                }
+            }
             store.UpdatePosition(valued);
             if (!evaluateExits) return Outcomes.Valued;
 
-            var reason = ShadowFillSimulator.EvaluateExits(valued, exits, spreadValue, dte!.Value);
+            var reason = ShadowFillSimulator.EvaluateExits(valued, exits, spreadValue, dte ?? int.MaxValue, metricMet);
             if (reason == null) return Outcomes.Valued;
 
             var closed = ShadowFillSimulator.Close(valued, spreadValue, reason, nowUtc) with

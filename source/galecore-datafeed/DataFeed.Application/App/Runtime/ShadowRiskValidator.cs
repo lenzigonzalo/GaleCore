@@ -49,6 +49,15 @@ namespace DataFeed.Application.App.Runtime
             if ((candidate.Structure.Contains("credit") || RuntimeStructures.Sides(candidate.Structure) != null) && candidate.Credit <= 0)
                 errors.Add($"Credit spread must have positive credit, got {candidate.Credit}");
 
+            // ── Acciones en largo: una pata BUY, entrar cuesta (crédito negativo) ──
+            if (candidate.Structure == RuntimeStructures.LongEquity)
+            {
+                if (candidate.Legs.Count != 1 || candidate.Legs[0].Side != "BUY" || !(candidate.Legs[0].Quantity > 0))
+                    errors.Add("long_equity must have exactly one BUY leg with a positive quantity");
+                if (candidate.Credit >= 0)
+                    errors.Add($"long_equity entry must cost money (negative credit), got {candidate.Credit}");
+            }
+
             // ── MaxRisk debe ser positivo ──
             if (candidate.MaxRisk <= 0)
                 errors.Add($"MaxRisk must be positive, got {candidate.MaxRisk}");

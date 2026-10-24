@@ -191,7 +191,8 @@ namespace DataFeed.Application.App.Runtime
                 MaxRisk = p.MaxRisk,
                 ExitReason = p.ExitReason,
                 RealizedPnl = p.RealizedPnl,
-                PnlPctOfCredit = p.EntryCredit > 0 ? Math.Round(p.RealizedPnl!.Value / (p.EntryCredit * 100) * 100, 1) : null,
+                // Acciones en largo: no hay crédito; el % va sobre el costo (PnlPctOfMaxRisk).
+                PnlPctOfCredit = p.Structure != RuntimeStructures.LongEquity && p.EntryCredit > 0 ? Math.Round(p.RealizedPnl!.Value / (p.EntryCredit * 100) * 100, 1) : null,
                 PnlPctOfMaxRisk = p.MaxRisk > 0 ? Math.Round(p.RealizedPnl!.Value / p.MaxRisk * 100, 1) : null,
                 Plan = plan,
                 GapToPlan = planned == null ? null : Math.Round(p.RealizedPnl!.Value - planned.Value, 2),

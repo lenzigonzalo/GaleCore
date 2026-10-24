@@ -1,0 +1,140 @@
+{
+  "strategy_spec_version": "1.0.0",
+  "content_hash": null,
+  "canonicalization_version": "jcs-1",
+  "identity": {
+    "id": "7c0e6b52-3f1a-4d52-9d0e-61a0c5e0a061",
+    "name": "aapl_cruce_ema_20_50",
+    "display_name": "Acciones en largo en AAPL con cruce de EMA 20/50 diarias",
+    "version": "1.0.0",
+    "author": {
+      "type": "COLLABORATIVE",
+      "agent_definition_version": null
+    },
+    "created_at": "2026-10-24T00:00:00Z",
+    "parent_version_hash": null
+  },
+  "deployment_constraints": {
+    "eligible_modes": [
+      "SHADOW"
+    ],
+    "requires_human_approval_for": [
+      "PAPER",
+      "LIVE"
+    ]
+  },
+  "universe": {
+    "mode": "WHITELIST",
+    "symbols": [
+      "AAPL"
+    ],
+    "excluded": {},
+    "instrument_types": [
+      "EQUITY"
+    ]
+  },
+  "structure": {
+    "allowed_strategies": [
+      "long_equity"
+    ],
+    "forbidden_strategies": [
+      "naked_short",
+      "ratio_spread"
+    ],
+    "default_structure": "long_equity",
+    "selection_method": "FIXED"
+  },
+  "entry_filters": {
+    "gate_layer": {
+      "pass_rule": "ALL",
+      "on_fail": "NO_TRADE",
+      "gates": [
+        {
+          "id": "ema20_above_ema50",
+          "label": "EMA20 > EMA50 (cierres diarios)",
+          "metric_ref": "capability:compute.ema_spread.AAPL.20.50",
+          "operator": "GT",
+          "threshold": {
+            "value": 0
+          },
+          "on_fail": "NO_TRADE",
+          "on_no_data": "BLOCK"
+        }
+      ]
+    },
+    "signal_layer": {
+      "pass_rule": "ALL",
+      "gates": []
+    }
+  },
+  "candidate_construction": {
+    "legs": [
+      {
+        "side": "BUY",
+        "type": "STOCK",
+        "strike_selection": {
+          "method": "NONE",
+          "target_delta": null,
+          "delta_tolerance": null,
+          "width": null
+        }
+      }
+    ],
+    "sizing": {
+      "method": "FIXED",
+      "fixed_contracts": 10,
+      "risk_per_trade_pct": null
+    },
+    "constraints": {
+      "min_dte": null,
+      "max_dte": null,
+      "min_credit": null,
+      "max_bid_ask_spread_pct": null
+    }
+  },
+  "exits": {
+    "deterministic": {
+      "metric_exit": {
+        "metric_ref": "capability:compute.ema_spread.AAPL.20.50",
+        "operator": "LT",
+        "threshold": {
+          "value": 0
+        }
+      },
+      "defensive_roll": {
+        "enabled": false
+      }
+    }
+  },
+  "risk_limits": {
+    "max_concurrent_positions": 1,
+    "min_minutes_between_entries": null,
+    "max_portfolio_heat_pct": null,
+    "max_risk_per_trade_pct": null,
+    "max_loss_per_trade_usd": null
+  },
+  "operational": {
+    "timezone": "America/New_York",
+    "session_hours": {
+      "start": "09:30",
+      "end": "16:00"
+    },
+    "calendar": "NYSE",
+    "decimal_precision": 2,
+    "currency": "USD",
+    "rounding": "HALF_UP",
+    "symbology": "OCC_21_CHAR"
+  },
+  "data_quality": {
+    "max_quote_age_seconds": 15,
+    "block_on_crossed_market": true,
+    "block_on_missing_critical_data": true
+  },
+  "analytics_refs": {},
+  "metadata": {
+    "schema_version": "1.0.0",
+    "methodology_version": "1.0.0",
+    "reference_docs": [],
+    "notes": "Acciones en largo (long_equity): 10 acciones de AAPL. Entra si EMA20 > EMA50 sobre cierres diarios y no hay posicion; sale cuando EMA20 < EMA50 (metric_exit, se registra como METRIC_EXIT). Si al activar ya esta arriba, compra en la primera evaluacion. Sin validacion de rentabilidad: sirve para recorrer el circuito SHADOW completo (WS-0061). No desplegar sin aprobacion del owner."
+  }
+}

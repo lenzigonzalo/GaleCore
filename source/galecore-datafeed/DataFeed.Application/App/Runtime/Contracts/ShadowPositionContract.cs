@@ -26,7 +26,7 @@ namespace DataFeed.Application.App.Runtime.Contracts
         // Exit (populated on close)
         public double? ExitDebit { get; init; }
         public DateTime? ExitAt { get; init; }
-        /// <summary>"TAKE_PROFIT" | "STOP_LOSS" | "TIME_EXIT" | "MANUAL" | "KILL_SWITCH"</summary>
+        /// <summary>"TAKE_PROFIT" | "STOP_LOSS" | "METRIC_EXIT" | "TIME_EXIT" | "MANUAL" | "KILL_SWITCH"</summary>
         public string? ExitReason { get; init; }
 
         // P&L
@@ -98,5 +98,7 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double EntryPrice { get; init; }
         public double? ExitPrice { get; init; }
         public double? Delta { get; init; }
+        /// <summary>Acciones de la pata (sólo long_equity); null en opciones. Va dentro de legs_json: sin migración.</summary>
+        public int? Quantity { get; init; }
     }
 }

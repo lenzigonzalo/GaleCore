@@ -38,6 +38,8 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double? Delta { get; init; }
         public double? Bid { get; init; }
         public double? Ask { get; init; }
+        /// <summary>Acciones de la pata (sólo long_equity); null en patas de opciones.</summary>
+        public int? Quantity { get; init; }
     }
 
     public record MarketSnapshot

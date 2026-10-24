@@ -15,7 +15,12 @@ namespace DataFeed.Application.App.Runtime
         public const string CallCreditSpread = "call_credit_spread";
         public const string IronCondor = "iron_condor";
 
-        public static readonly string[] Supported = { PutCreditSpread, CallCreditSpread, IronCondor };
+        /// <summary>Acciones en largo (WS-0061): una pata BUY del subyacente, sin opciones.</summary>
+        public const string LongEquity = "long_equity";
+
+        public static readonly string[] Supported = { PutCreditSpread, CallCreditSpread, IronCondor, LongEquity };
+
+        public static bool IsSupported(string structure) => Sides(structure) != null || structure == LongEquity;
 
         /// <summary>Los lados ("PUT", "CALL") de la estructura, en ese orden; null si el runtime no la construye.</summary>
         public static string[]? Sides(string structure) => structure switch

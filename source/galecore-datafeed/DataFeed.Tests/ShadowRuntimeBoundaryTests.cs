@@ -5,13 +5,14 @@ namespace DataFeed.Tests;
 /// <summary>
 /// GC-0002 AC-07 — el runtime SHADOW no depende de GaleCore-AI y no puede mandar órdenes.
 /// Se verifica sobre el código fuente del runtime: sólo puede pedir datos de mercado de lectura
-/// (cadena, gamma, cotización), no usa HTTP directo y no nombra a GaleCore-AI.
+/// (cadena, gamma, cotización, velas), no usa HTTP directo y no nombra a GaleCore-AI.
 /// </summary>
 public class ShadowRuntimeBoundaryTests
 {
     private static readonly string[] AllowedRequests =
     {
         "OptionChainsRequest", "GammaExposureRequest", "MarketDataQuoteRequest", "MarketDataTradeRequest",
+        "MarketDataCandleRequest",   // velas diarias para ema_spread (WS-0061): lectura de mercado
     };
 
     private static IEnumerable<string> RuntimeSources()

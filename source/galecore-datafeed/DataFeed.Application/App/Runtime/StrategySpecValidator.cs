@@ -63,6 +63,7 @@ namespace DataFeed.Application.App.Runtime
 
             // ── Construcción: sólo lo que el runtime sabe construir (P1-07) ──
             ValidateConstruction(spec, errors);
+            ValidateMetricExit(spec.Exits.Deterministic.MetricExit, errors);
 
             // ── Selection method: el runtime no tiene selector, siempre arma la default_structure ──
             if (spec.Structure.SelectionMethod != "FIXED")
@@ -100,7 +101,7 @@ namespace DataFeed.Application.App.Runtime
         /// </summary>
         private static void ValidateConstruction(StrategySpec spec, List<string> errors)
         {
-            foreach (var allowed in spec.Structure.AllowedStrategies.Where(a => RuntimeStructures.Sides(a) == null))
+            foreach (var allowed in spec.Structure.AllowedStrategies.Where(a => !RuntimeStructures.IsSupported(a)))
                 errors.Add($"structure.allowed_strategies contains '{allowed}', not built by the runtime "
                            + $"(supported: {string.Join(", ", RuntimeStructures.Supported)})");
             if (spec.CandidateConstruction.Constraints.MinCredit is double minCredit && !(minCredit > 0))
@@ -108,6 +109,11 @@ namespace DataFeed.Application.App.Runtime
 
             var structure = spec.Structure.DefaultStructure;
             if (string.IsNullOrWhiteSpace(structure)) return;   // ya informado arriba
+            if (structure == RuntimeStructures.LongEquity)
+            {
+                ValidateLongEquity(spec, errors);
+                return;
+            }
             var sides = RuntimeStructures.Sides(structure);
             if (sides == null)
             {
@@ -147,6 +153,38 @@ namespace DataFeed.Application.App.Runtime
                         errors.Add($"{name}.strike_selection.width must be positive");
                 }
             }
+        }
+
+        /// <summary>
+        /// Acciones en largo (WS-0061): una sola pata BUY STOCK, instrumento EQUITY, cantidad fija de acciones en
+        /// sizing.fixed_contracts. Las salidas por % del crédito y por DTE no tienen sentido sin crédito ni vencimiento.
+        /// </summary>
+        private static void ValidateLongEquity(StrategySpec spec, List<string> errors)
+        {
+            var legs = spec.CandidateConstruction.Legs;
+            if (legs.Count != 1 || legs[0].Side != "BUY" || legs[0].Type != LongEquityCandidateBuilder.LegType)
+                errors.Add("candidate_construction.legs must be exactly BUY STOCK for long_equity; got "
+                           + (legs.Count == 0 ? "none" : string.Join(", ", legs.Select(l => $"{l.Side} {l.Type}"))));
+            if (!spec.Universe.InstrumentTypes.Contains("EQUITY"))
+                errors.Add("universe.instrument_types must contain EQUITY for long_equity");
+            var sizing = spec.CandidateConstruction.Sizing;
+            if (sizing.Method != "FIXED" || sizing.FixedContracts is not > 0)
+                errors.Add("candidate_construction.sizing must be FIXED with fixed_contracts > 0 (shares) for long_equity");
+            var exits = spec.Exits.Deterministic;
+            if (exits.TakeProfit != null || exits.StopLoss != null || exits.TimeExit != null)
+                errors.Add("exits.deterministic: take_profit, stop_loss and time_exit are % of credit / DTE and do not apply to long_equity (use metric_exit)");
+        }
+
+        private static void ValidateMetricExit(MetricExit? exit, List<string> errors)
+        {
+            if (exit == null) return;
+            if (string.IsNullOrWhiteSpace(exit.MetricRef))
+                errors.Add("exits.deterministic.metric_exit.metric_ref is required");
+            var validOperators = new[] { "LT", "LTE", "GT", "GTE", "EQ", "NEQ", "BETWEEN" };
+            if (!validOperators.Contains(exit.Operator))
+                errors.Add($"exits.deterministic.metric_exit.operator must be one of: {string.Join(", ", validOperators)}");
+            else if (exit.Operator == "BETWEEN" ? !(exit.Threshold.Min.HasValue && exit.Threshold.Max.HasValue) : !exit.Threshold.Value.HasValue)
+                errors.Add($"exits.deterministic.metric_exit: operator {exit.Operator} requires its threshold");
         }
 
         private static void ValidateGates(List<GateDefinition> gates, string prefix, List<string> errors)
