@@ -151,9 +151,7 @@ async def test_prepare_includes_required_asset_hashes(store):
         symbol="SPY", dispatcher=dispatcher, store=store, allow_unknown_freshness=True,
     )
 
-    assert view.effective_assets.agent.content_hash.startswith("sha256:")
-    assert view.effective_assets.agent.asset_id
-    assert view.effective_assets.agent.version
+    assert view.effective_assets.agent is None
     assert "gex_interpretation" in view.effective_assets.skills
     assert "facts_discipline" in view.effective_assets.protocols
     assert "trading_defaults" in view.effective_assets.conventions

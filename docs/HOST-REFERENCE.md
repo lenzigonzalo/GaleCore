@@ -103,7 +103,6 @@ did not fetch it and never labels it GaleCore-verified. Params that may carry cr
 
 | Asset | Path | Purpose |
 |---|---|---|
-| TradingAgent | `config/agents/trading-agent.yaml` | Agent definition: mission, capabilities, restrictions |
 | GEX Skill | `config/skills/gex-analysis/skill.yaml` | Instructions, output contract, examples |
 | Regime Skill | `config/skills/regime-analysis/skill.yaml` | Daily regime: GEX + put skew + VIX/VVIX, output contract, examples |
 | Research Skill | `config/skills/research/SKILL.md` | Resumable investigation: antecedents, typed statements, test plan, next steps |

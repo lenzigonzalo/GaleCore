@@ -69,7 +69,8 @@ class AssetManifest(BaseModel):
 
     model_config = {"frozen": True, "extra": "forbid"}
 
-    agent: AssetEntry
+    # Legacy: snapshots written before the TradingAgent sheet was retired still carry it.
+    agent: AssetEntry | None = None
     skills: dict[str, AssetEntry]
     protocols: dict[str, AssetEntry]
     conventions: dict[str, AssetEntry]

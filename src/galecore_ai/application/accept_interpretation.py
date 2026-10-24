@@ -51,11 +51,12 @@ _OUTPUT_SCHEMAS: dict[str, type] = {
 def _populate_trace_assets(trace: TraceRecord, snapshot: StoredPreparedSnapshot) -> None:
     """Fill trace with asset identity from the internally-stored snapshot."""
     m = snapshot.effective_assets
-    trace.agent_definition = AgentDefinitionTrace(
-        agent_id=m.agent.asset_id,
-        version=m.agent.version,
-        content_hash=m.agent.content_hash,
-    )
+    if m.agent is not None:
+        trace.agent_definition = AgentDefinitionTrace(
+            agent_id=m.agent.asset_id,
+            version=m.agent.version,
+            content_hash=m.agent.content_hash,
+        )
     trace.skills = [
         SkillTrace(skill_id=e.asset_id, version=e.version, content_hash=e.content_hash)
         for e in m.skills.values()

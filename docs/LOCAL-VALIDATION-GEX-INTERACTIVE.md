@@ -303,7 +303,7 @@ Reproduced by `python tools/e2e_interactive_cases.py --out docs/evidence/increme
 | N07 | stdin `not json` | 3 | error JSON | CLI parse |
 | N08 | `prepare` without `--symbol` | 3 | error JSON | CLI argparse |
 | N09 | snapshot expired (TTL 2 s) | 3 | `VALIDATION_ERROR` | store TTL |
-| N10 | `trading-agent.yaml` absent during prepare | 1 | error JSON | fail-closed asset load |
+| N10 | `facts-discipline.yaml` absent during prepare | 1 | error JSON | fail-closed asset load |
 | N11 | empty stdin | 3 | error JSON | CLI parse |
 | N12 | one valid + one invalid evidence path | 3 | `VALIDATION_ERROR` | `facts_match_source` |
 | N13 | `net_gex` value claimed as `metric=put_wall` | 3 | `VALIDATION_ERROR` | `quantitative_claims_valid` |

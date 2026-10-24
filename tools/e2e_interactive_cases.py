@@ -195,15 +195,15 @@ def main() -> int:
         record("N09-expired-snapshot", "TTL=2s, accept after 3s", "VALIDATION_ERROR (snapshot expired)",
                "SNAPSHOT_TTL_SECONDS=2 " + accept_cmd, payload, code, so, se,
                expect_exit=3, expect_status="VALIDATION_ERROR", expect_failed={"snapshot_lookup"})
-    # missing required asset: rename the agent YAML around a prepare
-    agent = ASSET_ROOT / "agents" / "trading-agent.yaml"
+    # missing required asset: rename the facts-discipline protocol around a prepare
+    agent = ASSET_ROOT / "protocols" / "facts-discipline.yaml"
     moved = agent.with_suffix(".yaml.e2e-moved")
     agent.rename(moved)
     try:
         code, so, se = run_cli(["prepare", "--symbol", args.symbol], None)
     finally:
         moved.rename(agent)
-    record("N10-missing-asset", "trading-agent.yaml absent during prepare", "error JSON, non-zero exit", prep_cmd, None,
+    record("N10-missing-asset", "facts-discipline.yaml absent during prepare", "error JSON, non-zero exit", prep_cmd, None,
            code, so, se, expect_exit=1)
     code, so, se = run_cli(["accept"], "")
     record("N11-empty-stdin", "accept with empty stdin", "error JSON, non-zero exit", accept_cmd, "", code, so, se,

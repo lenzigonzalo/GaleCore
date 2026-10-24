@@ -103,7 +103,6 @@ def regime_facts(**overrides) -> dict:
 def test_manifest(skill_id: str = REGIME_SKILL_ID) -> AssetManifest:
     h = "sha256:" + "a" * 64
     return AssetManifest(
-        agent=AssetEntry(asset_id="TradingAgent", version="1.1.0", content_hash=h),
         skills={skill_id: AssetEntry(asset_id=skill_id, version="1.0.0", content_hash=h)},
         protocols={"facts_discipline": AssetEntry(asset_id="facts_discipline", version="1.2.0", content_hash=h)},
         conventions={"trading_defaults": AssetEntry(asset_id="trading_defaults", version="1.0.0", content_hash=h)},

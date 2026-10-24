@@ -22,7 +22,6 @@ def _dummy_manifest() -> AssetManifest:
     h = "sha256:" + "a" * 64
     e = AssetEntry(asset_id="test", version="1.0.0", content_hash=h)
     return AssetManifest(
-        agent=e,
         skills={"s": e},
         protocols={"p": e},
         conventions={"c": e},

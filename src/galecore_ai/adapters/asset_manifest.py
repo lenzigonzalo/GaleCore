@@ -1,7 +1,7 @@
 """Load the required cognitive assets once and derive everything from that read.
 
 Fail-closed: if any required asset is missing or invalid, raise immediately.
-Every vertical requires TradingAgent, facts_discipline and trading_defaults plus
+Every vertical requires facts_discipline and trading_defaults plus
 the skill(s) it prepares for: gex_interpretation (GEX) or regime_interpretation
 (daily regime). The manifest lists only the skills actually loaded for the run.
 
@@ -23,7 +23,6 @@ from galecore_ai.contracts.prepared_analysis import (
 from galecore_ai.harness.assets import asset_root, definition_hash, load_asset
 from galecore_ai.harness.catalog import CatalogError, skill_paths
 from galecore_ai.harness.definitions import (
-    AgentDefinition,
     ConventionSet,
     ProtocolDefinition,
     SkillDefinition,
@@ -35,7 +34,6 @@ class RequiredAssetError(Exception):
 
 
 # Required assets; skills are selected per vertical from the catalog (harness/catalog.py)
-_REQUIRED_AGENT = "agents/trading-agent.yaml"
 DEFAULT_SKILL_IDS: tuple[str, ...] = ("gex_interpretation",)
 _REQUIRED_PROTOCOLS = {"facts_discipline": "protocols/facts-discipline.yaml"}
 _REQUIRED_CONVENTIONS = {"trading_defaults": "conventions/trading-defaults.yaml"}
@@ -79,11 +77,6 @@ def load_required_assets(
     unknown = [s for s in skill_ids if s not in known_skills]
     if unknown or not skill_ids:
         raise RequiredAssetError(f"Unknown or empty skill selection: {list(skill_ids)}")
-    agent = _load(_REQUIRED_AGENT, AgentDefinition, "agent")
-    agent_entry = AssetEntry(
-        asset_id=agent.agent_id, version=agent.version, content_hash=definition_hash(agent),
-    )
-
     skill_entries: dict[str, AssetEntry] = {}
     for skill_id in skill_ids:
         skill = _load(known_skills[skill_id], SkillDefinition, f"skill {skill_id}")
@@ -116,7 +109,6 @@ def load_required_assets(
 
     return RequiredAssetBundle(
         manifest=AssetManifest(
-            agent=agent_entry,
             skills=skill_entries,
             protocols=protocol_entries,
             conventions=convention_entries,

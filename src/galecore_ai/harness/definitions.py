@@ -1,4 +1,4 @@
-"""Harness definitions — agent, skill, protocol, and convention schemas.
+"""Harness definitions — skill, protocol, and convention schemas.
 
 These Pydantic models define the shape of YAML/JSON definition files
 that configure the Harness at startup. They are NOT runtime state.
@@ -9,32 +9,6 @@ from __future__ import annotations
 from enum import Enum
 
 from pydantic import BaseModel, Field
-
-# ── Agent Definition ──────────────────────────────────────────────
-
-
-class AgentDefinition(BaseModel):
-    """Declares an agent's identity, capabilities, and constraints."""
-
-    agent_id: str
-    version: str
-    display_name: str
-    description: str = ""
-    skills: list[str] = Field(default_factory=list)       # skill IDs this agent can use
-    protocols: list[str] = Field(default_factory=list)     # protocol IDs this agent must follow
-    conventions: list[str] = Field(default_factory=list)   # convention IDs applied to this agent
-    allowed_capabilities: list[str] = Field(default_factory=list)  # capability IDs this agent can invoke
-    model_preferences: ModelPreferences = Field(default_factory=lambda: ModelPreferences())
-
-
-class ModelPreferences(BaseModel):
-    """Preferred model configuration for an agent."""
-
-    provider: str = "fake"       # default to fake for testing
-    model: str | None = None
-    temperature: float = 0.0
-    max_tokens: int = 4096
-
 
 # ── Skill Definition ─────────────────────────────────────────────
 

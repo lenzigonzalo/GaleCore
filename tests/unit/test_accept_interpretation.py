@@ -26,7 +26,6 @@ CONVENTIONS = {"gex_near_zero_threshold_pct": 5.0, "timezone": "America/New_York
 def _test_manifest() -> AssetManifest:
     h = "sha256:" + "a" * 64
     return AssetManifest(
-        agent=AssetEntry(asset_id="TradingAgent", version="1.0.0", content_hash=h),
         skills={"gex_interpretation": AssetEntry(asset_id="gex_interpretation", version="1.2.0", content_hash=h)},
         protocols={"facts_discipline": AssetEntry(asset_id="facts_discipline", version="1.1.0", content_hash=h)},
         conventions={"trading_defaults": AssetEntry(asset_id="trading_defaults", version="1.0.0", content_hash=h)},
@@ -169,10 +168,7 @@ class TestAcceptSuccess:
 
         assert result.status == RunStatus.SUCCESS
         t = result.trace
-        assert t.agent_definition is not None
-        assert t.agent_definition.agent_id == "TradingAgent"
-        assert t.agent_definition.version == "1.0.0"
-        assert t.agent_definition.content_hash.startswith("sha256:")
+        assert t.agent_definition is None
         assert len(t.skills) == 1
         assert t.skills[0].skill_id == "gex_interpretation"
         assert t.skills[0].content_hash.startswith("sha256:")
@@ -231,7 +227,6 @@ class TestAcceptSuccess:
         )
 
         m = snapshot.effective_assets
-        assert result.trace.agent_definition.content_hash == m.agent.content_hash
         assert result.trace.skills[0].content_hash == m.skills["gex_interpretation"].content_hash
         assert result.trace.protocols[0].content_hash == m.protocols["facts_discipline"].content_hash
         assert result.trace.conventions[0].content_hash == m.conventions["trading_defaults"].content_hash
@@ -268,7 +263,7 @@ class TestAcceptRejectionTrace:
         assert t.facts_hash == snapshot.facts_hash
         assert t.prepared_at == snapshot.prepared_at
         assert t.facts_provenance == "GALECORE_VERIFIED"
-        assert t.agent_definition is not None
+        assert t.agent_definition is None
         assert t.provider == "HOST_DECLARED:test-host"
         assert t.model == "HOST_DECLARED:test-model"
         assert t.validator_called_model is False

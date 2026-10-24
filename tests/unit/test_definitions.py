@@ -1,7 +1,6 @@
 """Unit tests for Harness definition models."""
 
 from galecore_ai.harness.definitions import (
-    AgentDefinition,
     ConventionEntry,
     ConventionPrecedence,
     ConventionSet,
@@ -9,30 +8,6 @@ from galecore_ai.harness.definitions import (
     ProtocolStep,
     SkillDefinition,
 )
-
-
-class TestAgentDefinition:
-    def test_create_minimal(self):
-        agent = AgentDefinition(
-            agent_id="test_agent",
-            version="1.0.0",
-            display_name="Test Agent",
-        )
-        assert agent.agent_id == "test_agent"
-        assert agent.skills == []
-        assert agent.model_preferences.provider == "fake"
-
-    def test_with_skills_and_protocols(self):
-        agent = AgentDefinition(
-            agent_id="trading",
-            version="1.0.0",
-            display_name="Trading Agent",
-            skills=["gex_interpretation"],
-            protocols=["facts_discipline"],
-            conventions=["trading_defaults"],
-        )
-        assert "gex_interpretation" in agent.skills
-        assert "facts_discipline" in agent.protocols
 
 
 class TestSkillDefinition:
