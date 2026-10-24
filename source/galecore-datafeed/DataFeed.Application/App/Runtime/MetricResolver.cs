@@ -160,18 +160,38 @@ namespace DataFeed.Application.App.Runtime
         private async Task<double?> ResolveEmaSpread(string symbol, int fast, int slow, CancellationToken ct)
         {
             if (fast <= 0 || slow <= fast) return null;
-            // Al menos slow×3 días corridos (≈ slow×2 ruedas, lo que exige UsableEmaSpread), con piso de 120.
-            var response = await _mediator.Send(new MarketDataCandleRequest
+            // slow×6 días corridos (≈ 4 ruedas por cada una de slow: la EMA converge y sobran para los feriados), piso 250.
+            int days = Math.Max(250, slow * 6);
+            var key = (symbol, "1d", days);
+            List<CandleData>? candles;
+            if (DailyCandleCache.TryGetValue(key, out var hit) && _nowUtc - hit.At < DailyCandleTtl && _nowUtc >= hit.At)
+                candles = hit.Candles;
+            else
             {
-                Symbol = symbol,
-                Interval = "1d",
-                FromTime = _nowUtc.AddDays(-Math.Max(120, slow * 3)),
-            }, ct);
-            var spread = UsableEmaSpread(response?.data, fast, slow, _nowUtc);
+                var response = await _mediator.Send(new MarketDataCandleRequest
+                {
+                    Symbol = symbol,
+                    Interval = "1d",
+                    FromTime = _nowUtc.AddDays(-days),
+                }, ct);
+                candles = response?.data;
+                // Sólo se guarda un resultado con velas: un fallo del proveedor se reintenta en el tick siguiente.
+                if (candles is { Count: > 0 }) DailyCandleCache[key] = (_nowUtc, candles);
+            }
+            var spread = UsableEmaSpread(candles, fast, slow, _nowUtc);
             if (spread == null)
                 _logger.LogDebug("MetricResolver: velas diarias insuficientes para ema_spread {Symbol} {Fast}/{Slow}", symbol, fast, slow);
             return spread;
         }
+
+        /// <summary>
+        /// Caché de velas diarias por (símbolo, intervalo, días): la entrada (60 s) y la salida por métrica (30 s)
+        /// no necesitan pedir 250 días a Tastytrade en cada tick. Vence a los 10 min (el cierre diario no cambia).
+        /// </summary>
+        public static readonly TimeSpan DailyCandleTtl = TimeSpan.FromMinutes(10);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string, string, int), (DateTime At, List<CandleData> Candles)>
+            DailyCandleCache = new();
+        public static void ClearDailyCandleCache() => DailyCandleCache.Clear();
 
         /// <summary>Días corridos máximos entre la última vela diaria y ahora (fin de semana largo + margen).</summary>
         public const int MaxLastCandleAgeDays = 7;

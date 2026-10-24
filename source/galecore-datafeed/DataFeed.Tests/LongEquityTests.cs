@@ -71,6 +71,7 @@ public class LongEquityTests
     [Fact]
     public async Task Resolver_AsksDailyCandlesWithEnoughHistory_AndReturnsSpreadOrNull()
     {
+        MetricResolver.ClearDailyCandleCache();
         var mediator = new CandleMediator { Data = Candles(120, i => 100 + i) };
         var resolver = new MetricResolver(mediator, NullLogger.Instance);
 
@@ -78,16 +79,34 @@ public class LongEquityTests
         Assert.True(ok[EmaRef] > 0);
         Assert.Equal("1d", mediator.Seen!.Interval);
         Assert.Equal("AAPL", mediator.Seen.Symbol);
-        Assert.Equal(Now.AddDays(-150), mediator.Seen.FromTime);   // slow 50 × 3
+        Assert.Equal(Now.AddDays(-300), mediator.Seen.FromTime);   // slow 50 × 6
 
+        MetricResolver.ClearDailyCandleCache();
         mediator.Data = Candles(30, i => 100 + i);
         var none = await resolver.ResolveAsync(new[] { EmaRef, "capability:compute.ema_spread.AAPL.10.20" }, default, Now);
         Assert.Null(none[EmaRef]);
         Assert.Null(none["capability:compute.ema_spread.AAPL.10.20"]);   // 30 < 20×2
-        Assert.Equal(Now.AddDays(-120), mediator.Seen!.FromTime);         // piso de 120 (20 × 3 = 60)
+        Assert.Equal(Now.AddDays(-250), mediator.Seen!.FromTime);         // piso de 250 (20 × 6 = 120)
 
+        MetricResolver.ClearDailyCandleCache();
         mediator.Data = null!;
         Assert.Null((await resolver.ResolveAsync(new[] { EmaRef }, default, Now))[EmaRef]);
+    }
+
+    [Fact]
+    public async Task Resolver_CachesDailyCandles_ForTenMinutes()
+    {
+        MetricResolver.ClearDailyCandleCache();
+        var mediator = new CandleMediator { Data = Candles(120, i => 100 + i) };
+        var resolver = new MetricResolver(mediator, NullLogger.Instance);
+        await resolver.ResolveAsync(new[] { EmaRef }, default, Now);
+        mediator.Seen = null;
+
+        await resolver.ResolveAsync(new[] { EmaRef }, default, Now.AddMinutes(9));   // dentro del TTL: sin pedido
+        Assert.Null(mediator.Seen);
+        await resolver.ResolveAsync(new[] { EmaRef }, default, Now.AddMinutes(11));  // vencido: pide de nuevo
+        Assert.NotNull(mediator.Seen);
+        MetricResolver.ClearDailyCandleCache();
     }
 
     // ── Spec ────────────────────────────────────────────────────────
