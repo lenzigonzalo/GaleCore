@@ -18,11 +18,6 @@ namespace DataFeed.Application.App.Runtime
         {
             var errors = new List<string>();
 
-            // ── Estructura prohibida por la plataforma ──
-            var platformForbidden = new[] { "naked_short", "ratio_spread", "long_directional" };
-            if (platformForbidden.Contains(candidate.Structure))
-                errors.Add($"Structure '{candidate.Structure}' is platform-forbidden");
-
             // ── Estructura no permitida por el spec ──
             if (!spec.Structure.AllowedStrategies.Contains(candidate.Structure))
                 errors.Add($"Structure '{candidate.Structure}' not in spec allowed_strategies");
@@ -53,6 +48,15 @@ namespace DataFeed.Application.App.Runtime
             // ── Credit debe ser positivo para credit spreads ──
             if ((candidate.Structure.Contains("credit") || RuntimeStructures.Sides(candidate.Structure) != null) && candidate.Credit <= 0)
                 errors.Add($"Credit spread must have positive credit, got {candidate.Credit}");
+
+            // ── Acciones en largo: una pata BUY, entrar cuesta (crédito negativo) ──
+            if (candidate.Structure == RuntimeStructures.LongEquity)
+            {
+                if (candidate.Legs.Count != 1 || candidate.Legs[0].Side != "BUY" || !(candidate.Legs[0].Quantity > 0))
+                    errors.Add("long_equity must have exactly one BUY leg with a positive quantity");
+                if (candidate.Credit >= 0)
+                    errors.Add($"long_equity entry must cost money (negative credit), got {candidate.Credit}");
+            }
 
             // ── MaxRisk debe ser positivo ──
             if (candidate.MaxRisk <= 0)

@@ -52,7 +52,6 @@ cd source/galecore-monitor && CI=true npm run build                       # el b
 
 - **Primero el JSON, después el código:** ante un cambio de lógica o parámetro de una estrategia, se actualiza su JSON
   y luego el backend o el front. El front renderiza lo que el JSON declara, sin lógica de negocio hardcodeada.
-- Sólo estructuras de riesgo definido: nada de naked shorts, ratio spreads ni largos direccionales.
 - Un secreto nunca va en `appsettings.*.json`, en docs ni en logs.
 - Interfaz: skill `.agents/skills/galecore-frontend/` (tema carbón, jerarquía legible); mirar en el navegador antes
   de entregar.

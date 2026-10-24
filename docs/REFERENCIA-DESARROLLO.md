@@ -99,8 +99,8 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   los contratos de `App/Shared/Dtos/CascadeContracts.cs`. Cada una le pasa SU propio JSON — los
   primitivos no saben de qué estrategia son.
 
-  **Prohibido terminantemente en cualquier estrategia:** naked shorts de cualquier tipo, ratio
-  spreads, y cualquier posición long direccional. Solo estructuras de riesgo definido.
+  **Estructuras permitidas/prohibidas:** la plataforma no impone ninguna; cada estrategia declara las
+  suyas en su spec (`allowed_strategies` / `forbidden_strategies`).
 
 
 ### Backend DataFeed

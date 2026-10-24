@@ -52,12 +52,13 @@ public class ShadowRiskValidatorTests
     }
 
     [Fact]
-    public void NakedShort_Rejected()
+    public void NakedShort_NotPlatformForbidden_OnlySpecDecides()
     {
         var candidate = ValidCandidate() with { Structure = "naked_short" };
         var result = ShadowRiskValidator.Validate(candidate, TestSpec(), 0, 10_000);
         Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("platform-forbidden"));
+        Assert.DoesNotContain(result.Errors, e => e.Contains("platform-forbidden"));
+        Assert.Contains(result.Errors, e => e.Contains("not in spec"));
     }
 
     [Fact]

@@ -140,6 +140,9 @@ namespace DataFeed.Application.App.Runtime.Contracts
     {
         /// <summary>"FIXED" | "RISK_BASED" | "KELLY"</summary>
         public string Method { get; init; } = "RISK_BASED";
+        /// <summary>
+        /// Contratos fijos. En long_equity son ACCIONES (método FIXED): cantidad fija de acciones por entrada.
+        /// </summary>
         public int? FixedContracts { get; init; }
         public double? RiskPerTradePct { get; init; }
     }
@@ -163,6 +166,20 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public StopLossExit? StopLoss { get; init; }
         public TimeExit? TimeExit { get; init; }
         public DefensiveRollExit? DefensiveRoll { get; init; }
+        /// <summary>Cierra cuando una métrica cumple la condición (WS-0061). Se evalúa en el monitor de posiciones.</summary>
+        public MetricExit? MetricExit { get; init; }
+    }
+
+    /// <summary>
+    /// Salida por condición de métrica: cierra la posición cuando <c>metric_ref operator threshold</c> se cumple
+    /// (mismo operador y umbral que un gate). Si falta el dato no cierra y lo deja anotado en la posición.
+    /// </summary>
+    public record MetricExit
+    {
+        public string MetricRef { get; init; } = "";
+        /// <summary>"LT" | "LTE" | "GT" | "GTE" | "EQ" | "NEQ" | "BETWEEN"</summary>
+        public string Operator { get; init; } = "";
+        public GateThreshold Threshold { get; init; } = new();
     }
 
     public record TakeProfitExit

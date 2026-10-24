@@ -1610,7 +1610,7 @@ namespace DataFeed.Controllers
         public IActionResult RuntimePositions(string id)
         {
             var positions = _runtimeStore.AllPositions()
-                .Where(p => p.InstanceId == id).ToList();
+                .Where(p => p.InstanceId == id).Select(p => new DataFeed.Application.App.Runtime.ShadowPositionRow(p)).ToList();
             return Ok(positions);
         }
 

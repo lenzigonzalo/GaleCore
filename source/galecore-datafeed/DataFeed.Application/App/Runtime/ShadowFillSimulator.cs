@@ -24,6 +24,7 @@ namespace DataFeed.Application.App.Runtime
                 Expiration = leg.Expiration,
                 OccSymbol = leg.OccSymbol,
                 StreamerSymbol = leg.StreamerSymbol,
+                Quantity = leg.Quantity,
                 EntryPrice = ComputeMidPrice(leg)
                     ?? throw new InvalidOperationException(
                         $"Sin cotización utilizable para la pata {leg.Side} {leg.Type} {leg.Strike}: no hay fill"),
@@ -49,6 +50,20 @@ namespace DataFeed.Application.App.Runtime
             };
         }
 
+        /// <summary>
+        /// Multiplicador del P&L por unidad de precio: 100 por contrato de opciones; en long_equity, las acciones.
+        /// </summary>
+        public static double Multiplier(ShadowPosition position) =>
+            position.Structure == RuntimeStructures.LongEquity
+                ? position.Legs.FirstOrDefault()?.Quantity
+                    ?? throw new InvalidOperationException(
+                        $"La posición de acciones {position.PositionId} no tiene cantidad en su pata: no se puede calcular el P&L ni el costo.")
+                : 100;
+
+        /// <summary>P&L no realizado / realizado: (entrada − valor de cierre) × multiplicador, en USD.</summary>
+        public static double Pnl(ShadowPosition position, double closeValue) =>
+            Math.Round((position.EntryCredit - closeValue) * Multiplier(position), 2);
+
         /// <summary>Mid-price real del leg, o null si no tiene una cotización utilizable.</summary>
         public static double? ComputeMidPrice(CandidateLeg leg)
         {
@@ -60,13 +75,15 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>
         /// Evalúa exits determinísticos contra una posición abierta.
         /// Devuelve la razón de exit si alguno se dispara, null si no.
-        /// Precedencia: STOP_LOSS > TAKE_PROFIT > TIME_EXIT.
+        /// Precedencia: STOP_LOSS > METRIC_EXIT > TAKE_PROFIT > TIME_EXIT.
+        /// <paramref name="metricExitMet"/>: la condición de exits.MetricExit se cumple ahora (la evalúa el motor con el dato real).
         /// </summary>
         public static string? EvaluateExits(
             ShadowPosition position,
             DeterministicExits exits,
             double currentSpreadValue,
-            int currentDte)
+            int currentDte,
+            bool metricExitMet = false)
         {
             if (position.Status != "OPEN") return null;
 
@@ -78,6 +95,10 @@ namespace DataFeed.Application.App.Runtime
                 if (currentLoss >= stopThreshold)
                     return "STOP_LOSS";
             }
+
+            // Salida por métrica (WS-0061)
+            if (exits.MetricExit != null && metricExitMet)
+                return "METRIC_EXIT";
 
             // Take profit: spread vale <= (100 - pct)% del crédito
             if (exits.TakeProfit != null)
@@ -97,7 +118,7 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Cierra una posición SHADOW con razón y debit.</summary>
         public static ShadowPosition Close(ShadowPosition position, double exitDebit, string reason, DateTime now)
         {
-            double realizedPnl = Math.Round((position.EntryCredit - exitDebit) * 100, 2); // per contract, x100 for options
+            double realizedPnl = Pnl(position, exitDebit); // x100 por contrato en opciones; x acciones en long_equity
 
             return position with
             {

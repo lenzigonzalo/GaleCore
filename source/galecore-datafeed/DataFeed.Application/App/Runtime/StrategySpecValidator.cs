@@ -61,16 +61,9 @@ namespace DataFeed.Application.App.Runtime
             if (overlap.Count > 0)
                 errors.Add($"structure: overlap between allowed and forbidden strategies: {string.Join(", ", overlap)}");
 
-            // Prohibición absoluta de la plataforma (CLAUDE.md)
-            var platformForbidden = new[] { "naked_short", "ratio_spread", "long_directional" };
-            foreach (var allowed in spec.Structure.AllowedStrategies)
-            {
-                if (platformForbidden.Contains(allowed))
-                    errors.Add($"structure.allowed_strategies contains platform-forbidden strategy: {allowed}");
-            }
-
             // ── Construcción: sólo lo que el runtime sabe construir (P1-07) ──
             ValidateConstruction(spec, errors);
+            ValidateMetricExit(spec.Exits.Deterministic.MetricExit, errors);
 
             // ── Selection method: el runtime no tiene selector, siempre arma la default_structure ──
             if (spec.Structure.SelectionMethod != "FIXED")
@@ -108,7 +101,7 @@ namespace DataFeed.Application.App.Runtime
         /// </summary>
         private static void ValidateConstruction(StrategySpec spec, List<string> errors)
         {
-            foreach (var allowed in spec.Structure.AllowedStrategies.Where(a => RuntimeStructures.Sides(a) == null))
+            foreach (var allowed in spec.Structure.AllowedStrategies.Where(a => !RuntimeStructures.IsSupported(a)))
                 errors.Add($"structure.allowed_strategies contains '{allowed}', not built by the runtime "
                            + $"(supported: {string.Join(", ", RuntimeStructures.Supported)})");
             if (spec.CandidateConstruction.Constraints.MinCredit is double minCredit && !(minCredit > 0))
@@ -116,6 +109,11 @@ namespace DataFeed.Application.App.Runtime
 
             var structure = spec.Structure.DefaultStructure;
             if (string.IsNullOrWhiteSpace(structure)) return;   // ya informado arriba
+            if (structure == RuntimeStructures.LongEquity)
+            {
+                ValidateLongEquity(spec, errors);
+                return;
+            }
             var sides = RuntimeStructures.Sides(structure);
             if (sides == null)
             {
@@ -155,6 +153,49 @@ namespace DataFeed.Application.App.Runtime
                         errors.Add($"{name}.strike_selection.width must be positive");
                 }
             }
+        }
+
+        /// <summary>
+        /// Acciones en largo (WS-0061): una sola pata BUY STOCK, instrumento EQUITY, cantidad fija de acciones en
+        /// sizing.fixed_contracts. Las salidas por % del crédito y por DTE no tienen sentido sin crédito ni vencimiento.
+        /// </summary>
+        private static void ValidateLongEquity(StrategySpec spec, List<string> errors)
+        {
+            var legs = spec.CandidateConstruction.Legs;
+            if (legs.Count != 1 || legs[0].Side != "BUY" || legs[0].Type != LongEquityCandidateBuilder.LegType)
+                errors.Add("candidate_construction.legs must be exactly BUY STOCK for long_equity; got "
+                           + (legs.Count == 0 ? "none" : string.Join(", ", legs.Select(l => $"{l.Side} {l.Type}"))));
+            if (!spec.Universe.InstrumentTypes.SequenceEqual(new[] { "EQUITY" }))
+                errors.Add("universe.instrument_types must be exactly [\"EQUITY\"] for long_equity");
+            var constraints = spec.CandidateConstruction.Constraints;
+            if (constraints.MinDte != null || constraints.MaxDte != null || constraints.MinCredit != null)
+                errors.Add("candidate_construction.constraints: min_dte, max_dte and min_credit need an expiration or a credit and must be null for long_equity");
+            foreach (var leg in legs)
+            {
+                var sel = leg.StrikeSelection;
+                if (sel.Method != "NONE" || sel.TargetDelta != null || sel.Width != null)
+                    errors.Add("candidate_construction.legs[BUY STOCK].strike_selection must be method NONE with target_delta and width null for long_equity");
+            }
+            if (spec.Exits.Deterministic.DefensiveRoll?.Enabled == true)
+                errors.Add("exits.deterministic.defensive_roll must not be enabled for long_equity (long_equity has no expiration to roll)");
+            var sizing = spec.CandidateConstruction.Sizing;
+            if (sizing.Method != "FIXED" || sizing.FixedContracts is not > 0)
+                errors.Add("candidate_construction.sizing must be FIXED with fixed_contracts > 0 (shares) for long_equity");
+            var exits = spec.Exits.Deterministic;
+            if (exits.TakeProfit != null || exits.StopLoss != null || exits.TimeExit != null)
+                errors.Add("exits.deterministic: take_profit, stop_loss and time_exit are % of credit / DTE and do not apply to long_equity (use metric_exit)");
+        }
+
+        private static void ValidateMetricExit(MetricExit? exit, List<string> errors)
+        {
+            if (exit == null) return;
+            if (string.IsNullOrWhiteSpace(exit.MetricRef))
+                errors.Add("exits.deterministic.metric_exit.metric_ref is required");
+            var validOperators = new[] { "LT", "LTE", "GT", "GTE", "EQ", "NEQ", "BETWEEN" };
+            if (!validOperators.Contains(exit.Operator))
+                errors.Add($"exits.deterministic.metric_exit.operator must be one of: {string.Join(", ", validOperators)}");
+            else if (exit.Operator == "BETWEEN" ? !(exit.Threshold.Min.HasValue && exit.Threshold.Max.HasValue) : !exit.Threshold.Value.HasValue)
+                errors.Add($"exits.deterministic.metric_exit: operator {exit.Operator} requires its threshold");
         }
 
         private static void ValidateGates(List<GateDefinition> gates, string prefix, List<string> errors)

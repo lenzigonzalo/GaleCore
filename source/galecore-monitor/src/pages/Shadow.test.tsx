@@ -154,6 +154,17 @@ test('Runtime plegado carga sólo instancias y lecturas de la estrategia', async
   expect(screen.queryByText('other')).not.toBeInTheDocument();
   expect(screen.getAllByText('gex_positive: FAIL (-412.5 >= 0)')).toHaveLength(2);
 });
+test('con valor, los problemas son un aviso; sin valor, la posición está sin valuar', async () => {
+  mocked.fetchShadowPositions.mockResolvedValue([
+    position({ positionId: 'p-a', valuationProblems: ['salida por condición sin dato: X'] }),
+    position({ positionId: 'p-b', lastSpreadValue: null, lastValuedAt: null, unrealizedPnl: null, valuationProblems: ['sin cotización'] }),
+  ]);
+  render(<Shadow />); fireEvent.click(await screen.findByRole('button', { name: strategyName(instance.specName) }));
+  fireEvent.click(screen.getByText('Detalle técnico del motor'));
+  expect(await screen.findByText('Aviso: salida por condición sin dato: X')).toBeInTheDocument();
+  expect(screen.getByText('Sin valuar: sin cotización')).toBeInTheDocument();
+  expect(screen.queryByText(/Sin valuar: salida/)).not.toBeInTheDocument();
+});
 test('el error del runtime no desmonta el panel', async () => {
   render(<Shadow />); fireEvent.click(await screen.findByRole('button', { name: strategyName(instance.specName) }));
   mocked.fetchShadowStatus.mockRejectedValue(new Error('offline')); fireEvent.click(screen.getByText('Detalle técnico del motor'));

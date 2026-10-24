@@ -86,10 +86,12 @@ namespace DataFeed.Application.App.Runtime
         public DateTime EntryAt { get; init; }
         public DateTime? ExitAt { get; init; }
         public double? DaysHeld { get; init; }
-        public int EntryDte { get; init; }
+        /// <summary>null en acciones (no vencen).</summary>
+        public int? EntryDte { get; init; }
         public double EntryCredit { get; init; }
         public double? ExitDebit { get; init; }
-        public double Width { get; init; }
+        /// <summary>null en acciones (no hay ancho).</summary>
+        public double? Width { get; init; }
         public double MaxRisk { get; init; }
         public string? ExitReason { get; init; }
         public double? RealizedPnl { get; init; }
@@ -114,7 +116,9 @@ namespace DataFeed.Application.App.Runtime
     {
         /// <summary>Patas en texto: «SELL PUT 580 2026-11-20 / BUY PUT 575 2026-11-20».</summary>
         public static string LegsText(ShadowPosition p) =>
-            string.Join(" / ", p.Legs.Select(l => $"{l.Side} {l.Type} {l.Strike:0.##} {l.Expiration}".Trim()));
+            string.Join(" / ", p.Legs.Select(l => l.Type == LongEquityCandidateBuilder.LegType
+                ? $"{l.Side} {l.Quantity ?? 1} {p.Symbol}"   // acciones: «BUY 10 AAPL»
+                : $"{l.Side} {l.Type} {l.Strike:0.##} {l.Expiration}".Trim()));
 
         public static PerformanceReport Compute(IEnumerable<SpecVersionRecord> records,
             IReadOnlyDictionary<string, DeterministicExits> exitsByHash, double? referenceCapital, DateTime now,
@@ -184,14 +188,15 @@ namespace DataFeed.Application.App.Runtime
                 EntryAt = p.EntryAt,
                 ExitAt = p.ExitAt,
                 DaysHeld = p.ExitAt == null ? null : Math.Round((p.ExitAt.Value - p.EntryAt).TotalDays, 1),
-                EntryDte = p.EntryDte,
+                EntryDte = p.Structure == RuntimeStructures.LongEquity ? null : p.EntryDte,
                 EntryCredit = p.EntryCredit,
                 ExitDebit = p.ExitDebit,
-                Width = p.Width,
+                Width = p.Structure == RuntimeStructures.LongEquity ? null : p.Width,
                 MaxRisk = p.MaxRisk,
                 ExitReason = p.ExitReason,
                 RealizedPnl = p.RealizedPnl,
-                PnlPctOfCredit = p.EntryCredit > 0 ? Math.Round(p.RealizedPnl!.Value / (p.EntryCredit * 100) * 100, 1) : null,
+                // Acciones en largo: no hay crédito; el % va sobre el costo (PnlPctOfMaxRisk).
+                PnlPctOfCredit = p.Structure != RuntimeStructures.LongEquity && p.EntryCredit > 0 ? Math.Round(p.RealizedPnl!.Value / (p.EntryCredit * 100) * 100, 1) : null,
                 PnlPctOfMaxRisk = p.MaxRisk > 0 ? Math.Round(p.RealizedPnl!.Value / p.MaxRisk * 100, 1) : null,
                 Plan = plan,
                 GapToPlan = planned == null ? null : Math.Round(p.RealizedPnl!.Value - planned.Value, 2),

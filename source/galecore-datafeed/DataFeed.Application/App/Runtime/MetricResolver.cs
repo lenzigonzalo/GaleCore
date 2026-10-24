@@ -1,4 +1,6 @@
 using DataFeed.Application.App.GammaExposure;
+using DataFeed.Application.App.Shared;
+using DataFeed.Application.Data.Tastytrade.MarketDataCandle;
 using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
 using DataFeed.Application.Data.Tastytrade.MarketDataTrade;
 using MediatR;
@@ -13,6 +15,7 @@ namespace DataFeed.Application.App.Runtime
     ///   "capability:market_data.quote.{SYMBOL}.price"   → MarketDataQuoteRequest → MidPrice
     ///   "capability:market_data.trade.{SYMBOL}.price"   → MarketDataTradeRequest → Price (último trade)
     ///   "capability:compute.gamma_exposure.{SYMBOL}.net_gex" → GammaExposureRequest → NetGEX
+    ///   "capability:compute.ema_spread.{SYMBOL}.{fast}.{slow}" → velas diarias → EMA(fast) − EMA(slow) (WS-0061)
     ///
     /// Cada metric_ref se parsea y se despacha al handler MediatR correspondiente.
     /// Si el handler falla o no devuelve datos, el valor queda null → el gate lo trata según on_no_data.
@@ -88,6 +91,13 @@ namespace DataFeed.Application.App.Runtime
                 return await ResolveNetGex(parts[2], ct);
             }
 
+            // compute.ema_spread.{SYMBOL}.{fast}.{slow}
+            if (parts.Length == 5 && parts[0] == "compute" && parts[1] == "ema_spread"
+                && int.TryParse(parts[3], out var fast) && int.TryParse(parts[4], out var slow))
+            {
+                return await ResolveEmaSpread(parts[2], fast, slow, ct);
+            }
+
             _logger.LogWarning("MetricResolver: capability path no soportado: {Path}", path);
             return null;
         }
@@ -145,6 +155,63 @@ namespace DataFeed.Application.App.Runtime
             if (DataFreshness.Problem(tradedAt, nowUtc, maxAge) != null) return null;
             var price = trade.Price;
             return double.IsFinite(price) && price > 0 ? price : null;
+        }
+
+        private async Task<double?> ResolveEmaSpread(string symbol, int fast, int slow, CancellationToken ct)
+        {
+            if (fast <= 0 || slow <= fast) return null;
+            // slow×6 días corridos (≈ 4 ruedas por cada una de slow: la EMA converge y sobran para los feriados), piso 250.
+            int days = Math.Max(250, slow * 6);
+            var key = (symbol, "1d", days);
+            List<CandleData>? candles;
+            bool fetched = false;
+            if (DailyCandleCache.TryGetValue(key, out var hit) && _nowUtc - hit.At < DailyCandleTtl && _nowUtc >= hit.At)
+                candles = hit.Candles;
+            else
+            {
+                var response = await _mediator.Send(new MarketDataCandleRequest
+                {
+                    Symbol = symbol,
+                    Interval = "1d",
+                    FromTime = _nowUtc.AddDays(-days),
+                }, ct);
+                candles = response?.data;
+                fetched = true;
+            }
+            var spread = UsableEmaSpread(candles, fast, slow, _nowUtc);
+            // Sólo se guarda un resultado utilizable: velas parciales o con la última vieja se reintentan en el tick siguiente.
+            if (fetched && spread != null && candles != null) DailyCandleCache[key] = (_nowUtc, candles);
+            if (spread == null)
+                _logger.LogDebug("MetricResolver: velas diarias insuficientes para ema_spread {Symbol} {Fast}/{Slow}", symbol, fast, slow);
+            return spread;
+        }
+
+        /// <summary>
+        /// Caché de velas diarias por (símbolo, intervalo, días): la entrada (60 s) y la salida por métrica (30 s)
+        /// no necesitan pedir 250 días a Tastytrade en cada tick. Vence a los 10 min (el cierre diario no cambia).
+        /// </summary>
+        public static readonly TimeSpan DailyCandleTtl = TimeSpan.FromMinutes(10);
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string, string, int), (DateTime At, List<CandleData> Candles)>
+            DailyCandleCache = new();
+        public static void ClearDailyCandleCache() => DailyCandleCache.Clear();
+
+        /// <summary>Días corridos máximos entre la última vela diaria y ahora (fin de semana largo + margen).</summary>
+        public const int MaxLastCandleAgeDays = 7;
+
+        /// <summary>
+        /// EMA(fast) − EMA(slow) sobre los cierres diarios, o null si no hay datos suficientes: menos de slow×2 velas
+        /// con cierre positivo (la EMA arranca con una SMA de slow y necesita historia para estabilizarse) o la última
+        /// vela es vieja. Nunca se completa con ceros.
+        /// </summary>
+        public static double? UsableEmaSpread(IEnumerable<CandleData>? candles, int fast, int slow, DateTime nowUtc)
+        {
+            if (candles == null || fast <= 0 || slow <= fast) return null;
+            var list = candles.Where(c => c.Close > 0 && double.IsFinite(c.Close)).OrderBy(c => c.Time).ToList();
+            if (list.Count < slow * 2) return null;
+            var last = DateTimeOffset.FromUnixTimeMilliseconds(list[^1].Time).UtcDateTime;
+            if (nowUtc - last > TimeSpan.FromDays(MaxLastCandleAgeDays)) return null;
+            var spread = CascadeUtils.ComputeEMA(list, fast) - CascadeUtils.ComputeEMA(list, slow);
+            return double.IsFinite(spread) ? spread : null;
         }
 
         private async Task<double?> ResolveNetGex(string symbol, CancellationToken ct)
