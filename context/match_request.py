@@ -14,7 +14,10 @@ except ImportError:  # sin PyYAML se pierde el «cómo responder», no el aviso 
     yaml = None
 
 MIN_SCORE = 6  # debajo de esto el cruce de palabras es casualidad («hacer» ≠ perfil)
-SKILLS = Path(__file__).resolve().parents[3] / "GaleCore-AI" / "config"
+_HERE = Path(__file__).resolve()
+# Raíz canónica: si este script corre desde un worktree, la del repo que lo contiene (nunca una copia de .worktrees/).
+_ROOT = Path(*_HERE.parts[:_HERE.parts.index(".worktrees")]) if ".worktrees" in _HERE.parts else _HERE.parents[3]
+SKILLS = _ROOT / "GaleCore-AI" / "config"
 DESIGN = {"capability": "strategy_design", "skill": "skills/strategy-design/SKILL.md", "score": MIN_SCORE}
 
 sys.stdout.reconfigure(encoding="utf-8")
@@ -151,5 +154,8 @@ if top["score"] >= MIN_SCORE:
         answer = None
     if answer:
         print("[cómo responder]\n" + answer.strip())
-    if top["capability"] == "strategy_design" and not in_project:
-        method()
+    if top["capability"] == "strategy_design":
+        print(f"[método de diseño] Si necesitás la skill completa: {SKILLS / top['skill']} "
+              "(única copia; no busques otra ni la tomes de .worktrees/).")
+        if not in_project:
+            method()

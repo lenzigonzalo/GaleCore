@@ -203,3 +203,21 @@ test('permisos en el chat como en el CLI: el pedido queda a la vista, el trader 
  assert.ok(proc.stdin.writableEnded);proc.emit('close',0);
  c=(await route(service,'GET','/chats/'+chat.id)).value;assert.equal(c.error,null);assert.equal(c.state,'idle');assert.equal(c.mode,'auto');
 });
+
+test('el contexto pasa la ruta exacta del mapa existente y la skill de diseño canónica, nunca de .worktrees',async t=>{
+ const {base,kb,local}=setup(t);const {EventEmitter}=require('events');
+ fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo');
+ const p0=path.join(kb,'workspaces/personal');fs.mkdirSync(path.join(p0,'memory'),{recursive:true});
+ const contexts=[];
+ const spawnProcess=(bin,args)=>{const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(){},end(){}};proc.kill=()=>{};
+  const f=args[args.indexOf('--append-system-prompt-file')+1];contexts.push(fs.readFileSync(f,'utf8'));setImmediate(()=>proc.emit('close',0));return proc;};
+ const service=createWorkspaces({root:base,kb,local,binaries:{claude:'claude'},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
+ const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ fs.writeFileSync(path.join(p0,'memory','mapa-19cfc2d9.md'),'# Mapa\n');
+ await route(service,'POST','/chats/'+chat.id+'/messages',{text:'seguimos con la idea'});
+ await new Promise(r=>setTimeout(r,300));
+ const ctx=contexts.at(-1);
+ assert.ok(ctx.includes(path.join(base,'GaleCore-AI','config','skills','strategy-design','SKILL.md')));
+ assert.ok(ctx.includes(path.join(p0,'memory','mapa-19cfc2d9.md')));
+ assert.ok(!ctx.includes(path.join('tools','terminal','skills','strategy-design')));
+});

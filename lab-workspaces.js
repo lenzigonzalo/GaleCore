@@ -131,6 +131,8 @@ function consumeEvent(chat, event, provider) {
 // Mapa de la idea (WS-0039): una página memory/mapa-<tema>.md que el agente reescribe en el turno. El Lab sólo anota
 // cuál tocó cada chat y la sirve separada en secciones; no hay otra llamada al modelo.
 const MAPA=/^mapa-[\w-]+\.md$/;
+// Si el Lab corre desde un worktree, la raíz canónica es la que lo contiene (GaleCore-AI/config/skills es una sola).
+function canonicalRoot(root){const parts=path.normalize(root).split(path.sep),i=parts.indexOf('.worktrees');return i<0?root:parts.slice(0,i).join(path.sep);}
 function latestMapa(dir,since){
   const mem=path.join(dir,'memory');if(!fs.existsSync(mem))return null;
   const found=fs.readdirSync(mem).filter(f=>MAPA.test(f)).map(f=>({f,t:fs.statSync(path.join(mem,f)).mtimeMs})).filter(x=>x.t>=since).sort((a,b)=>b.t-a.t)[0];
@@ -288,17 +290,20 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
     chat.state='running';chat.error=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'tools','terminal','skills','lab-strategy-bootstrap','SKILL.md');
+    // Rutas canónicas: nunca dentro de .worktrees/ (puede haber copias viejas); el método de diseño es una sola copia.
+    const designSkill=path.join(canonicalRoot(root),'GaleCore-AI','config','skills','strategy-design','SKILL.md');
+    let existingMapa=chat.mapa||null;if(!existingMapa){try{existingMapa=latestMapa(p.dir,0);}catch{ existingMapa=null; }}
     // El contexto del turno, igual para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el
     // proveedor ni el modelo»; Personal sin filtro). Capas (D-0012, D-0014): final de la conversación anterior
     // (estrategia), núcleo PRODUCT.md, proyecto, hechos del momento y capacidad del pedido. Las reglas del entorno
     // (knowledge/AGENTS.md) y las del proyecto (su AGENTS.md) las lee cada motor solo desde la carpeta.
     const product=fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8');
     const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+'.'+(p.type==='strategy'||p.type==='personal'?'':' Si la conversación va hacia una estrategia, proponé una sola vez «¿armamos esta estrategia acá?»; con el sí, corré python "'+path.join(root,'tools','terminal','mark_strategy.py')+'" desde esta carpeta (activa el mapa de estrategia y su seguimiento) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+(p.type==='strategy'
+    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra ni la tomes de .worktrees/).'+(p.type==='strategy'||p.type==='personal'?'':' Si la conversación va hacia una estrategia, proponé una sola vez «¿armamos esta estrategia acá?»; con el sí, corré python "'+path.join(root,'tools','terminal','mark_strategy.py')+'" desde esta carpeta (activa el mapa de estrategia y su seguimiento) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+(p.type==='strategy'
       // Owner 17/10: el mapa es el diseño que se va armando; se reescribe en cada turno con el formato vigente (también
       // si el de memory/ tiene otro formato) y la respuesta cierra proponiendo la próxima pieza del diseño.
-      ?' Antes de responder, reescribí el mapa del proyecto (el mapa-*.md de memory/, o '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md')+' si no hay) con el formato de «Mapa de la idea» (en el método de ideas y estrategias del contexto), aunque nada haya cambiado: pasá lo que ya estaba a sus 8 partes.'
-      :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea», '+path.join(root,'GaleCore-AI','config','skills','strategy-design','method.md')+') en '+path.join(p.dir,chat.mapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
+      ?' Antes de responder, reescribí el mapa del proyecto ('+(existingMapa?'el que ya existe es '+path.join(p.dir,existingMapa)+' (ruta exacta, no la adivines)':'todavía no hay: creá '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md'))+') con el formato de «Mapa de la idea» (en el método de ideas y estrategias del contexto), aunque nada haya cambiado: pasá lo que ya estaba a sus 8 partes.'
+      :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea», '+path.join(root,'GaleCore-AI','config','skills','strategy-design','method.md')+') en '+path.join(p.dir,existingMapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
     function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
