@@ -41,6 +41,19 @@ INDISPENSABLE = [
 ]
 WATCHED_INDISPENSABLE = {"tope por apuesta"}
 
+# long_equity (stocks, WS-0061): the runtime limits the risk of a trade by the position's cost (fixed shares × price,
+# its MaxRisk) and by max_loss_per_trade_usd when declared. Stop and time exit are options mechanics (credit, DTE):
+# GaleCore rejects them for stocks, so they are not indispensable there. The exit is a condition (metric_exit).
+EQUITY_RISK_PATHS = ("candidate_construction.sizing.fixed_contracts", "risk_limits.max_loss_per_trade_usd")
+EQUITY_NOT_INDISPENSABLE = {"stop", "salida por tiempo"}
+# Of SUPERVISED, what reads a credit or an expiration and so never fires on a stock position.
+OPTIONS_ONLY_SUPERVISED = {"cerca del stop", "dato macro o FOMC antes del vencimiento"}
+
+
+def is_long_equity(spec: dict) -> bool:
+    structure = spec.get("structure") or {}
+    return structure.get("default_structure") == "long_equity" or structure.get("allowed_strategies") == ["long_equity"]
+
 
 def _spec_value(spec: dict, path: str):
     node = spec
@@ -65,9 +78,16 @@ def classify(doc: StrategyDocument) -> dict:
             cls = "no aplica"
         rules.append({"regla": rule.id, "bloque": rule.block.value, "clase": cls,
                       "como": ", ".join(rule.runtime.spec_paths) if cls == "ejecutada" else rule.runtime.note})
+    equity = is_long_equity(spec)
     indispensables = []
     for name, path in INDISPENSABLE:
-        if path is None:
+        if equity and name in EQUITY_NOT_INDISPENSABLE:
+            continue
+        if equity and name == "riesgo por operación":
+            runs = any(_spec_value(spec, q) not in (None, {}, False, 0) and any(
+                p == q or p.startswith(q + ".") for p in executed_paths) for q in EQUITY_RISK_PATHS)
+            state = "ejecutado" if runs else "no ejecutado por el runtime"
+        elif path is None:
             state = ("vigilado (aviso, no bloquea; si el perfil declara sus límites)" if name in WATCHED_INDISPENSABLE
                      else "no ejecutado por el runtime")
         else:
@@ -82,7 +102,8 @@ def classify(doc: StrategyDocument) -> dict:
     return {
         "estrategia": f"strategy:{doc.name}/{doc.version}", "spec_hash": doc.spec_hash,
         "reglas": rules,
-        "vigilancia_del_supervisor": [{"control": c, "como": how, "clase": "vigilada"} for c, how in SUPERVISED],
+        "vigilancia_del_supervisor": [{"control": c, "como": how, "clase": "vigilada"} for c, how in SUPERVISED
+                                      if not (equity and c in OPTIONS_ONLY_SUPERVISED)],
         "indispensables": indispensables,
         "monto_simulado_usd": amount,
         "recomendar_aprobacion": not missing,

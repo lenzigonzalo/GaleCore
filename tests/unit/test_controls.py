@@ -79,3 +79,56 @@ def test_a_bet_check_without_numbers_is_a_problem_not_a_crash(kb, research_ref):
     broken = {"limit": "bet:SPY bullish 2026-W46", "used": None, "max": 1500.0, "headroom": None, "ok": False}
     out = supervisor.scan(kb, _reader(doc.spec_hash, [position()], exposure(checks=[broken])), IN_SESSION)
     assert out["new"] == [] and any("no dio lo usado" in p for p in out["problems"])
+
+
+# ── long_equity: the options-only indispensables do not apply (WS-0061) ──
+def _equity_doc(max_loss=None, sizing_executed=True):
+    import json
+    from types import SimpleNamespace as NS
+    spec = {"structure": {"default_structure": "long_equity", "allowed_strategies": ["long_equity"]},
+            "candidate_construction": {"sizing": {"method": "FIXED", "fixed_contracts": 10}},
+            "risk_limits": {"max_concurrent_positions": 1, "max_loss_per_trade_usd": max_loss}}
+    paths = (["candidate_construction.sizing.fixed_contracts"] if sizing_executed else []) + [
+        "risk_limits.max_concurrent_positions"]
+    rule = NS(id="S1", block=NS(value="sizing"), runtime=NS(status=controls.RuntimeStatus.SUPPORTED, spec_paths=paths, note=""))
+    return NS(spec_json=json.dumps(spec), content=NS(rules=[rule], simulated_amount_usd=10000), name="x", version="1",
+              spec_hash="h")
+
+
+def test_long_equity_risk_is_the_position_cost_and_stop_and_time_exit_are_not_indispensable():
+    out = controls.classify(_equity_doc())
+    state = {i["control"]: i["estado"] for i in out["indispensables"]}
+    assert state["riesgo por operación"] == "ejecutado" and state["tope de posiciones abiertas"] == "ejecutado"
+    assert "stop" not in state and "salida por tiempo" not in state
+    assert state["freno por pérdida acumulada"] == "no ejecutado por el runtime"      # still real
+    assert state["tope por apuesta"].startswith("vigilado")
+    assert out["recomendar_aprobacion"] is False and "stop" not in out["motivo"]
+    watched = {v["control"] for v in out["vigilancia_del_supervisor"]}
+    assert "cerca del stop" not in watched and "dato macro o FOMC antes del vencimiento" not in watched
+
+
+def test_long_equity_risk_not_executed_when_the_runtime_does_not_size_it():
+    out = controls.classify(_equity_doc(sizing_executed=False))
+    assert {i["control"]: i["estado"] for i in out["indispensables"]}["riesgo por operación"] == "no ejecutado por el runtime"
+
+
+def test_options_keep_their_indispensables(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    names = [i["control"] for i in controls.classify(doc)["indispensables"]]
+    assert "stop" in names and "salida por tiempo" in names
+
+
+def test_long_equity_sheet_speaks_of_stocks_not_of_options():
+    from galecore_ai.application import strategy_sheet
+    doc = _equity_doc()
+    doc.content.limits = None
+    spec = __import__("json").loads(doc.spec_json)
+    spec["universe"] = {"symbols": ["AAPL"]}
+    spec["exits"] = {"deterministic": {"metric_exit": {"metric_ref": "m", "operator": "LT", "threshold": {"value": 0}}}}
+    doc.spec_json = __import__("json").dumps(spec)
+    doc.content.management = []
+    st = strategy_sheet.structures(doc, None)
+    assert "10 por operación" in st["equity"] and "sin cadena de opciones" in st["equity"] and not st["missing"]
+    r = strategy_sheet.risk(None, doc, None)
+    assert "10 acciones × precio" in r["per_trade_note"]
+    assert not any("pérdida máxima por operación" in m for m in r["missing"])

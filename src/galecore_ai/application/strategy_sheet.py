@@ -65,7 +65,11 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
         (width * 100, "ancho completo × 100; la spec no fija tope") if width is not None else (None, "no calculable"))
     positions = _num(limits_.get("max_concurrent_positions"))
     ref = doc.content.simulated_amount_usd   # WS-0043 (1e): what is simulated is sized with its own amount
-    rows, missing = [], [f"límites del diseño: {x}" for x in lim["no_leidos"] if x != "monto simulado"]
+    equity = controls.is_long_equity(spec)
+    # Stocks have no stop to size a loss by: the trade's risk is its cost (shares × price), which the runtime checks
+    # (controls.EQUITY_RISK_PATHS), so a missing «pérdida máxima por operación» in percent is not a gap there.
+    skipped = {"monto simulado"} | ({"pérdida máxima por operación"} if equity else set())
+    rows, missing = [], [f"límites del diseño: {x}" for x in lim["no_leidos"] if x not in skipped]
     if ref is None:
         missing.append("monto simulado: el diseño no lo declara, no se miden los topes")
     if ref is not None and lim.get("maxRiskPerTradePct") is not None and per_trade is not None:
@@ -101,7 +105,14 @@ def risk(kb: KnowledgeBase, doc: StrategyDocument, read: Callable[[str], object]
                 missing.append(f"lo abierto en SHADOW: respuesta inesperada de GaleCore ({exc!r})")
     elif read is None:
         missing.append("lo abierto en SHADOW: no se consultó GaleCore")
-    return {"rows": rows, "kill_switch": kill_text, "open_now": opened, "over_limit": broken, "missing": missing}
+    note = None
+    if equity:
+        shares = _num(((spec.get("candidate_construction") or {}).get("sizing") or {}).get("fixed_contracts"))
+        note = (f"Pérdida máxima por operación: el costo de la posición ({shares:g} acciones × precio de entrada); "
+                "sin corte automático de pérdida, sólo se sale por la condición de salida"
+                + (f"; tope declarado {capital._usd(cap)} USD" if cap is not None else "")) if shares else None
+    return {"rows": rows, "kill_switch": kill_text, "open_now": opened, "over_limit": broken, "missing": missing,
+            **({"per_trade_note": note} if note else {})}
 
 
 STRUCTURE_LABEL = {"put_credit_spread": "PCS", "call_credit_spread": "CCS", "iron_condor": "Iron condor",
@@ -114,6 +125,15 @@ def structures(doc: StrategyDocument, read: Callable[[str], object] | None = Non
     spec = json.loads(doc.spec_json)
     cc = spec.get("candidate_construction") or {}
     legs = cc.get("legs") or []
+    if controls.is_long_equity(spec):
+        symbol = ((spec.get("universe") or {}).get("symbols") or ["?"])[0]
+        shares = _num((cc.get("sizing") or {}).get("fixed_contracts"))
+        exit_ = (spec.get("exits") or {}).get("deterministic", {}).get("metric_exit") or {}
+        return {"data": None, "missing": [], "equity": (
+            f"Acciones de {symbol}" + (f": {shares:g} por operación" if shares else "")
+            + ", compradas al precio medio compra/venta; costo = acciones × precio, sin cadena de opciones. "
+            + (f"Sale por condición ({exit_.get('metric_ref')} {exit_.get('operator')} "
+               f"{(exit_.get('threshold') or {}).get('value')})." if exit_ else "Sin condición de salida declarada."))}
     sell = next((leg.get("strike_selection") or {} for leg in legs if str(leg.get("side", "")).upper() == "SELL"), {})
     buy = next((leg.get("strike_selection") or {} for leg in legs if str(leg.get("side", "")).upper() == "BUY"), {})
     cons = cc.get("constraints") or {}
@@ -161,6 +181,8 @@ def _structure_lines(s: dict) -> list[str]:
             state = "ejecutable hoy" if x.get("executableToday") else "no ejecutable hoy"
             lines += [f"- {label}: {state}" + (f" — {_cell(x['note'])}" if x.get("note") else "")]
         lines += [f"- Supuesto: {_cell(a)}" for a in data.get("assumptions") or []]
+    if s.get("equity"):
+        lines += [s["equity"]]
     lines += [f"- Falta: {m}" for m in s["missing"]]
     return lines
 
@@ -221,11 +243,14 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
         lines += [f"| {a} | {b} | {c} | {d} |" for a, b, c, d in r["rows"]]
         lines += [""]
     lines += [f"- Kill switch: {r['kill_switch']}"]
+    if r.get("per_trade_note"):
+        lines += [f"- {r['per_trade_note']}"]
     if r["open_now"]:
         lines += [f"- Abierto hoy en SHADOW: {r['open_now']}"]
     lines += [f"- Falta: {m}" for m in r["missing"]]
     st = structures(doc, read)
-    lines += ["", "## Estructuras para la misma tesis (cadena real, hoy)", ""] + _structure_lines(st)
+    title = "Posición (acciones)" if st.get("equity") else "Estructuras para la misma tesis (cadena real, hoy)"
+    lines += ["", f"## {title}", ""] + _structure_lines(st)
     lines += ["", "## Lo que GaleCore no ejecuta", ""]
     lines += [f"- {_cell(g)}" for g in doc.check.declared_gaps] or ["- Nada declarado."]
     pending = [d for d in c.owner_decisions if d.status == "pending"]
