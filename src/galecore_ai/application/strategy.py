@@ -140,14 +140,20 @@ STRUCTURE_LEGS = {
     "put_credit_spread": ["buy_put", "sell_put"],
     "call_credit_spread": ["buy_call", "sell_call"],
     "iron_condor": ["buy_call", "buy_put", "sell_call", "sell_put"],
+    # LongEquityCandidateBuilder (GaleCore WS-0061): one BUY STOCK leg at the quote's mid.
+    "long_equity": ["buy_stock"],
 }
+LONG_EQUITY = "long_equity"
+BUY_STOCK = "candidate_construction.legs[buy_stock]"
+METRIC_EXIT = "exits.deterministic.metric_exit"
 
 # Executed by the runtime: a non-null value changes what GaleCore does, so a supported rule explains it.
 EXECUTED = {
     "universe.symbols": "cada símbolo de la lista se evalúa en cada ciclo",
     "structure.allowed_strategies": "ShadowRiskValidator rechaza estructuras fuera de la lista",
     "structure.forbidden_strategies": "ShadowRiskValidator rechaza estructuras de la lista",
-    "structure.default_structure": "CreditSpreadCandidateBuilder: put_credit_spread, call_credit_spread o iron_condor",
+    "structure.default_structure": ("CreditSpreadCandidateBuilder: put_credit_spread, call_credit_spread o iron_condor; "
+                                   "LongEquityCandidateBuilder: long_equity, una compra de acciones al mid"),
     f"{SELL_PUT}.strike_selection.target_delta": "delta objetivo del put vendido",
     f"{SELL_PUT}.strike_selection.delta_tolerance": "tolerancia alrededor del delta objetivo",
     f"{BUY_PUT}.strike_selection.width": "ancho del spread en dólares",
@@ -162,6 +168,8 @@ EXECUTED = {
                                                 "o cerrada → ENTRY_SKIPPED (GaleCore GC-0005; un runtime anterior "
                                                 "lo ignora)"),
     "risk_limits.max_loss_per_trade_usd": "riesgo máximo por operación (ancho − crédito) × 100",
+    METRIC_EXIT: ("cierra la posición cuando la métrica cumple operador y umbral (se registra como METRIC_EXIT); "
+                  "se evalúa con la sesión abierta y sin dato no cierra"),
     "exits.deterministic.stop_loss.pct_of_credit": "cierra si pérdida ≥ pct × crédito (precedencia 1)",
     "exits.deterministic.take_profit.pct_of_credit": "cierra si valor ≤ (1 − pct) × crédito (precedencia 2)",
     "exits.deterministic.time_exit.max_dte": "cierra si DTE ≤ max_dte (precedencia 3)",
@@ -171,6 +179,19 @@ EXECUTED = {
     "data_quality.max_quote_age_seconds": ("antigüedad máxima × 10 en SHADOW (DataFreshness.ShadowAgeFactor); "
                                            "una cotización sin hora no se puede medir y se acepta"),
 }
+
+# Executed only for long_equity (LongEquityCandidateBuilder / ShadowRiskValidator on a stock position).
+EQUITY_EXECUTED = {
+    "candidate_construction.sizing.fixed_contracts": "cantidad de acciones que compra en cada entrada",
+    "risk_limits.max_loss_per_trade_usd": "costo máximo de la posición (precio × acciones); más → no entra",
+}
+# EXECUTED rules that need a credit, a delta or an expiration: for long_equity the runtime never reads them
+# (GaleCore rejects the exits outright), so only null is honest.
+OPTIONS_ONLY = (
+    "candidate_construction.constraints.min_dte", "candidate_construction.constraints.max_dte",
+    "candidate_construction.constraints.min_credit", "exits.deterministic.stop_loss.pct_of_credit",
+    "exits.deterministic.take_profit.pct_of_credit", "exits.deterministic.time_exit.max_dte",
+)
 
 # Ignored by the runtime: only the value that matches what the runtime really does is honest.
 _NEUTRAL: dict[str, tuple[Any, ...]] = {
@@ -214,7 +235,7 @@ MUST_DECLARE = {
 # The runtime has exactly one semantics for these: any other value would promise behavior it does not have.
 _FIXED: dict[str, Any] = {
     "universe.mode": "WHITELIST",
-    "universe.instrument_types": ["EQUITY_OPTION"],
+    "universe.instrument_types": ["EQUITY_OPTION"],   # long_equity: ["EQUITY"] (_FIXED_EQUITY)
     "universe.excluded": {},
     "structure.selection_method": "FIXED",
     "entry_filters.gate_layer.pass_rule": "ALL",
@@ -225,24 +246,27 @@ _FIXED: dict[str, Any] = {
     f"{SELL_CALL}.strike_selection.method": "DELTA",
     f"{BUY_CALL}.strike_selection.method": "FIXED_WIDTH",
 }
+_FIXED_EQUITY = {"universe.instrument_types": ["EQUITY"], f"{BUY_STOCK}.strike_selection.method": "NONE"}
 
 # Descriptive fields with no behavior in SHADOW (leg side/type are checked by the legs' shape).
 _INFORMATIONAL = {
     "strategy_spec_version", "canonicalization_version", "content_hash",
     "deployment_constraints.requires_human_approval_for", "entry_filters.signal_layer.pass_rule",
     "operational.decimal_precision", "operational.currency", "operational.rounding", "operational.symbology",
-    *(f"{leg}.{k}" for leg in (SELL_PUT, BUY_PUT, SELL_CALL, BUY_CALL) for k in ("side", "type")),
+    *(f"{leg}.{k}" for leg in (SELL_PUT, BUY_PUT, SELL_CALL, BUY_CALL, BUY_STOCK) for k in ("side", "type")),
 }
 _INFORMATIONAL_PREFIXES = ("identity.", "metadata.")
 _ROLL = "exits.deterministic.defensive_roll."
 # Leg fields the builder never reads for that leg: only null is honest.
 _NULL_ONLY = (f"{SELL_PUT}.strike_selection.width", f"{BUY_PUT}.strike_selection.target_delta",
               f"{BUY_PUT}.strike_selection.delta_tolerance", f"{SELL_CALL}.strike_selection.width",
-              f"{BUY_CALL}.strike_selection.target_delta", f"{BUY_CALL}.strike_selection.delta_tolerance")
+              f"{BUY_CALL}.strike_selection.target_delta", f"{BUY_CALL}.strike_selection.delta_tolerance",
+              *(f"{BUY_STOCK}.strike_selection.{k}" for k in ("target_delta", "delta_tolerance", "width")))
 
 _METRIC_RE = re.compile(
     r"^capability:(market_data\.quote\.[A-Z0-9.^]+\.price|market_data\.trade\.[A-Z0-9.^]+\.price|"
-    r"compute\.gamma_exposure\.[A-Z0-9.^]+\.net_gex)$")
+    r"compute\.gamma_exposure\.[A-Z0-9.^]+\.net_gex|compute\.ema_spread\.[A-Z0-9.^]+\.[0-9]+\.[0-9]+)$")
+_EMA_RE = re.compile(r"\.([0-9]+)\.([0-9]+)$")
 _OPERATORS = {"LT", "LTE", "GT", "GTE", "EQ", "NEQ", "BETWEEN"}
 _GATE_KEYS = {"id", "label", "metric_ref", "operator", "threshold", "on_fail", "on_no_data"}
 
@@ -275,6 +299,8 @@ def _leg_value_errors(legs: Any) -> list[str]:
             errors.append(f"candidate_construction.legs: a leg must be an object, got {leg!r}")
             continue
         key, sel = _leg_key(leg), leg.get("strike_selection")
+        if key == "buy_stock":
+            continue   # a stock has no strike: its strike_selection fields are checked as null-only
         path = f"candidate_construction.legs[{key}].strike_selection"
         if not isinstance(sel, dict):
             errors.append(f"{path} must be an object")
@@ -327,6 +353,9 @@ def _structure_errors(spec: dict) -> list[str]:
 
 
 def _leaves(node: Any, path: str, out: dict[str, Any], errors: list[str]) -> None:
+    if path == METRIC_EXIT and isinstance(node, dict) and node:
+        out[path] = node
+        return
     if isinstance(node, dict) and node:
         for k, v in node.items():
             _leaves(v, f"{path}.{k}" if path else k, out, errors)
@@ -339,7 +368,7 @@ def _leaves(node: Any, path: str, out: dict[str, Any], errors: list[str]) -> Non
     if path == "candidate_construction.legs" and isinstance(node, list):
         keys = [_leg_key(leg) if isinstance(leg, dict) else "?" for leg in node]
         if sorted(keys) not in STRUCTURE_LEGS.values():
-            errors.append(f"legs must be one SELL and one BUY per side of a credit spread or iron condor; got {keys}")
+            errors.append(f"legs must be one SELL and one BUY per side of a credit spread or iron condor, or one BUY STOCK; got {keys}")
             return
         for leg in node:
             _leaves(leg, f"candidate_construction.legs[{_leg_key(leg)}]", out, errors)
@@ -347,21 +376,19 @@ def _leaves(node: Any, path: str, out: dict[str, Any], errors: list[str]) -> Non
     out[path] = node
 
 
-def _check_gate(key: str, gate: Any, errors: list[str]) -> None:
-    if not isinstance(gate, dict) or not gate.get("id"):
-        errors.append(f"{key}: a gate needs an id")
-        return
-    if not _METRIC_RE.fullmatch(str(gate.get("metric_ref", ""))):
-        errors.append(f"{key}: metric_ref {gate.get('metric_ref')!r} is not one the runtime resolves "
-                      "(quote/trade price or net GEX); it would be NO_DATA forever")
-    if gate.get("operator") not in _OPERATORS:
-        errors.append(f"{key}: operator {gate.get('operator')!r} unknown")
-    if gate.get("on_fail") != "NO_TRADE" or gate.get("on_no_data") != "BLOCK":
-        errors.append(f"{key}: only on_fail=NO_TRADE and on_no_data=BLOCK keep a gate fail-closed")
-    unknown = sorted(set(gate) - _GATE_KEYS)
-    if unknown:
-        errors.append(f"{key}: properties the gate evaluator never reads: {unknown}")
-    threshold = gate.get("threshold")
+def _metric_problem(ref: Any) -> str | None:
+    if not _METRIC_RE.fullmatch(str(ref)):
+        return (f"metric_ref {ref!r} is not one the runtime resolves (quote/trade price, net GEX or ema_spread "
+                "SYMBOL.fast.slow); it would be NO_DATA forever")
+    if m := _EMA_RE.search(str(ref)):
+        fast, slow = int(m.group(1)), int(m.group(2))
+        if fast <= 0 or slow <= fast:
+            return f"metric_ref {ref!r}: ema_spread needs 0 < fast < slow"
+    return None
+
+
+def _check_threshold(key: str, node: dict, errors: list[str]) -> None:
+    threshold = node.get("threshold")
     if not isinstance(threshold, dict):
         errors.append(f"{key}: threshold must be an object")
         return
@@ -370,11 +397,41 @@ def _check_gate(key: str, gate: Any, errors: list[str]) -> None:
     extra = sorted(set(threshold) - {"value", "min", "max"})
     if extra:
         errors.append(f"{key}: threshold properties never read: {extra}")
-    if gate.get("operator") == "BETWEEN":
+    if node.get("operator") == "BETWEEN":
         if not (number(threshold.get("min")) and number(threshold.get("max"))) or threshold.get("value") is not None:
             errors.append(f"{key}: BETWEEN needs numeric threshold.min and threshold.max and no value")
     elif not number(threshold.get("value")) or threshold.get("min") is not None or threshold.get("max") is not None:
-        errors.append(f"{key}: {gate.get('operator')} needs a numeric threshold.value and no min/max")
+        errors.append(f"{key}: {node.get('operator')} needs a numeric threshold.value and no min/max")
+
+
+def _check_gate(key: str, gate: Any, errors: list[str]) -> None:
+    if not isinstance(gate, dict) or not gate.get("id"):
+        errors.append(f"{key}: a gate needs an id")
+        return
+    if problem := _metric_problem(gate.get("metric_ref", "")):
+        errors.append(f"{key}: {problem}")
+    if gate.get("operator") not in _OPERATORS:
+        errors.append(f"{key}: operator {gate.get('operator')!r} unknown")
+    if gate.get("on_fail") != "NO_TRADE" or gate.get("on_no_data") != "BLOCK":
+        errors.append(f"{key}: only on_fail=NO_TRADE and on_no_data=BLOCK keep a gate fail-closed")
+    unknown = sorted(set(gate) - _GATE_KEYS)
+    if unknown:
+        errors.append(f"{key}: properties the gate evaluator never reads: {unknown}")
+    _check_threshold(key, gate, errors)
+
+
+def _check_metric_exit(key: str, node: Any, errors: list[str]) -> None:
+    if not isinstance(node, dict):
+        errors.append(f"{key} must be an object")
+        return
+    if problem := _metric_problem(node.get("metric_ref", "")):
+        errors.append(f"{key}: {problem}")
+    if node.get("operator") not in _OPERATORS:
+        errors.append(f"{key}: operator {node.get('operator')!r} unknown")
+    unknown = sorted(set(node) - {"metric_ref", "operator", "threshold"})
+    if unknown:
+        errors.append(f"{key}: properties the runtime never reads: {unknown}")
+    _check_threshold(key, node, errors)
 
 
 def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> CheckReport:
@@ -404,6 +461,7 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
         errors.append("content_hash must be null in the file; GaleCore computes it")
     structure = _obj(spec.get("structure")).get("default_structure")
     legs = _obj(spec.get("candidate_construction")).get("legs")
+    equity = structure == LONG_EQUITY
     if not isinstance(structure, str) or structure not in STRUCTURE_LEGS:
         errors.append(f"default_structure {structure!r} is not built by the runtime ({', '.join(STRUCTURE_LEGS)})")
     elif isinstance(legs, list) and sorted(_leg_key(x) for x in legs if isinstance(x, dict)) != STRUCTURE_LEGS[structure]:
@@ -413,6 +471,16 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
 
     leaves: dict[str, Any] = {}
     _leaves(spec, "", leaves, errors)
+    executed = EXECUTED
+    if equity:   # what the stock builder reads; the % of credit / DTE rules are left to the null-only check
+        executed = {**{k: v for k, v in EXECUTED.items() if k not in OPTIONS_ONLY}, **EQUITY_EXECUTED}
+        shares = leaves.get("candidate_construction.sizing.fixed_contracts")
+        if not (isinstance(shares, int) and not isinstance(shares, bool) and shares > 0):
+            errors.append("candidate_construction.sizing.fixed_contracts must be a positive integer (shares) "
+                          f"for long_equity, got {shares!r}")
+        if leaves.get("candidate_construction.sizing.method") != "FIXED":
+            errors.append("candidate_construction.sizing.method must be FIXED for long_equity")
+    fixed = {**_FIXED, **_FIXED_EQUITY} if equity else _FIXED
 
     supported_paths: dict[str, list[str]] = {}
     declared_paths: set[str] = set()
@@ -430,13 +498,19 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
             if path not in supported_paths:
                 errors.append(f"{path}: the runtime evaluates this gate but no supported rule explains it")
             coverage[path] = supported_paths.get(path, [])
-        elif path in EXECUTED:
+        elif path in executed:
             if value is None:
                 continue
+            if path == METRIC_EXIT:
+                _check_metric_exit(path, value, errors)
             if path not in supported_paths:
-                errors.append(f"{path} = {value!r}: the runtime executes it ({EXECUTED[path]}) "
+                errors.append(f"{path} = {value!r}: the runtime executes it ({executed[path]}) "
                               "but no supported rule explains it")
             coverage[path] = supported_paths.get(path, [])
+        elif equity and path in OPTIONS_ONLY:
+            if value is not None:
+                errors.append(f"{path} = {value!r}: it needs a credit or an expiration and does not apply to "
+                              "long_equity (GaleCore rejects the exits; use exits.deterministic.metric_exit)")
         elif path in _NEUTRAL:
             if value not in _NEUTRAL[path]:
                 errors.append(f"{path} = {value!r}: the runtime ignores it ({_RUNTIME_DOES[path]}); the spec "
@@ -445,11 +519,10 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
             if path not in declared_paths:
                 errors.append(f"{path} = {value!r}: the runtime {MUST_DECLARE[path]}; declare it with an "
                               "unsupported rule naming this field")
-        elif path in _FIXED:
-            if value != _FIXED[path]:
-                errors.append(f"{path} = {value!r}: the runtime only has {_FIXED[path]!r} semantics (only SHADOW, "
-                              "a fixed whitelist of equity options, one builder for PCS, CCS and iron condor, "
-                              "gates with ALL/NO_TRADE)")
+        elif path in fixed:
+            if value != fixed[path]:
+                errors.append(f"{path} = {value!r}: the runtime only has {fixed[path]!r} semantics (only SHADOW, "
+                              "a fixed whitelist, one builder per structure, gates with ALL/NO_TRADE)")
         elif path in _NULL_ONLY or path.startswith(_ROLL):
             if value is not None:
                 errors.append(f"{path} = {value!r}: the runtime never reads it; it must be null")
@@ -460,12 +533,12 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
         if path.startswith(f"{GATE}["):
             if path not in leaves:
                 errors.append(f"rules {rule_ids}: gate {path} is not in the spec")
-        elif path in IMPLICIT_BEHAVIOR:
+        elif path in IMPLICIT_BEHAVIOR and path not in executed:
             # Supported only as what the runtime already does regardless of the spec (one contract, no roll).
             if path not in leaves or leaves[path] not in _NEUTRAL[path]:
                 errors.append(f"rules {rule_ids}: {path} is supported only with the runtime's own behavior "
                               f"({_RUNTIME_DOES[path]}), value {_NEUTRAL[path][0]!r}")
-        elif path not in EXECUTED:
+        elif path not in executed:
             errors.append(f"rules {rule_ids}: {path} is marked supported but the runtime does not execute it")
         elif leaves.get(path) is None:
             errors.append(f"rules {rule_ids}: {path} is marked supported but the spec leaves it empty")

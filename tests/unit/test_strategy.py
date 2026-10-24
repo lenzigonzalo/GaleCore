@@ -973,3 +973,103 @@ def test_capital_sizes_each_strategy_with_its_own_amount(kb, research_ref):  # n
     assert asked[0].startswith("/App/Runtime/Exposure?capital=10000.0&")      # the strategy's own amount
     assert asked[1].startswith("/App/Runtime/Allocation?capital=10000.0&") and asked[1].endswith(f"&spec={NAME}")
     assert isinstance(out["reparto"], list) and len(out["reparto"]) == 1
+
+
+# ── long_equity (acciones en largo, GaleCore WS-0061) ────────────
+
+AAPL = "aapl_cruce_ema_20_50"
+AAPL_GATE = "entry_filters.gate_layer.gates[ema20_above_ema50]"
+
+
+def _aapl() -> dict:
+    spec = json.loads(spec_text(f"{AAPL}.json"))
+    spec["identity"]["version"] = "1.0.3"   # the proposal fixture's version
+    return spec
+
+
+def _aapl_rules() -> ProposalContent:
+    """The candidate's proposal with the rules that only make sense for options removed and the gate and the
+    metric exit explained."""
+    data = proposal_data()
+    data["name"] = AAPL
+    gone = {"C2", "C3", "C4", "R1", "X2", "X3"}
+    data["rules"] = [r for r in data["rules"] if r["id"] not in gone]
+    data["parameters"] = [p for p in data["parameters"] if not gone & set(p["rules"])]
+    data["management"] = [g for g in data["management"] if not gone & set(g["rules"])]
+    by_id = {r["id"]: r for r in data["rules"]}
+    by_id["E2"]["runtime"]["spec_paths"] = [AAPL_GATE]
+    by_id["X1"]["runtime"]["spec_paths"] = ["exits.deterministic.metric_exit"]
+    return ProposalContent.model_validate(data)
+
+
+def _check_aapl(spec: dict | None = None, rules: ProposalContent | None = None):
+    return check_proposal(rules or _aapl_rules(), json.dumps(spec or _aapl()), f"{AAPL}.json")
+
+
+def test_long_equity_spec_equivalent_to_aapl_passes_the_check():
+    report = _check_aapl()
+    assert report.verdict in {"VALID", "VALID_WITH_DECLARED_GAPS"}, report.errors
+    assert report.coverage[AAPL_GATE] == ["E2"]
+    assert report.coverage["exits.deterministic.metric_exit"] == ["X1"]
+    assert report.coverage
+
+
+def test_long_equity_needs_rules_for_what_the_runtime_executes():
+    data = _aapl_rules().model_dump(mode="json")
+    for rid in ("E2", "S1", "X1"):
+        next(r for r in data["rules"] if r["id"] == rid)["runtime"]["spec_paths"] = ["operational.timezone"]
+    errors = _check_aapl(rules=ProposalContent.model_validate(data)).errors
+    assert any("metric_exit" in e and "no supported rule" in e for e in errors)
+    assert any("fixed_contracts" in e and "no supported rule" in e for e in errors)
+    assert any(AAPL_GATE in e and "no supported rule" in e for e in errors)
+
+
+def test_long_equity_take_profit_stop_loss_and_time_exit_are_not_executed():
+    for path, value in [("take_profit", {"pct_of_credit": 0.5}), ("stop_loss", {"pct_of_credit": 2.0}),
+                        ("time_exit", {"max_dte": 7})]:
+        spec = _aapl()
+        spec["exits"]["deterministic"][path] = value
+        errors = _check_aapl(spec).errors
+        assert any(f"exits.deterministic.{path}" in e and "long_equity" in e for e in errors), (path, errors)
+        # and a rule cannot claim the runtime executes it
+        data = _aapl_rules().model_dump(mode="json")
+        key = f"exits.deterministic.{path}.{next(iter(value))}"
+        next(r for r in data["rules"] if r["id"] == "X1")["runtime"]["spec_paths"].append(key)
+        errors = _check_aapl(spec, ProposalContent.model_validate(data)).errors
+        assert any(key in e and "does not execute" in e for e in errors), (path, errors)
+
+
+@pytest.mark.parametrize(("path", "value", "message"), [
+    ("universe.instrument_types", ["EQUITY_OPTION"], "only has ['EQUITY']"),
+    ("candidate_construction.sizing.fixed_contracts", 0, "positive integer"),
+    ("candidate_construction.sizing.fixed_contracts", None, "positive integer"),
+    ("candidate_construction.sizing.method", "RISK_BASED", "must be FIXED"),
+    ("candidate_construction.constraints.min_dte", 30, "does not apply to long_equity"),
+    ("entry_filters.gate_layer.gates.0.metric_ref", "capability:compute.ema_spread.AAPL.50.20", "0 < fast < slow"),
+    ("exits.deterministic.metric_exit.metric_ref", "capability:compute.rsi.AAPL.14", "not one the runtime resolves"),
+    ("exits.deterministic.metric_exit.operator", "ABOVE", "operator 'ABOVE' unknown"),
+])
+def test_long_equity_values_the_runtime_would_not_honor_are_invalid(path, value, message):
+    spec = _aapl()
+    *parents, leaf = path.split(".")
+    node = spec
+    for part in parents:
+        node = node[int(part)] if part.isdigit() else node[part]
+    node[leaf] = value
+    report = _check_aapl(spec)
+    assert report.verdict == "INVALID"
+    assert any(message in e for e in report.errors), report.errors
+
+
+def test_stock_leg_does_not_need_a_strike_and_spreads_keep_their_rules():
+    spec = _aapl()
+    spec["candidate_construction"]["legs"][0]["strike_selection"]["width"] = 5
+    assert any("legs[buy_stock].strike_selection.width" in e for e in _check_aapl(spec).errors)
+    # an option spread still cannot size by shares, fix instrument EQUITY or take a metric exit without a rule
+    assert any("fixed_contracts = 10" in e for e in check(text=spec_with(**{
+        "candidate_construction.sizing": {"method": "FIXED", "fixed_contracts": 10, "risk_per_trade_pct": None}})).errors)
+    assert any("instrument_types" in e for e in check(text=spec_with(**{"universe.instrument_types": ["EQUITY"]})).errors)
+    exit_spec = json.loads(spec_text())
+    exit_spec["exits"]["deterministic"]["metric_exit"] = {
+        "metric_ref": "capability:market_data.quote.VIX.price", "operator": "GT", "threshold": {"value": 30}}
+    assert any("metric_exit" in e and "no supported rule" in e for e in check(text=json.dumps(exit_spec)).errors)
