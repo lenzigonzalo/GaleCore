@@ -145,3 +145,34 @@ test('varias conversaciones a la vez: el mismo proyecto y Cartera no se bloquean
  await assert.rejects(say(e),/cuatro conversaciones/); // tope global
  for(const p of procs)p.emit('close',0);
 });
+
+test('WS-0059: el contexto común conserva bloques útiles y avisa fallos sin copiar stderr',async t=>{
+ const {base,kb,local}=setup(t);const {EventEmitter}=require('events');
+ fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI/PRODUCT.md'),'núcleo único');
+ const dir=path.join(base,'tools/terminal/context');fs.mkdirSync(dir,{recursive:true});
+ fs.writeFileSync(path.join(dir,'session_context.py'),"import sys\nprint('[reloj] fixture')\nprint('private-token', file=sys.stderr)\nsys.exit(1)\n");
+ fs.writeFileSync(path.join(dir,'match_request.py'),"print('[method] fixture')\n");
+ const contexts=[];
+ const service=createWorkspaces({root:base,kb,local,binaries:{claude:'fixture'},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess:(_,args)=>{
+  contexts.push(fs.readFileSync(args[args.indexOf('--append-system-prompt-file')+1],'utf8'));
+  const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={end(){}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;
+ }});
+ const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ const send=async()=>{
+  await route(service,'POST','/chats/'+chat.id+'/messages',{text:'consulta fixture'});
+  for(let i=0;i<100;i++){
+   const c=(await route(service,'GET','/chats/'+chat.id)).value;
+   if(c.state==='idle')return contexts.at(-1);
+   await new Promise(r=>setTimeout(r,20));
+  }
+  assert.fail('no terminó el turno fixture');
+ };
+ const failed=await send();
+ assert.match(failed,/\[reloj\] fixture/);assert.match(failed,/\[method\] fixture/);
+ assert.match(failed,/\[hechos del momento\] contexto no disponible/);assert.doesNotMatch(failed,/private-token/);
+ assert.equal(failed.split('núcleo único').length-1,1);
+ fs.writeFileSync(path.join(dir,'session_context.py'),'');
+ const empty=await send();assert.doesNotMatch(empty,/contexto no disponible/);assert.match(empty,/\[method\] fixture/);
+ fs.unlinkSync(path.join(dir,'match_request.py'));
+ const missing=await send();assert.match(missing,/\[capacidad del pedido\] contexto no disponible/);
+});

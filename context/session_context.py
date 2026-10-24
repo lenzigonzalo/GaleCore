@@ -59,8 +59,10 @@ def cli(*args):
 def clock_line():
     out = cli("clock")
     try:
+        if out.returncode:
+            raise ValueError
         return "[reloj] " + json.loads(out.stdout)["summary"]
-    except (ValueError, KeyError):
+    except (ValueError, KeyError, TypeError):
         return "[reloj] no disponible: no asumas la fecha ni si el mercado está abierto."
 
 
@@ -68,8 +70,13 @@ def galecore_map():
     """Qué sirve GaleCore (de `galecore list`, agrupado por área) y qué no."""
     out = cli("galecore", "list")
     try:
+        if out.returncode:
+            raise ValueError
         caps = json.loads(out.stdout)["capabilities"]
-    except (ValueError, KeyError):
+        if not isinstance(caps, list) or any(not isinstance(c, dict) or not isinstance(c.get("id"), str)
+                                              for c in caps):
+            raise ValueError
+    except (ValueError, KeyError, TypeError):
         return "[mapa de GaleCore] no disponible: `galecore list`."
     areas = {}
     for c in caps:
@@ -92,7 +99,7 @@ def week_line():
     out = cli("clock")
     try:
         now = datetime.datetime.fromisoformat(json.loads(out.stdout)["now_ny"]).date()
-    except (ValueError, KeyError):
+    except (ValueError, KeyError, TypeError):
         return ""
     near = ["hoy", "mañana", "pasado mañana"]
     days = [f"{near[i] if i < 3 else ''} {names[d.weekday()]} {d:%d/%m}".strip()
@@ -101,12 +108,14 @@ def week_line():
 
 
 def _data(key):
-    try:
-        body = json.loads(cli(key).stdout)
-        data = body["data"]
-        return data["data"] if isinstance(data, dict) else data
-    except (ValueError, KeyError, TypeError, AttributeError):
-        return None
+    out = cli(key)
+    if out.returncode:
+        raise ValueError("consulta fallida")
+    data = json.loads(out.stdout)["data"]
+    data = data["data"] if isinstance(data, dict) else data
+    if not isinstance(data, list):
+        raise ValueError("respuesta no válida")
+    return data
 
 
 def _num(x):
@@ -140,23 +149,32 @@ def _vix():
 
 
 def _events():
-    events = [(m["start"][:10], f"Fed {m['start'][8:10]}-{_day(m['end'])}")
-              for m in _data("fomc") or [] if str(m.get("start", ""))[:10] >= _TODAY.isoformat()][:1]
-    events += [(r["date"][:10], f"{r['releaseName'][:40]} {_day(r['date'])}") for r in _data("macro") or []
-               if r.get("date")]
-    return "próximos: " + ", ".join(e for _, e in sorted(events)[:4]) if events else ""
+    events, missing = [], []
+    for key, label in (("fomc", "FOMC"), ("macro", "eventos macro")):
+        try:
+            rows = _data(key)
+            if key == "fomc":
+                events += [(m["start"][:10], f"Fed {m['start'][8:10]}-{_day(m['end'])}")
+                           for m in rows if str(m.get("start", ""))[:10] >= _TODAY.isoformat()][:1]
+            else:
+                events += [(r["date"][:10], f"{r['releaseName'][:40]} {_day(r['date'])}")
+                           for r in rows if r.get("date")]
+        except (ValueError, KeyError, TypeError, AttributeError, IndexError):
+            missing.append(f"{label}: consulta fallida o respuesta no válida; datos no disponibles")
+    upcoming = ["próximos: " + ", ".join(e for _, e in sorted(events)[:4])] if events else []
+    return " · ".join(upcoming + missing)
 
 
 def market_line():
     """Cómo viene el mercado: SPY y VIX de las últimas ruedas y los próximos eventos. Una parte que falla o cambia de
-    forma se omite; nunca tumba el resto del contexto (revisión 19/10)."""
+    forma se avisa sin tumbar el resto del contexto (WS-0059)."""
     parts = []
-    for part in (_spy, _vix, _events):
+    for label, part in (("SPY", _spy), ("VIX", _vix), ("eventos", _events)):
         try:
             if text := part():
                 parts.append(text)
         except (ValueError, KeyError, TypeError, AttributeError, IndexError, ZeroDivisionError):
-            continue
+            parts.append(f"{label}: consulta fallida o respuesta no válida; datos no disponibles")
     return ("[mercado] " + " · ".join(parts) + ". Para «Mercado hoy» y para no dar el mercado por quieto; "
             "lo demás (cadena, GEX, curva) se trae si hace falta.") if parts else ""
 
@@ -170,6 +188,8 @@ if not _LIGHT:
     print(galecore_map())
 print()
 out = cli("space", "context")
-print(out.stdout)
 if out.returncode != 0:
+    print("[espacio del trader] consulta fallida; nombre, intereses y memoria no disponibles.")
     print(out.stderr, file=sys.stderr)
+else:
+    print(out.stdout)

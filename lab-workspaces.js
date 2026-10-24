@@ -225,15 +225,17 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     return 'Final de la conversación anterior de este proyecto («'+prev.title+'»), para retomar sin preguntar (lo vigente está en memory/ y en los registros):\n'+tail;
   }
   // Los scripts de contexto del producto (tools/terminal/context) los corre el Lab, no el motor (D-0014). Asíncrono para
-  // no frenar el servidor; sin el script, si falla o tarda más de un minuto, nada: el turno sigue sin esa parte.
+  // no frenar el servidor; si falla o tarda más de un minuto, avisa sin perder los otros bloques (WS-0059).
   function script(name,input){
+    const label={'session_context.py':'hechos del momento','match_request.py':'capacidad del pedido'}[name];
+    const missing=label?'['+label+'] contexto no disponible: falló su preparación.':'';
     const file=path.join(root,'tools','terminal','context',name);
-    if(!fs.existsSync(file))return Promise.resolve('');
+    if(!fs.existsSync(file))return Promise.resolve(missing);
     return new Promise(done=>{
-      let out='';const proc=spawn('python',[file],{cwd:input.cwd,env:{...environment(),GALECORE_KNOWLEDGE_DIR:kb},windowsHide:true});
-      const timer=setTimeout(()=>proc.kill(),60000);
+      let out='',timedOut=false;const proc=spawn('python',[file],{cwd:input.cwd,env:{...environment(),GALECORE_KNOWLEDGE_DIR:kb},windowsHide:true});
+      const timer=setTimeout(()=>{timedOut=true;proc.kill();},60000);
       proc.stdout.setEncoding('utf8');proc.stdout.on('data',d=>{out+=d;});proc.stderr.on('data',()=>{});
-      proc.on('error',()=>{clearTimeout(timer);done('');});proc.on('close',()=>{clearTimeout(timer);done(out.trim());});
+      proc.on('error',()=>{clearTimeout(timer);done(missing);});proc.on('close',code=>{clearTimeout(timer);done([out.trim(),code!==0||timedOut?missing:''].filter(Boolean).join('\n'));});
       proc.stdin.end(JSON.stringify(input));
     });
   }

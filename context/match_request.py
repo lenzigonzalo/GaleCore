@@ -55,25 +55,39 @@ def preload(text):
     lines = []
     for sym, proc in runs.items():
         try:
-            x = json.loads(proc.communicate(timeout=20)[0])["data"]["items"][0]
+            raw = proc.communicate(timeout=20)[0]
+            if proc.returncode:
+                raise ValueError
+            items = json.loads(raw)["data"]["items"]
+            if not isinstance(items, list):
+                raise ValueError
+            if not items:  # vacío legítimo: no es una consulta fallida
+                lines.append(f"- {sym}: sin resultados de volatilidad en GaleCore.")
+                continue
+            x = items[0]
+            if not isinstance(x, dict):
+                raise ValueError
+            e = x.get("earnings") or {}
+            parts = [f"{x.get('sector') or 's/sector'}"]
+            if e.get("expectedReportDate"):
+                hora = {"AMC": "después del cierre", "BMO": "antes de la apertura"}.get(e.get("timeOfDay"), "hora s/d")
+                parts.append(f"próximo balance {e['expectedReportDate']} {hora}"
+                             + (f", consenso EPS {e['consensusEps']}" if e.get("consensusEps") is not None else ""))
+            if x.get("impliedVolatility30Day") is not None:
+                hv = x.get("historicalVolatility30Day")
+                vs = f" vs histórica {hv} %" if hv is not None else ""
+                parts.append(f"IV 30 d {x['impliedVolatility30Day']} %{vs}")
+            if x.get("priceEarningsRatio"):
+                parts.append(f"P/E {round(x['priceEarningsRatio'], 1)}")
+            lines.append(f"- {sym}: " + " · ".join(parts) + f" (GaleCore, {str(x.get('updatedAt', ''))[:16]} UTC)")
         except subprocess.TimeoutExpired:
             proc.kill()
+            proc.communicate()
+            lines.append(f"- {sym}: consulta de volatilidad agotó el tiempo; datos no disponibles.")
             continue
-        except (ValueError, KeyError, IndexError, TypeError):
+        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+            lines.append(f"- {sym}: consulta de volatilidad fallida o respuesta no válida; datos no disponibles.")
             continue
-        e = x.get("earnings") or {}
-        parts = [f"{x.get('sector') or 's/sector'}"]
-        if e.get("expectedReportDate"):
-            hora = {"AMC": "después del cierre", "BMO": "antes de la apertura"}.get(e.get("timeOfDay"), "hora s/d")
-            parts.append(f"próximo balance {e['expectedReportDate']} {hora}"
-                         + (f", consenso EPS {e['consensusEps']}" if e.get("consensusEps") is not None else ""))
-        if x.get("impliedVolatility30Day") is not None:
-            hv = x.get("historicalVolatility30Day")
-            vs = f" vs histórica {hv} %" if hv is not None else ""
-            parts.append(f"IV 30 d {x['impliedVolatility30Day']} %{vs}")
-        if x.get("priceEarningsRatio"):
-            parts.append(f"P/E {round(x['priceEarningsRatio'], 1)}")
-        lines.append(f"- {sym}: " + " · ".join(parts) + f" (GaleCore, {str(x.get('updatedAt', ''))[:16]} UTC)")
     if lines:
         print("[ya traído por código, no lo vuelvas a pedir]\n" + "\n".join(lines))
 
@@ -92,8 +106,13 @@ else:
     out = subprocess.run([sys.executable, "-B", "-m", "galecore_ai.adapters.cli", "catalog", "--match", prompt],
                          capture_output=True, text=True, encoding="utf-8", errors="replace")
     try:
+        if out.returncode:
+            raise ValueError
         found = json.loads(out.stdout)
+        if not isinstance(found, dict):
+            raise ValueError
     except ValueError:
+        print("[capacidades] consulta al catálogo fallida o respuesta no válida; capacidad sin verificar.")
         sys.exit(0)
     if found.get("confident"):
         top = found["matches"][0]
