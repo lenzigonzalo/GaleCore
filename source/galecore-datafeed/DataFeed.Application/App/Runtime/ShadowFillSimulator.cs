@@ -54,7 +54,11 @@ namespace DataFeed.Application.App.Runtime
         /// Multiplicador del P&L por unidad de precio: 100 por contrato de opciones; en long_equity, las acciones.
         /// </summary>
         public static double Multiplier(ShadowPosition position) =>
-            position.Structure == RuntimeStructures.LongEquity ? position.Legs.FirstOrDefault()?.Quantity ?? 1 : 100;
+            position.Structure == RuntimeStructures.LongEquity
+                ? position.Legs.FirstOrDefault()?.Quantity
+                    ?? throw new InvalidOperationException(
+                        $"La posición de acciones {position.PositionId} no tiene cantidad en su pata: no se puede calcular el P&L ni el costo.")
+                : 100;
 
         /// <summary>P&L no realizado / realizado: (entrada − valor de cierre) × multiplicador, en USD.</summary>
         public static double Pnl(ShadowPosition position, double closeValue) =>

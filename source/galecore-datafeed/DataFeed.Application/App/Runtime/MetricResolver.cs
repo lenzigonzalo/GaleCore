@@ -164,6 +164,7 @@ namespace DataFeed.Application.App.Runtime
             int days = Math.Max(250, slow * 6);
             var key = (symbol, "1d", days);
             List<CandleData>? candles;
+            bool fetched = false;
             if (DailyCandleCache.TryGetValue(key, out var hit) && _nowUtc - hit.At < DailyCandleTtl && _nowUtc >= hit.At)
                 candles = hit.Candles;
             else
@@ -175,10 +176,11 @@ namespace DataFeed.Application.App.Runtime
                     FromTime = _nowUtc.AddDays(-days),
                 }, ct);
                 candles = response?.data;
-                // Sólo se guarda un resultado con velas: un fallo del proveedor se reintenta en el tick siguiente.
-                if (candles is { Count: > 0 }) DailyCandleCache[key] = (_nowUtc, candles);
+                fetched = true;
             }
             var spread = UsableEmaSpread(candles, fast, slow, _nowUtc);
+            // Sólo se guarda un resultado utilizable: velas parciales o con la última vieja se reintentan en el tick siguiente.
+            if (fetched && spread != null && candles != null) DailyCandleCache[key] = (_nowUtc, candles);
             if (spread == null)
                 _logger.LogDebug("MetricResolver: velas diarias insuficientes para ema_spread {Symbol} {Fast}/{Slow}", symbol, fast, slow);
             return spread;

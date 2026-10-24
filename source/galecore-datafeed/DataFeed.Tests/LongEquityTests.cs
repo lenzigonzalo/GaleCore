@@ -109,6 +109,29 @@ public class LongEquityTests
         MetricResolver.ClearDailyCandleCache();
     }
 
+    [Fact]
+    public async Task Resolver_DoesNotCache_PartialOrStaleCandles()
+    {
+        MetricResolver.ClearDailyCandleCache();
+        var mediator = new CandleMediator { Data = Candles(30, i => 100 + i) };   // parcial: 30 < 50×2
+        var resolver = new MetricResolver(mediator, NullLogger.Instance);
+        Assert.Null((await resolver.ResolveAsync(new[] { EmaRef }, default, Now))[EmaRef]);
+
+        mediator.Seen = null;
+        mediator.Data = Candles(120, i => 100 + i);   // el proveedor ya devuelve todo: se pide de nuevo, no se usa el parcial
+        Assert.True((await resolver.ResolveAsync(new[] { EmaRef }, default, Now.AddMinutes(1)))[EmaRef] > 0);
+        Assert.NotNull(mediator.Seen);
+
+        MetricResolver.ClearDailyCandleCache();
+        mediator.Data = Candles(120, i => 100 + i, Now.AddDays(-12));   // última vela vieja
+        Assert.Null((await resolver.ResolveAsync(new[] { EmaRef }, default, Now))[EmaRef]);
+        mediator.Seen = null;
+        mediator.Data = Candles(120, i => 100 + i);
+        Assert.True((await resolver.ResolveAsync(new[] { EmaRef }, default, Now.AddMinutes(1)))[EmaRef] > 0);
+        Assert.NotNull(mediator.Seen);
+        MetricResolver.ClearDailyCandleCache();
+    }
+
     // ── Spec ────────────────────────────────────────────────────────
 
     private static string SpecFilePath() =>
@@ -135,6 +158,35 @@ public class LongEquityTests
         var spec = EquitySpec();
         Assert.Contains(StrategySpecValidator.Validate(spec with { Universe = spec.Universe with { InstrumentTypes = new() { "EQUITY_OPTION" } } }).Errors,
             e => e.Contains("EQUITY"));
+        Assert.Contains(StrategySpecValidator.Validate(spec with { Universe = spec.Universe with { InstrumentTypes = new() { "EQUITY", "EQUITY_OPTION" } } }).Errors,
+            e => e.Contains("exactly"));
+        foreach (var c in new[]
+        {
+            spec.CandidateConstruction.Constraints with { MinDte = 30 },
+            spec.CandidateConstruction.Constraints with { MaxDte = 45 },
+            spec.CandidateConstruction.Constraints with { MinCredit = 0.5 },
+        })
+            Assert.Contains(StrategySpecValidator.Validate(spec with
+            {
+                CandidateConstruction = spec.CandidateConstruction with { Constraints = c },
+            }).Errors, e => e.Contains("constraints"));
+        foreach (var sel in new[]
+        {
+            new LegStrikeSelection { Method = "DELTA" },
+            new LegStrikeSelection { Method = "NONE", TargetDelta = -0.16 },
+            new LegStrikeSelection { Method = "NONE", Width = 5 },
+        })
+            Assert.Contains(StrategySpecValidator.Validate(spec with
+            {
+                CandidateConstruction = spec.CandidateConstruction with
+                {
+                    Legs = new() { spec.CandidateConstruction.Legs[0] with { StrikeSelection = sel } },
+                },
+            }).Errors, e => e.Contains("strike_selection"));
+        Assert.Contains(StrategySpecValidator.Validate(spec with
+        {
+            Exits = new SpecExits { Deterministic = spec.Exits.Deterministic with { DefensiveRoll = new DefensiveRollExit { Enabled = true } } },
+        }).Errors, e => e.Contains("defensive_roll"));
         Assert.Contains(StrategySpecValidator.Validate(spec with
         {
             CandidateConstruction = spec.CandidateConstruction with { Sizing = new SizingConfig { Method = "FIXED", FixedContracts = 0 } },
@@ -357,6 +409,19 @@ public class LongEquityTests
         Assert.Equal(-1.9, trade.PnlPctOfMaxRisk);               // −50 / 2700
         Assert.Null(trade.PnlPctOfCredit);
         Assert.Equal(-0.5, rep.Portfolio.RealizedReturnPct);
+    }
+
+    [Fact]
+    public void EquityWithoutQuantity_FailsExplicitly_InsteadOfUsingOne()
+    {
+        var noQty = new ShadowPosition
+        {
+            PositionId = "p9", Structure = "long_equity", EntryCredit = -270, Status = "OPEN",
+            Legs = new() { new ShadowLeg { Side = "BUY", Type = "STOCK" } },
+        };
+        var ex = Assert.Throws<InvalidOperationException>(() => ShadowFillSimulator.Multiplier(noQty));
+        Assert.Contains("p9", ex.Message);
+        Assert.Throws<InvalidOperationException>(() => ShadowFillSimulator.Pnl(noQty, 275));
     }
 
     [Fact]

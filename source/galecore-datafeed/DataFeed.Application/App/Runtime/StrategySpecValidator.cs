@@ -165,8 +165,19 @@ namespace DataFeed.Application.App.Runtime
             if (legs.Count != 1 || legs[0].Side != "BUY" || legs[0].Type != LongEquityCandidateBuilder.LegType)
                 errors.Add("candidate_construction.legs must be exactly BUY STOCK for long_equity; got "
                            + (legs.Count == 0 ? "none" : string.Join(", ", legs.Select(l => $"{l.Side} {l.Type}"))));
-            if (!spec.Universe.InstrumentTypes.Contains("EQUITY"))
-                errors.Add("universe.instrument_types must contain EQUITY for long_equity");
+            if (!spec.Universe.InstrumentTypes.SequenceEqual(new[] { "EQUITY" }))
+                errors.Add("universe.instrument_types must be exactly [\"EQUITY\"] for long_equity");
+            var constraints = spec.CandidateConstruction.Constraints;
+            if (constraints.MinDte != null || constraints.MaxDte != null || constraints.MinCredit != null)
+                errors.Add("candidate_construction.constraints: min_dte, max_dte and min_credit need an expiration or a credit and must be null for long_equity");
+            foreach (var leg in legs)
+            {
+                var sel = leg.StrikeSelection;
+                if (sel.Method != "NONE" || sel.TargetDelta != null || sel.Width != null)
+                    errors.Add("candidate_construction.legs[BUY STOCK].strike_selection must be method NONE with target_delta and width null for long_equity");
+            }
+            if (spec.Exits.Deterministic.DefensiveRoll?.Enabled == true)
+                errors.Add("exits.deterministic.defensive_roll must not be enabled for long_equity (long_equity has no expiration to roll)");
             var sizing = spec.CandidateConstruction.Sizing;
             if (sizing.Method != "FIXED" || sizing.FixedContracts is not > 0)
                 errors.Add("candidate_construction.sizing must be FIXED with fixed_contracts > 0 (shares) for long_equity");
