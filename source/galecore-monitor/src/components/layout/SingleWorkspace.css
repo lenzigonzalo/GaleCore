@@ -41,15 +41,19 @@
 .alert-empty strong{font-size:15px;font-weight:600;color:var(--text-primary)}
 .alert-empty span{font-size:14px;line-height:1.45;color:var(--text-secondary)}
 .settings-backdrop{position:fixed;inset:0;z-index:250;background:#0009;display:grid;place-items:center;padding:24px}
-.settings-dialog{width:min(1120px,100%);height:min(820px,calc(100vh - 48px));display:flex;flex-direction:column;min-height:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 100px #0009;overflow:hidden}
+.settings-dialog{width:min(1640px,100%);height:calc(100vh - 48px);display:flex;flex-direction:column;min-height:0;background:var(--bg-primary);border:1px solid var(--border);border-radius:14px;box-shadow:0 24px 100px #0009;overflow:hidden}
 .settings-dialog>header{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border-dark);flex-shrink:0}
 .settings-dialog>header h2{font-size:19px;font-weight:600;margin:0}
 .settings-dialog>header button{padding:6px}
-.settings-dialog .settings-page{flex:1;min-height:0;display:grid;grid-template-columns:180px minmax(0,1fr);overflow:hidden;padding:0;gap:0}
+.settings-dialog .settings-page{flex:1;min-height:0;display:grid;grid-template-columns:230px minmax(0,1fr);overflow:hidden;padding:0;gap:0}
 .settings-dialog .settings-nav{width:auto;padding:18px 12px;border-right:1px solid var(--border-dark);background:var(--bg-secondary);overflow:auto}
-.settings-dialog .settings-nav button{font-size:15px;padding:11px 10px}
-.settings-dialog .settings-main{padding:24px;min-width:0;overflow:auto}
-.settings-dialog .settings-main h1{font-size:23px;margin:0 0 18px}
+.settings-dialog .settings-nav button{font-size:16px;padding:12px 12px}
+.settings-dialog .settings-main{padding:32px 40px;min-width:0;overflow:auto}
+.settings-dialog .settings-main h1{font-size:26px;margin:0 0 18px}
+.settings-dialog .settings-main>*{max-width:1400px}
+.settings-dialog .settings-main{font-size:16px}
+.settings-dialog .settings-main h2{font-size:19px}
+.settings-dialog .settings-main p{font-size:16px}
 .settings-main h2{font-size:17px;font-weight:600;margin-bottom:12px}
 .settings-main p{font-size:14px;line-height:1.65;color:var(--text-secondary);margin:12px 0}
 .settings-subsections{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
