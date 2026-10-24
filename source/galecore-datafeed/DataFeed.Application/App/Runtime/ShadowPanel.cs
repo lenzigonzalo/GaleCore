@@ -192,6 +192,32 @@ namespace DataFeed.Application.App.Runtime
         public List<GateResult> EntryGates { get; init; } = new();
     }
 
+    /// <summary>
+    /// Posición SHADOW tal como la guarda el runtime, más la lectura de acciones (long_equity) que el panel también expone:
+    /// patas como texto, acciones, precios por acción y costo (positivos). Null en spreads.
+    /// </summary>
+    public record ShadowPositionRow : ShadowPosition
+    {
+        public ShadowPositionRow(ShadowPosition p) : base(p)
+        {
+            bool equity = p.Structure == RuntimeStructures.LongEquity;
+            LegsText = ShadowPerformance.LegsText(p);
+            if (!equity) return;
+            Shares = (int)ShadowFillSimulator.Multiplier(p);
+            EntryPrice = -p.EntryCredit;
+            ExitPrice = p.ExitDebit == null ? null : -p.ExitDebit;
+            LastPrice = p.LastSpreadValue == null ? null : -p.LastSpreadValue;
+            Cost = Math.Round(-p.EntryCredit * ShadowFillSimulator.Multiplier(p), 2);
+        }
+
+        public string LegsText { get; init; }
+        public int? Shares { get; init; }
+        public double? EntryPrice { get; init; }
+        public double? ExitPrice { get; init; }
+        public double? LastPrice { get; init; }
+        public double? Cost { get; init; }
+    }
+
     /// <summary>Una fila de la lista de estrategias SHADOW: las cifras del panel de cada una, en un solo pedido.</summary>
     public record StrategySummary
     {

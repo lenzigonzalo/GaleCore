@@ -87,6 +87,22 @@ public class LongEquityPanelTests
     }
 
     [Fact]
+    public void PositionsEndpointRow_ExposesEquityFields_AndSpreadsOnlyLegsText()
+    {
+        var row = new ShadowPositionRow(Stock("a", "CLOSED", "METRIC_EXIT"));
+        Assert.Equal(("BUY 10 AAPL", 10, 270.0, 265.0, 2700.0), (row.LegsText, row.Shares, row.EntryPrice, row.ExitPrice, row.Cost));
+        Assert.Equal(-270, row.EntryCredit);
+        Assert.Equal("a", row.PositionId);
+
+        var pcs = new ShadowPositionRow(new ShadowPosition { Structure = "put_credit_spread", EntryCredit = 0.44,
+            Legs = new() { new ShadowLeg { Side = "SELL", Type = "PUT", Strike = 580, Expiration = "2026-11-20" } } });
+        Assert.Equal("SELL PUT 580 2026-11-20", pcs.LegsText);
+        Assert.Null(pcs.Shares);
+        Assert.Null(pcs.EntryPrice);
+        Assert.Null(pcs.Cost);
+    }
+
+    [Fact]
     public void Summaries_CountMetricExitByName_NotAsOther()
     {
         var recs = new[] { Rec(Stock("a", "CLOSED", "METRIC_EXIT"), Stock("b", "CLOSED", "TIME_EXIT")) };

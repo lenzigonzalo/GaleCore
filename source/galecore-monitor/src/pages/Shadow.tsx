@@ -356,25 +356,28 @@ function MetricsCard({ m }: { m: SpecVersionMetrics }) {
 
 function PositionsTable({ positions }: { positions: ShadowPosition[] }) {
   return (
-    <Table head={['Entrada', 'Símbolo', 'Patas', 'Crédito', 'Riesgo máx.', 'DTE', 'Valuación', 'Salida']}>
-      {positions.map((p) => (
+    <Table head={['Entrada', 'Símbolo', 'Patas', 'Crédito / precio', 'Riesgo máx. / costo', 'DTE', 'Valuación', 'Salida']}>
+      {positions.map((p) => {
+        const stock = p.structure === 'long_equity';
+        return (
         <tr key={p.positionId}>
           <Td>{when(p.entryAt)}</Td>
           <Td>{p.symbol}</Td>
-          <Td mono>{p.legs.map((l) => `${l.side} ${l.type} ${l.strike} ${l.expiration ?? ''}`).join(' / ')}</Td>
-          <Td mono>{p.entryCredit.toFixed(2)}</Td>
-          <Td mono>{usd(p.maxRisk)}</Td>
-          <Td mono>{p.currentDte ?? p.entryDte}</Td>
+          <Td mono>{stock && p.legsText ? p.legsText : p.legs.map((l) => `${l.side} ${l.type} ${l.strike} ${l.expiration ?? ''}`).join(' / ')}</Td>
+          <Td mono>{stock ? (p.entryPrice == null ? '—' : `${p.entryPrice.toFixed(2)} × ${p.shares ?? '—'}`) : p.entryCredit.toFixed(2)}</Td>
+          <Td mono>{usd(stock ? (p.cost ?? p.maxRisk) : p.maxRisk)}</Td>
+          <Td mono>{stock ? '—' : (p.currentDte ?? p.entryDte)}</Td>
           <Td>
             {p.valuationProblems?.length ? (
               <span style={{ color: 'var(--yellow-gc)' }}>Sin valuar: {p.valuationProblems.join(' · ')}</span>
             ) : p.lastValuedAt ? (
-              <span style={mono}>{p.lastSpreadValue?.toFixed(2)} · {usd(p.unrealizedPnl)} <span style={{ color: 'var(--text-muted)' }}>({when(p.lastValuedAt)})</span></span>
+              <span style={mono}>{(stock ? p.lastPrice : p.lastSpreadValue)?.toFixed(2)} · {usd(p.unrealizedPnl)} <span style={{ color: 'var(--text-muted)' }}>({when(p.lastValuedAt)})</span></span>
             ) : <span style={{ color: 'var(--text-muted)' }}>todavía no valuada</span>}
           </Td>
-          <Td>{p.exitReason ? <span style={mono}>{p.exitReason} · {p.exitDebit?.toFixed(2)} · {usd(p.realizedPnl)} ({when(p.exitAt)})</span> : '—'}</Td>
+          <Td>{p.exitReason ? <span style={mono}>{p.exitReason} · {(stock ? p.exitPrice : p.exitDebit)?.toFixed(2)} · {usd(p.realizedPnl)} ({when(p.exitAt)})</span> : '—'}</Td>
         </tr>
-      ))}
+        );
+      })}
     </Table>
   );
 }

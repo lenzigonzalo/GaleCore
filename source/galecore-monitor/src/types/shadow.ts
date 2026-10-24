@@ -118,6 +118,9 @@ export interface ShadowPosition {
   currentDte: number | null;
   lastValuedAt: string | null;
   valuationProblems: string[] | null;
+  /** Sólo acciones (long_equity), lo calcula el back; null en spreads. */
+  legsText?: string;
+  shares?: number | null; entryPrice?: number | null; exitPrice?: number | null; lastPrice?: number | null; cost?: number | null;
 }
 
 /** Los tipos de evento que explican por qué una evaluación no terminó en una posición. */
