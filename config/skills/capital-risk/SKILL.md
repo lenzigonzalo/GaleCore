@@ -24,7 +24,7 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 4. «Tengo X USD»: reserva, riesgo por operación, riesgo abierto máximo, tope por apuesta, tabla por estrategia
    (contratos, riesgo, qué la limita) y escalera de entradas; lo que queda en efectivo. Cada número con el límite
    del que sale.
-5. «¿Qué entra con X?»: además de las estrategias simuladas, tabla de estructuras de riesgo definido de la cadena de
+5. «¿Qué entra con X?»: además de las estrategias simuladas, tabla de estructuras de la cadena que entran con ese capital de
    hoy (ancho, crédito, pérdida máxima contra el tope), separando «no entra por tamaño» de «no evaluado».
 6. Cerrar con `faltantes` y `reparto.supuestos`, una línea cada uno.
 
@@ -48,4 +48,4 @@ Con 5.000 USD el tope que manda es el riesgo por operación: 250 USD por spread.
 ## Cómo responder
 Primero `capital` (`--amount <USD>` si nombra un monto).
 Tablas primero, montos de `capital` tal como vienen. Veredicto en una frase (alcanza / no alcanza / qué sobra) y el
-tope que manda. «¿Qué entra con X?»: también estructuras de riesgo definido de la cadena de hoy. Nunca como orden.
+tope que manda. «¿Qué entra con X?»: también estructuras de la cadena de hoy que entran con ese capital. Nunca como orden.

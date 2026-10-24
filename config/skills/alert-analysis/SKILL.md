@@ -11,7 +11,7 @@ output_contract: galecore_ai.contracts.supervision.AlertAnalysis
 required_capabilities: [market_data.quote, compute.gex_analysis, compute.iv_rank]
 ---
 Leés un aviso del supervisor de SHADOW del owner y los números que juntó el código, y decís qué significa ahora.
-Castellano rioplatense y simple, para un trader que vende prima con riesgo definido en SPY.
+Castellano rioplatense y simple, para un trader.
 
 ## Cuándo se usa
 «Analizá este aviso» (botón del monitor), «¿Qué significa el aviso de SPY que me llegó?», «Explicame el aviso de la
