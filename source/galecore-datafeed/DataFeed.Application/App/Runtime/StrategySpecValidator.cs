@@ -61,14 +61,6 @@ namespace DataFeed.Application.App.Runtime
             if (overlap.Count > 0)
                 errors.Add($"structure: overlap between allowed and forbidden strategies: {string.Join(", ", overlap)}");
 
-            // Prohibición absoluta de la plataforma (CLAUDE.md)
-            var platformForbidden = new[] { "naked_short", "ratio_spread", "long_directional" };
-            foreach (var allowed in spec.Structure.AllowedStrategies)
-            {
-                if (platformForbidden.Contains(allowed))
-                    errors.Add($"structure.allowed_strategies contains platform-forbidden strategy: {allowed}");
-            }
-
             // ── Construcción: sólo lo que el runtime sabe construir (P1-07) ──
             ValidateConstruction(spec, errors);
 

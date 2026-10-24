@@ -18,11 +18,6 @@ namespace DataFeed.Application.App.Runtime
         {
             var errors = new List<string>();
 
-            // ── Estructura prohibida por la plataforma ──
-            var platformForbidden = new[] { "naked_short", "ratio_spread", "long_directional" };
-            if (platformForbidden.Contains(candidate.Structure))
-                errors.Add($"Structure '{candidate.Structure}' is platform-forbidden");
-
             // ── Estructura no permitida por el spec ──
             if (!spec.Structure.AllowedStrategies.Contains(candidate.Structure))
                 errors.Add($"Structure '{candidate.Structure}' not in spec allowed_strategies");

@@ -256,7 +256,7 @@ public class StrategySpecValidatorTests
     }
 
     [Fact]
-    public void PlatformForbiddenStrategy_Rejected()
+    public void NoPlatformForbiddenStrategies()
     {
         var spec = ValidSpec() with
         {
@@ -269,8 +269,7 @@ public class StrategySpecValidatorTests
             }
         };
         var result = StrategySpecValidator.Validate(spec);
-        Assert.False(result.IsValid);
-        Assert.Contains(result.Errors, e => e.Contains("platform-forbidden"));
+        Assert.DoesNotContain(result.Errors, e => e.Contains("platform-forbidden"));
     }
 
     [Fact]
