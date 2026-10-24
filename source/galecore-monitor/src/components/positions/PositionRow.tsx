@@ -11,6 +11,8 @@ export interface PositionRowData {
   structure: string; symbol: string; expiration: string | null; dte: number | null;
   legs: PositionLeg[]; entryAt: string | null; credit: number | null; currentValue: number | null;
   pnl: number | null; risk: number | null; spot?: number | null; reason?: string | null;
+  /** Acciones en largo (long_equity): lo que el back informa en vez de crédito y strikes. */
+  equity?: { legs: string; shares: number | null; entryPrice: number | null; lastPrice: number | null; cost: number | null };
 }
 const quotes = new Map<string, Promise<number | null>>();
 /** One quote per symbol, shared by mounted rows; stream always takes precedence. */
@@ -29,7 +31,7 @@ export function useUnderlyingPrice(symbol: string): number | null {
   }, [symbol, streamed]);
   return streamed !== undefined && Number.isFinite(streamed) && streamed > 0 ? streamed : fallback?.symbol === symbol ? fallback.price : null;
 }
-const names: Record<string, string> = { iron_condor: 'IRON CONDOR', IC: 'IRON CONDOR', put_credit_spread: 'PUT CREDIT SPREAD', PUT_CS: 'PUT CREDIT SPREAD', PCS: 'PUT CREDIT SPREAD', call_credit_spread: 'CALL CREDIT SPREAD', CALL_CS: 'CALL CREDIT SPREAD', CCS: 'CALL CREDIT SPREAD', ACC: 'ACCIONES' };
+const names: Record<string, string> = { iron_condor: 'IRON CONDOR', IC: 'IRON CONDOR', put_credit_spread: 'PUT CREDIT SPREAD', PUT_CS: 'PUT CREDIT SPREAD', PCS: 'PUT CREDIT SPREAD', call_credit_spread: 'CALL CREDIT SPREAD', CALL_CS: 'CALL CREDIT SPREAD', CCS: 'CALL CREDIT SPREAD', ACC: 'ACCIONES', long_equity: 'ACCIONES' };
 export function PositionHeading({ structure, symbol, expiration, dte }: Pick<PositionRowData, 'structure' | 'symbol' | 'expiration' | 'dte'>) {
   const name = names[structure] || structure.toUpperCase();
   const condor = name === 'IRON CONDOR';
@@ -41,8 +43,9 @@ export function PositionRow({ position, compact = false, children }: { position:
   const entry = position.entryAt ? `${new Date(position.entryAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'numeric', timeZone: MARKET_TZ })} ${fmtTime(new Date(position.entryAt)).slice(0, 5)} ET` : '—';
   return <article className={`position-row${compact ? ' compact' : ''}`} aria-label={`${position.symbol} ${names[position.structure] || position.structure}`}>
     <PositionHeading {...position} />
-    <StrikeLadder legs={position.legs} spot={compact ? null : position.spot} />
-    {!compact && <dl className="position-values"><div><dt>Entrada</dt><dd title={date(position.entryAt)}>{entry}</dd></div><div><dt>Crédito</dt><dd>{position.credit === null ? '—' : amount(position.credit)}</dd></div><div><dt>Valor actual</dt><dd title={position.reason || undefined}>{position.currentValue === null ? '—' : amount(position.currentValue)}</dd></div><div><dt>Resultado abierto</dt><dd title={position.reason || undefined} style={{ color: position.pnl === null || position.pnl === 0 ? undefined : position.pnl > 0 ? 'var(--green)' : 'var(--red-gc)' }}>{position.pnl === null ? '—' : usd(position.pnl)}</dd></div><div><dt>Riesgo</dt><dd title={position.risk === null ? 'La API de la cuenta no informa el riesgo de esta estructura.' : undefined}>{position.risk === null ? '—' : amount(position.risk)}</dd></div></dl>}
+    {position.equity ? <div className="strike-empty">{position.equity.legs}</div> : <StrikeLadder legs={position.legs} spot={compact ? null : position.spot} />}
+    {!compact && position.equity && <dl className="position-values"><div><dt>Entrada</dt><dd title={date(position.entryAt)}>{entry}</dd></div><div><dt>Precio de entrada</dt><dd>{position.equity.entryPrice === null ? '—' : amount(position.equity.entryPrice)}</dd></div><div><dt>Acciones</dt><dd>{position.equity.shares ?? '—'}</dd></div><div><dt>Costo</dt><dd>{position.equity.cost === null ? '—' : amount(position.equity.cost)}</dd></div><div><dt>Precio actual</dt><dd title={position.reason || undefined}>{position.equity.lastPrice === null ? '—' : amount(position.equity.lastPrice)}</dd></div><div><dt>Resultado abierto</dt><dd title={position.reason || undefined} style={{ color: position.pnl === null || position.pnl === 0 ? undefined : position.pnl > 0 ? 'var(--green)' : 'var(--red-gc)' }}>{position.pnl === null ? '—' : usd(position.pnl)}</dd></div></dl>}
+    {!compact && !position.equity && <dl className="position-values"><div><dt>Entrada</dt><dd title={date(position.entryAt)}>{entry}</dd></div><div><dt>Crédito</dt><dd>{position.credit === null ? '—' : amount(position.credit)}</dd></div><div><dt>Valor actual</dt><dd title={position.reason || undefined}>{position.currentValue === null ? '—' : amount(position.currentValue)}</dd></div><div><dt>Resultado abierto</dt><dd title={position.reason || undefined} style={{ color: position.pnl === null || position.pnl === 0 ? undefined : position.pnl > 0 ? 'var(--green)' : 'var(--red-gc)' }}>{position.pnl === null ? '—' : usd(position.pnl)}</dd></div><div><dt>Riesgo</dt><dd title={position.risk === null ? 'La API de la cuenta no informa el riesgo de esta estructura.' : undefined}>{position.risk === null ? '—' : amount(position.risk)}</dd></div></dl>}
     {children}
   </article>;
 }

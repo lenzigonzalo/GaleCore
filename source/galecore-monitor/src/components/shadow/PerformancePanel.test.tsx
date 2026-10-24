@@ -102,6 +102,23 @@ test('uses API daily values, saved open legs and closed trade rows without deriv
   fireEvent.click(screen.getByLabelText('Mes anterior')); expect(screen.getByTitle('2026-10-05 · 2 cierre(s)')).toBeInTheDocument();
 });
 
+test('long_equity shows entry price, shares and cost from the API, without credit', async () => {
+  const stock = { symbol: 'AAPL', legList: [{ side: 'BUY', type: 'STOCK', strike: 0, expiration: null }], version: '1', structure: 'long_equity', legs: 'BUY 10 AAPL', entryAt: plain.asOf, entryDte: null, entryCredit: -270, maxRisk: 2700, shares: 10, entryPrice: 270, cost: 2700 };
+  panelApi.mockResolvedValue({ ...plain,
+    openPositions: [{ ...stock, positionId: 'o', currentDte: null, lastSpreadValue: -272, lastPrice: 272, unrealizedPnl: 20, lastValuedAt: plain.asOf, valuationProblems: null }],
+    closedTrades: [{ ...context, ...stock, positionId: 'c', exitAt: plain.asOf, daysHeld: 5, exitDebit: -265, exitPrice: 265, exitReason: 'METRIC_EXIT', realizedPnl: -50, pnlPctOfCredit: null, pnlPctOfMaxRisk: -1.9 }] });
+  render(<PerformancePanel spec={plain.spec} />); await screen.findByText('Ganancia total');
+  expect(screen.getAllByText('BUY 10 AAPL').length).toBeGreaterThan(0);
+  expect(screen.getByText('Precio de entrada')).toBeInTheDocument();
+  expect(screen.getByText('Acciones')).toBeInTheDocument();
+  expect(screen.getByText('Costo')).toBeInTheDocument();
+  expect(screen.queryByText('Crédito')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
+  fireEvent.click(screen.getAllByLabelText(/Ver operación AAPL/)[1]);
+  expect(screen.getByText('Precio de salida')).toBeInTheDocument();
+  expect(screen.queryByText('Crédito')).not.toBeInTheDocument();
+  expect(screen.queryByText('Débito')).not.toBeInTheDocument();
+});
 test('chart ticks use ET with DST and leave mouse wheel scrolling to the page', async () => {
   render(<PerformancePanel spec={plain.spec} />);
   await waitFor(() => expect(createChart).toHaveBeenCalled());

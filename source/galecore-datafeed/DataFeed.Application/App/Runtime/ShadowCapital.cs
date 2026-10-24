@@ -133,7 +133,7 @@ namespace DataFeed.Application.App.Runtime
         public double RiskUsd { get; init; }
         /// <summary>Posiciones de esta estrategia que entran solas en una apuesta (el tope se comparte en la escalera).</summary>
         public int PositionsPerWeek { get; init; }
-        /// <summary>Qué limita la cantidad: per_trade, budget, max_concurrent, bet, no_width o missing_dte.</summary>
+        /// <summary>Qué limita la cantidad: per_trade, budget, max_concurrent, bet, no_width, missing_dte o equity_not_applicable (acciones).</summary>
         public string BindingLimit { get; init; } = "";
         public bool Fits { get; init; }
         /// <summary>Si no entra un contrato: el ancho mayor que sí entraría (strikes de a 1 USD, mismo crédito relativo).</summary>
@@ -184,6 +184,7 @@ namespace DataFeed.Application.App.Runtime
             "put_credit_spread" => "bullish",
             "call_credit_spread" => "bearish",
             "iron_condor" => "neutral",
+            "long_equity" => "bullish",   // acciones en largo
             _ => "unknown",
         };
 
@@ -339,6 +340,9 @@ namespace DataFeed.Application.App.Runtime
                     : s.MinDte != null && s.MaxDte != null ? (s.MinDte + s.MaxDte) / 2 : s.MinDte ?? s.MaxDte,
                 BudgetUsd = Math.Round(budget, 2), MaxRiskPerTradeUsd = perTrade,
             };
+            // Acciones: sin ancho, crédito ni contratos de 100; el reparto por riesgo de spreads no aplica (no se inventa).
+            if (s.Structure == RuntimeStructures.LongEquity)
+                return baseAlloc with { BindingLimit = "equity_not_applicable", RiskSource = "none", RiskPerContract = null, AvgCredit = null };
             if (rpc is not > 0) return baseAlloc with { BindingLimit = "no_width", RiskSource = "none" };
             // Sin DTE no se puede estimar el vencimiento ni, por lo tanto, la apuesta: no se inventa.
             if (baseAlloc.EntryDte == null) return baseAlloc with { BindingLimit = "missing_dte" };

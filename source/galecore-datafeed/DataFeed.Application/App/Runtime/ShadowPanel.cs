@@ -128,10 +128,20 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Las patas por separado (lado, tipo, strike, vencimiento), para dibujarlas.</summary>
         public List<ShadowLeg> LegList { get; init; } = new();
         public DateTime EntryAt { get; init; }
-        public int EntryDte { get; init; }
+        /// <summary>null en acciones (no vencen).</summary>
+        public int? EntryDte { get; init; }
         public int? CurrentDte { get; init; }
+        /// <summary>Crédito de entrada; en acciones es el precio por acción en negativo (se paga). Ver EntryPrice.</summary>
         public double EntryCredit { get; init; }
         public double? LastSpreadValue { get; init; }
+        /// <summary>Sólo acciones (long_equity), en positivo; null en spreads. Acciones de la posición.</summary>
+        public int? Shares { get; init; }
+        /// <summary>Acciones: precio de entrada por acción.</summary>
+        public double? EntryPrice { get; init; }
+        /// <summary>Acciones: última valuación por acción.</summary>
+        public double? LastPrice { get; init; }
+        /// <summary>Acciones: costo de la posición (precio de entrada × acciones).</summary>
+        public double? Cost { get; init; }
         public double? UnrealizedPnl { get; init; }
         public double MaxRisk { get; init; }
         public DateTime? LastValuedAt { get; init; }
@@ -156,8 +166,16 @@ namespace DataFeed.Application.App.Runtime
         public DateTime EntryAt { get; init; }
         public DateTime? ExitAt { get; init; }
         public double? DaysHeld { get; init; }
+        /// <summary>Crédito de entrada; en acciones es el precio por acción en negativo (se paga). Ver EntryPrice.</summary>
         public double EntryCredit { get; init; }
+        /// <summary>Débito de salida; en acciones es el precio de venta por acción en negativo. Ver ExitPrice.</summary>
         public double? ExitDebit { get; init; }
+        /// <summary>Sólo acciones (long_equity), en positivo; null en spreads. Acciones de la posición.</summary>
+        public int? Shares { get; init; }
+        public double? EntryPrice { get; init; }
+        public double? ExitPrice { get; init; }
+        /// <summary>Acciones: costo de la posición (precio de entrada × acciones).</summary>
+        public double? Cost { get; init; }
         public string? ExitReason { get; init; }
         public double? RealizedPnl { get; init; }
         public double MaxRisk { get; init; }
@@ -189,6 +207,8 @@ namespace DataFeed.Application.App.Runtime
         public Metric AvgDaysHeld { get; init; } = Metric.None("");
         public int TakeProfitExits { get; init; }
         public int StopLossExits { get; init; }
+        /// <summary>Salidas por la métrica de la spec (METRIC_EXIT), aparte de «otras».</summary>
+        public int MetricExits { get; init; }
         public int OtherExits { get; init; }
         public DateTime? LastExitAt { get; init; }
     }
@@ -267,7 +287,8 @@ namespace DataFeed.Application.App.Runtime
                     RealizedPnl = p.RealizedPnl, UnrealizedPnl = p.UnrealizedPnl, Expectancy = p.Expectancy,
                     MaxDrawdown = p.MaxDrawdown, WorstTrade = p.WorstTrade, AvgDaysHeld = p.AvgDaysHeld,
                     TakeProfitExits = Exits("TAKE_PROFIT"), StopLossExits = Exits("STOP_LOSS"),
-                    OtherExits = p.TradesClosed - Exits("TAKE_PROFIT") - Exits("STOP_LOSS"), LastExitAt = p.LastExitAt,
+                    MetricExits = Exits("METRIC_EXIT"),
+                    OtherExits = p.TradesClosed - Exits("TAKE_PROFIT") - Exits("STOP_LOSS") - Exits("METRIC_EXIT"), LastExitAt = p.LastExitAt,
                 };
             }).ToList();
 
@@ -313,8 +334,12 @@ namespace DataFeed.Application.App.Runtime
                 OpenPositions = openRows.Select(x => new OpenPositionRow
                 {
                     PositionId = x.p.PositionId, Version = x.SpecVersion, Structure = x.p.Structure,
-                    Legs = ShadowPerformance.LegsText(x.p), Symbol = x.p.Symbol, LegList = x.p.Legs, EntryAt = x.p.EntryAt, EntryDte = x.p.EntryDte,
+                    Legs = ShadowPerformance.LegsText(x.p), Symbol = x.p.Symbol, LegList = x.p.Legs, EntryAt = x.p.EntryAt,
+                    EntryDte = Equity(x.p) ? null : x.p.EntryDte,
                     CurrentDte = x.p.CurrentDte, EntryCredit = x.p.EntryCredit, LastSpreadValue = x.p.LastSpreadValue,
+                    Shares = Shares(x.p), EntryPrice = Equity(x.p) ? -x.p.EntryCredit : null,
+                    LastPrice = Equity(x.p) && x.p.LastSpreadValue != null ? -x.p.LastSpreadValue : null,
+                    Cost = Equity(x.p) ? Math.Round(-x.p.EntryCredit * ShadowFillSimulator.Multiplier(x.p), 2) : null,
                     UnrealizedPnl = x.p.UnrealizedPnl, MaxRisk = x.p.MaxRisk, LastValuedAt = x.p.LastValuedAt,
                     ValuationProblems = x.p.ValuationProblems,
                     EntryGates = x.p.EntryContext?.Gates ?? new List<GateResult>(),
@@ -326,13 +351,18 @@ namespace DataFeed.Application.App.Runtime
                     PositionId = t.PositionId, Version = t.SpecVersion, Structure = t.Structure, Legs = t.Legs,
                     Symbol = t.Symbol, LegList = positions.GetValueOrDefault(t.PositionId)?.Legs ?? new List<ShadowLeg>(),
                     EntryAt = t.EntryAt, ExitAt = t.ExitAt, DaysHeld = t.DaysHeld, EntryCredit = t.EntryCredit,
-                    ExitDebit = t.ExitDebit, ExitReason = t.ExitReason, RealizedPnl = t.RealizedPnl,
+                    ExitDebit = t.ExitDebit, ExitReason = t.ExitReason,
+                    Shares = Shares(positions.GetValueOrDefault(t.PositionId)),
+                    EntryPrice = Equity(positions.GetValueOrDefault(t.PositionId)) ? -t.EntryCredit : null,
+                    ExitPrice = Equity(positions.GetValueOrDefault(t.PositionId)) && t.ExitDebit != null ? -t.ExitDebit : null,
+                    Cost = Equity(positions.GetValueOrDefault(t.PositionId))
+                        ? Math.Round(-t.EntryCredit * ShadowFillSimulator.Multiplier(positions[t.PositionId]), 2) : null, RealizedPnl = t.RealizedPnl,
                     MaxRisk = t.MaxRisk, PnlPctOfCredit = t.PnlPctOfCredit, PnlPctOfMaxRisk = t.PnlPctOfMaxRisk,
                     GapToPlan = t.GapToPlan,
                     EntryVix = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.Vix,
                     EntryIvRank = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.IvRank,
                     EntryUnderlyingPrice = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.UnderlyingPrice,
-                    ExitDte = positions.GetValueOrDefault(t.PositionId)?.ExitContext?.Dte,
+                    ExitDte = Equity(positions.GetValueOrDefault(t.PositionId)) ? null : positions.GetValueOrDefault(t.PositionId)?.ExitContext?.Dte,
                     EntryGates = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.Gates ?? new List<GateResult>(),
                 }).ToList(),
                 RealizedPnl = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(pnls.Sum()),
@@ -373,6 +403,9 @@ namespace DataFeed.Application.App.Runtime
                 Execution = Execution(trades, positions),
             };
         }
+
+        private static bool Equity(ShadowPosition? p) => p?.Structure == RuntimeStructures.LongEquity;
+        private static int? Shares(ShadowPosition? p) => Equity(p) ? (int)ShadowFillSimulator.Multiplier(p!) : null;
 
         // Día de salida en hora de Nueva York: una salida 21:30 ET es de ese día aunque en UTC ya sea el siguiente.
         private static List<DailyPnl> Daily(List<TradeReview> trades)
@@ -542,7 +575,7 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>
         /// Entrada cruzando el spread: se vende al bid y se compra al ask; salida al revés. El costo es la
-        /// diferencia contra el mid simulado, en USD por contrato (×100).
+        /// diferencia contra el mid simulado, en USD por posición (× el multiplicador: 100 por contrato, las acciones en long_equity).
         /// </summary>
         private static ExecutionBlock Execution(List<TradeReview> trades, Dictionary<string, ShadowPosition> positions)
         {
@@ -554,7 +587,8 @@ namespace DataFeed.Application.App.Runtime
                 var exit = p?.ExitContext?.Legs;
                 if (entry == null || exit == null || !Usable(entry) || !Usable(exit)) continue;
                 // Cruzar el spread cuesta medio spread bid/ask por pata, al entrar y al salir.
-                costs.Add((Math.Round((HalfSpreads(entry) + HalfSpreads(exit)) * 100, 2), t.RealizedPnl!.Value));
+                // El multiplicador es el de la posición: 100 por contrato, o las acciones en long_equity.
+                costs.Add((Math.Round((HalfSpreads(entry) + HalfSpreads(exit)) * ShadowFillSimulator.Multiplier(p!), 2), t.RealizedPnl!.Value));
             }
             int missing = trades.Count - costs.Count;
             if (costs.Count == 0)

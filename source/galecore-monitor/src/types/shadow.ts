@@ -159,13 +159,15 @@ export interface PerformancePanelResponse {
   curve: { at: string; pnl: number; cumulative: number; drawdown: number }[];
   daily: { date: string; pnl: number; trades: number }[];
   openPositions: { positionId: string; version: string; structure: string; legs: string; symbol: string; legList: PanelLeg[];
-    entryAt: string; entryDte: number; currentDte: number | null; entryCredit: number;
+    entryAt: string; entryDte: number | null; currentDte: number | null; entryCredit: number;
     lastSpreadValue: number | null; unrealizedPnl: number | null; maxRisk: number;
+    shares?: number | null; entryPrice?: number | null; lastPrice?: number | null; cost?: number | null;
     lastValuedAt: string | null; valuationProblems: string[] | null;
     entryGates?: PanelGate[]; entryVix?: number | null; entryIvRank?: number | null; entryUnderlyingPrice?: number | null }[];
   closedTrades: { positionId: string; version: string; structure: string; legs: string; symbol: string; legList: PanelLeg[];
     entryAt: string; exitAt: string | null; daysHeld: number | null; entryCredit: number;
     exitDebit: number | null; exitReason: string | null; realizedPnl: number | null;
+    shares?: number | null; entryPrice?: number | null; exitPrice?: number | null; cost?: number | null;
     maxRisk: number; pnlPctOfCredit: number | null; pnlPctOfMaxRisk: number | null;
     gapToPlan: number | null; entryVix: number | null; entryIvRank: number | null;
     entryUnderlyingPrice: number | null; exitDte: number | null; entryGates?: PanelGate[] }[];
