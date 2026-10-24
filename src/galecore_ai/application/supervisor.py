@@ -184,6 +184,11 @@ def evaluate(position: dict, *, strategy: str, strategy_ref: str | None, spec: d
     shorts = [f"{leg.get('strike'):g}" for leg in legs if leg.get("side") == "SELL" and leg.get("strike") is not None]
     longs = [f"{leg.get('strike'):g}" for leg in legs if leg.get("side") == "BUY" and leg.get("strike") is not None]
     label = f"{'/'.join(shorts + longs)} {legs[0].get('expiration', '') if legs else ''}".strip()
+    if position.get("structure") == "long_equity" or any(leg.get("type") == "STOCK" for leg in legs):
+        # Stocks have no strike or expiration: «BUY 10 AAPL» as GaleCore writes it, or the symbol with the shares.
+        shares = next((leg.get("quantity") for leg in legs if leg.get("quantity") is not None), None)
+        label = (position.get("legsText") or " ".join(str(x) for x in (shares, position.get("symbol")) if x is not None)
+                 or label).strip()
     out = []
     if position.get("status") == "CLOSED":
         reason = position.get("exitReason") or "sin motivo informado"

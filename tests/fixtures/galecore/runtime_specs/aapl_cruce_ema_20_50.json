@@ -135,6 +135,6 @@
     "schema_version": "1.0.0",
     "methodology_version": "1.0.0",
     "reference_docs": [],
-    "notes": "Acciones en largo (long_equity): 10 acciones de AAPL. Entra si EMA20 > EMA50 sobre cierres diarios y no hay posicion; sale cuando EMA20 < EMA50 (metric_exit, se registra como METRIC_EXIT). Si al activar ya esta arriba, compra en la primera evaluacion. Sin validacion de rentabilidad: sirve para recorrer el circuito SHADOW completo (WS-0061). No desplegar sin aprobacion del owner."
+    "notes": "Acciones en largo (long_equity): 10 acciones de AAPL. Entra si EMA20 > EMA50 sobre cierres diarios y no hay posicion; sale cuando EMA20 < EMA50 (metric_exit, se registra como METRIC_EXIT). Si al activar ya esta arriba, compra en la primera evaluacion. ema_spread usa velas diarias y la ultima puede ser la del dia en curso (intradia): el cruce puede darse durante la rueda y revertirse. Sin validacion de rentabilidad: sirve para recorrer el circuito SHADOW completo (WS-0061). No desplegar sin aprobacion del owner."
   }
 }

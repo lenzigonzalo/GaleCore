@@ -22,6 +22,8 @@ ya tenemos: el plazo, y en opciones el delta o el ancho, o en acciones la señal
 proponen valores de reglas; si el trader pide la mecánica primero, se la da y se dice en una línea qué parte de la
 tesis falta y qué cambiaría.
 
+En acciones, `ema_spread` usa velas diarias y la última puede ser la del día en curso (intradía): el cruce puede darse durante la rueda y revertirse.
+
 En un proyecto de estrategia cada respuesta deja una parte más clara y, si sirve, propone la próxima concreta: en 1-5,
 el dato o la pregunta que la destraba, con su tiempo («¿Qué mueve hoy a QQQ? Traigo tasas, balances de las grandes y
 GEX, ~40 s. ¿Va?»); en 6-8, con valores y su porqué («Salida: cerrar al 50 % del crédito o al doble de pérdida, para

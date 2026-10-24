@@ -69,6 +69,18 @@ def test_a_close_by_shadow_is_one_alert_with_its_data_and_never_repeats(kb, rese
     assert supervisor.scan(kb, reader(doc.spec_hash, [closed]), IN_SESSION + timedelta(minutes=5))["new"] == []
 
 
+def test_a_stock_position_is_labelled_with_its_shares_not_a_zero(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    closed = {"status": "CLOSED", "exitReason": "METRIC_EXIT", "exitDebit": 275.0, "realizedPnl": 50.0,
+              "entryCredit": -270.0, "structure": "long_equity", "symbol": "AAPL",
+              "exitAt": (IN_SESSION - timedelta(hours=1)).isoformat()}
+    leg = {"side": "BUY", "type": "STOCK", "strike": 0.0, "expiration": None, "quantity": 10}
+    for pid, extra in (("aaaaaaaa-2", {"legsText": "BUY 10 AAPL"}), ("aaaaaaaa-3", {})):
+        supervisor.scan(kb, reader(doc.spec_hash, [position(pid, legs=[leg], **closed, **extra)]), IN_SESSION)
+    motivos = sorted(a.motivo for a in supervisor.alerts(kb))
+    assert motivos == ["SHADOW cerró 10 AAPL por METRIC_EXIT.", "SHADOW cerró BUY 10 AAPL por METRIC_EXIT."]
+
+
 def test_an_old_close_is_history_not_news(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
     old = position(status="CLOSED", exitReason="STOP_LOSS", exitAt=(IN_SESSION - timedelta(days=10)).isoformat())
