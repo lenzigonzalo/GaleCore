@@ -270,7 +270,7 @@ namespace DataFeed.Application.App.Runtime
                 if (metricValue is double mv) metricMet = GenericGateEvaluator.EvaluateOperator(metricExit.Operator, mv, metricExit.Threshold);
                 else
                 {
-                    var problems2 = new List<string> { $"salida por métrica sin dato: {metricExit.MetricRef}" + (metricProblem == null ? "" : $" ({metricProblem})") };
+                    var problems2 = new List<string> { $"salida por condición sin dato: {metricExit.MetricRef}" + (metricProblem == null ? "" : $" ({metricProblem})") };
                     valued = valued with { ValuationProblems = problems2 };
                     if (pos.ValuationProblems == null || !pos.ValuationProblems.SequenceEqual(problems2))
                         store.AddEvent(NewEvent(pos.InstanceId, "VALUATION_NO_DATA", pos.Symbol, nowUtc,

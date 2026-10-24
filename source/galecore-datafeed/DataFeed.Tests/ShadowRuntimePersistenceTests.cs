@@ -240,7 +240,8 @@ public class ShadowRuntimePersistenceTests
         var other = Deploy(store, instance with { InstanceId = Guid.NewGuid().ToString(), DeploymentId = Guid.NewGuid().ToString(), VersionHash = "sha256:otra" });
         Assert.Equal(DeployResult.KindCreated, other.Kind);
 
-        Assert.Equal(new[] { instance.InstanceId, other.Instance.InstanceId }, store.RunningInstances().Select(i => i.InstanceId));
+        // Mismo CreatedAt: el orden entre ambas lo desempata el id (aleatorio), así que se compara sin orden.
+        Assert.Equal(new[] { instance.InstanceId, other.Instance.InstanceId }.OrderBy(x => x, StringComparer.Ordinal), store.RunningInstances().Select(i => i.InstanceId).OrderBy(x => x, StringComparer.Ordinal));
         Assert.Equal(2, repo.Instances.Count);
         Assert.Equal(2, repo.Deployments.Count);
     }

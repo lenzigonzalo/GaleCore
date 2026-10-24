@@ -368,10 +368,13 @@ function PositionsTable({ positions }: { positions: ShadowPosition[] }) {
           <Td mono>{usd(stock ? (p.cost ?? p.maxRisk) : p.maxRisk)}</Td>
           <Td mono>{stock ? '—' : (p.currentDte ?? p.entryDte)}</Td>
           <Td>
-            {p.valuationProblems?.length ? (
+            {p.lastValuedAt && p.lastSpreadValue != null ? (
+              <>
+                <span style={mono}>{(stock ? p.lastPrice : p.lastSpreadValue)?.toFixed(2)} · {usd(p.unrealizedPnl)} <span style={{ color: 'var(--text-muted)' }}>({when(p.lastValuedAt)})</span></span>
+                {p.valuationProblems?.length ? <div style={{ color: 'var(--yellow-gc)' }}>Aviso: {p.valuationProblems.join(' · ')}</div> : null}
+              </>
+            ) : p.valuationProblems?.length ? (
               <span style={{ color: 'var(--yellow-gc)' }}>Sin valuar: {p.valuationProblems.join(' · ')}</span>
-            ) : p.lastValuedAt ? (
-              <span style={mono}>{(stock ? p.lastPrice : p.lastSpreadValue)?.toFixed(2)} · {usd(p.unrealizedPnl)} <span style={{ color: 'var(--text-muted)' }}>({when(p.lastValuedAt)})</span></span>
             ) : <span style={{ color: 'var(--text-muted)' }}>todavía no valuada</span>}
           </Td>
           <Td>{p.exitReason ? <span style={mono}>{p.exitReason} · {(stock ? p.exitPrice : p.exitDebit)?.toFixed(2)} · {usd(p.realizedPnl)} ({when(p.exitAt)})</span> : '—'}</Td>
