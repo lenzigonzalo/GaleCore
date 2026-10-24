@@ -81,10 +81,21 @@ def test_stale_valuation_in_session_and_partial_coverage():
     old = (IN_SESSION - timedelta(minutes=supervisor.NO_PRICE_MINUTES + 5)).isoformat()
     positions = four_open_one_closed(old)
     positions[0]["valuationProblems"] = ["sin cotización de la pata 738P"]
+    positions[0]["lastSpreadValue"] = None
     out = state.snapshot(reader(status([inst("i-run")]), {"i-run": positions},
                                 quote={"data": [{"midPrice": 778.5}]}), IN_SESSION)
     assert out["datos"]["frescura"]["estado"] == "vieja"
     assert out["datos"]["cobertura"] == {"estado": "parcial", "valuadas": 3, "abiertas": 4, "sin_precio": ["p0aaaaaa"]}
+
+
+def test_a_valued_position_with_problems_is_a_warning_not_missing_price():
+    positions = four_open_one_closed((IN_SESSION - timedelta(minutes=1)).isoformat())
+    positions[0]["lastSpreadValue"] = 0.4
+    positions[0]["valuationProblems"] = ["salida por condición sin dato: capability:compute.ema_spread.AAPL.20.50"]
+    out = state.snapshot(reader(status([inst("i-run")]), {"i-run": positions},
+                                quote={"data": [{"midPrice": 778.5}]}), IN_SESSION)
+    assert out["datos"]["cobertura"] == {"estado": "ok", "valuadas": 4, "abiertas": 4, "sin_precio": [],
+                                         "con_aviso": ["p0aaaaaa"]}
 
 
 def test_unread_galecore_is_unverified_never_a_repeated_record():

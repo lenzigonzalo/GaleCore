@@ -64,11 +64,14 @@ def _freshness(now: datetime, open_positions: list[dict]) -> dict:
 def _coverage(open_positions: list[dict]) -> dict:
     if not open_positions:
         return {"estado": "sin_posiciones"}
-    missing = [p.get("positionId", "")[:8] for p in open_positions
-               if p.get("lastSpreadValue") is None or p.get("valuationProblems")]
+    # A position with a value is valued: its valuationProblems are warnings (e.g. a metric exit without data).
+    missing = [p.get("positionId", "")[:8] for p in open_positions if p.get("lastSpreadValue") is None]
+    warned = [p.get("positionId", "")[:8] for p in open_positions
+              if p.get("lastSpreadValue") is not None and p.get("valuationProblems")]
     state = "ok" if not missing else ("ninguna" if len(missing) == len(open_positions) else "parcial")
-    return {"estado": state, "valuadas": len(open_positions) - len(missing), "abiertas": len(open_positions),
-            "sin_precio": missing}
+    out = {"estado": state, "valuadas": len(open_positions) - len(missing), "abiertas": len(open_positions),
+           "sin_precio": missing}
+    return {**out, "con_aviso": warned} if warned else out
 
 
 def snapshot(read: supervisor.Reader, now: datetime | None = None) -> dict:
