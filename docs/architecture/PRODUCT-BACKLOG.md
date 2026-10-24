@@ -2677,6 +2677,18 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 
 ---
 
+## BL-033 — Permisos de Codex respondidos desde el chat del Lab
+
+**Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.
+**Origen:** pedido del owner, 24/10/2026, al cerrar los permisos en el chat para Claude («dejá eso de Codex en BL para no olvidarnos»).
+**Target:** host del workspace (`tools/terminal/lab-workspaces.js`) y front del Lab (`Lab.tsx`, la tarjeta de permiso ya existe). GaleCore sólo en local.
+**Encaje:** misma tarjeta y mismo endpoint (`POST /chats/<id>/permission`) que Claude; sólo cambia el adaptador del motor (D-0014).
+**Hoy:** Claude corre con el Lab como host de permisos (`--permission-prompt-tool stdio`): cada pedido aparece en el chat con Permitir / Permitir y no volver a preguntar / No permitir, en Manual y en Auto, y el modo se cambia en vivo. Codex corre con `codex exec --json` (Auto = `--approve-for-me`, Manual = sandbox `workspace-write` sin aprobación): no hay forma de responder un pedido en medio del turno, así que lo que el sandbox no deja simplemente falla. El cambio de modo en vivo tampoco le llega.
+**Entry gate:** cuando el owner priorice usar Codex en el Lab con tareas que piden permiso. Antes, verificar qué superficie de aprobación ofrece Codex para un host (p. ej. `app-server` o `mcp-server` con pedidos de aprobación) en la versión instalada.
+**Aceptación:** con Codex, en Manual, un comando o escritura fuera del sandbox se frena y aparece la tarjeta; permitir lo ejecuta y negar sigue sin eso, sin mostrarlo como error; cambiar a Auto en medio de la respuesta se aplica; los casos de `tools/caso.py` con Codex no se cuelgan.
+
+---
+
 ## BL-032 — Cambiar modelo o proveedor dentro de una conversación del Lab
 
 **Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.
