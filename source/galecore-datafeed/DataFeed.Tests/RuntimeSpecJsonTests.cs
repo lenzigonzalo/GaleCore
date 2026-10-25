@@ -188,7 +188,7 @@ public class RuntimeSpecJsonTests
         var spec = SpecJson();
         var risk = spec["risk_limits"]!.AsObject();
         Assert.Equal(1, risk["max_concurrent_positions"]!.GetValue<int>());
-        Assert.Equal(5.0, risk["max_risk_per_trade_pct"]!.GetValue<double>());
+        Assert.Null(risk["max_risk_per_trade_pct"]);   // sin simulated_capital_usd el % no mide nada y el validador lo rechaza
     }
 
     // ── v2 (GC-0004, owner 25/09): igual a v1 salvo el gate de GEX ──

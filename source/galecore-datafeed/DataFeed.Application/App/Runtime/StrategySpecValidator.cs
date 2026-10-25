@@ -341,6 +341,8 @@ namespace DataFeed.Application.App.Runtime
             if (r.MaxBetPct is double mb && !(mb > 0 && mb <= 100)) errors.Add($"{p}.max_bet_pct must be in (0, 100]");
             if ((r.ReservePct != null || r.MaxOpenRiskPct != null || r.MaxBetPct != null) && r.SimulatedCapitalUsd == null)
                 errors.Add($"{p}.reserve_pct, max_open_risk_pct and max_bet_pct need risk_limits.simulated_capital_usd");
+            if (r.MaxRiskPerTradePct != null && r.SimulatedCapitalUsd == null)
+                errors.Add($"{p}.max_risk_per_trade_pct needs risk_limits.simulated_capital_usd (without a capital it measures nothing)");
             if (r.LossBrakes == null) return;
             if (r.LossBrakes.Count == 0) errors.Add($"{p}.loss_brakes must not be empty (omit it for no brakes)");
             foreach (var (b, i) in r.LossBrakes.Select((b, i) => (b, i)))

@@ -69,7 +69,7 @@ public class StrategySpecValidatorTests
                 new() { Side = "BUY", Type = "PUT", StrikeSelection = new LegStrikeSelection { Method = "FIXED_WIDTH", Width = 5 } },
             }
         },
-        RiskLimits = new SpecRiskLimits { MaxConcurrentPositions = 1, MaxRiskPerTradePct = 5.0 },
+        RiskLimits = new SpecRiskLimits { MaxConcurrentPositions = 1, MaxRiskPerTradePct = 5.0, SimulatedCapitalUsd = 10_000 },
         Operational = new SpecOperational(),
         Metadata = new SpecMetadata { SchemaVersion = "1.0.0" }
     };

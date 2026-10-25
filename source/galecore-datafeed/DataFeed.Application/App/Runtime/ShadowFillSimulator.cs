@@ -134,7 +134,7 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>
         /// Evalúa exits determinísticos contra una posición abierta.
         /// Devuelve la razón de exit si alguno se dispara, null si no.
-        /// Precedencia: STOP_LOSS > METRIC_EXIT > TAKE_PROFIT > TIME_EXIT. El vencimiento (EXPIRATION) manda sobre todas
+        /// Precedencia: STOP_LOSS > METRIC_EXIT > EVENT_EXIT > TAKE_PROFIT > TIME_EXIT. El vencimiento (EXPIRATION) manda sobre todas
         /// y no pasa por acá: lo liquida el motor antes de valuar con cotizaciones.
         /// <paramref name="metricExitMet"/>: la condición de exits.MetricExit se cumple ahora (la evalúa el motor con el dato real).
         /// </summary>

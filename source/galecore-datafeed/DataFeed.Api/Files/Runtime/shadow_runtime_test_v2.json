@@ -13,7 +13,7 @@
       "agent_definition_version": null
     },
     "created_at": "2026-09-25T00:00:00Z",
-    "parent_version_hash": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076"
+    "parent_version_hash": "sha256:bb4d35027bb023b6bf1858a7130c53ba93fe346d10760a267d5ad4284c556348"
   },
 
   "deployment_constraints": {
@@ -122,7 +122,7 @@
   "risk_limits": {
     "max_concurrent_positions": 1,
     "max_portfolio_heat_pct": null,
-    "max_risk_per_trade_pct": 5.0,
+    "max_risk_per_trade_pct": null,
     "max_loss_per_trade_usd": null
   },
 

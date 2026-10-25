@@ -347,6 +347,63 @@ public class OptionStructureBuilderTests
     }
 
     [Fact]
+    public async Task MaxDebit_WhereTheStructureFillsAtCredit_IsRejected_NotADebit()
+    {
+        // Con max_debit declarado la estructura tiene que costar: vender la call spread cobra 1.60, y un % del costo no mediría nada.
+        var spec = With(Sandwich(),
+            Leg("c1", "SELL", "CALL", new() { Method = "POINTS_FROM_SPOT", PointsFromSpot = 5 }),
+            Leg("c2", "BUY", "CALL", new() { Method = "OFFSET_FROM_LEG", FromLeg = "c1", OffsetPoints = 5 }));
+        spec = spec with { CandidateConstruction = spec.CandidateConstruction with { Constraints = new() { MinDte = 0, MaxDte = 0, MaxDebit = 2 } } };
+
+        var rejected = await Build(Source(), spec);
+
+        Assert.Null(rejected.Candidate);
+        Assert.Contains("no es débito", rejected.RejectReason);
+    }
+
+    [Fact]
+    public async Task DeltaLeg_WhoseStrikeIsNotInTheChain_KeepsTheRootOfTheQuotedSeries()
+    {
+        // Las griegas traen 7615 y 7610 pero la cadena no los lista: el OCC se arma con la raíz del streamer (SPXW), no con «SPX» (AM, nunca liquida).
+        var spec = With(Sandwich(0.5),
+            Leg("corta", "SELL", "PUT", new() { Method = "DELTA", TargetDelta = -0.16, DeltaTolerance = 0.04 }),
+            Leg("larga", "BUY", "PUT", new() { Method = "OFFSET_FROM_LEG", FromLeg = "corta", OffsetPoints = -5 }));
+        var source = Source();
+        source.Expirations![0].strikes!.RemoveAll(s => s.StrikePrice is "7615.0" or "7610.0");
+        source.Gex = _ => new GammaExposureResponse
+        {
+            Symbol = "SPX", Spot = Spot, Expiration = "2026-09-24", DTE = 0, ExpirationType = "Weekly", SymbolsWithGreeks = 2,
+            Strikes = new()
+            {
+                new() { Strike = 7615, PutDelta = -0.16, PutStreamerSymbol = ".SPXW260924P7615" },
+                new() { Strike = 7610, PutDelta = -0.14, PutStreamerSymbol = ".SPXW260924P7610" },
+            },
+        };
+
+        var c = Assert.IsType<TradeCandidate>((await Build(source, spec)).Candidate);
+
+        Assert.All(c.Legs, l => Assert.StartsWith("SPXW", l.OccSymbol));
+        Assert.Equal("SPXW  260924P07615000", c.Legs[0].OccSymbol);
+        Assert.False(Expiry.IsAmSettled(ShadowFillSimulator.Fill(c, Now)));
+    }
+
+    [Fact]
+    public async Task Credit_KeepsFourDecimals_LikeTheLegsAndTheExit()
+    {
+        var spec = With(Sandwich(0.5),
+            Leg("corta", "SELL", "PUT", new() { Method = "FIXED_STRIKE", Strike = 7615 }),
+            Leg("larga", "BUY", "PUT", new() { Method = "FIXED_STRIKE", Strike = 7610 }));
+        var source = Source();
+        source.Quotes[".SPXW260924P7615"] = new LegQuote(2.0125, 2.2, Now.AddSeconds(-3));
+        source.Quotes[".SPXW260924P7610"] = new LegQuote(0.9, 1.0033, Now.AddSeconds(-3));
+
+        var c = Assert.IsType<TradeCandidate>((await Build(source, spec)).Candidate);
+
+        Assert.Equal(1.0092, c.Credit);      // 2.0125 − 1.0033, sin redondear a centavos
+        Assert.Equal(399.08, c.MaxRisk);     // (5 − 1.0092) × 100
+    }
+
+    [Fact]
     public async Task SpecWithoutTheSelectorValue_NoCandidate_NothingIsCompleted()
     {
         var spec = With(Sandwich(),

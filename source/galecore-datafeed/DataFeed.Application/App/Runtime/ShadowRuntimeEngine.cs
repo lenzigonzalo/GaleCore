@@ -367,7 +367,7 @@ namespace DataFeed.Application.App.Runtime
                     else exitProblems.Add("salida por hora sin dato: el calendario de NYSE no cubre el día de sesión de la salida");
                 }
                 else if (exits.TimeExit.DaysAfterEntry == null && dte == 0)
-                    timeOfDayReached = localNow.TimeOfDay >= atTime;
+                    timeOfDayReached = localNow.TimeOfDay >= ShadowSession.EffectiveExitTime(op, localNow.Date, atTime);
             }
             if (exitProblems.Count > 0)
             {
@@ -444,13 +444,14 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>
         /// Deja en la posición por qué no se pudo valuar, y un evento VALUATION_NO_DATA sólo si el
         /// problema es nuevo o cambió. El monitor corre cada 30 s: sin esto, una noche sin
-        /// cotizaciones llenaría el registro de eventos con el mismo aviso.
+        /// cotizaciones llenaría el registro de eventos con el mismo aviso. Sin valuación vigente no queda el P&amp;L ni el valor
+        /// de la valuación anterior: nadie suma un número viejo (métricas, rendimiento, capital, freno por pérdida).
         /// </summary>
         public static void RecordValuationProblems(
             ShadowRuntimeStore store, ShadowPosition pos, List<string> problems, DateTime nowUtc)
         {
             bool changed = pos.ValuationProblems == null || !pos.ValuationProblems.SequenceEqual(problems);
-            store.UpdatePosition(pos with { ValuationProblems = problems, UpdatedAt = nowUtc });
+            store.UpdatePosition(pos with { ValuationProblems = problems, UnrealizedPnl = null, LastSpreadValue = null, UpdatedAt = nowUtc });
             if (!changed) return;
             store.AddEvent(new OperationalEvent
             {
@@ -549,7 +550,7 @@ namespace DataFeed.Application.App.Runtime
             var exp = pos.Legs.Select(l => l.Expiration).FirstOrDefault(e => !string.IsNullOrEmpty(e));
             if (exp == null || !DateTime.TryParse(exp, System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None, out var expDate)) return null;
-            ShadowSession.TryZone("America/New_York", out var et);
+            if (!ShadowSession.TryZone("America/New_York", out var et)) return null;   // sin zona no se sabe si ya pasó la hora: no se liquida
             var nowEt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), et);
             return nowEt >= expDate.Date + SettlementTimeEt ? expDate.Date : null;
         }

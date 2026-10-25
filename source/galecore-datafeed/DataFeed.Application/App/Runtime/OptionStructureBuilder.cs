@@ -232,7 +232,7 @@ namespace DataFeed.Application.App.Runtime
                 var q = quotes[l.Plan.Id];
                 return (l.Plan.Side == "SELL" ? 1 : -1)
                     * ShadowFillSimulator.LegPrice(q.Bid, q.Ask, buying: l.Plan.Side == "BUY", terms, 4);
-            }), 2);
+            }), 4);
             if (!double.IsFinite(credit))
                 return Rejected($"crédito no finito ({credit})");
 
@@ -245,8 +245,14 @@ namespace DataFeed.Application.App.Runtime
                 if (credit < minCredit)
                     return Rejected($"crédito {credit} menor al mínimo {minCredit}");
             }
-            else if (c.MaxDebit is double maxDebit && -credit > maxDebit)
-                return Rejected($"débito {-credit} mayor al máximo {maxDebit}");
+            else if (c.MaxDebit is double maxDebit)
+            {
+                // Con max_debit declarado la entrada tiene que costar: take profit y stop loss (% del costo) sólo miden débitos.
+                if (!(credit < 0))
+                    return Rejected($"no es débito: la estructura llenaría con crédito {credit}");
+                if (-credit > maxDebit)
+                    return Rejected($"débito {-credit} mayor al máximo {maxDebit}");
+            }
 
             // ── 7. Riesgo máximo: el peor débito de cierre posible según el payoff de las patas, menos el crédito cobrado ──
             var payoffLegs = legs.Select(l => (l.Plan.Side, l.Plan.Type, l.Row.Strike)).ToList();
@@ -373,9 +379,10 @@ namespace DataFeed.Application.App.Runtime
             }
 
             string? streamer = Streamer(row);
-            // El OCC de la cadena trae la raíz real (SPXW); sin cadena se arma con el subyacente.
+            // El OCC de la cadena trae la raíz real (SPXW); si el strike no está en la cadena, la raíz sale del streamer de la pata
+            // (la misma serie que se cotiza), no del subyacente: con SPX se armaría una AM que nunca liquida.
             string occ = (isPut ? row.PutOcc : row.CallOcc)
-                ?? CascadeUtils.BuildOccSymbol(symbol, expirationDate, row.Strike, isPut ? 'P' : 'C');
+                ?? CascadeUtils.BuildOccSymbol(string.IsNullOrEmpty(streamer) ? symbol : RootOfStreamer(streamer), expirationDate, row.Strike, isPut ? 'P' : 'C');
             return (new Resolved(p, row, streamer ?? "", occ, Delta(row)), null);
         }
 

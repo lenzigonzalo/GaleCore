@@ -85,7 +85,7 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Decisión del FOMC: 14:00 NY del último día de cada reunión. Si algún año del rango no está en la página, no se sabe.</summary>
         private async Task<EventQueryResult> FomcAsync(DateTime fromUtc, DateTime toUtc, CancellationToken ct)
         {
-            ShadowSession.TryZone("America/New_York", out var et);
+            if (!ShadowSession.TryZone("America/New_York", out var et)) return EventQueryResult.NoData("no se pudo leer la zona horaria de Nueva York para las 14:00 del FOMC");
             var events = new List<CalendarEvent>();
             var retrieved = DateTime.UtcNow;
             for (int year = fromUtc.Year; year <= toUtc.Year; year++)

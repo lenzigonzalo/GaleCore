@@ -186,7 +186,22 @@ namespace DataFeed.Application.App.Runtime
                 ? LongEquityCandidateBuilder.BuildAsync(GetQuoteAsync, instance, spec, symbol, nowUtc, ct)
                 : new CreditSpreadCandidateBuilder(this).BuildAsync(instance, spec, symbol, vixPrice, nowUtc, ct);
 
+        /// <summary>Cuánto se espera para volver a pedir un cierre que todavía no estaba: el monitor pasa cada 30 s por cada posición vencida.</summary>
+        internal static readonly TimeSpan NoCloseRetry = TimeSpan.FromMinutes(5);
+        // (símbolo, fecha) → hasta cuándo no se vuelve a pedir; sólo guarda los «todavía no hay cierre» (las fallas de la fuente se reintentan).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string, DateTime), DateTime> NoCloseUntil = new();
+
         public async Task<double?> GetOfficialCloseAsync(string symbol, DateTime sessionDate, CancellationToken ct)
+        {
+            var key = (symbol.ToUpperInvariant(), sessionDate.Date);
+            if (NoCloseUntil.TryGetValue(key, out var until) && DateTime.UtcNow < until) return null;
+            var close = await ReadOfficialCloseAsync(symbol, sessionDate, ct);
+            if (close == null) NoCloseUntil[key] = DateTime.UtcNow + NoCloseRetry;
+            else NoCloseUntil.TryRemove(key, out _);
+            return close;
+        }
+
+        private async Task<double?> ReadOfficialCloseAsync(string symbol, DateTime sessionDate, CancellationToken ct)
         {
             var response = await _mediator.Send(new MarketDataCandleRequest
             {
