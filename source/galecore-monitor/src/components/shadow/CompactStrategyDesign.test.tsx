@@ -32,3 +32,19 @@ test('algorithm view preserves structured exit thresholds and does not derive nu
   expect(screen.queryByText('150 segundos')).not.toBeInTheDocument();
   expect(screen.getByText('Entrar según un criterio por definir').closest('tr')).toHaveTextContent('—');
 });
+test('algorithm view shows debit exits as percent of cost and a 0DTE time exit by hour', () => {
+  const spec: AlgorithmSpec = { exits: { deterministic: { take_profit: { pct_of_cost: 50 }, stop_loss: { pct_of_cost: 30 }, time_exit: { at: '15:30', days_after_entry: 0 } } } };
+  const strategy: StrategyView = { current: { ref: 'v1', approved: true, purpose: '', spec_hash: '', spec, rules: [] } };
+  render(<CompactStrategyDesign strategy={strategy} />);
+  const exits = screen.getByRole('heading', { name: 'Salida' }).closest('section')!;
+  expect(within(exits).getByText('Ganancia sobre el costo').closest('tr')).toHaveTextContent('≥50 % del costoCerrar por objetivo');
+  expect(within(exits).getByText('Pérdida sobre el costo').closest('tr')).toHaveTextContent('≥30 % del costoCerrar por stop');
+  expect(within(exits).getByText('Hora de cierre').closest('tr')).toHaveTextContent('≥15:30 · mismo díaCerrar por tiempo');
+  expect(within(exits).queryByText('Días restantes')).not.toBeInTheDocument();
+  expect(exits).not.toHaveTextContent(/del crédito|DTE/);
+});
+test('time exit at without days_after_entry means the expiration day', () => {
+  const spec: AlgorithmSpec = { exits: { deterministic: { time_exit: { at: '15:30' } } } };
+  render(<CompactStrategyDesign strategy={{ current: { ref: 'v1', approved: true, purpose: '', spec_hash: '', spec, rules: [] } }} />);
+  expect(screen.getByText('Hora de cierre').closest('tr')).toHaveTextContent('15:30 · día del vencimiento');
+});
