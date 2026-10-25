@@ -84,6 +84,8 @@ namespace DataFeed.Application.App.Runtime
             if (spec.RiskLimits.MinMinutesBetweenEntries.HasValue && spec.RiskLimits.MinMinutesBetweenEntries.Value <= 0)
                 errors.Add("risk_limits.min_minutes_between_entries must be positive");
 
+            ValidateRiskControls(spec, errors);
+
             // ── Operational ──
             if (string.IsNullOrWhiteSpace(spec.Operational.Timezone))
                 errors.Add("operational.timezone is required");
@@ -326,6 +328,38 @@ namespace DataFeed.Application.App.Runtime
 
         private static (TimeSpan Start, TimeSpan End)? SessionRange(SpecOperational o) =>
             ShadowSession.TryTime(o.SessionHours.Start, out var s) && ShadowSession.TryTime(o.SessionHours.End, out var e) ? (s, e) : null;
+
+        /// <summary>Capital simulado y frenos por pérdida de risk_limits (WS-0062 inc.6). Las claves desconocidas ya las rechaza el cargador.</summary>
+        private static void ValidateRiskControls(StrategySpec spec, List<string> errors)
+        {
+            var r = spec.RiskLimits;
+            const string p = "risk_limits";
+            if (r.SimulatedCapitalUsd is double c && !(c > 0 && double.IsFinite(c))) errors.Add($"{p}.simulated_capital_usd must be positive");
+            if (r.ReservePct is double rp && !(rp >= 0 && rp < 100)) errors.Add($"{p}.reserve_pct must be in [0, 100)");
+            if (r.MaxOpenRiskPct is double mo && !(mo > 0 && mo <= 100)) errors.Add($"{p}.max_open_risk_pct must be in (0, 100]");
+            if (r.MaxBetPct is double mb && !(mb > 0 && mb <= 100)) errors.Add($"{p}.max_bet_pct must be in (0, 100]");
+            if ((r.ReservePct != null || r.MaxOpenRiskPct != null || r.MaxBetPct != null) && r.SimulatedCapitalUsd == null)
+                errors.Add($"{p}.reserve_pct, max_open_risk_pct and max_bet_pct need risk_limits.simulated_capital_usd");
+            if (r.LossBrakes == null) return;
+            if (r.LossBrakes.Count == 0) errors.Add($"{p}.loss_brakes must not be empty (omit it for no brakes)");
+            foreach (var (b, i) in r.LossBrakes.Select((b, i) => (b, i)))
+            {
+                string q = $"{p}.loss_brakes[{i}]";
+                if (!ShadowRiskControls.Periods.Contains(b.Period)) errors.Add($"{q}.period must be one of day, week, total; got '{b.Period}'");
+                if (b.Basis != ShadowRiskControls.BasisRealized && b.Basis != ShadowRiskControls.BasisRealizedPlusOpen)
+                    errors.Add($"{q}.basis must be realized or realized_plus_open; got '{b.Basis}'");
+                if ((b.MaxLossUsd == null) == (b.MaxLossPctOfCapital == null))
+                    errors.Add($"{q} must declare exactly one of max_loss_usd or max_loss_pct_of_capital");
+                if (b.MaxLossUsd is double u && !(u > 0 && double.IsFinite(u))) errors.Add($"{q}.max_loss_usd must be positive");
+                if (b.MaxLossPctOfCapital is double pc)
+                {
+                    if (!(pc > 0 && pc <= 100)) errors.Add($"{q}.max_loss_pct_of_capital must be in (0, 100]");
+                    if (r.SimulatedCapitalUsd == null) errors.Add($"{q}.max_loss_pct_of_capital needs risk_limits.simulated_capital_usd");
+                }
+            }
+            if (r.LossBrakes.GroupBy(b => b.Period).Any(g => g.Count() > 1))
+                errors.Add($"{p}.loss_brakes: at most one brake per period");
+        }
 
         /// <summary>operational.entry_window y operational.trade_limits (WS-0062 inc.5). Las claves desconocidas ya las rechaza el cargador.</summary>
         private static void ValidateOperationalWindows(SpecOperational o, List<string> errors)

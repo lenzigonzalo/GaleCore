@@ -333,6 +333,33 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double? MaxPortfolioHeatPct { get; init; }
         public double? MaxRiskPerTradePct { get; init; }
         public double? MaxLossPerTradeUsd { get; init; }
+
+        // ── Capital simulado y controles que el runtime hace cumplir (WS-0062 inc.6) ──
+        // Cada estrategia SHADOW declara su propio monto. Sin simulated_capital_usd no hay capital contra el cual medir: no se
+        // aplican ni el tope por apuesta, ni el presupuesto de riesgo, ni el margen intradiario, ni los frenos en % del capital.
+
+        /// <summary>Monto simulado de la estrategia, en USD. Es el capital de CapitalLimits y el punto de partida del equity (capital + P&amp;L realizado neto).</summary>
+        public double? SimulatedCapitalUsd { get; init; }
+        /// <summary>% del capital que no se usa como riesgo ni como margen. null = 0.</summary>
+        public double? ReservePct { get; init; }
+        /// <summary>Riesgo abierto máximo, en % del capital (CapitalLimits.MaxOpenRiskPct). null = 100 (sólo manda la reserva).</summary>
+        public double? MaxOpenRiskPct { get; init; }
+        /// <summary>Tope por apuesta, en % del riesgo abierto máximo (CapitalLimits.MaxBetPct). null = 100.</summary>
+        public double? MaxBetPct { get; init; }
+        /// <summary>Frenos por pérdida: con la pérdida del período en el límite, no entran posiciones nuevas (nunca se cierran las abiertas).</summary>
+        public List<SpecLossBrake>? LossBrakes { get; init; }
+    }
+
+    /// <summary>
+    /// Freno por pérdida (risk_limits.loss_brakes). period: "day" | "week" (lunes a domingo) | "total" (desde que arrancó la instancia);
+    /// exactamente uno entre max_loss_usd y max_loss_pct_of_capital; basis: "realized" (default) o "realized_plus_open".
+    /// </summary>
+    public record SpecLossBrake
+    {
+        public string Period { get; init; } = "";
+        public double? MaxLossUsd { get; init; }
+        public double? MaxLossPctOfCapital { get; init; }
+        public string Basis { get; init; } = "realized";
     }
 
     public record SpecOperational

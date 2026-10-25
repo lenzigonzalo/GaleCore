@@ -22,6 +22,8 @@ namespace DataFeed.Application.App.Runtime
             public const string MaxPositions = "MAX_POSITIONS";
             public const string TooSoon = "TOO_SOON";
             public const string TradeLimit = "TRADE_LIMIT";
+            public const string LossBrake = "LOSS_BRAKE";
+            public const string RiskLimit = "RISK_LIMIT";
             public const string NoCandidate = "NO_CANDIDATE";
             public const string RiskRejected = "RISK_REJECTED";
             public const string Opened = "OPENED";
@@ -125,6 +127,16 @@ namespace DataFeed.Application.App.Runtime
                 return Outcomes.TradeLimit;
             }
 
+            // 3d. Freno por pérdida (WS-0062 inc.6): no depende del candidato, así que se chequea antes de pedir cotizaciones. Nunca cierra
+            // nada abierto. El total mira sólo esta instancia: redesplegar la estrategia lo levanta; day y week se levantan al cambiar el período.
+            var scopePositions = store.AllPositions().Where(p => limitScope.Contains(p.InstanceId)).ToList();
+            var brake = ShadowRiskControls.LossBrake(spec, scopePositions, scopePositions.Where(p => p.InstanceId == instance.InstanceId).ToList(), nowUtc);
+            if (brake != null)
+            {
+                AddEvent(store, instance, "ENTRY_SKIPPED", symbol, nowUtc, ("reason", brake.Reason), ("limit", brake.Limit));
+                return Outcomes.LossBrake;
+            }
+
             // 4. Candidato real, o la razón por la que no hay.
             CandidateBuildResult built;
             try
@@ -150,11 +162,21 @@ namespace DataFeed.Application.App.Runtime
                 ("legs", candidate.Legs.Select(l => $"{l.Side} {l.Type} {l.Strike} {l.Expiration} bid={l.Bid} ask={l.Ask}").ToList()));
 
             // 5. Riesgo duro.
-            var risk = ShadowRiskValidator.Validate(candidate, spec, openCount, null, nowUtc);
+            // Con capital simulado declarado, el % máximo de riesgo por operación se mide contra el equity (capital + P&L realizado).
+            var risk = ShadowRiskValidator.Validate(candidate, spec, openCount, ShadowRiskControls.Equity(spec, scopePositions), nowUtc);
             if (!risk.IsValid)
             {
                 AddEvent(store, instance, "RISK_CHECK_FAILED", symbol, nowUtc, ("errors", risk.Errors));
                 return Outcomes.RiskRejected;
+            }
+
+            // 5b. Tope por apuesta, presupuesto de riesgo y margen intradiario (WS-0062 inc.6): dependen del candidato.
+            var block = ShadowRiskControls.CandidateBlock(spec, candidate, scopePositions);
+            if (block != null)
+            {
+                AddEvent(store, instance, "ENTRY_SKIPPED", symbol, nowUtc,
+                    ("reason", block.Reason), ("limit", block.Limit), ("candidate_id", candidate.CandidateId), ("max_risk", candidate.MaxRisk));
+                return Outcomes.RiskLimit;
             }
 
             // 6. Fill simulado con las condiciones de la spec (natural por defecto).
