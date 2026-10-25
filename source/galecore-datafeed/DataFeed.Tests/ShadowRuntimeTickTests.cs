@@ -11,6 +11,7 @@ namespace DataFeed.Tests;
 /// GC-0002 — los ticks de los loops SHADOW: el switch OFF pausa entradas sin borrar ni frenar el
 /// seguimiento (AC-04, R1-M2), y fuera de sesión no se simulan fills ni cierres (R1-M1).
 /// </summary>
+[Collection("RuntimeStaticCaches")]
 public class ShadowRuntimeTickTests
 {
     private static readonly DateTime Night = new(2026, 9, 25, 0, 30, 0, DateTimeKind.Utc);     // jueves 20:30 ET
@@ -168,6 +169,7 @@ public class ShadowRuntimeTickTests
 }
 
 /// <summary>GC-0002 R1-B1 — un net GEX sin datos reales es NO_DATA, no 0.</summary>
+[Collection("RuntimeStaticCaches")]
 public class MetricResolverNetGexTests
 {
     private static GammaExposureResponse WithStrikes(int greeks, long oi, int requested = 2, long? putOi = null) => new()
@@ -202,6 +204,7 @@ public class MetricResolverNetGexTests
 }
 
 /// <summary>GC-0002 (recheck R2, m-c) — un precio de cotización sólo sale de una cotización utilizable.</summary>
+[Collection("RuntimeStaticCaches")]
 public class MetricResolverQuoteTests
 {
     private static readonly DateTime QNow = new(2026, 9, 24, 17, 0, 0, DateTimeKind.Utc);
@@ -238,6 +241,7 @@ public class MetricResolverQuoteTests
 }
 
 /// <summary>GC-0002 AC-08 — VIX sale del último trade (DXLink publica el Quote del índice sin bid/ask).</summary>
+[Collection("RuntimeStaticCaches")]
 public class MetricResolverTradeTests
 {
     // Hora fija y representativa (2026-09-24 durante la sesión); no es la de un trade registrado.

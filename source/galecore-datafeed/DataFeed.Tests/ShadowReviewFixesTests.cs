@@ -11,6 +11,7 @@ namespace DataFeed.Tests;
 /// WS-0062 revisión interna — salida por hora en un cierre temprano, valuación vencida que no deja P&amp;L viejo, cierre oficial que
 /// todavía no está (no se vuelve a pedir en cada tick) y el % de riesgo por operación que exige capital simulado.
 /// </summary>
+[Collection("RuntimeStaticCaches")]
 public class ShadowReviewFixesTests
 {
     // ── M2: time_exit.at sin days_after_entry en un cierre temprano ───────────

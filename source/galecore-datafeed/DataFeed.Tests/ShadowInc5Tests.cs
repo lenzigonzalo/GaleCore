@@ -19,6 +19,7 @@ namespace DataFeed.Tests;
 /// WS-0062 inc.5 — métrica contra métrica (EMA/SMA), ventana de entrada, tope de entradas por día, blackout del FOMC,
 /// salida por hora, take profit / stop loss de débito (% del costo) y validación de los campos nuevos.
 /// </summary>
+[Collection("RuntimeStaticCaches")]
 public class ShadowInc5Tests
 {
     private static readonly DateTime D1745 = new(2026, 9, 24, 17, 45, 0, DateTimeKind.Utc);   // 13:45 ET (EDT, jueves)

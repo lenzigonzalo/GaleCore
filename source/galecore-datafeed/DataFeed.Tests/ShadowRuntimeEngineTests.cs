@@ -8,6 +8,7 @@ namespace DataFeed.Tests;
 /// "existen"; los tests verifican que un dato faltante bloquea y queda registrado, y que nunca se
 /// inventa una métrica, un candidato ni un precio.
 /// </summary>
+[Collection("RuntimeStaticCaches")]
 public class ShadowRuntimeEngineTests
 {
     internal const string VixRef = "capability:market_data.trade.VIX.price";

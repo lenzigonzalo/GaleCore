@@ -8,6 +8,7 @@ namespace DataFeed.Tests;
 /// WS-0062 inc.10 — N contratos por posición de opciones según sizing: FIXED y RISK_BASED con el tope de siempre, sin tope o sin lugar para
 /// uno no entra (con motivo), costos / P&amp;L / pérdida máxima / liquidación ×N, y una posición anterior sin cantidad vale lo de siempre.
 /// </summary>
+[Collection("RuntimeStaticCaches")]
 public class ShadowSizingTests
 {
     private static StrategySpec With(string method, int? fixedContracts = null, double? capital = null, double? riskPct = null, double? maxLossUsd = null,

@@ -8,6 +8,7 @@ namespace DataFeed.Tests;
 /// WS-0062 inc.3 — vencimiento y liquidación: intrínseco con el cierre oficial del día, sólo la orden de entrada,
 /// «pendiente de liquidar» sin cierre, nada antes de las 16:00 NY, acciones no vencen.
 /// </summary>
+[Collection("RuntimeStaticCaches")]
 public class ShadowExpirationTests
 {
     private static readonly DateTime After = new(2026, 9, 24, 20, 30, 0, DateTimeKind.Utc);   // 16:30 ET (EDT)

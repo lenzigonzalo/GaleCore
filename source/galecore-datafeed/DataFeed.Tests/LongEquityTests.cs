@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace DataFeed.Tests;
 
 /// <summary>WS-0061 — acciones en largo (long_equity): métrica ema_spread, entrada, valuación, salida por métrica y P&amp;L.</summary>
+[Collection("RuntimeStaticCaches")]
 public class LongEquityTests
 {
     private static readonly DateTime Now = ShadowRuntimeEngineTests.Now;
