@@ -198,12 +198,13 @@ namespace DataFeed.Application.App.Runtime
             if (legs.Select(l => (l.Plan.Type, l.Row.Strike)).Distinct().Count() != legs.Count)
                 return Rejected("dos patas quedaron en el mismo tipo y strike");
 
-            // Todas las patas, de la misma raíz (y la de la serie elegida si la cadena la informa).
+            // Todas las patas, de la misma raíz y nunca de una serie AM: el vencimiento elegido es PM, y el 3.er viernes la serie AM
+            // (SPX) comparte fecha con la PM (SPXW); un símbolo de la AM no se mezcla.
             if (legs.Any(l => string.IsNullOrEmpty(l.Streamer)))
                 return Rejected("falta el símbolo de streamer de una pata; no se puede cotizar");
-            var roots = legs.Select(l => RootOfStreamer(l.Streamer)).Distinct().ToList();
-            if (roots.Count > 1 || (root != null && !string.Equals(roots[0], root, StringComparison.OrdinalIgnoreCase)))
-                return Rejected($"las patas son de la raíz {string.Join("/", roots)} y el vencimiento elegido {expirationDate} es de {root ?? roots[0]}: no se mezclan series");
+            var roots = legs.Select(l => RootOfStreamer(l.Streamer)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            if (roots.Count > 1 || Expiry.IsAmRoot(roots[0]))
+                return Rejected($"las patas son de la raíz {string.Join("/", roots)} y el vencimiento elegido {expirationDate} es de {root ?? "otra serie (PM)"}: no se mezclan series");
 
             // ── 5. Cotizaciones frescas, por pata ──
             var quotes = new Dictionary<string, LegQuote>();

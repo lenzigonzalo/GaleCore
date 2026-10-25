@@ -518,3 +518,76 @@ public class OptionStructureBuilderTests
         public Task<LegQuote?> GetQuoteAsync(string s, CancellationToken ct) => Task.FromResult(_quotes.GetValueOrDefault(s));
     }
 }
+
+/// <summary>
+/// WS-0062 inc.4b — PCS, CCS e iron condor se construyen por el camino genérico y dan el MISMO candidato que el constructor anterior
+/// (verificado contra él con 216 combinaciones de estructura × fill × fallas antes de borrarlo; acá quedan los valores congelados).
+/// </summary>
+public class FamiliesAreGenericLegsTests
+{
+    private static readonly DateTime Now = ShadowRuntimeEngineTests.Now;
+
+    private static async Task<TradeCandidate> BuildFamily(string structure)
+    {
+        var result = await CreditSpreadCandidateBuilderTests.Build(CreditSpreadCandidateBuilderTests.WithCallQuotes(),
+            CreditSpreadCandidateBuilderTests.SpecFor(structure));
+        return Assert.IsType<TradeCandidate>(result.Candidate);
+    }
+
+    private static string Describe(CandidateLeg l) =>
+        string.Create(CultureInfo.InvariantCulture, $"{l.Side} {l.Type} {l.Strike} {l.Expiration} {l.OccSymbol} {l.StreamerSymbol} d={l.Delta} {l.Bid}/{l.Ask}");
+
+    [Fact]
+    public async Task PutCreditSpread_SameCandidate()
+    {
+        var c = await BuildFamily(RuntimeStructures.PutCreditSpread);
+
+        Assert.Equal(new[]
+        {
+            "SELL PUT 720 2026-11-03 SPY   261103P00720000 .SPY261103P720 d=-0.17 4.1/4.3",
+            "BUY PUT 715 2026-11-03 SPY   261103P00715000 .SPY261103P715 d=-0.14 3.4/3.6",
+        }, c.Legs.Select(Describe).ToArray());
+        Assert.Equal((0.7, 430.0, 5.0, 40, -0.17, 767.7), (c.Credit, c.MaxRisk, c.Width, c.Dte, c.DeltaShort, c.Snapshot.UnderlyingPrice!.Value));
+        Assert.Equal((Now.AddSeconds(-8), 0, 15.2), (c.Snapshot.OldestQuoteAt!.Value, c.Snapshot.QuotesWithoutTime, c.Snapshot.Vix!.Value));
+        Assert.Equal("put_credit_spread", c.Structure);
+    }
+
+    [Fact]
+    public async Task CallCreditSpread_SameCandidate()
+    {
+        var c = await BuildFamily(RuntimeStructures.CallCreditSpread);
+
+        Assert.Equal(new[]
+        {
+            "SELL CALL 810 2026-11-03 SPY   261103C00810000 .SPY261103C810 d=0.16 2/2.2",
+            "BUY CALL 815 2026-11-03 SPY   261103C00815000 .SPY261103C815 d=0.13 1.4/1.6",
+        }, c.Legs.Select(Describe).ToArray());
+        Assert.Equal((0.6, 440.0, 5.0, 40, 0.16), (c.Credit, c.MaxRisk, c.Width, c.Dte, c.DeltaShort));
+    }
+
+    [Fact]
+    public async Task IronCondor_SameCandidate()
+    {
+        var c = await BuildFamily(RuntimeStructures.IronCondor);
+
+        Assert.Equal(new[]
+        {
+            "SELL PUT 720 2026-11-03 SPY   261103P00720000 .SPY261103P720 d=-0.17 4.1/4.3",
+            "BUY PUT 715 2026-11-03 SPY   261103P00715000 .SPY261103P715 d=-0.14 3.4/3.6",
+            "SELL CALL 810 2026-11-03 SPY   261103C00810000 .SPY261103C810 d=0.16 2/2.2",
+            "BUY CALL 815 2026-11-03 SPY   261103C00815000 .SPY261103C815 d=0.13 1.4/1.6",
+        }, c.Legs.Select(Describe).ToArray());
+        Assert.Equal((1.3, 370.0, 5.0, 40, -0.17), (c.Credit, c.MaxRisk, c.Width, c.Dte, c.DeltaShort));
+    }
+
+    [Fact]
+    public async Task FamilySpec_StillValidatesLikeBefore_AndNeedsItsOwnLegs()
+    {
+        var spec = CreditSpreadCandidateBuilderTests.SpecFor(RuntimeStructures.IronCondor);
+        spec = spec with { CandidateConstruction = spec.CandidateConstruction with { Legs = spec.CandidateConstruction.Legs.Take(3).ToList() } };
+
+        Assert.Contains(StrategySpecValidator.Validate(spec).Errors, e => e.Contains("must be exactly"));
+        var result = await CreditSpreadCandidateBuilderTests.Build(CreditSpreadCandidateBuilderTests.WithCallQuotes(), spec);
+        Assert.Contains("BUY CALL", result.RejectReason);
+    }
+}
