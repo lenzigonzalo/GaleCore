@@ -28,7 +28,33 @@ RULE_EXITS = ("TAKE_PROFIT", "STOP_LOSS", "TIME_EXIT")
 SAFETY_EXITS = ("KILL_SWITCH",)  # the system's own safety rule (R2): observed, not a breach by the owner
 GAP_TOLERANCE_USD = 2.0          # a close within 2 USD (or 10 % of the credit) of its rule's level is on plan
 GAP_TOLERANCE_OF_CREDIT = 0.10
-COSTS_NOTE = "SHADOW llena al mid y sin comisiones: el resultado es antes de costos."
+
+
+def costs_note(perf: dict) -> str:
+    """What GaleCore says about fill and costs (`portfolio.costsDeclared`, `realizedGrossPnl`; per close `fill`,
+    `costs`, `costsDeclared`). A close at `mid` without costs is a position from before WS-0062 or a spec that asks
+    for mid and declares none: GaleCore does not tell them apart, so it is said as it is, never assumed."""
+    pf = perf.get("portfolio") or {}
+    trades = perf.get("trades") or []
+    declared = pf.get("costsDeclared")
+    if declared is None:
+        return "GaleCore no informa si el resultado de SHADOW descuenta costos: no se sabe."
+    if declared:
+        gross, net = pf.get("realizedGrossPnl"), pf.get("realizedPnl")
+        note = "Resultado neto de los costos que declara la spec"
+        if gross is not None and net is not None:
+            note += f" (bruto {gross:g} USD, costos {round(gross - net, 2):g} USD, neto {net:g} USD)"
+        note += ", con el fill de la spec."
+    else:
+        note = "Ninguna posición declara costos: el neto es igual al bruto porque no se descontó nada."
+    unknown = [t for t in trades if t.get("fill") is None]
+    mid_free = [t for t in trades if t.get("fill") == "mid" and not t.get("costsDeclared")]
+    if mid_free:
+        note += (f" {len(mid_free)} operación(es) cerradas al medio y sin costos (previas a WS-0062 o de una spec que "
+                 "pide mid sin costos).")
+    if unknown:
+        note += f" {len(unknown)} operación(es) sin dato de ejecución: no se sabe cómo se llenaron."
+    return note
 
 def criteria(docs: dict[str, StrategyDocument | None]) -> dict:
     """The numbers the strategy declares in its design (WS-0058: `limits` and its simulated amount). Only one strategy
@@ -80,8 +106,8 @@ def edge(portfolio: dict, crit: dict) -> dict:
             pending.append(f"{days or 0:g} de {need_d} días")
         conclusion = "Sin edge demostrado: la muestra no alcanza (" + ", ".join(pending) + "). Lo que hay es anécdota."
     elif realized is not None and realized > 0:
-        conclusion = ("Muestra suficiente y resultado neto > 0 antes de costos: compatible con edge; falta comparar "
-                      "contra el efectivo y descontar costos antes de afirmarlo.")
+        conclusion = ("Muestra suficiente y resultado neto > 0: compatible con edge; falta comparar "
+                      "contra el efectivo (los costos son los que declara la spec, ver `costos`) antes de afirmarlo.")
     else:
         conclusion = "Muestra suficiente y resultado neto ≤ 0: no hay edge con estas reglas."
     return {"cierres": closed, "cierres_requeridos": need_n, "dias": days, "dias_requeridos": need_d,
@@ -245,5 +271,5 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, strategies: list[str] 
             "contra_objetivo": against_objective(portfolio, crit, verdict["muestra_suficiente"]),
             "edge": verdict, "por_estrategia": perf.get("strategies", []), "por_version": perf.get("versions", []),
             "operaciones": trades, "paneles": panels, "decisiones_a_revisar": pending_reviews(decisions, today),
-            "costos": COSTS_NOTE, "faltantes": missing,
+            "costos": costs_note(perf), "faltantes": missing,
             "fuente": "GaleCore GET /App/Runtime/Performance" + (" y /Performance/Panel" if panels else "") + "; criterios del diseño de la estrategia"}

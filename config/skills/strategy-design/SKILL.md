@@ -1,6 +1,6 @@
 ---
 name: strategy-design
-version: 2.1.0
+version: 2.2.0
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Parte A (método): convierte una idea y su investigación en una estrategia completa (hipótesis, reglas por bloque,
@@ -87,7 +87,8 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   natural, medio o medio con deslizamiento, y costos); condiciones de entrada y salida (una métrica contra un umbral o
   contra otra métrica, medias móviles); eventos por tipo, símbolo y ventana (entrada y salida); ventana de entrada y
   límites de operaciones; salidas por tiempo, por evento o por % del costo o del crédito; límites de riesgo y frenos
-  por pérdida; capital simulado. Si algo no figura entre lo ejecutado, es un hueco declarado (`unsupported`), no una
+  por pérdida; tamaño (`sizing` FIXED con `fixed_contracts`, o RISK_BASED: los contratos que entran en el tope por
+  apuesta, con `risk_limits.simulated_capital_usd`; en acciones `fixed_contracts` son acciones); capital simulado. Si algo no figura entre lo ejecutado, es un hueco declarado (`unsupported`), no una
   regla en la spec. El capital simulado se escribe en la spec, en `risk_limits.simulated_capital_usd`, con el mismo
   monto que `simulated_amount_usd` del diseño (un solo monto): si no coinciden o falta, `strategy controls` no
   recomienda aprobar. Las rutas de las reglas `supported` (`spec_paths`) se copian de `executed_paths`, tal como las
@@ -97,7 +98,7 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   nombrando sus reglas; «nada» es una acción válida.
 - **A6. Plan de evaluación, fijado antes de los resultados:** método, métrica principal, comparación, dependencia y
   posiciones superpuestas, suficiencia de muestra, criterios de apoyo / refutación / no concluyente, datos a la fecha
-  y qué prueba cada fuente de ejecución (los fills de SHADOW son simulados al medio, no ejecuciones).
+  y qué prueba cada fuente de ejecución (los fills de SHADOW son simulados con el fill y los costos que declara la spec, natural por defecto, sobre cotizaciones reales; no son ejecuciones).
 - **A7.** `strategy check --spec <archivo> < {content}` hasta VALID o VALID_WITH_DECLARED_GAPS con `design_gaps`
   vacío; después `strategy save --spec <archivo> --prompt "..." < {content, host_provider, host_model}`. Un cambio es
   una versión nueva: `change` dice de qué versión, por qué y qué lo originó (research:, evidence:, feedback: o

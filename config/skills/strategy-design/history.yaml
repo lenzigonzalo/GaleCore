@@ -1,6 +1,11 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "2.2.0"
+    date: 2026-10-25
+    changes: >
+      WS-0062 inc. 8c: los fills de SHADOW son simulados con el fill y los costos que declara la spec (natural por defecto), no al medio; suma el tamaño (`sizing` FIXED o RISK_BASED) a las piezas del runtime.
+    feedback: []
   - version: "2.1.0"
     date: 2026-10-25
     changes: >

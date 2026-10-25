@@ -138,7 +138,20 @@ def test_report_reads_galecore_and_links_each_close_to_its_alert_and_decision(kb
     [op] = out["operaciones"]
     assert op["avisos"] == [alert.id] and op["decision"]["esperado"] == "cobrar la mitad del crédito"
     assert out["edge"]["muestra_suficiente"] is False
-    assert any("efectivo" in f for f in out["faltantes"]) and "antes de costos" in out["costos"]
+    assert any("efectivo" in f for f in out["faltantes"]) and "no se sabe" in out["costos"]
+
+
+def test_costs_note_comes_from_what_galecore_exposes_never_assumed():
+    declared = {"portfolio": {"costsDeclared": True, "realizedPnl": 90.0, "realizedGrossPnl": 100.0},
+                "trades": [{"fill": "natural", "costsDeclared": True}, {"fill": "mid", "costsDeclared": False}]}
+    note = performance.costs_note(declared)
+    assert "neto de los costos que declara la spec" in note and "bruto 100 USD, costos 10 USD, neto 90 USD" in note
+    assert "1 operación(es) cerradas al medio y sin costos" in note
+    none = performance.costs_note({"portfolio": {"costsDeclared": False}, "trades": [{"fill": "natural"}]})
+    assert "Ninguna posición declara costos" in none and "sin dato de ejecución" not in none
+    old = performance.costs_note({"portfolio": {"costsDeclared": True}, "trades": [{"realizedPnl": 1.0}]})
+    assert "1 operación(es) sin dato de ejecución" in old
+    assert "no se sabe" in performance.costs_note({"portfolio": {}, "trades": []})
 
 
 def test_report_refuses_what_is_not_a_performance_report(kb):  # noqa: F811
