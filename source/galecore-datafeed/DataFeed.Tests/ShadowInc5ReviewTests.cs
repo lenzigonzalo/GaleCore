@@ -82,6 +82,81 @@ public class ShadowInc5ReviewTests
         Assert.Equal(new DateTime(2026, 10, 1), ShadowRuntimeEngine.AddSessionDays(new DateTime(2026, 9, 24), 5));
     }
 
+    // ── Calendario de NYSE: feriados y cierres tempranos ─────────────
+
+    private static DateTime Utc(int y, int m, int d, int h, int min = 0) => new(y, m, d, h, min, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void NyseCalendar_Kinds()
+    {
+        Assert.Equal(NyseDay.Closed, NyseCalendar.Kind(new DateOnly(2026, 11, 26)));       // Acción de Gracias
+        Assert.Equal(NyseDay.Closed, NyseCalendar.Kind(new DateOnly(2028, 7, 4)));
+        Assert.Equal(NyseDay.EarlyClose, NyseCalendar.Kind(new DateOnly(2026, 11, 27)));
+        Assert.Equal(NyseDay.EarlyClose, NyseCalendar.Kind(new DateOnly(2028, 7, 3)));
+        Assert.Equal(NyseDay.Normal, NyseCalendar.Kind(new DateOnly(2026, 11, 30)));
+        Assert.Equal(NyseDay.Unknown, NyseCalendar.Kind(new DateOnly(2025, 12, 25)));
+        Assert.Equal(NyseDay.Unknown, NyseCalendar.Kind(new DateOnly(2029, 1, 2)));
+        Assert.Equal(Utc(2026, 11, 27, 18), NyseCalendar.EarlyCloseUtc(new DateOnly(2026, 11, 27)));   // 13:00 EST
+    }
+
+    [Fact]
+    public void Session_HolidayIsClosedAllDay()
+    {
+        var op = Spec().Operational;
+        Assert.False(ShadowSession.IsOpen(op, Utc(2026, 11, 26, 15)));    // jueves 26/11 10:00 ET: Acción de Gracias
+        Assert.True(ShadowSession.IsOpen(op, Utc(2026, 11, 25, 15)));     // el día anterior, normal
+    }
+
+    [Fact]
+    public void Session_EarlyCloseEndsAt1300NewYork_NormalDayIsUnchanged()
+    {
+        var op = Spec().Operational;                                       // 09:30–16:00 NY
+        Assert.True(ShadowSession.IsOpen(op, Utc(2026, 11, 27, 17, 59)));  // 12:59 ET
+        Assert.False(ShadowSession.IsOpen(op, Utc(2026, 11, 27, 18, 0)));  // 13:00 ET
+        Assert.False(ShadowSession.IsOpen(op, Utc(2026, 11, 27, 20, 0)));  // 15:00 ET
+        Assert.True(ShadowSession.IsOpen(op, Utc(2026, 11, 30, 20, 59)));  // lunes normal 15:59 ET
+        Assert.False(ShadowSession.IsOpen(op, Utc(2026, 11, 30, 21, 0)));
+        // Una spec que ya termina antes del cierre temprano no se estira.
+        Assert.False(ShadowSession.IsOpen(op with { SessionHours = new SessionHours { Start = "09:30", End = "12:00" } }, Utc(2026, 11, 27, 17, 30)));
+    }
+
+    [Fact]
+    public void Session_YearOutsideTheTable_IsClosed()
+    {
+        var op = Spec().Operational;
+        Assert.False(ShadowSession.IsOpen(op, Utc(2029, 3, 7, 15)));       // miércoles 10:00 ET de un año sin calendario
+        Assert.False(ShadowSession.IsOpen(op, Utc(2025, 9, 24, 15)));
+    }
+
+    [Fact]
+    public void AddSessionDays_SkipsHolidays_AndFailsClosedOutsideTheTable()
+    {
+        Assert.Equal(new DateTime(2026, 11, 27), ShadowRuntimeEngine.AddSessionDays(new DateTime(2026, 11, 25), 1));   // salta el jueves 26
+        Assert.Equal(new DateTime(2026, 12, 28), ShadowRuntimeEngine.AddSessionDays(new DateTime(2026, 12, 24), 1));   // 25 feriado, fin de semana
+        Assert.Equal(new DateTime(2026, 7, 6), ShadowRuntimeEngine.AddSessionDays(new DateTime(2026, 7, 2), 1));      // viernes 3/7 feriado
+        Assert.Null(ShadowRuntimeEngine.AddSessionDays(new DateTime(2028, 12, 29), 1));                               // lunes 1/1/2029 sin calendario
+    }
+
+    [Fact]
+    public async Task TimeExit_DaysAfterEntry_CrossesAHolidayAndFiresOnTheEarlyCloseDay()
+    {
+        var (store, data, spec, pos) = await OpenEquity(new DeterministicExits { TimeExit = new TimeExit { At = "15:45", DaysAfterEntry = 1 } });
+        store.UpdatePosition(pos with { EntryAt = Utc(2026, 11, 25, 16) });   // miércoles 25/11 11:00 ET
+        // El jueves 26 es feriado y el viernes 27 cierra 13:00: el día 1 es el viernes y la salida de las 15:45 cae a las 12:59.
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Valued, await Value(store, data, spec, pos, Utc(2026, 11, 27, 17, 58), 270));
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Closed, await Value(store, data, spec, pos, Utc(2026, 11, 27, 17, 59), 270));
+        Assert.Equal("TIME_EXIT", store.GetPosition(pos.PositionId)!.ExitReason);
+    }
+
+    [Fact]
+    public async Task TimeExit_DaysAfterEntry_TargetOutsideTheCalendar_DoesNotInventADay()
+    {
+        var (store, data, spec, pos) = await OpenEquity(new DeterministicExits { TimeExit = new TimeExit { At = "15:30", DaysAfterEntry = 1 } });
+        store.UpdatePosition(pos with { EntryAt = Utc(2028, 12, 29, 16) });   // viernes 29/12/2028; el día 1 sería 2029
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Valued, await Value(store, data, spec, pos, Utc(2028, 12, 29, 20, 45), 270));   // 15:45 ET
+        Assert.Contains(store.GetPosition(pos.PositionId)!.ValuationProblems!, p => p.Contains("calendario de NYSE"));
+    }
+
     // ── event_exits ──────────────────────────────────────────────────
 
     private static EventExit Earnings(string onNoData = "HOLD") => new()

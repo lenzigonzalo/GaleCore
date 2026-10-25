@@ -1,15 +1,15 @@
 using System.Globalization;
 using DataFeed.Application.App.Runtime.Contracts;
+using DataFeed.Application.App.Shared;
 
 namespace DataFeed.Application.App.Runtime
 {
     /// <summary>
     /// Horario de sesión de la spec (operational.session_hours en operational.timezone).
     ///
-    /// Sin calendario de feriados: un feriado de NYSE en día hábil cuenta como sesión abierta. Es una
-    /// limitación declarada de GC-0002; lo que queda cubierto es la noche y el fin de semana, cuando
-    /// las cotizaciones son las del último cierre. Si la zona o el horario no se pueden leer, la
-    /// sesión se considera cerrada (falla cerrado).
+    /// Con el calendario de NYSE (<see cref="NyseCalendar"/>): un feriado cierra la sesión todo el día y un cierre temprano
+    /// la termina a las 13:00 NY si la spec la terminaba después. Un año fuera de la tabla, una zona o un horario que no se
+    /// pueden leer: sesión cerrada (falla cerrado). El motivo no tiene estado propio en el scheduler: todo es OUTSIDE_SESSION.
     /// </summary>
     public static class ShadowSession
     {
@@ -22,7 +22,25 @@ namespace DataFeed.Application.App.Runtime
 
             var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), zone);
             if (local.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) return false;
+            var nyDate = NyseCalendar.NyDate(nowUtc);
+            switch (NyseCalendar.Kind(nyDate))
+            {
+                case NyseDay.Closed or NyseDay.Unknown: return false;
+                case NyseDay.EarlyClose when DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc) >= NyseCalendar.EarlyCloseUtc(nyDate): return false;
+            }
             return local.TimeOfDay >= start && local.TimeOfDay < end;
+        }
+
+        /// <summary>
+        /// Hora local efectiva de una salida «a las <paramref name="at"/>» el día de sesión <paramref name="localDate"/>: en un cierre
+        /// temprano que cae antes de <paramref name="at"/>, el último minuto con la sesión abierta (la salida no pasa al día siguiente).
+        /// </summary>
+        public static TimeSpan EffectiveExitTime(SpecOperational operational, DateTime localDate, TimeSpan at)
+        {
+            var day = DateOnly.FromDateTime(localDate);
+            if (NyseCalendar.Kind(day) != NyseDay.EarlyClose || !TryZone(operational.Timezone, out var zone)) return at;
+            var lastOpen = TimeZoneInfo.ConvertTimeFromUtc(NyseCalendar.EarlyCloseUtc(day), zone).TimeOfDay - TimeSpan.FromMinutes(1);
+            return at < lastOpen ? at : lastOpen;
         }
 
         /// <summary>

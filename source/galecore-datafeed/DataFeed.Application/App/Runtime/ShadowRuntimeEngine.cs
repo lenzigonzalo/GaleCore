@@ -349,6 +349,26 @@ namespace DataFeed.Application.App.Runtime
                         else exitProblems.Add($"salida por evento sin dato: {r.Label}");
                     }
                 }
+            // Salida por hora (WS-0062 inc.5): con days_after_entry, a esa hora del N-ésimo día de sesión tras la entrada (0 = el mismo día);
+            // sin él, el día del vencimiento (DTE 0). Los feriados de NYSE no cuentan como día de sesión; en un cierre temprano la salida
+            // se dispara en el último minuto abierto. Si el calendario no cubre la fecha, no se inventa un día: queda anotado.
+            bool timeOfDayReached = false;
+            var op = operational ?? new SpecOperational();
+            if (evaluateExits && exits.TimeExit?.At is string at && ShadowSession.TryTime(at, out var atTime)
+                && ShadowSession.LocalTime(op, nowUtc) is DateTime localNow)
+            {
+                if (exits.TimeExit.DaysAfterEntry is int n && ShadowSession.LocalTime(op, pos.EntryAt) is DateTime entryLocal)
+                {
+                    if (AddSessionDays(entryLocal.Date, n) is DateTime target)
+                    {
+                        var effectiveAt = ShadowSession.EffectiveExitTime(op, target, atTime);
+                        timeOfDayReached = localNow.Date > target || (localNow.Date == target && localNow.TimeOfDay >= effectiveAt);
+                    }
+                    else exitProblems.Add("salida por hora sin dato: el calendario de NYSE no cubre el día de sesión de la salida");
+                }
+                else if (exits.TimeExit.DaysAfterEntry == null && dte == 0)
+                    timeOfDayReached = localNow.TimeOfDay >= atTime;
+            }
             if (exitProblems.Count > 0)
             {
                 valued = valued with { ValuationProblems = exitProblems };
@@ -358,22 +378,6 @@ namespace DataFeed.Application.App.Runtime
             }
             store.UpdatePosition(valued);
             if (!evaluateExits) return Outcomes.Valued;
-
-            // Salida por hora (WS-0062 inc.5): con days_after_entry, a esa hora del N-ésimo día de sesión tras la entrada (0 = el mismo día);
-            // sin él, el día del vencimiento (DTE 0).
-            bool timeOfDayReached = false;
-            var op = operational ?? new SpecOperational();
-            if (exits.TimeExit?.At is string at && ShadowSession.TryTime(at, out var atTime)
-                && ShadowSession.LocalTime(op, nowUtc) is DateTime localNow)
-            {
-                if (exits.TimeExit.DaysAfterEntry is int n && ShadowSession.LocalTime(op, pos.EntryAt) is DateTime entryLocal)
-                {
-                    var target = AddSessionDays(entryLocal.Date, n);
-                    timeOfDayReached = localNow.Date > target || (localNow.Date == target && localNow.TimeOfDay >= atTime);
-                }
-                else if (exits.TimeExit.DaysAfterEntry == null && dte == 0)
-                    timeOfDayReached = localNow.TimeOfDay >= atTime;
-            }
 
             var reason = ShadowFillSimulator.EvaluateExits(valued, exits, spreadValue, dte ?? int.MaxValue, metricMet, timeOfDayReached, eventMet);
             if (reason == null) return Outcomes.Valued;
@@ -456,14 +460,23 @@ namespace DataFeed.Application.App.Runtime
             });
         }
 
-        /// <summary>El día de sesión N después de <paramref name="date"/> (lunes a viernes, sin calendario de feriados).</summary>
-        public static DateTime AddSessionDays(DateTime date, int n)
+        /// <summary>
+        /// El día de sesión N después de <paramref name="date"/>: lunes a viernes sin los feriados de NYSE (los cierres tempranos cuentan).
+        /// Null si algún día a contar cae en un año que el calendario no cubre: no se sabe, no se inventa.
+        /// </summary>
+        public static DateTime? AddSessionDays(DateTime date, int n)
         {
             var d = date;
             for (int i = 0; i < n; i++)
             {
-                d = d.AddDays(1);
-                while (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) d = d.AddDays(1);
+                do
+                {
+                    d = d.AddDays(1);
+                    while (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) d = d.AddDays(1);
+                    var kind = NyseCalendar.Kind(DateOnly.FromDateTime(d));
+                    if (kind == NyseDay.Unknown) return null;
+                    if (kind != NyseDay.Closed) break;
+                } while (true);
             }
             return d;
         }
