@@ -243,7 +243,7 @@ namespace DataFeed.Application.App.Runtime
     {
         public DateTime AsOf { get; init; }
         public string Mode { get; init; } = "SHADOW";
-        public string Source { get; init; } = "posiciones SHADOW guardadas (shadow_positions); P&L en USD por contrato";
+        public string Source { get; init; } = "posiciones SHADOW guardadas (shadow_positions); P&L en USD por posición";
         public string Spec { get; init; } = "";
         public string? Version { get; init; }
         public DateTime? From { get; init; }

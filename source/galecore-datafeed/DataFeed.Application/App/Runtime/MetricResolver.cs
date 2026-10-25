@@ -208,6 +208,9 @@ namespace DataFeed.Application.App.Runtime
             if (candles == null || fast <= 0 || slow <= fast) return null;
             var list = candles.Where(c => c.Close > 0 && double.IsFinite(c.Close)).OrderBy(c => c.Time).ToList();
             if (list.Count < slow * 2) return null;
+            // Una vela sin hora o con hora futura es dato malformado: no se descarta en silencio, el resultado no sirve.
+            if (list[0].Time <= 0 || DateTimeOffset.FromUnixTimeMilliseconds(list[^1].Time).UtcDateTime > nowUtc + DataFreshness.ClockSkew)
+                return null;
             var last = DateTimeOffset.FromUnixTimeMilliseconds(list[^1].Time).UtcDateTime;
             if (nowUtc - last > TimeSpan.FromDays(MaxLastCandleAgeDays)) return null;
             var spread = CascadeUtils.ComputeEMA(list, fast) - CascadeUtils.ComputeEMA(list, slow);

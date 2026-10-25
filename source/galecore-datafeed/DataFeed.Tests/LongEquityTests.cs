@@ -50,6 +50,18 @@ public class LongEquityTests
         Assert.Null(MetricResolver.UsableEmaSpread(Candles(120, i => 100 + i), 50, 20, Now));         // fast >= slow
     }
 
+    [Fact]
+    public void EmaSpread_FutureOrTimelessCandle_IsNull()
+    {
+        var future = Candles(120, i => 100 + i);
+        future[^1].Time = new DateTimeOffset(Now.AddDays(3)).ToUnixTimeMilliseconds();   // la vela más nueva, en el futuro
+        Assert.Null(MetricResolver.UsableEmaSpread(future, 20, 50, Now));
+
+        var timeless = Candles(120, i => 100 + i);
+        timeless[0].Time = 0;                                                            // una vela sin hora
+        Assert.Null(MetricResolver.UsableEmaSpread(timeless, 20, 50, Now));
+    }
+
     private sealed class CandleMediator : IMediator
     {
         public List<CandleData>? Data;
