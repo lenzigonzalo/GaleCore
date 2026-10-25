@@ -1185,7 +1185,11 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
     if args.strategy_command == "check":
         content, _ = _read_proposal_request()
         text, name = _read_spec(args.spec)
-        report = check_proposal(content, text, name)
+        try:
+            report = check_proposal(content, text, name)   # asks GaleCore (/App/Runtime/Specs/Check); no fallback
+        except KnowledgeError as exc:
+            _knowledge_error_out(exc)
+            raise AssertionError("unreachable") from exc
         from galecore_ai.contracts.strategy import design_gaps
         _json_out({**report.model_dump(mode="json"), "spec_hash": galecore_spec_hash(text),
                    "design_gaps": design_gaps(content)},

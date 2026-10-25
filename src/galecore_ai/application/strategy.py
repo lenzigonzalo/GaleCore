@@ -1,26 +1,24 @@
 """Strategy use cases (GC-AI-0008): check a proposal against its spec and the runtime, store it,
 record the owner's approval of an exact version, and refuse a deploy whose hash is not the approved one.
 
-The check answers one question: does the spec make GaleCore do what the proposal says, and does the
-proposal say everything the runtime will not do? It is fail-closed:
+The runtime is the authority on its own spec (WS-0062 inc. 8b): validity, errors, the hash and which spec paths
+it executes come from GaleCore's ``POST /App/Runtime/Specs/Check`` (read-only), never from a table kept here.
+The harness keeps its own job, fail-closed:
 
-- every leaf of the spec must be in the runtime support table (a field nobody mapped is an error);
-- a field the runtime ignores must hold the value that matches what the runtime really does
-  (e.g. sizing is always one contract), otherwise the spec would promise behavior that never runs;
-- a field the runtime executes must be explained by a supported rule, and a supported rule may only
-  name fields the runtime executes;
+- every rule the proposal marks SUPPORTED must cite spec paths GaleCore reports as executed;
+- every path GaleCore reports as executed must be explained by some supported rule;
+- identity, file name, ASCII text, version mentions and the hash GaleCore reports against the local one;
 - a rule the runtime cannot execute stays out of the spec and is listed as a declared gap.
 
-The support table describes GaleCore's SHADOW runtime as read in code (``RUNTIME_REFERENCE``). When
-the runtime changes, the table changes with it; until then an unknown field fails the check.
+Without GaleCore there is no check (it is always on): the error says so, there is no fallback.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
-import math
-import re
+import os
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -49,13 +47,7 @@ from galecore_ai.contracts.strategy import (
     other_version_mentions,
 )
 
-RUNTIME_REFERENCE = (
-    "GaleCore feature/GC-0004-shadow-durable @ bc62f22 + feature/GC-0005-shadow-espaciado @ f86877e "
-    "(min_minutes_between_entries): DataFeed.Application/App/Runtime "
-    "+ P1-07 (WS-0019 @ d8f82e8: PCS, CCS e iron condor; una instancia RUNNING por versión) "
-    "(ShadowRuntimeEngine, GenericGateEvaluator, MetricResolver, CreditSpreadCandidateBuilder, ShadowRiskValidator, "
-    "ShadowFillSimulator.EvaluateExits, ShadowRuntimeTick, StrategySpecHasher)"
-)
+RUNTIME_REFERENCE = "GaleCore POST /App/Runtime/Specs/Check (el runtime dice qué ejecuta)"
 
 # ── GaleCore's content hash ──────────────────────────────────────
 # StrategySpecHasher: drop content_hash, keys sorted by UTF-16 code units, no whitespace, numbers
@@ -128,161 +120,42 @@ def galecore_spec_hash(spec_json: str) -> str:
     return "sha256:" + hashlib.sha256(_canonical(data).encode("utf-8")).hexdigest()
 
 
-# ── runtime support table ────────────────────────────────────────
 
-SELL_PUT = "candidate_construction.legs[sell_put]"
-BUY_PUT = "candidate_construction.legs[buy_put]"
-SELL_CALL = "candidate_construction.legs[sell_call]"
-BUY_CALL = "candidate_construction.legs[buy_call]"
-GATE = "entry_filters.gate_layer.gates"
-# What CreditSpreadCandidateBuilder builds (GaleCore P1-07): one vertical per side, same expiration.
-STRUCTURE_LEGS = {
-    "put_credit_spread": ["buy_put", "sell_put"],
-    "call_credit_spread": ["buy_call", "sell_call"],
-    "iron_condor": ["buy_call", "buy_put", "sell_call", "sell_put"],
-    # LongEquityCandidateBuilder (GaleCore WS-0061): one BUY STOCK leg at the quote's mid.
-    "long_equity": ["buy_stock"],
-}
-LONG_EQUITY = "long_equity"
-BUY_STOCK = "candidate_construction.legs[buy_stock]"
-METRIC_EXIT = "exits.deterministic.metric_exit"
+# ── GaleCore's check of a spec ───────────────────────────────────
 
-# Executed by the runtime: a non-null value changes what GaleCore does, so a supported rule explains it.
-EXECUTED = {
-    "universe.symbols": "cada símbolo de la lista se evalúa en cada ciclo",
-    "structure.allowed_strategies": "ShadowRiskValidator rechaza estructuras fuera de la lista",
-    "structure.forbidden_strategies": "ShadowRiskValidator rechaza estructuras de la lista",
-    "structure.default_structure": ("CreditSpreadCandidateBuilder: put_credit_spread, call_credit_spread o iron_condor; "
-                                   "LongEquityCandidateBuilder: long_equity, una compra de acciones al mid"),
-    f"{SELL_PUT}.strike_selection.target_delta": "delta objetivo del put vendido",
-    f"{SELL_PUT}.strike_selection.delta_tolerance": "tolerancia alrededor del delta objetivo",
-    f"{BUY_PUT}.strike_selection.width": "ancho del spread en dólares",
-    f"{SELL_CALL}.strike_selection.target_delta": "delta objetivo de la call vendida (positivo)",
-    f"{SELL_CALL}.strike_selection.delta_tolerance": "tolerancia alrededor del delta objetivo de la call",
-    f"{BUY_CALL}.strike_selection.width": "ancho del spread de calls en dólares",
-    "candidate_construction.constraints.min_dte": "DTE mínimo del vencimiento elegido",
-    "candidate_construction.constraints.max_dte": "DTE máximo del vencimiento elegido",
-    "candidate_construction.constraints.min_credit": "crédito mínimo a mid; menos → sin candidato",
-    "risk_limits.max_concurrent_positions": "posiciones abiertas máximas → ENTRY_SKIPPED",
-    "risk_limits.min_minutes_between_entries": ("minutos mínimos desde la última entrada de la instancia, abierta "
-                                                "o cerrada → ENTRY_SKIPPED (GaleCore GC-0005; un runtime anterior "
-                                                "lo ignora)"),
-    "risk_limits.max_loss_per_trade_usd": "riesgo máximo por operación (ancho − crédito) × 100",
-    METRIC_EXIT: ("cierra la posición cuando la métrica cumple operador y umbral (se registra como METRIC_EXIT); "
-                  "se evalúa con la sesión abierta y sin dato no cierra"),
-    "exits.deterministic.stop_loss.pct_of_credit": "cierra si pérdida ≥ pct × crédito (precedencia 1)",
-    "exits.deterministic.take_profit.pct_of_credit": "cierra si valor ≤ (1 − pct) × crédito (precedencia 2)",
-    "exits.deterministic.time_exit.max_dte": "cierra si DTE ≤ max_dte (precedencia 3)",
-    "operational.timezone": "zona horaria de la sesión",
-    "operational.session_hours.start": "inicio de la sesión evaluada (lunes a viernes)",
-    "operational.session_hours.end": "fin de la sesión evaluada",
-    "data_quality.max_quote_age_seconds": ("antigüedad máxima × 10 en SHADOW (DataFreshness.ShadowAgeFactor); "
-                                           "una cotización sin hora no se puede medir y se acepta"),
-}
-
-# Executed only for long_equity (LongEquityCandidateBuilder / ShadowRiskValidator on a stock position).
-EQUITY_EXECUTED = {
-    "candidate_construction.sizing.fixed_contracts": "cantidad de acciones que compra en cada entrada",
-    "risk_limits.max_loss_per_trade_usd": "costo máximo de la posición (precio × acciones); más → no entra",
-}
-# EXECUTED rules that need a credit, a delta or an expiration: for long_equity the runtime never reads them
-# (GaleCore rejects the exits outright), so only null is honest.
-OPTIONS_ONLY = (
-    "candidate_construction.constraints.min_dte", "candidate_construction.constraints.max_dte",
-    "candidate_construction.constraints.min_credit", "exits.deterministic.stop_loss.pct_of_credit",
-    "exits.deterministic.take_profit.pct_of_credit", "exits.deterministic.time_exit.max_dte",
-)
-
-# Ignored by the runtime: only the value that matches what the runtime really does is honest.
-_NEUTRAL: dict[str, tuple[Any, ...]] = {
-    "candidate_construction.sizing.method": ("FIXED",),
-    "candidate_construction.sizing.fixed_contracts": (None, 1),
-    "candidate_construction.sizing.risk_per_trade_pct": (None,),
-    "candidate_construction.constraints.max_bid_ask_spread_pct": (None,),
-    "exits.deterministic.defensive_roll.enabled": (False,),
-    "risk_limits.max_risk_per_trade_pct": (None,),   # compared against net liq, which SHADOW passes as null
-    "risk_limits.max_portfolio_heat_pct": (None,),
-    "entry_filters.signal_layer.gates": ([],),       # validated, never evaluated
-    "analytics_refs": ({},),
-    "data_quality.block_on_crossed_market": (True,),  # the runtime always discards crossed quotes
-    "data_quality.block_on_missing_critical_data": (True,),  # and always blocks without data
-}
-_RUNTIME_DOES = {
-    "candidate_construction.sizing.method": "siempre 1 contrato",
-    "candidate_construction.sizing.fixed_contracts": "siempre 1 contrato",
-    "candidate_construction.sizing.risk_per_trade_pct": "no dimensiona por riesgo",
-    "candidate_construction.constraints.max_bid_ask_spread_pct": "no filtra por bid/ask",
-    "exits.deterministic.defensive_roll.enabled": "no hace roll",
-    "risk_limits.max_risk_per_trade_pct": "no lo aplica (net liq nula en SHADOW)",
-    "risk_limits.max_portfolio_heat_pct": "no mide heat",
-    "entry_filters.signal_layer.gates": "no evalúa la capa de señales",
-    "analytics_refs": "no usa analytics_refs",
-    "data_quality.block_on_crossed_market": "siempre descarta cotizaciones cruzadas",
-    "data_quality.block_on_missing_critical_data": "siempre bloquea sin datos",
-}
-
-# What the runtime always does, whatever the spec says: a supported rule may rest on these fields when
-# they hold that value. A null neutral (no heat, no bid/ask filter) is an absence, never support.
-IMPLICIT_BEHAVIOR = ("candidate_construction.sizing.method", "candidate_construction.sizing.fixed_contracts",
-                     "exits.deterministic.defensive_roll.enabled", "data_quality.block_on_crossed_market",
-                     "data_quality.block_on_missing_critical_data")
-
-# No neutral value exists: the proposal must declare the gap with an unsupported rule naming the field.
-MUST_DECLARE = {
-    "operational.calendar": "sólo excluye sábados y domingos; no conoce feriados",
-}
-
-# The runtime has exactly one semantics for these: any other value would promise behavior it does not have.
-_FIXED: dict[str, Any] = {
-    "universe.mode": "WHITELIST",
-    "universe.instrument_types": ["EQUITY_OPTION"],   # long_equity: ["EQUITY"] (_FIXED_EQUITY)
-    "universe.excluded": {},
-    "structure.selection_method": "FIXED",
-    "entry_filters.gate_layer.pass_rule": "ALL",
-    "entry_filters.gate_layer.on_fail": "NO_TRADE",
-    "deployment_constraints.eligible_modes": ["SHADOW"],
-    f"{SELL_PUT}.strike_selection.method": "DELTA",
-    f"{BUY_PUT}.strike_selection.method": "FIXED_WIDTH",
-    f"{SELL_CALL}.strike_selection.method": "DELTA",
-    f"{BUY_CALL}.strike_selection.method": "FIXED_WIDTH",
-}
-_FIXED_EQUITY = {"universe.instrument_types": ["EQUITY"], f"{BUY_STOCK}.strike_selection.method": "NONE"}
-
-# Descriptive fields with no behavior in SHADOW (leg side/type are checked by the legs' shape).
-_INFORMATIONAL = {
-    "strategy_spec_version", "canonicalization_version", "content_hash",
-    "deployment_constraints.requires_human_approval_for", "entry_filters.signal_layer.pass_rule",
-    "operational.decimal_precision", "operational.currency", "operational.rounding", "operational.symbology",
-    *(f"{leg}.{k}" for leg in (SELL_PUT, BUY_PUT, SELL_CALL, BUY_CALL, BUY_STOCK) for k in ("side", "type")),
-}
-_INFORMATIONAL_PREFIXES = ("identity.", "metadata.")
-_ROLL = "exits.deterministic.defensive_roll."
-# Leg fields the builder never reads for that leg: only null is honest.
-_NULL_ONLY = (f"{SELL_PUT}.strike_selection.width", f"{BUY_PUT}.strike_selection.target_delta",
-              f"{BUY_PUT}.strike_selection.delta_tolerance", f"{SELL_CALL}.strike_selection.width",
-              f"{BUY_CALL}.strike_selection.target_delta", f"{BUY_CALL}.strike_selection.delta_tolerance",
-              *(f"{BUY_STOCK}.strike_selection.{k}" for k in ("target_delta", "delta_tolerance", "width")))
-
-_METRIC_RE = re.compile(
-    r"^capability:(market_data\.quote\.[A-Z0-9.^]+\.price|market_data\.trade\.[A-Z0-9.^]+\.price|"
-    r"compute\.gamma_exposure\.[A-Z0-9.^]+\.net_gex|compute\.ema_spread\.[A-Z0-9.^]+\.[0-9]+\.[0-9]+)$")
-_EMA_RE = re.compile(r"\.([0-9]+)\.([0-9]+)$")
-_OPERATORS = {"LT", "LTE", "GT", "GTE", "EQ", "NEQ", "BETWEEN"}
-_GATE_KEYS = {"id", "label", "metric_ref", "operator", "threshold", "on_fail", "on_no_data"}
+CHECK_PATH = "/App/Runtime/Specs/Check"
+SpecChecker = Callable[[str], dict]   # spec text -> GaleCore's Check response
 
 
-def _leg_key(leg: dict) -> str:
-    return f"{str(leg.get('side', '')).lower()}_{str(leg.get('type', '')).lower()}"
+def galecore_spec_checker(base_url: str | None = None, api_key: str | None = None, timeout: float = 30.0) -> SpecChecker:
+    """POST the spec to GaleCore's read-only Check. An unreachable or older GaleCore is an error, not a fallback."""
+    import httpx
 
+    base = (base_url or os.environ.get("GALECORE_BASE_URL", "http://localhost:7001")).rstrip("/")
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if key := (api_key or os.environ.get("GALECORE_API_KEY")):
+        headers["X-Api-Key"] = key
 
-def _number(v: Any) -> bool:
-    """A finite JSON number the runtime can hold as a double (an integer like 10**400 is not)."""
-    if not isinstance(v, int | float) or isinstance(v, bool):
-        return False
-    try:
-        return math.isfinite(float(v))
-    except OverflowError:
-        return False
+    def check(spec_json: str) -> dict:
+        try:
+            r = httpx.post(base + CHECK_PATH, content=spec_json.encode("utf-8"), headers=headers, timeout=timeout)
+        except httpx.HTTPError as exc:
+            raise KnowledgeError(f"GaleCore no respondió en {base} ({type(exc).__name__}): sin GaleCore no se puede "
+                                 "verificar qué ejecuta el runtime, y no hay otra fuente") from exc
+        if r.status_code == 404:
+            raise KnowledgeError(f"GaleCore en {base} no tiene {CHECK_PATH}: corre una versión anterior al runtime "
+                                 "genérico (WS-0062); sin él no se puede verificar la spec")
+        if r.status_code != 200:
+            raise KnowledgeError(f"POST {CHECK_PATH} -> HTTP {r.status_code}")
+        try:
+            body = r.json()
+        except ValueError as exc:
+            raise KnowledgeError(f"POST {CHECK_PATH} no devolvió JSON") from exc
+        if not isinstance(body, dict) or not isinstance(body.get("valid"), bool):
+            raise KnowledgeError(f"POST {CHECK_PATH} devolvió algo que no es un resultado de Check")
+        return body
+
+    return check
 
 
 def _obj(v: Any) -> dict:
@@ -290,151 +163,13 @@ def _obj(v: Any) -> dict:
     return v if isinstance(v, dict) else {}
 
 
-def _leg_value_errors(legs: Any) -> list[str]:
-    """GaleCore's StrategySpecValidator checks plus what the builder needs to build at all (fail-closed): the seller
-    needs a finite delta (put < 0, call > 0) and tolerance > 0; the buyer, a finite width > 0."""
-    errors = []
-    for leg in legs if isinstance(legs, list) else []:
-        if not isinstance(leg, dict):
-            errors.append(f"candidate_construction.legs: a leg must be an object, got {leg!r}")
-            continue
-        key, sel = _leg_key(leg), leg.get("strike_selection")
-        if key == "buy_stock":
-            continue   # a stock has no strike: its strike_selection fields are checked as null-only
-        path = f"candidate_construction.legs[{key}].strike_selection"
-        if not isinstance(sel, dict):
-            errors.append(f"{path} must be an object")
-            continue
-        if key.startswith("sell_"):
-            delta, tol = sel.get("target_delta"), sel.get("delta_tolerance")
-            if not _number(delta):
-                errors.append(f"{path}.target_delta must be a number, got {delta!r}")
-            elif key == "sell_put" and delta >= 0:
-                errors.append(f"{path}.target_delta must be negative (put delta)")
-            elif key == "sell_call" and delta <= 0:
-                errors.append(f"{path}.target_delta must be positive (call delta)")
-            if not _number(tol) or tol <= 0:
-                errors.append(f"{path}.delta_tolerance must be positive, got {tol!r}")
-        elif key.startswith("buy_"):
-            width = sel.get("width")
-            if not _number(width) or width <= 0:
-                errors.append(f"{path}.width must be positive, got {width!r}")
-    return errors
+def _related(p: str, e: str) -> bool:
+    """Spec paths are opaque dotted strings with list indexes: one covers the other when it is a prefix."""
+    return p == e or any(a.startswith(b + sep) for a, b in ((e, p), (p, e)) for sep in (".", "["))
 
 
-def _structure_errors(spec: dict) -> list[str]:
-    """GaleCore's StrategySpecValidator on structure (P1-07): the default is allowed and not forbidden, every allowed
-    structure is one the runtime builds, nothing is both allowed and forbidden; min_credit > 0 (no zero/debit entry)."""
-    errors = []
-    structure = _obj(spec.get("structure"))
-    allowed, forbidden = structure.get("allowed_strategies"), structure.get("forbidden_strategies")
-    if not isinstance(allowed, list) or not allowed or not all(isinstance(a, str) for a in allowed):
-        errors.append(f"structure.allowed_strategies must be a non-empty list of names, got {allowed!r}")
-        allowed = []
-    if not isinstance(forbidden, list) or not all(isinstance(f, str) for f in forbidden):
-        errors.append(f"structure.forbidden_strategies must be a list of names, got {forbidden!r}")
-        forbidden = []
-    unbuilt = [a for a in allowed if a not in STRUCTURE_LEGS]
-    if unbuilt:
-        errors.append(f"structure.allowed_strategies {unbuilt} are not built by the runtime ({', '.join(STRUCTURE_LEGS)})")
-    both = sorted(set(allowed) & set(forbidden))
-    if both:
-        errors.append(f"structure: {both} are both allowed and forbidden")
-    default = structure.get("default_structure")
-    if allowed and default not in allowed:
-        errors.append(f"structure.default_structure {default!r} must be in allowed_strategies "
-                      "(otherwise the risk check rejects every candidate)")
-    if default in forbidden:
-        errors.append(f"structure.default_structure {default!r} is forbidden")
-    min_credit = _obj(_obj(spec.get("candidate_construction")).get("constraints")).get("min_credit")
-    if min_credit is not None and not (_number(min_credit) and min_credit > 0):
-        errors.append(f"candidate_construction.constraints.min_credit must be positive, got {min_credit!r}")
-    return errors
-
-
-def _leaves(node: Any, path: str, out: dict[str, Any], errors: list[str]) -> None:
-    if path == METRIC_EXIT and isinstance(node, dict) and node:
-        out[path] = node
-        return
-    if isinstance(node, dict) and node:
-        for k, v in node.items():
-            _leaves(v, f"{path}.{k}" if path else k, out, errors)
-        return
-    if path == GATE and isinstance(node, list):
-        for gate in node:
-            gid = gate.get("id") if isinstance(gate, dict) else None
-            out[f"{GATE}[{gid}]"] = gate
-        return
-    if path == "candidate_construction.legs" and isinstance(node, list):
-        keys = [_leg_key(leg) if isinstance(leg, dict) else "?" for leg in node]
-        if sorted(keys) not in STRUCTURE_LEGS.values():
-            errors.append(f"legs must be one SELL and one BUY per side of a credit spread or iron condor, or one BUY STOCK; got {keys}")
-            return
-        for leg in node:
-            _leaves(leg, f"candidate_construction.legs[{_leg_key(leg)}]", out, errors)
-        return
-    out[path] = node
-
-
-def _metric_problem(ref: Any) -> str | None:
-    if not _METRIC_RE.fullmatch(str(ref)):
-        return (f"metric_ref {ref!r} is not one the runtime resolves (quote/trade price, net GEX or ema_spread "
-                "SYMBOL.fast.slow); it would be NO_DATA forever")
-    if m := _EMA_RE.search(str(ref)):
-        fast, slow = int(m.group(1)), int(m.group(2))
-        if fast <= 0 or slow <= fast:
-            return f"metric_ref {ref!r}: ema_spread needs 0 < fast < slow"
-    return None
-
-
-def _check_threshold(key: str, node: dict, errors: list[str]) -> None:
-    threshold = node.get("threshold")
-    if not isinstance(threshold, dict):
-        errors.append(f"{key}: threshold must be an object")
-        return
-    def number(v: Any) -> bool:
-        return isinstance(v, int | float) and not isinstance(v, bool)
-    extra = sorted(set(threshold) - {"value", "min", "max"})
-    if extra:
-        errors.append(f"{key}: threshold properties never read: {extra}")
-    if node.get("operator") == "BETWEEN":
-        if not (number(threshold.get("min")) and number(threshold.get("max"))) or threshold.get("value") is not None:
-            errors.append(f"{key}: BETWEEN needs numeric threshold.min and threshold.max and no value")
-    elif not number(threshold.get("value")) or threshold.get("min") is not None or threshold.get("max") is not None:
-        errors.append(f"{key}: {node.get('operator')} needs a numeric threshold.value and no min/max")
-
-
-def _check_gate(key: str, gate: Any, errors: list[str]) -> None:
-    if not isinstance(gate, dict) or not gate.get("id"):
-        errors.append(f"{key}: a gate needs an id")
-        return
-    if problem := _metric_problem(gate.get("metric_ref", "")):
-        errors.append(f"{key}: {problem}")
-    if gate.get("operator") not in _OPERATORS:
-        errors.append(f"{key}: operator {gate.get('operator')!r} unknown")
-    if gate.get("on_fail") != "NO_TRADE" or gate.get("on_no_data") != "BLOCK":
-        errors.append(f"{key}: only on_fail=NO_TRADE and on_no_data=BLOCK keep a gate fail-closed")
-    unknown = sorted(set(gate) - _GATE_KEYS)
-    if unknown:
-        errors.append(f"{key}: properties the gate evaluator never reads: {unknown}")
-    _check_threshold(key, gate, errors)
-
-
-def _check_metric_exit(key: str, node: Any, errors: list[str]) -> None:
-    if not isinstance(node, dict):
-        errors.append(f"{key} must be an object")
-        return
-    if problem := _metric_problem(node.get("metric_ref", "")):
-        errors.append(f"{key}: {problem}")
-    if node.get("operator") not in _OPERATORS:
-        errors.append(f"{key}: operator {node.get('operator')!r} unknown")
-    unknown = sorted(set(node) - {"metric_ref", "operator", "threshold"})
-    if unknown:
-        errors.append(f"{key}: properties the runtime never reads: {unknown}")
-    _check_threshold(key, node, errors)
-
-
-def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> CheckReport:
+def check_proposal(content: ProposalContent, spec_json: str, spec_file: str,
+                   checker: SpecChecker | None = None) -> CheckReport:
     errors: list[str] = []
     try:
         spec = json.loads(spec_json)
@@ -459,89 +194,33 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str) -> 
                       "rules, evaluation plan and approval questions must name this exact version")
     if spec.get("content_hash") is not None:
         errors.append("content_hash must be null in the file; GaleCore computes it")
-    structure = _obj(spec.get("structure")).get("default_structure")
-    legs = _obj(spec.get("candidate_construction")).get("legs")
-    equity = structure == LONG_EQUITY
-    if not isinstance(structure, str) or structure not in STRUCTURE_LEGS:
-        errors.append(f"default_structure {structure!r} is not built by the runtime ({', '.join(STRUCTURE_LEGS)})")
-    elif isinstance(legs, list) and sorted(_leg_key(x) for x in legs if isinstance(x, dict)) != STRUCTURE_LEGS[structure]:
-        errors.append(f"legs must be exactly {STRUCTURE_LEGS[structure]} for {structure}")
-    errors.extend(_leg_value_errors(legs))
-    errors.extend(_structure_errors(spec))
 
-    leaves: dict[str, Any] = {}
-    _leaves(spec, "", leaves, errors)
-    executed = EXECUTED
-    if equity:   # what the stock builder reads; the % of credit / DTE rules are left to the null-only check
-        executed = {**{k: v for k, v in EXECUTED.items() if k not in OPTIONS_ONLY}, **EQUITY_EXECUTED}
-        shares = leaves.get("candidate_construction.sizing.fixed_contracts")
-        if not (isinstance(shares, int) and not isinstance(shares, bool) and shares > 0):
-            errors.append("candidate_construction.sizing.fixed_contracts must be a positive integer (shares) "
-                          f"for long_equity, got {shares!r}")
-        if leaves.get("candidate_construction.sizing.method") != "FIXED":
-            errors.append("candidate_construction.sizing.method must be FIXED for long_equity")
-    fixed = {**_FIXED, **_FIXED_EQUITY} if equity else _FIXED
-
-    supported_paths: dict[str, list[str]] = {}
-    declared_paths: set[str] = set()
-    for rule in content.rules:
-        if rule.runtime.status == RuntimeStatus.SUPPORTED:
-            for p in rule.runtime.spec_paths:
-                supported_paths.setdefault(p, []).append(rule.id)
-        else:
-            declared_paths.update(rule.runtime.spec_paths)
+    result = (checker or galecore_spec_checker())(spec_json)
+    errors.extend(f"GaleCore: {e}" for e in result.get("errors") or [])
+    if not result["valid"] and not result.get("errors"):
+        errors.append("GaleCore: the runtime refuses the spec without saying why")
+    reported = result.get("content_hash")
+    if result["valid"] and reported != galecore_spec_hash(spec_json):
+        errors.append(f"GaleCore hashes this spec as {reported}, the local hash is {galecore_spec_hash(spec_json)}")
 
     coverage: dict[str, list[str]] = {}
-    for path, value in sorted(leaves.items()):
-        if path.startswith(f"{GATE}["):
-            _check_gate(path, value, errors)
-            if path not in supported_paths:
-                errors.append(f"{path}: the runtime evaluates this gate but no supported rule explains it")
-            coverage[path] = supported_paths.get(path, [])
-        elif path in executed:
-            if value is None:
-                continue
-            if path == METRIC_EXIT:
-                _check_metric_exit(path, value, errors)
-            if path not in supported_paths:
-                errors.append(f"{path} = {value!r}: the runtime executes it ({executed[path]}) "
-                              "but no supported rule explains it")
-            coverage[path] = supported_paths.get(path, [])
-        elif equity and path in OPTIONS_ONLY:
-            if value is not None:
-                errors.append(f"{path} = {value!r}: it needs a credit or an expiration and does not apply to "
-                              "long_equity (GaleCore rejects the exits; use exits.deterministic.metric_exit)")
-        elif path in _NEUTRAL:
-            if value not in _NEUTRAL[path]:
-                errors.append(f"{path} = {value!r}: the runtime ignores it ({_RUNTIME_DOES[path]}); the spec "
-                              f"must say {_NEUTRAL[path][0]!r} and the rule stays declared as unsupported")
-        elif path in MUST_DECLARE:
-            if path not in declared_paths:
-                errors.append(f"{path} = {value!r}: the runtime {MUST_DECLARE[path]}; declare it with an "
-                              "unsupported rule naming this field")
-        elif path in fixed:
-            if value != fixed[path]:
-                errors.append(f"{path} = {value!r}: the runtime only has {fixed[path]!r} semantics (only SHADOW, "
-                              "a fixed whitelist, one builder per structure, gates with ALL/NO_TRADE)")
-        elif path in _NULL_ONLY or path.startswith(_ROLL):
-            if value is not None:
-                errors.append(f"{path} = {value!r}: the runtime never reads it; it must be null")
-        elif path not in _INFORMATIONAL and not path.startswith(_INFORMATIONAL_PREFIXES):
-            errors.append(f"{path}: not in the runtime support table; nobody verified what GaleCore does with it")
-
-    for path, rule_ids in supported_paths.items():
-        if path.startswith(f"{GATE}["):
-            if path not in leaves:
-                errors.append(f"rules {rule_ids}: gate {path} is not in the spec")
-        elif path in IMPLICIT_BEHAVIOR and path not in executed:
-            # Supported only as what the runtime already does regardless of the spec (one contract, no roll).
-            if path not in leaves or leaves[path] not in _NEUTRAL[path]:
-                errors.append(f"rules {rule_ids}: {path} is supported only with the runtime's own behavior "
-                              f"({_RUNTIME_DOES[path]}), value {_NEUTRAL[path][0]!r}")
-        elif path not in executed:
-            errors.append(f"rules {rule_ids}: {path} is marked supported but the runtime does not execute it")
-        elif leaves.get(path) is None:
-            errors.append(f"rules {rule_ids}: {path} is marked supported but the spec leaves it empty")
+    if result["valid"]:
+        executed = list(dict.fromkeys(result.get("executed_paths") or []))
+        inert = list(result.get("inert_paths") or [])
+        supported: dict[str, list[str]] = {}
+        for rule in content.rules:
+            if rule.runtime.status == RuntimeStatus.SUPPORTED:
+                for p in rule.runtime.spec_paths:
+                    supported.setdefault(p, []).append(rule.id)
+        for e in sorted(executed):
+            rule_ids = sorted({r for p, ids in supported.items() if _related(p, e) for r in ids})
+            if not rule_ids:
+                errors.append(f"{e}: GaleCore executes it but no supported rule explains it")
+            coverage[e] = rule_ids
+        for p, rule_ids in supported.items():
+            if not any(_related(p, e) for e in executed):
+                why = "GaleCore ignores it (inert)" if any(_related(p, i) for i in inert) else "GaleCore does not execute it"
+                errors.append(f"rules {rule_ids}: {p} is marked supported but {why}")
 
     gaps = [f"{r.id}: {r.text} — {r.runtime.note}" for r in content.rules
             if r.runtime.status == RuntimeStatus.UNSUPPORTED]
@@ -593,11 +272,12 @@ def _change_problems(content: ProposalContent, kb: KnowledgeBase) -> list[str]:
 
 
 def save_proposal(*, kb: KnowledgeBase, prompt: str, host: RecordHost, content: ProposalContent,
-                  spec_json: str, spec_file: str, now: datetime | None = None) -> tuple[StrategyDocument, str]:
+                  spec_json: str, spec_file: str, now: datetime | None = None,
+                  checker: SpecChecker | None = None) -> tuple[StrategyDocument, str]:
     """Check and store a version. An INVALID check, an unresolved reference or a version without its parameter
     table and management tree is refused, not stored."""
     problems = _check_refs(content, kb) + design_gaps(content) + _change_problems(content, kb)
-    report = check_proposal(content, spec_json, spec_file)
+    report = check_proposal(content, spec_json, spec_file, checker)
     if report.verdict == "INVALID" or problems:
         raise KnowledgeError("proposal refused", problems + report.errors)
     now = now or datetime.now(UTC)

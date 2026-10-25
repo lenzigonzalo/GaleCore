@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from galecore_ai.application import controls, supervisor
 from tests.unit.test_capital import _Doc, _kb, exposure
 from tests.unit.test_knowledge import kb  # noqa: F401  (kb is a fixture)
@@ -19,11 +21,57 @@ def test_rules_fall_in_three_classes_and_indispensables_decide_the_recommendatio
         expected = {"supported": "ejecutada", "unsupported": "sólo declarada"}.get(rule.runtime.status.value, "no aplica")
         assert by_id[rule.id]["clase"] == expected
     assert all(v["clase"] == "vigilada" for v in out["vigilancia_del_supervisor"])
+    assert "tope por apuesta del perfil" not in {v["control"] for v in out["vigilancia_del_supervisor"]}
     state = {i["control"]: i["estado"] for i in out["indispensables"]}
-    assert state["tope por apuesta"].startswith("vigilado (aviso, no bloquea")        # final state: watched, never «ejecutado»
-    assert state["freno por pérdida acumulada"] == "no ejecutado por el runtime"
+    assert state["riesgo por operación"] == "ejecutado" and state["stop"] == "ejecutado"
+    for absent in ("tope por apuesta", "freno por pérdida acumulada", "margen y capital simulado"):
+        assert state[absent] == "no ejecutado por el runtime"      # the check says GaleCore did not execute them here
     assert out["recomendar_aprobacion"] is False
-    assert "No se recomienda aprobar" in out["motivo"] and "tope por apuesta" in out["motivo"]
+    assert "No se recomienda aprobar" in out["motivo"] and "freno por pérdida acumulada" in out["motivo"]
+
+
+RISK = {"max_bet_pct": 30.0, "simulated_capital_usd": 10000.0,
+        "loss_brakes": [{"period": "day", "max_loss_usd": 300.0, "basis": "realized_plus_open"}]}
+
+
+def _declaring(doc, **risk):
+    """The stored version as if its spec declared these risk_limits and GaleCore reported them executed."""
+    spec = json.loads(doc.spec_json)
+    spec["risk_limits"].update(risk)
+    executed = {f"risk_limits.{k}[0].max_loss_usd" if k == "loss_brakes" else f"risk_limits.{k}": ["R1"]
+                for k, v in risk.items() if v is not None}
+    check = doc.check.model_copy(update={"coverage": {**doc.check.coverage, **executed}})
+    return doc.model_copy(update={"spec_json": json.dumps(spec), "check": check})
+
+
+def test_approval_is_recommended_when_everything_indispensable_runs_and_the_capital_is_the_designs(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    out = controls.classify(_declaring(doc, **RISK))
+    assert {i["estado"] for i in out["indispensables"]} == {"ejecutado"}
+    assert out["recomendar_aprobacion"] is True and out["monto_simulado_usd"] == 10000.0
+    assert "capital de la spec es el monto simulado" in out["motivo"]
+
+
+def test_a_missing_brake_or_bet_cap_is_not_recommended(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    out = controls.classify(_declaring(doc, **{**RISK, "loss_brakes": None}))
+    assert out["recomendar_aprobacion"] is False and "freno por pérdida acumulada (no ejecutado" in out["motivo"]
+    out = controls.classify(_declaring(doc, **{**RISK, "max_bet_pct": None}))
+    assert out["recomendar_aprobacion"] is False and "tope por apuesta (no ejecutado" in out["motivo"]
+    declared_only = _declaring(doc, **RISK)    # in the spec but GaleCore did not report it executed
+    unexecuted = declared_only.check.model_copy(update={"coverage": doc.check.coverage})
+    out = controls.classify(declared_only.model_copy(update={"check": unexecuted}))
+    assert out["recomendar_aprobacion"] is False
+
+
+def test_the_capital_of_the_spec_must_be_the_single_simulated_amount(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    out = controls.classify(_declaring(doc, **{**RISK, "simulated_capital_usd": 25000.0}))
+    assert out["recomendar_aprobacion"] is False
+    assert "25000 USD no es el monto simulado del diseño, 10000 USD" in out["motivo"]
+    assert "margen y capital simulado" in {i["control"] for i in out["indispensables"]}
+    out = controls.classify(_declaring(doc, **{**RISK, "simulated_capital_usd": None}))
+    assert out["recomendar_aprobacion"] is False and "falta risk_limits.simulated_capital_usd" in out["motivo"]
 
 
 def test_listing_unexecuted_rules_is_not_enough_to_recommend(kb, research_ref):  # noqa: F811
@@ -92,7 +140,7 @@ def _equity_doc(max_loss=None, sizing_executed=True):
         "risk_limits.max_concurrent_positions"]
     rule = NS(id="S1", block=NS(value="sizing"), runtime=NS(status=controls.RuntimeStatus.SUPPORTED, spec_paths=paths, note=""))
     return NS(spec_json=json.dumps(spec), content=NS(rules=[rule], simulated_amount_usd=10000), name="x", version="1",
-              spec_hash="h")
+              spec_hash="h", check=NS(coverage={p: ["S1"] for p in paths}))
 
 
 def test_long_equity_risk_is_the_position_cost_and_stop_and_time_exit_are_not_indispensable():
@@ -100,8 +148,7 @@ def test_long_equity_risk_is_the_position_cost_and_stop_and_time_exit_are_not_in
     state = {i["control"]: i["estado"] for i in out["indispensables"]}
     assert state["riesgo por operación"] == "ejecutado" and state["tope de posiciones abiertas"] == "ejecutado"
     assert "stop" not in state and "salida por tiempo" not in state
-    assert state["freno por pérdida acumulada"] == "no ejecutado por el runtime"      # still real
-    assert state["tope por apuesta"].startswith("vigilado")
+    assert state["freno por pérdida acumulada"] == "no ejecutado por el runtime"      # nothing declared in this spec
     assert out["recomendar_aprobacion"] is False and "stop" not in out["motivo"]
     watched = {v["control"] for v in out["vigilancia_del_supervisor"]}
     assert "cerca del stop" not in watched and "dato macro o FOMC antes del vencimiento" not in watched

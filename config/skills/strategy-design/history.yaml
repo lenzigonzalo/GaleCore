@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "2.1.0"
+    date: 2026-10-25
+    changes: >
+      WS-0062 inc. 8b: `strategy check` ya no usa tablas propias; pregunta a GaleCore qué ejecuta (valid, errors,
+      executed_paths, hash). La skill describe las piezas genéricas del runtime en lugar de familias, pide el capital
+      simulado en risk_limits.simulated_capital_usd y las rutas de las reglas tal como las devuelve el check.
+    feedback: []
   - version: "2.0.0"
     date: 2026-10-21
     changes: >

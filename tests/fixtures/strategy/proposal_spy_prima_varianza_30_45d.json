@@ -52,7 +52,7 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
-          "entry_filters.gate_layer.gates[vix_below_30]"
+          "entry_filters.gate_layer.gates[0]"
         ]
       }
     },
@@ -123,8 +123,8 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
-          "candidate_construction.legs[sell_put].strike_selection.target_delta",
-          "candidate_construction.legs[sell_put].strike_selection.delta_tolerance",
+          "candidate_construction.legs[0].strike_selection.target_delta",
+          "candidate_construction.legs[0].strike_selection.delta_tolerance",
           "candidate_construction.constraints.min_dte",
           "candidate_construction.constraints.max_dte"
         ]
@@ -140,7 +140,7 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
-          "candidate_construction.legs[buy_put].strike_selection.width"
+          "candidate_construction.legs[1].strike_selection.width"
         ]
       }
     },
@@ -165,11 +165,8 @@
       "basis": "design_choice",
       "rationale": "Es lo que el runtime SHADOW hace siempre; alcanza para observar el comportamiento, no para dimensionar capital.",
       "runtime": {
-        "status": "supported",
-        "spec_paths": [
-          "candidate_construction.sizing.method",
-          "candidate_construction.sizing.fixed_contracts"
-        ]
+        "status": "not_applicable",
+        "note": "Un contrato lo hace siempre el runtime; la spec no lo ejecuta."
       }
     },
     {
@@ -217,9 +214,7 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
-          "data_quality.max_quote_age_seconds",
-          "data_quality.block_on_crossed_market",
-          "data_quality.block_on_missing_critical_data"
+          "data_quality.max_quote_age_seconds"
         ]
       }
     },
@@ -255,10 +250,8 @@
       "basis": "design_choice",
       "rationale": "El runtime no hace roll y la semántica del roll de RPF está en disputa (R10 del piloto); un roll mal definido no se puede evaluar.",
       "runtime": {
-        "status": "supported",
-        "spec_paths": [
-          "exits.deterministic.defensive_roll.enabled"
-        ]
+        "status": "not_applicable",
+        "note": "El runtime no hace roll; no hay nada que ejecutar."
       }
     },
     {

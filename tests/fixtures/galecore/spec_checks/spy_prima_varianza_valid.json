@@ -1,0 +1,71 @@
+{
+  "valid": true,
+  "errors": [],
+  "content_hash": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51",
+  "executed_paths": [
+    "universe.symbols",
+    "structure.allowed_strategies",
+    "structure.forbidden_strategies",
+    "structure.default_structure",
+    "entry_filters.gate_layer.gates[0].metric_ref",
+    "entry_filters.gate_layer.gates[0].operator",
+    "entry_filters.gate_layer.gates[0].threshold.value",
+    "candidate_construction.legs[0].strike_selection.target_delta",
+    "candidate_construction.legs[0].strike_selection.delta_tolerance",
+    "candidate_construction.legs[1].strike_selection.width",
+    "candidate_construction.constraints.min_dte",
+    "candidate_construction.constraints.max_dte",
+    "candidate_construction.constraints.min_credit",
+    "risk_limits.max_concurrent_positions",
+    "risk_limits.max_loss_per_trade_usd",
+    "exits.deterministic.stop_loss.pct_of_credit",
+    "exits.deterministic.take_profit.pct_of_credit",
+    "exits.deterministic.time_exit.max_dte",
+    "operational.timezone",
+    "operational.session_hours.start",
+    "operational.session_hours.end",
+    "data_quality.max_quote_age_seconds"
+  ],
+  "inert_paths": [
+    "candidate_construction.sizing.method",
+    "candidate_construction.sizing.fixed_contracts",
+    "exits.deterministic.defensive_roll.enabled",
+    "data_quality.block_on_crossed_market",
+    "data_quality.block_on_missing_critical_data",
+    "risk_limits.max_portfolio_heat_pct"
+  ],
+  "catalog": {
+    "event_types": [
+      {
+        "type": "FOMC",
+        "description": "Reunion del FOMC",
+        "per_symbol": false,
+        "precision": "day",
+        "source": "calendar"
+      }
+    ],
+    "metric_patterns": [
+      "compute.ema.{SYM}.{n}",
+      "compute.sma.{SYM}.{n}"
+    ],
+    "structures": [
+      "put_credit_spread",
+      "call_credit_spread",
+      "iron_condor",
+      "long_equity",
+      "custom_options"
+    ],
+    "leg_selectors": [
+      "DELTA",
+      "POINTS_FROM_SPOT",
+      "PCT_FROM_SPOT",
+      "FIXED_STRIKE",
+      "OFFSET_FROM_LEG"
+    ],
+    "fill_models": [
+      "natural",
+      "mid",
+      "mid_slippage"
+    ]
+  }
+}

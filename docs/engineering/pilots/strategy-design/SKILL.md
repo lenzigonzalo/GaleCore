@@ -170,5 +170,5 @@ en la conversación y señalá lo pendiente. Guardar no certifica contenido.
 Distinguí definición, revisión de coherencia, evidencia económica, aprobación humana y compatibilidad
 con ejecución. Una propuesta no autoriza operaciones. La conversión a StrategySpec, aprobación,
 revalidación y SHADOW son trabajos posteriores con sus controles; no pierdas requisitos que el runtime
-no soporte ni fuerces todos los instrumentos al formato actual. Planificá seguimiento, revisión y retiro
+no soporte ni fuerces todos los instrumentos al formato actual. Qué ejecuta el runtime no es una lista de familias: se arma con patas y selectores, vencimientos, ejecución y costos, condiciones, eventos, ventana de entrada, salidas, límites y frenos de riesgo y capital simulado; la lista que vale es la que devuelve `strategy check` desde GaleCore. Planificá seguimiento, revisión y retiro
 sin iniciar PAPER/LIVE, despliegues, compras de datos ni cambios en producción.

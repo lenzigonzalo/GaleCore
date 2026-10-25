@@ -14,7 +14,7 @@ from collections.abc import Callable
 from galecore_ai.adapters.strategy_store import StrategyIntegrityError, StrategyStoreError
 from galecore_ai.application import capital, controls, supervisor
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
-from galecore_ai.application.strategy import IMPLICIT_BEHAVIOR, load_critique, load_proposal
+from galecore_ai.application.strategy import load_critique, load_proposal
 from galecore_ai.contracts.strategy import Basis, ManagementKind, RuntimeStatus, StrategyDocument
 
 BASIS_LABEL = {
@@ -38,9 +38,6 @@ def _runs(doc: StrategyDocument, rule_ids: list[str]) -> str:
         return "no (hueco declarado)"
     if statuses == {RuntimeStatus.NOT_APPLICABLE}:
         return "no aplica"
-    paths = {p for r in rules if r.runtime.status == RuntimeStatus.SUPPORTED for p in r.runtime.spec_paths}
-    if paths and paths <= set(IMPLICIT_BEHAVIOR):
-        return "sí (lo hace siempre)"
     return "sí"
 
 

@@ -1,0 +1,44 @@
+{
+  "valid": false,
+  "errors": [
+    "candidate_construction.legs[1].strike_selection.method: 'FIXED_WIDTH' is not a leg selector",
+    "risk_limits.simulated_capital_usd must be positive"
+  ],
+  "content_hash": null,
+  "executed_paths": [],
+  "inert_paths": [],
+  "catalog": {
+    "event_types": [
+      {
+        "type": "FOMC",
+        "description": "Reunion del FOMC",
+        "per_symbol": false,
+        "precision": "day",
+        "source": "calendar"
+      }
+    ],
+    "metric_patterns": [
+      "compute.ema.{SYM}.{n}",
+      "compute.sma.{SYM}.{n}"
+    ],
+    "structures": [
+      "put_credit_spread",
+      "call_credit_spread",
+      "iron_condor",
+      "long_equity",
+      "custom_options"
+    ],
+    "leg_selectors": [
+      "DELTA",
+      "POINTS_FROM_SPOT",
+      "PCT_FROM_SPOT",
+      "FIXED_STRIKE",
+      "OFFSET_FROM_LEG"
+    ],
+    "fill_models": [
+      "natural",
+      "mid",
+      "mid_slippage"
+    ]
+  }
+}

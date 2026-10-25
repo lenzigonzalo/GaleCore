@@ -1,6 +1,6 @@
 ---
 name: strategy-design
-version: 2.0.0
+version: 2.1.0
 display_name: Diseño de una estrategia y su paso a SHADOW
 description: >
   Parte A (método): convierte una idea y su investigación en una estrategia completa (hipótesis, reglas por bloque,
@@ -81,6 +81,17 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   pending_parameter (qué la fundaría), owner_decision o design_choice (por qué). Un default heredado no es grounded.
   Cada regla mapeada al runtime: supported, unsupported (fuera de la spec, declarada) o not_applicable. Nunca borrar
   una regla, relajar un umbral ni agregar un campo sólo para pasar `strategy check`.
+- **Piezas del runtime** (no hay un menú de familias: se arma con bloques; lo que vale, y lo que GaleCore ejecuta hoy,
+  es lo que devuelve `strategy check`, que se lo pregunta a GaleCore). Patas con su selector de strike (delta, puntos
+  o % desde el spot, strike fijo, desplazamiento desde otra pata) y vencimiento, incluido 0DTE; ejecución (llenado a
+  natural, medio o medio con deslizamiento, y costos); condiciones de entrada y salida (una métrica contra un umbral o
+  contra otra métrica, medias móviles); eventos por tipo, símbolo y ventana (entrada y salida); ventana de entrada y
+  límites de operaciones; salidas por tiempo, por evento o por % del costo o del crédito; límites de riesgo y frenos
+  por pérdida; capital simulado. Si algo no figura entre lo ejecutado, es un hueco declarado (`unsupported`), no una
+  regla en la spec. El capital simulado se escribe en la spec, en `risk_limits.simulated_capital_usd`, con el mismo
+  monto que `simulated_amount_usd` del diseño (un solo monto): si no coinciden o falta, `strategy controls` no
+  recomienda aprobar. Las rutas de las reglas `supported` (`spec_paths`) se copian de `executed_paths`, tal como las
+  devuelve el check (con índices, como `candidate_construction.legs[0].strike_selection.target_delta`).
 - **A5.** `parameters`: una fila por valor (valor, unidad, rango, de qué depende, qué dato lo fundaría, estado, reglas
   que lo usan). `management`: objetivo, stop, tiempo, roll/ajuste, kill switch y revisión como disparador → acción
   nombrando sus reglas; «nada» es una acción válida.
