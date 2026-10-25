@@ -251,8 +251,13 @@ namespace DataFeed.Application.App.Runtime
             if (problems.Count == 0 && !double.IsFinite(spreadValue)) problems.Add($"valor del spread no finito ({spreadValue})");
             // El débito de un spread de crédito de riesgo definido está en [0, ancho]. Fuera de eso alguna pata
             // trae una cotización sin sentido (p. ej. bid 0 / ask 20 en la apertura): no se valúa ni se cierra con ese precio.
-            if (problems.Count == 0 && pos.Width > 0 && (midValue < -ValueTolerance || midValue > pos.Width + ValueTolerance))
-                problems.Add($"valor del spread {midValue:0.00} fuera de [0, {pos.Width:0.##}]: cotización inválida en alguna pata");
+            // En custom_options el rango sale del payoff de las patas (un débito puede valer menos que 0); en las familias, [0, ancho].
+            var (lowest, highest) = pos.Structure == RuntimeStructures.CustomOptions
+                ? OptionPayoff.DebitRange(pos.Legs.Select(l => (l.Side, l.Type, l.Strike)).ToList())
+                : (0.0, pos.Width);
+            if (problems.Count == 0 && (pos.Width > 0 || pos.Structure == RuntimeStructures.CustomOptions)
+                && (midValue < lowest - ValueTolerance || midValue > highest + ValueTolerance))
+                problems.Add($"valor del spread {midValue:0.00} fuera de [{lowest:0.##}, {highest:0.##}]: cotización inválida en alguna pata");
 
             if (problems.Count > 0)
             {

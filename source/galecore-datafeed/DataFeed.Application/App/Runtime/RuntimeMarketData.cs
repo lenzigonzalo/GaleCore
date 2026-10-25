@@ -1,7 +1,8 @@
-using DataFeed.Application.App.GammaExposure;
+﻿using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime.Contracts;
 using DataFeed.Application.Data.Tastytrade.MarketDataCandle;
 using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
+using DataFeed.Application.Data.Tastytrade.MarketDataTrade;
 using DataFeed.Application.Data.Tastytrade.OptionChains;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -40,7 +41,20 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>Cotización utilizable de un símbolo de streamer, o null si no la hay.</summary>
         Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct);
+
+        /// <summary>
+        /// Precio del subyacente con su hora, para elegir strikes por puntos o %. Por defecto, el medio de su cotización; la
+        /// implementación real prefiere el último trade (los índices no publican hora en la cotización).
+        /// </summary>
+        async Task<UnderlyingQuote?> GetUnderlyingAsync(string symbol, CancellationToken ct)
+        {
+            var q = await GetQuoteAsync(symbol, ct);
+            return q == null ? null : new UnderlyingQuote(q.Mid, q.AsOf);
+        }
     }
+
+    /// <summary>Precio del subyacente y cuándo lo publicó el proveedor (null si no lo informa).</summary>
+    public record UnderlyingQuote(double Price, DateTime? AsOf);
 
     /// <summary>
     /// Lo único que el runtime le pide al mercado. Separa las decisiones del runtime de cómo se
@@ -183,6 +197,22 @@ namespace DataFeed.Application.App.Runtime
 
         public async Task<GammaExposureResponse?> GetGammaExposureAsync(GammaExposureRequest request, CancellationToken ct)
             => await _mediator.Send(request, ct);
+
+        public async Task<UnderlyingQuote?> GetUnderlyingAsync(string symbol, CancellationToken ct)
+        {
+            try
+            {
+                var trade = (await _mediator.Send(new MarketDataTradeRequest { Symbol = symbol }, ct))?.Data?.FirstOrDefault();
+                if (trade != null && double.IsFinite(trade.Price) && trade.Price > 0 && trade.Time > 0)
+                    return new UnderlyingQuote(trade.Price, DateTimeOffset.FromUnixTimeMilliseconds(trade.Time).UtcDateTime);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "RuntimeMarketData: sin trade de {Symbol}, se prueba la cotización", symbol);
+            }
+            var q = await GetQuoteAsync(symbol, ct);
+            return q == null ? null : new UnderlyingQuote(q.Mid, q.AsOf);
+        }
 
         public async Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
         {

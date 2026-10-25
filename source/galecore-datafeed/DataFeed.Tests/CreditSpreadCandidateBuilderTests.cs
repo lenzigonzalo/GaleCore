@@ -41,6 +41,10 @@ public class CreditSpreadCandidateBuilderTests
 
         public Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
             => Task.FromResult(Quotes.GetValueOrDefault(streamerSymbol));
+
+        /// <summary>Precio del subyacente con hora para los selectores por puntos o % (null = sin dato).</summary>
+        public UnderlyingQuote? Underlying;
+        public Task<UnderlyingQuote?> GetUnderlyingAsync(string symbol, CancellationToken ct) => Task.FromResult(Underlying);
     }
 
     private static GammaExposureResponse Response(string expiration, int dte) => new()

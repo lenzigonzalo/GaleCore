@@ -122,6 +122,8 @@ namespace DataFeed.Application.App.Runtime.Contracts
 
     public record LegTemplate
     {
+        /// <summary>Nombre de la pata para que otra la referencie con from_leg (custom_options). Sin nombre: leg1, leg2... por orden.</summary>
+        public string? Id { get; init; }
         /// <summary>"SELL" | "BUY"</summary>
         public string Side { get; init; } = "";
         /// <summary>"PUT" | "CALL"</summary>
@@ -131,11 +133,26 @@ namespace DataFeed.Application.App.Runtime.Contracts
 
     public record LegStrikeSelection
     {
-        /// <summary>"DELTA" | "FIXED_WIDTH" | "PERCENTAGE_OTM"</summary>
+        /// <summary>
+        /// "DELTA" | "FIXED_WIDTH" (familias con ancho) | "PERCENTAGE_OTM", y las de custom_options:
+        /// "POINTS_FROM_SPOT" | "PCT_FROM_SPOT" | "FIXED_STRIKE" | "OFFSET_FROM_LEG".
+        /// </summary>
         public string Method { get; init; } = "";
         public double? TargetDelta { get; init; }
         public double? DeltaTolerance { get; init; }
         public double? Width { get; init; }
+        /// <summary>POINTS_FROM_SPOT, con signo: -5 = el primer strike a 5 puntos o más DEBAJO del precio; +5 = ARRIBA.</summary>
+        public double? PointsFromSpot { get; init; }
+        /// <summary>PCT_FROM_SPOT, con signo y en %: -1 = el primer strike a 1 % o más debajo del precio.</summary>
+        public double? PctFromSpot { get; init; }
+        /// <summary>FIXED_STRIKE: ese strike exacto (tiene que existir en el vencimiento elegido).</summary>
+        public double? Strike { get; init; }
+        /// <summary>OFFSET_FROM_LEG: id de la pata de la que se mide.</summary>
+        public string? FromLeg { get; init; }
+        /// <summary>OFFSET_FROM_LEG, con signo: -5 = 5 puntos debajo del strike de from_leg.</summary>
+        public double? OffsetPoints { get; init; }
+        /// <summary>OFFSET_FROM_LEG: diferencia tolerada (en puntos) entre el strike pedido y el que existe. Sin declarar: 0, tiene que existir exacto.</summary>
+        public double? TolerancePoints { get; init; }
     }
 
     public record SizingConfig
@@ -154,6 +171,8 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public int? MinDte { get; init; }
         public int? MaxDte { get; init; }
         public double? MinCredit { get; init; }
+        /// <summary>Débito neto máximo al precio de fill (custom_options de débito); excluye a min_credit.</summary>
+        public double? MaxDebit { get; init; }
         public double? MaxBidAskSpreadPct { get; init; }
     }
 

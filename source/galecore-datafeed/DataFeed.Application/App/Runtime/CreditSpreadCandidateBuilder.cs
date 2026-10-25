@@ -15,12 +15,15 @@ namespace DataFeed.Application.App.Runtime
         public const string CallCreditSpread = "call_credit_spread";
         public const string IronCondor = "iron_condor";
 
+        /// <summary>Opciones con patas declaradas en la spec (WS-0062 inc.4): cualquier cantidad de patas del mismo vencimiento y raíz.</summary>
+        public const string CustomOptions = "custom_options";
+
         /// <summary>Acciones en largo (WS-0061): una pata BUY del subyacente, sin opciones.</summary>
         public const string LongEquity = "long_equity";
 
-        public static readonly string[] Supported = { PutCreditSpread, CallCreditSpread, IronCondor, LongEquity };
+        public static readonly string[] Supported = { PutCreditSpread, CallCreditSpread, IronCondor, CustomOptions, LongEquity };
 
-        public static bool IsSupported(string structure) => Sides(structure) != null || structure == LongEquity;
+        public static bool IsSupported(string structure) => Sides(structure) != null || structure == LongEquity || structure == CustomOptions;
 
         /// <summary>Los lados ("PUT", "CALL") de la estructura, en ese orden; null si el runtime no la construye.</summary>
         public static string[]? Sides(string structure) => structure switch
@@ -65,6 +68,32 @@ namespace DataFeed.Application.App.Runtime
             string.Equals(e.SettlementType, "AM", StringComparison.OrdinalIgnoreCase)
             || Expiry.IsAmRoot(e.strikes?.Select(s => s.call ?? s.put).FirstOrDefault(o => !string.IsNullOrWhiteSpace(o)));
 
+        /// <summary>Las patas de custom_options tal como las declara la spec; lo que falta de cada selector se informa, no se completa.</summary>
+        private static (List<LegPlan> Plans, List<string> Missing) CustomLegPlans(CandidateConstruction cc)
+        {
+            var plans = new List<LegPlan>();
+            var missing = new List<string>();
+            for (int i = 0; i < cc.Legs.Count; i++)
+            {
+                var l = cc.Legs[i];
+                var s = l.StrikeSelection;
+                string id = string.IsNullOrWhiteSpace(l.Id) ? $"leg{i + 1}" : l.Id!;
+                var required = s.Method switch
+                {
+                    "DELTA" => new (string, bool)[] { ("target_delta", s.TargetDelta != null), ("delta_tolerance", s.DeltaTolerance != null) },
+                    "POINTS_FROM_SPOT" => new (string, bool)[] { ("points_from_spot", s.PointsFromSpot != null) },
+                    "PCT_FROM_SPOT" => new (string, bool)[] { ("pct_from_spot", s.PctFromSpot != null) },
+                    "FIXED_STRIKE" => new (string, bool)[] { ("strike", s.Strike != null) },
+                    "OFFSET_FROM_LEG" => new (string, bool)[] { ("from_leg", s.FromLeg != null), ("offset_points", s.OffsetPoints != null) },
+                    _ => new (string, bool)[] { ($"un strike_selection.method soportado en la pata {id}", false) },
+                };
+                missing.AddRange(required.Where(r => !r.Item2).Select(r => r.Item1));
+                plans.Add(new LegPlan(id, l.Side, l.Type, s.Method, s.TargetDelta, s.DeltaTolerance, s.PointsFromSpot, s.PctFromSpot,
+                    s.Strike, s.FromLeg, s.OffsetPoints, s.TolerancePoints ?? 0));
+            }
+            return (plans, missing);
+        }
+
         private sealed record SideParams(string Type, double TargetDelta, double DeltaTolerance, double Width);
 
         private sealed record BuiltSide(CandidateLeg Short, CandidateLeg Long, LegQuote ShortQuote, LegQuote LongQuote)
@@ -85,6 +114,11 @@ namespace DataFeed.Application.App.Runtime
         {
             var cc = spec.CandidateConstruction;
             var structure = spec.Structure.DefaultStructure;
+            if (structure == RuntimeStructures.CustomOptions)
+            {
+                var (plans, missingParams) = CustomLegPlans(cc);
+                return await new OptionStructureBuilder(_market).BuildAsync(instance, spec, structure, plans, missingParams, symbol, vixPrice, nowUtc, ct);
+            }
             var sideTypes = RuntimeStructures.Sides(structure);
             if (sideTypes == null)
                 return Rejected($"el runtime no construye la estructura '{structure}'");

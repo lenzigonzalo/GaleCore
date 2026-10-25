@@ -107,12 +107,19 @@ namespace DataFeed.Application.App.Runtime
                            + $"(supported: {string.Join(", ", RuntimeStructures.Supported)})");
             if (spec.CandidateConstruction.Constraints.MinCredit is double minCredit && !(minCredit > 0))
                 errors.Add($"candidate_construction.constraints.min_credit must be positive, got {minCredit}");
+            if (spec.CandidateConstruction.Constraints.MaxDebit is double maxDebit && !(maxDebit > 0))
+                errors.Add($"candidate_construction.constraints.max_debit must be positive, got {maxDebit}");
 
             var structure = spec.Structure.DefaultStructure;
             if (string.IsNullOrWhiteSpace(structure)) return;   // ya informado arriba
             if (structure == RuntimeStructures.LongEquity)
             {
                 ValidateLongEquity(spec, errors);
+                return;
+            }
+            if (structure == RuntimeStructures.CustomOptions)
+            {
+                ValidateCustomOptions(spec, errors);
                 return;
             }
             var sides = RuntimeStructures.Sides(structure);
@@ -154,6 +161,101 @@ namespace DataFeed.Application.App.Runtime
                         errors.Add($"{name}.strike_selection.width must be positive");
                 }
             }
+        }
+
+        /// <summary>
+        /// custom_options (WS-0062 inc.4): patas declaradas, cada una con SELL/BUY, PUT/CALL y UN selector de strike (delta, puntos o % del
+        /// precio, strike fijo, u offset en puntos de otra pata). Mismo vencimiento (rango de DTE de la spec) y crédito mínimo o débito máximo.
+        /// </summary>
+        private static void ValidateCustomOptions(StrategySpec spec, List<string> errors)
+        {
+            const string p = "candidate_construction";
+            var legs = spec.CandidateConstruction.Legs;
+            var c = spec.CandidateConstruction.Constraints;
+            if (legs.Count == 0) errors.Add($"{p}.legs must declare at least one leg for custom_options");
+            var ids = legs.Select((l, i) => string.IsNullOrWhiteSpace(l.Id) ? $"leg{i + 1}" : l.Id!).ToList();
+            foreach (var dup in ids.GroupBy(i => i).Where(g => g.Count() > 1))
+                errors.Add($"{p}.legs: duplicate leg id '{dup.Key}'");
+
+            for (int i = 0; i < legs.Count; i++)
+            {
+                var leg = legs[i];
+                var sel = leg.StrikeSelection;
+                var name = $"{p}.legs[{ids[i]}]";
+                if (leg.Side != "SELL" && leg.Side != "BUY") errors.Add($"{name}.side must be SELL or BUY, got '{leg.Side}'");
+                if (leg.Type != "PUT" && leg.Type != "CALL") errors.Add($"{name}.type must be PUT or CALL, got '{leg.Type}'");
+
+                // Un solo selector: el método fija qué campos lleva y los demás quedan vacíos.
+                var all = new (string Name, bool Set)[]
+                {
+                    ("target_delta", sel.TargetDelta != null), ("delta_tolerance", sel.DeltaTolerance != null), ("width", sel.Width != null),
+                    ("points_from_spot", sel.PointsFromSpot != null), ("pct_from_spot", sel.PctFromSpot != null), ("strike", sel.Strike != null),
+                    ("from_leg", sel.FromLeg != null), ("offset_points", sel.OffsetPoints != null), ("tolerance_points", sel.TolerancePoints != null),
+                };
+                var allowed = sel.Method switch
+                {
+                    "DELTA" => new[] { "target_delta", "delta_tolerance" },
+                    "POINTS_FROM_SPOT" => new[] { "points_from_spot" },
+                    "PCT_FROM_SPOT" => new[] { "pct_from_spot" },
+                    "FIXED_STRIKE" => new[] { "strike" },
+                    "OFFSET_FROM_LEG" => new[] { "from_leg", "offset_points", "tolerance_points" },
+                    _ => null,
+                };
+                if (allowed == null)
+                {
+                    errors.Add($"{name}.strike_selection.method must be one of: DELTA, POINTS_FROM_SPOT, PCT_FROM_SPOT, FIXED_STRIKE, OFFSET_FROM_LEG, got '{sel.Method}'");
+                    continue;
+                }
+                foreach (var f in all.Where(f => f.Set && !allowed.Contains(f.Name)))
+                    errors.Add($"{name}.strike_selection.{f.Name} does not apply to method {sel.Method} (one selector per leg)");
+                foreach (var f in allowed.Where(a => a != "tolerance_points" && !all.First(x => x.Name == a).Set))
+                    errors.Add($"{name}.strike_selection.{f} is required for method {sel.Method}");
+
+                if (sel.TargetDelta is double d && (leg.Type == "PUT" ? d >= 0 || d <= -0.5 : d <= 0 || d >= 0.5))
+                    errors.Add($"{name}.strike_selection.target_delta must be {(leg.Type == "PUT" ? "between -0.5 and 0" : "between 0 and 0.5")}, got {d}");
+                if (sel.DeltaTolerance is double tol && tol <= 0) errors.Add($"{name}.strike_selection.delta_tolerance must be positive");
+                if (sel.PointsFromSpot is double pts && (pts == 0 || !double.IsFinite(pts)))
+                    errors.Add($"{name}.strike_selection.points_from_spot must be non-zero (negative = below the price, positive = above)");
+                if (sel.PctFromSpot is double pct && (pct == 0 || !double.IsFinite(pct) || pct <= -100))
+                    errors.Add($"{name}.strike_selection.pct_from_spot must be non-zero and above -100 (negative = below the price, positive = above)");
+                if (sel.Strike is double k && !(k > 0)) errors.Add($"{name}.strike_selection.strike must be positive");
+                if (sel.OffsetPoints is double off && (off == 0 || !double.IsFinite(off))) errors.Add($"{name}.strike_selection.offset_points must be non-zero");
+                if (sel.TolerancePoints is double tp && !(tp >= 0)) errors.Add($"{name}.strike_selection.tolerance_points must be zero or positive");
+                if (sel.FromLeg != null)
+                {
+                    if (!ids.Contains(sel.FromLeg)) errors.Add($"{name}.strike_selection.from_leg '{sel.FromLeg}' is not a leg of this structure");
+                    else if (sel.FromLeg == ids[i]) errors.Add($"{name}.strike_selection.from_leg cannot reference the leg itself");
+                }
+            }
+
+            // from_leg sin ciclos: se sigue la cadena de referencias de cada pata.
+            var refs = new Dictionary<string, string>();
+            for (int i = 0; i < legs.Count; i++)
+                if (legs[i].StrikeSelection.FromLeg is string from && !refs.ContainsKey(ids[i])) refs[ids[i]] = from;
+            foreach (var start in refs.Keys)
+            {
+                var seen = new HashSet<string>();
+                var current = start;
+                while (refs.TryGetValue(current, out var next))
+                {
+                    if (!seen.Add(current))
+                    {
+                        errors.Add($"{p}.legs: the from_leg chain starting at '{start}' is circular");
+                        break;
+                    }
+                    current = next;
+                }
+            }
+
+            if (c.MinDte is not int minDte || c.MaxDte is not int maxDte)
+                errors.Add($"{p}.constraints.min_dte and max_dte are required for custom_options (0 is allowed: 0DTE)");
+            else if (minDte < 0 || maxDte < minDte)
+                errors.Add($"{p}.constraints: min_dte must be >= 0 and max_dte >= min_dte, got {minDte}..{maxDte}");
+            if ((c.MinCredit != null) == (c.MaxDebit != null))
+                errors.Add($"{p}.constraints: declare exactly one of min_credit (credit structure) or max_debit (debit structure)");
+            var exits = spec.Exits.Deterministic;
+            if (c.MaxDebit != null && (exits.TakeProfit != null || exits.StopLoss != null))
+                errors.Add("exits.deterministic: take_profit and stop_loss are % of credit and do not apply to a debit structure (use metric_exit or time_exit)");
         }
 
         /// <summary>
