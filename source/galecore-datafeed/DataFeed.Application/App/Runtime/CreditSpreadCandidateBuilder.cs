@@ -51,7 +51,7 @@ namespace DataFeed.Application.App.Runtime
     /// </summary>
     public class CreditSpreadCandidateBuilder
     {
-        private static readonly string[] ExpirationTypes = { "Regular", "Weekly" };
+        internal static readonly string[] ExpirationTypes = { "Regular", "Weekly", "End-Of-Month", "Quarterly" };   // los de índices (SPXW diarios, fin de mes, trimestrales) también
 
         private readonly IPcsMarketSource _market;
 
@@ -128,14 +128,14 @@ namespace DataFeed.Application.App.Runtime
                 .ThenBy(e => e.Dte)
                 .FirstOrDefault();
             if (expiration.ExpirationDate == null)
-                return Rejected($"sin vencimiento regular o weekly con DTE entre {minDte} y {maxDte}");
+                return Rejected($"sin vencimiento con DTE entre {minDte} y {maxDte}");
 
             string expirationDate = expiration.ExpirationDate;
 
-            // El handler de griegas interpreta TargetDte = 0 como "el de mayor DTE": con un 0DTE
-            // elegido las griegas serían de otro vencimiento. No se soporta (la spec pide 30-50).
-            if (expiration.Dte == 0)
-                return Rejected($"el vencimiento elegido {expirationDate} es 0DTE; el constructor no lo soporta");
+            // 0DTE sólo si el rango de la spec lo incluye (el filtro de arriba ya lo garantiza). El handler de griegas
+            // interpreta TargetDte = 0 como "el de mayor DTE dentro de MaxDTE": con un 0DTE se acota MaxDTE a 0
+            // para que el único vencimiento posible sea el de hoy.
+            int gexMaxDte = expiration.Dte == 0 ? 0 : maxDte;
 
             // ── 2. Griegas y OI del vencimiento elegido ──
             // Sin ExpirationTypes el handler sólo mira mensuales y puede devolver otro vencimiento.
@@ -143,7 +143,7 @@ namespace DataFeed.Application.App.Runtime
             {
                 Symbol = symbol,
                 TargetDte = expiration.Dte,
-                MaxDTE = maxDte,
+                MaxDTE = gexMaxDte,
                 ExpirationTypes = ExpirationTypes,
                 IncludeZeroDte = minDte == 0,
             }, ct);

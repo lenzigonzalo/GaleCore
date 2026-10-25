@@ -10,6 +10,9 @@ namespace DataFeed.Application.App.Runtime
     /// </summary>
     public static class ShadowFillSimulator
     {
+        /// <summary>Razón de cierre de una posición liquidada al vencimiento (WS-0062 inc.3).</summary>
+        public const string ExpirationReason = "EXPIRATION";
+
         /// <summary>
         /// Crea una ShadowPosition a partir de un TradeCandidate validado.
         /// Entry price de cada leg según el modelo (abrir: vendidas al bid, compradas al ask en natural). Si una pata no
@@ -97,14 +100,21 @@ namespace DataFeed.Application.App.Runtime
         /// P&L NETO (el que se guarda y se mide): bruto menos la orden de entrada y la de salida. Una abierta descuenta
         /// también la salida: es lo que daría cerrarla ahora.
         /// </summary>
-        public static double Pnl(ShadowPosition position, double closeValue)
+        public static double Pnl(ShadowPosition position, double closeValue, bool atExpiration = false)
         {
             var terms = TermsOf(position);
-            return Math.Round(GrossPnl(position, closeValue) - 2 * OrderCost(position, terms), 2);
+            return Math.Round(GrossPnl(position, closeValue) - OrdersCharged(position, atExpiration) * OrderCost(position, terms), 2);
         }
 
-        /// <summary>Costos declarados de la posición (entrada + salida), en USD.</summary>
-        public static double Costs(ShadowPosition position) => Math.Round(2 * OrderCost(position, TermsOf(position)), 2);
+        /// <summary>
+        /// Órdenes con costo: entrada + salida. Una posición liquidada al vencimiento no tiene orden de salida: sólo paga la de entrada.
+        /// </summary>
+        private static int OrdersCharged(ShadowPosition position, bool atExpiration) =>
+            atExpiration || position.ExitReason == ExpirationReason ? 1 : 2;
+
+        /// <summary>Costos declarados de la posición (entrada + salida si la hubo), en USD.</summary>
+        public static double Costs(ShadowPosition position) =>
+            Math.Round(OrdersCharged(position, false) * OrderCost(position, TermsOf(position)), 2);
 
         /// <summary>P&L bruto de una posición ya valuada o cerrada (neto + costos); null si no tiene P&L.</summary>
         public static double? GrossOf(ShadowPosition position)
@@ -124,7 +134,8 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>
         /// Evalúa exits determinísticos contra una posición abierta.
         /// Devuelve la razón de exit si alguno se dispara, null si no.
-        /// Precedencia: STOP_LOSS > METRIC_EXIT > TAKE_PROFIT > TIME_EXIT.
+        /// Precedencia: STOP_LOSS > METRIC_EXIT > TAKE_PROFIT > TIME_EXIT. El vencimiento (EXPIRATION) manda sobre todas
+        /// y no pasa por acá: lo liquida el motor antes de valuar con cotizaciones.
         /// <paramref name="metricExitMet"/>: la condición de exits.MetricExit se cumple ahora (la evalúa el motor con el dato real).
         /// </summary>
         public static string? EvaluateExits(
@@ -167,7 +178,7 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Cierra una posición SHADOW con razón y debit.</summary>
         public static ShadowPosition Close(ShadowPosition position, double exitDebit, string reason, DateTime now)
         {
-            double realizedPnl = Pnl(position, exitDebit); // x100 por contrato en opciones; x acciones en long_equity
+            double realizedPnl = Pnl(position, exitDebit, reason == ExpirationReason); // x100 por contrato en opciones; x acciones en long_equity
 
             return position with
             {

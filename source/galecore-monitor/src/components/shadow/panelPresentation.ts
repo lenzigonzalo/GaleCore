@@ -8,7 +8,7 @@ export const rate = (n: number) => `${fmtPrice(n * 100, 1)}%`;
 export const days = (n: number) => `${fmtPrice(n, 1)} d`;
 export const date = (iso: string | null) => iso ? `${new Date(iso).toLocaleDateString('es-AR', { timeZone: MARKET_TZ })} ${fmtTime(new Date(iso))} ET` : 'n/d';
 export const stateLabel = (state: string) => state === 'RUNNING' ? 'corriendo' : state === 'PAUSED' ? 'pausada' : state === 'STOPPED' ? 'detenida' : state;
-export const exitLabel = (reason: string) => reason === 'TAKE_PROFIT' ? 'Toma de ganancia' : reason === 'STOP_LOSS' ? 'Stop loss' : reason === 'METRIC_EXIT' ? 'Salida por condición' : reason === 'DTE_EXIT' || reason === 'TIME_EXIT' ? 'Por vencimiento/tiempo' : reason;
+export const exitLabel = (reason: string) => reason === 'TAKE_PROFIT' ? 'Toma de ganancia' : reason === 'STOP_LOSS' ? 'Stop loss' : reason === 'METRIC_EXIT' ? 'Salida por condición' : reason === 'EXPIRATION' ? 'Vencimiento' : reason === 'DTE_EXIT' || reason === 'TIME_EXIT' ? 'Por vencimiento/tiempo' : reason;
 export const metricText = (metric: Metric, format: (n: number) => string = fmtPrice) => metric.value === null ? '—' : format(metric.value);
 export function readPanelError(error: unknown): string {
   const e = error as { response?: { status?: number }; message?: string };

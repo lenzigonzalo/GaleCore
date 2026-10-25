@@ -26,7 +26,7 @@ namespace DataFeed.Application.App.Runtime.Contracts
         // Exit (populated on close)
         public double? ExitDebit { get; init; }
         public DateTime? ExitAt { get; init; }
-        /// <summary>"TAKE_PROFIT" | "STOP_LOSS" | "METRIC_EXIT" | "TIME_EXIT" | "MANUAL" | "KILL_SWITCH"</summary>
+        /// <summary>"TAKE_PROFIT" | "STOP_LOSS" | "METRIC_EXIT" | "TIME_EXIT" | "EXPIRATION" | "MANUAL" | "KILL_SWITCH"</summary>
         public string? ExitReason { get; init; }
 
         // P&L

@@ -85,7 +85,7 @@ public class CreditSpreadCandidateBuilderTests
         await Build(source);
 
         var req = source.LastGexRequest!;
-        Assert.Equal(new[] { "Regular", "Weekly" }, req.ExpirationTypes);
+        Assert.Equal(new[] { "Regular", "Weekly", "End-Of-Month", "Quarterly" }, req.ExpirationTypes);
         Assert.Equal(40, req.TargetDte);   // DTE recalculado en ET, no el 99 del proveedor
         Assert.Equal(50, req.MaxDTE);
     }
@@ -191,7 +191,47 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
-    public async Task ZeroDteExpiration_NoCandidate_Explained()
+    public async Task ZeroDteExpiration_NotChosen_WhenTheSpecDoesNotAskForIt()
+    {
+        var source = new FakeSource();
+        source.Expirations!.Add(new() { ExpirationDate = "2026-09-24", ExpirationType = "Weekly" });   // hoy
+
+        var result = await Build(source);   // spec 30-50
+
+        Assert.Equal(40, Assert.IsType<TradeCandidate>(result.Candidate).Dte);
+    }
+
+    [Theory]
+    [InlineData("End-Of-Month")]
+    [InlineData("Quarterly")]
+    public async Task IndexExpirationTypes_AreAccepted(string type)
+    {
+        var source = new FakeSource { Expirations = new() { new() { ExpirationDate = "2026-11-03", ExpirationType = type } } };
+
+        Assert.NotNull((await Build(source)).Candidate);
+    }
+
+    [Fact]
+    public async Task ZeroDteOnly_RejectedWhenTheSpecStartsAtOne()
+    {
+        var spec = ShadowRuntimeEngineTests.Spec();
+        spec = spec with
+        {
+            CandidateConstruction = spec.CandidateConstruction with
+            {
+                Constraints = spec.CandidateConstruction.Constraints with { MinDte = 1, MaxDte = 5 },
+            },
+        };
+        var source = new FakeSource { Expirations = new() { new() { ExpirationDate = "2026-09-24", ExpirationType = "Weekly" } } };
+
+        var result = await Build(source, spec);
+
+        Assert.Null(result.Candidate);
+        Assert.Null(source.LastGexRequest);
+    }
+
+    [Fact]
+    public async Task ZeroDteExpiration_IsBuilt_WhenTheSpecRangeIncludesIt()
     {
         var spec = ShadowRuntimeEngineTests.Spec();
         spec = spec with
@@ -201,13 +241,18 @@ public class CreditSpreadCandidateBuilderTests
                 Constraints = spec.CandidateConstruction.Constraints with { MinDte = 0, MaxDte = 0 },
             },
         };
-        var source = new FakeSource { Expirations = new() { new() { ExpirationDate = "2026-09-24", ExpirationType = "Weekly" } } };
+        var source = new FakeSource
+        {
+            Expirations = new() { new() { ExpirationDate = "2026-09-24", ExpirationType = "Weekly" } },
+            Gex = _ => Response("2026-09-24", 0),
+        };
 
         var result = await Build(source, spec);
 
-        Assert.Null(result.Candidate);
-        Assert.Contains("0DTE", result.RejectReason);
-        Assert.Null(source.LastGexRequest);
+        var c = Assert.IsType<TradeCandidate>(result.Candidate);
+        Assert.Equal(0, c.Dte);
+        Assert.Equal(0, source.LastGexRequest!.MaxDTE);   // el handler no puede elegir otro vencimiento
+        Assert.True(source.LastGexRequest.IncludeZeroDte);
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime.Contracts;
+using DataFeed.Application.Data.Tastytrade.MarketDataCandle;
 using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
 using DataFeed.Application.Data.Tastytrade.OptionChains;
 using MediatR;
@@ -60,6 +61,28 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>Cotización utilizable de un símbolo de streamer, o null si no la hay.</summary>
         Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct);
+
+        /// <summary>
+        /// Cierre oficial del subyacente en la fecha <paramref name="sessionDate"/> (vela diaria de ESA fecha), o null si
+        /// no hay una. Sirve para liquidar vencimientos (WS-0062 inc.3); nunca se infiere de opciones ni se completa.
+        /// </summary>
+        Task<double?> GetOfficialCloseAsync(string symbol, DateTime sessionDate, CancellationToken ct) => Task.FromResult<double?>(null);
+    }
+
+    public static class OfficialClose
+    {
+        /// <summary>
+        /// Cierre de la vela diaria cuya fecha es <paramref name="sessionDate"/>, o null. La fecha de la vela es la fecha UTC de
+        /// su hora: coincide con la fecha de la rueda sea cual sea la convención del proveedor (medianoche UTC, medianoche ET
+        /// o el cierre). Una vela sin hora, con cierre no finito o no positivo no sirve.
+        /// </summary>
+        public static double? FromCandles(IEnumerable<CandleData>? candles, DateTime sessionDate)
+        {
+            var candle = candles?
+                .Where(c => c.Time > 0 && DateTimeOffset.FromUnixTimeMilliseconds(c.Time).UtcDateTime.Date == sessionDate.Date)
+                .OrderByDescending(c => c.Time).FirstOrDefault();
+            return candle != null && double.IsFinite(candle.Close) && candle.Close > 0 ? candle.Close : null;
+        }
     }
 
     public static class QuoteRules
@@ -143,6 +166,17 @@ namespace DataFeed.Application.App.Runtime
             => spec.Structure.DefaultStructure == RuntimeStructures.LongEquity
                 ? LongEquityCandidateBuilder.BuildAsync(GetQuoteAsync, instance, spec, symbol, nowUtc, ct)
                 : new CreditSpreadCandidateBuilder(this).BuildAsync(instance, spec, symbol, vixPrice, nowUtc, ct);
+
+        public async Task<double?> GetOfficialCloseAsync(string symbol, DateTime sessionDate, CancellationToken ct)
+        {
+            var response = await _mediator.Send(new MarketDataCandleRequest
+            {
+                Symbol = symbol,
+                Interval = "1d",
+                FromTime = DateTime.SpecifyKind(sessionDate.Date.AddDays(-3), DateTimeKind.Utc),
+            }, ct);
+            return OfficialClose.FromCandles(response?.data, sessionDate);
+        }
 
         public async Task<List<Expiration>?> GetExpirationsAsync(string symbol, CancellationToken ct)
             => (await _mediator.Send(new OptionChainsRequest { Symbol = symbol }, ct))?.expirations;

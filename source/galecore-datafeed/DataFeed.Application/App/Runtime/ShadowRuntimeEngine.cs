@@ -196,6 +196,10 @@ namespace DataFeed.Application.App.Runtime
             ShadowRuntimeStore store, IRuntimeMarketData data, ShadowPosition pos, DeterministicExits exits,
             DateTime nowUtc, CancellationToken ct, bool evaluateExits = true, TimeSpan? maxQuoteAge = null)
         {
+            // Vencida y pasada la hora de liquidación: se liquida (o queda pendiente) sin mirar cotizaciones de opciones.
+            if (Expiry.SettlementDue(pos, nowUtc) is DateTime expiredOn)
+                return await SettleExpiredAsync(store, data, pos, expiredOn, nowUtc, ct);
+
             var problems = new List<string>();
             var legQuotes = new List<LegQuoteSnapshot>();
             var terms = ShadowFillSimulator.TermsOf(pos);
@@ -307,6 +311,54 @@ namespace DataFeed.Application.App.Runtime
         }
 
         /// <summary>
+        /// Liquidación al vencimiento. Valor = intrínseco de cada pata con el cierre oficial del subyacente de ese día; el
+        /// cierre se pide como vela diaria de esa fecha. Sin ese precio la posición sigue OPEN, «pendiente de liquidar»,
+        /// sin P&amp;L ni otras salidas. Las de liquidación AM (SPX mensual) no se pueden liquidar con el cierre: quedan pendientes.
+        /// Simplificación declarada: una opción sobre acciones/ETF se liquida por su valor intrínseco (como si se ejerciera
+        /// y se vendiera/recomprara al cierre); no se crea posición en acciones.
+        /// </summary>
+        private static async Task<string> SettleExpiredAsync(
+            ShadowRuntimeStore store, IRuntimeMarketData data, ShadowPosition pos, DateTime expiredOn,
+            DateTime nowUtc, CancellationToken ct)
+        {
+            var date = expiredOn.ToString("yyyy-MM-dd");
+            if (Expiry.IsAmSettled(pos))
+            {
+                RecordValuationProblems(store, pos, new List<string>
+                {
+                    $"{Expiry.PendingText}: vencimiento {date} de liquidación AM; se liquida con la apertura y no hay ese precio",
+                }, nowUtc);
+                return Outcomes.NoData;
+            }
+            double? close = null;
+            string? error = null;
+            try { close = await data.GetOfficialCloseAsync(pos.Symbol, expiredOn, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { error = ex.Message; }
+            if (close is not double underlying || !double.IsFinite(underlying) || underlying <= 0)
+            {
+                RecordValuationProblems(store, pos, new List<string>
+                {
+                    $"{Expiry.PendingText}: sin cierre oficial de {pos.Symbol} del {date}" + (error == null ? "" : $" ({error})"),
+                }, nowUtc);
+                return Outcomes.NoData;
+            }
+
+            double debit = Math.Round(pos.Legs.Sum(l =>
+                (l.Side == "SELL" ? 1 : -1) * Expiry.Intrinsic(l, underlying)), 4);
+            var closed = ShadowFillSimulator.Close(
+                pos with { LastSpreadValue = debit, CurrentDte = 0, LastValuedAt = nowUtc, ValuationProblems = null },
+                debit, ShadowFillSimulator.ExpirationReason, nowUtc) with
+            {
+                ExitContext = new ExitContext { CapturedAt = nowUtc, Dte = 0, Legs = new List<LegQuoteSnapshot>() },
+            };
+            store.UpdatePosition(closed, NewEvent(pos.InstanceId, "POSITION_CLOSED", pos.Symbol, nowUtc,
+                ("position_id", pos.PositionId), ("exit_reason", ShadowFillSimulator.ExpirationReason),
+                ("realized_pnl", closed.RealizedPnl), ("exit_debit", closed.ExitDebit), ("dte", 0),
+                ("underlying_close", underlying), ("expiration", date)));
+            return Outcomes.Closed;
+        }
+
+        /// <summary>
         /// Deja en la posición por qué no se pudo valuar, y un evento VALUATION_NO_DATA sólo si el
         /// problema es nuevo o cambió. El monitor corre cada 30 s: sin esto, una noche sin
         /// cotizaciones llenaría el registro de eventos con el mismo aviso.
@@ -350,5 +402,47 @@ namespace DataFeed.Application.App.Runtime
             Payload = payload.ToDictionary(p => p.Key, p => p.Value),
             Timestamp = nowUtc,
         };
+    }
+}
+
+namespace DataFeed.Application.App.Runtime
+{
+    /// <summary>Vencimiento y liquidación de las patas de una posición (WS-0062 inc.3).</summary>
+    public static class Expiry
+    {
+        public const string PendingText = "pendiente de liquidar";
+
+        /// <summary>Raíces de índice con liquidación AM (SPX mensual, NDX, RUT, VIX); SPXW, NDXP, RUTW... liquidan PM.</summary>
+        private static readonly HashSet<string> AmRoots = new(StringComparer.OrdinalIgnoreCase) { "SPX", "NDX", "RUT", "VIX" };
+
+        /// <summary>Liquidación AM, derivada de la raíz del símbolo OCC (la cadena trae settlement-type pero la posición no lo guarda).</summary>
+        public static bool IsAmSettled(ShadowPosition pos)
+        {
+            var occ = pos.Legs.Select(l => l.OccSymbol).FirstOrDefault(o => !string.IsNullOrWhiteSpace(o));
+            if (occ == null) return false;
+            var root = new string(occ.Trim().TakeWhile(char.IsLetter).ToArray());
+            return AmRoots.Contains(root);
+        }
+
+        /// <summary>
+        /// La fecha de vencimiento si la posición de opciones ya pasó su hora de liquidación (16:00 America/New_York de ese día), o null.
+        /// Las acciones (long_equity) no vencen.
+        /// </summary>
+        public static DateTime? SettlementDue(ShadowPosition pos, DateTime nowUtc)
+        {
+            if (pos.Structure == RuntimeStructures.LongEquity) return null;
+            var exp = pos.Legs.Select(l => l.Expiration).FirstOrDefault(e => !string.IsNullOrEmpty(e));
+            if (exp == null || !DateTime.TryParse(exp, System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None, out var expDate)) return null;
+            ShadowSession.TryZone("America/New_York", out var et);
+            var nowEt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), et);
+            return nowEt >= expDate.Date.AddHours(16) ? expDate.Date : null;
+        }
+
+        /// <summary>Valor intrínseco de una pata con el subyacente a <paramref name="underlying"/>.</summary>
+        public static double Intrinsic(ShadowLeg leg, double underlying) =>
+            string.Equals(leg.Type, "CALL", StringComparison.OrdinalIgnoreCase)
+                ? Math.Max(underlying - leg.Strike, 0)
+                : Math.Max(leg.Strike - underlying, 0);
     }
 }
