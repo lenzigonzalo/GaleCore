@@ -66,6 +66,30 @@ public class ShadowPerformanceTests
     }
 
     [Fact]
+    public void CreditPlan_WithNContracts_ScalesLikeTheRealizedPnl()
+    {
+        // 3 contratos, crédito 0.44: TP planeado = 3 × 22, SL = 3 × −88. El SL cerró a 1.50: −318 realizado, 54 peor que lo planeado.
+        ShadowPosition Three(double debit, string reason, int day)
+        {
+            return Closed(0.44, debit, reason, day) with
+            {
+                Legs = new List<ShadowLeg> { new() { Side = "SELL", Type = "PUT", Quantity = 3 }, new() { Side = "BUY", Type = "PUT", Quantity = 3 } },
+                RealizedPnl = Math.Round((0.44 - debit) * 300, 2),
+            };
+        }
+        var v = Version("a", "1", Three(0.22, "TAKE_PROFIT", 10), Three(1.50, "STOP_LOSS", 20));
+        var rep = ShadowPerformance.Compute(new[] { v }, AllExits(v), 10000, T0.AddDays(30));
+
+        var sl = rep.Trades.First();
+        Assert.Equal(-264, sl.Plan!.StopLossPnl);
+        Assert.Equal(66, sl.Plan.TakeProfitPnl);
+        Assert.Equal(-318, sl.RealizedPnl);
+        Assert.Equal(-54, sl.GapToPlan);
+        Assert.Equal(0, rep.Trades.Last().GapToPlan);
+        Assert.Equal(-54, rep.Strategies.Single().ByExitRule.Single(x => x.Rule == "STOP_LOSS").AvgGapToPlan);
+    }
+
+    [Fact]
     public void Attribution_ByExitRule_AndByStrategyAcrossVersions()
     {
         var v1 = Version("a", "1", Closed(0.44, 0.22, "TAKE_PROFIT", 5));
