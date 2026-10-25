@@ -175,9 +175,13 @@ namespace DataFeed.Application.App.Runtime
             return new TradePlan
             {
                 // TP: el spread vale (100 − pct)% del crédito → se gana pct% del crédito.
-                TakeProfitPnl = exits.TakeProfit == null ? null : Math.Round(p.EntryCredit * exits.TakeProfit.PctOfCredit, 2),
+                TakeProfitPnl = exits.TakeProfit == null ? null
+                    : exits.TakeProfit.PctOfCost is double tpCost ? Math.Round(-p.EntryCredit * tpCost / 100.0 * ShadowFillSimulator.Multiplier(p), 2)
+                    : Math.Round(p.EntryCredit * exits.TakeProfit.PctOfCredit, 2),
                 // SL: la pérdida llega a pct% del crédito (spread − crédito ≥ crédito × pct).
-                StopLossPnl = exits.StopLoss == null ? null : -Math.Round(p.EntryCredit * exits.StopLoss.PctOfCredit, 2),
+                StopLossPnl = exits.StopLoss == null ? null
+                    : exits.StopLoss.PctOfCost is double slCost ? -Math.Round(-p.EntryCredit * slCost / 100.0 * ShadowFillSimulator.Multiplier(p), 2)
+                    : -Math.Round(p.EntryCredit * exits.StopLoss.PctOfCredit, 2),
                 TimeExitDte = exits.TimeExit?.MaxDte,
             };
         }

@@ -83,6 +83,40 @@ namespace DataFeed.Application.App.Runtime.Contracts
         /// <summary>"NO_TRADE" — si falla, no se opera.</summary>
         public string OnFail { get; init; } = "NO_TRADE";
         public List<GateDefinition> Gates { get; init; } = new();
+        /// <summary>Condiciones de eventos (WS-0062 inc.5): evitar o exigir un evento (FOMC, balances, datos macro, lo que el calendario conozca). Se evalúan junto con los gates.</summary>
+        public List<EventGate> EventGates { get; init; } = new();
+    }
+
+    /// <summary>
+    /// «Existe / no existe un evento de este tipo y sujeto dentro de la ventana». El tipo es un texto del catálogo del calendario de eventos
+    /// (no un enum del runtime). Sin dato (fuente ilegible, tipo sin fuente, o evento sólo con fecha en una ventana de minutos) es NO_DATA y
+    /// aplica on_no_data (BLOCK por defecto).
+    /// </summary>
+    public record EventGate
+    {
+        public string Id { get; init; } = "";
+        /// <summary>Tipo del catálogo: "FOMC", "EARNINGS", "CPI"...</summary>
+        public string Type { get; init; } = "";
+        /// <summary>Un símbolo ("AAPL"), "UNIVERSE" (cualquier símbolo del universo de la spec) o "ANY" / sin declarar (eventos que no son de un símbolo, o de cualquiera).</summary>
+        public string? Subject { get; init; }
+        public EventGateWindow Window { get; init; } = new();
+        /// <summary>"exist" (hay que operar con el evento) | "not_exist" (evitarlo).</summary>
+        public string Must { get; init; } = "";
+        /// <summary>"NO_TRADE" | "INFORM_ONLY"</summary>
+        public string OnFail { get; init; } = "NO_TRADE";
+        /// <summary>"BLOCK" | "PASS" | "INFORM_ONLY"</summary>
+        public string OnNoData { get; init; } = "BLOCK";
+    }
+
+    /// <summary>
+    /// Ventana en operational.timezone. from: "day_start" (00:00 de hoy) | "now". to: "day_end" (00:00 de mañana) | "minutes_after_now" con <c>minutes</c>.
+    /// Un evento sólo con fecha coincide sólo con una ventana de día completo (day_start → day_end).
+    /// </summary>
+    public record EventGateWindow
+    {
+        public string From { get; init; } = "";
+        public string To { get; init; } = "";
+        public int? Minutes { get; init; }
     }
 
     public record SignalLayer
@@ -111,6 +145,11 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double? Value { get; init; }
         public double? Min { get; init; }
         public double? Max { get; init; }
+        /// <summary>
+        /// Métrica contra métrica (WS-0062 inc.5): el umbral es el valor de OTRA métrica ("capability:compute.ema.SPY.20").
+        /// Excluye a value/min/max y no se combina con BETWEEN. Si falta cualquiera de las dos, es NO_DATA.
+        /// </summary>
+        public string? MetricRef { get; init; }
     }
 
     public record CandidateConstruction
@@ -207,18 +246,28 @@ namespace DataFeed.Application.App.Runtime.Contracts
     {
         /// <summary>Porcentaje del crédito. Ej: 50 = cerrar cuando el spread vale 50% del crédito recibido.</summary>
         public double PctOfCredit { get; init; }
+        /// <summary>Estructuras de débito (custom_options con max_debit, long_equity): % de lo que costó entrar. 50 = cerrar con una ganancia del 50% del costo. Excluye a pct_of_credit.</summary>
+        public double? PctOfCost { get; init; }
     }
 
     public record StopLossExit
     {
         /// <summary>Porcentaje del crédito. Ej: 200 = cerrar cuando la pérdida alcanza 200% del crédito.</summary>
         public double PctOfCredit { get; init; }
+        /// <summary>Estructuras de débito: % del costo de entrada. 50 = cerrar cuando la pérdida alcanza el 50% de lo que costó entrar. Excluye a pct_of_credit.</summary>
+        public double? PctOfCost { get; init; }
     }
 
     public record TimeExit
     {
         /// <summary>Cerrar cuando DTE <= este valor.</summary>
-        public int MaxDte { get; init; }
+        public int? MaxDte { get; init; }
+        /// <summary>
+        /// Hora del día "HH:mm" en operational.timezone (WS-0062 inc.5). Cierra al precio de fill con la hora declarada o pasada,
+        /// SÓLO el día del vencimiento (DTE 0): es la salida de una 0DTE antes de la liquidación. Sin vencimiento no aplica.
+        /// Puede declararse junto con max_dte (se cierra con la primera que se cumpla).
+        /// </summary>
+        public string? At { get; init; }
     }
 
     public record DefensiveRollExit
@@ -267,6 +316,13 @@ namespace DataFeed.Application.App.Runtime.Contracts
     {
         public string Timezone { get; init; } = "America/New_York";
         public SessionHours SessionHours { get; init; } = new();
+        /// <summary>Ventana de entrada en operational.timezone (WS-0062 inc.5): sólo ahí se evalúan entradas. session_hours sigue gobernando el monitoreo. null = toda la sesión.</summary>
+        public EntryWindow? EntryWindow { get; init; }
+        /// <summary>
+        /// Límites de frecuencia de operaciones (WS-0062 inc.5, requisito legal): se hacen cumplir, la entrada que los rompería se
+        /// bloquea y queda el motivo. Sin declarar no hay límite (no hay un default).
+        /// </summary>
+        public SpecTradeLimits? TradeLimits { get; init; }
         public string Calendar { get; init; } = "NYSE";
         public int DecimalPrecision { get; init; } = 2;
         public string Currency { get; init; } = "USD";
@@ -278,6 +334,26 @@ namespace DataFeed.Application.App.Runtime.Contracts
     {
         public string Start { get; init; } = "09:30";
         public string End { get; init; } = "16:00";
+    }
+
+    /// <summary>"HH:mm" de inicio (inclusive) y fin (exclusivo), como session_hours. Fin posterior al inicio y dentro de session_hours.</summary>
+    public record EntryWindow
+    {
+        public string Start { get; init; } = "";
+        public string End { get; init; } = "";
+    }
+
+    /// <summary>
+    /// Frecuencia de operaciones que la estrategia se impone a sí misma, contada por estrategia (sus instancias, como los otros límites). Todo
+    /// opcional. No hay un límite por defecto ni un contador de day trades: FINRA eliminó la regla PDT y los 25.000 USD mínimos (en vigor
+    /// desde el 04/06/2026) y la reemplazó por margen intradiario.
+    /// </summary>
+    public record SpecTradeLimits
+    {
+        /// <summary>Entradas por día calendario en operational.timezone. 1 = una sola por día.</summary>
+        public int? MaxEntriesPerDay { get; init; }
+        /// <summary>Entradas por semana calendario (lunes a domingo) en operational.timezone.</summary>
+        public int? MaxEntriesPerWeek { get; init; }
     }
 
     public record SpecDataQuality

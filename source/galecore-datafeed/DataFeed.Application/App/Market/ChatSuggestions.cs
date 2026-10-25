@@ -47,7 +47,7 @@ public class ChatSuggestionsHandler(IDxLinkStreamingService streaming, IMediator
     private static readonly (string Symbol, string Name)[] Universe =
         { ("SPY", "SPY"), ("QQQ", "QQQ"), ("IWM", "IWM"), ("TLT", "TLT"), ("VIX", "VIX") };
     // Empleo, IPC, IPP, PBI, ingreso personal (PCE) y ventas minoristas, como la agenda de Inicio.
-    private const string MacroReleases = "50,10,46,53,54,9";
+    private static readonly string MacroReleases = DataFeed.Application.App.Runtime.EventCatalog.FredReleaseIdsCsv;
     private static readonly TimeSpan CalendarWait = TimeSpan.FromSeconds(6);
 
     public async Task<ChatSuggestionsResponse> Handle(ChatSuggestionsRequest request, CancellationToken ct)

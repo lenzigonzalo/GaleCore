@@ -9,7 +9,7 @@ namespace DataFeed.Application.App.Runtime
     /// </summary>
     public static class StrategySpecValidator
     {
-        public static SpecValidationResult Validate(StrategySpec spec)
+        public static SpecValidationResult Validate(StrategySpec spec, IReadOnlyCollection<EventTypeInfo>? eventCatalog = null)
         {
             var errors = new List<string>();
 
@@ -64,6 +64,7 @@ namespace DataFeed.Application.App.Runtime
             // ── Construcción: sólo lo que el runtime sabe construir (P1-07) ──
             ValidateConstruction(spec, errors);
             ValidateMetricExit(spec.Exits.Deterministic.MetricExit, errors);
+            ValidateExits(spec, errors);
             ValidateExecution(spec.Execution, errors);
 
             // ── Selection method: el runtime no tiene selector, siempre arma la default_structure ──
@@ -73,6 +74,7 @@ namespace DataFeed.Application.App.Runtime
             // ── Entry filters — gates ──
             ValidateGates(spec.EntryFilters.GateLayer.Gates, "entry_filters.gate_layer", errors);
             ValidateGates(spec.EntryFilters.SignalLayer.Gates, "entry_filters.signal_layer", errors);
+            ValidateEventGates(spec, eventCatalog ?? EventCatalog.Builtin, errors);
 
             // ── Risk limits — sanity ──
             if (spec.RiskLimits.MaxRiskPerTradePct.HasValue && spec.RiskLimits.MaxRiskPerTradePct.Value <= 0)
@@ -85,6 +87,7 @@ namespace DataFeed.Application.App.Runtime
             // ── Operational ──
             if (string.IsNullOrWhiteSpace(spec.Operational.Timezone))
                 errors.Add("operational.timezone is required");
+            ValidateOperationalWindows(spec.Operational, errors);
             if (string.IsNullOrWhiteSpace(spec.Operational.Currency))
                 errors.Add("operational.currency is required");
 
@@ -253,9 +256,89 @@ namespace DataFeed.Application.App.Runtime
                 errors.Add($"{p}.constraints: min_dte must be >= 0 and max_dte >= min_dte, got {minDte}..{maxDte}");
             if ((c.MinCredit != null) == (c.MaxDebit != null))
                 errors.Add($"{p}.constraints: declare exactly one of min_credit (credit structure) or max_debit (debit structure)");
+            // take_profit / stop_loss de una estructura de débito: % del costo (ValidateExits).
+        }
+
+        /// <summary>
+        /// Estructura de débito: se paga para entrar (custom_options con max_debit, o acciones en largo). Su take_profit y stop_loss
+        /// son % del costo (pct_of_cost); en las de crédito, % del crédito (pct_of_credit). Mezclarlos se rechaza.
+        /// </summary>
+        private static void ValidateExits(StrategySpec spec, List<string> errors)
+        {
             var exits = spec.Exits.Deterministic;
-            if (c.MaxDebit != null && (exits.TakeProfit != null || exits.StopLoss != null))
-                errors.Add("exits.deterministic: take_profit and stop_loss are % of credit and do not apply to a debit structure (use metric_exit or time_exit)");
+            bool debit = spec.Structure.DefaultStructure == RuntimeStructures.LongEquity
+                         || (spec.Structure.DefaultStructure == RuntimeStructures.CustomOptions && spec.CandidateConstruction.Constraints.MaxDebit != null);
+            foreach (var (name, pctOfCredit, pctOfCost) in new[]
+                     {
+                         ("take_profit", exits.TakeProfit?.PctOfCredit, exits.TakeProfit?.PctOfCost),
+                         ("stop_loss", exits.StopLoss?.PctOfCredit, exits.StopLoss?.PctOfCost),
+                     })
+            {
+                if (pctOfCredit == null) continue;   // la salida no está declarada
+                var prefix = $"exits.deterministic.{name}";
+                if (debit)
+                {
+                    if (pctOfCredit != 0)
+                        errors.Add($"{prefix}.pct_of_credit does not apply to a debit structure (nothing is received to enter): use pct_of_cost");
+                    if (pctOfCost is not double c || !(c > 0) || !double.IsFinite(c))
+                        errors.Add($"{prefix}.pct_of_cost is required (and positive) for a debit structure");
+                }
+                else if (pctOfCost != null)
+                    errors.Add($"{prefix}.pct_of_cost only applies to a debit structure (custom_options with max_debit, long_equity); use pct_of_credit");
+            }
+
+            if (exits.TimeExit is TimeExit te)
+            {
+                if (te.MaxDte == null && te.At == null)
+                    errors.Add("exits.deterministic.time_exit must declare max_dte, at or both");
+                if (te.MaxDte is int dte && dte < 0)
+                    errors.Add($"exits.deterministic.time_exit.max_dte must be >= 0, got {dte}");
+                if (te.At != null)
+                {
+                    if (!ShadowSession.TryTime(te.At, out var at))
+                        errors.Add($"exits.deterministic.time_exit.at must be HH:mm, got '{te.At}'");
+                    else if (SessionRange(spec.Operational) is (TimeSpan start, TimeSpan end) && (at < start || at >= end))
+                        errors.Add($"exits.deterministic.time_exit.at {te.At} must be inside operational.session_hours "
+                                   + $"({spec.Operational.SessionHours.Start}-{spec.Operational.SessionHours.End}): exits are only evaluated in session");
+                }
+            }
+        }
+
+        private static (TimeSpan Start, TimeSpan End)? SessionRange(SpecOperational o) =>
+            ShadowSession.TryTime(o.SessionHours.Start, out var s) && ShadowSession.TryTime(o.SessionHours.End, out var e) ? (s, e) : null;
+
+        /// <summary>operational.entry_window y operational.trade_limits (WS-0062 inc.5). Las claves desconocidas ya las rechaza el cargador.</summary>
+        private static void ValidateOperationalWindows(SpecOperational o, List<string> errors)
+        {
+            bool needsZone = o.EntryWindow != null || o.TradeLimits != null;
+            if (needsZone && !string.IsNullOrWhiteSpace(o.Timezone) && !ShadowSession.TryZone(o.Timezone, out _))
+                errors.Add($"operational.timezone '{o.Timezone}' is not a known time zone");
+
+            if (o.EntryWindow is EntryWindow w)
+            {
+                bool okStart = ShadowSession.TryTime(w.Start, out var start);
+                bool okEnd = ShadowSession.TryTime(w.End, out var end);
+                if (!okStart) errors.Add($"operational.entry_window.start must be HH:mm, got '{w.Start}'");
+                if (!okEnd) errors.Add($"operational.entry_window.end must be HH:mm, got '{w.End}'");
+                if (okStart && okEnd)
+                {
+                    if (end <= start)
+                        errors.Add($"operational.entry_window.end ({w.End}) must be after start ({w.Start})");
+                    else if (SessionRange(o) is (TimeSpan ss, TimeSpan se) && (start < ss || end > se))
+                        errors.Add($"operational.entry_window {w.Start}-{w.End} must be inside operational.session_hours ({o.SessionHours.Start}-{o.SessionHours.End})");
+                }
+            }
+
+            if (o.TradeLimits is SpecTradeLimits t)
+            {
+                const string p = "operational.trade_limits";
+                if (t.MaxEntriesPerDay is int d && d <= 0) errors.Add($"{p}.max_entries_per_day must be positive");
+                if (t.MaxEntriesPerWeek is int wk && wk <= 0) errors.Add($"{p}.max_entries_per_week must be positive");
+                if (t.MaxEntriesPerDay is int d2 && t.MaxEntriesPerWeek is int w2 && d2 > 0 && w2 > 0 && w2 < d2)
+                    errors.Add($"{p}.max_entries_per_week ({w2}) cannot be below max_entries_per_day ({d2})");
+                if (t.MaxEntriesPerDay == null && t.MaxEntriesPerWeek == null)
+                    errors.Add($"{p} must declare at least one limit");
+            }
         }
 
         /// <summary>
@@ -285,8 +368,8 @@ namespace DataFeed.Application.App.Runtime
             if (sizing.Method != "FIXED" || sizing.FixedContracts is not > 0)
                 errors.Add("candidate_construction.sizing must be FIXED with fixed_contracts > 0 (shares) for long_equity");
             var exits = spec.Exits.Deterministic;
-            if (exits.TakeProfit != null || exits.StopLoss != null || exits.TimeExit != null)
-                errors.Add("exits.deterministic: take_profit, stop_loss and time_exit are % of credit / DTE and do not apply to long_equity (use metric_exit)");
+            if (exits.TimeExit != null)
+                errors.Add("exits.deterministic: time_exit is DTE / expiration day and does not apply to long_equity (use metric_exit, or take_profit / stop_loss with pct_of_cost)");
         }
 
         private static void ValidateExecution(SpecExecution? e, List<string> errors)
@@ -319,8 +402,73 @@ namespace DataFeed.Application.App.Runtime
             var validOperators = new[] { "LT", "LTE", "GT", "GTE", "EQ", "NEQ", "BETWEEN" };
             if (!validOperators.Contains(exit.Operator))
                 errors.Add($"exits.deterministic.metric_exit.operator must be one of: {string.Join(", ", validOperators)}");
-            else if (exit.Operator == "BETWEEN" ? !(exit.Threshold.Min.HasValue && exit.Threshold.Max.HasValue) : !exit.Threshold.Value.HasValue)
-                errors.Add($"exits.deterministic.metric_exit: operator {exit.Operator} requires its threshold");
+            else ValidateThreshold(exit.Operator, exit.Threshold, "exits.deterministic.metric_exit", errors);
+        }
+
+        /// <summary>
+        /// Umbral escalar (value, o min y max para BETWEEN) o métrica contra métrica (threshold.metric_ref): uno u otro, nunca mezclados,
+        /// y BETWEEN no admite una métrica (necesitaría dos).
+        /// </summary>
+        private static void ValidateThreshold(string op, GateThreshold t, string name, List<string> errors)
+        {
+            if (t.MetricRef != null)
+            {
+                if (string.IsNullOrWhiteSpace(t.MetricRef))
+                    errors.Add($"{name}: threshold.metric_ref must not be empty");
+                if (t.Value != null || t.Min != null || t.Max != null)
+                    errors.Add($"{name}: threshold.metric_ref cannot be combined with threshold.value, min or max");
+                if (op == "BETWEEN")
+                    errors.Add($"{name}: BETWEEN does not support threshold.metric_ref (use min and max)");
+                return;
+            }
+            if (op == "BETWEEN" ? !(t.Min.HasValue && t.Max.HasValue) : !t.Value.HasValue)
+                errors.Add(op == "BETWEEN"
+                    ? $"{name}: BETWEEN requires threshold.min and threshold.max"
+                    : $"{name}: operator {op} requires its threshold (threshold.value or threshold.metric_ref)");
+        }
+
+        /// <summary>
+        /// event_gates: tipo del catálogo del calendario (sin fuente de datos para el tipo, la spec no se despliega: antes hay que traer el dato),
+        /// sujeto coherente con el tipo, ventana y must legibles.
+        /// </summary>
+        private static void ValidateEventGates(StrategySpec spec, IReadOnlyCollection<EventTypeInfo> catalog, List<string> errors)
+        {
+            var ids = new HashSet<string>();
+            foreach (var g in spec.EntryFilters.GateLayer.EventGates)
+            {
+                var name = $"entry_filters.gate_layer.event_gates[{g.Id}]";
+                if (string.IsNullOrWhiteSpace(g.Id)) { errors.Add("entry_filters.gate_layer.event_gates: event gate id is required"); continue; }
+                if (!ids.Add(g.Id) || spec.EntryFilters.GateLayer.Gates.Any(x => x.Id == g.Id))
+                    errors.Add($"{name}: duplicate gate id '{g.Id}'");
+                if (g.Must != "exist" && g.Must != "not_exist") errors.Add($"{name}.must must be exist or not_exist, got '{g.Must}'");
+                if (g.OnFail != "NO_TRADE" && g.OnFail != "INFORM_ONLY") errors.Add($"{name}.on_fail must be one of: NO_TRADE, INFORM_ONLY");
+                if (g.OnNoData != "BLOCK" && g.OnNoData != "PASS" && g.OnNoData != "INFORM_ONLY") errors.Add($"{name}.on_no_data must be one of: BLOCK, PASS, INFORM_ONLY");
+
+                var w = g.Window;
+                if (w.From != "day_start" && w.From != "now") errors.Add($"{name}.window.from must be day_start or now, got '{w.From}'");
+                if (w.To != "day_end" && w.To != "minutes_after_now") errors.Add($"{name}.window.to must be day_end or minutes_after_now, got '{w.To}'");
+                else if (w.To == "minutes_after_now" && !(w.Minutes is > 0 and <= 1440)) errors.Add($"{name}.window.minutes must be between 1 and 1440 with minutes_after_now");
+                else if (w.To == "day_end" && w.Minutes != null) errors.Add($"{name}.window.minutes only applies with minutes_after_now");
+
+                var info = catalog.FirstOrDefault(t => string.Equals(t.Type, g.Type, StringComparison.OrdinalIgnoreCase));
+                if (string.IsNullOrWhiteSpace(g.Type)) { errors.Add($"{name}.type is required"); continue; }
+                if (info == null)
+                {
+                    errors.Add($"{name}.type '{g.Type}': there is no data source for that event type (known: {string.Join(", ", catalog.Select(t => t.Type))}); "
+                               + "the data has to be brought into GaleCore before a strategy can depend on it");
+                    continue;
+                }
+                var subject = g.Subject?.ToUpperInvariant();
+                if (info.PerSymbol)
+                {
+                    if (subject == null || subject == EventGates.Any)
+                        errors.Add($"{name}.subject: {info.Type} is per symbol; use a symbol or UNIVERSE (no source lists every symbol's events)");
+                    else if (subject == EventGates.Universe && spec.Universe.Symbols.Count == 0)
+                        errors.Add($"{name}.subject UNIVERSE needs universe.symbols");
+                }
+                else if (subject != null && subject != EventGates.Any)
+                    errors.Add($"{name}.subject: {info.Type} is not tied to a symbol; leave subject empty (or ANY), got '{g.Subject}'");
+            }
         }
 
         private static void ValidateGates(List<GateDefinition> gates, string prefix, List<string> errors)
@@ -348,15 +496,8 @@ namespace DataFeed.Application.App.Runtime
                 if (!validOnNoData.Contains(gate.OnNoData))
                     errors.Add($"{prefix}.gates[{gate.Id}].on_no_data must be one of: {string.Join(", ", validOnNoData)}");
 
-                if (gate.Operator == "BETWEEN")
-                {
-                    if (!gate.Threshold.Min.HasValue || !gate.Threshold.Max.HasValue)
-                        errors.Add($"{prefix}.gates[{gate.Id}]: BETWEEN requires threshold.min and threshold.max");
-                }
-                else if (gate.Operator != "" && !gate.Threshold.Value.HasValue)
-                {
-                    errors.Add($"{prefix}.gates[{gate.Id}]: operator {gate.Operator} requires threshold.value");
-                }
+                if (gate.Operator != "")
+                    ValidateThreshold(gate.Operator, gate.Threshold, $"{prefix}.gates[{gate.Id}]", errors);
             }
         }
     }

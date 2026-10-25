@@ -210,7 +210,7 @@ public class LongEquityTests
         Assert.Contains(StrategySpecValidator.Validate(spec with
         {
             Exits = new SpecExits { Deterministic = spec.Exits.Deterministic with { StopLoss = new StopLossExit { PctOfCredit = 200 } } },
-        }).Errors, e => e.Contains("long_equity"));
+        }).Errors, e => e.Contains("pct_of_credit"));   // acciones = débito: el stop es pct_of_cost (WS-0062 inc.5)
         Assert.Contains(StrategySpecValidator.Validate(spec with
         {
             Exits = new SpecExits { Deterministic = spec.Exits.Deterministic with { MetricExit = new MetricExit { MetricRef = EmaRef, Operator = "LT" } } },

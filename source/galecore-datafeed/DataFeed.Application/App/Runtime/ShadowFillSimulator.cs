@@ -143,33 +143,57 @@ namespace DataFeed.Application.App.Runtime
             DeterministicExits exits,
             double currentSpreadValue,
             int currentDte,
-            bool metricExitMet = false)
+            bool metricExitMet = false,
+            bool timeOfDayReached = false)
         {
             if (position.Status != "OPEN") return null;
 
-            // Stop loss: pérdida >= pct del crédito
+            // Estructuras de débito (EntryCredit < 0, p. ej. acciones o custom_options con max_debit): take profit y stop loss son % del
+            // COSTO de entrada, sobre el P&L por unidad (entrada − valor de cierre, ya con el modelo de fill del valor de cierre).
+            // Las de crédito no cambian: siguen siendo % del crédito.
+            double pnlPerUnit = position.EntryCredit - currentSpreadValue;
+            double cost = -position.EntryCredit;
+
+            // Stop loss: pérdida >= pct del crédito (o del costo)
             if (exits.StopLoss != null)
             {
-                double stopThreshold = position.EntryCredit * (exits.StopLoss.PctOfCredit / 100.0);
-                double currentLoss = currentSpreadValue - position.EntryCredit;
-                if (currentLoss >= stopThreshold)
-                    return "STOP_LOSS";
+                if (exits.StopLoss.PctOfCost is double slCost)
+                {
+                    if (position.EntryCredit < 0 && pnlPerUnit <= -cost * (slCost / 100.0))
+                        return "STOP_LOSS";
+                }
+                else
+                {
+                    double stopThreshold = position.EntryCredit * (exits.StopLoss.PctOfCredit / 100.0);
+                    double currentLoss = currentSpreadValue - position.EntryCredit;
+                    if (currentLoss >= stopThreshold)
+                        return "STOP_LOSS";
+                }
             }
 
             // Salida por métrica (WS-0061)
             if (exits.MetricExit != null && metricExitMet)
                 return "METRIC_EXIT";
 
-            // Take profit: spread vale <= (100 - pct)% del crédito
+            // Take profit: spread vale <= (100 - pct)% del crédito; en débito, ganancia >= pct% del costo
             if (exits.TakeProfit != null)
             {
-                double profitTarget = position.EntryCredit * (1.0 - exits.TakeProfit.PctOfCredit / 100.0);
-                if (currentSpreadValue <= profitTarget)
-                    return "TAKE_PROFIT";
+                if (exits.TakeProfit.PctOfCost is double tpCost)
+                {
+                    if (position.EntryCredit < 0 && pnlPerUnit >= cost * (tpCost / 100.0))
+                        return "TAKE_PROFIT";
+                }
+                else
+                {
+                    double profitTarget = position.EntryCredit * (1.0 - exits.TakeProfit.PctOfCredit / 100.0);
+                    if (currentSpreadValue <= profitTarget)
+                        return "TAKE_PROFIT";
+                }
             }
 
-            // Time exit: DTE <= max_dte
-            if (exits.TimeExit != null && currentDte <= exits.TimeExit.MaxDte)
+            // Time exit: DTE <= max_dte, o la hora del día de vencimiento (at, ya evaluada por el motor)
+            if (exits.TimeExit != null
+                && ((exits.TimeExit.MaxDte is int maxDte && currentDte <= maxDte) || (exits.TimeExit.At != null && timeOfDayReached)))
                 return "TIME_EXIT";
 
             return null;

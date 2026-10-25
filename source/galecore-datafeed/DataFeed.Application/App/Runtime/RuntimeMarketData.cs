@@ -81,6 +81,9 @@ namespace DataFeed.Application.App.Runtime
         /// no hay una. Sirve para liquidar vencimientos (WS-0062 inc.3); nunca se infiere de opciones ni se completa.
         /// </summary>
         Task<double?> GetOfficialCloseAsync(string symbol, DateTime sessionDate, CancellationToken ct) => Task.FromResult<double?>(null);
+
+        /// <summary>Calendario de eventos para las event_gates de la spec (WS-0062 inc.5); null = sin calendario (las condiciones quedan NO_DATA).</summary>
+        IEventCalendar? Events => null;
     }
 
     public static class OfficialClose
@@ -169,6 +172,8 @@ namespace DataFeed.Application.App.Runtime
             _mediator = mediator;
             _logger = logger;
         }
+
+        public IEventCalendar? Events => new MediatorEventCalendar(_mediator, _logger);
 
         public Task<Dictionary<string, double?>> ResolveMetricsAsync(
             IEnumerable<string> metricRefs, DateTime nowUtc, TimeSpan? maxAge, CancellationToken ct)

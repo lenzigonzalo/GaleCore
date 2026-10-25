@@ -444,7 +444,7 @@ public class OptionStructureBuilderTests
         var spec = Sandwich();
         spec = spec with { CandidateConstruction = spec.CandidateConstruction with { Constraints = new() { MinDte = 0, MaxDte = 0, MaxDebit = 2 } } };
 
-        Assert.Contains(Errors(spec), e => e.Contains("do not apply to a debit structure"));
+        Assert.Contains(Errors(spec), e => e.Contains("does not apply to a debit structure"));
     }
 
     [Fact]

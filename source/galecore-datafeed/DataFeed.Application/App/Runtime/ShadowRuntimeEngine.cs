@@ -21,6 +21,7 @@ namespace DataFeed.Application.App.Runtime
             public const string GatesNotPassed = "GATES_NOT_PASSED";
             public const string MaxPositions = "MAX_POSITIONS";
             public const string TooSoon = "TOO_SOON";
+            public const string TradeLimit = "TRADE_LIMIT";
             public const string NoCandidate = "NO_CANDIDATE";
             public const string RiskRejected = "RISK_REJECTED";
             public const string Opened = "OPENED";
@@ -42,7 +43,10 @@ namespace DataFeed.Application.App.Runtime
             string symbol, DateTime nowUtc, CancellationToken ct, Func<bool>? canOpen = null)
         {
             var gates = spec.EntryFilters.GateLayer.Gates;
-            var metricRefs = gates.Select(g => g.MetricRef).Distinct().ToList();
+            // Los umbrales que son otra métrica (metric_ref contra metric_ref) se resuelven junto con las demás.
+            var metricRefs = gates.Select(g => g.MetricRef)
+                .Concat(gates.Where(g => g.Threshold.MetricRef != null).Select(g => g.Threshold.MetricRef!))
+                .Distinct().ToList();
 
             // 1. Métricas reales; si el resolver entero falla, todas quedan sin dato (nunca inventadas).
             Dictionary<string, double?> metrics;
@@ -64,6 +68,9 @@ namespace DataFeed.Application.App.Runtime
             var eval = GenericGateEvaluator.Evaluate(
                 gates, spec.EntryFilters.GateLayer.PassRule, spec.EntryFilters.GateLayer.OnFail,
                 metrics, instance.InstanceId, symbol, nowUtc);
+            // Condiciones de eventos (WS-0062 inc.5): FOMC, balances, datos macro... según lo que el calendario conozca.
+            eval = await EventGates.ApplyAsync(eval, spec.EntryFilters.GateLayer.EventGates, data.Events, spec.Operational,
+                spec.Universe.Symbols, nowUtc, ct);
             store.AddEvaluation(eval);
             var gateSummary = eval.GateResults.Select(g => new Dictionary<string, object?>
             {
@@ -106,6 +113,16 @@ namespace DataFeed.Application.App.Runtime
                     ("reason", $"espaciado entre entradas: la última fue hace {(int)(nowUtc - lastEntry).TotalMinutes} min (mínimo {minMinutes})"),
                     ("last_entry_at", lastEntry.ToString("o")), ("next_entry_allowed_at", next.ToString("o")));
                 return Outcomes.TooSoon;
+            }
+
+            // 3c. Límites de frecuencia de operaciones (WS-0062 inc.5, requisito legal): bloquean la entrada y dejan el motivo.
+            // Mismo criterio que 3b: se chequean fuera del lock, el loop de entrada es único y serial.
+            var limitReason = TradeLimits.BlockReason(
+                spec, store.AllPositions().Where(p => limitScope.Contains(p.InstanceId)).ToList(), nowUtc);
+            if (limitReason != null)
+            {
+                AddEvent(store, instance, "ENTRY_SKIPPED", symbol, nowUtc, ("reason", limitReason), ("limit", "trade_limits"));
+                return Outcomes.TradeLimit;
             }
 
             // 4. Candidato real, o la razón por la que no hay.
@@ -194,7 +211,8 @@ namespace DataFeed.Application.App.Runtime
         /// </summary>
         public static async Task<string> ValuePositionAsync(
             ShadowRuntimeStore store, IRuntimeMarketData data, ShadowPosition pos, DeterministicExits exits,
-            DateTime nowUtc, CancellationToken ct, bool evaluateExits = true, TimeSpan? maxQuoteAge = null)
+            DateTime nowUtc, CancellationToken ct, bool evaluateExits = true, TimeSpan? maxQuoteAge = null,
+            SpecOperational? operational = null)
         {
             // Vencida y pasada la hora de liquidación: se liquida (o queda pendiente) sin mirar cotizaciones de opciones.
             if (Expiry.SettlementDue(pos, nowUtc) is DateTime expiredOn)
@@ -281,14 +299,18 @@ namespace DataFeed.Application.App.Runtime
             if (evaluateExits && exits.MetricExit is MetricExit metricExit)
             {
                 double? metricValue = null;
+                GateThreshold? threshold = null;
                 string? metricProblem = null;
                 try
                 {
-                    var resolved = await data.ResolveMetricsAsync(new[] { metricExit.MetricRef }, nowUtc, maxQuoteAge, ct);
+                    var refs = metricExit.Threshold.MetricRef == null
+                        ? new[] { metricExit.MetricRef } : new[] { metricExit.MetricRef, metricExit.Threshold.MetricRef };
+                    var resolved = await data.ResolveMetricsAsync(refs, nowUtc, maxQuoteAge, ct);
                     metricValue = resolved.GetValueOrDefault(metricExit.MetricRef);
+                    threshold = GenericGateEvaluator.ResolveThreshold(metricExit.Threshold, resolved);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException) { metricProblem = ex.Message; }
-                if (metricValue is double mv) metricMet = GenericGateEvaluator.EvaluateOperator(metricExit.Operator, mv, metricExit.Threshold);
+                if (metricValue is double mv && threshold != null) metricMet = GenericGateEvaluator.EvaluateOperator(metricExit.Operator, mv, threshold);
                 else
                 {
                     var problems2 = new List<string> { $"salida por condición sin dato: {metricExit.MetricRef}" + (metricProblem == null ? "" : $" ({metricProblem})") };
@@ -301,7 +323,13 @@ namespace DataFeed.Application.App.Runtime
             store.UpdatePosition(valued);
             if (!evaluateExits) return Outcomes.Valued;
 
-            var reason = ShadowFillSimulator.EvaluateExits(valued, exits, spreadValue, dte ?? int.MaxValue, metricMet);
+            // Salida por hora (WS-0062 inc.5): sólo el día del vencimiento (DTE 0), con la hora de la spec ya cumplida.
+            bool timeOfDayReached = false;
+            if (exits.TimeExit?.At is string at && dte == 0 && ShadowSession.TryTime(at, out var atTime)
+                && ShadowSession.LocalTime(operational ?? new SpecOperational(), nowUtc) is DateTime localNow)
+                timeOfDayReached = localNow.TimeOfDay >= atTime;
+
+            var reason = ShadowFillSimulator.EvaluateExits(valued, exits, spreadValue, dte ?? int.MaxValue, metricMet, timeOfDayReached);
             if (reason == null) return Outcomes.Valued;
 
             var closed = ShadowFillSimulator.Close(valued, spreadValue, reason, nowUtc) with
