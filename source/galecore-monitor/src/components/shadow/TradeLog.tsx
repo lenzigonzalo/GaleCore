@@ -49,6 +49,8 @@ function Fact({ label, value, color }: { label: string; value: React.ReactNode; 
   return <div className="op-fact"><span>{label}</span><strong style={color ? { color } : undefined}>{value}</strong></div>;
 }
 
+const contractsOf = (legs: Trade['legList']) => legs[0]?.quantity ?? 1;
+
 function OperationPanel({ row, onClose }: { row: Row; onClose: () => void }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -57,7 +59,7 @@ function OperationPanel({ row, onClose }: { row: Row; onClose: () => void }) {
   return <aside className="op-panel" role="dialog" aria-label={`Operación ${row.symbol}`}>
     <header><div><h3>{row.symbol} · {row.structure.replace(/_/g, ' ')}</h3><span className={'op-state' + (row.open ? ' is-open' : '')}>{row.pending ? 'Pendiente de liquidar' : row.open ? 'Abierta' : 'Cerrada'} · SHADOW · v{row.version}</span></div>
       <button aria-label="Cerrar" onClick={onClose}><X size={18} /></button></header>
-    <div className="op-legs">{row.equity ? <div className="strike-empty">{row.equity.legs}</div> : <StrikeLadder legs={row.legList} />}</div>
+    <div className="op-legs">{row.equity ? <div className="strike-empty">{row.equity.legs}</div> : <StrikeLadder legs={row.legList} />}{!row.equity && contractsOf(row.legList) > 1 && <div className="strike-empty">{contractsOf(row.legList)} contratos por pata</div>}</div>
     <section><h4>Resultado (SHADOW)</h4><div className="op-facts">
       <Fact label={row.open ? 'P&L abierto' : 'P&L realizado'} value={number(row.pnl, usd)} color={tone(row.pnl)} />
       {row.debit ? <Fact label="% del costo" value={number(row.pnlPctOfCost, pct)} color={tone(row.pnlPctOfCost)} />
@@ -131,7 +133,7 @@ export function TradeLog({ trades, spec, exits, open = [] }: { trades: Trade[]; 
           tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') setSelected(r.id); }} aria-label={`Ver operación ${r.symbol} ${shortDate(r.entryAt)}`}>
           <td><span className={'op-state' + (r.open ? ' is-open' : '')}>{r.pending ? 'Pendiente de liquidar' : r.open ? 'Abierta' : 'Cerrada'}</span></td>
           <td>{shortDate(r.entryAt)}</td><td>{shortDate(r.exitAt)}</td>
-          <td><div className="trade-structure"><strong title={r.structure}>{r.symbol}</strong>{r.equity ? <span>{r.equity.legs}</span> : <StrikeLadder compact legs={r.legList} />}</div></td>
+          <td><div className="trade-structure"><strong title={r.structure}>{r.symbol}</strong>{r.equity ? <span>{r.equity.legs}</span> : <StrikeLadder compact legs={r.legList} />}{!r.equity && contractsOf(r.legList) > 1 && <span>×{contractsOf(r.legList)}</span>}</div></td>
           <td>{r.exitReason ? exitLabel(r.exitReason) : r.open ? 'en curso' : '—'}</td>
           <td className="numeric" style={{ color: tone(r.pnl) }}>{number(r.pnl, usd)}</td>
           <td className="numeric" style={{ color: tone(r.pnlPctOfMaxRisk) }}>{number(r.pnlPctOfMaxRisk, pct)}</td>

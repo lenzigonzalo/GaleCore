@@ -196,10 +196,11 @@ namespace DataFeed.Application.App.Runtime.Contracts
 
     public record SizingConfig
     {
-        /// <summary>"FIXED" | "RISK_BASED" | "KELLY"</summary>
+        /// <summary>"FIXED" | "RISK_BASED" (contratos = tope por operación / pérdida máxima de uno, ShadowSizing) | "KELLY" (no se ejecuta con opciones)</summary>
         public string Method { get; init; } = "RISK_BASED";
         /// <summary>
-        /// Contratos fijos. En long_equity son ACCIONES (método FIXED): cantidad fija de acciones por entrada.
+        /// Contratos por posición con FIXED (la misma cantidad en todas las patas de opciones). En long_equity son ACCIONES: cantidad fija
+        /// de acciones por entrada.
         /// </summary>
         public int? FixedContracts { get; init; }
         public double? RiskPerTradePct { get; init; }

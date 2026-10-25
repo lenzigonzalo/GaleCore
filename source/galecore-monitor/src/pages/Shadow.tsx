@@ -369,7 +369,7 @@ function PositionsTable({ positions }: { positions: ShadowPosition[] }) {
         <tr key={p.positionId}>
           <Td>{when(p.entryAt)}</Td>
           <Td>{p.symbol}</Td>
-          <Td mono>{stock && p.legsText ? p.legsText : p.legs.map((l) => `${l.side} ${l.type} ${l.strike} ${l.expiration ?? ''}`).join(' / ')}</Td>
+          <Td mono>{stock && p.legsText ? p.legsText : p.legs.map((l) => `${l.side} ${(l.quantity ?? 1) > 1 ? `${l.quantity} ` : ''}${l.type} ${l.strike} ${l.expiration ?? ''}`).join(' / ')}</Td>
           <Td mono>{stock ? (p.entryPrice == null ? '—' : `${p.entryPrice.toFixed(2)} × ${p.shares ?? '—'}`) : `${p.entryKind === 'debit' ? 'Costo ' : ''}${(p.entryAmount ?? p.entryCredit).toFixed(2)}`}</Td>
           <Td mono>{usd(stock ? (p.cost ?? p.maxRisk) : p.maxRisk)}</Td>
           <Td mono>{stock ? '—' : (p.currentDte ?? p.entryDte)}</Td>

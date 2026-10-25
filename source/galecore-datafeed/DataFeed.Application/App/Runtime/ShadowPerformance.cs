@@ -155,7 +155,7 @@ namespace DataFeed.Application.App.Runtime
         public static string LegsText(ShadowPosition p) =>
             string.Join(" / ", p.Legs.Select(l => l.Type == LongEquityCandidateBuilder.LegType
                 ? $"{l.Side} {l.Quantity ?? 1} {p.Symbol}"   // acciones: «BUY 10 AAPL»
-                : $"{l.Side} {l.Type} {l.Strike:0.##} {l.Expiration}".Trim()));
+                : $"{l.Side} {(l.Quantity > 1 ? $"{l.Quantity} " : "")}{l.Type} {l.Strike:0.##} {l.Expiration}".Trim()));   // opciones con N > 1: «SELL 3 PUT 580 ...»
 
         public static PerformanceReport Compute(IEnumerable<SpecVersionRecord> records,
             IReadOnlyDictionary<string, DeterministicExits> exitsByHash, double? referenceCapital, DateTime now,

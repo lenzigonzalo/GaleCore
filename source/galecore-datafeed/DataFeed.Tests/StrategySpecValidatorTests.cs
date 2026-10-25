@@ -63,6 +63,7 @@ public class StrategySpecValidatorTests
         },
         CandidateConstruction = new CandidateConstruction
         {
+            Sizing = new SizingConfig { Method = "FIXED", FixedContracts = 1 },
             Legs = new List<LegTemplate>
             {
                 new() { Side = "SELL", Type = "PUT", StrikeSelection = new LegStrikeSelection { Method = "DELTA", TargetDelta = -0.16, DeltaTolerance = 0.04 } },

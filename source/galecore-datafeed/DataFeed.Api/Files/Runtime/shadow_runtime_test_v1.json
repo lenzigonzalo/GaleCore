@@ -90,9 +90,9 @@
       }
     ],
     "sizing": {
-      "method": "RISK_BASED",
-      "fixed_contracts": null,
-      "risk_per_trade_pct": 5.0
+      "method": "FIXED",
+      "fixed_contracts": 1,
+      "risk_per_trade_pct": null
     },
     "constraints": {
       "min_dte": 30,

@@ -123,6 +123,7 @@ namespace DataFeed.Application.App.Runtime
                 ValidateLongEquity(spec, errors);
                 return;
             }
+            ValidateOptionSizing(spec, errors);
             if (structure == RuntimeStructures.CustomOptions)
             {
                 ValidateCustomOptions(spec, errors);
@@ -395,6 +396,30 @@ namespace DataFeed.Application.App.Runtime
                     errors.Add($"{p}.max_entries_per_week ({w2}) cannot be below max_entries_per_day ({d2})");
                 if (t.MaxEntriesPerDay == null && t.MaxEntriesPerWeek == null)
                     errors.Add($"{p} must declare at least one limit");
+            }
+        }
+
+        /// <summary>
+        /// Contratos por posición de opciones (WS-0062 inc.10): FIXED con fixed_contracts, o RISK_BASED con un tope por operación que el
+        /// runtime pueda calcular (max_loss_per_trade_usd, o max_risk_per_trade_pct con capital simulado). KELLY no se ejecuta.
+        /// </summary>
+        private static void ValidateOptionSizing(StrategySpec spec, List<string> errors)
+        {
+            var s = spec.CandidateConstruction.Sizing;
+            var r = spec.RiskLimits;
+            const string p = "candidate_construction.sizing";
+            switch (s.Method)
+            {
+                case ShadowSizing.Fixed:
+                    if (s.FixedContracts is not > 0) errors.Add($"{p}.fixed_contracts must be > 0 with FIXED (contracts per position)");
+                    break;
+                case ShadowSizing.RiskBased:
+                    if (!(r.MaxLossPerTradeUsd is > 0 || (r.MaxRiskPerTradePct != null && r.SimulatedCapitalUsd != null)))
+                        errors.Add($"{p}: RISK_BASED needs risk_limits.max_loss_per_trade_usd, or max_risk_per_trade_pct with simulated_capital_usd (no cap, no contracts)");
+                    break;
+                default:
+                    errors.Add($"{p}.method must be FIXED or RISK_BASED for options, got '{s.Method}' (KELLY is not executed)");
+                    break;
             }
         }
 

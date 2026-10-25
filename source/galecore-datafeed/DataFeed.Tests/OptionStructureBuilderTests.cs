@@ -547,6 +547,28 @@ public class OptionStructureBuilderTests
     }
 
     [Fact]
+    public async Task Sandwich_WithTwoContracts_ScalesRiskCostsAndPnl_PricesStayPerContract()
+    {
+        var spec = Sandwich() with
+        {
+            CandidateConstruction = Sandwich().CandidateConstruction with { Sizing = new SizingConfig { Method = "FIXED", FixedContracts = 2 } },
+        };
+        var built = Assert.IsType<TradeCandidate>((await Build(Source(), spec)).Candidate);
+        var (sized, reason) = ShadowSizing.Apply(spec, built, null);
+        Assert.Null(reason);
+        var c = sized!;
+
+        Assert.All(c.Legs, l => Assert.Equal(2, l.Quantity));
+        Assert.Equal((2.6, 5.0, 480.0), (c.Credit, c.Width, c.MaxRisk));   // 240 × 2; crédito y ancho por contrato
+        var terms = new ExecutionTerms { PerContractUsd = 0.65, CostsDeclared = true };
+        var pos = ShadowFillSimulator.Fill(c, Now, terms);
+        Assert.Equal(5.2, ShadowFillSimulator.OrderCost(pos, terms));        // 4 patas x 2 contratos x 0,65
+        Assert.Equal(-480.0, ShadowFillSimulator.GrossPnl(pos, 5.0));        // (2,60 - 5) x 100 x 2 = -max_risk
+        Assert.Equal(-490.4, ShadowFillSimulator.Pnl(pos, 5.0));             // - 2 ordenes x 5,20
+        Assert.Equal(c.MaxRisk, -ShadowFillSimulator.GrossPnl(pos, 5.0));
+    }
+
+    [Fact]
     public async Task OpenSandwich_Valuation_AcceptsTheRangeOfThePayoff()
     {
         var spec = Sandwich();

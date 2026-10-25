@@ -49,7 +49,7 @@ namespace DataFeed.Application.App.Runtime.Contracts
                 "entry_filters.gate_layer.event_gates",
                 "candidate_construction.legs[].id", "candidate_construction.legs[].side", "candidate_construction.legs[].type",
                 "candidate_construction.legs[].strike_selection",
-                "candidate_construction.sizing.method", "candidate_construction.sizing.fixed_contracts",   // long_equity (acciones fijas)
+                "candidate_construction.sizing.method", "candidate_construction.sizing.fixed_contracts",   // contratos por posición (opciones: FIXED o RISK_BASED) o acciones fijas (long_equity)
                 "candidate_construction.constraints.min_dte", "candidate_construction.constraints.max_dte",
                 "candidate_construction.constraints.min_credit", "candidate_construction.constraints.max_debit",
                 "exits.deterministic.take_profit", "exits.deterministic.stop_loss",                         // pct_of_credit | pct_of_cost

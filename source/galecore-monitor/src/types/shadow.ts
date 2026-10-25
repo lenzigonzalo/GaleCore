@@ -95,6 +95,8 @@ export interface ShadowLeg {
   streamerSymbol: string | null;
   entryPrice: number;
   exitPrice: number | null;
+  /** Contratos de la pata (opciones, la misma en todas); null en posiciones anteriores = 1. */
+  quantity?: number | null;
 }
 
 export interface ShadowPosition {
@@ -166,7 +168,7 @@ export interface PerformanceSummary {
   maxDrawdown: Metric; worstTrade: Metric; avgDaysHeld: Metric;
   takeProfitExits: number; stopLossExits: number; otherExits: number; lastExitAt: string | null;
 }
-export interface PanelLeg { side: string; type: string; strike: number; expiration: string | null }
+export interface PanelLeg { side: string; type: string; strike: number; expiration: string | null; quantity?: number | null }
 /** Una regla de entrada con el valor que vio al abrir la posición (WS-0057 C). */
 export interface PanelGate { gateId: string; label: string; status: string; value: number | null; threshold: number | null; operator: string; onFail: string }
 export interface PerformancePanelResponse {

@@ -57,14 +57,17 @@ namespace DataFeed.Application.App.Runtime
         }
 
         /// <summary>
-        /// Multiplicador del P&L por unidad de precio: 100 por contrato de opciones; en long_equity, las acciones.
+        /// Multiplicador del P&L por unidad de precio: 100 por contrato de opciones (× los contratos de la posición); en long_equity, las acciones.
         /// </summary>
         public static double Multiplier(ShadowPosition position) =>
             position.Structure == RuntimeStructures.LongEquity
                 ? position.Legs.FirstOrDefault()?.Quantity
                     ?? throw new InvalidOperationException(
                         $"La posición de acciones {position.PositionId} no tiene cantidad en su pata: no se puede calcular el P&L ni el costo.")
-                : 100;
+                : 100 * Contracts(position);
+
+        /// <summary>Contratos de una posición de opciones: la misma cantidad en todas las patas (sin cantidad guardada, 1: posiciones anteriores).</summary>
+        public static int Contracts(ShadowPosition position) => Math.Max(1, position.Legs.FirstOrDefault()?.Quantity ?? 1);
 
         /// <summary>Las condiciones con que se abrió la posición; las anteriores a WS-0062 entraron al mid y sin costos.</summary>
         public static ExecutionTerms TermsOf(ShadowPosition position) => position.EntryContext?.Execution ?? ExecutionTerms.Legacy;
@@ -87,7 +90,7 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Costo declarado de UNA orden (la de entrada o la de salida), en USD.</summary>
         public static double OrderCost(ShadowPosition position, ExecutionTerms terms)
         {
-            double units = position.Legs.Sum(l => l.Quantity ?? 1);   // contratos (1 por pata) o acciones
+            double units = position.Legs.Sum(l => l.Quantity ?? 1);   // contratos (N por pata) o acciones
             double perUnit = position.Structure == RuntimeStructures.LongEquity ? terms.PerShareUsd : terms.PerContractUsd;
             return Math.Round(perUnit * units + terms.PerOrderUsd, 2);
         }

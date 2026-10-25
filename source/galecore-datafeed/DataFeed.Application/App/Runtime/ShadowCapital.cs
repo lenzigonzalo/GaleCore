@@ -323,13 +323,27 @@ namespace DataFeed.Application.App.Runtime
             };
         }
 
+        /// <summary>
+        /// Tope de pérdida por operación en USD: el menor de los que hay (% del capital y/o USD fijo); null si no hay ninguno.
+        /// Lo usan el reparto de capital (<see cref="AllocateOne"/>) y el tamaño de cada posición (<see cref="ShadowSizing"/>).
+        /// </summary>
+        public static double? PerTradeCapUsd(double? pctOfCapitalUsd, double? maxLossUsd)
+        {
+            double? usd = maxLossUsd is > 0 ? maxLossUsd : null;
+            return pctOfCapitalUsd is double pct ? (usd is double u ? Math.Min(pct, u) : pct) : usd;
+        }
+
+        /// <summary>Contratos enteros que entran en el tope con la pérdida máxima de UN contrato (puede dar 0).</summary>
+        public static int ContractsWithin(double capUsd, double riskPerContractUsd) =>
+            (int)Math.Floor(capUsd / riskPerContractUsd + 1e-9);
+
         private static StrategyAllocation AllocateOne(StrategyTerms s, double budget, CapitalLimits limits)
         {
-            double perTrade = s.MaxLossPerTradeUsd is > 0 ? Math.Min(limits.MaxRiskPerTradeUsd, s.MaxLossPerTradeUsd.Value)
-                : limits.MaxRiskPerTradeUsd;
+            double perTrade = PerTradeCapUsd(limits.MaxRiskPerTradeUsd, s.MaxLossPerTradeUsd)!.Value;
             var observed = s.Observed.Where(p => p.MaxRisk > 0).ToList();
             double? avgCredit = observed.Count == 0 ? null : Math.Round(observed.Average(p => p.EntryCredit), 4);
-            double? rpc = observed.Count > 0 ? Math.Round(observed.Average(p => p.MaxRisk), 2)
+            // Riesgo de UN contrato: una posición observada de N contratos tiene N veces su pérdida máxima por contrato.
+            double? rpc = observed.Count > 0 ? Math.Round(observed.Average(p => p.MaxRisk / ShadowFillSimulator.Contracts(p)), 2)
                 : s.Width is > 0 ? Math.Round(s.Width.Value * 100, 2) : null;
             var baseAlloc = new StrategyAllocation
             {
@@ -347,7 +361,7 @@ namespace DataFeed.Application.App.Runtime
             // Sin DTE no se puede estimar el vencimiento ni, por lo tanto, la apuesta: no se inventa.
             if (baseAlloc.EntryDte == null) return baseAlloc with { BindingLimit = "missing_dte" };
 
-            int contracts = (int)Math.Floor(perTrade / rpc.Value + 1e-9);
+            int contracts = ContractsWithin(perTrade, rpc.Value);
             if (contracts < 1)
             {
                 // (w − c) × 100 ≤ perTrade, con c = w × crédito relativo → w ≤ perTrade / 100 / (1 − ratio).

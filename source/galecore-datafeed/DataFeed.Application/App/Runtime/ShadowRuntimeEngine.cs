@@ -148,14 +148,24 @@ namespace DataFeed.Application.App.Runtime
             {
                 built = CandidateBuildResult.Rejected($"error construyendo el candidato: {ex.Message}");
             }
-            if (built.Candidate is not TradeCandidate candidate)
+            if (built.Candidate is not TradeCandidate oneContract)
             {
                 AddEvent(store, instance, "CANDIDATE_NOT_VIABLE", symbol, nowUtc,
                     ("reason", built.RejectReason ?? "sin razón informada"));
                 return Outcomes.NoCandidate;
             }
+
+            // 4b. Contratos (WS-0062 inc.10): el candidato viene de un contrato; N sale de sizing y los controles de abajo miden la pérdida de N.
+            var (sized, sizingReason) = ShadowSizing.Apply(spec, oneContract, ShadowRiskControls.Equity(spec, scopePositions));
+            if (sized is not TradeCandidate candidate)
+            {
+                AddEvent(store, instance, "ENTRY_SKIPPED", symbol, nowUtc,
+                    ("reason", sizingReason), ("limit", "sizing"), ("candidate_id", oneContract.CandidateId), ("max_risk_per_contract", oneContract.MaxRisk));
+                return Outcomes.RiskLimit;
+            }
+            int? contracts = candidate.Structure == RuntimeStructures.LongEquity ? null : candidate.Legs.FirstOrDefault()?.Quantity;
             AddEvent(store, instance, "CANDIDATE_CREATED", symbol, nowUtc,
-                ("candidate_id", candidate.CandidateId), ("credit", candidate.Credit), ("max_risk", candidate.MaxRisk),
+                ("candidate_id", candidate.CandidateId), ("credit", candidate.Credit), ("max_risk", candidate.MaxRisk), ("contracts", contracts),
                 ("delta_short", candidate.DeltaShort), ("dte", candidate.Dte),
                 ("quotes_as_of", candidate.Snapshot.OldestQuoteAt?.ToString("o") ?? "desconocida (el proveedor no informa la hora)"),
                 ("quotes_without_time", candidate.Snapshot.QuotesWithoutTime),
@@ -193,7 +203,7 @@ namespace DataFeed.Application.App.Runtime
             }
             var opened = NewEvent(instance.InstanceId, "POSITION_OPENED", symbol, nowUtc,
                 ("position_id", position.PositionId), ("credit", position.EntryCredit),
-                ("max_risk", position.MaxRisk), ("dte", position.EntryDte));
+                ("max_risk", position.MaxRisk), ("dte", position.EntryDte), ("contracts", contracts));
             if (!store.TryAddPosition(position, canOpen ?? (() => true), opened))
             {
                 AddEvent(store, instance, "ENTRY_ABORTED", symbol, nowUtc,

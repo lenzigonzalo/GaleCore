@@ -13,7 +13,7 @@
       "agent_definition_version": null
     },
     "created_at": "2026-09-25T00:00:00Z",
-    "parent_version_hash": "sha256:bb4d35027bb023b6bf1858a7130c53ba93fe346d10760a267d5ad4284c556348"
+    "parent_version_hash": "sha256:f94b3dd24e6c7b78bf55c26b5af35a1d62ad1238d591da981edd0db7d6819e24"
   },
 
   "deployment_constraints": {
@@ -90,9 +90,9 @@
       }
     ],
     "sizing": {
-      "method": "RISK_BASED",
-      "fixed_contracts": null,
-      "risk_per_trade_pct": 5.0
+      "method": "FIXED",
+      "fixed_contracts": 1,
+      "risk_per_trade_pct": null
     },
     "constraints": {
       "min_dte": 30,
