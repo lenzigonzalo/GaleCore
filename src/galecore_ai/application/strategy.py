@@ -127,6 +127,26 @@ CHECK_PATH = "/App/Runtime/Specs/Check"
 SpecChecker = Callable[[str], dict]   # spec text -> GaleCore's Check response
 
 
+def _check_response_problem(body: Any) -> str | None:
+    """What is wrong with a Check response (GaleCore's contract: valid, errors, content_hash, executed_paths,
+    inert_paths), or None. A missing field is never read as empty: an unexplained executed path would go unseen."""
+    if not isinstance(body, dict):
+        return "no es un objeto"
+
+    def strings(key: str) -> bool:
+        return isinstance(body.get(key), list) and all(isinstance(x, str) for x in body[key])
+
+    if not isinstance(body.get("valid"), bool):
+        return "valid no es booleano"
+    for key in ("errors", "executed_paths", "inert_paths"):
+        if not strings(key):
+            return f"{key} falta o no es una lista de textos"
+    hashed = body.get("content_hash")
+    if not (isinstance(hashed, str) if body["valid"] else hashed is None or isinstance(hashed, str)):
+        return "content_hash falta o no es texto"
+    return None
+
+
 def galecore_spec_checker(base_url: str | None = None, api_key: str | None = None, timeout: float = 30.0) -> SpecChecker:
     """POST the spec to GaleCore's read-only Check. An unreachable or older GaleCore is an error, not a fallback."""
     import httpx
@@ -151,8 +171,9 @@ def galecore_spec_checker(base_url: str | None = None, api_key: str | None = Non
             body = r.json()
         except ValueError as exc:
             raise KnowledgeError(f"POST {CHECK_PATH} no devolvió JSON") from exc
-        if not isinstance(body, dict) or not isinstance(body.get("valid"), bool):
-            raise KnowledgeError(f"POST {CHECK_PATH} devolvió algo que no es un resultado de Check")
+        if problem := _check_response_problem(body):
+            raise KnowledgeError(f"POST {CHECK_PATH} devolvió algo que no es un resultado de Check ({problem}): "
+                                 "sin la respuesta completa no se puede verificar qué ejecuta el runtime")
         return body
 
     return check
@@ -205,8 +226,8 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str,
 
     coverage: dict[str, list[str]] = {}
     if result["valid"]:
-        executed = list(dict.fromkeys(result.get("executed_paths") or []))
-        inert = list(result.get("inert_paths") or [])
+        executed = list(dict.fromkeys(result["executed_paths"]))
+        inert = list(result["inert_paths"])
         supported: dict[str, list[str]] = {}
         for rule in content.rules:
             if rule.runtime.status == RuntimeStatus.SUPPORTED:

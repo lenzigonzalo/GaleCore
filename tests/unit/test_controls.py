@@ -5,15 +5,23 @@ from __future__ import annotations
 import json
 
 from galecore_ai.application import controls, supervisor
+from tests.unit.fake_galecore import fake_checker, recorded
 from tests.unit.test_capital import _Doc, _kb, exposure
 from tests.unit.test_knowledge import kb  # noqa: F401  (kb is a fixture)
 from tests.unit.test_strategy import research_ref, stored  # noqa: F401  (research_ref is a fixture)
 from tests.unit.test_supervisor import IID, IN_SESSION, NAME, position
 
 
+def _classify(doc, executed=None):
+    """classify with a GaleCore that executes what the stored check says (or ``executed``) for this exact spec."""
+    paths = list(doc.check.coverage if executed is None else executed)
+    return controls.classify(doc, fake_checker(recorded("spy_prima_varianza_valid", executed_paths=paths,
+                                                        content_hash=doc.spec_hash), pin_hash=True))
+
+
 def test_rules_fall_in_three_classes_and_indispensables_decide_the_recommendation(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
-    out = controls.classify(doc)
+    out = _classify(doc)
     classes = {r["clase"] for r in out["reglas"]}
     assert classes <= {"ejecutada", "sólo declarada", "no aplica"} and "ejecutada" in classes
     by_id = {r["regla"]: r for r in out["reglas"]}
@@ -46,7 +54,7 @@ def _declaring(doc, **risk):
 
 def test_approval_is_recommended_when_everything_indispensable_runs_and_the_capital_is_the_designs(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
-    out = controls.classify(_declaring(doc, **RISK))
+    out = _classify(_declaring(doc, **RISK))
     assert {i["estado"] for i in out["indispensables"]} == {"ejecutado"}
     assert out["recomendar_aprobacion"] is True and out["monto_simulado_usd"] == 10000.0
     assert "capital de la spec es el monto simulado" in out["motivo"]
@@ -54,29 +62,29 @@ def test_approval_is_recommended_when_everything_indispensable_runs_and_the_capi
 
 def test_a_missing_brake_or_bet_cap_is_not_recommended(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
-    out = controls.classify(_declaring(doc, **{**RISK, "loss_brakes": None}))
+    out = _classify(_declaring(doc, **{**RISK, "loss_brakes": None}))
     assert out["recomendar_aprobacion"] is False and "freno por pérdida acumulada (no ejecutado" in out["motivo"]
-    out = controls.classify(_declaring(doc, **{**RISK, "max_bet_pct": None}))
+    out = _classify(_declaring(doc, **{**RISK, "max_bet_pct": None}))
     assert out["recomendar_aprobacion"] is False and "tope por apuesta (no ejecutado" in out["motivo"]
     declared_only = _declaring(doc, **RISK)    # in the spec but GaleCore did not report it executed
     unexecuted = declared_only.check.model_copy(update={"coverage": doc.check.coverage})
-    out = controls.classify(declared_only.model_copy(update={"check": unexecuted}))
+    out = _classify(declared_only.model_copy(update={"check": unexecuted}))
     assert out["recomendar_aprobacion"] is False
 
 
 def test_the_capital_of_the_spec_must_be_the_single_simulated_amount(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
-    out = controls.classify(_declaring(doc, **{**RISK, "simulated_capital_usd": 25000.0}))
+    out = _classify(_declaring(doc, **{**RISK, "simulated_capital_usd": 25000.0}))
     assert out["recomendar_aprobacion"] is False
     assert "25000 USD no es el monto simulado del diseño, 10000 USD" in out["motivo"]
     assert "margen y capital simulado" in {i["control"] for i in out["indispensables"]}
-    out = controls.classify(_declaring(doc, **{**RISK, "simulated_capital_usd": None}))
+    out = _classify(_declaring(doc, **{**RISK, "simulated_capital_usd": None}))
     assert out["recomendar_aprobacion"] is False and "falta risk_limits.simulated_capital_usd" in out["motivo"]
 
 
 def test_listing_unexecuted_rules_is_not_enough_to_recommend(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
-    out = controls.classify(doc)
+    out = _classify(doc)
     executed = [i for i in out["indispensables"] if i["estado"] == "ejecutado"]
     assert len(executed) < len(out["indispensables"]) and not out["recomendar_aprobacion"]
 
@@ -144,7 +152,7 @@ def _equity_doc(max_loss=None, sizing_executed=True):
 
 
 def test_long_equity_risk_is_the_position_cost_and_stop_and_time_exit_are_not_indispensable():
-    out = controls.classify(_equity_doc())
+    out = _classify(_equity_doc())
     state = {i["control"]: i["estado"] for i in out["indispensables"]}
     assert state["riesgo por operación"] == "ejecutado" and state["tope de posiciones abiertas"] == "ejecutado"
     assert "stop" not in state and "salida por tiempo" not in state
@@ -155,13 +163,13 @@ def test_long_equity_risk_is_the_position_cost_and_stop_and_time_exit_are_not_in
 
 
 def test_long_equity_risk_not_executed_when_the_runtime_does_not_size_it():
-    out = controls.classify(_equity_doc(sizing_executed=False))
+    out = _classify(_equity_doc(sizing_executed=False))
     assert {i["control"]: i["estado"] for i in out["indispensables"]}["riesgo por operación"] == "no ejecutado por el runtime"
 
 
 def test_options_keep_their_indispensables(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
-    names = [i["control"] for i in controls.classify(doc)["indispensables"]]
+    names = [i["control"] for i in _classify(doc)["indispensables"]]
     assert "stop" in names and "salida por tiempo" in names
 
 
@@ -179,3 +187,29 @@ def test_long_equity_sheet_speaks_of_stocks_not_of_options():
     r = strategy_sheet.risk(None, doc, None)
     assert "10 acciones × precio" in r["per_trade_note"]
     assert not any("pérdida máxima por operación" in m for m in r["missing"])
+
+
+# ── the recommendation asks GaleCore again (WS-0062 review) ──
+def test_the_recommendation_uses_what_the_running_galecore_executes_not_the_stored_coverage(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    full = _declaring(doc, **RISK)
+    assert _classify(full)["recomendar_aprobacion"] is True
+    older = _classify(full, executed=doc.check.coverage)       # a runtime that stopped executing the brakes and the cap
+    assert older["recomendar_aprobacion"] is False and "freno por pérdida acumulada (no ejecutado" in older["motivo"]
+
+
+def test_without_a_confirmation_from_galecore_nothing_is_recommended(kb, research_ref):  # noqa: F811
+    from galecore_ai.application.knowledge import KnowledgeError
+    full = _declaring(stored(kb, research_ref)[0], **RISK)
+
+    def down(spec_json):
+        raise KnowledgeError("GaleCore no respondió en http://x")
+
+    for out, why in [(controls.classify(full), "no se reverificó"),
+                     (controls.classify(full, down), "no se pudo reverificar con GaleCore"),
+                     (controls.classify(full, fake_checker(recorded("invalid"))), "GaleCore ya no acepta esta spec"),
+                     (controls.classify(full, fake_checker(recorded("spy_prima_varianza_valid", content_hash="sha256:otra"), pin_hash=True)),
+                      "su verificación no es de esta versión")]:
+        assert out["recomendar_aprobacion"] is False and why in out["motivo"]
+        assert out["motivo"].startswith("No se recomienda aprobar")
+        assert "sin verificar" in {i["estado"] for i in out["indispensables"]}

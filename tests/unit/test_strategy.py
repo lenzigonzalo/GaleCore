@@ -227,6 +227,26 @@ def test_without_galecore_the_check_fails_clearly_and_does_not_fall_back(case):
             check_proposal(proposal(), spec_text(), f"{NAME}.json", checker)
 
 
+def _without(key):
+    return {k: v for k, v in recorded("spy_prima_varianza_valid").items() if k != key}
+
+
+@pytest.mark.parametrize("response", [
+    _without("executed_paths"), _without("inert_paths"), _without("errors"), _without("content_hash"),
+    recorded("spy_prima_varianza_valid", valid="true"),
+    recorded("spy_prima_varianza_valid", errors="boom"),
+    recorded("spy_prima_varianza_valid", executed_paths=[1]),
+    recorded("spy_prima_varianza_valid", inert_paths=None),
+    recorded("spy_prima_varianza_valid", content_hash=5),
+    ["valid"],
+], ids=["no_executed", "no_inert", "no_errors", "no_hash", "valid_str", "errors_str", "executed_ints", "inert_null",
+        "hash_int", "not_object"])
+def test_an_incomplete_or_mistyped_check_response_is_a_galecore_error_not_an_empty_default(response):
+    from galecore_ai.application.strategy import galecore_spec_checker
+    with galecore_server(response) as base, pytest.raises(KnowledgeError, match="no es un resultado de Check"):
+        check_proposal(proposal(), spec_text(), f"{NAME}.json", galecore_spec_checker(base_url=base))
+
+
 # ── the proposal contract ────────────────────────────────────────
 
 

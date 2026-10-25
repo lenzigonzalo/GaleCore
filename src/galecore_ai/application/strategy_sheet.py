@@ -14,7 +14,7 @@ from collections.abc import Callable
 from galecore_ai.adapters.strategy_store import StrategyIntegrityError, StrategyStoreError
 from galecore_ai.application import capital, controls, supervisor
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
-from galecore_ai.application.strategy import load_critique, load_proposal
+from galecore_ai.application.strategy import SpecChecker, load_critique, load_proposal
 from galecore_ai.contracts.strategy import Basis, ManagementKind, RuntimeStatus, StrategyDocument
 
 BASIS_LABEL = {
@@ -184,7 +184,8 @@ def _structure_lines(s: dict) -> list[str]:
     return lines
 
 
-def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = None) -> dict:
+def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = None,
+          checker: SpecChecker | None = None) -> dict:
     doc = load_proposal(kb, key)
     review = load_critique(kb, key)
     try:
@@ -193,7 +194,7 @@ def sheet(kb: KnowledgeBase, key: str, read: Callable[[str], object] | None = No
         raise KnowledgeError(f"strategy:{key}: approval not usable ({exc})") from exc
     c = doc.content
     review_ok = review is not None and review.proposal_hash == doc.content_hash
-    ctl = controls.classify(doc)
+    ctl = controls.classify(doc, checker)
     r = risk(kb, doc, read)
     # WS-0027 R2: asked «¿la activo o espero?», a session read only this sheet and proposed approving on credit alone;
     # the controls verdict and the portfolio limits already broken go first, by code.

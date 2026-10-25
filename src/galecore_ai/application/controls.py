@@ -10,8 +10,9 @@ Three classes, never mixed:
 - sólo declarada: it is written in the proposal and nobody checks it.
 
 The indispensable controls (owner 10/10) are recognised by the spec field that executes them, not by rule ids,
-which are each strategy's own, and their state comes from the paths GaleCore reported as executed when the proposal
-was checked (``check.coverage``). Since the runtime enforces the cap per bet, the loss brakes and the margin
+which are each strategy's own, and their state comes from the paths the running GaleCore reports as executed for the
+stored spec, asked again each time (Check, same hash). With no checker, no answer or another hash, nothing is
+recommended: a stored coverage may describe an older runtime. Since the runtime enforces the cap per bet, the loss brakes and the margin
 (WS-0062), approval is recommended when every indispensable is executed and ``risk_limits.simulated_capital_usd``
 equals the single simulated amount of the design; a mismatch or a missing amount is not recommended, with the reason.
 Deterministic, no model call; the owner approves or not, this only says what is true.
@@ -21,8 +22,13 @@ from __future__ import annotations
 
 import json
 import math
+from collections.abc import Callable
 
+from galecore_ai.application.knowledge import KnowledgeError
 from galecore_ai.contracts.strategy import RuntimeStatus, StrategyDocument
+
+SpecChecker = Callable[[str], dict]   # spec text -> GaleCore's Check response (as in application.strategy)
+
 
 # What the supervisor reads of an open position and alerts on (supervisor.evaluate / scan). Alerts, never blocks.
 SUPERVISED = [
@@ -70,9 +76,25 @@ def _covers(executed: set[str], path: str) -> bool:
     return any(p == path or p.startswith((path + ".", path + "[")) for p in executed)
 
 
-def classify(doc: StrategyDocument) -> dict:
+def _executed_now(doc: StrategyDocument, checker: SpecChecker | None) -> tuple[set[str], str | None]:
+    """The spec paths the running GaleCore executes for this exact spec, or why that is not known."""
+    if checker is None:
+        return set(), "no se reverificó con GaleCore: lo que ejecuta el runtime de hoy no está confirmado"
+    try:
+        result = checker(doc.spec_json)
+    except KnowledgeError as exc:
+        return set(), f"no se pudo reverificar con GaleCore, no se sabe qué ejecuta hoy ({exc})"
+    if not result["valid"]:
+        return set(), f"GaleCore ya no acepta esta spec ({'; '.join(result['errors']) or 'sin motivo'})"
+    if result["content_hash"] != doc.spec_hash:
+        return set(), (f"GaleCore hashea esta spec como {result['content_hash']} y la versión guardada es "
+                       f"{doc.spec_hash}: su verificación no es de esta versión")
+    return set(result["executed_paths"]), None
+
+
+def classify(doc: StrategyDocument, checker: SpecChecker | None = None) -> dict:
     spec = json.loads(doc.spec_json)
-    executed = set(doc.check.coverage)   # the spec paths GaleCore reported as executed when the check ran
+    executed, unverified = _executed_now(doc, checker)
     rules = []
     for rule in doc.content.rules:
         status = rule.runtime.status
@@ -92,8 +114,11 @@ def classify(doc: StrategyDocument) -> dict:
         if equity and name == "riesgo por operación":
             paths = (*paths, *EQUITY_RISK_PATHS)
         runs = any(_spec_value(spec, q) not in (None, {}, [], False) and _covers(executed, q) for q in paths)
-        indispensables.append({"control": name, "estado": "ejecutado" if runs else "no ejecutado por el runtime"})
+        indispensables.append({"control": name, "estado": "ejecutado" if runs else (
+            "sin verificar" if unverified else "no ejecutado por el runtime")})
     missing = [i["control"] + f" ({i['estado']})" for i in indispensables if i["estado"] != "ejecutado"]
+    if unverified:
+        missing = [unverified]
     amount = doc.content.simulated_amount_usd
     declared = _spec_value(spec, CAPITAL_PATH)
     if amount is None:   # WS-0043 (1e): the design closes with the amount it is simulated with
@@ -113,6 +138,7 @@ def classify(doc: StrategyDocument) -> dict:
         "recomendar_aprobacion": not missing,
         "motivo": ("Todos los controles indispensables los ejecuta el runtime y el capital de la spec es el monto "
                    "simulado." if not missing else
-                   "No se recomienda aprobar: faltan controles indispensables ejecutados — " + "; ".join(missing)
+                   "No se recomienda aprobar: " + ("" if unverified else "faltan controles indispensables ejecutados — ")
+                   + "; ".join(missing)
                    + ". Aprobar igual es decisión del owner, sabiendo esto."),
     }
