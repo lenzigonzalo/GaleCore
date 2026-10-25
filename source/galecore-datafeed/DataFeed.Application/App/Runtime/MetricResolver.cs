@@ -23,6 +23,17 @@ namespace DataFeed.Application.App.Runtime
     /// </summary>
     public class MetricResolver
     {
+        /// <summary>Los patrones de metric_ref que ResolveSingleAsync entiende (los publica POST /App/Runtime/Specs/Check). Mantener junto al despacho de abajo.</summary>
+        public static readonly IReadOnlyList<string> Patterns = new[]
+        {
+            "capability:market_data.quote.{SYMBOL}.price",
+            "capability:market_data.trade.{SYMBOL}.price",
+            "capability:compute.gamma_exposure.{SYMBOL}.net_gex",
+            "capability:compute.ema_spread.{SYMBOL}.{fast}.{slow}",
+            "capability:compute.ema.{SYMBOL}.{n}",
+            "capability:compute.sma.{SYMBOL}.{n}",
+        };
+
         private readonly IMediator _mediator;
         private readonly ILogger _logger;
         private DateTime _nowUtc = DateTime.UtcNow;

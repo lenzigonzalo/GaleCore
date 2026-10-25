@@ -208,7 +208,7 @@ namespace DataFeed.Application.App.Runtime
                 };
                 if (allowed == null)
                 {
-                    errors.Add($"{name}.strike_selection.method must be one of: DELTA, POINTS_FROM_SPOT, PCT_FROM_SPOT, FIXED_STRIKE, OFFSET_FROM_LEG, got '{sel.Method}'");
+                    errors.Add($"{name}.strike_selection.method must be one of: {string.Join(", ", RuntimeStructures.CustomLegMethods)}, got '{sel.Method}'");
                     continue;
                 }
                 foreach (var f in all.Where(f => f.Set && !allowed.Contains(f.Name)))

@@ -21,6 +21,9 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Acciones en largo (WS-0061): una pata BUY del subyacente, sin opciones.</summary>
         public const string LongEquity = "long_equity";
 
+        /// <summary>Métodos de selección de strike de las patas de custom_options.</summary>
+        public static readonly string[] CustomLegMethods = { "DELTA", "POINTS_FROM_SPOT", "PCT_FROM_SPOT", "FIXED_STRIKE", "OFFSET_FROM_LEG" };
+
         public static readonly string[] Supported = { PutCreditSpread, CallCreditSpread, IronCondor, CustomOptions, LongEquity };
 
         public static bool IsSupported(string structure) => Sides(structure) != null || structure == LongEquity || structure == CustomOptions;
