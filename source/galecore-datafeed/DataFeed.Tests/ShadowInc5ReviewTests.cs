@@ -142,9 +142,9 @@ public class ShadowInc5ReviewTests
     {
         var (store, data, spec, pos) = await OpenEquity(new DeterministicExits { TimeExit = new TimeExit { At = "15:45", DaysAfterEntry = 1 } });
         store.UpdatePosition(pos with { EntryAt = Utc(2026, 11, 25, 16) });   // miércoles 25/11 11:00 ET
-        // El jueves 26 es feriado y el viernes 27 cierra 13:00: el día 1 es el viernes y la salida de las 15:45 cae a las 12:59.
-        Assert.Equal(ShadowRuntimeEngine.Outcomes.Valued, await Value(store, data, spec, pos, Utc(2026, 11, 27, 17, 58), 270));
-        Assert.Equal(ShadowRuntimeEngine.Outcomes.Closed, await Value(store, data, spec, pos, Utc(2026, 11, 27, 17, 59), 270));
+        // El jueves 26 es feriado y el viernes 27 cierra 13:00: el día 1 es el viernes y la salida de las 15:45 cae a las 12:55.
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Valued, await Value(store, data, spec, pos, Utc(2026, 11, 27, 17, 54), 270));
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Closed, await Value(store, data, spec, pos, Utc(2026, 11, 27, 17, 55), 270));
         Assert.Equal("TIME_EXIT", store.GetPosition(pos.PositionId)!.ExitReason);
     }
 

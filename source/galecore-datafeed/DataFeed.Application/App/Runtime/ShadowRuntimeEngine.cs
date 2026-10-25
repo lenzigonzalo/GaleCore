@@ -351,7 +351,7 @@ namespace DataFeed.Application.App.Runtime
                 }
             // Salida por hora (WS-0062 inc.5): con days_after_entry, a esa hora del N-ésimo día de sesión tras la entrada (0 = el mismo día);
             // sin él, el día del vencimiento (DTE 0). Los feriados de NYSE no cuentan como día de sesión; en un cierre temprano la salida
-            // se dispara en el último minuto abierto. Si el calendario no cubre la fecha, no se inventa un día: queda anotado.
+            // se dispara 5 minutos antes del cierre. Si el calendario no cubre la fecha, no se inventa un día: queda anotado.
             bool timeOfDayReached = false;
             var op = operational ?? new SpecOperational();
             if (evaluateExits && exits.TimeExit?.At is string at && ShadowSession.TryTime(at, out var atTime)

@@ -33,14 +33,15 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>
         /// Hora local efectiva de una salida «a las <paramref name="at"/>» el día de sesión <paramref name="localDate"/>: en un cierre
-        /// temprano que cae antes de <paramref name="at"/>, el último minuto con la sesión abierta (la salida no pasa al día siguiente).
+        /// temprano que cae antes de <paramref name="at"/>, 5 minutos antes del cierre: el monitor de posiciones pasa cada ~30 s más lo que
+        /// tarda, y con un margen menor una pasada lenta dejaría la salida para la apertura del día siguiente.
         /// </summary>
         public static TimeSpan EffectiveExitTime(SpecOperational operational, DateTime localDate, TimeSpan at)
         {
             var day = DateOnly.FromDateTime(localDate);
             if (NyseCalendar.Kind(day) != NyseDay.EarlyClose || !TryZone(operational.Timezone, out var zone)) return at;
-            var lastOpen = TimeZoneInfo.ConvertTimeFromUtc(NyseCalendar.EarlyCloseUtc(day), zone).TimeOfDay - TimeSpan.FromMinutes(1);
-            return at < lastOpen ? at : lastOpen;
+            var latest = TimeZoneInfo.ConvertTimeFromUtc(NyseCalendar.EarlyCloseUtc(day), zone).TimeOfDay - TimeSpan.FromMinutes(5);
+            return at < latest ? at : latest;
         }
 
         /// <summary>
