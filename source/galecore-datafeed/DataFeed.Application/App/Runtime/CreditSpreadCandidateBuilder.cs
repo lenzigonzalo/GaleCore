@@ -60,6 +60,11 @@ namespace DataFeed.Application.App.Runtime
             _market = market;
         }
 
+        /// <summary>Liquidación AM: lo informa la cadena (settlement-type) o lo dice la raíz del símbolo OCC (misma regla que la liquidación).</summary>
+        private static bool IsAmExpiration(DataFeed.Application.Data.Tastytrade.OptionChains.Expiration e) =>
+            string.Equals(e.SettlementType, "AM", StringComparison.OrdinalIgnoreCase)
+            || Expiry.IsAmRoot(e.strikes?.Select(s => s.call ?? s.put).FirstOrDefault(o => !string.IsNullOrWhiteSpace(o)));
+
         private sealed record SideParams(string Type, double TargetDelta, double DeltaTolerance, double Width);
 
         private sealed record BuiltSide(CandidateLeg Short, CandidateLeg Long, LegQuote ShortQuote, LegQuote LongQuote)
@@ -119,8 +124,10 @@ namespace DataFeed.Application.App.Runtime
 
             var today = CascadeUtils.TodayEt(new DateTimeOffset(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc)));
             int midDte = (minDte + maxDte) / 2;
-            var expiration = rawExpirations
-                .Where(e => e != null && ExpirationTypes.Contains(e.ExpirationType))
+            // Los vencimientos AM (SPX mensual) no se pueden liquidar con el cierre: no se abren (ver Expiry.IsAmSettled).
+            var inTypes = rawExpirations.Where(e => e != null && ExpirationTypes.Contains(e.ExpirationType)).ToList();
+            var amExpirations = inTypes.Where(IsAmExpiration).ToList();
+            var expiration = inTypes.Except(amExpirations)
                 .Select(e => (e.ExpirationDate, Dte: DteFrom(e.ExpirationDate, today)))
                 .Where(e => e.Dte is int d && d >= minDte && d <= maxDte)
                 .Select(e => (e.ExpirationDate, Dte: e.Dte!.Value))
@@ -128,7 +135,13 @@ namespace DataFeed.Application.App.Runtime
                 .ThenBy(e => e.Dte)
                 .FirstOrDefault();
             if (expiration.ExpirationDate == null)
-                return Rejected($"sin vencimiento con DTE entre {minDte} y {maxDte}");
+            {
+                var amInRange = amExpirations.Where(e => DteFrom(e.ExpirationDate, today) is int d && d >= minDte && d <= maxDte)
+                    .Select(e => e.ExpirationDate).ToList();
+                return Rejected(amInRange.Count > 0
+                    ? $"sin vencimiento con DTE entre {minDte} y {maxDte}: {string.Join(", ", amInRange)} es de liquidación AM y no hay precio para liquidarlo"
+                    : $"sin vencimiento con DTE entre {minDte} y {maxDte}");
+            }
 
             string expirationDate = expiration.ExpirationDate;
 

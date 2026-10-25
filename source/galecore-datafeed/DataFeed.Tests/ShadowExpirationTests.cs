@@ -119,14 +119,18 @@ public class ShadowExpirationTests
     }
 
     [Fact]
-    public async Task Before1600NewYork_DoesNotSettle()
+    public async Task Before1615NewYork_DoesNotSettle_From1615_Does()
     {
         var data = new CloseData { Close = 105 };
-
         var (store, _) = await Run(Condor(), data, Before);
+        Assert.NotEqual("EXPIRATION", store.GetPosition("p-1")!.ExitReason);
 
+        (store, _) = await Run(Condor(), data, new DateTime(2026, 9, 24, 20, 10, 0, DateTimeKind.Utc));   // 16:10 ET
         Assert.NotEqual("EXPIRATION", store.GetPosition("p-1")!.ExitReason);
         Assert.Equal(0, data.CloseCalls);
+
+        (store, _) = await Run(Condor(), data, new DateTime(2026, 9, 24, 20, 15, 0, DateTimeKind.Utc));   // 16:15 ET
+        Assert.Equal("EXPIRATION", store.GetPosition("p-1")!.ExitReason);
     }
 
     [Fact]

@@ -418,14 +418,25 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Liquidación AM, derivada de la raíz del símbolo OCC (la cadena trae settlement-type pero la posición no lo guarda).</summary>
         public static bool IsAmSettled(ShadowPosition pos)
         {
-            var occ = pos.Legs.Select(l => l.OccSymbol).FirstOrDefault(o => !string.IsNullOrWhiteSpace(o));
-            if (occ == null) return false;
+            return IsAmRoot(pos.Legs.Select(l => l.OccSymbol).FirstOrDefault(o => !string.IsNullOrWhiteSpace(o)));
+        }
+
+        /// <summary>Liquidación AM según la raíz de un símbolo OCC (null = se asume PM).</summary>
+        public static bool IsAmRoot(string? occ)
+        {
+            if (string.IsNullOrWhiteSpace(occ)) return false;
             var root = new string(occ.Trim().TakeWhile(char.IsLetter).ToArray());
             return AmRoots.Contains(root);
         }
 
         /// <summary>
-        /// La fecha de vencimiento si la posición de opciones ya pasó su hora de liquidación (16:00 America/New_York de ese día), o null.
+        /// Hora (ET) desde la que se liquida: 16:15, no 16:00. A las 16:00 la vela diaria puede estar parcial y su cierre
+        /// todavía no ser el definitivo; el cuarto de hora de margen evita liquidar con un precio provisorio.
+        /// </summary>
+        public static readonly TimeSpan SettlementTimeEt = new(16, 15, 0);
+
+        /// <summary>
+        /// La fecha de vencimiento si la posición de opciones ya pasó su hora de liquidación (<see cref="SettlementTimeEt"/> de ese día), o null.
         /// Las acciones (long_equity) no vencen.
         /// </summary>
         public static DateTime? SettlementDue(ShadowPosition pos, DateTime nowUtc)
@@ -436,7 +447,7 @@ namespace DataFeed.Application.App.Runtime
                     System.Globalization.DateTimeStyles.None, out var expDate)) return null;
             ShadowSession.TryZone("America/New_York", out var et);
             var nowEt = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), et);
-            return nowEt >= expDate.Date.AddHours(16) ? expDate.Date : null;
+            return nowEt >= expDate.Date + SettlementTimeEt ? expDate.Date : null;
         }
 
         /// <summary>Valor intrínseco de una pata con el subyacente a <paramref name="underlying"/>.</summary>

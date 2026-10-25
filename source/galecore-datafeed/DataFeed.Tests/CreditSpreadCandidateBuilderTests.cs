@@ -211,6 +211,37 @@ public class CreditSpreadCandidateBuilderTests
         Assert.NotNull((await Build(source)).Candidate);
     }
 
+    [Theory]
+    [InlineData("SPX   261103P00720000", null)]    // raíz AM por el símbolo OCC
+    [InlineData(null, "AM")]                       // AM por el settlement-type de la cadena
+    public async Task AmSettledExpiration_IsNotOpened_WithClearReason(string? occ, string? settlement)
+    {
+        var exp = new Expiration
+        {
+            ExpirationDate = "2026-11-03", ExpirationType = "Regular", SettlementType = settlement,
+            strikes = new() { new Strike { call = occ ?? "SPXW  261103C00720000", put = occ } },
+        };
+        var source = new FakeSource { Expirations = new() { exp } };
+
+        var result = await Build(source);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("AM", result.RejectReason);
+        Assert.Contains("2026-11-03", result.RejectReason);
+        Assert.Null(source.LastGexRequest);
+    }
+
+    [Fact]
+    public async Task PmIndexExpiration_WithOccRootSpxw_IsOpened()
+    {
+        var exp = new Expiration
+        {
+            ExpirationDate = "2026-11-03", ExpirationType = "Weekly", SettlementType = "PM",
+            strikes = new() { new Strike { call = "SPXW  261103C00720000" } },
+        };
+        Assert.NotNull((await Build(new FakeSource { Expirations = new() { exp } })).Candidate);
+    }
+
     [Fact]
     public async Task ZeroDteOnly_RejectedWhenTheSpecStartsAtOne()
     {
