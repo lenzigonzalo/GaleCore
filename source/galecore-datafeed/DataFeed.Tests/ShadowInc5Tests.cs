@@ -1,3 +1,4 @@
+using DataFeed.Application.App.Shared;
 using System.Text.Json.Nodes;
 using DataFeed.Application.App.Runtime;
 using DataFeed.Application.App.Runtime.Contracts;

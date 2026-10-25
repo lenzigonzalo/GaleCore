@@ -1,3 +1,4 @@
+using DataFeed.Application.App.Shared;
 using DataFeed.Application.App.Runtime.Contracts;
 
 namespace DataFeed.Application.App.Runtime

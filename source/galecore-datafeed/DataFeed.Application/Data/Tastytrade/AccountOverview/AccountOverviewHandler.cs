@@ -18,7 +18,7 @@ namespace DataFeed.Application.Data.Tastytrade.AccountOverview
     {
         // Los datos de la agenda pueden tardar con la caché fría (FRED ~8 s): Inicio no los espera más que esto.
         private static readonly TimeSpan CalendarWait = TimeSpan.FromSeconds(6);
-        private static readonly string MacroReleases = DataFeed.Application.App.Runtime.EventCatalog.FredReleaseIdsCsv;
+        private static readonly string MacroReleases = EventCatalog.FredReleaseIdsCsv;
 
         private readonly IMediator _mediator;
 
