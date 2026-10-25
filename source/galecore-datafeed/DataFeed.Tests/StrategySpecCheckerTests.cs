@@ -46,6 +46,25 @@ public class StrategySpecCheckerTests
     }
 
     [Fact]
+    public void GateLayer_PassRuleAndOnFail_OnlyTheValuesTheRuntimeExecutes()
+    {
+        var ok = StrategySpecChecker.Check(Sandwich());
+        Assert.True(ok.Valid);
+        Assert.Contains("entry_filters.gate_layer.pass_rule", ok.ExecutedPaths);
+        Assert.Contains("entry_filters.gate_layer.on_fail", ok.ExecutedPaths);
+
+        foreach (var (field, value) in new[] { ("pass_rule", "ANY"), ("on_fail", "INFORM_ONLY") })
+        {
+            var node = JsonNode.Parse(Sandwich())!;
+            node["entry_filters"]!["gate_layer"]![field] = value;
+            var r = StrategySpecChecker.Check(node.ToJsonString());
+            Assert.False(r.Valid);
+            Assert.Contains(r.Errors, e => e.Contains($"gate_layer.{field}") && e.Contains(value));
+            Assert.Equal(StrategySpecLoader.LoadFromJson(node.ToJsonString()).Errors, r.Errors);
+        }
+    }
+
+    [Fact]
     public void Hash_EqualsTheOneTheSpecsListUses()
     {
         var json = Sandwich();

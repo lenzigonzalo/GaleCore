@@ -73,6 +73,11 @@ namespace DataFeed.Application.App.Runtime
                 errors.Add($"structure.selection_method must be FIXED (the runtime has no selector), got '{spec.Structure.SelectionMethod}'");
 
             // ── Entry filters — gates ──
+            // El runtime exige que pasen todos los gates y cada gate decide si bloquea (su on_fail): no hay otra regla ni otro destino de la capa.
+            if (spec.EntryFilters.GateLayer.PassRule != "ALL")
+                errors.Add($"entry_filters.gate_layer.pass_rule must be ALL (the runtime requires every gate to pass), got '{spec.EntryFilters.GateLayer.PassRule}'");
+            if (spec.EntryFilters.GateLayer.OnFail != "NO_TRADE")
+                errors.Add($"entry_filters.gate_layer.on_fail must be NO_TRADE (blocking is decided per gate with on_fail), got '{spec.EntryFilters.GateLayer.OnFail}'");
             ValidateGates(spec.EntryFilters.GateLayer.Gates, "entry_filters.gate_layer", errors);
             ValidateGates(spec.EntryFilters.SignalLayer.Gates, "entry_filters.signal_layer", errors);
             ValidateEventGates(spec, eventCatalog ?? EventCatalog.Builtin, errors);
