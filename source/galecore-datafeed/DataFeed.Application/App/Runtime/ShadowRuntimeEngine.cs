@@ -294,42 +294,66 @@ namespace DataFeed.Application.App.Runtime
                 UpdatedAt = nowUtc,
             };
 
-            // Salida por métrica (WS-0061): sólo con sesión abierta. Sin dato no se cierra y queda anotado en la posición.
-            bool metricMet = false;
+            // Salidas por métrica (WS-0061) y por evento (WS-0062 inc.5): sólo con sesión abierta. Sin dato no se cierra (salvo un
+            // event_exit con on_no_data CLOSE) y queda anotado en la posición, con el nombre de lo que falta.
+            bool metricMet = false, eventMet = false;
+            var exitProblems = new List<string>();
             if (evaluateExits && exits.MetricExit is MetricExit metricExit)
             {
-                double? metricValue = null;
-                GateThreshold? threshold = null;
+                var resolved = new Dictionary<string, double?>();
                 string? metricProblem = null;
-                try
-                {
-                    var refs = metricExit.Threshold.MetricRef == null
-                        ? new[] { metricExit.MetricRef } : new[] { metricExit.MetricRef, metricExit.Threshold.MetricRef };
-                    var resolved = await data.ResolveMetricsAsync(refs, nowUtc, maxQuoteAge, ct);
-                    metricValue = resolved.GetValueOrDefault(metricExit.MetricRef);
-                    threshold = GenericGateEvaluator.ResolveThreshold(metricExit.Threshold, resolved);
-                }
+                var refs = metricExit.Threshold.MetricRef == null
+                    ? new[] { metricExit.MetricRef } : new[] { metricExit.MetricRef, metricExit.Threshold.MetricRef };
+                try { resolved = await data.ResolveMetricsAsync(refs, nowUtc, maxQuoteAge, ct); }
                 catch (Exception ex) when (ex is not OperationCanceledException) { metricProblem = ex.Message; }
+                var metricValue = resolved.GetValueOrDefault(metricExit.MetricRef);
+                var threshold = GenericGateEvaluator.ResolveThreshold(metricExit.Threshold, resolved);
                 if (metricValue is double mv && threshold != null) metricMet = GenericGateEvaluator.EvaluateOperator(metricExit.Operator, mv, threshold);
                 else
                 {
-                    var problems2 = new List<string> { $"salida por condición sin dato: {metricExit.MetricRef}" + (metricProblem == null ? "" : $" ({metricProblem})") };
-                    valued = valued with { ValuationProblems = problems2 };
-                    if (pos.ValuationProblems == null || !pos.ValuationProblems.SequenceEqual(problems2))
-                        store.AddEvent(NewEvent(pos.InstanceId, "VALUATION_NO_DATA", pos.Symbol, nowUtc,
-                            ("position_id", pos.PositionId), ("problems", problems2)));
+                    var missing = refs.Where(r => resolved.GetValueOrDefault(r) == null).Distinct();
+                    exitProblems.Add($"salida por condición sin dato: {string.Join(", ", missing)}" + (metricProblem == null ? "" : $" ({metricProblem})"));
                 }
+            }
+            if (evaluateExits)
+                foreach (var ev in exits.EventExits)
+                {
+                    var gate = new EventGate { Id = ev.Id, Type = ev.Type, Subject = ev.Subject, Window = ev.Window, Must = ev.Must };
+                    var r = await EventGates.EvaluateAsync(gate, data.Events, operational ?? new SpecOperational(), new[] { pos.Symbol }, nowUtc, ct);
+                    if (r.Status == "PASS") eventMet = true;
+                    else if (r.Status == "NO_DATA")
+                    {
+                        if (ev.OnNoData == "CLOSE") eventMet = true;
+                        else exitProblems.Add($"salida por evento sin dato: {r.Label}");
+                    }
+                }
+            if (exitProblems.Count > 0)
+            {
+                valued = valued with { ValuationProblems = exitProblems };
+                if (pos.ValuationProblems == null || !pos.ValuationProblems.SequenceEqual(exitProblems))
+                    store.AddEvent(NewEvent(pos.InstanceId, "VALUATION_NO_DATA", pos.Symbol, nowUtc,
+                        ("position_id", pos.PositionId), ("problems", exitProblems)));
             }
             store.UpdatePosition(valued);
             if (!evaluateExits) return Outcomes.Valued;
 
-            // Salida por hora (WS-0062 inc.5): sólo el día del vencimiento (DTE 0), con la hora de la spec ya cumplida.
+            // Salida por hora (WS-0062 inc.5): con days_after_entry, a esa hora del N-ésimo día de sesión tras la entrada (0 = el mismo día);
+            // sin él, el día del vencimiento (DTE 0).
             bool timeOfDayReached = false;
-            if (exits.TimeExit?.At is string at && dte == 0 && ShadowSession.TryTime(at, out var atTime)
-                && ShadowSession.LocalTime(operational ?? new SpecOperational(), nowUtc) is DateTime localNow)
-                timeOfDayReached = localNow.TimeOfDay >= atTime;
+            var op = operational ?? new SpecOperational();
+            if (exits.TimeExit?.At is string at && ShadowSession.TryTime(at, out var atTime)
+                && ShadowSession.LocalTime(op, nowUtc) is DateTime localNow)
+            {
+                if (exits.TimeExit.DaysAfterEntry is int n && ShadowSession.LocalTime(op, pos.EntryAt) is DateTime entryLocal)
+                {
+                    var target = AddSessionDays(entryLocal.Date, n);
+                    timeOfDayReached = localNow.Date > target || (localNow.Date == target && localNow.TimeOfDay >= atTime);
+                }
+                else if (exits.TimeExit.DaysAfterEntry == null && dte == 0)
+                    timeOfDayReached = localNow.TimeOfDay >= atTime;
+            }
 
-            var reason = ShadowFillSimulator.EvaluateExits(valued, exits, spreadValue, dte ?? int.MaxValue, metricMet, timeOfDayReached);
+            var reason = ShadowFillSimulator.EvaluateExits(valued, exits, spreadValue, dte ?? int.MaxValue, metricMet, timeOfDayReached, eventMet);
             if (reason == null) return Outcomes.Valued;
 
             var closed = ShadowFillSimulator.Close(valued, spreadValue, reason, nowUtc) with
@@ -408,6 +432,18 @@ namespace DataFeed.Application.App.Runtime
                 Symbol = pos.Symbol, Timestamp = nowUtc,
                 Payload = new Dictionary<string, object?> { ["position_id"] = pos.PositionId, ["problems"] = problems },
             });
+        }
+
+        /// <summary>El día de sesión N después de <paramref name="date"/> (lunes a viernes, sin calendario de feriados).</summary>
+        public static DateTime AddSessionDays(DateTime date, int n)
+        {
+            var d = date;
+            for (int i = 0; i < n; i++)
+            {
+                d = d.AddDays(1);
+                while (d.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) d = d.AddDays(1);
+            }
+            return d;
         }
 
         /// <summary>Días hasta el vencimiento de la posición, contados en la fecha del mercado (ET).</summary>

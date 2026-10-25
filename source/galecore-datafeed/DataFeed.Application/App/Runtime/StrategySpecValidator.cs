@@ -64,7 +64,7 @@ namespace DataFeed.Application.App.Runtime
             // ── Construcción: sólo lo que el runtime sabe construir (P1-07) ──
             ValidateConstruction(spec, errors);
             ValidateMetricExit(spec.Exits.Deterministic.MetricExit, errors);
-            ValidateExits(spec, errors);
+            ValidateExits(spec, eventCatalog ?? EventCatalog.Builtin, errors);
             ValidateExecution(spec.Execution, errors);
 
             // ── Selection method: el runtime no tiene selector, siempre arma la default_structure ──
@@ -263,7 +263,7 @@ namespace DataFeed.Application.App.Runtime
         /// Estructura de débito: se paga para entrar (custom_options con max_debit, o acciones en largo). Su take_profit y stop_loss
         /// son % del costo (pct_of_cost); en las de crédito, % del crédito (pct_of_credit). Mezclarlos se rechaza.
         /// </summary>
-        private static void ValidateExits(StrategySpec spec, List<string> errors)
+        private static void ValidateExits(StrategySpec spec, IReadOnlyCollection<EventTypeInfo> catalog, List<string> errors)
         {
             var exits = spec.Exits.Deterministic;
             bool debit = spec.Structure.DefaultStructure == RuntimeStructures.LongEquity
@@ -287,12 +287,32 @@ namespace DataFeed.Application.App.Runtime
                     errors.Add($"{prefix}.pct_of_cost only applies to a debit structure (custom_options with max_debit, long_equity); use pct_of_credit");
             }
 
+            var exitIds = new HashSet<string>();
+            foreach (var ev in exits.EventExits)
+            {
+                var name = $"exits.deterministic.event_exits[{ev.Id}]";
+                if (string.IsNullOrWhiteSpace(ev.Id)) { errors.Add("exits.deterministic.event_exits: event exit id is required"); continue; }
+                if (!exitIds.Add(ev.Id)) errors.Add($"{name}: duplicate id '{ev.Id}'");
+                if (ev.Must != "exist" && ev.Must != "not_exist") errors.Add($"{name}.must must be exist or not_exist, got '{ev.Must}'");
+                if (ev.OnNoData != "HOLD" && ev.OnNoData != "CLOSE") errors.Add($"{name}.on_no_data must be HOLD or CLOSE");
+                ValidateEventCondition(spec, catalog, name, ev.Type, ev.Subject, ev.Window, errors);
+            }
+
             if (exits.TimeExit is TimeExit te)
             {
+                bool equity = spec.Structure.DefaultStructure == RuntimeStructures.LongEquity;
                 if (te.MaxDte == null && te.At == null)
                     errors.Add("exits.deterministic.time_exit must declare max_dte, at or both");
                 if (te.MaxDte is int dte && dte < 0)
                     errors.Add($"exits.deterministic.time_exit.max_dte must be >= 0, got {dte}");
+                if (te.MaxDte != null && equity)
+                    errors.Add("exits.deterministic.time_exit.max_dte is DTE and does not apply to long_equity (no expiration): use at with days_after_entry");
+                if (te.DaysAfterEntry is int days && days < 0)
+                    errors.Add($"exits.deterministic.time_exit.days_after_entry must be >= 0, got {days}");
+                if (te.DaysAfterEntry != null && te.At == null)
+                    errors.Add("exits.deterministic.time_exit.days_after_entry needs at (HH:mm): the close happens at that time");
+                if (te.At != null && te.DaysAfterEntry == null && equity)
+                    errors.Add("exits.deterministic.time_exit.at needs days_after_entry for long_equity (no expiration day): 0 = same day as the entry");
                 if (te.At != null)
                 {
                     if (!ShadowSession.TryTime(te.At, out var at))
@@ -367,9 +387,6 @@ namespace DataFeed.Application.App.Runtime
             var sizing = spec.CandidateConstruction.Sizing;
             if (sizing.Method != "FIXED" || sizing.FixedContracts is not > 0)
                 errors.Add("candidate_construction.sizing must be FIXED with fixed_contracts > 0 (shares) for long_equity");
-            var exits = spec.Exits.Deterministic;
-            if (exits.TimeExit != null)
-                errors.Add("exits.deterministic: time_exit is DTE / expiration day and does not apply to long_equity (use metric_exit, or take_profit / stop_loss with pct_of_cost)");
         }
 
         private static void ValidateExecution(SpecExecution? e, List<string> errors)
@@ -444,21 +461,29 @@ namespace DataFeed.Application.App.Runtime
                 if (g.OnFail != "NO_TRADE" && g.OnFail != "INFORM_ONLY") errors.Add($"{name}.on_fail must be one of: NO_TRADE, INFORM_ONLY");
                 if (g.OnNoData != "BLOCK" && g.OnNoData != "PASS" && g.OnNoData != "INFORM_ONLY") errors.Add($"{name}.on_no_data must be one of: BLOCK, PASS, INFORM_ONLY");
 
-                var w = g.Window;
+                ValidateEventCondition(spec, catalog, name, g.Type, g.Subject, g.Window, errors);
+            }
+        }
+
+        /// <summary>Ventana, tipo (del catálogo) y sujeto de una condición de evento (event_gate o event_exit).</summary>
+        private static void ValidateEventCondition(StrategySpec spec, IReadOnlyCollection<EventTypeInfo> catalog, string name,
+            string type, string? subjectText, EventGateWindow w, List<string> errors)
+        {
+            {
                 if (w.From != "day_start" && w.From != "now") errors.Add($"{name}.window.from must be day_start or now, got '{w.From}'");
                 if (w.To != "day_end" && w.To != "minutes_after_now") errors.Add($"{name}.window.to must be day_end or minutes_after_now, got '{w.To}'");
                 else if (w.To == "minutes_after_now" && !(w.Minutes is > 0 and <= 1440)) errors.Add($"{name}.window.minutes must be between 1 and 1440 with minutes_after_now");
                 else if (w.To == "day_end" && w.Minutes != null) errors.Add($"{name}.window.minutes only applies with minutes_after_now");
 
-                var info = catalog.FirstOrDefault(t => string.Equals(t.Type, g.Type, StringComparison.OrdinalIgnoreCase));
-                if (string.IsNullOrWhiteSpace(g.Type)) { errors.Add($"{name}.type is required"); continue; }
+                var info = catalog.FirstOrDefault(t => string.Equals(t.Type, type, StringComparison.OrdinalIgnoreCase));
+                if (string.IsNullOrWhiteSpace(type)) { errors.Add($"{name}.type is required"); return; }
                 if (info == null)
                 {
-                    errors.Add($"{name}.type '{g.Type}': there is no data source for that event type (known: {string.Join(", ", catalog.Select(t => t.Type))}); "
+                    errors.Add($"{name}.type '{type}': there is no data source for that event type (known: {string.Join(", ", catalog.Select(t => t.Type))}); "
                                + "the data has to be brought into GaleCore before a strategy can depend on it");
-                    continue;
+                    return;
                 }
-                var subject = g.Subject?.ToUpperInvariant();
+                var subject = subjectText?.ToUpperInvariant();
                 if (info.PerSymbol)
                 {
                     if (subject == null || subject == EventGates.Any)
@@ -467,7 +492,7 @@ namespace DataFeed.Application.App.Runtime
                         errors.Add($"{name}.subject UNIVERSE needs universe.symbols");
                 }
                 else if (subject != null && subject != EventGates.Any)
-                    errors.Add($"{name}.subject: {info.Type} is not tied to a symbol; leave subject empty (or ANY), got '{g.Subject}'");
+                    errors.Add($"{name}.subject: {info.Type} is not tied to a symbol; leave subject empty (or ANY), got '{subjectText}'");
             }
         }
 

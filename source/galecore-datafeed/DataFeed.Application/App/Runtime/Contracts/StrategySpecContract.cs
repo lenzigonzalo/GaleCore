@@ -228,6 +228,8 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public DefensiveRollExit? DefensiveRoll { get; init; }
         /// <summary>Cierra cuando una métrica cumple la condición (WS-0061). Se evalúa en el monitor de posiciones.</summary>
         public MetricExit? MetricExit { get; init; }
+        /// <summary>Cierra cuando un evento existe / no existe en la ventana (WS-0062 inc.5).</summary>
+        public List<EventExit> EventExits { get; init; } = new();
     }
 
     /// <summary>
@@ -268,6 +270,27 @@ namespace DataFeed.Application.App.Runtime.Contracts
         /// Puede declararse junto con max_dte (se cierra con la primera que se cumpla).
         /// </summary>
         public string? At { get; init; }
+        /// <summary>
+        /// Con <c>at</c>: cierra a esa hora el N-ésimo día de sesión (lunes a viernes, sin feriados) después del día de entrada; 0 = el mismo día
+        /// (intradía). Sin declarar y con vencimiento, <c>at</c> vale el día del vencimiento; sin vencimiento (acciones) es obligatorio.
+        /// </summary>
+        public int? DaysAfterEntry { get; init; }
+    }
+
+    /// <summary>
+    /// Cierra la posición (razón EVENT_EXIT) cuando la condición de evento se cumple: misma forma que un event_gate. Sin dato nunca se inventa un
+    /// cierre: on_no_data HOLD (default: se mantiene y se anota) o CLOSE.
+    /// </summary>
+    public record EventExit
+    {
+        public string Id { get; init; } = "";
+        public string Type { get; init; } = "";
+        public string? Subject { get; init; }
+        public EventGateWindow Window { get; init; } = new();
+        /// <summary>"exist" | "not_exist": la posición se cierra cuando se cumple.</summary>
+        public string Must { get; init; } = "";
+        /// <summary>"HOLD" | "CLOSE"</summary>
+        public string OnNoData { get; init; } = "HOLD";
     }
 
     public record DefensiveRollExit

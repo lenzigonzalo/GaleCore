@@ -144,7 +144,8 @@ namespace DataFeed.Application.App.Runtime
             double currentSpreadValue,
             int currentDte,
             bool metricExitMet = false,
-            bool timeOfDayReached = false)
+            bool timeOfDayReached = false,
+            bool eventExitMet = false)
         {
             if (position.Status != "OPEN") return null;
 
@@ -174,6 +175,8 @@ namespace DataFeed.Application.App.Runtime
             // Salida por métrica (WS-0061)
             if (exits.MetricExit != null && metricExitMet)
                 return "METRIC_EXIT";
+            if (eventExitMet)
+                return "EVENT_EXIT";
 
             // Take profit: spread vale <= (100 - pct)% del crédito; en débito, ganancia >= pct% del costo
             if (exits.TakeProfit != null)
