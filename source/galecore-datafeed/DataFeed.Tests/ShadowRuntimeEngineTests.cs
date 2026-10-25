@@ -611,13 +611,13 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
-    public void QuoteTime_TakesOldestOfBidAskThenEventTime()
+    public void QuoteTime_TakesNewestOfBidAskThenEventTime()
     {
         long ms(DateTime d) => new DateTimeOffset(d, TimeSpan.Zero).ToUnixTimeMilliseconds();
         var older = Now.AddSeconds(-40);
         var newer = Now.AddSeconds(-10);
-        Assert.Equal(older, DataFreshness.QuoteTime(ms(older), ms(newer), 0));
-        Assert.Equal(older, DataFreshness.QuoteTime(ms(newer), ms(older), ms(Now)));   // bid/ask mandan sobre EventTime
+        Assert.Equal(newer, DataFreshness.QuoteTime(ms(older), ms(newer), 0));
+        Assert.Equal(newer, DataFreshness.QuoteTime(ms(newer), ms(older), ms(Now)));   // bid/ask mandan sobre EventTime
         Assert.Equal(newer, DataFreshness.QuoteTime(ms(newer), 0, 0));                  // sólo bid
         Assert.Equal(newer, DataFreshness.QuoteTime(0, ms(newer), 0));                  // sólo ask
         Assert.Equal(older, DataFreshness.QuoteTime(0, 0, ms(older)));                  // sólo EventTime
@@ -633,7 +633,8 @@ public class ShadowRuntimeEngineTests
             new() { BidPrice = 10, AskPrice = 10.2, BidTime = bt, AskTime = at, EventTime = et };
         Assert.NotNull(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-5)), ms(Now.AddSeconds(-3))), Now, max));
         Assert.Null(MetricResolver.UsableQuotePrice(Q(0, 0), Now, max));                                       // sin hora
-        Assert.Null(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-500)), ms(Now.AddSeconds(-3))), Now, max)); // la más vieja manda
+        Assert.NotNull(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-500)), ms(Now.AddSeconds(-3))), Now, max)); // un lado quieto no la invalida
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-500)), ms(Now.AddSeconds(-400))), Now, max)); // los dos viejos sí
         Assert.Null(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(60)), ms(Now.AddSeconds(60))), Now, max));  // futura
     }
 

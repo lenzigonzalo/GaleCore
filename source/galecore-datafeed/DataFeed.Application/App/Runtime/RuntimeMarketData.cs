@@ -80,7 +80,8 @@ namespace DataFeed.Application.App.Runtime
     ///
     /// Una cotización sin hora (null) no se puede medir y NO sirve: bloquea la entrada y deja la
     /// valuación de una posición abierta en NO_DATA (sin cierre inventado). La hora sale de
-    /// QuoteTime: la más vieja de bidTime/askTime; DXLink manda EventTime 0 (verificado el 24/09).
+    /// QuoteTime: la más nueva de bidTime/askTime (cada una marca el último cambio de ese lado; un lado
+    /// quieto sigue vigente); DXLink manda EventTime 0 (verificado el 24/09).
     /// </summary>
     public static class DataFreshness
     {
@@ -94,13 +95,13 @@ namespace DataFeed.Application.App.Runtime
                 : null;
 
         /// <summary>
-        /// Hora de una cotización (epoch ms): la MÁS VIEJA de bidTime y askTime que sean > 0; si
+        /// Hora de una cotización (epoch ms): la MÁS NUEVA de bidTime y askTime que sean > 0; si
         /// ninguna, eventTime > 0; si nada, null (sin hora).
         /// </summary>
         public static DateTime? QuoteTime(long bidTime, long askTime, long eventTime)
         {
             long ms = 0;
-            if (bidTime > 0 && askTime > 0) ms = Math.Min(bidTime, askTime);
+            if (bidTime > 0 && askTime > 0) ms = Math.Max(bidTime, askTime);
             else if (bidTime > 0) ms = bidTime;
             else if (askTime > 0) ms = askTime;
             else if (eventTime > 0) ms = eventTime;
