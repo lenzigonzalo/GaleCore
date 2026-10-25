@@ -59,7 +59,15 @@ public class ShadowRuntimeEngineTests
 
     internal static string SpecJson() => File.ReadAllText(SpecPath());
 
-    internal static StrategySpec Spec()
+    /// <summary>
+    /// La spec de prueba tal como está en el archivo, pero con fill al MID (WS-0062 inc.2): las specs sin bloque execution
+    /// llenan al natural, y los tests de abajo fueron escritos con precios al medio (también prueban que mid sin costos
+    /// reproduce los resultados de antes). El natural se prueba en ShadowExecutionModelTests con <see cref="NaturalSpec"/>.
+    /// </summary>
+    internal static StrategySpec Spec() => NaturalSpec() with { Execution = new SpecExecution { Fill = "mid" } };
+
+    /// <summary>La spec de prueba tal cual el archivo: sin bloque execution, o sea fill natural.</summary>
+    internal static StrategySpec NaturalSpec()
     {
         var result = StrategySpecLoader.LoadFromFile(SpecPath());
         Assert.True(result.Success, string.Join("; ", result.Errors));
@@ -313,7 +321,7 @@ public class ShadowRuntimeEngineTests
     {
         var (store, instance) = NewRuntime();
         var data = FreshCandidates();
-        store.AddPosition(ShadowFillSimulator.Fill(RealCandidate() with { InstanceId = "otra", CandidateId = "c-otra" }, Now));
+        store.AddPosition(ShadowFillSimulator.Fill(RealCandidate() with { InstanceId = "otra", CandidateId = "c-otra" }, Now, ShadowFillSimulatorTests.MidTerms));
 
         var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(), "SPY", Now.AddMinutes(5), default);
 

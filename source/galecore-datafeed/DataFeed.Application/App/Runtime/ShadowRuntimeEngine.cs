@@ -140,11 +140,12 @@ namespace DataFeed.Application.App.Runtime
                 return Outcomes.RiskRejected;
             }
 
-            // 6. Fill simulado al mid real.
+            // 6. Fill simulado con las condiciones de la spec (natural por defecto).
             ShadowPosition position;
             try
             {
-                position = ShadowFillSimulator.Fill(candidate, nowUtc) with { EntryContext = BuildEntryContext(eval, candidate) };
+                var terms = ExecutionTerms.From(spec);
+                position = ShadowFillSimulator.Fill(candidate, nowUtc, terms) with { EntryContext = BuildEntryContext(eval, candidate, terms) };
             }
             catch (InvalidOperationException ex)
             {
@@ -164,7 +165,7 @@ namespace DataFeed.Application.App.Runtime
         }
 
         /// <summary>Lo que la spec evaluó y las cotizaciones de las patas al armar el candidato (WS-0033).</summary>
-        private static EntryContext BuildEntryContext(EvaluationResult eval, TradeCandidate candidate) => new()
+        private static EntryContext BuildEntryContext(EvaluationResult eval, TradeCandidate candidate, ExecutionTerms terms) => new()
         {
             EvaluationId = eval.EvaluationId,
             Gates = eval.GateResults,
@@ -172,6 +173,7 @@ namespace DataFeed.Application.App.Runtime
             IvRank = candidate.Snapshot.IvRank,
             UnderlyingPrice = candidate.Snapshot.UnderlyingPrice,
             SnapshotAt = candidate.Snapshot.AsOf,
+            Execution = terms,
             Legs = candidate.Legs.Select(l => new LegQuoteSnapshot
             {
                 Side = l.Side, Type = l.Type, Strike = l.Strike, Bid = l.Bid, Ask = l.Ask,
@@ -196,7 +198,9 @@ namespace DataFeed.Application.App.Runtime
         {
             var problems = new List<string>();
             var legQuotes = new List<LegQuoteSnapshot>();
+            var terms = ShadowFillSimulator.TermsOf(pos);
             double spreadValue = 0;
+            double midValue = 0;   // el mismo débito al medio: valida las cotizaciones sin depender del modelo de fill
             foreach (var leg in pos.Legs)
             {
                 if (string.IsNullOrEmpty(leg.StreamerSymbol))
@@ -223,9 +227,17 @@ namespace DataFeed.Application.App.Runtime
                 {
                     Side = leg.Side, Type = leg.Type, Strike = leg.Strike, Bid = quote.Bid, Ask = quote.Ask,
                 });
-                // Débito para cerrar: recomprar lo vendido (+mid) y vender lo comprado (−mid).
-                if (leg.Side == "SELL") spreadValue += quote.Mid;
-                else if (leg.Side == "BUY") spreadValue -= quote.Mid;
+                // Débito para cerrar: recomprar lo vendido (+precio; natural: al ask) y vender lo comprado (−precio; al bid).
+                if (leg.Side == "SELL")
+                {
+                    spreadValue += ShadowFillSimulator.LegPrice(quote.Bid, quote.Ask, buying: true, terms, 4);
+                    midValue += quote.Mid;
+                }
+                else if (leg.Side == "BUY")
+                {
+                    spreadValue -= ShadowFillSimulator.LegPrice(quote.Bid, quote.Ask, buying: false, terms, 4);
+                    midValue -= quote.Mid;
+                }
                 else problems.Add($"{leg.StreamerSymbol}: lado de pata desconocido '{leg.Side}'");
             }
 
@@ -235,8 +247,8 @@ namespace DataFeed.Application.App.Runtime
             if (problems.Count == 0 && !double.IsFinite(spreadValue)) problems.Add($"valor del spread no finito ({spreadValue})");
             // El débito de un spread de crédito de riesgo definido está en [0, ancho]. Fuera de eso alguna pata
             // trae una cotización sin sentido (p. ej. bid 0 / ask 20 en la apertura): no se valúa ni se cierra con ese precio.
-            if (problems.Count == 0 && pos.Width > 0 && (spreadValue < -ValueTolerance || spreadValue > pos.Width + ValueTolerance))
-                problems.Add($"valor del spread {spreadValue:0.00} fuera de [0, {pos.Width:0.##}]: cotización inválida en alguna pata");
+            if (problems.Count == 0 && pos.Width > 0 && (midValue < -ValueTolerance || midValue > pos.Width + ValueTolerance))
+                problems.Add($"valor del spread {midValue:0.00} fuera de [0, {pos.Width:0.##}]: cotización inválida en alguna pata");
 
             if (problems.Count > 0)
             {

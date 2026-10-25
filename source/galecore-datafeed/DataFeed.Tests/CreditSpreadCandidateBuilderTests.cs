@@ -14,7 +14,7 @@ public class CreditSpreadCandidateBuilderTests
 {
     private static readonly DateTime Now = ShadowRuntimeEngineTests.Now; // jueves 24/09/2026, 11:00 ET
 
-    private sealed class FakeSource : IPcsMarketSource
+    internal sealed class FakeSource : IPcsMarketSource
     {
         public List<Expiration>? Expirations = new()
         {
@@ -58,7 +58,7 @@ public class CreditSpreadCandidateBuilderTests
 
     private static StrategyInstance Instance() => new() { InstanceId = "i-1" };
 
-    private static Task<CandidateBuildResult> Build(FakeSource source, StrategySpec? spec = null) =>
+    internal static Task<CandidateBuildResult> Build(FakeSource source, StrategySpec? spec = null) =>
         new CreditSpreadCandidateBuilder(source).BuildAsync(Instance(), spec ?? ShadowRuntimeEngineTests.Spec(), "SPY", 15.2, Now);
 
     [Fact]
@@ -264,7 +264,7 @@ public class CreditSpreadCandidateBuilderTests
         return r;
     }
 
-    private static FakeSource WithCallQuotes()
+    internal static FakeSource WithCallQuotes()
     {
         var source = new FakeSource { Gex = _ => WithCalls(Response("2026-11-03", 40)) };
         source.Quotes[".SPY261103C810"] = new LegQuote(2.00, 2.20, Now.AddSeconds(-2));
@@ -272,7 +272,7 @@ public class CreditSpreadCandidateBuilderTests
         return source;
     }
 
-    private static StrategySpec SpecFor(string structure)
+    internal static StrategySpec SpecFor(string structure)
     {
         var spec = ShadowRuntimeEngineTests.Spec();
         var putLegs = spec.CandidateConstruction.Legs;

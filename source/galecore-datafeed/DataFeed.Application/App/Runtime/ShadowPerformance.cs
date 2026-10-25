@@ -28,8 +28,12 @@ namespace DataFeed.Application.App.Runtime
     {
         public int PositionsClosed { get; init; }
         public int PositionsOpen { get; init; }
+        /// <summary>Neto de costos declarados (WS-0062); RealizedGrossPnl es el mismo sin costos.</summary>
         public double? RealizedPnl { get; init; }
         public double? UnrealizedPnl { get; init; }
+        public double? RealizedGrossPnl { get; init; }
+        /// <summary>false = ninguna posición declara costos: neto = bruto porque no se descontó nada.</summary>
+        public bool CostsDeclared { get; init; }
         public double? WinRate { get; init; }
         public double? MaxDrawdown { get; init; }
         /// <summary>Riesgo máximo sumado de las abiertas (USD).</summary>
@@ -57,6 +61,8 @@ namespace DataFeed.Application.App.Runtime
         public int PositionsOpen { get; init; }
         public double? RealizedPnl { get; init; }
         public double? UnrealizedPnl { get; init; }
+        public double? RealizedGrossPnl { get; init; }
+        public bool CostsDeclared { get; init; }
         public double? WinRate { get; init; }
         public double? AvgPnl { get; init; }
         public double? AvgPctOfMaxRisk { get; init; }
@@ -94,7 +100,15 @@ namespace DataFeed.Application.App.Runtime
         public double? Width { get; init; }
         public double MaxRisk { get; init; }
         public string? ExitReason { get; init; }
+        /// <summary>Neto de costos declarados.</summary>
         public double? RealizedPnl { get; init; }
+        /// <summary>Sin costos (WS-0062).</summary>
+        public double? GrossPnl { get; init; }
+        /// <summary>Costos declarados descontados (entrada + salida).</summary>
+        public double? Costs { get; init; }
+        public bool CostsDeclared { get; init; }
+        /// <summary>Modelo de fill con que se simuló: natural | mid | mid_slippage.</summary>
+        public string Fill { get; init; } = "";
         public double? PnlPctOfCredit { get; init; }
         public double? PnlPctOfMaxRisk { get; init; }
         /// <summary>Lo que la spec de esa versión planeaba al entrar (null si la spec no se pudo leer).</summary>
@@ -195,6 +209,10 @@ namespace DataFeed.Application.App.Runtime
                 MaxRisk = p.MaxRisk,
                 ExitReason = p.ExitReason,
                 RealizedPnl = p.RealizedPnl,
+                GrossPnl = ShadowFillSimulator.GrossOf(p),
+                Costs = ShadowFillSimulator.Costs(p),
+                CostsDeclared = ShadowFillSimulator.TermsOf(p).CostsDeclared,
+                Fill = ShadowFillSimulator.TermsOf(p).Fill,
                 // Acciones en largo: no hay crédito; el % va sobre el costo (PnlPctOfMaxRisk).
                 PnlPctOfCredit = p.Structure != RuntimeStructures.LongEquity && p.EntryCredit > 0 ? Math.Round(p.RealizedPnl!.Value / (p.EntryCredit * 100) * 100, 1) : null,
                 PnlPctOfMaxRisk = p.MaxRisk > 0 ? Math.Round(p.RealizedPnl!.Value / p.MaxRisk * 100, 1) : null,
@@ -217,6 +235,8 @@ namespace DataFeed.Application.App.Runtime
                 PositionsOpen = positions.Count(p => p.Status == "OPEN"),
                 RealizedPnl = closed.Count == 0 ? null : Math.Round(closed.Sum(t => t.RealizedPnl!.Value), 2),
                 UnrealizedPnl = valued.Count == 0 ? null : Math.Round(valued.Sum(p => p.UnrealizedPnl!.Value), 2),
+                RealizedGrossPnl = closed.Count == 0 ? null : Math.Round(closed.Sum(t => t.GrossPnl!.Value), 2),
+                CostsDeclared = positions.Any(p => ShadowFillSimulator.TermsOf(p).CostsDeclared),
                 WinRate = closed.Count == 0 ? null : Math.Round((double)closed.Count(t => t.RealizedPnl > 0) / closed.Count, 4),
                 AvgPnl = closed.Count == 0 ? null : Math.Round(closed.Average(t => t.RealizedPnl!.Value), 2),
                 AvgPctOfMaxRisk = withRisk.Count == 0 ? null : Math.Round(withRisk.Average(t => t.PnlPctOfMaxRisk!.Value), 1),
@@ -258,6 +278,8 @@ namespace DataFeed.Application.App.Runtime
                 PositionsOpen = open.Count,
                 RealizedPnl = realized,
                 UnrealizedPnl = unrealized,
+                RealizedGrossPnl = closed.Count == 0 ? null : Math.Round(closed.Sum(p => ShadowFillSimulator.GrossOf(p)!.Value), 2),
+                CostsDeclared = all.Any(p => ShadowFillSimulator.TermsOf(p).CostsDeclared),
                 WinRate = closed.Count == 0 ? null : Math.Round((double)closed.Count(p => p.RealizedPnl > 0) / closed.Count, 4),
                 MaxDrawdown = closed.Count == 0 ? null : ShadowMetrics.MaxDrawdown(closed.GroupBy(p => p.ExitAt)
                     .OrderBy(g => g.Key ?? DateTime.MaxValue).Select(g => g.Sum(p => p.RealizedPnl!.Value))),

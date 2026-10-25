@@ -149,7 +149,11 @@ public class LongEquityTests
     private static string SpecFilePath() =>
         Path.Combine(Path.GetDirectoryName(ShadowRuntimeEngineTests.SpecPath())!, "aapl_cruce_ema_20_50.json");
 
-    internal static StrategySpec EquitySpec()
+    /// <summary>La spec de acciones con fill al MID (WS-0062 inc.2): estos tests se escribieron con precios al medio.</summary>
+    internal static StrategySpec EquitySpec() => NaturalEquitySpec() with { Execution = new SpecExecution { Fill = "mid" } };
+
+    /// <summary>La spec de acciones tal cual el archivo: sin bloque execution, o sea fill natural.</summary>
+    internal static StrategySpec NaturalEquitySpec()
     {
         var r = StrategySpecLoader.LoadFromFile(SpecFilePath());
         Assert.True(r.Success, string.Join("; ", r.Errors));
@@ -240,7 +244,7 @@ public class LongEquityTests
         Assert.Equal(("BUY", "STOCK", 10), (leg.Side, leg.Type, leg.Quantity));
         Assert.True(ShadowRiskValidator.Validate(c, EquitySpec(), 0, null, Now).IsValid);
 
-        var pos = ShadowFillSimulator.Fill(c, Now);
+        var pos = ShadowFillSimulator.Fill(c, Now, ShadowFillSimulatorTests.MidTerms);
         Assert.Equal(-270.0, pos.EntryCredit);
         Assert.Equal(270.0, pos.Legs.Single().EntryPrice);
         Assert.Equal(10, pos.Legs.Single().Quantity);

@@ -33,10 +33,16 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Posiciones abiertas sin una valuación con precios reales todavía.</summary>
         public int OpenPositionsNotValued { get; init; }
 
-        /// <summary>Suma del P&L realizado (USD por contrato). null sin operaciones cerradas.</summary>
+        /// <summary>Suma del P&L realizado NETO de costos declarados (USD por contrato). null sin operaciones cerradas.</summary>
         public double? RealizedPnl { get; init; }
-        /// <summary>Suma del P&L no realizado de las abiertas valuadas. null si no hay ninguna valuada.</summary>
+        /// <summary>Suma del P&L no realizado NETO de las abiertas valuadas. null si no hay ninguna valuada.</summary>
         public double? UnrealizedPnl { get; init; }
+        /// <summary>El realizado sin costos (WS-0062). null sin operaciones cerradas.</summary>
+        public double? RealizedGrossPnl { get; init; }
+        /// <summary>Costos declarados descontados en las cerradas (entrada + salida). null sin cerradas.</summary>
+        public double? RealizedCosts { get; init; }
+        /// <summary>false = ninguna posición tiene costos declarados: neto y bruto coinciden porque no se descontó nada.</summary>
+        public bool CostsDeclared { get; init; }
         /// <summary>Cerradas con P&L &gt; 0 sobre cerradas. null sin operaciones cerradas.</summary>
         public double? WinRate { get; init; }
         /// <summary>Mayor caída desde un máximo del P&L realizado acumulado (≥ 0). null sin cerradas.</summary>
@@ -82,6 +88,9 @@ namespace DataFeed.Application.App.Runtime
                 OpenPositionsNotValued = open.Count - valued.Count,
                 RealizedPnl = closed.Count == 0 ? null : Math.Round(closed.Sum(p => p.RealizedPnl!.Value), 2),
                 UnrealizedPnl = valued.Count == 0 ? null : Math.Round(valued.Sum(p => p.UnrealizedPnl!.Value), 2),
+                RealizedGrossPnl = closed.Count == 0 ? null : Math.Round(closed.Sum(p => ShadowFillSimulator.GrossOf(p)!.Value), 2),
+                RealizedCosts = closed.Count == 0 ? null : Math.Round(closed.Sum(ShadowFillSimulator.Costs), 2),
+                CostsDeclared = r.Positions.Any(p => ShadowFillSimulator.TermsOf(p).CostsDeclared),
                 WinRate = closed.Count == 0 ? null : Math.Round((double)closed.Count(p => p.RealizedPnl > 0) / closed.Count, 4),
                 // Las salidas del mismo instante (un mismo tick del monitor) cuentan como un solo paso:
                 // así el drawdown no depende del orden en que la base devuelva las filas.

@@ -8,6 +8,9 @@ namespace DataFeed.Tests;
 /// </summary>
 public class ShadowFillSimulatorTests
 {
+    /// <summary>Fill al medio sin costos: lo que hacía el simulador antes de WS-0062 inc.2 (el default ahora es natural).</summary>
+    internal static readonly ExecutionTerms MidTerms = new() { Fill = ExecutionTerms.Mid };
+
     private static TradeCandidate TestCandidate() => new()
     {
         CandidateId = "c-1",
@@ -71,7 +74,7 @@ public class ShadowFillSimulatorTests
                 new() { Side = "BUY", Type = "PUT", Strike = 515 }
             }
         };
-        Assert.Throws<InvalidOperationException>(() => ShadowFillSimulator.Fill(candidate, DateTime.UtcNow));
+        Assert.Throws<InvalidOperationException>(() => ShadowFillSimulator.Fill(candidate, DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms));
     }
 
     [Fact]
@@ -87,7 +90,7 @@ public class ShadowFillSimulatorTests
     public void Fill_CreatesOpenPosition()
     {
         var now = DateTime.UtcNow;
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), now);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), now, ShadowFillSimulatorTests.MidTerms);
 
         Assert.Equal("OPEN", pos.Status);
         Assert.Equal("SPY", pos.Symbol);
@@ -104,7 +107,7 @@ public class ShadowFillSimulatorTests
     [Fact]
     public void Fill_LegsMidPrices()
     {
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms);
         Assert.Equal(1.60, pos.Legs[0].EntryPrice); // (1.50+1.70)/2
         Assert.Equal(0.80, pos.Legs[1].EntryPrice); // (0.70+0.90)/2
     }
@@ -114,8 +117,8 @@ public class ShadowFillSimulatorTests
     {
         var now = new DateTime(2026, 9, 13, 12, 0, 0, DateTimeKind.Utc);
         var candidate = TestCandidate();
-        var pos1 = ShadowFillSimulator.Fill(candidate, now);
-        var pos2 = ShadowFillSimulator.Fill(candidate, now);
+        var pos1 = ShadowFillSimulator.Fill(candidate, now, ShadowFillSimulatorTests.MidTerms);
+        var pos2 = ShadowFillSimulator.Fill(candidate, now, ShadowFillSimulatorTests.MidTerms);
 
         // Prices and structure are identical (ids differ by design)
         Assert.Equal(pos1.EntryCredit, pos2.EntryCredit);
@@ -132,7 +135,7 @@ public class ShadowFillSimulatorTests
         {
             TakeProfit = new TakeProfitExit { PctOfCredit = 50 }
         };
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms);
 
         // Credit = 0.85. 50% take profit → close when spread value <= 0.425
         var reason = ShadowFillSimulator.EvaluateExits(pos, exits, currentSpreadValue: 0.40, currentDte: 30);
@@ -146,7 +149,7 @@ public class ShadowFillSimulatorTests
         {
             TakeProfit = new TakeProfitExit { PctOfCredit = 50 }
         };
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms);
 
         var reason = ShadowFillSimulator.EvaluateExits(pos, exits, currentSpreadValue: 0.60, currentDte: 30);
         Assert.Null(reason);
@@ -159,7 +162,7 @@ public class ShadowFillSimulatorTests
         {
             StopLoss = new StopLossExit { PctOfCredit = 200 }
         };
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms);
 
         // Credit = 0.85. 200% stop → loss >= 1.70 → spread value >= 0.85 + 1.70 = 2.55
         var reason = ShadowFillSimulator.EvaluateExits(pos, exits, currentSpreadValue: 2.60, currentDte: 30);
@@ -173,7 +176,7 @@ public class ShadowFillSimulatorTests
         {
             TimeExit = new TimeExit { MaxDte = 7 }
         };
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms);
 
         var reason = ShadowFillSimulator.EvaluateExits(pos, exits, currentSpreadValue: 0.60, currentDte: 5);
         Assert.Equal("TIME_EXIT", reason);
@@ -188,7 +191,7 @@ public class ShadowFillSimulatorTests
             StopLoss = new StopLossExit { PctOfCredit = 200 },
             TimeExit = new TimeExit { MaxDte = 7 }
         };
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms);
 
         // Both stop and take trigger
         var reason = ShadowFillSimulator.EvaluateExits(pos, exits, currentSpreadValue: 3.00, currentDte: 5);
@@ -202,7 +205,7 @@ public class ShadowFillSimulatorTests
         {
             TakeProfit = new TakeProfitExit { PctOfCredit = 50 }
         };
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms);
         pos = ShadowFillSimulator.Close(pos, 0.40, "TAKE_PROFIT", DateTime.UtcNow);
 
         var reason = ShadowFillSimulator.EvaluateExits(pos, exits, currentSpreadValue: 0.10, currentDte: 5);
@@ -214,7 +217,7 @@ public class ShadowFillSimulatorTests
     [Fact]
     public void Close_SetsFieldsCorrectly()
     {
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms);
         var now = DateTime.UtcNow;
         var closed = ShadowFillSimulator.Close(pos, exitDebit: 0.40, reason: "TAKE_PROFIT", now: now);
 
@@ -232,7 +235,7 @@ public class ShadowFillSimulatorTests
     [Fact]
     public void Close_LossScenario()
     {
-        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow);
+        var pos = ShadowFillSimulator.Fill(TestCandidate(), DateTime.UtcNow, ShadowFillSimulatorTests.MidTerms);
         var closed = ShadowFillSimulator.Close(pos, exitDebit: 2.50, reason: "STOP_LOSS", now: DateTime.UtcNow);
 
         // P&L = (0.85 - 2.50) * 100 = -165

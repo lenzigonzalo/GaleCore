@@ -3,7 +3,8 @@ using DataFeed.Application.App.Runtime.Contracts;
 namespace DataFeed.Application.App.Runtime
 {
     /// <summary>
-    /// Fill simulado al mid-price, determinístico (P0 §8.6).
+    /// Fill simulado, determinístico (P0 §8.6): natural por defecto (se compra al ask y se vende al bid), o al mid /
+    /// mid con deslizamiento según spec.execution (WS-0062), más costos declarados en el P&L.
     /// No hay llamada al broker. EXECUTION_UNKNOWN no es posible.
     /// El fill es inmediato y siempre resuelve.
     /// </summary>
@@ -11,11 +12,12 @@ namespace DataFeed.Application.App.Runtime
     {
         /// <summary>
         /// Crea una ShadowPosition a partir de un TradeCandidate validado.
-        /// Entry price de cada leg = mid-price real (bid+ask)/2. Si una pata no tiene una cotización
-        /// utilizable, no hay fill: lanza InvalidOperationException (datos reales o nada, GC-0002).
+        /// Entry price de cada leg según el modelo (abrir: vendidas al bid, compradas al ask en natural). Si una pata no
+        /// tiene una cotización utilizable, no hay fill: lanza InvalidOperationException (datos reales o nada, GC-0002).
         /// </summary>
-        public static ShadowPosition Fill(TradeCandidate candidate, DateTime now)
+        public static ShadowPosition Fill(TradeCandidate candidate, DateTime now, ExecutionTerms? terms = null)
         {
+            terms ??= new ExecutionTerms();
             var legs = candidate.Legs.Select(leg => new ShadowLeg
             {
                 Side = leg.Side,
@@ -25,7 +27,7 @@ namespace DataFeed.Application.App.Runtime
                 OccSymbol = leg.OccSymbol,
                 StreamerSymbol = leg.StreamerSymbol,
                 Quantity = leg.Quantity,
-                EntryPrice = ComputeMidPrice(leg)
+                EntryPrice = EntryPrice(leg, terms)
                     ?? throw new InvalidOperationException(
                         $"Sin cotización utilizable para la pata {leg.Side} {leg.Type} {leg.Strike}: no hay fill"),
                 Delta = leg.Delta
@@ -45,6 +47,7 @@ namespace DataFeed.Application.App.Runtime
                 Width = candidate.Width,
                 EntryDte = candidate.Dte,
                 EntryAt = now,
+                EntryContext = new EntryContext { Execution = terms },
                 CreatedAt = now,
                 UpdatedAt = now
             };
@@ -60,11 +63,57 @@ namespace DataFeed.Application.App.Runtime
                         $"La posición de acciones {position.PositionId} no tiene cantidad en su pata: no se puede calcular el P&L ni el costo.")
                 : 100;
 
-        /// <summary>P&L no realizado / realizado: (entrada − valor de cierre) × multiplicador, en USD.</summary>
-        public static double Pnl(ShadowPosition position, double closeValue) =>
+        /// <summary>Las condiciones con que se abrió la posición; las anteriores a WS-0062 entraron al mid y sin costos.</summary>
+        public static ExecutionTerms TermsOf(ShadowPosition position) => position.EntryContext?.Execution ?? ExecutionTerms.Legacy;
+
+        /// <summary>
+        /// Precio de una pata según el modelo: desde el medio, hacia el lado desfavorable (compra más caro, venta más barato)
+        /// la fracción que marca el modelo del medio spread. Con fill mid es el medio.
+        /// </summary>
+        public static double LegPrice(double bid, double ask, bool buying, ExecutionTerms terms, int decimals) =>
+            Math.Round((bid + ask) / 2.0 + (buying ? 1 : -1) * terms.AdverseFraction * (ask - bid) / 2.0, decimals);
+
+        /// <summary>Precio de entrada de una pata (abrir: BUY paga, SELL cobra); null sin cotización utilizable.</summary>
+        public static double? EntryPrice(CandidateLeg leg, ExecutionTerms terms)
+        {
+            if (!(leg.Bid.HasValue && leg.Ask.HasValue && QuoteRules.IsUsable(leg.Bid.Value, leg.Ask.Value))) return null;
+            // Al mid se conserva el redondeo a centavos de siempre.
+            return LegPrice(leg.Bid.Value, leg.Ask.Value, leg.Side == "BUY", terms, terms.AdverseFraction == 0 ? 2 : 4);
+        }
+
+        /// <summary>Costo declarado de UNA orden (la de entrada o la de salida), en USD.</summary>
+        public static double OrderCost(ShadowPosition position, ExecutionTerms terms)
+        {
+            double units = position.Legs.Sum(l => l.Quantity ?? 1);   // contratos (1 por pata) o acciones
+            double perUnit = position.Structure == RuntimeStructures.LongEquity ? terms.PerShareUsd : terms.PerContractUsd;
+            return Math.Round(perUnit * units + terms.PerOrderUsd, 2);
+        }
+
+        /// <summary>P&L bruto, sin costos: (entrada − valor de cierre) × multiplicador, en USD.</summary>
+        public static double GrossPnl(ShadowPosition position, double closeValue) =>
             Math.Round((position.EntryCredit - closeValue) * Multiplier(position), 2);
 
-        /// <summary>Mid-price real del leg, o null si no tiene una cotización utilizable.</summary>
+        /// <summary>
+        /// P&L NETO (el que se guarda y se mide): bruto menos la orden de entrada y la de salida. Una abierta descuenta
+        /// también la salida: es lo que daría cerrarla ahora.
+        /// </summary>
+        public static double Pnl(ShadowPosition position, double closeValue)
+        {
+            var terms = TermsOf(position);
+            return Math.Round(GrossPnl(position, closeValue) - 2 * OrderCost(position, terms), 2);
+        }
+
+        /// <summary>Costos declarados de la posición (entrada + salida), en USD.</summary>
+        public static double Costs(ShadowPosition position) => Math.Round(2 * OrderCost(position, TermsOf(position)), 2);
+
+        /// <summary>P&L bruto de una posición ya valuada o cerrada (neto + costos); null si no tiene P&L.</summary>
+        public static double? GrossOf(ShadowPosition position)
+        {
+            var net = position.Status == "CLOSED" ? position.RealizedPnl : position.UnrealizedPnl;
+            return net == null ? null : Math.Round(net.Value + Costs(position), 2);
+        }
+
+        /// <summary>Mid-price real del leg (no el precio de fill), o null si no tiene una cotización utilizable.</summary>
         public static double? ComputeMidPrice(CandidateLeg leg)
         {
             if (leg.Bid.HasValue && leg.Ask.HasValue && QuoteRules.IsUsable(leg.Bid.Value, leg.Ask.Value))

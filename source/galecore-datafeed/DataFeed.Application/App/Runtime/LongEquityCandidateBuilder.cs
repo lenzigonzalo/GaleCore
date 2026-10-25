@@ -3,11 +3,11 @@ using DataFeed.Application.App.Runtime.Contracts;
 namespace DataFeed.Application.App.Runtime
 {
     /// <summary>
-    /// Construye el candidato de acciones en largo (WS-0061): una sola pata BUY del subyacente, a mid de la cotización
-    /// real. Cantidad = sizing.fixed_contracts (método FIXED) interpretado como número de acciones.
+    /// Construye el candidato de acciones en largo (WS-0061): una sola pata BUY del subyacente, al precio de fill de la cotización
+    /// real (natural: el ask). Cantidad = sizing.fixed_contracts (método FIXED) interpretado como número de acciones.
     ///
-    /// Convención de signos (la de los spreads): Credit = −mid (entrar cuesta, es un crédito negativo por acción);
-    /// MaxRisk = costo de la posición = mid × acciones. Sin cotización utilizable (QuoteRules.IsUsable) o vieja, no
+    /// Convención de signos (la de los spreads): Credit = −precio de fill (entrar cuesta, es un crédito negativo por acción);
+    /// MaxRisk = costo de la posición = precio × acciones. Sin cotización utilizable (QuoteRules.IsUsable) o vieja, no
     /// hay candidato (GC-0002).
     /// </summary>
     public static class LongEquityCandidateBuilder
@@ -34,9 +34,9 @@ namespace DataFeed.Application.App.Runtime
                 Side = "BUY", Type = LegType, Strike = 0, StreamerSymbol = symbol,
                 Bid = quote.Bid, Ask = quote.Ask, Quantity = qty,
             };
-            var mid = ShadowFillSimulator.ComputeMidPrice(leg);
-            if (mid is not double m || !(m > 0))
-                return CandidateBuildResult.Rejected($"mid de {symbol} no positivo");
+            var price = ShadowFillSimulator.EntryPrice(leg, ExecutionTerms.From(spec));
+            if (price is not double m || !(m > 0))
+                return CandidateBuildResult.Rejected($"precio de fill de {symbol} no positivo");
 
             return CandidateBuildResult.Built(new TradeCandidate
             {

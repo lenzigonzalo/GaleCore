@@ -20,6 +20,8 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public CandidateConstruction CandidateConstruction { get; init; } = new();
         public SpecExits Exits { get; init; } = new();
         public SpecRiskLimits RiskLimits { get; init; } = new();
+        /// <summary>Cómo se simula el fill y qué costos se descuentan (WS-0062). null = fill natural, sin costos declarados.</summary>
+        public SpecExecution? Execution { get; init; }
         public SpecOperational Operational { get; init; } = new();
         public SpecDataQuality DataQuality { get; init; } = new();
         public Dictionary<string, AnalyticsRef> AnalyticsRefs { get; init; } = new();
@@ -203,6 +205,30 @@ namespace DataFeed.Application.App.Runtime.Contracts
     public record DefensiveRollExit
     {
         public bool Enabled { get; init; }
+    }
+
+    /// <summary>
+    /// Modelo de ejecución del simulador SHADOW. fill: "natural" (default; se compra al ask y se vende al bid),
+    /// "mid" o "mid_slippage" (desde el medio hacia el lado desfavorable: slippage_pct_of_spread = 0 es el medio,
+    /// 100 es el bid/ask, o sea el natural).
+    /// </summary>
+    public record SpecExecution
+    {
+        public string Fill { get; init; } = "natural";
+        /// <summary>0-100, sólo con fill mid_slippage: % del medio spread bid/ask que se cede en contra.</summary>
+        public double? SlippagePctOfSpread { get; init; }
+        public ExecutionCosts? Costs { get; init; }
+    }
+
+    /// <summary>Costos en USD, aplicados en la entrada y otra vez en la salida. Los que no se declaran son 0.</summary>
+    public record ExecutionCosts
+    {
+        /// <summary>Por contrato de opción (cada pata × contratos).</summary>
+        public double? PerContractUsd { get; init; }
+        /// <summary>Por acción (long_equity).</summary>
+        public double? PerShareUsd { get; init; }
+        /// <summary>Por orden (una en la entrada, una en la salida).</summary>
+        public double? PerOrderUsd { get; init; }
     }
 
     public record SpecRiskLimits

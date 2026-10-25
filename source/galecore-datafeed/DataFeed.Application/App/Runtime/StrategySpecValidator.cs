@@ -64,6 +64,7 @@ namespace DataFeed.Application.App.Runtime
             // ── Construcción: sólo lo que el runtime sabe construir (P1-07) ──
             ValidateConstruction(spec, errors);
             ValidateMetricExit(spec.Exits.Deterministic.MetricExit, errors);
+            ValidateExecution(spec.Execution, errors);
 
             // ── Selection method: el runtime no tiene selector, siempre arma la default_structure ──
             if (spec.Structure.SelectionMethod != "FIXED")
@@ -184,6 +185,28 @@ namespace DataFeed.Application.App.Runtime
             var exits = spec.Exits.Deterministic;
             if (exits.TakeProfit != null || exits.StopLoss != null || exits.TimeExit != null)
                 errors.Add("exits.deterministic: take_profit, stop_loss and time_exit are % of credit / DTE and do not apply to long_equity (use metric_exit)");
+        }
+
+        private static void ValidateExecution(SpecExecution? e, List<string> errors)
+        {
+            if (e == null) return;
+            var fills = new[] { ExecutionTerms.Natural, ExecutionTerms.Mid, ExecutionTerms.MidSlippage };
+            if (!fills.Contains(e.Fill))
+                errors.Add($"execution.fill must be one of: {string.Join(", ", fills)}");
+            if (e.Fill == ExecutionTerms.MidSlippage)
+            {
+                if (e.SlippagePctOfSpread is not double s || !(s >= 0 && s <= 100))
+                    errors.Add("execution.slippage_pct_of_spread is required with mid_slippage and must be between 0 and 100");
+            }
+            else if (e.SlippagePctOfSpread != null)
+                errors.Add("execution.slippage_pct_of_spread only applies with fill mid_slippage");
+            foreach (var (name, value) in new[]
+                     {
+                         ("per_contract_usd", e.Costs?.PerContractUsd), ("per_share_usd", e.Costs?.PerShareUsd),
+                         ("per_order_usd", e.Costs?.PerOrderUsd),
+                     })
+                if (value is double v && !(v >= 0 && v <= 1000))
+                    errors.Add($"execution.costs.{name} must be between 0 and 1000, got {v}");
         }
 
         private static void ValidateMetricExit(MetricExit? exit, List<string> errors)

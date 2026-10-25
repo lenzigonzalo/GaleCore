@@ -602,6 +602,8 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>
         /// Entrada cruzando el spread: se vende al bid y se compra al ask; salida al revés. El costo es la
         /// diferencia contra el mid simulado, en USD por posición (× el multiplicador: 100 por contrato, las acciones en long_equity).
+        /// Sólo cuenta lo que el fill todavía no cobró (WS-0062): con fill natural el P&L ya lo trae y el costo es 0; con
+        /// mid_slippage, la parte no cedida; al mid, el cruce completo.
         /// </summary>
         private static ExecutionBlock Execution(List<TradeReview> trades, Dictionary<string, ShadowPosition> positions)
         {
@@ -614,7 +616,8 @@ namespace DataFeed.Application.App.Runtime
                 if (entry == null || exit == null || !Usable(entry) || !Usable(exit)) continue;
                 // Cruzar el spread cuesta medio spread bid/ask por pata, al entrar y al salir.
                 // El multiplicador es el de la posición: 100 por contrato, o las acciones en long_equity.
-                costs.Add((Math.Round((HalfSpreads(entry) + HalfSpreads(exit)) * ShadowFillSimulator.Multiplier(p!), 2), t.RealizedPnl!.Value));
+                costs.Add((Math.Round((HalfSpreads(entry) + HalfSpreads(exit)) * ShadowFillSimulator.Multiplier(p!)
+                    * (1 - ShadowFillSimulator.TermsOf(p!).AdverseFraction), 2), t.RealizedPnl!.Value));
             }
             int missing = trades.Count - costs.Count;
             if (costs.Count == 0)

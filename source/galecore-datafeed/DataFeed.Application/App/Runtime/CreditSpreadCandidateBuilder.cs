@@ -170,8 +170,12 @@ namespace DataFeed.Application.App.Runtime
                 built.Add(result);
             }
 
-            // Credit = mids vendidos − mids comprados
-            double credit = Math.Round(built.Sum(s => s.ShortQuote.Mid - s.LongQuote.Mid), 2);
+            // Credit = precio de fill de lo vendido − precio de fill de lo comprado (natural: bids vendidos − asks comprados;
+            // con fill mid, los mids de siempre). Los costos declarados no entran: van al P&L.
+            var terms = ExecutionTerms.From(spec);
+            double credit = Math.Round(built.Sum(s =>
+                ShadowFillSimulator.LegPrice(s.ShortQuote.Bid, s.ShortQuote.Ask, buying: false, terms, 4)
+                - ShadowFillSimulator.LegPrice(s.LongQuote.Bid, s.LongQuote.Ask, buying: true, terms, 4)), 2);
             if (!double.IsFinite(credit))
                 return Rejected($"crédito no finito ({credit})");
 
