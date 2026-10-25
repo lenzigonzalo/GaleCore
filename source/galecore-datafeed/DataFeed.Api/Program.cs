@@ -410,7 +410,7 @@ namespace DataFeed
                 var sender = scope.ServiceProvider.GetRequiredService<IMediator>();
                 var today = DataFeed.Application.Shared.DailyCache.Today.ToDateTime(TimeOnly.MinValue);
                 await Task.WhenAll(
-                    sender.Send(new DataFeed.Application.Data.Fred.ReleaseDates.FredReleaseDatesRequest { From = today, To = today.AddDays(45), ReleaseIds = "10,50,46,53" }),
+                    sender.Send(new DataFeed.Application.Data.Fred.ReleaseDates.FredReleaseDatesRequest { From = today, To = today.AddDays(45), ReleaseIds = DataFeed.Application.App.Shared.EventCatalog.FredReleaseIdsCsv }),
                     sender.Send(new DataFeed.Application.Data.Fed.FomcMeetings.FomcMeetingsRequest()));
             }).ContinueWith(t => app.Logger.LogWarning(t.Exception?.GetBaseException(), "Calendario: no se pudo precalentar"), TaskContinuationOptions.OnlyOnFaulted));
 

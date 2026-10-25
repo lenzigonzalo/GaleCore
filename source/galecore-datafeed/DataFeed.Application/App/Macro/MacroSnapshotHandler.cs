@@ -6,6 +6,7 @@ using DataFeed.Application.Data.Fred.Series;
 using DataFeed.Application.Data.Fred.ReleaseDates;
 using DataFeed.Application.Data.Fed.FomcMeetings;
 using DataFeed.Application.Data.Cboe.IndexHistory;
+using DataFeed.Application.App.Shared;
 using DataFeed.Application.Shared;
 using MediatR;
 
@@ -102,7 +103,7 @@ public class MacroSnapshotHandler(IMediator mediator) : IRequestHandler<MacroSna
             r.Data.Select(o => Row(id, o.Date, o.Close, r.UpstreamUrl, r.RetrievedAt, null, cutoff)).ToArray(),
             Array.Empty<MacroEvent>(), Status(id, r, r.Data.Count == 0)), ct);
     private Task<Part> ReadFredEvents(DateTime cutoff, CancellationToken ct) => Read("fred-calendar",
-        new FredReleaseDatesRequest { From = cutoff.Date, To = cutoff.Date.AddDays(45), ReleaseIds = "10,50,46,53" }, r => new(
+        new FredReleaseDatesRequest { From = cutoff.Date, To = cutoff.Date.AddDays(45), ReleaseIds = EventCatalog.FredReleaseIdsCsv }, r => new(
             Array.Empty<MacroObservation>(), r.Data.Select(e => new MacroEvent($"fred:{e.ReleaseId}:{e.Date}",
                 e.ReleaseName, e.Date, "fred", "https://fred.stlouisfed.org/releases/calendar", r.RetrievedAt, "day",
                 new[] { "Fecha programada; sin hora exacta, consenso ni sorpresa." })).ToArray(), Status("fred-calendar", r, r.Data.Count == 0)), ct);

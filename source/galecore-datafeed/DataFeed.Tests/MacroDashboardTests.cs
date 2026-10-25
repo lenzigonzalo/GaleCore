@@ -1,4 +1,6 @@
 using DataFeed.Application.App.Macro;
+using DataFeed.Application.App.Shared;
+using DataFeed.Application.Data.Fred.ReleaseDates;
 using DataFeed.Application.Shared;
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
@@ -68,6 +70,35 @@ public class MacroDashboardTests
         Assert.Equal(snapshot.Observations.First(o => o.SeriesId == "UST10").RetrievedAt,
             failedUpdate.Observations.First(o => o.SeriesId == "UST10").RetrievedAt);
         Assert.Contains(failedUpdate.SourceStatuses, s => s.Id == "treasury" && s.Status == "source-error");
+    }
+    /// <summary>Macro y el warm-up de Program.cs piden las mismas publicaciones de FRED que el catálogo de eventos (misma clave de caché diaria).</summary>
+    [Fact]
+    public async Task FredCalendar_UsesTheCatalogReleaseIds_AlsoInTheWarmUp()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddMediatR(c => c.RegisterServicesFromAssemblyContaining<MacroSnapshotHandler>());
+        var fred = new FredReleasesStub();
+        services.AddSingleton<IRequestHandler<FredReleaseDatesRequest, SourcedResponse<List<FredReleaseDateDto>>>>(fred);
+        using var provider = services.BuildServiceProvider();
+        await new MacroSnapshotHandler(provider.GetRequiredService<IMediator>()).Handle(new(), default);
+        Assert.Equal(EventCatalog.FredReleaseIdsCsv, fred.ReleaseIds);
+        Assert.Equal("9,10,46,50,53,54", fred.ReleaseIds);
+
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "DataFeed.Api", "Program.cs"))) dir = dir.Parent;
+        var program = File.ReadAllText(Path.Combine(dir!.FullName, "DataFeed.Api", "Program.cs"));
+        Assert.Contains("ReleaseIds = DataFeed.Application.App.Shared.EventCatalog.FredReleaseIdsCsv", program);
+        Assert.DoesNotContain("\"10,50,46,53\"", program);
+    }
+    private class FredReleasesStub : IRequestHandler<FredReleaseDatesRequest, SourcedResponse<List<FredReleaseDateDto>>>
+    {
+        public string? ReleaseIds { get; private set; }
+        public Task<SourcedResponse<List<FredReleaseDateDto>>> Handle(FredReleaseDatesRequest r, CancellationToken ct)
+        {
+            ReleaseIds = r.ReleaseIds;
+            return Task.FromResult(new SourcedResponse<List<FredReleaseDateDto>> { Source = "fred", RetrievedAt = DateTime.UtcNow, AsOf = "2026-10-12", UpstreamUrl = "https://example.test", Data = new() });
+        }
     }
     private class TreasuryStub : IRequestHandler<DataFeed.Application.Data.Treasury.TreasuryYieldCurveRequest,
         SourcedResponse<List<DataFeed.Application.Data.Treasury.TreasuryCurveDayDto>>>
