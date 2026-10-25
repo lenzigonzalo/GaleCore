@@ -115,7 +115,7 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
-    public async Task QuoteWithoutProviderTime_AgeIsUnknown_NotNow()
+    public async Task QuoteWithoutProviderTime_NoCandidate()
     {
         var source = new FakeSource();
         source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
@@ -123,15 +123,15 @@ public class CreditSpreadCandidateBuilderTests
 
         var result = await Build(source);
 
-        Assert.Null(result.Candidate!.Snapshot.OldestQuoteAt);
-        Assert.Equal(2, result.Candidate.Snapshot.QuotesWithoutTime);
+        Assert.Null(result.Candidate);
+        Assert.Contains("sin hora", result.RejectReason);
     }
 
     [Fact]
-    public async Task StaleLeg_NoCandidate_EvenIfTheOtherHasNoTime()
+    public async Task StaleLeg_NoCandidate_EvenIfTheOtherIsFresh()
     {
         var source = new FakeSource();
-        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now.AddSeconds(-3));
         source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddMinutes(-10));
 
         var result = await Build(source);
@@ -153,15 +153,15 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
-    public async Task OneLegWithoutTime_OldestIsTheKnownOne_AndItIsCounted()
+    public async Task OneLegWithoutTime_NoCandidate()
     {
         var source = new FakeSource();
         source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
 
         var result = await Build(source);
 
-        Assert.Equal(Now.AddSeconds(-8), result.Candidate!.Snapshot.OldestQuoteAt);
-        Assert.Equal(1, result.Candidate.Snapshot.QuotesWithoutTime);
+        Assert.Null(result.Candidate);
+        Assert.Contains("sin hora", result.RejectReason);
     }
 
     [Fact]

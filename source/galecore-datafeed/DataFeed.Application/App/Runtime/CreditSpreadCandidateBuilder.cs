@@ -270,7 +270,7 @@ namespace DataFeed.Application.App.Runtime
                 return (null, $"sin cotización utilizable para la pata comprada {longSymbol}");
 
             // Frescura por pata: una pata vieja o con hora futura descarta el candidato aunque la otra
-            // no tenga hora (Codex C1). Sin hora, la edad no se puede medir (ver DataFreshness).
+            // no tenga hora (Codex C1). Sin hora no sirve (ver DataFreshness).
             var maxAge = DataFreshness.MaxAge(spec);
             foreach (var (legName, legSymbol, quote) in new[] { ("vendida", shortSymbol, shortQuote), ("comprada", longSymbol, longQuote) })
             {

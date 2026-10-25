@@ -78,10 +78,9 @@ namespace DataFeed.Application.App.Runtime
     /// Frescura de un dato con hora del proveedor. SHADOW tolera 10 veces
     /// data_quality.max_quote_age_seconds (con 15 s en la spec: 150 s).
     ///
-    /// Una hora desconocida (null) no se puede medir y hoy se acepta: DXLink manda el Quote con
-    /// EventTime 0 (verificado en vivo el 24/09), así que exigir hora dejaría al runtime sin poder
-    /// cotizar ninguna pata. Es una limitación declarada del item; la protección que queda es no
-    /// simular fills ni cierres fuera de sesión.
+    /// Una cotización sin hora (null) no se puede medir y NO sirve: bloquea la entrada y deja la
+    /// valuación de una posición abierta en NO_DATA (sin cierre inventado). La hora sale de
+    /// QuoteTime: la más vieja de bidTime/askTime; DXLink manda EventTime 0 (verificado el 24/09).
     /// </summary>
     public static class DataFreshness
     {
@@ -94,10 +93,24 @@ namespace DataFeed.Application.App.Runtime
                 ? TimeSpan.FromSeconds(spec.DataQuality.MaxQuoteAgeSeconds * ShadowAgeFactor)
                 : null;
 
-        /// <summary>null si el dato sirve; si no, por qué (viejo o con hora en el futuro).</summary>
+        /// <summary>
+        /// Hora de una cotización (epoch ms): la MÁS VIEJA de bidTime y askTime que sean > 0; si
+        /// ninguna, eventTime > 0; si nada, null (sin hora).
+        /// </summary>
+        public static DateTime? QuoteTime(long bidTime, long askTime, long eventTime)
+        {
+            long ms = 0;
+            if (bidTime > 0 && askTime > 0) ms = Math.Min(bidTime, askTime);
+            else if (bidTime > 0) ms = bidTime;
+            else if (askTime > 0) ms = askTime;
+            else if (eventTime > 0) ms = eventTime;
+            return ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime : null;
+        }
+
+        /// <summary>null si el dato sirve; si no, por qué (sin hora, viejo o con hora en el futuro).</summary>
         public static string? Problem(DateTime? asOf, DateTime nowUtc, TimeSpan? maxAge)
         {
-            if (asOf is not DateTime t) return null;
+            if (asOf is not DateTime t) return "cotización sin hora";
             if (t > nowUtc + ClockSkew) return $"hora en el futuro ({t:o})";
             if (maxAge is TimeSpan max && nowUtc - t > max)
                 return $"dato viejo ({(nowUtc - t).TotalSeconds:F0}s, límite {max.TotalSeconds:F0}s)";
@@ -145,7 +158,7 @@ namespace DataFeed.Application.App.Runtime
                 _logger.LogDebug("RuntimeMarketData: sin cotización utilizable para {Symbol}", streamerSymbol);
                 return null;
             }
-            DateTime? asOf = q.EventTime > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(q.EventTime).UtcDateTime : null;
+            var asOf = DataFreshness.QuoteTime(q.BidTime, q.AskTime, q.EventTime);
             return new LegQuote(q.BidPrice, q.AskPrice, asOf);
         }
     }

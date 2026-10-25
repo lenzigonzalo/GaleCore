@@ -50,11 +50,11 @@ namespace DataFeed.Application.App.Runtime.Contracts
         /// <summary>Cuándo el runtime recibió los datos del snapshot (reloj del runtime, no del mercado).</summary>
         public DateTime AsOf { get; init; }
         /// <summary>
-        /// Hora de publicación de la cotización más vieja entre las patas que informan hora; null si
-        /// ninguna la informa (DXLink manda el Quote con EventTime 0). Es lo que mide la frescura.
+        /// Hora de la cotización más vieja entre las patas (la más vieja de bidTime/askTime de cada
+        /// una). Es lo que mide la frescura; una cotización sin hora no llega a armar candidato.
         /// </summary>
         public DateTime? OldestQuoteAt { get; init; }
-        /// <summary>Patas cuya cotización llegó sin hora del proveedor (edad desconocida, no medible).</summary>
+        /// <summary>Patas cuya cotización llegó sin hora del proveedor (hoy el candidato se rechaza antes; queda como contador de diagnóstico).</summary>
         public int QuotesWithoutTime { get; init; }
     }
 }

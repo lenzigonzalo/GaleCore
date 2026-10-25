@@ -225,7 +225,7 @@ public class MetricResolverQuoteTests
     [Fact]
     public void RealQuote_IsTheMid()
     {
-        Assert.Equal(15.25, P(Q(15.2, 15.3))!.Value, 10);                          // sin hora: se acepta (BL-013)
+        Assert.Null(P(Q(15.2, 15.3)));                                              // sin hora: ya no se acepta (WS-0062 inc.1)
         Assert.Equal(15.25, P(Q(15.2, 15.3, Ms(QNow.AddSeconds(-10))))!.Value, 10);
     }
 

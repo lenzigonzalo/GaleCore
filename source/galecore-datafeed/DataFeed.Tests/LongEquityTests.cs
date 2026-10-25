@@ -224,7 +224,7 @@ public class LongEquityTests
     // ── Constructor, riesgo y fill ──────────────────────────────────
 
     private static Func<string, CancellationToken, Task<LegQuote?>> Quote(double bid, double ask, DateTime? asOf = null) =>
-        (_, _) => Task.FromResult<LegQuote?>(new LegQuote(bid, ask, asOf));
+        (_, _) => Task.FromResult<LegQuote?>(new LegQuote(bid, ask, asOf ?? Now));
 
     private static StrategyInstance Instance() => ShadowRuntimeEngineTests.NewRuntime().Instance;
 

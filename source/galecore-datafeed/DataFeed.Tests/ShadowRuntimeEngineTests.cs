@@ -38,7 +38,11 @@ public class ShadowRuntimeEngineTests
         {
             BuildCalls++;
             if (ThrowOnBuild) throw new InvalidOperationException("cadena caída");
-            return Task.FromResult(BuildFor?.Invoke(instance) ?? Build?.Invoke() ?? CandidateBuildResult.Rejected("sin candidato"));
+            var built = BuildFor?.Invoke(instance) ?? Build?.Invoke() ?? CandidateBuildResult.Rejected("sin candidato");
+            // El candidato de prueba trae la cotización de "ahora" (sin hora el riesgo lo rechaza, WS-0062 inc.1).
+            if (built.Candidate is { Snapshot.OldestQuoteAt: null } c)
+                built = built with { Candidate = c with { Snapshot = c.Snapshot with { OldestQuoteAt = nowUtc } } };
+            return Task.FromResult(built);
         }
 
         public Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
@@ -522,6 +526,22 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
+    public async Task Valuation_LegQuoteWithoutTime_IsNoData_AndNeverCloses()
+    {
+        var (store, pos, data) = await OpenPosition();
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, null);   // take profit si se aceptara
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(
+            store, data, pos, Spec().Exits.Deterministic, Now, default, maxQuoteAge: DataFreshness.MaxAge(Spec()));
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoData, outcome);
+        var same = store.GetPosition(pos.PositionId)!;
+        Assert.Equal("OPEN", same.Status);
+        Assert.Contains(same.ValuationProblems!, p => p.Contains("sin hora"));
+    }
+
+    [Fact]
     public async Task Entry_SwitchTurnedOffWhileBuilding_NoPosition()
     {
         var (store, instance) = NewRuntime();
@@ -587,7 +607,34 @@ public class ShadowRuntimeEngineTests
         Assert.Null(DataFreshness.Problem(Now.AddSeconds(-149), Now, max));
         Assert.Contains("viejo", DataFreshness.Problem(Now.AddSeconds(-151), Now, max));
         Assert.Contains("futuro", DataFreshness.Problem(Now.AddSeconds(30), Now, max));
-        Assert.Null(DataFreshness.Problem(null, Now, max));   // desconocida: limitación declarada
+        Assert.Contains("sin hora", DataFreshness.Problem(null, Now, max));   // sin hora ya no pasa (WS-0062 inc.1)
+    }
+
+    [Fact]
+    public void QuoteTime_TakesOldestOfBidAskThenEventTime()
+    {
+        long ms(DateTime d) => new DateTimeOffset(d, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var older = Now.AddSeconds(-40);
+        var newer = Now.AddSeconds(-10);
+        Assert.Equal(older, DataFreshness.QuoteTime(ms(older), ms(newer), 0));
+        Assert.Equal(older, DataFreshness.QuoteTime(ms(newer), ms(older), ms(Now)));   // bid/ask mandan sobre EventTime
+        Assert.Equal(newer, DataFreshness.QuoteTime(ms(newer), 0, 0));                  // sólo bid
+        Assert.Equal(newer, DataFreshness.QuoteTime(0, ms(newer), 0));                  // sólo ask
+        Assert.Equal(older, DataFreshness.QuoteTime(0, 0, ms(older)));                  // sólo EventTime
+        Assert.Null(DataFreshness.QuoteTime(0, 0, 0));                                  // ninguna
+    }
+
+    [Fact]
+    public void MetricResolver_QuotePrice_NoTimeOldOrFutureIsBlocked()
+    {
+        long ms(DateTime d) => new DateTimeOffset(d, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var max = TimeSpan.FromSeconds(150);
+        DataFeed.Application.Data.Tastytrade.MarketDataQuote.QuoteEvent Q(long bt, long at, long et = 0) =>
+            new() { BidPrice = 10, AskPrice = 10.2, BidTime = bt, AskTime = at, EventTime = et };
+        Assert.NotNull(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-5)), ms(Now.AddSeconds(-3))), Now, max));
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(0, 0), Now, max));                                       // sin hora
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-500)), ms(Now.AddSeconds(-3))), Now, max)); // la más vieja manda
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(60)), ms(Now.AddSeconds(60))), Now, max));  // futura
     }
 
     [Fact]
