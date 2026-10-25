@@ -132,7 +132,7 @@ test('chart ticks use ET with DST and leave mouse wheel scrolling to the page', 
   expect(options.handleScale.mouseWheel).toBe(false);
 });
 
-test.each([['TAKE_PROFIT', 'Toma de ganancia'], ['STOP_LOSS', 'Stop loss'], ['DTE_EXIT', 'Por vencimiento/tiempo'], ['TIME_EXIT', 'Por vencimiento/tiempo'], ['METRIC_EXIT', 'Salida por condición'], ['MANUAL', 'MANUAL']])('exit reason %s is shown as %s in both bars and trades', async (reason, label) => {
+test.each([['TAKE_PROFIT', 'Toma de ganancia'], ['STOP_LOSS', 'Stop loss'], ['DTE_EXIT', 'Por tiempo'], ['TIME_EXIT', 'Por tiempo'], ['METRIC_EXIT', 'Por condición'], ['EVENT_EXIT', 'Por evento'], ['EXPIRATION', 'Vencimiento'], ['MANUAL', 'Manual'], ['SOMETHING_NEW', 'SOMETHING_NEW']])('exit reason %s is shown as %s in both bars and trades', async (reason, label) => {
   panelApi.mockResolvedValue({ ...plain, byExitRule: [{ ...plain.byExitRule[0], key: reason }],
     closedTrades: [{ ...context, positionId: 'closed', version: '1.0.3', structure: 'put_credit_spread', legs: '', entryAt: plain.asOf, exitAt: plain.asOf, daysHeld: 5.7, entryCredit: .44, exitDebit: .22, exitReason: reason, realizedPnl: 22 }],
   });

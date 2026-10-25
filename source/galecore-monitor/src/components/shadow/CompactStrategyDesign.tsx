@@ -1,5 +1,6 @@
 import React from 'react';
 import type { StrategyView } from '../../pages/LabStrategySheet';
+import { legSelectionLabel } from './panelPresentation';
 
 export type AlgorithmSpec = NonNullable<NonNullable<StrategyView['current']>['spec']> & {
   exits?: { deterministic?: { take_profit?: { pct_of_credit: number }; stop_loss?: { pct_of_credit: number }; time_exit?: { max_dte: number }; defensive_roll?: { enabled: boolean } } };
@@ -28,8 +29,8 @@ export function CompactStrategyDesign({ strategy }: { strategy: StrategyView | n
   if (constraints?.min_credit !== undefined) construction.push({ concept: 'Crédito', comparison: '≥', threshold: raw(constraints.min_credit, spec?.operational?.currency), action: 'Aceptar candidato', path: 'candidate_construction.constraints.min_credit' });
   for (const leg of spec?.candidate_construction?.legs || []) {
     const selection = leg.strike_selection;
-    construction.push({ concept: `${leg.side === 'SELL' ? 'Venta' : 'Compra'} ${leg.type}`, comparison: selection.method === 'DELTA' ? 'Delta objetivo' : selection.method === 'FIXED_WIDTH' ? 'Ancho' : selection.method,
-      threshold: selection.method === 'DELTA' ? `${raw(selection.target_delta)}${selection.delta_tolerance != null ? ` ± ${selection.delta_tolerance}` : ''}` : selection.method === 'FIXED_WIDTH' ? raw(selection.width, spec?.operational?.currency) : '—', action: 'Seleccionar pata', path: 'candidate_construction.legs.strike_selection' });
+    construction.push({ concept: `${leg.side === 'SELL' ? 'Venta' : 'Compra'} ${leg.type}`, comparison: selection.method === 'DELTA' ? 'Delta objetivo' : selection.method === 'FIXED_WIDTH' ? 'Ancho' : 'Strike',
+      threshold: selection.method === 'DELTA' ? `${raw(selection.target_delta)}${selection.delta_tolerance != null ? ` ± ${selection.delta_tolerance}` : ''}` : selection.method === 'FIXED_WIDTH' ? raw(selection.width, spec?.operational?.currency) : legSelectionLabel(selection), action: 'Seleccionar pata', path: 'candidate_construction.legs.strike_selection' });
   }
   if (spec?.candidate_construction?.sizing?.fixed_contracts !== undefined) construction.push({ concept: 'Contratos', comparison: '=', threshold: raw(spec.candidate_construction.sizing.fixed_contracts), action: 'Tamaño fijo', path: 'candidate_construction.sizing.fixed_contracts' });
   const limits = spec?.risk_limits;

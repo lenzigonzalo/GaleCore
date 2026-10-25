@@ -121,6 +121,8 @@ export interface ShadowPosition {
   /** Sólo acciones (long_equity), lo calcula el back; null en spreads. */
   legsText?: string;
   shares?: number | null; entryPrice?: number | null; exitPrice?: number | null; lastPrice?: number | null; cost?: number | null;
+  /** El back: «credit» | «debit», el monto sin signo y si está vencida sin liquidar. */
+  entryKind?: 'credit' | 'debit'; entryAmount?: number; pendingSettlement?: boolean;
 }
 
 /** Los tipos de evento que explican por qué una evaluación no terminó en una posición. */
@@ -130,10 +132,25 @@ export const DISCARD_EVENT_TYPES = [
 
 export const DISCARD_LABELS: Record<string, string> = {
   GATES_NOT_PASSED: 'Gates no cumplidos',
-  ENTRY_SKIPPED: 'Máximo de posiciones',
+  ENTRY_SKIPPED: 'Entrada salteada',
   CANDIDATE_NOT_VIABLE: 'Sin candidato viable',
   RISK_CHECK_FAILED: 'Riesgo rechazado',
   ENTRY_ABORTED: 'Switch apagado durante la entrada',
+  MAX_POSITIONS: 'Máximo de posiciones',
+  TOO_SOON: 'Entradas muy seguidas',
+  TRADE_LIMIT: 'Límite de operaciones',
+  LOSS_BRAKE: 'Freno por pérdida',
+  RISK_LIMIT: 'Límite de riesgo',
+  OUTSIDE_ENTRY_WINDOW: 'Fuera de la ventana de entrada',
+};
+/** Qué límite frenó una entrada salteada (el campo `limit` del evento). */
+export const LIMIT_LABELS: Record<string, string> = {
+  trade_limits: 'Límite de operaciones',
+  loss_brake: 'Freno por pérdida',
+  max_bet: 'Tope por apuesta',
+  risk_budget: 'Presupuesto de riesgo',
+  margin_account_minimum: 'Mínimo de cuenta (margen)',
+  intraday_margin: 'Margen intradiario',
 };
 export interface Metric { value: number | null; reason: string | null }
 export interface PerformanceGroup {
@@ -163,6 +180,8 @@ export interface PerformancePanelResponse {
   daily: { date: string; pnl: number; trades: number }[];
   openPositions: { positionId: string; version: string; structure: string; legs: string; symbol: string; legList: PanelLeg[];
     entryAt: string; entryDte: number | null; currentDte: number | null; entryCredit: number;
+    entryKind?: 'credit' | 'debit'; entryAmount?: number; pendingSettlement?: boolean;
+    pnlPctOfCredit?: number | null; pnlPctOfCost?: number | null; pnlPctOfMaxRisk?: number | null;
     lastSpreadValue: number | null; unrealizedPnl: number | null; maxRisk: number;
     shares?: number | null; entryPrice?: number | null; lastPrice?: number | null; cost?: number | null;
     lastValuedAt: string | null; valuationProblems: string[] | null;
@@ -172,9 +191,13 @@ export interface PerformancePanelResponse {
     exitDebit: number | null; exitReason: string | null; realizedPnl: number | null;
     shares?: number | null; entryPrice?: number | null; exitPrice?: number | null; cost?: number | null;
     maxRisk: number; pnlPctOfCredit: number | null; pnlPctOfMaxRisk: number | null;
+    entryKind?: 'credit' | 'debit'; entryAmount?: number; pnlPctOfCost?: number | null;
+    grossPnl?: number | null; costs?: number | null; costsDeclared?: boolean;
     gapToPlan: number | null; entryVix: number | null; entryIvRank: number | null;
     entryUnderlyingPrice: number | null; exitDte: number | null; entryGates?: PanelGate[] }[];
   realizedPnl: Metric; unrealizedPnl: Metric; maxDrawdown: Metric;
+  /** Neto = realizedPnl; el bruto y los costos sólo se muestran si la spec declara costos. */
+  realizedGrossPnl?: Metric; totalCosts?: Metric; costsDeclared?: boolean;
   winRate: Metric; avgWin: Metric; avgLoss: Metric; profitFactor: Metric; expectancy: Metric;
   sharpe: Metric; sortino: Metric; avgDaysHeld: Metric; worstTrade: Metric; lossStreak: Metric;
   openMaxRisk: number;

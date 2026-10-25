@@ -9,14 +9,14 @@ import { PerformancePanel } from '../components/shadow/PerformancePanel';
 import { ModeSwitch } from '../components/common/ModeSwitch';
 import { StageModeChip, StrategyHeader } from '../components/shadow/StrategyHeader';
 import { fetchReferenceCapital } from '../api/space';
-import { amount, rate, readPanelError, stateLabel, strategyName, usd as panelUsd } from '../components/shadow/panelPresentation';
+import { amount, exitLabel, rate, readPanelError, stateLabel, strategyName, usd as panelUsd } from '../components/shadow/panelPresentation';
 import { NoticePanel } from '../components/common/NoticePanel';
 import {
   fetchPerformanceSummary, fetchStrategySettings, saveStrategySetting, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
 } from '../api/shadow';
 import type { StrategySetting } from '../api/shadow';
 import {
-  PerformanceSummary, Metric, DISCARD_LABELS, ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics,
+  PerformanceSummary, Metric, DISCARD_LABELS, LIMIT_LABELS, ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics,
 } from '../types/shadow';
 
 /**
@@ -53,6 +53,12 @@ export function pickInstance(instances: ShadowInstance[]): ShadowInstance | null
 }
 
 /** Por qué se descartó, tal como lo dejó el runtime en el evento. */
+/** Motivo de un descarte: si el evento dice qué límite frenó la entrada, ese; si no, el tipo de evento. */
+export function discardLabel(evt: ShadowEvent): string {
+  const limit = evt.payload?.limit;
+  return typeof limit === 'string' && LIMIT_LABELS[limit] ? LIMIT_LABELS[limit] : DISCARD_LABELS[evt.eventType] ?? evt.eventType;
+}
+
 export function discardReason(evt: ShadowEvent): string {
   const p = evt.payload ?? {};
   if (Array.isArray(p.gates)) {
@@ -356,7 +362,7 @@ function MetricsCard({ m }: { m: SpecVersionMetrics }) {
 
 function PositionsTable({ positions }: { positions: ShadowPosition[] }) {
   return (
-    <Table head={['Entrada', 'Símbolo', 'Patas', 'Crédito / precio', 'Riesgo máx. / costo', 'DTE', 'Valuación', 'Salida']}>
+    <Table head={['Entrada', 'Símbolo', 'Patas', 'Crédito / costo / precio', 'Riesgo máx. / costo', 'DTE', 'Valuación', 'Salida']}>
       {positions.map((p) => {
         const stock = p.structure === 'long_equity';
         return (
@@ -364,11 +370,11 @@ function PositionsTable({ positions }: { positions: ShadowPosition[] }) {
           <Td>{when(p.entryAt)}</Td>
           <Td>{p.symbol}</Td>
           <Td mono>{stock && p.legsText ? p.legsText : p.legs.map((l) => `${l.side} ${l.type} ${l.strike} ${l.expiration ?? ''}`).join(' / ')}</Td>
-          <Td mono>{stock ? (p.entryPrice == null ? '—' : `${p.entryPrice.toFixed(2)} × ${p.shares ?? '—'}`) : p.entryCredit.toFixed(2)}</Td>
+          <Td mono>{stock ? (p.entryPrice == null ? '—' : `${p.entryPrice.toFixed(2)} × ${p.shares ?? '—'}`) : `${p.entryKind === 'debit' ? 'Costo ' : ''}${(p.entryAmount ?? p.entryCredit).toFixed(2)}`}</Td>
           <Td mono>{usd(stock ? (p.cost ?? p.maxRisk) : p.maxRisk)}</Td>
           <Td mono>{stock ? '—' : (p.currentDte ?? p.entryDte)}</Td>
           <Td>
-            {p.lastValuedAt && p.lastSpreadValue != null ? (
+            {p.pendingSettlement ? <span style={{ color: 'var(--yellow-gc)' }}>Pendiente de liquidar</span> : p.lastValuedAt && p.lastSpreadValue != null ? (
               <>
                 <span style={mono}>{(stock ? p.lastPrice : p.lastSpreadValue)?.toFixed(2)} · {usd(p.unrealizedPnl)} <span style={{ color: 'var(--text-muted)' }}>({when(p.lastValuedAt)})</span></span>
                 {p.valuationProblems?.length ? <div style={{ color: 'var(--yellow-gc)' }}>Aviso: {p.valuationProblems.join(' · ')}</div> : null}
@@ -377,7 +383,7 @@ function PositionsTable({ positions }: { positions: ShadowPosition[] }) {
               <span style={{ color: 'var(--yellow-gc)' }}>Sin valuar: {p.valuationProblems.join(' · ')}</span>
             ) : <span style={{ color: 'var(--text-muted)' }}>todavía no valuada</span>}
           </Td>
-          <Td>{p.exitReason ? <span style={mono}>{p.exitReason} · {(stock ? p.exitPrice : p.exitDebit)?.toFixed(2)} · {usd(p.realizedPnl)} ({when(p.exitAt)})</span> : '—'}</Td>
+          <Td>{p.exitReason ? <span style={mono}>{exitLabel(p.exitReason)} · {(stock ? p.exitPrice : p.exitDebit)?.toFixed(2)} · {usd(p.realizedPnl)} ({when(p.exitAt)})</span> : '—'}</Td>
         </tr>
         );
       })}
@@ -392,7 +398,7 @@ function DiscardsTable({ events }: { events: ShadowEvent[] }) {
         <tr key={e.eventId}>
           <Td>{when(e.timestamp)}</Td>
           <Td>{e.symbol ?? '—'}</Td>
-          <Td>{DISCARD_LABELS[e.eventType] ?? e.eventType}</Td>
+          <Td>{discardLabel(e)}</Td>
           <Td mono>{discardReason(e)}</Td>
         </tr>
       ))}
