@@ -528,7 +528,7 @@ public class ShadowInc5Tests
                 new(2026, "October", "27-28", new DateOnly(2026, 10, 27), new DateOnly(2026, 10, 28), false, true),
             }) : throw new UpstreamSourceException("fed", "sin ese año"),
         };
-        var cal = new MediatorEventCalendar(mediator, NullLogger.Instance);
+        var cal = new MediatorEventCalendar(mediator, NullLogger.Instance, () => Now);
         var res = await cal.QueryAsync("FOMC", null, new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc), new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc), default);
         Assert.Equal(EventQueryStatus.Ok, res.Status);
         var ev = Assert.Single(res.Events);
@@ -538,6 +538,46 @@ public class ShadowInc5Tests
         // Un rango que cruza a un año que la página no trae: no se sabe.
         var cross = await cal.QueryAsync("FOMC", null, new DateTime(2026, 12, 20, 0, 0, 0, DateTimeKind.Utc), new DateTime(2027, 1, 5, 0, 0, 0, DateTimeKind.Utc), default);
         Assert.Equal(EventQueryStatus.NoData, cross.Status);
+    }
+
+    [Fact]
+    public void MediatorEventCalendar_StaleSnapshot_IsNoData_NotAnEmptyOk()
+    {
+        // Una respuesta vacía y vieja no puede decir «no hay evento».
+        var fomcFrom = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        var fomcTo = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        SourcedResponse<List<T>> At<T>(DateTime retrieved, List<T> data) => new() { Source = "t", RetrievedAt = retrieved, Data = data };
+        var meetings = new List<FomcMeeting> { new(2026, "October", "27-28", new DateOnly(2026, 10, 27), new DateOnly(2026, 10, 28), false, true) };
+
+        EventQueryResult FomcAt(DateTime retrieved, DateTime now) => new MediatorEventCalendar(
+            new RoutingMediator { Handler = _ => At(retrieved, meetings) }, NullLogger.Instance, () => now).QueryAsync("FOMC", null, fomcFrom, fomcTo, default).Result;
+        EventQueryResult Cpi(DateTime retrieved, DateTime now) => new MediatorEventCalendar(
+            new RoutingMediator { Handler = _ => At(retrieved, new List<FredReleaseDateDto>()) }, NullLogger.Instance, () => now).QueryAsync("CPI", null, fomcFrom, fomcTo, default).Result;
+
+        // Dentro de las 24 h, incluso cruzando la medianoche de Nueva York (la copia de ayer que sirve la caché mientras refresca).
+        var ayerNoche = new DateTime(2026, 9, 23, 23, 30, 0, DateTimeKind.Utc);
+        Assert.Equal(EventQueryStatus.Ok, Cpi(ayerNoche, Now).Status);
+        Assert.Equal(EventQueryStatus.Ok, FomcAt(ayerNoche, Now).Status);
+
+        // Vencida: FRED vacío = NoData (no «no hay publicación»), igual FOMC.
+        var vieja = Now.AddHours(-25);
+        var cpi = Cpi(vieja, Now);
+        Assert.Equal(EventQueryStatus.NoData, cpi.Status);
+        Assert.Contains("vencido", cpi.Note);
+        Assert.Equal(EventQueryStatus.NoData, FomcAt(vieja, Now).Status);
+
+        // Sin hora de lectura o con hora en el futuro: tampoco sirve.
+        Assert.Equal(EventQueryStatus.NoData, Cpi(default, Now).Status);
+        Assert.Equal(EventQueryStatus.NoData, Cpi(Now.AddHours(2), Now).Status);
+    }
+
+    [Fact]
+    public async Task EventGate_NotExist_WithStaleEmptyCalendar_IsNoData_AndBlocks()
+    {
+        var mediator = new RoutingMediator { Handler = _ => new SourcedResponse<List<FredReleaseDateDto>> { Source = "t", RetrievedAt = Now.AddDays(-3), Data = new() } };
+        var cal = new MediatorEventCalendar(mediator, NullLogger.Instance, () => Now);
+        var result = await EventGates.EvaluateAsync(EGate("CPI", null, "day_start", "day_end", null, "not_exist"), cal, NyOp, UniverseSymbols, Now, default);
+        Assert.Equal("NO_DATA", result.Status);
     }
 
     [Fact]
@@ -560,7 +600,7 @@ public class ShadowInc5Tests
                 _ => throw new UpstreamSourceException("x", "caída"),
             },
         };
-        var cal = new MediatorEventCalendar(mediator, NullLogger.Instance);
+        var cal = new MediatorEventCalendar(mediator, NullLogger.Instance, () => Now);
         var from = new DateTime(2026, 9, 24, 4, 0, 0, DateTimeKind.Utc);
         var to = from.AddDays(1);
 

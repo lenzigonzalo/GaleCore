@@ -51,11 +51,29 @@ namespace DataFeed.Application.App.Runtime
     {
         private readonly IMediator _mediator;
         private readonly ILogger _logger;
+        private readonly Func<DateTime> _utcNow;
 
-        public MediatorEventCalendar(IMediator mediator, ILogger logger)
+        /// <summary>
+        /// Máxima edad de un calendario de FOMC / FRED. Ambas fuentes se cachean por día de Nueva York (<c>DailyCache</c>) y, al cambiar
+        /// el día, la caché sirve la copia anterior mientras refresca: 24 h cubre esa copia de ayer y descarta una más vieja (la
+        /// lectura nueva no llegó), que no puede decidir un «no hay evento».
+        /// </summary>
+        public static readonly TimeSpan MaxSnapshotAge = TimeSpan.FromHours(24);
+
+        public MediatorEventCalendar(IMediator mediator, ILogger logger, Func<DateTime>? utcNow = null)
         {
             _mediator = mediator;
             _logger = logger;
+            _utcNow = utcNow ?? (() => DateTime.UtcNow);
+        }
+
+        /// <summary>null si la copia sirve; si no, por qué (sin hora de lectura, en el futuro o vencida).</summary>
+        private string? StaleProblem(string source, DateTime retrievedAt)
+        {
+            if (retrievedAt == default) return $"el calendario de {source} no informa cuándo se leyó";
+            var age = _utcNow() - DateTime.SpecifyKind(retrievedAt, DateTimeKind.Utc);
+            if (age < -DataFreshness.ClockSkew) return $"el calendario de {source} tiene hora de lectura en el futuro";
+            return age > MaxSnapshotAge ? $"el calendario de {source} está vencido (leído hace {age.TotalHours:0.#} h, máximo {MaxSnapshotAge.TotalHours:0} h)" : null;
         }
 
         public IReadOnlyCollection<EventTypeInfo> Catalog => EventCatalog.Builtin;
@@ -87,14 +105,15 @@ namespace DataFeed.Application.App.Runtime
         {
             if (!ShadowSession.TryZone("America/New_York", out var et)) return EventQueryResult.NoData("no se pudo leer la zona horaria de Nueva York para las 14:00 del FOMC");
             var events = new List<CalendarEvent>();
-            var retrieved = DateTime.UtcNow;
             for (int year = fromUtc.Year; year <= toUtc.Year; year++)
             {
                 var response = await _mediator.Send(new FomcMeetingsRequest { Years = year.ToString(CultureInfo.InvariantCulture) }, ct);
                 var meetings = response?.Data?.Where(m => m.Year == year).ToList();
                 // El handler falla si la página no trae el año pedido; una lista vacía tampoco es un calendario.
                 if (meetings == null || meetings.Count == 0) return EventQueryResult.NoData($"el calendario del FOMC no trae {year}");
-                retrieved = response!.RetrievedAt == default ? retrieved : response.RetrievedAt;
+                var retrieved = response!.RetrievedAt;
+                var stale = StaleProblem("FOMC", retrieved);
+                if (stale != null) return EventQueryResult.NoData(stale);
                 foreach (var m in meetings)
                 {
                     var start = TimeZoneInfo.ConvertTimeToUtc(m.End.ToDateTime(new TimeOnly(14, 0)), et);
@@ -113,6 +132,8 @@ namespace DataFeed.Application.App.Runtime
                 From = fromUtc.Date.AddDays(-1), To = toUtc.Date.AddDays(1), ReleaseIds = releaseId.ToString(CultureInfo.InvariantCulture),
             }, ct);
             if (response?.Data == null) return EventQueryResult.NoData("FRED no devolvió fechas");
+            var stale = StaleProblem("FRED", response.RetrievedAt);
+            if (stale != null) return EventQueryResult.NoData(stale);
             var events = response.Data
                 .Where(r => DateOnly.TryParseExact(r.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
                 .Select(r => DateOnly.ParseExact(r.Date, "yyyy-MM-dd", CultureInfo.InvariantCulture))
@@ -135,7 +156,7 @@ namespace DataFeed.Application.App.Runtime
             if (next < DateOnly.FromDateTime(fromUtc.AddDays(-1)))
                 return EventQueryResult.NoData($"la fecha de balance de {symbol} que informa el proveedor ({next:yyyy-MM-dd}) ya pasó: la siguiente no está publicada");
             var events = DateUtc(next) >= fromUtc.Date.AddDays(-1) && DateUtc(next) <= toUtc.Date.AddDays(1)
-                ? new[] { new CalendarEvent(info.Type, symbol.ToUpperInvariant(), DateUtc(next), EventPrecision.Date, "tastytrade", DateTime.UtcNow) }
+                ? new[] { new CalendarEvent(info.Type, symbol.ToUpperInvariant(), DateUtc(next), EventPrecision.Date, "tastytrade", _utcNow()) }
                 : Array.Empty<CalendarEvent>();
             return EventQueryResult.Ok(events);
         }
