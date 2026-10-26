@@ -36,17 +36,29 @@ namespace DataFeed.Application.Data.Tastytrade.MarketDataGreeks
             _streaming = streaming;
         }
 
+        /// <summary>
+        /// Acepta el OCC de 21 caracteres y el símbolo streamer de DXLink (el que devuelve la cadena); devuelve el streamer.
+        /// </summary>
+        public static string ResolveSymbol(string? symbol)
+        {
+            symbol = symbol?.Trim();
+            if (!string.IsNullOrEmpty(symbol))
+            {
+                if (TastytradeHelper.IsStreamerOptionSymbol(symbol)) return symbol;
+                if (TastytradeHelper.IsOptionSymbol(symbol)) return TastytradeHelper.GetOptionSymbolFromTicker(symbol);
+            }
+            throw new DataFeed.Application.Shared.ValidationException("Symbol inválido. Símbolo de opción en formato OCC de 21 caracteres (6+6+1+8, ej: 'SPXW  261026P06800000') o streamer de DXLink (ej: '.SPXW261026P6800').");
+        }
+
         public async Task<MarketDataGreeksResponse> Handle(MarketDataGreeksRequest request, CancellationToken cancellationToken)
         {
+            // Fuera del try: un símbolo mal armado es 400 (ValidationException), no el 500 de abajo.
+            var symbol = ResolveSymbol(request.Symbol);
+
             try
             {
                 var response = new MarketDataGreeksResponse();
 
-                var isOption = TastytradeHelper.IsOptionSymbol(request.Symbol);
-                if (!isOption)
-                    throw new Exception("Symbol incorrect. Option symbol must be 6+6+1+8=21 chars");
-
-                var symbol = isOption ? TastytradeHelper.GetOptionSymbolFromTicker(request.Symbol) : request.Symbol;
                 var tastyWSProvider = new TastytradeSocketProvider(_config, _auth, _client, _streaming);
 
                 var prices = await tastyWSProvider.GetGreeksAsync(symbol, cancellationToken);

@@ -139,12 +139,23 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   const stages: { id: Stage; label: string }[] = [{ id: 'LIVE', label: 'Live' }, { id: 'PAPER', label: 'Paper' }, { id: 'SHADOW', label: 'SHADOW' }];
   const [stage, setStage] = useState<Stage | null>(null);
   useEffect(() => { if (rpfEntry?.switch_endpoint) void readSwitch(rpfEntry.switch_endpoint); }, [rpfEntry?.switch_endpoint, readSwitch]);
+  // Si el Lab estaba apagado, la promesa fallida se descarta y se reintenta cada 30 s y al volver a la pestaña.
+  const [projectsRetry, setProjectsRetry] = useState(0);
   useEffect(() => {
     let active = true;
-    projectsRequest.current ??= labRequest<WorkspaceState>('/workspaces');
-    projectsRequest.current.then(state => { if (active) { setProjects(state.projects.filter(p => p.type === 'strategy' && p.strategyName)); setProjectsError(''); } }).catch(() => { if (active) setProjectsError('No se pudieron leer las estrategias en diseño.'); });
+    const request = projectsRequest.current ??= labRequest<WorkspaceState>('/workspaces');
+    request.then(state => { if (active) { setProjects(state.projects.filter(p => p.type === 'strategy' && p.strategyName)); setProjectsError(''); } })
+      .catch(() => { if (projectsRequest.current === request) projectsRequest.current = undefined; if (active) setProjectsError('No se pudieron leer las estrategias en diseño.'); });
     return () => { active = false; };
-  }, []);
+  }, [projectsRetry]);
+  useEffect(() => {
+    if (!projectsError) return;
+    const again = () => setProjectsRetry(n => n + 1);
+    const onVisible = () => { if (document.visibilityState === 'visible') again(); };
+    const timer = window.setInterval(again, 30000);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', onVisible); };
+  }, [projectsError]);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
   const [rows, setRows] = useState<PerformanceSummary[]>([]);
   const [instances, setInstances] = useState<ShadowInstance[]>([]);
