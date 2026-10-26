@@ -84,10 +84,40 @@ namespace DataFeed.Application.App.Runtime
 
         // ── Specs ──
 
-        public void RegisterSpec(string name, StrategySpec spec)
+        // JSON exacto del que salió el hash de cada spec registrada: el deploy lo guarda en la base si la spec no vino de archivo.
+        private readonly ConcurrentDictionary<string, string> _specJsonByHash = new();
+
+        public void RegisterSpec(string name, StrategySpec spec, string? specJson = null)
         {
             _specs[name] = spec;
-            if (!string.IsNullOrEmpty(spec.ContentHash)) _specsByHash[spec.ContentHash] = spec;
+            if (!string.IsNullOrEmpty(spec.ContentHash))
+            {
+                _specsByHash[spec.ContentHash] = spec;
+                if (specJson != null) _specJsonByHash[spec.ContentHash] = specJson;
+            }
+        }
+
+        /// <summary>
+        /// Registra en caliente una spec aprobada (WS-0062 inc.11), bajo el lock del deploy. Mismo nombre y mismo hash: no hace nada.
+        /// Mismo nombre y otro hash: si hay una instancia RUNNING de ese nombre con otro hash no pisa nada (conflicto: primero se frena
+        /// la vieja); si no, reemplaza la vigente y devuelve el hash que reemplazó. Queda en memoria; se guarda en la base al desplegarla.
+        /// </summary>
+        public SpecRegistration TryRegisterSpec(StrategySpec spec, string specJson)
+        {
+            var name = spec.Identity.Name;
+            lock (_deployGate)
+            {
+                var current = GetSpec(name);
+                if (current?.ContentHash == spec.ContentHash)
+                {
+                    RegisterSpec(name, spec, specJson);
+                    return SpecRegistration.Registered(null);
+                }
+                var running = RunningInstances().FirstOrDefault(i => i.SpecName == name && i.VersionHash != spec.ContentHash);
+                if (running != null) return SpecRegistration.Conflict(running);
+                RegisterSpec(name, spec, specJson);
+                return SpecRegistration.Registered(current?.ContentHash);
+            }
         }
 
         /// <summary>
@@ -142,6 +172,9 @@ namespace DataFeed.Application.App.Runtime
                 if (running != null) return DeployResult.Existing(running);
                 // Traza con las instancias paradas de la misma estrategia (WS-0024): la nueva no las reanuda, pero
                 // sus posiciones cuentan para sus límites (LimitScope).
+                // Una spec registrada en caliente no está en la base todavía: se guarda (con su JSON exacto) antes que el deployment que la referencia.
+                if (_repository != null && _specsByHash.TryGetValue(instance.VersionHash, out var runSpec) && _specJsonByHash.TryGetValue(instance.VersionHash, out var runJson))
+                    _repository.SaveSpec(runSpec, runJson);
                 created.Payload["previous_instances"] = StoppedBefore(instance.SpecName, instance.CreatedAt).Select(i => i.InstanceId).ToList();
                 var other = _repository?.Deploy(deployment, instance, created);
                 if (other != null)

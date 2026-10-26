@@ -238,6 +238,10 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   * `App.GaleCore` — endpoints de la aplicación en general. Hoy solo `Rules/Core` (config de app).
   * `App.<Prefijo>` — un prefijo por estrategia. Hoy: `App.Rpf` → `/App/Rpf/*` y
     `App.Gex` → `/App/Gex/*`. Ver "Convención de rutas HTTP por estrategia" más abajo.
+  * `App.Runtime` — runtime SHADOW (`/App/Runtime/*`): `Specs` (GET lista; `POST Specs` registra en caliente una spec aprobada,
+    sin reinicio: 400 `{valid:false,errors}` si no valida, 409 si corre otra versión de ese nombre, 503 sin persistencia, idempotente
+    con el mismo hash; queda en memoria y el `Deploy` la guarda en la base), `Specs/Check`, `Deploy`, `Instances/{id}/Stop`.
+    Autenticación: JWT de usuario o `X-API-KEY` (`ApiKeyMiddleware`); sin chequeo de admin todavía (D-0003 pendiente).
 
   `DataController` → `/Data`
   * `Data.Api` — datos REST de mercado: `Tastytrade/MarketData/ByType`, `Tastytrade/OptionChains`,
