@@ -27,6 +27,7 @@ Usage:
     python -m galecore_ai.adapters.cli strategy sheet --ref strategy:NAME/VERSION
     python -m galecore_ai.adapters.cli strategy diff --from strategy:NAME/OLD --ref strategy:NAME/NEW
     python -m galecore_ai.adapters.cli strategy deploy-check --ref strategy:NAME/VERSION [--galecore-hash sha256:...]
+    python -m galecore_ai.adapters.cli strategy deploy --ref strategy:NAME/VERSION
     python -m galecore_ai.adapters.cli strategy hash --spec PATH
     python -m galecore_ai.adapters.cli followup run --strategy NAME --prompt "..." --host-model MODEL [--task ID]
     python -m galecore_ai.adapters.cli followup history --strategy NAME [--limit N]
@@ -122,6 +123,7 @@ from galecore_ai.application.strategy import (
 from galecore_ai.application.strategy import (
     check_proposal,
     deploy_check,
+    deploy_strategy,
     galecore_spec_checker,
     galecore_spec_hash,
     load_proposal,
@@ -1255,6 +1257,8 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
                     raise KnowledgeError(f"GaleCore Dev does not list {spec_name} yet (it loads specs at start: "
                                          "restart the Dev API)")
             _json_out(deploy_check(kb=kb, key=key, galecore_hash=galecore_hash))
+        if args.strategy_command == "deploy":
+            _json_out(deploy_strategy(kb=kb, key=key))
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
 
@@ -1717,6 +1721,9 @@ def build_parser() -> _JsonArgumentParser:
     p_st_deploy.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", default=None,
                              help="contentHash that App/Runtime/Specs/<name> reports (default: asked to GaleCore)")
+    p_st_dep = st_sub.add_parser("deploy", help="Deploy an approved version in SHADOW Dev (registers the spec, then "
+                                                "deploys it; GaleCore is not called without an intact approval)")
+    p_st_dep.add_argument("--ref", required=True, help="strategy:<name>/<version>")
 
     p_schema = sub.add_parser("schema", help="The JSON a save takes on stdin (research, evidence, proposal, critique)")
     p_schema.add_argument("kind", choices=["research", "evidence", "proposal", "critique"])

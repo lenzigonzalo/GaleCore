@@ -61,3 +61,43 @@ def galecore_server(response: dict | None = None, status: int = 200) -> Iterator
     finally:
         server.shutdown()
         server.server_close()
+
+
+@contextmanager
+def galecore_deploy_server(specs_status: int = 200, deploy_status: int = 200, returned_hash: str | None = None,
+                           replaced_hash: str | None = None) -> Iterator[tuple[str, list[tuple[str, bytes]]]]:
+    """A local HTTP GaleCore for ``POST /App/Runtime/Specs`` and ``/App/Runtime/Deploy``; yields (base URL, calls).
+    Specs answers with the hash of what it was sent unless ``returned_hash`` says another."""
+    calls: list[tuple[str, bytes]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            calls.append((self.path, raw))
+            if self.path == "/App/Runtime/Specs":
+                status = specs_status
+                body = {"name": "x", "content_hash": returned_hash or galecore_spec_hash(raw.decode("utf-8")),
+                        "registered": True, "replaced_hash": replaced_hash}
+            else:
+                status = deploy_status
+                name = json.loads(raw)["specName"]
+                spec = next(r for p, r in calls if p == "/App/Runtime/Specs")
+                body = {"deploymentId": "d-1", "instanceId": "i-1", "specName": name, "mode": "SHADOW",
+                        "lifecycleState": "RUNNING", "versionHash": galecore_spec_hash(spec.decode("utf-8")),
+                        "existing": False}
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(body if status == 200 else {"error": "no"}).encode())
+
+        def log_message(self, *args):
+            pass
+
+    server = HTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", calls
+    finally:
+        server.shutdown()
+        server.server_close()
