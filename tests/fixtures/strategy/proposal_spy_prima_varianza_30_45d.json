@@ -52,7 +52,9 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
-          "entry_filters.gate_layer.gates[0]"
+          "entry_filters.gate_layer.gates[0]",
+          "entry_filters.gate_layer.pass_rule",
+          "entry_filters.gate_layer.on_fail"
         ]
       }
     },
@@ -123,6 +125,8 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
+          "candidate_construction.legs[0].side",
+          "candidate_construction.legs[0].type",
           "candidate_construction.legs[0].strike_selection.target_delta",
           "candidate_construction.legs[0].strike_selection.delta_tolerance",
           "candidate_construction.constraints.min_dte",
@@ -140,6 +144,8 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
+          "candidate_construction.legs[1].side",
+          "candidate_construction.legs[1].type",
           "candidate_construction.legs[1].strike_selection.width"
         ]
       }
@@ -165,8 +171,11 @@
       "basis": "design_choice",
       "rationale": "Es lo que el runtime SHADOW hace siempre; alcanza para observar el comportamiento, no para dimensionar capital.",
       "runtime": {
-        "status": "not_applicable",
-        "note": "Esta spec no declara sizing; el runtime ejecuta sizing FIXED o RISK_BASED y, sin él, un contrato."
+        "status": "supported",
+        "spec_paths": [
+          "candidate_construction.sizing.method",
+          "candidate_construction.sizing.fixed_contracts"
+        ]
       }
     },
     {

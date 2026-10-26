@@ -3,57 +3,131 @@
   "errors": [],
   "content_hash": "sha256:19884e779e3722f6221cf86c03b411307cdc41e04880e26f8f88395cf960bc51",
   "executed_paths": [
-    "universe.symbols",
-    "structure.allowed_strategies",
-    "structure.forbidden_strategies",
-    "structure.default_structure",
-    "entry_filters.gate_layer.gates[0].metric_ref",
-    "entry_filters.gate_layer.gates[0].operator",
-    "entry_filters.gate_layer.gates[0].threshold.value",
-    "candidate_construction.legs[0].strike_selection.target_delta",
-    "candidate_construction.legs[0].strike_selection.delta_tolerance",
-    "candidate_construction.legs[1].strike_selection.width",
-    "candidate_construction.constraints.min_dte",
     "candidate_construction.constraints.max_dte",
     "candidate_construction.constraints.min_credit",
+    "candidate_construction.constraints.min_dte",
+    "candidate_construction.legs[0].side",
+    "candidate_construction.legs[0].strike_selection",
+    "candidate_construction.legs[0].type",
+    "candidate_construction.legs[1].side",
+    "candidate_construction.legs[1].strike_selection",
+    "candidate_construction.legs[1].type",
+    "candidate_construction.sizing.fixed_contracts",
+    "candidate_construction.sizing.method",
+    "data_quality.max_quote_age_seconds",
+    "deployment_constraints.eligible_modes",
+    "entry_filters.gate_layer.gates",
+    "entry_filters.gate_layer.on_fail",
+    "entry_filters.gate_layer.pass_rule",
+    "exits.deterministic.stop_loss",
+    "exits.deterministic.take_profit",
+    "exits.deterministic.time_exit.max_dte",
+    "identity.id",
+    "identity.name",
+    "identity.version",
+    "operational.session_hours",
+    "operational.timezone",
     "risk_limits.max_concurrent_positions",
     "risk_limits.max_loss_per_trade_usd",
-    "exits.deterministic.stop_loss.pct_of_credit",
-    "exits.deterministic.take_profit.pct_of_credit",
-    "exits.deterministic.time_exit.max_dte",
-    "operational.timezone",
-    "operational.session_hours.start",
-    "operational.session_hours.end",
-    "data_quality.max_quote_age_seconds"
+    "structure.allowed_strategies",
+    "structure.default_structure",
+    "structure.forbidden_strategies",
+    "universe.symbols"
   ],
   "inert_paths": [
-    "candidate_construction.sizing.method",
-    "candidate_construction.sizing.fixed_contracts",
-    "exits.deterministic.defensive_roll.enabled",
+    "canonicalization_version",
     "data_quality.block_on_crossed_market",
     "data_quality.block_on_missing_critical_data",
-    "risk_limits.max_portfolio_heat_pct"
+    "deployment_constraints.requires_human_approval_for",
+    "entry_filters.signal_layer",
+    "exits.deterministic.defensive_roll",
+    "identity.author",
+    "identity.created_at",
+    "identity.display_name",
+    "metadata",
+    "operational.calendar",
+    "operational.currency",
+    "operational.decimal_precision",
+    "operational.rounding",
+    "operational.symbology",
+    "strategy_spec_version",
+    "structure.selection_method",
+    "universe.instrument_types",
+    "universe.mode"
   ],
   "catalog": {
     "event_types": [
       {
         "type": "FOMC",
-        "description": "Reunion del FOMC",
+        "description": "Decisión del FOMC (14:00 NY del último día de la reunión)",
         "per_symbol": false,
-        "precision": "day",
-        "source": "calendar"
+        "precision": "time",
+        "source": "fed"
+      },
+      {
+        "type": "CPI",
+        "description": "Publicación del IPC (FRED release 10)",
+        "per_symbol": false,
+        "precision": "date",
+        "source": "fred"
+      },
+      {
+        "type": "PPI",
+        "description": "Publicación del IPP (FRED release 46)",
+        "per_symbol": false,
+        "precision": "date",
+        "source": "fred"
+      },
+      {
+        "type": "EMPLOYMENT",
+        "description": "Situación de empleo (FRED release 50)",
+        "per_symbol": false,
+        "precision": "date",
+        "source": "fred"
+      },
+      {
+        "type": "GDP",
+        "description": "Publicación del PIB (FRED release 53)",
+        "per_symbol": false,
+        "precision": "date",
+        "source": "fred"
+      },
+      {
+        "type": "RETAIL_SALES",
+        "description": "Ventas minoristas (FRED release 9)",
+        "per_symbol": false,
+        "precision": "date",
+        "source": "fred"
+      },
+      {
+        "type": "PERSONAL_INCOME",
+        "description": "Ingresos y gastos personales (FRED release 54)",
+        "per_symbol": false,
+        "precision": "date",
+        "source": "fred"
+      },
+      {
+        "type": "EARNINGS",
+        "description": "Próximo balance de un símbolo (Tastytrade market-metrics: fecha y BMO/AMC, sin hora)",
+        "per_symbol": true,
+        "precision": "date",
+        "source": "tastytrade"
       }
     ],
     "metric_patterns": [
-      "compute.ema.{SYM}.{n}",
-      "compute.sma.{SYM}.{n}"
+      "capability:market_data.quote.{SYMBOL}.price",
+      "capability:market_data.trade.{SYMBOL}.price",
+      "capability:compute.gamma_exposure.{SYMBOL}.net_gex",
+      "capability:compute.ema_spread.{SYMBOL}.{fast}.{slow}",
+      "capability:compute.ema.{SYMBOL}.{n}",
+      "capability:compute.sma.{SYMBOL}.{n}"
     ],
     "structures": [
       "put_credit_spread",
       "call_credit_spread",
       "iron_condor",
-      "long_equity",
-      "custom_options"
+      "custom_options",
+      "long_equity"
     ],
     "leg_selectors": [
       "DELTA",

@@ -184,6 +184,11 @@ def _obj(v: Any) -> dict:
     return v if isinstance(v, dict) else {}
 
 
+# Identity and deployment paths say which spec this is and where it may run; they are not trading rules, so
+# GaleCore executing them needs no supported rule. Everything else it executes must be explained by one.
+_UNRULED_PREFIXES = ("identity.", "deployment_constraints.")
+
+
 def _related(p: str, e: str) -> bool:
     """Spec paths are opaque dotted strings with list indexes: one covers the other when it is a prefix."""
     return p == e or any(a.startswith(b + sep) for a, b in ((e, p), (p, e)) for sep in (".", "["))
@@ -235,6 +240,8 @@ def check_proposal(content: ProposalContent, spec_json: str, spec_file: str,
                     supported.setdefault(p, []).append(rule.id)
         for e in sorted(executed):
             rule_ids = sorted({r for p, ids in supported.items() if _related(p, e) for r in ids})
+            if not rule_ids and e.startswith(_UNRULED_PREFIXES):
+                continue
             if not rule_ids:
                 errors.append(f"{e}: GaleCore executes it but no supported rule explains it")
             coverage[e] = rule_ids

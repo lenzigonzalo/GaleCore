@@ -130,7 +130,7 @@ def test_candidate_is_valid_with_its_declared_gaps():
     report = check()
     assert report.verdict == "VALID_WITH_DECLARED_GAPS", report.errors
     assert [g.split(":")[0] for g in report.declared_gaps] == ["E3", "E4", "S2", "R2", "M2"]
-    assert report.coverage["entry_filters.gate_layer.gates[0].metric_ref"] == ["E2"]
+    assert report.coverage["entry_filters.gate_layer.gates"] == ["E2"]
 
 
 def test_identity_and_file_name_must_match():
@@ -147,7 +147,7 @@ def test_validity_errors_and_hash_come_from_galecore_not_from_a_table():
     assert report.errors == [] and report.runtime_reference.startswith("GaleCore POST /App/Runtime/Specs/Check")
     invalid = check(response=recorded("invalid"))
     assert invalid.verdict == "INVALID" and invalid.coverage == {}
-    assert any(e.startswith("GaleCore: candidate_construction.legs[1].strike_selection.method") for e in invalid.errors)
+    assert any(e.startswith("GaleCore: candidate_construction.legs[put_comprada].strike_selection.method") for e in invalid.errors)
     assert any("simulated_capital_usd must be positive" in e for e in invalid.errors)
     refused = check(response=recorded("invalid", errors=[]))
     assert any("refuses the spec without saying why" in e for e in refused.errors)
@@ -187,7 +187,7 @@ def test_a_new_executed_path_must_be_explained_without_touching_the_harness():
 
 
 @pytest.mark.parametrize(("path", "message"), [
-    ("risk_limits.max_portfolio_heat_pct", "GaleCore ignores it (inert)"),
+    ("operational.currency", "GaleCore ignores it (inert)"),
     ("risk_limits.max_unknown_thing", "GaleCore does not execute it"),
 ])
 def test_a_supported_rule_must_cite_paths_galecore_executes(path, message):
@@ -326,7 +326,7 @@ def test_a_version_is_create_only(kb, research_ref):  # noqa: F811
 
 
 def test_invalid_proposals_and_unresolved_refs_are_not_stored(kb, research_ref):  # noqa: F811
-    with pytest.raises(KnowledgeError, match="is not a leg selector"):
+    with pytest.raises(KnowledgeError, match="strike_selection.method must be one of"):
         save_proposal(checker=fake_checker(recorded("invalid")), kb=kb, prompt="x", host=HOST,
                       content=proposal(research_ref=research_ref), spec_json=spec_text(),
                       spec_file=f"{NAME}.json", now=NOW)
