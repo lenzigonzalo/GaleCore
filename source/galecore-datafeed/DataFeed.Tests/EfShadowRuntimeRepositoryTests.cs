@@ -139,7 +139,8 @@ public class EfShadowRuntimeRepositoryTests
         Assert.Equal(ShadowRuntimeEngine.Outcomes.Valued, outcomes[opened.PositionId]);
 
         var third = Boot(new EfShadowRuntimeRepository(() => new GaleCoreDbContext(Options())), out _);
-        Assert.Equal(25.0, third.GetPosition(opened.PositionId)!.UnrealizedPnl);
+        // Valuación al natural (WS-0062 inc. 2, por defecto sin bloque execution): recompra 720 a 1,30 y vende 715 a 0,60.
+        Assert.Equal(15.0, third.GetPosition(opened.PositionId)!.UnrealizedPnl);
         Assert.Single(third.AllPositions());
     }
 
