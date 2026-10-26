@@ -158,6 +158,34 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
+    public async Task ReadTimeAfterEvaluationNow_IsClamped_BuildsAndPassesTheValidator()
+    {
+        // La foto llegó 30 s después del nowUtc de la evaluación (más que ClockSkew): no es «futuro».
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now.AddSeconds(30), ReadTime: true);
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddSeconds(30), ReadTime: true);
+
+        var result = await Build(source);
+
+        Assert.NotNull(result.Candidate);
+        Assert.Equal(Now, result.Candidate!.Snapshot.OldestQuoteAt);
+        Assert.True(ShadowRiskValidator.Validate(result.Candidate, ShadowRuntimeEngineTests.Spec(), 0, null, Now).IsValid);
+    }
+
+    [Fact]
+    public async Task ProviderTimeInTheFuture_StillBlocks_EvenWhenReadTimeLegsAreClamped()
+    {
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now.AddSeconds(30));
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddSeconds(30), ReadTime: true);
+
+        var result = await Build(source);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("futuro", result.RejectReason);
+    }
+
+    [Fact]
     public async Task OneLegWithReadTime_StaleOtherLeg_StillBlocks()
     {
         var source = new FakeSource();

@@ -272,7 +272,7 @@ namespace DataFeed.Application.App.Runtime
                     continue;
                 }
                 // Una cotización vieja no puede disparar un take profit ni un stop (Codex C1).
-                var stale = DataFreshness.Problem(quote.AsOf, nowUtc, maxQuoteAge);
+                var stale = DataFreshness.Problem(quote.At(nowUtc), nowUtc, maxQuoteAge);
                 if (stale != null)
                 {
                     problems.Add($"{leg.StreamerSymbol}: {stale}");

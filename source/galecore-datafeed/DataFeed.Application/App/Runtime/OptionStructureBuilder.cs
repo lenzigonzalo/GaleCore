@@ -173,11 +173,11 @@ namespace DataFeed.Application.App.Runtime
                 var underlying = await _market.GetUnderlyingAsync(symbol, ct);
                 if (underlying == null || !double.IsFinite(underlying.Price) || !(underlying.Price > 0))
                     return Rejected($"sin precio del subyacente {symbol} para elegir strikes por puntos o %");
-                var spotProblem = DataFreshness.Problem(underlying.AsOf, nowUtc, DataFreshness.MaxAge(spec));
+                var spotProblem = DataFreshness.Problem(underlying.At(nowUtc), nowUtc, DataFreshness.MaxAge(spec));
                 if (spotProblem != null)
                     return Rejected($"precio del subyacente {symbol} no utilizable: {spotProblem}");
                 quoteSpot = underlying.Price;
-                spotAsOf = underlying.AsOf;
+                spotAsOf = underlying.At(nowUtc);
             }
 
             // ── 4. Cada pata: su strike ──
@@ -220,7 +220,7 @@ namespace DataFeed.Application.App.Runtime
             var maxAge = DataFreshness.MaxAge(spec);
             foreach (var l in legs)
             {
-                var problem = DataFreshness.Problem(quotes[l.Plan.Id].AsOf, nowUtc, maxAge);
+                var problem = DataFreshness.Problem(quotes[l.Plan.Id].At(nowUtc), nowUtc, maxAge);
                 if (problem != null)
                     return Rejected($"cotización de la pata {l.Plan.SideWord} {l.Streamer} no utilizable: {problem}");
             }
@@ -265,7 +265,7 @@ namespace DataFeed.Application.App.Runtime
                 return Rejected($"riesgo máximo no finito ({maxRisk})");
 
             // La hora más vieja entre las cotizaciones; las patas con hora de lectura (no del proveedor) se cuentan aparte.
-            var knownTimes = quotes.Values.Select(q => q.AsOf).ToList();
+            var knownTimes = quotes.Values.Select(q => q.At(nowUtc)).ToList();
             if (spotAsOf.HasValue) knownTimes.Add(spotAsOf.Value);
             DateTime? oldestQuoteAt = knownTimes.Count > 0 ? knownTimes.Min() : null;
             int quotesWithoutTime = quotes.Values.Count(q => q.ReadTime);

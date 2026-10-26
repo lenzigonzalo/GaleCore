@@ -25,7 +25,7 @@ namespace DataFeed.Application.App.Runtime
             var quote = await getQuote(symbol, ct);
             if (quote == null || !QuoteRules.IsUsable(quote.Bid, quote.Ask))
                 return CandidateBuildResult.Rejected($"sin cotización utilizable de {symbol}");
-            var stale = DataFreshness.Problem(quote.AsOf, nowUtc, DataFreshness.MaxAge(spec));
+            var stale = DataFreshness.Problem(quote.At(nowUtc), nowUtc, DataFreshness.MaxAge(spec));
             if (stale != null)
                 return CandidateBuildResult.Rejected($"cotización de {symbol} no sirve: {stale}");
 
@@ -51,7 +51,7 @@ namespace DataFeed.Application.App.Runtime
                 Dte = 0,
                 Snapshot = new MarketSnapshot
                 {
-                    UnderlyingPrice = m, AsOf = nowUtc, OldestQuoteAt = quote.AsOf,
+                    UnderlyingPrice = m, AsOf = nowUtc, OldestQuoteAt = quote.At(nowUtc),
                     QuotesWithoutTime = quote.ReadTime ? 1 : 0,
                 },
                 CreatedAt = nowUtc,

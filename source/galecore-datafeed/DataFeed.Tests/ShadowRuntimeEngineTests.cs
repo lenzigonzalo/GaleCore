@@ -535,6 +535,24 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
+    public async Task Valuation_ReadTimeAfterEvaluationNow_IsValued_ButProviderFutureIsNoData()
+    {
+        var (store, pos, data) = await OpenPosition();
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now.AddSeconds(30), ReadTime: true);
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now.AddSeconds(30), ReadTime: true);
+        var ok = await ShadowRuntimeEngine.ValuePositionAsync(
+            store, data, pos, Spec().Exits.Deterministic, Now, default, maxQuoteAge: DataFreshness.MaxAge(Spec()));
+        Assert.NotEqual(ShadowRuntimeEngine.Outcomes.NoData, ok);
+
+        var (store2, pos2, data2) = await OpenPosition();
+        data2.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now.AddSeconds(30));   // hora del proveedor en el futuro
+        data2.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+        var blocked = await ShadowRuntimeEngine.ValuePositionAsync(
+            store2, data2, pos2, Spec().Exits.Deterministic, Now, default, maxQuoteAge: DataFreshness.MaxAge(Spec()));
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoData, blocked);
+    }
+
+    [Fact]
     public async Task Valuation_LegQuoteWithReadTime_IsValued()
     {
         var (store, pos, data) = await OpenPosition();

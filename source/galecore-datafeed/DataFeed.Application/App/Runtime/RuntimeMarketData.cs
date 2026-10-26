@@ -16,6 +16,9 @@ namespace DataFeed.Application.App.Runtime
     public record LegQuote(double Bid, double Ask, DateTime AsOf, bool ReadTime = false)
     {
         public double Mid => Math.Round((Bid + Ask) / 2.0, 4);
+
+        /// <summary>Hora con la que se mide la frescura: una hora de lectura nunca es posterior al <paramref name="nowUtc"/> de la evaluación (la foto llega mientras se evalúa).</summary>
+        public DateTime At(DateTime nowUtc) => ReadTime && AsOf > nowUtc ? nowUtc : AsOf;
     }
 
     /// <summary>
@@ -50,12 +53,16 @@ namespace DataFeed.Application.App.Runtime
         async Task<UnderlyingQuote?> GetUnderlyingAsync(string symbol, CancellationToken ct)
         {
             var q = await GetQuoteAsync(symbol, ct);
-            return q == null ? null : new UnderlyingQuote(q.Mid, q.AsOf);
+            return q == null ? null : new UnderlyingQuote(q.Mid, q.AsOf, q.ReadTime);
         }
     }
 
     /// <summary>Precio del subyacente y su hora (la del proveedor o, si no la informa, la de lectura; null sólo si una fuente no da ninguna).</summary>
-    public record UnderlyingQuote(double Price, DateTime? AsOf);
+    public record UnderlyingQuote(double Price, DateTime? AsOf, bool ReadTime = false)
+    {
+        /// <summary>Igual que <see cref="LegQuote.At"/>.</summary>
+        public DateTime? At(DateTime nowUtc) => ReadTime && AsOf > nowUtc ? nowUtc : AsOf;
+    }
 
     /// <summary>
     /// Lo único que el runtime le pide al mercado. Separa las decisiones del runtime de cómo se
@@ -233,7 +240,7 @@ namespace DataFeed.Application.App.Runtime
                 _logger.LogDebug(ex, "RuntimeMarketData: sin trade de {Symbol}, se prueba la cotización", symbol);
             }
             var q = await GetQuoteAsync(symbol, ct);
-            return q == null ? null : new UnderlyingQuote(q.Mid, q.AsOf);
+            return q == null ? null : new UnderlyingQuote(q.Mid, q.AsOf, q.ReadTime);
         }
 
         public async Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
