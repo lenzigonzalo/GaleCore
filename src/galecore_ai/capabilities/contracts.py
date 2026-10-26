@@ -147,8 +147,8 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
     CapabilityDefinition(
         capability_id="market_data.option_greeks",
         semantic_class=SemanticClass.PURE_QUERY,
-        description="Greeks of ONE option contract (OCC symbol, 21 chars, e.g. from market_data.option_chains)",
-        parameters=[CapabilityParameter(name="symbol", type="string", description="OCC option symbol")],
+        description="Greeks of ONE option contract (OCC symbol of 21 chars, or the DXLink streamer symbol such as .SPXW261026P6800; both come from market_data.option_chains)",
+        parameters=[CapabilityParameter(name="symbol", type="string", description="OCC (21 chars) or DXLink streamer option symbol")],
         returns="DXLink Greeks event: price, volatility, delta, gamma, theta, rho, vega",
     ),
     # GC-0006 (GaleCore): calendario macro y del FOMC servidos por GaleCore, con procedencia (SourcedResponse).

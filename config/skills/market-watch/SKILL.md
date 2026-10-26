@@ -23,7 +23,7 @@ símbolos», o la corrida de un agente de oportunidades: el objetivo del agente 
   get market_data.volatility_metrics --symbol <SYM1,SYM2,...>`, `galecore get compute.implied_volatility --symbol
   <SYM>` antes que las cadenas. Una cadena pesa ~1 MB: siempre `galecore get market_data.option_chains --symbol <SYM>
   --out <dir>/<SYM>-chain.json` y leer sólo los vencimientos y strikes necesarios. Griegas sólo de los contratos de un
-  candidato (`market_data.option_greeks --symbol "<OCC>"`). Velas: `market_data.candles --symbol <SYM> --param
+  candidato (`market_data.option_greeks --symbol "<OCC o streamer de la cadena>"`). Velas: `market_data.candles --symbol <SYM> --param
   interval=1d --param fromTime=<ISO>`.
 - Calendario: `galecore get calendar.macro_releases --param From=<hoy> --param To=<hasta> --param
   ReleaseIds=50,10,46,53,54,9` y `galecore get calendar.fomc_meetings` (404 o 502 → faltante con el error).

@@ -1457,7 +1457,7 @@ def build_parser() -> _JsonArgumentParser:
     gc_sub.add_parser("list", help="Every GaleCore capability the harness can ask for, with its parameters")
     p_gc_get = gc_sub.add_parser("get", help="Ask one capability; JSON on stdout, or the payload to --out")
     p_gc_get.add_argument("capability", choices=[c.capability_id for c in KNOWN_CAPABILITIES])
-    p_gc_get.add_argument("--symbol", help="Symbol (an OCC option symbol for option_greeks); calendars take none")
+    p_gc_get.add_argument("--symbol", help="Symbol (an OCC or streamer option symbol for option_greeks); calendars take none")
     p_gc_get.add_argument("--param", action="append", help="Extra parameter key=value (e.g. interval=1d)")
     p_gc_get.add_argument("--out", help="Write the payload to this file and print only a summary")
     p_gc_get.add_argument("--keep", metavar="PROMPT", help="Also keep the answer as evidence (the trader's request "
