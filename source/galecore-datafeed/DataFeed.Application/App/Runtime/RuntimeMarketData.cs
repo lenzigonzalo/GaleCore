@@ -1,6 +1,8 @@
-using DataFeed.Application.App.GammaExposure;
+﻿using DataFeed.Application.App.GammaExposure;
 using DataFeed.Application.App.Runtime.Contracts;
+using DataFeed.Application.Data.Tastytrade.MarketDataCandle;
 using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
+using DataFeed.Application.Data.Tastytrade.MarketDataTrade;
 using DataFeed.Application.Data.Tastytrade.OptionChains;
 using MediatR;
 using Microsoft.Extensions.Logging;
@@ -8,11 +10,15 @@ using Microsoft.Extensions.Logging;
 namespace DataFeed.Application.App.Runtime
 {
     /// <summary>
-    /// Cotización real de una pata: bid, ask y cuándo la publicó el proveedor (null si no lo informa).
+    /// Cotización real de una pata: bid, ask y su hora. Es la que publica el proveedor; si no la informa (DXLink manda
+    /// bidTime/askTime/eventTime en 0), es la hora en que GaleCore la leyó y <paramref name="ReadTime"/> es true.
     /// </summary>
-    public record LegQuote(double Bid, double Ask, DateTime? AsOf)
+    public record LegQuote(double Bid, double Ask, DateTime AsOf, bool ReadTime = false)
     {
         public double Mid => Math.Round((Bid + Ask) / 2.0, 4);
+
+        /// <summary>Hora con la que se mide la frescura: una hora de lectura nunca es posterior al <paramref name="nowUtc"/> de la evaluación (la foto llega mientras se evalúa).</summary>
+        public DateTime At(DateTime nowUtc) => ReadTime && AsOf > nowUtc ? nowUtc : AsOf;
     }
 
     /// <summary>
@@ -39,6 +45,23 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>Cotización utilizable de un símbolo de streamer, o null si no la hay.</summary>
         Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct);
+
+        /// <summary>
+        /// Precio del subyacente con su hora, para elegir strikes por puntos o %. Por defecto, el medio de su cotización; la
+        /// implementación real prefiere el último trade (los índices no publican hora en la cotización).
+        /// </summary>
+        async Task<UnderlyingQuote?> GetUnderlyingAsync(string symbol, CancellationToken ct)
+        {
+            var q = await GetQuoteAsync(symbol, ct);
+            return q == null ? null : new UnderlyingQuote(q.Mid, q.AsOf, q.ReadTime);
+        }
+    }
+
+    /// <summary>Precio del subyacente y su hora (la del proveedor o, si no la informa, la de lectura; null sólo si una fuente no da ninguna).</summary>
+    public record UnderlyingQuote(double Price, DateTime? AsOf, bool ReadTime = false)
+    {
+        /// <summary>Igual que <see cref="LegQuote.At"/>.</summary>
+        public DateTime? At(DateTime nowUtc) => ReadTime && AsOf > nowUtc ? nowUtc : AsOf;
     }
 
     /// <summary>
@@ -60,6 +83,31 @@ namespace DataFeed.Application.App.Runtime
 
         /// <summary>Cotización utilizable de un símbolo de streamer, o null si no la hay.</summary>
         Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct);
+
+        /// <summary>
+        /// Cierre oficial del subyacente en la fecha <paramref name="sessionDate"/> (vela diaria de ESA fecha), o null si
+        /// no hay una. Sirve para liquidar vencimientos (WS-0062 inc.3); nunca se infiere de opciones ni se completa.
+        /// </summary>
+        Task<double?> GetOfficialCloseAsync(string symbol, DateTime sessionDate, CancellationToken ct) => Task.FromResult<double?>(null);
+
+        /// <summary>Calendario de eventos para las event_gates de la spec (WS-0062 inc.5); null = sin calendario (las condiciones quedan NO_DATA).</summary>
+        IEventCalendar? Events => null;
+    }
+
+    public static class OfficialClose
+    {
+        /// <summary>
+        /// Cierre de la vela diaria cuya fecha es <paramref name="sessionDate"/>, o null. La fecha de la vela es la fecha UTC de
+        /// su hora: coincide con la fecha de la rueda sea cual sea la convención del proveedor (medianoche UTC, medianoche ET
+        /// o el cierre). Una vela sin hora, con cierre no finito o no positivo no sirve.
+        /// </summary>
+        public static double? FromCandles(IEnumerable<CandleData>? candles, DateTime sessionDate)
+        {
+            var candle = candles?
+                .Where(c => c.Time > 0 && DateTimeOffset.FromUnixTimeMilliseconds(c.Time).UtcDateTime.Date == sessionDate.Date)
+                .OrderByDescending(c => c.Time).FirstOrDefault();
+            return candle != null && double.IsFinite(candle.Close) && candle.Close > 0 ? candle.Close : null;
+        }
     }
 
     public static class QuoteRules
@@ -78,10 +126,11 @@ namespace DataFeed.Application.App.Runtime
     /// Frescura de un dato con hora del proveedor. SHADOW tolera 10 veces
     /// data_quality.max_quote_age_seconds (con 15 s en la spec: 150 s).
     ///
-    /// Una hora desconocida (null) no se puede medir y hoy se acepta: DXLink manda el Quote con
-    /// EventTime 0 (verificado en vivo el 24/09), así que exigir hora dejaría al runtime sin poder
-    /// cotizar ninguna pata. Es una limitación declarada del item; la protección que queda es no
-    /// simular fills ni cierres fuera de sesión.
+    /// La hora sale de QuoteTime: la más nueva de bidTime/askTime (cada una marca el último cambio de ese
+    /// lado; un lado quieto sigue vigente). DXLink manda las tres horas en 0 (verificado el 26/10): entonces
+    /// la cotización vale con la hora de lectura de GaleCore (decisión del owner), porque DXLink sólo manda
+    /// cambios y la foto de cada evaluación sigue vigente. Lo que sigue bloqueando: sin foto, precios no
+    /// utilizables, hora del proveedor vieja o futura. Problem(null) queda para quien aún no tenga hora.
     /// </summary>
     public static class DataFreshness
     {
@@ -94,10 +143,24 @@ namespace DataFeed.Application.App.Runtime
                 ? TimeSpan.FromSeconds(spec.DataQuality.MaxQuoteAgeSeconds * ShadowAgeFactor)
                 : null;
 
-        /// <summary>null si el dato sirve; si no, por qué (viejo o con hora en el futuro).</summary>
+        /// <summary>
+        /// Hora de una cotización (epoch ms): la MÁS NUEVA de bidTime y askTime que sean > 0; si
+        /// ninguna, eventTime > 0; si nada, null (sin hora).
+        /// </summary>
+        public static DateTime? QuoteTime(long bidTime, long askTime, long eventTime)
+        {
+            long ms = 0;
+            if (bidTime > 0 && askTime > 0) ms = Math.Max(bidTime, askTime);
+            else if (bidTime > 0) ms = bidTime;
+            else if (askTime > 0) ms = askTime;
+            else if (eventTime > 0) ms = eventTime;
+            return ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime : null;
+        }
+
+        /// <summary>null si el dato sirve; si no, por qué (sin hora, viejo o con hora en el futuro). Las cotizaciones llegan con hora de lectura, no null.</summary>
         public static string? Problem(DateTime? asOf, DateTime nowUtc, TimeSpan? maxAge)
         {
-            if (asOf is not DateTime t) return null;
+            if (asOf is not DateTime t) return "cotización sin hora";
             if (t > nowUtc + ClockSkew) return $"hora en el futuro ({t:o})";
             if (maxAge is TimeSpan max && nowUtc - t > max)
                 return $"dato viejo ({(nowUtc - t).TotalSeconds:F0}s, límite {max.TotalSeconds:F0}s)";
@@ -119,6 +182,8 @@ namespace DataFeed.Application.App.Runtime
             _logger = logger;
         }
 
+        public IEventCalendar? Events => new MediatorEventCalendar(_mediator, _logger);
+
         public Task<Dictionary<string, double?>> ResolveMetricsAsync(
             IEnumerable<string> metricRefs, DateTime nowUtc, TimeSpan? maxAge, CancellationToken ct)
             => new MetricResolver(_mediator, _logger).ResolveAsync(metricRefs, ct, nowUtc, maxAge);
@@ -130,11 +195,53 @@ namespace DataFeed.Application.App.Runtime
                 ? LongEquityCandidateBuilder.BuildAsync(GetQuoteAsync, instance, spec, symbol, nowUtc, ct)
                 : new CreditSpreadCandidateBuilder(this).BuildAsync(instance, spec, symbol, vixPrice, nowUtc, ct);
 
+        /// <summary>Cuánto se espera para volver a pedir un cierre que todavía no estaba: el monitor pasa cada 30 s por cada posición vencida.</summary>
+        internal static readonly TimeSpan NoCloseRetry = TimeSpan.FromMinutes(5);
+        // (símbolo, fecha) → hasta cuándo no se vuelve a pedir; sólo guarda los «todavía no hay cierre» (las fallas de la fuente se reintentan).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<(string, DateTime), DateTime> NoCloseUntil = new();
+
+        public async Task<double?> GetOfficialCloseAsync(string symbol, DateTime sessionDate, CancellationToken ct)
+        {
+            var key = (symbol.ToUpperInvariant(), sessionDate.Date);
+            if (NoCloseUntil.TryGetValue(key, out var until) && DateTime.UtcNow < until) return null;
+            var close = await ReadOfficialCloseAsync(symbol, sessionDate, ct);
+            if (close == null) NoCloseUntil[key] = DateTime.UtcNow + NoCloseRetry;
+            else NoCloseUntil.TryRemove(key, out _);
+            return close;
+        }
+
+        private async Task<double?> ReadOfficialCloseAsync(string symbol, DateTime sessionDate, CancellationToken ct)
+        {
+            var response = await _mediator.Send(new MarketDataCandleRequest
+            {
+                Symbol = symbol,
+                Interval = "1d",
+                FromTime = DateTime.SpecifyKind(sessionDate.Date.AddDays(-3), DateTimeKind.Utc),
+            }, ct);
+            return OfficialClose.FromCandles(response?.data, sessionDate);
+        }
+
         public async Task<List<Expiration>?> GetExpirationsAsync(string symbol, CancellationToken ct)
             => (await _mediator.Send(new OptionChainsRequest { Symbol = symbol }, ct))?.expirations;
 
         public async Task<GammaExposureResponse?> GetGammaExposureAsync(GammaExposureRequest request, CancellationToken ct)
             => await _mediator.Send(request, ct);
+
+        public async Task<UnderlyingQuote?> GetUnderlyingAsync(string symbol, CancellationToken ct)
+        {
+            try
+            {
+                var trade = (await _mediator.Send(new MarketDataTradeRequest { Symbol = symbol }, ct))?.Data?.FirstOrDefault();
+                if (trade != null && double.IsFinite(trade.Price) && trade.Price > 0 && trade.Time > 0)
+                    return new UnderlyingQuote(trade.Price, DateTimeOffset.FromUnixTimeMilliseconds(trade.Time).UtcDateTime);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                _logger.LogDebug(ex, "RuntimeMarketData: sin trade de {Symbol}, se prueba la cotización", symbol);
+            }
+            var q = await GetQuoteAsync(symbol, ct);
+            return q == null ? null : new UnderlyingQuote(q.Mid, q.AsOf, q.ReadTime);
+        }
 
         public async Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
         {
@@ -145,8 +252,9 @@ namespace DataFeed.Application.App.Runtime
                 _logger.LogDebug("RuntimeMarketData: sin cotización utilizable para {Symbol}", streamerSymbol);
                 return null;
             }
-            DateTime? asOf = q.EventTime > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(q.EventTime).UtcDateTime : null;
-            return new LegQuote(q.BidPrice, q.AskPrice, asOf);
+            // Sin hora del proveedor, vale la hora en que se recibió la respuesta.
+            var providerTime = DataFreshness.QuoteTime(q.BidTime, q.AskTime, q.EventTime);
+            return new LegQuote(q.BidPrice, q.AskPrice, providerTime ?? DateTime.UtcNow, providerTime == null);
         }
     }
 }

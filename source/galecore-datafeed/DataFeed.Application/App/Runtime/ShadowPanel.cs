@@ -133,6 +133,15 @@ namespace DataFeed.Application.App.Runtime
         public int? CurrentDte { get; init; }
         /// <summary>Crédito de entrada; en acciones es el precio por acción en negativo (se paga). Ver EntryPrice.</summary>
         public double EntryCredit { get; init; }
+        /// <summary>«credit» | «debit»: en débito el monto es lo que se pagó (se muestra «Costo»).</summary>
+        public string EntryKind { get; init; } = "credit";
+        /// <summary>Monto de entrada sin signo, por unidad.</summary>
+        public double EntryAmount { get; init; }
+        /// <summary>true = vencida sin cierre oficial para liquidarla: sigue abierta, sin P&amp;L.</summary>
+        public bool PendingSettlement { get; init; }
+        public double? PnlPctOfCredit { get; init; }
+        public double? PnlPctOfCost { get; init; }
+        public double? PnlPctOfMaxRisk { get; init; }
         public double? LastSpreadValue { get; init; }
         /// <summary>Sólo acciones (long_equity), en positivo; null en spreads. Acciones de la posición.</summary>
         public int? Shares { get; init; }
@@ -179,8 +188,15 @@ namespace DataFeed.Application.App.Runtime
         public string? ExitReason { get; init; }
         public double? RealizedPnl { get; init; }
         public double MaxRisk { get; init; }
+        public string EntryKind { get; init; } = "credit";
+        public double EntryAmount { get; init; }
         public double? PnlPctOfCredit { get; init; }
+        public double? PnlPctOfCost { get; init; }
         public double? PnlPctOfMaxRisk { get; init; }
+        /// <summary>Resultado sin costos (el RealizedPnl ya los descuenta).</summary>
+        public double? GrossPnl { get; init; }
+        public double? Costs { get; init; }
+        public bool CostsDeclared { get; init; }
         /// <summary>Realizado − nivel planeado de la regla que actuó (TP o SL); null si no aplica.</summary>
         public double? GapToPlan { get; init; }
         /// <summary>Contexto guardado al entrar (desde WS-0033); null en posiciones anteriores.</summary>
@@ -202,6 +218,9 @@ namespace DataFeed.Application.App.Runtime
         {
             bool equity = p.Structure == RuntimeStructures.LongEquity;
             LegsText = ShadowPerformance.LegsText(p);
+            EntryKind = ShadowPerformance.EntryKind(p);
+            EntryAmount = Math.Abs(p.EntryCredit);
+            PendingSettlement = ShadowPerformance.IsPendingSettlement(p);
             if (!equity) return;
             Shares = (int)ShadowFillSimulator.Multiplier(p);
             EntryPrice = -p.EntryCredit;
@@ -211,6 +230,9 @@ namespace DataFeed.Application.App.Runtime
         }
 
         public string LegsText { get; init; }
+        public string EntryKind { get; init; }
+        public double EntryAmount { get; init; }
+        public bool PendingSettlement { get; init; }
         public int? Shares { get; init; }
         public double? EntryPrice { get; init; }
         public double? ExitPrice { get; init; }
@@ -263,7 +285,13 @@ namespace DataFeed.Application.App.Runtime
         public List<OpenPositionRow> OpenPositions { get; init; } = new();
         /// <summary>Cerradas del período, la más reciente primero.</summary>
         public List<ClosedTradeRow> ClosedTrades { get; init; } = new();
+        /// <summary>Neto de costos declarados; RealizedGrossPnl es el mismo sin costos.</summary>
         public Metric RealizedPnl { get; init; } = Metric.None("");
+        public Metric RealizedGrossPnl { get; init; } = Metric.None("");
+        /// <summary>Costos declarados descontados en las cerradas del período.</summary>
+        public Metric TotalCosts { get; init; } = Metric.None("");
+        /// <summary>false = ninguna posición declara costos: neto = bruto porque no se descontó nada.</summary>
+        public bool CostsDeclared { get; init; }
         public Metric UnrealizedPnl { get; init; } = Metric.None("");
         public Metric MaxDrawdown { get; init; } = Metric.None("");
         public Metric WinRate { get; init; } = Metric.None("");
@@ -363,10 +391,15 @@ namespace DataFeed.Application.App.Runtime
                     Legs = ShadowPerformance.LegsText(x.p), Symbol = x.p.Symbol, LegList = x.p.Legs, EntryAt = x.p.EntryAt,
                     EntryDte = Equity(x.p) ? null : x.p.EntryDte,
                     CurrentDte = x.p.CurrentDte, EntryCredit = x.p.EntryCredit, LastSpreadValue = x.p.LastSpreadValue,
+                    EntryKind = ShadowPerformance.EntryKind(x.p), EntryAmount = Math.Abs(x.p.EntryCredit),
+                    PendingSettlement = ShadowPerformance.IsPendingSettlement(x.p),
+                    PnlPctOfCredit = ShadowPerformance.PctOfCredit(x.p, OpenPnl(x.p)),
+                    PnlPctOfCost = ShadowPerformance.PctOfCost(x.p, OpenPnl(x.p)),
+                    PnlPctOfMaxRisk = OpenPnl(x.p) is double up && x.p.MaxRisk > 0 ? Math.Round(up / x.p.MaxRisk * 100, 1) : null,
                     Shares = Shares(x.p), EntryPrice = Equity(x.p) ? -x.p.EntryCredit : null,
                     LastPrice = Equity(x.p) && x.p.LastSpreadValue != null ? -x.p.LastSpreadValue : null,
                     Cost = Equity(x.p) ? Math.Round(-x.p.EntryCredit * ShadowFillSimulator.Multiplier(x.p), 2) : null,
-                    UnrealizedPnl = x.p.UnrealizedPnl, MaxRisk = x.p.MaxRisk, LastValuedAt = x.p.LastValuedAt,
+                    UnrealizedPnl = OpenPnl(x.p), MaxRisk = x.p.MaxRisk, LastValuedAt = x.p.LastValuedAt,
                     ValuationProblems = x.p.ValuationProblems,
                     EntryGates = x.p.EntryContext?.Gates ?? new List<GateResult>(),
                     EntryVix = x.p.EntryContext?.Vix, EntryIvRank = x.p.EntryContext?.IvRank,
@@ -383,7 +416,9 @@ namespace DataFeed.Application.App.Runtime
                     ExitPrice = Equity(positions.GetValueOrDefault(t.PositionId)) && t.ExitDebit != null ? -t.ExitDebit : null,
                     Cost = Equity(positions.GetValueOrDefault(t.PositionId))
                         ? Math.Round(-t.EntryCredit * ShadowFillSimulator.Multiplier(positions[t.PositionId]), 2) : null, RealizedPnl = t.RealizedPnl,
-                    MaxRisk = t.MaxRisk, PnlPctOfCredit = t.PnlPctOfCredit, PnlPctOfMaxRisk = t.PnlPctOfMaxRisk,
+                    MaxRisk = t.MaxRisk, EntryKind = t.EntryKind, EntryAmount = t.EntryAmount,
+                    PnlPctOfCredit = t.PnlPctOfCredit, PnlPctOfCost = t.PnlPctOfCost, PnlPctOfMaxRisk = t.PnlPctOfMaxRisk,
+                    GrossPnl = t.GrossPnl, Costs = t.Costs, CostsDeclared = t.CostsDeclared,
                     GapToPlan = t.GapToPlan,
                     EntryVix = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.Vix,
                     EntryIvRank = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.IvRank,
@@ -392,6 +427,9 @@ namespace DataFeed.Application.App.Runtime
                     EntryGates = positions.GetValueOrDefault(t.PositionId)?.EntryContext?.Gates ?? new List<GateResult>(),
                 }).ToList(),
                 RealizedPnl = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(pnls.Sum()),
+                RealizedGrossPnl = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(trades.Sum(t => t.GrossPnl!.Value)),
+                TotalCosts = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(trades.Sum(t => t.Costs ?? 0)),
+                CostsDeclared = recs.SelectMany(r => r.Positions).Any(p => ShadowFillSimulator.TermsOf(p).CostsDeclared),
                 UnrealizedPnl = Unrealized(open),
                 MaxDrawdown = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of(curve.Max(c => c.Drawdown)),
                 WinRate = trades.Count == 0 ? Metric.None(NoClosed()) : Metric.Of((double)wins.Count / trades.Count, 4),
@@ -452,12 +490,15 @@ namespace DataFeed.Application.App.Runtime
             return days.Count == 0 ? Metric.None("sin fecha de salida en las cerradas") : Metric.Of(days.Average(), 1);
         }
 
+        /// <summary>P&amp;L abierto; null si la posición está pendiente de liquidar (no hay P&amp;L hasta que se liquide).</summary>
+        private static double? OpenPnl(ShadowPosition p) => ShadowPerformance.IsPendingSettlement(p) ? null : p.UnrealizedPnl;
+
         private static Metric Unrealized(List<ShadowPosition> open)
         {
             if (open.Count == 0) return Metric.None("sin posiciones abiertas");
-            var valued = open.Where(p => p.UnrealizedPnl != null).ToList();
+            var valued = open.Where(p => OpenPnl(p) != null).ToList();
             if (valued.Count == 0) return Metric.None("las abiertas no tienen una valuación con precios reales todavía");
-            return Metric.Of(valued.Sum(p => p.UnrealizedPnl!.Value));
+            return Metric.Of(valued.Sum(p => OpenPnl(p)!.Value));
         }
 
         // Las salidas del mismo instante son un solo paso (igual criterio que ShadowMetrics.MaxDrawdown).
@@ -602,6 +643,8 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>
         /// Entrada cruzando el spread: se vende al bid y se compra al ask; salida al revés. El costo es la
         /// diferencia contra el mid simulado, en USD por posición (× el multiplicador: 100 por contrato, las acciones en long_equity).
+        /// Sólo cuenta lo que el fill todavía no cobró (WS-0062): con fill natural el P&L ya lo trae y el costo es 0; con
+        /// mid_slippage, la parte no cedida; al mid, el cruce completo.
         /// </summary>
         private static ExecutionBlock Execution(List<TradeReview> trades, Dictionary<string, ShadowPosition> positions)
         {
@@ -614,7 +657,8 @@ namespace DataFeed.Application.App.Runtime
                 if (entry == null || exit == null || !Usable(entry) || !Usable(exit)) continue;
                 // Cruzar el spread cuesta medio spread bid/ask por pata, al entrar y al salir.
                 // El multiplicador es el de la posición: 100 por contrato, o las acciones en long_equity.
-                costs.Add((Math.Round((HalfSpreads(entry) + HalfSpreads(exit)) * ShadowFillSimulator.Multiplier(p!), 2), t.RealizedPnl!.Value));
+                costs.Add((Math.Round((HalfSpreads(entry) + HalfSpreads(exit)) * ShadowFillSimulator.Multiplier(p!)
+                    * (1 - ShadowFillSimulator.TermsOf(p!).AdverseFraction), 2), t.RealizedPnl!.Value));
             }
             int missing = trades.Count - costs.Count;
             if (costs.Count == 0)

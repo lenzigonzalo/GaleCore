@@ -1,0 +1,103 @@
+{
+  "strategy_spec_version": "1.0.0",
+  "content_hash": null,
+  "canonicalization_version": "jcs-1",
+  "identity": {
+    "id": "0d3c5a7e-8b1f-4c26-9a54-2e6f7b8c9d01",
+    "name": "sandwich_spx_0dte_fixture",
+    "display_name": "Sandwich SPX 0DTE (fixture de pruebas, no es una estrategia)",
+    "version": "1.0.0",
+    "author": { "type": "COLLABORATIVE", "agent_definition_version": null },
+    "created_at": "2026-10-25T00:00:00Z",
+    "parent_version_hash": null
+  },
+  "deployment_constraints": { "eligible_modes": ["SHADOW"], "requires_human_approval_for": ["LIVE"] },
+  "universe": { "mode": "WHITELIST", "symbols": ["SPX"], "excluded": {}, "instrument_types": ["EQUITY_OPTION"] },
+  "structure": {
+    "allowed_strategies": ["custom_options"],
+    "forbidden_strategies": ["naked_short"],
+    "default_structure": "custom_options",
+    "selection_method": "FIXED"
+  },
+  "entry_filters": {
+    "gate_layer": {
+      "pass_rule": "ALL",
+      "on_fail": "NO_TRADE",
+      "gates": [
+        {
+          "id": "spx_sobre_ema20",
+          "label": "SPX sobre su EMA 20 diaria",
+          "metric_ref": "capability:market_data.trade.SPX.price",
+          "operator": "GT",
+          "threshold": { "metric_ref": "capability:compute.ema.SPX.20" },
+          "on_fail": "NO_TRADE",
+          "on_no_data": "BLOCK"
+        }
+      ],
+      "event_gates": [
+        {
+          "id": "sin_fomc_hoy",
+          "type": "FOMC",
+          "must": "not_exist",
+          "window": { "from": "day_start", "to": "day_end" },
+          "on_fail": "NO_TRADE",
+          "on_no_data": "BLOCK"
+        }
+      ]
+    },
+    "signal_layer": { "pass_rule": "ALL", "gates": [] }
+  },
+  "candidate_construction": {
+    "legs": [
+      { "id": "put_vendida", "side": "SELL", "type": "PUT", "strike_selection": { "method": "POINTS_FROM_SPOT", "points_from_spot": -5 } },
+      { "id": "put_comprada", "side": "BUY", "type": "PUT", "strike_selection": { "method": "OFFSET_FROM_LEG", "from_leg": "put_vendida", "offset_points": -5 } },
+      { "id": "call_vendida", "side": "SELL", "type": "CALL", "strike_selection": { "method": "POINTS_FROM_SPOT", "points_from_spot": 5 } },
+      { "id": "call_comprada", "side": "BUY", "type": "CALL", "strike_selection": { "method": "OFFSET_FROM_LEG", "from_leg": "call_vendida", "offset_points": 5 } }
+    ],
+    "sizing": { "method": "FIXED", "fixed_contracts": 1, "risk_per_trade_pct": null },
+    "constraints": { "min_dte": 0, "max_dte": 0, "min_credit": 2.5, "max_bid_ask_spread_pct": null }
+  },
+  "exits": {
+    "deterministic": {
+      "take_profit": { "pct_of_credit": 50 },
+      "stop_loss": { "pct_of_credit": 200 },
+      "time_exit": { "at": "15:30" },
+      "defensive_roll": { "enabled": false }
+    }
+  },
+  "execution": {
+    "fill": "natural",
+    "costs": { "per_contract_usd": 0.65, "per_order_usd": 0 }
+  },
+  "risk_limits": {
+    "max_concurrent_positions": 1,
+    "simulated_capital_usd": 25000,
+    "reserve_pct": 20,
+    "max_open_risk_pct": 50,
+    "max_bet_pct": 100,
+    "max_risk_per_trade_pct": 5,
+    "loss_brakes": [
+      { "period": "day", "max_loss_usd": 500 },
+      { "period": "week", "max_loss_pct_of_capital": 5, "basis": "realized_plus_open" }
+    ]
+  },
+  "operational": {
+    "timezone": "America/New_York",
+    "session_hours": { "start": "09:30", "end": "16:00" },
+    "entry_window": { "start": "13:45", "end": "13:50" },
+    "trade_limits": { "max_entries_per_day": 1, "max_entries_per_week": 3 },
+    "calendar": "NYSE",
+    "decimal_precision": 2,
+    "currency": "USD",
+    "rounding": "HALF_UP",
+    "symbology": "OCC_21_CHAR"
+  },
+  "data_quality": { "max_quote_age_seconds": 15, "block_on_crossed_market": true, "block_on_missing_critical_data": true },
+  "analytics_refs": {},
+  "metadata": {
+    "schema_version": "1.0.0",
+    "methodology_version": "1.0.0",
+    "reference_docs": [],
+    "notes": "Fixture de pruebas de WS-0062 inc.8a (sandwich SPX 0DTE con las piezas de los incrementos 2 a 7). No es una estrategia."
+  }
+}

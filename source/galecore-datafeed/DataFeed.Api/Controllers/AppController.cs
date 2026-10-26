@@ -1435,6 +1435,26 @@ namespace DataFeed.Controllers
         }
 
         /// <summary>
+        /// Chequeo de una spec sin guardarla ni desplegarla (WS-0062 inc.8a): los mismos errores que daría el deploy, el content_hash,
+        /// qué rutas de ESA spec ejecuta el runtime (executed_paths) y cuáles sólo acepta (inert_paths), y el catálogo de lo que el runtime
+        /// entiende (tipos de evento, patrones de métrica, estructuras, selectores de pata, modelos de fill). 200 también si es inválida;
+        /// 400 sólo si el cuerpo no es JSON. Sólo lectura, sin efectos.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpPost("Runtime/Specs/Check")]
+        public async Task<IActionResult> RuntimeSpecCheck(CancellationToken ct)
+        {
+            string body;
+            using (var reader = new StreamReader(Request.Body))
+                body = await reader.ReadToEndAsync(ct);
+            try { System.Text.Json.JsonDocument.Parse(body).Dispose(); }
+            catch (System.Text.Json.JsonException ex) { return BadRequest($"El cuerpo no es JSON: {ex.Message}"); }
+
+            var result = DataFeed.Application.App.Runtime.StrategySpecChecker.Check(body);
+            return Content(System.Text.Json.JsonSerializer.Serialize(result, DataFeed.Application.App.Runtime.StrategySpecChecker.Json), "application/json");
+        }
+
+        /// <summary>
         /// PCS, CCS, iron condor y «esperar» con la cadena real (WS-0016): crédito, riesgo, griegas al entrar,
         /// gaps ±3/±5 %, salto de vol y probabilidad de tocar el strike vendido. El PCS es el candidato del
         /// runtime; sólo él se ejecuta hoy. Lee datos de mercado; no despliega ni guarda nada.

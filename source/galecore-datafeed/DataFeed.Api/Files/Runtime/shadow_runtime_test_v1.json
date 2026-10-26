@@ -90,9 +90,9 @@
       }
     ],
     "sizing": {
-      "method": "RISK_BASED",
-      "fixed_contracts": null,
-      "risk_per_trade_pct": 5.0
+      "method": "FIXED",
+      "fixed_contracts": 1,
+      "risk_per_trade_pct": null
     },
     "constraints": {
       "min_dte": 30,
@@ -122,7 +122,7 @@
   "risk_limits": {
     "max_concurrent_positions": 1,
     "max_portfolio_heat_pct": null,
-    "max_risk_per_trade_pct": 5.0,
+    "max_risk_per_trade_pct": null,
     "max_loss_per_trade_usd": null
   },
 

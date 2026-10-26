@@ -26,7 +26,7 @@ namespace DataFeed.Application.App.Runtime.Contracts
         // Exit (populated on close)
         public double? ExitDebit { get; init; }
         public DateTime? ExitAt { get; init; }
-        /// <summary>"TAKE_PROFIT" | "STOP_LOSS" | "METRIC_EXIT" | "TIME_EXIT" | "MANUAL" | "KILL_SWITCH"</summary>
+        /// <summary>"TAKE_PROFIT" | "STOP_LOSS" | "METRIC_EXIT" | "TIME_EXIT" | "EXPIRATION" | "MANUAL" | "KILL_SWITCH"</summary>
         public string? ExitReason { get; init; }
 
         // P&L
@@ -77,6 +77,52 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double? UnderlyingPrice { get; init; }
         public DateTime? SnapshotAt { get; init; }
         public List<LegQuoteSnapshot> Legs { get; init; } = new();
+        /// <summary>Modelo de fill y costos con los que se abrió (WS-0062). null en posiciones anteriores: se abrieron al mid, sin costos.</summary>
+        public ExecutionTerms? Execution { get; init; }
+    }
+
+    /// <summary>
+    /// Las condiciones de ejecución de una posición, copiadas de la spec al abrir: se valúa y se cierra con las
+    /// mismas con que se entró. Va dentro de entry_context_json: sin migración.
+    /// </summary>
+    public record ExecutionTerms
+    {
+        public const string Natural = "natural", Mid = "mid", MidSlippage = "mid_slippage";
+
+        public string Fill { get; init; } = Natural;
+        public double SlippagePctOfSpread { get; init; }
+        public double PerContractUsd { get; init; }
+        public double PerShareUsd { get; init; }
+        public double PerOrderUsd { get; init; }
+        /// <summary>false = el P&L neto es igual al bruto porque la spec no declara costos.</summary>
+        public bool CostsDeclared { get; init; }
+
+        /// <summary>Posiciones anteriores a WS-0062: entraron al mid y no tienen costos.</summary>
+        public static readonly ExecutionTerms Legacy = new() { Fill = Mid };
+
+        public static ExecutionTerms From(StrategySpec spec)
+        {
+            var e = spec.Execution;
+            if (e == null) return new ExecutionTerms();
+            var c = e.Costs;
+            return new ExecutionTerms
+            {
+                Fill = e.Fill,
+                SlippagePctOfSpread = e.Fill == MidSlippage ? e.SlippagePctOfSpread ?? 0 : 0,
+                PerContractUsd = c?.PerContractUsd ?? 0,
+                PerShareUsd = c?.PerShareUsd ?? 0,
+                PerOrderUsd = c?.PerOrderUsd ?? 0,
+                CostsDeclared = (c?.PerContractUsd ?? 0) > 0 || (c?.PerShareUsd ?? 0) > 0 || (c?.PerOrderUsd ?? 0) > 0,
+            };
+        }
+
+        /// <summary>Fracción del medio spread que se cede en contra: 1 natural, 0 mid, pct/100 con deslizamiento.</summary>
+        public double AdverseFraction => Fill switch
+        {
+            Natural => 1,
+            MidSlippage => SlippagePctOfSpread / 100.0,
+            _ => 0,
+        };
     }
 
     public record ExitContext

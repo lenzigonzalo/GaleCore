@@ -63,13 +63,14 @@ public class StrategySpecValidatorTests
         },
         CandidateConstruction = new CandidateConstruction
         {
+            Sizing = new SizingConfig { Method = "FIXED", FixedContracts = 1 },
             Legs = new List<LegTemplate>
             {
                 new() { Side = "SELL", Type = "PUT", StrikeSelection = new LegStrikeSelection { Method = "DELTA", TargetDelta = -0.16, DeltaTolerance = 0.04 } },
                 new() { Side = "BUY", Type = "PUT", StrikeSelection = new LegStrikeSelection { Method = "FIXED_WIDTH", Width = 5 } },
             }
         },
-        RiskLimits = new SpecRiskLimits { MaxConcurrentPositions = 1, MaxRiskPerTradePct = 5.0 },
+        RiskLimits = new SpecRiskLimits { MaxConcurrentPositions = 1, MaxRiskPerTradePct = 5.0, SimulatedCapitalUsd = 10_000 },
         Operational = new SpecOperational(),
         Metadata = new SpecMetadata { SchemaVersion = "1.0.0" }
     };

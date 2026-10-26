@@ -113,8 +113,8 @@ namespace DataFeed.Application.App.Runtime
             // La misma consulta de griegas que hizo el constructor: IV de las patas y strikes de calls.
             var gex = await _market.GetGammaExposureAsync(new GammaExposureRequest
             {
-                Symbol = symbol, TargetDte = pcs.Dte, MaxDTE = maxDte,
-                ExpirationTypes = new[] { "Regular", "Weekly" }, IncludeZeroDte = minDte == 0,
+                Symbol = symbol, TargetDte = pcs.Dte, MaxDTE = pcs.Dte == 0 ? 0 : maxDte,   // igual que el constructor: con 0DTE el handler no puede elegir otro
+                ExpirationTypes = CreditSpreadCandidateBuilder.ExpirationTypes, IncludeZeroDte = minDte == 0,
             }, ct);
             if (gex?.Strikes == null || gex.Expiration != expiration)
                 return new StructureComparison

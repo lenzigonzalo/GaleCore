@@ -14,7 +14,7 @@ public class CreditSpreadCandidateBuilderTests
 {
     private static readonly DateTime Now = ShadowRuntimeEngineTests.Now; // jueves 24/09/2026, 11:00 ET
 
-    private sealed class FakeSource : IPcsMarketSource
+    internal sealed class FakeSource : IPcsMarketSource
     {
         public List<Expiration>? Expirations = new()
         {
@@ -41,6 +41,10 @@ public class CreditSpreadCandidateBuilderTests
 
         public Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
             => Task.FromResult(Quotes.GetValueOrDefault(streamerSymbol));
+
+        /// <summary>Precio del subyacente con hora para los selectores por puntos o % (null = sin dato).</summary>
+        public UnderlyingQuote? Underlying;
+        public Task<UnderlyingQuote?> GetUnderlyingAsync(string symbol, CancellationToken ct) => Task.FromResult(Underlying);
     }
 
     private static GammaExposureResponse Response(string expiration, int dte) => new()
@@ -58,7 +62,7 @@ public class CreditSpreadCandidateBuilderTests
 
     private static StrategyInstance Instance() => new() { InstanceId = "i-1" };
 
-    private static Task<CandidateBuildResult> Build(FakeSource source, StrategySpec? spec = null) =>
+    internal static Task<CandidateBuildResult> Build(FakeSource source, StrategySpec? spec = null) =>
         new CreditSpreadCandidateBuilder(source).BuildAsync(Instance(), spec ?? ShadowRuntimeEngineTests.Spec(), "SPY", 15.2, Now);
 
     [Fact]
@@ -85,7 +89,7 @@ public class CreditSpreadCandidateBuilderTests
         await Build(source);
 
         var req = source.LastGexRequest!;
-        Assert.Equal(new[] { "Regular", "Weekly" }, req.ExpirationTypes);
+        Assert.Equal(new[] { "Regular", "Weekly", "End-Of-Month", "Quarterly" }, req.ExpirationTypes);
         Assert.Equal(40, req.TargetDte);   // DTE recalculado en ET, no el 99 del proveedor
         Assert.Equal(50, req.MaxDTE);
     }
@@ -115,23 +119,24 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
-    public async Task QuoteWithoutProviderTime_AgeIsUnknown_NotNow()
+    public async Task QuoteWithoutProviderTime_EntersWithReadTime()
     {
+        // El proveedor no informa la hora: la cotización vale con la hora de lectura y se cuentan las patas así.
         var source = new FakeSource();
-        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
-        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, null);
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now, ReadTime: true);
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now, ReadTime: true);
 
         var result = await Build(source);
 
-        Assert.Null(result.Candidate!.Snapshot.OldestQuoteAt);
-        Assert.Equal(2, result.Candidate.Snapshot.QuotesWithoutTime);
+        Assert.NotNull(result.Candidate);
+        Assert.Equal((Now, 2), (result.Candidate!.Snapshot.OldestQuoteAt!.Value, result.Candidate.Snapshot.QuotesWithoutTime));
     }
 
     [Fact]
-    public async Task StaleLeg_NoCandidate_EvenIfTheOtherHasNoTime()
+    public async Task StaleLeg_NoCandidate_EvenIfTheOtherIsFresh()
     {
         var source = new FakeSource();
-        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now.AddSeconds(-3));
         source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddMinutes(-10));
 
         var result = await Build(source);
@@ -153,15 +158,44 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
-    public async Task OneLegWithoutTime_OldestIsTheKnownOne_AndItIsCounted()
+    public async Task ReadTimeAfterEvaluationNow_IsClamped_BuildsAndPassesTheValidator()
     {
+        // La foto llegó 30 s después del nowUtc de la evaluación (más que ClockSkew): no es «futuro».
         var source = new FakeSource();
-        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now.AddSeconds(30), ReadTime: true);
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddSeconds(30), ReadTime: true);
 
         var result = await Build(source);
 
-        Assert.Equal(Now.AddSeconds(-8), result.Candidate!.Snapshot.OldestQuoteAt);
-        Assert.Equal(1, result.Candidate.Snapshot.QuotesWithoutTime);
+        Assert.NotNull(result.Candidate);
+        Assert.Equal(Now, result.Candidate!.Snapshot.OldestQuoteAt);
+        Assert.True(ShadowRiskValidator.Validate(result.Candidate, ShadowRuntimeEngineTests.Spec(), 0, null, Now).IsValid);
+    }
+
+    [Fact]
+    public async Task ProviderTimeInTheFuture_StillBlocks_EvenWhenReadTimeLegsAreClamped()
+    {
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now.AddSeconds(30));
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddSeconds(30), ReadTime: true);
+
+        var result = await Build(source);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("futuro", result.RejectReason);
+    }
+
+    [Fact]
+    public async Task OneLegWithReadTime_StaleOtherLeg_StillBlocks()
+    {
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now, ReadTime: true);
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddMinutes(-10));
+
+        var result = await Build(source);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("dato viejo", result.RejectReason);
     }
 
     [Fact]
@@ -191,7 +225,78 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
-    public async Task ZeroDteExpiration_NoCandidate_Explained()
+    public async Task ZeroDteExpiration_NotChosen_WhenTheSpecDoesNotAskForIt()
+    {
+        var source = new FakeSource();
+        source.Expirations!.Add(new() { ExpirationDate = "2026-09-24", ExpirationType = "Weekly" });   // hoy
+
+        var result = await Build(source);   // spec 30-50
+
+        Assert.Equal(40, Assert.IsType<TradeCandidate>(result.Candidate).Dte);
+    }
+
+    [Theory]
+    [InlineData("End-Of-Month")]
+    [InlineData("Quarterly")]
+    public async Task IndexExpirationTypes_AreAccepted(string type)
+    {
+        var source = new FakeSource { Expirations = new() { new() { ExpirationDate = "2026-11-03", ExpirationType = type } } };
+
+        Assert.NotNull((await Build(source)).Candidate);
+    }
+
+    [Theory]
+    [InlineData("SPX   261103P00720000", null)]    // raíz AM por el símbolo OCC
+    [InlineData(null, "AM")]                       // AM por el settlement-type de la cadena
+    public async Task AmSettledExpiration_IsNotOpened_WithClearReason(string? occ, string? settlement)
+    {
+        var exp = new Expiration
+        {
+            ExpirationDate = "2026-11-03", ExpirationType = "Regular", SettlementType = settlement,
+            strikes = new() { new Strike { call = occ ?? "SPXW  261103C00720000", put = occ } },
+        };
+        var source = new FakeSource { Expirations = new() { exp } };
+
+        var result = await Build(source);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("AM", result.RejectReason);
+        Assert.Contains("2026-11-03", result.RejectReason);
+        Assert.Null(source.LastGexRequest);
+    }
+
+    [Fact]
+    public async Task PmIndexExpiration_WithOccRootSpxw_IsOpened()
+    {
+        var exp = new Expiration
+        {
+            ExpirationDate = "2026-11-03", ExpirationType = "Weekly", SettlementType = "PM",
+            strikes = new() { new Strike { call = "SPXW  261103C00720000" } },
+        };
+        Assert.NotNull((await Build(new FakeSource { Expirations = new() { exp } })).Candidate);
+    }
+
+    [Fact]
+    public async Task ZeroDteOnly_RejectedWhenTheSpecStartsAtOne()
+    {
+        var spec = ShadowRuntimeEngineTests.Spec();
+        spec = spec with
+        {
+            CandidateConstruction = spec.CandidateConstruction with
+            {
+                Constraints = spec.CandidateConstruction.Constraints with { MinDte = 1, MaxDte = 5 },
+            },
+        };
+        var source = new FakeSource { Expirations = new() { new() { ExpirationDate = "2026-09-24", ExpirationType = "Weekly" } } };
+
+        var result = await Build(source, spec);
+
+        Assert.Null(result.Candidate);
+        Assert.Null(source.LastGexRequest);
+    }
+
+    [Fact]
+    public async Task ZeroDteExpiration_IsBuilt_WhenTheSpecRangeIncludesIt()
     {
         var spec = ShadowRuntimeEngineTests.Spec();
         spec = spec with
@@ -201,13 +306,18 @@ public class CreditSpreadCandidateBuilderTests
                 Constraints = spec.CandidateConstruction.Constraints with { MinDte = 0, MaxDte = 0 },
             },
         };
-        var source = new FakeSource { Expirations = new() { new() { ExpirationDate = "2026-09-24", ExpirationType = "Weekly" } } };
+        var source = new FakeSource
+        {
+            Expirations = new() { new() { ExpirationDate = "2026-09-24", ExpirationType = "Weekly" } },
+            Gex = _ => Response("2026-09-24", 0),
+        };
 
         var result = await Build(source, spec);
 
-        Assert.Null(result.Candidate);
-        Assert.Contains("0DTE", result.RejectReason);
-        Assert.Null(source.LastGexRequest);
+        var c = Assert.IsType<TradeCandidate>(result.Candidate);
+        Assert.Equal(0, c.Dte);
+        Assert.Equal(0, source.LastGexRequest!.MaxDTE);   // el handler no puede elegir otro vencimiento
+        Assert.True(source.LastGexRequest.IncludeZeroDte);
     }
 
     [Fact]
@@ -264,7 +374,7 @@ public class CreditSpreadCandidateBuilderTests
         return r;
     }
 
-    private static FakeSource WithCallQuotes()
+    internal static FakeSource WithCallQuotes()
     {
         var source = new FakeSource { Gex = _ => WithCalls(Response("2026-11-03", 40)) };
         source.Quotes[".SPY261103C810"] = new LegQuote(2.00, 2.20, Now.AddSeconds(-2));
@@ -272,7 +382,7 @@ public class CreditSpreadCandidateBuilderTests
         return source;
     }
 
-    private static StrategySpec SpecFor(string structure)
+    internal static StrategySpec SpecFor(string structure)
     {
         var spec = ShadowRuntimeEngineTests.Spec();
         var putLegs = spec.CandidateConstruction.Legs;

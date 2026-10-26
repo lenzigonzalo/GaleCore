@@ -1,8 +1,10 @@
 import React from 'react';
 import type { StrategyView } from '../../pages/LabStrategySheet';
+import { legSelectionLabel } from './panelPresentation';
 
+type ExitPct = { pct_of_credit?: number; pct_of_cost?: number };
 export type AlgorithmSpec = NonNullable<NonNullable<StrategyView['current']>['spec']> & {
-  exits?: { deterministic?: { take_profit?: { pct_of_credit: number }; stop_loss?: { pct_of_credit: number }; time_exit?: { max_dte: number }; defensive_roll?: { enabled: boolean } } };
+  exits?: { deterministic?: { take_profit?: ExitPct; stop_loss?: ExitPct; time_exit?: { max_dte?: number; at?: string; days_after_entry?: number }; defensive_roll?: { enabled: boolean } } };
   data_quality?: { max_quote_age_seconds?: number; block_on_crossed_market?: boolean; block_on_missing_critical_data?: boolean };
 };
 interface Condition { concept: string; comparison: string; threshold: string; action: string; path?: string }
@@ -28,8 +30,8 @@ export function CompactStrategyDesign({ strategy }: { strategy: StrategyView | n
   if (constraints?.min_credit !== undefined) construction.push({ concept: 'Crédito', comparison: '≥', threshold: raw(constraints.min_credit, spec?.operational?.currency), action: 'Aceptar candidato', path: 'candidate_construction.constraints.min_credit' });
   for (const leg of spec?.candidate_construction?.legs || []) {
     const selection = leg.strike_selection;
-    construction.push({ concept: `${leg.side === 'SELL' ? 'Venta' : 'Compra'} ${leg.type}`, comparison: selection.method === 'DELTA' ? 'Delta objetivo' : selection.method === 'FIXED_WIDTH' ? 'Ancho' : selection.method,
-      threshold: selection.method === 'DELTA' ? `${raw(selection.target_delta)}${selection.delta_tolerance != null ? ` ± ${selection.delta_tolerance}` : ''}` : selection.method === 'FIXED_WIDTH' ? raw(selection.width, spec?.operational?.currency) : '—', action: 'Seleccionar pata', path: 'candidate_construction.legs.strike_selection' });
+    construction.push({ concept: `${leg.side === 'SELL' ? 'Venta' : 'Compra'} ${leg.type}`, comparison: selection.method === 'DELTA' ? 'Delta objetivo' : selection.method === 'FIXED_WIDTH' ? 'Ancho' : 'Strike',
+      threshold: selection.method === 'DELTA' ? `${raw(selection.target_delta)}${selection.delta_tolerance != null ? ` ± ${selection.delta_tolerance}` : ''}` : selection.method === 'FIXED_WIDTH' ? raw(selection.width, spec?.operational?.currency) : legSelectionLabel(selection), action: 'Seleccionar pata', path: 'candidate_construction.legs.strike_selection' });
   }
   if (spec?.candidate_construction?.sizing?.fixed_contracts !== undefined) construction.push({ concept: 'Contratos', comparison: '=', threshold: raw(spec.candidate_construction.sizing.fixed_contracts), action: 'Tamaño fijo', path: 'candidate_construction.sizing.fixed_contracts' });
   const limits = spec?.risk_limits;
@@ -38,9 +40,20 @@ export function CompactStrategyDesign({ strategy }: { strategy: StrategyView | n
   if (limits?.max_loss_per_trade_usd !== undefined) management.push({ concept: 'Riesgo por operación', comparison: '≤', threshold: raw(limits.max_loss_per_trade_usd, 'USD'), action: 'No abrir si excede', path: 'risk_limits.max_loss_per_trade_usd' });
   const deterministic = spec?.exits?.deterministic;
   if (deterministic?.defensive_roll) management.push({ concept: 'Roll defensivo habilitado', comparison: '=', threshold: deterministic.defensive_roll.enabled ? 'Sí' : 'No', action: deterministic.defensive_roll.enabled ? '—' : 'Sin ajustes', path: 'exits.deterministic.defensive_roll.enabled' });
-  if (deterministic?.stop_loss) exits.push({ concept: 'Pérdida sobre el crédito', comparison: '≥', threshold: raw(deterministic.stop_loss.pct_of_credit, '% del crédito'), action: 'Cerrar por stop', path: 'exits.deterministic.stop_loss.pct_of_credit' });
-  if (deterministic?.take_profit) exits.push({ concept: 'Ganancia sobre el crédito', comparison: '≥', threshold: raw(deterministic.take_profit.pct_of_credit, '% del crédito'), action: 'Cerrar por objetivo', path: 'exits.deterministic.take_profit.pct_of_credit' });
-  if (deterministic?.time_exit) exits.push({ concept: 'Días restantes', comparison: '≤', threshold: raw(deterministic.time_exit.max_dte, 'DTE'), action: 'Cerrar por tiempo', path: 'exits.deterministic.time_exit.max_dte' });
+  const pctRow = (exit: ExitPct, gain: boolean): Condition => {
+    const cost = exit.pct_of_cost !== undefined && exit.pct_of_cost !== null;
+    const key = gain ? 'take_profit' : 'stop_loss';
+    return { concept: `${gain ? 'Ganancia' : 'Pérdida'} sobre ${cost ? 'el costo' : 'el crédito'}`, comparison: '≥', threshold: raw(cost ? exit.pct_of_cost : exit.pct_of_credit, cost ? '% del costo' : '% del crédito'),
+      action: gain ? 'Cerrar por objetivo' : 'Cerrar por stop', path: `exits.deterministic.${key}.${cost ? 'pct_of_cost' : 'pct_of_credit'}` };
+  };
+  if (deterministic?.stop_loss) exits.push(pctRow(deterministic.stop_loss, false));
+  if (deterministic?.take_profit) exits.push(pctRow(deterministic.take_profit, true));
+  const timeExit = deterministic?.time_exit;
+  if (timeExit?.max_dte !== undefined && timeExit.max_dte !== null) exits.push({ concept: 'Días restantes', comparison: '≤', threshold: raw(timeExit.max_dte, 'DTE'), action: 'Cerrar por tiempo', path: 'exits.deterministic.time_exit.max_dte' });
+  if (timeExit?.at) {
+    const day = timeExit.days_after_entry;
+    exits.push({ concept: 'Hora de cierre', comparison: '≥', threshold: `${timeExit.at} · ${day === undefined || day === null ? 'día del vencimiento' : day === 0 ? 'mismo día' : `${day} ${day === 1 ? 'día' : 'días'} después`}`, action: 'Cerrar por tiempo', path: 'exits.deterministic.time_exit.at' });
+  }
   const annotations = (current.rules || []).filter(rule => rule.runtime !== 'supported');
   return <div className="compact-design algorithm-design performance-block">
     <div><Conditions title="Entrada" rows={entry} /><Conditions title="Construcción" rows={construction} /></div>

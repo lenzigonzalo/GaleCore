@@ -28,8 +28,12 @@ namespace DataFeed.Application.App.Runtime
     {
         public int PositionsClosed { get; init; }
         public int PositionsOpen { get; init; }
+        /// <summary>Neto de costos declarados (WS-0062); RealizedGrossPnl es el mismo sin costos.</summary>
         public double? RealizedPnl { get; init; }
         public double? UnrealizedPnl { get; init; }
+        public double? RealizedGrossPnl { get; init; }
+        /// <summary>false = ninguna posición declara costos: neto = bruto porque no se descontó nada.</summary>
+        public bool CostsDeclared { get; init; }
         public double? WinRate { get; init; }
         public double? MaxDrawdown { get; init; }
         /// <summary>Riesgo máximo sumado de las abiertas (USD).</summary>
@@ -57,6 +61,8 @@ namespace DataFeed.Application.App.Runtime
         public int PositionsOpen { get; init; }
         public double? RealizedPnl { get; init; }
         public double? UnrealizedPnl { get; init; }
+        public double? RealizedGrossPnl { get; init; }
+        public bool CostsDeclared { get; init; }
         public double? WinRate { get; init; }
         public double? AvgPnl { get; init; }
         public double? AvgPctOfMaxRisk { get; init; }
@@ -94,8 +100,23 @@ namespace DataFeed.Application.App.Runtime
         public double? Width { get; init; }
         public double MaxRisk { get; init; }
         public string? ExitReason { get; init; }
+        /// <summary>Neto de costos declarados.</summary>
         public double? RealizedPnl { get; init; }
+        /// <summary>Sin costos (WS-0062).</summary>
+        public double? GrossPnl { get; init; }
+        /// <summary>Costos declarados descontados (entrada + salida).</summary>
+        public double? Costs { get; init; }
+        public bool CostsDeclared { get; init; }
+        /// <summary>Modelo de fill con que se simuló: natural | mid | mid_slippage.</summary>
+        public string Fill { get; init; } = "";
+        /// <summary>«credit» | «debit»: lo que se cobró o se pagó al entrar (EntryCredit negativo = débito).</summary>
+        public string EntryKind { get; init; } = "credit";
+        /// <summary>Monto de entrada sin signo, por unidad (por acción o por spread): lo que se muestra como crédito o costo.</summary>
+        public double EntryAmount { get; init; }
+        /// <summary>% del crédito cobrado; sólo estructuras de crédito, null en débito y acciones.</summary>
         public double? PnlPctOfCredit { get; init; }
+        /// <summary>% de lo pagado al entrar; sólo estructuras de débito y acciones, null en crédito.</summary>
+        public double? PnlPctOfCost { get; init; }
         public double? PnlPctOfMaxRisk { get; init; }
         /// <summary>Lo que la spec de esa versión planeaba al entrar (null si la spec no se pudo leer).</summary>
         public TradePlan? Plan { get; init; }
@@ -114,11 +135,27 @@ namespace DataFeed.Application.App.Runtime
 
     public static class ShadowPerformance
     {
+        /// <summary>true si la entrada fue un pago (débito o acciones): EntryCredit negativo.</summary>
+        public static bool IsDebit(ShadowPosition p) => p.EntryCredit < 0;
+        public static string EntryKind(ShadowPosition p) => IsDebit(p) ? "debit" : "credit";
+
+        /// <summary>% del crédito cobrado (USD, x100 por spread); null si la estructura no cobró crédito.</summary>
+        public static double? PctOfCredit(ShadowPosition p, double? pnl) =>
+            pnl == null || IsDebit(p) || p.EntryCredit <= 0 ? null : Math.Round(pnl.Value / (p.EntryCredit * ShadowFillSimulator.Multiplier(p)) * 100, 1);
+
+        /// <summary>% de lo pagado al entrar (acciones, débitos y opciones largas); null si cobró crédito.</summary>
+        public static double? PctOfCost(ShadowPosition p, double? pnl) =>
+            pnl == null || !IsDebit(p) ? null : Math.Round(pnl.Value / (-p.EntryCredit * ShadowFillSimulator.Multiplier(p)) * 100, 1);
+
+        /// <summary>Posición vencida sin precio de cierre oficial: sigue OPEN, sin P&amp;L (Expiry.PendingText).</summary>
+        public static bool IsPendingSettlement(ShadowPosition p) =>
+            p.Status == "OPEN" && p.ValuationProblems?.Any(v => v.StartsWith(Expiry.PendingText, StringComparison.Ordinal)) == true;
+
         /// <summary>Patas en texto: «SELL PUT 580 2026-11-20 / BUY PUT 575 2026-11-20».</summary>
         public static string LegsText(ShadowPosition p) =>
             string.Join(" / ", p.Legs.Select(l => l.Type == LongEquityCandidateBuilder.LegType
                 ? $"{l.Side} {l.Quantity ?? 1} {p.Symbol}"   // acciones: «BUY 10 AAPL»
-                : $"{l.Side} {l.Type} {l.Strike:0.##} {l.Expiration}".Trim()));
+                : $"{l.Side} {(l.Quantity > 1 ? $"{l.Quantity} " : "")}{l.Type} {l.Strike:0.##} {l.Expiration}".Trim()));   // opciones con N > 1: «SELL 3 PUT 580 ...»
 
         public static PerformanceReport Compute(IEnumerable<SpecVersionRecord> records,
             IReadOnlyDictionary<string, DeterministicExits> exitsByHash, double? referenceCapital, DateTime now,
@@ -158,12 +195,18 @@ namespace DataFeed.Application.App.Runtime
         public static TradePlan? Plan(ShadowPosition p, DeterministicExits? exits)
         {
             if (exits == null) return null;
+            // El crédito planeado (precio × pct) es de UN contrato: con N contratos se multiplica, como el P&L realizado y el plan de débito.
+            double contracts = p.Structure == RuntimeStructures.LongEquity ? 1 : ShadowFillSimulator.Contracts(p);
             return new TradePlan
             {
                 // TP: el spread vale (100 − pct)% del crédito → se gana pct% del crédito.
-                TakeProfitPnl = exits.TakeProfit == null ? null : Math.Round(p.EntryCredit * exits.TakeProfit.PctOfCredit, 2),
+                TakeProfitPnl = exits.TakeProfit == null ? null
+                    : exits.TakeProfit.PctOfCost is double tpCost ? Math.Round(-p.EntryCredit * tpCost / 100.0 * ShadowFillSimulator.Multiplier(p), 2)
+                    : Math.Round(p.EntryCredit * exits.TakeProfit.PctOfCredit * contracts, 2),
                 // SL: la pérdida llega a pct% del crédito (spread − crédito ≥ crédito × pct).
-                StopLossPnl = exits.StopLoss == null ? null : -Math.Round(p.EntryCredit * exits.StopLoss.PctOfCredit, 2),
+                StopLossPnl = exits.StopLoss == null ? null
+                    : exits.StopLoss.PctOfCost is double slCost ? -Math.Round(-p.EntryCredit * slCost / 100.0 * ShadowFillSimulator.Multiplier(p), 2)
+                    : -Math.Round(p.EntryCredit * exits.StopLoss.PctOfCredit * contracts, 2),
                 TimeExitDte = exits.TimeExit?.MaxDte,
             };
         }
@@ -195,8 +238,15 @@ namespace DataFeed.Application.App.Runtime
                 MaxRisk = p.MaxRisk,
                 ExitReason = p.ExitReason,
                 RealizedPnl = p.RealizedPnl,
-                // Acciones en largo: no hay crédito; el % va sobre el costo (PnlPctOfMaxRisk).
-                PnlPctOfCredit = p.Structure != RuntimeStructures.LongEquity && p.EntryCredit > 0 ? Math.Round(p.RealizedPnl!.Value / (p.EntryCredit * 100) * 100, 1) : null,
+                GrossPnl = ShadowFillSimulator.GrossOf(p),
+                Costs = ShadowFillSimulator.Costs(p),
+                CostsDeclared = ShadowFillSimulator.TermsOf(p).CostsDeclared,
+                Fill = ShadowFillSimulator.TermsOf(p).Fill,
+                EntryKind = EntryKind(p),
+                EntryAmount = Math.Abs(p.EntryCredit),
+                // Crédito: % del crédito. Débito y acciones: % de lo pagado. El otro queda null.
+                PnlPctOfCredit = PctOfCredit(p, p.RealizedPnl),
+                PnlPctOfCost = PctOfCost(p, p.RealizedPnl),
                 PnlPctOfMaxRisk = p.MaxRisk > 0 ? Math.Round(p.RealizedPnl!.Value / p.MaxRisk * 100, 1) : null,
                 Plan = plan,
                 GapToPlan = planned == null ? null : Math.Round(p.RealizedPnl!.Value - planned.Value, 2),
@@ -217,6 +267,8 @@ namespace DataFeed.Application.App.Runtime
                 PositionsOpen = positions.Count(p => p.Status == "OPEN"),
                 RealizedPnl = closed.Count == 0 ? null : Math.Round(closed.Sum(t => t.RealizedPnl!.Value), 2),
                 UnrealizedPnl = valued.Count == 0 ? null : Math.Round(valued.Sum(p => p.UnrealizedPnl!.Value), 2),
+                RealizedGrossPnl = closed.Count == 0 ? null : Math.Round(closed.Sum(t => t.GrossPnl!.Value), 2),
+                CostsDeclared = positions.Any(p => ShadowFillSimulator.TermsOf(p).CostsDeclared),
                 WinRate = closed.Count == 0 ? null : Math.Round((double)closed.Count(t => t.RealizedPnl > 0) / closed.Count, 4),
                 AvgPnl = closed.Count == 0 ? null : Math.Round(closed.Average(t => t.RealizedPnl!.Value), 2),
                 AvgPctOfMaxRisk = withRisk.Count == 0 ? null : Math.Round(withRisk.Average(t => t.PnlPctOfMaxRisk!.Value), 1),
@@ -258,6 +310,8 @@ namespace DataFeed.Application.App.Runtime
                 PositionsOpen = open.Count,
                 RealizedPnl = realized,
                 UnrealizedPnl = unrealized,
+                RealizedGrossPnl = closed.Count == 0 ? null : Math.Round(closed.Sum(p => ShadowFillSimulator.GrossOf(p)!.Value), 2),
+                CostsDeclared = all.Any(p => ShadowFillSimulator.TermsOf(p).CostsDeclared),
                 WinRate = closed.Count == 0 ? null : Math.Round((double)closed.Count(p => p.RealizedPnl > 0) / closed.Count, 4),
                 MaxDrawdown = closed.Count == 0 ? null : ShadowMetrics.MaxDrawdown(closed.GroupBy(p => p.ExitAt)
                     .OrderBy(g => g.Key ?? DateTime.MaxValue).Select(g => g.Sum(p => p.RealizedPnl!.Value))),

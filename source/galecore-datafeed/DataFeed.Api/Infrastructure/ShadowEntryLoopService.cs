@@ -1,4 +1,5 @@
 using DataFeed.Application.App.Runtime;
+using DataFeed.Application.App.Shared;
 using MediatR;
 
 namespace DataFeed.Api.Infrastructure
@@ -23,6 +24,7 @@ namespace DataFeed.Api.Infrastructure
         private const int TickSeconds = 60;
         private const int InitialDelaySeconds = 45;
         private bool _inertLogged;
+        private DateOnly _unknownYearWarnedOn;
 
         public ShadowEntryLoopService(
             IServiceScopeFactory scopeFactory,
@@ -77,6 +79,13 @@ namespace DataFeed.Api.Infrastructure
 
         private async Task TickAsync(CancellationToken ct)
         {
+            // Sin calendario de NYSE para el año la sesión queda cerrada (falla cerrado): se avisa una vez por día.
+            var today = NyseCalendar.NyDate(DateTime.UtcNow);
+            if (NyseCalendar.Kind(today) == NyseDay.Unknown && _unknownYearWarnedOn != today)
+            {
+                _unknownYearWarnedOn = today;
+                _logger.LogWarning("ShadowEntryLoop: el calendario de NYSE no cubre {Year}; la sesión SHADOW queda cerrada hasta cargarlo", today.Year);
+            }
             using var scope = _scopeFactory.CreateScope();
             var data = new MediatorRuntimeMarketData(scope.ServiceProvider.GetRequiredService<IMediator>(), _logger);
             var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(

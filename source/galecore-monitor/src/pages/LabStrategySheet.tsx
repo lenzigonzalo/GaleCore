@@ -6,7 +6,7 @@ interface Controls {reglas:{regla:string;clase:string;nota?:string}[];indispensa
 interface Spec {
   universe?:{symbols?:string[];instrument_types?:string[]}; structure?:{default_structure?:string};
   operational?:{timezone?:string;calendar?:string;currency?:string;session_hours?:{start?:string;end?:string}};
-  candidate_construction?:{constraints?:{min_dte?:number;max_dte?:number;min_credit?:number};sizing?:{fixed_contracts?:number};legs?:{side:string;type:string;strike_selection:{method:string;target_delta?:number;width?:number;delta_tolerance?:number}}[]};
+  candidate_construction?:{constraints?:{min_dte?:number;max_dte?:number;min_credit?:number};sizing?:{fixed_contracts?:number};legs?:{side:string;type:string;strike_selection:{method:string;target_delta?:number;width?:number;delta_tolerance?:number;points_from_spot?:number;pct_from_spot?:number;strike?:number;from_leg?:string;offset_points?:number}}[]};
   entry_filters?:{gate_layer?:{gates?:Gate[]};signal_layer?:{gates?:Gate[]}};
   risk_limits?:{max_concurrent_positions?:number;min_minutes_between_entries?:number;max_loss_per_trade_usd?:number};
 }

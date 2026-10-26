@@ -311,7 +311,8 @@ public class ShadowRuntimePersistenceTests
         var outcomes = await ShadowRuntimeTick.RunMonitorTickAsync(after, data, Now, default);
 
         Assert.Equal(ShadowRuntimeEngine.Outcomes.Valued, outcomes[opened.PositionId]);
-        Assert.Equal(25.0, repo.Positions[opened.PositionId].UnrealizedPnl);
+        // Fill natural (spec sin bloque execution, WS-0062 inc.2): cerrar = recomprar la vendida al ask 1.30 y vender la comprada al bid 0.60 → débito 0.70; (0.85 − 0.70) × 100.
+        Assert.Equal(15.0, repo.Positions[opened.PositionId].UnrealizedPnl);
         Assert.Single(after.AllPositions());
         Assert.Single(repo.Positions);
     }

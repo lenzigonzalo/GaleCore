@@ -60,8 +60,9 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Evalúa un gate individual contra su métrica.</summary>
         public static GateResult EvaluateGate(GateDefinition gate, Dictionary<string, double?> metrics)
         {
-            // ── Resolver valor ──
-            if (!metrics.TryGetValue(gate.MetricRef, out var value) || !value.HasValue)
+            // ── Resolver valor y, si el umbral es otra métrica, también el umbral ──
+            var threshold = ResolveThreshold(gate.Threshold, metrics);
+            if (!metrics.TryGetValue(gate.MetricRef, out var value) || !value.HasValue || threshold == null)
             {
                 return new GateResult
                 {
@@ -76,7 +77,7 @@ namespace DataFeed.Application.App.Runtime
             }
 
             // ── Evaluar operador ──
-            bool pass = EvaluateOperator(gate.Operator, value.Value, gate.Threshold);
+            bool pass = EvaluateOperator(gate.Operator, value.Value, threshold);
 
             return new GateResult
             {
@@ -84,10 +85,20 @@ namespace DataFeed.Application.App.Runtime
                 Label = gate.Label,
                 Status = pass ? "PASS" : "FAIL",
                 Value = value.Value,
-                Threshold = gate.Operator == "BETWEEN" ? gate.Threshold.Min : gate.Threshold.Value,
+                Threshold = gate.Operator == "BETWEEN" ? threshold.Min : threshold.Value,
                 Operator = gate.Operator,
                 OnFail = gate.OnFail
             };
+        }
+
+        /// <summary>
+        /// El umbral listo para comparar: el mismo si es escalar; si es <c>metric_ref</c> (métrica contra métrica), con el valor
+        /// resuelto de esa métrica. null si esa métrica no tiene dato (NO_DATA, nunca se completa).
+        /// </summary>
+        public static GateThreshold? ResolveThreshold(GateThreshold threshold, Dictionary<string, double?> metrics)
+        {
+            if (threshold.MetricRef == null) return threshold;
+            return metrics.TryGetValue(threshold.MetricRef, out var v) && v.HasValue ? new GateThreshold { Value = v.Value } : null;
         }
 
         /// <summary>Evalúa un operador contra un valor y threshold. Función pura.</summary>

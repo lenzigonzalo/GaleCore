@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace DataFeed.Tests;
 
 /// <summary>WS-0061 — acciones en largo (long_equity): métrica ema_spread, entrada, valuación, salida por métrica y P&amp;L.</summary>
+[Collection("RuntimeStaticCaches")]
 public class LongEquityTests
 {
     private static readonly DateTime Now = ShadowRuntimeEngineTests.Now;
@@ -149,7 +150,11 @@ public class LongEquityTests
     private static string SpecFilePath() =>
         Path.Combine(Path.GetDirectoryName(ShadowRuntimeEngineTests.SpecPath())!, "aapl_cruce_ema_20_50.json");
 
-    internal static StrategySpec EquitySpec()
+    /// <summary>La spec de acciones con fill al MID (WS-0062 inc.2): estos tests se escribieron con precios al medio.</summary>
+    internal static StrategySpec EquitySpec() => NaturalEquitySpec() with { Execution = new SpecExecution { Fill = "mid" } };
+
+    /// <summary>La spec de acciones tal cual el archivo: sin bloque execution, o sea fill natural.</summary>
+    internal static StrategySpec NaturalEquitySpec()
     {
         var r = StrategySpecLoader.LoadFromFile(SpecFilePath());
         Assert.True(r.Success, string.Join("; ", r.Errors));
@@ -206,7 +211,7 @@ public class LongEquityTests
         Assert.Contains(StrategySpecValidator.Validate(spec with
         {
             Exits = new SpecExits { Deterministic = spec.Exits.Deterministic with { StopLoss = new StopLossExit { PctOfCredit = 200 } } },
-        }).Errors, e => e.Contains("long_equity"));
+        }).Errors, e => e.Contains("pct_of_credit"));   // acciones = débito: el stop es pct_of_cost (WS-0062 inc.5)
         Assert.Contains(StrategySpecValidator.Validate(spec with
         {
             Exits = new SpecExits { Deterministic = spec.Exits.Deterministic with { MetricExit = new MetricExit { MetricRef = EmaRef, Operator = "LT" } } },
@@ -224,7 +229,7 @@ public class LongEquityTests
     // ── Constructor, riesgo y fill ──────────────────────────────────
 
     private static Func<string, CancellationToken, Task<LegQuote?>> Quote(double bid, double ask, DateTime? asOf = null) =>
-        (_, _) => Task.FromResult<LegQuote?>(new LegQuote(bid, ask, asOf));
+        (_, _) => Task.FromResult<LegQuote?>(new LegQuote(bid, ask, asOf ?? Now));
 
     private static StrategyInstance Instance() => ShadowRuntimeEngineTests.NewRuntime().Instance;
 
@@ -240,7 +245,7 @@ public class LongEquityTests
         Assert.Equal(("BUY", "STOCK", 10), (leg.Side, leg.Type, leg.Quantity));
         Assert.True(ShadowRiskValidator.Validate(c, EquitySpec(), 0, null, Now).IsValid);
 
-        var pos = ShadowFillSimulator.Fill(c, Now);
+        var pos = ShadowFillSimulator.Fill(c, Now, ShadowFillSimulatorTests.MidTerms);
         Assert.Equal(-270.0, pos.EntryCredit);
         Assert.Equal(270.0, pos.Legs.Single().EntryPrice);
         Assert.Equal(10, pos.Legs.Single().Quantity);

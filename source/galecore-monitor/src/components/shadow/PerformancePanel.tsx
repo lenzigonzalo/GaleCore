@@ -110,6 +110,8 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
         <div className="metric-columns">
         <section><h3>Resultado</h3><div className="metric-rows">
           {stat('Resultado de las abiertas', 'Ganancia o pérdida de las posiciones que siguen abiertas.', panel.unrealizedPnl, usd, true)}
+          {panel.costsDeclared && panel.realizedGrossPnl && stat('Ganancia sin costos', 'Resultado de las operaciones cerradas antes de descontar los costos declarados.', panel.realizedGrossPnl, usd, true)}
+          {panel.costsDeclared && panel.totalCosts && stat('Costos', 'Costos declarados descontados en las operaciones cerradas.', panel.totalCosts, amount)}
           {stat('Ganancia bruta', 'Suma de los resultados positivos de las operaciones cerradas.', panel.grossProfit, amount)}
           {stat('Pérdida bruta', 'Suma de las pérdidas de las operaciones cerradas.', panel.grossLoss, amount)}
           {stat('Retorno sobre capital', 'Resultado cerrado dividido por el capital de referencia.', panel.references.strategyReturnPct, pct, true)}
@@ -139,7 +141,7 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
         </div>
       </div>
       <div className="performance-visuals"><Block title="Evolución"><Curve rows={panel.curve} /></Block><Block title="Calendario"><PnlCalendar daily={panel.daily} asOf={panel.asOf} /></Block></div>
-      <Block title="Posiciones abiertas">{panel.openPositions.map(position => <LivePositionRow key={position.positionId} position={{ structure: position.structure, symbol: position.symbol, expiration: position.legList[0]?.expiration ?? null, dte: position.currentDte, legs: position.legList, entryAt: position.entryAt, credit: position.entryCredit, currentValue: position.lastSpreadValue, pnl: position.unrealizedPnl, risk: position.maxRisk, reason: position.valuationProblems?.join(' · '), equity: position.structure === 'long_equity' ? { legs: position.legs, shares: position.shares ?? null, entryPrice: position.entryPrice ?? null, lastPrice: position.lastPrice ?? null, cost: position.cost ?? null } : undefined }} />)}{!panel.openPositions.length && <p>Sin posiciones abiertas</p>}</Block>
+      <Block title="Posiciones abiertas">{panel.openPositions.map(position => <LivePositionRow key={position.positionId} position={{ structure: position.structure, symbol: position.symbol, expiration: position.legList[0]?.expiration ?? null, dte: position.currentDte, legs: position.legList, entryAt: position.entryAt, credit: position.entryAmount ?? position.entryCredit, debit: position.entryKind === 'debit', pending: position.pendingSettlement, currentValue: position.lastSpreadValue, pnl: position.unrealizedPnl, risk: position.maxRisk, reason: position.valuationProblems?.join(' · '), equity: position.structure === 'long_equity' ? { legs: position.legs, shares: position.shares ?? null, entryPrice: position.entryPrice ?? null, lastPrice: position.lastPrice ?? null, cost: position.cost ?? null } : undefined }} />)}{!panel.openPositions.length && <p>Sin posiciones abiertas</p>}</Block>
     </div>}
     {panel && !loading && !error && tab === 'Operaciones' && <div role="tabpanel" id="pane-Operaciones" aria-labelledby="tab-Operaciones">
       {/* WS-0057 C (owner 21/10): una sola tabla de operaciones; el detalle de cada una en el panel de la derecha. */}

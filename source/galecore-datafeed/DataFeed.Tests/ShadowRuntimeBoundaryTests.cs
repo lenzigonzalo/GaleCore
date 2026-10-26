@@ -13,6 +13,7 @@ public class ShadowRuntimeBoundaryTests
     {
         "OptionChainsRequest", "GammaExposureRequest", "MarketDataQuoteRequest", "MarketDataTradeRequest",
         "MarketDataCandleRequest",   // velas diarias para ema_spread (WS-0061): lectura de mercado
+        "FomcMeetingsRequest", "FredReleaseDatesRequest", "MarketMetricsVolatilityRequest",   // calendario de eventos (WS-0062 inc.5): lectura
     };
 
     private static IEnumerable<string> RuntimeSources()

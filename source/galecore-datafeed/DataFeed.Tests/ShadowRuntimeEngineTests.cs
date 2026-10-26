@@ -8,6 +8,7 @@ namespace DataFeed.Tests;
 /// "existen"; los tests verifican que un dato faltante bloquea y queda registrado, y que nunca se
 /// inventa una métrica, un candidato ni un precio.
 /// </summary>
+[Collection("RuntimeStaticCaches")]
 public class ShadowRuntimeEngineTests
 {
     internal const string VixRef = "capability:market_data.trade.VIX.price";
@@ -38,7 +39,11 @@ public class ShadowRuntimeEngineTests
         {
             BuildCalls++;
             if (ThrowOnBuild) throw new InvalidOperationException("cadena caída");
-            return Task.FromResult(BuildFor?.Invoke(instance) ?? Build?.Invoke() ?? CandidateBuildResult.Rejected("sin candidato"));
+            var built = BuildFor?.Invoke(instance) ?? Build?.Invoke() ?? CandidateBuildResult.Rejected("sin candidato");
+            // El candidato de prueba trae la cotización de "ahora" (sin hora el riesgo lo rechaza, WS-0062 inc.1).
+            if (built.Candidate is { Snapshot.OldestQuoteAt: null } c)
+                built = built with { Candidate = c with { Snapshot = c.Snapshot with { OldestQuoteAt = nowUtc } } };
+            return Task.FromResult(built);
         }
 
         public Task<LegQuote?> GetQuoteAsync(string streamerSymbol, CancellationToken ct)
@@ -55,7 +60,15 @@ public class ShadowRuntimeEngineTests
 
     internal static string SpecJson() => File.ReadAllText(SpecPath());
 
-    internal static StrategySpec Spec()
+    /// <summary>
+    /// La spec de prueba tal como está en el archivo, pero con fill al MID (WS-0062 inc.2): las specs sin bloque execution
+    /// llenan al natural, y los tests de abajo fueron escritos con precios al medio (también prueban que mid sin costos
+    /// reproduce los resultados de antes). El natural se prueba en ShadowExecutionModelTests con <see cref="NaturalSpec"/>.
+    /// </summary>
+    internal static StrategySpec Spec() => NaturalSpec() with { Execution = new SpecExecution { Fill = "mid" } };
+
+    /// <summary>La spec de prueba tal cual el archivo: sin bloque execution, o sea fill natural.</summary>
+    internal static StrategySpec NaturalSpec()
     {
         var result = StrategySpecLoader.LoadFromFile(SpecPath());
         Assert.True(result.Success, string.Join("; ", result.Errors));
@@ -309,7 +322,7 @@ public class ShadowRuntimeEngineTests
     {
         var (store, instance) = NewRuntime();
         var data = FreshCandidates();
-        store.AddPosition(ShadowFillSimulator.Fill(RealCandidate() with { InstanceId = "otra", CandidateId = "c-otra" }, Now));
+        store.AddPosition(ShadowFillSimulator.Fill(RealCandidate() with { InstanceId = "otra", CandidateId = "c-otra" }, Now, ShadowFillSimulatorTests.MidTerms));
 
         var outcome = await ShadowRuntimeEngine.EvaluateEntryAsync(store, data, instance, SpacedSpec(), "SPY", Now.AddMinutes(5), default);
 
@@ -522,6 +535,39 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
+    public async Task Valuation_ReadTimeAfterEvaluationNow_IsValued_ButProviderFutureIsNoData()
+    {
+        var (store, pos, data) = await OpenPosition();
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now.AddSeconds(30), ReadTime: true);
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now.AddSeconds(30), ReadTime: true);
+        var ok = await ShadowRuntimeEngine.ValuePositionAsync(
+            store, data, pos, Spec().Exits.Deterministic, Now, default, maxQuoteAge: DataFreshness.MaxAge(Spec()));
+        Assert.NotEqual(ShadowRuntimeEngine.Outcomes.NoData, ok);
+
+        var (store2, pos2, data2) = await OpenPosition();
+        data2.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now.AddSeconds(30));   // hora del proveedor en el futuro
+        data2.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+        var blocked = await ShadowRuntimeEngine.ValuePositionAsync(
+            store2, data2, pos2, Spec().Exits.Deterministic, Now, default, maxQuoteAge: DataFreshness.MaxAge(Spec()));
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoData, blocked);
+    }
+
+    [Fact]
+    public async Task Valuation_LegQuoteWithReadTime_IsValued()
+    {
+        var (store, pos, data) = await OpenPosition();
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now, ReadTime: true);   // el proveedor no da hora: vale la de lectura
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+
+        var outcome = await ShadowRuntimeEngine.ValuePositionAsync(
+            store, data, pos, Spec().Exits.Deterministic, Now, default, maxQuoteAge: DataFreshness.MaxAge(Spec()));
+
+        Assert.NotEqual(ShadowRuntimeEngine.Outcomes.NoData, outcome);
+        var same = store.GetPosition(pos.PositionId)!;
+        Assert.True(same.ValuationProblems == null || same.ValuationProblems.Count == 0);
+    }
+
+    [Fact]
     public async Task Entry_SwitchTurnedOffWhileBuilding_NoPosition()
     {
         var (store, instance) = NewRuntime();
@@ -587,7 +633,35 @@ public class ShadowRuntimeEngineTests
         Assert.Null(DataFreshness.Problem(Now.AddSeconds(-149), Now, max));
         Assert.Contains("viejo", DataFreshness.Problem(Now.AddSeconds(-151), Now, max));
         Assert.Contains("futuro", DataFreshness.Problem(Now.AddSeconds(30), Now, max));
-        Assert.Null(DataFreshness.Problem(null, Now, max));   // desconocida: limitación declarada
+        Assert.Contains("sin hora", DataFreshness.Problem(null, Now, max));   // Problem(null) sigue bloqueando: las cotizaciones ya traen hora de lectura
+    }
+
+    [Fact]
+    public void QuoteTime_TakesNewestOfBidAskThenEventTime()
+    {
+        long ms(DateTime d) => new DateTimeOffset(d, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var older = Now.AddSeconds(-40);
+        var newer = Now.AddSeconds(-10);
+        Assert.Equal(newer, DataFreshness.QuoteTime(ms(older), ms(newer), 0));
+        Assert.Equal(newer, DataFreshness.QuoteTime(ms(newer), ms(older), ms(Now)));   // bid/ask mandan sobre EventTime
+        Assert.Equal(newer, DataFreshness.QuoteTime(ms(newer), 0, 0));                  // sólo bid
+        Assert.Equal(newer, DataFreshness.QuoteTime(0, ms(newer), 0));                  // sólo ask
+        Assert.Equal(older, DataFreshness.QuoteTime(0, 0, ms(older)));                  // sólo EventTime
+        Assert.Null(DataFreshness.QuoteTime(0, 0, 0));                                  // ninguna
+    }
+
+    [Fact]
+    public void MetricResolver_QuotePrice_NoTimeUsesReadTime_OldOrFutureIsBlocked()
+    {
+        long ms(DateTime d) => new DateTimeOffset(d, TimeSpan.Zero).ToUnixTimeMilliseconds();
+        var max = TimeSpan.FromSeconds(150);
+        DataFeed.Application.Data.Tastytrade.MarketDataQuote.QuoteEvent Q(long bt, long at, long et = 0) =>
+            new() { BidPrice = 10, AskPrice = 10.2, BidTime = bt, AskTime = at, EventTime = et };
+        Assert.NotNull(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-5)), ms(Now.AddSeconds(-3))), Now, max));
+        Assert.Equal(10.1, MetricResolver.UsableQuotePrice(Q(0, 0), Now, max)!.Value, 10);                       // sin hora: vale con la hora de lectura (el mid)
+        Assert.NotNull(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-500)), ms(Now.AddSeconds(-3))), Now, max)); // un lado quieto no la invalida
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-500)), ms(Now.AddSeconds(-400))), Now, max)); // los dos viejos sí
+        Assert.Null(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(60)), ms(Now.AddSeconds(60))), Now, max));  // futura
     }
 
     [Fact]

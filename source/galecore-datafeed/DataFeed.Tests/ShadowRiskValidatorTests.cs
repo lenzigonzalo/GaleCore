@@ -41,7 +41,7 @@ public class ShadowRiskValidatorTests
             new() { Side = "SELL", Type = "PUT", Strike = 520, Bid = 1.50, Ask = 1.70, Delta = -0.16 },
             new() { Side = "BUY", Type = "PUT", Strike = 515, Bid = 0.70, Ask = 0.90 }
         },
-        Snapshot = new MarketSnapshot { UnderlyingPrice = 545, AsOf = DateTime.UtcNow }
+        Snapshot = new MarketSnapshot { UnderlyingPrice = 545, AsOf = DateTime.UtcNow, OldestQuoteAt = DateTime.UtcNow }
     };
 
     [Fact]
@@ -171,9 +171,11 @@ public class ShadowRiskValidatorTests
     }
 
     [Fact]
-    public void UnknownQuoteTime_IsNotMeasured()
+    public void UnknownQuoteTime_IsRejected()
     {
-        // Sin hora del proveedor la edad no se puede medir; la protección es no operar fuera de sesión.
-        Assert.True(ShadowRiskValidator.Validate(QuotedAt(null), TestSpec(), 0, null, Now).IsValid);
+        // Un snapshot sin hora (ni del proveedor ni de lectura) no sirve; las patas reales ya traen hora de lectura.
+        var result = ShadowRiskValidator.Validate(QuotedAt(null), TestSpec(), 0, null, Now);
+        Assert.False(result.IsValid);
+        Assert.Contains(result.Errors, e => e.Contains("sin hora"));
     }
 }

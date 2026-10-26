@@ -1,15 +1,15 @@
 using System.Globalization;
 using DataFeed.Application.App.Runtime.Contracts;
+using DataFeed.Application.App.Shared;
 
 namespace DataFeed.Application.App.Runtime
 {
     /// <summary>
     /// Horario de sesión de la spec (operational.session_hours en operational.timezone).
     ///
-    /// Sin calendario de feriados: un feriado de NYSE en día hábil cuenta como sesión abierta. Es una
-    /// limitación declarada de GC-0002; lo que queda cubierto es la noche y el fin de semana, cuando
-    /// las cotizaciones son las del último cierre. Si la zona o el horario no se pueden leer, la
-    /// sesión se considera cerrada (falla cerrado).
+    /// Con el calendario de NYSE (<see cref="NyseCalendar"/>): un feriado cierra la sesión todo el día y un cierre temprano
+    /// la termina a las 13:00 NY si la spec la terminaba después. Un año fuera de la tabla, una zona o un horario que no se
+    /// pueden leer: sesión cerrada (falla cerrado). El motivo no tiene estado propio en el scheduler: todo es OUTSIDE_SESSION.
     /// </summary>
     public static class ShadowSession
     {
@@ -22,8 +22,50 @@ namespace DataFeed.Application.App.Runtime
 
             var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), zone);
             if (local.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) return false;
+            var nyDate = NyseCalendar.NyDate(nowUtc);
+            switch (NyseCalendar.Kind(nyDate))
+            {
+                case NyseDay.Closed or NyseDay.Unknown: return false;
+                case NyseDay.EarlyClose when DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc) >= NyseCalendar.EarlyCloseUtc(nyDate): return false;
+            }
             return local.TimeOfDay >= start && local.TimeOfDay < end;
         }
+
+        /// <summary>
+        /// Hora local efectiva de una salida «a las <paramref name="at"/>» el día de sesión <paramref name="localDate"/>: en un cierre
+        /// temprano que cae antes de <paramref name="at"/>, 5 minutos antes del cierre: el monitor de posiciones pasa cada ~30 s más lo que
+        /// tarda, y con un margen menor una pasada lenta dejaría la salida para la apertura del día siguiente.
+        /// </summary>
+        public static TimeSpan EffectiveExitTime(SpecOperational operational, DateTime localDate, TimeSpan at)
+        {
+            var day = DateOnly.FromDateTime(localDate);
+            if (NyseCalendar.Kind(day) != NyseDay.EarlyClose || !TryZone(operational.Timezone, out var zone)) return at;
+            var latest = TimeZoneInfo.ConvertTimeFromUtc(NyseCalendar.EarlyCloseUtc(day), zone).TimeOfDay - TimeSpan.FromMinutes(5);
+            return at < latest ? at : latest;
+        }
+
+        /// <summary>
+        /// ¿Estamos dentro de operational.entry_window (inicio inclusive, fin exclusivo, en operational.timezone)? Sin ventana declarada
+        /// vale toda la sesión. Una ventana ilegible falla cerrado (la spec válida no llega acá con una así).
+        /// </summary>
+        public static bool InEntryWindow(SpecOperational operational, DateTime nowUtc)
+        {
+            if (operational.EntryWindow is not EntryWindow w) return true;
+            if (!TryZone(operational.Timezone, out var zone)) return false;
+            if (!TryTime(w.Start, out var start) || !TryTime(w.End, out var end)) return false;
+            var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), zone);
+            return local.TimeOfDay >= start && local.TimeOfDay < end;
+        }
+
+        /// <summary>Fecha y hora locales en operational.timezone; null si la zona no se puede leer.</summary>
+        public static DateTime? LocalTime(SpecOperational operational, DateTime nowUtc) =>
+            TryZone(operational.Timezone, out var zone)
+                ? TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(nowUtc, DateTimeKind.Utc), zone)
+                : null;
+
+        /// <summary>"HH:mm" estricto (también usado por el validador).</summary>
+        public static bool TryTime(string? text, out TimeSpan time) =>
+            TimeSpan.TryParseExact(text, @"hh\:mm", CultureInfo.InvariantCulture, out time);
 
         internal static bool TryZone(string id, out TimeZoneInfo zone)
         {
@@ -54,6 +96,7 @@ namespace DataFeed.Application.App.Runtime
         {
             public const string Paused = "PAUSED";
             public const string OutsideSession = "OUTSIDE_SESSION";
+            public const string OutsideEntryWindow = "OUTSIDE_ENTRY_WINDOW";
             public const string Evaluating = "EVALUATING";
             public const string Idle = "IDLE";
             public const string SpecNotFound = "SPEC_NOT_FOUND";
@@ -101,6 +144,13 @@ namespace DataFeed.Application.App.Runtime
                 return;
             }
 
+            // Ventana de entrada (WS-0062 inc.5): fuera de ella no se evalúa nada; el monitor sigue con session_hours.
+            if (!ShadowSession.InEntryWindow(spec.Operational, nowUtc))
+            {
+                store.UpdateInstanceState(instance.InstanceId, "RUNNING", SchedulerStates.OutsideEntryWindow);
+                return;
+            }
+
             store.UpdateInstanceState(instance.InstanceId, "RUNNING", SchedulerStates.Evaluating);
             foreach (var symbol in spec.Universe.Symbols)
             {
@@ -140,7 +190,7 @@ namespace DataFeed.Application.App.Runtime
                     outcomes[pos.PositionId] = await ShadowRuntimeEngine.ValuePositionAsync(
                         store, data, pos, spec.Exits.Deterministic, nowUtc, ct,
                         evaluateExits: ShadowSession.IsOpen(spec.Operational, nowUtc),
-                        maxQuoteAge: DataFreshness.MaxAge(spec));
+                        maxQuoteAge: DataFreshness.MaxAge(spec), operational: spec.Operational);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
                 {
