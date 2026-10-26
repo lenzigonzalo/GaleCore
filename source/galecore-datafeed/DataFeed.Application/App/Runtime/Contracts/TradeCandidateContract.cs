@@ -51,10 +51,10 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public DateTime AsOf { get; init; }
         /// <summary>
         /// Hora de la cotización más vieja entre las patas (la más vieja de bidTime/askTime de cada
-        /// una). Es lo que mide la frescura; una cotización sin hora no llega a armar candidato.
+        /// una; la de lectura de GaleCore si el proveedor no la informa). Es lo que mide la frescura.
         /// </summary>
         public DateTime? OldestQuoteAt { get; init; }
-        /// <summary>Patas cuya cotización llegó sin hora del proveedor (hoy el candidato se rechaza antes; queda como contador de diagnóstico).</summary>
+        /// <summary>Patas cuya cotización llegó sin hora del proveedor y valen con la hora de lectura de GaleCore.</summary>
         public int QuotesWithoutTime { get; init; }
     }
 }

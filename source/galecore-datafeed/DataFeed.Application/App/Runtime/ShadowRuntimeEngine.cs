@@ -167,7 +167,8 @@ namespace DataFeed.Application.App.Runtime
             AddEvent(store, instance, "CANDIDATE_CREATED", symbol, nowUtc,
                 ("candidate_id", candidate.CandidateId), ("credit", candidate.Credit), ("max_risk", candidate.MaxRisk), ("contracts", contracts),
                 ("delta_short", candidate.DeltaShort), ("dte", candidate.Dte),
-                ("quotes_as_of", candidate.Snapshot.OldestQuoteAt?.ToString("o") ?? "desconocida (el proveedor no informa la hora)"),
+                ("quotes_as_of", (candidate.Snapshot.OldestQuoteAt?.ToString("o") ?? "desconocida")
+                    + (candidate.Snapshot.QuotesWithoutTime > 0 ? $" (hora de lectura de GaleCore en {candidate.Snapshot.QuotesWithoutTime} cotizaciones: el proveedor no informa la hora)" : "")),
                 ("quotes_without_time", candidate.Snapshot.QuotesWithoutTime),
                 ("legs", candidate.Legs.Select(l => $"{l.Side} {l.Type} {l.Strike} {l.Expiration} bid={l.Bid} ask={l.Ask}").ToList()));
 

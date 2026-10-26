@@ -65,7 +65,7 @@ namespace DataFeed.Application.App.Runtime
             // ── Freshness de las cotizaciones ──
             // Se mide con la hora que publica el proveedor (OldestQuoteAt), no con la hora en que el
             // runtime armó el snapshot: esa siempre es "ahora" y el chequeo nunca fallaría (GC-0002,
-            // R1-M1). Sin hora la cotización no sirve (DataFreshness.Problem).
+            // R1-M1). Sin hora del proveedor ya es la de lectura (DataFreshness).
             // El constructor ya rechaza cada pata vieja o con hora futura; esto es la segunda barrera.
             var freshness = DataFreshness.Problem(
                 candidate.Snapshot.OldestQuoteAt, nowUtc ?? DateTime.UtcNow, DataFreshness.MaxAge(spec));

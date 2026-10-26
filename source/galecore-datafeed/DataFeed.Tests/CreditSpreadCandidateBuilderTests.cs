@@ -119,16 +119,17 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
-    public async Task QuoteWithoutProviderTime_NoCandidate()
+    public async Task QuoteWithoutProviderTime_EntersWithReadTime()
     {
+        // El proveedor no informa la hora: la cotización vale con la hora de lectura y se cuentan las patas así.
         var source = new FakeSource();
-        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
-        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, null);
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now, ReadTime: true);
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now, ReadTime: true);
 
         var result = await Build(source);
 
-        Assert.Null(result.Candidate);
-        Assert.Contains("sin hora", result.RejectReason);
+        Assert.NotNull(result.Candidate);
+        Assert.Equal((Now, 2), (result.Candidate!.Snapshot.OldestQuoteAt!.Value, result.Candidate.Snapshot.QuotesWithoutTime));
     }
 
     [Fact]
@@ -157,15 +158,16 @@ public class CreditSpreadCandidateBuilderTests
     }
 
     [Fact]
-    public async Task OneLegWithoutTime_NoCandidate()
+    public async Task OneLegWithReadTime_StaleOtherLeg_StillBlocks()
     {
         var source = new FakeSource();
-        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, null);
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now, ReadTime: true);
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddMinutes(-10));
 
         var result = await Build(source);
 
         Assert.Null(result.Candidate);
-        Assert.Contains("sin hora", result.RejectReason);
+        Assert.Contains("dato viejo", result.RejectReason);
     }
 
     [Fact]

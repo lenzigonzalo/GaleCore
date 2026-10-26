@@ -148,12 +148,12 @@ namespace DataFeed.Application.App.Runtime
         /// El mid de la cotización, o null si la cotización no sirve (QuoteRules.IsUsable), el mid no es
         /// positivo y finito, o la hora del proveedor es vieja o futura. Una cotización de un solo lado
         /// (bid 0, ask 20) daría un mid de 10 que no existe; dos precios finitos enormes suman
-        /// infinito (Codex C2). Sin hora (ni bidTime/askTime ni EventTime) no sirve, como en las patas.
+        /// infinito (Codex C2). Sin hora del proveedor (ni bidTime/askTime ni EventTime) vale con la hora de lectura (<paramref name="nowUtc"/>), como en las patas.
         /// </summary>
         public static double? UsableQuotePrice(QuoteEvent? quote, DateTime nowUtc, TimeSpan? maxAge)
         {
             if (quote == null || !QuoteRules.IsUsable(quote.BidPrice, quote.AskPrice)) return null;
-            var quotedAt = DataFreshness.QuoteTime(quote.BidTime, quote.AskTime, quote.EventTime);
+            var quotedAt = DataFreshness.QuoteTime(quote.BidTime, quote.AskTime, quote.EventTime) ?? nowUtc;
             if (DataFreshness.Problem(quotedAt, nowUtc, maxAge) != null) return null;
             var mid = quote.MidPrice;
             return double.IsFinite(mid) && mid > 0 ? mid : null;

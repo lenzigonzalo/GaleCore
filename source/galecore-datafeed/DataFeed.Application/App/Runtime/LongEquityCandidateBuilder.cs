@@ -52,7 +52,7 @@ namespace DataFeed.Application.App.Runtime
                 Snapshot = new MarketSnapshot
                 {
                     UnderlyingPrice = m, AsOf = nowUtc, OldestQuoteAt = quote.AsOf,
-                    QuotesWithoutTime = quote.AsOf == null ? 1 : 0,
+                    QuotesWithoutTime = quote.ReadTime ? 1 : 0,
                 },
                 CreatedAt = nowUtc,
             });

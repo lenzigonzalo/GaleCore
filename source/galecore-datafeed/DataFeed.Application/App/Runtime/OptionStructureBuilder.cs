@@ -216,7 +216,7 @@ namespace DataFeed.Application.App.Runtime
                 quotes[l.Plan.Id] = q;
             }
             // Frescura por pata: una pata vieja o con hora futura descarta el candidato aunque la otra
-            // no tenga hora (Codex C1). Sin hora no sirve (ver DataFreshness).
+            // tenga hora de lectura (Codex C1; ver DataFreshness).
             var maxAge = DataFreshness.MaxAge(spec);
             foreach (var l in legs)
             {
@@ -264,12 +264,11 @@ namespace DataFeed.Application.App.Runtime
             if (!double.IsFinite(maxRisk))
                 return Rejected($"riesgo máximo no finito ({maxRisk})");
 
-            // La hora más vieja entre las cotizaciones que la informan; las que no, se cuentan aparte.
-            var allTimes = quotes.Values.Select(q => q.AsOf).ToList();
-            var knownTimes = allTimes.Where(t => t.HasValue).Select(t => t!.Value).ToList();
+            // La hora más vieja entre las cotizaciones; las patas con hora de lectura (no del proveedor) se cuentan aparte.
+            var knownTimes = quotes.Values.Select(q => q.AsOf).ToList();
             if (spotAsOf.HasValue) knownTimes.Add(spotAsOf.Value);
             DateTime? oldestQuoteAt = knownTimes.Count > 0 ? knownTimes.Min() : null;
-            int quotesWithoutTime = allTimes.Count(t => !t.HasValue);
+            int quotesWithoutTime = quotes.Values.Count(q => q.ReadTime);
 
             return CandidateBuildResult.Built(new TradeCandidate
             {

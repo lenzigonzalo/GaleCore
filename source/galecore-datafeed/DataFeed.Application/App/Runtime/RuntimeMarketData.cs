@@ -10,9 +10,10 @@ using Microsoft.Extensions.Logging;
 namespace DataFeed.Application.App.Runtime
 {
     /// <summary>
-    /// Cotización real de una pata: bid, ask y cuándo la publicó el proveedor (null si no lo informa).
+    /// Cotización real de una pata: bid, ask y su hora. Es la que publica el proveedor; si no la informa (DXLink manda
+    /// bidTime/askTime/eventTime en 0), es la hora en que GaleCore la leyó y <paramref name="ReadTime"/> es true.
     /// </summary>
-    public record LegQuote(double Bid, double Ask, DateTime? AsOf)
+    public record LegQuote(double Bid, double Ask, DateTime AsOf, bool ReadTime = false)
     {
         public double Mid => Math.Round((Bid + Ask) / 2.0, 4);
     }
@@ -53,7 +54,7 @@ namespace DataFeed.Application.App.Runtime
         }
     }
 
-    /// <summary>Precio del subyacente y cuándo lo publicó el proveedor (null si no lo informa).</summary>
+    /// <summary>Precio del subyacente y su hora (la del proveedor o, si no la informa, la de lectura; null sólo si una fuente no da ninguna).</summary>
     public record UnderlyingQuote(double Price, DateTime? AsOf);
 
     /// <summary>
@@ -118,10 +119,11 @@ namespace DataFeed.Application.App.Runtime
     /// Frescura de un dato con hora del proveedor. SHADOW tolera 10 veces
     /// data_quality.max_quote_age_seconds (con 15 s en la spec: 150 s).
     ///
-    /// Una cotización sin hora (null) no se puede medir y NO sirve: bloquea la entrada y deja la
-    /// valuación de una posición abierta en NO_DATA (sin cierre inventado). La hora sale de
-    /// QuoteTime: la más nueva de bidTime/askTime (cada una marca el último cambio de ese lado; un lado
-    /// quieto sigue vigente); DXLink manda EventTime 0 (verificado el 24/09).
+    /// La hora sale de QuoteTime: la más nueva de bidTime/askTime (cada una marca el último cambio de ese
+    /// lado; un lado quieto sigue vigente). DXLink manda las tres horas en 0 (verificado el 26/10): entonces
+    /// la cotización vale con la hora de lectura de GaleCore (decisión del owner), porque DXLink sólo manda
+    /// cambios y la foto de cada evaluación sigue vigente. Lo que sigue bloqueando: sin foto, precios no
+    /// utilizables, hora del proveedor vieja o futura. Problem(null) queda para quien aún no tenga hora.
     /// </summary>
     public static class DataFreshness
     {
@@ -148,7 +150,7 @@ namespace DataFeed.Application.App.Runtime
             return ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime : null;
         }
 
-        /// <summary>null si el dato sirve; si no, por qué (sin hora, viejo o con hora en el futuro).</summary>
+        /// <summary>null si el dato sirve; si no, por qué (sin hora, viejo o con hora en el futuro). Las cotizaciones llegan con hora de lectura, no null.</summary>
         public static string? Problem(DateTime? asOf, DateTime nowUtc, TimeSpan? maxAge)
         {
             if (asOf is not DateTime t) return "cotización sin hora";
@@ -243,8 +245,9 @@ namespace DataFeed.Application.App.Runtime
                 _logger.LogDebug("RuntimeMarketData: sin cotización utilizable para {Symbol}", streamerSymbol);
                 return null;
             }
-            var asOf = DataFreshness.QuoteTime(q.BidTime, q.AskTime, q.EventTime);
-            return new LegQuote(q.BidPrice, q.AskPrice, asOf);
+            // Sin hora del proveedor, vale la hora en que se recibió la respuesta.
+            var providerTime = DataFreshness.QuoteTime(q.BidTime, q.AskTime, q.EventTime);
+            return new LegQuote(q.BidPrice, q.AskPrice, providerTime ?? DateTime.UtcNow, providerTime == null);
         }
     }
 }

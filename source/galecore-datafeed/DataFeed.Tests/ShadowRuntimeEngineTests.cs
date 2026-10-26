@@ -535,19 +535,18 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
-    public async Task Valuation_LegQuoteWithoutTime_IsNoData_AndNeverCloses()
+    public async Task Valuation_LegQuoteWithReadTime_IsValued()
     {
         var (store, pos, data) = await OpenPosition();
-        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, null);   // take profit si se aceptara
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now, ReadTime: true);   // el proveedor no da hora: vale la de lectura
         data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
 
         var outcome = await ShadowRuntimeEngine.ValuePositionAsync(
             store, data, pos, Spec().Exits.Deterministic, Now, default, maxQuoteAge: DataFreshness.MaxAge(Spec()));
 
-        Assert.Equal(ShadowRuntimeEngine.Outcomes.NoData, outcome);
+        Assert.NotEqual(ShadowRuntimeEngine.Outcomes.NoData, outcome);
         var same = store.GetPosition(pos.PositionId)!;
-        Assert.Equal("OPEN", same.Status);
-        Assert.Contains(same.ValuationProblems!, p => p.Contains("sin hora"));
+        Assert.True(same.ValuationProblems == null || same.ValuationProblems.Count == 0);
     }
 
     [Fact]
@@ -616,7 +615,7 @@ public class ShadowRuntimeEngineTests
         Assert.Null(DataFreshness.Problem(Now.AddSeconds(-149), Now, max));
         Assert.Contains("viejo", DataFreshness.Problem(Now.AddSeconds(-151), Now, max));
         Assert.Contains("futuro", DataFreshness.Problem(Now.AddSeconds(30), Now, max));
-        Assert.Contains("sin hora", DataFreshness.Problem(null, Now, max));   // sin hora ya no pasa (WS-0062 inc.1)
+        Assert.Contains("sin hora", DataFreshness.Problem(null, Now, max));   // Problem(null) sigue bloqueando: las cotizaciones ya traen hora de lectura
     }
 
     [Fact]
@@ -634,14 +633,14 @@ public class ShadowRuntimeEngineTests
     }
 
     [Fact]
-    public void MetricResolver_QuotePrice_NoTimeOldOrFutureIsBlocked()
+    public void MetricResolver_QuotePrice_NoTimeUsesReadTime_OldOrFutureIsBlocked()
     {
         long ms(DateTime d) => new DateTimeOffset(d, TimeSpan.Zero).ToUnixTimeMilliseconds();
         var max = TimeSpan.FromSeconds(150);
         DataFeed.Application.Data.Tastytrade.MarketDataQuote.QuoteEvent Q(long bt, long at, long et = 0) =>
             new() { BidPrice = 10, AskPrice = 10.2, BidTime = bt, AskTime = at, EventTime = et };
         Assert.NotNull(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-5)), ms(Now.AddSeconds(-3))), Now, max));
-        Assert.Null(MetricResolver.UsableQuotePrice(Q(0, 0), Now, max));                                       // sin hora
+        Assert.Equal(10.1, MetricResolver.UsableQuotePrice(Q(0, 0), Now, max)!.Value, 10);                       // sin hora: vale con la hora de lectura (el mid)
         Assert.NotNull(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-500)), ms(Now.AddSeconds(-3))), Now, max)); // un lado quieto no la invalida
         Assert.Null(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(-500)), ms(Now.AddSeconds(-400))), Now, max)); // los dos viejos sí
         Assert.Null(MetricResolver.UsableQuotePrice(Q(ms(Now.AddSeconds(60)), ms(Now.AddSeconds(60))), Now, max));  // futura

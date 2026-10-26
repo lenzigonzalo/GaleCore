@@ -173,7 +173,7 @@ public class ShadowRiskValidatorTests
     [Fact]
     public void UnknownQuoteTime_IsRejected()
     {
-        // Sin hora del proveedor la cotización no sirve (WS-0062 inc.1).
+        // Un snapshot sin hora (ni del proveedor ni de lectura) no sirve; las patas reales ya traen hora de lectura.
         var result = ShadowRiskValidator.Validate(QuotedAt(null), TestSpec(), 0, null, Now);
         Assert.False(result.IsValid);
         Assert.Contains(result.Errors, e => e.Contains("sin hora"));
