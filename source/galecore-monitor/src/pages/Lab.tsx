@@ -193,6 +193,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const recognition = useRef<{ stop: () => void } | null>(null);
   const Speech = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : undefined;
   useEffect(() => { setMode('manual'); setAttachments([]); }, [chatId, projectId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- sólo al cambiar de conversación; seguir chat.mode pisaría el cambio local mientras responde
   useEffect(() => { if (chat?.mode) setMode(chat.mode); }, [chat?.id]);   // cada conversación recuerda su modo
   // Owner 24/10: permisos en el chat como en el CLI; el modo se puede cambiar mientras responde.
   const toggleMode = () => { const next = mode === 'manual' ? 'auto' : 'manual'; setMode(next); if (chat?.state === 'running') labRequest('/chats/' + chat.id + '/mode', { mode: next }).catch(() => setError('No se pudo cambiar el modo.')); };
