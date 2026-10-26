@@ -1,6 +1,6 @@
 ---
 name: performance-review
-version: 2.0.0
+version: 2.1.0
 display_name: Rendimiento y aprendizaje
 description: >
   «¿Cómo viene la estrategia? ¿Cuánto rinde mi cartera contra mi objetivo? ¿Es edge o suerte? ¿Qué aprendo de cada
@@ -27,8 +27,8 @@ output_contract: galecore_ai.contracts.research.ResearchContent
    abierto), por estrategia y versión, y por regla de salida (cantidad, resultado, distancia al plan). Después cada
    cierre: regla que actuó, planeado contra ocurrido, diagnóstico y certeza.
 2. **Edge o suerte:** decir `edge.conclusion` tal cual. Con muestra insuficiente: «no hay edge demostrado; es
-   anécdota», cualquiera sea el resultado; una racha ganadora no es edge. Mencionar `costos` (fills de SHADOW al medio,
-   sin comisiones) y `faltantes` (comparación con efectivo).
+   anécdota», cualquiera sea el resultado; una racha ganadora no es edge. Mencionar `costos` (neto de los costos que declara la spec;
+   dice si hay operaciones previas al medio y sin costos) y `faltantes` (comparación con efectivo).
 3. **Diagnóstico de un cierre:** separar `observado` (un hecho: regla no respetada, fill peor que su nivel) de
    `hipotesis` (la tesis puede estar fallando). Una pérdida dentro del plan es compatible con la estrategia; un stop no
    prueba que la tesis esté mal. `todavia_nada` = no hay nada que cambiar todavía: decirlo en vez de inventar una

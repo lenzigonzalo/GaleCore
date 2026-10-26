@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 import json
 import os
 import subprocess
@@ -30,6 +29,7 @@ from galecore_ai.contracts.strategy import (
     design_gaps,
 )
 from galecore_ai.harness.catalog import load_catalog
+from tests.unit.fake_galecore import fake_checker, galecore_server, recorded
 from tests.unit.test_evidence import evidence
 from tests.unit.test_knowledge import HOST, NOW, content, kb, save  # noqa: F401  (kb is a fixture)
 
@@ -85,8 +85,8 @@ def proposal(mutate=None, research_ref: str | None = None) -> ProposalContent:
     return ProposalContent.model_validate(data)
 
 
-def check(p: ProposalContent | None = None, text: str | None = None, file: str = f"{NAME}.json"):
-    return check_proposal(p or proposal(), text if text is not None else spec_text(), file)
+def check(p: ProposalContent | None = None, text: str | None = None, file: str = f"{NAME}.json", response=None):
+    return check_proposal(p or proposal(), text if text is not None else spec_text(), file, fake_checker(response))
 
 
 # ── GaleCore's hash ──────────────────────────────────────────────
@@ -130,130 +130,7 @@ def test_candidate_is_valid_with_its_declared_gaps():
     report = check()
     assert report.verdict == "VALID_WITH_DECLARED_GAPS", report.errors
     assert [g.split(":")[0] for g in report.declared_gaps] == ["E3", "E4", "S2", "R2", "M2"]
-    assert report.coverage["entry_filters.gate_layer.gates[vix_below_30]"] == ["E2"]
-
-
-def test_owner_draft_spec_is_refused_for_what_the_runtime_ignores():
-    """pcs_spy_16d_v1 declares risk-based sizing and a VRP analytics ref the runtime never uses."""
-    def as_draft(d):
-        d["name"], d["version"], d["owner_decisions"] = "pcs_spy_16d_v1", "1.0.0", []
-    errors = check(proposal(as_draft), spec_text("pcs_spy_16d_v1.json"), "pcs_spy_16d_v1.json").errors
-    joined = "\n".join(errors)
-    assert "candidate_construction.sizing.method = 'RISK_BASED'" in joined
-    assert "risk_limits.max_risk_per_trade_pct = 5.0" in joined
-    assert "analytics_refs" in joined
-
-
-@pytest.mark.parametrize(("change", "expected"), [
-    ({"candidate_construction.sizing": {"method": "RISK_BASED", "fixed_contracts": None,
-                                        "risk_per_trade_pct": 5.0}}, "runtime ignores it"),
-    ({"exits.deterministic.defensive_roll": {"enabled": True}}, "no hace roll"),
-    ({"risk_limits.max_portfolio_heat_pct": 7.0}, "no mide heat"),
-    ({"data_quality.block_on_crossed_market": False}, "siempre descarta cotizaciones cruzadas"),
-    ({"analytics_refs": {"vrp": {"capability_ref": "compute:vrp", "version": "1.0.0"}}}, "analytics_refs"),
-])
-def test_a_spec_promising_behavior_the_runtime_ignores_is_invalid(change, expected):
-    report = check(text=spec_with(**change))
-    assert report.verdict == "INVALID"
-    assert any(expected in e for e in report.errors), report.errors
-
-
-def test_an_executed_field_without_a_rule_is_invalid():
-    def drop_x3(d):
-        d["rules"] = [r for r in d["rules"] if r["id"] != "X3"]
-        d["parameters"] = [x for x in d["parameters"] if x["rules"] != ["X3"]]
-        d["management"] = [x for x in d["management"] if x["rules"] != ["X3"]]
-    report = check(proposal(drop_x3))
-    assert report.verdict == "INVALID"
-    assert any("time_exit.max_dte" in e and "no supported rule" in e for e in report.errors)
-
-
-def test_a_supported_rule_naming_a_field_the_runtime_does_not_execute_is_invalid():
-    def fake(d):
-        d["rules"][0]["runtime"]["spec_paths"].append("risk_limits.max_portfolio_heat_pct")
-    report = check(proposal(fake))
-    assert any("max_portfolio_heat_pct is marked supported but the runtime does not execute it" in e
-               for e in report.errors)
-
-
-def test_a_supported_rule_on_an_empty_field_is_invalid():
-    report = check(text=spec_with(**{"risk_limits.max_loss_per_trade_usd": None}))
-    assert any("max_loss_per_trade_usd is marked supported but the spec leaves it empty" in e
-               for e in report.errors)
-
-
-def test_entry_spacing_is_executed_and_needs_a_supported_rule():
-    """GC-0005: the runtime skips an entry sooner than N minutes after the instance's last one."""
-    text = spec_with(**{"risk_limits.min_minutes_between_entries": 1440})
-    report = check(text=text)
-    assert any("min_minutes_between_entries = 1440" in e and "no supported rule" in e for e in report.errors)
-
-    def explain(d):
-        d["rules"].append({"id": "R9", "block": "risk", "text": "Como mucho una entrada por día.",
-                           "basis": "design_choice", "rationale": "test",
-                           "runtime": {"status": "supported",
-                                       "spec_paths": ["risk_limits.min_minutes_between_entries"]}})
-    assert check(proposal(explain), text=text).verdict != "INVALID"
-
-
-def test_entry_spacing_left_null_needs_no_rule():
-    assert check(text=spec_with(**{"risk_limits.min_minutes_between_entries": None})).verdict != "INVALID"
-
-
-def test_an_unmapped_field_fails_closed():
-    report = check(text=spec_with(**{"exits.deterministic.trailing_stop": {"pct": 25}}))
-    assert any("trailing_stop.pct: not in the runtime support table" in e for e in report.errors)
-
-
-def test_the_calendar_must_be_declared():
-    def undeclare(d):
-        d["rules"] = [r for r in d["rules"] if r["id"] != "M2"]
-    report = check(proposal(undeclare))
-    assert any("operational.calendar" in e and "declare it" in e for e in report.errors)
-
-
-@pytest.mark.parametrize(("change", "expected"), [
-    ({"universe.mode": "DYNAMIC"}, "universe.mode"),
-    ({"structure.selection_method": "AI_RECOMMENDED"}, "structure.selection_method"),
-    ({"universe.instrument_types": ["EQUITY_OPTION", "FUTURE"]}, "universe.instrument_types"),
-    ({"exits.deterministic.defensive_roll": {"enabled": False, "min_dte_remaining": 21}}, "defensive_roll.min_dte"),
-])
-def test_fields_with_a_single_runtime_semantics_are_fixed(change, expected):
-    """Codex C1 BLOCKER: these reproduced VALID_WITH_DECLARED_GAPS as 'informational'."""
-    assert any(expected in e for e in check(text=spec_with(**change)).errors)
-
-
-def test_a_leg_selection_method_the_builder_does_not_use_is_invalid():
-    data = json.loads(spec_text())
-    data["candidate_construction"]["legs"][1]["strike_selection"]["method"] = "DELTA"
-    assert any("strike_selection.method" in e for e in check(text=json.dumps(data)).errors)
-
-
-@pytest.mark.parametrize(("mutate", "expected"), [
-    (lambda g: g.update(cooldown_minutes=30), "never reads"),
-    (lambda g: g.update(threshold={}), "numeric threshold.value"),
-    (lambda g: g.update(threshold={"value": 30, "max": 40}), "no min/max"),
-    (lambda g: g.update(operator="BETWEEN"), "BETWEEN needs"),
-    (lambda g: g.update(threshold={"value": 30, "unit": "points"}), "threshold properties never read"),
-])
-def test_every_gate_leaf_is_validated(mutate, expected):
-    """Codex C1 BLOCKER: gates were checked as whole objects."""
-    data = json.loads(spec_text())
-    mutate(data["entry_filters"]["gate_layer"]["gates"][0])
-    assert any(expected in e for e in check(text=json.dumps(data)).errors)
-
-
-def test_a_gate_on_a_metric_the_runtime_cannot_resolve_is_invalid():
-    data = json.loads(spec_text())
-    data["entry_filters"]["gate_layer"]["gates"][0]["metric_ref"] = "capability:compute.vrp.SPY.ratio"
-    report = check(text=json.dumps(data))
-    assert any("NO_DATA forever" in e for e in report.errors)
-
-
-def test_a_gate_that_passes_without_data_is_invalid():
-    data = json.loads(spec_text())
-    data["entry_filters"]["gate_layer"]["gates"][0]["on_no_data"] = "PASS"
-    assert any("fail-closed" in e for e in check(text=json.dumps(data)).errors)
+    assert report.coverage["entry_filters.gate_layer.gates"] == ["E2"]
 
 
 def test_identity_and_file_name_must_match():
@@ -263,114 +140,111 @@ def test_identity_and_file_name_must_match():
     assert any("is not the proposal's" in e for e in report.errors)
 
 
-def test_only_shadow_and_credit_spreads_the_runtime_builds():
-    assert check(text=spec_with(**{"deployment_constraints.eligible_modes": ["SHADOW", "PAPER"]})).verdict == "INVALID"
-    data = json.loads(spec_text())
-    data["candidate_construction"]["legs"][1]["type"] = "CALL"
-    assert any("one SELL and one BUY per side" in e for e in check(text=json.dumps(data)).errors)
-    errors = check(text=spec_with(**{"structure.default_structure": "butterfly"})).errors
-    assert any("'butterfly' is not built by the runtime" in e for e in errors)
+def test_validity_errors_and_hash_come_from_galecore_not_from_a_table():
+    asked = fake_checker()
+    report = check_proposal(proposal(), spec_text(), f"{NAME}.json", asked)
+    assert asked.asked == [spec_text()]            # the exact text, so number literals reach GaleCore untouched
+    assert report.errors == [] and report.runtime_reference.startswith("GaleCore POST /App/Runtime/Specs/Check")
+    invalid = check(response=recorded("invalid"))
+    assert invalid.verdict == "INVALID" and invalid.coverage == {}
+    assert any(e.startswith("GaleCore: candidate_construction.legs[put_comprada].strike_selection.method") for e in invalid.errors)
+    assert any("simulated_capital_usd must be positive" in e for e in invalid.errors)
+    refused = check(response=recorded("invalid", errors=[]))
+    assert any("refuses the spec without saying why" in e for e in refused.errors)
 
 
-def _iron_condor(call_delta: float = 0.16) -> dict:
-    data = json.loads(spec_text())
-    data["structure"]["allowed_strategies"] = ["iron_condor"]
-    data["structure"]["default_structure"] = "iron_condor"
-    sell, buy = (json.loads(json.dumps(leg)) for leg in data["candidate_construction"]["legs"])
-    sell["type"], buy["type"] = "CALL", "CALL"
-    sell["strike_selection"]["target_delta"] = call_delta
-    data["candidate_construction"]["legs"] += [sell, buy]
-    return data
+def test_a_hash_galecore_reports_must_be_the_local_one():
+    other = recorded("spy_prima_varianza_valid", content_hash="sha256:" + "0" * 64)
+    report = check_proposal(proposal(), spec_text(), f"{NAME}.json", fake_checker(other, pin_hash=True))
+    assert any("GaleCore hashes this spec as" in e for e in report.errors)
 
 
-def _call_credit_spread() -> dict:
-    data = json.loads(spec_text())
-    data["structure"]["allowed_strategies"] = ["call_credit_spread"]
-    data["structure"]["default_structure"] = "call_credit_spread"
-    for leg in data["candidate_construction"]["legs"]:
-        leg["type"] = "CALL"
-    data["candidate_construction"]["legs"][0]["strike_selection"]["target_delta"] = 0.16
-    return data
-
-
-def _rules_for(sides: tuple[str, ...]):
-    """The candidate's rules, with C2/C3 explaining the legs of these sides."""
-    def mutate(d):
-        by_id = {r["id"]: r for r in d["rules"]}
-        by_id["C2"]["runtime"]["spec_paths"] = [
-            *(f"candidate_construction.legs[sell_{s}].strike_selection.{k}" for s in sides
-              for k in ("target_delta", "delta_tolerance")),
-            "candidate_construction.constraints.min_dte", "candidate_construction.constraints.max_dte"]
-        by_id["C3"]["runtime"]["spec_paths"] = [f"candidate_construction.legs[buy_{s}].strike_selection.width"
-                                                for s in sides]
-    return mutate
-
-
-@pytest.mark.parametrize("spec, sides", [(_call_credit_spread, ("call",)), (_iron_condor, ("put", "call"))])
-def test_call_credit_spread_and_iron_condor_pass_the_check_since_p1_07(spec, sides):
-    report = check(proposal(_rules_for(sides)), text=json.dumps(spec()))
-    assert report.errors == []
-    assert report.verdict == "VALID_WITH_DECLARED_GAPS"   # the candidate's declared gaps (E3, E4, ...)
-
-
-def test_call_legs_need_a_supported_rule():
-    errors = check(text=json.dumps(_iron_condor())).errors
-    assert not any("legs must" in e or "not built" in e or "must be positive" in e for e in errors)
-    assert any("legs[sell_call].strike_selection.target_delta" in e and "no supported rule" in e for e in errors)
-
-    pcs_legs_as_ccs = json.loads(spec_text())
-    pcs_legs_as_ccs["structure"]["default_structure"] = "call_credit_spread"
-    assert any("legs must be exactly ['buy_call', 'sell_call']" in e for e in check(text=json.dumps(pcs_legs_as_ccs)).errors)
-    assert any("must be positive" in e for e in check(text=json.dumps(_iron_condor(-0.16))).errors)
-    for path, value, message in [
-        ("candidate_construction.legs.0.strike_selection.target_delta", 0.16, "must be negative (put delta)"),
-        ("candidate_construction.legs.0.strike_selection.delta_tolerance", 0, "delta_tolerance must be positive"),
-        ("candidate_construction.legs.1.strike_selection.width", -5, "width must be positive"),
-    ]:
-        data = json.loads(spec_text())
-        *parents, leaf = path.split(".")
-        node = data
-        for part in parents:
-            node = node[int(part)] if part.isdigit() else node[part]
-        node[leaf] = value
-        assert any(message in e for e in check(text=json.dumps(data)).errors), path
-
-
-def _set(data: dict, path: str, value) -> dict:
-    *parents, leaf = path.split(".")
-    node = data
-    for part in parents:
-        node = node[int(part)] if part.isdigit() else node[part]
-    node[leaf] = value
-    return data
-
-
-@pytest.mark.parametrize("path, value, message", [
-    ("candidate_construction.legs.0.strike_selection.target_delta", "-0.16", "target_delta must be a number"),
-    ("candidate_construction.legs.0.strike_selection.target_delta", None, "target_delta must be a number"),
-    ("candidate_construction.legs.0.strike_selection.target_delta", True, "target_delta must be a number"),
-    ("candidate_construction.legs.0.strike_selection.target_delta", -(10**400), "target_delta must be a number"),
-    ("candidate_construction.constraints.min_credit", 10**400, "min_credit must be positive"),
-    ("candidate_construction.legs.0.strike_selection.delta_tolerance", None, "delta_tolerance must be positive"),
-    ("candidate_construction.legs.1.strike_selection.width", "5", "width must be positive"),
-    ("candidate_construction.legs.1.strike_selection", [], "strike_selection must be an object"),
-    ("structure.allowed_strategies", ["put_credit_spread", "jade_lizard"], "not built by the runtime"),
-    ("structure.allowed_strategies", ["call_credit_spread"], "must be in allowed_strategies"),
-    ("structure.forbidden_strategies", ["put_credit_spread"], "both allowed and forbidden"),
-    ("candidate_construction.constraints.min_credit", 0, "min_credit must be positive"),
-    ("candidate_construction.constraints.min_credit", "0.10", "min_credit must be positive"),
-])
-def test_malformed_or_inconsistent_values_are_invalid_not_accepted(path, value, message):
-    report = check(text=json.dumps(_set(json.loads(spec_text()), path, value)))
+def test_every_executed_path_needs_a_supported_rule():
+    def drop_x3(d):
+        d["rules"] = [r for r in d["rules"] if r["id"] != "X3"]
+        d["parameters"] = [x for x in d["parameters"] if x["rules"] != ["X3"]]
+        d["management"] = [x for x in d["management"] if x["rules"] != ["X3"]]
+    report = check(proposal(drop_x3))
     assert report.verdict == "INVALID"
-    assert any(message in e for e in report.errors), report.errors
+    assert any("exits.deterministic.time_exit.max_dte" in e and "no supported rule explains it" in e
+               for e in report.errors)
+    assert report.coverage["exits.deterministic.time_exit.max_dte"] == []
 
 
-@pytest.mark.parametrize("section", ["structure", "candidate_construction", "identity"])
-def test_a_section_that_is_not_an_object_is_invalid_without_crashing(section):
-    data = json.loads(spec_text())
-    data[section] = ["not", "an", "object"]
-    assert check(text=json.dumps(data)).verdict == "INVALID"
+def test_a_new_executed_path_must_be_explained_without_touching_the_harness():
+    """A block GaleCore starts executing (loss brakes) fails the check until a rule explains it, with no table here."""
+    response = recorded("spy_prima_varianza_valid")
+    response["executed_paths"] = [*response["executed_paths"], "risk_limits.loss_brakes[0].max_loss_usd"]
+    assert any("risk_limits.loss_brakes[0].max_loss_usd" in e for e in check(response=response).errors)
+
+    def explain(d):
+        d["rules"].append({"id": "R9", "block": "risk", "text": "Freno por pérdida diaria.", "basis": "design_choice",
+                           "rationale": "test", "runtime": {"status": "supported",
+                                                            "spec_paths": ["risk_limits.loss_brakes"]}})
+    covered = check(proposal(explain), response=response)
+    assert covered.verdict != "INVALID", covered.errors
+    assert covered.coverage["risk_limits.loss_brakes[0].max_loss_usd"] == ["R9"]
+
+
+@pytest.mark.parametrize(("path", "message"), [
+    ("operational.currency", "GaleCore ignores it (inert)"),
+    ("risk_limits.max_unknown_thing", "GaleCore does not execute it"),
+])
+def test_a_supported_rule_must_cite_paths_galecore_executes(path, message):
+    def fake(d):
+        d["rules"][0]["runtime"]["spec_paths"].append(path)
+    errors = check(proposal(fake)).errors
+    assert any(path in e and "marked supported" in e and message in e for e in errors), errors
+
+
+def test_rule_paths_match_by_prefix_in_either_direction():
+    from galecore_ai.application.strategy import _related
+    assert _related("candidate_construction.legs", "candidate_construction.legs[0].strike_selection.width")
+    assert _related("entry_filters.gate_layer.gates[0]", "entry_filters.gate_layer.gates[0].threshold.value")
+    assert _related("risk_limits.loss_brakes[0].max_loss_usd", "risk_limits.loss_brakes")
+    assert not _related("risk_limits.max_bet", "risk_limits.max_bet_pct")
+    assert not _related("candidate_construction.legs[1]", "candidate_construction.legs[10].x")
+
+
+def test_the_real_client_posts_the_spec_and_reads_the_response():
+    from galecore_ai.application.strategy import galecore_spec_checker
+    with galecore_server() as base:
+        result = galecore_spec_checker(base_url=base)(spec_text())
+    assert result["valid"] is True and "risk_limits.max_loss_per_trade_usd" in result["executed_paths"]
+
+
+@pytest.mark.parametrize("case", ["unreachable", "old_galecore", "server_error"])
+def test_without_galecore_the_check_fails_clearly_and_does_not_fall_back(case):
+    from galecore_ai.application.strategy import galecore_spec_checker
+    if case == "unreachable":
+        checker = galecore_spec_checker(base_url="http://127.0.0.1:9", timeout=2.0)
+        with pytest.raises(KnowledgeError, match="GaleCore no respondió"):
+            check_proposal(proposal(), spec_text(), f"{NAME}.json", checker)
+        return
+    with galecore_server(status=404 if case == "old_galecore" else 500) as base:
+        checker = galecore_spec_checker(base_url=base)
+        with pytest.raises(KnowledgeError, match="anterior al runtime|HTTP 500"):
+            check_proposal(proposal(), spec_text(), f"{NAME}.json", checker)
+
+
+def _without(key):
+    return {k: v for k, v in recorded("spy_prima_varianza_valid").items() if k != key}
+
+
+@pytest.mark.parametrize("response", [
+    _without("executed_paths"), _without("inert_paths"), _without("errors"), _without("content_hash"),
+    recorded("spy_prima_varianza_valid", valid="true"),
+    recorded("spy_prima_varianza_valid", errors="boom"),
+    recorded("spy_prima_varianza_valid", executed_paths=[1]),
+    recorded("spy_prima_varianza_valid", inert_paths=None),
+    recorded("spy_prima_varianza_valid", content_hash=5),
+    ["valid"],
+], ids=["no_executed", "no_inert", "no_errors", "no_hash", "valid_str", "errors_str", "executed_ints", "inert_null",
+        "hash_int", "not_object"])
+def test_an_incomplete_or_mistyped_check_response_is_a_galecore_error_not_an_empty_default(response):
+    from galecore_ai.application.strategy import galecore_spec_checker
+    with galecore_server(response) as base, pytest.raises(KnowledgeError, match="no es un resultado de Check"):
+        check_proposal(proposal(), spec_text(), f"{NAME}.json", galecore_spec_checker(base_url=base))
 
 
 # ── the proposal contract ────────────────────────────────────────
@@ -412,7 +286,7 @@ def research_ref(kb):  # noqa: F811
 
 
 def stored(kb, research_ref, criticised: bool = True):  # noqa: F811
-    saved = save_proposal(kb=kb, prompt="Desarrollá la estrategia hasta SHADOW", host=HOST,
+    saved = save_proposal(checker=fake_checker(), kb=kb, prompt="Desarrollá la estrategia hasta SHADOW", host=HOST,
                           content=proposal(research_ref=research_ref), spec_json=spec_text(),
                           spec_file=f"{NAME}.json", now=NOW)
     if criticised:
@@ -452,12 +326,13 @@ def test_a_version_is_create_only(kb, research_ref):  # noqa: F811
 
 
 def test_invalid_proposals_and_unresolved_refs_are_not_stored(kb, research_ref):  # noqa: F811
-    with pytest.raises(KnowledgeError, match="runtime ignores"):
-        save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(research_ref=research_ref),
-                      spec_json=spec_with(**{"risk_limits.max_portfolio_heat_pct": 7.0}),
+    with pytest.raises(KnowledgeError, match="strike_selection.method must be one of"):
+        save_proposal(checker=fake_checker(recorded("invalid")), kb=kb, prompt="x", host=HOST,
+                      content=proposal(research_ref=research_ref), spec_json=spec_text(),
                       spec_file=f"{NAME}.json", now=NOW)
     with pytest.raises(KnowledgeError, match="no such investigation"):
-        save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(research_ref="research:2026-01-01-nada"),
+        save_proposal(checker=fake_checker(), kb=kb, prompt="x", host=HOST,
+                      content=proposal(research_ref="research:2026-01-01-nada"),
                       spec_json=spec_text(), spec_file=f"{NAME}.json", now=NOW)
     assert not (kb.base / "strategies").exists()
 
@@ -527,7 +402,7 @@ def test_save_requires_the_parameter_table_and_the_management_tree(kb, research_
     assert any(g.startswith("rule X1 has parameter") for g in gaps)
     assert any(g.startswith("rule A1 (adjustment)") for g in gaps)
     with pytest.raises(KnowledgeError) as exc:
-        save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(bare, research_ref=research_ref),
+        save_proposal(checker=fake_checker(), kb=kb, prompt="x", host=HOST, content=proposal(bare, research_ref=research_ref),
                       spec_json=spec_text(), spec_file=f"{NAME}.json", now=NOW)
     assert "the proposal has no parameter table (parameters)" in exc.value.problems
     assert not (kb.base / "strategies").exists()
@@ -595,7 +470,7 @@ def test_sheet_shows_parameters_management_gaps_and_critique(kb, research_ref): 
     assert f"hash `{out['spec_hash']}`" in md   # the owner retypes the exact hash to approve
     assert "| Stop | 200 | % del crédito | 150–300 |" in md
     assert "| G1 | stop |" in md and md.count("| sí |") >= 3
-    assert "| G4 | roll | cualquiera | nada: sin ajustes ni roll | sí (lo hace siempre) |" in md
+    assert "| G4 | roll | cualquiera | nada: sin ajustes ni roll | no aplica |" in md
     assert "| G5 | kill_switch | pérdida acumulada sobre el límite del owner | pausar entradas | no (hueco declarado) |" in md
     assert "**Por qué no:**" in md and "un gap de −5 %" in md
 
@@ -663,19 +538,27 @@ def _cli(*args, stdin=None, env=None):
 
 def test_cli_check_and_hash():
     request = json.dumps({"content": proposal_data()})
-    code, report = _cli("strategy", "check", "--spec", str(SPECS / f"{NAME}.json"), stdin=request)
-    assert code == 0 and report["verdict"] == "VALID_WITH_DECLARED_GAPS" and report["design_gaps"] == []
+    spec = str(SPECS / f"{NAME}.json")
+    with galecore_server() as base:
+        code, report = _cli("strategy", "check", "--spec", spec, stdin=request, env={"GALECORE_BASE_URL": base})
+        assert code == 0 and report["verdict"] == "VALID_WITH_DECLARED_GAPS" and report["design_gaps"] == []
+        assert report["spec_hash"] == GALECORE_HASHES[f"{NAME}.json"]
+    with galecore_server(recorded("invalid")) as base:
+        code, report = _cli("strategy", "check", "--spec", spec, stdin=request, env={"GALECORE_BASE_URL": base})
+        assert code == 3 and report["verdict"] == "INVALID"
+    code, out = _cli("strategy", "check", "--spec", spec, stdin=request, env={"GALECORE_BASE_URL": "http://127.0.0.1:9"})
+    assert code == 3 and out["status"] == "REJECTED" and "GaleCore no respondió" in out["error"]
     code, out = _cli("strategy", "hash", "--spec", str(SPECS / "shadow_runtime_test_v2.json"))
     assert code == 0 and out["spec_hash"] == GALECORE_HASHES["shadow_runtime_test_v2.json"]
-    bad = copy.deepcopy(proposal_data())
-    bad["name"], bad["version"], bad["owner_decisions"] = "pcs_spy_16d_v1", "1.0.0", []
-    code, report = _cli("strategy", "check", "--spec", str(SPECS / "pcs_spy_16d_v1.json"),
-                        stdin=json.dumps({"content": bad}))
-    assert code == 3 and report["verdict"] == "INVALID"
 
 
 def test_cli_save_approve_deploy_check(kb, research_ref):  # noqa: F811
-    env = {KNOWLEDGE_DIR_ENV: str(kb.base)}
+    with galecore_server() as base:
+        _cli_save_approve_deploy_check(kb, research_ref, base)
+
+
+def _cli_save_approve_deploy_check(kb, research_ref, base):  # noqa: F811
+    env = {KNOWLEDGE_DIR_ENV: str(kb.base), "GALECORE_BASE_URL": base}
     request = json.dumps({"content": proposal(research_ref=research_ref).model_dump(mode="json"),
                           "host_provider": "claude-code", "host_model": "test"})
     code, saved = _cli("strategy", "save", "--spec", str(SPECS / f"{NAME}.json"), "--prompt", "Hasta SHADOW",
@@ -743,7 +626,7 @@ def test_save_refuses_a_rule_parameter_missing_from_the_table(kb, research_ref):
     def partial(d):
         d["parameters"] = [p for p in d["parameters"] if p["rules"] != ["X1"]]
     with pytest.raises(KnowledgeError) as exc:
-        save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(partial, research_ref=research_ref),
+        save_proposal(checker=fake_checker(), kb=kb, prompt="x", host=HOST, content=proposal(partial, research_ref=research_ref),
                       spec_json=spec_text(), spec_file=f"{NAME}.json", now=NOW)
     assert any(p.startswith("rule X1 has parameter") for p in exc.value.problems)
 
@@ -874,7 +757,7 @@ def _next_version(kb, research_ref, change):  # noqa: F811
                 r["text"] += " Hasta 3 posiciones."
         if change is not None:
             d["change"] = change
-    return save_proposal(kb=kb, prompt="x", host=HOST, content=proposal(bump, research_ref=research_ref),
+    return save_proposal(checker=fake_checker(), kb=kb, prompt="x", host=HOST, content=proposal(bump, research_ref=research_ref),
                          spec_json=json.dumps(spec, indent=2), spec_file=f"{NAME}.json", now=NOW)
 
 
@@ -975,101 +858,5 @@ def test_capital_sizes_each_strategy_with_its_own_amount(kb, research_ref):  # n
     assert isinstance(out["reparto"], list) and len(out["reparto"]) == 1
 
 
-# ── long_equity (acciones en largo, GaleCore WS-0061) ────────────
-
-AAPL = "aapl_cruce_ema_20_50"
-AAPL_GATE = "entry_filters.gate_layer.gates[ema20_above_ema50]"
 
 
-def _aapl() -> dict:
-    spec = json.loads(spec_text(f"{AAPL}.json"))
-    spec["identity"]["version"] = "1.0.3"   # the proposal fixture's version
-    return spec
-
-
-def _aapl_rules() -> ProposalContent:
-    """The candidate's proposal with the rules that only make sense for options removed and the gate and the
-    metric exit explained."""
-    data = proposal_data()
-    data["name"] = AAPL
-    gone = {"C2", "C3", "C4", "R1", "X2", "X3"}
-    data["rules"] = [r for r in data["rules"] if r["id"] not in gone]
-    data["parameters"] = [p for p in data["parameters"] if not gone & set(p["rules"])]
-    data["management"] = [g for g in data["management"] if not gone & set(g["rules"])]
-    by_id = {r["id"]: r for r in data["rules"]}
-    by_id["E2"]["runtime"]["spec_paths"] = [AAPL_GATE]
-    by_id["X1"]["runtime"]["spec_paths"] = ["exits.deterministic.metric_exit"]
-    return ProposalContent.model_validate(data)
-
-
-def _check_aapl(spec: dict | None = None, rules: ProposalContent | None = None):
-    return check_proposal(rules or _aapl_rules(), json.dumps(spec or _aapl()), f"{AAPL}.json")
-
-
-def test_long_equity_spec_equivalent_to_aapl_passes_the_check():
-    report = _check_aapl()
-    assert report.verdict in {"VALID", "VALID_WITH_DECLARED_GAPS"}, report.errors
-    assert report.coverage[AAPL_GATE] == ["E2"]
-    assert report.coverage["exits.deterministic.metric_exit"] == ["X1"]
-    assert report.coverage
-
-
-def test_long_equity_needs_rules_for_what_the_runtime_executes():
-    data = _aapl_rules().model_dump(mode="json")
-    for rid in ("E2", "S1", "X1"):
-        next(r for r in data["rules"] if r["id"] == rid)["runtime"]["spec_paths"] = ["operational.timezone"]
-    errors = _check_aapl(rules=ProposalContent.model_validate(data)).errors
-    assert any("metric_exit" in e and "no supported rule" in e for e in errors)
-    assert any("fixed_contracts" in e and "no supported rule" in e for e in errors)
-    assert any(AAPL_GATE in e and "no supported rule" in e for e in errors)
-
-
-def test_long_equity_take_profit_stop_loss_and_time_exit_are_not_executed():
-    for path, value in [("take_profit", {"pct_of_credit": 0.5}), ("stop_loss", {"pct_of_credit": 2.0}),
-                        ("time_exit", {"max_dte": 7})]:
-        spec = _aapl()
-        spec["exits"]["deterministic"][path] = value
-        errors = _check_aapl(spec).errors
-        assert any(f"exits.deterministic.{path}" in e and "long_equity" in e for e in errors), (path, errors)
-        # and a rule cannot claim the runtime executes it
-        data = _aapl_rules().model_dump(mode="json")
-        key = f"exits.deterministic.{path}.{next(iter(value))}"
-        next(r for r in data["rules"] if r["id"] == "X1")["runtime"]["spec_paths"].append(key)
-        errors = _check_aapl(spec, ProposalContent.model_validate(data)).errors
-        assert any(key in e and "does not execute" in e for e in errors), (path, errors)
-
-
-@pytest.mark.parametrize(("path", "value", "message"), [
-    ("universe.instrument_types", ["EQUITY_OPTION"], "only has ['EQUITY']"),
-    ("candidate_construction.sizing.fixed_contracts", 0, "positive integer"),
-    ("candidate_construction.sizing.fixed_contracts", None, "positive integer"),
-    ("candidate_construction.sizing.method", "RISK_BASED", "must be FIXED"),
-    ("candidate_construction.constraints.min_dte", 30, "does not apply to long_equity"),
-    ("entry_filters.gate_layer.gates.0.metric_ref", "capability:compute.ema_spread.AAPL.50.20", "0 < fast < slow"),
-    ("exits.deterministic.metric_exit.metric_ref", "capability:compute.rsi.AAPL.14", "not one the runtime resolves"),
-    ("exits.deterministic.metric_exit.operator", "ABOVE", "operator 'ABOVE' unknown"),
-])
-def test_long_equity_values_the_runtime_would_not_honor_are_invalid(path, value, message):
-    spec = _aapl()
-    *parents, leaf = path.split(".")
-    node = spec
-    for part in parents:
-        node = node[int(part)] if part.isdigit() else node[part]
-    node[leaf] = value
-    report = _check_aapl(spec)
-    assert report.verdict == "INVALID"
-    assert any(message in e for e in report.errors), report.errors
-
-
-def test_stock_leg_does_not_need_a_strike_and_spreads_keep_their_rules():
-    spec = _aapl()
-    spec["candidate_construction"]["legs"][0]["strike_selection"]["width"] = 5
-    assert any("legs[buy_stock].strike_selection.width" in e for e in _check_aapl(spec).errors)
-    # an option spread still cannot size by shares, fix instrument EQUITY or take a metric exit without a rule
-    assert any("fixed_contracts = 10" in e for e in check(text=spec_with(**{
-        "candidate_construction.sizing": {"method": "FIXED", "fixed_contracts": 10, "risk_per_trade_pct": None}})).errors)
-    assert any("instrument_types" in e for e in check(text=spec_with(**{"universe.instrument_types": ["EQUITY"]})).errors)
-    exit_spec = json.loads(spec_text())
-    exit_spec["exits"]["deterministic"]["metric_exit"] = {
-        "metric_ref": "capability:market_data.quote.VIX.price", "operator": "GT", "threshold": {"value": 30}}
-    assert any("metric_exit" in e and "no supported rule" in e for e in check(text=json.dumps(exit_spec)).errors)

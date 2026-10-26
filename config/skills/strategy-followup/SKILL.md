@@ -1,6 +1,6 @@
 ---
 name: strategy-followup
-version: 1.0.0
+version: 1.1.0
 display_name: Seguimiento de una estrategia
 description: >
   Responde «¿qué hizo esta estrategia desde la última revisión, por qué entró o no, cómo evolucionaron sus posiciones
@@ -30,7 +30,7 @@ algo en la hipótesis?». También la corre el agente programado de seguimiento 
    - **Funcionamiento operativo:** evaluaciones corridas, bloqueos y sus motivos (NO_DATA, cotización vieja, fuera de
      horario), errores; si el runtime hizo lo que dicen las reglas.
    - **Resultados SHADOW:** entradas, descartes y por qué, posiciones, valuaciones, salidas y resultado simulado. Los
-     fills de SHADOW son simulados al medio con cotizaciones reales: nunca «ejecuciones».
+     fills de SHADOW son simulados con el fill y los costos que declara la spec (natural por defecto) sobre cotizaciones reales: nunca «ejecuciones».
    - **Evidencia económica:** qué puede y qué no puede decir esta muestra contra el plan de evaluación (cerradas contra
      la muestra que pide el plan). Pocas operaciones no son evidencia de edge.
 4. Qué cambia en la hipótesis: sólo lo que sostienen los datos; si nada, decir que no cambia y por qué. Registrarlo

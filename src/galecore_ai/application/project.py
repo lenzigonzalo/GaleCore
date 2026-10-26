@@ -214,7 +214,7 @@ def _followup_view(kb: KnowledgeBase, name: str, broken: list[dict]) -> dict | N
             "path": _display_path(kb.base / "followups" / name / f"{r.id.split('/', 1)[1]}.json", kb)}
 
 
-def strategy_project(kb: KnowledgeBase, name: str) -> dict:
+def strategy_project(kb: KnowledgeBase, name: str, checker: controls.SpecChecker | None = None) -> dict:
     """Everything about one strategy, each item with its reference; what is missing is declared."""
     broken: list[dict] = []
     versions = _versions(kb, name, broken)
@@ -241,7 +241,7 @@ def strategy_project(kb: KnowledgeBase, name: str) -> dict:
         if current["approval"] is None:
             # WS-0027 R2: «¿la activo o espero?» was answered from this view alone, proposing approval on credit;
             # whether approval is recommended, and why, is part of the project, not something the session may skip.
-            ctl = controls.classify(current["doc"])
+            ctl = controls.classify(current["doc"], checker)
             view["current"]["aprobacion"] = {"recomendar_aprobacion": ctl["recomendar_aprobacion"],
                                              "motivo": ctl["motivo"],
                                              "detalle": f"strategy controls --ref {current['ref']}"}
@@ -265,7 +265,7 @@ def strategy_project(kb: KnowledgeBase, name: str) -> dict:
     return view
 
 
-def strategy_design_view(kb: KnowledgeBase, name: str) -> dict:
+def strategy_design_view(kb: KnowledgeBase, name: str, checker: controls.SpecChecker | None = None) -> dict:
     """The saved design only: verified local files, no research scan, market API or model.
 
     Keep the same approved/latest selection as project show. Expose the complete method instead
@@ -296,7 +296,7 @@ def strategy_design_view(kb: KnowledgeBase, name: str) -> dict:
         current = doc.content.model_dump(mode="json")
         current.update(ref=selected["ref"], approved=approval is not None, spec_hash=doc.spec_hash,
                        recorded_at=doc.recorded_at.isoformat(), spec=json.loads(doc.spec_json),
-                       declared_gaps=doc.check.declared_gaps, controls=controls.classify(doc),
+                       declared_gaps=doc.check.declared_gaps, controls=controls.classify(doc, checker),
                        critique=critique.content.model_dump(mode="json") if critique else None)
         current["rules"] = [{**r.model_dump(mode="json"), "runtime": r.runtime.status.value,
                              "runtime_note": r.runtime.note, "spec_paths": r.runtime.spec_paths}

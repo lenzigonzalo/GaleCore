@@ -297,7 +297,7 @@ def report(kb: KnowledgeBase, read: supervisor.Reader, *, capital: float | None 
         raise supervisor.SupervisorError("GaleCore devolvió algo que no es exposición o reparto")
     missing = ["cuenta real: esto es lo simulado en SHADOW (sin broker); la cuenta real se mide con `capital --real`",
                "correlación entre subyacentes: se agrupa por subyacente, dirección y semana; no se mide la correlación",
-               "costos: el riesgo es el máximo del spread, sin comisiones"]
+               "costos: el riesgo es la pérdida máxima por payoff × contratos de cada posición; no suma las comisiones ni el fill que declara la spec (esos entran en el resultado de SHADOW)"]
     if len(ready) > 1:
         missing.append(f"la exposición agregada se mide con los límites de {first}: cada estrategia declara los suyos")
     notready = sorted(n for n in amounts if n not in ready)

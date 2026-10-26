@@ -52,7 +52,9 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
-          "entry_filters.gate_layer.gates[vix_below_30]"
+          "entry_filters.gate_layer.gates[0]",
+          "entry_filters.gate_layer.pass_rule",
+          "entry_filters.gate_layer.on_fail"
         ]
       }
     },
@@ -81,7 +83,7 @@
       ],
       "runtime": {
         "status": "unsupported",
-        "note": "El runtime no tiene calendario de eventos. Queda fuera de la spec; el seguimiento marca las posiciones que atraviesan un evento. Soportarlo requiere un dato operacional en GaleCore."
+        "note": "El runtime ejecuta un calendario de eventos, pero esta spec no declara ninguno. Queda fuera de la spec; el seguimiento marca las posiciones que atraviesan un evento."
       }
     },
     {
@@ -123,8 +125,10 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
-          "candidate_construction.legs[sell_put].strike_selection.target_delta",
-          "candidate_construction.legs[sell_put].strike_selection.delta_tolerance",
+          "candidate_construction.legs[0].side",
+          "candidate_construction.legs[0].type",
+          "candidate_construction.legs[0].strike_selection.target_delta",
+          "candidate_construction.legs[0].strike_selection.delta_tolerance",
           "candidate_construction.constraints.min_dte",
           "candidate_construction.constraints.max_dte"
         ]
@@ -140,7 +144,9 @@
       "runtime": {
         "status": "supported",
         "spec_paths": [
-          "candidate_construction.legs[buy_put].strike_selection.width"
+          "candidate_construction.legs[1].side",
+          "candidate_construction.legs[1].type",
+          "candidate_construction.legs[1].strike_selection.width"
         ]
       }
     },
@@ -180,7 +186,7 @@
       "rationale": "Requiere capital base y porcentaje del owner; necesario antes de PAPER.",
       "runtime": {
         "status": "unsupported",
-        "note": "El runtime SHADOW no dimensiona (siempre 1 contrato) y compara el riesgo contra un net liq que en SHADOW es nulo. Fuera de la spec hasta PAPER."
+        "note": "El runtime ejecuta sizing RISK_BASED, pero esta spec no lo declara: falta el capital base y el porcentaje del owner. Fuera de la spec hasta que los confirme."
       }
     },
     {
@@ -205,21 +211,19 @@
       "rationale": "El owner fija el drawdown aceptable; necesario antes de PAPER.",
       "runtime": {
         "status": "unsupported",
-        "note": "El runtime no mide heat ni drawdown para pausar. En SHADOW lo vigila el seguimiento; fuera de la spec."
+        "note": "Esta spec no declara frenos por pérdida acumulada (el runtime ejecuta los de risk_limits.loss_brakes); sin ellos el seguimiento vigila el drawdown. Fuera de la spec."
       }
     },
     {
       "id": "M1",
       "block": "monitoring",
-      "text": "La posición abierta se valúa en cada ciclo con cotizaciones reales. En SHADOW una cotización se usa si su hora tiene hasta 150 s (15 s × el factor 10 del runtime) o si no trae hora (entonces la edad no se puede medir); una cotización cruzada o sin bid/ask válido nunca se usa (sin valuación ni salida en ese ciclo).",
+      "text": "La posición abierta se valúa en cada ciclo con cotizaciones reales. En SHADOW una cotización se usa si su hora tiene hasta 150 s (15 s × el factor 10 del runtime); una cotización sin hora no entra (la edad no se puede medir), y una cruzada o sin bid/ask válido nunca se usa (sin valuación ni salida en ese ciclo).",
       "basis": "design_choice",
-      "rationale": "Control de frescura de las specs de prueba validadas en I2–I3, descrito como lo ejecuta GaleCore; aceptar cotizaciones sin hora es una limitación del runtime, visible en los eventos.",
+      "rationale": "Control de frescura de las specs de prueba validadas en I2–I3, descrito como lo ejecuta GaleCore: sin hora la cotización no entra y el ciclo queda sin valuación, visible en los eventos.",
       "runtime": {
         "status": "supported",
         "spec_paths": [
-          "data_quality.max_quote_age_seconds",
-          "data_quality.block_on_crossed_market",
-          "data_quality.block_on_missing_critical_data"
+          "data_quality.max_quote_age_seconds"
         ]
       }
     },
@@ -255,10 +259,8 @@
       "basis": "design_choice",
       "rationale": "El runtime no hace roll y la semántica del roll de RPF está en disputa (R10 del piloto); un roll mal definido no se puede evaluar.",
       "runtime": {
-        "status": "supported",
-        "spec_paths": [
-          "exits.deterministic.defensive_roll.enabled"
-        ]
+        "status": "not_applicable",
+        "note": "El runtime no hace roll; no hay nada que ejecutar."
       }
     },
     {

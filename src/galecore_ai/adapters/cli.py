@@ -122,6 +122,7 @@ from galecore_ai.application.strategy import (
 from galecore_ai.application.strategy import (
     check_proposal,
     deploy_check,
+    galecore_spec_checker,
     galecore_spec_hash,
     load_proposal,
     save_proposal,
@@ -864,11 +865,11 @@ async def _cmd_project(args: argparse.Namespace) -> None:
             if args.project_command == "design":
                 if not target.startswith("strategy:"):
                     raise KnowledgeError("project design needs strategy:<name>")
-                view = project.strategy_design_view(kb, target.split(":", 1)[1])
+                view = project.strategy_design_view(kb, target.split(":", 1)[1], galecore_spec_checker())
             elif target == "portfolio":
                 view = project.portfolio_project(kb)
             elif target.startswith("strategy:"):
-                view = project.strategy_project(kb, target.split(":", 1)[1])
+                view = project.strategy_project(kb, target.split(":", 1)[1], galecore_spec_checker())
             else:
                 raise KnowledgeError(f"{target!r}: use strategy:<name> or portfolio")
             _json_out(view, exit_code=_EXIT_VALIDATION_ERROR if view["integrity_failed"] else _EXIT_SUCCESS)
@@ -1185,7 +1186,11 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
     if args.strategy_command == "check":
         content, _ = _read_proposal_request()
         text, name = _read_spec(args.spec)
-        report = check_proposal(content, text, name)
+        try:
+            report = check_proposal(content, text, name)   # asks GaleCore (/App/Runtime/Specs/Check); no fallback
+        except KnowledgeError as exc:
+            _knowledge_error_out(exc)
+            raise AssertionError("unreachable") from exc
         from galecore_ai.contracts.strategy import design_gaps
         _json_out({**report.model_dump(mode="json"), "spec_hash": galecore_spec_hash(text),
                    "design_gaps": design_gaps(content)},
@@ -1230,11 +1235,12 @@ async def _cmd_strategy(args: argparse.Namespace) -> None:
             doc = kb.strategies.load(key)
             if doc is None:
                 raise KnowledgeError(f"no strategy {args.ref}")
-            _json_out(classify(doc))
+            _json_out(classify(doc, galecore_spec_checker()))   # asks GaleCore again; none, no recommendation
         if args.strategy_command == "sheet":
             from galecore_ai.application import supervisor
             from galecore_ai.application.strategy_sheet import sheet
-            _json_out(sheet(kb, key, None if args.offline else supervisor.api_reader()))
+            _json_out(sheet(kb, key, None if args.offline else supervisor.api_reader(),
+                        None if args.offline else galecore_spec_checker()))
         if args.strategy_command == "diff":
             from galecore_ai.application.strategy_sheet import diff
             _json_out(diff(kb, strategy_key(args.from_ref), key))

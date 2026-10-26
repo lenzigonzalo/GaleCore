@@ -543,7 +543,7 @@ entries:
       - "Numbers come from GaleCore App/Runtime/Performance; the code only compares them with the numbers the strategy declares in its design (what it does not declare is listed in criterios.no_leidos, never guessed)"
       - "Edge: below the strategy's declared sample (closes and days) the conclusion is «sin edge demostrado» whatever the result"
       - "A close's diagnosis separates observado (limit of the design not respected, fill worse than its rule's level beyond max(2 USD, 10 % of the credit)) from hipotesis (a loss inside the plan: thesis to review only if it repeats)"
-      - "Not checked - costs (SHADOW fills at mid, no commissions), comparison against cash (no risk-free rate in the report), positions closed before persistence existed"
+      - "Not checked - costs beyond those the spec declares (net P&L uses the spec's fill and declared costs; positions closed before WS-0062 are at mid, no costs), comparison against cash (no risk-free rate in the report), positions closed before persistence existed"
 
   - id: capital_risk
     kind: investigation
