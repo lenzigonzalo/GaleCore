@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "2.3.0"
+    date: 2026-10-26
+    changes: >
+      Si la estrategia se guarda con otro nombre que el proyecto del Lab, se vincula con `mark_strategy.py <nombre>` para que
+      Estrategias no muestre dos proyectos (owner 26/10: Sandwich SPY y sandwich_spx_0dte_1345).
+    feedback: []
   - version: "2.2.0"
     date: 2026-10-25
     changes: >
