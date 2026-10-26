@@ -116,6 +116,23 @@ public class StrategySpecCheckerTests
     }
 
     [Fact]
+    public void PointsFromAtm_IsInTheCatalog_AndASpecWithItIsValid_WithItsPathsExecuted()
+    {
+        Assert.Contains("POINTS_FROM_ATM", StrategySpecChecker.Catalog().LegSelectors);
+        Assert.Contains("POINTS_FROM_SPOT", StrategySpecChecker.Catalog().LegSelectors);
+
+        var node = JsonNode.Parse(Sandwich())!;
+        var sel = node["candidate_construction"]!["legs"]!.AsArray().First(l => l!["id"]!.ToString() == "put_vendida")!["strike_selection"]!.AsObject();
+        sel.Remove("points_from_spot");
+        sel["method"] = "POINTS_FROM_ATM";
+        sel["points_from_atm"] = -5;
+        var r = StrategySpecChecker.Check(node.ToJsonString());
+
+        Assert.True(r.Valid, string.Join("; ", r.Errors));
+        Assert.Contains(r.ExecutedPaths, p => p.StartsWith("candidate_construction.legs[") && p.EndsWith("].strike_selection"));
+    }
+
+    [Fact]
     public void ControllerRoute_IsPostRuntimeSpecsCheck_AndOnlyReadsAndChecks()
     {
         // DataFeed.Api no se referencia desde los tests (ver el csproj): se lee el fuente del controller.

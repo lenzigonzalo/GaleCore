@@ -22,7 +22,7 @@ namespace DataFeed.Application.App.Runtime
         public const string LongEquity = "long_equity";
 
         /// <summary>Métodos de selección de strike de las patas de custom_options.</summary>
-        public static readonly string[] CustomLegMethods = { "DELTA", "POINTS_FROM_SPOT", "PCT_FROM_SPOT", "FIXED_STRIKE", "OFFSET_FROM_LEG" };
+        public static readonly string[] CustomLegMethods = { "DELTA", "POINTS_FROM_SPOT", "PCT_FROM_SPOT", "POINTS_FROM_ATM", "FIXED_STRIKE", "OFFSET_FROM_LEG" };
 
         public static readonly string[] Supported = { PutCreditSpread, CallCreditSpread, IronCondor, CustomOptions, LongEquity };
 
@@ -132,13 +132,14 @@ namespace DataFeed.Application.App.Runtime
                     "DELTA" => new (string, bool)[] { ("target_delta", s.TargetDelta != null), ("delta_tolerance", s.DeltaTolerance != null) },
                     "POINTS_FROM_SPOT" => new (string, bool)[] { ("points_from_spot", s.PointsFromSpot != null) },
                     "PCT_FROM_SPOT" => new (string, bool)[] { ("pct_from_spot", s.PctFromSpot != null) },
+                    "POINTS_FROM_ATM" => new (string, bool)[] { ("points_from_atm", s.PointsFromAtm != null) },
                     "FIXED_STRIKE" => new (string, bool)[] { ("strike", s.Strike != null) },
                     "OFFSET_FROM_LEG" => new (string, bool)[] { ("from_leg", s.FromLeg != null), ("offset_points", s.OffsetPoints != null) },
                     _ => new (string, bool)[] { ($"un strike_selection.method soportado en la pata {id}", false) },
                 };
                 missing.AddRange(required.Where(r => !r.Item2).Select(r => r.Item1));
                 plans.Add(new LegPlan(id, l.Side, l.Type, s.Method, s.TargetDelta, s.DeltaTolerance, s.PointsFromSpot, s.PctFromSpot,
-                    s.Strike, s.FromLeg, s.OffsetPoints, s.TolerancePoints ?? 0));
+                    s.Strike, s.FromLeg, s.OffsetPoints, s.TolerancePoints ?? 0, s.PointsFromAtm));
             }
             return (plans, missing);
         }

@@ -312,6 +312,69 @@ public class OptionStructureBuilderTests
         Assert.Contains("no hay strike 7613", result.RejectReason);
     }
 
+    // ── POINTS_FROM_ATM: a N puntos del strike más cercano al precio ──
+
+    private static StrategySpec Condor(double atmPoints = 5) => With(Sandwich(1.0),
+        Leg("put_vendida", "SELL", "PUT", new() { Method = "POINTS_FROM_ATM", PointsFromAtm = -atmPoints }),
+        Leg("put_comprada", "BUY", "PUT", new() { Method = "OFFSET_FROM_LEG", FromLeg = "put_vendida", OffsetPoints = -5 }),
+        Leg("call_vendida", "SELL", "CALL", new() { Method = "POINTS_FROM_ATM", PointsFromAtm = atmPoints }),
+        Leg("call_comprada", "BUY", "CALL", new() { Method = "OFFSET_FROM_LEG", FromLeg = "call_vendida", OffsetPoints = 5 }));
+
+    private static CreditSpreadCandidateBuilderTests.FakeSource CondorSource(double spot)
+    {
+        var s = Source();
+        s.Underlying = new UnderlyingQuote(spot, Now.AddSeconds(-2));
+        void Q(string sym, double bid, double ask) => s.Quotes[sym] = new LegQuote(bid, ask, Now.AddSeconds(-3));
+        Q(".SPXW260924P7670", 2.00, 2.20); Q(".SPXW260924P7665", 1.00, 1.10);
+        Q(".SPXW260924C7680", 2.00, 2.20); Q(".SPXW260924C7685", 1.00, 1.10);
+        return s;
+    }
+
+    [Fact]
+    public async Task PointsFromAtm_CentersOnTheNearestStrike_Condor()
+    {
+        // Spot 7.676,02: ATM = 7675 (POINTS_FROM_SPOT daría 7670/7685); vendidos a 5 del ATM, alas 5 más afuera.
+        var result = await Build(CondorSource(7676.02), Condor());
+
+        var c = Assert.IsType<TradeCandidate>(result.Candidate);
+        Assert.Equal(new[] { ("SELL", "PUT", 7670.0), ("BUY", "PUT", 7665.0), ("SELL", "CALL", 7680.0), ("BUY", "CALL", 7685.0) },
+            c.Legs.Select(l => (l.Side, l.Type, l.Strike)));
+    }
+
+    [Fact]
+    public async Task PointsFromAtm_ExactTie_PicksTheLowerStrike()
+    {
+        // Spot 7.677,50 equidista de 7675 y 7680: ATM = 7675 (el más bajo).
+        var result = await Build(CondorSource(7677.50), Condor());
+
+        var c = Assert.IsType<TradeCandidate>(result.Candidate);
+        Assert.Equal(new[] { 7670.0, 7665.0, 7680.0, 7685.0 }, c.Legs.Select(l => l.Strike));
+    }
+
+    [Fact]
+    public async Task PointsFromAtm_TargetThatDoesNotExist_Rejected_WithReason()
+    {
+        // 7673 no está en la cadena (strikes cada 5): no se aproxima.
+        var result = await Build(CondorSource(7676.02), Condor(atmPoints: 2));
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("no hay strike 7673 (ATM 7675 + -2) de put", result.RejectReason);
+    }
+
+    [Fact]
+    public void PointsFromAtm_Validator_MissingFieldAndMixedMethod()
+    {
+        var spec = With(Sandwich(),
+            Leg("a", "SELL", "PUT", new() { Method = "POINTS_FROM_ATM" }),
+            Leg("b", "SELL", "CALL", new() { Method = "POINTS_FROM_ATM", PointsFromAtm = 5, PointsFromSpot = 5 }));
+
+        var errors = Errors(spec);
+
+        Assert.Contains(errors, e => e.Contains("points_from_atm is required for method POINTS_FROM_ATM"));
+        Assert.Contains(errors, e => e.Contains("points_from_spot does not apply to method POINTS_FROM_ATM"));
+        Assert.Empty(Errors(Condor()));
+    }
+
     [Fact]
     public async Task UncoveredShortCall_NoCandidate_UnlimitedRisk()
     {

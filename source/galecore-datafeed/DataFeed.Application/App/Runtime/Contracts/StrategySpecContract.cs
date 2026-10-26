@@ -174,7 +174,7 @@ namespace DataFeed.Application.App.Runtime.Contracts
     {
         /// <summary>
         /// "DELTA" | "FIXED_WIDTH" (familias con ancho) | "PERCENTAGE_OTM", y las de custom_options:
-        /// "POINTS_FROM_SPOT" | "PCT_FROM_SPOT" | "FIXED_STRIKE" | "OFFSET_FROM_LEG".
+        /// "POINTS_FROM_SPOT" | "PCT_FROM_SPOT" | "POINTS_FROM_ATM" | "FIXED_STRIKE" | "OFFSET_FROM_LEG".
         /// </summary>
         public string Method { get; init; } = "";
         public double? TargetDelta { get; init; }
@@ -184,6 +184,11 @@ namespace DataFeed.Application.App.Runtime.Contracts
         public double? PointsFromSpot { get; init; }
         /// <summary>PCT_FROM_SPOT, con signo y en %: -1 = el primer strike a 1 % o más debajo del precio.</summary>
         public double? PctFromSpot { get; init; }
+        /// <summary>
+        /// POINTS_FROM_ATM, con signo: ATM = el strike de la cadena (de ese vencimiento y tipo) más cercano al precio, con empate el más bajo;
+        /// -5 = 5 puntos debajo del ATM, +5 = arriba, 0 = el ATM. El strike resultante tiene que existir exacto.
+        /// </summary>
+        public double? PointsFromAtm { get; init; }
         /// <summary>FIXED_STRIKE: ese strike exacto (tiene que existir en el vencimiento elegido).</summary>
         public double? Strike { get; init; }
         /// <summary>OFFSET_FROM_LEG: id de la pata de la que se mide.</summary>
