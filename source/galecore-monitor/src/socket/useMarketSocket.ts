@@ -68,7 +68,10 @@ export function useMarketSocket(tickers: string[] = []) {
       .withUrl(hubUrl, {
         accessTokenFactory: async () => (await getAccessToken()) ?? '',
       })
-      .withAutomaticReconnect()
+      // Reintenta sin rendirse (0, 2, 10 s y después cada 30 s). La política por defecto abandona a
+      // los ~40 s: un reinicio de la API dejaba el indicador en Offline hasta recargar la página,
+      // aunque los datos por HTTP siguieran llegando.
+      .withAutomaticReconnect({ nextRetryDelayInMilliseconds: (ctx) => [0, 2000, 10000][ctx.previousRetryCount] ?? 30000 })
       .configureLogging(signalR.LogLevel.Warning)
       .build();
 
@@ -136,8 +139,10 @@ export function useMarketSocket(tickers: string[] = []) {
     // ── Start connection ──────────────────────────────────────────────────
     // El universo NO se suscribe acá: de eso se encarga el efecto de abajo, que reacciona a
     // `tickers`. Acá solo va lo que no depende del universo.
+    // Si la API no está al abrir el tablero, el primer start() falla y la reconexión automática no
+    // lo cubre: se reintenta cada 10 s hasta que conecte o se desmonte.
     setStatus('connecting');
-    const started = connection
+    const start = (): Promise<void> => connection
       .start()
       .then(() => {
         if (disposed) return;
@@ -149,7 +154,9 @@ export function useMarketSocket(tickers: string[] = []) {
         if (disposed) return;
         console.error('SignalR connection error:', err);
         setStatus('error');
+        return new Promise<void>((r) => setTimeout(r, 10000)).then(() => (disposed ? undefined : start()));
       });
+    const started = start();
 
     return () => {
       disposed = true;

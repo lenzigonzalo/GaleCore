@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { KeyRound, RefreshCw, Unlink } from 'lucide-react';
 import { BrokerAccountState, fetchBrokerAccount, linkBrokerAccount, unlinkBrokerAccount } from '../../api/brokerAccount';
+import { describeAccountError, fetchAccountOverview } from '../../api/account';
 import { tint } from '../../utils/formatters';
 
 const ACCENT = 'var(--blue-gc)';
@@ -45,16 +46,25 @@ export function BrokerAccountCard({ onLinked }: { onLinked?: () => void }) {
   // Desvincular borra el refresh token cifrado y no se puede deshacer sin volver a pegarlo, así que
   // pide una confirmación explícita en vez de borrar de un click.
   const [confirmandoUnlink, setConfirmandoUnlink] = useState(false);
+  // Vinculada no es lo mismo que conectada: se comprueba leyendo la cuenta en Tastytrade.
+  const [conexion, setConexion] = useState<'checking' | 'ok' | 'rejected' | 'unknown' | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setState(null);
     setError(null);
+    setConexion(null);
     try {
       const data = await fetchBrokerAccount();
       setState(data);
       // Solo propone el número que ya está vinculado: el que se rota es el token, no la cuenta.
       if (data.accountNumber) setAccountNumber((prev) => prev || data.accountNumber!);
+      if (data.linked) {
+        setConexion('checking');
+        fetchAccountOverview()
+          .then(() => setConexion('ok'))
+          .catch((err) => setConexion(describeAccountError(err).brokerAccountIssue === 'credential_invalid' ? 'rejected' : 'unknown'));
+      }
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'No se pudo leer la cuenta vinculada');
     } finally {
@@ -170,6 +180,18 @@ export function BrokerAccountCard({ onLinked }: { onLinked?: () => void }) {
         </button>
       </div>
 
+      {/* Estado de la conexión, como en Conexiones (Claude Code / Codex) */}
+      {!loading && state && (
+        <span className={'settings-status' + (conexion === 'ok' ? ' is-good' : '')} role="status">
+          <i />
+          {!state.linked ? 'Sin cuenta vinculada'
+            : conexion === 'ok' ? 'Cuenta conectada'
+            : conexion === 'rejected' ? 'Tastytrade rechaza la credencial'
+            : conexion === 'unknown' ? 'Vinculada, sin poder comprobar la conexión'
+            : 'Comprobando…'}
+        </span>
+      )}
+
       {/* Estado actual */}
       <div style={{ fontSize: 15, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
         {loading && 'Leyendo…'}
@@ -187,9 +209,6 @@ export function BrokerAccountCard({ onLinked }: { onLinked?: () => void }) {
               </span>
             )}
           </>
-        )}
-        {!loading && state && !state.linked && (
-          <span style={{ color: 'var(--text-muted)' }}>Sin cuenta vinculada.</span>
         )}
       </div>
 

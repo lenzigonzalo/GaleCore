@@ -232,7 +232,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
               {cell(row.realizedPnl, panelUsd, true)}{cell(row.winRate, rate)}<td className="numeric">{row.tradesClosed || ''}</td>{cell(row.maxDrawdown, amount)}
               <td className="strategy-actions" onClick={event => event.stopPropagation()}>{rowAction(row)}</td>
             </tr>)}
-            {countIn(currentStage) === 0 && <tr><td colSpan={9} className="strategy-empty">{currentStage === 'PAPER' ? 'Ninguna estrategia en Paper. Paper necesita la cuenta paper del bróker, que todavía no está conectada.' : 'Ninguna estrategia en esta etapa.'}</td></tr>}
+            {countIn(currentStage) === 0 && <tr><td colSpan={9} className="strategy-empty">Ninguna estrategia en esta etapa.</td></tr>}
           </tbody>
           {currentStage === 'SHADOW' && designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={9}>En diseño</th></tr>
             {designOnly.map(project => <tr key={project.id} className="strategy-row" tabIndex={0} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.key === 'Enter') setSpec(project.strategyName); }}>
