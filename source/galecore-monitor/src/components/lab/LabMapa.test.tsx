@@ -67,3 +67,10 @@ test('evidencia: cifras grandes y gráfico con su fuente detrás del «?»; un m
   expect(screen.getByRole('img', { name: 'Implícita vs realizada' })).toBeInTheDocument();
   expect(screen.getByText('Fuente: GaleCore, hasta el 16/10/2026 · Cálculo en Archivos: vrp.py')).toBeInTheDocument();
 });
+
+test('al elegir un proyecto sin conversación, muestra el último mapa del proyecto', async () => {
+  (labRequest as jest.Mock).mockResolvedValue({ mapa: { ...mapa, title: 'Sandwich SPX' } });
+  render(<LabMapa chatId={null} projectId="sandwich_spy" running={false} />);
+  expect(await screen.findByRole('heading', { name: 'Sandwich SPX' })).toBeInTheDocument();
+  expect(labRequest).toHaveBeenCalledWith('/workspaces/sandwich_spy/mapa');
+});

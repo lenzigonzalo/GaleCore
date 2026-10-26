@@ -102,23 +102,25 @@ function Section({ sec }: { sec: MapaSection }) {
   </section>;
 }
 
-export function LabMapa({ chatId, running, onResults }: { chatId: string | null; running: boolean; onResults?: () => void }) {
+export function LabMapa({ chatId, projectId = null, running, onResults }: { chatId: string | null; projectId?: string | null; running: boolean; onResults?: () => void }) {
+  // Sin conversación elegida (clic en el proyecto), se muestra el último mapa del proyecto.
+  const source = chatId ? '/chats/' + chatId + '/mapa' : projectId ? '/workspaces/' + encodeURIComponent(projectId) + '/mapa' : null;
   const [mapa, setMapa] = useState<Mapa | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>(() => (chatId ? 'loading' : 'ready'));
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>(() => (source ? 'loading' : 'ready'));
   const shown = useRef<string | null>(null);
   useEffect(() => {
     // Otra conversación: no mostrar el mapa de la anterior mientras se lee el suyo.
-    if (shown.current !== chatId) { shown.current = chatId; setMapa(null); setState(chatId ? 'loading' : 'ready'); }
-    if (!chatId) return;
+    if (shown.current !== source) { shown.current = source; setMapa(null); setState(source ? 'loading' : 'ready'); }
+    if (!source) return;
     let active = true;
-    const read = () => labRequest<{ mapa: Mapa | null }>('/chats/' + chatId + '/mapa')
+    const read = () => labRequest<{ mapa: Mapa | null }>(source)
       .then(v => { if (active) { setMapa(m => v.mapa || m); setState('ready'); } })
       .catch(() => { if (active) setState('error'); });
     read();
     // Mientras responde, el mapa aparece apenas el agente lo escribe; al terminar se relee una vez más.
     const timer = running ? window.setInterval(read, 4000) : undefined;
     return () => { active = false; if (timer) window.clearInterval(timer); };
-  }, [chatId, running]);
+  }, [source, running]);
 
   const results = onResults && <button type="button" className="lab-mapa-results" title="Resultados de esta estrategia en Estrategias" onClick={onResults}>Ver resultados<ArrowUpRight size={15}/></button>;
   return <aside className="lab-mapa" aria-label="Mapa de la idea">
