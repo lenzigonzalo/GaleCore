@@ -462,3 +462,21 @@ def test_a_new_agent_is_created_from_a_monitor_request(env, galecore):  # noqa: 
     client.put("agent", "gamma-qqq", title="x", fmt="json", content=json.dumps({"request": {"create": create, "at": _now()}}))
     again = [r for r in space.publish_agents(client, kb_, sch)["requests"] if r["agent"] == "gamma-qqq"]
     assert again and again[0]["result"] == "refused" and "ya existe" in again[0]["error"]
+
+
+def test_a_cancelled_agent_leaves_the_space(env, galecore):  # noqa: F811
+    # WS-0063: a cancelled task is history; it no longer stays listed in the space as «cancelled».
+    kb_, sch, _ = env
+    fake, client = galecore
+    from galecore_ai.application import tasks as t
+    from tests.unit.test_market_watch import MARKET
+    from tests.unit.test_tasks import make
+    make(kb_, sch, task_id="oportunidades", strategy=None, capability="market_watch", schedule=MARKET)
+    space.publish_agents(client, kb_, sch)
+    assert ("agent", "oportunidades") in fake.rows
+    t.cancel(kb=kb_, scheduler=sch, task_id="oportunidades", prompt="ya no")
+    space.publish_agents(client, kb_, sch)
+    assert ("agent", "oportunidades") not in fake.rows
+    client.put("agent", "vieja", title="x", fmt="json", content=json.dumps({"id": "vieja", "status": "cancelled"}))
+    space.publish_agents(client, kb_, sch)                      # one already published as cancelled goes too
+    assert ("agent", "vieja") not in fake.rows

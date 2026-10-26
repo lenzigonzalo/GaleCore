@@ -339,7 +339,7 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     """Apply the monitor's requests, then publish every agent's state (only the ones that changed are written).
 
     A refusal stays in the piece (`request_error`) until the next request. A piece whose agent is cancelled or gone
-    from this PC is published as cancelled, so the monitor stops showing it as running.
+    from this PC is removed from the space (WS-0063), unless a refused request must still be explained: then it is published as cancelled once.
     """
     items = _agent_items(client)
     # Every agent piece, readable or not: one with broken content must not stay deferred forever.
@@ -378,6 +378,9 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     live = {p["key"] for p in pieces}
     for item, content in items:
         if item["key"] == SUPERVISOR_KEY:          # not a task: only a pass with `supervise` rewrites it
+            continue
+        if item["key"] not in live and not refused.get(item["key"]):
+            client.delete("agent", item["key"])    # WS-0063: a cancelled or gone task is history, not a piece in the space
             continue
         if item["key"] not in live and content.get("status") != "cancelled":
             gone = {k: content[k] for k in ("id", "capability", "schedule", "strategy", "objective") if k in content}

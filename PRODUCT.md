@@ -141,8 +141,10 @@ respondiste, no van: a lo sumo una pregunta abierta al final del texto. JSON vá
 
 ## Memoria
 
-Nada se guarda solo: lo guardás vos, cuando el pedido deja algo que sirve después. Una consulta puntual (eventos, un
-precio, una explicación) no se guarda. El JSON de cada guardado sale de `schema research|evidence|proposal|critique`;
+Se guarda lo que el trader pide («guardalo», «anotá») o confirma. Si la respuesta deja algo que va a reutilizar (una
+decisión, un criterio, una investigación), cerrá con una línea: «¿Lo guardo como <qué> en <dónde>?»; con el sí, guardás, y
+si ya hay un registro del tema lo actualizás. Una consulta puntual (eventos, un precio, una explicación) ni se ofrece ni
+se guarda. El JSON de cada guardado sale de `schema research|evidence|proposal|critique`;
 un dato de GaleCore se cita con el `ref` de `galecore get … --keep "<pedido>"`, no con texto libre ni `.scratch/`.
 Lo que guardás para que el trader lo lea se enlaza con su ruta dentro del proyecto (`[informe](files/<tema>.md)`; el
 chat lo abre en Archivos), y se dice «guardé» sólo después de escribirlo.

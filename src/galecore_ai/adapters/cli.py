@@ -642,6 +642,19 @@ async def _cmd_kb_show(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+async def _cmd_kb_tidy(args: argparse.Namespace) -> None:
+    from galecore_ai.application import tidy
+    _json_out(tidy.tidy(_build_knowledge_base(), space_agents=tidy.space_agents()))
+
+
+async def _cmd_kb_archive(args: argparse.Namespace) -> None:
+    from galecore_ai.application import tidy
+    try:
+        _json_out(tidy.archive(_build_knowledge_base(), args.path))
+    except KnowledgeError as exc:
+        _knowledge_error_out(exc)
+
+
 async def _cmd_research_save(args: argparse.Namespace) -> None:
     kb = _build_knowledge_base()
     content, host = _read_research_request()
@@ -1433,6 +1446,10 @@ def build_parser() -> _JsonArgumentParser:
     p_show = kb_sub.add_parser("show", help="One item by reference, with what cites it")
     p_show.add_argument("ref", help="regime:<SYMBOL>/<YYYY-MM-DD>, research:<id>, evidence:<id>, "
                                     "strategy:<name>/<version>, profile:v<N>, feedback:<id>, project:<name> or file:<path>")
+    kb_sub.add_parser("tidy", help="What looks abandoned (idle projects, orphans, cancelled agents in the space, repeated "
+                                   "gaps), each with the command to resolve it; only reads (WS-0063)")
+    kb_sub.add_parser("archive", help="Move a path to archive/ (out of the search) and commit it; undo by moving it back"
+                      ).add_argument("path", help="Relative to the knowledge base, e.g. workspaces/<name>")
     p_mark = kb_sub.add_parser("mark", help="«Esto ya no vale»: mark an item corrected, superseded or retired, with "
                                             "the reason; it is kept but no longer cited or listed (P1-08)")
     p_mark.add_argument("ref", help="The item to mark (same references as kb show)")
@@ -1809,6 +1826,10 @@ def main() -> None:
             asyncio.run(_cmd_kb_search(args))
         elif args.command == "kb" and args.kb_command == "show":
             asyncio.run(_cmd_kb_show(args))
+        elif args.command == "kb" and args.kb_command == "tidy":
+            asyncio.run(_cmd_kb_tidy(args))
+        elif args.command == "kb" and args.kb_command == "archive":
+            asyncio.run(_cmd_kb_archive(args))
         elif args.command == "kb" and args.kb_command == "mark":
             asyncio.run(_cmd_kb_mark(args))
         elif args.command == "research" and args.research_command == "save":

@@ -14,6 +14,7 @@ application/model_run.py). The catalog is checked again at every run.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import csv
 import hashlib
 import io
@@ -650,6 +651,17 @@ def _commit_knowledge(kb: KnowledgeBase, paths: list[Path], message: str) -> str
         f"commit failed: {(com.stderr or add.stderr).decode(errors='replace').strip()[:200]}"
 
 
+def _append_tidy(kb: KnowledgeBase, latest: Path) -> None:
+    """«Para limpiar» at the end of the curator's report; a failure here never fails the run."""
+    from galecore_ai.application import tidy
+
+    with contextlib.suppress(Exception):   # the cleaning list is a courtesy of the report; its failure never fails the run
+        section = tidy.report_section(tidy.tidy(kb, space_agents=tidy.space_agents()))
+        if section:
+            with latest.open("a", encoding="utf-8", newline="\n") as fh:
+                fh.write(section)
+
+
 def _mark_validity(latest: Path, task: TaskDefinition, now: datetime) -> None:
     """LATEST.md cannot update itself when a run is missed, so it says until when it is the current result."""
     nxt = next_due(task.schedule, now)
@@ -981,6 +993,8 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
                            "route": entry.schedulable.route_reason(), "error": f"{type(exc).__name__}: {exc}"[:800], "trace": traceback.format_exc()[-800:]}
             latest = d / "LATEST.md"
             _write_latest(latest, task, outcome, now)
+            if task.kind == "knowledge_curator":      # WS-0063: what looks abandoned, by code, proposed and not applied
+                _append_tidy(kb, latest)
             if invoked_by == "scheduler":
                 _mark_validity(latest, task, now)
             ev = _event(kb, task_id, "run_failed" if outcome["result"] == "FAILED" else "run_finished",
