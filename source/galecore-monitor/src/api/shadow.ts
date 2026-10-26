@@ -49,6 +49,11 @@ export async function fetchPerformanceSummary(): Promise<PerformanceSummary[]> {
   return data;
 }
 
+/** Detiene una instancia: no evalúa más entradas; sus posiciones abiertas se siguen valuando hasta su salida. */
+export async function stopShadowInstance(instanceId: string): Promise<void> {
+  await apiClient.post(`/App/Runtime/Instances/${encodeURIComponent(instanceId)}/Stop`);
+}
+
 /** Etapa (SHADOW | PAPER | LIVE) y modo (AUTO | MANUAL) de cada estrategia (WS-0036). */
 export interface StrategySetting { name: string; stage: 'SHADOW' | 'PAPER' | 'LIVE'; mode: 'AUTO' | 'MANUAL'; isDefault: boolean; effect: string; updatedBy?: string | null; updatedAt?: string | null }
 export async function fetchStrategySettings(): Promise<StrategySetting[]> {

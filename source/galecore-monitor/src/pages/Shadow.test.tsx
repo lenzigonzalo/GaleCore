@@ -19,6 +19,7 @@ jest.mock('../api/shadow', () => ({
   fetchShadowPositions: jest.fn(),
   fetchStrategySettings: jest.fn(),
   saveStrategySetting: jest.fn(),
+  stopShadowInstance: jest.fn(),
 }));
 
 jest.mock('../components/shadow/PerformancePanel', () => ({ PerformancePanel: ({ spec, runtime, onBack }: { spec: string; runtime: React.ReactNode; onBack?: () => void }) => <div data-testid="performance-panel"><button onClick={onBack}>Estrategias</button>{spec}{runtime}</div> }));
@@ -222,4 +223,31 @@ test('etapas Live | Paper | SHADOW: RPF en Live·Manual con Auto bloqueado; SHAD
   expect(within(row).getByRole('radio', { name: 'Auto' })).toHaveAttribute('aria-checked', 'true');
   expect(api.saveStrategySetting).not.toHaveBeenCalled();
   useAppConfigStore.setState({ strategies: [] });
+});
+
+test('Detener pide confirmar, avisa de las posiciones abiertas y deja la estrategia apagada', async () => {
+  (api.stopShadowInstance as jest.Mock).mockResolvedValue(undefined);
+  render(<Shadow />);
+  const row = (await screen.findByRole('button', { name: strategyName(instance.specName) })).closest('tr')!;
+  fireEvent.click(within(row).getByRole('button', { name: 'Detener' }));
+  expect(api.stopShadowInstance).not.toHaveBeenCalled();
+  expect(within(row).getByText(/Tiene 4 abiertas: se siguen valuando/)).toBeInTheDocument();
+  fireEvent.click(within(row).getByRole('button', { name: 'Sí' }));
+  await waitFor(() => expect(api.stopShadowInstance).toHaveBeenCalledWith('i-1'));
+  await waitFor(() => expect(within(row).getByText('Apagada')).toBeInTheDocument());
+  expect(within(row).getByRole('button', { name: 'Archivar' })).toBeDisabled();
+});
+
+test('Archivar oculta una estrategia detenida y sin abiertas; se guarda y se puede ver y desarchivar', async () => {
+  mocked.fetchPerformanceSummary.mockResolvedValue([{ ...summary(), tradesOpen: 0 }]);
+  mocked.fetchShadowStatus.mockResolvedValue(status({}, [{ ...instance, lifecycleState: 'STOPPED' }]));
+  render(<Shadow />);
+  const name = strategyName(instance.specName);
+  fireEvent.click(within((await screen.findByRole('button', { name })).closest('tr')!).getByRole('button', { name: 'Archivar' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledWith('preference', 'shadow-estrategias-archivadas', expect.objectContaining({ content: JSON.stringify([instance.specName]) })));
+  expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Mostrar archivadas (1)' }));
+  const row = screen.getByRole('button', { name }).closest('tr')!;
+  fireEvent.click(within(row).getByRole('button', { name: 'Desarchivar' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenLastCalledWith('preference', 'shadow-estrategias-archivadas', expect.objectContaining({ content: '[]' })));
 });

@@ -243,3 +243,11 @@
 .op-fail { color: var(--red-gc); font-weight: 700; }
 
 .data-stored small { display: block; }
+
+.strategy-list td.strategy-actions { white-space: nowrap; text-align: right; }
+.row-action { padding: 4px 12px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--text-primary); font: 13px var(--font-sans); cursor: pointer; }
+.row-action:hover:not(:disabled) { background: var(--bg-secondary); }
+.row-action:disabled { color: var(--text-secondary); cursor: not-allowed; }
+.row-action.danger { color: var(--red-gc); border-color: var(--red-gc); }
+.row-confirm { font-size: 13px; color: var(--text-secondary); }
+.archived-toggle { margin-top: 12px; }

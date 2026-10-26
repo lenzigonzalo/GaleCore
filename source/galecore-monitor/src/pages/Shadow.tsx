@@ -8,11 +8,11 @@ import { latestInstance } from '../components/shadow/InstanceState';
 import { PerformancePanel } from '../components/shadow/PerformancePanel';
 import { ModeSwitch } from '../components/common/ModeSwitch';
 import { StageModeChip, StrategyHeader } from '../components/shadow/StrategyHeader';
-import { fetchReferenceCapital } from '../api/space';
+import { fetchReferenceCapital, fetchSpace, saveSpaceItem } from '../api/space';
 import { amount, exitLabel, rate, readPanelError, stateLabel, strategyName, usd as panelUsd } from '../components/shadow/panelPresentation';
 import { NoticePanel } from '../components/common/NoticePanel';
 import {
-  fetchPerformanceSummary, fetchStrategySettings, saveStrategySetting, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus,
+  fetchPerformanceSummary, fetchStrategySettings, saveStrategySetting, fetchShadowDiscards, fetchShadowEvaluations, fetchShadowMetrics, fetchShadowPositions, fetchShadowStatus, stopShadowInstance,
 } from '../api/shadow';
 import type { StrategySetting } from '../api/shadow';
 import {
@@ -31,6 +31,8 @@ import {
  */
 
 const REFRESH_MS = 30_000;
+const ARCHIVED_KEY = 'shadow-estrategias-archivadas';
+const readArchived = (content?: string): string[] => { try { const list = JSON.parse(content || '[]'); return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : []; } catch { return []; } };
 const mono: React.CSSProperties = { fontFamily: 'var(--font-mono)' };
 
 function when(iso: string | null | undefined): string {
@@ -135,6 +137,19 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
     catch { setSettings(all => { const next = { ...all }; if (before) next[name] = before; else delete next[name]; return next; }); setSettingsError('No se pudo cambiar el modo.'); }
     finally { setSavingMode(null); }
   };
+  // Archivar: oculta de la lista de este usuario una estrategia detenida y sin posiciones abiertas; no borra nada.
+  const [archived, setArchived] = useState<string[]>([]);
+  const [showArchived, setShowArchived] = useState(false);
+  const [confirmStop, setConfirmStop] = useState<string | null>(null);
+  const [acting, setActing] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+  useEffect(() => { let active = true; fetchSpace().then(({ items }) => { if (active) setArchived(readArchived(items.find(i => i.kind === 'preference' && i.key === ARCHIVED_KEY && i.isOwn)?.content)); }).catch(() => undefined); return () => { active = false; }; }, []);
+  const saveArchived = async (next: string[], spec: string) => {
+    const before = archived; setActing(spec); setActionError(''); setArchived(next);
+    try { await saveSpaceItem('preference', ARCHIVED_KEY, { title: 'Estrategias SHADOW archivadas', content: JSON.stringify(next), format: 'json', visibility: 'private' }); }
+    catch { setArchived(before); setActionError('No se pudo guardar el archivo de estrategias.'); }
+    finally { setActing(null); }
+  };
   const showRpf = !!rpf && rpfEnabled;
   const stages: { id: Stage; label: string }[] = [{ id: 'LIVE', label: 'Live' }, { id: 'PAPER', label: 'Paper' }, { id: 'SHADOW', label: 'SHADOW' }];
   const [stage, setStage] = useState<Stage | null>(null);
@@ -167,12 +182,30 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   }, [retry]);
   useEffect(() => { let active = true; profileRequest.current ??= fetchReferenceCapital(); profileRequest.current.then(value => { if (active) setCapital(value); }); return () => { active = false; }; }, []);
   const cell = (metric: Metric, format = panelUsd, signed = false) => <td className="numeric" title={metric.reason || undefined} style={signed && metric.value !== null ? { color: metric.value < 0 ? 'var(--red-gc)' : metric.value > 0 ? 'var(--green)' : undefined } : undefined}>{metric.value === null ? '' : format(metric.value)}</td>;
+  const stopStrategy = async (spec: string) => {
+    const instance = latestInstance(instances, spec); if (!instance) return;
+    setActing(spec); setActionError('');
+    try { await stopShadowInstance(instance.instanceId); setInstances(list => list.map(i => i.instanceId === instance.instanceId ? { ...i, lifecycleState: 'STOPPED' } : i)); setConfirmStop(null); }
+    catch (e) { setActionError(`No se pudo detener: ${errorText(e)}`); }
+    finally { setActing(null); }
+  };
   const isRunning = (name: string) => latestInstance(instances, name)?.lifecycleState === 'RUNNING';
   const sortByState = (list: PerformanceSummary[]) => [...list].sort((a, b) => Number(isRunning(b.spec)) - Number(isRunning(a.spec)) || strategyName(a.spec).localeCompare(strategyName(b.spec)));
   const designOnly = projects.filter(project => project.strategyName && project.strategyName !== 'rpf' && !rows.some(row => row.spec === project.strategyName))
     .sort((a, b) => strategyName(a.strategyName!).localeCompare(strategyName(b.strategyName!)));
-  const countIn = (id: Stage) => rows.filter(r => stageOf(r.spec) === id).length + (showRpf && stageOf('rpf') === id ? 1 : 0);
+  const countIn = (id: Stage) => rows.filter(r => stageOf(r.spec) === id && !archived.includes(r.spec)).length + (showRpf && stageOf('rpf') === id ? 1 : 0);
   const currentStage: Stage = stage ?? (countIn('LIVE') ? 'LIVE' : 'SHADOW');
+  const archivedHere = rows.filter(r => stageOf(r.spec) === currentStage && archived.includes(r.spec)).length;
+  const rowAction = (row: PerformanceSummary) => {
+    const busy = acting === row.spec; const instance = latestInstance(instances, row.spec);
+    if (archived.includes(row.spec)) return <button type="button" className="row-action" disabled={busy} onClick={() => void saveArchived(archived.filter(x => x !== row.spec), row.spec)}>Desarchivar</button>;
+    if (!instance) return null;
+    if (instance.lifecycleState === 'RUNNING') return confirmStop === row.spec
+      ? <span className="row-confirm">{row.tradesOpen ? `Tiene ${row.tradesOpen} abierta${row.tradesOpen > 1 ? 's' : ''}: se siguen valuando. ` : ''}¿Detener? <button type="button" className="row-action danger" disabled={busy} onClick={() => void stopStrategy(row.spec)}>Sí</button> <button type="button" className="row-action" disabled={busy} onClick={() => setConfirmStop(null)}>No</button></span>
+      : <button type="button" className="row-action" onClick={() => setConfirmStop(row.spec)}>Detener</button>;
+    return row.tradesOpen ? <button type="button" className="row-action" disabled title="Tiene posiciones abiertas: se puede archivar cuando salgan.">Archivar</button>
+      : <button type="button" className="row-action" disabled={busy} onClick={() => void saveArchived([...archived, row.spec], row.spec)}>Archivar</button>;
+  };
   const back = () => { setSpec(null); setRuntimeOpen(false); };
   return <div className="shadow-page">
     {spec ? <>
@@ -181,31 +214,33 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
       <div className="strategy-list-heading"><h2 className="strategy-list-title">Estrategias</h2>
         <div className="stage-switch" role="tablist" aria-label="Etapa">{stages.map(x => <button key={x.id} role="tab" aria-selected={currentStage === x.id} onClick={() => setStage(x.id)}>{x.label}<span className="stage-count">{countIn(x.id) || ''}</span></button>)}</div></div>
       {error && <div role="alert">{error}<button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
-      {statusError && <p role="alert">{statusError}</p>}{projectsError && <p role="alert">{projectsError}</p>}{settingsError && <p role="alert">{settingsError}</p>}
+      {statusError && <p role="alert">{statusError}</p>}{projectsError && <p role="alert">{projectsError}</p>}{settingsError && <p role="alert">{settingsError}</p>}{actionError && <p role="alert">{actionError}</p>}
       <div className="performance-table strategy-list" aria-busy={loading}><table>
-        <thead><tr><th>Estrategia</th><th>Estado</th><th>Modo</th><th className="numeric">Abiertas</th><th className="numeric">Resultado</th><th className="numeric">% ganadoras</th><th className="numeric">Operaciones</th><th className="numeric">Máx. caída</th></tr></thead>
-        {loading ? <tbody>{Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia"><td colSpan={8}><div className="performance-skeleton row-skeleton" /></td></tr>)}</tbody> : <>
+        <thead><tr><th>Estrategia</th><th>Estado</th><th>Modo</th><th className="numeric">Abiertas</th><th className="numeric">Resultado</th><th className="numeric">% ganadoras</th><th className="numeric">Operaciones</th><th className="numeric">Máx. caída</th><th aria-label="Acciones" /></tr></thead>
+        {loading ? <tbody>{Array.from({ length: 5 }, (_, i) => <tr key={i} aria-label="Cargando estrategia"><td colSpan={9}><div className="performance-skeleton row-skeleton" /></td></tr>)}</tbody> : <>
           <tbody>
             {showRpf && stageOf('rpf') === currentStage && <tr className="strategy-row" tabIndex={0} onClick={() => setSpec('rpf')} onKeyDown={event => { if (event.key === 'Enter') setSpec('rpf'); }}>
               <td className="strategy-name"><button onClick={event => { event.stopPropagation(); setSpec('rpf'); }}>{rpfName}</button></td><td><StageState active={rpfActive} /></td>
               <td><ModeSwitch mode={modeOf('rpf')} busy={savingMode === 'rpf'} autoBlocked={stageOf('rpf') === 'LIVE' ? 'En Live, Auto mandaría órdenes solas: bloqueado hasta que exista la ejecución.' : undefined} onChange={mode => void changeMode('rpf', mode)} /></td>
-              <td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" />
+              <td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" /><td />
             </tr>}
-            {sortByState(rows.filter(row => stageOf(row.spec) === currentStage)).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.key === 'Enter') setSpec(row.spec); }}>
+            {sortByState(rows.filter(row => stageOf(row.spec) === currentStage && (showArchived || !archived.includes(row.spec)))).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.key === 'Enter') setSpec(row.spec); }}>
               <td className="strategy-name"><button title={row.spec} onClick={event => { event.stopPropagation(); setSpec(row.spec); }}>{strategyName(row.spec)}</button></td>
               <td><StageState active={isRunning(row.spec)} /></td>
               <td><ModeSwitch mode={modeOf(row.spec)} busy={savingMode === row.spec} autoBlocked={stageOf(row.spec) === 'LIVE' ? 'En Live, Auto mandaría órdenes solas: bloqueado hasta que exista la ejecución.' : undefined} manualBlocked={stageOf(row.spec) === 'SHADOW' ? 'SHADOW corre siempre en automático.' : undefined} onChange={mode => void changeMode(row.spec, mode)} /></td>
               <td className="numeric">{row.tradesOpen || ''}</td>
               {cell(row.realizedPnl, panelUsd, true)}{cell(row.winRate, rate)}<td className="numeric">{row.tradesClosed || ''}</td>{cell(row.maxDrawdown, amount)}
+              <td className="strategy-actions" onClick={event => event.stopPropagation()}>{rowAction(row)}</td>
             </tr>)}
-            {countIn(currentStage) === 0 && <tr><td colSpan={8} className="strategy-empty">{currentStage === 'PAPER' ? 'Ninguna estrategia en Paper. Paper necesita la cuenta paper del bróker, que todavía no está conectada.' : 'Ninguna estrategia en esta etapa.'}</td></tr>}
+            {countIn(currentStage) === 0 && <tr><td colSpan={9} className="strategy-empty">{currentStage === 'PAPER' ? 'Ninguna estrategia en Paper. Paper necesita la cuenta paper del bróker, que todavía no está conectada.' : 'Ninguna estrategia en esta etapa.'}</td></tr>}
           </tbody>
-          {currentStage === 'SHADOW' && designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={8}>En diseño</th></tr>
+          {currentStage === 'SHADOW' && designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={9}>En diseño</th></tr>
             {designOnly.map(project => <tr key={project.id} className="strategy-row" tabIndex={0} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.key === 'Enter') setSpec(project.strategyName); }}>
-              <td className="strategy-name"><button title={project.strategyName!} onClick={event => { event.stopPropagation(); setSpec(project.strategyName); }}>{strategyName(project.strategyName!)}</button></td><td /><td /><td colSpan={5} />
+              <td className="strategy-name"><button title={project.strategyName!} onClick={event => { event.stopPropagation(); setSpec(project.strategyName); }}>{strategyName(project.strategyName!)}</button></td><td /><td /><td colSpan={6} />
             </tr>)}</tbody>}
         </>}
       </table></div>
+      {archivedHere > 0 && <button type="button" className="row-action archived-toggle" onClick={() => setShowArchived(v => !v)}>{showArchived ? 'Ocultar archivadas' : `Mostrar archivadas (${archivedHere})`}</button>}
     </div>}
   </div>;
 }
