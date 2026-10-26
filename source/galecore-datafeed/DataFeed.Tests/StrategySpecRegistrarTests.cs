@@ -31,7 +31,7 @@ public class StrategySpecRegistrarTests
     private static SpecRegisterOutcome Register(ShadowRuntimeStore store, string json, bool available = true)
         => StrategySpecRegistrar.Register(store, json, available, available ? null : "apagada");
 
-    private static DeployResult Deploy(ShadowRuntimeStore store, string specName, string hash)
+    private static DeployResult Deploy(ShadowRuntimeStore store, string specName, string hash, string? expectedHash = null)
     {
         var instance = new StrategyInstance
         {
@@ -41,7 +41,8 @@ public class StrategySpecRegistrarTests
         return store.DeployOrGetRunning(
             new StrategyDeployment { DeploymentId = instance.DeploymentId, VersionHash = hash, SpecName = specName, DeployedAt = Now },
             instance,
-            new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = instance.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now });
+            new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = instance.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now },
+            expectedHash);
     }
 
     [Fact]
@@ -64,6 +65,49 @@ public class StrategySpecRegistrarTests
         Assert.Equal(DeployResult.KindCreated, deploy.Kind);
         Assert.Equal(json, repo.Specs[r.ContentHash!]);   // el deploy guarda la spec con el JSON exacto: se reconstruye al reiniciar
         Assert.Single(repo.Deployments);
+    }
+
+    [Fact]
+    public void Deploy_WithTheExpectedHash_Deploys_AndWithoutItWorksAsBefore()
+    {
+        var (store, _) = Durable();
+        var r = Register(store, Sandwich());
+
+        var deploy = Deploy(store, r.Name!, r.ContentHash!, expectedHash: r.ContentHash);
+
+        Assert.Equal(DeployResult.KindCreated, deploy.Kind);
+        // Ya corre esa versión: devuelve la existente, con o sin hash esperado.
+        Assert.Equal(DeployResult.KindExisting, Deploy(store, r.Name!, r.ContentHash!, expectedHash: r.ContentHash).Kind);
+        Assert.Equal(DeployResult.KindExisting, Deploy(store, r.Name!, r.ContentHash!).Kind);
+    }
+
+    [Fact]
+    public void Deploy_WhenTheCurrentSpecIsNotTheExpectedHash_Is409_AndCreatesNothing()
+    {
+        var (store, repo) = Durable();
+        var approved = Register(store, Sandwich());
+        var newer = Register(store, OtherVersion());   // otra subida entre la aprobación y el Deploy
+
+        var deploy = Deploy(store, approved.Name!, approved.ContentHash!, expectedHash: approved.ContentHash);
+
+        Assert.Equal(DeployResult.KindHashMismatch, deploy.Kind);
+        Assert.Equal(newer.ContentHash, deploy.CurrentHash);
+        Assert.Empty(store.RunningInstances());
+        Assert.Empty(repo.Deployments);
+    }
+
+    [Fact]
+    public void Deploy_WithAnUnknownExpectedHash_Is409_AndCreatesNothing()
+    {
+        var (store, repo) = Durable();
+        var r = Register(store, Sandwich());
+
+        var deploy = Deploy(store, r.Name!, r.ContentHash!, expectedHash: "sha256:inexistente");
+
+        Assert.Equal(DeployResult.KindHashMismatch, deploy.Kind);
+        Assert.Equal(r.ContentHash, deploy.CurrentHash);
+        Assert.Empty(store.RunningInstances());
+        Assert.Empty(repo.Deployments);
     }
 
     [Fact]

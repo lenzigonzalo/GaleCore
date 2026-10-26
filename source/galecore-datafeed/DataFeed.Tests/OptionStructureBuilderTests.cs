@@ -362,6 +362,48 @@ public class OptionStructureBuilderTests
     }
 
     [Fact]
+    public async Task PointsFromAtm_ZeroPoints_SellsAtTheAtmStrike()
+    {
+        var s = CondorSource(7676.02);   // ATM = 7675
+        s.Quotes[".SPXW260924P7675"] = new LegQuote(2.00, 2.20, Now.AddSeconds(-3));
+        s.Quotes[".SPXW260924P7670"] = new LegQuote(1.00, 1.10, Now.AddSeconds(-3));
+        s.Quotes[".SPXW260924C7675"] = new LegQuote(2.00, 2.20, Now.AddSeconds(-3));
+        s.Quotes[".SPXW260924C7680"] = new LegQuote(1.00, 1.10, Now.AddSeconds(-3));
+        var spec = With(Sandwich(1.0),
+            Leg("put_vendida", "SELL", "PUT", new() { Method = "POINTS_FROM_ATM", PointsFromAtm = 0 }),
+            Leg("put_comprada", "BUY", "PUT", new() { Method = "OFFSET_FROM_LEG", FromLeg = "put_vendida", OffsetPoints = -5 }),
+            Leg("call_vendida", "SELL", "CALL", new() { Method = "POINTS_FROM_ATM", PointsFromAtm = 0 }),
+            Leg("call_comprada", "BUY", "CALL", new() { Method = "OFFSET_FROM_LEG", FromLeg = "call_vendida", OffsetPoints = 5 }));
+
+        var result = await Build(s, spec);
+
+        var c = Assert.IsType<TradeCandidate>(result.Candidate);
+        Assert.Equal(new[] { ("SELL", "PUT", 7675.0), ("BUY", "PUT", 7670.0), ("SELL", "CALL", 7675.0), ("BUY", "CALL", 7680.0) },
+            c.Legs.Select(l => (l.Side, l.Type, l.Strike)));
+    }
+
+    [Fact]
+    public async Task PointsFromAtm_PutsAndCallsWithDifferentStrikes_EachTypeUsesItsOwnAtm()
+    {
+        // Sin put a 7675: el ATM de los puts es 7680 (a 3,98 del spot) y el de las calls, 7675. Si compartieran ATM, la put saldría en 7665.
+        var chain = Chain();
+        var row = chain.strikes.Single(k => k.StrikePrice == "7675.0");
+        row.put = null; row.PutStreamerSymbol = null;
+        var s = CondorSource(7676.02);
+        s.Expirations = new() { chain };
+        var spec = With(Sandwich(1.0),
+            Leg("put_vendida", "SELL", "PUT", new() { Method = "POINTS_FROM_ATM", PointsFromAtm = -10 }),
+            Leg("put_comprada", "BUY", "PUT", new() { Method = "OFFSET_FROM_LEG", FromLeg = "put_vendida", OffsetPoints = -5 }),
+            Leg("call_vendida", "SELL", "CALL", new() { Method = "POINTS_FROM_ATM", PointsFromAtm = 5 }),
+            Leg("call_comprada", "BUY", "CALL", new() { Method = "OFFSET_FROM_LEG", FromLeg = "call_vendida", OffsetPoints = 5 }));
+
+        var result = await Build(s, spec);
+
+        var c = Assert.IsType<TradeCandidate>(result.Candidate);
+        Assert.Equal(new[] { 7670.0, 7665.0, 7680.0, 7685.0 }, c.Legs.Select(l => l.Strike));
+    }
+
+    [Fact]
     public void PointsFromAtm_Validator_MissingFieldAndMixedMethod()
     {
         var spec = With(Sandwich(),

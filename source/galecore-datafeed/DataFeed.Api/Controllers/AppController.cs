@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using System.IO;
@@ -1483,7 +1483,11 @@ namespace DataFeed.Controllers
         [HttpPost("Runtime/Deploy")]
         public async Task<IActionResult> RuntimeDeploy([FromBody] RuntimeDeployRequest body, CancellationToken ct)
         {
-            var spec = _runtimeStore.GetSpec(body.SpecName);
+            // Con expectedHash la spec se resuelve por ese hash (la versión aprobada), no por nombre; el store confirma bajo su lock
+            // que sigue siendo la vigente. Sin expectedHash, como siempre: la vigente por nombre.
+            var spec = string.IsNullOrEmpty(body.ExpectedHash) ? _runtimeStore.GetSpec(body.SpecName) : _runtimeStore.GetSpecByHash(body.ExpectedHash);
+            if (!string.IsNullOrEmpty(body.ExpectedHash) && (spec == null || spec.Identity.Name != body.SpecName))
+                return StatusCode(StatusCodes.Status409Conflict, new { error = $"La versión {body.ExpectedHash} de '{body.SpecName}' no está registrada: no se desplegó nada.", expected_hash = body.ExpectedHash, current_hash = _runtimeStore.GetSpec(body.SpecName)?.ContentHash });
             if (spec == null) return NotFound($"Spec '{body.SpecName}' not found");
 
             if (!spec.DeploymentConstraints.EligibleModes.Contains("SHADOW"))
@@ -1536,7 +1540,10 @@ namespace DataFeed.Controllers
                     ["version_hash"] = spec.ContentHash
                 },
                 Timestamp = now
-            });
+            }, string.IsNullOrEmpty(body.ExpectedHash) ? null : body.ExpectedHash);
+
+            if (result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindHashMismatch)
+                return StatusCode(StatusCodes.Status409Conflict, new { error = $"La spec vigente de '{body.SpecName}' ya no es la versión {body.ExpectedHash}: no se desplegó nada.", expected_hash = body.ExpectedHash, current_hash = result.CurrentHash });
 
             var shown = result.Instance!;
 
@@ -1559,6 +1566,8 @@ namespace DataFeed.Controllers
         public class RuntimeDeployRequest
         {
             public string SpecName { get; set; } = "";
+            /// <summary>Opcional: el hash de la versión aprobada; si la vigente es otra, 409 y no se despliega nada.</summary>
+            public string? ExpectedHash { get; set; }
         }
 
         /// <summary>

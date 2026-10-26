@@ -1,4 +1,4 @@
-using MediatR;
+﻿using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
 using DataFeed.Application.Data.Tastytrade.MarketDataByType;
@@ -114,7 +114,8 @@ namespace DataFeed.Controllers
 
         [Tags("Data.Stream")]
         [HttpGet("Tastytrade/MarketData/Candle")]
-        public async Task<IActionResult> MarketDataCandleAsync([FromQuery] MarketDataCandleRequest request) => await Handle(request);
+        public async Task<IActionResult> MarketDataCandleAsync([FromQuery] string? symbol, [FromQuery] string? interval, [FromQuery] string? fromTime, [FromQuery] string? toTime)
+            => await Handle(MarketDataCandleRequest.FromQuery(symbol, interval, fromTime, toTime));
 
         [Tags("Data.Stream")]
         [HttpGet("Tastytrade/MarketData/Trade")]

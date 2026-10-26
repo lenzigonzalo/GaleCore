@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using DataFeed.Application.App.Runtime.Contracts;
 
 namespace DataFeed.Application.App.Runtime
@@ -163,13 +163,20 @@ namespace DataFeed.Application.App.Runtime
         /// dos deploys simultáneos no crean dos instancias. El deployment, la instancia y su evento INSTANCE_CREATED
         /// se guardan en una sola transacción; si la base ya tiene esa versión RUNNING (otro proceso), se devuelve
         /// esa instancia y no queda nada de este intento. En memoria nunca hay algo que no esté en la base.
+        /// Con expectedHash (la versión que el owner aprobó), bajo el mismo lock la spec vigente de ese nombre tiene que seguir siendo esa:
+        /// si otra subida o un reinicio la cambiaron, no se crea nada (HashMismatch).
         /// </summary>
-        public DeployResult DeployOrGetRunning(StrategyDeployment deployment, StrategyInstance instance, OperationalEvent created)
+        public DeployResult DeployOrGetRunning(StrategyDeployment deployment, StrategyInstance instance, OperationalEvent created, string? expectedHash = null)
         {
             lock (_deployGate)
             {
                 var running = RunningInstances().FirstOrDefault(i => i.VersionHash == instance.VersionHash);
                 if (running != null) return DeployResult.Existing(running);
+                if (expectedHash != null)
+                {
+                    var current = GetSpec(instance.SpecName)?.ContentHash;
+                    if (current != expectedHash || instance.VersionHash != expectedHash) return DeployResult.HashMismatch(current);
+                }
                 // Traza con las instancias paradas de la misma estrategia (WS-0024): la nueva no las reanuda, pero
                 // sus posiciones cuentan para sus límites (LimitScope).
                 // Una spec registrada en caliente no está en la base todavía: se guarda (con su JSON exacto) antes que el deployment que la referencia.

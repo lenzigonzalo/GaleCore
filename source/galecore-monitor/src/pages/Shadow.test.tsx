@@ -196,6 +196,14 @@ test('incluye estrategias de prueba y proyectos en diseño',async()=>{
  expect(row.closest('tbody')!).toHaveTextContent('En diseño');expect(row).not.toHaveTextContent('$0');
  expect(screen.getByRole('button',{name:'Shadow runtime test hidden'})).toBeInTheDocument();
 });
+test('si el Lab estaba apagado, reintenta al volver a la pestaña y muestra las estrategias en diseño',async()=>{
+ (labRequest as jest.Mock).mockRejectedValueOnce(new Error('Lab apagado')).mockResolvedValue({projects:[{id:'draft',type:'strategy',strategyName:'idea'}],chats:[],providers:[]});
+ render(<Shadow/>);
+ expect(await screen.findByText('No se pudieron leer las estrategias en diseño.')).toBeInTheDocument();
+ fireEvent(document,new Event('visibilitychange'));
+ expect(await screen.findByRole('button',{name:'Idea'})).toBeInTheDocument();
+ expect(screen.queryByText('No se pudieron leer las estrategias en diseño.')).not.toBeInTheDocument();
+});
 test('RPF ocupa una fila en Producción y su monitor aparece en Hoy',async()=>{
  useAppConfigStore.setState({strategies:[{id:'rpf',tab:'rpf'} as any]});
  render(<Shadow rpf={<div>Monitor real RPF</div>}/>);

@@ -65,6 +65,14 @@ namespace DataFeed.Application.Shared
             return dte;
         }
 
+        /// <summary>
+        /// Símbolo streamer de DXLink (".SPXW261026P6800", ".TSLA260904P352.5"): el que devuelve la cadena de opciones.
+        /// </summary>
+        public static bool IsStreamerOptionSymbol(string ticker)
+        {
+            return ticker != null && System.Text.RegularExpressions.Regex.IsMatch(ticker, @"^\.[A-Z0-9]{1,6}\d{6}[CP]\d+(\.\d+)?$");
+        }
+
         public static bool IsOptionSymbol(string ticker)
         {
             return (ticker.Length == 21 && (ticker.Substring(12,1) == "C" || ticker.Substring(12, 1) == "P")) ? true : false;
