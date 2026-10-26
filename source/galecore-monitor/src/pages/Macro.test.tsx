@@ -37,8 +37,8 @@ test('resumen por preguntas y pestañas de detalle, todo desde la API', async ()
   await screen.findByText('¿Hay apetito por riesgo?');
   expect(screen.getAllByText('7.791').length).toBeGreaterThan(0);
   expect(screen.getByText('−1,05 %')).toBeInTheDocument();
-  expect(screen.getByText('Reunión FOMC')).toBeInTheDocument();
-  expect(screen.getByRole('img', { name: /Curva 2026-10-15/ })).toBeInTheDocument();
+  expect(screen.queryByText('Agenda')).not.toBeInTheDocument();
+  expect(screen.queryByRole('img', { name: /Curva/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getAllByRole('button', { name: 'Ver detalle →' })[1]);
   expect(screen.getByText('Quién mueve el S&P · valor sumado en el mes')).toBeInTheDocument();
   expect(screen.getByText('+US$ 362 mil M')).toBeInTheDocument();

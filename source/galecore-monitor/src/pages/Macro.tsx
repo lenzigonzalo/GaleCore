@@ -1,14 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { BoardRow, MacroBoard, fetchMacroBoard } from '../api/macroData';
-import { MacroCurve } from '../components/macro/MacroCurve';
 import { MacroChart } from '../components/macro/MacroChart';
-import { eventName } from '../components/macro/MacroCalendar';
 import './Macro.css';
 
 /**
  * Macro como el panel de mercados de un bróker (WS-0036, ok del owner 15/10): seis números arriba y una tabla ordenada
  * por las preguntas que cuentan la historia del mercado, de lo general a lo específico (apetito por riesgo, tasas,
- * quién lidera, si lo confirman los demás); al costado la curva del Tesoro y la agenda. En «quién lidera», los
+ * quién lidera, si lo confirman los demás); sin curva ni agenda al costado (la agenda ya está en el calendario). En «quién lidera», los
  * cocientes se leen como cuánto le ganó o perdió uno al otro.
  * Todo viene calculado de `GET /App/Macro/Board`; acá sólo se muestra.
  */
@@ -83,7 +81,6 @@ export function Macro() {
     window.scrollTo({ top: 0 });
   };
   const current = board?.tabs.find(t => t.id === tab) ?? board?.tabs[0];
-  const today = new Date().toISOString().slice(0, 10);
 
   return <div className="macro-page">
     {error && !board && <p role="alert" className="macro-attention">{error} <button onClick={() => load()}>Reintentar</button></p>}
@@ -113,14 +110,6 @@ export function Macro() {
             </tr>)}
           </tbody>))}
         </table>
-        <aside className="mb-side">
-          <MacroCurve curve={board.curve} />
-          <section className="mb-agenda"><h2>Agenda</h2><ol>
-            {board.events.filter(e => e.date >= today).slice(0, 6).map(e => <li key={e.date + e.name}>
-              <time>{new Date(e.date + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' })}</time>
-              <span>{eventName(e.name)}</span></li>)}
-          </ol></section>
-        </aside>
       </div>
       {board.missing.length > 0 && <p className="macro-attention">Sin datos: {board.missing.join(' · ')}</p>}
     </>}
