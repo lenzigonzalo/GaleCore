@@ -84,7 +84,7 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
 - **Piezas del runtime** (no hay un menú de familias: se arma con bloques; lo que vale, y lo que GaleCore ejecuta hoy,
   es lo que devuelve `strategy check`, que se lo pregunta a GaleCore; una investigación o un faltante anterior pueden
   haber quedado viejos). Patas con su selector de strike (delta, puntos
-  o % desde el spot, strike fijo, desplazamiento desde otra pata) y vencimiento, incluido 0DTE; ejecución (llenado a
+  o % desde el spot, puntos desde el strike más cercano al precio, strike fijo, desplazamiento desde otra pata) y vencimiento, incluido 0DTE; ejecución (llenado a
   natural, medio o medio con deslizamiento, y costos); condiciones de entrada y salida (una métrica contra un umbral o
   contra otra métrica, medias móviles); eventos por tipo, símbolo y ventana (entrada y salida); ventana de entrada y
   límites de operaciones; salidas por tiempo, por evento o por % del costo o del crédito; límites de riesgo y frenos
