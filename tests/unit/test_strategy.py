@@ -497,10 +497,26 @@ def test_deploy_uploads_the_approved_spec_and_returns_the_instance(kb, research_
     with galecore_deploy_server(replaced_hash="sha256:" + "a" * 64) as (base, calls):
         out = deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
     assert [p for p, _ in calls] == ["/App/Runtime/Specs", "/App/Runtime/Deploy"]
-    assert calls[0][1] == doc.spec_json.encode("utf-8") and json.loads(calls[1][1]) == {"specName": NAME}
+    assert calls[0][1] == doc.spec_json.encode("utf-8") and json.loads(calls[1][1]) == {"specName": NAME, "expectedHash": doc.spec_hash}
     assert out["status"] == "DEPLOYED" and out["instance_id"] == "i-1" and out["spec_hash"] == doc.spec_hash
     assert out["ref"] == f"strategy:{KEY}" and out["replaced_hash"] == "sha256:" + "a" * 64 and out["recorded"]
-    assert "Desplegada" in load_log(kb, NAME).entries[-1].words
+    assert "no son palabras del owner" in load_log(kb, NAME).entries[-1].words
+
+
+@pytest.mark.parametrize("version_hash", [None, "sha256:" + "c" * 64])
+def test_deploy_requires_the_instance_to_report_the_approved_hash(kb, research_ref, version_hash):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    with galecore_deploy_server(deploy_version_hash=version_hash) as (base, _), pytest.raises(KnowledgeError, match="frenala"):
+        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+
+
+def test_deploy_explains_the_409_of_a_stale_expected_hash(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    with galecore_deploy_server(deploy_status=409, stale_hash=True) as (base, _),             pytest.raises(KnowledgeError, match="otra versión de esa estrategia que la aprobada") as err:
+        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+    assert "sha256:vigente" in " ".join(err.value.problems)
 
 
 def test_deploy_without_approval_or_with_another_hash_never_calls_galecore(kb, research_ref):  # noqa: F811

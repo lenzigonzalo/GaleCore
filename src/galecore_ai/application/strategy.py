@@ -500,6 +500,11 @@ def galecore_deployer(base_url: str | None = None, timeout: float = 60.0) -> Dep
         if r.status_code != 200:
             why = _HTTP_PROBLEMS.get(r.status_code, f"GaleCore respondió HTTP {r.status_code}")
             detail = body.get("errors") or body.get("error") if isinstance(body, dict) else None
+            if r.status_code == 409 and isinstance(body, dict) and "expected_hash" in body:
+                raise KnowledgeError(
+                    f"GaleCore tiene otra versión de esa estrategia que la aprobada ({path}, HTTP 409): se subió otra "
+                    "versión o se reinició entre el registro y el despliegue; no se desplegó nada",
+                    [f"hash aprobado: {body.get('expected_hash')}", f"hash vigente en GaleCore: {body.get('current_hash')}"])
             raise KnowledgeError(f"{why} ({path}, HTTP {r.status_code})",
                                  [str(d) for d in detail] if isinstance(detail, list) else
                                  [str(detail)] if detail else [])
@@ -511,7 +516,8 @@ def galecore_deployer(base_url: str | None = None, timeout: float = 60.0) -> Dep
         registered = post(SPECS_PATH, content=spec_json.encode("utf-8"))
         if registered.get("content_hash") != galecore_spec_hash(spec_json):
             return registered, {}   # the caller refuses: nothing is deployed
-        return registered, post(DEPLOY_PATH, json={"specName": name})
+        # expectedHash: GaleCore despliega sólo si la vigente sigue siendo exactamente la versión aprobada.
+        return registered, post(DEPLOY_PATH, json={"specName": name, "expectedHash": galecore_spec_hash(spec_json)})
 
     return deploy
 
@@ -534,16 +540,16 @@ def deploy_strategy(*, kb: KnowledgeBase, key: str, deployer: Deployer | None = 
     instance_id = instance.get("instanceId")
     if not instance_id:
         raise KnowledgeError("GaleCore no devolvió la instancia desplegada")
-    if instance.get("versionHash") not in (None, doc.spec_hash):
-        raise KnowledgeError(f"la instancia {instance_id} corre {instance.get('versionHash')}, no la versión aprobada "
-                             f"{doc.spec_hash}: frenala")
+    if instance.get("versionHash") != doc.spec_hash:
+        raise KnowledgeError(f"la instancia {instance_id} corre {instance.get('versionHash') or 'una versión que GaleCore no informó'}, "
+                             f"no la versión aprobada {doc.spec_hash}: frenala")
     result = {"status": "DEPLOYED", "ref": f"strategy:{key}", "instance_id": instance_id,
               "spec_hash": doc.spec_hash, "replaced_hash": registered.get("replaced_hash"),
               "existing": bool(instance.get("existing")), "scope": allowed["scope"]}
     from galecore_ai.application.project import add
     try:
         add(kb=kb, name=doc.name, kind="decision", prompt="strategy deploy", refs=[], now=None,
-            words=f"Desplegada {key} en SHADOW Dev: instancia {instance_id}"
+            words=f"Registro del sistema, no son palabras del owner: se desplegó {key} en SHADOW Dev, instancia {instance_id}"
                   + (" (ya corría)" if result["existing"] else ""))
         result["recorded"] = True
     except KnowledgeError as exc:   # the instance is real: a failed note must not hide it
