@@ -14,7 +14,7 @@ const EXIT_LABELS: Record<string, string> = {
 };
 export const exitLabel = (reason: string) => EXIT_LABELS[reason] ?? reason;
 /** Cómo se elige el strike de una pata, en palabras: «Δ 0,20», «5 pts debajo del precio», «fijo 7615», «5 pts arriba de la pata X». */
-export interface LegSelection { method: string; target_delta?: number; width?: number; points_from_spot?: number; pct_from_spot?: number; strike?: number; from_leg?: string; offset_points?: number }
+export interface LegSelection { method: string; target_delta?: number; width?: number; points_from_spot?: number; pct_from_spot?: number; points_from_atm?: number; strike?: number; from_leg?: string; offset_points?: number }
 const num = (n: number) => String(n).replace('.', ',');
 const fromSpot = (n: number, unit: string) => `${num(Math.abs(n))} ${unit} ${n < 0 ? 'debajo' : 'arriba'} del precio`;
 export function legSelectionLabel(sel: LegSelection): string {
@@ -23,6 +23,9 @@ export function legSelectionLabel(sel: LegSelection): string {
     case 'FIXED_WIDTH': return sel.width === undefined ? 'Ancho fijo' : `ancho ${num(sel.width)}`;
     case 'POINTS_FROM_SPOT': return sel.points_from_spot === undefined ? 'Puntos del precio' : fromSpot(sel.points_from_spot, 'pts');
     case 'PCT_FROM_SPOT': return sel.pct_from_spot === undefined ? 'Porcentaje del precio' : fromSpot(sel.pct_from_spot, '%');
+    case 'POINTS_FROM_ATM': return sel.points_from_atm === undefined ? 'Puntos del strike más cercano'
+      : sel.points_from_atm === 0 ? 'strike más cercano al precio'
+      : `${num(Math.abs(sel.points_from_atm))} pts ${sel.points_from_atm < 0 ? 'debajo' : 'arriba'} del strike más cercano`;
     case 'FIXED_STRIKE': return sel.strike === undefined ? 'Strike fijo' : `fijo ${num(sel.strike)}`;
     case 'OFFSET_FROM_LEG': return sel.offset_points === undefined ? `Desde la pata ${sel.from_leg ?? ''}`.trim()
       : `${num(Math.abs(sel.offset_points))} pts ${sel.offset_points < 0 ? 'debajo' : 'arriba'} de la pata ${sel.from_leg ?? ''}`.trim();

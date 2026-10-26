@@ -138,6 +138,7 @@ test.each([
   [{ method: 'DELTA', target_delta: 0.2 }, 'Δ 0,2'],
   [{ method: 'POINTS_FROM_SPOT', points_from_spot: -5 }, '5 pts debajo del precio'],
   [{ method: 'POINTS_FROM_SPOT', points_from_spot: 5 }, '5 pts arriba del precio'],
+  [{ method: 'POINTS_FROM_ATM', points_from_atm: -5 }, '5 pts debajo del strike más cercano'],
   [{ method: 'PCT_FROM_SPOT', pct_from_spot: -1.5 }, '1,5 % debajo del precio'],
   [{ method: 'FIXED_STRIKE', strike: 7615 }, 'fijo 7615'],
   [{ method: 'OFFSET_FROM_LEG', from_leg: 'short_put', offset_points: -5 }, '5 pts debajo de la pata short_put'],

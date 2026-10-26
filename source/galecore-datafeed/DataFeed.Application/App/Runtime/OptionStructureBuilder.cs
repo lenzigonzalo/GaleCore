@@ -13,7 +13,7 @@ namespace DataFeed.Application.App.Runtime
         string Id, string Side, string Type, string Method,
         double? TargetDelta = null, double? DeltaTolerance = null,
         double? Points = null, double? Pct = null, double? Strike = null,
-        string? FromLeg = null, double? Offset = null, double Tolerance = 0)
+        string? FromLeg = null, double? Offset = null, double Tolerance = 0, double? PointsFromAtm = null)
     {
         public bool IsPut => Type == "PUT";
         public string SideWord => Side == "SELL" ? "vendida" : "comprada";
@@ -168,7 +168,7 @@ namespace DataFeed.Application.App.Runtime
             // ── 3. Precio del subyacente para los selectores por puntos o %: cotización real con hora ──
             double? quoteSpot = null;
             DateTime? spotAsOf = null;
-            if (plans.Any(p => p.Method is "POINTS_FROM_SPOT" or "PCT_FROM_SPOT"))
+            if (plans.Any(p => p.Method is "POINTS_FROM_SPOT" or "PCT_FROM_SPOT" or "POINTS_FROM_ATM"))
             {
                 var underlying = await _market.GetUnderlyingAsync(symbol, ct);
                 if (underlying == null || !double.IsFinite(underlying.Price) || !(underlying.Price > 0))
@@ -353,6 +353,20 @@ namespace DataFeed.Application.App.Runtime
                         : withSymbol.Where(s => s.Strike >= target - 1e-9).OrderBy(s => s.Strike).FirstOrDefault();
                     if (row == null)
                         return (null, $"sin strike de {name} {(below ? "debajo" : "arriba")} de {target:0.##} (precio {spot:0.##}) en el vencimiento {expirationDate}");
+                    break;
+                }
+                case "POINTS_FROM_ATM":
+                {
+                    // ATM = el strike de esta lista (el de ese tipo, con símbolo) más cercano al precio; con empate exacto, el más bajo.
+                    // Puts y calls pueden tener strikes distintos: cada tipo usa su ATM. El objetivo (ATM + N) tiene que existir exacto.
+                    double spot = quoteSpot!.Value;
+                    var atm = withSymbol.OrderBy(s => Math.Abs(s.Strike - spot)).ThenBy(s => s.Strike).FirstOrDefault();
+                    if (atm == null)
+                        return (null, $"sin strikes de {name} en el vencimiento {expirationDate}");
+                    double wanted = atm.Strike + p.PointsFromAtm!.Value;
+                    row = withSymbol.FirstOrDefault(s => Math.Abs(s.Strike - wanted) < 1e-9);
+                    if (row == null)
+                        return (null, $"no hay strike {wanted:0.##} (ATM {atm.Strike:0.##} + {p.PointsFromAtm.Value:0.##}) de {name} en el vencimiento {expirationDate}");
                     break;
                 }
                 case "FIXED_STRIKE":

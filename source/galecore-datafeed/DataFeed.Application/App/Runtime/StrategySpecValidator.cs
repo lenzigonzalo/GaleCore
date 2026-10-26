@@ -201,7 +201,7 @@ namespace DataFeed.Application.App.Runtime
                 var all = new (string Name, bool Set)[]
                 {
                     ("target_delta", sel.TargetDelta != null), ("delta_tolerance", sel.DeltaTolerance != null), ("width", sel.Width != null),
-                    ("points_from_spot", sel.PointsFromSpot != null), ("pct_from_spot", sel.PctFromSpot != null), ("strike", sel.Strike != null),
+                    ("points_from_spot", sel.PointsFromSpot != null), ("pct_from_spot", sel.PctFromSpot != null), ("points_from_atm", sel.PointsFromAtm != null), ("strike", sel.Strike != null),
                     ("from_leg", sel.FromLeg != null), ("offset_points", sel.OffsetPoints != null), ("tolerance_points", sel.TolerancePoints != null),
                 };
                 var allowed = sel.Method switch
@@ -209,6 +209,7 @@ namespace DataFeed.Application.App.Runtime
                     "DELTA" => new[] { "target_delta", "delta_tolerance" },
                     "POINTS_FROM_SPOT" => new[] { "points_from_spot" },
                     "PCT_FROM_SPOT" => new[] { "pct_from_spot" },
+                    "POINTS_FROM_ATM" => new[] { "points_from_atm" },
                     "FIXED_STRIKE" => new[] { "strike" },
                     "OFFSET_FROM_LEG" => new[] { "from_leg", "offset_points", "tolerance_points" },
                     _ => null,
@@ -230,6 +231,8 @@ namespace DataFeed.Application.App.Runtime
                     errors.Add($"{name}.strike_selection.points_from_spot must be non-zero (negative = below the price, positive = above)");
                 if (sel.PctFromSpot is double pct && (pct == 0 || !double.IsFinite(pct) || pct <= -100))
                     errors.Add($"{name}.strike_selection.pct_from_spot must be non-zero and above -100 (negative = below the price, positive = above)");
+                if (sel.PointsFromAtm is double atmPts && !double.IsFinite(atmPts))
+                    errors.Add($"{name}.strike_selection.points_from_atm must be a finite number (negative = below the strike nearest the price, positive = above, 0 = that strike)");
                 if (sel.Strike is double k && !(k > 0)) errors.Add($"{name}.strike_selection.strike must be positive");
                 if (sel.OffsetPoints is double off && (off == 0 || !double.IsFinite(off))) errors.Add($"{name}.strike_selection.offset_points must be non-zero");
                 if (sel.TolerancePoints is double tp && !(tp >= 0)) errors.Add($"{name}.strike_selection.tolerance_points must be zero or positive");
