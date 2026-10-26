@@ -138,6 +138,10 @@ function latestMapa(dir,since){
   const found=fs.readdirSync(mem).filter(f=>MAPA.test(f)).map(f=>({f,t:fs.statSync(path.join(mem,f)).mtimeMs})).filter(x=>x.t>=since).sort((a,b)=>b.t-a.t)[0];
   return found?'memory/'+found.f:null;
 }
+function readMapa(dir,rel){
+  const file=safeFile(dir,rel);
+  return {path:rel,updatedAt:fs.statSync(file).mtime.toISOString(),...parseMapa(fs.readFileSync(file,'utf8'))};
+}
 function parseMapa(text){
   // Secciones fijas del diseño (Hipótesis, Objetivo, Entrada… Datos, Evidencia); las reglas y los datos van en tablas.
   // «- valor · qué es» = cifra grande; un bloque ```grafico con JSON = la serie que sostiene la evidencia, con su fuente.
@@ -198,16 +202,48 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         if(!entry.isDirectory()||!ID.test(entry.name))continue;
         const dir=path.join(base,entry.name);if(!fs.realpathSync(dir).startsWith(fs.realpathSync(kb)+path.sep))continue;
         const meta=read(path.join(dir,'workspace.json'),null);
-        if(meta&&meta.id===entry.name&&typeof meta.label==='string'&&meta.label.length<=100&&TYPES.includes(meta.type)&&(folder!=='strategies'||meta.type==='strategy'))descriptors.push({id:entry.name,label:meta.label,type:meta.type,relative:folder+'/'+entry.name,strategyName:meta.type==='strategy'?entry.name:null,dir});
+        if(meta&&meta.id===entry.name&&typeof meta.label==='string'&&meta.label.length<=100&&TYPES.includes(meta.type)&&(folder!=='strategies'||meta.type==='strategy'))descriptors.push({id:entry.name,label:meta.label,type:meta.type,relative:folder+'/'+entry.name,strategyName:meta.type==='strategy'?(typeof meta.strategyName==='string'&&ID.test(meta.strategyName)?meta.strategyName:entry.name):null,dir});
       }
     }
     const all=old.map(p=>({...p,...registry.find(r=>r.id===p.id),...descriptors.find(d=>d.id===p.id)}));
     for(const p of descriptors)if(!all.some(o=>o.id===p.id))all.push(p);
+    // Una estrategia con carpeta propia no abre un proyecto aparte si otro proyecto ya la declara (strategyName en su workspace.json).
+    const declared=new Set(descriptors.filter(d=>d.strategyName&&d.strategyName!==d.id).map(d=>d.strategyName));
+    for(let i=all.length-1;i>=0;i--)if(declared.has(all[i].id)&&!descriptors.some(d=>d.id===all[i].id))all.splice(i,1);
     for(const p of registry){if(all.some(o=>o.id===p.id)||!p.relative)continue;const dir=path.join(kb,p.relative);if(fs.existsSync(dir) && fs.realpathSync(dir).startsWith(fs.realpathSync(kb)+path.sep))all.push({...p,dir});}
     const overrides=read(overridesFile,{});
     return all.map(p=>({...p,...(overrides[p.id]?.label?{label:overrides[p.id].label}:{}),...(overrides[p.id]?.archived?{archived:true}:{})}));
   }
   function setOverride(id,change){const all=read(overridesFile,{});all[id]={...all[id],...change};atomic(overridesFile,all);}
+  // Borra la carpeta del proyecto (sólo dentro de knowledge/workspaces|strategies) y lo que cuelga: seguimientos, registro,
+  // investigaciones que lo nombran, tareas (canceladas con el harness) y conversaciones (a chats-borradas/). Cartera (raíz de knowledge/) sólo se oculta.
+  async function removeProject(p){
+    const kbReal=fs.realpathSync(kb), inside=(d,sub)=>{try{const r=fs.realpathSync(d);return r.startsWith(path.join(kbReal,sub)+path.sep);}catch{return false;}};
+    const dirs=['workspaces','strategies'].map(f=>path.join(kb,f,p.id)).filter(d=>fs.existsSync(d)&&!fs.lstatSync(d).isSymbolicLink()&&inside(d,path.basename(path.dirname(d))));
+    if(!dirs.length||!ID.test(p.id)){setOverride(p.id,{archived:true});return {archived:true};}
+    const named=new RegExp('^([0-9]{4}-[0-9]{2}-[0-9]{2}-)?('+p.id+'|'+p.id.replace(/_/g,'-')+')([^a-z0-9_-]|$)','i'), gone=[...dirs];
+    const research=path.join(kb,'research');
+    if(fs.existsSync(research))for(const f of fs.readdirSync(research))if(named.test(f))gone.push(path.join(research,f));
+    for(const x of [path.join(kb,'followups',p.id),path.join(kb,'projects',p.id+'.json')])if(fs.existsSync(x))gone.push(x);
+    const cancelled=[], tasksDir=path.join(kb,'tasks');
+    for(const t of fs.existsSync(tasksDir)?fs.readdirSync(tasksDir):[]){
+      const def=read(path.join(tasksDir,t,'task.json'),null);if(def?.strategy!==p.id||def.status==='cancelled')continue;
+      await new Promise((ok,bad)=>execute('python',['-B','-m','galecore_ai.adapters.cli','task','cancel',t,'--prompt','Proyecto '+p.id+' eliminado en el Lab'],{cwd:root,env:environment(),windowsHide:true,timeout:60000},e=>e?bad(fail('No se pudo cancelar la tarea '+t+'; el proyecto no se borró.',502)):ok()));
+      cancelled.push(t);
+    }
+    fs.mkdirSync(removedDir,{recursive:true});
+    for(const f of chatFiles()){const c=read(path.join(chatDir,f),null);if(c?.project===p.id)fs.renameSync(path.join(chatDir,f),path.join(removedDir,f));}
+    for(const x of gone)fs.rmSync(x,{recursive:true,force:true});
+    const reg=registry.filter(r=>r.id!==p.id);if(reg.length!==registry.length){registry=reg;atomic(metadata,registry);}
+    const ov=read(overridesFile,{});if(ov[p.id]){delete ov[p.id];atomic(overridesFile,ov);}
+    let commit=null;
+    if(fs.existsSync(path.join(kb,'.git'))){
+      const rel=gone.map(x=>path.relative(kb,x).split(path.sep).join('/')), git=(...a)=>new Promise(ok=>execute('git',['-C',kb,...a],{windowsHide:true,timeout:60000},(e,out)=>ok(e?null:String(out).trim())));
+      const staged=[];for(const r of rel)if(await git('add','-A','--',r)!==null)staged.push(r);   // lo que nunca se versionó no está en el commit
+      if(staged.length&&await git('commit','-m','lab: proyecto '+p.id+' eliminado','--',...staged)!==null)commit=await git('rev-parse','--short','HEAD');
+    }
+    return {deleted:true,archived:true,cancelled,removed:gone.map(x=>path.relative(kb,x).split(path.sep).join('/')),commit};
+  }
   function project(id){const p=listProjects().find(p=>p.id===id);if(!p)throw fail('Proyecto desconocido.',404);return p;}
   function createProject(body){
     const label=String(body.label||'').trim(), type=body.type||'analysis';   // owner 19/10: se crea sólo con nombre; la estrategia llega por intención (mark_strategy.py)
@@ -337,10 +373,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[1]&&(parts[2]==='rename'||parts[2]==='archive')&&parts.length===3){
       const p=project(parts[1]);
       if(parts[2]==='rename'){const label=String((await readBody(req)).label||'').trim();if(!label||label.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');setOverride(p.id,{label});json(res,200,{...publicProject(p),label});return true;}
-      // Eliminar un proyecto lo saca de la lista; su carpeta y sus registros quedan en knowledge/ (se recupera).
+      // Eliminar un proyecto lo borra de verdad con lo que cuelga de él (WS-0063); queda un commit en knowledge/ para deshacerlo.
       if(p.id==='personal')throw fail('El espacio personal no se elimina.');
       if([...jobs.values()].some(j=>j.project===p.id))throw fail('El proyecto tiene una conversación respondiendo.',409);
-      setOverride(p.id,{archived:true});json(res,200,{archived:true});return true;
+      json(res,200,await removeProject(p));return true;
     }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='files'&&parts[3]&&parts.length===4){
       const p=project(parts[1]), b=await readBody(req), op=parts[3];
@@ -366,6 +402,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       }
       throw fail('Operación desconocida.',404);
     }
+    // Al elegir un proyecto sin conversación, el panel muestra el último mapa del proyecto.
+    if(req.method==='GET'&&parts[0]==='workspaces'&&parts[1]&&parts[2]==='mapa'&&parts.length===3){
+      const dir=project(parts[1]).dir, rel=latestMapa(dir,0);
+      json(res,200,{mapa:rel?readMapa(dir,rel):null});return true;}
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='strategy'){
       const p=project(parts[1]); if(p.type!=='strategy')throw fail('Este proyecto no es una estrategia.');
       const value=await readStrategy(p,url.searchParams.get('view')==='design');json(res,200,value);return true;
@@ -393,8 +433,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         // WS-0044: en un proyecto de estrategia (una idea), una conversación que todavía no tocó el mapa ve el último del proyecto.
         const p=project(c.project), dir=p.dir, live=c.state==='running'&&c.turnStartedAt?latestMapa(dir,c.turnStartedAt):null, rel=live||c.mapa||(p.type==='strategy'?latestMapa(dir,0):null);
         if(!rel){json(res,200,{mapa:null});return true;}
-        const file=safeFile(dir,rel);
-        json(res,200,{mapa:{path:rel,updatedAt:fs.statSync(file).mtime.toISOString(),...parseMapa(fs.readFileSync(file,'utf8'))}});return true;}
+        json(res,200,{mapa:readMapa(dir,rel)});return true;}
       if(req.method==='POST'&&parts[2]==='messages'){const b=await readBody(req);const words=String(b.text||'').trim();if(!words||words.length>12000)throw fail('El mensaje debe tener entre 1 y 12000 caracteres.');
         // Adjuntos subidos antes a /workspaces/<id>/attachments: sólo rutas de adjuntos/ del proyecto, que existan.
         const dir=project(c.project).dir, files=(Array.isArray(b.attachments)?b.attachments:[]).slice(0,10).map(String);

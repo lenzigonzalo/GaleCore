@@ -115,9 +115,14 @@ test('proyectos y conversaciones: renombrar, eliminar y ocultar las de prueba',a
  await route(service,'POST','/chats/'+a.id+'/delete',{});
  state=(await route(service,'GET','/workspaces')).value;assert.equal(state.chats.length,0);
  await assert.rejects(route(service,'POST','/workspaces/personal/archive',{}),/no se elimina/);
- await route(service,'POST','/workspaces/'+p.id+'/archive',{});
+ fs.mkdirSync(path.join(kb,'followups',p.id),{recursive:true});fs.writeFileSync(path.join(kb,'followups',p.id,'a.json'),'{}');
+ fs.mkdirSync(path.join(kb,'research'),{recursive:true});fs.writeFileSync(path.join(kb,'research','2026-10-26-'+p.id+'.md'),'x');fs.writeFileSync(path.join(kb,'research','otra.md'),'x');
+ const b=(await route(service,'POST','/chats',{project:p.id,provider:'claude'})).value;
+ const r=await route(service,'POST','/workspaces/'+p.id+'/archive',{});assert.equal(r.value.deleted,true);
  state=(await route(service,'GET','/workspaces')).value;assert.equal(state.projects.some(x=>x.id===p.id),false);
- assert.ok(fs.existsSync(path.join(kb,'workspaces',p.id)));  // la carpeta queda
+ assert.equal(fs.existsSync(path.join(kb,'workspaces',p.id)),false);  // WS-0063: se borra de verdad con lo que cuelga
+ assert.equal(fs.existsSync(path.join(kb,'followups',p.id)),false);assert.equal(fs.existsSync(path.join(kb,'research','2026-10-26-'+p.id+'.md')),false);assert.ok(fs.existsSync(path.join(kb,'research','otra.md')));
+ assert.equal(state.chats.some(c=>c.id===b.id),false);
 });
 test('mapa como diseño: secciones con tablas de reglas y datos, gráfico en Evidencia (owner 17/10)',()=>{
  const {parseMapa}=require('./lab-workspaces');
@@ -221,3 +226,9 @@ test('el contexto pasa la ruta exacta del mapa existente y la skill de diseño c
  assert.ok(ctx.includes(path.join(p0,'memory','mapa-19cfc2d9.md')));
  assert.ok(!ctx.includes(path.join('tools','terminal','skills','strategy-design')));
 });
+
+test('un proyecto puede declarar su estrategia con otro nombre y mark_strategy conserva el vínculo (owner 26/10)',async t=>{const {kb,service}=setup(t);await route(service,'POST','/workspaces',{label:'Sandwich SPY',type:'strategy'});const dir=path.join(kb,'strategies','sandwich_spy'),file=path.join(dir,'workspace.json');const meta=JSON.parse(fs.readFileSync(file,'utf8'));fs.writeFileSync(file,JSON.stringify({...meta,strategyName:'sandwich_spx_0dte_1345'}));const linked=(await route(service,'GET','/workspaces')).value.projects.find(x=>x.id==='sandwich_spy');assert.equal(linked.strategyName,'sandwich_spx_0dte_1345');require('child_process').execFileSync('python',[path.join(__dirname,'mark_strategy.py')],{cwd:dir,encoding:'utf8'});assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).strategyName,'sandwich_spx_0dte_1345');fs.writeFileSync(file,JSON.stringify({...meta,strategyName:'../fuera'}));assert.equal((await route(service,'GET','/workspaces')).value.projects.find(x=>x.id==='sandwich_spy').strategyName,'sandwich_spy');});
+
+test('la carpeta de una estrategia no abre un proyecto aparte si otro proyecto ya la declara (owner 26/10)',async t=>{const {base,kb,local}=setup(t);const make=legacy=>createWorkspaces({root:base,kb,local,binaries:{codex:null,claude:null},environment:()=>({}),instructions:()=>'',legacyProjects:()=>legacy,legacySessions:()=>[]});const legacy=[{id:'sandwich_spx',label:'sandwich spx',relative:'strategies/sandwich_spx'}];const solo=make(legacy);assert.ok((await route(solo,'GET','/workspaces')).value.projects.some(x=>x.id==='sandwich_spx'));await route(solo,'POST','/workspaces',{label:'Sandwich SPY',type:'strategy'});const file=path.join(kb,'strategies','sandwich_spy','workspace.json');fs.writeFileSync(file,JSON.stringify({...JSON.parse(fs.readFileSync(file,'utf8')),strategyName:'sandwich_spx'}));const ids=(await route(make(legacy),'GET','/workspaces')).value.projects.filter(x=>x.strategyName==='sandwich_spx').map(x=>x.id);assert.deepEqual(ids,['sandwich_spy']);});
+
+test('el mapa del proyecto se lee sin conversación: el último de memory/, o vacío (owner 26/10)',async t=>{const {kb,service}=setup(t);const p=(await route(service,'POST','/workspaces',{label:'Sandwich SPY',type:'strategy'})).value;assert.equal((await route(service,'GET','/workspaces/'+p.id+'/mapa')).value.mapa,null);const mem=path.join(kb,'strategies',p.id,'memory');fs.mkdirSync(mem,{recursive:true});fs.writeFileSync(path.join(mem,'mapa-viejo.md'),'# Viejo\n');await new Promise(r=>setTimeout(r,20));fs.writeFileSync(path.join(mem,'mapa-nuevo.md'),'# Sandwich SPX\n');const mapa=(await route(service,'GET','/workspaces/'+p.id+'/mapa')).value.mapa;assert.equal(mapa.path,'memory/mapa-nuevo.md');assert.equal(mapa.title,'Sandwich SPX');});
