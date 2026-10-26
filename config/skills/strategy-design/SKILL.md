@@ -82,7 +82,8 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   Cada regla mapeada al runtime: supported, unsupported (fuera de la spec, declarada) o not_applicable. Nunca borrar
   una regla, relajar un umbral ni agregar un campo sólo para pasar `strategy check`.
 - **Piezas del runtime** (no hay un menú de familias: se arma con bloques; lo que vale, y lo que GaleCore ejecuta hoy,
-  es lo que devuelve `strategy check`, que se lo pregunta a GaleCore). Patas con su selector de strike (delta, puntos
+  es lo que devuelve `strategy check`, que se lo pregunta a GaleCore; una investigación o un faltante anterior pueden
+  haber quedado viejos). Patas con su selector de strike (delta, puntos
   o % desde el spot, strike fijo, desplazamiento desde otra pata) y vencimiento, incluido 0DTE; ejecución (llenado a
   natural, medio o medio con deslizamiento, y costos); condiciones de entrada y salida (una métrica contra un umbral o
   contra otra métrica, medias móviles); eventos por tipo, símbolo y ventana (entrada y salida); ventana de entrada y
