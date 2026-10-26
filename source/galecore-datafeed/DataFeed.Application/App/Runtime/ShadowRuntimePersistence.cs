@@ -83,6 +83,15 @@ namespace DataFeed.Application.App.Runtime
         public static DeployResult Existing(StrategyInstance i) => new(KindExisting, i);
     }
 
+    /// <summary>Resultado de ShadowRuntimeStore.TryRegisterSpec.</summary>
+    public record SpecRegistration(string Kind, string? ReplacedHash, StrategyInstance? Running)
+    {
+        public const string KindRegistered = "REGISTERED", KindConflict = "CONFLICT";
+        public static SpecRegistration Registered(string? replacedHash) => new(KindRegistered, replacedHash, null);
+        /// <summary>Hay una instancia RUNNING de ese nombre con otro hash: no se pisa.</summary>
+        public static SpecRegistration Conflict(StrategyInstance running) => new(KindConflict, null, running);
+    }
+
     /// <summary>Resultado de ShadowRuntimeStore.Stop.</summary>
     public record StopResult(string Kind, StrategyInstance? Instance)
     {
@@ -153,7 +162,7 @@ namespace DataFeed.Application.App.Runtime
                 }
             }
 
-            foreach (var (name, result) in valid) store.RegisterSpec(name, result.Spec!);
+            foreach (var (name, result) in valid) store.RegisterSpec(name, result.Spec!, result.Json);
             store.Hydrate(snapshot);
             foreach (var spec in rebuiltSpecs) store.RegisterSpecVersion(spec);
             store.AttachRepository(repository);

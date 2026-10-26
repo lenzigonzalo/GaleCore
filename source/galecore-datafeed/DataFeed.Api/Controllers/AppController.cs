@@ -1562,6 +1562,44 @@ namespace DataFeed.Controllers
         }
 
         /// <summary>
+        /// Registra una spec aprobada sin reiniciar (WS-0062 inc.11). Cuerpo: el JSON crudo de la spec, como el Check. 400 si el cuerpo
+        /// no es JSON o la spec no es válida ({ valid:false, errors }); 409 si hay una instancia RUNNING de ese nombre con otro hash
+        /// (primero se frena la vieja); 503 sin persistencia (como el Deploy). Mismo nombre y hash: idempotente. Queda en memoria hasta
+        /// desplegarse (el Deploy la guarda en la base); no escribe archivos. Misma autorización que el Deploy.
+        /// </summary>
+        [Tags("App.Runtime")]
+        [HttpPost("Runtime/Specs")]
+        public async Task<IActionResult> RuntimeSpecRegister(CancellationToken ct)
+        {
+            string body;
+            using (var reader = new StreamReader(Request.Body))
+                body = await reader.ReadToEndAsync(ct);
+            try { System.Text.Json.JsonDocument.Parse(body).Dispose(); }
+            catch (System.Text.Json.JsonException ex)
+            {
+                return BadRequest(new { valid = false, errors = new[] { $"El cuerpo no es JSON: {ex.Message}" } });
+            }
+
+            var r = DataFeed.Application.App.Runtime.StrategySpecRegistrar.Register(_runtimeStore, body, _runtimePersistence.Available, _runtimePersistence.Reason);
+            switch (r.Kind)
+            {
+                case DataFeed.Application.App.Runtime.SpecRegisterOutcome.KindInvalid:
+                    return BadRequest(new { valid = false, errors = r.Errors });
+                case DataFeed.Application.App.Runtime.SpecRegisterOutcome.KindNoPersistence:
+                    return StatusCode(StatusCodes.Status503ServiceUnavailable, new { error = r.Message, reason = _runtimePersistence.Reason });
+                case DataFeed.Application.App.Runtime.SpecRegisterOutcome.KindConflict:
+                    return Conflict(new
+                    {
+                        error = r.Message, name = r.Name, content_hash = r.ContentHash,
+                        running_instance_id = r.RunningInstanceId, running_hash = r.RunningHash,
+                    });
+            }
+
+            _logger.LogInformation("Runtime: spec '{Name}' registrada en caliente (hash={Hash}, reemplaza={Replaced})", r.Name, r.ContentHash, r.ReplacedHash);
+            return Ok(new { name = r.Name, content_hash = r.ContentHash, registered = true, replaced_hash = r.ReplacedHash });
+        }
+
+        /// <summary>
         /// Para una instancia SHADOW (GC-0004): deja de evaluar entradas y libera el lugar para desplegar
         /// otra versión. Sus posiciones abiertas se siguen valuando hasta su salida. Idempotente: si ya
         /// estaba parada devuelve 200 con alreadyStopped = true. Sin persistencia, 503 (no se cambia en
