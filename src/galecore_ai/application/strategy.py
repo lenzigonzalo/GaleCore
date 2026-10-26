@@ -459,6 +459,99 @@ def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_sp
             "scope": approval.scope}
 
 
+# ── deploy into SHADOW Dev ───────────────────────────────────────
+
+SPECS_PATH = "/App/Runtime/Specs"
+DEPLOY_PATH = "/App/Runtime/Deploy"
+Deployer = Callable[[str, str], tuple[dict, dict]]   # (spec name, spec text) -> (Specs response, Deploy response)
+
+_HTTP_PROBLEMS = {
+    400: "GaleCore rechaza la spec o el despliegue",
+    404: "GaleCore no conoce esa spec",
+    409: "GaleCore ya corre otra versión de esa estrategia: hay que frenar esa instancia antes de desplegar ésta",
+    503: "SHADOW de GaleCore está sin persistencia: no se despliega algo que se perdería al reiniciar",
+}
+
+
+def _galecore_headers() -> dict[str, str]:
+    """The one place where calls that change GaleCore authenticate (same ApiKey as the reads and the Check)."""
+    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+    if key := os.environ.get("GALECORE_API_KEY"):
+        headers["X-Api-Key"] = key
+    return headers
+
+
+def galecore_deployer(base_url: str | None = None, timeout: float = 60.0) -> Deployer:
+    """Register the spec text and deploy it in SHADOW Dev. No retries: any refusal or network error is reported."""
+    import httpx
+
+    base = (base_url or os.environ.get("GALECORE_BASE_URL", "http://localhost:7001")).rstrip("/")
+
+    def post(path: str, **kwargs) -> dict:
+        try:
+            r = httpx.post(base + path, headers=_galecore_headers(), timeout=timeout, **kwargs)
+        except httpx.HTTPError as exc:
+            raise KnowledgeError(f"GaleCore no respondió en {base} ({type(exc).__name__}); no se desplegó nada "
+                                 "o no se sabe si quedó a medias: mirá Estrategias en la plataforma") from exc
+        try:
+            body = r.json()
+        except ValueError:
+            body = None
+        if r.status_code != 200:
+            why = _HTTP_PROBLEMS.get(r.status_code, f"GaleCore respondió HTTP {r.status_code}")
+            detail = body.get("errors") or body.get("error") if isinstance(body, dict) else None
+            raise KnowledgeError(f"{why} ({path}, HTTP {r.status_code})",
+                                 [str(d) for d in detail] if isinstance(detail, list) else
+                                 [str(detail)] if detail else [])
+        if not isinstance(body, dict):
+            raise KnowledgeError(f"POST {path} no devolvió un objeto JSON")
+        return body
+
+    def deploy(name: str, spec_json: str) -> tuple[dict, dict]:
+        registered = post(SPECS_PATH, content=spec_json.encode("utf-8"))
+        if registered.get("content_hash") != galecore_spec_hash(spec_json):
+            return registered, {}   # the caller refuses: nothing is deployed
+        return registered, post(DEPLOY_PATH, json={"specName": name})
+
+    return deploy
+
+
+def deploy_strategy(*, kb: KnowledgeBase, key: str, deployer: Deployer | None = None) -> dict:
+    """Deploy an approved version in SHADOW Dev: GaleCore is only called with an intact approval of this exact spec,
+    and only deploys what it hashes to the approved hash."""
+    doc = load_proposal(kb, key)
+    allowed = deploy_check(kb=kb, key=key, galecore_hash=doc.spec_hash)   # intact approval and critique, no GaleCore
+    approval = kb.strategies.load_approval(key)
+    if approval.strategy_ref != f"strategy:{key}" or approval.scope != "SHADOW:galecore-dev":
+        raise KnowledgeError(f"deploy of strategy:{key} refused", ["the approval is not of this version in SHADOW Dev"])
+    if galecore_spec_hash(doc.spec_json) != doc.spec_hash:
+        raise KnowledgeError(f"strategy:{key}: the stored spec does not hash to its recorded hash")
+    name = Path(doc.spec_file).stem
+    registered, instance = (deployer or galecore_deployer())(name, doc.spec_json)
+    if registered.get("content_hash") != doc.spec_hash:
+        raise KnowledgeError(f"GaleCore registró la spec con el hash {registered.get('content_hash')}, la aprobada es "
+                             f"{doc.spec_hash}: no se desplegó")
+    instance_id = instance.get("instanceId")
+    if not instance_id:
+        raise KnowledgeError("GaleCore no devolvió la instancia desplegada")
+    if instance.get("versionHash") not in (None, doc.spec_hash):
+        raise KnowledgeError(f"la instancia {instance_id} corre {instance.get('versionHash')}, no la versión aprobada "
+                             f"{doc.spec_hash}: frenala")
+    result = {"status": "DEPLOYED", "ref": f"strategy:{key}", "instance_id": instance_id,
+              "spec_hash": doc.spec_hash, "replaced_hash": registered.get("replaced_hash"),
+              "existing": bool(instance.get("existing")), "scope": allowed["scope"]}
+    from galecore_ai.application.project import add
+    try:
+        add(kb=kb, name=doc.name, kind="decision", prompt="strategy deploy", refs=[], now=None,
+            words=f"Desplegada {key} en SHADOW Dev: instancia {instance_id}"
+                  + (" (ya corría)" if result["existing"] else ""))
+        result["recorded"] = True
+    except KnowledgeError as exc:   # the instance is real: a failed note must not hide it
+        result["recorded"] = False
+        result["record_error"] = str(exc)
+    return result
+
+
 def strategy_key(ref_or_key: str) -> str:
     key = ref_or_key.removeprefix("strategy:")
     try:

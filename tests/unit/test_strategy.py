@@ -13,11 +13,14 @@ from pydantic import ValidationError
 
 from galecore_ai.adapters.knowledge_base import KNOWLEDGE_DIR_ENV, parse_ref
 from galecore_ai.application.knowledge import KnowledgeError, save_evidence, search, show
+from galecore_ai.application.project import load_log
 from galecore_ai.application.strategy import (
     approve,
     check_proposal,
     critique,
     deploy_check,
+    deploy_strategy,
+    galecore_deployer,
     galecore_spec_hash,
     save_proposal,
 )
@@ -29,7 +32,7 @@ from galecore_ai.contracts.strategy import (
     design_gaps,
 )
 from galecore_ai.harness.catalog import load_catalog
-from tests.unit.fake_galecore import fake_checker, galecore_server, recorded
+from tests.unit.fake_galecore import fake_checker, galecore_deploy_server, galecore_server, recorded
 from tests.unit.test_evidence import evidence
 from tests.unit.test_knowledge import HOST, NOW, content, kb, save  # noqa: F401  (kb is a fixture)
 
@@ -486,6 +489,51 @@ def test_deploy_is_refused_without_approval_or_with_another_hash(kb, research_re
         deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash, galecore_spec_json=spec_text("pcs_spy_16d_v1.json"))
     allowed = deploy_check(kb=kb, key=KEY, galecore_hash=doc.spec_hash, galecore_spec_json=spec_text())
     assert allowed["status"] == "DEPLOY_ALLOWED" and allowed["spec_file"] == f"{NAME}.json"
+
+
+def test_deploy_uploads_the_approved_spec_and_returns_the_instance(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    with galecore_deploy_server(replaced_hash="sha256:" + "a" * 64) as (base, calls):
+        out = deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+    assert [p for p, _ in calls] == ["/App/Runtime/Specs", "/App/Runtime/Deploy"]
+    assert calls[0][1] == doc.spec_json.encode("utf-8") and json.loads(calls[1][1]) == {"specName": NAME}
+    assert out["status"] == "DEPLOYED" and out["instance_id"] == "i-1" and out["spec_hash"] == doc.spec_hash
+    assert out["ref"] == f"strategy:{KEY}" and out["replaced_hash"] == "sha256:" + "a" * 64 and out["recorded"]
+    assert "Desplegada" in load_log(kb, NAME).entries[-1].words
+
+
+def test_deploy_without_approval_or_with_another_hash_never_calls_galecore(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    with galecore_deploy_server() as (base, calls):
+        with pytest.raises(KnowledgeError, match="refused"):
+            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+        approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+        kb.strategies.load_approval(KEY)
+        p = next(Path(kb.base).rglob("*.approval.json"))
+        p.write_text(p.read_text(encoding="utf-8").replace("Apruebo", "Apruebo todo"), encoding="utf-8")
+        with pytest.raises(KnowledgeError):
+            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+    assert calls == []
+
+
+def test_deploy_stops_when_galecore_registers_another_hash(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    with galecore_deploy_server(returned_hash="sha256:" + "b" * 64) as (base, calls),             pytest.raises(KnowledgeError, match="no se desplegó"):
+        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+    assert [p for p, _ in calls] == ["/App/Runtime/Specs"]
+
+
+@pytest.mark.parametrize(("specs", "deploy", "text"), [(409, 200, "otra versión"), (503, 200, "sin persistencia"),
+                                                       (200, 409, "otra versión"), (200, 503, "sin persistencia")])
+def test_deploy_reports_galecore_refusals_in_plain_words(kb, research_ref, specs, deploy, text):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    with galecore_deploy_server(specs_status=specs, deploy_status=deploy) as (base, calls):
+        with pytest.raises(KnowledgeError, match=text):
+            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+        assert len(calls) == (1 if specs != 200 else 2)   # no retries
 
 
 def test_an_edited_approval_blocks_the_deploy(kb, research_ref):  # noqa: F811
