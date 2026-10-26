@@ -1,4 +1,4 @@
-using DataFeed.Application.App.Runtime.Contracts;
+﻿using DataFeed.Application.App.Runtime.Contracts;
 
 namespace DataFeed.Application.App.Runtime
 {
@@ -75,9 +75,11 @@ namespace DataFeed.Application.App.Runtime
     }
 
     /// <summary>Resultado de ShadowRuntimeStore.DeployOrGetRunning.</summary>
-    public record DeployResult(string Kind, StrategyInstance? Instance)
+    public record DeployResult(string Kind, StrategyInstance? Instance, string? CurrentHash = null)
     {
-        public const string KindCreated = "CREATED", KindExisting = "EXISTING";
+        public const string KindCreated = "CREATED", KindExisting = "EXISTING", KindHashMismatch = "HASH_MISMATCH";
+        /// <summary>El hash esperado ya no es la spec vigente de ese nombre: no se creó nada. CurrentHash es el vigente (null si no hay).</summary>
+        public static DeployResult HashMismatch(string? currentHash) => new(KindHashMismatch, null, currentHash);
         public static DeployResult Created(StrategyInstance i) => new(KindCreated, i);
         /// <summary>Ya corre esa misma versión (en este proceso o, según la base, en otro): es esa instancia.</summary>
         public static DeployResult Existing(StrategyInstance i) => new(KindExisting, i);
