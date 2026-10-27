@@ -166,7 +166,7 @@ export function LabProjectList(props: Props) {
   const itemOptions = (key: string, label: string) => menu === key && optionsPanel('Organizar ' + label, <>
     <button type="button" onClick={() => { const id = key.slice(2); const original = key.startsWith('c:') ? state?.chats.find(c => c.id === id)?.title : state?.projects.find(p => p.id === id)?.label; lastTrigger.current = null; setMenu(null); onRename(id, original || label); }}>Renombrar</button>
     {onDelete && key !== 'p:personal' && (confirmDelete === key
-      ? <button type="button" className="lab-option-danger" onClick={() => { setMenu(null); onDelete(key.startsWith('c:') ? 'chat' : 'project', key.slice(2)); }}>{key.startsWith('c:') ? 'Sí, eliminar la conversación' : 'Sí, quitar el proyecto (los archivos quedan)'}</button>
+      ? <button type="button" className="lab-option-danger" onClick={() => { setMenu(null); onDelete(key.startsWith('c:') ? 'chat' : 'project', key.slice(2)); }}>{key.startsWith('c:') ? 'Sí, eliminar la conversación' : 'Sí, eliminar el proyecto y sus archivos'}</button>
       : <button type="button" className="lab-option-danger" onClick={() => setConfirmDelete(key)}>Eliminar</button>)}
     <hr/>
     <label>Mover a grupo<select aria-label={'Grupo de ' + label} value={organization.members[key] || ''} onChange={e => move(key, e.target.value)}><option value="">{key.startsWith('c:') ? 'Dentro de su proyecto' : 'Sin grupo'}</option>{organization.groups.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}</select></label>
