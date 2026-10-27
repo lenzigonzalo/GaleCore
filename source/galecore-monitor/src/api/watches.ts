@@ -5,6 +5,8 @@ import { fetchSpace, saveSpaceItem, SpaceItem } from './space';
 export interface Watch {
   id: string; symbol: string; metric: string; condition: 'above' | 'below';
   threshold: number; words: string; created_at: string;
+  /** Texto ya legible que publica el back (p. ej. «precio de MSFT ≤ 489»). */
+  label?: string;
 }
 
 const REFRESH_MS = 60_000;
@@ -18,6 +20,20 @@ export function priceWatchesFor(content: unknown, symbol: string): Watch[] {
     && typeof w.symbol === 'string' && w.symbol.trim().toUpperCase() === sym
     && (w.condition === 'above' || w.condition === 'below')
     && typeof w.threshold === 'number' && Number.isFinite(w.threshold));
+}
+
+/** Todos los avisos armados, de cualquier métrica; descarta lo mal formado. */
+export function allWatches(content: unknown): Watch[] {
+  const list = (content as { watches?: unknown } | null)?.watches;
+  if (!Array.isArray(list)) return [];
+  return list.filter((w): w is Watch => !!w && typeof w.id === 'string' && w.id !== '');
+}
+
+/** Rótulo para la lista: el del back; si falta, símbolo + condición + umbral. */
+export function watchText(w: Watch): string {
+  if (typeof w.label === 'string' && w.label.trim()) return w.label.trim();
+  const ok = typeof w.threshold === 'number' && Number.isFinite(w.threshold) && (w.condition === 'above' || w.condition === 'below');
+  return [w.symbol, ok ? watchLabel(w) : ''].filter(Boolean).join(' ') || w.id;
 }
 
 export function watchLabel(w: Watch): string {
