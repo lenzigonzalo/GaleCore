@@ -1,0 +1,35 @@
+# Qué cambió en cada versión de performance_review y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: performance_review
+versions:
+  - version: "2.1.0"
+    date: 2026-10-25
+    changes: >
+      WS-0062 inc. 8c: `costos` sale de lo que informa GaleCore (neto de los costos de la spec; operaciones previas al medio y sin costos), ya no es una nota fija «al medio, sin comisiones».
+    feedback: []
+  - version: "2.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "1.1.0"
+    date: 2026-10-13
+    changes: >
+      WS-0033: con `--strategy X` se lee también el panel SHADOW de GaleCore (régimen, regla de salida, versión,
+      referencias, hipótesis, ejecución) con el capital y los límites del perfil; la skill lo presenta con el motivo
+      de cada dato que falta.
+    feedback: []
+  - version: "1.0.1"
+    date: 2026-10-06
+    changes: >
+      Revisión interna: la semana sale de `ventana` (GaleCore la calcula con `from`) y la skill dice qué es
+      acumulado y qué es de la semana (`alcance`).
+    feedback: []
+  - version: "1.0.0"
+    date: 2026-10-06
+    changes: >
+      Primera versión (WS-0011, P1-03): performance por estrategia, versión y regla, la cartera contra el objetivo,
+      edge o suerte con el criterio del perfil, revisión de cada cierre (observado / hipótesis) y decisiones
+      esperado contra ocurrido; resumen semanal con las piezas existentes.
+    feedback: []

@@ -1,0 +1,507 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "http://127.0.0.1:8765/api/records?symbol=SPY&since=2026-09-01"
+  },
+  "http_status": 200,
+  "body": {
+    "symbol": "SPY",
+    "since": "2026-09-01",
+    "until": null,
+    "records_dir": "<workspace>\\GaleCore\\research\\regime",
+    "count": 1,
+    "integrity_failed": [],
+    "read_inconsistent": [],
+    "records": [
+      {
+        "date": "2026-09-17",
+        "status": "OK",
+        "path": "<workspace>\\GaleCore\\research\\regime\\SPY\\2026-09-17.md",
+        "entries": [
+          {
+            "run_id": "01a0aeff-a70d-7a90-83b6-24175654b390",
+            "prompt": "Analizá el régimen de hoy de SPY y guardalo",
+            "accepted_at": "2026-09-17T10:53:40.641739+00:00",
+            "facts_hash": "sha256:066239c4c5c46abc6a13ebb0778955491165b922ea423d092e99189d3a67dfe3",
+            "facts": {
+              "atm_iv": 0.144,
+              "call_gex": 1086548.8384,
+              "call_wall": 765.0,
+              "coverage_pct": 100.0,
+              "freshness_status": "UNKNOWN",
+              "market_data_as_of": "2026-09-16T20:15:01.142000Z",
+              "net_gex": -951.4,
+              "put_gex": -2037953.4862,
+              "put_skew_dte": 29,
+              "put_skew_expiration": "2026-10-16",
+              "put_skew_level_ok": true,
+              "put_skew_level_threshold": 1.3,
+              "put_skew_ratio": 1.1921,
+              "put_wall": 760.0,
+              "put_wing_iv": 0.1716,
+              "sources": {
+                "gex": {
+                  "capability_id": "compute.gex_analysis",
+                  "endpoint": "/App/Gex/Analysis",
+                  "freshness_basis": "galecore_timestamp",
+                  "freshness_status": "VALID",
+                  "market_data_as_of": "2026-09-17T10:52:35.778484Z",
+                  "provenance": "GALECORE_VERIFIED",
+                  "response_received_at": "2026-09-17T10:53:05.162216Z"
+                },
+                "put_skew": {
+                  "capability_id": "compute.put_skew",
+                  "endpoint": "/App.Analytics/PutSkew",
+                  "freshness_basis": "none",
+                  "freshness_status": "UNKNOWN",
+                  "provenance": "GALECORE_VERIFIED",
+                  "response_received_at": "2026-09-17T10:53:05.162216Z"
+                },
+                "vix": {
+                  "capability_id": "market_data.trade",
+                  "endpoint": "/Data/Tastytrade/MarketData/Trade",
+                  "freshness_basis": "galecore_timestamp",
+                  "freshness_status": "VALID",
+                  "market_data_as_of": "2026-09-17T10:52:46.224000Z",
+                  "provenance": "GALECORE_VERIFIED",
+                  "response_received_at": "2026-09-17T10:53:05.162216Z"
+                },
+                "vvix": {
+                  "capability_id": "market_data.trade",
+                  "endpoint": "/Data/Tastytrade/MarketData/Trade",
+                  "freshness_basis": "galecore_timestamp",
+                  "freshness_status": "VALID",
+                  "market_data_as_of": "2026-09-16T20:15:01.142000Z",
+                  "provenance": "GALECORE_VERIFIED",
+                  "response_received_at": "2026-09-17T10:53:05.162216Z"
+                }
+              },
+              "spot": 760.4,
+              "symbol": "SPY",
+              "vix": 15.98,
+              "vvix": 95.41,
+              "zero_gamma_level": 760.98
+            },
+            "host": {
+              "provider": "claude-code",
+              "model": "claude-opus-5",
+              "provenance": "HOST_DECLARED"
+            },
+            "accepted_payload": {
+              "evidence": [
+                {
+                  "claim": "Net GEX is negative, dealers are short gamma",
+                  "fact_path": "facts.net_gex"
+                },
+                {
+                  "claim": "Spot is a fraction below the zero-gamma level",
+                  "fact_path": "facts.zero_gamma_level"
+                },
+                {
+                  "claim": "The put wall sits right under spot",
+                  "fact_path": "facts.put_wall"
+                },
+                {
+                  "claim": "The skew level semaphore is in the calm zone",
+                  "fact_path": "facts.put_skew_level_ok"
+                },
+                {
+                  "claim": "The volatility index printed lower in the pre-market",
+                  "fact_path": "facts.vix"
+                },
+                {
+                  "claim": "The vol-of-vol index is the previous close",
+                  "fact_path": "facts.vvix"
+                }
+              ],
+              "gamma_regime": "negative_gamma",
+              "implications": [
+                "With spot at the zero-gamma level, a small move decides whether hedging flows dampen or amplify the session; the regime is fragile rather than established",
+                "The put wall directly under spot is where hedging support would first be expected; a break below it with dealers short gamma could see moves accelerate",
+                "A calmer volatility index alongside an unchanged calm skew suggests no protection bid overnight, consistent with a quiet open unless the flip point gives way"
+              ],
+              "limitations": [
+                "Pre-market read: GEX and the volatility index are live, but the vol-of-vol index is the previous close because it has no pre-market print",
+                "The staleness window was widened to a day to admit that print; this is an operator choice, visible per source in the snapshot",
+                "The skew snapshot carries no GaleCore timestamp; it reflects the moment of the request",
+                "GEX reflects current open interest and coverage and will shift with the session's flow",
+                "Qualitative statements are not checked for entailment by the validator; only paths, numbers and directives are"
+              ],
+              "observations": [
+                "Net gamma exposure is negative but smaller in magnitude than the previous session: dealers remain short gamma",
+                "Spot sits a fraction below the zero-gamma level and right on top of the put wall, so the market is at the flip point rather than deep on either side",
+                "The call wall stays where it was; the reference range above spot is narrow",
+                "The twenty-five delta put skew remains inside GaleCore's calm zone and essentially unchanged from the prior read",
+                "The volatility index printed lower in the pre-market than at the previous close; the vol-of-vol index is still the previous close, no fresh print yet"
+              ],
+              "quantitative_claims": [
+                {
+                  "metric": "net_gex",
+                  "unit": "billion_usd",
+                  "value": -951.4
+                },
+                {
+                  "metric": "spot",
+                  "unit": "usd",
+                  "value": 760.4
+                },
+                {
+                  "metric": "zero_gamma_level",
+                  "unit": "usd",
+                  "value": 760.98
+                },
+                {
+                  "metric": "call_wall",
+                  "unit": "usd",
+                  "value": 765.0
+                },
+                {
+                  "metric": "put_wall",
+                  "unit": "usd",
+                  "value": 760.0
+                },
+                {
+                  "metric": "put_skew_ratio",
+                  "unit": "ratio",
+                  "value": 1.1921
+                },
+                {
+                  "metric": "atm_iv",
+                  "unit": "iv_decimal",
+                  "value": 0.144
+                },
+                {
+                  "metric": "put_wing_iv",
+                  "unit": "iv_decimal",
+                  "value": 0.1716
+                },
+                {
+                  "metric": "vix",
+                  "unit": "index_points",
+                  "value": 15.98
+                },
+                {
+                  "metric": "vvix",
+                  "unit": "index_points",
+                  "value": 95.41
+                }
+              ],
+              "tail_pricing": "calm"
+            },
+            "outcomes": [],
+            "human_reviews": [],
+            "recorded_at": "2026-09-17T10:53:40.656218+00:00",
+            "snapshot": {
+              "run_id": "01a0aeff-a70d-7a90-83b6-24175654b390",
+              "prepared_at": "2026-09-17T10:53:05.164629Z",
+              "facts_hash": "sha256:066239c4c5c46abc6a13ebb0778955491165b922ea423d092e99189d3a67dfe3",
+              "conventions_hash": "sha256:4213a153871c18d4cb1ec82020d1694dd0a0200e3ebecc7eb202bd789dd7a708",
+              "market_data_as_of": "2026-09-16T20:15:01.142000Z",
+              "freshness_status": "UNKNOWN"
+            },
+            "effective_assets": {
+              "agent": {
+                "asset_id": "TradingAgent",
+                "version": "1.1.0",
+                "content_hash": "sha256:02c1268fe83422734e0afa6c36be2fc5f93db520137edd4a31cb7075514cf57b"
+              },
+              "skills": {
+                "regime_interpretation": {
+                  "asset_id": "regime_interpretation",
+                  "version": "1.0.0",
+                  "content_hash": "sha256:90907fbdb249c92b3d37fd36db90b25f32c2ed572761d62df9960bafc6597eb7"
+                }
+              },
+              "protocols": {
+                "facts_discipline": {
+                  "asset_id": "facts_discipline",
+                  "version": "1.2.0",
+                  "content_hash": "sha256:d69cb5950c5f9dc72499e378278eecc94924034d2443283d448e69a5d16f3a8a"
+                }
+              },
+              "conventions": {
+                "trading_defaults": {
+                  "asset_id": "trading_defaults",
+                  "version": "1.0.0",
+                  "content_hash": "sha256:46f9020771319f19d297f0306ebf16382792cefd2310b6b272f960172b78dab4"
+                }
+              }
+            },
+            "trace": {
+              "trace_id": "01a0af00-3194-7d23-8a14-946193203d25",
+              "accepted_at": "2026-09-17T10:53:40.641739Z",
+              "facts_provenance": "GALECORE_VERIFIED",
+              "guardrails": [
+                {
+                  "guardrail_id": "snapshot_integrity",
+                  "passed": true,
+                  "message": "facts_hash and conventions_hash recomputed and match"
+                },
+                {
+                  "guardrail_id": "no_invented_numbers",
+                  "passed": true,
+                  "message": "OK"
+                },
+                {
+                  "guardrail_id": "facts_match_source",
+                  "passed": true,
+                  "message": "All evidence paths validated"
+                },
+                {
+                  "guardrail_id": "no_trading_recommendation",
+                  "passed": true,
+                  "message": "No explicit trading recommendations detected (pattern-based; novel phrasings may bypass)"
+                },
+                {
+                  "guardrail_id": "no_numbers_in_prose",
+                  "passed": true,
+                  "message": "No numbers in observations/implications (pattern-based; spelled-out numbers may bypass)"
+                },
+                {
+                  "guardrail_id": "gex_regime_sign",
+                  "passed": true,
+                  "message": "Regime sign validated"
+                },
+                {
+                  "guardrail_id": "tail_pricing_level",
+                  "passed": true,
+                  "message": "tail_pricing agrees with GaleCore's put_skew_level_ok"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[0]: metric 'net_gex' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[1]: metric 'spot' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[2]: metric 'zero_gamma_level' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[3]: metric 'call_wall' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[4]: metric 'put_wall' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[5]: metric 'put_skew_ratio' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[6]: metric 'atm_iv' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[7]: metric 'put_wing_iv' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[8]: metric 'vix' validated"
+                },
+                {
+                  "guardrail_id": "quantitative_claims_valid",
+                  "passed": true,
+                  "message": "Claim[9]: metric 'vvix' validated"
+                }
+              ],
+              "capabilities": [
+                {
+                  "capability_id": "compute.gex_analysis",
+                  "semantic_class": null,
+                  "endpoint": "/App/Gex/Analysis",
+                  "transport": "REST",
+                  "schema_version": null,
+                  "calculation_version": null,
+                  "methodology_version": null,
+                  "latency_ms": 296,
+                  "outcome": "ok",
+                  "error": null,
+                  "response_received_at": "2026-09-17T10:53:05.162216Z"
+                },
+                {
+                  "capability_id": "compute.put_skew",
+                  "semantic_class": null,
+                  "endpoint": "/App.Analytics/PutSkew",
+                  "transport": "REST",
+                  "schema_version": null,
+                  "calculation_version": null,
+                  "methodology_version": null,
+                  "latency_ms": 9203,
+                  "outcome": "ok",
+                  "error": null,
+                  "response_received_at": "2026-09-17T10:53:05.162216Z"
+                },
+                {
+                  "capability_id": "market_data.trade",
+                  "semantic_class": null,
+                  "endpoint": "/Data/Tastytrade/MarketData/Trade",
+                  "transport": "REST",
+                  "schema_version": null,
+                  "calculation_version": null,
+                  "methodology_version": null,
+                  "latency_ms": 250,
+                  "outcome": "ok",
+                  "error": null,
+                  "response_received_at": "2026-09-17T10:53:05.162216Z"
+                },
+                {
+                  "capability_id": "market_data.trade",
+                  "semantic_class": null,
+                  "endpoint": "/Data/Tastytrade/MarketData/Trade",
+                  "transport": "REST",
+                  "schema_version": null,
+                  "calculation_version": null,
+                  "methodology_version": null,
+                  "latency_ms": 234,
+                  "outcome": "ok",
+                  "error": null,
+                  "response_received_at": "2026-09-17T10:53:05.162216Z"
+                }
+              ]
+            },
+            "entry_hash": "sha256:7bdcba8af7dac2f6448f29f67a71c3c5e7196b184c34e3169be08e856f3edb27",
+            "request": {
+              "prompt": "Analizá el régimen de hoy de SPY y guardalo",
+              "symbol": "SPY",
+              "skill_id": "regime_interpretation"
+            },
+            "claims": [
+              {
+                "metric": "net_gex",
+                "value": -951.4,
+                "unit": "billion_usd",
+                "fact_value": -951.4,
+                "matches": true
+              },
+              {
+                "metric": "spot",
+                "value": 760.4,
+                "unit": "usd",
+                "fact_value": 760.4,
+                "matches": true
+              },
+              {
+                "metric": "zero_gamma_level",
+                "value": 760.98,
+                "unit": "usd",
+                "fact_value": 760.98,
+                "matches": true
+              },
+              {
+                "metric": "call_wall",
+                "value": 765.0,
+                "unit": "usd",
+                "fact_value": 765.0,
+                "matches": true
+              },
+              {
+                "metric": "put_wall",
+                "value": 760.0,
+                "unit": "usd",
+                "fact_value": 760.0,
+                "matches": true
+              },
+              {
+                "metric": "put_skew_ratio",
+                "value": 1.1921,
+                "unit": "ratio",
+                "fact_value": 1.1921,
+                "matches": true
+              },
+              {
+                "metric": "atm_iv",
+                "value": 0.144,
+                "unit": "iv_decimal",
+                "fact_value": 0.144,
+                "matches": true
+              },
+              {
+                "metric": "put_wing_iv",
+                "value": 0.1716,
+                "unit": "iv_decimal",
+                "fact_value": 0.1716,
+                "matches": true
+              },
+              {
+                "metric": "vix",
+                "value": 15.98,
+                "unit": "index_points",
+                "fact_value": 15.98,
+                "matches": true
+              },
+              {
+                "metric": "vvix",
+                "value": 95.41,
+                "unit": "index_points",
+                "fact_value": 95.41,
+                "matches": true
+              }
+            ],
+            "evidence": [
+              {
+                "claim": "Net GEX is negative, dealers are short gamma",
+                "fact_path": "facts.net_gex",
+                "fact_value": -951.4
+              },
+              {
+                "claim": "Spot is a fraction below the zero-gamma level",
+                "fact_path": "facts.zero_gamma_level",
+                "fact_value": 760.98
+              },
+              {
+                "claim": "The put wall sits right under spot",
+                "fact_path": "facts.put_wall",
+                "fact_value": 760.0
+              },
+              {
+                "claim": "The skew level semaphore is in the calm zone",
+                "fact_path": "facts.put_skew_level_ok",
+                "fact_value": true
+              },
+              {
+                "claim": "The volatility index printed lower in the pre-market",
+                "fact_path": "facts.vix",
+                "fact_value": 15.98
+              },
+              {
+                "claim": "The vol-of-vol index is the previous close",
+                "fact_path": "facts.vvix",
+                "fact_value": 95.41
+              }
+            ],
+            "comparisons": [],
+            "states": {
+              "outcome_pending": true,
+              "review_pending": true
+            },
+            "annotation": {
+              "symbol": "SPY",
+              "date": "2026-09-17",
+              "entry_hash": "sha256:7bdcba8af7dac2f6448f29f67a71c3c5e7196b184c34e3169be08e856f3edb27",
+              "kind": "observed_history",
+              "label": "Observed history — does not count toward AC-08",
+              "note": "Real record kept as flagged history: its prose compares with the previous session from memory (skill rule 10 was added afterwards). The AC-08 series of GC-AI-0002 starts on the next trading day. Hash-bound, unmodified, integrity intact.",
+              "source": "GaleCore-AI/docs/engineering/work-items/GC-AI-0002-phase4-host-harness-evaluable-record.md — Product-owner decisions (2026-09-19), F-7",
+              "decided_on": "2026-09-19"
+            }
+          }
+        ]
+      }
+    ],
+    "queried_at": "2026-09-21T17:08:37.332276+00:00"
+  }
+}

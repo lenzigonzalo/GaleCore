@@ -1,0 +1,30 @@
+# Qué cambió en cada versión de scheduled_report y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: scheduled_report
+versions:
+  - version: "1.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "0.1.2"
+    date: 2026-10-14
+    changes: >
+      Corrida programada del 14/10 quedó INCOMPLETE: no podía leer la revisión anterior (`kb show` faltaba en el flujo
+      del catálogo) y contaba como faltantes los límites por operación sin un spread concreto. Ahora lee la anterior
+      y esos límites se nombran como «no aplica sin estructura»; una publicación
+      cuyo valor aún no está en GaleCore se informa con fecha y hora, no como faltante.
+    feedback: []
+  - version: "0.1.1"
+    date: 2026-10-13
+    changes: >
+      Primera corrida programada real (WS-0031): fallaba por «conviene abrir» y un hecho sin fuente. El veredicto se
+      da como lectura de las condiciones del perfil, nunca como orden, y todo hecho cita su evidencia.
+    feedback: []
+  - version: "0.1.0"
+    date: 2026-10-13
+    changes: >
+      Primera versión (WS-0031, P1-09): informe programado genérico cuyo `objective` es el método, para armar tareas
+      como «cada mañana decime cómo está el gamma de SPY» sin escribir una capacidad por idea.
+    feedback: []

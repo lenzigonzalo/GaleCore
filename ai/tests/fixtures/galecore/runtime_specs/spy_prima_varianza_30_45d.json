@@ -1,0 +1,152 @@
+{
+  "strategy_spec_version": "1.0.0",
+  "content_hash": null,
+  "canonicalization_version": "jcs-1",
+  "identity": {
+    "id": "15da4d03-c76b-4d1b-8b83-192fd2f177c9",
+    "name": "spy_prima_varianza_30_45d",
+    "display_name": "Cobro de prima de varianza en SPY a 30-45 dias con riesgo definido",
+    "version": "1.0.3",
+    "author": {
+      "type": "COLLABORATIVE",
+      "agent_definition_version": "strategy-design 0.3.0"
+    },
+    "created_at": "2026-09-27T00:00:00Z",
+    "parent_version_hash": null
+  },
+  "deployment_constraints": {
+    "eligible_modes": [
+      "SHADOW"
+    ],
+    "requires_human_approval_for": [
+      "PAPER",
+      "LIVE"
+    ]
+  },
+  "universe": {
+    "mode": "WHITELIST",
+    "symbols": [
+      "SPY"
+    ],
+    "excluded": {},
+    "instrument_types": [
+      "EQUITY_OPTION"
+    ]
+  },
+  "structure": {
+    "allowed_strategies": [
+      "put_credit_spread"
+    ],
+    "forbidden_strategies": [
+      "naked_short",
+      "ratio_spread",
+      "long_directional"
+    ],
+    "default_structure": "put_credit_spread",
+    "selection_method": "FIXED"
+  },
+  "entry_filters": {
+    "gate_layer": {
+      "pass_rule": "ALL",
+      "on_fail": "NO_TRADE",
+      "gates": [
+        {
+          "id": "vix_below_30",
+          "label": "VIX < 30",
+          "metric_ref": "capability:market_data.trade.VIX.price",
+          "operator": "LT",
+          "threshold": {
+            "value": 30
+          },
+          "on_fail": "NO_TRADE",
+          "on_no_data": "BLOCK"
+        }
+      ]
+    },
+    "signal_layer": {
+      "pass_rule": "ALL",
+      "gates": []
+    }
+  },
+  "candidate_construction": {
+    "legs": [
+      {
+        "side": "SELL",
+        "type": "PUT",
+        "strike_selection": {
+          "method": "DELTA",
+          "target_delta": -0.16,
+          "delta_tolerance": 0.04,
+          "width": null
+        }
+      },
+      {
+        "side": "BUY",
+        "type": "PUT",
+        "strike_selection": {
+          "method": "FIXED_WIDTH",
+          "target_delta": null,
+          "delta_tolerance": null,
+          "width": 5.0
+        }
+      }
+    ],
+    "sizing": {
+      "method": "FIXED",
+      "fixed_contracts": 1,
+      "risk_per_trade_pct": null
+    },
+    "constraints": {
+      "min_dte": 30,
+      "max_dte": 45,
+      "min_credit": 0.1,
+      "max_bid_ask_spread_pct": null
+    }
+  },
+  "exits": {
+    "deterministic": {
+      "take_profit": {
+        "pct_of_credit": 50.0
+      },
+      "stop_loss": {
+        "pct_of_credit": 200.0
+      },
+      "time_exit": {
+        "max_dte": 21
+      },
+      "defensive_roll": {
+        "enabled": false
+      }
+    }
+  },
+  "risk_limits": {
+    "max_concurrent_positions": 1,
+    "max_portfolio_heat_pct": null,
+    "max_risk_per_trade_pct": null,
+    "max_loss_per_trade_usd": 500.0
+  },
+  "operational": {
+    "timezone": "America/New_York",
+    "session_hours": {
+      "start": "09:30",
+      "end": "16:00"
+    },
+    "calendar": "NYSE",
+    "decimal_precision": 2,
+    "currency": "USD",
+    "rounding": "HALF_UP",
+    "symbology": "OCC_21_CHAR"
+  },
+  "data_quality": {
+    "max_quote_age_seconds": 15,
+    "block_on_crossed_market": true,
+    "block_on_missing_critical_data": true
+  },
+  "analytics_refs": {},
+  "metadata": {
+    "schema_version": "1.0.0",
+    "methodology_version": "1.0.0",
+    "reference_docs": [],
+    "notes": "Propuesta completa en knowledge: strategy:spy_prima_varianza_30_45d/1.0.3 (GC-AI-0008; reemplaza a 1.0.0, 1.0.1 y 1.0.2, nunca aprobadas ni desplegadas, corregidas por la revision de Codex). Parametros de pcs_spy_16d_v1 (borrador local del 26/09, nunca desplegado) con sizing y limites ajustados a lo que el runtime ejecuta: 1 contrato fijo, sin riesgo por % de capital, sin roll. Reglas no ejecutables declaradas en la propuesta, fuera de esta spec. Sin validacion de rentabilidad."
+  }
+}

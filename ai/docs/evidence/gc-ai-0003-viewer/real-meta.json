@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "http://127.0.0.1:8765/api/meta"
+  },
+  "http_status": 200,
+  "body": {
+    "records_dir": "<workspace>\\GaleCore\\research\\regime",
+    "symbols": [
+      "SPY"
+    ],
+    "annotations_file": "<workspace>\\.worktrees\\galecore-ai\\GC-AI-0003\\config\\viewer\\record-annotations.yaml",
+    "annotation_count": 1,
+    "read_only": true,
+    "served_at": "2026-09-21T17:08:37.252787+00:00"
+  }
+}

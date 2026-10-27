@@ -1,0 +1,28 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/reviews",
+    "headers": {
+      "Origin": "http://localhost:3039",
+      "X-Review-Token": "<token>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "symbol": "TEST",
+      "date": "2026-09-21",
+      "run_id": "x",
+      "verdict": "partial",
+      "comment": "SYNTHETIC evidence review from GC-AI-0004; not an owner verdict"
+    }
+  },
+  "http_status": 422,
+  "response_headers": {
+    "Content-Type": "application/json; charset=utf-8",
+    "Access-Control-Allow-Origin": "http://localhost:3039",
+    "Vary": "Origin"
+  },
+  "body": {
+    "error": "Record cannot be trusted; not modifying: <tmp>\\records\\TEST\\2026-09-21.md: entry 01a0c67c-b891-7fa0-a63e-ad050fb67aae: entry_hash mismatch; markdown body disagrees with the frontmatter record",
+    "at": "2026-09-22T00:20:57.988555+00:00"
+  }
+}

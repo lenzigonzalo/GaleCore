@@ -1,0 +1,76 @@
+# Connectors of the host (Claude Code's MCP servers) that bear on the harness (GC-AI-0024, BL-006 minimum).
+# `python -B -m galecore_ai.adapters.cli inventory` shows them next to the capabilities and the data sources.
+#
+# Data a connector brings is registered in config/sources.yaml (`source:` points there) with what it covers,
+# its cost and its observed access; this file says what each connector is FOR in the harness, WHEN it is used
+# and what the agent may do with it on its own:
+#   free  - use it when the need calls for it
+#   warn  - use it, saying so in one line (owner, 26/09: IBKR as a read-only market benchmark)
+#   ask   - ask the owner first (accounts, paid plans, anything that writes)
+# `state` is what the host showed when this file was written (connected | needs_auth), not a live check.
+# Scheduled runs start the model with --strict-mcp-config: they see NO connector, only GaleCore and the scripts.
+schema_version: "1"
+observed_at: "2026-10-04"
+connectors:
+  - id: alpha_vantage
+    display_name: Alpha Vantage
+    state: connected
+    source: alpha_vantage
+    for: macro (tasas, CPI, empleo, PIB), resultados y calendario de resultados, noticias y sentimiento
+    when: a pedido en una sesión, cuando GaleCore no cubre el dato (clave gratuita, 25 consultas por día)
+    permission: free
+  - id: fmp
+    display_name: Financial Modeling Prep (FMP)
+    state: connected
+    source: fmp
+    for: curva del Tesoro, cierre diario, calendario de resultados (varios endpoints denegados por plan)
+    when: a pedido en una sesión, después de GaleCore y Alpha Vantage
+    permission: free
+  - id: ibkr
+    display_name: Interactive Brokers (IBKR)
+    state: needs_auth
+    for: referencia de mercado de sólo lectura para validar rápido un dato de GaleCore
+    when: al dudar de un dato de GaleCore; rol todavía no definido
+    permission: warn
+  - id: iol
+    display_name: InvertirOnline (IOL)
+    state: connected
+    for: la cuenta del owner (saldo, cartera, órdenes) y cotizaciones de Argentina
+    when: sólo si el owner lo pide; nunca órdenes
+    permission: ask
+  - id: supabase
+    display_name: Supabase (GaleCore Dev)
+    state: connected
+    for: la base de GaleCore Dev (espacio del trader, SHADOW); tiene escritura
+    when: diagnóstico de la base de desarrollo
+    permission: warn
+  - id: trading_economics
+    display_name: Trading Economics
+    state: needs_auth
+    for: calendario e indicadores macro con consenso y valor anterior (candidato para la historia del mercado)
+    when: no se usa; conectarlo es una decisión del owner (posible costo)
+    permission: ask
+  - id: mt_newswires
+    display_name: MT Newswires
+    state: needs_auth
+    for: noticias de mercado (candidato para «qué se le está vendiendo al retail»)
+    when: no se usa; conectarlo es una decisión del owner (posible costo)
+    permission: ask
+  - id: lseg
+    display_name: LSEG
+    state: needs_auth
+    for: datos de mercado e históricos institucionales
+    when: no se usa; conectarlo es una decisión del owner (posible costo)
+    permission: ask
+  - id: morningstar
+    display_name: Morningstar
+    state: needs_auth
+    for: fondos, ETF y valuación
+    when: no se usa; conectarlo es una decisión del owner (posible costo)
+    permission: ask
+  - id: claude_in_chrome
+    display_name: Claude in Chrome
+    state: connected
+    for: mirar las pantallas del monitor antes de entregar
+    when: sólo si es imprescindible, con capturas chicas; nunca para buscar datos en la web
+    permission: free

@@ -1,0 +1,22 @@
+{
+  "case": "N02-missing-source",
+  "title": "prepare regime for symbol ZZZZ",
+  "expected": "error JSON 'Capability fetch failed' or 'Fact validation failed', exit 1",
+  "command": "python -B -m galecore_ai.adapters.cli prepare --symbol ZZZZ --skill regime",
+  "stdin": null,
+  "exit_code": 1,
+  "stdout_json": {
+    "error": "Capability fetch failed: gex: HTTP 500: System.Exception: GammaExposureHandler Error: No se pudo obtener el precio spot de ZZZZ",
+    "timestamp": "2026-09-21T15:47:10.366587+00:00"
+  },
+  "stdout_raw": null,
+  "stderr": "",
+  "status": null,
+  "failed_guardrails": [],
+  "error": "Capability fetch failed: gex: HTTP 500: System.Exception: GammaExposureHandler Error: No se pudo obtener el precio spot de ZZZZ",
+  "record": null,
+  "note": "",
+  "observed_at": "2026-09-21T15:47:10.447270+00:00",
+  "verified": true,
+  "problems": []
+}

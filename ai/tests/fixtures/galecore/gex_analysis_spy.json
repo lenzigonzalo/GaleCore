@@ -1,0 +1,65 @@
+{
+  "symbol": "SPY",
+  "timestamp": "2026-09-15T14:30:00",
+  "spotPrice": 450.50,
+  "fromCache": false,
+  "switchEnabled": true,
+  "frozen": false,
+  "elapsedMs": 2340,
+  "macroRegime": {
+    "signal": "SELL",
+    "passedCount": 4,
+    "totalChecks": 6,
+    "checks": {
+      "vixAbsolute": { "passed": true, "value": 18.5, "threshold": 30.0 },
+      "vixTermStructure": { "passed": true, "noData": false, "vix9d": 17.2, "vix30d": 18.5 },
+      "ivRank": { "passed": true, "value": 42.0, "min": 25.0, "max": 65.0 },
+      "ivMomentum": { "passed": false, "value": 15.3, "threshold": 12.0 },
+      "gexTotal": { "passed": true, "value": 1500.0, "metric": "billions_usd", "threshold": 0.0, "thresholdDeclared": true },
+      "spotVsZgl": { "passed": false, "spot": 450.5, "zgl": 445.0, "bufferPct": 0.005 }
+    }
+  },
+  "structureInputs": null,
+  "gex": {
+    "global": {
+      "spot": 450.50,
+      "callGex": 2000000.0,
+      "putGex": -500000.0,
+      "netGex": 1500.0,
+      "gammaZeroLevel": 445.0,
+      "callWall": 460.0,
+      "putWall": 440.0,
+      "expirationsIncluded": 8,
+      "expirationsRequested": 12,
+      "coveragePct": 85.5,
+      "strikes": []
+    },
+    "byExpiry": [
+      {
+        "expiration": "2026-10-17",
+        "dte": 32,
+        "expirationType": "Regular",
+        "callGex": 800000.0,
+        "putGex": -200000.0,
+        "netGex": 600.0,
+        "gammaZeroLevel": 446.0,
+        "callWall": 460.0,
+        "putWall": 442.0,
+        "callBand": null,
+        "putBand": null,
+        "atmIv": 0.185,
+        "expectedMove": 12.5,
+        "strikes": []
+      }
+    ],
+    "config": {
+      "maxDte": 60,
+      "includeZeroDte": false,
+      "expirationTypes": ["Regular"],
+      "greeksBatchSize": 50,
+      "greeksRetries": 2,
+      "cacheSeconds": 120,
+      "cacheMinCoveragePct": 50.0
+    }
+  }
+}

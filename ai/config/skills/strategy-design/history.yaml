@@ -1,0 +1,111 @@
+# Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: strategy_design
+versions:
+  - version: "2.3.0"
+    date: 2026-10-26
+    changes: >
+      Si la estrategia se guarda con otro nombre que el proyecto del Lab, se vincula con `mark_strategy.py <nombre>` para que
+      Estrategias no muestre dos proyectos (owner 26/10: Sandwich SPY y sandwich_spx_0dte_1345).
+    feedback: []
+  - version: "2.2.0"
+    date: 2026-10-25
+    changes: >
+      WS-0062 inc. 8c: los fills de SHADOW son simulados con el fill y los costos que declara la spec (natural por defecto), no al medio; suma el tamaño (`sizing` FIXED o RISK_BASED) a las piezas del runtime.
+    feedback: []
+  - version: "2.1.0"
+    date: 2026-10-25
+    changes: >
+      WS-0062 inc. 8b: `strategy check` ya no usa tablas propias; pregunta a GaleCore qué ejecuta (valid, errors,
+      executed_paths, hash). La skill describe las piezas genéricas del runtime en lugar de familias, pide el capital
+      simulado en risk_limits.simulated_capital_usd y las rutas de las reglas tal como las devuelve el check.
+    feedback: []
+  - version: "2.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "1.6.0"
+    date: 2026-10-16
+    changes: >
+      WS-0044 (owner, experimento VRP: «no está bien diagramado el camino guía al usuario para avanzar a su objetivo»):
+      guiar hacia el objetivo (idea → hipótesis → evidencia → riesgos → cómo se evalúa → operar o no), diciendo en qué
+      tramo está, qué falta y para qué sirve el próximo paso; como principio, sin línea fija (owner: sin reglas duras).
+    feedback: []
+  - version: "1.5.0"
+    date: 2026-10-16
+    changes: >
+      WS-0039 (owner 16/10: «no sé qué está haciendo, está tardando mucho»): una idea va en dos tiempos. Aclarar en
+      segundos, sin buscar, con 2-3 preguntas cerradas y lo que va a buscar; buscar todo de una vez cuando el trader
+      responde o si el pedido ya era específico.
+    feedback: []
+  - version: "1.4.2"
+    date: 2026-10-16
+    changes: >
+      WS-0039 (panel Mapa): el mapa de la idea (`memory/mapa-<tema>.md`, cinco secciones) se reescribe en cada turno
+      que cambia la idea, también sin proyecto; en la prueba de varios turnos de Apple la retoma perdió el último turno.
+    feedback: []
+  - version: "1.4.1"
+    date: 2026-10-16
+    changes: >
+      WS-0039 vuelta 2: con 1.4.0 la idea quedó corta pero vacía (E1, E3 sin un dato). La primera respuesta trae uno o
+      dos datos de GaleCore de hoy y una fila «Lo que no tuviste en cuenta».
+    feedback: []
+  - version: "1.4.0"
+    date: 2026-10-16
+    changes: >
+      WS-0039 (owner 16/10, casos de entrada E1–E4): el perfil informa y no frena una idea que se está pensando; no se
+      abre con el nombre del paso; el contexto del instrumento (perfil del ticker o sector, story pack) se ofrece en
+      una línea y se corre si el owner lo pide o el paso lo necesita; sin backtest en GaleCore, se ofrece una lectura
+      descriptiva de la historia con velas y se dice cuando no hay dato.
+    feedback: []
+  - version: "1.3.1"
+    date: 2026-10-11
+    changes: >
+      H-4 (WS-0026, revisión interna): A9 muestra la tabla de `strategy controls` tal como vuelve (cada regla
+      ejecutada / vigilada / sólo declarada / no aplica y los controles indispensables), no un resumen: en la corrida
+      de IWM sólo nombró dos controles. A0 aclara que no cambia el perfil.
+    feedback: []
+  - version: "1.3.0"
+    date: 2026-10-11
+    changes: >
+      H-4 (WS-0026): A0, no frenar en preguntas. Observado en una sesión nueva («vender prima en IWM, la estructura
+      proponela vos»): v1.2.0 devolvió tres preguntas sin guardar investigación ni spec ni pasar por check, crítica y
+      ficha. Ahora diseña completo con valores propuestos (design_choice) y deja las decisiones al final; sólo
+      descarta o deja pendiente, con motivo, si choca con el perfil o no hay datos que la fundamenten.
+    feedback: []
+  - version: "1.2.0"
+    date: 2026-10-11
+    changes: >
+      H-4 (WS-0026): receta más corta. Parte A = juicio del modelo (A1-A10, sin repetir lo que hace el comando);
+      Parte B = procedimiento por comandos (el modelo sólo frena y pregunta ante una instancia en marcha). Las
+      instrucciones traen la cadena de comandos con su entrada y salida. Sin cambios de código ni de reglas.
+    feedback: []
+  - version: "1.1.0"
+    date: 2026-10-11
+    changes: >
+      P1-PPa (WS-0023, owner 10/10): antes de recomendar, `strategy controls` (ejecutada / vigilada / sólo declarada e
+      indispensables); sin los indispensables ejecutados no se recomienda aprobar (observado en C5b de WS-0022). Las
+      estructuras desplegables se leen de `state` (decía «sólo PCS»). Pausar una estrategia es detener su instancia,
+      no el switch global (observado en C0); reanudar es una instancia nueva con trazabilidad; reanudar o revisar va al
+      supervisor.
+    feedback: []
+  - version: "1.0.0"
+    date: 2026-10-06
+    changes: >
+      WS-0016 (P1-06): la skill se parte en método (parte A) y procedimiento de SHADOW (parte B); suma tabla de
+      parámetros, árbol de gestión (disparador → acción), el crítico antes de aprobar (`strategy critique`; sin
+      crítica o con «descartar» no se aprueba) y la ficha de una página (`strategy sheet`) como salida estándar. La ficha
+      pone la versión contra el perfil (pérdida por operación, peor caso sumado, kill switch, lo abierto en SHADOW)
+      y el método trae el contexto del instrumento con `story pack` (AC-02). Una versión nueva dice qué cambia y por qué
+      (`change`) y `strategy diff` muestra la diferencia por código (AC-05). Lo que invalida la tesis
+      se registra como regla del supervisor con `--thesis` y sus estrategias (AC-07).
+      La ficha suma PCS / CCS / iron condor / esperar con la cadena real que calcula GaleCore
+      (`/App/Runtime/Structures`, AC-03/04); sólo el PCS se despliega hasta P1-07.
+    feedback: []
+  - version: "0.3.1"
+    date: 2026-09-27
+    changes: >
+      Correcciones de Codex C1: campos de semántica única, gates por hoja, deploy atado a la aprobación (GC-AI-0008). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

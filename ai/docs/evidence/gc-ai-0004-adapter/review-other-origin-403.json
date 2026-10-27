@@ -1,0 +1,26 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/reviews",
+    "headers": {
+      "Origin": "http://evil.example",
+      "X-Review-Token": "<token>",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "symbol": "TEST",
+      "date": "2026-09-20",
+      "run_id": "01a0c67c-b860-7910-8f42-a094b436da3c",
+      "verdict": "partial",
+      "comment": "SYNTHETIC evidence review from GC-AI-0004; not an owner verdict"
+    }
+  },
+  "http_status": 403,
+  "response_headers": {
+    "Content-Type": "application/json; charset=utf-8"
+  },
+  "body": {
+    "error": "origin not allowed",
+    "at": "2026-09-22T00:20:57.892833+00:00"
+  }
+}

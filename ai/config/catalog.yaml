@@ -1,0 +1,672 @@
+# What the host can ask GaleCore-AI for. `python -B -m galecore_ai.adapters.cli catalog` prints
+# this with the version and hash of each skill as loaded. Start here, not from a table in prose.
+#
+# Adding a capability: add an entry here and its skill asset under skills/. Anything the entry's
+# flow needs that does not exist yet (a prepare function, a validator, a store, a command) is code;
+# the entry names the commands, so what was declared and what was programmed stays visible.
+catalog_version: "1"
+entries:
+  - id: gex_interpretation
+    kind: interpretation
+    serves: Interpretar la exposición gamma (GEX) actual de un símbolo con datos de GaleCore.
+    example_requests:
+      - Analizá el GEX actual de SPY.
+    skill: skills/gex-analysis/SKILL.md
+    output_contract: galecore_ai.contracts.gex_analysis.GexInterpretation
+    galecore_capabilities: [compute.gex_analysis]
+    data_needs:
+      - need: GEX
+    prepare_skill: gex
+    flow:
+      - prepare --symbol <SYMBOL> --skill gex
+      - accept < {run_id, interpretation, host_provider, host_model}
+    stored_as: none
+    controls:
+      - Numbers only in quantitative_claims, each equal to a GaleCore fact with its unit
+      - No digits in observations or implications
+      - Regime by the sign of net_gex; near_zero always rejected
+      - Evidence paths resolve (entailment is not checked)
+      - No explicit trading recommendation (pattern-based, D-6)
+      - Snapshot integrity and freshness, fail-closed
+      - Not checked - that the interpretation follows from the facts beyond numbers and evidence paths (entailment)
+    guide: docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md
+
+  - id: regime_interpretation
+    kind: interpretation
+    serves: Registrar el régimen diario de un símbolo (GEX, skew 25Δ, VIX/VVIX) y evaluarlo después.
+    example_requests:
+      - Analizá el régimen de hoy de SPY y guardalo.
+      - ¿Qué dijimos del régimen la semana pasada y qué pasó?
+    skill: skills/regime-analysis/SKILL.md
+    output_contract: galecore_ai.contracts.regime_analysis.RegimeInterpretation
+    galecore_capabilities: [compute.gex_analysis, compute.put_skew, market_data.trade]
+    data_needs:
+      - need: GEX de SPY
+      - need: put skew de SPY
+      - need: VIX
+      - need: VVIX
+    prepare_skill: regime
+    flow:
+      - prepare --symbol <SYMBOL> --skill regime
+      - accept --record --prompt "<pedido del usuario>" < {run_id, interpretation, host_provider, host_model}
+      - record outcome --symbol <SYMBOL> --date <YYYY-MM-DD> [--run-id <run_id>]
+      - record review --symbol <SYMBOL> --date <YYYY-MM-DD> --run-id <run_id> --verdict <v> --comment "<owner>"
+      - query --symbol <SYMBOL> --since <YYYY-MM-DD>
+    stored_as: regime
+    controls:
+      - The GEX controls, plus tail_pricing equal to GaleCore's put_skew_level_ok
+      - Record entry hashed at acceptance; outcomes and reviews appended, never rewritten
+      - The review verdict is the owner's (F-6)
+      - Daily records only after the cash session (F-2)
+      - Not checked - that the regime reading anticipates what happens next; outcomes and reviews exist to judge that
+    guide: docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md
+
+  - id: capability_builder
+    kind: harness
+    serves: >-
+      Crear una capacidad nueva con el molde: qué pedido atiende, qué datos necesita y de qué fuentes
+      registradas salen, qué entrega y dónde se guarda, con qué comandos corre y qué controles tiene,
+      y declarar lo que no se pudo completar.
+    example_requests:
+      - Quiero una capacidad que me diga qué merece mi atención hoy.
+      - Quiero que cada mañana me digas cómo está el gamma de SPY.
+      - Armame un agente que todos los días me prepare el resumen del mercado.
+      - Quiero una tarea que me avise cada semana cómo viene mi cartera.
+      - Armá una skill de reporte macro para ver los eventos de la semana.
+      - Le faltó el calendario de la Fed.
+      - ¿Qué feedback quedó pendiente?
+      - "Esto ya no vale: reemplazalo por la investigación nueva."
+      - Retirá esa regla, ya no la uso.
+      - Esto no me sirvió porque usaste datos viejos.
+      - Este trabajo me sirvió, quiero reutilizarlo o delegarlo.
+    skill: skills/capability-builder/SKILL.md
+    output_contract: galecore_ai.harness.catalog.CatalogEntry
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - catalog
+      - sources query --need "<dato>"
+      - catalog --check
+      - feedback add --research research:<id> --revision <N> --classification <kind> --slug <slug> --prompt "<pedido>"
+      - feedback list
+      - kb mark <ref> --as corrected|superseded|retired --reason "<motivo>" [--by <ref>] --slug <slug> --prompt "<palabras del owner>"
+    stored_as: none
+    controls:
+      - "catalog --check rejects an entry whose skill or contract does not load, whose flow names a command this CLI does not have (or a script not in the workspace), whose data need no registered source covers without a declared reason, or whose controls do not say what is not checked"
+      - "feedback add rejects a result or revision that does not exist and takes the skill and version from that revision; written once, hashed"
+      - "A profile version or skill history may only cite feedback of its kind (preference / method), and a skill version only feedback about an earlier version of that skill; feedback list counts as applied only a citation where its kind belongs"
+      - "One case is not a rule: a skill version citing method feedback needs comments on two different results or the owner's words in owner_decision (catalog --check)"
+      - "kb mark keeps the item and its history; a marked item is left out of kb search and refused as a citation in a new result; corrected and superseded name an intact replacement; one mark per item, written once, hashed"
+      - Not checked - that the classification is right or that the correction does what the comment asked; the next run shows it
+      - Not checked - that an owner_decision was really said by the owner, or that a mark is deserved
+      - Not checked - that the capability is useful or that its method is right; that is judged by running it
+      - Not checked - the options and arguments of each flow line (only the command and subcommand)
+
+  - id: research
+    kind: investigation
+    serves: >-
+      Investigar una idea con los antecedentes disponibles (registros, investigaciones previas,
+      archivos locales), producir una hipótesis y un plan de prueba con fuentes y limitaciones,
+      conservarlos y retomarlos en otra sesión.
+    example_requests:
+      - Investigá si el 0DTE vencido distorsiona el GEX post-cierre y cómo lo probaríamos.
+      - Retomá la investigación sobre el GEX post-cierre.
+    skill: skills/research/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - kb search --text "<términos>" [--kind research|regime] [--status unfinished]
+      - kb show <ref>
+      - research save --slug <slug> --prompt "<pedido del usuario>" < {content, host_provider, host_model}
+      - research revise --id <id> --reason continuation|correction|result --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - Every antecedent and source resolves to an intact knowledge item or an existing workspace file
+      - Every antecedent says how it affects the hypothesis or the plan
+      - A statement marked as fact cites at least one source
+      - Open or test_planned work lists its next steps; a test plan needs its hypothesis
+      - "Revisions are append-only and hashed; an edit that breaks a revision's hash is INTEGRITY_FAILED (removing or consistently rewriting revisions shows only in the knowledge base's git history)"
+      - "Knowledge items are cited as regime or research refs; a file ref into the knowledge base is refused"
+      - Not checked - whether the reasoning is right, or whether a fact's source supports it
+
+  - id: context_research
+    kind: investigation
+    serves: >-
+      Investigar el contexto de una idea de trading sobre un instrumento y horizonte: qué factores
+      importan (tasas, inflación, actividad, beneficios, eventos, opciones…), consultarlos en GaleCore
+      y en las fuentes externas del host según haga falta, conservar cada respuesta con su procedencia,
+      contrastar escenarios y dejar qué implica para investigar la estrategia, qué falta y cómo probarlo.
+    example_requests:
+      - Quiero investigar una estrategia sobre SPY. ¿Qué contexto importa para esta idea y horizonte?
+      - Retomá la investigación de contexto de SPY e incorporá lo nuevo.
+      - Analizame el contexto de mi idea (tasas, macro, eventos) antes de diseñarla.
+    skill: skills/context-research/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: []
+    data_needs:
+      - need: curva de tasas
+      - need: tasa real
+      - need: inflacion
+      - need: spread de credito
+      - need: calendario de earnings
+      - need: VIX
+      - need: fecha del FOMC
+    flow:
+      - kb search --text "<idea, instrumento>" [--kind research|evidence] [--status unfinished]
+      - evidence add --slug <fuente-serie> --prompt "<pedido del usuario>" < {content, host_provider, host_model}
+      - research save --capability context_research --slug <slug> --prompt "<pedido>" < {content, host_provider, host_model}
+      - kb show research:<id>
+      - research revise --capability context_research --id <id> --reason result|continuation|correction --note "<qué cambia>" --prompt "<pedido>" < {...}
+    stored_as: research
+    controls:
+      - The research controls, plus every evidence:<id> cited must resolve to an intact evidence item
+      - Evidence is create-only and hashed; an edited item is INTEGRITY_FAILED and cannot be cited
+      - Evidence provenance is always HOST_DECLARED; parameters that may carry credentials are refused
+      - Each revision records the skill (version and hash) of the method followed
+      - Not checked - that the payload is what the source returned, that factors were well chosen, or that the scenarios are right
+
+  - id: strategy_design
+    kind: strategy
+    serves: >-
+      Desarrollar una estrategia completa desde su investigación (hipótesis, entrada, construcción,
+      sizing, monitoreo, ajustes, salidas, invalidación y plan de evaluación), mapear cada regla a lo
+      que el runtime de GaleCore ejecuta, preparar la StrategySpec versionada con el hash de GaleCore,
+      registrar la aprobación del owner de esa versión exacta y desplegarla en SHADOW de desarrollo.
+    example_requests:
+      - Desarrollá esta estrategia hasta SHADOW.
+      - Quiero desarrollar una estrategia en SPY, guiame paso a paso
+      - ¿Qué le falta a esta estrategia para correr en SHADOW y qué reglas no soporta GaleCore?
+      - Quiero probar una estrategia de put credit spreads en SHADOW
+      - Tengo una idea de estrategia, armala y ponela a prueba
+      - ¿Qué tendría que pasar para que esta tesis deje de servir?
+      - ¿Qué cambió entre versiones y por qué?
+      - ¿Está bien esta idea? ¿Qué le falta y por qué no?
+      - Tengo esta idea, pensemos si sirve.
+      - ¿Prendo, pauso o espero esta estrategia?
+      - La estrategia que diseñamos, ¿la activo o espero?
+      - ¿Activamos la estrategia o conviene esperar?
+      - Quiero vender prima en QQQ, ¿armo algo?
+      - ¿La prendemos ya? ¿Apruebo esta estrategia o le falta algo?
+    skill: skills/strategy-design/SKILL.md
+    output_contract: galecore_ai.contracts.strategy.ProposalContent
+    galecore_capabilities: [App/Runtime/Specs, App/Runtime/Deploy]
+    data_needs:
+      - need: cotizaciones de SPY
+      - need: posiciones SHADOW
+      - need: velas de SPY
+      - need: historicos de SPY con disponibilidad point-in-time
+        missing: "las velas de GaleCore (galecore get market_data.candles) son precios, no una historia point-in-time con dividendos y revisiones; el backtest GC-AI-0011 sigue suspendido"
+      - need: IV rank de SPY
+    flow:
+      - kb search --text "<idea>" [--kind research|evidence|strategy]
+      - research save --slug <slug> --prompt "<pedido>" < {content, host_provider, host_model}   # si la estrategia no tiene investigación propia
+      - story pack --symbol <SYM>   # qué mueve hoy al instrumento (P1-05), sin que lo pidan; se cita en la hipótesis
+      - strategy check --spec .scratch/<name>.json   # el archivo de la spec, en el proyecto
+      - strategy save --spec <file> --prompt "<pedido>" < {content, host_provider, host_model}
+      - strategy critique --ref strategy:<name>/<version> < {content, host_provider, host_model}   # el crítico, antes de pedir la aprobación
+      - strategy sheet --ref strategy:<name>/<version>   # la ficha de una página para el owner, con el riesgo contra el perfil
+      - state
+      - strategy controls --ref strategy:<name>/<version>
+      - strategy diff --from strategy:<name>/<anterior> --ref strategy:<name>/<version>   # qué cambió y por qué
+      - supervise watch --symbol <SYM> --metric <m> --below|--above <nivel> --thesis "<tesis>" --strategy <name> --text "<owner>" --prompt "<pedido>"   # qué invalida la tesis; lo vigila el supervisor
+      - strategy approve --ref strategy:<name>/<version> --spec-hash <hash> --owner-words "<owner>" --host-model <model>
+      - strategy deploy-check --ref strategy:<name>/<version> --galecore-hash <hash de App/Runtime/Specs/<name>>
+      - python GaleCore/dev/galecore_dev.py deploy --spec <name> --approval knowledge/strategies/<name>/<version>.approval.json   # sólo GaleCore Dev
+    stored_as: strategy
+    controls:
+      - Every block (entry, construction, sizing, monitoring, adjustment, exit, invalidation) has a rule or a not-applicable rule that says why
+      - A grounded rule cites a source; a pending parameter or design choice says its reason
+      - Every spec field is in the runtime support table; a field nobody mapped fails the check
+      - A field the runtime executes is explained by a supported rule; a supported rule names only fields the runtime executes
+      - A field the runtime ignores must hold the value the runtime really behaves as (one contract, no roll, no heat); unsupported rules stay out of the spec, declared
+      - The spec hash is GaleCore's (JCS + SHA-256, verified against hashes GaleCore computed); versions and approvals are create-only and hashed
+      - Deploy (dev tool) reads the approval file, re-checks the approval's and the proposal's hashes and requires the hash GaleCore loaded; scope SHADOW in GaleCore Dev. GaleCore's Deploy endpoint itself does not check approvals (admin-only, D-0003)
+      - A version is saved only with its parameter table (every rule with a parameter in a row) and its management tree (every exit and adjustment rule as a trigger -> action step)
+      - After the first version, a new one is saved only with `change` (the stored version it changes, the reason, and refs that resolve or a decision hash of the strategy's project)
+      - A version is approved only with a critique of that exact proposal document, and never with the verdict «descartar»; critiques are create-only and hashed
+      - Not checked - that the hypothesis is right, that parameters are good, that the critique is sharp, or that the strategy is profitable
+
+  - id: strategy_followup
+    kind: investigation
+    serves: >-
+      Mostrar la estrategia, qué está ejecutando GaleCore, qué pasó desde la última revisión (entradas,
+      descartes, posiciones) y qué merece atención, con datos de GaleCore atados a la versión exacta, y
+      guardarlo como registro de seguimiento y revisión de su investigación.
+    example_requests:
+      - ¿Cómo le fue a mi estrategia en SHADOW?
+      - ¿Qué hizo la versión aprobada desde que la desplegamos?
+      - Mostrame mi estrategia, qué está ejecutando, qué pasó desde la última revisión y qué merece mi atención.
+      - ¿Qué hizo esta estrategia desde la última revisión, por qué entró o no entró, cómo evolucionaron sus posiciones y qué cambia en nuestra hipótesis?
+    skill: skills/strategy-followup/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics]
+    data_needs:
+      - need: posiciones SHADOW
+      - need: evaluaciones SHADOW
+      - need: metricas SHADOW
+    flow:
+      - followup run --strategy <name> --prompt "<pedido>" --host-model <model>   # lee GaleCore por API; guarda evidencia y registro con hash
+      - followup history --strategy <name>
+      - research revise --capability strategy_followup --id <investigación> --reason result --note "<qué cambia>" --prompt "<pedido>" < {...}
+    stored_as: research
+    controls:
+      - The research and evidence controls; the runtime report is kept verbatim as evidence
+      - Only data of the instance whose version hash equals the approved spec hash
+      - Operation, SHADOW results and economic evidence are reported separately; simulated fills are never executions
+      - Not checked - that the interpretation of the results is right
+    schedulable: {runs: code}
+
+  - id: daily_attention
+    kind: investigation
+    serves: >-
+      Decir qué merece tu atención hoy sobre lo que tenés en SHADOW: exposición de las posiciones frente a
+      los límites de tu perfil, qué dicen las reglas de la estrategia aprobada, qué cambió desde la última
+      revisión, qué eventos (datos macro, resultados) vienen antes de que venza o salga cada posición, el
+      contexto de mercado que importa y qué falta, con fuentes, y guardarlo como revisión de una
+      investigación de atención diaria por estrategia.
+    example_requests:
+      - ¿Qué merece mi atención hoy sobre lo que tengo en SHADOW?
+      - ¿Cómo está la exposición y qué dicen las reglas de la estrategia sobre las posiciones abiertas?
+      - ¿Qué cambió desde la última revisión y qué contexto importa hoy?
+      - ¿Qué evento macro viene y cómo afecta mis posiciones?
+      - ¿Qué cambió y me afecta?
+      - ¿Qué hago con mi apuesta de SPY antes del CPI?
+      - ¿Cierro, roleo o dejo mis posiciones antes del FOMC?
+    skill: skills/daily-attention/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics, compute.gex_analysis, compute.put_skew, market_data.trade, calendar.macro_releases, calendar.fomc_meetings, calendar.treasury_auctions, rates.treasury_curve, history.index_daily]
+    data_needs:
+      - need: posiciones SHADOW
+      - need: evaluaciones SHADOW
+      - need: metricas SHADOW
+      - need: GEX de SPY
+      - need: put skew de SPY
+      - need: VIX
+      - need: VVIX
+      - need: calendario de earnings
+      - need: griegas de posiciones SHADOW
+        missing: "ninguna fuente registrada las sirve (GaleCore no expone griegas de posiciones SHADOW por el harness)"
+      - need: riesgo maximo de posiciones SHADOW
+      - need: reuniones del FOMC
+      - need: calendario macro
+    flow:
+      - kb search --kind strategy
+      - kb show strategy:<name>/<version>
+      - kb search --kind research --text "atencion diaria <strategy>"
+      - followup history --strategy <name>
+      - followup run --strategy <name> --prompt "<pedido>" --host-model <model>
+      - prepare --symbol SPY --skill regime   # contexto GaleCore, sólo lectura
+      - sources query --need "<dato>"
+      - galecore get <capability> [--param clave=valor] [--out <archivo>]   # calendar.*, rates.treasury_curve, history.index_daily
+      - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research save --capability daily_attention --slug atencion-diaria-<strategy> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability daily_attention --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - The research, evidence and strategy_followup controls; the runtime report is kept verbatim as evidence
+      - Only data of the instance whose version hash equals the approved spec hash
+      - Each revision records this skill's version and hash
+      - A data need no registered source covers is declared missing, never estimated
+      - "Not checked - that exposure is compared against the right limits, that the rules were applied correctly to each position, or that the attention points are the right ones"
+      - Not checked - that the events x positions table is present, complete for the range, or reads each event's bearing right; the next run shows it
+      - "A scheduled run (recurring_followup) calls the model with only the read commands of this flow and a turn cap; the model returns the content and the evidence, and the runner validates and saves them (invoked_by=scheduler)"
+      - "Not checked - that a scheduled briefing is as complete as one made in a session; the run's status (OK, INCOMPLETE, FAILED) says what was missing"
+    schedulable: {runs: model, work: reading, max_turns: 40, timeout_minutes: 20}
+
+  - id: market_watch
+    kind: investigation
+    serves: >-
+      Un agente que vigila el mercado con tus instrucciones (qué símbolos, qué condiciones, qué es un hallazgo):
+      lee IV rank, estructura de IV, métricas de volatilidad, cadenas y griegas, velas, GEX y el calendario macro,
+      evalúa tus condiciones símbolo por símbolo y guarda lo que encontró (candidatos que cumplen, los que quedaron
+      cerca y por qué, y qué dato faltó) como revisión de una investigación por agente. Se programa como tarea
+      (por ejemplo cada 30 minutos en horario de mercado) o se corre a pedido.
+    example_requests:
+      - Armame un agente que cada 30 minutos revise SPY, QQQ e IWM y me anote candidatos para put credit spreads cuando el IV rank esté alto
+      - Vigilá el mercado y avisame qué símbolos cumplen mis condiciones
+      - ¿Qué encontró hoy mi agente de oportunidades?
+      - ¿Hay algo para vender prima esta semana en SPY o QQQ?
+      - ¿Dónde hay una oportunidad de put credit spread hoy?
+    skill: skills/market-watch/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [compute.iv_rank, compute.implied_volatility, market_data.volatility_metrics, market_data.option_chains, market_data.option_greeks, market_data.candles, calendar.macro_releases, calendar.fomc_meetings, compute.gex_analysis, compute.put_skew, history.index_daily, rates.treasury_curve]
+    data_needs:
+      - need: IV rank de SPY
+      - need: cadena de opciones de SPY
+      - need: velas de SPY
+      - need: calendario macro
+    flow:
+      - kb search --kind research --text "<agent slug>"
+      - galecore list
+      - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
+      - prepare --symbol <símbolo> --skill regime
+      - sources query --need "<dato>"
+      - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research save --capability market_watch --slug <agent slug> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability market_watch --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - The research and evidence controls; every reported number comes from a stored response
+      - Each revision records this skill's version and hash
+      - "Read-only: a candidate is described, never advised (the runner refuses advice addressed to the reader); no orders"
+      - A condition that cannot be evaluated with the data available is declared not evaluated, never assumed met
+      - "A scheduled run calls the model (sonnet) with only the read commands of this flow and a turn cap; the runner validates and saves the result"
+      - "With a screen (`task set-scan`), each run first checks by code the IV rank of each symbol and the quiet window of releases; the model is called only with a finding, and a screen that could not run never calls it (P1-05)"
+      - "Not checked - that the owner's conditions were applied correctly or that a candidate is a good trade"
+    schedulable: {runs: model, work: reading, max_turns: 25, timeout_minutes: 12}
+
+  - id: market_story
+    kind: investigation
+    serves: >-
+      La historia que está priceando el mercado y si cambió: qué activo lidera y cuál queda atrás, si tasas, dólar y
+      crédito confirman o contradicen a las acciones, si la volatilidad pricea calma o estrés, qué cobran las opciones
+      por protegerse y qué pagan por venderlas, qué eventos del calendario pueden moverla, la historia competidora y
+      qué la decidiría. Junta los datos el código (sin modelo) y los interpreta el modelo; cada lectura queda como
+      revisión de una investigación por símbolo y se compara con la anterior. Corre sola después del cierre o a pedido.
+    example_requests:
+      - ¿Qué historia está priceando el mercado?
+      - ¿Cambió la historia del mercado?
+      - ¿Qué está descontando hoy el mercado?
+      - Contame qué narrativa hay detrás de los precios de hoy
+      - ¿El mercado está priceando calma o miedo?
+    skill: skills/market-story/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [market_data.candles, compute.put_skew, compute.implied_volatility, compute.iv_rank, market_data.volatility_metrics, compute.gex_analysis, calendar.macro_releases, calendar.fomc_meetings]
+    data_needs:
+      - need: velas de SPY
+      - need: velas de TLT
+      - need: put skew de SPY
+      - need: IV rank de SPY
+      - need: GEX de SPY
+      - need: calendario macro
+      - need: noticias del mercado
+        missing: ninguna fuente registrada cubre noticias en una corrida programada; en sesión, Alpha Vantage NEWS_SENTIMENT sin probar (inventory)
+    flow:
+      - story pack --symbol <SYMBOL> --prompt "<pedido>"
+      - kb search --kind research --text "historia del mercado"
+      - kb show <ref>
+      - research save --capability market_story --slug historia-del-mercado-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability market_story --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - "The pack is gathered by code from GaleCore (no model): one call per capability, changes and term ratios computed here, a failed call declared in missing, never estimated"
+      - The pack is kept as one evidence item and compared with the previous pack of the symbol (moves and sign flips)
+      - The research controls; every reported number cites the pack
+      - "A scheduled run: the runner gathers the pack, then the model (sonnet; what the code flags — a sign flip, a big SPY/VIX move, a macro release near today — goes in the run event) reads it with only read commands and a turn cap; the runner validates and saves"
+      - "Read-only: describes, never advises (the runner refuses advice addressed to the reader); no orders"
+      - "Not checked - that the story is right or anticipates anything; the next readings and the owner's feedback exist to judge that"
+    schedulable: {runs: model, work: reading, max_turns: 12, timeout_minutes: 15}
+
+  - id: on_demand_analysis
+    kind: investigation
+    serves: >-
+      Análisis a pedido desde los datos de GaleCore: la macro (tasas, curva, tasa real y breakevens, crédito, fed funds,
+      CPI, empleo y la cadena de transmisión), el técnico de un símbolo (tendencia, niveles, volatilidad realizada
+      contra IV), el fundamental de una empresa (ingresos, resultado, EPS, crecimiento, P/E contra lo reportado,
+      últimas presentaciones a la SEC) y el flow de opciones (GEX, walls, skew, estructura de IV). Cada lectura separa
+      hecho, cálculo, estimación e hipótesis, con alternativa e invalidación; consenso y estimaciones de analistas se
+      declaran faltantes. Junta el código, interpreta el modelo.
+    example_requests:
+      - Explicame la macro
+      - ¿Cómo están las tasas largas, los breakevens y el empleo?
+      - Análisis técnico de QQQ
+      - El flow de opciones de SPY
+      - ¿Qué mueve a SPY?
+      - ¿Qué es el skew y por qué me tendría que importar?
+      - ¿Qué es el gamma exposure?
+    skill: skills/on-demand-analysis/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [macro.fred_series, macro.bls_series, market_data.candles, filings.sec_facts, filings.sec_filings, market_data.volatility_metrics, market_data.quote, compute.put_skew, compute.implied_volatility, compute.iv_rank, compute.gex_analysis]
+    data_needs:
+      - need: curva de tasas
+      - need: inflacion
+      - need: spread de credito
+      - need: velas
+      - need: fundamentales XBRL
+      - need: consenso de datos macro
+        missing: ninguna fuente registrada trae consenso ni estimaciones de analistas
+    flow:
+      - analyze pack --kind macro|technical|fundamental|flow [--symbol SYM] --prompt "<pedido>"
+      - kb search --kind research --text "<análisis, símbolo>"
+      - kb show <ref>
+      - research save --capability on_demand_analysis --slug analisis-<kind>-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability on_demand_analysis --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - "The pack is gathered by code from GaleCore (no model); descriptive numbers computed here and labelled; a failed call or a source that does not exist is declared in missing"
+      - The pack is kept as one evidence item and points at the previous one of the same kind and symbol
+      - The research controls; every reported number cites the pack
+      - "Not checked - that the reading is right; consensus and estimates are missing, so surprises are not measured"
+
+  - id: company_research
+    kind: investigation
+    serves: >-
+      Investigar una empresa o elegir entre varias acciones con datos de GaleCore: técnico (tendencia, medias,
+      fuerza relativa contra SPY y su sector), fundamentos (crecimiento de ingresos y resultado operativo, márgenes,
+      flujo libre, inversión, dilución, deuda neta), valoración (P/E contra su propia historia, escenarios a 12 meses),
+      próximo balance, negocio y riesgos del 10-K y la macro que la afecta. Cierra con la tesis, qué tiene que pasar en
+      6-12 meses y qué la rompe; elegir entre varias es una tabla por bloques, sin puntaje.
+    example_requests:
+      - Analizame NVDA
+      - Investigá la empresa MSFT
+      - ¿Qué tal está AAPL a este precio? ¿Está cara?
+      - Buscá una empresa con tendencia alcista y buenos fundamentos para 6 a 12 meses
+      - De MSFT, AAPL y NVDA, ¿cuál tiene tendencia alcista y fundamentos que la sostengan?
+      - ¿Cómo vienen los fundamentos de esta acción?
+      - Hacé un análisis de qué tecnológicas tienen más potencial de crecimiento, con tendencia y oportunidad de entrada
+    skill: skills/company-research/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [market_data.candles, filings.sec_facts, filings.sec_filings, filings.sec_document, market_data.volatility_metrics, macro.fred_series, macro.bls_series]
+    data_needs:
+      - need: velas
+      - need: fundamentales XBRL
+      - need: presentaciones ante la SEC
+      - need: noticias de la empresa
+        missing: fuera de esta pieza (WS-0042)
+      - need: consenso y guía más allá del próximo EPS
+        missing: ninguna fuente registrada lo trae
+    flow:
+      - analyze pack --kind fundamental --symbol SYM --prompt "<pedido>"
+      - analyze pack --kind technical --symbol SYM --prompt "<pedido>"
+      - analyze pack --kind macro --prompt "<pedido>"
+      - galecore get filings.sec_document --param Ticker=SYM --param Items=1,1A,7 --param MaxChars=30000 --keep "<pedido>"
+      - kb search --kind research --text "empresa <symbol>"
+      - research save --capability company_research --slug empresa-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability company_research --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - "Numbers are gathered and computed by code from GaleCore (analyze pack); the model interprets and cites the packs"
+      - "Two routes: Investigar explains a company whatever its numbers; Seleccionar compares a stated list against one declared profile"
+      - "A company outside the method (banks, insurers) is an incomplete evaluation, never a pass"
+      - The research controls; every reported number cites the pack
+      - "Not checked - that the thesis is right; news, consensus beyond next EPS and guidance are missing"
+
+  - id: scheduled_report
+    kind: investigation
+    serves: >-
+      Un informe que armás en tus palabras (qué leer de GaleCore, qué decir, qué comparar con la corrida anterior) y
+      que corre solo como tarea (por ejemplo cada día hábil antes de la apertura) o a pedido. Cada corrida lee los
+      datos, escribe el informe y lo guarda como revisión de una investigación, diciendo qué cambió desde la anterior.
+    example_requests:
+      - Armame un informe diario antes de la apertura con el VIX y el calendario macro
+      - Mostrame el último informe de gamma
+    skill: skills/scheduled-report/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [compute.gex_analysis, market_data.volatility_metrics, calendar.macro_releases, calendar.fomc_meetings, market_data.trade]
+    data_needs:
+      - need: GEX de SPY
+      - need: calendario macro
+    flow:
+      - kb search --kind research --text "<report slug>"
+      - kb show research:<id>
+      - galecore list
+      - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
+      - evidence add --slug <fuente-serie> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research save --capability scheduled_report --slug <report slug> --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability scheduled_report --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - The research and evidence controls; every reported number comes from a stored response
+      - Each revision records this skill's version and hash
+      - "Read-only: the report describes, never advises (the runner refuses advice addressed to the reader); no orders"
+      - "A scheduled run calls the model (sonnet) with only the read commands of this flow and a turn cap; the runner validates and saves the result"
+      - Not checked - that the report answers what the owner wanted or that its reading is right; the first real run shows it
+    schedulable: {runs: model, work: reading, max_turns: 20, timeout_minutes: 10}
+
+  - id: performance_review
+    kind: investigation
+    serves: >-
+      Decir cómo viene cada estrategia y la cartera contra tu objetivo: performance por estrategia, versión y regla de
+      salida, retorno contra el capital de referencia, la utilidad mínima y el objetivo, si es edge o suerte según tu
+      criterio, la revisión de cada operación cerrada (qué regla actuó, planeado contra ocurrido, diagnóstico observado
+      o hipótesis) y tus decisiones (qué esperábamos y qué pasó). También el resumen de la semana de la cartera.
+    example_requests:
+      - ¿Cómo viene la estrategia? ¿Dónde falla y por qué?
+      - ¿Cuánto rinde mi cartera contra mi objetivo?
+      - ¿Esto es edge o suerte?
+      - ¿Qué aprendemos de la última operación cerrada?
+      - ¿Qué esperábamos cuando decidimos, qué ocurrió y qué corresponde revisar?
+      - Resumime la semana de mi cartera.
+      - ¿Cómo viene mi cartera?
+    skill: skills/performance-review/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [App/Runtime/Performance]
+    data_needs:
+      - need: performance SHADOW
+    flow:
+      - performance [--strategy <name>] [--since <YYYY-MM-DD>]   # GaleCore calcula; el código lo pone contra el perfil y las decisiones
+      - supervise list
+      - story pack
+    stored_as: none
+    controls:
+      - "Numbers come from GaleCore App/Runtime/Performance; the code only compares them with the numbers the strategy declares in its design (what it does not declare is listed in criterios.no_leidos, never guessed)"
+      - "Edge: below the strategy's declared sample (closes and days) the conclusion is «sin edge demostrado» whatever the result"
+      - "A close's diagnosis separates observado (limit of the design not respected, fill worse than its rule's level beyond max(2 USD, 10 % of the credit)) from hipotesis (a loss inside the plan: thesis to review only if it repeats)"
+      - "Not checked - costs beyond those the spec declares (net P&L uses the spec's fill and declared costs; positions closed before WS-0062 are at mid, no costs), comparison against cash (no risk-free rate in the report), positions closed before persistence existed"
+
+  - id: capital_risk
+    kind: investigation
+    serves: >-
+      Decir qué capital tenés disponible u ocioso sobre el capital de referencia, si estás concentrado (varias
+      posiciones chicas del mismo subyacente, dirección y semana de vencimiento son una sola apuesta) contra tus
+      límites, y cómo repartir un capital («tengo X USD»): reserva, riesgo por operación, riesgo abierto máximo,
+      tope por apuesta, escalera de entradas y diversificación, justificado y nunca como orden.
+    example_requests:
+      - Tengo 5.000 USD, ¿qué hago?
+      - ¿Cómo reparto 10.000 USD entre mis estrategias?
+      - ¿Qué capital tengo disponible u ocioso?
+      - ¿Estoy concentrado?
+      - ¿Varias posiciones chicas son una sola apuesta?
+      - ¿Cuánto riesgo tengo abierto contra mis límites?
+      - ¿Qué exposición tengo?
+      - Tengo 5.000 USD, ¿qué puedo hacer?
+      - Estoy pensando en agregar un spread, ¿entra en mi cuenta?
+    skill: skills/capital-risk/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [App/Runtime/Exposure, App/Runtime/Allocation]
+    data_needs:
+      - need: exposición y reparto SHADOW
+    flow:
+      - capital [--amount <USD>] [--strategy <name>]   # GaleCore calcula; el código le pasa los % del perfil
+    stored_as: none
+    controls:
+      - "Numbers come from GaleCore App/Runtime/Exposure and App/Runtime/Allocation; the limits are the percentages each strategy declares in its design (a missing one stops with MISSING_LIMITS, never guessed); with another capital the same percentages apply to it (owner, 06/10)"
+      - "A bet is same underlying, direction and ISO expiry week; one bet is capped at the strategy's % of the allowed open risk, and the ladder keeps each week under it"
+      - "The split is never an order: a narrower width is a new version with approval; waiting in cash is always an alternative"
+      - "Not checked - real account (no broker: on the reference capital), correlation between underlyings, costs, holidays in the ladder"
+
+  - id: alert_analysis
+    kind: harness
+    serves: >-
+      «Analizá este aviso»: desde un aviso del supervisor, el botón del monitor abre Claude Code en su terminal con el
+      pedido (P1-01c) y se sigue por chat. El código arma el contexto — el aviso y su regla, la posición si la hay, las
+      salidas y el límite de la estrategia y los números de ahora en GaleCore — y la sesión dice qué significa el aviso
+      ahora, sin aconsejar. `supervise analyze` queda como corrida suelta que guarda el análisis.
+    example_requests:
+      - Analizá este aviso.
+      - ¿Qué significa el aviso de SPY que me llegó?
+      - Explicame el aviso de la posición cerca del stop.
+    skill: skills/alert-analysis/SKILL.md
+    output_contract: galecore_ai.contracts.supervision.AlertAnalysis
+    galecore_capabilities: [Data/Tastytrade/MarketData/Quote, App/Gex/Analysis, App.Analytics/IVRank, App/Runtime/Instances]
+    data_needs:
+      - need: cotizacion
+      - need: GEX de SPY
+      - need: IV rank de SPY
+    flow:
+      - supervise list
+      - supervise context <alert id>
+      - supervise analyze <alert id> --prompt "<pedido>"
+      - supervise analyses
+    stored_as: supervision
+    controls:
+      - The code gathers the context (no model); a source GaleCore does not give is listed as missing, never filled in
+      - "The model runs with no tools, on the policy's model for reading work (sonnet, GC-AI-0025), with a turn and time cap"
+      - The runner refuses advice addressed to the reader (same patterns as a scheduled run) after one correction round
+      - One done analysis per alert, create-only and hashed; a failed one says why and can be asked again
+      - "Not checked - that the reading is right; it describes what the numbers say, the decision is the owner's"
+
+  - id: knowledge_curator
+    kind: investigation
+    serves: >-
+      Tener la memoria al día sin pedirla: un agente que lee lo que cambió en la base de conocimiento (resultados,
+      feedback, tus decisiones y la bitácora de los proyectos, versiones de estrategia y perfil) y guarda con su fuente
+      lo que importa: qué se aprendió, qué se decidió y por qué, qué contradice o reemplaza algo anterior y qué
+      comentarios de método ya se repiten. Sólo propone marcar algo corregido, reemplazado o retirado, o volver regla
+      lo repetido: lo decidís vos. Se programa como tarea diaria o se corre a pedido.
+    example_requests:
+      - ¿Qué aprendimos esta semana?
+      - Poné al día la memoria.
+      - ¿Hay algo guardado que ya no valga?
+      - ¿Qué feedback se repite y podría ser regla?
+    skill: skills/knowledge-curator/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - kb search --kind research --text "curaduria"
+      - kb search --since <YYYY-MM-DD>
+      - kb show <ref>
+      - feedback list --status pending
+      - project show portfolio
+      - research save --capability knowledge_curator --slug curaduria --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability knowledge_curator --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - The research controls; every statement cites the stored item it comes from, and a marked item cannot be cited
+      - Each revision records this skill's version and hash
+      - "Read-only besides its own result: a scheduled run cannot mark, apply feedback or change a skill (the flow allows only reads and its research); marks and rules are proposals for the owner"
+      - "Not checked - that what it kept is what matters most, or that a proposal to mark is right; the owner decides"
+    schedulable: {runs: model, work: reading, max_turns: 20, timeout_minutes: 20}
+
+  - id: daily_contrast
+    kind: investigation
+    serves: >-
+      Cruzar la historia que pricea hoy el mercado con cada estrategia (en qué historia funciona, tus decisiones, su
+      estado en SHADOW), con qué mueve hoy al subyacente (datos que vienen y lo que paga la IV) y con la cartera
+      (perfil y límites): qué conviene prender, mantener, esperar o apagar en SHADOW, por qué y qué lo cambiaría, e
+      ideas nuevas. Propone; decidís vos. Junta los datos el código y lo interpreta el modelo.
+    example_requests:
+      - ¿Prendo o apago algo hoy?
+      - ¿Mis estrategias encajan con la historia de hoy?
+      - Contrastá la historia del mercado con mi cartera.
+      - ¿Qué conviene prender o apagar en SHADOW según el contexto?
+    skill: skills/daily-contrast/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: []
+    data_needs: []
+    flow:
+      - state
+      - contrast pack [--symbol SPY]
+      - capital
+      - research save --capability daily_contrast --slug contraste-diario --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability daily_contrast --id <investigación> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {...}
+      - project add <name> --kind decision --text "<tu decisión>" --prompt "<pedido>"
+    stored_as: research
+    controls:
+      - The pack is built by code from stored items, each with its reference; a stale story or a strategy without its story is declared
+      - The research controls apply to the reading (cited refs resolve, facts cite a source)
+      - Each proposal is one of prender | mantener | esperar | apagar | sin datos and says «qué la cambiaría» (refused otherwise)
+      - Proposals only; nothing is deployed, paused or changed here; the owner's decision is kept in the strategy's project
+      - "Not checked - that the proposal is right; that the story read is still the market's"

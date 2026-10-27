@@ -1,0 +1,1 @@
+{"type":"FEED_DATA","channel":3,"data":[{"eventType":"Trade","eventSymbol":"VIX","eventTime":0,"time":1790367301214,"timeNanoPart":0,"sequence":0,"exchangeCode":"","price":14.87,"change":0.0,"size":"NaN","dayId":20722,"dayVolume":"NaN","dayTurnover":"NaN","tickDirection":"ZERO_DOWN","extendedTradingHours":false,"timeStamp":"2026-09-25T20:15:01.214"}]}

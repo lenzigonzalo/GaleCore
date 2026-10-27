@@ -1,0 +1,20 @@
+# Qué cambió en cada versión de strategy_followup y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: strategy_followup
+versions:
+  - version: "1.1.0"
+    date: 2026-10-25
+    changes: >
+      WS-0062 inc. 8c: los fills de SHADOW son simulados con el fill y los costos que declara la spec (natural por defecto), no al medio.
+    feedback: []
+  - version: "1.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "0.4.0"
+    date: 2026-09-29
+    changes: >
+      Necesidades de datos declaradas en el catálogo (GC-AI-0015). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

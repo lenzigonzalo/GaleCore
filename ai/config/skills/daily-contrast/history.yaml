@@ -1,0 +1,30 @@
+# Qué cambió en cada versión de daily_contrast y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: daily_contrast
+versions:
+  - version: "2.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "1.2.0"
+    date: 2026-10-11
+    changes: >
+      P1-PPa (WS-0023, owner 10/10): primero `state`; lo que se dice del runtime y de los datos sale de esa lectura con
+      su hora y lo guardado es antecedente. Las estructuras que SHADOW ejecuta se leen de `state` (decía «sólo put
+      credit spreads», falso desde P1-07; observado en C1 y R-C6 de WS-0022).
+    feedback: []
+  - version: "1.1.0"
+    date: 2026-10-06
+    changes: >
+      P1-05 (WS-0015, U-28): suma «esperar» como propuesta y «qué la cambiaría» obligatorio en cada una (el guardado la
+      rechaza si falta); el pack trae «qué mueve hoy» del último pack de la historia (datos que vienen, lo que paga la
+      IV, reacción por tipo); la tabla suma riesgo contra límites y qué la cambiaría.
+    feedback: []
+  - version: "1.0.0"
+    date: 2026-10-04
+    changes: >
+      Primera versión (GC-AI-0027, pieza 3): historia de hoy × cada estrategia y la cartera; propuesta prender /
+      mantener / apagar por estrategia, con motivo; decide el owner.
+    feedback: []

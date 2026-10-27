@@ -1,0 +1,41 @@
+{
+  "design": "ver docstring de real_rate_study.py (commiteado antes de correr)",
+  "sources": [
+    "evidence:2026-09-27-spy-tasa-real-fred-dfii10",
+    "evidence:2026-09-27-spy-tasa-real-fred-dgs10",
+    "evidence:2026-09-27-spy-tasa-real-fred-vixcls",
+    "file:GaleCore/research/data/spy_options/spy_underlying_prices.parquet"
+  ],
+  "real_DFII10": {
+    "events": 6,
+    "controls": 108,
+    "event_dates": [
+      "2004-04-05",
+      "2013-05-30",
+      "2013-08-15",
+      "2015-06-03",
+      "2016-11-14",
+      "2023-08-03"
+    ],
+    "verdict": "insuficiente: 6 eventos < 27; no se calculan diferencias"
+  },
+  "nominal_DGS10_reference": {
+    "events": 12,
+    "controls": 108,
+    "event_dates": [
+      "2004-04-02",
+      "2005-10-26",
+      "2011-02-04",
+      "2012-03-14",
+      "2013-07-05",
+      "2013-09-05",
+      "2015-06-03",
+      "2016-11-09",
+      "2019-10-11",
+      "2023-07-06",
+      "2023-09-06",
+      "2024-02-06"
+    ],
+    "verdict": "insuficiente: 12 eventos < 27; no se calculan diferencias"
+  }
+}

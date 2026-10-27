@@ -1,0 +1,22 @@
+{
+  "case": "N12-review-unknown-run",
+  "title": "record review with unknown run_id on the P1 record",
+  "expected": "exit 1, 'not found'",
+  "command": "python -B -m galecore_ai.adapters.cli record review ... --run-id <unknown>",
+  "stdin": null,
+  "exit_code": 1,
+  "stdout_json": {
+    "error": "run_id 01a0a7bc-0fc3-7a41-9fcf-73ec491249c3 not found in SPY 2026-09-21",
+    "timestamp": "2026-09-21T15:47:18.954580+00:00"
+  },
+  "stdout_raw": null,
+  "stderr": "",
+  "status": null,
+  "failed_guardrails": [],
+  "error": "run_id 01a0a7bc-0fc3-7a41-9fcf-73ec491249c3 not found in SPY 2026-09-21",
+  "record": null,
+  "note": "",
+  "observed_at": "2026-09-21T15:47:19.020449+00:00",
+  "verified": true,
+  "problems": []
+}

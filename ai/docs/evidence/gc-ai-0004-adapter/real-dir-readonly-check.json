@@ -1,0 +1,56 @@
+{
+  "captured_at": "2026-09-22T00:33:05.553920+00:00",
+  "records_dir": "<workspace>/GaleCore/research/regime",
+  "sha256_before": {
+    "SPY/2026-09-17.md": "57a485420fe41bf0ac7756f53923dcb745a1bb216eada30e1b0664888b0d5f53",
+    "SPY/2026-09-21.md": "20b9c3b7731ffa514cb098262bb52643e01f93fda687020be6a6553124ce191d"
+  },
+  "sha256_after": {
+    "SPY/2026-09-17.md": "57a485420fe41bf0ac7756f53923dcb745a1bb216eada30e1b0664888b0d5f53",
+    "SPY/2026-09-21.md": "20b9c3b7731ffa514cb098262bb52643e01f93fda687020be6a6553124ce191d"
+  },
+  "identical": true,
+  "cli_query": {
+    "command": "python -B -m galecore_ai.adapters.cli query --symbol SPY --since 2026-09-01",
+    "exit_code": 0,
+    "integrity_failed": [],
+    "count": 2,
+    "records": [
+      {
+        "date": "2026-09-17",
+        "status": "OK",
+        "entries": [
+          {
+            "run_id": "01a0aeff-a70d-7a90-83b6-24175654b390",
+            "outcomes": 0,
+            "review_verdicts": []
+          }
+        ]
+      },
+      {
+        "date": "2026-09-21",
+        "status": "OK",
+        "entries": [
+          {
+            "run_id": "01a0c5eb-541e-7303-814f-f1a53376e442",
+            "outcomes": 1,
+            "review_verdicts": [
+              "agree"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "api_today": {
+    "date": "2026-09-21",
+    "timezone": "America/New_York",
+    "status": "OK",
+    "states": {
+      "outcome_pending": false,
+      "review_pending": false
+    },
+    "annotation": false
+  },
+  "note": "Read-only check of the REAL directory with the GC-AI-0004 code (worktree base 7ad598b): the 2026-09-21 record was written by the GC-AI-0002 session after this base. No file was written; reviews of real records are the owner's."
+}

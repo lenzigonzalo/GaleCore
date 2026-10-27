@@ -1,0 +1,36 @@
+# Qué cambió en cada versión de capability_builder y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: capability_builder
+versions:
+  - version: "1.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "0.4.0"
+    date: 2026-10-13
+    changes: >
+      P1-09 (WS-0031): recorrido guiado para armar una skill, un agente o una tarea (para qué, dónde vive según
+      lo que se repite, qué usa, ficha con costo y control, prueba con datos reales, aprobación y control desde
+      el chat). Viene del alcance del owner del 13/10, no de un comentario sobre un resultado.
+    feedback: []
+  - version: "0.3.0"
+    date: 2026-10-08
+    changes: >
+      P1-08 (WS-0020): un caso no es una regla (un cambio de método pide comentarios sobre dos resultados
+      distintos o la decisión explícita del owner en owner_decision) y «esto ya no vale» con `kb mark`
+      (corregido, reemplazado o retirado, con motivo; no se borra y deja de citarse y listarse).
+    feedback: []
+  - version: "0.2.0"
+    date: 2026-09-30
+    changes: >
+      Suma el recorrido «corregir una capacidad desde tu feedback»: guardar el comentario atado al resultado,
+      clasificarlo (caso, preferencia, método) y aplicarlo donde corresponde citándolo; history.yaml al crear
+      una capacidad (GC-AI-0016, AC-05). Viene del acuerdo del work item, no de un comentario sobre un resultado.
+    feedback: []
+  - version: "0.1.1"
+    date: 2026-09-29
+    changes: >
+      Guía para crear una capacidad con el molde: necesidades de datos por entrada, catalog --check, slug documentado (GC-AI-0015). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []

@@ -1,0 +1,18 @@
+{
+  "symbol": "SPY",
+  "spot": 757.43,
+  "dte": 30,
+  "expiration": "2026-10-16",
+  "targetDelta": 0.25,
+  "atmStrike": 757.0,
+  "atmIV": 0.1435,
+  "put25DeltaStrike": 734.0,
+  "put25DeltaActualDelta": -0.2532,
+  "put25DeltaIV": 0.1715,
+  "putSkew25d": 1.1951,
+  "levelOk": true,
+  "levelThreshold": 1.3,
+  "roc5d": null,
+  "percentile252d": null,
+  "note": "Snapshot. RoC 5d y percentil 252d requieren historial de IV-por-delta (no persistido a\u00fan)."
+}

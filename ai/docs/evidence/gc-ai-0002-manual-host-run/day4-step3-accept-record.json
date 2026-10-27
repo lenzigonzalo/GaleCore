@@ -1,0 +1,324 @@
+{
+  "run_id": "01a0cff8-81cb-77c3-881c-e68245f2d94d",
+  "status": "SUCCESS",
+  "result": {
+    "gamma_regime": "negative_gamma",
+    "tail_pricing": "calm",
+    "observations": [
+      "Net gamma exposure is negative at the close: dealers are short gamma, so their hedging trades in the direction of price moves",
+      "Spot closed below the zero-gamma level, placing the market on the short-gamma side of the flip point",
+      "The call wall sits above spot and above the flip point, while the put wall sits just below spot",
+      "Gamma coverage of the chain is complete, so the exposure figures are not the product of a partial book",
+      "The twenty-five delta put skew is inside GaleCore's calm zone, under the threshold, with the wing trading at a modest premium to the at-the-money",
+      "The volatility index settled in the mid teens and the vol-of-vol index is moderate, so the index complex is not signalling stress"
+    ],
+    "implications": [
+      "With dealers short gamma, hedging flows tend to amplify rather than dampen moves, so realized volatility can run above what a long-gamma book would allow while the regime holds",
+      "A move back above the flip point would change the sign of the hedging response; until then the book reads as pro-cyclical",
+      "A calm skew alongside negative gamma is a mixed combination: hedging flows are pro-cyclical while the options market is not paying up for downside protection",
+      "The walls are reported as locations of the largest single-strike gamma on each side; this read does not assign them a role as barriers or targets for price"
+    ],
+    "quantitative_claims": [
+      {
+        "metric": "net_gex",
+        "value": -822.1,
+        "unit": "billion_usd"
+      },
+      {
+        "metric": "spot",
+        "value": 767.73,
+        "unit": "usd"
+      },
+      {
+        "metric": "zero_gamma_level",
+        "value": 771.08,
+        "unit": "usd"
+      },
+      {
+        "metric": "call_wall",
+        "value": 772.0,
+        "unit": "usd"
+      },
+      {
+        "metric": "put_wall",
+        "value": 767.0,
+        "unit": "usd"
+      },
+      {
+        "metric": "put_skew_ratio",
+        "value": 1.0948,
+        "unit": "ratio"
+      },
+      {
+        "metric": "atm_iv",
+        "value": 0.1371,
+        "unit": "iv_decimal"
+      },
+      {
+        "metric": "put_wing_iv",
+        "value": 0.1501,
+        "unit": "iv_decimal"
+      },
+      {
+        "metric": "vix",
+        "value": 15.18,
+        "unit": "index_points"
+      },
+      {
+        "metric": "vvix",
+        "value": 88.6,
+        "unit": "index_points"
+      }
+    ],
+    "evidence": [
+      {
+        "fact_path": "facts.net_gex",
+        "claim": "Net GEX is negative, dealers are short gamma"
+      },
+      {
+        "fact_path": "facts.zero_gamma_level",
+        "claim": "Spot is below the zero-gamma level"
+      },
+      {
+        "fact_path": "facts.call_wall",
+        "claim": "The call wall sits above spot and above the flip point"
+      },
+      {
+        "fact_path": "facts.put_wall",
+        "claim": "The put wall sits just below spot"
+      },
+      {
+        "fact_path": "facts.coverage_pct",
+        "claim": "Gamma coverage of the chain is complete"
+      },
+      {
+        "fact_path": "facts.put_skew_level_ok",
+        "claim": "The skew level semaphore is in the calm zone"
+      },
+      {
+        "fact_path": "facts.put_skew_level_threshold",
+        "claim": "The skew ratio is under the threshold that would flag it"
+      },
+      {
+        "fact_path": "facts.vix",
+        "claim": "The volatility index settled in the mid teens"
+      },
+      {
+        "fact_path": "facts.vvix",
+        "claim": "The vol-of-vol index is moderate"
+      }
+    ],
+    "limitations": [
+      "Post-session read: GEX is computed at request time after the close, while the volatility and vol-of-vol indices are their afternoon settlement prints",
+      "The skew snapshot carries no GaleCore timestamp, so snapshot freshness is UNKNOWN; it reflects the moment of the request",
+      "The skew is read from an expiration roughly two months out, not from the front of the curve, so it describes the term where GaleCore measures it and not the immediate tail",
+      "GEX reflects current open interest and coverage and will shift with the next session's flow",
+      "The gamma regime is a sign classification only; the magnitude relative to total exposure is not validated, and the distance of spot from the flip point is a level reading, not a probability",
+      "The walls are argmax strikes of the gamma profile; no behavioural effect of their levels on price is claimed or validated here",
+      "No comparison with earlier sessions is made here; such comparisons are only valid through the query step",
+      "Qualitative statements are not checked for entailment by the validator; only paths, numbers and directives are"
+    ]
+  },
+  "trace": {
+    "trace_id": "01a0cff8-eb66-7473-9667-ce1c7fac1a41",
+    "correlation_id": null,
+    "request_timestamp": null,
+    "started_at": "2026-09-23T20:33:12.037590Z",
+    "completed_at": "2026-09-23T20:33:12.047628Z",
+    "latency_ms": null,
+    "facts_hash": "sha256:70f8123aac73c5b71f4f75378df1661ff29aaf0fa35f2076e4ac9bba4ffcfe66",
+    "conventions_hash": "sha256:4213a153871c18d4cb1ec82020d1694dd0a0200e3ebecc7eb202bd789dd7a708",
+    "prepared_at": "2026-09-23T20:32:45.003194Z",
+    "accepted_at": "2026-09-23T20:33:12.047628Z",
+    "facts_provenance": "GALECORE_VERIFIED",
+    "provider": "HOST_DECLARED:claude-code",
+    "model": "HOST_DECLARED:claude-opus-5-5",
+    "validator_called_model": false,
+    "host_model_execution": "HOST_DECLARED",
+    "input_tokens": null,
+    "output_tokens": null,
+    "agent_definition": {
+      "agent_id": "TradingAgent",
+      "version": "1.1.0",
+      "content_hash": "sha256:02c1268fe83422734e0afa6c36be2fc5f93db520137edd4a31cb7075514cf57b"
+    },
+    "skills": [
+      {
+        "skill_id": "regime_interpretation",
+        "version": "1.1.0",
+        "content_hash": "sha256:c58972b66a14f7ca54b1a2a699f077fceec63ecbb24bb325c1facac9cf641ba5"
+      }
+    ],
+    "protocols": [
+      {
+        "protocol_id": "facts_discipline",
+        "version": "1.2.0",
+        "content_hash": "sha256:d69cb5950c5f9dc72499e378278eecc94924034d2443283d448e69a5d16f3a8a"
+      }
+    ],
+    "conventions": [
+      {
+        "convention_id": "trading_defaults",
+        "version": "1.0.0",
+        "content_hash": "sha256:46f9020771319f19d297f0306ebf16382792cefd2310b6b272f960172b78dab4"
+      }
+    ],
+    "capabilities_invoked": [
+      {
+        "capability_id": "compute.gex_analysis",
+        "semantic_class": null,
+        "endpoint": "/App/Gex/Analysis",
+        "transport": "REST",
+        "schema_version": null,
+        "calculation_version": null,
+        "methodology_version": null,
+        "latency_ms": 96531,
+        "outcome": "ok",
+        "error": null,
+        "response_received_at": "2026-09-23T20:32:44.996661Z"
+      },
+      {
+        "capability_id": "compute.put_skew",
+        "semantic_class": null,
+        "endpoint": "/App.Analytics/PutSkew",
+        "transport": "REST",
+        "schema_version": null,
+        "calculation_version": null,
+        "methodology_version": null,
+        "latency_ms": 6155,
+        "outcome": "ok",
+        "error": null,
+        "response_received_at": "2026-09-23T20:32:44.996661Z"
+      },
+      {
+        "capability_id": "market_data.trade",
+        "semantic_class": null,
+        "endpoint": "/Data/Tastytrade/MarketData/Trade",
+        "transport": "REST",
+        "schema_version": null,
+        "calculation_version": null,
+        "methodology_version": null,
+        "latency_ms": 250,
+        "outcome": "ok",
+        "error": null,
+        "response_received_at": "2026-09-23T20:32:44.996661Z"
+      },
+      {
+        "capability_id": "market_data.trade",
+        "semantic_class": null,
+        "endpoint": "/Data/Tastytrade/MarketData/Trade",
+        "transport": "REST",
+        "schema_version": null,
+        "calculation_version": null,
+        "methodology_version": null,
+        "latency_ms": 250,
+        "outcome": "ok",
+        "error": null,
+        "response_received_at": "2026-09-23T20:32:44.996661Z"
+      }
+    ],
+    "freshness": {
+      "market_data_as_of": "2026-09-23T20:15:01.190000Z",
+      "response_received_at": null,
+      "freshness_status": "UNKNOWN",
+      "freshness_age_seconds": 1090.84759
+    },
+    "guardrails_executed": [
+      {
+        "guardrail_id": "snapshot_integrity",
+        "passed": true,
+        "message": "snapshot_hash, facts_hash and conventions_hash recomputed and match"
+      },
+      {
+        "guardrail_id": "no_invented_numbers",
+        "passed": true,
+        "message": "OK"
+      },
+      {
+        "guardrail_id": "facts_match_source",
+        "passed": true,
+        "message": "All evidence paths validated"
+      },
+      {
+        "guardrail_id": "no_trading_recommendation",
+        "passed": true,
+        "message": "No explicit trading recommendations detected (pattern-based; novel phrasings may bypass)"
+      },
+      {
+        "guardrail_id": "no_numbers_in_prose",
+        "passed": true,
+        "message": "No numbers in observations/implications (pattern-based; spelled-out numbers may bypass)"
+      },
+      {
+        "guardrail_id": "gex_regime_sign",
+        "passed": true,
+        "message": "Regime sign validated"
+      },
+      {
+        "guardrail_id": "tail_pricing_level",
+        "passed": true,
+        "message": "tail_pricing agrees with GaleCore's put_skew_level_ok"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[0]: metric 'net_gex' validated"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[1]: metric 'spot' validated"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[2]: metric 'zero_gamma_level' validated"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[3]: metric 'call_wall' validated"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[4]: metric 'put_wall' validated"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[5]: metric 'put_skew_ratio' validated"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[6]: metric 'atm_iv' validated"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[7]: metric 'put_wing_iv' validated"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[8]: metric 'vix' validated"
+      },
+      {
+        "guardrail_id": "quantitative_claims_valid",
+        "passed": true,
+        "message": "Claim[9]: metric 'vvix' validated"
+      }
+    ],
+    "status": "SUCCESS",
+    "error": null
+  },
+  "error_detail": null,
+  "record": {
+    "status": "RECORDED",
+    "path": "<workspace>\\GaleCore\\research\\regime\\SPY\\2026-09-23.md",
+    "date": "2026-09-23",
+    "entry_id": "01a0cff8-81cb-77c3-881c-e68245f2d94d",
+    "entry_hash": "sha256:08fd95db3a73acae3b9f9c853bf6a97aed66d4fa7c01fd6eb65f472b875deaf3"
+  }
+}

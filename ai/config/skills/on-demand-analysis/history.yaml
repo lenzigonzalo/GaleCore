@@ -1,0 +1,29 @@
+# Qué cambió en cada versión de on_demand_analysis y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: on_demand_analysis
+versions:
+  - version: "1.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "0.1.2"
+    date: 2026-10-19
+    changes: >
+      WS-0047 F1a: el pack fundamental trae calidad (márgenes, flujo libre, capex, conversión a caja, dilución, deuda
+      neta), valoración (P/E propio, escenarios con su regla) y el próximo balance; las categorías ante pérdidas se
+      dicen como tales. «Analizame NVDA» pasa a company_research.
+    feedback: []
+  - version: "0.1.1"
+    date: 2026-10-17
+    changes: >
+      WS-0044 (owner, caso 2008; revisión de Codex): un pedido para entender no se ata a sus estrategias ni al dato
+      de hoy salvo que responda lo que preguntó; alineado con PRODUCT.md.
+    feedback: []
+  - version: "0.1.0"
+    date: 2026-10-06
+    changes: >
+      Primera versión (P1-05, WS-0015): macro, técnico, fundamental (mínimo, pedido del owner) y flow desde GaleCore
+      con `analyze pack`; cada lectura con los cuatro tipos de dato, alternativa e invalidación.
+    feedback: []

@@ -1,0 +1,113 @@
+{
+  "catalog_version": "1",
+  "knowledge_base": {
+    "path": "<workspace>\\knowledge",
+    "available": true
+  },
+  "entries": [
+    {
+      "id": "gex_interpretation",
+      "kind": "interpretation",
+      "serves": "Interpretar la exposici\u00f3n gamma (GEX) actual de un s\u00edmbolo con datos de GaleCore.",
+      "example_requests": [
+        "Analiz\u00e1 el GEX actual de SPY."
+      ],
+      "skill": "skills/gex-analysis/skill.yaml",
+      "output_contract": "galecore_ai.contracts.gex_analysis.GexInterpretation",
+      "galecore_capabilities": [
+        "compute.gex_analysis"
+      ],
+      "prepare_skill": "gex",
+      "flow": [
+        "prepare --symbol <SYMBOL> --skill gex",
+        "accept < {run_id, interpretation, host_provider, host_model}"
+      ],
+      "stored_as": "none",
+      "controls": [
+        "Numbers only in quantitative_claims, each equal to a GaleCore fact with its unit",
+        "No digits in observations or implications",
+        "Regime by the sign of net_gex; near_zero always rejected",
+        "Evidence paths resolve (entailment is not checked)",
+        "No explicit trading recommendation (pattern-based, D-6)",
+        "Snapshot integrity and freshness, fail-closed"
+      ],
+      "guide": "docs/LOCAL-VALIDATION-GEX-INTERACTIVE.md",
+      "skill_asset": {
+        "version": "1.3.0",
+        "content_hash": "sha256:3f937fd4e395be3b7efc3b565ba67be551c912c5caba53397a8eca8b28f11ad3"
+      },
+      "available": true
+    },
+    {
+      "id": "regime_interpretation",
+      "kind": "interpretation",
+      "serves": "Registrar el r\u00e9gimen diario de un s\u00edmbolo (GEX, skew 25\u0394, VIX/VVIX) y evaluarlo despu\u00e9s.",
+      "example_requests": [
+        "Analiz\u00e1 el r\u00e9gimen de hoy de SPY y guardalo.",
+        "\u00bfQu\u00e9 dijimos del r\u00e9gimen la semana pasada y qu\u00e9 pas\u00f3?"
+      ],
+      "skill": "skills/regime-analysis/skill.yaml",
+      "output_contract": "galecore_ai.contracts.regime_analysis.RegimeInterpretation",
+      "galecore_capabilities": [
+        "compute.gex_analysis",
+        "compute.put_skew",
+        "market_data.trade"
+      ],
+      "prepare_skill": "regime",
+      "flow": [
+        "prepare --symbol <SYMBOL> --skill regime",
+        "accept --record --prompt \"<pedido del usuario>\" < {run_id, interpretation, host_provider, host_model}",
+        "record outcome --symbol <SYMBOL> --date <YYYY-MM-DD> [--run-id <run_id>]",
+        "record review --symbol <SYMBOL> --date <YYYY-MM-DD> --run-id <run_id> --verdict <v> --comment \"<owner>\"",
+        "query --symbol <SYMBOL> --since <YYYY-MM-DD>"
+      ],
+      "stored_as": "regime",
+      "controls": [
+        "The GEX controls, plus tail_pricing equal to GaleCore's put_skew_level_ok",
+        "Record entry hashed at acceptance; outcomes and reviews appended, never rewritten",
+        "The review verdict is the owner's (F-6)",
+        "Daily records only after the cash session (F-2)"
+      ],
+      "guide": "docs/LOCAL-VALIDATION-REGIME-INTERACTIVE.md",
+      "skill_asset": {
+        "version": "1.1.0",
+        "content_hash": "sha256:c58972b66a14f7ca54b1a2a699f077fceec63ecbb24bb325c1facac9cf641ba5"
+      },
+      "available": true
+    },
+    {
+      "id": "research",
+      "kind": "investigation",
+      "serves": "Investigar una idea con los antecedentes disponibles (registros, investigaciones previas, archivos locales), producir una hip\u00f3tesis y un plan de prueba con fuentes y limitaciones, conservarlos y retomarlos en otra sesi\u00f3n.",
+      "example_requests": [
+        "Investig\u00e1 si el 0DTE vencido distorsiona el GEX post-cierre y c\u00f3mo lo probar\u00edamos.",
+        "Retom\u00e1 la investigaci\u00f3n sobre el GEX post-cierre."
+      ],
+      "skill": "skills/research/skill.yaml",
+      "output_contract": "galecore_ai.contracts.research.ResearchContent",
+      "galecore_capabilities": [],
+      "prepare_skill": null,
+      "flow": [
+        "kb search --text \"<t\u00e9rminos>\" [--kind research|regime] [--status open]",
+        "kb show <ref>",
+        "research save --slug <slug> --prompt \"<pedido del usuario>\" < {content, host_provider, host_model}",
+        "research revise --id <id> --reason continuation|correction|result --note \"<qu\u00e9 cambia>\" --prompt \"<pedido>\" < {content, host_provider, host_model}"
+      ],
+      "stored_as": "research",
+      "controls": [
+        "Every antecedent and source resolves to an intact knowledge item or an existing workspace file",
+        "Every antecedent says how it affects the hypothesis or the plan",
+        "A statement marked as fact cites at least one source",
+        "Open or test_planned work lists its next steps; a test plan needs its hypothesis",
+        "Revisions are append-only and hashed; a changed earlier revision is INTEGRITY_FAILED",
+        "Not checked - whether the reasoning is right, or whether a fact's source supports it"
+      ],
+      "guide": null,
+      "skill_asset": {
+        "version": "1.0.0",
+        "content_hash": "sha256:1439ef4216853369a34428eafdaeeb12f068d8b1aca4e725dd65145f3c42ccd1"
+      },
+      "available": true
+    }
+  ]
+}

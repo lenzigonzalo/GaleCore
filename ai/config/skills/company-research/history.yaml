@@ -1,0 +1,81 @@
+# Qué cambió en cada versión de company_research y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: company_research
+versions:
+  - version: "1.1.1"
+    date: 2026-10-21
+    changes: >
+      Revisión del owner sobre 1.1.0: la forma queda a criterio del pedido (sin «tabla corta» ni «el resto a la
+      investigación guardada», que forzaban tabla y archivo en una comparación sencilla); lo que no cambia la
+      conclusión no entra. El guardado sigue el paso 5.
+    feedback: []
+  - version: "1.1.0"
+    date: 2026-10-21
+    changes: >
+      Caso tecnológicas (WS-0057 G, owner 21/10): un pedido amplio sin lista empieza por el universo (qué se revisó,
+      por qué y con qué criterio, supuestos del perfil dichos); primero las pocas que pasan, cada conclusión con su
+      cifra, el resto en la investigación enlazada. Se saca la contradicción «sin tabla» / «cifras en tabla».
+    feedback: []
+  - version: "1.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "0.3.0"
+    date: 2026-10-20
+    changes: >
+      F6 replanteado por el owner (harness liviano): sin esqueleto de respuesta, bloques fijos, estados de selección,
+      escenarios por regla ni tabla de ETF; quedan las herramientas, qué trae cada pack y los cuidados que nacieron de
+      errores observados (números del día, competidores con su pack, P/E con no operativo, flujo del accionista,
+      guardar). De ~150 a ~45 líneas; `answer` y `system_prompt` dicen lo mismo.
+    feedback: []
+  - version: "0.2.5"
+    date: 2026-10-19
+    changes: >
+      F1b: Seleccionar usa `analyze company --symbols`, que devuelve la matriz en 4 bloques ya calculada (encaje
+      técnico, calidad y salud financiera, valoración, entrada y eventos) en lugar de correr los packs de a uno.
+    feedback: []
+  - version: "0.2.4"
+    date: 2026-10-19
+    changes: >
+      F5 cuarta vuelta: ningún motor guardó (Claude: «la de hoy ya tiene estas conclusiones»); el guardado pasa al
+      «cómo responder», con `research revise` cuando ya hay una, aunque sea del mismo día.
+    feedback: []
+  - version: "0.2.3"
+    date: 2026-10-19
+    changes: >
+      F5 tercera vuelta: Codex sigue el «cómo responder» (lo único que el Lab inyecta a todos los motores) y no el
+      método completo; las reglas de datos, valoración y competidores pasan al «cómo responder» (D-0014).
+    feedback: []
+  - version: "0.2.2"
+    date: 2026-10-19
+    changes: >
+      F5 segunda vuelta: Claude corrió el pack pero copió los números de una investigación anterior (hecha con velas
+      cortadas); los dos dijeron que no había datos de competidores. El pack del día manda siempre; la investigación
+      anterior es antecedente; competidores siempre con su pack.
+    feedback: []
+  - version: "0.2.1"
+    date: 2026-10-19
+    changes: >
+      F5 con MSFT (Claude y Codex): la valoración del pack es la base común (Codex armó sus propios múltiplos y
+      escenarios); competidores siempre con su pack y en una tabla con las mismas métricas (ninguno lo hizo); cifras
+      de una investigación anterior como antecedente con fecha; guardar siempre (Claude no guardó); hasta ~250
+      palabras fuera de las tablas; sin valoración a mano si el pack no la trae.
+    feedback: []
+  - version: "0.2.0"
+    date: 2026-10-19
+    changes: >
+      Revisión de Codex pedida por el owner: valoración según el modelo de negocio (EV/EBIT, EV/ventas, EV/FCF,
+      precio sobre valor tangible y ROE para bancos; P/E sólo donde corresponde), asignación de capital aparte,
+      drivers como centro de la tesis (ficha por motor y cadena demanda → caja), competidores con las mismas
+      métricas, market share sólo con mercado definido, mercado del negocio separado del bursátil, riesgos como
+      cadena riesgo → driver → impacto → señal, y la limitación dicha en la conclusión.
+    feedback: []
+  - version: "0.1.0"
+    date: 2026-10-19
+    changes: >
+      Primera versión (WS-0047, pedido del owner tras EMP01): recorridos Investigar y Seleccionar sobre `analyze pack`
+      (fundamental con caja, dilución, deuda y escenarios; técnico; macro) y el 10-K; tesis con qué tiene que pasar y
+      qué la rompe; selección por bloques sin puntaje; tabla fija de ETF por sector.
+    feedback: []

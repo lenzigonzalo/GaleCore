@@ -1,0 +1,123 @@
+{
+  "run_id": "01a0cff8-81cb-77c3-881c-e68245f2d94d",
+  "interpretation": {
+    "gamma_regime": "negative_gamma",
+    "tail_pricing": "calm",
+    "observations": [
+      "Net gamma exposure is negative at the close: dealers are short gamma, so their hedging trades in the direction of price moves",
+      "Spot closed below the zero-gamma level, placing the market on the short-gamma side of the flip point",
+      "The call wall sits above spot and above the flip point, while the put wall sits just below spot",
+      "Gamma coverage of the chain is complete, so the exposure figures are not the product of a partial book",
+      "The twenty-five delta put skew is inside GaleCore's calm zone, under the threshold, with the wing trading at a modest premium to the at-the-money",
+      "The volatility index settled in the mid teens and the vol-of-vol index is moderate, so the index complex is not signalling stress"
+    ],
+    "implications": [
+      "With dealers short gamma, hedging flows tend to amplify rather than dampen moves, so realized volatility can run above what a long-gamma book would allow while the regime holds",
+      "A move back above the flip point would change the sign of the hedging response; until then the book reads as pro-cyclical",
+      "A calm skew alongside negative gamma is a mixed combination: hedging flows are pro-cyclical while the options market is not paying up for downside protection",
+      "The walls are reported as locations of the largest single-strike gamma on each side; this read does not assign them a role as barriers or targets for price"
+    ],
+    "quantitative_claims": [
+      {
+        "metric": "net_gex",
+        "value": -822.1,
+        "unit": "billion_usd"
+      },
+      {
+        "metric": "spot",
+        "value": 767.73,
+        "unit": "usd"
+      },
+      {
+        "metric": "zero_gamma_level",
+        "value": 771.08,
+        "unit": "usd"
+      },
+      {
+        "metric": "call_wall",
+        "value": 772.0,
+        "unit": "usd"
+      },
+      {
+        "metric": "put_wall",
+        "value": 767.0,
+        "unit": "usd"
+      },
+      {
+        "metric": "put_skew_ratio",
+        "value": 1.0948,
+        "unit": "ratio"
+      },
+      {
+        "metric": "atm_iv",
+        "value": 0.1371,
+        "unit": "iv_decimal"
+      },
+      {
+        "metric": "put_wing_iv",
+        "value": 0.1501,
+        "unit": "iv_decimal"
+      },
+      {
+        "metric": "vix",
+        "value": 15.18,
+        "unit": "index_points"
+      },
+      {
+        "metric": "vvix",
+        "value": 88.6,
+        "unit": "index_points"
+      }
+    ],
+    "evidence": [
+      {
+        "fact_path": "facts.net_gex",
+        "claim": "Net GEX is negative, dealers are short gamma"
+      },
+      {
+        "fact_path": "facts.zero_gamma_level",
+        "claim": "Spot is below the zero-gamma level"
+      },
+      {
+        "fact_path": "facts.call_wall",
+        "claim": "The call wall sits above spot and above the flip point"
+      },
+      {
+        "fact_path": "facts.put_wall",
+        "claim": "The put wall sits just below spot"
+      },
+      {
+        "fact_path": "facts.coverage_pct",
+        "claim": "Gamma coverage of the chain is complete"
+      },
+      {
+        "fact_path": "facts.put_skew_level_ok",
+        "claim": "The skew level semaphore is in the calm zone"
+      },
+      {
+        "fact_path": "facts.put_skew_level_threshold",
+        "claim": "The skew ratio is under the threshold that would flag it"
+      },
+      {
+        "fact_path": "facts.vix",
+        "claim": "The volatility index settled in the mid teens"
+      },
+      {
+        "fact_path": "facts.vvix",
+        "claim": "The vol-of-vol index is moderate"
+      }
+    ],
+    "limitations": [
+      "Post-session read: GEX is computed at request time after the close, while the volatility and vol-of-vol indices are their afternoon settlement prints",
+      "The skew snapshot carries no GaleCore timestamp, so snapshot freshness is UNKNOWN; it reflects the moment of the request",
+      "The skew is read from an expiration roughly two months out, not from the front of the curve, so it describes the term where GaleCore measures it and not the immediate tail",
+      "GEX reflects current open interest and coverage and will shift with the next session's flow",
+      "The gamma regime is a sign classification only; the magnitude relative to total exposure is not validated, and the distance of spot from the flip point is a level reading, not a probability",
+      "The walls are argmax strikes of the gamma profile; no behavioural effect of their levels on price is claimed or validated here",
+      "No comparison with earlier sessions is made here; such comparisons are only valid through the query step",
+      "Qualitative statements are not checked for entailment by the validator; only paths, numbers and directives are"
+    ]
+  },
+  "host_provider": "claude-code",
+  "host_model": "claude-opus-5-5"
+}

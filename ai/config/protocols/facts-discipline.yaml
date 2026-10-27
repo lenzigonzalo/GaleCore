@@ -1,0 +1,40 @@
+protocol_id: facts_discipline
+version: "1.2.0"
+display_name: Facts Discipline
+description: >
+  Ensures the model reasons only from provided deterministic facts.
+  No invented numbers, no hallucinated data points.
+
+trigger: always
+
+steps:
+  - step_id: no_invention
+    description: Never invent quantitative values; cite only provided facts
+    required: true
+
+  - step_id: verify_facts_present
+    description: Verify that deterministic facts have been provided and are non-empty
+    required: true
+
+  - step_id: classify_regime
+    description: Classify the current regime based on facts
+    required: true
+
+  - step_id: cite_facts
+    description: Each qualitative claim must reference a fact path through evidence
+    required: true
+
+  - step_id: numbers_only_in_claims
+    description: Numbers appear only in quantitative_claims as {metric, value, unit}; prose stays qualitative
+    required: true
+
+  - step_id: state_caveats
+    description: Acknowledge limitations and conditions that could change the analysis
+    required: true
+
+guardrails:
+  - no_invented_numbers
+  - facts_match_source
+  - no_trading_recommendation
+  - no_numbers_in_prose
+  - quantitative_claims_valid

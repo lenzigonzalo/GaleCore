@@ -1,0 +1,29 @@
+convention_id: trading_defaults
+version: "1.0.0"
+display_name: Trading Defaults
+
+entries:
+  - key: gex_near_zero_threshold_pct
+    value: 5.0
+    precedence: domain
+    description: >
+      Intended threshold (percent of total absolute GEX) below which net_gex would be
+      considered "near zero". NOT IN EFFECT: GaleCore publishes call_gex/put_gex and
+      net_gex in incompatible scales, so no near_zero validation runs and the regime is
+      always rejected. Preserved for when normalized facts exist; it does not enable
+      anything today.
+
+  - key: timezone
+    value: America/New_York
+    precedence: domain
+    description: All market times are Eastern Time
+
+  - key: currency
+    value: USD
+    precedence: domain
+    description: Default currency for all values
+
+  - key: precision_decimal_places
+    value: 2
+    precedence: methodology
+    description: Number of decimal places for price display

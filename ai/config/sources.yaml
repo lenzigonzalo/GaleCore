@@ -1,0 +1,151 @@
+# Declarative registry of data sources (GC-AI-0012, AC-01). `python -B -m
+# galecore_ai.adapters.cli sources list|query` reads this file together with the
+# observed access status kept in `<knowledge>/sources/<id>.md`.
+#
+# `usage` orders the answer (owner's rule, 29/09): free → own (GaleCore) → daily_quota
+# (only when the ones before do not cover the need) → plan; `preference` within each.
+#
+# Adding a source means adding an entry here. `access_type: galecore_api` and
+# `api_key` need a `probe.command` this repo's code can actually run (checked by
+# `sources check`); `host_connector` sources have no command — only the host, via
+# its own connector, can observe them (`sources declare`).
+#
+# "covers" lists only what a *registered* capability of this code can actually
+# reach; a source's own product may do more (e.g. GaleCore/Tastytrade also serves
+# option chains and VIX-family series through other paths), but if this registry's
+# probe cannot reach it, it does not belong in `covers` — it goes in `limits`
+# instead, so a query never points at a route that then fails.
+schema_version: "1"
+sources:
+  - id: galecore
+    display_name: GaleCore (API propia)
+    access_type: galecore_api
+    cost: sin costo adicional (API propia del ecosistema)
+    usage: own
+    preference: 0
+    covers:
+      - category: market_data
+        description: cotizaciones y trades de SPY y de cualquier otro símbolo que sirve el DataFeed, incluidos VIX y VVIX (market_data.quote, market_data.trade con symbol=SPY|VIX|VVIX|… — ver application/prepare_regime.py)
+        any_symbol: true
+      - category: options_state
+        description: GEX (compute.gamma_exposure, compute.gex_analysis) y put skew 25Δ (compute.put_skew), por símbolo
+        any_symbol: true
+      - category: options_chain
+        description: cadena de opciones de un subyacente con vencimientos, strikes y símbolos OCC (market_data.option_chains) y griegas de un contrato por su símbolo OCC (market_data.option_greeks); `galecore get ... --out <archivo>` porque la cadena de SPY pesa ~1 MB
+        any_symbol: true
+      - category: volatility
+        description: IV rank e IV percentile (compute.iv_rank), estructura temporal de IV30 y movimiento diario esperado (compute.implied_volatility), índice de IV, percentil, HV, beta y fecha de resultados por símbolo (market_data.volatility_metrics)
+        any_symbol: true
+      - category: price_history
+        description: velas OHLCV históricas e intradía por intervalo (1d, 1h, 5m…) desde una fecha (market_data.candles con interval y fromTime)
+        any_symbol: true
+      - category: macro_calendar
+        description: calendario macro, sólo fechas de publicación programadas según FRED (empleo, precios al consumidor y al productor, PIB, ingresos y gastos, ventas minoristas; calendar.macro_releases) y reuniones del FOMC de la página de la Fed (calendar.fomc_meetings), servidos por GaleCore desde GC-0006; subastas próximas del Tesoro (calendar.treasury_auctions, WS-0014)
+      - category: volatility_history
+        description: historia diaria oficial de CBOE de VIX (desde 1990, OHLC), VVIX (desde 2006) y SKEW (desde 1990), para percentiles de régimen y el tail_score (history.index_daily con Index=VIX|VVIX|SKEW; WS-0014)
+      - category: rates_curve
+        description: curva par diaria oficial del Tesoro por plazo, de 1 mes a 30 años (rates.treasury_curve) y cualquier serie de tasas de FRED — DGS10, DGS2, DTB3, DFII10 (real), fed funds (macro.fred_series con SeriesId; WS-0014)
+      - category: credit
+        description: spreads de crédito de FRED, high yield BAMLH0A0HYM2 e investment grade BAMLC0A0CM (macro.fred_series)
+      - category: inflation
+        description: CPI y breakevens (T10YIE) de FRED (macro.fred_series) y valores oficiales del BLS con el detalle por componente (macro.bls_series, p. ej. CUUR0000SA0, CUSR0000SA0)
+      - category: activity_employment
+        description: empleo y actividad — desempleo LNS14000000 y nóminas CES0000000001 del BLS (macro.bls_series) y las series de FRED (macro.fred_series)
+      - category: policy_uncertainty
+        description: índice de incertidumbre de política económica de EEUU, diario (macro.fred_series con SeriesId=USEPUINDXD; WS-0042). Termómetro de contexto, no señal; el día suelto es muy ruidoso, se lee su promedio de 30 días contra el de 12 meses
+      - category: filings_fundamentals
+        description: presentaciones ante la SEC por empresa (filings.sec_filings; en los 8-K, el ítem 2.02 es el comunicado de resultados) y fundamentales XBRL reportados — ingresos, resultado, deuda (filings.sec_facts, p. ej. Revenues, EarningsPerShareDiluted); ticker → CIK con filings.sec_company
+        any_symbol: true
+      - category: shadow_runtime
+        description: runtime SHADOW de GaleCore Dev — estado, instancias, evaluaciones, descartes, posiciones (con su riesgo máximo) y métricas por versión de estrategia (App/Runtime/Status, App/Runtime/Instances, App/Runtime/Metrics; se lee con `followup run`) y performance por estrategia, versión y regla de salida, de la cartera contra el capital y por operación cerrada contra su plan (App/Runtime/Performance; se lee con `performance`); exposición de lo abierto por apuesta, subyacente, estrategia y vencimiento contra límites y reparto de un capital con reserva, tope por apuesta y escalera (App/Runtime/Exposure, App/Runtime/Allocation; se lee con `capital`)
+    limits:
+      - "Sólo lo registrado en capabilities/contracts.py (KNOWN_CAPABILITIES), que se pide con `galecore list|get`; el runtime SHADOW se lee aparte con `followup run`"
+      - "IV rank: la historia de IV que guarda GaleCore empieza el 21/09/2026, así que el rango es corto y highIV/lowIV vienen en 0 (observado el 03/10)"
+      - "Fuentes públicas (WS-0014): una fuente caída o que cambió de forma es 502, nunca una lista vacía; la procedencia (upstreamUrl, asOf, sha256) viene en cada respuesta. CBOE publica el día hábil anterior; las series macro se revisan (FRED dice el vintage); las fechas del calendario macro se pueden mover"
+      - "SEC EDGAR exige SecEdgar:UserAgent (nombre y correo) en la configuración de GaleCore: sin él, filings.* responde 502; EDGAR no da la fecha futura de resultados (FMP o Alpha Vantage)"
+      - "BLS sin clave: pocas consultas por día, hasta 25 series y 10 años por pedido (GaleCore guarda cada respuesta 6 h); las fechas de CPI y empleo salen de calendar.macro_releases"
+      - "Velas: formato DXLink crudo (FEED_DATA con eventos Candle); griegas: sólo de un contrato por su símbolo OCC, no de un subyacente"
+      - "Dos vías con dirección distinta: `sources check`, `prepare` y las capabilities usan GALECORE_BASE_URL (por defecto :5000, sin clave); GaleCore Dev corre en :7001 y el runtime SHADOW se lee con `followup run` (galecore_dev.py, con su autenticación). Un `down` del probe sin GALECORE_BASE_URL/GALECORE_API_KEY apuntando a Dev no dice que GaleCore Dev esté caída (29/09: probe down mientras Dev respondía en :7001)"
+    probe:
+      description: GET de bajo costo (market_data.trade de SPY) evaluando el código de estado HTTP
+      command: python -B -m galecore_ai.adapters.cli sources check --source galecore
+
+  # FRED sigue como fuente propia del mapa, pero desde WS-0014 se lee sólo a
+  # través de GaleCore: este código ya no llama a FRED ni usa su clave.
+  - id: fred
+    display_name: FRED (St. Louis Fed), servido por GaleCore
+    access_type: galecore_api
+    cost: sin costo adicional (la clave de FRED la tiene GaleCore, FredApi:Key)
+    usage: own
+    preference: 5
+    covers:
+      - category: rates_curve
+        description: curva de tasas del Tesoro (DGS*), fed funds, tasas reales (DFII10) y otras series de tasas (macro.fred_series con SeriesId)
+      - category: credit
+        description: spreads de crédito (high yield BAMLH0A0HYM2, investment grade BAMLC0A0CM) (macro.fred_series)
+      - category: inflation
+        description: CPI (CPIAUCSL) y breakevens (T10YIE) (macro.fred_series)
+      - category: activity_employment
+        description: nonfarm payroll, desempleo y otras series de actividad (macro.fred_series)
+      - category: macro_calendar
+        description: calendario de publicaciones macro programadas — empleo, CPI, PPI, PIB, ingresos y gasto, ventas minoristas (calendar.macro_releases)
+      - category: policy_uncertainty
+        description: incertidumbre de política económica de EEUU (EPU, USEPUINDXD, diaria; macro.fred_series). La versión global GEPUCURRENT es mensual y sin dato reciente
+    limits:
+      - "Calendario de publicaciones: no trae el día de reunión del comité de la Fed (calendar.fomc_meetings); «FOMC Press Release» (release 101) figura todos los días (verificado el 30/09, GC-AI-0016)"
+      - "Fechas programadas por la agencia; se pueden mover y FRED lo refleja cuando la agencia lo publica. Las series macro se revisan: la respuesta dice el vintage leído"
+    probe:
+      description: macro.fred_series DGS10 por GaleCore (una serie liviana desde el primer día del mes)
+      command: python -B -m galecore_ai.adapters.cli sources check --source fred
+
+  - id: alpha_vantage
+    display_name: Alpha Vantage
+    access_type: host_connector
+    cost: clave gratuita (límite de plan)
+    usage: daily_quota
+    preference: 20
+    covers:
+      - category: rates_curve
+        description: tasas y curva de tasas (TREASURY_YIELD, FEDERAL_FUNDS_RATE)
+      - category: inflation
+        description: inflación (CPI, INFLATION)
+      - category: activity_employment
+        description: empleo y actividad (NONFARM_PAYROLL, UNEMPLOYMENT)
+      - category: earnings_valuation
+        description: resultados y estimaciones (EARNINGS, EARNINGS_ESTIMATES, EARNINGS_CALL_TRANSCRIPT)
+      - category: scheduled_events
+        description: calendario de resultados y salidas a bolsa (EARNINGS_CALENDAR, IPO_CALENDAR)
+      - category: volatility_options_external
+        description: opciones históricas y put/call ratio histórico (HISTORICAL_OPTIONS, HISTORICAL_PUT_CALL_RATIO)
+    limits:
+      - "Clave gratuita: 1 consulta/s y 25/día; en paralelo falla por límite (evidencia:2026-09-27-spy-ctx-av-effr-preview)"
+      - "Series diarias (TREASURY_YIELD, FEDERAL_FUNDS_RATE): el conector devuelve una vista previa de 2 puntos, no el historial completo (evidencia:2026-09-27-spy-ctx-av-treasury-10y-preview, evidencia:2026-09-27-spy-ctx-av-effr-preview); las mensuales sí devuelven la serie completa"
+      - "REALTIME_OPTIONS, REALTIME_PUT_CALL_RATIO y ETF_PROFILE: sin probar con la clave gratuita, no forman parte de covers hasta verificarlos"
+    probe:
+      description: sin comando propio; el host prueba con la llamada mínima del dato que necesita y declara el resultado (sources declare)
+      command: null
+
+  - id: fmp
+    display_name: Financial Modeling Prep (FMP)
+    access_type: host_connector
+    cost: "plan actual insuficiente para varios endpoints: el conector responde que hace falta Starter/Premium/Ultimate/Enterprise (evidencia:2026-09-27-spy-ctx-fmp-economics-calendar-denied)"
+    usage: plan
+    preference: 30
+    covers:
+      - category: rates_curve
+        description: curva de tasas del Tesoro, treasury-rates (funciona; evidencia:2026-09-27-spy-ctx-fmp-treasury-rates)
+      - category: market_data
+        description: precio de cierre diario (EOD) de SPY vía chart historical-price-eod-light (funciona; evidencia:2026-09-28-cartera-ctx-fmp-spy-eod)
+      - category: quotes
+        description: cotizaciones de SPY vía quote/batch-quote (intermitente por plan — ver historia de estado)
+      - category: earnings_valuation
+        description: calendario de earnings (funciona; filas por corrida sin garantía de cobertura completa)
+      - category: scheduled_events
+        description: economics-calendar (denegado por plan)
+    limits:
+      - "economics-calendar y etfAndMutualFunds information denegados por plan (evidencia:2026-09-27-spy-ctx-fmp-economics-calendar-denied, evidencia:2026-09-27-spy-ctx-fmp-etf-information-denied)"
+      - "quote/batch-quote: respondió en una sesión y fue denegado en otra sin cambio de código de este lado — el plan puede variar entre sesiones (evidencia:2026-09-27-spy-ctx-fmp-spy-quote, evidencia:2026-09-28-cartera-ctx-fmp-spy-eod)"
+      - "Calendario de earnings: corridas con 8 y con 50 filas, posible recorte del endpoint sin verificar (evidencia:2026-09-27-spy-ctx-fmp-earnings-calendar-oct13-16, evidencia:2026-09-28-cartera-ctx-fmp-earnings-oct19-nov6)"
+    probe:
+      description: sin comando propio; el host prueba con la llamada mínima del dato que necesita y declara el resultado (sources declare)
+      command: null

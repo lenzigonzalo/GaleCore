@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "OPTIONS",
+    "path": "/api/reviews",
+    "headers": {
+      "Origin": "http://localhost:3039",
+      "Access-Control-Request-Method": "POST"
+    },
+    "body": null
+  },
+  "http_status": 204,
+  "response_headers": {
+    "Access-Control-Allow-Origin": "http://localhost:3039",
+    "Vary": "Origin",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Review-Token",
+    "Access-Control-Max-Age": "600"
+  },
+  "body": null
+}

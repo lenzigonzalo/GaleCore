@@ -1,0 +1,32 @@
+# Qué cambió en cada versión de market_story y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: market_story
+versions:
+  - version: "1.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "0.2.0"
+    date: 2026-10-06
+    changes: >
+      P1-05 (WS-0015), «qué mueve hoy»: el paquete trae `drivers` — movimiento de SPY en cada publicación macro y FOMC
+      de los últimos seis meses contra la IV de la víspera (por tipo, contra los días sin dato), correlación y beta con
+      cada activo en 20 sesiones contra las 20 anteriores, y lo que paga hoy la IV para los datos que vienen. El método
+      suma el pilar [qué lo mueve] con los cuatro tipos de dato, la historia competidora y qué la refutaría.
+    feedback: []
+  - version: "0.1.1"
+    date: 2026-10-04
+    changes: >
+      Primera corrida real (r2 de research:2026-10-04-historia-del-mercado-spy): atribuyó la baja de la volatilidad
+      corta al «dato de empleo» del viernes, que no estaba en el paquete. El paquete trae ahora las publicaciones de
+      la última semana (recent_releases) y el método sólo deja nombrar eventos que estén en su calendario.
+    feedback: []
+  - version: "0.1.0"
+    date: 2026-10-04
+    changes: >
+      Primera versión (GC-AI-0024, pieza 1 del plan para cerrar el harness): la historia que está priceando el
+      mercado con el paquete del día que junta el código (`story pack`), sus pilares con evidencia, qué se le ofrece
+      al retail según las opciones, la historia competidora y si cambió frente a la lectura anterior.
+    feedback: []

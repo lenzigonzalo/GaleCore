@@ -1,0 +1,71 @@
+# Qué cambió en cada versión de daily_attention y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: daily_attention
+versions:
+  - version: "1.0.1"
+    date: 2026-10-21
+    changes: >
+      Sin «fuentes» del perfil (owner 21/10): GaleCore es la base siempre y una fuente externa con clave se le pide
+      al usuario; el perfil ya no elige fuentes.
+    feedback: []
+  - version: "1.0.0"
+    date: 2026-10-21
+    changes: >
+      Formato SKILL.md (WS-0054, aprobado por el owner 21/10): mismo método, en español y por secciones (cuándo
+      se usa, qué necesita, pasos, qué entrega con ejemplo, errores a evitar, cómo responder); los pasos llegan
+      al Lab con `catalog --match`.
+    feedback: []
+  - version: "0.2.5"
+    date: 2026-10-13
+    changes: >
+      Separa SHADOW y real según PRODUCT.md «Límites» (owner, 13/10): la exposición simulada se llama «exposición SHADOW»,
+      nunca «tu apuesta» ni «tu exposición»; los topes del perfil son la vara de referencia, no un límite que lo simulado
+      consuma del capital real; la cartera real va aparte y sin sumar. El supervisor (`bet_limit`) y `supervise exposure`
+      marcan sus montos como SHADOW. Origen: H4 y H5 de la vuelta 28 de WS-0029 («tu apuesta de SPY pasa su tope»).
+    feedback: []
+  - version: "0.2.4"
+    date: 2026-10-06
+    changes: >
+      El calendario macro (FRED), las reuniones del FOMC y las subastas del Tesoro salen de GaleCore
+      (`galecore get calendar.*`, WS-0014) y no de los scripts tools/fred_query.py y tools/fed_calendar.py, que se
+      borran. Suma las subastas de notes y bonds a la tabla eventos x posiciones y, como contexto opcional, la curva
+      oficial del Tesoro y la historia de VIX/VVIX/SKEW de CBOE. Un 502 de GaleCore va a faltantes con el motivo.
+    feedback: []
+  - version: "0.2.3"
+    date: 2026-09-30
+    changes: >
+      La exposición suma las posiciones abiertas de versiones anteriores y de otras specs que el seguimiento ahora
+      trae (other_versions). La corrida 7 del 30/09 informó 0 USD con dos spreads abiertos (1.0.3 y v2) porque el
+      seguimiento sólo leía la versión aprobada más reciente. Una spec que no se pudo leer es «no verificada», nunca cero.
+    feedback: []
+  - version: "0.2.2"
+    date: 2026-09-30
+    changes: >
+      Se puede programar (GC-AI-0017): el paso 10 ya no dice que no está disponible; dice cómo crear la tarea y
+      que una corrida programada no tiene los conectores de resultados (FMP/Alpha Vantage), así que esas
+      fechas salen de evidencia guardada o van a faltantes.
+    feedback: []
+  - version: "0.2.1"
+    date: 2026-09-30
+    changes: >
+      Las reuniones del FOMC entran en la tabla eventos x posiciones desde el calendario oficial de la Fed
+      (fuente registrada `fed`, tools/fed_calendar.py), marcando las que traen proyecciones; dejan de ser
+      faltante. Completa el comentario del owner (qué evento macro viene): la 0.2.0 no tenía fuente para el
+      FOMC. Aclara las rutas de tools/ desde el checkout y desde la raíz del workspace.
+    feedback: [feedback:2026-09-30-briefing-eventos-macro-vs-posiciones]
+    owner_decision: "«Si tomalo como comentario» (29/09): el owner eligió que el brief lo haga siempre (GC-AI-0016, cierre aprobado)"
+  - version: "0.2.0"
+    date: 2026-09-30
+    changes: >
+      Siempre abre con un brief rápido de todo (cartera, estrategias activas, qué pasó, qué viene) y una tabla
+      eventos x posiciones: cada publicación macro o resultado entre hoy y el último vencimiento, con días
+      hasta el evento y si cae antes del vencimiento o de la salida por tiempo de cada posición («hay un NFP
+      en 3 días y tu PCS vence después»). El calendario macro sale de FRED (fuente registrada, fred_query.py
+      --releases). No cambia: la fecha de reunión del FOMC sigue sin fuente registrada y se declara faltante;
+      las griegas de posiciones tampoco.
+    feedback: [feedback:2026-09-30-briefing-eventos-macro-vs-posiciones]
+    owner_decision: "«Si tomalo como comentario» (29/09): el owner eligió que el brief lo haga siempre (GC-AI-0016, cierre aprobado)"
+  - version: "0.1.2"
+    date: 2026-09-29
+    changes: >
+      Necesidades honestas (históricos e IV faltantes), check más estricto (revisión interna R1 de GC-AI-0015). Versiones anteriores: git log de skill.yaml (el historial empieza con GC-AI-0016).
+    feedback: []
