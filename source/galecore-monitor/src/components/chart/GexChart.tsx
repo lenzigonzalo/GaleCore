@@ -44,6 +44,8 @@ interface Props {
   alineado?: boolean;
   /** Lo llama el gráfico cuando el operador mueve la escala a mano: la alineación se apaga sola. */
   onDesalinear?: () => void;
+  /** Avisos de precio (WS-0064): líneas grises punteadas, separadas de las del gex. */
+  alertLevels?: { id: string; price: number; label: string }[];
 }
 
 const DEFAULT_BUCKET = 5 * 60;
@@ -162,6 +164,7 @@ export function GexChart({
   scaleConfig,
   alineado = false,
   onDesalinear,
+  alertLevels,
 }: Props) {
   const [historyState, setHistoryState] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
   const [historyError, setHistoryError] = useState('');
@@ -172,6 +175,7 @@ export function GexChart({
   const chartRef      = useRef<IChartApi | null>(null);
   const seriesRef     = useRef<ISeriesApi<'Candlestick' | 'Line', any> | null>(null);
   const gexLinesRef   = useRef<any[]>([]);
+  const alertLinesRef = useRef<any[]>([]);
   const candlesRef    = useRef<{ time: number; open: number; high: number; low: number; close: number }[]>([]);
   const useCandlesRef = useRef(false);
 
@@ -534,6 +538,20 @@ export function GexChart({
       catch { seriesRef.current.setData([{ time: now as any, value: currentPrice }]); }
     }
   }, [currentPrice, candleBucketSeconds]);
+
+  // ── Avisos de precio: línea gris punteada con su etiqueta (WS-0064) ───────
+  const alertsKey = (alertLevels ?? []).map(a => `${a.id}:${a.price}:${a.label}`).join('|');
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series) return;
+    alertLinesRef.current.forEach(l => { try { series.removePriceLine(l); } catch {} });
+    alertLinesRef.current = [];
+    for (const a of alertLevels ?? []) {
+      try {
+        alertLinesRef.current.push(series.createPriceLine({ price: a.price, color: '#92928b', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: a.label }));
+      } catch {}
+    }
+  }, [alertsKey, seriesVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── GEX price lines + StdDev + autoscale ──────────────────────────────────
   useEffect(() => {
