@@ -1,1 +1,0 @@
-{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{"name":"get_implied_volatility","arguments":{"symbol":"SPY"}}}

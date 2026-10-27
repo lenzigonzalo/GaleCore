@@ -1,1 +1,0 @@
-{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{"name":"get_market_data_by_type","arguments":{"symbol":"SPY"}}}

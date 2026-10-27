@@ -1,7 +1,0 @@
-{
-  "command": "project show strategy:iwm_prima_condor_30_45d",
-  "seconds": 9.245,
-  "exit_code": 0,
-  "bytes": 30723,
-  "scope": "local files, no model request"
-}

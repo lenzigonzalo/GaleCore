@@ -1,3 +1,0 @@
-event: message
-data: {"result":{"protocolVersion":"2025-03-26","capabilities":{"logging":{},"tools":{"listChanged":true}},"serverInfo":{"name":"DataFeed.Api","version":"1.0.0.0"}},"id":1,"jsonrpc":"2.0"}
-

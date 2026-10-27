@@ -1,1 +1,0 @@
-{"type":"FEED_DATA","channel":3,"data":[{"eventType":"Trade","eventSymbol":"VVIX","eventTime":0,"time":1790367301251,"timeNanoPart":0,"sequence":0,"exchangeCode":"","price":87.84,"change":0.0,"size":"NaN","dayId":20722,"dayVolume":"NaN","dayTurnover":"NaN","tickDirection":"ZERO_UP","extendedTradingHours":false,"timeStamp":"2026-09-25T20:15:01.251"}]}

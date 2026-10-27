@@ -1,3 +1,0 @@
-event: message
-data: {"result":{"content":[{"type":"text","text":"{\r\n  \u0022symbol\u0022: \u0022SPY\u0022,\r\n  \u0022spot\u0022: 772,\r\n  \u0022iV30_9d\u0022: 11.77,\r\n  \u0022iV30_30d\u0022: 14.81,\r\n  \u0022iV30_90d\u0022: 17.57,\r\n  \u0022dailyMove\u0022: 0.93,\r\n  \u0022dailyMoveDollar\u0022: 7.18,\r\n  \u0022iV30_0d\u0022: 14.73,\r\n  \u0022iV30_5d\u0022: 14.92,\r\n  \u0022iV30RocPct\u0022: -1.27\r\n}"}]},"id":11,"jsonrpc":"2.0"}
-
