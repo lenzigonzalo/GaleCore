@@ -41,7 +41,7 @@ function persist() {
   fs.renameSync(tmp, STORE);
 }
 function projects() {
-  const list = [{ id: 'portfolio', label: 'Cartera e investigación', dir: KB, relative: '.' }];
+  const list = [{ id: 'portfolio', label: 'Cartera e investigación', dir: path.join(KB, 'workspaces', 'portfolio'), relative: 'workspaces/portfolio' }];
   const base = path.join(KB, 'strategies');
   if (!fs.existsSync(base)) return list;
   const realBase = fs.realpathSync(base);
@@ -105,9 +105,8 @@ function newSession(body) {
   if (!project || !['codex', 'claude'].includes(body.provider)) throw Object.assign(new Error('Proyecto o motor desconocido.'), { status: 400 });
   if (!binaries[body.provider]) throw Object.assign(new Error('El CLI no está instalado en esta PC.'), { status: 409 });
   const active = [...sessions.values()].filter(s => s.state === 'running');
-  // El proyecto portfolio abarca toda la memoria: no se combina con otras escrituras.
-  if (active.some(s => s.project === project.id || s.project === 'portfolio' || project.id === 'portfolio')) {
-    throw Object.assign(new Error('Ya hay una sesión abierta sobre este proyecto o la cartera. Retomala o terminála antes de abrir otra.'), { status: 409 });
+  if (active.some(s => s.project === project.id)) {
+    throw Object.assign(new Error('Ya hay una sesión abierta sobre este proyecto. Retomala o terminála antes de abrir otra.'), { status: 409 });
   }
   if (active.length >= 4) throw Object.assign(new Error('Hay cuatro sesiones activas. Terminá una antes de continuar.'), { status: 409 });
   const previous = body.resumeOf ? sessions.get(body.resumeOf) : null;
@@ -157,7 +156,7 @@ function git(args) {
 async function projectContext(id) {
   const p = projects().find(p => p.id === id);
   if (!p) throw Object.assign(new Error('Proyecto desconocido.'), { status: 404 });
-  const paths = p.id === 'portfolio' ? ['.'] : [p.relative, 'projects/' + p.id + '.json'];
+  const paths = [p.relative, 'projects/' + p.id + '.json'];
   const [log, status] = await Promise.all([
     git(['log', '-6', '--format=%h%x09%aI%x09%s', '--', ...paths]),
     git(['status', '--porcelain', '--', ...paths]),
