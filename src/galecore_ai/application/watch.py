@@ -11,10 +11,11 @@ A number GaleCore cannot give (no quote, NaN, a timeout) is reported as a proble
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import re
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -45,6 +46,9 @@ SOURCES: dict[WatchMetric, str] = {
     WatchMetric.IV_RANK: IV_RANK,
 }
 POSITIONS = "/App/Runtime/Instances/{instance}/Positions"
+EVALUATIONS = "/App/Runtime/Instances/{instance}/Evaluations?limit=20"   # newest 20, oldest first; a pass is 5 min
+INSTANCES = "/App/Runtime/Instances"
+TIMED = 99_999_999       # a DATE threshold above YYYYMMDD carries a time (YYYYMMDDHHMM)
 GEX_FIELDS = {WatchMetric.GAMMA_ZERO: "gammaZeroLevel", WatchMetric.CALL_WALL: "callWall",
               WatchMetric.PUT_WALL: "putWall"}
 
@@ -80,6 +84,12 @@ def read_metric(payload, metric: WatchMetric) -> float | None:
 
 def _fmt(x: float) -> str:
     return f"{x:g}"
+
+
+def _fmt_ar(x: float) -> str:
+    """es-AR for what the owner reads (the monitor shows ``describe`` verbatim): 1.188 · 222,29 · 760."""
+    text = f"{x:,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return text.removesuffix(",00") if text.endswith(",00") else text.rstrip("0") if "," in text else text
 
 
 def add(kb: KnowledgeBase, *, symbol: str, metric: str, condition: str, threshold: float, words: str, prompt: str,
@@ -192,24 +202,37 @@ def cancel(kb: KnowledgeBase, rule_id: str, *, words: str, prompt: str, now: dat
     return mark
 
 
-def remind(kb: KnowledgeBase, *, words: str, prompt: str, on: date | None = None, instance_id: str = "",
-           decision: str = "", host_model: str | None = None, now: datetime | None = None) -> WatchRule:
+def remind(kb: KnowledgeBase, *, words: str, prompt: str, on: date | None = None, at: time | None = None,
+           instance_id: str = "", on_evaluation: bool = False, decision: str = "", host_model: str | None = None,
+           now: datetime | None = None) -> WatchRule:
     """WS-0023: a decision's «revisar el <fecha>» or «reanudar cuando cierren» kept as a rule the supervisor checks,
-    so it does not depend on someone remembering a project's `pending`. Exactly one of ``on`` (a date, New York) or
-    ``instance_id`` (alerts when that instance has no open position). It alerts once, with the decision as context."""
+    so it does not depend on someone remembering a project's `pending`. Exactly one of ``on`` (a date, New York; with
+    ``at`` a time that day, New York, which may be today if still ahead), ``instance_id`` alone (alerts when that
+    instance has no open position) or ``instance_id`` with ``on_evaluation`` (alerts at each new evaluation of that
+    instance, WS-0064). All but the last alert once."""
     from galecore_ai.application.supervisor import NEW_YORK
     now = now or datetime.now(UTC)
-    if (on is None) == (not instance_id.strip()):
-        raise KnowledgeError("a reminder is either a date (--on) or an instance whose positions close (--when-closed)")
+    if (on is None) == (not instance_id.strip()) or (on_evaluation and on is not None) or             (on_evaluation and not instance_id.strip()):
+        raise KnowledgeError("a reminder is either a date (--on [--at]), an instance whose positions close (--when-closed) "
+                             "or an instance's evaluations (--on-evaluation --instance)")
+    if at is not None and on is None:
+        raise KnowledgeError("--at goes with --on (a date)")
     if not words.strip() or not prompt.strip():
         raise KnowledgeError("a reminder keeps the owner's words and request (--text, --prompt)")
-    if on is not None:
+    if on is not None and at is not None:
+        stamp = f"{on:%Y%m%d}{at:%H%M}"
+        if stamp <= now.astimezone(NEW_YORK).strftime("%Y%m%d%H%M"):
+            raise KnowledgeError("--on/--at is in the past (New York time)")
+        metric, condition, threshold, tag = WatchMetric.DATE, WatchCondition.ABOVE, float(stamp), "hora"
+    elif on is not None:
         if on <= now.astimezone(NEW_YORK).date():
             raise KnowledgeError("--on is today or in the past")
         metric, condition, threshold, tag = WatchMetric.DATE, WatchCondition.ABOVE, float(on.strftime("%Y%m%d")), "fecha"
+    elif on_evaluation:
+        metric, condition, threshold, tag = WatchMetric.EVALUATION, WatchCondition.ABOVE, 0.0, f"eval-{instance_id.strip()[:8]}"
     else:
         metric, condition, threshold, tag = WatchMetric.OPEN_POSITIONS, WatchCondition.BELOW, 0.0, instance_id[:8]
-    rule = WatchRule(id=f"{now.date().isoformat()}-recordatorio-{tag}-{_fmt(threshold)}", created_at=now, symbol="",
+    rule = WatchRule(id=f"{now.date().isoformat()}-recordatorio-{tag}-{int(threshold)}", created_at=now, symbol="",
                      metric=metric, condition=condition, threshold=threshold, words=words, prompt=prompt,
                      host_model=host_model, instance_id=instance_id.strip(), decision=decision.strip())
     return _store(kb, rule, now)
@@ -229,11 +252,15 @@ def view(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
 def describe(rule: WatchRule) -> str:
     if rule.metric == WatchMetric.DATE:
         t = int(rule.threshold)
+        if t > TIMED:
+            return f"el {date(t // 100000000, t // 1000000 % 100, t // 10000 % 100):%d/%m/%Y} a las {t // 100 % 100:02d}:{t % 100:02d} NY"
         return f"fecha ≥ {date(t // 10000, t // 100 % 100, t % 100):%d/%m/%Y}"
+    if rule.metric == WatchMetric.EVALUATION:
+        return f"cada evaluación de la instancia {rule.instance_id[:8]}"
     if rule.metric == WatchMetric.OPEN_POSITIONS:
         return f"sin posiciones abiertas en la instancia {rule.instance_id[:8]}"
     sign = "≤" if rule.condition == WatchCondition.BELOW else "≥"
-    return f"{METRIC_LABELS[rule.metric]} de {rule.symbol} {sign} {_fmt(rule.threshold)}"
+    return f"{METRIC_LABELS[rule.metric]} de {rule.symbol} {sign} {_fmt_ar(rule.threshold)}"
 
 
 def _reminder_alert(rule: WatchRule, now: datetime, path: str) -> Alert:
@@ -248,13 +275,100 @@ def _reminder_alert(rule: WatchRule, now: datetime, path: str) -> Alert:
     return alert.model_copy(update={"content_hash": compute_document_hash(alert.hashable_content())})
 
 
+def _when(value) -> datetime | None:
+    try:
+        t = datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=UTC)
+
+
+def _entry_text(positions, at: datetime) -> str:
+    """What the instance opened at/after an evaluation, from the fields GaleCore's Positions give (legs, entry credit or
+    debit; Positions carries no costs of its own); empty when it opened nothing."""
+    opened = [p for p in positions if isinstance(p, dict) and (_when(p.get("entryAt")) or datetime.min.replace(tzinfo=UTC)) >= at]
+    if not opened:
+        return ""
+    p = opened[0]
+    legs = p.get("legs") or []
+    strikes = "/".join(f"{leg['strike']:g}" for leg in legs if leg.get("side") == "SELL" and leg.get("strike")) +         ("/" + "/".join(f"{leg['strike']:g}" for leg in legs if leg.get("side") == "BUY" and leg.get("strike"))
+         if any(leg.get("side") == "BUY" and leg.get("strike") for leg in legs) else "")
+    what = p.get("legsText") or " ".join(x for x in (strikes.strip("/"), str((legs[0] or {}).get("expiration") or "")[:10])
+                                         if x)
+    amount = p.get("entryAmount")
+    credit = p.get("entryCredit")
+    money = (f"{'crédito' if p.get('entryKind') == 'credit' else 'débito'} {_fmt(amount)}" if amount is not None else
+             f"crédito {_fmt(credit)}" if isinstance(credit, int | float) else "")
+    return " " + ", ".join(x for x in (what, money) if x) + "." if what or money else ""
+
+
+def _evaluation_alerts(rule: WatchRule, read, cache: dict, names: dict[str, str], known: set[str],
+                       now: datetime, problems: list[str]) -> list[Alert]:
+    """One alert per evaluation of the rule's instance newer than the rule (WS-0064). The rule stays active."""
+    path = EVALUATIONS.format(instance=rule.instance_id)
+    for p in (INSTANCES, path):
+        if p not in cache:
+            try:
+                cache[p] = read(p)
+            except Exception as exc:  # noqa: BLE001 - reported; the other rules still run
+                cache[p] = exc
+    if isinstance(cache[path], Exception):
+        problems.append(f"regla {rule.id}: {str(cache[path])[:160]}")
+        return []
+    payload = cache[path].get("items") if isinstance(cache[path], dict) else cache[path]
+    if not isinstance(payload, list):
+        problems.append(f"regla {rule.id}: GaleCore no dio las evaluaciones de {rule.instance_id[:8]}")
+        return []
+    if not names and isinstance(cache[INSTANCES], list):
+        names.update({i.get("instanceId"): i.get("specName") or "" for i in cache[INSTANCES] if isinstance(i, dict)})
+    name = names.get(rule.instance_id) or f"instancia {rule.instance_id[:8]}"
+    out = []
+    for ev in payload:
+        at = _when(ev.get("evaluatedAt")) if isinstance(ev, dict) else None
+        key = f"watch-eval:{rule.id}:{(ev or {}).get('evaluationId')}" if isinstance(ev, dict) else ""
+        if at is None or at <= rule.created_at or not ev.get("evaluationId") or key in known:
+            continue
+        passed = bool(ev.get("overallPass"))
+        sources = [path.split("?")[0]]
+        if passed:
+            entry, pos_path = "", POSITIONS.format(instance=rule.instance_id)
+            with contextlib.suppress(Exception):     # the evaluation is still reported, without the entry
+                if pos_path not in cache:
+                    cache[pos_path] = read(pos_path)
+                entry = _entry_text(cache[pos_path], at)
+                sources.append(pos_path)
+            motivo = f"{name} evaluó y entró." + entry
+        else:
+            gate = next((g for g in ev.get("gateResults") or [] if isinstance(g, dict) and g.get("status") != "PASS"), None)
+            why = (f": {gate.get('label') or gate.get('gateId')} {_fmt(gate['value'])} vs {_fmt(gate['threshold'])}"
+                   if gate and isinstance(gate.get("value"), int | float) and isinstance(gate.get("threshold"), int | float)
+                   else f": {gate.get('label') or gate.get('gateId')}" if gate else "")
+            motivo = f"{name} evaluó y no entró{why}."
+        alert = Alert(id=f"{now.date().isoformat()}-watch-eval-{rule.instance_id[:8]}-{ev['evaluationId'][:8]}"[:80],
+                      key=key, kind=AlertKind.WATCH, strategy=name, strategy_ref=None, instance_id=rule.instance_id,
+                      position_id=rule.id, detected_at=now, motivo=motivo,
+                      dato={"evaluation_id": ev["evaluationId"], "evaluated_at": ev.get("evaluatedAt"),
+                            "passed": "sí" if passed else "no", "symbol": ev.get("symbol")},
+                      regla=f"Pedido del owner: «{rule.words}» ({rule.created_at:%d/%m})",
+                      propuesta="Es informativo; la estrategia sigue su regla.",
+                      options=OPTIONS[AlertKind.WATCH], sources=sources)
+        out.append(alert.model_copy(update={"content_hash": compute_document_hash(alert.hashable_content())}))
+    return out
+
+
 def evaluate(kb: KnowledgeBase, read, now: datetime) -> tuple[list[Alert], list[str], int]:
     """Check every active rule once. Returns (alerts to write, problems, rules checked). One read per source."""
     met = _met(kb)
     active = [r for r in rules(kb) if status(kb, r, now, met) == "active"]
     cache: dict[str, object] = {}
     out, problems = [], []
+    from galecore_ai.application import supervisor
+    known = {a.key for a in supervisor.alerts(kb)}
+    names: dict[str, str] = {}
     for rule in active:
+        if rule.metric == WatchMetric.EVALUATION:    # fires per new evaluation, never ends (WS-0064)
+            out.extend(_evaluation_alerts(rule, read, cache, names, known, now, problems))
+            continue
         if rule.metric == WatchMetric.DATE:          # a reminder by date reads nothing (WS-0023)
             from galecore_ai.application.supervisor import NEW_YORK
             payload, path = None, "reloj"
@@ -271,7 +385,7 @@ def evaluate(kb: KnowledgeBase, read, now: datetime) -> tuple[list[Alert], list[
                 problems.append(f"regla {rule.id}: {str(payload)[:160]}")
                 continue
         if rule.metric == WatchMetric.DATE:
-            value = float(now.astimezone(NEW_YORK).strftime("%Y%m%d"))
+            value = float(now.astimezone(NEW_YORK).strftime("%Y%m%d%H%M" if rule.threshold > TIMED else "%Y%m%d"))
         elif rule.metric == WatchMetric.OPEN_POSITIONS:
             value = (float(sum(isinstance(p, dict) and p.get("status") == "OPEN" for p in payload))
                      if isinstance(payload, list) else None)

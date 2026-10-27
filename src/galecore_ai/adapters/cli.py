@@ -986,8 +986,13 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
                 on = _date.fromisoformat(args.on) if args.on else None
             except ValueError as exc:
                 raise KnowledgeError(f"--on {args.on!r}: a date such as 2026-10-23") from exc
-            rule = watch.remind(kb, words=args.text, prompt=args.prompt, on=on, instance_id=args.when_closed or "",
-                                decision=args.decision, host_model=args.host_model)
+            try:
+                at = _dt.fromisoformat(f"2000-01-01T{args.at}").time() if args.at else None
+            except ValueError as exc:
+                raise KnowledgeError(f"--at {args.at!r}: a time such as 13:50 (New York)") from exc
+            rule = watch.remind(kb, words=args.text, prompt=args.prompt, on=on, at=at,
+                                instance_id=args.when_closed or args.instance or "",
+                                on_evaluation=args.on_evaluation, decision=args.decision, host_model=args.host_model)
             _json_out({"status": "REMINDING", "rule": rule.id, "watches": watch.describe(rule),
                        "note": "El supervisor la revisa cada 5 minutos en la sesión regular y avisa una vez en el monitor."})
         elif c == "watches":
@@ -1581,6 +1586,10 @@ def build_parser() -> _JsonArgumentParser:
     when = p_sv_remind.add_mutually_exclusive_group(required=True)
     when.add_argument("--on", help="Date (YYYY-MM-DD, New York) to alert on")
     when.add_argument("--when-closed", dest="when_closed", help="Instance id: alert when it has no open position")
+    when.add_argument("--on-evaluation", dest="on_evaluation", action="store_true",
+                      help="Alert at every new evaluation of --instance (does not stop after the first)")
+    p_sv_remind.add_argument("--instance", help="Instance id for --on-evaluation")
+    p_sv_remind.add_argument("--at", help="HH:MM (New York) with --on: alert at that time that day")
     p_sv_remind.add_argument("--decision", default="", help="The decision it comes from (words or project ref)")
     p_sv_remind.add_argument("--text", required=True, help="The owner's words, verbatim")
     p_sv_remind.add_argument("--prompt", required=True, help="The owner's request")

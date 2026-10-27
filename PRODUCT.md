@@ -50,7 +50,10 @@ Pedidos que se resuelven con un comando, sin skill:
   o probar la llamada y `sources declare`.
 - **Avisos de un nivel** («avisame si SPY baja a 760») → `supervise watch --symbol SPY --below 760 [--metric
   price|gamma_zero|call_wall|put_wall|iv_rank] --text "<sus palabras>"`; vigila el supervisor, nunca un bucle propio.
-  Ambiguo: una pregunta. Avisa una vez en el monitor, en la rueda. `supervise watches` · `supervise unwatch <id>`. GEX
+  Por hora o evaluación, el mismo supervisor: «avisame a las 13:50 NY» → `supervise remind --on <AAAA-MM-DD> --at 13:50
+  --text "…" --prompt "…"`; «avisame cuando evalúe <estrategia>» → `supervise remind --on-evaluation --instance <id de
+  la instancia> --text "…" --prompt "…"` (un aviso por evaluación nueva: entró o no entró y por qué gate; no se
+  apaga solo, `unwatch`). Ambiguo: una pregunta. Avisa una vez en el monitor, en la rueda. `supervise watches` · `supervise unwatch <id>`. GEX
   neto, cruces entre dos números o noticias no están soportados: ofrecer lo más cercano o anotarlo.
 - **Agentes:** se crean con `capability_builder` (ficha, corrida real, dos «sí»); después `task status|history <id>` y
   `task pause|resume|set-frequency|cancel <id>` con sus palabras. Corren sólo skills de lectura: nunca aprueban,

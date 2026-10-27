@@ -66,6 +66,7 @@ def test_a_close_by_shadow_is_one_alert_with_its_data_and_never_repeats(kb, rese
     assert out["new"] == [alert.id] and alert.kind.value == "closed"
     assert alert.strategy_ref == f"strategy:{KEY}" and alert.dato["realized_pnl_usd"] == 23.0
     assert "TAKE_PROFIT" in alert.motivo and alert.options[0] == "conforme"
+    assert alert.motivo.endswith("Resultado neto: +23.00 USD, después de costos.")
     assert supervisor.scan(kb, reader(doc.spec_hash, [closed]), IN_SESSION + timedelta(minutes=5))["new"] == []
 
 
@@ -78,7 +79,8 @@ def test_a_stock_position_is_labelled_with_its_shares_not_a_zero(kb, research_re
     for pid, extra in (("aaaaaaaa-2", {"legsText": "BUY 10 AAPL"}), ("aaaaaaaa-3", {})):
         supervisor.scan(kb, reader(doc.spec_hash, [position(pid, legs=[leg], **closed, **extra)]), IN_SESSION)
     motivos = sorted(a.motivo for a in supervisor.alerts(kb))
-    assert motivos == ["SHADOW cerró 10 AAPL por METRIC_EXIT.", "SHADOW cerró BUY 10 AAPL por METRIC_EXIT."]
+    net = " Resultado neto: +50.00 USD, después de costos."
+    assert motivos == [f"SHADOW cerró 10 AAPL por METRIC_EXIT.{net}", f"SHADOW cerró BUY 10 AAPL por METRIC_EXIT.{net}"]
 
 
 def test_an_old_close_is_history_not_news(kb, research_ref):  # noqa: F811
@@ -222,6 +224,9 @@ def test_active_price_rules_are_published_and_the_monitor_can_delete_them(kb, re
     space.publish_agents(client, kb, None, now=IN_SESSION, supervise=read)
     piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
     assert {w["id"] for w in piece["watches"]} == {keep.id, gone.id} and "unwatch_errors" not in piece
+    assert all(w["label"] and w["label"].startswith("precio de SPY") for w in piece["watches"])
+    assert watch.describe(watch.add(kb, threshold=1188.5, **{**mk, "symbol": "NVDA"})) == "precio de NVDA ≤ 1.188,5"
+    assert watch._fmt_ar(222.29) == "222,29" and watch._fmt_ar(1188) == "1.188" and watch._fmt_ar(760.0) == "760"
     [w] = [w for w in piece["watches"] if w["id"] == gone.id]
     assert w["threshold"] == 700.0 and w["metric"] == "price" and w["condition"] == "below" and w["words"] == "w"
     request = {"unwatch": {gone.id: {"at": IN_SESSION.isoformat()}, "no-such-rule": {"at": "x"}}}

@@ -87,14 +87,16 @@ class WatchMetric(str, Enum):
     # threshold; OPEN_POSITIONS: open positions of one instance (GET /App/Runtime/Instances/{id}/Positions).
     DATE = "date"
     OPEN_POSITIONS = "open_positions"
+    # WS-0064 AC-6: one alert per new evaluation of a SHADOW instance (it does not stop after firing).
+    EVALUATION = "evaluation"
 
 
 METRIC_LABELS: dict[WatchMetric, str] = {
     WatchMetric.PRICE: "precio", WatchMetric.GAMMA_ZERO: "nivel gamma cero", WatchMetric.CALL_WALL: "muro de calls",
     WatchMetric.PUT_WALL: "muro de puts", WatchMetric.IV_RANK: "IV rank", WatchMetric.DATE: "fecha",
-    WatchMetric.OPEN_POSITIONS: "posiciones abiertas",
+    WatchMetric.OPEN_POSITIONS: "posiciones abiertas", WatchMetric.EVALUATION: "evaluación",
 }
-REMINDERS = {WatchMetric.DATE, WatchMetric.OPEN_POSITIONS}
+REMINDERS = {WatchMetric.DATE, WatchMetric.OPEN_POSITIONS, WatchMetric.EVALUATION}
 
 
 class WatchCondition(str, Enum):

@@ -192,8 +192,11 @@ def evaluate(position: dict, *, strategy: str, strategy_ref: str | None, spec: d
     out = []
     if position.get("status") == "CLOSED":
         reason = position.get("exitReason") or "sin motivo informado"
+        pnl = position.get("realizedPnl")      # GaleCore stores the net P&L (entry and exit order costs already out)
+        settled = " (liquidada al vencimiento con el cierre oficial)" if reason == "EXPIRATION" else ""
+        net = f" Resultado neto: {pnl:+.2f} USD, después de costos." if isinstance(pnl, int | float) else ""
         out.append({**base, "key": f"closed:{pid}", "kind": AlertKind.CLOSED,
-                    "motivo": f"SHADOW cerró {label} por {reason}.",
+                    "motivo": f"SHADOW cerró {label} por {reason}{settled}.{net}",
                     "dato": {"exit_reason": reason, "entry_credit": credit, "exit_debit": position.get("exitDebit"),
                              "realized_pnl_usd": position.get("realizedPnl"), "dte": position.get("currentDte"),
                              "exit_at": position.get("exitAt")},

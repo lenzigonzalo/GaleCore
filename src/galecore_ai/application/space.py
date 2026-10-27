@@ -298,7 +298,8 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
     lines += [f"- {a['motivo']} — {a['propuesta']}" for a in pending]
     met = watch._met(kb)
     watches = [{"id": r.id, "symbol": r.symbol, "metric": r.metric.value, "condition": r.condition.value,
-                "threshold": r.threshold, "words": r.words, "created_at": r.created_at.isoformat()}
+                "threshold": r.threshold, "words": r.words, "created_at": r.created_at.isoformat(),
+                "label": watch.describe(r)}
                for r in watch.rules(kb) if watch.status(kb, r, now, met=met) == "active"]   # newest first
     content = {
         "id": SUPERVISOR_KEY, "capability": "supervisor", "status": "active", "schedule": "cada 5 minutos",
