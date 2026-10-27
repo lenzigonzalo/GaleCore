@@ -6,10 +6,10 @@
  * navegador podría abrir una terminal en la PC. Usa el plan de Claude Code de la PC: no pasa ANTHROPIC_API_KEY ni
  * las variables de una sesión de Claude Code (si el servidor se lanzó desde una, `claude` creería estar anidado).
  *
- *   node tools/terminal/server.js          # :8770
+ *   node lab/server.js          # :8770
  *
  * GET  /folders                                 → dónde se puede abrir: GaleCore (el harness, por defecto), cada
- *                                                 estrategia y el workspace de desarrollo
+ *                                                 estrategia
  * WS   /pty?folder=<clave>&prompt=<texto>&cols=&rows=
  *      servidor → panel: la salida tal cual · panel → servidor: {"type":"input","data"} | {"type":"resize","cols","rows"}
  */
@@ -23,10 +23,11 @@ const { PROVIDERS, providerBinary, authCommand, authEnvironment, authStatus } = 
 const PORT = Number(process.env.GALECORE_TERMINAL_PORT || 8770);
 const ORIGINS = (process.env.GALECORE_TERMINAL_ORIGINS || 'http://localhost:3039,http://127.0.0.1:3039')
   .split(',').map(s => s.trim()).filter(Boolean);
-const WORKSPACE = path.resolve(__dirname, '..', '..');
-const STRATEGIES = path.join(WORKSPACE, 'knowledge', 'strategies');
-// El trader usa el harness (GaleCore-AI), nunca el workspace de desarrollo con sus hooks y skills (owner 10/10, WS-0023).
-const HARNESS = path.join(WORKSPACE, 'GaleCore-AI');
+const { knowledgeDir } = require('./knowledge-dir');
+const ROOT = path.resolve(__dirname, '..');
+const STRATEGIES = path.join(knowledgeDir(), 'strategies');
+// El trader usa el harness (ai/), sin hooks ni skills de desarrollo.
+const HARNESS = path.join(ROOT, 'ai');
 const DEFAULT_FOLDER = 'galecore';
 const HOSTS = [`127.0.0.1:${PORT}`, `localhost:${PORT}`];   // contra DNS rebinding: el nombre tiene que ser local
 const MAX_SESSIONS = 4;
@@ -47,8 +48,7 @@ function folders() {
     for (const d of fs.readdirSync(STRATEGIES, { withFileTypes: true })) {
       if (d.isDirectory()) list.push({ key: `strategy:${d.name}`, label: d.name, dir: path.join(STRATEGIES, d.name) });
     }
-  } catch { /* sin estrategias: quedan GaleCore y el workspace */ }
-  list.push({ key: 'workspace', label: 'Desarrollo (workspace)', dir: WORKSPACE });
+  } catch { /* sin estrategias: queda GaleCore */ }
   return list;
 }
 

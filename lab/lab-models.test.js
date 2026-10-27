@@ -10,7 +10,7 @@ const { createWorkspaces } = require('./lab-workspaces');
 function folder(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-lab-models-'));
   t.after(() => { assert.ok(path.resolve(dir).startsWith(path.resolve(os.tmpdir()) + path.sep + 'gc-lab-models-')); fs.rmSync(dir, { recursive:true, force:true }); });
-  fs.mkdirSync(path.join(dir, 'GaleCore-AI')); fs.writeFileSync(path.join(dir, 'GaleCore-AI', 'PRODUCT.md'), 'núcleo de test');
+  fs.mkdirSync(path.join(dir, 'ai')); fs.writeFileSync(path.join(dir, 'ai', 'PRODUCT.md'), 'núcleo de test');
   return dir;
 }
 async function route(service, method, url, body) {

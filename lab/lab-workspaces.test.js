@@ -14,7 +14,7 @@ test('claude: la narración junto a una consulta no entra al chat; la respuesta 
 
 test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el permiso al motor',async t=>{
  const {base,kb,local}=setup(t);const calls=[];const {EventEmitter}=require('events');
- fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo de test');
+ fs.mkdirSync(path.join(base,'ai'));fs.writeFileSync(path.join(base,'ai','PRODUCT.md'),'núcleo de test');
  // El contexto va por archivo (D-0014): se lee al lanzar el motor, porque se borra al terminar el turno.
  const codexHome=path.join(base,'codex');fs.mkdirSync(codexHome);const contexts=[];
  const spawnProcess=(bin,args)=>{calls.push(args);const f=args.includes('-p')&&bin==='codex'?path.join(codexHome,args[args.indexOf('-p')+1]+'.config.toml'):args[args.indexOf('--append-system-prompt-file')+1];contexts.push(fs.readFileSync(f,'utf8'));const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(){},end(){}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
@@ -43,7 +43,7 @@ test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el per
 });
 test('mapa de la idea: el Lab anota la página que tocó el turno y la sirve por secciones (WS-0039)',async t=>{
  const {base,kb,local}=setup(t);const {EventEmitter}=require('events');
- fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo');
+ fs.mkdirSync(path.join(base,'ai'));fs.writeFileSync(path.join(base,'ai','PRODUCT.md'),'núcleo');
  const mem=path.join(kb,'workspaces/personal/memory');
  fs.mkdirSync(mem,{recursive:true});fs.writeFileSync(path.join(mem,'mapa-vieja.md'),'# Vieja\n## Idea\nno\n');
  const old=new Date(Date.now()-60000);fs.utimesSync(path.join(mem,'mapa-vieja.md'),old,old);
@@ -138,7 +138,7 @@ test('el detalle de un paso no guarda secretos (revisión 19/10)',()=>{const c={
 
 test('varias conversaciones a la vez: el mismo proyecto y Cartera no se bloquean; el tope global y la propia conversación sí (WS-0057 J)',async t=>{
  const {base,kb,local}=setup(t);const {EventEmitter}=require('events');const procs=[];
- fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo de test');
+ fs.mkdirSync(path.join(base,'ai'));fs.writeFileSync(path.join(base,'ai','PRODUCT.md'),'núcleo de test');
  const spawnProcess=()=>{const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(){},end(){}};proc.kill=()=>{};procs.push(proc);return proc;};
  const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude'},environment:()=>({}),legacyProjects:()=>[{id:'portfolio',label:'Cartera',dir:kb,relative:'.'}],legacySessions:()=>[{id:'s',state:'running',project:'portfolio'}],spawnProcess});
  const mk=async project=>(await route(service,'POST','/chats',{project,provider:'claude'})).value;
@@ -153,8 +153,8 @@ test('varias conversaciones a la vez: el mismo proyecto y Cartera no se bloquean
 
 test('WS-0059: el contexto común conserva bloques útiles y avisa fallos sin copiar stderr',async t=>{
  const {base,kb,local}=setup(t);const {EventEmitter}=require('events');
- fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI/PRODUCT.md'),'núcleo único');
- const dir=path.join(base,'tools/terminal/context');fs.mkdirSync(dir,{recursive:true});
+ fs.mkdirSync(path.join(base,'ai'));fs.writeFileSync(path.join(base,'ai/PRODUCT.md'),'núcleo único');
+ const dir=path.join(base,'lab/context');fs.mkdirSync(dir,{recursive:true});
  fs.writeFileSync(path.join(dir,'session_context.py'),"import sys\nprint('[reloj] fixture')\nprint('private-token', file=sys.stderr)\nsys.exit(1)\n");
  fs.writeFileSync(path.join(dir,'match_request.py'),"print('[method] fixture')\n");
  const contexts=[];
@@ -184,7 +184,7 @@ test('WS-0059: el contexto común conserva bloques útiles y avisa fallos sin co
 
 test('permisos en el chat como en el CLI: el pedido queda a la vista, el trader responde y puede pasar a Auto en medio (owner 24/10)',async t=>{
  const {base,kb,local}=setup(t);const {EventEmitter}=require('events');let proc;const sent=[];
- fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo de test');
+ fs.mkdirSync(path.join(base,'ai'));fs.writeFileSync(path.join(base,'ai','PRODUCT.md'),'núcleo de test');
  const spawnProcess=()=>{proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(l){sent.push(JSON.parse(l));},end(){this.writableEnded=true;}};proc.kill=()=>{};return proc;};
  const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude'},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
  const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
@@ -209,9 +209,9 @@ test('permisos en el chat como en el CLI: el pedido queda a la vista, el trader 
  c=(await route(service,'GET','/chats/'+chat.id)).value;assert.equal(c.error,null);assert.equal(c.state,'idle');assert.equal(c.mode,'auto');
 });
 
-test('el contexto pasa la ruta exacta del mapa existente y la skill de diseño canónica, nunca de .worktrees',async t=>{
+test('el contexto pasa la ruta exacta del mapa existente y la skill de diseño de ai/config',async t=>{
  const {base,kb,local}=setup(t);const {EventEmitter}=require('events');
- fs.mkdirSync(path.join(base,'GaleCore-AI'));fs.writeFileSync(path.join(base,'GaleCore-AI','PRODUCT.md'),'núcleo');
+ fs.mkdirSync(path.join(base,'ai'));fs.writeFileSync(path.join(base,'ai','PRODUCT.md'),'núcleo');
  const p0=path.join(kb,'workspaces/personal');fs.mkdirSync(path.join(p0,'memory'),{recursive:true});
  const contexts=[];
  const spawnProcess=(bin,args)=>{const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(){},end(){}};proc.kill=()=>{};
@@ -222,9 +222,9 @@ test('el contexto pasa la ruta exacta del mapa existente y la skill de diseño c
  await route(service,'POST','/chats/'+chat.id+'/messages',{text:'seguimos con la idea'});
  await new Promise(r=>setTimeout(r,300));
  const ctx=contexts.at(-1);
- assert.ok(ctx.includes(path.join(base,'GaleCore-AI','config','skills','strategy-design','SKILL.md')));
+ assert.ok(ctx.includes(path.join(base,'ai','config','skills','strategy-design','SKILL.md')));
  assert.ok(ctx.includes(path.join(p0,'memory','mapa-19cfc2d9.md')));
- assert.ok(!ctx.includes(path.join('tools','terminal','skills','strategy-design')));
+ assert.ok(!ctx.includes('.worktrees'));
 });
 
 test('un proyecto puede declarar su estrategia con otro nombre y mark_strategy conserva el vínculo (owner 26/10)',async t=>{const {kb,service}=setup(t);await route(service,'POST','/workspaces',{label:'Sandwich SPY',type:'strategy'});const dir=path.join(kb,'strategies','sandwich_spy'),file=path.join(dir,'workspace.json');const meta=JSON.parse(fs.readFileSync(file,'utf8'));fs.writeFileSync(file,JSON.stringify({...meta,strategyName:'sandwich_spx_0dte_1345'}));const linked=(await route(service,'GET','/workspaces')).value.projects.find(x=>x.id==='sandwich_spy');assert.equal(linked.strategyName,'sandwich_spx_0dte_1345');require('child_process').execFileSync('python',[path.join(__dirname,'mark_strategy.py')],{cwd:dir,encoding:'utf8'});assert.equal(JSON.parse(fs.readFileSync(file,'utf8')).strategyName,'sandwich_spx_0dte_1345');fs.writeFileSync(file,JSON.stringify({...meta,strategyName:'../fuera'}));assert.equal((await route(service,'GET','/workspaces')).value.projects.find(x=>x.id==='sandwich_spy').strategyName,'sandwich_spy');});

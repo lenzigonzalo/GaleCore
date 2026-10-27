@@ -144,7 +144,7 @@ function consumeEvent(chat, event, provider) {
     if(event.type === 'result' && event.is_error) chat.error = limited ? limitText(chat.limitResetsAt) : 'Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
     // Con el Lab como host los permisos se preguntan en el chat; lo que el trader negó no es un error.
     const refused = (event.permission_denials || []).filter(d => !(chat.refused || []).includes(d.tool_use_id));
-    // Owner 27/10: una regla del Lab (p. ej. no escribir en GaleCore-AI) frena un paso aunque esté en Auto; si el turno
+    // Owner 27/10: una regla del Lab (p. ej. no escribir en ai/) frena un paso aunque esté en Auto; si el turno
     // terminó, no es una falla: aviso de una línea con el paso, sin marcar el chat como fallido.
     if(event.type === 'result' && !event.is_error && refused.length) { const d = refused[0], detail = stepDetail(d.tool_name, d.tool_input); chat.notice = 'Un paso quedó sin hacer porque el Lab no lo permite' + (detail ? ' («' + detail + '»)' : '') + '; siguió por otro lado.'; }
   }
@@ -152,8 +152,6 @@ function consumeEvent(chat, event, provider) {
 // Mapa de la idea (WS-0039): una página memory/mapa-<tema>.md que el agente reescribe en el turno. El Lab sólo anota
 // cuál tocó cada chat y la sirve separada en secciones; no hay otra llamada al modelo.
 const MAPA=/^mapa-[\w-]+\.md$/;
-// Si el Lab corre desde un worktree, la raíz canónica es la que lo contiene (GaleCore-AI/config/skills es una sola).
-function canonicalRoot(root){const parts=path.normalize(root).split(path.sep),i=parts.indexOf('.worktrees');return i<0?root:parts.slice(0,i).join(path.sep);}
 function latestMapa(dir,since){
   const mem=path.join(dir,'memory');if(!fs.existsSync(mem))return null;
   const found=fs.readdirSync(mem).filter(f=>MAPA.test(f)).map(f=>({f,t:fs.statSync(path.join(mem,f)).mtimeMs})).filter(x=>x.t>=since).sort((a,b)=>b.t-a.t)[0];
@@ -278,14 +276,14 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(!fs.realpathSync(path.dirname(dir)).startsWith(fs.realpathSync(kb)+path.sep))throw fail('Carpeta fuera del conocimiento local.',403);
     fs.mkdirSync(dir);
     fs.writeFileSync(path.join(dir,'README.md'),'# '+label+'\n\nWorkspace de '+(type==='strategy'?'estrategia':type==='personal'?'trabajo personal':'análisis')+'.\n\nLos resultados y memorias se guardan acá. Las conversaciones permanecen en el historial local del Lab.\n',{flag:'wx'});
-    fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y memory/README.md (el criterio vigente, por tema) y recuperá antecedentes antes de preguntar.\nUsá GaleCore-AI para memoria canónica y GaleCore para datos/cálculos financieros.\n'+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
+    fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y memory/README.md (el criterio vigente, por tema) y recuperá antecedentes antes de preguntar.\nUsá ai/ para memoria canónica y GaleCore (app/) para datos/cálculos financieros.\n'+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
     fs.mkdirSync(path.join(dir,'memory'),{recursive:true});if(type!=='personal')fs.writeFileSync(path.join(dir,'memory','README.md'),'# Memoria de '+label+'\n\nCriterio vigente del proyecto, una página por tema. Índice:\n\n',{flag:'wx'});fs.mkdirSync(path.join(dir,'files'),{recursive:true});
     const p={id:slug,label,type,relative,strategyName:type==='strategy'?slug:null};fs.writeFileSync(path.join(dir,'workspace.json'),JSON.stringify(p,null,2)+'\n',{flag:'wx'});registry.push(p);atomic(metadata,registry);return p;
   }
   // Un workspace personal explícito y separado del conocimiento financiero compartido.
   if(!listProjects().some(p=>p.id==='personal'))createProject({label:'Personal',type:'personal'});
   const publicProject=({dir,...p})=>p;
-  // Las conversaciones que abre tools/caso.py (origin «prueba») no se listan: el trader ve sólo las suyas.
+  // Las conversaciones de prueba (origin «prueba») no se listan: el trader ve sólo las suyas.
   function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.origin!=='prueba').map(({messages,...c})=>({...c,messageCount:messages.length}));}
   // Al abrir una conversación nueva en un proyecto, el final de la anterior del mismo proyecto (ya guardada por el Lab):
   // retomar sin depender de que el modelo haya guardado (WS-0029 H8). No genera datos nuevos.
@@ -295,12 +293,12 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const tail=prev.messages.slice(-4).map(m=>(m.role==='user'?'Trader: ':'Respuesta: ')+m.text).join('\n\n').slice(-4000);
     return 'Final de la conversación anterior de este proyecto («'+prev.title+'»), para retomar sin preguntar (lo vigente está en memory/ y en los registros):\n'+tail;
   }
-  // Los scripts de contexto del producto (tools/terminal/context) los corre el Lab, no el motor (D-0014). Asíncrono para
+  // Los scripts de contexto del producto (lab/context) los corre el Lab, no el motor (D-0014). Asíncrono para
   // no frenar el servidor; si falla o tarda más de un minuto, avisa sin perder los otros bloques (WS-0059).
   function script(name,input){
     const label={'session_context.py':'hechos del momento','match_request.py':'capacidad del pedido'}[name];
     const missing=label?'['+label+'] contexto no disponible: falló su preparación.':'';
-    const file=path.join(root,'tools','terminal','context',name);
+    const file=path.join(root,'lab','context',name);
     if(!fs.existsSync(file))return Promise.resolve(missing);
     return new Promise(done=>{
       let out='',timedOut=false;const proc=spawn('python',[file],{cwd:input.cwd,env:{...environment(),GALECORE_KNOWLEDGE_DIR:kb},windowsHide:true});
@@ -347,26 +345,26 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()};chat.messages.push(ask);
     if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
     chat.state='running';chat.error=null;chat.notice=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
-    const skill=path.join(root,'tools','terminal','skills','lab-strategy-bootstrap','SKILL.md');
-    // Rutas canónicas: nunca dentro de .worktrees/ (puede haber copias viejas); el método de diseño es una sola copia.
-    const designSkill=path.join(canonicalRoot(root),'GaleCore-AI','config','skills','strategy-design','SKILL.md');
+    const skill=path.join(root,'lab','skills','lab-strategy-bootstrap','SKILL.md');
+    // El método de diseño es una sola copia, en ai/config/skills.
+    const designSkill=path.join(root,'ai','config','skills','strategy-design','SKILL.md');
     let existingMapa=chat.mapa||null;if(!existingMapa){try{existingMapa=latestMapa(p.dir,0);}catch{ existingMapa=null; }}
     // El contexto del turno, igual para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el
     // proveedor ni el modelo»; Personal sin filtro). Capas (D-0012, D-0014): final de la conversación anterior
     // (estrategia), núcleo PRODUCT.md, proyecto, hechos del momento y capacidad del pedido. Las reglas del entorno
     // (knowledge/AGENTS.md) y las del proyecto (su AGENTS.md) las lee cada motor solo desde la carpeta.
-    const product=fs.readFileSync(path.join(root,'GaleCore-AI','PRODUCT.md'),'utf8');
+    const product=fs.readFileSync(path.join(root,'ai','PRODUCT.md'),'utf8');
     const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra ni la tomes de .worktrees/).'+(p.type==='strategy'||p.type==='personal'?'':' Si la conversación va hacia una estrategia, proponé una sola vez «¿armamos esta estrategia acá?»; con el sí, corré python "'+path.join(root,'tools','terminal','mark_strategy.py')+'" desde esta carpeta (activa el mapa de estrategia y su seguimiento) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+(p.type==='strategy'
+    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.type==='strategy'||p.type==='personal'?'':' Si la conversación va hacia una estrategia, proponé una sola vez «¿armamos esta estrategia acá?»; con el sí, corré python "'+path.join(root,'lab','mark_strategy.py')+'" desde esta carpeta (activa el mapa de estrategia y su seguimiento) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+(p.type==='strategy'
       // Owner 17/10: el mapa es el diseño que se va armando; se reescribe en cada turno con el formato vigente (también
       // si el de memory/ tiene otro formato) y la respuesta cierra proponiendo la próxima pieza del diseño.
       ?' Antes de responder, reescribí el mapa del proyecto ('+(existingMapa?'el que ya existe es '+path.join(p.dir,existingMapa)+' (ruta exacta, no la adivines)':'todavía no hay: creá '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md'))+') con el formato de «Mapa de la idea» (en el método de ideas y estrategias del contexto), aunque nada haya cambiado: pasá lo que ya estaba a sus 8 partes.'
-      :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea», '+path.join(root,'GaleCore-AI','config','skills','strategy-design','method.md')+') en '+path.join(p.dir,existingMapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
+      :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea», '+path.join(root,'ai','config','skills','strategy-design','method.md')+') en '+path.join(p.dir,existingMapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
     function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
-      ask.context={facts,asked};saveChat(chat);  // lo mide tools/caso.py, sea cual sea el motor
+      ask.context={facts,asked};saveChat(chat);  // lo mide el arnés de pruebas, sea cual sea el motor
       const context=[resume,product,here,facts,asked].filter(Boolean).join('\n\n');
       const engine=engineArgs(chat,p,context,auto);job.file=engine.file;
       const proc=job.proc=spawnProcess(binaries[chat.provider],engine.args,{cwd:p.dir,env:{...environment(),GALECORE_HOST_PROVIDER:chat.provider||'',GALECORE_HOST_MODEL:chat.model||'',...(chat.provider==='codex'?{}:{BASH_DEFAULT_TIMEOUT_MS:'300000',BASH_MAX_TIMEOUT_MS:'600000'})},windowsHide:true,stdio:['pipe','pipe','pipe']});

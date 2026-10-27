@@ -1,7 +1,7 @@
 /**
  * Lab local: CLI de suscripción, proyectos reales y sesiones desacopladas del navegador.
  * Sólo loopback y orígenes locales explícitos. NO es un servicio multiusuario alojado.
- * node tools/terminal/lab-server.js
+ * node lab/lab-server.js
  */
 const fs = require('fs');
 const path = require('path');
@@ -12,8 +12,9 @@ const { execFile, execFileSync } = require('child_process');
 const pty = require('@lydell/node-pty');
 const { WebSocketServer } = require('ws');
 
-const ROOT = path.resolve(__dirname, '../..');
-const KB = path.join(ROOT, 'knowledge');
+const { ensureKnowledgeDir } = require('./knowledge-dir');
+const ROOT = path.resolve(__dirname, '..');
+const KB = ensureKnowledgeDir();
 const PORT = Number(process.env.GALECORE_LAB_PORT || 8771);
 const LOCAL = path.join(__dirname, '.local');
 const STORE = path.join(LOCAL, 'lab-sessions.json');
@@ -76,12 +77,12 @@ function instructions(project) {
   return [
     'Esta sesión pertenece a GaleCore Lab: trabajo real del trader, no desarrollo del software ni continuación del ACTIVE_WORK_ITEM.',
     'Proyecto seleccionado: ' + project.id + '. Workspace del producto: ' + ROOT + '.',
-    'Al recibir el primer pedido, leé ' + path.join(ROOT, 'GaleCore-AI', 'CLAUDE.md') + ' y consultá antecedentes con las herramientas de GaleCore-AI.',
+    'Al recibir el primer pedido, leé ' + path.join(ROOT, 'ai', 'CLAUDE.md') + ' y consultá antecedentes con las herramientas del harness (ai/).',
     'Usá python -B -m galecore_ai.adapters.cli catalog --match con el pedido y kb search para recuperar contexto. Para estrategias existentes, project show strategy:' + project.id + '; para cartera, project show portfolio. Un borrador nuevo todavía no tiene registro canónico.',
-    'PYTHONPATH y GALECORE_KNOWLEDGE_DIR ya están definidos. Las capacidades y su contrato están en GaleCore-AI/docs/HOST-REFERENCE.md.',
+    'PYTHONPATH y GALECORE_KNOWLEDGE_DIR ya están definidos. Las capacidades y su contrato están en ai/docs/HOST-REFERENCE.md.',
     'Guardá investigaciones, decisiones y pendientes mediante research/project/feedback u otras herramientas canónicas; no edites registros con hashes a mano.',
     'Para pasar contenido por stdin, escribí el JSON en un archivo de este proyecto (files/) y corré el comando con `< files/<archivo>.json`; sin cd, heredocs ni pipes.',
-    'Después de un hito útil, guardá su evidencia y próximos pasos con las herramientas de GaleCore-AI. No hagas commit: el guardado alcanza (el commit de ' + KB + ' lo hace el mantenimiento).',
+    'Después de un hito útil, guardá su evidencia y próximos pasos con las herramientas del harness (ai/). No hagas commit: el guardado alcanza (el commit de ' + KB + ' lo hace el mantenimiento).',
     'No uses git add . ni incluyas cambios ajenos. No pushees. No guardes secretos ni transcripciones completas en Git. No inventes evidencia ni aprobación.',
     'Corto y sin códigos internos. Si guardaste algo, una sola línea al final («Guardado: …»); si no, nada.',
     'Los datos y cálculos financieros provienen de GaleCore. Nunca uses los mocks del front. No hagas órdenes LIVE ni cambios en producción.',
@@ -91,7 +92,7 @@ function instructions(project) {
 }
 function environment() {
   const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor',
-    PYTHONPATH: path.join(ROOT, 'GaleCore-AI', 'src'), GALECORE_KNOWLEDGE_DIR: KB };
+    PYTHONPATH: path.join(ROOT, 'ai', 'src'), GALECORE_KNOWLEDGE_DIR: KB };
   for (const k of Object.keys(env)) {
     if (['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'ANTHROPIC_BASE_URL', 'CLAUDECODE'].includes(k)) delete env[k];
     if (k.startsWith('CLAUDE_CODE_') && k !== 'CLAUDE_CODE_OAUTH_TOKEN') delete env[k];

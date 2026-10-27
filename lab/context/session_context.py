@@ -1,6 +1,6 @@
 """Contexto del momento para cada turno del Lab: reloj, calendario, mapa de GaleCore y contexto del trader.
 
-Lo corre el Lab antes de cada turno, para cualquier motor (D-0014). Lo estable (`GaleCore-AI/PRODUCT.md`) va aparte;
+Lo corre el Lab antes de cada turno, para cualquier motor (D-0014). Lo estable (`ai/PRODUCT.md`) va aparte;
 acá sólo lo que cambia, con tope de diseño de 6.000 caracteres (D-0012).
 """
 import datetime

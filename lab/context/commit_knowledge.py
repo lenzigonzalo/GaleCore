@@ -6,8 +6,7 @@ import os
 import subprocess
 import sys
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
-KB = os.environ.get("GALECORE_KNOWLEDGE_DIR") or os.path.join(ROOT, "knowledge")
+KB = os.environ.get("GALECORE_KNOWLEDGE_DIR") or os.path.join(os.path.expanduser("~"), "GaleCore-datos", "knowledge")
 
 
 def git(*args):

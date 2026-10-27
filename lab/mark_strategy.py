@@ -2,7 +2,7 @@
 
 Lo corre el motor, desde la carpeta del proyecto, cuando el trader acepta armar la estrategia: cambia el tipo en
 workspace.json y desde ahí el Lab activa el mapa de estrategia, «¿dónde quedamos?» y «Ver resultados». No aprueba ni
-despliega nada. Uso: python <raíz>/tools/terminal/mark_strategy.py [nombre-de-la-estrategia]
+despliega nada. Uso: python <raíz>/lab/mark_strategy.py [nombre-de-la-estrategia]
 
 Con un nombre, el proyecto queda vinculado a esa estrategia cuando se guardó con otro nombre que el del proyecto
 (p. ej. el proyecto nació como SPY y la estrategia quedó en SPX): así Estrategias no los muestra como dos.
