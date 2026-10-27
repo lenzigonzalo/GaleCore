@@ -21,8 +21,13 @@ function ensureKnowledgeDir(dir = knowledgeDir()) {
   const git = (...args) => execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore', windowsHide: true, timeout: 20000 });
   try {
     git('init', '-q', '-b', 'main');
+    // Si la PC no tiene identidad de git, el commit automático de cada turno fallaría: se fija una local al repo de datos.
+    for (const [key, value] of [['user.name', 'GaleCore'], ['user.email', 'galecore@localhost']]) {
+      try { if (!execFileSync('git', ['-C', dir, 'config', key], { encoding: 'utf8', windowsHide: true }).trim()) throw new Error(); }
+      catch { git('config', key, value); }
+    }
     git('add', '-A');
-    git('-c', 'user.name=GaleCore', '-c', 'user.email=galecore@localhost', 'commit', '-q', '-m', 'plantilla inicial');
+    git('commit', '-q', '-m', 'plantilla inicial');
   } catch { /* sin git: la carpeta funciona igual; el Lab no la versiona hasta que haya git */ }
   return dir;
 }
