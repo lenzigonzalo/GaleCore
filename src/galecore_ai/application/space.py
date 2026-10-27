@@ -277,15 +277,17 @@ ALERTS_SHOWN = 20
 
 
 def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, str] | None = None,
-                     now: datetime | None = None) -> dict:
+                     now: datetime | None = None, unwatch_errors: dict[str, str] | None = None) -> dict:
     """The supervisor (WS-0007) as an agent piece: its last pass and the latest alerts with their decision.
 
     The monitor sounds for an alert it has not seen and shows its options; the owner's answer comes back in
     ``responses`` (alert id -> {choice, words, expected, review_by, at}) and `apply_responses` records it.
     ``analyses`` carries the stored analyses of the shown alerts (WS-0008); «Analizá este aviso» opens Claude Code in
     the monitor since P1-01c, so nothing comes back from the button.
+    ``watches`` lists the active price rules (a price alert is not an agent; the pass just evaluates it) so the monitor
+    draws them; deleting one comes back in ``unwatch`` (rule id -> {at}) and `apply_unwatch` cancels it.
     """
-    from galecore_ai.application import alert_analysis
+    from galecore_ai.application import alert_analysis, watch
     from galecore_ai.application import supervisor as sv
 
     shown = sv.view(kb, ALERTS_SHOWN, today=(now or datetime.now(UTC)).astimezone(sv.NEW_YORK).date(), today_only=True)
@@ -294,10 +296,14 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
     failed = "error" in scan or bool(scan.get("problems"))
     lines = [f"**{len(pending)} aviso(s) para decidir.**" if pending else "Nada para decidir.", ""]
     lines += [f"- {a['motivo']} — {a['propuesta']}" for a in pending]
+    met = watch._met(kb)
+    watches = [{"id": r.id, "symbol": r.symbol, "metric": r.metric.value, "condition": r.condition.value,
+                "threshold": r.threshold, "words": r.words, "created_at": r.created_at.isoformat()}
+               for r in watch.rules(kb) if watch.status(kb, r, now, met=met) == "active"]   # newest first
     content = {
         "id": SUPERVISOR_KEY, "capability": "supervisor", "status": "active", "schedule": "cada 5 minutos",
         "strategy": None,
-        "objective": "Vigilar las reglas de lo abierto en SHADOW (stop, cierres, precio, límite) y guardar tus decisiones",
+        "objective": "Vigilar tus avisos de precio y las reglas de lo abierto en SHADOW (stop, cierres, precio, límite) y guardar tus decisiones",
         "state": "FAILED" if failed else "CURRENT",
         "state_detail": scan.get("error") or ("; ".join(scan["problems"]) if scan.get("problems") else None),
         "next_expected_at": None,
@@ -306,10 +312,11 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
                       + (f"; sin leer: {'; '.join(scan['problems'])}" if scan.get("problems") else "")),
                      "invoked_by": "espacio-agentes", "failed": failed},
         "runs": 0, "findings": "\n".join(lines), "result_ref": None,
-        "alerts": shown, "analyses": analyses,
+        "alerts": shown, "analyses": analyses, "watches": watches,
         **({"response_errors": response_errors} if response_errors else {}),
+        **({"unwatch_errors": unwatch_errors} if unwatch_errors else {}),
     }
-    return {"kind": "agent", "key": SUPERVISOR_KEY, "title": "Supervisor de SHADOW (avisos y decisiones)",
+    return {"kind": "agent", "key": SUPERVISOR_KEY, "title": "Avisos y supervisión de estrategias",
             "content": json.dumps(content, ensure_ascii=False), "format": "json", "visibility": "private"}
 
 
@@ -334,6 +341,25 @@ def apply_responses(kb: KnowledgeBase, content: dict, user: str | None) -> tuple
     return done, errors
 
 
+def apply_unwatch(kb: KnowledgeBase, content: dict, user: str | None) -> dict[str, str]:
+    """Cancel the price rules the owner deleted in the monitor; return rule id -> why it failed (gone = idempotent)."""
+    from galecore_ai.application import watch
+
+    errors = {}
+    met = watch._met(kb)
+    active = {r.id for r in watch.rules(kb) if watch.status(kb, r, met=met) == "active"}
+    for rule_id, r in (content.get("unwatch") or {}).items():
+        if rule_id not in active:
+            continue
+        at = r.get("at", "sin hora") if isinstance(r, dict) else "sin hora"
+        try:
+            watch.cancel(kb, rule_id, words="borrado desde el gráfico",
+                         prompt=f"Borrado desde el monitor por {user} ({at})")
+        except KnowledgeError as exc:
+            errors[rule_id] = str(exc)[:300]
+    return errors
+
+
 def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datetime | None = None,
                    supervise=None) -> dict:
     """Apply the monitor's requests, then publish every agent's state (only the ones that changed are written).
@@ -356,15 +382,16 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
         at = (now or datetime.now(UTC)).isoformat()
         try:
             responses, errors = apply_responses(kb, mine, client.user)
+            unwatch_errors = apply_unwatch(kb, mine, client.user)
             try:
                 scan = sv.scan(kb, supervise, now)
             except sv.SupervisorError as exc:
                 scan = {"at": at, "error": str(exc)}
-            pieces.append(supervisor_piece(kb, scan, errors, now))
+            pieces.append(supervisor_piece(kb, scan, errors, now, unwatch_errors))
         except (KnowledgeError, ValueError) as exc:   # a damaged alert or log: the other agents still publish
             responses = [{"result": "refused", "error": str(exc)[:300]}]
-            keep = {k: mine[k] for k in ("alerts", "responses", "analyses") if k in mine}
-            pieces.append({"kind": "agent", "key": SUPERVISOR_KEY, "title": "Supervisor de SHADOW (avisos y decisiones)",
+            keep = {k: mine[k] for k in ("alerts", "responses", "analyses", "unwatch") if k in mine}
+            pieces.append({"kind": "agent", "key": SUPERVISOR_KEY, "title": "Avisos y supervisión de estrategias",
                            "format": "json", "visibility": "private",
                            "content": json.dumps({**mine, **keep, "id": SUPERVISOR_KEY, "capability": "supervisor",
                                                   "status": "active", "state": "FAILED",

@@ -202,6 +202,37 @@ def test_the_monitor_shows_the_alert_and_its_answer_becomes_a_decision(kb, resea
     assert "Nada para decidir" in piece["findings"]
 
 
+def test_active_price_rules_are_published_and_the_monitor_can_delete_them(kb, research_ref, galecore):  # noqa: F811
+    from galecore_ai.application import space, watch
+
+    doc, _ = stored(kb, research_ref)
+    mk = {"symbol": "SPY", "metric": "price", "condition": "below", "words": "w", "prompt": "p", "now": NOW}
+    keep = watch.add(kb, threshold=760.0, **mk)
+    gone = watch.add(kb, threshold=700.0, **mk)
+    old = watch.add(kb, threshold=650.0, **mk)
+    watch.cancel(kb, old.id, words="x", prompt="y")
+    inner = reader(doc.spec_hash, [])
+
+    def read(path):
+        if path.startswith("/Data/Tastytrade/MarketData/Quote"):
+            return {"data": [{"eventType": "Quote", "eventSymbol": "SPY", "midPrice": 777.8}]}
+        return inner(path)
+
+    fake, client = galecore
+    space.publish_agents(client, kb, None, now=IN_SESSION, supervise=read)
+    piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
+    assert {w["id"] for w in piece["watches"]} == {keep.id, gone.id} and "unwatch_errors" not in piece
+    [w] = [w for w in piece["watches"] if w["id"] == gone.id]
+    assert w["threshold"] == 700.0 and w["metric"] == "price" and w["condition"] == "below" and w["words"] == "w"
+    request = {"unwatch": {gone.id: {"at": IN_SESSION.isoformat()}, "no-such-rule": {"at": "x"}}}
+    for _ in range(2):                              # the second pass finds it already cancelled: nothing breaks
+        client.put("agent", "supervisor", title="Supervisor", fmt="json", content=json.dumps({**piece, **request}))
+        space.publish_agents(client, kb, None, now=IN_SESSION, supervise=read)
+    piece = json.loads(fake.rows[("agent", "supervisor")]["content"])
+    assert [w["id"] for w in piece["watches"]] == [keep.id] and "unwatch_errors" not in piece
+    assert watch.status(kb, next(r for r in watch.rules(kb) if r.id == gone.id)) == "cancelled"
+
+
 def test_a_refused_answer_is_shown_and_galecore_down_is_a_failure(kb, research_ref, galecore):  # noqa: F811
     from galecore_ai.application import space
 
