@@ -47,6 +47,8 @@ SOURCES: dict[WatchMetric, str] = {
 }
 POSITIONS = "/App/Runtime/Instances/{instance}/Positions"
 EVALUATIONS = "/App/Runtime/Instances/{instance}/Evaluations?limit=20"   # newest 20, oldest first; a pass is 5 min
+EVENTS = ("/App/Runtime/Instances/{instance}/Events?limit=100&types=POSITION_OPENED,GATES_NOT_PASSED,CANDIDATE_NOT_VIABLE,"
+          "ENTRY_SKIPPED,RISK_CHECK_FAILED,ENTRY_ABORTED,METRICS_NO_DATA")   # what the runtime did after an evaluation
 INSTANCES = "/App/Runtime/Instances"
 TIMED = 99_999_999       # a DATE threshold above YYYYMMDD carries a time (YYYYMMDDHHMM)
 GEX_FIELDS = {WatchMetric.GAMMA_ZERO: "gammaZeroLevel", WatchMetric.CALL_WALL: "callWall",
@@ -334,13 +336,24 @@ def _evaluation_alerts(rule: WatchRule, read, cache: dict, names: dict[str, str]
         passed = bool(ev.get("overallPass"))
         sources = [path.split("?")[0]]
         if passed:
-            entry, pos_path = "", POSITIONS.format(instance=rule.instance_id)
+            entry, pos_path, ev_path, opened, dropped = "", POSITIONS.format(instance=rule.instance_id),                 EVENTS.format(instance=rule.instance_id), False, ""
             with contextlib.suppress(Exception):     # the evaluation is still reported, without the entry
                 if pos_path not in cache:
                     cache[pos_path] = read(pos_path)
                 entry = _entry_text(cache[pos_path], at)
                 sources.append(pos_path)
-            motivo = f"{name} evaluó y entró." + entry
+            with contextlib.suppress(Exception):     # gates PASS is not an entry: the runtime may drop the candidate
+                if ev_path not in cache:
+                    cache[ev_path] = read(ev_path)
+                same = [e for e in cache[ev_path] if isinstance(e, dict) and _when(e.get("timestamp")) == at]
+                opened = any(e.get("eventType") == "POSITION_OPENED" for e in same)
+                drop = next((e for e in same if e.get("eventType") != "POSITION_OPENED"), None)
+                pl = (drop or {}).get("payload") or {}
+                dropped = str(pl.get("reason") or "; ".join(map(str, pl.get("errors") or [])) or (drop or {}).get("eventType") or "")
+                sources.append(ev_path.split("?")[0])
+            motivo = (f"{name} evaluó y entró." + entry if entry or opened else
+                      f"{name} evaluó y no entró: {dropped.rstrip('.')}." if dropped else
+                      f"{name} evaluó: pasó los filtros; GaleCore no muestra entrada.")
         else:
             gate = next((g for g in ev.get("gateResults") or [] if isinstance(g, dict) and g.get("status") != "PASS"), None)
             why = (f": {gate.get('label') or gate.get('gateId')} {_fmt(gate['value'])} vs {_fmt(gate['threshold'])}"
