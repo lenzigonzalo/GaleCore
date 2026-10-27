@@ -336,7 +336,8 @@ def _evaluation_alerts(rule: WatchRule, read, cache: dict, names: dict[str, str]
         passed = bool(ev.get("overallPass"))
         sources = [path.split("?")[0]]
         if passed:
-            entry, pos_path, ev_path, opened, dropped = "", POSITIONS.format(instance=rule.instance_id),                 EVENTS.format(instance=rule.instance_id), False, ""
+            entry, opened, dropped = "", False, ""
+            pos_path, ev_path = POSITIONS.format(instance=rule.instance_id), EVENTS.format(instance=rule.instance_id)
             with contextlib.suppress(Exception):     # the evaluation is still reported, without the entry
                 if pos_path not in cache:
                     cache[pos_path] = read(pos_path)
