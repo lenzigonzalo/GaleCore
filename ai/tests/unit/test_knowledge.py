@@ -102,22 +102,31 @@ class TestLocation:
         monkeypatch.setenv("GALECORE_RECORDS_DIR", str(tmp_path / "elsewhere"))
         assert default_records_dir() == (tmp_path / "elsewhere").resolve()
 
-    def test_workspace_root_is_found_from_a_checkout_or_a_worktree(self, tmp_path):
-        from galecore_ai.adapters.knowledge_base import _workspace_root
-        (tmp_path / "ENGINEERING.md").write_text("x", encoding="utf-8")
-        (tmp_path / "GaleCore-AI" / "src").mkdir(parents=True)
-        deep = tmp_path / ".worktrees" / "galecore-ai" / "GC-AI-9999" / "src" / "galecore_ai"
-        deep.mkdir(parents=True)
-        assert _workspace_root(tmp_path / "GaleCore-AI" / "src") == tmp_path
-        assert _workspace_root(deep) == tmp_path
-        assert _workspace_root(tmp_path.parent) is None
+    def test_data_dir_is_the_env_var_or_the_home_default(self, tmp_path, monkeypatch):
+        home = tmp_path / "home"
+        (home / "GaleCore-datos" / "knowledge").mkdir(parents=True)
+        monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+        monkeypatch.delenv("GALECORE_KNOWLEDGE_DIR", raising=False)
+        assert knowledge_dir() == (home / "GaleCore-datos" / "knowledge").resolve()
+        other = tmp_path / "other"
+        other.mkdir()
+        monkeypatch.setenv("GALECORE_KNOWLEDGE_DIR", str(other))
+        assert knowledge_dir() == other.resolve()
+        monkeypatch.delenv("GALECORE_KNOWLEDGE_DIR")
+        (home / "GaleCore-datos" / "knowledge").rmdir()
+        with pytest.raises(KnowledgeBaseError, match="does not exist"):
+            knowledge_dir()
+
+    def test_product_root_is_the_parent_of_ai(self):
+        from galecore_ai.adapters.knowledge_base import PRODUCT_ROOT
+        assert (PRODUCT_ROOT / "ai" / "src" / "galecore_ai").is_dir()
 
 
 class TestRefs:
     @pytest.mark.parametrize("text,expected", [
         ("regime:spy/2026-09-23", "regime:SPY/2026-09-23"),
         ("research:2026-09-23-gex-0dte", "research:2026-09-23-gex-0dte"),
-        ("file:GaleCore-AI\\docs\\x.md", "file:GaleCore-AI/docs/x.md"),
+        ("file:ai\\docs\\x.md", "file:ai/docs/x.md"),
     ])
     def test_normalised(self, text, expected):
         assert str(parse_ref(text)) == expected

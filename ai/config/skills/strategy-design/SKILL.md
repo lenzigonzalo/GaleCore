@@ -69,7 +69,7 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   registrarla. Ofrecer en una línea el contexto del instrumento (no correrlo sin pedido) y citarlo si se usa.
 - **Nombre de la estrategia y proyecto del Lab.** Lo normal es que la estrategia lleve el nombre del proyecto. Si al guardar la primera
   versión el nombre cambia (p. ej. el proyecto nació como SPY y la estrategia es de SPX), vinculá el proyecto desde su carpeta con
-  `python <raíz>/tools/terminal/mark_strategy.py <nombre-de-la-estrategia>`; sin eso, Estrategias muestra el proyecto aparte y
+  `python <raíz>/lab/mark_strategy.py <nombre-de-la-estrategia>`; sin eso, Estrategias muestra el proyecto aparte y
   no se ve el diseño de la estrategia desde su proyecto. Decirlo en una línea.
 - **Monto y límites propios.** Cada estrategia es distinta y declara los suyos al cerrar el diseño: `simulated_amount_usd` y
   `limits` (% de ese monto: `max_drawdown_pct`, que es su corte automático R2; `max_risk_per_trade_pct`,

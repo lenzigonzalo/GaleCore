@@ -1,0 +1,7 @@
+{
+  "id": "portfolio",
+  "label": "Cartera e investigación",
+  "type": "analysis",
+  "relative": "workspaces/portfolio",
+  "strategyName": null
+}

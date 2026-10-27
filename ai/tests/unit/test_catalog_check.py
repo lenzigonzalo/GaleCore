@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from pydantic import ValidationError
 
 from galecore_ai.adapters.cli import build_parser
-from galecore_ai.adapters.knowledge_base import _workspace_root
+from galecore_ai.adapters.knowledge_base import PRODUCT_ROOT
 from galecore_ai.adapters.source_registry_store import load_source_registry
 from galecore_ai.adapters.source_status_store import FileSourceStatusStore
 from galecore_ai.application.catalog_check import check_catalog, cli_commands
 from galecore_ai.harness.catalog import Catalog, CatalogEntry, load_catalog
 
-WORKSPACE = Path(__file__).resolve().parents[2]  # the checkout root; only used for `python <script>` lines
+WORKSPACE = PRODUCT_ROOT  # the product root; only used for `python <script>` lines
 
 
 def entry(**overrides) -> CatalogEntry:
@@ -41,7 +39,7 @@ def problems(result: dict) -> list[str]:
 
 def test_the_real_catalog_is_complete(tmp_path):
     # Cited feedback lives in the knowledge base (absent in CI); its resolution is tested in test_feedback.py.
-    result = check_catalog(load_catalog(), commands=cli_commands(build_parser()), workspace=_workspace_root(WORKSPACE),
+    result = check_catalog(load_catalog(), commands=cli_commands(build_parser()), workspace=WORKSPACE,
                            registry=load_source_registry(), status_store=FileSourceStatusStore(tmp_path / "s"),
                            feedback_check=lambda refs, skill_id, version, owner_decision: [])
     assert result["complete"], [e for e in result["entries"] if not e["complete"]]
@@ -67,7 +65,7 @@ def test_data_needs_must_be_declared():
     ({"controls": ["Numbers match the facts"]}, "none says what is NOT checked"),
     ({"skill": "skills/nope/skill.yaml"}, "skill or contract"),
     ({"flow": []}, "flow: empty"),
-    ({"flow": ["python ENGINEERING.md"]}, "script not found"),
+    ({"flow": ["python README.md"]}, "script not found"),
     ({"controls": ["Not checked"]}, "none says what is NOT checked"),
     ({"controls": ["Not checked -  "]}, "none says what is NOT checked"),
 ])
@@ -119,7 +117,7 @@ def test_a_read_only_schedulable_entry_passes(tmp_path):
     "sources declare --source fred --state down --note n",
     "sources check", "feedback add --research r --revision 1 --classification case --slug s --prompt p",
     "task pause x --prompt p", "accept --record --prompt p",
-    "python GaleCore/dev/galecore_dev.py deploy --spec x --approval a",
+    "python app/dev/galecore_dev.py deploy --spec x --approval a",
 ])
 def test_a_schedulable_entry_that_writes_elsewhere_is_refused(tmp_path, line):
     e = scheduled(flow=[*scheduled().flow, line])

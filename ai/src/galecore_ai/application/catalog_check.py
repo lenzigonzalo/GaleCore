@@ -37,14 +37,14 @@ def cli_commands(parser: argparse.ArgumentParser) -> dict[str, set[str]]:
     return {name: set(subcommands(child)) for name, child in subcommands(parser).items()}
 
 
-CHECKOUT = Path(__file__).resolve().parents[3]  # the GaleCore-AI checkout this code runs from (also a worktree)
+CHECKOUT = Path(__file__).resolve().parents[3]  # ai/, the checkout dir this code runs from
 
 
 def _script_path(script: str, workspace: Path) -> Path:
-    """A flow script: ``GaleCore-AI/...`` is this checkout's own file (a worktree's new script counts before
-    it is merged); anything else is relative to the workspace root."""
+    """A flow script: ``ai/...`` is this checkout's own file; anything
+    else is relative to the product root."""
     head, _, rest = script.partition("/")
-    return CHECKOUT / rest if head == "GaleCore-AI" and rest else workspace / script
+    return CHECKOUT / rest if head == "ai" and rest else workspace / script
 
 
 def _flow_problems(entry: CatalogEntry, commands: dict[str, set[str]], workspace: Path) -> list[str]:

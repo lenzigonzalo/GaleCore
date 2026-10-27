@@ -15,6 +15,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from galecore_ai.adapters.knowledge_base import PRODUCT_ROOT
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError, resolve_ref
 from galecore_ai.contracts.inbox import (
     DESTINATION_RE,
@@ -24,10 +25,9 @@ from galecore_ai.contracts.inbox import (
     compute_inbox_hash,
 )
 
-BACKLOG = Path("GaleCore-AI") / "docs" / "architecture" / "PRODUCT-BACKLOG.md"
-WORK_ITEM_DIRS = ("GaleCore-AI/docs/engineering/work-items", "GaleCore/docs/engineering/work-items",
-                  ".worktrees/galecore-ai/*/docs/engineering/work-items",
-                  ".worktrees/galecore/*/docs/engineering/work-items")
+# Dev-only references: when the root has no backlog / work-items folders, a destination is accepted unchecked.
+BACKLOG = Path("ai") / "docs" / "architecture" / "PRODUCT-BACKLOG.md"
+WORK_ITEM_DIRS = ("ai/docs/engineering/work-items", "app/docs/engineering/work-items")
 SLUG_WORDS = 6
 
 
@@ -115,21 +115,22 @@ def items(kb: KnowledgeBase, status: str | None = None) -> tuple[list[InboxItem]
     return found, broken
 
 
-def destination_exists(workspace: Path, to: str) -> str | None:
-    """None when the destination exists; otherwise why not."""
+def destination_exists(root: Path, to: str) -> str | None:
+    """None when the destination exists (or cannot be checked here); otherwise why not."""
     if to in ("roadmap", "done", "discarded"):
         return None
     kind, _, ref = to.partition(":")
     if kind == "backlog":
-        backlog = workspace / BACKLOG
+        backlog = root / BACKLOG
         if not backlog.is_file():
-            return f"backlog not found at {backlog}"
+            return None
         if not re.search(rf"^##\s+{re.escape(ref)}\b", backlog.read_text(encoding="utf-8"), re.MULTILINE):
-            return f"{ref} is not in {BACKLOG.as_posix()}: create it there first or pick the BL- that contains it"
+            return f"{ref} is not in the product backlog: create it there first or pick the BL- that contains it"
         return None
-    if any(next(workspace.glob(f"{d}/{ref}-*.md"), None) for d in WORK_ITEM_DIRS):
+    dirs = [root / d for d in WORK_ITEM_DIRS if (root / d).is_dir()]
+    if not dirs or any(next(d.glob(f"{ref}-*.md"), None) for d in dirs):
         return None
-    return f"no work item {ref} in GaleCore-AI, GaleCore or their worktrees"
+    return f"no work item {ref} in ai/ or app/"
 
 
 def resolve(*, kb: KnowledgeBase, item_id: str, to: str, note: str, prompt: str,
@@ -143,7 +144,7 @@ def resolve(*, kb: KnowledgeBase, item_id: str, to: str, note: str, prompt: str,
     except ValidationError as exc:
         raise KnowledgeError("Refusing to resolve", [e["msg"] for e in exc.errors()]) from exc
     resolution = draft.model_copy(update={"hash": compute_inbox_hash(draft.hashable())})
-    if why := destination_exists(kb.workspace, to):
+    if why := destination_exists(PRODUCT_ROOT, to):
         raise KnowledgeError("Refusing to resolve", [why])
     item = item.model_copy(update={"resolutions": [*item.resolutions, resolution]})
     return item, _write(kb, item)

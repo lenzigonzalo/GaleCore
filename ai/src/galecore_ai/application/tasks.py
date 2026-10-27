@@ -537,7 +537,7 @@ def rebind(*, kb: KnowledgeBase, scheduler, task_id: str, code_path: Path, promp
     now = now or datetime.now(UTC)
     code_path = Path(code_path).resolve()
     if not (code_path / "tools" / "task_runner.py").is_file():
-        raise TaskError(f"{code_path} has no tools/task_runner.py: not a GaleCore-AI checkout")
+        raise TaskError(f"{code_path} has no tools/task_runner.py: not an ai/ checkout")
     with _state_lock(kb, task_id):
         task = load(kb, task_id)
         if task.status == "cancelled":

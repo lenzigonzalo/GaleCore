@@ -1,0 +1,5 @@
+# Archivos de trabajo con datos de GaleCore (pesados, se bajan de nuevo): no se versionan
+.scratch/
+/files/*.json
+/files/*.py
+/workspaces/*/files/*chain*.json

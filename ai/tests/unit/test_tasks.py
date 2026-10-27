@@ -300,9 +300,9 @@ def test_rebind_moves_the_task_to_another_checkout_keeping_id_history_and_pause(
     kb, sch, _ = env  # noqa: F811
     make(kb, sch)
     t.pause(kb=kb, scheduler=sch, task_id="seguimiento-spy", prompt="Pausalo", now=NOW)
-    with pytest.raises(t.TaskError, match="not a GaleCore-AI checkout"):
+    with pytest.raises(t.TaskError, match="not an ai/ checkout"):
         t.rebind(kb=kb, scheduler=sch, task_id="seguimiento-spy", code_path=tmp_path, prompt="Mové la tarea", now=NOW)
-    stable = tmp_path / "GaleCore-AI"
+    stable = tmp_path / "ai"
     (stable / "tools").mkdir(parents=True)
     (stable / "tools" / "task_runner.py").write_text("# runner", encoding="utf-8")
     task = t.rebind(kb=kb, scheduler=sch, task_id="seguimiento-spy", code_path=stable, prompt="Mové la tarea", now=NOW)
@@ -319,7 +319,7 @@ def test_a_paused_rebind_that_cannot_disable_again_stays_consistent(env, tmp_pat
     kb, sch, follow = env  # noqa: F811
     make(kb, sch)
     t.pause(kb=kb, scheduler=sch, task_id="seguimiento-spy", prompt="Pausalo", now=NOW)
-    stable = tmp_path / "GaleCore-AI"
+    stable = tmp_path / "ai"
     (stable / "tools").mkdir(parents=True)
     (stable / "tools" / "task_runner.py").write_text("# runner", encoding="utf-8")
 

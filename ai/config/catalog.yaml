@@ -1,4 +1,4 @@
-# What the host can ask GaleCore-AI for. `python -B -m galecore_ai.adapters.cli catalog` prints
+# What the host can ask the ai/ harness for. `python -B -m galecore_ai.adapters.cli catalog` prints
 # this with the version and hash of each skill as loaded. Start here, not from a table in prose.
 #
 # Adding a capability: add an entry here and its skill asset under skills/. Anything the entry's
@@ -212,7 +212,7 @@ entries:
       - supervise watch --symbol <SYM> --metric <m> --below|--above <nivel> --thesis "<tesis>" --strategy <name> --text "<owner>" --prompt "<pedido>"   # qué invalida la tesis; lo vigila el supervisor
       - strategy approve --ref strategy:<name>/<version> --spec-hash <hash> --owner-words "<owner>" --host-model <model>
       - strategy deploy-check --ref strategy:<name>/<version> --galecore-hash <hash de App/Runtime/Specs/<name>>
-      - python GaleCore/dev/galecore_dev.py deploy --spec <name> --approval knowledge/strategies/<name>/<version>.approval.json   # sólo GaleCore Dev
+      - python app/dev/galecore_dev.py deploy --spec <name> --approval knowledge/strategies/<name>/<version>.approval.json   # sólo GaleCore Dev
     stored_as: strategy
     controls:
       - Every block (entry, construction, sizing, monitoring, adjustment, exit, invalidation) has a rule or a not-applicable rule that says why

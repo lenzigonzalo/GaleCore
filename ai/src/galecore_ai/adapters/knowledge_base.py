@@ -1,10 +1,10 @@
 """Where the knowledge base lives and how references into it are written.
 
 The knowledge base is a plain directory of Markdown files with YAML frontmatter,
-outside every code checkout, so its content never depends on which branch a code
-repository has checked out:
+outside the code checkout, so its content never depends on which branch the code
+has checked out:
 
-    <workspace>/knowledge/
+    <data dir>/
         regime/<SYMBOL>/<YYYY-MM-DD>.md   daily regime records (record_store)
         research/<id>.md                  investigations (research_store)
         evidence/<id>.json                source responses with provenance (evidence_store)
@@ -13,10 +13,9 @@ repository has checked out:
         feedback/<id>.json                the user's comments on a result (feedback_store)
 
 ``GALECORE_KNOWLEDGE_DIR`` overrides the location. Without it, the directory is
-found by walking up from this checkout to the workspace root (the directory that
-holds ``ENGINEERING.md`` and ``GaleCore-AI/``), which also works from a worktree
-under ``.worktrees/``. The directory is never created implicitly: a missing base
-is an error, not an empty result.
+``~/GaleCore-datos/knowledge`` (the user's data dir; the Lab creates it from
+``config/knowledge-template`` on first start). The directory is never created
+implicitly here: a missing base is an error, not an empty result.
 
 References are how one piece of work cites another:
 
@@ -26,10 +25,9 @@ References are how one piece of work cites another:
     strategy:<name>/<version>  a strategy proposal version (with its spec and approval)
     profile:v<N>               a version of the user profile
     feedback:<id>              the user's comment on a result
-    file:<path>                a local file, relative to the workspace root
+    file:<path>                a local file, relative to the parent of the knowledge directory
 
-``file:`` paths resolve against the parent of the knowledge directory, which is
-the workspace root in the default layout.
+``file:`` paths resolve against the parent of the knowledge directory.
 """
 
 from __future__ import annotations
@@ -40,6 +38,8 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 KNOWLEDGE_DIR_ENV = "GALECORE_KNOWLEDGE_DIR"
+# The product root: the monorepo, parent of ai/, app/ and lab/ (this file is ai/src/galecore_ai/adapters/...).
+PRODUCT_ROOT = Path(__file__).resolve().parents[4]
 
 _REGIME_KEY_RE = re.compile(r"^(?P<symbol>[A-Za-z0-9.\-]{1,12})/(?P<date>\d{4}-\d{2}-\d{2})$")
 RESEARCH_ID_RE = re.compile(r"^\d{4}-\d{2}-\d{2}-[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -53,29 +53,18 @@ class KnowledgeBaseError(Exception):
     """The knowledge base cannot be located or a reference is malformed."""
 
 
-def _workspace_root(start: Path) -> Path | None:
-    for candidate in [start, *start.parents]:
-        if (candidate / "ENGINEERING.md").is_file() and (candidate / "GaleCore-AI").is_dir():
-            return candidate
-    return None
+def default_knowledge_dir() -> Path:
+    return Path.home() / "GaleCore-datos" / "knowledge"
 
 
 def knowledge_dir() -> Path:
-    """``GALECORE_KNOWLEDGE_DIR`` or ``<workspace>/knowledge``. Must already exist."""
+    """``GALECORE_KNOWLEDGE_DIR`` or ``~/GaleCore-datos/knowledge``. Must already exist."""
     configured = os.environ.get(KNOWLEDGE_DIR_ENV)
-    if configured:
-        path = Path(configured).expanduser().resolve()
-    else:
-        root = _workspace_root(Path(__file__).resolve())
-        if root is None:
-            raise KnowledgeBaseError(
-                f"Cannot locate the workspace root from this checkout; set {KNOWLEDGE_DIR_ENV}"
-            )
-        path = (root / "knowledge").resolve()
+    path = Path(configured).expanduser().resolve() if configured else default_knowledge_dir().resolve()
     if not path.is_dir():
         raise KnowledgeBaseError(
             f"Knowledge base directory does not exist: {path} (not created; set {KNOWLEDGE_DIR_ENV} "
-            "or create it — see knowledge/README.md)"
+            "or start the Lab once, which creates it)"
         )
     return path
 

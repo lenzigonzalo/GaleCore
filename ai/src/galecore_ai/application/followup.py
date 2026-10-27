@@ -3,7 +3,7 @@
 «Mostrame mi estrategia, qué está ejecutando, qué pasó desde la última revisión y qué merece mi atención.»
 
 Deterministic: no model call. It reads the strategy and its exact version from the knowledge base, reads GaleCore
-through its API (``GaleCore/dev/galecore_dev.py runtime-report``, read-only, development environment), keeps that
+through its API (``app/dev/galecore_dev.py runtime-report``, read-only, development environment), keeps that
 output verbatim as evidence, and writes a follow-up record with three separate parts — operation, SHADOW results,
 evidence about the hypothesis — plus what deserves attention. It never writes a strategy version, an approval or
 a deployment: analysis cannot change the approved strategy.
@@ -18,6 +18,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from galecore_ai.adapters.knowledge_base import PRODUCT_ROOT
 from galecore_ai.adapters.strategy_store import StrategyIntegrityError, StrategyStoreError
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError, save_evidence
 from galecore_ai.contracts.evidence import EvidenceContent
@@ -133,8 +134,9 @@ def _research_state(kb: KnowledgeBase, doc: StrategyDocument) -> str | None:
             f"{cur.note[:400]}")
 
 
-def default_report_command(workspace: Path, strategy: str) -> list[str]:
-    return [sys.executable, "-B", str(workspace / "GaleCore" / "dev" / "galecore_dev.py"), "runtime-report",
+def default_report_command(root: Path, strategy: str) -> list[str]:
+    # <root>/app/dev/galecore_dev.py; if it is absent the run fails and the follow-up records an ERROR.
+    return [sys.executable, "-B", str(root / "app" / "dev" / "galecore_dev.py"), "runtime-report",
             "--spec", strategy, "--limit", "500"]
 
 
@@ -283,7 +285,7 @@ def analyse(report: dict, doc: StrategyDocument, approved: bool, since: datetime
 
 def _evidence_of(report_out: str, err: str, code: int, ok: bool, spec: str, now: datetime) -> EvidenceContent:
     return EvidenceContent(
-        source="galecore", tool="GaleCore/dev/galecore_dev.py runtime-report (GET App/Runtime/*, GaleCore Dev)",
+        source="galecore", tool="app/dev/galecore_dev.py runtime-report (GET App/Runtime/*, GaleCore Dev)",
         params={"spec": spec, "exit_code": code}, retrieved_at=now,
         series=[{"name": "estado del runtime SHADOW (status, instancias, posiciones, evaluaciones, eventos, métricas)"
                  if ok else "error al leer GaleCore", "unit": "n/a", "frequency": "snapshot",
@@ -321,7 +323,7 @@ def run_followup(*, kb: KnowledgeBase, strategy: str, prompt: str, host: RecordH
     doc, approved = _versions(kb, strategy)
     # An ERROR run read nothing from GaleCore: anchoring on it would hide what happened before it.
     since = next((r.recorded_at for r in history(kb, strategy) if r.status != "ERROR"), None)
-    cmd = report_command or default_report_command(kb.workspace, strategy)
+    cmd = report_command or default_report_command(PRODUCT_ROOT, strategy)
     code, out, err = _run_report(cmd)
     stamp = now.strftime("%Y%m%dT%H%M%SZ")
     report = None
@@ -338,7 +340,7 @@ def run_followup(*, kb: KnowledgeBase, strategy: str, prompt: str, host: RecordH
     if ok:
         # An injected report command (tests, another runner) answers for the other specs too: never the real API.
         command_for = other_report_command or ((lambda _spec: report_command) if report_command else
-                                               (lambda spec: default_report_command(kb.workspace, spec)))
+                                               (lambda spec: default_report_command(PRODUCT_ROOT, spec)))
         # (an injected command answers with this strategy's report: its other specs then read as "not verified")
         other_reports, other_sources = _other_specs(kb, report, strategy, prompt, host, now, command_for)
         sources += other_sources

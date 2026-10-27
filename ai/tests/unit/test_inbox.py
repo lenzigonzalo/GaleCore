@@ -15,12 +15,14 @@ IDEA = "Probar la estrategia con acciones en vez de opciones, con datos más fá
 
 
 @pytest.fixture
-def workspace(kb):  # noqa: F811
+def workspace(kb, tmp_path, monkeypatch):  # noqa: F811
     """A backlog with one item and a work item, where the destinations are looked up."""
-    backlog = kb.workspace / "GaleCore-AI" / "docs" / "architecture" / "PRODUCT-BACKLOG.md"
+    root = tmp_path / "product"
+    monkeypatch.setattr(inbox, "PRODUCT_ROOT", root)
+    backlog = root / "ai" / "docs" / "architecture" / "PRODUCT-BACKLOG.md"
     backlog.parent.mkdir(parents=True)
     backlog.write_text("# Backlog\n\n## BL-007 — Estrategias\n\ntexto\n", encoding="utf-8")
-    wi = kb.workspace / ".worktrees" / "galecore-ai" / "GC-AI-0019" / "docs" / "engineering" / "work-items"
+    wi = root / "ai" / "docs" / "engineering" / "work-items"
     wi.mkdir(parents=True)
     (wi / "GC-AI-0019-acciones.md").write_text("---\nid: GC-AI-0019\n---\n", encoding="utf-8")
     return kb

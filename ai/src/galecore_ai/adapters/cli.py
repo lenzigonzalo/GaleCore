@@ -75,7 +75,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from galecore_ai.adapters.knowledge_base import KnowledgeBaseError, _workspace_root, knowledge_dir
+from galecore_ai.adapters.knowledge_base import PRODUCT_ROOT, KnowledgeBaseError, knowledge_dir
 from galecore_ai.adapters.record_store import (
     FileRecordStore,
     RecordStoreError,
@@ -579,9 +579,7 @@ async def _cmd_catalog(args: argparse.Namespace) -> None:
     if args.check:
         try:
             registry = load_source_registry()
-            workspace = _workspace_root(Path(__file__).resolve())
-            if workspace is None:
-                raise KnowledgeBaseError("Cannot locate the workspace root from this checkout")
+            workspace = PRODUCT_ROOT
         except (SourceRegistryError, KnowledgeBaseError) as exc:
             _error_out(str(exc), exit_code=_EXIT_INTERNAL_ERROR)
             return
@@ -1203,12 +1201,11 @@ def _read_proposal_request() -> tuple[ProposalContent, RecordHost]:
 
 
 def _runtime_specs_dir() -> Path:
-    """Where GaleCore Dev loads specs from: ``GALECORE_RUNTIME_SPECS_DIR`` or the sibling GaleCore checkout."""
+    """Where GaleCore Dev loads specs from: ``GALECORE_RUNTIME_SPECS_DIR`` or the product's ``app/``."""
     configured = os.environ.get("GALECORE_RUNTIME_SPECS_DIR")
     if configured:
         return Path(configured).expanduser().resolve()
-    return (Path(__file__).resolve().parents[4] / "GaleCore" / "source" / "galecore-datafeed" / "DataFeed.Api"
-            / "Files" / "Runtime")
+    return PRODUCT_ROOT / "app" / "source" / "galecore-datafeed" / "DataFeed.Api" / "Files" / "Runtime"
 
 
 async def _cmd_strategy(args: argparse.Namespace) -> None:
@@ -1715,7 +1712,7 @@ def build_parser() -> _JsonArgumentParser:
     p_ts.add_argument("--prompt", required=True)
     p_tr = t_sub.add_parser("rebind", help="Run the task from another checkout, keeping its id and history")
     p_tr.add_argument("id")
-    p_tr.add_argument("--code-path", dest="code_path", required=True, help="GaleCore-AI checkout with tools/task_runner.py")
+    p_tr.add_argument("--code-path", dest="code_path", required=True, help="ai/ checkout with tools/task_runner.py")
     p_tr.add_argument("--prompt", required=True)
     for name in ("pause", "resume", "cancel"):
         p = t_sub.add_parser(name)

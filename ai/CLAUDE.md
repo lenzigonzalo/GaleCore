@@ -2,20 +2,13 @@
 
 Harness de IA financiera sobre GaleCore: métodos (skills), agentes, perfil del trader, memoria con fuente,
 validaciones y catálogo. No calcula hechos financieros ni consulta APIs externas por su cuenta: los datos vienen de
-GaleCore. El objetivo, el catálogo de lo que el usuario puede pedir y el plan están en `../roadmap/README.md`; la forma
-de trabajo en `../ENGINEERING.md`. Este archivo sólo dice cómo se usa y se prueba este repo.
+GaleCore (`../app/`). Este archivo sólo dice cómo se usa y se prueba `ai/`.
 
 ```
-GaleCore     = datos, cálculos, riesgo, SHADOW, monitor (verdad operativa)
-GaleCore-AI  = método, criterio, memoria y validación determinística
+app          = datos, cálculos, riesgo, SHADOW, monitor (verdad operativa)
+ai           = método, criterio, memoria y validación determinística
 Host         = ejecuta el modelo (hoy Claude Code)
 ```
-
-## Antes de cambiar el repo
-
-La pieza activa es la del `ACTIVE_WORK_ITEM` del workspace (el hook la muestra). Trabajá sólo en su alcance; el
-implementer no marca su trabajo `VALIDATED` ni `CLOSED`. Antes de presentar una pieza como lista:
-`python tools/engineering_gate.py`. Evidencia, revisión y estados: `../ENGINEERING.md` §1, §3, §9 y §12.
 
 ## Uso del producto
 
@@ -25,7 +18,7 @@ Las secciones de uso (contexto, herramientas, datos, cuenta, memoria, límites) 
 
 ## Entorno
 
-La API Dev de GaleCore corre desde `../GaleCore` (`python dev/galecore_dev.py api`, `:7001`). La ApiKey nunca se
+La API Dev de GaleCore corre desde `../app` (`python dev/galecore_dev.py api`, `:7001`). La ApiKey nunca se
 escribe en archivos.
 
 ```bash
@@ -42,7 +35,6 @@ insuficientes · `3` error de validación (también argumentos y `query` con un 
 ## Probar
 
 ```bash
-python tools/engineering_gate.py
 python -B -m pytest -q -p no:cacheprovider          # suite completa; para un cambio acotado, los tests del área
 python -B -m ruff check --no-cache .
 python -B -m galecore_ai.adapters.cli catalog --check   # cada capacidad carga y su flujo existe
@@ -50,7 +42,7 @@ python -B -m galecore_ai.adapters.cli catalog --check   # cada capacidad carga y
 
 ## Referencia
 
-- Uso del producto, capas de contexto y motor: `PRODUCT.md` (arriba) con D-0012 y D-0014 (`../decisiones/`)
+- Uso del producto, capas de contexto y motor: `PRODUCT.md` (arriba)
 - Uso desde el host, capacidad por capacidad: `docs/HOST-REFERENCE.md`
 - Contratos del código (anteriores a D-0012/D-0014; en capas y motor manda `PRODUCT.md`):
   `docs/architecture/P0-CONTRACTS.md`, `docs/architecture/GaleCore-AI-arquitectura-v5.md`

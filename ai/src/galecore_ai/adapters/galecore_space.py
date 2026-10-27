@@ -2,7 +2,7 @@
 
 GaleCore keeps one row per piece (profile, objective, convention, memory, skill, agent, data), owned by a user and
 private or shared. The endpoints need the user's login, not the API key alone: this client logs in with
-GALECORE_USERNAME / GALECORE_PASSWORD, or, on GaleCore Dev only, with the demo user of `GaleCore/dev/.local/env.json`.
+GALECORE_USERNAME / GALECORE_PASSWORD, or, on GaleCore Dev only, with the demo user of `app/dev/.local/env.json`.
 Nothing here stores a credential.
 """
 
@@ -14,6 +14,8 @@ from pathlib import Path
 
 import httpx
 
+from galecore_ai.adapters.knowledge_base import PRODUCT_ROOT
+
 KINDS = ("profile", "objective", "convention", "memory", "skill", "agent", "data")
 
 
@@ -22,12 +24,9 @@ class SpaceError(Exception):
 
 
 def _dev_env() -> Path | None:
-    """GaleCore Dev's local config, found from this file upwards (the workspace holds GaleCore/ next to GaleCore-AI/)."""
-    for parent in Path(__file__).resolve().parents:
-        candidate = parent / "GaleCore" / "dev" / ".local" / "env.json"
-        if candidate.is_file():
-            return candidate
-    return None
+    """GaleCore Dev's local config, found from this file upwards (``<root>/app/dev/.local/env.json``, root = parent of ai/)."""
+    candidate = PRODUCT_ROOT / "app" / "dev" / ".local" / "env.json"
+    return candidate if candidate.is_file() else None
 
 
 def credentials() -> tuple[str, str, str]:
