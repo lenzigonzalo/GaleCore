@@ -125,7 +125,9 @@ function consumeEvent(chat, event, provider) {
     if(event.type === 'result' && event.is_error) chat.error = limited ? limitText(chat.limitResetsAt) : 'Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
     // Con el Lab como host los permisos se preguntan en el chat; lo que el trader negó no es un error.
     const refused = (event.permission_denials || []).filter(d => !(chat.refused || []).includes(d.tool_use_id));
-    if(event.type === 'result' && !event.is_error && refused.length) { const what = describeStep(refused[0].tool_name, refused[0].tool_input); chat.error = 'Quedó sin hacer «' + (what === 'Trabajando' ? refused[0].tool_name : what) + '»: lo bloqueó la regla de permisos del Lab.'; }
+    // Owner 27/10: una regla del Lab (p. ej. no escribir en GaleCore-AI) frena un paso aunque esté en Auto; si el turno
+    // terminó, no es una falla: aviso de una línea con el paso, sin marcar el chat como fallido.
+    if(event.type === 'result' && !event.is_error && refused.length) { const d = refused[0], detail = stepDetail(d.tool_name, d.tool_input); chat.notice = 'Un paso quedó sin hacer porque el Lab no lo permite' + (detail ? ' («' + detail + '»)' : '') + '; siguió por otro lado.'; }
   }
 }
 // Mapa de la idea (WS-0039): una página memory/mapa-<tema>.md que el agente reescribe en el turno. El Lab sólo anota
@@ -216,7 +218,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   function setOverride(id,change){const all=read(overridesFile,{});all[id]={...all[id],...change};atomic(overridesFile,all);}
   // Borra la carpeta del proyecto (sólo dentro de knowledge/workspaces|strategies) y lo que cuelga: seguimientos, registro,
-  // investigaciones que lo nombran, tareas (canceladas con el harness) y conversaciones (a chats-borradas/). Cartera (raíz de knowledge/) sólo se oculta.
+  // investigaciones que lo nombran, tareas (canceladas con el harness) y conversaciones (a chats-borradas/).
   async function removeProject(p){
     const kbReal=fs.realpathSync(kb), inside=(d,sub)=>{try{const r=fs.realpathSync(d);return r.startsWith(path.join(kbReal,sub)+path.sep);}catch{return false;}};
     const dirs=['workspaces','strategies'].map(f=>path.join(kb,f,p.id)).filter(d=>fs.existsSync(d)&&!fs.lstatSync(d).isSymbolicLink()&&inside(d,path.basename(path.dirname(d))));
@@ -324,7 +326,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(chat.model === undefined || chat.effort === undefined){Object.assign(chat,normalize(chat.provider,chat),{selectionSource:'legacy-fallback'});saveChat(chat);}
     const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()};chat.messages.push(ask);
     if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
-    chat.state='running';chat.error=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
+    chat.state='running';chat.error=null;chat.notice=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'tools','terminal','skills','lab-strategy-bootstrap','SKILL.md');
     // Rutas canónicas: nunca dentro de .worktrees/ (puede haber copias viejas); el método de diseño es una sola copia.
     const designSkill=path.join(canonicalRoot(root),'GaleCore-AI','config','skills','strategy-design','SKILL.md');
@@ -375,12 +377,12 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       if(parts[2]==='rename'){const label=String((await readBody(req)).label||'').trim();if(!label||label.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');setOverride(p.id,{label});json(res,200,{...publicProject(p),label});return true;}
       // Eliminar un proyecto lo borra de verdad con lo que cuelga de él (WS-0063); queda un commit en knowledge/ para deshacerlo.
       if(p.id==='personal')throw fail('El espacio personal no se elimina.');
+      if(p.id==='portfolio')throw fail('Cartera no se elimina.');
       if([...jobs.values()].some(j=>j.project===p.id))throw fail('El proyecto tiene una conversación respondiendo.',409);
       json(res,200,await removeProject(p));return true;
     }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='files'&&parts[3]&&parts.length===4){
       const p=project(parts[1]), b=await readBody(req), op=parts[3];
-      if(p.id==='portfolio'&&[b.path,b.from,b.to].some(x=>/^(workspaces|strategies|projects)(\/|$)/i.test(String(x||'').replace(/\\/g,'/'))))throw fail('Eso es de otro proyecto: abrilo desde su proyecto.',403);
       if(op==='write'){
         const target=projectPath(p.dir,b.path,{editable:true});const text=String(b.text??'');
         if(!TEXT.test(target))throw fail('Sólo se editan archivos de texto (md, txt, csv, yaml, py).');
@@ -423,7 +425,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       fs.writeFileSync(path.join(p.dir,rel),Buffer.concat(chunks));json(res,201,{path:rel,name:safe,size});return true;
     }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='files'){
-      const p=project(parts[1]), rel=url.searchParams.get('path');const target=rel?safeFile(p.dir,rel):null;if(p.id==='portfolio'&&target&&target.toLowerCase().startsWith(path.join(fs.realpathSync(p.dir),'workspaces').toLowerCase()+path.sep))throw fail('Elegí el proyecto personal para leer sus archivos.',403);json(res,200,rel?{path:rel,text:fs.readFileSync(target,'utf8')}:{tree:tree(p.dir).filter(n=>p.id!=='portfolio'||n.name!=='workspaces'),folder:p.relative});return true;
+      const p=project(parts[1]), rel=url.searchParams.get('path');const target=rel?safeFile(p.dir,rel):null;json(res,200,rel?{path:rel,text:fs.readFileSync(target,'utf8')}:{tree:tree(p.dir),folder:p.relative});return true;
     }
     if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,...(b.origin==='prueba'?{origin:'prueba'}:{}),title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);
