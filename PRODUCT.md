@@ -35,7 +35,8 @@ python -B -m galecore_ai.adapters.cli galecore get <capacidad> [--symbol X] [--o
   skill propia del trader (`skill propia` en `[espacio]`) se lee con `space show skill/<clave>` y se sigue igual. Si
   ninguna sirve, ofrecé `capability_builder`. El trader no nombra skills ni hace falta anunciarlas.
 - Cómo se pide un dato: `galecore list` (no `docs/` ni `GaleCore/`). Lo pesado (una cadena ~1 MB) va con
-  `--out .scratch/<nombre>.json`. Lo que el Lab ya trajo en el contexto no se vuelve a pedir.
+  `--out .scratch/<nombre>.json`, con la `.scratch/` de la carpeta del proyecto (ruta completa: en `GaleCore-AI/` no se
+  escribe) y se borra al terminar. Lo que el Lab ya trajo en el contexto no se vuelve a pedir.
 - Consultas a GaleCore en primer plano y en paralelo, esperando el resultado (no en segundo plano).
 - Cuentas simples sobre cifras de GaleCore, sí (crédito = venta − compra, riesgo = ancho − crédito). Probabilidades,
   griegas y volatilidades, sólo de GaleCore.
