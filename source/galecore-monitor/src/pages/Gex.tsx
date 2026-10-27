@@ -10,6 +10,7 @@ import { VolSmile } from '../components/gex/VolSmile';
 import { ExpiryEngine } from '../components/gex/ExpiryEngine';
 import { fetchMarketSummary, MarketSummary } from '../api/marketdata';
 import { GexChart } from '../components/chart/GexChart';
+import { useWatches, watchLabel } from '../api/watches';
 import { StrategyOffPanel } from '../components/common/StrategyOffPanel';
 import { ReferencesModal } from '../components/common/ReferencesModal';
 import { getStrategyReference } from '../components/strategy/strategyReferences';
@@ -133,6 +134,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   );
 
   const active = selectedSymbol ?? tickers[0] ?? null;
+  const { watches, remove: removeWatch } = useWatches(active);
   const isAdHoc = !!active && adHocSymbols.includes(active);
 
   const ticker = useMarketStore((s) => (active ? s.tickers[active] : undefined));
@@ -433,7 +435,12 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
 
           {indicator === 'price' && <section className="market-price-panel" aria-label="Gráfico de precio">
             <header><h2>Precio</h2><span>{display?.candles?.interval ?? '1h'} · Velas</span></header>
+            {watches.length > 0 && <div className="market-watch-chips">
+              <span>Avisos:</span>
+              {watches.map(w => <button key={w.id} type="button" title={w.words} aria-label={`Borrar aviso ${watchLabel(w)}`} onClick={() => removeWatch(w.id)}>{watchLabel(w)} ×</button>)}
+            </div>}
             <div className="market-price-chart"><GexChart key={'price-'+active} symbol={active}
+              alertLevels={watches.map(w => ({ id: w.id, price: w.threshold, label: `Aviso ${watchLabel(w)}` }))}
               currentPrice={hasPrice ? ticker!.price : 0} openPrice={ticker?.open ?? 0} gexData={null}
               candleInterval={display?.candles?.interval ?? '1h'} candleBucketSeconds={3600}
               maxCandles={display?.candles?.count ?? 100} candleFromDays={30}

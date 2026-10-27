@@ -89,3 +89,6 @@
 .vol-smile { position: relative; }
 .vol-smile svg { position: absolute; inset: 0 0 28px; height: calc(100% - 28px); min-height: 0; }
 .vol-smile figcaption { position: absolute; bottom: 0; left: 0; right: 0; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; max-height: 28px; }
+.market-watch-chips { display:flex; flex-wrap:wrap; align-items:center; gap:8px; padding:8px 18px; border-bottom:1px solid var(--border); font-size:14px; color:var(--text-secondary); }
+.market-watch-chips button { border:1px solid var(--border); border-radius:999px; padding:2px 10px; background:transparent; color:var(--text-primary); font-size:13px; cursor:pointer; }
+.market-watch-chips button:hover { border-color:var(--text-muted); }
