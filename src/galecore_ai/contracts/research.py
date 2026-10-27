@@ -145,6 +145,7 @@ class ResearchDocument(BaseModel):
     kind: str = "research"
     id: str
     created_at: datetime
+    project: str | None = None    # Lab project it was saved from (the first one); None outside a project
     revisions: list[ResearchRevision] = Field(default_factory=list)
 
     @field_validator("schema_version")

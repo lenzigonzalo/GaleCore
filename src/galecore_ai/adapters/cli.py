@@ -655,12 +655,24 @@ async def _cmd_kb_archive(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+def _current_project() -> str | None:
+    """Id of the Lab project the process runs in (cwd inside knowledge/workspaces|strategies/<id>/), else None."""
+    try:
+        base, cwd = knowledge_dir().resolve(), Path.cwd().resolve()
+        rel = cwd.relative_to(base).parts
+    except (KnowledgeBaseError, OSError, ValueError):
+        return None
+    if len(rel) >= 2 and rel[0] in ("workspaces", "strategies") and (base / rel[0] / rel[1] / "workspace.json").is_file():
+        return rel[1]
+    return None
+
+
 async def _cmd_research_save(args: argparse.Namespace) -> None:
     kb = _build_knowledge_base()
     content, host = _read_research_request()
     try:
         document, path = save_research(kb=kb, slug=args.slug, prompt=args.prompt, host=host, content=content,
-                                       capability=args.capability)
+                                       capability=args.capability, project=_current_project())
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
         return
@@ -676,7 +688,7 @@ async def _cmd_research_revise(args: argparse.Namespace) -> None:
     try:
         document, path = revise_research(kb=kb, research_id=args.id, reason=RevisionReason(args.reason),
                                          note=args.note, prompt=args.prompt, host=host, content=content,
-                                         capability=args.capability)
+                                         capability=args.capability, project=_current_project())
     except KnowledgeError as exc:
         _knowledge_error_out(exc)
         return

@@ -121,14 +121,23 @@ class FileResearchStore:
         self._write(document, path)
         return path
 
-    def append(self, research_id: str, revision: ResearchRevision) -> tuple[ResearchDocument, Path]:
+    def append(self, research_id: str, revision: ResearchRevision,
+               project: str | None = None) -> tuple[ResearchDocument, Path]:
         current = self.load(research_id)
         if current is None:
             raise ResearchStoreError(f"research:{research_id} does not exist")
-        updated = current.model_copy(update={"revisions": [*current.revisions, revision]})
+        updated = current.model_copy(update={"revisions": [*current.revisions, revision],
+                                              "project": current.project or project})
         path = self.path_for(research_id)
         self._write(updated, path)
         return updated, path
+
+    @staticmethod
+    def _header(document: ResearchDocument) -> dict:
+        data = document.model_dump(mode="json")
+        if data.get("project") is None:
+            data.pop("project", None)   # sin proyecto no se escribe la clave (los registros viejos quedan igual)
+        return data
 
     def _write(self, document: ResearchDocument, path: Path) -> None:
         problems = verify_document(document)
@@ -157,7 +166,7 @@ class FileResearchStore:
         link = lambda r: self._link(r, path)
 
         lines = [
-            frontmatter.render_frontmatter(document.model_dump(mode="json")).rstrip("\n"),
+            frontmatter.render_frontmatter(self._header(document)).rstrip("\n"),
             "",
             f"# {c.title}",
             "",

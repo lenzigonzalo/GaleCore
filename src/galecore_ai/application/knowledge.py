@@ -316,7 +316,8 @@ def _revision(*, number: int, reason: RevisionReason, note: str, prompt: str, ho
 
 
 def save_research(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost, content: ResearchContent,
-                  now: datetime | None = None, capability: str = "research") -> tuple[ResearchDocument, Path]:
+                  now: datetime | None = None, capability: str = "research",
+                  project: str | None = None) -> tuple[ResearchDocument, Path]:
     now = now or datetime.now(UTC)
     research_id = f"{now.date().isoformat()}-{slug}"
     if not prompt.strip():
@@ -330,7 +331,7 @@ def save_research(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost
         raise KnowledgeError("Refusing to save", problems)
     revision = _revision(number=1, reason=RevisionReason.INITIAL, note="", prompt=prompt, host=host,
                          content=content, resolved=resolved, now=now, capability=capability)
-    document = ResearchDocument(id=research_id, created_at=now, revisions=[revision])
+    document = ResearchDocument(id=research_id, created_at=now, project=project, revisions=[revision])
     try:
         path = kb.research.create(document)
     except ResearchStoreError as exc:
@@ -340,7 +341,7 @@ def save_research(*, kb: KnowledgeBase, slug: str, prompt: str, host: RecordHost
 
 def revise_research(*, kb: KnowledgeBase, research_id: str, reason: RevisionReason, note: str, prompt: str,
                     host: RecordHost, content: ResearchContent, now: datetime | None = None,
-                    capability: str = "research") -> tuple[ResearchDocument, Path]:
+                    capability: str = "research", project: str | None = None) -> tuple[ResearchDocument, Path]:
     now = now or datetime.now(UTC)
     problems: list[str] = []
     if reason == RevisionReason.INITIAL:
@@ -362,7 +363,7 @@ def revise_research(*, kb: KnowledgeBase, research_id: str, reason: RevisionReas
     revision = _revision(number=len(current.revisions) + 1, reason=reason, note=note, prompt=prompt,
                          host=host, content=content, resolved=resolved, now=now, capability=capability)
     try:
-        return kb.research.append(research_id, revision)
+        return kb.research.append(research_id, revision, project=project)
     except (ResearchIntegrityError, ResearchStoreError) as exc:
         raise KnowledgeError("Refusing to revise", [str(exc)]) from exc
 
