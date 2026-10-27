@@ -56,10 +56,12 @@ namespace DataFeed.Application.App.Runtime
         private const double WidthStrikeTolerance = 1.0;
 
         private readonly IPcsMarketSource _market;
+        private readonly Func<DateTime>? _utcNow;
 
-        public CreditSpreadCandidateBuilder(IPcsMarketSource market)
+        public CreditSpreadCandidateBuilder(IPcsMarketSource market, Func<DateTime>? utcNow = null)
         {
             _market = market;
+            _utcNow = utcNow;
         }
 
         /// <summary>
@@ -88,7 +90,7 @@ namespace DataFeed.Application.App.Runtime
                 if (error != null) return CandidateBuildResult.Rejected(error);
                 (plans, missing) = (familyPlans, familyMissing);
             }
-            return await new OptionStructureBuilder(_market).BuildAsync(instance, spec, structure, plans, missing, symbol, vixPrice, nowUtc, ct);
+            return await new OptionStructureBuilder(_market, _utcNow).BuildAsync(instance, spec, structure, plans, missing, symbol, vixPrice, nowUtc, ct);
         }
 
         /// <summary>
