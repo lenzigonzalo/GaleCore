@@ -274,6 +274,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
               {(last < 0 || steps[last].kind === 'note') && <span className="lab-step-now"><i/><span>{chat.activity && chat.activity !== 'Trabajando' ? chat.activity : 'Pensando'}…</span></span>}</>; })()}
         </div>}
         {chat?.state==='running' && chat.permission && <div className="lab-permission" role="alertdialog" aria-label="Pedido de permiso"><p>Necesita tu permiso: <strong>{chat.permission.label === 'Trabajando' ? chat.permission.tool : chat.permission.label}</strong></p>{chat.permission.detail && <code>{chat.permission.detail}</code>}<div><button type="button" className="primary" disabled={answering} onClick={() => void answerPermission('allow')}>Permitir</button>{chat.permission.always && <button type="button" disabled={answering} onClick={() => void answerPermission('always')}>Permitir y no volver a preguntar</button>}<button type="button" disabled={answering} onClick={() => void answerPermission('deny')}>No permitir</button></div></div>}
+        {chat?.state!=='running' && chat?.notice && !chat?.error && <div className="lab-chat-notice" role="status">{chat.notice}</div>}
         {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}{error && <button onClick={refresh}>Reintentar conexión</button>}</div>}
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
