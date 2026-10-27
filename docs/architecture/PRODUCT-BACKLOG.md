@@ -2677,6 +2677,27 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 
 ---
 
+## BL-034 — Configuración de avisos en el monitor: frecuencia y umbrales del supervisor
+
+**Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.
+**Origen:** pedido del owner, 27/10/2026, tras revisar qué parámetros del datafeed y de la vigilancia de avisos conviene exponer en Configuración («anotalo en el backlog»).
+**Target:** GaleCore-AI (`application/tasks.py`, `application/supervisor.py`, `tools/space_sync.py`) y front del monitor (Configuración, sección «Avisos»). GaleCore sólo en local.
+**Encaje:** una sección «Avisos» en Configuración con tres controles; los valores viajan por el espacio del usuario en GaleCore (como los pedidos de Agentes) y `space_sync` los aplica. Junto a «sólo en horario de mercado» de los avisos de strike, que ya está expuesto (`StrikeAlertForm`).
+**Hoy:** son constantes. Frecuencia de la tarea `espacio-agentes` = `SYNC_MINUTES = 5` (`tasks.py:62`); cerca del stop = `NEAR_STOP_MULTIPLE = 1.0` (pérdida ≥ 1× el crédito, `supervisor.py:36`); anticipación de eventos = `EVENT_BUSINESS_DAYS = 2` (`supervisor.py:38`).
+**Qué se expone:**
+
+| Control | Opciones | Cuidado |
+|---|---|---|
+| Frecuencia de revisión | 2 / 5 / 15 min | Cambiarla recrea la tarea de Windows; menos de 2 min choca con lecturas lentas (Structures ~31 s) y el lock de 30 min |
+| Cerca del stop | 0,5–1,5 × crédito | Validar rango |
+| Anticipación de eventos | 1–5 días hábiles | — |
+
+**Qué no se expone (decidido en el análisis):** horario extendido (opciones/SPX no cotizan fuera de la rueda; SHADOW evaluaría distinto que su spec), `NO_PRICE_MINUTES` (técnico: subirlo tapa caídas de fuente), intervalo de velas en Configuración (si hace falta, selector en el propio gráfico), fuente preferida (cada dato tiene una sola fuente), ciclos y caches del runtime de la API (compartidos, límites de Tastytrade, comparabilidad de SHADOW).
+**Entry gate:** cuando el owner priorice ajustar los avisos.
+**Aceptación:** desde Configuración el trader cambia los tres valores; la siguiente corrida de `space_sync` los usa (la tarea queda con la nueva frecuencia) y el aviso lo refleja; un valor fuera de rango se rechaza con el motivo; sin valores guardados rige lo de hoy.
+
+---
+
 ## BL-033 — Permisos de Codex respondidos desde el chat del Lab
 
 **Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.
