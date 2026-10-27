@@ -25,6 +25,24 @@ function safeFile(dir, relative) {
   if (fs.statSync(actual).size > 512 * 1024) throw fail('Archivo demasiado grande para la vista previa.', 413);
   return actual;
 }
+// Investigaciones (WS-0066): viven en knowledge/research/ (comunes); la que se guardó desde un proyecto lleva `project: <id>`
+// en su encabezado y Archivos la muestra en la carpeta «investigaciones», sólo para leer (el cuerpo ya es Markdown legible).
+const RESEARCH_DIR = 'investigaciones', RESEARCH_FILE = /^\d{4}-\d{2}-\d{2}-[a-z0-9-]+\.md$/;
+function researchProject(file) {
+  try {
+    const head = fs.readFileSync(file, 'utf8').split(/\r?\n---\r?\n/)[0];
+    return (head.match(/^project: ['"]?([^\s'"]+)['"]?\s*$/m) || [])[1] || null;
+  } catch { return null; }
+}
+function projectResearch(kb, id) {
+  const dir = path.join(kb, 'research');
+  return fs.existsSync(dir) ? fs.readdirSync(dir).filter(f => RESEARCH_FILE.test(f) && researchProject(path.join(dir, f)) === id) : [];
+}
+function readResearch(kb, id, rel) {
+  const name = rel.slice(RESEARCH_DIR.length + 1);
+  if (!projectResearch(kb, id).includes(name)) throw fail('Archivo no encontrado.', 404);
+  return fs.readFileSync(path.join(kb, 'research', name), 'utf8').replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/, '').trim() + '\n';
+}
 function tree(dir, prefix = '', depth = 0) {
   if (depth > 5) return [];
   return fs.readdirSync(dir, { withFileTypes: true }).filter(e => !e.isSymbolicLink() && !PRIVATE.test(e.name)).slice(0,200).flatMap(e => {
@@ -37,6 +55,7 @@ function tree(dir, prefix = '', depth = 0) {
 // del proyecto, sin archivos privados ni enlaces, con la carpeta de arriba ya existente.
 function projectPath(dir, relative, { exists = false, editable = false } = {}) {
   relative = String(relative || '').replace(/\\/g, '/').replace(/\/+$/, '');
+  if (relative === RESEARCH_DIR || relative.startsWith(RESEARCH_DIR + '/')) throw fail('«investigaciones» es sólo de lectura: son las investigaciones guardadas desde este proyecto.', 403);
   if (!relative || relative.length > 300 || path.isAbsolute(relative) || PRIVATE.test(relative) || BAD_NAME.test(relative)) throw fail('Nombre o ruta no válida.');
   if (editable && LOCKED.test(relative)) throw fail('Los registros JSON los escribe el harness; no se editan desde Archivos.', 403);
   const base = fs.realpathSync(dir), target = path.resolve(base, relative);
@@ -226,6 +245,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const named=new RegExp('^([0-9]{4}-[0-9]{2}-[0-9]{2}-)?('+p.id+'|'+p.id.replace(/_/g,'-')+')([^a-z0-9_-]|$)','i'), gone=[...dirs];
     const research=path.join(kb,'research');
     if(fs.existsSync(research))for(const f of fs.readdirSync(research))if(named.test(f))gone.push(path.join(research,f));
+    for(const f of projectResearch(kb,p.id))if(!gone.includes(path.join(research,f)))gone.push(path.join(research,f));
     for(const x of [path.join(kb,'followups',p.id),path.join(kb,'projects',p.id+'.json')])if(fs.existsSync(x))gone.push(x);
     const cancelled=[], tasksDir=path.join(kb,'tasks');
     for(const t of fs.existsSync(tasksDir)?fs.readdirSync(tasksDir):[]){
@@ -425,7 +445,12 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       fs.writeFileSync(path.join(p.dir,rel),Buffer.concat(chunks));json(res,201,{path:rel,name:safe,size});return true;
     }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='files'){
-      const p=project(parts[1]), rel=url.searchParams.get('path');const target=rel?safeFile(p.dir,rel):null;json(res,200,rel?{path:rel,text:fs.readFileSync(target,'utf8')}:{tree:tree(p.dir),folder:p.relative});return true;
+      const p=project(parts[1]), rel=url.searchParams.get('path');
+      if(rel&&rel.startsWith(RESEARCH_DIR+'/')){json(res,200,{path:rel,text:readResearch(kb,p.id,rel)});return true;}
+      if(rel){json(res,200,{path:rel,text:fs.readFileSync(safeFile(p.dir,rel),'utf8')});return true;}
+      const mine=projectResearch(kb,p.id),nodes=tree(p.dir).filter(n=>n.name!==RESEARCH_DIR);
+      if(mine.length)nodes.push({path:RESEARCH_DIR,name:RESEARCH_DIR,kind:'folder',children:mine.map(f=>({path:RESEARCH_DIR+'/'+f,name:f,kind:'file'}))});
+      json(res,200,{tree:nodes,folder:p.relative});return true;
     }
     if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,...(b.origin==='prueba'?{origin:'prueba'}:{}),title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);

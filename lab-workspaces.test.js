@@ -232,3 +232,29 @@ test('un proyecto puede declarar su estrategia con otro nombre y mark_strategy c
 test('la carpeta de una estrategia no abre un proyecto aparte si otro proyecto ya la declara (owner 26/10)',async t=>{const {base,kb,local}=setup(t);const make=legacy=>createWorkspaces({root:base,kb,local,binaries:{codex:null,claude:null},environment:()=>({}),instructions:()=>'',legacyProjects:()=>legacy,legacySessions:()=>[]});const legacy=[{id:'sandwich_spx',label:'sandwich spx',relative:'strategies/sandwich_spx'}];const solo=make(legacy);assert.ok((await route(solo,'GET','/workspaces')).value.projects.some(x=>x.id==='sandwich_spx'));await route(solo,'POST','/workspaces',{label:'Sandwich SPY',type:'strategy'});const file=path.join(kb,'strategies','sandwich_spy','workspace.json');fs.writeFileSync(file,JSON.stringify({...JSON.parse(fs.readFileSync(file,'utf8')),strategyName:'sandwich_spx'}));const ids=(await route(make(legacy),'GET','/workspaces')).value.projects.filter(x=>x.strategyName==='sandwich_spx').map(x=>x.id);assert.deepEqual(ids,['sandwich_spy']);});
 
 test('el mapa del proyecto se lee sin conversación: el último de memory/, o vacío (owner 26/10)',async t=>{const {kb,service}=setup(t);const p=(await route(service,'POST','/workspaces',{label:'Sandwich SPY',type:'strategy'})).value;assert.equal((await route(service,'GET','/workspaces/'+p.id+'/mapa')).value.mapa,null);const mem=path.join(kb,'strategies',p.id,'memory');fs.mkdirSync(mem,{recursive:true});fs.writeFileSync(path.join(mem,'mapa-viejo.md'),'# Viejo\n');await new Promise(r=>setTimeout(r,20));fs.writeFileSync(path.join(mem,'mapa-nuevo.md'),'# Sandwich SPX\n');const mapa=(await route(service,'GET','/workspaces/'+p.id+'/mapa')).value.mapa;assert.equal(mapa.path,'memory/mapa-nuevo.md');assert.equal(mapa.title,'Sandwich SPX');});
+
+test('investigaciones del proyecto: carpeta de sólo lectura con las anotadas con su id; cuerpo legible; borrar el proyecto las borra (WS-0066)',async t=>{
+ const {kb,service}=setup(t);const p=(await route(service,'POST','/workspaces',{label:'Empresas test',type:'analysis'})).value;const other=(await route(service,'POST','/workspaces',{label:'Otro test',type:'analysis'})).value;
+ const research=path.join(kb,'research');fs.mkdirSync(research,{recursive:true});
+ const doc=(project,title)=>'---\nschema_version: "1"\ncreated_at: \'2026-10-27T10:00:00Z\'\n'+(project?'project: '+project+'\n':'')+'kind: research\nrevisions: []\n---\n\n# '+title+'\n\nHallazgo legible.\n';
+ fs.writeFileSync(path.join(research,'2026-10-27-mia.md'),doc(p.id,'Mia'));
+ fs.writeFileSync(path.join(research,'2026-10-27-ajena.md'),doc(other.id,'Ajena'));
+ fs.writeFileSync(path.join(research,'2026-10-27-comun.md'),doc(null,'Comun'));
+ fs.writeFileSync(path.join(research,'2026-10-27-crlf.md'),doc('"'+p.id+'"','Crlf').replace(/\n/g,'\r\n'));
+ const files=(await route(service,'GET','/workspaces/'+p.id+'/files')).value;
+ const folder=files.tree.find(n=>n.name==='investigaciones');assert.equal(folder.kind,'folder');
+ assert.deepEqual(folder.children.map(c=>c.path).sort(),['investigaciones/2026-10-27-crlf.md','investigaciones/2026-10-27-mia.md']);
+ const mine=(await route(service,'GET','/workspaces/'+p.id+'/files?path=investigaciones/2026-10-27-mia.md')).value;
+ assert.match(mine.text,/^# Mia/);assert.match(mine.text,/Hallazgo legible/);assert.doesNotMatch(mine.text,/schema_version|project:/);
+ assert.match((await route(service,'GET','/workspaces/'+p.id+'/files?path=investigaciones/2026-10-27-crlf.md')).value.text,/^# Crlf/);
+ await assert.rejects(route(service,'GET','/workspaces/'+p.id+'/files?path=investigaciones/2026-10-27-ajena.md'),/no encontrado/);
+ await assert.rejects(route(service,'GET','/workspaces/'+p.id+'/files?path=investigaciones/2026-10-27-comun.md'),/no encontrado/);
+ assert.equal((await route(service,'GET','/workspaces/'+other.id+'/files')).value.tree.find(n=>n.name==='investigaciones').children.length,1);
+ fs.writeFileSync(path.join(kb,'workspaces',p.id,'notas.md'),'n');
+ for(const [op,body] of [['write',{path:'investigaciones/x.md',text:'x',create:true}],['write',{path:'investigaciones/2026-10-27-mia.md',text:'x'}],['mkdir',{path:'investigaciones/sub'}],['rename',{from:'investigaciones/2026-10-27-mia.md',to:'otra.md'}],['rename',{from:'notas.md',to:'investigaciones/z.md'}],['delete',{path:'investigaciones/2026-10-27-mia.md'}]])
+  await assert.rejects(route(service,'POST','/workspaces/'+p.id+'/files/'+op,body),/sólo de lectura/);
+ assert.ok(fs.existsSync(path.join(research,'2026-10-27-mia.md')));
+ const r=await route(service,'POST','/workspaces/'+p.id+'/archive',{});assert.equal(r.value.deleted,true);
+ assert.equal(fs.existsSync(path.join(research,'2026-10-27-mia.md')),false);assert.equal(fs.existsSync(path.join(research,'2026-10-27-crlf.md')),false);
+ assert.ok(fs.existsSync(path.join(research,'2026-10-27-ajena.md')));assert.ok(fs.existsSync(path.join(research,'2026-10-27-comun.md')));
+});
