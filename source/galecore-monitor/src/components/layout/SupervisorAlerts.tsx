@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchSpace, SpaceItem } from '../../api/space';
 import { fetchStrikeAlerts, StrikeAlert } from '../../api/account';
+import { allWatches, removeWatch, watchText, Watch } from '../../api/watches';
 
 /**
  * Avisos del supervisor de SHADOW (WS-0007): está en todas las pestañas y suena cuando llega un aviso nuevo.
@@ -12,7 +13,7 @@ import { fetchStrikeAlerts, StrikeAlert } from '../../api/account';
 
 type Category = 'eeuu' | 'empresa' | 'estrategia' | 'cuenta' | 'mercado' | 'strike';
 interface Alert { id: string; kind: string; detected_at: string; motivo: string; decision: unknown; category?: Category; title?: string }
-interface Piece { alerts?: Alert[]; last_run?: { at: string; result: string; failed: boolean }; state_detail?: string | null }
+interface Piece { watches?: Watch[]; alerts?: Alert[]; last_run?: { at: string; result: string; failed: boolean }; state_detail?: string | null }
 
 const KEY = 'supervisor';
 const REFRESH_MS = 60_000;
@@ -138,6 +139,24 @@ function AlertCard({ alert }: { alert: Alert }) {
   );
 }
 
+/** Avisos armados (WS-0064 AC-6): todos los de la pieza, con × para borrar (se oculta al instante). Sin avisos, no se muestra. */
+function ArmedWatches({ watches }: { watches: Watch[] }) {
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
+  const remove = (id: string) => {
+    setRemoved(prev => new Set(prev).add(id));
+    removeWatch(id).catch(() => setRemoved(prev => { const n = new Set(prev); n.delete(id); return n; }));
+  };
+  const shown = watches.filter(w => !removed.has(w.id));
+  if (!shown.length) return null;
+  return <section className="armed-watches" aria-label="Avisos armados">
+    <h3>Avisos armados</h3>
+    {shown.map(w => <div key={w.id} className="armed-watch" title={w.words}>
+      <span>{watchText(w)}</span>
+      <button type="button" aria-label={`Borrar aviso ${watchText(w)}`} onClick={() => remove(w.id)}>×</button>
+    </div>)}
+  </section>;
+}
+
 export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice = null }: { embedded?: boolean; strike?: StrikeAlert[]; strikeNotice?: string | null }) {
   const [loading, setLoading] = useState(true);
   const [item, setItem] = useState<SpaceItem | null>(null);
@@ -178,6 +197,7 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
   const alerts = [...noticeCard, ...strikeCards, ...(piece.alerts ?? []).filter(a => a.kind === 'watch')];
   // WS-0057 A (owner 21/10): una falla del sistema (p. ej. FRED caído) no es un aviso para el trader; se ve en
   // Configuración → Plataforma. Acá sólo la hora de la última revisión, discreta.
+  const armed = allWatches(piece);
   const status = piece.last_run?.at ? <p className="alert-status">Revisado {when(piece.last_run.at)}</p> : null;
   const empty = <div className="alert-empty"><strong>{item ? 'Sin avisos de tu cuenta' : 'Todavía no hay avisos'}</strong>
     <span>{item ? 'Cuando una posición quede cerca de su strike o un evento la mueva fuerte, aparece acá.' : 'Se activan cuando tu PC publica la primera revisión.'}</span></div>;
@@ -185,7 +205,7 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
   if (embedded) return <section className="supervisor-dock" aria-label="Avisos del supervisor">
     {loading ? <p role="status">Leyendo avisos…</p>
       : error ? <div role="alert"><p>{error}</p><button onClick={load}>Reintentar</button></div>
-      : <>{status}{!alerts.length && empty}{alerts.map(a => <AlertCard key={a.id} alert={a} />)}</>}
+      : <>{status}{!alerts.length && empty}{alerts.map(a => <AlertCard key={a.id} alert={a} />)}<ArmedWatches watches={armed} /></>}
   </section>;
   if (!item) return null;
 
@@ -204,6 +224,7 @@ export function SupervisorAlerts({ embedded = false, strike = [], strikeNotice =
           {error && <p style={{ color: 'var(--red-gc)' }}>{error}</p>}
           {!alerts.length && empty}
           {alerts.map(a => <AlertCard key={a.id} alert={a} />)}
+          <ArmedWatches watches={armed} />
         </div>
       )}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
