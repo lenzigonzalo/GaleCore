@@ -258,7 +258,7 @@ public class LongEquityTests
         var spec = EquitySpec();
         foreach (var q in new[] { Quote(270.10, 269.90), Quote(0, 0), Quote(double.NaN, 270), Quote(269, 270, Now.AddMinutes(-10)),
                                   Quote(269, 270, Now.AddMinutes(10)) })
-            Assert.Null((await LongEquityCandidateBuilder.BuildAsync(q, Instance(), spec, "AAPL", Now, default)).Candidate);
+            Assert.Null((await LongEquityCandidateBuilder.BuildAsync(q, Instance(), spec, "AAPL", Now, default, () => Now)).Candidate);   // reloj de la lectura = Now
         Assert.Null((await LongEquityCandidateBuilder.BuildAsync((_, _) => Task.FromResult<LegQuote?>(null), Instance(), spec, "AAPL", Now, default)).Candidate);
 
         var noQty = spec with { CandidateConstruction = spec.CandidateConstruction with { Sizing = new SizingConfig { Method = "RISK_BASED" } } };

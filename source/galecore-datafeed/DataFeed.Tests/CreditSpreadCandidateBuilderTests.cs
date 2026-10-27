@@ -62,8 +62,9 @@ public class CreditSpreadCandidateBuilderTests
 
     private static StrategyInstance Instance() => new() { InstanceId = "i-1" };
 
-    internal static Task<CandidateBuildResult> Build(FakeSource source, StrategySpec? spec = null) =>
-        new CreditSpreadCandidateBuilder(source).BuildAsync(Instance(), spec ?? ShadowRuntimeEngineTests.Spec(), "SPY", 15.2, Now);
+    // Reloj de la lectura fijo (por defecto Now): «futuro» se mide contra él, no contra el reloj real de la PC.
+    internal static Task<CandidateBuildResult> Build(FakeSource source, StrategySpec? spec = null, DateTime? clock = null) =>
+        new CreditSpreadCandidateBuilder(source, () => clock ?? Now).BuildAsync(Instance(), spec ?? ShadowRuntimeEngineTests.Spec(), "SPY", 15.2, Now);
 
     [Fact]
     public async Task RealData_BuildsCandidate_AllFromTheChosenExpiration()
@@ -180,6 +181,33 @@ public class CreditSpreadCandidateBuilderTests
         source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddSeconds(30), ReadTime: true);
 
         var result = await Build(source);
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("futuro", result.RejectReason);
+    }
+
+    [Fact]
+    public async Task ProviderTimeAfterEvaluationNowButBeforeTheReadClock_IsNotFuture_BuildsAndPassesTheValidator()
+    {
+        // 27/10: las patas se cotizan ~8 s después del nowUtc de la evaluación y traen hora del proveedor de ese momento.
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now.AddSeconds(8));
+        source.Quotes[".SPY261103P715"] = new LegQuote(3.40, 3.60, Now.AddSeconds(-8));
+
+        var result = await Build(source, clock: Now.AddSeconds(10));
+
+        Assert.NotNull(result.Candidate);
+        Assert.True(result.Candidate!.Snapshot.OldestQuoteAt <= Now);
+        Assert.True(ShadowRiskValidator.Validate(result.Candidate, ShadowRuntimeEngineTests.Spec(), 0, null, Now).IsValid);
+    }
+
+    [Fact]
+    public async Task ProviderTimeBeyondTheReadClockPlusSkew_StillBlocks()
+    {
+        var source = new FakeSource();
+        source.Quotes[".SPY261103P720"] = new LegQuote(4.10, 4.30, Now.AddSeconds(30));
+
+        var result = await Build(source, clock: Now.AddSeconds(10));
 
         Assert.Null(result.Candidate);
         Assert.Contains("futuro", result.RejectReason);

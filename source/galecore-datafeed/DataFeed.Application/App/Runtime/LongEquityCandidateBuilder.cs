@@ -16,7 +16,8 @@ namespace DataFeed.Application.App.Runtime
 
         public static async Task<CandidateBuildResult> BuildAsync(
             Func<string, CancellationToken, Task<LegQuote?>> getQuote,
-            StrategyInstance instance, StrategySpec spec, string symbol, DateTime nowUtc, CancellationToken ct)
+            StrategyInstance instance, StrategySpec spec, string symbol, DateTime nowUtc, CancellationToken ct,
+            Func<DateTime>? utcNow = null)
         {
             var sizing = spec.CandidateConstruction.Sizing;
             if (sizing.Method != "FIXED" || sizing.FixedContracts is not int qty || qty <= 0)
@@ -25,7 +26,7 @@ namespace DataFeed.Application.App.Runtime
             var quote = await getQuote(symbol, ct);
             if (quote == null || !QuoteRules.IsUsable(quote.Bid, quote.Ask))
                 return CandidateBuildResult.Rejected($"sin cotización utilizable de {symbol}");
-            var stale = DataFreshness.Problem(quote.At(nowUtc), nowUtc, DataFreshness.MaxAge(spec));
+            var stale = DataFreshness.Problem(quote.At(nowUtc), nowUtc, DataFreshness.MaxAge(spec), (utcNow ?? (() => DateTime.UtcNow))());
             if (stale != null)
                 return CandidateBuildResult.Rejected($"cotización de {symbol} no sirve: {stale}");
 
@@ -51,7 +52,7 @@ namespace DataFeed.Application.App.Runtime
                 Dte = 0,
                 Snapshot = new MarketSnapshot
                 {
-                    UnderlyingPrice = m, AsOf = nowUtc, OldestQuoteAt = quote.At(nowUtc),
+                    UnderlyingPrice = m, AsOf = nowUtc, OldestQuoteAt = DataFreshness.CapAt(quote.At(nowUtc), nowUtc),
                     QuotesWithoutTime = quote.ReadTime ? 1 : 0,
                 },
                 CreatedAt = nowUtc,

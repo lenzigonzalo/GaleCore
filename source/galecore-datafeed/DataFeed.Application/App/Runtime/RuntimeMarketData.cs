@@ -157,11 +157,19 @@ namespace DataFeed.Application.App.Runtime
             return ms > 0 ? DateTimeOffset.FromUnixTimeMilliseconds(ms).UtcDateTime : null;
         }
 
-        /// <summary>null si el dato sirve; si no, por qué (sin hora, viejo o con hora en el futuro). Las cotizaciones llegan con hora de lectura, no null.</summary>
-        public static string? Problem(DateTime? asOf, DateTime nowUtc, TimeSpan? maxAge)
+        /// <summary>Acota una hora a <paramref name="nowUtc"/> (para edad, snapshot y validador, que no ven horas posteriores a la evaluación).</summary>
+        public static DateTime? CapAt(DateTime? t, DateTime nowUtc) => t > nowUtc ? nowUtc : t;
+
+        /// <summary>
+        /// null si el dato sirve; si no, por qué (sin hora, viejo o con hora en el futuro). Las cotizaciones llegan con hora de lectura, no null.
+        /// <paramref name="readUtc"/> es el reloj real al leer el dato: una hora del proveedor que cae entre <paramref name="nowUtc"/>
+        /// (inicio de la evaluación) y la lectura no es «futuro»; la edad se mide contra <paramref name="nowUtc"/>.
+        /// </summary>
+        public static string? Problem(DateTime? asOf, DateTime nowUtc, TimeSpan? maxAge, DateTime? readUtc = null)
         {
             if (asOf is not DateTime t) return "cotización sin hora";
-            if (t > nowUtc + ClockSkew) return $"hora en el futuro ({t:o})";
+            var checkUtc = readUtc is DateTime r && r > nowUtc ? r : nowUtc;
+            if (t > checkUtc + ClockSkew) return $"hora en el futuro ({t:o})";
             if (maxAge is TimeSpan max && nowUtc - t > max)
                 return $"dato viejo ({(nowUtc - t).TotalSeconds:F0}s, límite {max.TotalSeconds:F0}s)";
             return null;

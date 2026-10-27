@@ -57,7 +57,13 @@ namespace DataFeed.Application.App.Runtime
 
         private readonly IPcsMarketSource _market;
 
-        public OptionStructureBuilder(IPcsMarketSource market) => _market = market;
+        private readonly Func<DateTime> _utcNow;
+
+        public OptionStructureBuilder(IPcsMarketSource market, Func<DateTime>? utcNow = null)
+        {
+            _market = market;
+            _utcNow = utcNow ?? (() => DateTime.UtcNow);
+        }
 
         private static bool IsAmExpiration(Expiration e) =>
             string.Equals(e.SettlementType, "AM", StringComparison.OrdinalIgnoreCase)
@@ -173,11 +179,12 @@ namespace DataFeed.Application.App.Runtime
                 var underlying = await _market.GetUnderlyingAsync(symbol, ct);
                 if (underlying == null || !double.IsFinite(underlying.Price) || !(underlying.Price > 0))
                     return Rejected($"sin precio del subyacente {symbol} para elegir strikes por puntos o %");
-                var spotProblem = DataFreshness.Problem(underlying.At(nowUtc), nowUtc, DataFreshness.MaxAge(spec));
+                // «Futuro» es posterior al reloj de la lectura, no al nowUtc del inicio de la evaluación (DataFreshness).
+                var spotProblem = DataFreshness.Problem(underlying.At(nowUtc), nowUtc, DataFreshness.MaxAge(spec), _utcNow());
                 if (spotProblem != null)
                     return Rejected($"precio del subyacente {symbol} no utilizable: {spotProblem}");
                 quoteSpot = underlying.Price;
-                spotAsOf = underlying.At(nowUtc);
+                spotAsOf = DataFreshness.CapAt(underlying.At(nowUtc), nowUtc);
             }
 
             // ── 4. Cada pata: su strike ──
@@ -218,9 +225,10 @@ namespace DataFeed.Application.App.Runtime
             // Frescura por pata: una pata vieja o con hora futura descarta el candidato aunque la otra
             // tenga hora de lectura (Codex C1; ver DataFreshness).
             var maxAge = DataFreshness.MaxAge(spec);
+            var readUtc = _utcNow();
             foreach (var l in legs)
             {
-                var problem = DataFreshness.Problem(quotes[l.Plan.Id].At(nowUtc), nowUtc, maxAge);
+                var problem = DataFreshness.Problem(quotes[l.Plan.Id].At(nowUtc), nowUtc, maxAge, readUtc);
                 if (problem != null)
                     return Rejected($"cotización de la pata {l.Plan.SideWord} {l.Streamer} no utilizable: {problem}");
             }
@@ -265,7 +273,7 @@ namespace DataFeed.Application.App.Runtime
                 return Rejected($"riesgo máximo no finito ({maxRisk})");
 
             // La hora más vieja entre las cotizaciones; las patas con hora de lectura (no del proveedor) se cuentan aparte.
-            var knownTimes = quotes.Values.Select(q => q.At(nowUtc)).ToList();
+            var knownTimes = quotes.Values.Select(q => DataFreshness.CapAt(q.At(nowUtc), nowUtc)).ToList();
             if (spotAsOf.HasValue) knownTimes.Add(spotAsOf.Value);
             DateTime? oldestQuoteAt = knownTimes.Count > 0 ? knownTimes.Min() : null;
             int quotesWithoutTime = quotes.Values.Count(q => q.ReadTime);

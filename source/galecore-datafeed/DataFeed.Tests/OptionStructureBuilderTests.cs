@@ -74,8 +74,8 @@ public class OptionStructureBuilderTests
         };
     }
 
-    private static Task<CandidateBuildResult> Build(CreditSpreadCandidateBuilderTests.FakeSource source, StrategySpec spec) =>
-        new CreditSpreadCandidateBuilder(source).BuildAsync(new StrategyInstance { InstanceId = "i-1" }, spec, "SPX", 15.2, Now);
+    private static Task<CandidateBuildResult> Build(CreditSpreadCandidateBuilderTests.FakeSource source, StrategySpec spec, DateTime? clock = null) =>
+        new CreditSpreadCandidateBuilder(source, () => clock ?? Now).BuildAsync(new StrategyInstance { InstanceId = "i-1" }, spec, "SPX", 15.2, Now);
 
     // ── El sándwich ─────────────────────────────────────────────
 
@@ -219,6 +219,32 @@ public class OptionStructureBuilderTests
 
         Assert.Null(result.Candidate);
         Assert.Contains(reason, result.RejectReason);
+    }
+
+    [Fact]
+    public async Task UnderlyingProviderTimeAfterEvaluationNowButBeforeTheReadClock_IsNotFuture()
+    {
+        // 27/10: el SPX se pidió ~8 s después del nowUtc y trajo hora del proveedor de ese momento.
+        var source = Source();
+        source.Underlying = new UnderlyingQuote(Spot, Now.AddSeconds(8));
+
+        var result = await Build(source, Sandwich(), clock: Now.AddSeconds(10));
+
+        Assert.NotNull(result.Candidate);
+        Assert.True(result.Candidate!.Snapshot.OldestQuoteAt <= Now);
+        Assert.True(ShadowRiskValidator.Validate(result.Candidate, Sandwich(), 0, null, Now).IsValid);
+    }
+
+    [Fact]
+    public async Task UnderlyingProviderTimeBeyondTheReadClockPlusSkew_StillBlocks()
+    {
+        var source = Source();
+        source.Underlying = new UnderlyingQuote(Spot, Now.AddSeconds(30));
+
+        var result = await Build(source, Sandwich(), clock: Now.AddSeconds(10));
+
+        Assert.Null(result.Candidate);
+        Assert.Contains("futuro", result.RejectReason);
     }
 
     [Fact]
