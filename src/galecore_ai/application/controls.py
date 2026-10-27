@@ -56,6 +56,13 @@ EQUITY_RISK_PATHS = ("candidate_construction.sizing.fixed_contracts",)
 EQUITY_NOT_INDISPENSABLE = {"stop", "salida por tiempo"}
 # Of SUPERVISED, what reads a credit or an expiration and so never fires on a stock position.
 OPTIONS_ONLY_SUPERVISED = {"cerca del stop", "dato macro o FOMC antes del vencimiento"}
+# 0DTE options (min_dte = max_dte = 0): the runtime settles every expired option position with the official close, so
+# holding to expiry is the time exit (the 1:45pm Sandwich, owner 27/10); GaleCore rejects a 16:00 time_exit anyway.
+ZERO_DTE_PATHS = ("candidate_construction.constraints.min_dte", "candidate_construction.constraints.max_dte")
+
+
+def is_zero_dte(spec: dict) -> bool:
+    return all(_spec_value(spec, p) == 0 and not isinstance(_spec_value(spec, p), bool) for p in ZERO_DTE_PATHS)
 
 
 def is_long_equity(spec: dict) -> bool:
@@ -114,8 +121,10 @@ def classify(doc: StrategyDocument, checker: SpecChecker | None = None) -> dict:
         if equity and name == "riesgo por operación":
             paths = (*paths, *EQUITY_RISK_PATHS)
         runs = any(_spec_value(spec, q) not in (None, {}, [], False) and _covers(executed, q) for q in paths)
-        indispensables.append({"control": name, "estado": "ejecutado" if runs else (
-            "sin verificar" if unverified else "no ejecutado por el runtime")})
+        at_expiry = name == "salida por tiempo" and not runs and not equity and is_zero_dte(spec)
+        indispensables.append({"control": name, "estado": "ejecutado" if runs or at_expiry else (
+            "sin verificar" if unverified else "no ejecutado por el runtime")}
+            | ({"como": "liquidación al vencimiento con el cierre oficial (0DTE)"} if at_expiry else {}))
     missing = [i["control"] + f" ({i['estado']})" for i in indispensables if i["estado"] != "ejecutado"]
     if unverified:
         missing = [unverified]

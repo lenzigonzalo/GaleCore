@@ -173,6 +173,21 @@ def test_options_keep_their_indispensables(kb, research_ref):  # noqa: F811
     assert "stop" in names and "salida por tiempo" in names
 
 
+def test_zero_dte_options_hold_to_expiry_without_a_time_exit():
+    """1:45pm Sandwich (owner 27/10): a 0DTE spec without time_exit is settled at expiry by the runtime."""
+    doc = _equity_doc()
+    spec = json.loads(doc.spec_json)
+    spec["structure"] = {"default_structure": "custom_options", "allowed_strategies": ["custom_options"]}
+    spec["candidate_construction"]["constraints"] = {"min_dte": 0, "max_dte": 0}
+    doc.spec_json = json.dumps(spec)
+    row = {i["control"]: i for i in _classify(doc)["indispensables"]}["salida por tiempo"]
+    assert row["estado"] == "ejecutado" and "vencimiento" in row["como"]
+    spec["candidate_construction"]["constraints"]["max_dte"] = 7
+    doc.spec_json = json.dumps(spec)
+    assert {i["control"]: i["estado"] for i in _classify(doc)["indispensables"]}["salida por tiempo"] == (
+        "no ejecutado por el runtime")
+
+
 def test_long_equity_sheet_speaks_of_stocks_not_of_options():
     from galecore_ai.application import strategy_sheet
     doc = _equity_doc()
