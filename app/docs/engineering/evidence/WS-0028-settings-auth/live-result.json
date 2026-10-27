@@ -1,0 +1,18 @@
+{
+  "http": 200,
+  "providers": [
+    {
+      "id": "claude",
+      "status": "authenticated"
+    },
+    {
+      "id": "codex",
+      "status": "authenticated"
+    }
+  ],
+  "invalidOrigin": 403,
+  "bundleHttp": 200,
+  "simplifiedConnections": true,
+  "errors": [],
+  "scope": "Endpoint real y bundle servido; login del monitor visible. Sin ejecutar login de proveedores ni E2E autenticado."
+}

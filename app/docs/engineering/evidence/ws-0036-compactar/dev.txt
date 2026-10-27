@@ -1,0 +1,4 @@
+﻿Real Dev: header hypothesis/objective; 10 log columns; row heights [37, 37] px; runtime folded.
+Design thresholds from real JSON: profit 50%, stop 200%, time 21 DTE.
+Real Dev compact design columns: 728px 728px shared Lab design requests: 1
+Operativa GEX wall labels: ['PUT WALL 750', 'CALL WALL 800']

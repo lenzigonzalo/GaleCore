@@ -1,0 +1,18 @@
+> react-scripts test --watchAll=false --runInBand --runTestsByPath src/pages/LabSidebar.test.tsx src/components/layout/WorkspaceNav.test.tsx src/components/layout/WorkspaceHeader.test.tsx
+
+npm : PASS src/pages/LabSidebar.test.tsx (9.713 s)
+At line:8 char:17
++ ... :CI='true'; npm --prefix source/galecore-monitor test -- --watchAll=f ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS src/pages/...t.tsx (9.713 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+PASS src/components/layout/WorkspaceNav.test.tsx
+PASS src/components/layout/WorkspaceHeader.test.tsx
+
+Test Suites: 3 passed, 3 total
+Tests:       5 passed, 5 total
+Snapshots:   0 total
+Time:        17.449 s
+Ran all test suites within paths "src/pages/LabSidebar.test.tsx", "src/components/layout/WorkspaceNav.test.tsx",
+"src/components/layout/WorkspaceHeader.test.tsx".

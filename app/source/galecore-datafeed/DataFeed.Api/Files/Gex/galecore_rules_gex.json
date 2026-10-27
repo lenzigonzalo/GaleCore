@@ -1,0 +1,308 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "strategy": "gex_gamma_exposure",
+    "strategy_name_es": "Gamma Exposure (informativa)",
+    "profile": "core",
+    "status": "informational",
+    "enabled_for_live": false,
+    "last_updated": "2026-08-05",
+    "purpose": "Mostrar el gamma exposure de un simbolo para la toma de decisiones. NO propone trades, NO calcula setups, NO ejecuta nada.",
+    "schema_note": "Declara macro_regime.checks + definitions + position_builder.layers[id=2].config.structure_selection.thresholds con el schema que leen los primitivos compartidos de App/Shared/CascadeUtils (EvaluateLayer1, ComputePriceZScore, ComputeTrend...), asi la estrategia no necesita codigo nuevo. Mismo criterio que el JSON de RPF.",
+    "scope_note": "El GEX de esta estrategia es GLOBAL: agrega todos los strikes de todos los vencimientos de la cadena dentro de gex.max_dte, incluido 0DTE. El GEX de /App/GaleCore/* sigue siendo de un solo vencimiento — son numeros distintos a proposito.",
+    "switch_note": "No corre BackgroundService ni sockets propios (todo es REST on-demand), pero igual expone el switch de estrategia: lo que apaga es el barrido de la cadena, que anda solo y compite por DXLink."
+  },
+
+  "strategy_scope": {
+    "allowed_strategies": [],
+    "forbidden_strategies": ["iron_condor", "call_credit_spread", "put_credit_spread", "naked_short", "ratio_spread", "long_directional"],
+    "structure_selection_method": "disabled_informational_only",
+    "note": "Estrategia informativa: no selecciona ni sugiere estructura alguna."
+  },
+
+  "universe": {
+    "mode": "whitelist",
+    "tickers": ["SPY", "QQQ", "AAPL"],
+    "min_avg_daily_volume_underlying": 5000000,
+
+    "ad_hoc_search": {
+      "enabled": true,
+      "max_pinned": 1,
+      "max_results": 8,
+      "auto_refresh": false,
+      "min_query_length": 1,
+      "allowed_instrument_types": ["Equity", "Index"],
+      "_note": "El buscador de la pestania: una card mas al final de la grilla que permite analizar un simbolo que NO esta en tickers, sin editar este archivo ni reiniciar la API. Lo resuelve GET /Data/Tastytrade/Symbols/Search, que es de plataforma (Data.Api) y no de esta estrategia.",
+      "_por_que_no_entra_al_universo": "El simbolo elegido NO se agrega a tickers. Esa lista es whitelist, esta en git, es la misma para todos y declara que barre la estrategia; un simbolo que un operador mira cinco minutos no es una regla. El pinneado vive en el front y muere con la sesion.",
+      "_max_pinned_note": "Uno solo, y no es una limitacion de la UI: los barridos se serializan en un semaforo global (ver GexAnalysisHandler) y recorrer el universo ya toma ~383s medidos. Cada simbolo pinneado entra a esa misma ronda. Elegir uno nuevo reemplaza al anterior.",
+      "_auto_refresh_note": "false = no se programa ningun intervalo para el simbolo ad-hoc. El primer barrido lo dispara elegirlo en el buscador (esa eleccion ES el acto manual); despues solo el boton Reload. Por eso su card no usa el amarillo de dato viejo sino la etiqueta MANUAL: para un simbolo que nadie va a refrescar, envejecer es el estado normal y no una anomalia.",
+      "_allowed_instrument_types_note": "Lo que el front le pasa a InstrumentTypes del endpoint de busqueda. Equity incluye ETFs (SPY y QQQ son Equity para Tastytrade), asi que los dos tipos cubren el universo analizable. NO promete que el simbolo tenga cadena de opciones: eso recien se sabe al pedirla, y ahi el barrido responde 409 con code option_chain_not_found. Buscar 'AAPL' devuelve siete ETFs apalancados sobre AAPL, y ninguno tiene cadena propia.",
+      "_sin_umbral": "Un simbolo ad-hoc no figura en definitions.gex_threshold_by_symbol, asi que su celda de GEX Global muestra 'sin umbral declarado' en vez de un veredicto. Es correcto y deliberado: declarar un umbral es lo que hace que ese check signifique algo, y para un simbolo que se mira una vez no hay umbral que declarar."
+    }
+  },
+
+  "gex": {
+    "enabled": true,
+    "_enabled_note": "Estado por defecto del switch de la estrategia. En OFF el endpoint /App/Gex/Analysis NO barre la cadena ni toca DXLink: devuelve lo ultimo cacheado marcado como congelado. El operador lo cambia desde el front, y ese override se guarda en Files/Gex/gex_switch_state.json — este valor solo manda mientras nadie haya tocado el switch.",
+    "max_dte": 60,
+    "include_zero_dte": true,
+    "expiration_types": ["Regular", "Weekly"],
+    "strike_scope": "full_chain",
+
+    "wall_band": {
+      "width_em": 0.25,
+      "money_zone_em": 0.15,
+      "_note": "La zona sombreada que el grafico pinta a cada lado: la ventana de ancho width_em x ExpectedMove que maximiza la suma de |GEX| de su lado, entre los strikes que estan FUERA de la zona del dinero (|K - spot| >= money_zone_em x EM). La exclusion del dinero no es un detalle: sin ella la ventana mas densa puede SER la pila de gamma del dinero, o medirse contra ella.",
+      "_es_sombreado_y_nada_mas": "La banda NO tiene fila en el Expiry Engine ni etiqueta en ningun grafico. Es contexto visual: dice que tan ancha es la concentracion alrededor del muro, y esa lectura es de forma, no de numero. El nivel con nombre y valor sigue siendo el Call/Put Wall, que es lo unico que se lee como texto. Poner las dos cosas como texto duplica la lectura sobre el mismo eje.",
+      "_por_que_existe": "El Call/Put Wall es un ARGMAX sobre un solo strike, y esta medido que no es una concentracion: nunca junta mas del 19% del |GEX| de su lado, le gana al segundo candidato por tan poco como un 2%, y salta — el call wall de QQQ 18-Sep estuvo en 750 a las 10:12 ET y en 710 a las 11:00 ET del mismo dia. El sombreado muestra cuanta masa hay realmente alrededor de ese numero, que es lo que la linea sola no puede decir. La banda en si es estable: sobre diez series con dos o mas tomas se movio $1.3 en total, contra $16.1 de una construccion anterior. Ver research/got/, seccion 61.4.",
+      "_lo_que_la_banda_no_dice": "Que el precio vaya a frenar ahi, ni que vender en su borde sea mejor que vender al mismo delta en cualquier otro lado. Se midio sobre 926 observaciones de SPY/QQQ/IWM 2013-2025 y la respuesta es que NO hay diferencia: el borde se comporta como un strike cualquiera de su mismo delta y su mismo lado (+0.010, IC [-0.019, +0.040]). Es DESCRIPCION del posicionamiento, no una zona de venta — y que sea sombreado sin etiqueta ayuda a que se lea asi. GEX es informativa. Ver research/got/hallazgos/2026-08-28-la-banda-no-predice.md.",
+      "_sin_umbral": "xmed —la banda contra la ventana mediana de su lado— lo calcula el backend y no lo dibuja ninguna pantalla, justamente porque no lleva umbral: no hay ninguna falla observada contra la cual declararlo, y ademas no es comparable entre simbolos ni entre epocas (sobre la historia de cadenas su mediana va de 205.8 en 2013 a 19.4 en 2025, segun cuantos strikes lejanos liste la cadena). Queda en la respuesta como dato de diagnostico.",
+      "_no_aplica_al_agregado": "La banda NO se calcula sobre la cadena completa, por la misma razon que expected_move no se muestra ahi: su ancho es una fraccion del EM y el agregado no tiene un `t` con el cual definirlo. En global el grafico simplemente no pinta el sombreado; los muros si salen, porque el argmax no necesita EM.",
+      "_mismo_sombreado_en_los_dos_graficos": "El grafico de velas y el panel de barras pintan la banda IGUAL —mismo color de lado y misma opacidad—, porque son la misma zona vista dos veces sobre el mismo eje de precio. Dos tratamientos distintos se leerian como dos objetos distintos."
+    },
+    "oi_delta_band": [0.005, 0.995],
+    "_oi_delta_band_note": "Banda de |delta| para pedir OI: la pata que queda afuera no tiene OI y aporta GEX 0. Medido 2026-08-06 en SPY (cadena completa, misma corrida para evitar drift): con [0.02, 0.98] lo descartado era solo 3.6% del |GEX|, pero -41.3B del NETO sobre 210.5B (-19.6%), porque lo que se corta esta sesgado a puts (los puts lejanos acumulan OI) e inflaba el neto hacia el lado call. Abrir la banda no costo latencia medible (93s abierta vs 127s cerrada). Se deja una poda minima en 0.005/0.995 para acotar la cola en simbolos de cadena enorme.",
+    "greeks_batch_size": 200,
+    "greeks_retries": 2,
+    "cache_seconds": 600,
+    "cache_min_coverage_pct": 99,
+    "_cache_note": "Un barrido incompleto no se guarda en cache: si se guardara, el tablero mostraria durante cache_seconds un GEX al que le faltan vencimientos enteros, y un GEX mas chico se lee como caida del gamma en vez de dato faltante. Medido 2026-08-05: una llamada abortada por el cliente dejo cacheado 494.1B con 14/17 vencimientos, contra 568B con 17/17. El umbral es 99 y no 100 porque la cobertura viene redondeada a un decimal.",
+    "_note": "max_dte y oi_delta_band son las dos palancas de latencia. Medido a 50 DTE (2026-08-05): la cadena de SPY eran ~17 vencimientos (~6200 simbolos). El 2026-08-14 se subio a 60 para que entre el vencimiento mensual siguiente completo — son ~2 vencimientos y ~700 simbolos mas, y el barrido escala casi lineal con eso. Los Greeks se piden en lotes de greeks_batch_size y el OI reusa el cache diario por simbolo del handler. Si la primera llamada del dia tarda de mas, se bajan aca — sin recompilar.",
+    "_batch_note": "Medido 2026-08-05 con la cadena completa de SPY: lotes de 500 (12 lotes) dieron barridos de 103-256s, porque cada lote que no completa espera su timeout de 15s entero. Con lotes de 1000 eran 6 lotes. Bajado a 200 el 2026-08-07: con 1000, DXLink respondia BAD_ACTION 'subscription rate is too high' y, como el canal 3 es compartido, el rechazo cortaba tambien Trade/Quote de los subyacentes (tablero sin precio en vivo) y dejaba el barrido en 0 vencimientos. El limite de DXLink es de VOLUMEN por unidad de tiempo, no de tamano de lote: el lote chico va acompanado del throttle de FEED_SUBSCRIPTION en DxLinkStreamingService. Barridos mas lentos a cambio de un canal que no se rompe.",
+    "_cache_seconds_note": "600 y no 300: los barridos se serializan (un semaforo, ver GexAnalysisHandler), asi que lo que manda no es lo que tarda UN simbolo sino recorrer el universo entero. Medido 2026-08-06 con mercado abierto: SPY 197s + QQQ 135s + AAPL 50s + SKM 1s = ~383s. Con 300s, para cuando el operador mira el cuarto simbolo el primero ya expiro y se rebarre solo. display_config.gex_tab.refresh_seconds va igual (600).",
+    "_retries_note": "greeks_retries existe porque el snapshot devuelve lo que junto al vencer el timeout: sin reintentos un lote lento deja vencimientos ENTEROS sin Greeks y el netGEX global cambia entre corridas (medido 2026-08-05: 271B con 12 vencimientos vs 696B con 16). Cada reintento pide solo los simbolos que faltan."
+  },
+
+  "definitions": {
+    "_note": "Solo quedan los dos nodos que el codigo LEE (CascadeUtils.EvaluateLayer1). Las definiciones de formulas (iv_rank, expected_move, gex_skew, trend_ema, realized_vol_regime, gamma_zero_level, call_wall, put_wall, etc.) se eliminaron el 2026-08-06: estan implementadas en C# y aca eran copias que nadie leia, con el riesgo de desincronizarse y mentir. La referencia conceptual esta en docs/archive/galecore-rules-reference.md.",
+
+    "gex_threshold_by_symbol": {
+      "type": "lookup_by_symbol",
+      "values": {
+        "SPY": 0,
+        "QQQ": 0
+      },
+      "unit": "billions_usd",
+      "_note": "El check pasa con GEX >= 0 (gamma positivo): el umbral es el SIGNO, no un piso en billones. Como el GEX global agrega toda la cadena, es mayor en magnitud que el de un vencimiento, asi que cualquier piso en billones queda descalibrado — el signo no. La unit sigue siendo billions_usd porque es la escala en la que el handler compara el valor; el umbral en esa escala es 0.",
+      "_historia": "Hasta el 2026-08-18 estos valores eran SPY 200 y QQQ 50, o sea un piso en billones que contradecia a esta misma nota, y que aplicado al agregado global es justo la comparacion que no se sostiene. Nadie lo veia porque el cuadro Details pintaba el check reprobado en rojo con una cruz y un check en rojo mas no llama la atencion; al sacar el semaforo y mostrar la referencia en texto ('ref >= $200B' contra un valor de -$951B) quedo a la vista.",
+      "_regla": "ESTE NODO DECIDE QUE SIMBOLOS SE EVALUAN. Cada simbolo del universo que se quiera evaluar tiene que declarar aca su umbral. El que no figura NO se valida: el tablero muestra su GEX en gris, apagado, con 'sin umbral' (el backend informa thresholdDeclared:false). Agregar un simbolo al universo no alcanza para que su check de GEX signifique algo."
+    },
+    "zgl_with_buffer": {
+      "type": "formula",
+      "formula": "gamma_zero_level * (1 + 0.005)",
+      "buffer_pct": 0.005
+    }
+  },
+
+  "macro_regime": {
+    "name": "macro_regime",
+    "description": "Contexto de mercado. En esta estrategia es LECTURA, no un gate: ningun check bloquea nada porque no hay trade que bloquear.",
+    "pass_rule": "all_checks_pass",
+    "on_fail": "inform_only",
+    "checks": [
+      {
+        "id": "vix_absolute",
+        "label": "VIX < 30",
+        "metric": { "ref": "marketdata.VIX.price" },
+        "operator": "lt",
+        "threshold": { "value": 30 },
+        "source": "/Data/Tastytrade/MarketData/Trade -> Symbol=VIX (indice CBOE, mismo camino que VVIX)",
+        "_note": "Es el VIX real, NO la IV del simbolo. Hasta 2026-08-10 el codigo usaba IV30_30d como proxy: en SPY coincidia por casualidad (IV30 ~ VIX) pero con universo multi-simbolo cada simbolo reportaba 'su' VIX (SKM 77.2 marcaba panico siendo un ADR ilquido). Un indice unico no puede tener un valor por simbolo. El check es macro: da lo mismo para todos los simbolos.",
+        "on_fail": "inform_only"
+      },
+      {
+        "id": "vix_term_structure",
+        "label": "VIX TS normal (VIX9D < VIX)",
+        "metric": { "ref": "marketdata.VIX9D.price" },
+        "operator": "lt",
+        "threshold": { "ref": "marketdata.VIX.price" },
+        "source": "/Data/Tastytrade/MarketData/Trade -> Symbol=VIX9D y Symbol=VIX (indices CBOE, mismo camino que VVIX)",
+        "on_fail": "inform_only",
+        "on_no_data": "pass",
+        "_note": "Contango del VIX, NO la IV del simbolo. Hasta 2026-08-10 declaraba iv30_9d vs iv30_30d: eso SI es una curva, pero del simbolo barrido, no del mercado — el mismo error de categoria que tenia vix_absolute (ver b22c8c9). Un check de macro_regime tiene que dar lo mismo para todos los simbolos. El JSON de RPF declaraba una TERCERA cosa distinta; los dos quedaron unificados aca."
+      },
+      {
+        "id": "iv_rank",
+        "label": "IV Rank entre 25 y 65",
+        "metric": { "ref": "definitions.iv_rank" },
+        "operator": "between",
+        "threshold": { "min": 25, "max": 65 },
+        "source": "/App.Analytics/IVRank",
+        "on_fail": "inform_only"
+      },
+      {
+        "id": "iv_momentum",
+        "label": "IV aceleracion <= 12%",
+        "metric": { "ref": "definitions.iv30_atm_roc_pct" },
+        "operator": "lte",
+        "threshold": { "value": 12.0 },
+        "source": "/App.Analytics/ImpliedVolatility -> IV30RocPct",
+        "on_fail": "inform_only"
+      },
+      {
+        "id": "gex_total",
+        "label": "GEX global >= umbral por simbolo",
+        "metric": { "ref": "definitions.gex_total" },
+        "operator": "gte",
+        "threshold": { "ref": "definitions.gex_threshold_by_symbol" },
+        "source": "/App/Gex/Analysis -> gex.global.netGex",
+        "on_fail": "inform_only"
+      },
+      {
+        "id": "spot_vs_zgl",
+        "label": "Spot > ZGL + 0.5%",
+        "metric": { "ref": "marketdata.spot" },
+        "operator": "gt",
+        "threshold": { "ref": "definitions.zgl_with_buffer" },
+        "source": "/App/Gex/Analysis -> gex.global.gammaZeroLevel",
+        "on_fail": "inform_only"
+      }
+    ]
+  },
+
+  "position_builder": {
+    "description": "Solo esta declarado el layer 2 y solo por sus thresholds: el handler los usa para interpretar el z-score direccional del Diagnostico de mercado. No hay motor de strikes ni seleccion de estructura en esta estrategia.",
+    "layers": [
+      {
+        "id": 2,
+        "name": "market_context",
+        "description": "Factores de contexto (z-score, GEX skew, trend EMA, RV, flow). Informativo.",
+        "config": {
+          "structure_selection": {
+            "method": "disabled_informational_only",
+            "thresholds": {
+              "neutral_z": 1.0,
+              "extreme_z": 1.5
+            },
+            "inputs": {
+              "price_zscore": { "ref": "definitions.directional_zscore" },
+              "gex_skew": { "ref": "definitions.gex_skew" },
+              "trend": { "ref": "definitions.trend_ema" }
+            },
+            "rules": []
+          }
+        },
+        "checks": []
+      }
+    ]
+  },
+
+  "display_config": {
+    "gex_tab": {
+      "description": "Contrato de render de la pestana GEX del monitor. El frontend renderiza lo que este nodo declara.",
+      "refresh_seconds": 600,
+      "_refresh_note": "Tiene que ser >= gex.cache_seconds, o el tablero pide de nuevo mientras el barrido anterior sigue corriendo. El boton Reload fuerza el rebarrido cuando el operador lo necesita antes.",
+      "default_expiry": "nearest",
+      "_default_expiry_note": "La pestana arranca en el vencimiento mas cercano (en dia habil, el 0DTE). El agregado de toda la cadena se elige a mano con la fila GLOBAL de options_chain: es una lectura distinta —no tiene vencimiento ni DTE— y no deberia ser lo primero que se ve sin haberlo pedido.",
+      "candles": {
+        "interval": "1h",
+        "count": 100,
+        "right_pad_bars": 12,
+        "_right_pad_note": "Barras vacias a la derecha del grafico: corren las velas a la izquierda y dejan aire delante del precio."
+      },
+      "chart_scale": {
+        "label": "Encuadrar la escala en la zona gamma",
+        "padding_pct": 0.06,
+        "_padding_note": "El aire se mide en PROPORCION del marco y no en strikes: dos strikes son el 17% del alto en un 0DTE (marco de ~13 puntos) y el 3% en un vencimiento a 42 dias (marco de ~69), o sea que la misma regla se ve enorme en un lado y nula en el otro. Un porcentaje se ve igual en los dos. El marco NO se centra en el spot: va pegado a las anclas, asi que el spot queda al medio solo cuando el EM es el que manda de los dos lados.",
+        "_padding_es_todo_el_aire": "Con este encuadre el eje de precio pone scaleMargins en 0, para que padding_pct sea el aire que se ve y no la mitad. Fuera del encuadre el eje conserva su 8% de siempre.",
+        "upper_anchors": ["expected_move_1sigma", "call_wall", "call_band_high"],
+        "lower_anchors": ["expected_move_1sigma", "put_wall", "put_band_low"],
+        "_note": "El boton de la mira, en el encabezado del cuadro Graph, encuadra el eje de precio en la zona que el operador mira: toma el mayor de las anclas de arriba, el menor de las de abajo, y agrega padding_pct del alto resultante a cada lado. El encuadre por defecto son los muros mas un 1,5%, que deja afuera el 1er EM y el borde de las bandas cuando se salen de los muros.",
+        "_anchors_note": "Las anclas son los tres niveles que el grafico ya dibuja: 1er EM (spot +- 1 sigma), el muro del lado y el borde de la banda de gamma del lado. Cada lista mira SU lado de la cadena. En el scope GLOBAL no hay bandas: esa ancla se ignora, no se inventa."
+      },
+      "details_panel": {
+        "microstructure": false,
+        "gex_scope": "global",
+        "subtitle": "Contexto de mercado — lectura informativa: nada de este cuadro habilita ni bloquea una operacion.",
+        "_gex_global_note": "La celda gex_global dice 'GEX Global' porque el numero agrega TODA la cadena; en Main la misma metrica se llama 'GEX' y es de un solo vencimiento. Los simbolos sin umbral en definitions.gex_threshold_by_symbol muestran 'sin umbral declarado' en la linea de referencia, no un umbral inventado.",
+        "semaphore": false,
+        "_semaphore_note": "false = sin checkmarks y sin veredicto de PANEL: GEX no tiene gates, nada de este cuadro habilita ni bloquea nada, y un numero en rojo con una cruz se lee como averia — el GEX global negativo es lo normal en SPY. Cada metrica muestra su referencia en texto ('< 30', '25-65'). Lo que NO prohibe es que una celda suelta se pinte contra su referencia: eso se declara metrica por metrica con color 'vs_ref' (ver _color_note), y hoy lo piden VIX e IV Rank.",
+        "groups": [
+          {
+            "id": "market",
+            "label": "Mercado",
+            "scope": "market",
+            "hint": "Igual para todos los simbolos",
+            "metrics": [
+              { "id": "vix", "label": "VIX", "color": "vs_ref" },
+              { "id": "vix_term_structure", "label": "VIX TS" }
+            ]
+          },
+          {
+            "id": "volatility",
+            "label": "Volatilidad",
+            "scope": "symbol",
+            "hint": "Cuanto vale el seguro, y hacia donde va",
+            "metrics": [
+              { "id": "iv_rank", "label": "IV Rank", "color": "vs_ref" },
+              { "id": "iv_atm", "label": "IV ATM" },
+              { "id": "iv_momentum", "label": "IV Momentum" },
+              { "id": "realized_vol", "label": "RV 10 / 30" }
+            ]
+          },
+          {
+            "id": "gamma",
+            "label": "Estructura gamma",
+            "scope": "symbol",
+            "hint": "Donde estan los muros, y de que lado",
+            "metrics": [
+              { "id": "gex_global", "label": "GEX Global" },
+              { "id": "gex_skew", "label": "Skew de muros" },
+              { "id": "spot_vs_zgl", "label": "Spot vs ZGL" }
+            ]
+          },
+          {
+            "id": "price",
+            "label": "Precio",
+            "scope": "symbol",
+            "hint": "Que esta haciendo",
+            "metrics": [
+              { "id": "price_zscore", "label": "z-score direccional" },
+              { "id": "trend_ema", "label": "Trend EMA" }
+            ]
+          }
+        ],
+        "_groups_note": "Los once indicadores agrupados por la PREGUNTA que contestan, y no por el objeto de la respuesta que los trae (macroRegime.checks contra structureInputs), que es un orden de origen del dato y al operador no le dice nada: dejaba RV lejos de IV Rank — juntas son la lectura de VRP — y partia la historia del gamma en dos columnas. El orden de los grupos es la secuencia de lectura: primero el marco de mercado, despues lo propio del simbolo. Reemplazo a 'columns', que declaraba las dos columnas por componente (validation_layers / market_diagnostics).",
+        "_scope_note": "scope 'market' = el valor NO depende del simbolo. VIX y VIX9D son indices CBOE que GexAnalysisHandler pide como simbolos fijos, asi que dan lo mismo en SPY, QQQ o AAPL. Por eso van PRIMEROS y con su propio rotulo mas el hint que lo dice: sin ese aviso, cambiar de ticker y ver que esos dos no se mueven es indistinguible de un dato que quedo colgado del barrido anterior. Desde el 2026-08-19 comparten la grilla con los grupos del simbolo, separados por la misma linea vertical que separa a los demas; antes el scope 'market' los sacaba a una franja aparte arriba, con fondo y tipografia propias, que era una segunda gramatica visual para la misma clase de dato.",
+        "_color_note": "color de una metrica: 'vs_ref' = verde si el valor cae dentro de la referencia que declara macro_regime y rojo si no (lo resuelve el `passed` que ya calcula el backend, no el front). Se declara aca y no en el front para que quien lea el JSON vea que celdas del cuadro tienen lectura de aprobado/reprobado. Las metricas SIN este campo pueden igual llevar color, pero por otro eje y no por su referencia: skew de muros usa la identidad del lado de la cadena (call verde / put rojo), trend usa direccion de precio y gex_global usa el signo del gamma. Son cuatro ejes que comparten los mismos dos colores del tema.",
+        "_metric_reference_note": "La linea de referencia de cada celda se arma con lo que devuelve la API (checks.<x>.threshold / min / max), no se declara aca: duplicar el umbral en display_config seria una segunda fuente de verdad que puede quedar desalineada de macro_regime."
+      },
+      "options_chain": {
+        "label": "Vencimientos",
+        "sort": "dte_asc",
+        "columns": ["expiration", "dte", "net_gex"],
+        "global_row": {
+          "enabled": true,
+          "label": "Todos",
+          "scope": "gex.global",
+          "_note": "Fila fija arriba de la lista de vencimientos. Elegirla lleva el grafico y el Expiry Engine al agregado de TODA la cadena (gex.global), que es el mismo numero que muestra el cuadro Details. No es un vencimiento: el panel pasa a modo global y las filas que dependen de un vencimiento se apagan."
+        }
+      },
+      "expiry_engine": {
+        "label": "Vencimiento elegido",
+        "rows": [
+          { "id": "expiration",    "label": "Vencimiento", "source": "byExpiry.expiration" },
+          { "id": "dte",           "label": "DTE",         "source": "byExpiry.dte" },
+          { "id": "net_gex",       "label": "Net GEX",     "source": "byExpiry.netGex" },
+          { "id": "zgl",           "label": "ZGL",         "source": "byExpiry.gammaZeroLevel", "ref": "definitions.gamma_zero_level" },
+          { "id": "call_wall",     "label": "Call Wall",   "source": "byExpiry.callWall",       "ref": "definitions.call_wall" },
+          { "id": "put_wall",      "label": "Put Wall",    "source": "byExpiry.putWall",        "ref": "definitions.put_wall" },
+          { "id": "expected_move", "label": "Expected Move", "source": "byExpiry.expectedMove", "ref": "definitions.expected_move" }
+        ],
+        "_rows_note": "El muro y la banda se reparten el trabajo: el MURO es el nivel con nombre y valor —tiene fila aca y etiqueta en el grafico—, y la BANDA es contexto visual, solo sombreado, sin fila ni etiqueta en ningun lado. Son dos objetos distintos sobre el mismo eje y por eso no compiten: el muro contesta 'que numero', la banda contesta 'que tan ancha es la concentracion alrededor'. Poner las dos como texto duplicaba la lectura; poner solo la banda dejaba a la pantalla sin un nivel que nombrar.",
+        "global_rows": [
+          { "id": "expiration",    "label": "Vencimiento",   "source": null,                          "value": "Cadena completa" },
+          { "id": "dte",           "label": "DTE",           "source": "gex.config.maxDte",           "format": "lte" },
+          { "id": "expirations",   "label": "Vencimientos",  "source": "global.expirationsIncluded" },
+          { "id": "net_gex",       "label": "Net GEX",       "source": "global.netGex" },
+          { "id": "zgl",           "label": "ZGL",           "source": "global.gammaZeroLevel", "ref": "definitions.gamma_zero_level" },
+          { "id": "call_wall",     "label": "Call Wall",     "source": "global.callWall",       "ref": "definitions.call_wall" },
+          { "id": "put_wall",      "label": "Put Wall",      "source": "global.putWall",        "ref": "definitions.put_wall" },
+          { "id": "expected_move", "label": "Expected Move", "source": null }
+        ],
+        "_global_rows_note": "Las mismas filas leidas del agregado en vez de un vencimiento. ZGL, Call Wall y Put Wall los calcula el backend sobre los strikes agregados, asi que salen tal cual. Lo que NO hay en global es el sombreado de la banda, por la misma razon que expected_move: su ancho es una fraccion del EM. No es una fila que quede vacia — es que el grafico no pinta nada. expected_move queda sin fuente A PROPOSITO: es spot * atmIv * sqrt(t) y el agregado no tiene un t — no es un dato que falte, es una formula que no esta definida para este scope. Se muestra vacia y no se rellena con el vencimiento mas cercano, que seria un numero de otro scope leido como si fuera de este. Por lo mismo, en global el grafico no dibuja las bandas +-1s/+-2s. Las dos filas que reemplazan a vencimiento/DTE (cadena completa, <= max_dte, cuantos vencimientos entraron) si son hechos del agregado, y expirationsIncluded deja a la vista si el barrido vino corto."
+      },
+      "hidden_blocks": ["setup_candidato", "portfolio_manager", "microstructure", "strike_engine_structure_rows"]
+    }
+  }
+}

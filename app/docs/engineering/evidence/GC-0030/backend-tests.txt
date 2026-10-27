@@ -1,0 +1,12 @@
+C:\Users\lenzi\GaleCore-Macro-GC-0030\source\galecore-datafeed\DataFeed.Tests\ShadowRuntimePersistenceTests.cs(237,43): warning CS8602: Dereference of a possibly null reference. [C:\Users\lenzi\GaleCore-Macro-GC-0030\source\galecore-datafeed\DataFeed.Tests\DataFeed.Tests.csproj]
+C:\Users\lenzi\GaleCore-Macro-GC-0030\source\galecore-datafeed\DataFeed.Tests\ShadowRuntimePersistenceTests.cs(243,51): warning CS8602: Dereference of a possibly null reference. [C:\Users\lenzi\GaleCore-Macro-GC-0030\source\galecore-datafeed\DataFeed.Tests\DataFeed.Tests.csproj]
+C:\Users\lenzi\GaleCore-Macro-GC-0030\source\galecore-datafeed\DataFeed.Tests\ShadowRuntimePersistenceTests.cs(261,43): warning CS8602: Dereference of a possibly null reference. [C:\Users\lenzi\GaleCore-Macro-GC-0030\source\galecore-datafeed\DataFeed.Tests\DataFeed.Tests.csproj]
+Test run for C:\Users\lenzi\GaleCore-Macro-GC-0030\source\galecore-datafeed\DataFeed.Tests\bin\Debug\net8.0\DataFeed.Tests.dll (.NETCoreApp,Version=v8.0)
+VSTest version 17.14.0 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:   602, Skipped:     8, Total:   610, Duration: 1 s - DataFeed.Tests.dll (net8.0)
+
+Workload updates are available. Run `dotnet workload list` for more information.

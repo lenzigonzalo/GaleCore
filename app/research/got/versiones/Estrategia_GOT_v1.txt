@@ -1,0 +1,999 @@
+ESTRATEGIA SISTEMÁTICA DE VENTA DE VOLATILIDAD
+“DEJAR QUE EL MERCADO VENGA A NOSOTROS”
+
+Documento de trabajo – Versión 1.0
+Objetivo: continuar el diseño y backtest en una sesión futura
+
+
+1. IDEA CENTRAL
+
+La estrategia no intenta predecir si el precio de un activo va a subir o bajar.
+
+La hipótesis central es:
+
+“En lugar de perseguir al mercado para abrir una operación, primero identificamos una estructura de opciones que estaríamos dispuestos a vender y luego esperamos a que el mercado se mueva hacia nuestra zona de interés, aumentando la prima que recibimos por asumir el riesgo.”
+
+El sistema trabaja con estructuras de riesgo definido:
+
+- PCS: Put Credit Spread
+- CCS: Call Credit Spread
+- IC: Iron Condor
+
+Las tres estructuras son fijas. El sistema no cambia de estrategia porque el mercado sea alcista o bajista.
+
+La información de mercado se utiliza para:
+
+1. Detectar si existe un setup válido.
+2. Determinar qué strikes son aceptables.
+3. Definir un “Safety Delta”.
+4. Esperar que el precio se acerque a la zona de riesgo.
+5. Ejecutar solamente cuando la prima sea suficientemente atractiva.
+6. Gestionar la posición hasta alcanzar el objetivo de beneficio o una condición de salida.
+
+
+2. PRINCIPIO FUNDAMENTAL: SETUP ≠ TRIGGER
+
+Una de las ideas más importantes de esta estrategia es separar claramente dos conceptos.
+
+SETUP:
+“Existe una operación que estaría dispuesto a realizar.”
+
+TRIGGER:
+“Ahora es el momento exacto para realizarla.”
+
+Esto evita entrar inmediatamente cada vez que aparece una estructura aparentemente atractiva.
+
+Ejemplo:
+
+SPY = 742
+DTE = 45
+
+Se identifica un PCS potencial:
+
+Sell Put 730
+Buy Put 725
+
+La estructura puede ser válida por:
+
+- Delta del short put
+- Expected Move
+- Put Wall
+- ZGL
+- GEX
+- Liquidez
+- Credit/Width
+- Riesgo máximo
+
+Pero si el mercado está en 742 y la prima es demasiado baja, el sistema puede dejar el setup en estado:
+
+ARMED / ESPERANDO TRIGGER
+
+Si posteriormente SPY cae hacia la zona de interés y la prima aumenta, el sistema puede activar el trigger.
+
+La filosofía es:
+
+“No necesito entrar ahora. Estoy dispuesto a entrar si el mercado me ofrece mejores condiciones.”
+
+
+3. ESTRUCTURAS FIJAS
+
+La estrategia inicial tendrá tres estructuras posibles.
+
+3.1 PUT CREDIT SPREAD (PCS)
+
+Venta de una put y compra de otra put de strike inferior.
+
+Ejemplo:
+
+Sell Put 730
+Buy Put 725
+
+Características:
+
+- Riesgo definido.
+- Beneficio máximo = crédito recibido.
+- Pérdida máxima = ancho del spread menos crédito.
+- Se busca capturar la contracción de la prima y/o el paso del tiempo.
+
+La dirección del precio no es la hipótesis principal.
+
+La hipótesis es que el precio no alcanzará o no permanecerá por debajo de la zona de riesgo antes del vencimiento.
+
+
+3.2 CALL CREDIT SPREAD (CCS)
+
+Venta de una call y compra de otra call de strike superior.
+
+Ejemplo:
+
+Sell Call 755
+Buy Call 760
+
+Características:
+
+- Riesgo definido.
+- Beneficio máximo = crédito recibido.
+- Pérdida máxima = ancho del spread menos crédito.
+
+La hipótesis es que el precio no alcanzará o no permanecerá por encima de la zona de riesgo.
+
+
+3.3 IRON CONDOR (IC)
+
+Combinación de un PCS y un CCS.
+
+Ejemplo:
+
+Buy Put 725
+Sell Put 730
+
+Sell Call 755
+Buy Call 760
+
+El IC será válido solamente si ambos lados cumplen sus condiciones.
+
+Conceptualmente:
+
+Put Side = PASS
+Call Side = PASS
+=> IC = VALID
+
+Si un lado falla:
+
+Put Side = PASS
+Call Side = FAIL
+=> IC = INVALID
+
+
+4. HORIZONTE TEMPORAL
+
+La estrategia inicial trabajará con:
+
+DTE mínimo: 30
+DTE máximo: 50
+
+Zona objetivo aproximada:
+
+30-50 DTE
+
+El objetivo inicial de salida será:
+
+50% del beneficio máximo.
+
+Ejemplo:
+
+Crédito recibido: $1.00
+
+Beneficio máximo: $100 por contrato.
+
+Objetivo:
+
+Comprar para cerrar aproximadamente a $0.50.
+
+Beneficio realizado:
+
+$50 por contrato.
+
+Este parámetro podrá modificarse posteriormente mediante backtesting.
+
+
+5. EL CONCEPTO DE SAFETY DELTA
+
+El Safety Delta es una de las piezas centrales de la estrategia.
+
+No se pretende definir simplemente:
+
+“Siempre vender delta 0.20”.
+
+La idea es:
+
+“Determinar cuál es el máximo delta aceptable para el short strike dadas las condiciones estructurales y de mercado.”
+
+El Safety Delta debe considerar:
+
+- Delta del short strike.
+- Distancia al precio actual.
+- Expected Move.
+- Put Wall / Call Wall.
+- ZGL.
+- GEX.
+- Liquidez.
+- Volatilidad implícita.
+- DTE.
+
+Por lo tanto, el Safety Delta puede ser adaptativo.
+
+Ejemplo conceptual:
+
+PCS:
+
+Short Put Delta máximo = 0.20
+
+Pero un escenario de riesgo elevado podría requerir:
+
+Short Put Delta máximo = 0.15
+
+La idea todavía NO está definida matemáticamente.
+
+Esto debe ser objeto de investigación y backtest.
+
+
+6. EXPECTED MOVE
+
+El Expected Move representa el movimiento que el mercado está descontando implícitamente para el período considerado.
+
+Ejemplo:
+
+SPY = 742
+
+Expected Move:
+
+Lower = 737
+Upper = 747
+
+La estrategia busca inicialmente que el short strike se encuentre fuera del Expected Move.
+
+Para PCS:
+
+Short Put < Expected Move Lower
+
+Para CCS:
+
+Short Call > Expected Move Upper
+
+Para IC:
+
+Short Put < Expected Move Lower
+AND
+Short Call > Expected Move Upper
+
+Esta condición es una hipótesis inicial, no una regla definitiva.
+
+Debe estudiarse si:
+
+- Estar apenas fuera del Expected Move es suficiente.
+- Se necesita una distancia adicional.
+- La distancia óptima depende del IV Rank.
+- La distancia óptima depende del DTE.
+- La distancia óptima depende del símbolo.
+
+
+7. WALLS Y ESTRUCTURA
+
+Se utilizarán:
+
+- Put Wall
+- Call Wall
+- ZGL
+- GEX
+- GEX Skew
+
+El objetivo es determinar la relación entre el short strike y las zonas estructurales.
+
+Por ejemplo, para un PCS:
+
+SPY = 742
+Expected Move Lower = 737
+Short Put = 730
+Put Wall = 710
+
+Hay distintas hipótesis posibles:
+
+HIPÓTESIS A:
+El short put debe estar por encima del Put Wall.
+
+HIPÓTESIS B:
+El short put debe estar por debajo del Put Wall.
+
+No debe asumirse cuál es mejor.
+
+Ambas hipótesis deben ser backtesteadas.
+
+La misma lógica se aplica al Call Wall para CCS.
+
+
+8. LIQUIDEZ
+
+Una operación puede parecer atractiva estadísticamente y ser imposible de ejecutar de manera eficiente.
+
+Por eso cada strike candidato debe pasar filtros de liquidez.
+
+Variables potenciales:
+
+- Bid/Ask spread absoluto.
+- Bid/Ask spread porcentual.
+- Open Interest.
+- Volume.
+- Tamaño de mercado.
+- Liquidez de la combinación completa del spread.
+
+La liquidez debe evaluarse especialmente sobre:
+
+1. Short leg.
+2. Long leg.
+3. Spread completo.
+
+La ejecución ideal debería utilizar una orden Limit.
+
+El sistema debe considerar que el precio teórico del spread no necesariamente es el precio ejecutable.
+
+
+9. EL CONCEPTO “DEJAR QUE EL MERCADO VENGA A NOSOTROS”
+
+Esta es la hipótesis central del timing.
+
+Supongamos:
+
+SPY = 742
+
+PCS seleccionado:
+
+Sell Put 730
+Buy Put 725
+
+El setup es válido.
+
+Pero el sistema no entra inmediatamente.
+
+El mercado puede moverse:
+
+742
+↓
+740
+↓
+738
+↓
+736
+
+A medida que el precio se acerca al short strike:
+
+- El delta del short put aumenta.
+- La prima del spread aumenta.
+- La volatilidad puede aumentar.
+- El credit disponible puede mejorar.
+
+La estrategia busca aprovechar ese movimiento para obtener un mejor precio de entrada.
+
+Conceptualmente:
+
+Precio actual lejos del riesgo
+=> Prima baja
+=> Esperar
+
+Precio se acerca a la zona de riesgo
+=> Prima aumenta
+=> Evaluar entrada
+
+Precio demasiado cerca del riesgo
+=> Delta demasiado alto
+=> No entrar
+
+
+10. SETUP ARMED
+
+Una vez definido un setup válido, el sistema pasa al estado:
+
+ARMED
+
+Ejemplo:
+
+Symbol: SPY
+Strategy: PCS
+DTE: 45
+
+Short Put: 730
+Long Put: 725
+
+Short Delta: 0.12
+
+Expected Move Lower: 737
+Put Wall: 710
+Liquidity: PASS
+
+Estado:
+
+ARMED / WAITING FOR TRIGGER
+
+No se ejecuta todavía.
+
+
+11. TRIGGER DE ENTRADA
+
+El trigger debe detectar el momento en que la prima se vuelve suficientemente atractiva sin que el riesgo haya aumentado demasiado.
+
+Una primera hipótesis de trigger:
+
+SETUP VALID
+AND
+Short Delta >= Entry Delta
+AND
+IV Rank >= Minimum IV Rank
+AND
+Credit >= Minimum Credit
+AND
+Liquidity = PASS
+AND
+No Extreme Risk Condition
+
+Ejemplo:
+
+Safety Delta máximo: 0.20
+
+Entry Delta: 0.15
+
+Mientras:
+
+Delta = 0.10
+=> WAIT
+
+Delta = 0.13
+=> WAIT
+
+Delta = 0.15
+=> TRIGGER
+
+Delta = 0.18
+=> Puede entrar si sigue cumpliendo las demás condiciones.
+
+Delta = 0.21
+=> NO ENTRY. Safety Delta excedido.
+
+
+12. SAFETY DELTA VS ENTRY DELTA
+
+Estos conceptos deben mantenerse separados.
+
+SAFETY DELTA:
+
+Define el límite máximo de riesgo aceptable para el short strike.
+
+ENTRY DELTA:
+
+Define la zona donde la prima empieza a ser suficientemente atractiva para ejecutar.
+
+Ejemplo:
+
+Safety Delta = 0.20
+Entry Delta = 0.15
+
+Esto crea una ventana:
+
+0.00 - 0.14
+=> Esperar.
+
+0.15 - 0.20
+=> Zona de ejecución.
+
+> 0.20
+=> Demasiado riesgo. No entrar.
+
+
+13. TRIGGER BASADO EN VOLATILIDAD
+
+El delta no debería ser necesariamente el único trigger.
+
+Una alternativa:
+
+SETUP VALID
+AND
+Short Delta >= Entry Delta
+AND
+IV Rank >= Minimum IV Rank
+AND
+IV Momentum favorable
+AND
+Credit >= Minimum Credit
+
+La hipótesis es que queremos vender prima cuando está suficientemente elevada.
+
+Debe estudiarse si:
+
+- IV Rank absoluto es útil para timing.
+- IV Momentum es útil.
+- La combinación IV Rank + IV Momentum tiene ventaja.
+- El aumento de IV debe ocurrir antes de la entrada.
+- Es mejor vender durante expansión de IV o después de estabilización.
+
+
+14. DOS FILOSOFÍAS DE TRIGGER A INVESTIGAR
+
+A. SELL THE FEAR
+
+Esperar que el precio se acerque a la zona de riesgo.
+
+Secuencia:
+
+Precio baja
+IV sube
+Delta aumenta
+Credit aumenta
+
+=> ENTRY
+
+Ventaja hipotética:
+
+Se vende la prima cuando está cara.
+
+Riesgo:
+
+El movimiento puede continuar y el spread puede deteriorarse rápidamente.
+
+
+B. SELL THE CONFIRMATION
+
+Esperar un shock y luego estabilización.
+
+Secuencia:
+
+Precio baja
+IV sube
+Mercado deja de caer
+IV deja de expandirse
+=> ENTRY
+
+Ventaja hipotética:
+
+Se evita vender durante la fase más violenta del movimiento.
+
+Riesgo:
+
+El mercado puede estabilizarse y luego reanudar el movimiento.
+
+
+15. GEX NEGATIVO Y TRIGGER
+
+Un entorno de GEX muy negativo puede requerir un filtro adicional.
+
+Hipótesis:
+
+Si:
+
+GEX extremadamente negativo
+AND
+RV muy alta
+AND
+Precio moviéndose rápidamente hacia el short strike
+
+=> NO ENTRAR INMEDIATAMENTE.
+
+Esperar estabilización.
+
+Posible condición:
+
+- Precio deja de acelerarse.
+- IV deja de aumentar rápidamente.
+- Delta permanece dentro del Safety Delta.
+- Credit sigue siendo atractivo.
+
+Esto podría convertirse en un “cooldown trigger”.
+
+
+16. ZGL COMO FILTRO DE TIMING
+
+ZGL puede utilizarse como referencia de timing, pero no necesariamente como predictor direccional.
+
+Dos hipótesis:
+
+A. Mean Reversion Entry
+
+Precio se aleja de ZGL
+=> Prima aumenta
+=> Esperar estabilización
+=> Entrar.
+
+B. Reclaim Entry
+
+Precio cruza nuevamente ZGL
+=> Mercado se estabiliza
+=> IV empieza a contraerse
+=> Entrar.
+
+Estas hipótesis deben compararse mediante backtesting.
+
+No se debe asumir que ZGL predice el movimiento.
+
+
+17. FILTRO DE RIESGO EXTREMO
+
+Debe existir una condición que invalide el trigger.
+
+Ejemplo:
+
+IF
+
+GEX < ExtremeNegativeGEX
+AND
+RV = ExtremelyHigh
+AND
+PriceVelocity = Extreme
+AND
+ShortDelta approaching SafetyDelta
+
+THEN
+
+NO ENTRY
+
+Aunque el setup estructural sea válido.
+
+Esto introduce una diferencia importante:
+
+SETUP VALID
+no significa necesariamente
+TRADE VALID.
+
+
+18. ESTADOS DEL SISTEMA
+
+La estrategia puede implementarse como una máquina de estados.
+
+Estado 1:
+NO SETUP
+
+No existe estructura válida.
+
+Estado 2:
+CANDIDATE
+
+Se detectó una estructura potencial.
+
+Estado 3:
+ARMED
+
+Se seleccionaron strikes y todos los filtros estructurales pasan.
+
+Estado 4:
+WAITING FOR TRIGGER
+
+La estrategia espera que el mercado se acerque.
+
+Estado 5:
+TRIGGERED
+
+Se cumplen las condiciones de entrada.
+
+Estado 6:
+ORDER PENDING
+
+Se envió una orden Limit.
+
+Estado 7:
+OPEN
+
+La operación fue ejecutada.
+
+Estado 8:
+MANAGING
+
+La posición está abierta.
+
+Estado 9:
+EXIT
+
+Se alcanzó el objetivo o una condición de salida.
+
+Estado 10:
+COOLDOWN
+
+Se produjo una salida y se espera un período antes de evaluar una nueva entrada.
+
+
+19. ARQUITECTURA CONCEPTUAL
+
+SYMBOL
+  |
+  v
+OPTION CHAIN
+  |
+  v
+GENERATE CANDIDATES
+  |
+  +-----------------+
+  |                 |
+  v                 v
+PCS               CCS
+  |                 |
+  +--------+--------+
+           |
+           v
+          IC
+           |
+           v
+STRUCTURAL FILTERS
+           |
+           +-- Expected Move
+           +-- Walls
+           +-- ZGL
+           +-- GEX
+           +-- Safety Delta
+           +-- Liquidity
+           |
+           v
+        ARMED
+           |
+           v
+     WAIT FOR MARKET
+       TO COME TO US
+           |
+           v
+        TRIGGER
+           |
+           +-- Entry Delta
+           +-- IV Rank
+           +-- IV Momentum
+           +-- Minimum Credit
+           +-- Liquidity
+           +-- Extreme Risk Filter
+           |
+           v
+        EXECUTE
+           |
+           v
+      50% PROFIT EXIT
+
+
+20. EJEMPLO CONCEPTUAL
+
+Symbol:
+SPY
+
+DTE:
+45
+
+Precio:
+742
+
+Expected Move:
+737 - 747
+
+Put Wall:
+710
+
+Call Wall:
+750
+
+ZGL:
+744
+
+GEX:
+Negative
+
+Candidato PCS:
+
+Sell Put 730
+Buy Put 725
+
+Safety Delta:
+0.20
+
+Entry Delta:
+0.15
+
+Estado inicial:
+
+SPY = 742
+Short Delta = 0.10
+Credit = $0.70
+
+Resultado:
+
+ARMED
+WAIT
+
+El mercado cae:
+
+SPY = 739
+Short Delta = 0.13
+Credit = $0.90
+
+Resultado:
+
+WAIT
+
+El mercado cae:
+
+SPY = 737
+Short Delta = 0.15
+Credit = $1.10
+
+IV Rank:
+52
+
+Liquidity:
+PASS
+
+GEX:
+Negative but not Extreme
+
+Resultado:
+
+TRIGGER
+
+Se envía orden Limit buscando un credit mínimo aceptable.
+
+Si se ejecuta:
+
+POSITION OPEN
+
+
+21. OBJETIVO DE SALIDA
+
+Objetivo inicial:
+
+50% del crédito máximo.
+
+Ejemplo:
+
+Credit recibido = $1.10
+
+Max Profit = $110
+
+Target de recompra:
+
+$0.55
+
+Profit objetivo:
+
+$55
+
+Este objetivo es inicialmente fijo.
+
+Debe estudiarse posteriormente si el 50% es óptimo para:
+
+- 30 DTE.
+- 40 DTE.
+- 50 DTE.
+- PCS.
+- CCS.
+- IC.
+- Diferentes IV Rank.
+
+
+22. TEMAS ABIERTOS PARA LA PRÓXIMA SESIÓN
+
+1. Definir matemáticamente Safety Delta.
+
+2. Definir Entry Delta.
+
+3. Determinar la relación óptima entre:
+   - Short Strike
+   - Expected Move
+   - Put Wall
+   - Call Wall
+   - ZGL.
+
+4. Investigar si el Wall debe estar:
+   - Entre Spot y Short Strike.
+   - Detrás del Short Strike.
+   - O utilizar distancia relativa al Wall.
+
+5. Definir filtros de liquidez:
+   - Bid/Ask.
+   - Open Interest.
+   - Volume.
+
+6. Definir Minimum Credit.
+
+7. Definir Credit/Width mínimo.
+
+8. Definir si el trigger debe usar:
+   - Delta.
+   - IV Rank.
+   - IV Momentum.
+   - Credit.
+   - Una combinación.
+
+9. Comparar:
+   - Sell the Fear.
+   - Sell the Confirmation.
+
+10. Definir el uso de GEX negativo como filtro de entrada.
+
+11. Definir si ZGL se utiliza:
+   - Como filtro.
+   - Como trigger.
+   - Como referencia estructural.
+
+12. Definir stop loss.
+
+13. Definir salida por:
+   - Delta.
+   - Precio del spread.
+   - Pérdida máxima.
+   - Ruptura de estructura.
+   - Cambio de régimen.
+
+14. Definir cuándo cancelar un setup ARMED.
+
+15. Definir si se permite rearmar el mismo símbolo después de un trigger fallido.
+
+16. Backtestear primero sobre SPY.
+
+17. Luego probar:
+   - QQQ
+   - IWM
+   - SPX
+   - AAPL
+   - NVDA
+   - Otros símbolos líquidos.
+
+18. Comparar rendimiento por estructura:
+   - PCS
+   - CCS
+   - IC.
+
+19. Analizar si la estrategia es realmente independiente de la dirección o si existe un sesgo implícito.
+
+20. Medir:
+   - Win rate.
+   - Average win.
+   - Average loss.
+   - Expected value.
+   - Profit factor.
+   - Max drawdown.
+   - Sharpe.
+   - Return on capital.
+   - Capital efficiency.
+   - Time in trade.
+
+
+23. HIPÓTESIS CENTRAL PARA EL BACKTEST
+
+La hipótesis que debe validarse es:
+
+“Una estrategia de venta de spreads de crédito con riesgo definido puede mejorar su relación riesgo/beneficio si, en lugar de ejecutar inmediatamente al detectar una estructura válida, espera a que el precio se acerque a la zona de riesgo, aumentando el valor de la prima vendida, siempre que el short strike permanezca dentro de un Safety Delta y la estructura de mercado no indique un riesgo extremo.”
+
+Esta hipótesis debe probarse comparando al menos:
+
+A. Entrada inmediata al detectar setup.
+
+B. Entrada por Entry Delta.
+
+C. Entrada por Minimum Credit.
+
+D. Entrada por expansión de IV.
+
+E. Entrada después de estabilización.
+
+F. Combinaciones de las anteriores.
+
+
+24. FILOSOFÍA FINAL
+
+La estrategia no intenta saber hacia dónde va el mercado.
+
+No intenta adivinar el próximo movimiento.
+
+No cambia de estrategia porque el mercado sea alcista o bajista.
+
+Primero define una estructura que está dispuesto a vender.
+
+Después define dónde está dispuesto a asumir el riesgo.
+
+Luego espera.
+
+El mercado se mueve.
+
+La prima cambia.
+
+El riesgo cambia.
+
+El sistema permanece paciente.
+
+Cuando el mercado finalmente ofrece una combinación suficientemente atractiva de:
+
+- Distancia.
+- Delta.
+- Prima.
+- Volatilidad.
+- Estructura.
+- Liquidez.
+
+entonces se ejecuta.
+
+La idea fundamental es:
+
+“Nosotros definimos dónde estamos dispuestos a asumir el riesgo.
+No perseguimos al mercado.
+Esperamos a que el mercado venga a nosotros.”
+
+FIN DEL DOCUMENTO – VERSIÓN 1.0

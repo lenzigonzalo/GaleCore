@@ -1,0 +1,3 @@
+﻿# Tanda 2 del 2026-08-25 -- primera captura con IV por strike
+SPY  2026-09-18  11:57:51 ET -> 12:00:25 ET  321 strikes, 321 con IV  (154s)
+SPY  2026-10-16  12:00:25 ET -> 12:01:06 ET  221 strikes, 221 con IV  (41s)

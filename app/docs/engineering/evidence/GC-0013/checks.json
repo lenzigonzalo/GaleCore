@@ -1,0 +1,19 @@
+{
+  "tests": {
+    "command": "$env:CI='true'; npm test -- --watchAll=false --runInBand --runTestsByPath src/components/ticker/LiveWatchlist.test.tsx src/components/ticker/TickerWatchlist.test.tsx src/store/useMarketStore.test.ts",
+    "chunk_id": "f1dfa1",
+    "wall_time_seconds": 0.0000156,
+    "exit_code": 0,
+    "original_token_count": 111,
+    "output": "PASS src/components/ticker/LiveWatchlist.test.tsx (7.344 s)\nPASS src/components/ticker/TickerWatchlist.test.tsx\nPASS src/store/useMarketStore.test.ts\n\nTest Suites: 3 passed, 3 total\nTests:       14 passed, 14 total\nSnapshots:   0 total\nTime:        10.396 s, estimated 17 s\nRan all test suites within paths \"src/components/ticker/LiveWatchlist.test.tsx\", \"src/components/ticker/TickerWatchlist.test.tsx\", \"src/store/useMarketStore.test.ts\".\n"
+  },
+  "build": {
+    "command": "$env:CI='true'; npm run build",
+    "chunk_id": "69d76b",
+    "wall_time_seconds": 2.0295277,
+    "exit_code": 0,
+    "original_token_count": 174,
+    "output": "Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:\n  npx update-browserslist-db@latest\n  Why you should do it regularly: https://github.com/browserslist/update-db#readme\nCompiled successfully.\n\nFile sizes after gzip:\n\n  434.77 kB  build\\static\\js\\main.85e37ee0.js\n  17.59 kB   build\\static\\css\\main.fc8d2d13.css\n  1.77 kB    build\\static\\js\\453.9f3d2d1f.chunk.js\n\nThe project was built assuming it is hosted at /.\nYou can control this with the homepage field in your package.json.\n\nThe build folder is ready to be deployed.\nYou may serve it with a static server:\n\n  npm install -g serve\n  serve -s build\n\nFind out more about deployment here:\n\n  https://cra.link/deployment\n\n"
+  },
+  "scope": "Salida final real de los comandos ejecutados en GaleCore/source/galecore-monitor; build sobre árbol con modificaciones concurrentes."
+}

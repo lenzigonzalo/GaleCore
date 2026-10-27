@@ -1,0 +1,24 @@
+
+> galecore-monitor@0.1.0 test
+> react-scripts test --watchAll=false --runInBand --runTestsByPath src/components/lab/LabProjectList.test.tsx
+
+npm : PASS src/components/lab/LabProjectList.test.tsx (35.22 s)
+At line:3 char:1
++ npm test -- --watchAll=false --runInBand --runTestsByPath src/compone ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (PASS src/compon...t.tsx (35.22 s):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+  √ crea varios grupos, mueve proyecto y chat, persiste pliegue y conserva contexto (9829 ms)
+  √ editar color/nombre y eliminar grupo conserva todos sus proyectos y chats (4597 ms)
+  √ sacar proyecto y elegir color propio no altera su selección ni sus chats (3989 ms)
+  √ storage inválido no oculta proyectos: {broken (196 ms)
+  √ storage inválido no oculta proyectos:
+{"groups":[null,{"id":"x","label":"Bad","color":"unknown"}],"members":{"p:spy":"missing"}} (171 ms)
+  √ Escape cancela creación y devuelve el foco; storage no disponible lo avisa (471 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       6 passed, 6 total
+Snapshots:   0 total
+Time:        42.009 s
+Ran all test suites within paths "src/components/lab/LabProjectList.test.tsx".

@@ -1,0 +1,11 @@
+{
+  "auth": "synthetic QA session",
+  "catalogue": "real local bridge GET",
+  "submissions": "browser fixtures only; no real CLI inference",
+  "checks": [
+    "Monitor: settings remains only in left sidebar; right account menu removed",
+    "Desktop: centered selector, loaded provider logos, preserved draft, Escape, no composer selectors; single left settings/logout",
+    "Fixture submit contains Claude/Opus/high; existing conversation selection locked; no native inference",
+    "820px: selector accessible without horizontal page overflow"
+  ]
+}

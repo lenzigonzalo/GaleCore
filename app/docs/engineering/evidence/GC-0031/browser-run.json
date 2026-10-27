@@ -1,0 +1,16 @@
+{
+  "auth": "synthetic-browser-session",
+  "inventory": "real-local-configurations",
+  "toggle": "temporary-home-only",
+  "checks": [
+    "Codex inventory: node_repl enabled, real configuration; no credential fields",
+    "GaleCore favorites exclude unrelated travel tools; stars edit browser preference only",
+    "Compact desktop account row is at most 80px high",
+    "Claude native inventory: Alpha Vantage, Google, IBKR, IoL; correct workspace selected, legacy datafeed absent",
+    "Mobile 390px: no horizontal overflow",
+    "UI disable/enable invokes backend writer on temporary config, persists state, new-session notice",
+    "Enabled filter combines with search; rows disappear from enabled/disabled filter after toggling"
+  ],
+  "browser": "120.0.6099.28",
+  "exit_code": 0
+}

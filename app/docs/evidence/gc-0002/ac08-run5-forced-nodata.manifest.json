@@ -1,0 +1,152 @@
+{
+  "run": "ac08-run5-forced-nodata",
+  "script": "docs/evidence/gc-0002/ac08_run.py",
+  "argv": [
+    "--name",
+    "ac08-run5-forced-nodata",
+    "--spec",
+    "shadow_runtime_forced_nodata_v1",
+    "--extra-spec",
+    "docs/evidence/gc-0002/shadow_runtime_forced_nodata_v1.json",
+    "--evals",
+    "2"
+  ],
+  "started_utc": "2026-09-24T18:02:29.946417+00:00",
+  "steps": [
+    {
+      "step": "preflight",
+      "at_utc": "2026-09-24T18:02:32.455405+00:00",
+      "port_7001_free": true
+    },
+    {
+      "step": "extra_spec_copied",
+      "at_utc": "2026-09-24T18:02:32.464002+00:00",
+      "source": "docs\\evidence\\gc-0002\\shadow_runtime_forced_nodata_v1.json",
+      "target": "source\\galecore-datafeed\\DataFeed.Api\\Files\\Runtime\\shadow_runtime_forced_nodata_v1.json",
+      "sha256": "a74d02ea30338b0f715b25bc14d3c0f3c7ca8c84f4579534be6336db397c4b79",
+      "note": "temporal, sin commitear; se borra al final"
+    },
+    {
+      "step": "build",
+      "at_utc": "2026-09-24T18:02:37.681777+00:00",
+      "cmd": [
+        "dotnet",
+        "build",
+        "C:\\Users\\lenzi\\OneDrive\\Escritorio\\GaleCore\\GaleCore\\source\\galecore-datafeed\\DataFeed.Api\\DataFeed.Api.csproj",
+        "-c",
+        "Debug",
+        "-nologo",
+        "-v",
+        "q"
+      ],
+      "exit_code": 0,
+      "summary": [
+        "Build succeeded.",
+        "    276 Warning(s)",
+        "    0 Error(s)"
+      ]
+    },
+    {
+      "step": "binaries",
+      "at_utc": "2026-09-24T18:02:37.686778+00:00",
+      "files": {
+        "DataFeed.Api.dll": "795586cb62e2aa310fe24e40a4182c4a8fc9f61794dae5f40014fc3c3c6a7e50",
+        "DataFeed.Application.dll": "2034a46e6d6298b9a697a1a14960bed588c2d4f137fd8ff58e848da2f8f7694d",
+        "DataFeed.Infrastructure.dll": "d42ab7623e28f94f5b8c36c97b240f98c911ebdd608fc874ecc56896072b91d9"
+      },
+      "specs": {
+        "shadow_runtime_forced_nodata_v1.json": "a74d02ea30338b0f715b25bc14d3c0f3c7ca8c84f4579534be6336db397c4b79",
+        "shadow_runtime_test_v1.json": "1e409e67cace3a39a6aa366f61bd165747487ffaa5403f87bcdb0ad9711710fa"
+      }
+    },
+    {
+      "step": "api_launch",
+      "at_utc": "2026-09-24T18:02:37.700778+00:00",
+      "cmd": [
+        "dotnet",
+        "run",
+        "--no-build",
+        "--project",
+        "C:\\Users\\lenzi\\OneDrive\\Escritorio\\GaleCore\\GaleCore\\source\\galecore-datafeed\\DataFeed.Api\\DataFeed.Api.csproj",
+        "--no-launch-profile"
+      ],
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:7001"
+      },
+      "pid": 2316
+    },
+    {
+      "step": "api_ready",
+      "at_utc": "2026-09-24T18:02:43.704702+00:00",
+      "log_lines": [
+        "Runtime: spec 'shadow_runtime_forced_nodata_v1' cargado (hash=sha256:60f2a8fd84b117c36823410af9b69db089385ff859687caa4058c672f8f6d33f)",
+        "Runtime: spec 'shadow_runtime_test_v1' cargado (hash=sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076)",
+        "info: DataFeed.Api.Infrastructure.ShadowEntryLoopService[0]",
+        "ShadowEntryLoopService iniciado (arranca inerte, switch OFF)",
+        "info: DataFeed.Api.Infrastructure.ShadowPositionMonitorService[0]",
+        "ShadowPositionMonitorService iniciado",
+        "Now listening on: http://localhost:7001",
+        "Hosting environment: Development",
+        "Content root path: C:\\Users\\lenzi\\OneDrive\\Escritorio\\GaleCore\\GaleCore\\source\\galecore-datafeed\\DataFeed.Api"
+      ]
+    },
+    {
+      "step": "deployed",
+      "at_utc": "2026-09-24T18:02:45.695547+00:00",
+      "instance_id": "84ff82cf-692e-4cac-8801-4ead565521cf",
+      "version_hash": "sha256:60f2a8fd84b117c36823410af9b69db089385ff859687caa4058c672f8f6d33f"
+    },
+    {
+      "step": "evaluations_reached",
+      "at_utc": "2026-09-24T18:05:07.087798+00:00",
+      "count": 2
+    },
+    {
+      "step": "switch_off",
+      "at_utc": "2026-09-24T18:05:07.528426+00:00"
+    },
+    {
+      "step": "snapshot_after_off",
+      "at_utc": "2026-09-24T18:07:18.971622+00:00"
+    },
+    {
+      "step": "api_stopped",
+      "at_utc": "2026-09-24T18:07:19.391451+00:00",
+      "taskkill_exit_code": 0,
+      "api_exit_code": 1
+    },
+    {
+      "step": "extra_spec_removed",
+      "at_utc": "2026-09-24T18:07:19.393453+00:00",
+      "target": "source\\galecore-datafeed\\DataFeed.Api\\Files\\Runtime\\shadow_runtime_forced_nodata_v1.json"
+    }
+  ],
+  "repo_start": {
+    "at_utc": "2026-09-24T18:02:30.070907+00:00",
+    "head": "9115ba34081ccba4f7b62c01c01160bdea9ae352",
+    "status_porcelain": [
+      "?? docs/engineering/reviews/GC-0002-20260924T174724Z.md"
+    ],
+    "diff_head_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "diff_head_bytes": 0
+  },
+  "tools": {
+    "python": "3.11.4",
+    "dotnet": "9.0.301"
+  },
+  "repo_end": {
+    "at_utc": "2026-09-24T18:07:19.528916+00:00",
+    "head": "9115ba34081ccba4f7b62c01c01160bdea9ae352",
+    "status_porcelain": [
+      "?? docs/engineering/reviews/GC-0002-20260924T174724Z.md",
+      "?? docs/evidence/gc-0002/ac08-run5-forced-nodata.jsonl",
+      "?? docs/evidence/gc-0002/ac08-run5-forced-nodata.manifest.json"
+    ],
+    "diff_head_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "diff_head_bytes": 0
+  },
+  "finished_utc": "2026-09-24T18:07:19.718218+00:00",
+  "result": "ok",
+  "exit_code": 0
+}

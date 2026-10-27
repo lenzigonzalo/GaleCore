@@ -1,0 +1,1365 @@
+{
+  "_meta": {
+    "version": "1.4.0-candidate",
+    "strategy": "gale_core_gamma_premium",
+    "profile": "core",
+    "status": "paper_only",
+    "enabled_for_live": false,
+    "last_updated": "2026-07-14",
+    "reference_doc": "galecore-rules-reference.md"
+  },
+  "principles": {
+    "cash_is_a_position": true,
+    "execution_quality_over_frequency": true,
+    "survival_over_trade_count": true,
+    "defined_risk_only": true,
+    "no_binary_macro_risk": true
+  },
+  "strategy_scope": {
+    "allowed_strategies": [
+      "iron_condor",
+      "put_credit_spread",
+      "call_credit_spread"
+    ],
+    "forbidden_strategies": [
+      "naked_short_put",
+      "naked_short_call",
+      "ratio_spread",
+      "long_directional"
+    ],
+    "default_structure": "put_credit_spread",
+    "structure_selection_method": "multi_factor"
+  },
+  "universe": {
+    "mode": "whitelist",
+    "tickers": [
+      "SPY",
+      "QQQ"
+    ],
+    "min_avg_daily_volume_underlying": 5000000
+  },
+  "data_availability": {
+    "available_today": [
+      "iv_rank",
+      "iv_percentile",
+      "iv9d",
+      "iv30",
+      "iv3m",
+      "iv_zscore_from_252d_history",
+      "gex_net_billions",
+      "gex_skew_call_put_ratio",
+      "gamma_zero_level",
+      "call_wall",
+      "put_wall",
+      "gex_by_strike",
+      "delta_by_strike",
+      "oi_by_strike",
+      "spot_price",
+      "vix_absolute_via_ticker",
+      "bid_ask_quote",
+      "account_net_liq",
+      "account_positions",
+      "daily_candles_ohlcv",
+      "ema_20_50_from_candles",
+      "realized_vol_short_long_from_candles",
+      "realtime_trade_quote_greeks_bundled",
+      "aggressive_flow_ask_side_from_stream"
+    ],
+    "manual_check_required": [
+      "fomc_cpi_calendar",
+      "spy_ex_dividend_date"
+    ]
+  },
+  "data_quality": {
+    "max_quote_age_seconds": 15,
+    "max_structural_levels_age_minutes": 15,
+    "block_on_crossed_market": true,
+    "block_on_missing_critical_data": true
+  },
+  "operators": {
+    "values": [
+      "gte",
+      "lte",
+      "gt",
+      "lt",
+      "eq",
+      "between",
+      "custom"
+    ]
+  },
+  "on_fail_actions": {
+    "values": [
+      "no_trade",
+      "discard_side",
+      "discard_put_side",
+      "discard_call_side",
+      "wait_for_stabilization",
+      "block_until_fresh",
+      "block_new_entries",
+      "block_new_call_entries",
+      "warn",
+      "degrade_structure",
+      "try_wider_spread_then_discard",
+      "reduce_contracts_to_fit_or_discard"
+    ]
+  },
+  "definitions": {
+    "iv_rank": {
+      "type": "formula",
+      "formula": "((iv_current - iv_min_252) / (iv_max_252 - iv_min_252)) * 100",
+      "source": "30d_continuous_atm_iv",
+      "lookback_trading_sessions": 252,
+      "endpoint": "/App.Analytics/IVRank"
+    },
+    "iv30_atm_roc_pct": {
+      "type": "formula",
+      "formula": "((iv30_today - iv30_5d_ago) / iv30_5d_ago) * 100",
+      "window_days": 5,
+      "iv30_today": {
+        "source": "/Data/Tastytrade/Market-metrics/VolatilityData → impliedVolatilityIndex (×100)",
+        "field": "IV30_0d"
+      },
+      "iv30_5d_ago": {
+        "source": "/Data/Tastytrade/Market-metrics/VolatilityData → impliedVolatilityIndex - impliedVolatilityIndex5DayChange (×100)",
+        "field": "IV30_5d"
+      },
+      "endpoint": "/App.Analytics/ImpliedVolatility → IV30RocPct"
+    },
+    "expected_move": {
+      "type": "formula",
+      "formula": "spot * iv_atm * sqrt(dte / 365)",
+      "iv_source": "atm_iv_of_target_expiration_cycle",
+      "rounding_rule": "calculate_exact_then_round_to_nearest_tradeable_strike",
+      "endpoint": "derived from /App.Analytics/ImpliedVolatility + /Data/Tastytrade/MarketData/ByType"
+    },
+    "directional_zscore": {
+      "type": "formula",
+      "formula": "ret_5d / (iv_atm / sqrt(252))",
+      "ret_5d": "cumulative_log_return_last_5_trading_sessions",
+      "iv_atm": "atm_iv_30d_annualised",
+      "endpoint": "derived from /Data/Tastytrade/MarketData/Candle (daily close) + /App.Analytics/ImpliedVolatility → IV30_30d"
+    },
+    "iv_zscore": {
+      "type": "formula",
+      "formula": "(iv_current - mean(iv_history_252)) / stddev(iv_history_252)",
+      "iv_current": "IV30_30d del día",
+      "iv_history_252": "serie diaria de IV de los últimos 252 días hábiles",
+      "endpoint": "/App.Analytics/IVRank → history[].iv (252 entradas)"
+    },
+    "gex_skew": {
+      "type": "formula",
+      "formula": "callGEX / (callGEX + abs(putGEX))",
+      "range": "[0.0, 1.0]",
+      "thresholds": {
+        "call_dominant": 0.6,
+        "put_dominant": 0.4
+      },
+      "endpoint": "/App.Analytics/GammaExposure → callGEX y putGEX"
+    },
+    "trend_ema": {
+      "type": "formula",
+      "ema_fast_period": 20,
+      "ema_slow_period": 50,
+      "formula_ema": "EMA(close, N) = precio_anterior_ema * (1 - 2/(N+1)) + close * (2/(N+1))",
+      "trend_up": "ema_20 > ema_50",
+      "trend_down": "ema_20 < ema_50",
+      "trend_neutral": "abs(ema_20 - ema_50) / ema_50 < 0.002",
+      "endpoint": "derived from /Data/Tastytrade/MarketData/Candle?Symbol={SYMBOL}&Interval=1d → close (últimas 60 sesiones)"
+    },
+    "realized_vol_regime": {
+      "type": "formula",
+      "log_return": "ln(close_t / close_t-1)",
+      "rv_short": "stddev(log_returns, 10) * sqrt(252) * 100",
+      "rv_long": "stddev(log_returns, 30) * sqrt(252) * 100",
+      "high_vol_regime": "rv_short > rv_long",
+      "unit": "percent_annualized",
+      "endpoint": "derived from /Data/Tastytrade/MarketData/Candle?Symbol={SYMBOL}&Interval=1d → close (últimas 35 sesiones)"
+    },
+    "aggressive_flow": {
+      "type": "realtime_stream",
+      "ask_side_aggression": "trade_price >= quote_ask",
+      "bid_side_aggression": "trade_price <= quote_bid",
+      "large_premium_formula": "trade_size * trade_price * 100",
+      "large_premium_threshold_usd": 25000,
+      "oi_opening_proxy": "day_volume / oi_prev_day",
+      "oi_opening_proxy_threshold": 0.5,
+      "bullish_flow": {
+        "conditions": [
+          "call_sweep",
+          "ask_side_aggression",
+          "large_premium >= threshold",
+          "oi_opening_proxy >= 0.5"
+        ],
+        "net_delta_flow": "net_call_delta_flow > 0"
+      },
+      "bearish_flow": {
+        "conditions": [
+          "put_sweep",
+          "ask_side_aggression",
+          "large_premium >= threshold",
+          "oi_opening_proxy >= 0.5"
+        ],
+        "net_delta_flow": "net_put_delta_flow < 0"
+      },
+      "flow_window_minutes": 60,
+      "endpoint": "/Data/Tastytrade/MarketData/TradeQuoteGreeks (streaming vía SignalR ReceiveTrade + ReceiveQuote bundled)",
+      "oi_prev_day_source": "/Data/Tastytrade/MarketData/Candle → openInterest del último cierre"
+    },
+    "leg_open_interest": {
+      "type": "field",
+      "unit": "contracts",
+      "realtime": false,
+      "source": "/Data/Tastytrade/MarketData/Candle → openInterest del último cierre",
+      "endpoint": "strikeEngine.legMeta.<leg>.openInterest"
+    },
+    "leg_prev_close": {
+      "type": "field",
+      "unit": "usd_per_contract",
+      "realtime": false,
+      "source": "/Data/Tastytrade/MarketData/Candle → close del último cierre",
+      "endpoint": "strikeEngine.legMeta.<leg>.prevClose"
+    },
+    "credit_ratio": {
+      "type": "formula",
+      "formula": "net_credit / spread_width",
+      "unit": "ratio [0, 1]",
+      "target": ">= 0.333",
+      "thresholds": {
+        "good": {
+          "min": 0.333,
+          "label": "≥ 33% — cumple regla 1/3"
+        },
+        "marginal": {
+          "min": 0.25,
+          "label": "25–33% — por debajo del target"
+        },
+        "poor": {
+          "max": 0.25,
+          "label": "< 25% — descartar"
+        }
+      },
+      "endpoint": "strikeEngine.creditRatio (en %)"
+    },
+    "credit_ratio_min_by_iv_rank": {
+      "type": "lookup_by_range",
+      "key": "iv_rank",
+      "ranges": [
+        {
+          "min": 0,
+          "max": 35,
+          "value": 0.1
+        },
+        {
+          "min": 35,
+          "max": 50,
+          "value": 0.12
+        },
+        {
+          "min": 50,
+          "max": 100,
+          "value": 0.15
+        }
+      ]
+    },
+    "gex_total": {
+      "type": "formula",
+      "formula": "sum(open_interest * gamma * 100 * spot^2 * 0.01)",
+      "included_expirations": "all_standard_and_weekly_with_dte_lt_90",
+      "unit": "billions_usd",
+      "refresh_minutes": 15,
+      "endpoint": "/App.Analytics/GammaExposure"
+    },
+    "gex_threshold_by_symbol": {
+      "type": "lookup_by_symbol",
+      "values": {
+        "SPY": 50,
+        "QQQ": 50
+      },
+      "unit": "billions_usd"
+    },
+    "gamma_zero_level": {
+      "type": "marketdata",
+      "definition": "strike_where_cumulative_net_gex_crosses_from_negative_to_positive",
+      "refresh_minutes": 15,
+      "endpoint": "/App.Analytics/GammaExposure → gammaZeroLevel"
+    },
+    "zgl_with_buffer": {
+      "type": "formula",
+      "formula": "gamma_zero_level * (1 + 0.005)",
+      "buffer_pct": 0.005
+    },
+    "call_wall": {
+      "type": "marketdata",
+      "definition": "strike with highest callGEX",
+      "endpoint": "/App.Analytics/GammaExposure → callWall"
+    },
+    "put_wall": {
+      "type": "marketdata",
+      "definition": "strike with most negative putGEX",
+      "endpoint": "/App.Analytics/GammaExposure → putWall"
+    },
+    "min_offset_from_spot_by_symbol": {
+      "type": "lookup_by_symbol",
+      "values": {
+        "SPY": 10,
+        "QQQ": 10
+      },
+      "unit": "points"
+    },
+    "pop_proxy": {
+      "type": "formula",
+      "formula": "(1 - abs(short_delta)) * 100",
+      "unit": "percent",
+      "applies_per_side": true,
+      "for_iron_condor": "min(pop_put_side, pop_call_side)"
+    },
+    "portfolio_heat": {
+      "type": "formula",
+      "formula": "sum((spread_width - net_credit) * 100 * contracts) for all open positions",
+      "unit": "dollars"
+    },
+    "heat_pct_net_liq": {
+      "type": "formula",
+      "formula": "portfolio_heat / net_liq"
+    },
+    "max_heat": {
+      "type": "formula",
+      "formula": "net_liq * 0.045"
+    },
+    "heat_available": {
+      "type": "formula",
+      "formula": "max_heat - current_heat"
+    },
+    "new_position_heat": {
+      "type": "formula",
+      "formula": "(spread_width - net_credit) * 100 * contracts"
+    },
+    "heat_after_new_position": {
+      "type": "formula",
+      "formula": "current_heat + new_position_heat"
+    },
+    "risk_per_trade": {
+      "type": "formula",
+      "formula": "net_liq * 0.015",
+      "risk_per_trade_pct": 0.015
+    },
+    "max_risk_per_contract": {
+      "type": "formula",
+      "formula": "(spread_width - net_credit) * 100"
+    },
+    "max_contracts": {
+      "type": "formula",
+      "formula": "floor(risk_per_trade / max_risk_per_contract)",
+      "floor_min": 1
+    },
+    "positions_available": {
+      "type": "formula",
+      "formula": "max_positions - open_positions"
+    },
+    "bid_ask_spread_pct": {
+      "type": "formula",
+      "formula": "(ask - bid) / mid",
+      "endpoint": "/Data/Tastytrade/MarketData/Quote"
+    },
+    "slippage_entry": {
+      "type": "formula",
+      "formula": "(estimated_mid_price - real_fill_price + fees) / estimated_mid_price"
+    },
+    "slippage_roll": {
+      "type": "rule",
+      "method": "fixed_per_leg_dollars",
+      "max_friction_per_leg": 0.05,
+      "total_max_4_legs": 0.2
+    },
+    "spy_exdiv_days_until": {
+      "type": "manual",
+      "applies_to": [
+        "SPY"
+      ],
+      "ex_dividend_months": [
+        "marzo",
+        "junio",
+        "septiembre",
+        "diciembre"
+      ],
+      "ex_dividend_day": "tercer_viernes_del_mes"
+    },
+    "leg_mid_price": {
+      "type": "formula",
+      "formula": "(bid + ask) / 2",
+      "unit": "dollars_per_contract_unit",
+      "source": "socket — ReceiveQuote por símbolo OCC de cada leg"
+    },
+    "max_profit": {
+      "type": "formula",
+      "formula": "net_credit_live * 100 * contracts",
+      "unit": "dollars",
+      "net_credit_live": "short_put_mid + short_call_mid - long_put_mid - long_call_mid (desde socket)"
+    },
+    "max_loss": {
+      "type": "formula",
+      "formula": "(spread_width - net_credit_live) * 100 * contracts",
+      "unit": "dollars",
+      "net_credit_live": "ver leg_mid_price"
+    },
+    "buying_power_requirement": {
+      "type": "formula",
+      "formula": "(spread_width - net_credit_live) * 100",
+      "unit": "dollars_per_contract",
+      "net_credit_live": "ver leg_mid_price"
+    }
+  },
+  "macro_regime": {
+    "name": "macro_regime",
+    "description": "Régimen de mercado",
+    "pass_rule": "all_checks_pass",
+    "on_fail": "short_circuit_no_trade",
+    "checks": [
+      {
+        "id": "vix_absolute",
+        "label": "VIX < 30",
+        "metric": {
+          "ref": "marketdata.$VIX.X.price"
+        },
+        "operator": "lt",
+        "threshold": {
+          "value": 30
+        },
+        "source": "/Data/Tastytrade/MarketData/ByType?Symbol=$VIX.X",
+        "on_fail": "no_trade"
+      },
+      {
+        "id": "vix_term_structure",
+        "label": "VIX TS normal (VIX −9d < VIX −30d)",
+        "metric": {
+          "ref": "marketdata.$VIX.X.candle.close_9d_ago"
+        },
+        "operator": "lt",
+        "threshold": {
+          "ref": "marketdata.$VIX.X.candle.close_30d_ago"
+        },
+        "source": "/Data/Tastytrade/MarketData/Candle?Symbol=$VIX.X&Interval=1d&FromTime={35_trading_days_ago} → close[−9] y close[−30]",
+        "polling_interval_minutes": 5,
+        "on_fail": "no_trade"
+      },
+      {
+        "id": "iv_rank",
+        "label": "IV Rank entre 25 y 65",
+        "metric": {
+          "ref": "definitions.iv_rank"
+        },
+        "operator": "between",
+        "threshold": {
+          "min": 25,
+          "max": 65
+        },
+        "source": "/App.Analytics/IVRank",
+        "on_fail": "no_trade"
+      },
+      {
+        "id": "iv_momentum",
+        "label": "IV aceleración ≤ 12%",
+        "metric": {
+          "ref": "definitions.iv30_atm_roc_pct"
+        },
+        "operator": "lte",
+        "threshold": {
+          "value": 12.0
+        },
+        "source": "/App.Analytics/ImpliedVolatility?Symbol={SYMBOL} → IV30RocPct",
+        "on_fail": "wait_for_stabilization"
+      },
+      {
+        "id": "gex_total",
+        "label": "GEX ≥ umbral por símbolo",
+        "metric": {
+          "ref": "definitions.gex_total"
+        },
+        "operator": "gte",
+        "threshold": {
+          "ref": "definitions.gex_threshold_by_symbol"
+        },
+        "source": "/App.Analytics/GammaExposure",
+        "on_fail": "no_trade"
+      },
+      {
+        "id": "spot_vs_zgl",
+        "label": "Spot > ZGL + 0.5%",
+        "metric": {
+          "ref": "marketdata.spot"
+        },
+        "operator": "gt",
+        "threshold": {
+          "ref": "definitions.zgl_with_buffer"
+        },
+        "source": "/App.Analytics/GammaExposure → gammaZeroLevel",
+        "on_fail": "no_trade"
+      },
+      {
+        "id": "spy_exdiv_warn",
+        "label": "SPY Ex-Div — warn ≤ 7d",
+        "applies_to_symbol": [
+          "SPY"
+        ],
+        "applies_to_side": "call",
+        "metric": {
+          "ref": "definitions.spy_exdiv_days_until"
+        },
+        "operator": "lte",
+        "threshold": {
+          "value": 7
+        },
+        "source": "manual_check",
+        "on_fail": "warn"
+      },
+      {
+        "id": "spy_exdiv_block_call",
+        "label": "SPY Ex-Div — block call entries ≤ 3d",
+        "applies_to_symbol": [
+          "SPY"
+        ],
+        "applies_to_side": "call",
+        "metric": {
+          "ref": "definitions.spy_exdiv_days_until"
+        },
+        "operator": "lte",
+        "threshold": {
+          "value": 3
+        },
+        "source": "manual_check",
+        "on_fail": "block_new_call_entries"
+      }
+    ]
+  },
+  "position_builder": {
+    "description": "Motor de construcción de posición. Se evalúa solo si macro_regime pasa.",
+    "cascade_rule": "sequential_short_circuit",
+    "ranking": {
+      "description": "Criterio de priorización cuando hay múltiples tickers operables simultáneamente. El backend calcula priorityScore y lo expone en strikeEngine.priorityScore. El frontend ordena por ese campo descendente.",
+      "method": "composite_score",
+      "score_formula": "(pop / 100) * weight_pop + (credit / spread_width) * weight_credit",
+      "output_field": "strikeEngine.priorityScore",
+      "tiebreak": "symbol_asc",
+      "criteria": [
+        {
+          "id": "pop",
+          "label": "Probabilidad de Profit",
+          "metric": "pop_proxy",
+          "ref": "definitions.pop_proxy",
+          "direction": "desc",
+          "weight": 0.6
+        },
+        {
+          "id": "credit_ratio",
+          "label": "Regla 1/3 — Calidad del Spread",
+          "metric": "credit_ratio",
+          "ref": "definitions.credit_ratio",
+          "formula": "net_credit_snapshot / spread_width",
+          "direction": "desc",
+          "weight": 0.4,
+          "target": 0.333
+        }
+      ]
+    },
+    "layers": [
+      {
+        "id": 2,
+        "name": "strike_engine",
+        "description": "Estructura, expiración, strikes y anchos. Si ningún lado pasa, no operar. Si solo un lado pasa, evaluar degradación.",
+        "pass_rule": "at_least_one_side_passes_all_checks",
+        "on_layer_fail": "short_circuit_no_trade",
+        "config": {
+          "dte_selection": {
+            "target": 45,
+            "min": 35,
+            "max": 45,
+            "expiration_preference": "monthly_regular",
+            "allow_weeklies": true,
+            "weekly_condition": "only_if_monthly_outside_dte_and_liquidity_met"
+          },
+          "structure_selection": {
+            "method": "multi_factor",
+            "description": "Selección de estructura basada en 4 dimensiones activas: z-score de precio, asimetría de GEX (skew), flow agresivo y tendencia EMA.",
+            "thresholds": {
+              "neutral_z": 1.0,
+              "extreme_z": 1.5
+            },
+            "inputs": {
+              "price_zscore": {
+                "ref": "definitions.directional_zscore"
+              },
+              "gex_skew": {
+                "ref": "definitions.gex_skew"
+              },
+              "trend": {
+                "ref": "definitions.trend_ema"
+              },
+              "flow": {
+                "ref": "definitions.aggressive_flow"
+              }
+            },
+            "evaluation_order": "sequential_first_match",
+            "rules": [
+              {
+                "id": 1,
+                "name": "neutral_symmetric_gex",
+                "label": "Mercado neutro — GEX simétrico",
+                "conditions": {
+                  "price_zscore_abs": "< neutral_z (1.0)",
+                  "gex_skew": "symmetric"
+                },
+                "output": "iron_condor"
+              },
+              {
+                "id": 2,
+                "name": "bullish_call_dominant",
+                "label": "Alcista — Call Wall dominante + Bullish Flow",
+                "conditions": {
+                  "price_zscore": "> extreme_z (1.5)",
+                  "gex_skew": "call_dominant",
+                  "flow": "bullish",
+                  "trend": "up"
+                },
+                "output": "put_credit_spread"
+              },
+              {
+                "id": 3,
+                "name": "bearish_put_dominant",
+                "label": "Bajista — Put Wall dominante + Bearish Flow",
+                "conditions": {
+                  "price_zscore": "< -extreme_z (-1.5)",
+                  "gex_skew": "put_dominant",
+                  "flow": "bearish",
+                  "trend": "down"
+                },
+                "output": "call_credit_spread"
+              },
+              {
+                "id": 4,
+                "name": "bullish_exhaustion",
+                "label": "Agotamiento alcista — Put Wall dominante + Bearish Flow",
+                "conditions": {
+                  "price_zscore": "> extreme_z (1.5)",
+                  "gex_skew": "put_dominant",
+                  "flow": "bearish"
+                },
+                "output": "call_credit_spread"
+              },
+              {
+                "id": 5,
+                "name": "bearish_exhaustion",
+                "label": "Agotamiento bajista — Call Wall dominante + Bullish Flow",
+                "conditions": {
+                  "price_zscore": "< -extreme_z (-1.5)",
+                  "gex_skew": "call_dominant",
+                  "flow": "bullish"
+                },
+                "output": "put_credit_spread"
+              },
+              {
+                "id": 6,
+                "name": "bullish_extreme_symmetric",
+                "label": "Alcista extremo — GEX simétrico + Trend up",
+                "conditions": {
+                  "price_zscore": "> extreme_z (1.5)",
+                  "gex_skew": "symmetric",
+                  "trend": "up"
+                },
+                "output": "put_credit_spread"
+              },
+              {
+                "id": 7,
+                "name": "bearish_extreme_symmetric",
+                "label": "Bajista extremo — GEX simétrico + Trend down",
+                "conditions": {
+                  "price_zscore": "< -extreme_z (-1.5)",
+                  "gex_skew": "symmetric",
+                  "trend": "down"
+                },
+                "output": "call_credit_spread"
+              },
+              {
+                "id": 8,
+                "name": "no_trade_fallthrough",
+                "label": "Sin señal — ninguna condición satisfecha",
+                "conditions": "fallthrough",
+                "output": "no_trade"
+              }
+            ],
+            "enabled": false,
+            "forced_structure_while_disabled": "put_credit_spread"
+          },
+          "spread_width": {
+            "symbol_overrides": {
+              "SPY": {
+                "default": 5,
+                "min": 5,
+                "max": 10,
+                "step": 5
+              },
+              "QQQ": {
+                "default": 5,
+                "min": 5,
+                "max": 10,
+                "step": 5
+              }
+            },
+            "unit": "points",
+            "selection_rule": "Empezar por default. Si credit_ratio < min, probar default+step. Si al llegar a max sigue sin cumplir, descartar ese lado."
+          },
+          "asymmetry_check": {
+            "enabled": true,
+            "distance_ratio_threshold": 2.5,
+            "absolute_distance_min_ref": "definitions.min_offset_from_spot_by_symbol",
+            "on_trigger": "switch_to_one_sided_credit_spread"
+          },
+          "delta_target": {
+            "put_short_min": 0.25,
+            "put_short_max": 0.3
+          }
+        },
+        "checks": [
+          {
+            "id": "put_strike_outside_wall",
+            "label": "Put strike < Put Wall",
+            "side": "put",
+            "metric": {
+              "ref": "calc.put_strike"
+            },
+            "operator": "lt",
+            "threshold": {
+              "ref": "definitions.put_wall"
+            },
+            "source": "/App.Analytics/GammaExposure → putWall",
+            "on_fail": "discard_put_side"
+          },
+          {
+            "id": "put_strike_delta",
+            "label": "|Δ put short| ∈ [0.25, 0.30]",
+            "side": "put",
+            "metric": {
+              "ref": "calc.put_short_delta_abs"
+            },
+            "operator": "between",
+            "threshold": {
+              "min": 0.25,
+              "max": 0.3
+            },
+            "source": "/Data/Tastytrade/MarketData/Greeks",
+            "on_fail": "discard_put_side"
+          },
+          {
+            "id": "put_strike_min_offset",
+            "label": "(Spot − Put) ≥ offset mínimo",
+            "side": "put",
+            "metric": {
+              "ref": "calc.spot_minus_put_strike"
+            },
+            "operator": "gte",
+            "threshold": {
+              "ref": "definitions.min_offset_from_spot_by_symbol"
+            },
+            "source": "calc",
+            "on_fail": "discard_put_side"
+          },
+          {
+            "id": "put_credit_ratio",
+            "label": "Credit ratio put ≥ mínimo por IVR",
+            "side": "put",
+            "metric": {
+              "ref": "calc.put_credit_ratio"
+            },
+            "operator": "gte",
+            "threshold": {
+              "ref": "definitions.credit_ratio_min_by_iv_rank"
+            },
+            "source": "calc",
+            "on_fail": "try_wider_spread_then_discard"
+          },
+          {
+            "id": "call_strike_outside_wall",
+            "label": "Call strike > Call Wall",
+            "side": "call",
+            "metric": {
+              "ref": "calc.call_strike"
+            },
+            "operator": "gt",
+            "threshold": {
+              "ref": "definitions.call_wall"
+            },
+            "source": "/App.Analytics/GammaExposure → callWall",
+            "on_fail": "discard_call_side"
+          },
+          {
+            "id": "call_strike_delta",
+            "label": "|Δ call short| ≤ 0.25",
+            "side": "call",
+            "metric": {
+              "ref": "calc.call_short_delta_abs"
+            },
+            "operator": "lte",
+            "threshold": {
+              "value": 0.25
+            },
+            "source": "/Data/Tastytrade/MarketData/Greeks",
+            "on_fail": "discard_call_side"
+          },
+          {
+            "id": "call_strike_min_offset",
+            "label": "(Call − Spot) ≥ offset mínimo",
+            "side": "call",
+            "metric": {
+              "ref": "calc.call_strike_minus_spot"
+            },
+            "operator": "gte",
+            "threshold": {
+              "ref": "definitions.min_offset_from_spot_by_symbol"
+            },
+            "source": "calc",
+            "on_fail": "discard_call_side"
+          },
+          {
+            "id": "call_credit_ratio",
+            "label": "Credit ratio call ≥ mínimo por IVR",
+            "side": "call",
+            "metric": {
+              "ref": "calc.call_credit_ratio"
+            },
+            "operator": "gte",
+            "threshold": {
+              "ref": "definitions.credit_ratio_min_by_iv_rank"
+            },
+            "source": "calc",
+            "on_fail": "try_wider_spread_then_discard"
+          },
+          {
+            "id": "skew_degradation",
+            "label": "Skew → degradar IC a PCS",
+            "operator": "custom",
+            "rule": "if call_side_discarded AND put_side_passes_all → structure = put_credit_spread",
+            "on_fail": "degrade_structure"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "name": "microstructure",
+        "description": "Liquidez, calidad de quote y crédito mínimo. Aplica por cada leg seleccionado.",
+        "pass_rule": "all_checks_pass_for_selected_legs",
+        "on_layer_fail": "short_circuit_no_trade",
+        "checks": [
+          {
+            "id": "oi_short_leg",
+            "label": "OI short ≥ 100",
+            "applies_per_leg": "short",
+            "metric": {
+              "ref": "marketdata.leg.openInterest"
+            },
+            "operator": "gte",
+            "threshold": {
+              "value": 100
+            },
+            "source": "/Data/Tastytrade/MarketData/Candle → openInterest",
+            "on_fail": "discard_side"
+          },
+          {
+            "id": "oi_long_leg",
+            "label": "OI long ≥ 100",
+            "applies_per_leg": "long",
+            "metric": {
+              "ref": "marketdata.leg.openInterest"
+            },
+            "operator": "gte",
+            "threshold": {
+              "value": 100
+            },
+            "source": "/Data/Tastytrade/MarketData/Candle → openInterest",
+            "on_fail": "discard_side"
+          },
+          {
+            "id": "bid_ask_spread",
+            "label": "B/A ≤ 5% mid",
+            "applies_per_leg": "all",
+            "metric": {
+              "ref": "definitions.bid_ask_spread_pct"
+            },
+            "operator": "lte",
+            "threshold": {
+              "value": 0.05
+            },
+            "source": "/Data/Tastytrade/MarketData/Quote",
+            "on_fail": "discard_side"
+          },
+          {
+            "id": "quote_freshness",
+            "label": "Quote < 15s",
+            "applies_per_leg": "all",
+            "metric": {
+              "ref": "marketdata.leg.quote_age_seconds"
+            },
+            "operator": "lte",
+            "threshold": {
+              "value": 15
+            },
+            "source": "data_quality.max_quote_age_seconds",
+            "on_fail": "block_until_fresh"
+          },
+          {
+            "id": "credit_minimum",
+            "label": "Crédito ≥ $0.30",
+            "applies_per_spread": true,
+            "metric": {
+              "ref": "calc.spread_mid_credit"
+            },
+            "operator": "gte",
+            "threshold": {
+              "value": 0.3
+            },
+            "source": "/Data/Tastytrade/MarketData/Quote → mid del spread combinado",
+            "on_fail": "try_wider_spread_then_discard"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "name": "risk_and_sizing",
+        "description": "Sizing y verificación de que el riesgo incremental no excede límites del portafolio.",
+        "pass_rule": "all_checks_pass",
+        "on_layer_fail": "short_circuit_no_trade",
+        "config": {
+          "risk_per_trade_pct": 0.015,
+          "max_positions": 2,
+          "max_heat_pct_net_liq": 0.045
+        },
+        "checks": [
+          {
+            "id": "max_contracts_viable",
+            "label": "Contratos máx ≥ 1",
+            "metric": {
+              "ref": "definitions.max_contracts"
+            },
+            "operator": "gte",
+            "threshold": {
+              "value": 1
+            },
+            "source": "calc",
+            "on_fail": "no_trade"
+          },
+          {
+            "id": "positions_available",
+            "label": "Slots disponibles ≥ 1",
+            "metric": {
+              "ref": "definitions.positions_available"
+            },
+            "operator": "gte",
+            "threshold": {
+              "value": 1
+            },
+            "source": "account.positions",
+            "on_fail": "no_trade"
+          },
+          {
+            "id": "heat_after_entry",
+            "label": "Heat total ≤ 4.5% NL",
+            "metric": {
+              "ref": "definitions.heat_after_new_position"
+            },
+            "operator": "lte",
+            "threshold": {
+              "ref": "definitions.max_heat"
+            },
+            "source": "calc",
+            "on_fail": "reduce_contracts_to_fit_or_discard"
+          }
+        ]
+      }
+    ]
+  },
+  "execution": {
+    "submit_multileg_as_complex_order": true,
+    "avoid_first_minutes_open": 20,
+    "avoid_last_minutes_close": 20,
+    "partial_fill_policy": {
+      "max_unresolved_seconds": 20,
+      "cleanup_method": "aggressive_limit_ladder",
+      "block_new_entries_until_resolved": true,
+      "raise_critical_alert_on_cleanup_failure": true,
+      "if_manual_unavailable_continue_flatten_until_flat": true
+    },
+    "forced_exit_policy": {
+      "applies_to": [
+        "macro_event_binary_avoidance",
+        "operational_contingency_cleanup",
+        "hard_risk_emergency"
+      ],
+      "method": "marketable_limit_ladder",
+      "ignore_entry_slippage_limits": true,
+      "override_standard_entry_time_windows": true
+    },
+    "slippage": {
+      "new_entries": {
+        "max_total_cost_pct_of_expected_credit": 0.1
+      },
+      "defensive_rolls": {
+        "formula_ref": "definitions.slippage_roll"
+      }
+    }
+  },
+  "trade_management": {
+    "evaluation_priority": [
+      "operational_contingency",
+      "macro_event_binary_avoidance",
+      "daily_kill_switch",
+      "take_profit",
+      "structural_support_loss",
+      "hard_defense",
+      "defensive_roll",
+      "time_exit"
+    ],
+    "daily_kill_switch": {
+      "daily_portfolio_mtm_loss_pct_net_liq_max": 0.015,
+      "action": "block_new_entries_for_rest_of_session"
+    },
+    "take_profit": {
+      "pct_of_initial_credit": 0.5,
+      "action": "close_position"
+    },
+    "macro_event_binary_avoidance": {
+      "trigger": "entered_macro_event_buffer_window",
+      "action": "close_position_before_window_starts"
+    },
+    "structural_support_loss": {
+      "trigger": "relevant_wall_moves_inside_short_strike",
+      "confirm_consecutive_recalculations": 2,
+      "action": "close_position"
+    },
+    "hard_defense": {
+      "trigger_any": {
+        "short_leg_delta_abs_gt": 0.3,
+        "unrealized_loss_pct_of_initial_credit_gte": 2.0
+      },
+      "action": "evaluate_immediate_risk_reduction"
+    },
+    "defensive_roll": {
+      "trigger_unrealized_loss_pct_of_initial_credit_gte": 1.0,
+      "min_dte_remaining": 28,
+      "min_net_credit_for_roll": 0.2,
+      "max_rolls_per_position": 1,
+      "slippage_rule_ref": "definitions.slippage_roll"
+    },
+    "time_exit": {
+      "dte_threshold": 21,
+      "action": "close_position"
+    }
+  },
+  "monitoring": {
+    "review_frequency_minutes": 30
+  },
+  "signal_gates": {
+    "description": "Filtros de entrada validados por research (H3 / BT-9b..BT-17). Se evaluan tras macro_regime y antes de construir strikes. Cortocircuitantes. Formaliza en el JSON lo que hasta v1.3.1 vivia solo en los scripts de backtesting.",
+    "evaluation": "all_must_pass",
+    "gates": {
+      "volatility_risk_premium": {
+        "enabled": true,
+        "label": "VRP >= 1.2 (el seguro esta caro)",
+        "formula": "atm_iv_30d / realized_vol_30d_trailing",
+        "rv_denominator": "realized_vol_30d_trailing",
+        "min": 1.2,
+        "on_fail": "no_trade"
+      },
+      "tail_score": {
+        "enabled": true,
+        "label": "Score de cola < 2 (sin alerta de crash)",
+        "components": {
+          "vvix": {
+            "warn": 110,
+            "block": 130,
+            "source": "CBOE VVIX"
+          },
+          "skew25_roc5d": {
+            "warn": 0.05,
+            "block": 0.08,
+            "source": "IV_put25d / IV_atm, RoC 5 dias, cadenas SPY DTE 25-35"
+          }
+        },
+        "scoring": "none=0 / warn=1 / block=2 por componente; suma >= 2 -> engine_out",
+        "streak_smoothing_days": 2,
+        "market_wide": "SPY (aplica a todo el universo)",
+        "on_fail": "no_trade"
+      },
+      "gamma_support": {
+        "enabled": true,
+        "configurable": true,
+        "formula": "sum(open_interest * gamma * 100 * spot^2 * 0.01) para DTE<90",
+        "min": 0,
+        "applies_to": [
+          "SPY"
+        ],
+        "on_fail": "no_trade"
+      },
+      "short_below_put_wall": {
+        "enabled": true,
+        "label": "Short put strike <= put wall (restriccion de sanidad)",
+        "on_fail": "discard_put_side"
+      },
+      "edge": {
+        "enabled": true,
+        "label": "Edge >= barra por regimen (te pagan mas que el riesgo real)",
+        "formula": "(credito / ancho) / p_perdida_trailing",
+        "p_loss_source": "tabla POP empirica de puts, calibracion trailing anti-lookahead, ventana expansiva anual, buckets n>=50 (SIN shrinkage — la palanca es el delta, BT-10b)",
+        "bars_by_regime": {
+          "low_vol": 1.1,
+          "normal": 1.05,
+          "elevated": 1.1,
+          "caution": 1.2
+        },
+        "on_fail": "no_trade"
+      },
+      "credit_minimum": {
+        "enabled": true,
+        "label": "Credito neto >= $0.30 y ratio anti-pennies >= 10% del ancho",
+        "min_usd": 0.3,
+        "min_ratio_of_width": 0.1,
+        "on_fail": "try_wider_spread_then_discard"
+      }
+    }
+  },
+  "display_config": {
+    "checks_render_order": "macro_regime.checks[] en orden de declaración / position_builder.layers[].checks[] en orden de declaración",
+    "portfolio_manager_table": {
+      "description": "Columnas del Portfolio Manager. El frontend debe renderizar exactamente estas columnas en este orden, leyendo los campos del endpoint /App/GaleCore/PositionBuilder.",
+      "columns": [
+        {
+          "id": "ticker",
+          "label": "Ticker",
+          "source": "symbol"
+        },
+        {
+          "id": "signal",
+          "label": "Signal",
+          "source": "overallSignal"
+        },
+        {
+          "id": "price",
+          "label": "Price",
+          "source": "spotPrice"
+        },
+        {
+          "id": "call_wall",
+          "label": "Call Wall",
+          "source": "strikeEngine.callWall",
+          "ref": "definitions.call_wall"
+        },
+        {
+          "id": "put_wall",
+          "label": "Put Wall",
+          "source": "strikeEngine.putWall",
+          "ref": "definitions.put_wall"
+        },
+        {
+          "id": "structure",
+          "label": "Structure",
+          "source": "selectedStructure.output"
+        },
+        {
+          "id": "long_put",
+          "label": "Long Put",
+          "source": "strikeEngine.longPutStrike",
+          "group": "strikes",
+          "cell_meta": [
+            {
+              "label": "OI",
+              "source": "strikeEngine.legMeta.longPut.openInterest",
+              "ref": "definitions.leg_open_interest"
+            },
+            {
+              "label": "cierre",
+              "source": "strikeEngine.legMeta.longPut.prevClose",
+              "ref": "definitions.leg_prev_close"
+            }
+          ]
+        },
+        {
+          "id": "short_put",
+          "label": "Short Put",
+          "source": "strikeEngine.shortPutStrike",
+          "group": "strikes",
+          "cell_meta": [
+            {
+              "label": "OI",
+              "source": "strikeEngine.legMeta.shortPut.openInterest",
+              "ref": "definitions.leg_open_interest"
+            },
+            {
+              "label": "cierre",
+              "source": "strikeEngine.legMeta.shortPut.prevClose",
+              "ref": "definitions.leg_prev_close"
+            }
+          ]
+        },
+        {
+          "id": "short_call",
+          "label": "Short Call",
+          "source": "strikeEngine.shortCallStrike",
+          "group": "strikes",
+          "cell_meta": [
+            {
+              "label": "OI",
+              "source": "strikeEngine.legMeta.shortCall.openInterest",
+              "ref": "definitions.leg_open_interest"
+            },
+            {
+              "label": "cierre",
+              "source": "strikeEngine.legMeta.shortCall.prevClose",
+              "ref": "definitions.leg_prev_close"
+            }
+          ]
+        },
+        {
+          "id": "long_call",
+          "label": "Long Call",
+          "source": "strikeEngine.longCallStrike",
+          "group": "strikes",
+          "cell_meta": [
+            {
+              "label": "OI",
+              "source": "strikeEngine.legMeta.longCall.openInterest",
+              "ref": "definitions.leg_open_interest"
+            },
+            {
+              "label": "cierre",
+              "source": "strikeEngine.legMeta.longCall.prevClose",
+              "ref": "definitions.leg_prev_close"
+            }
+          ]
+        },
+        {
+          "id": "prem_long_put",
+          "label": "Long Put",
+          "source": "socket.ReceiveQuote[strikeEngine.legSymbols.longPut]",
+          "ref": "definitions.leg_mid_price",
+          "group": "premium",
+          "realtime": true
+        },
+        {
+          "id": "prem_short_put",
+          "label": "Short Put",
+          "source": "socket.ReceiveQuote[strikeEngine.legSymbols.shortPut]",
+          "ref": "definitions.leg_mid_price",
+          "group": "premium",
+          "realtime": true
+        },
+        {
+          "id": "prem_short_call",
+          "label": "Short Call",
+          "source": "socket.ReceiveQuote[strikeEngine.legSymbols.shortCall]",
+          "ref": "definitions.leg_mid_price",
+          "group": "premium",
+          "realtime": true
+        },
+        {
+          "id": "prem_long_call",
+          "label": "Long Call",
+          "source": "socket.ReceiveQuote[strikeEngine.legSymbols.longCall]",
+          "ref": "definitions.leg_mid_price",
+          "group": "premium",
+          "realtime": true
+        },
+        {
+          "id": "net_credit",
+          "label": "Net Credit",
+          "source": "socket — computed from live leg quotes",
+          "ref": "definitions.leg_mid_price",
+          "realtime": true,
+          "formula": "short_put_mid + short_call_mid - long_put_mid - long_call_mid"
+        },
+        {
+          "id": "credit_ratio",
+          "label": "1/3 Rule",
+          "source": "strikeEngine.creditRatio (snapshot) | live: net_credit_live / spread_width * 100",
+          "ref": "definitions.credit_ratio",
+          "unit": "percent",
+          "thresholds": {
+            "good": 33.3,
+            "marginal": 25.0
+          },
+          "realtime": true
+        },
+        {
+          "id": "pop",
+          "label": "POP",
+          "source": "strikeEngine.pop",
+          "ref": "definitions.pop_proxy"
+        },
+        {
+          "id": "max_profit",
+          "label": "Max Profit",
+          "source": "riskAndSizing.maxProfit",
+          "ref": "definitions.max_profit"
+        },
+        {
+          "id": "max_loss",
+          "label": "Max Loss",
+          "source": "riskAndSizing.maxLoss",
+          "ref": "definitions.max_loss"
+        },
+        {
+          "id": "bpr",
+          "label": "BPR",
+          "source": "riskAndSizing.buyingPowerReq",
+          "ref": "definitions.buying_power_requirement"
+        }
+      ],
+      "column_groups": [
+        {
+          "id": "strikes",
+          "label": "Strikes",
+          "columns": [
+            "long_put",
+            "short_put",
+            "short_call",
+            "long_call"
+          ]
+        },
+        {
+          "id": "premium",
+          "label": "Premium",
+          "columns": [
+            "prem_long_put",
+            "prem_short_put",
+            "prem_short_call",
+            "prem_long_call"
+          ]
+        }
+      ]
+    },
+    "alerts_priority": [
+      "STOP_LOSS",
+      "TIME_EXIT",
+      "DELTA_BREACH",
+      "SPY_EXDIV_BLOCK",
+      "EVALUAR_ROLL",
+      "PROFIT_TARGET",
+      "SPY_EXDIV_WARN",
+      "MACRO_PROXIMO"
+    ],
+    "signal_labels": {
+      "OPERAR": {
+        "color": "green",
+        "condition": "macro_regime_pass AND all_position_builder_layers_pass"
+      },
+      "OPERAR_PCS": {
+        "color": "green",
+        "condition": "macro_regime_pass AND strike_engine_skew_degradation AND microstructure_pass AND risk_sizing_pass"
+      },
+      "ESPERAR": {
+        "color": "yellow",
+        "condition": "macro_regime_pass AND position_builder_partial_fail"
+      },
+      "NO_OPERAR": {
+        "color": "red",
+        "condition": "macro_regime_fail OR position_builder_short_circuit"
+      }
+    }
+  }
+}

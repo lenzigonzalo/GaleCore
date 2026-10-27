@@ -1,0 +1,1468 @@
+# ESTRATEGIA_GOT_V2.txt
+
+ESTRATEGIA GOT V2
+Especificación conceptual y operativa
+
+Versión: 2.0
+Estado: DEFINIDA
+Objetivo: Especificación de estrategia para posterior validación, backtesting e implementación
+
+======================================================================
+
+1. OBJETIVO DE LA ESTRATEGIA
+   ======================================================================
+
+La estrategia GOT V2 tiene como objetivo sistematizar la venta de opciones mediante estructuras de riesgo definido, buscando capturar prima con una combinación de:
+
+* Alta probabilidad estadística de éxito.
+* Riesgo máximo conocido y controlado.
+* Selección de strikes basada en estructura de mercado.
+* Respeto de Gamma Walls.
+* Control de Delta.
+* Control de liquidez.
+* Control de crédito mínimo.
+* Espera activa de una oportunidad favorable.
+* Ejecución disciplinada y sin predicción direccional.
+
+La estrategia no intenta predecir si el mercado va a subir o bajar.
+
+La filosofía central es:
+
+```
+"Definir primero dónde estamos dispuestos a asumir riesgo,
+ esperar que el mercado llegue a esa zona y ejecutar solamente
+ cuando la prima disponible compense el riesgo asumido."
+```
+
+La estrategia no persigue al mercado.
+
+No modifica arbitrariamente el Short Strike para obtener más crédito.
+
+No utiliza un Market Bias para decidir si se debe vender Put o Call.
+
+La dirección de la operación surge de la oportunidad disponible y de la estructura del mercado, no de una predicción direccional.
+
+======================================================================
+2. PRINCIPIOS FUNDAMENTALES
+===========================
+
+## 2.1. NO PREDECIR EL MERCADO
+
+La estrategia no intenta anticipar la dirección futura del subyacente.
+
+No se utiliza una lógica como:
+
+```
+Mercado alcista -> vender Put
+Mercado bajista -> vender Call
+```
+
+El Market Bias no determina la estructura.
+
+La estrategia busca oportunidades de forma neutral.
+
+## 2.2. ESPERAR QUE EL MERCADO VENGA HACIA NOSOTROS
+
+La operación se define antes de ejecutarse.
+
+Una vez determinada una configuración válida, se espera a que:
+
+* El Delta alcance la zona permitida.
+* La prima sea suficiente.
+* El POP sea adecuado.
+* El riesgo permanezca controlado.
+* La liquidez sea suficiente.
+
+La estrategia no persigue el precio.
+
+## 2.3. EL GAMMA WALL ES UNA FRONTERA ESTRUCTURAL
+
+Los Gamma Walls representan zonas importantes de la estructura del mercado de opciones.
+
+El Short Strike nunca debe ubicarse dentro de un Gamma Wall ni dentro de una zona de protección definida alrededor de este.
+
+## 2.4. EL DELTA DEFINE LA ZONA DE ENTRADA
+
+El Delta no determina por sí solo la ejecución.
+
+Define una ventana en la que una operación puede ser considerada.
+
+La prima disponible determina si finalmente se ejecuta.
+
+## 2.5. LA PRIMA DEBE COMPENSAR EL RIESGO
+
+Una operación puede ser estructuralmente correcta y, sin embargo, no ser económicamente atractiva.
+
+Por eso se establecen condiciones mínimas de:
+
+* Crédito.
+* Riesgo.
+* POP.
+
+======================================================================
+3. UNIVERSO DE EVALUACIÓN
+=========================
+
+Cada símbolo se analiza individualmente.
+
+Para cada símbolo se evalúan tres estructuras:
+
+```
+1. Iron Condor (IC)
+2. Put Credit Spread (PCS)
+3. Call Credit Spread (CCS)
+```
+
+No se utiliza scoring.
+
+Cada estructura se evalúa mediante reglas objetivas.
+
+La estrategia está diseñada para poder aplicarse a diferentes tipos de subyacentes, siempre que exista un mercado de opciones con liquidez suficiente.
+
+Puede aplicarse potencialmente a:
+
+* Índices.
+* ETFs.
+* Empresas individuales.
+* Otros subyacentes con mercado de opciones líquido.
+
+La estrategia es agnóstica al símbolo.
+
+Sin embargo, no implica que todos los símbolos deban presentar idénticas características de liquidez, volatilidad o estructura Gamma.
+
+La liquidez y las condiciones del mercado de opciones son requisitos fundamentales.
+
+======================================================================
+4. HORIZONTE TEMPORAL
+=====================
+
+La estrategia trabaja inicialmente con vencimientos de:
+
+```
+30 a 50 DTE
+```
+
+El objetivo es mantener un equilibrio entre:
+
+* Tiempo suficiente para esperar la oportunidad.
+* Theta favorable.
+* Menor exposición al Gamma de vencimientos muy cercanos.
+* Tiempo suficiente para alcanzar el objetivo de beneficio.
+
+El vencimiento seleccionado dentro de esta ventana será utilizado posteriormente para analizar la estructura Gamma específica de la operación.
+
+======================================================================
+5. MARKET DIAGNOSTIC
+====================
+
+Antes de analizar las oportunidades concretas de cada símbolo, se realiza un diagnóstico general del mercado.
+
+El Market Diagnostic tiene dos objetivos:
+
+1. Informar sobre el entorno general.
+2. Contextualizar la calidad y el riesgo de las oportunidades.
+
+El Market Diagnostic NO utiliza scoring.
+
+El Market Diagnostic NO determina la dirección de la operación.
+
+El Market Diagnostic NO reemplaza las reglas duras de la estrategia.
+
+El Market Diagnostic funciona como un semáforo.
+
+---
+
+## 5.1. ESTADOS DEL MARKET DIAGNOSTIC
+
+El diagnóstico tiene tres estados:
+
+```
+FAVORABLE
+SELECTIVO
+NO OPERAR
+```
+
+---
+
+## 5.2. ESTADO FAVORABLE
+
+El entorno es considerado favorable para buscar oportunidades de venta de prima.
+
+Puede estar asociado a condiciones como:
+
+* Volatilidad implícita atractiva.
+* VIX en niveles razonables.
+* Estructura de volatilidad estable.
+* IV Rank atractivo.
+* Buena liquidez.
+* Gamma y estructura de mercado relativamente normales.
+* Ausencia de eventos extraordinarios inmediatos.
+
+Interpretación:
+
+```
+"El entorno es favorable para buscar oportunidades."
+```
+
+En este régimen se permite una ventana de Entry Delta más amplia:
+
+```
+Entry Delta = 0.10 a 0.25
+```
+
+Esto significa que la estrategia puede aceptar operaciones con Delta de hasta 0.25 si todas las demás condiciones se cumplen.
+
+IMPORTANTE:
+
+No significa que la estrategia busque deliberadamente Delta 0.25.
+
+Significa que:
+
+```
+"Se permite aceptar una entrada de hasta 0.25 Delta
+ cuando la oportunidad económica y estructural lo justifica."
+```
+
+Si aparece una oportunidad válida con Delta 0.15, no es necesario esperar a 0.25.
+
+---
+
+## 5.3. ESTADO SELECTIVO
+
+El mercado presenta condiciones que requieren mayor selectividad.
+
+Puede estar asociado a:
+
+* VIX elevado.
+* Volatilidad en expansión.
+* Mercado con movimientos fuertes.
+* IV Rank extremadamente alto.
+* Curva del VIX inestable.
+* Eventos relevantes próximos.
+* Gamma extremadamente concentrado.
+* Deterioro de liquidez.
+
+La estrategia continúa buscando operaciones.
+
+No se modifican las reglas duras de:
+
+* POP.
+* Crédito.
+* Riesgo.
+* Gamma Wall.
+* Liquidez.
+
+Se utiliza una ventana de Entry Delta más conservadora:
+
+```
+Entry Delta = 0.10 a 0.20
+```
+
+---
+
+## 5.4. ESTADO NO OPERAR
+
+El mercado presenta un entorno considerado extremadamente adverso.
+
+El diagnóstico recomienda:
+
+```
+No abrir nuevas posiciones.
+```
+
+En la V2, el Market Diagnostic es principalmente contextual e informativo.
+
+El estado NO OPERAR no bloquea automáticamente la evaluación técnica de oportunidades salvo que posteriormente se defina explícitamente un Hard Stop de Mercado.
+
+La estrategia puede continuar mostrando oportunidades potenciales, pero el sistema debe informar claramente:
+
+```
+"El contexto de mercado es extremadamente adverso.
+ Se recomienda no iniciar nuevas posiciones."
+```
+
+---
+
+## 5.5. INFORMACIÓN UTILIZADA PARA EL MARKET DIAGNOSTIC
+
+El diagnóstico puede considerar:
+
+A. Volatilidad general:
+
+* VIX.
+* VIX9D.
+* VIX3M.
+* VIX Term Structure.
+* Evolución reciente de la volatilidad.
+
+B. Volatilidad del símbolo:
+
+* IV Rank.
+* IV Percentile.
+* IV vs. HV.
+* Nivel de prima disponible.
+
+C. Estructura del mercado:
+
+* GEX global.
+* Gamma Walls globales.
+* Open Interest.
+* Concentración de Gamma.
+* Zonas relevantes de opciones.
+
+D. Riesgo de eventos:
+
+* Earnings.
+* FOMC.
+* CPI.
+* NFP.
+* Otros eventos macro relevantes.
+
+El diagnóstico debe ayudar a responder:
+
+```
+"¿Qué tipo de mercado estamos atravesando?"
+```
+
+No debe responder:
+
+```
+"¿Debemos vender Put o Call?"
+```
+
+======================================================================
+6. GEX Y GAMMA WALLS
+====================
+
+La GOT V2 utilizará dos niveles complementarios de análisis Gamma.
+
+La razón es que el mercado de opciones presenta una estructura de Gamma distribuida entre diferentes vencimientos.
+
+Un Gamma Wall observado en un único vencimiento no necesariamente representa toda la estructura Gamma relevante del subyacente.
+
+Por este motivo se diferencian:
+
+```
+1. Estructura Gamma Global.
+2. Estructura Gamma Operativa.
+```
+
+---
+
+## 6.1. NIVEL GLOBAL — GEX GLOBAL
+
+El GEX Global se calculará considerando múltiples vencimientos relevantes del símbolo.
+
+El objetivo es obtener una visión agregada de la estructura Gamma del mercado de opciones.
+
+El análisis global se utilizará principalmente para:
+
+* Market Diagnostic.
+* Identificar zonas Gamma estructurales.
+* Identificar Gamma Walls globales.
+* Entender la estructura general del mercado de opciones.
+* Contextualizar el riesgo de movimiento del subyacente.
+
+Conceptualmente:
+
+```
+TODOS LOS VENCIMIENTOS RELEVANTES
+            |
+            v
+    GEX AGREGADO / PONDERADO
+            |
+            v
+    ESTRUCTURA GAMMA GLOBAL
+            |
+            v
+    GAMMA WALLS GLOBALES
+```
+
+---
+
+## 6.2. NIVEL OPERATIVO — GEX DEL VENCIMIENTO
+
+Una vez seleccionado el vencimiento de la operación dentro de:
+
+```
+30–50 DTE
+```
+
+se analiza adicionalmente el GEX específico de dicho vencimiento.
+
+El objetivo es identificar:
+
+* Gamma Walls específicos del vencimiento.
+* Concentraciones de Gamma del vencimiento.
+* Estructura de Gamma directamente relacionada con la operación.
+
+Conceptualmente:
+
+```
+VENCIMIENTO SELECCIONADO
+      30–50 DTE
+          |
+          v
+   GEX DEL VENCIMIENTO
+          |
+          v
+   GAMMA WALLS DEL DTE
+```
+
+---
+
+## 6.3. RELACIÓN ENTRE GEX GLOBAL Y GEX OPERATIVO
+
+La estrategia no utilizará exclusivamente el GEX del vencimiento seleccionado.
+
+Tampoco utilizará exclusivamente el GEX agregado de todos los vencimientos.
+
+Ambos niveles se utilizan de forma complementaria.
+
+La lógica es:
+
+```
+GEX GLOBAL
+    ->
+Contexto y estructura general
+
+GEX DEL VENCIMIENTO
+    ->
+Estructura específica de la operación
+
+AMBOS
+    ->
+Definición y validación del Safety Strike
+```
+
+---
+
+## 6.4. GAMMA WALLS COMO RESTRICCIÓN
+
+Los Gamma Walls representan zonas estructurales relevantes.
+
+El Short Strike:
+
+* Nunca debe ubicarse dentro de una zona Gamma prohibida.
+* Debe respetar las zonas de protección definidas alrededor de los Gamma Walls.
+
+La lógica general es:
+
+```
+Zona Gamma prohibida
+        |
+        v
+NO SE PUEDE UBICAR SHORT STRIKE
+```
+
+---
+
+## 6.5. PONDERACIÓN DE VENCIMIENTOS
+
+La V2 establece conceptualmente que el GEX Global debe considerar múltiples vencimientos relevantes.
+
+La metodología exacta de ponderación temporal aún queda pendiente de validación.
+
+La estrategia deberá determinar posteriormente si:
+
+* Todos los vencimientos tienen igual peso.
+* Los vencimientos cercanos tienen mayor peso.
+* Los vencimientos lejanos tienen menor peso.
+* Se utiliza una función de decaimiento temporal.
+* Se utiliza una combinación basada en DTE y exposición Gamma.
+
+Este parámetro deberá validarse mediante backtesting.
+
+No se define todavía una fórmula matemática definitiva.
+
+======================================================================
+7. SAFETY DELTA
+===============
+
+La V2 define:
+
+```
+Safety Delta absoluto = 0.25
+```
+
+Este valor representa la frontera máxima de Delta aceptable para una entrada.
+
+Por encima de 0.25:
+
+```
+La operación no es válida.
+```
+
+La ventana efectiva de entrada depende del Market Diagnostic.
+
+---
+
+## 7.1. ENTRY DELTA SEGÚN EL RÉGIMEN
+
+FAVORABLE:
+
+```
+0.10 <= |Entry Delta| <= 0.25
+```
+
+SELECTIVO:
+
+```
+0.10 <= |Entry Delta| <= 0.20
+```
+
+NO OPERAR:
+
+```
+No se recomienda abrir nuevas posiciones.
+```
+
+La lógica es:
+
+```
+Safety Delta = límite absoluto.
+
+Entry Delta = límite operativo determinado por el régimen.
+```
+
+======================================================================
+8. SAFETY STRIKE
+================
+
+El Safety Strike es el strike de referencia desde el cual se construye la operación.
+
+Su definición debe considerar conjuntamente:
+
+* Gamma Walls globales.
+* Gamma Walls del vencimiento seleccionado.
+* Zona de protección de los Gamma Walls.
+* Safety Delta.
+* Liquidez.
+
+El Safety Strike representa una frontera operativa de seguridad.
+
+No se debe desplazar el Short Strike hacia una zona más peligrosa simplemente para aumentar el crédito.
+
+La definición conceptual es:
+
+```
+GEX GLOBAL
+     +
+GEX DEL VENCIMIENTO
+     |
+     v
+GAMMA WALLS RELEVANTES
+     |
+     v
+ZONA DE PROTECCIÓN
+     |
+     v
+SAFETY STRIKE
+```
+
+La definición matemática exacta de:
+
+* Distancia entre Gamma Wall y Safety Strike.
+* Priorización entre Gamma Wall Global y Gamma Wall del DTE.
+* Combinación de múltiples Gamma Walls.
+* Peso de cada vencimiento.
+
+queda pendiente de validación.
+
+La V2 establece el principio estructural, pero no cierra todavía la fórmula matemática.
+
+======================================================================
+9. SHORT STRIKE
+===============
+
+A partir del Safety Strike se buscan configuraciones de Short Strike.
+
+El Short Strike debe:
+
+* Respetar Gamma Walls.
+* Respetar Safety Strike.
+* Cumplir el Entry Delta permitido.
+* Tener liquidez suficiente.
+* Formar una estructura con POP adecuado.
+* Permitir una configuración económicamente válida.
+
+El Short Strike es el elemento que determina principalmente la exposición de la posición al movimiento del subyacente.
+
+======================================================================
+10. ENTRY DELTA
+===============
+
+El Entry Delta define la ventana en la que una operación puede ser considerada para ejecución.
+
+En régimen FAVORABLE:
+
+```
+0.10 a 0.25
+```
+
+En régimen SELECTIVO:
+
+```
+0.10 a 0.20
+```
+
+El Delta debe interpretarse como una ventana de oportunidad.
+
+No existe un punto obligatorio de entrada.
+
+Ejemplo:
+
+```
+Delta = 0.12
+Credit = $85
+POP = 84%
+Risk = $380
+
+-> EJECUTAR
+```
+
+No es necesario esperar a Delta 0.20 o 0.25.
+
+Otro ejemplo:
+
+```
+Delta = 0.22
+Credit = $110
+POP = 82%
+Risk = $380
+```
+
+En régimen FAVORABLE:
+
+```
+-> Puede ser válida.
+```
+
+En régimen SELECTIVO:
+
+```
+-> No es válida.
+```
+
+======================================================================
+11. CONDICIONES DURAS DE LA ESTRATEGIA
+======================================
+
+Una configuración ejecutable debe cumplir simultáneamente:
+
+```
+1. DTE entre 30 y 50.
+
+2. Short Strike fuera de la zona Gamma prohibida
+   y zona de protección.
+
+3. Entry Delta dentro de la ventana permitida.
+
+4. Long Delta >= 0.10.
+
+5. POP >= 80%.
+
+6. Crédito mínimo >= $80.
+
+7. Riesgo máximo <= $400.
+
+8. Liquidez suficiente.
+
+9. Estructura válida.
+```
+
+No existe compensación entre condiciones.
+
+Un parámetro no puede compensar otro.
+
+Por ejemplo:
+
+```
+Crédito alto NO compensa POP bajo.
+
+POP alto NO compensa Gamma inválido.
+
+Liquidez baja NO se compensa con mayor crédito.
+
+Delta alto NO se compensa con mayor prima.
+```
+
+======================================================================
+12. EVALUACIÓN DE ANCHOS
+========================
+
+La estrategia prioriza estructuras simples.
+
+Se intenta primero:
+
+```
+1 ancho de strike.
+```
+
+Si la estructura es estructuralmente válida pero no cumple las condiciones económicas:
+
+```
+Se prueba 2 anchos.
+```
+
+No se utilizan más de 2 anchos en la V2.
+
+---
+
+## 12.1. PRIMER INTENTO: 1 ANCHO
+
+Se construye el spread utilizando un ancho.
+
+Se evalúa:
+
+* Gamma.
+* Short Delta.
+* Long Delta.
+* POP.
+* Liquidez.
+* Crédito.
+* Riesgo.
+
+Si cumple todo:
+
+```
+-> CONFIGURACIÓN VÁLIDA
+```
+
+---
+
+## 12.2. CUÁNDO PROBAR 2 ANCHOS
+
+Solo se prueban 2 anchos cuando:
+
+1. La configuración es estructuralmente válida.
+2. Pero no cumple las condiciones económicas.
+
+Ejemplo:
+
+```
+Short Delta = 0.15
+POP = 84%
+Gamma = OK
+Liquidez = OK
+
+Credit = $60
+Risk = $420
+```
+
+La estructura es correcta, pero económicamente no es válida.
+
+Se prueba un spread de 2 anchos.
+
+---
+
+## 12.3. REGLA AL PASAR DE 1 A 2 ANCHOS
+
+El Short Strike se mantiene.
+
+Solo se modifica el Long Strike.
+
+La lógica es:
+
+```
+MISMO SHORT STRIKE
+       +
+MAYOR ANCHO
+       ->
+REEVALUAR ECONOMÍA
+```
+
+---
+
+## 12.4. CUÁNDO NO PROBAR 2 ANCHOS
+
+No se utiliza un mayor ancho para corregir problemas estructurales.
+
+Por ejemplo:
+
+```
+Short Delta > máximo permitido
+Gamma inválido
+POP insuficiente
+Liquidez insuficiente
+```
+
+En estos casos:
+
+```
+-> Buscar otro Short Strike.
+```
+
+No se intenta "arreglar" el problema aumentando el ancho.
+
+======================================================================
+13. JERARQUÍA DE EVALUACIÓN
+===========================
+
+La estrategia trabaja en tres niveles:
+
+```
+NIVEL 1: SÍMBOLO
+
+NIVEL 2: ESTRUCTURA
+
+NIVEL 3: CONFIGURACIÓN
+```
+
+Ejemplo:
+
+```
+AAPL
+   |
+   +-- PCS
+   |    +-- Configuración A
+   |    +-- Configuración B
+   |
+   +-- CCS
+   |    +-- Configuración A
+   |
+   +-- IC
+        +-- Configuración A
+        +-- Configuración B
+```
+
+Un fallo descarta una configuración.
+
+Si no existe ninguna configuración válida:
+
+```
+-> Se descarta la estructura.
+```
+
+Si ninguna estructura es válida:
+
+```
+-> Se descarta el símbolo.
+```
+
+======================================================================
+14. CANDIDATAS
+==============
+
+Una configuración que todavía no puede ejecutarse pero presenta potencial se mantiene como:
+
+```
+CANDIDATA
+```
+
+Una candidata puede no cumplir temporalmente:
+
+* Crédito mínimo.
+* Entry Delta.
+* Alguna condición económica.
+
+Siempre que la estructura general tenga sentido y pueda evolucionar favorablemente.
+
+Ejemplo:
+
+```
+Delta = 0.09
+Credit = $70
+POP = 85%
+Risk = $350
+Liquidity = OK
+Gamma = OK
+```
+
+La configuración todavía no es ejecutable.
+
+Pero se mantiene como candidata para monitoreo.
+
+======================================================================
+15. FILOSOFÍA DE ESPERA
+=======================
+
+La estrategia utiliza activamente el concepto:
+
+```
+"Esperar que el mercado venga hacia nosotros."
+```
+
+Una vez definida una configuración:
+
+```
+Estructura
+    +
+Safety Strike
+    +
+Short Strike
+    +
+Long Strike
+```
+
+se entra en estado:
+
+```
+WAIT / MONITOR
+```
+
+Se monitorean:
+
+* Delta.
+* Crédito.
+* POP.
+* Riesgo.
+* Liquidez.
+* Gamma.
+
+La estrategia no persigue el mercado.
+
+Si la prima es insuficiente:
+
+```
+-> Esperar.
+```
+
+Si el Delta es demasiado alto:
+
+```
+-> Esperar o descartar.
+```
+
+Si el mercado se mueve y la configuración entra en la ventana válida:
+
+```
+-> Evaluar nuevamente.
+```
+
+======================================================================
+16. TRIGGER DE EJECUCIÓN
+========================
+
+La operación se ejecuta únicamente cuando todas las condiciones se cumplen simultáneamente.
+
+Condiciones:
+
+```
+Entry Delta válido
+    +
+Crédito >= $80
+    +
+POP >= 80%
+    +
+Riesgo <= $400
+    +
+Long Delta >= 0.10
+    +
+Gamma Wall respetado
+    +
+Liquidez OK
+```
+
+Si todas las condiciones se cumplen:
+
+```
+-> EJECUTAR
+```
+
+Si no:
+
+```
+-> ESPERAR
+```
+
+======================================================================
+17. EJEMPLO DE EJECUCIÓN
+========================
+
+Supongamos:
+
+```
+Símbolo: XYZ
+DTE: 42
+Diagnóstico: FAVORABLE
+
+Gamma Wall Global: 500
+Gamma Wall DTE: 495
+Safety Strike: 490
+```
+
+Se construye:
+
+```
+Short Put: 490
+Long Put: 485
+```
+
+Datos:
+
+```
+Short Delta = 0.18
+Long Delta = 0.09
+POP = 83%
+Credit = $85
+Risk = $415
+Liquidez = OK
+```
+
+Resultado:
+
+```
+Long Delta no cumple.
+Risk no cumple.
+```
+
+La configuración no es válida.
+
+Se puede buscar otra configuración o probar 2 anchos únicamente si el problema es económico y la estructura original es válida.
+
+======================================================================
+18. EJEMPLO DE 2 ANCHOS
+=======================
+
+Mismo Short Strike:
+
+```
+Short Put: 490
+```
+
+Se amplía el spread:
+
+```
+Long Put: 480
+```
+
+Resultados:
+
+```
+Short Delta = 0.18
+Long Delta = 0.12
+POP = 81%
+Credit = $105
+Risk = $395
+Liquidez = OK
+Gamma = OK
+```
+
+Resultado:
+
+```
+CONFIGURACIÓN VÁLIDA
+```
+
+La configuración pasa a:
+
+```
+WAIT / MONITOR
+```
+
+Si posteriormente las condiciones siguen vigentes:
+
+```
+-> EJECUTAR
+```
+
+======================================================================
+19. GESTIÓN DE LA POSICIÓN
+==========================
+
+Una vez ejecutada la operación, el objetivo inicial de salida es:
+
+```
+50% del beneficio máximo posible.
+```
+
+La estrategia busca capturar aproximadamente el 50% del crédito máximo disponible.
+
+Ejemplo:
+
+```
+Crédito recibido = $100
+
+Objetivo de beneficio = $50
+```
+
+Al alcanzar el objetivo:
+
+```
+-> CERRAR POSICIÓN
+```
+
+La V2 deja para una etapa posterior la definición detallada de:
+
+* Stop loss.
+* Ajustes.
+* Gestión ante movimientos adversos.
+* Gestión de vencimiento.
+* Gestión ante cambios extremos de Gamma.
+* Gestión ante eventos.
+
+======================================================================
+20. FLUJO GENERAL DE LA ESTRATEGIA
+==================================
+
+```
+MARKET DIAGNOSTIC
+        |
+        v
+SEMÁFORO
+FAVORABLE / SELECTIVO / NO OPERAR
+        |
+        v
+DETERMINAR ENTRY DELTA MÁXIMO
+        |
+        v
+SELECCIONAR SÍMBOLO
+        |
+        v
+ANALIZAR GEX GLOBAL
+MÚLTIPLES VENCIMIENTOS
+        |
+        v
+IDENTIFICAR GAMMA WALLS GLOBALES
+        |
+        v
+SELECCIONAR VENCIMIENTO
+30–50 DTE
+        |
+        v
+ANALIZAR GEX DEL VENCIMIENTO
+        |
+        v
+IDENTIFICAR GAMMA WALLS DEL DTE
+        |
+        v
+COMBINAR ESTRUCTURA GAMMA
+GLOBAL + OPERATIVA
+        |
+        v
+DEFINIR SAFETY STRIKE
+        |
+        v
+EVALUAR IC / PCS / CCS
+        |
+        v
+BUSCAR SHORT STRIKE
+        |
+        v
+VALIDAR FILTROS ESTRUCTURALES
+        |
+        +---- NO ----> SIGUIENTE CONFIGURACIÓN
+        |
+        v
+PROBAR 1 ANCHO
+        |
+        v
+VALIDAR ECONOMÍA
+        |
+        +---- OK ----> CONFIGURACIÓN VÁLIDA
+        |
+        +---- NO ----> PROBAR 2 ANCHOS
+                              |
+                              v
+                     VALIDAR ECONOMÍA
+                              |
+                              +---- OK ----> CONFIGURACIÓN VÁLIDA
+                              |
+                              +---- NO ----> CANDIDATA
+                                                    |
+                                                    v
+                                             ESPERAR MERCADO
+                                                    |
+                                                    v
+                                            ENTRY DELTA VÁLIDO
+                                                    |
+                                                    v
+                                              PRIMA SUFICIENTE
+                                                    |
+                                                    v
+                                             EJECUTAR OPERACIÓN
+                                                    |
+                                                    v
+                                           OBJETIVO DE SALIDA
+                                                    |
+                                                    v
+                                               50% PROFIT
+```
+
+======================================================================
+21. RESUMEN DE PARÁMETROS DE LA V2
+==================================
+
+Parámetro                         Valor
+
+Estructuras                       IC / PCS / CCS
+
+DTE                               30–50
+
+GEX Global                        Múltiples vencimientos relevantes
+
+GEX Operativo                     Vencimiento seleccionado
+
+Gamma Walls Globales              Estructura agregada / ponderada
+
+Gamma Walls Operativos            Vencimiento seleccionado
+
+Safety Delta absoluto             0.25
+
+Entry Delta FAVORABLE             0.10–0.25
+
+Entry Delta SELECTIVO             0.10–0.20
+
+Market Diagnostic                 Informativo / Semáforo
+
+Market Bias                       No utilizado
+
+Scoring                           No utilizado
+
+Gamma Wall                        Restricción estructural
+
+Safety Strike                     Global Gamma + Operative Gamma
+
+Long Delta mínimo                 0.10
+
+POP mínimo                        80%
+
+Crédito mínimo                    $80
+
+Riesgo máximo                     $400
+
+Ancho inicial                     1
+
+Ancho máximo                      2
+
+Regla al ampliar                  Mantener Short Strike
+
+Liquidez                          Obligatoria
+
+Candidatas                        Sí
+
+Objetivo de salida                50% del beneficio máximo
+
+======================================================================
+22. FILOSOFÍA FINAL DE LA V2
+============================
+
+La estrategia GOT V2 puede resumirse en la siguiente secuencia:
+
+```
+1. DIAGNOSTICAR
+
+   Entender el contexto general del mercado.
+
+   VIX, volatilidad, IV Rank, GEX, Gamma,
+   liquidez y eventos.
+
+   El resultado se expresa mediante un semáforo:
+
+   FAVORABLE
+   SELECTIVO
+   NO OPERAR
+
+
+2. MAPEAR LA ESTRUCTURA GAMMA
+
+   Analizar la estructura Gamma global mediante
+   múltiples vencimientos relevantes.
+
+   Identificar Gamma Walls globales.
+
+
+3. DEFINIR EL VENCIMIENTO
+
+   Seleccionar un vencimiento entre 30 y 50 DTE.
+
+
+4. REFINAR LA ESTRUCTURA
+
+   Analizar GEX y Gamma Walls específicos
+   del vencimiento seleccionado.
+
+
+5. DEFINIR LA SEGURIDAD
+
+   Combinar la estructura Gamma global y
+   la estructura Gamma del vencimiento.
+
+   Definir el Safety Strike.
+
+
+6. CONSTRUIR
+
+   Evaluar IC, PCS y CCS.
+
+   Definir Short Strike y Long Strike.
+
+
+7. PROTEGER
+
+   Respetar Gamma Walls.
+
+   Mantener el riesgo máximo bajo control.
+
+   Respetar Delta y POP.
+
+   Mantener liquidez suficiente.
+
+
+8. ESPERAR
+
+   No perseguir el mercado.
+
+   Esperar que el precio se mueva hacia la zona
+   donde la operación ofrece una relación
+   riesgo/beneficio aceptable.
+
+
+9. EVALUAR
+
+   Entry Delta.
+
+   Crédito.
+
+   POP.
+
+   Riesgo.
+
+   Liquidez.
+
+
+10. EJECUTAR
+
+    Solo cuando todas las condiciones se cumplen.
+
+
+11. GESTIONAR
+
+    Buscar inicialmente el 50% del beneficio máximo.
+```
+
+La filosofía central de la GOT V2 es:
+
+```
+"NO PREDECIR.
+ NO PERSEGUIR.
+ MAPEAR LA ESTRUCTURA.
+ DEFINIR LA SEGURIDAD.
+ ESPERAR.
+ COBRAR UNA PRIMA SUFICIENTE.
+ ASUMIR SOLO EL RIESGO QUE ESTAMOS DISPUESTOS A ACEPTAR."
+```
+
+======================================================================
+23. ASPECTOS PENDIENTES DE VALIDACIÓN
+=====================================
+
+La V2 está conceptualmente definida, pero algunos parámetros deben ser validados mediante backtesting.
+
+Principalmente:
+
+1. Definición exacta de la zona de protección del Gamma Wall.
+
+2. Distancia óptima entre Gamma Wall y Safety Strike.
+
+3. Validación del Safety Delta absoluto de 0.25.
+
+4. Impacto de permitir Entry Delta hasta 0.25
+   en régimen FAVORABLE.
+
+5. Validación del Entry Delta máximo de 0.20
+   en régimen SELECTIVO.
+
+6. Crédito mínimo de $80.
+
+7. Riesgo máximo de $400.
+
+8. POP mínimo de 80%.
+
+9. Long Delta mínimo de 0.10.
+
+10. Ventana de 30–50 DTE.
+
+11. Efectividad de 1 ancho versus 2 anchos.
+
+12. Definición cuantitativa de liquidez.
+
+13. Definición precisa del Market Diagnostic.
+
+14. Reglas para identificar los estados:
+    FAVORABLE / SELECTIVO / NO OPERAR.
+
+15. Metodología exacta para calcular el GEX Global.
+
+16. Selección de vencimientos incluidos en el GEX Global.
+
+17. Metodología de ponderación de vencimientos.
+
+18. Metodología para combinar Gamma Walls Globales
+    y Gamma Walls del vencimiento seleccionado.
+
+19. Definición matemática exacta del Safety Strike.
+
+20. Gestión posterior a la entrada.
+
+Estos parámetros son parte de la especificación inicial de la V2 y deben considerarse hipótesis operativas sujetas a validación estadística.
+
+La validación no debe modificar la filosofía de la estrategia, sino determinar si los parámetros seleccionados son los adecuados.
+
+======================================================================
+24. CONCLUSIÓN
+==============
+
+La GOT V2 representa una evolución respecto de la V1.
+
+La V1 buscaba principalmente definir una ventana de Delta adecuada para entrar.
+
+La V2 evoluciona hacia un sistema más completo:
+
+```
+MARKET DIAGNOSTIC
+        +
+GEX GLOBAL
+        +
+GAMMA WALLS GLOBALES
+        +
+GEX DEL VENCIMIENTO
+        +
+GAMMA WALLS OPERATIVOS
+        +
+SAFETY STRIKE
+        +
+ENTRY DELTA DINÁMICO
+        +
+PRIMA
+        +
+RIESGO
+        +
+POP
+        +
+LIQUIDEZ
+        +
+ESPERA ACTIVA
+```
+
+La estrategia no intenta adivinar qué hará el mercado.
+
+En cambio:
+
+```
+1. Observa el contexto.
+2. Mapea la estructura Gamma global.
+3. Selecciona el vencimiento.
+4. Analiza la estructura Gamma específica.
+5. Define las zonas estructuralmente seguras.
+6. Determina una configuración.
+7. Calcula el riesgo.
+8. Espera.
+9. Deja que el mercado se acerque.
+10. Exige una prima suficiente.
+11. Ejecuta solo si todas las condiciones se cumplen.
+```
+
+La idea fundamental es:
+
+```
+"La oportunidad no se busca persiguiendo al mercado.
+ La oportunidad se define previamente y se espera
+ hasta que el mercado venga a nosotros."
+```
+
+FIN DEL DOCUMENTO
+ESTRATEGIA GOT V2
+Versión 2.0
+Estado: DEFINIDA

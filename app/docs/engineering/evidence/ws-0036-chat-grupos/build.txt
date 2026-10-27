@@ -1,0 +1,35 @@
+Creating an optimized production build...
+node : Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+At line:3 char:1
++ node node_modules/react-scripts/bin/react-scripts.js build > ../../do ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Browserslist: b...ld. Please run::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Browserslist: browsers data (caniuse-lite) is 6 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Compiled successfully.
+
+File sizes after gzip:
+
+  460.49 kB (+62 B)  build\static\js\main.45006f2e.js
+  26.96 kB           build\static\css\main.47c7d327.css
+  1.78 kB            build\static\js\552.6e7457ae.chunk.js
+
+The project was built assuming it is hosted at /.
+You can control this with the homepage field in your package.json.
+
+The build folder is ready to be deployed.
+You may serve it with a static server:
+
+  npm install -g serve
+  serve -s build
+
+Find out more about deployment here:
+
+  https://cra.link/deployment
+
+exit_code=0

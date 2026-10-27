@@ -1,0 +1,43 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DataFeed.Application\DataFeed.Application.csproj" />
+  </ItemGroup>
+
+  <!--
+    El DTO del cuerpo de error entra LINKEADO y no por ProjectReference a DataFeed.Api. Referenciar
+    el proyecto web arrastraria su grafo entero de paquetes (EF Core, Supabase, MCP) a la suite de
+    tests, y en esta solucion ese grafo es fragil: ModelContextProtocol fija paquetes .NET 10 sobre
+    una app net8.0 (ver docs). Un test que congela el formato de tres campos no justifica ese riesgo.
+    Si algun dia hacen falta tests de integracion sobre los controllers, ahi si va el ProjectReference.
+
+    El archivo es el REAL, no una copia: si se mueve, esto falla al compilar y hay que actualizarlo,
+    que es exactamente lo que se quiere que pase.
+  -->
+  <ItemGroup>
+    <Compile Include="..\DataFeed.Api\Controllers\Dtos\ApiErrorResponse.cs" Link="Contracts\ApiErrorResponse.cs" />
+  </ItemGroup>
+
+</Project>

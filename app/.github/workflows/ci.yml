@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  backend:
+    name: Backend — build + test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: source/galecore-datafeed
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore DataFeed.sln
+
+      - name: Build
+        run: dotnet build DataFeed.sln --no-restore -c Release
+
+      - name: Test (incluye validacion de los JSON de reglas)
+        run: dotnet test DataFeed.Tests/DataFeed.Tests.csproj --no-build -c Release --verbosity normal

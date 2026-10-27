@@ -1,0 +1,173 @@
+{
+  "run": "ac08-run7-real-gex-coverage",
+  "script": "docs/evidence/gc-0002/ac08_run.py",
+  "argv": [
+    "--name",
+    "ac08-run7-real-gex-coverage",
+    "--spec",
+    "shadow_runtime_test_v1",
+    "--evals",
+    "2",
+    "--gex-samples",
+    "3"
+  ],
+  "started_utc": "2026-09-24T18:20:18.538039+00:00",
+  "steps": [
+    {
+      "step": "preflight",
+      "at_utc": "2026-09-24T18:20:21.074023+00:00",
+      "port_7001_free": true
+    },
+    {
+      "step": "build",
+      "at_utc": "2026-09-24T18:20:28.338425+00:00",
+      "cmd": [
+        "dotnet",
+        "build",
+        "C:\\Users\\lenzi\\OneDrive\\Escritorio\\GaleCore\\GaleCore\\source\\galecore-datafeed\\DataFeed.Api\\DataFeed.Api.csproj",
+        "-c",
+        "Debug",
+        "-nologo",
+        "-v",
+        "q"
+      ],
+      "exit_code": 0,
+      "summary": [
+        "Build succeeded.",
+        "    276 Warning(s)",
+        "    0 Error(s)"
+      ]
+    },
+    {
+      "step": "binaries",
+      "at_utc": "2026-09-24T18:20:28.341867+00:00",
+      "files": {
+        "DataFeed.Api.dll": "9c0b7ae88452f8acf67583be7148bb632de469cd22a83d36433c10504ed48053",
+        "DataFeed.Application.dll": "886a132b7666a329d7eb935e50a9f8e24de2267563c92cce6bd06b608ef50e5b",
+        "DataFeed.Infrastructure.dll": "2cbd4fd00fd3340bd33c483e3e425a55c75c8e849a24366fad3c8fe3de28fba4"
+      },
+      "specs": {
+        "shadow_runtime_test_v1.json": "1e409e67cace3a39a6aa366f61bd165747487ffaa5403f87bcdb0ad9711710fa"
+      }
+    },
+    {
+      "step": "api_launch",
+      "at_utc": "2026-09-24T18:20:28.357739+00:00",
+      "cmd": [
+        "dotnet",
+        "run",
+        "--no-build",
+        "--project",
+        "C:\\Users\\lenzi\\OneDrive\\Escritorio\\GaleCore\\GaleCore\\source\\galecore-datafeed\\DataFeed.Api\\DataFeed.Api.csproj",
+        "--no-launch-profile"
+      ],
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:7001"
+      },
+      "pid": 14212
+    },
+    {
+      "step": "api_ready",
+      "at_utc": "2026-09-24T18:20:34.362435+00:00",
+      "log_lines": [
+        "Runtime: spec 'shadow_runtime_test_v1' cargado (hash=sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076)",
+        "info: DataFeed.Api.Infrastructure.ShadowPositionMonitorService[0]",
+        "ShadowPositionMonitorService iniciado",
+        "info: DataFeed.Api.Infrastructure.ShadowEntryLoopService[0]",
+        "ShadowEntryLoopService iniciado (arranca inerte, switch OFF)",
+        "Now listening on: http://localhost:7001",
+        "Hosting environment: Development",
+        "Content root path: C:\\Users\\lenzi\\OneDrive\\Escritorio\\GaleCore\\GaleCore\\source\\galecore-datafeed\\DataFeed.Api"
+      ]
+    },
+    {
+      "step": "gex_coverage",
+      "at_utc": "2026-09-24T18:21:07.348355+00:00",
+      "samples": [
+        {
+          "expiration": "2026-11-20",
+          "dte": 57,
+          "symbolsRequested": 442,
+          "symbolsWithGreeks": 442,
+          "callOiRequested": 169,
+          "callOiReceived": 50,
+          "putOiRequested": 124,
+          "putOiReceived": 44,
+          "netGEX": -86.5
+        },
+        {
+          "expiration": "2026-11-20",
+          "dte": 57,
+          "symbolsRequested": 442,
+          "symbolsWithGreeks": 442,
+          "callOiRequested": 169,
+          "callOiReceived": 50,
+          "putOiRequested": 124,
+          "putOiReceived": 44,
+          "netGEX": -86.5
+        },
+        {
+          "expiration": "2026-11-20",
+          "dte": 57,
+          "symbolsRequested": 442,
+          "symbolsWithGreeks": 442,
+          "callOiRequested": 169,
+          "callOiReceived": 50,
+          "putOiRequested": 124,
+          "putOiReceived": 44,
+          "netGEX": -86.5
+        }
+      ]
+    },
+    {
+      "step": "deployed",
+      "at_utc": "2026-09-24T18:21:07.541019+00:00",
+      "instance_id": "657d059b-7325-4ffe-89ae-0daac22d9796",
+      "version_hash": "sha256:68add468f142baaca705797e34ca4ad40fcc1bf4d20e20578e996b5daaacd076"
+    },
+    {
+      "step": "evaluations_reached",
+      "at_utc": "2026-09-24T18:22:58.790414+00:00",
+      "count": 2
+    },
+    {
+      "step": "switch_off",
+      "at_utc": "2026-09-24T18:22:59.250427+00:00"
+    },
+    {
+      "step": "snapshot_after_off",
+      "at_utc": "2026-09-24T18:25:10.664198+00:00"
+    },
+    {
+      "step": "api_stopped",
+      "at_utc": "2026-09-24T18:25:11.043142+00:00",
+      "taskkill_exit_code": 0,
+      "api_exit_code": 1
+    }
+  ],
+  "repo_start": {
+    "at_utc": "2026-09-24T18:20:18.667426+00:00",
+    "head": "050d4860a8849bc81a8171cd58e961286ca92cf8",
+    "status_porcelain": [],
+    "diff_head_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "diff_head_bytes": 0
+  },
+  "tools": {
+    "python": "3.11.4",
+    "dotnet": "9.0.301"
+  },
+  "repo_end": {
+    "at_utc": "2026-09-24T18:25:11.178512+00:00",
+    "head": "050d4860a8849bc81a8171cd58e961286ca92cf8",
+    "status_porcelain": [
+      "?? docs/evidence/gc-0002/ac08-run7-real-gex-coverage.jsonl",
+      "?? docs/evidence/gc-0002/ac08-run7-real-gex-coverage.manifest.json"
+    ],
+    "diff_head_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "diff_head_bytes": 0
+  },
+  "finished_utc": "2026-09-24T18:25:11.344187+00:00",
+  "result": "ok",
+  "exit_code": 0
+}

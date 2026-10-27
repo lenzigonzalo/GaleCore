@@ -1,0 +1,18 @@
+# Corrida 2026-08-25 -- book vivo, para el pendiente de la seccion 43.4
+# simbolo  vencimiento  inicio                          fin                             estado
+SPY      2026-09-18  11:09:12 local / 10:09:12 ET  11:12:11 local / 10:12:11 ET  ok  321 strikes  (179s)
+SPY      2026-10-16  11:12:11 local / 10:12:11 ET  11:12:53 local / 10:12:53 ET  ok  221 strikes  (41s)
+QQQ      2026-09-18  11:12:53 local / 10:12:53 ET  11:15:37 local / 10:15:37 ET  ok  267 strikes  (164s)
+QQQ      2026-10-16  11:15:37 local / 10:15:37 ET  11:16:17 local / 10:16:17 ET  ok  238 strikes  (41s)
+TSLA     2026-09-18  11:16:17 local / 10:16:17 ET  11:17:16 local / 10:17:16 ET  DESCARTADA banda 12 -- solo 27 de 167 strikes con quote, ver descartado-banda12/  (59s)
+TSLA     2026-10-16  11:17:16 local / 10:17:16 ET  11:17:22 local / 10:17:22 ET  DESCARTADA banda 12 -- solo 17 de 137 strikes con quote, ver descartado-banda12/  (6s)
+TSLA     2026-09-18  11:22:09 local / 10:22:09 ET  11:23:17 local / 10:23:17 ET  ok  167 strikes, 59 con quote  (69s)  RECAPTURA banda 35
+TSLA     2026-10-16  11:23:17 local / 10:23:17 ET  11:23:35 local / 10:23:35 ET  ok  137 strikes, 49 con quote  (17s)  RECAPTURA banda 35
+
+# La columna de estado decia FALLO en las seis, y las seis salieron bien: el runner la
+# resolvia por $LASTEXITCODE, que un .ps1 terminando normal no setea. Corregida a mano
+# contra los CSV, que es el hecho. El runner ya verifica el archivo y no el codigo.
+
+# Las dos TSLA de las 10:16 salieron con la banda de quotes de SPY/QQQ (12%), que en un
+# simbolo de 42% de IV deja afuera la zona que la estrategia vende. Recapturadas a las 10:22
+# con banda 35. Las descartadas quedan en descartado-banda12/ como evidencia del hallazgo.

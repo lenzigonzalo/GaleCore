@@ -1,0 +1,29 @@
+[
+  {
+    "status": "NOTED",
+    "count": 1,
+    "id": "gate-runtime-iv30-frente-a-hv30-con-datos-de-galecore",
+    "need": "Gate runtime IV30 frente a HV30 con datos de GaleCore",
+    "kind": "calc",
+    "first_seen": "2026-10-13T03:19:52+00:00",
+    "last_seen": "2026-10-13T03:19:52+00:00"
+  },
+  {
+    "status": "NOTED",
+    "count": 1,
+    "id": "drawdown-acumulado-y-freno-de-entradas-por-estrategia-en-galecore",
+    "need": "Drawdown acumulado y freno de entradas por estrategia en GaleCore",
+    "kind": "calc",
+    "first_seen": "2026-10-13T03:19:53+00:00",
+    "last_seen": "2026-10-13T03:19:53+00:00"
+  },
+  {
+    "status": "NOTED",
+    "count": 1,
+    "id": "tope-de-riesgo-agregado-entre-instancias-por-apuesta-y-vencimiento",
+    "need": "Tope de riesgo agregado entre instancias por apuesta y vencimiento",
+    "kind": "cross",
+    "first_seen": "2026-10-13T03:19:55+00:00",
+    "last_seen": "2026-10-13T03:19:55+00:00"
+  }
+]

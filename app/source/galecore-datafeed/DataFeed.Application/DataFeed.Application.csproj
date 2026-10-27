@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MathNet.Numerics" Version="5.0.0" />
+    <PackageReference Include="MediatR" Version="14.1.0" />
+    <!-- Estas versiones son las que NuGet resuelve para toda la solucion; declararlas mas abajo NO
+         alinea nada, parte: un PackageReference es un minimo, asi que el proyecto de arranque igual
+         resuelve la mas alta y el mismo assembly termina en dos versiones segun el proyecto. Ver la
+         nota de DataFeed.Api.csproj sobre quien fija el piso. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="8.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DataFeed.Infrastructure\DataFeed.Infrastructure.csproj" />
+    <ProjectReference Include="..\DataFeed.Repositories\DataFeed.Repositories.csproj" />
+  </ItemGroup>
+
+</Project>

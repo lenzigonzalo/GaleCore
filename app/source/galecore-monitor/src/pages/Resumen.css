@@ -1,0 +1,155 @@
+.rs { padding:var(--workspace-padding); color:var(--text-primary); font-family:var(--font-sans); }
+.rs-top,.rs-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+.rs-top h1 { font-size:var(--font-page); font-weight:600; margin:0; }
+.rs-capital { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); border:1px solid var(--border-light); border-radius:var(--panel-radius); overflow:hidden; background:var(--bg-secondary); margin-bottom:24px; }
+.rs-capital>:first-child { border:0!important; border-radius:0; padding:var(--panel-padding); }
+.rs-exposure { border-left:1px solid var(--border-light); padding:var(--panel-padding); font-size:var(--font-label); min-width:0; }
+.rs-exposure h2 { font-size:15px; font-weight:600; margin:0; }
+.rs-exposure .rs-head { margin-bottom:8px; }
+.rs-concentration { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px 18px; }
+.rs-holding>div:first-child { display:flex; align-items:baseline; gap:8px; font-variant-numeric:tabular-nums; }
+.rs-holding strong { margin-left:auto; font-size:var(--font-body); }
+.rs-holding span { color:var(--text-secondary); }
+.rs-weight { height:4px; background:var(--bg-elevated); border-radius:2px; margin-top:5px; overflow:hidden; }
+.rs-weight i { display:block; height:100%; background:var(--accent); }
+.rs-panel { background:var(--bg-secondary); border:1px solid var(--border); border-radius:var(--panel-radius); padding:var(--panel-padding); }
+.rs-panel h2 { margin:0; font-size:var(--font-body); font-weight:600; color:var(--text-primary); }
+.rs-empty { font-size:15px; padding:12px 0; margin:0; }
+.rs-alert { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin:0 0 12px; padding:12px 16px; font-size:15px; border:1px solid var(--yellow-border); border-left:4px solid var(--yellow-gc); background:var(--yellow-muted); border-radius:8px; color:var(--text-primary); }
+.rs-alert svg { color:var(--yellow-gc); flex-shrink:0; }
+.rs-alert.urgent { border-color:var(--red-border); border-left-color:var(--red-gc); background:var(--red-muted); }
+.rs-alert.urgent svg { color:var(--red-gc); }
+.rs-table-scroll,.rs-calendar-scroll { overflow-x:auto; }
+.rs-table { width:100%; border-collapse:collapse; font-size:var(--font-body); }
+.rs-table th { color:var(--text-secondary); font-weight:500; text-align:left; padding:12px; background:var(--bg-tertiary); white-space:nowrap; }
+.rs-table td { padding:16px 12px; border-bottom:1px solid var(--border); white-space:nowrap; }
+.rs-table tr:hover td { background:var(--bg-tertiary); }
+.rs-table .rs-pnl { font-size:20px; font-weight:600; }
+.rs-price-status { font-size:var(--font-label); font-weight:500; color:var(--yellow-gc); }
+.rs-table .num { text-align:right; font-variant-numeric:tabular-nums; }
+.rs-table b { font-size:15px; font-weight:600; }
+.rs-structure { font-size:var(--font-label); font-weight:600; }
+.rs .pos { color:var(--green); } .rs .neg { color:var(--red-gc); }
+.rs-expiry { font-variant-numeric:tabular-nums; }
+.rs-expiry.warning,.rs-expiry.danger { display:inline-block; padding:2px 6px; border-radius:4px; font-weight:600; }
+.rs-expiry.warning { background:var(--yellow-muted); color:var(--yellow-gc); }
+.rs-expiry.danger { background:var(--red-muted); color:var(--red-gc); }
+.rs-page { margin:12px 24px 24px; }
+.rs-month { display:flex; align-items:center; gap:12px; text-transform:capitalize; }
+.rs-month strong { min-width:170px; text-align:center; font-size:var(--font-body); }
+.rs-month button { display:grid; place-items:center; width:32px; height:32px; border:1px solid var(--border-light); border-radius:6px; background:var(--bg-tertiary); color:var(--text-primary); cursor:pointer; }
+.rs-month button:disabled { opacity:.4; cursor:default; }
+.rs-calendar-grid { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); min-width:700px; margin-top:14px; border-top:1px solid var(--border); border-left:1px solid var(--border); }
+.rs-weekday { padding:8px; font-size:var(--font-label); color:var(--text-secondary); background:var(--bg-tertiary); border-right:1px solid var(--border); }
+.rs-day { min-height:104px; padding:8px; border-right:1px solid var(--border); border-bottom:1px solid var(--border); }
+.rs-day time { font-size:var(--font-label); font-weight:600; }
+.rs-day.outside { background:var(--bg-primary); }
+.rs-day.today { box-shadow:inset 0 0 0 2px var(--accent); }
+.rs-day.today time { color:var(--accent); }
+.rs-event { padding:5px 7px; margin-top:6px; border-left:3px solid var(--yellow-gc); border-radius:3px; background:var(--yellow-muted); font-size:var(--font-label); line-height:1.3; overflow-wrap:anywhere; }
+@media(max-width:950px) { .rs { padding:12px; } .rs-capital { grid-template-columns:1fr; } .rs-exposure { border-left:0; border-top:1px solid var(--border); } .rs-page { margin:12px; } }
+
+/* Inicio (WS-0036): como el encabezado de Tastytrade/IBKR. Una franja de números legibles, debajo lo que pide atención y
+   la tabla de posiciones a todo el ancho, una línea por posición (pensado para muchas, de varios brokers). */
+.rs-strip { display:flex; flex-wrap:wrap; align-items:flex-start; gap:20px 40px; padding:4px 0 20px; border-bottom:1px solid var(--border); }
+.rs-stat { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.rs-stat span { font-size:14px; color:var(--text-secondary); }
+.rs-stat strong { font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; line-height:1.2; }
+.rs-stat-main strong { font-size:34px; }
+.rs-stat em { font-style:normal; font-size:14px; color:var(--text-secondary); font-variant-numeric:tabular-nums; }
+.rs-stat em.pos, .rs-stat em.neg { color:inherit; }
+.rs-stat em.pos { color:var(--green); } .rs-stat em.neg { color:var(--red-gc); }
+.rs-attention-list { padding:8px 0; border-bottom:1px solid var(--border); }
+.rs-attention { display:flex; align-items:center; gap:10px; padding:6px 0; font-size:15px; }
+.rs-attention i { flex:0 0 8px; height:8px; border-radius:50%; background:#60a5fa; }
+.rs-attention i.gestion { background:var(--yellow-gc); }
+.rs-lines { font-size:15px; margin-top:8px; }
+.rs-line { display:grid; grid-template-columns:minmax(170px,1.4fr) minmax(150px,230px) minmax(90px,.6fr) minmax(120px,.8fr) minmax(140px,.8fr) minmax(90px,.5fr); gap:14px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border-dark); font-variant-numeric:tabular-nums; }
+.rs-line>span:nth-child(n+3) { text-align:right; }
+.rs-line em { font-style:normal; font-size:14px; }
+.rs-line-head { font-size:14px; color:var(--text-secondary); padding:10px 0 6px; }
+.rs-pos { display:flex; align-items:center; gap:10px; min-width:0; white-space:nowrap; }
+.rs-pos b { font-weight:600; font-size:16px; }
+.rs-pos em { color:var(--text-secondary); }
+.rs-payoff { width:26px; height:22px; color:var(--text-primary); flex:0 0 26px; }
+.rs-ladder { width:220px; height:34px; display:block; }
+.rs-ladder text { font-size:12px; fill:var(--text-primary); font-family:var(--font-sans); }
+.rs-muted { color:var(--text-secondary); }
+@media(max-width:760px) { .rs-line { grid-template-columns:1fr auto; } .rs-line>span:nth-child(2), .rs-line>span:nth-child(3), .rs-line>span:nth-child(5), .rs-line>span:nth-child(6) { display:none; } }
+
+.rs-strike { background:none; border:1px solid transparent; border-radius:6px; padding:2px 6px; color:var(--text-primary); font:inherit; cursor:pointer; }
+.rs-strike:hover { border-color:var(--border-light); }
+.rs-strike em { color:var(--text-secondary); }
+.rs-strike-input { width:80px; text-align:right; background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-light); border-radius:6px; padding:3px 6px; font:inherit; }
+
+/* Con la campana o la watchlist abiertas, Inicio queda angosto: la escalera se va antes de que se corten los números. */
+.rs-lines { container-type:inline-size; }
+@container (max-width:860px) { .rs-line>span:nth-child(2) { display:none; } .rs-line { grid-template-columns:minmax(150px,1.4fr) minmax(90px,.6fr) minmax(120px,.8fr) minmax(140px,.8fr) minmax(90px,.5fr); } }
+
+/* Inicio = cuenta + posiciones (Cartera se unió acá el 15/10): una tabla como la de Macro, agrupada por subyacente, y
+   cada posición se abre con su detalle. */
+.rs-section-title { font-size:20px; font-weight:600; margin:22px 0 4px; }
+.rs-line-head { border-bottom:1px solid var(--border); }
+.rs-group-head { display:flex; align-items:baseline; gap:16px; padding:16px 0 6px; border-bottom:1px solid var(--border); font-size:15px; font-variant-numeric:tabular-nums; }
+.rs-group-head b { font-size:16px; font-weight:600; }
+.rs-group-head .pos { color:var(--green); } .rs-group-head .neg { color:var(--red-gc); }
+.rs-position .rs-line { cursor:pointer; }
+.rs-position .rs-line:hover { background:var(--bg-hover); }
+.rs-chevron { color:var(--text-secondary); transition:transform .15s; transform:rotate(-90deg); flex:0 0 16px; }
+.rs-position.open .rs-chevron { transform:none; }
+.rs-detail { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px 24px; margin:0; padding:14px 0 18px 26px; border-bottom:1px solid var(--border-dark); background:var(--bg-secondary); }
+.rs-detail div { display:flex; flex-direction:column; gap:4px; }
+.rs-detail dt { font-size:14px; color:var(--text-secondary); }
+.rs-detail dd { margin:0; font-size:17px; font-weight:500; font-variant-numeric:tabular-nums; }
+.rs-detail .pos { color:var(--green); } .rs-detail .neg { color:var(--red-gc); }
+
+/* Inicio 15/10 (owner): valor y resultado por período arriba; capital y griegas en cuadros con números grandes y el
+   concepto escrito; lo que pide atención con su tipo, sin viñetas. */
+.rs-hero { display:flex; flex-wrap:wrap; align-items:flex-end; gap:24px 56px; padding:4px 0 22px; }
+.rs-hero-value span, .rs-periods span { display:block; font-size:15px; color:var(--text-secondary); margin-bottom:4px; }
+.rs-hero-value strong { font-size:44px; font-weight:600; line-height:1; font-variant-numeric:tabular-nums; }
+.rs-periods { display:flex; gap:40px; flex-wrap:wrap; }
+.rs-periods strong { display:block; font-size:26px; font-weight:600; line-height:1.15; font-variant-numeric:tabular-nums; }
+.rs-periods em { display:block; font-style:normal; font-size:15px; font-variant-numeric:tabular-nums; min-height:1.2em; }
+.rs .rs-periods .pos, .rs .rs-tile .pos { color:var(--green); } .rs .rs-periods .neg, .rs .rs-tile .neg { color:var(--red-gc); }
+.rs-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(380px,1fr)); gap:16px; margin-bottom:16px; }
+.rs-card { background:var(--bg-secondary); border:1px solid var(--border-dark); border-radius:12px; padding:16px 20px 18px; }
+.rs-card h2 { font-size:16px; font-weight:600; margin:0 0 12px; }
+.rs-tiles { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+.rs-tile span { display:block; font-size:15px; color:var(--text-secondary); }
+.rs-tile strong { display:block; font-size:28px; font-weight:600; line-height:1.2; margin:4px 0 6px; font-variant-numeric:tabular-nums; }
+.rs-tile p { margin:0; font-size:14px; line-height:1.4; color:var(--text-primary); opacity:.85; }
+.rs-bar { position:relative; height:6px; border-radius:3px; background:var(--bg-tertiary,#2a2a2a); margin:0 0 8px; overflow:visible; }
+.rs-bar i { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:var(--accent); }
+.rs-bar i.neg { background:var(--red-gc); }
+.rs-bar b { position:absolute; top:-3px; width:2px; height:12px; background:var(--text-primary); }
+.rs-attention-card { margin-bottom:8px; }
+.rs-attention-card .rs-attention { display:flex; align-items:center; gap:12px; padding:9px 0; border-top:1px solid var(--border-dark); font-size:15px; }
+.rs-attention-card h2 + .rs-attention { border-top:0; }
+.rs-tag { flex:0 0 auto; font-size:13px; font-weight:600; padding:3px 9px; border-radius:999px; border:1px solid currentColor; }
+.rs-tag.gestion { color:var(--yellow-gc); } .rs-tag.riesgo { color:var(--red-gc, #f87171); } .rs-tag.evento { color:#60a5fa; }
+@container (max-width:700px) { .rs-tiles { grid-template-columns:1fr 1fr; } }
+@media(max-width:700px) { .rs-tiles { grid-template-columns:1fr; } .rs-hero-value strong { font-size:36px; } }
+
+/* Posiciones en su cuadro, con delta y theta por fila (owner 15/10). */
+.rs-card.rs-lines { margin-top:0; }
+.rs-card.rs-lines .rs-line { grid-template-columns:minmax(170px,1.3fr) minmax(150px,220px) minmax(90px,.6fr) minmax(120px,.8fr) minmax(56px,.4fr) minmax(64px,.45fr) minmax(140px,.8fr) minmax(90px,.5fr); }
+.rs-card.rs-lines .rs-line:not(.rs-line-head) { padding-left:6px; padding-right:6px; }
+.rs-card .rs-group-head { padding-left:6px; }
+.rs-card .rs-detail { background:var(--bg-tertiary,#232323); border-radius:0 0 8px 8px; }
+@container (max-width:980px) { .rs-card.rs-lines .rs-line>span:nth-child(2) { display:none; } .rs-card.rs-lines .rs-line { grid-template-columns:minmax(150px,1.3fr) minmax(80px,.6fr) minmax(110px,.8fr) minmax(56px,.4fr) minmax(64px,.45fr) minmax(130px,.8fr) minmax(80px,.5fr); } }
+
+/* Cuadro del valor de la cuenta (owner 15/10): total y períodos chicos uno debajo del otro, y el gráfico al lado. */
+.rs-card.rs-hero { display:grid; grid-template-columns:260px minmax(0,1fr); gap:24px; align-items:stretch; padding:18px 20px; margin-bottom:16px; }
+.rs-hero-side { display:flex; flex-direction:column; gap:14px; }
+.rs-hero .rs-hero-value strong { font-size:40px; }
+.rs-hero .rs-periods { display:flex; flex-direction:column; gap:2px; }
+.rs-hero .rs-periods button { display:grid; grid-template-columns:70px 1fr auto; align-items:baseline; gap:8px; background:none; border:0; border-radius:8px; padding:7px 10px; margin:0 -10px; color:inherit; cursor:pointer; text-align:left; font:inherit; }
+.rs-hero .rs-periods button:hover { background:var(--bg-hover); }
+.rs-hero .rs-periods button[aria-selected="true"] { background:var(--bg-tertiary,#262626); }
+.rs-hero .rs-periods span { margin:0; font-size:15px; }
+.rs-hero .rs-periods strong { font-size:18px; display:inline; }
+.rs-hero .rs-periods em { font-size:14px; display:inline; min-height:0; }
+.rs-chart { height:230px; min-width:0; }
+.rs-chart-empty { display:flex; align-items:center; justify-content:center; color:var(--text-secondary); font-size:15px; }
+@media(max-width:900px) { .rs-card.rs-hero { grid-template-columns:1fr; } }

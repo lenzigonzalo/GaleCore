@@ -1,0 +1,275 @@
+using DataFeed.Application.App.GammaExposure;
+using DataFeed.Application.App.Runtime;
+using DataFeed.Application.App.Runtime.Contracts;
+using DataFeed.Application.Data.Tastytrade.MarketDataQuote;
+using DataFeed.Application.Data.Tastytrade.MarketDataTrade;
+using static DataFeed.Tests.ShadowRuntimeEngineTests;
+
+namespace DataFeed.Tests;
+
+/// <summary>
+/// GC-0002 — los ticks de los loops SHADOW: el switch OFF pausa entradas sin borrar ni frenar el
+/// seguimiento (AC-04, R1-M2), y fuera de sesión no se simulan fills ni cierres (R1-M1).
+/// </summary>
+[Collection("RuntimeStaticCaches")]
+public class ShadowRuntimeTickTests
+{
+    private static readonly DateTime Night = new(2026, 9, 25, 0, 30, 0, DateTimeKind.Utc);     // jueves 20:30 ET
+    private static readonly DateTime Saturday = new(2026, 9, 26, 15, 0, 0, DateTimeKind.Utc);  // sábado 11:00 ET
+
+    private static (ShadowRuntimeStore Store, StrategyInstance Instance) RuntimeWithSpec()
+    {
+        var (store, instance) = NewRuntime();
+        store.RegisterSpec("shadow_runtime_test_v1", Spec());
+        return (store, instance);
+    }
+
+    // ── Sesión ─────────────────────────────────────────────────────
+
+    [Fact]
+    public void Session_OpenOnlyOnWeekdaysWithinHours()
+    {
+        var op = Spec().Operational;
+        Assert.True(ShadowSession.IsOpen(op, Now));
+        Assert.True(ShadowSession.IsOpen(op, new DateTime(2026, 9, 24, 13, 30, 0, DateTimeKind.Utc)));   // 09:30 ET
+        Assert.False(ShadowSession.IsOpen(op, new DateTime(2026, 9, 24, 13, 29, 0, DateTimeKind.Utc)));  // 09:29 ET
+        Assert.False(ShadowSession.IsOpen(op, new DateTime(2026, 9, 24, 20, 0, 0, DateTimeKind.Utc)));   // 16:00 ET
+        Assert.False(ShadowSession.IsOpen(op, Night));
+        Assert.False(ShadowSession.IsOpen(op, Saturday));
+    }
+
+    [Fact]
+    public void Session_UnreadableConfig_IsClosed()
+    {
+        var op = Spec().Operational;
+        Assert.False(ShadowSession.IsOpen(op with { Timezone = "Nowhere/Nada" }, Now));
+        Assert.False(ShadowSession.IsOpen(op with { SessionHours = new SessionHours { Start = "9.30", End = "16:00" } }, Now));
+    }
+
+    // ── Entrada ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task EntryTick_InSession_Evaluates()
+    {
+        var (store, _) = RuntimeWithSpec();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
+
+        var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, outcomes["i-1:SPY"]);
+        Assert.Equal(ShadowRuntimeTick.SchedulerStates.Idle, store.GetInstance("i-1")!.SchedulerState);
+    }
+
+    [Theory]
+    [MemberData(nameof(ClosedTimes))]
+    public async Task EntryTick_OutsideSession_NeverEvaluatesNorFills(DateTime when)
+    {
+        var (store, _) = RuntimeWithSpec();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
+
+        var outcomes = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, when, default);
+
+        Assert.Empty(outcomes);
+        Assert.Equal(0, data.BuildCalls);
+        Assert.Empty(store.AllPositions());
+        Assert.Empty(store.GetEvaluations("i-1"));
+        Assert.Equal(ShadowRuntimeTick.SchedulerStates.OutsideSession, store.GetInstance("i-1")!.SchedulerState);
+    }
+
+    public static IEnumerable<object[]> ClosedTimes() => new[] { new object[] { Night }, new object[] { Saturday } };
+
+    // ── AC-04: el switch OFF pausa, no borra ni frena el monitor ──
+
+    [Fact]
+    public async Task SwitchOff_PausesEntries_KeepsState_MonitorKeepsValuing()
+    {
+        var (store, _) = RuntimeWithSpec();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
+        await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
+        var pos = Assert.Single(store.AllPositions());
+        int eventsBefore = store.GetEvents("i-1").Count;
+        int evaluationsBefore = store.GetEvaluations("i-1").Count;
+
+        // Switch OFF, en sesión: el tick de entrada no evalúa ni abre, y la instancia muestra la pausa.
+        var entry = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => false, Now.AddMinutes(1), default);
+        Assert.Empty(entry);
+        Assert.Equal(1, data.BuildCalls);
+        Assert.Equal(ShadowRuntimeTick.SchedulerStates.Paused, store.GetInstance("i-1")!.SchedulerState);
+        Assert.Equal("RUNNING", store.GetInstance("i-1")!.LifecycleState);
+
+        // Todo lo registrado sigue consultable.
+        Assert.Equal(eventsBefore, store.GetEvents("i-1").Count);
+        Assert.Equal(evaluationsBefore, store.GetEvaluations("i-1").Count);
+        Assert.Single(store.OpenPositions());
+
+        // El monitor no depende del switch: valúa y cierra con precios reales.
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Now);
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Now);
+        var monitor = await ShadowRuntimeTick.RunMonitorTickAsync(store, data, Now.AddMinutes(2), default);
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Closed, monitor[pos.PositionId]);
+        Assert.Equal("TAKE_PROFIT", store.GetPosition(pos.PositionId)!.ExitReason);
+    }
+
+    // ── Monitor ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task MonitorTick_OutsideSession_ValuesButNeverCloses()
+    {
+        var (store, _) = RuntimeWithSpec();
+        var data = new FakeData { Build = () => CandidateBuildResult.Built(RealCandidate()) };
+        await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
+        var pos = store.AllPositions().Single();
+        data.Quotes[".SPY261030P720"] = new LegQuote(0.50, 0.60, Night);   // take profit si se evaluara
+        data.Quotes[".SPY261030P715"] = new LegQuote(0.20, 0.30, Night);
+
+        var monitor = await ShadowRuntimeTick.RunMonitorTickAsync(store, data, Night, default);
+
+        Assert.Equal(ShadowRuntimeEngine.Outcomes.Valued, monitor[pos.PositionId]);
+        var same = store.GetPosition(pos.PositionId)!;
+        Assert.Equal("OPEN", same.Status);
+        Assert.Equal(0.3, same.LastSpreadValue);
+        Assert.Equal(Night, same.LastValuedAt);
+    }
+
+    [Fact]
+    public async Task MonitorTick_PositionWithoutSpec_IsRecorded_Once()
+    {
+        var (store, _) = NewRuntime();   // sin spec registrada
+        store.AddPosition(new ShadowPosition { PositionId = "p-1", InstanceId = "i-1", Symbol = "SPY", Status = "OPEN" });
+
+        await ShadowRuntimeTick.RunMonitorTickAsync(store, new FakeData(), Now, default);
+        await ShadowRuntimeTick.RunMonitorTickAsync(store, new FakeData(), Now.AddSeconds(30), default);
+
+        var ev = Assert.Single(store.GetEvents("i-1"), e => e.EventType == "VALUATION_NO_DATA");
+        Assert.Contains("sin spec", ((List<string>)ev.Payload["problems"]!).Single());
+    }
+
+    // ── P1-07: varias instancias ───────────────────────────────────
+
+    [Fact]
+    public async Task EntryTick_EvaluatesEveryRunningInstance_EachWithItsOwnLimit()
+    {
+        var (store, first) = RuntimeWithSpec();   // máximo 1 posición por instancia
+        var second = first with { InstanceId = "i-2", DeploymentId = "d-2", CreatedAt = Now.AddMinutes(1) };
+        store.SetInstance(second.InstanceId, second);
+        var stopped = first with { InstanceId = "i-3", DeploymentId = "d-3", LifecycleState = "STOPPED" };
+        store.SetInstance(stopped.InstanceId, stopped);
+        var data = new FakeData { BuildFor = i => CandidateBuildResult.Built(RealCandidate() with { InstanceId = i.InstanceId }) };
+
+        var firstTick = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
+        var secondTick = await ShadowRuntimeTick.RunEntryTickAsync(store, data, switchEnabled: () => true, Now, default);
+
+        Assert.Equal(new[] { "i-1:SPY", "i-2:SPY" }, firstTick.Keys.OrderBy(k => k));
+        Assert.All(firstTick.Values, o => Assert.Equal(ShadowRuntimeEngine.Outcomes.Opened, o));
+        Assert.All(secondTick.Values, o => Assert.Equal(ShadowRuntimeEngine.Outcomes.MaxPositions, o));   // cada una, su límite
+        Assert.Equal(new[] { "i-1", "i-2" }, store.AllPositions().Select(p => p.InstanceId).OrderBy(x => x));
+        Assert.Equal(ShadowRuntimeTick.SchedulerStates.Idle, store.GetInstance("i-2")!.SchedulerState);
+        Assert.Equal("IDLE", store.GetInstance("i-3")!.SchedulerState);   // la parada no se evaluó
+    }
+}
+
+/// <summary>GC-0002 R1-B1 — un net GEX sin datos reales es NO_DATA, no 0.</summary>
+[Collection("RuntimeStaticCaches")]
+public class MetricResolverNetGexTests
+{
+    private static GammaExposureResponse WithStrikes(int greeks, long oi, int requested = 2, long? putOi = null) => new()
+    {
+        SymbolsRequested = requested,
+        SymbolsWithGreeks = greeks,
+        Strikes = new() { new() { Strike = 700, CallOI = oi, PutOI = putOi ?? oi, CallGEX = 5000, PutGEX = -2000 } },
+    };
+
+    [Fact]
+    public void PartialCoverage_OrOneSidedOi_IsNoData()
+    {
+        Assert.Null(MetricResolver.UsableNetGex(WithStrikes(greeks: 441, oi: 10, requested: 442)));
+        Assert.Null(MetricResolver.UsableNetGex(WithStrikes(greeks: 2, oi: 10, requested: 0)));
+        Assert.Null(MetricResolver.UsableNetGex(WithStrikes(greeks: 2, oi: 10, putOi: 0)));   // sólo calls
+    }
+
+    [Fact]
+    public void NoResponse_NoStrikes_NoGreeks_NoOi_AreNoData()
+    {
+        Assert.Null(MetricResolver.UsableNetGex(null));
+        Assert.Null(MetricResolver.UsableNetGex(new GammaExposureResponse()));
+        Assert.Null(MetricResolver.UsableNetGex(WithStrikes(greeks: 0, oi: 10)));
+        Assert.Null(MetricResolver.UsableNetGex(WithStrikes(greeks: 2, oi: 0)));
+    }
+
+    [Fact]
+    public void RealData_ReturnsTheSum()
+    {
+        Assert.Equal(3.0, MetricResolver.UsableNetGex(WithStrikes(greeks: 2, oi: 10)));   // (5000 − 2000) / 1000
+    }
+}
+
+/// <summary>GC-0002 (recheck R2, m-c) — un precio de cotización sólo sale de una cotización utilizable.</summary>
+[Collection("RuntimeStaticCaches")]
+public class MetricResolverQuoteTests
+{
+    private static readonly DateTime QNow = new(2026, 9, 24, 17, 0, 0, DateTimeKind.Utc);
+    private static readonly TimeSpan QMax = TimeSpan.FromSeconds(150);
+    private static QuoteEvent Q(double bid, double ask, long eventTime = 0) =>
+        new() { BidPrice = bid, AskPrice = ask, EventTime = eventTime };
+    private static double? P(QuoteEvent? q) => MetricResolver.UsableQuotePrice(q, QNow, QMax);
+    private static long Ms(DateTime t) => new DateTimeOffset(t).ToUnixTimeMilliseconds();
+
+    [Fact]
+    public void OneSidedOrCrossedOrEmpty_IsNoData()
+    {
+        Assert.Null(P(null));
+        Assert.Null(P(Q(0, 0)));
+        Assert.Null(P(Q(20, 0)));    // sin ask
+        Assert.Null(P(Q(16, 15)));   // cruzada
+        Assert.Null(P(Q(double.NaN, 15)));
+        Assert.Null(P(Q(double.MaxValue, double.MaxValue)));   // finitos, pero el mid desborda
+    }
+
+    [Fact]
+    public void RealQuote_IsTheMid()
+    {
+        Assert.Equal(15.25, P(Q(15.2, 15.3))!.Value, 10);                             // sin hora del proveedor: vale con la hora de lectura (WS-0062 inc.1b)
+        Assert.Equal(15.25, P(Q(15.2, 15.3, Ms(QNow.AddSeconds(-10))))!.Value, 10);
+    }
+
+    [Fact]
+    public void StaleOrFutureQuote_IsNoData()
+    {
+        Assert.Null(P(Q(15.2, 15.3, Ms(QNow.AddSeconds(-151)))));
+        Assert.Null(P(Q(15.2, 15.3, Ms(QNow.AddSeconds(30)))));
+    }
+}
+
+/// <summary>GC-0002 AC-08 — VIX sale del último trade (DXLink publica el Quote del índice sin bid/ask).</summary>
+[Collection("RuntimeStaticCaches")]
+public class MetricResolverTradeTests
+{
+    // Hora fija y representativa (2026-09-24 durante la sesión); no es la de un trade registrado.
+    private const long TradeTime = 1790269546314;
+    private static readonly DateTime At = DateTimeOffset.FromUnixTimeMilliseconds(TradeTime).UtcDateTime;
+    private static readonly TimeSpan Max = TimeSpan.FromSeconds(150);
+
+    [Fact]
+    public void TradeWithoutTimeOrPrice_IsNoData()
+    {
+        Assert.Null(MetricResolver.UsableTradePrice(null, At, Max));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = 15.42, Time = 0 }, At, Max));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = double.NaN, Time = TradeTime }, At, Max));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = double.PositiveInfinity, Time = TradeTime }, At, Max));
+        Assert.Null(MetricResolver.UsableTradePrice(new TradeEvent { Price = 0, Time = TradeTime }, At, Max));
+    }
+
+    [Fact]
+    public void StaleOrFutureTrade_IsNoData()
+    {
+        var trade = new TradeEvent { Price = 15.42, Time = TradeTime };
+        Assert.Null(MetricResolver.UsableTradePrice(trade, At.AddSeconds(151), Max));   // viejo: un VIX de ayer no pasa
+        Assert.Null(MetricResolver.UsableTradePrice(trade, At.AddSeconds(-30), Max));   // hora en el futuro
+    }
+
+    [Fact]
+    public void RealTrade_IsThePrice()
+    {
+        Assert.Equal(15.42, MetricResolver.UsableTradePrice(new TradeEvent { Price = 15.42, Time = TradeTime }, At.AddSeconds(20), Max));
+    }
+}

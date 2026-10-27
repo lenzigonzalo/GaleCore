@@ -1,0 +1,21 @@
+Why you should do it regularly: https://github.com/browserslist/update-db#readme
+Compiled successfully.
+
+File sizes after gzip:
+
+  440.73 kB (+182 B)  build\static\js\main.33d620eb.js
+  19 kB (+24 B)       build\static\css\main.252aae1c.css
+  1.78 kB             build\static\js\552.6e7457ae.chunk.js
+
+The project was built assuming it is hosted at /.
+You can control this with the homepage field in your package.json.
+
+The build folder is ready to be deployed.
+You may serve it with a static server:
+
+  npm install -g serve
+  serve -s build
+
+Find out more about deployment here:
+
+  https://cra.link/deployment

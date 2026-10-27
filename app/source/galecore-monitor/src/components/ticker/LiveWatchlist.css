@@ -1,0 +1,75 @@
+.workspace-shell.has-watchlist-dock { padding-right:48px; }
+.workspace-shell.has-watchlist-dock.watchlist-expanded { padding-right:calc(var(--watchlist-width, 420px) + 48px); }
+.lw-tools { position:fixed; right:0; top:0; bottom:0; width:48px; z-index:61; background:var(--bg-secondary); border-left:1px solid var(--border); padding:12px 5px; }
+.lw-tools > button,.lw-account > div > button { display:grid; place-items:center; width:37px; height:40px; border:1px solid transparent; border-radius:5px; background:none; color:var(--text-secondary); cursor:pointer; }
+.lw-tools button.active { background:var(--bg-hover); border-color:var(--border-light); color:var(--text-primary); }
+.lw-account { position:absolute; bottom:12px; right:5px; }
+.lw-account > div > button { padding:0; }
+.lw-account [role="menu"] button { display:flex; width:100%; height:auto; justify-content:flex-start; }
+.lw-drawer { position:fixed; inset:0 48px 0 auto; z-index:60; width:420px; height:100dvh; display:flex; flex-direction:column; background:var(--bg-primary); color:var(--text-primary); border-left:1px solid var(--border); font-size:15px; }
+.lw-drawer[hidden] { display:none; }
+.lw-drawer { max-width:calc(100vw - 48px); }
+.lw-resize { position:absolute; inset:0 auto 0 -5px; width:10px; z-index:3; cursor:col-resize; touch-action:none; }
+.lw-resize:hover,.lw-resize:focus-visible { background:var(--border-light); outline:none; }
+.lw-drawer > header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); flex-shrink:0; height:64px; }
+.lw-drawer header > div { display:flex; gap:6px; }
+.lw-drawer h2 { font-size:18px; font-weight:600; margin:0; }
+.lw-close { display:grid; place-items:center; width:30px; height:30px; background:none; border:0; color:var(--text-secondary); cursor:pointer; }
+.lw-content { flex:1; min-height:0; overflow:auto; padding:0 8px 16px; }
+.lw-search { margin:12px 4px; }
+.lw-drawer .ticker-watchlist table { font-size:16px; }
+/* Sin cuadrícula y números centrados en su celda (owner 17/10); las acciones aparecen sobre la fila al pasar. */
+.lw-drawer .ticker-watchlist th,.lw-drawer .ticker-watchlist td { padding:10px 7px; border:0; }
+.lw-drawer .ticker-watchlist .numeric { text-align:center; }
+.lw-drawer .ticker-watchlist tbody tr:not(.watchlist-group):not(.watchlist-move):hover { background:var(--bg-secondary); }
+.lw-drawer .ticker-watchlist tbody tr { position:relative; }
+.lw-drawer .ticker-watchlist td.watchlist-action { position:absolute; right:4px; top:50%; transform:translateY(-50%); width:auto; padding:0!important; display:flex; gap:2px; border-radius:6px; }
+.lw-drawer .ticker-watchlist tr:hover td.watchlist-action,.lw-drawer .ticker-watchlist tr:focus-within td.watchlist-action { background:var(--bg-secondary); }
+.lw-drawer .ticker-watchlist thead th:last-child { width:0; padding:0; }
+.lw-drawer .ticker-watchlist thead th { font-size:14px; color:var(--text-secondary); background:var(--bg-primary); position:sticky; top:0; z-index:1; }
+.lw-drawer .ticker-watchlist .watchlist-group td { border:0; padding:16px 4px 5px; }
+.watchlist-group button { display:flex; align-items:center; gap:7px; border:0; background:none; color:var(--text-secondary); font:inherit; font-size:12px; text-transform:uppercase; cursor:pointer; }
+.lw-drawer .watchlist-symbol { display:flex; align-items:center; gap:8px; padding:0; }
+.watchlist-price-error { display:block; font-size:12px; font-weight:400; color:var(--yellow-gc); }
+.watchlist-ticker-icon { display:grid; place-items:center; flex-shrink:0; width:24px; height:24px; overflow:hidden; background:var(--bg-elevated); color:var(--text-secondary); border-radius:50%; font-size:12px; font-weight:500; }
+.watchlist-ticker-icon img { width:100%; height:100%; object-fit:contain; }
+.lw-drawer .watchlist-action { width:22px; padding:8px 3px!important; }
+.lw-drawer .watchlist-remove { opacity:0; }
+.lw-drawer tr:hover .watchlist-remove,.lw-drawer tr:focus-within .watchlist-remove { opacity:1; }
+.lw-drawer .watchlist-note { display:none; }
+.lw-hidden { display:flex; flex-wrap:wrap; gap:6px; border-top:1px solid var(--border); padding-top:14px; margin-top:20px; }
+.lw-hidden > span { flex-basis:100%; color:var(--text-secondary); font-size:12px; }
+.lw-hidden button { display:flex; gap:5px; align-items:center; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:5px; padding:5px 8px; color:var(--text-primary); cursor:pointer; }
+.lw-drawer button:focus-visible,.lw-tools button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+@media(max-width:1200px) { .workspace-shell.has-watchlist-dock.watchlist-expanded { padding-right:48px; } .lw-drawer { box-shadow:-15px 0 40px #0008; } }
+@media(max-width:480px) { .lw-resize { display:none; } .lw-drawer .ticker-watchlist table { font-size:14px; } .lw-drawer .ticker-watchlist th,.lw-drawer .ticker-watchlist td { padding:8px 4px; } .watchlist-ticker-icon { display:none; } }
+.lw-tools > button { position:relative; }
+.lw-badge { position:absolute; top:5px; right:4px; width:9px; height:9px; border-radius:50%; background:#f87171; box-shadow:0 0 0 2px var(--bg-secondary); }
+.lw-add { position:relative; margin:12px 4px 4px; }
+.lw-add-row { display:flex; align-items:center; gap:8px; height:40px; padding:0 4px 0 10px; background:var(--bg-secondary); border:1px solid var(--border-light); border-radius:6px; color:var(--text-secondary); }
+.lw-add-row:focus-within { border-color:var(--accent); }
+.lw-add-row input { flex:1; min-width:0; background:none; border:0; outline:none; color:var(--text-primary); font:inherit; font-size:15px; text-transform:uppercase; }
+.lw-add-row input::placeholder { text-transform:none; color:var(--text-muted); }
+.lw-add-row select { max-width:130px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:4px; color:var(--text-primary); font:inherit; font-size:13px; padding:4px 6px; }
+.lw-add-results { position:absolute; left:0; right:0; top:44px; z-index:5; margin:0; padding:4px; list-style:none; background:var(--bg-elevated, var(--bg-secondary)); border:1px solid var(--border-light); border-radius:6px; box-shadow:0 12px 30px #0008; max-height:300px; overflow:auto; }
+.lw-add-results li { display:flex; align-items:baseline; gap:10px; padding:8px 10px; border-radius:4px; cursor:pointer; }
+.lw-add-results li.active { background:var(--bg-hover); }
+.lw-add-results li b { font-weight:600; min-width:56px; }
+.lw-add-results li span { color:var(--text-secondary); font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lw-add-results li.lw-add-note { color:var(--text-secondary); cursor:default; }
+.lw-warn { color:var(--yellow-gc); font-size:13px; margin:8px 4px; }
+.watchlist-group-row { display:flex; align-items:center; justify-content:space-between; }
+.watchlist-group-tools { display:flex; gap:2px; opacity:0; }
+.watchlist-group:hover .watchlist-group-tools,.watchlist-group:focus-within .watchlist-group-tools { opacity:1; }
+.watchlist-group-tools button { padding:3px 5px; text-transform:none; }
+.watchlist-group.drop td { background:var(--bg-hover); }
+.watchlist-rename { width:100%; background:var(--bg-secondary); border:1px solid var(--accent); border-radius:4px; color:var(--text-primary); font:inherit; font-size:13px; padding:3px 6px; }
+.lw-drawer .watchlist-action { width:auto; white-space:nowrap; }
+.lw-drawer .watchlist-move td { padding:6px 8px 10px!important; background:var(--bg-secondary); }
+.watchlist-move span { color:var(--text-secondary); font-size:13px; margin-right:8px; }
+.watchlist-move button { margin:2px 6px 2px 0; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:4px; padding:4px 9px; color:var(--text-primary); font:inherit; font-size:13px; cursor:pointer; }
+.lw-drawer .watchlist-empty td { color:var(--text-secondary); font-size:13px; padding:10px 8px; }
+.lw-drawer tr[draggable="true"] { cursor:grab; }
+.lw-new-group { display:flex; align-items:center; gap:7px; margin:14px 4px 0; background:none; border:0; color:var(--text-secondary); font:inherit; font-size:14px; cursor:pointer; padding:4px 0; }
+.lw-new-group:hover { color:var(--text-primary); }
+.lw-add-row input:focus,.lw-add-row input:focus-visible { outline:none!important; box-shadow:none!important; border:0!important; }

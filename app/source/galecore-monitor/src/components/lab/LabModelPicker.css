@@ -1,0 +1,17 @@
+.lab-provider-picker { position: relative; justify-self: center; min-width: 0; z-index: 40; }
+.lab-provider-trigger { display: flex; align-items: center; gap: 9px; padding: 7px 12px; border: 1px solid var(--border-dark); border-radius: 9px; background: var(--bg-secondary); color: var(--text-primary); font: 14px var(--font-sans); cursor: pointer; max-width: 100%; }
+.lab-provider-trigger > span { overflow-wrap: anywhere; text-align: left; }
+.lab-provider-trigger img,.lab-provider-menu img { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
+.lab-provider-separator { color: var(--text-muted); }
+.lab-provider-menu { position: fixed; z-index: 200; box-sizing: border-box; overflow-y: auto; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-light); border-radius: 12px; padding: 12px; box-shadow: 0 16px 50px #0009; font-family: var(--font-sans); }
+.lab-provider-menu header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; font-size:14px; }
+.lab-provider-menu header button { background: transparent; border: 0; color: var(--text-secondary); cursor:pointer; padding:4px; }
+.lab-provider-menu h3 { margin: 10px 8px 5px; font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+.lab-provider-menu h3 span { font-size:12px; }
+.lab-provider-menu button[role=option] { display: flex; align-items: center; gap: 10px; width:100%; border:0; border-radius:7px; padding:9px 8px; background:transparent; color:var(--text-primary); text-align:left; font:14px var(--font-sans); cursor:pointer; }
+.lab-provider-menu button[role=option] > span { flex:1; min-width:0; overflow-wrap:anywhere; }
+.lab-provider-menu button[role=option]:hover:not(:disabled),.lab-provider-menu button[aria-selected=true] { background:var(--bg-hover); }
+.lab-provider-menu button:disabled { opacity:.5; cursor:not-allowed; }
+.lab-provider-effort { display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--border); margin-top:10px; padding-top:12px; font-size:13px; }
+.lab-provider-effort select { padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg-primary); color:var(--text-primary); font-size:13px; }
+.lab-provider-menu p { margin:12px 6px 0; font-size:13px; color:var(--text-secondary); line-height:1.5; }

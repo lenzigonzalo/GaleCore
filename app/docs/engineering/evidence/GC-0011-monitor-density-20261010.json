@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-10",
+  "scope": "GC-0011 frontend density/watchlist dock/Macro",
+  "tests": {
+    "suites": 6,
+    "passed": 22,
+    "exit": 0
+  },
+  "preview": "CRA Compiled successfully / No issues found",
+  "visualQA": "not performed; no browser available",
+  "financialData": {
+    "account": "temporary fixture",
+    "positions": "temporary fixture including unassigned equity",
+    "macro": "temporary fixture restricted to localhost",
+    "watchlist": "existing real services; previous Dev provider authentication failure unresolved",
+    "gex": "existing real services; only Mercado"
+  },
+  "harnessChanged": false,
+  "approval": "PENDING",
+  "review": "not repeated: visual iteration ENGINEERING §12"
+}

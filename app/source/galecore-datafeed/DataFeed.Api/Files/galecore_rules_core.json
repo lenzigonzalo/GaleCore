@@ -1,0 +1,106 @@
+{
+  "_meta": {
+    "version": "2.0.0",
+    "name": "GaleCore App Config",
+    "description": "Configuracion de la APLICACION, no de una estrategia. GaleCore es la plataforma sobre la que se implementan proyectos de estrategias; cada estrategia declara sus reglas en su propio JSON bajo Files/<Prefijo>/. Aca no va nada de trading: ni gates, ni strikes, ni sizing de entrada.",
+    "last_updated": "2026-08-06",
+    "replaces": "Hasta v1.4.0 este archivo era el JSON de reglas de la estrategia gale_core_gamma_premium (PCS-only). Esa estrategia se elimino; su definicion quedo en docs/archive/."
+  },
+
+  "universe": {
+    "description": "Simbolos que la plataforma streamea por SignalR al abrir el front. NO es el universo de ninguna estrategia — cada una declara el suyo en universe.tickers de su propio JSON.",
+    "tickers": [
+      "SPY",
+      "QQQ"
+    ]
+  },
+
+  "strategies": [
+    {
+      "id": "gex",
+      "prefix": "Gex",
+      "tab": "gex",
+      "label": "GEX",
+      "name": "Gamma Exposure",
+      "kind": "informativa",
+      "description": "GEX global de toda la cadena dentro de max_dte, incluido 0DTE. No propone estructura ni emite señales: su unico producto es informacion.",
+      "rules_endpoint": "/App/Gex/Rules",
+      "switch_endpoint": "/App/Gex/Switch"
+    },
+    {
+      "id": "rpf",
+      "prefix": "Rpf",
+      "tab": "rpf",
+      "label": "RPF",
+      "name": "Disparo por prima real",
+      "kind": "operativa",
+      "description": "Maquina de 7 estados sobre el loop backend. Sugiere operaciones por SignalR; nunca ejecuta.",
+      "rules_endpoint": "/App/Rpf/Rules",
+      "switch_endpoint": "/App/Rpf/Switch"
+    }
+  ],
+
+  "services": [
+    {
+      "id": "skew",
+      "label": "Skew snapshot",
+      "name": "SkewSnapshotService",
+      "description": "Cada 6h registra el skew25 del dia por simbolo en skew25_history.json. Es la serie de la que sale el RoC 5d del gate tail_score de RPF, asi que apagarlo no es gratis: cada dia sin registrar es un hueco en la historia. Corre un GammaExposure completo por simbolo, o sea que compite por DXLink.",
+      "enabled": true,
+      "switch_endpoint": "/App/GaleCore/Services/skew/Switch"
+    },
+    {
+      "id": "runtime",
+      "label": "Trading Runtime",
+      "name": "ShadowEntryLoopService",
+      "description": "Trading Runtime SHADOW (Phase 1). Evalua gates, construye candidatos, ejecuta fills simulados al mid-price y monitorea posiciones con exits deterministicos. NO ejecuta ordenes reales: todo es SHADOW. Arranca OFF.",
+      "enabled": false,
+      "switch_endpoint": "/App/GaleCore/Services/runtime/Switch"
+    }
+  ],
+
+  "monitor": {
+    "description": "Config de la pestaña Monitor. Es transversal a las estrategias: monitorea las posiciones abiertas de la cuenta, sin importar quien las abrio. Valores migrados tal cual desde los nodos trade_management y position_builder.layers[risk_and_sizing] de la v1.4.0.",
+
+    "trade_management": {
+      "evaluation_priority": [
+        "daily_kill_switch",
+        "take_profit",
+        "hard_defense",
+        "defensive_roll",
+        "time_exit"
+      ],
+      "daily_kill_switch": {
+        "daily_portfolio_mtm_loss_pct_net_liq_max": 0.015,
+        "action": "block_new_entries_for_rest_of_session"
+      },
+      "take_profit": {
+        "pct_of_initial_credit": 0.5,
+        "action": "close_position"
+      },
+      "hard_defense": {
+        "trigger_any": {
+          "short_leg_delta_abs_gt": 0.3,
+          "unrealized_loss_pct_of_initial_credit_gte": 2.0
+        },
+        "action": "evaluate_immediate_risk_reduction"
+      },
+      "defensive_roll": {
+        "trigger_unrealized_loss_pct_of_initial_credit_gte": 1.0,
+        "min_dte_remaining": 28,
+        "min_net_credit_for_roll": 0.2,
+        "max_rolls_per_position": 1
+      },
+      "time_exit": {
+        "dte_threshold": 21,
+        "action": "close_position"
+      }
+    },
+
+    "risk_limits": {
+      "max_concurrent_positions": 2,
+      "portfolio_heat_max_pct": 0.045,
+      "risk_per_trade_pct": 0.015
+    }
+  }
+}

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>DataFeed SignalR Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.7/signalr.min.js"></script>
+    <style>
+        body { font-family: Consolas, monospace; background: #1e1e1e; color: #d4d4d4; padding: 20px; }
+        h1 { color: #569cd6; font-size: 18px; }
+        .controls { margin: 10px 0; display: flex; gap: 8px; align-items: center; }
+        input { background: #2d2d2d; color: #d4d4d4; border: 1px solid #555; padding: 6px 10px; font-family: inherit; }
+        button { background: #264f78; color: #fff; border: none; padding: 6px 14px; cursor: pointer; font-family: inherit; }
+        button:hover { background: #37699e; }
+        button.danger { background: #6e2020; }
+        button.danger:hover { background: #8e3030; }
+        #status { padding: 4px 8px; border-radius: 3px; font-size: 13px; }
+        .connected { color: #4ec9b0; }
+        .disconnected { color: #f44747; }
+        #log { background: #111; padding: 12px; height: 400px; overflow-y: auto; font-size: 13px; border: 1px solid #333; }
+        .trade { color: #dcdcaa; }
+        .quote { color: #4ec9b0; }
+        .greeks { color: #c586c0; }
+        .info { color: #569cd6; }
+        .error { color: #f44747; }
+        .timestamp { color: #666; }
+    </style>
+</head>
+<body>
+    <h1>DataFeed - SignalR MarketData Test</h1>
+
+    <div class="controls">
+        <span>Estado:</span>
+        <span id="status" class="disconnected">Desconectado</span>
+        <button onclick="connect()">Conectar</button>
+        <button class="danger" onclick="disconnect()">Desconectar</button>
+    </div>
+
+    <div class="controls">
+        <input id="symbol" type="text" placeholder="Symbol (ej: AAPL)" value="AAPL" />
+        <label><input id="includeGreeks" type="checkbox" /> Greeks (opciones)</label>
+        <button onclick="subscribe()">Subscribe</button>
+        <button class="danger" onclick="unsubscribe()">Unsubscribe</button>
+        <button class="danger" onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <div id="log"></div>
+
+    <script>
+        const HUB_URL = "/hubs/marketdata";
+        let connection = null;
+
+        function log(msg, cls = "info") {
+            const el = document.getElementById("log");
+            const ts = new Date().toLocaleTimeString();
+            el.innerHTML += `<div><span class="timestamp">[${ts}]</span> <span class="${cls}">${msg}</span></div>`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById("log").innerHTML = "";
+        }
+
+        function setStatus(connected) {
+            const el = document.getElementById("status");
+            el.textContent = connected ? "Conectado" : "Desconectado";
+            el.className = connected ? "connected" : "disconnected";
+        }
+
+        async function connect() {
+            if (connection) {
+                log("Ya conectado", "error");
+                return;
+            }
+
+            connection = new signalR.HubConnectionBuilder()
+                .withUrl(HUB_URL)
+                .withAutomaticReconnect()
+                .configureLogging(signalR.LogLevel.Information)
+                .build();
+
+            // Registrar handlers para los 3 tipos de evento
+            connection.on("ReceiveTrade", (symbol, data) => {
+                log(`TRADE ${symbol}: price=${data.price} size=${data.size} vol=${data.dayVolume}`, "trade");
+            });
+
+            connection.on("ReceiveQuote", (symbol, data) => {
+                log(`QUOTE ${symbol}: bid=${data.bidPrice} ask=${data.askPrice} mid=${data.midPrice}`, "quote");
+            });
+
+            connection.on("ReceiveGreeks", (symbol, data) => {
+                log(`GREEKS ${symbol}: iv=${data.volatility} delta=${data.delta} gamma=${data.gamma} theta=${data.theta}`, "greeks");
+            });
+
+            connection.onclose(() => {
+                setStatus(false);
+                log("Conexion cerrada");
+                connection = null;
+            });
+
+            connection.onreconnecting(() => log("Reconectando...", "error"));
+            connection.onreconnected(() => { setStatus(true); log("Reconectado"); });
+
+            try {
+                await connection.start();
+                setStatus(true);
+                log("Conectado a " + HUB_URL);
+            } catch (err) {
+                log("Error conectando: " + err, "error");
+                connection = null;
+            }
+        }
+
+        async function disconnect() {
+            if (!connection) return;
+            await connection.stop();
+            connection = null;
+            setStatus(false);
+            log("Desconectado manualmente");
+        }
+
+        async function subscribe() {
+            if (!connection) { log("No conectado", "error"); return; }
+            const symbol = document.getElementById("symbol").value.trim().toUpperCase();
+            const greeks = document.getElementById("includeGreeks").checked;
+            if (!symbol) return;
+
+            await connection.invoke("Subscribe", symbol, greeks);
+            log(`Suscripto a ${symbol} (greeks: ${greeks})`);
+        }
+
+        async function unsubscribe() {
+            if (!connection) { log("No conectado", "error"); return; }
+            const symbol = document.getElementById("symbol").value.trim().toUpperCase();
+            const greeks = document.getElementById("includeGreeks").checked;
+            if (!symbol) return;
+
+            await connection.invoke("Unsubscribe", symbol, greeks);
+            log(`Desuscripto de ${symbol}`);
+        }
+    </script>
+</body>
+</html>

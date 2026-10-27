@@ -1,0 +1,23 @@
+# Corrida 2026-08-27 -- primera captura con IV por strike, para la 43.5
+# simbolo  vencimiento  fin                             estado
+TSLA     2026-09-18  16:17:24 local / 15:17:24 ET  ok  170 strikes,  62 con quote   banda 35
+TSLA     2026-10-16  16:18:03 local / 15:18:03 ET  ok  137 strikes,  49 con quote   banda 35
+QQQ      2026-09-18  16:22:10 local / 15:22:10 ET  ok  267 strikes, 122 con quote   banda 12
+QQQ      2026-10-16  16:22:50 local / 15:22:50 ET  ok  238 strikes, 114 con quote   banda 12
+SPY      2026-09-18  16:23:44 local / 15:23:44 ET  ok  321 strikes, 155 con quote   banda 12
+SPY      2026-10-16  16:24:27 local / 15:24:27 ET  ok  221 strikes, 117 con quote   banda 12
+
+# Las seis con el mercado ABIERTO (cierre 16:00 ET), sobre los dos vencimientos regulares
+# del bucle de la 47.1. Ninguna disparo el aviso de banda corta ni el de IV vacia.
+#
+# PRIMERA CAPTURA CON callIV/putIV EN LOS TRES SIMBOLOS. La superficie de IV se expuso el
+# 2026-08-25 (feat(gex): exponer la IV por strike) y hasta hoy la unica captura que la tenia
+# era 2026-08-25-t2/, que es solo SPY. Es lo que habilita el hallazgo del 27.
+#
+# Tambien es la primera captura POSTERIOR al fix del DTE (el del proveedor no era confiable),
+# desplegado a produccion esta misma tarde. Estas se tomaron contra la API LOCAL.
+#
+# Solo se anota la hora de fin, que es la que deja el archivo. La primera TSLA 09-18 se
+# perdio a las 16:16 porque el script no crea el -OutDir y Set-Content fallo con la carpeta
+# inexistente; se recapturo de inmediato desde el cache de /App/Gex/Analysis, o sea que su
+# barrido de GEX es el de las 16:16 y sus quotes los de las 16:17.

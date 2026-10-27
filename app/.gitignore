@@ -1,0 +1,78 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.user
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
+# Dependencies
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# Build output
+dist/
+build/
+out/
+
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+publish/
+
+# Claude Code local artifacts — se ignora todo MENOS las skills compartidas del equipo
+.claude/*
+!.claude/commands/
+
+# Estado de runtime del backend (se acumula día a día vía SkewSnapshotService)
+source/galecore-datafeed/DataFeed.Api/Files/skew25_history.json
+
+# Switch de CUALQUIER estrategia, y también el de los servicios de plataforma
+# (platform_services_switch_state.json) — decisión del operador, no configuración.
+# Versionarlo haría que un deploy pise el switch (una estrategia apagada a propósito volvería a
+# arrancar sola) y que cada toggle ensucie el working tree. El default lo declara el JSON de reglas
+# de cada estrategia (state_machine.enabled en RPF, gex.enabled en GEX) y, para los servicios,
+# services[].enabled de galecore_rules_core.json.
+# Glob y no una línea por estrategia: la próxima que sume switch queda cubierta sola.
+source/galecore-datafeed/DataFeed.Api/Files/**/*_switch_state.json
+# Nombre anterior al renombre de 2026-08-10. Se mantiene ignorado: el archivo puede seguir existiendo
+# en la máquina del operador y los switches lo leen como fallback para no perder el override.
+source/galecore-datafeed/DataFeed.Api/Files/**/*_workers_state.json
+
+# Configuración por ambiente. Estuvo trackeada hasta el 2026-08-11 y publicaba en el repo el
+# refresh token de la cuenta de bróker, el client_secret de la app OAuth de Tastytrade, la API key
+# y la key de FRED — las mismas cuatro en los dos archivos.
+# Development: los secretos se mudaron a user-secrets del proyecto DataFeed.Api y el archivo quedó
+#   solo con lo que NO es secreto.
+# Ojo: sacarlos del índice no los borra del historial — hubo que ROTAR esas credenciales.
+#
+# Production VOLVIÓ al índice el 2026-09-03, ya vaciado: es el archivo que viaja al VPS, y sin
+#   trackear, el que llegaba era el que tuviera en disco la máquina de quien deploya — invisible en
+#   un PR y ausente en una clone nueva. Los secretos de producción no están ahí sino en
+#   /etc/galecore/datafeed.env, y las variables de entorno le ganan a cualquier JSON.
+# Development se queda afuera: es por máquina (número de cuenta del operador) y no viaja a ningún
+#   lado — deploy-api.ps1 lo borra del paquete antes de subirlo.
+source/galecore-datafeed/DataFeed.Api/appsettings.Development.json
+
+# Backtesting datasets — se versiona research/data/ (derived/ + vvix) EXCEPTO
+# las carpetas de cadenas crudas, pesadas y re-descargables:
+research/data/iwm_options/
+research/data/qqq_options/
+research/data/spy_eod/
+research/data/spy_options/
+research/data/*.zip

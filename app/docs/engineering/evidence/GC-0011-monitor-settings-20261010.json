@@ -1,0 +1,35 @@
+{
+  "scope": "Exploración UX frontend demo Monitor/Configuración; sin cambios de harness, APIs ni datos reales",
+  "preview": "CRA localhost:3039: Compiled successfully / No issues found",
+  "visualQA": "No ejecutada: navegador CUA no disponible",
+  "tests": [
+    {
+      "command": "CI=true npm test -- --watchAll=false --runInBand --testMatch '**/MainDemo.test.tsx'",
+      "result": "4 passed / 1 suite",
+      "exitCode": 0
+    },
+    {
+      "command": "CI=true npm test -- --watchAll=false --runInBand --testMatch '**/MainDemo.test.tsx' '**/SettingsDemo.test.tsx' '**/WorkspaceHeader.test.tsx'",
+      "result": "SettingsDemo 2 passed, WorkspaceHeader 3 passed; MainDemo 3 passed / 1 failed por selector ambiguo Cartera; etiqueta de retorno corregida y MainDemo rerun 4 passed",
+      "exitCode": 1
+    }
+  ],
+  "consistency": {
+    "monthlySessions": 20,
+    "equityChange": 1510.8,
+    "sessionPnlTotal": 1510.8,
+    "firstObservation": "base sin P&L previo"
+  },
+  "review": "../reviews/GC-0011-monitor-settings-20261010-codex.md; una pasada CHANGES_REQUESTED; correcciones posteriores sin recheck",
+  "remaining": [
+    "QA visual de densidad/contraste/responsive con owner",
+    "Consolidar sólo composiciones aprobadas con datos reales",
+    "Retirar mocks documentados"
+  ],
+  "sources": [
+    "https://robinhood.com/us/en/support/articles/using-the-charts/",
+    "https://www.ibkrguides.com/clientportal/portfolio.htm",
+    "https://support.tastytrade.com/support/s/solutions/articles/43000435412"
+  ],
+  "recordedAt": "2026-10-10T16:48:19.312Z"
+}

@@ -1,0 +1,13 @@
+{
+  "scope": "Estado reportado por CLI local, sin inferencia ni login, sin datos de cuenta",
+  "providers": [
+    {
+      "id": "claude",
+      "status": "authenticated"
+    },
+    {
+      "id": "codex",
+      "status": "authenticated"
+    }
+  ]
+}

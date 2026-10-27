@@ -1,0 +1,14 @@
+{
+  "http": 200,
+  "newComposer": true,
+  "wideComposer": true,
+  "wideMessages": true,
+  "compactHeader": true,
+  "compactToolbar": true,
+  "resizableSidebar": true,
+  "resizeObserver": true,
+  "shadowPartialRead": true,
+  "designSheet": true,
+  "errors": [],
+  "scope": "Login y bundle servido; no E2E autenticado."
+}

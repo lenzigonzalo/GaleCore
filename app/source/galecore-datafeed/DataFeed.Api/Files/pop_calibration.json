@@ -1,0 +1,113 @@
+{
+ "_meta": {
+  "source": "research/data/derived/pop_calibration_{sym}.parquet",
+  "description": "Tabla POP empirica calibrada (BT-10). puts[].pLoss = prob. empirica ITM por bucket de |delta|. Interpolar linealmente por |delta|. edge=(credit/width)/pLoss.",
+  "generated": "from research parquet"
+ },
+ "symbols": {
+  "SPY": [
+   {
+    "delta": 0.073,
+    "pLoss": 0.0247,
+    "n": 80840
+   },
+   {
+    "delta": 0.1241,
+    "pLoss": 0.0554,
+    "n": 57612
+   },
+   {
+    "delta": 0.1743,
+    "pLoss": 0.0884,
+    "n": 47388
+   },
+   {
+    "delta": 0.2245,
+    "pLoss": 0.1224,
+    "n": 41084
+   },
+   {
+    "delta": 0.2746,
+    "pLoss": 0.1603,
+    "n": 36535
+   },
+   {
+    "delta": 0.3247,
+    "pLoss": 0.1954,
+    "n": 33102
+   },
+   {
+    "delta": 0.3747,
+    "pLoss": 0.2314,
+    "n": 30265
+   },
+   {
+    "delta": 0.4247,
+    "pLoss": 0.2734,
+    "n": 28076
+   },
+   {
+    "delta": 0.4748,
+    "pLoss": 0.3158,
+    "n": 26373
+   },
+   {
+    "delta": 0.5248,
+    "pLoss": 0.3626,
+    "n": 25007
+   }
+  ],
+  "QQQ": [
+   {
+    "delta": 0.0735,
+    "pLoss": 0.0299,
+    "n": 52880
+   },
+   {
+    "delta": 0.1243,
+    "pLoss": 0.062,
+    "n": 40385
+   },
+   {
+    "delta": 0.1744,
+    "pLoss": 0.0931,
+    "n": 35044
+   },
+   {
+    "delta": 0.2246,
+    "pLoss": 0.1316,
+    "n": 31528
+   },
+   {
+    "delta": 0.2747,
+    "pLoss": 0.1707,
+    "n": 28968
+   },
+   {
+    "delta": 0.3247,
+    "pLoss": 0.2147,
+    "n": 26726
+   },
+   {
+    "delta": 0.3747,
+    "pLoss": 0.253,
+    "n": 24806
+   },
+   {
+    "delta": 0.4248,
+    "pLoss": 0.3016,
+    "n": 23348
+   },
+   {
+    "delta": 0.4748,
+    "pLoss": 0.3443,
+    "n": 22014
+   },
+   {
+    "delta": 0.5247,
+    "pLoss": 0.3845,
+    "n": 21125
+   }
+  ]
+ }
+}

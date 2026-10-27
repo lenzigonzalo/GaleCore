@@ -1,0 +1,27 @@
+{
+  "command": "CI=true npm run build",
+  "exec_session": 73046,
+  "exit_code": 0,
+  "observed_output": "Compiled successfully.",
+  "artifacts": [
+    {
+      "name": "main.654461b7.js",
+      "sha256": "fea0936c5676f6a286492b59be1c63149e513f144bdcc7443f4475bb7d9ec712"
+    }
+  ],
+  "final_build": {
+    "exit_code": 0,
+    "exec_session": 7430,
+    "log": "build-final.txt"
+  },
+  "account_discovery_build": {
+    "exit_code": 0,
+    "exec_session": 51559,
+    "log": "build-account-discovery.txt"
+  },
+  "compact_favorites_build": {
+    "exit_code": 0,
+    "exec_session": 79619,
+    "log": "build-compact-favorites.txt"
+  }
+}

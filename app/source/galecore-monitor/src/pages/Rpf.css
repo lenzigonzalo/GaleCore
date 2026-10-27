@@ -1,0 +1,39 @@
+/* Monitor de RPF (pestaña «Hoy»), 15/10: filas nombre … valor como el resto, sin cajas por dato ni mayúsculas. */
+.rpf-page { padding: 20px 0 40px; font-family: var(--font-sans); color: var(--text-primary); font-size: 15px; }
+.rpf-motor { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; font-size: 14px; }
+.rpf-motor > span { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); }
+.rpf-motor > span i { width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); }
+.rpf-motor .rpf-motor-on i { background: var(--green); }
+.rpf-page .rpf-motor button { display: inline-flex; align-items: center; gap: 7px; border: 0; background: none; padding: 0; color: var(--text-secondary); font: 14px var(--font-sans); cursor: pointer; }
+.rpf-page .rpf-motor button:hover { color: var(--text-primary); }
+.rpf-symbol { margin-bottom: 32px; }
+.rpf-state { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+.rpf-page .rpf-state h2 { margin: 0; font-size: 22px; font-weight: 600; }
+.rpf-state h2 span { margin-left: 10px; font-weight: 500; }
+.rpf-warn { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--yellow-gc); font-size: 14px; }
+.rpf-explain { margin: 8px 0 24px; max-width: 900px; color: var(--text-secondary); font-size: 15px; line-height: 1.6; }
+.rpf-axes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 48px; margin-bottom: 28px; }
+.rpf-page .rpf-block h3 { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 0 0 6px; padding-bottom: 10px; border-bottom: 1px solid var(--border); font-size: 16px; font-weight: 600; }
+.rpf-page .rpf-block h3 span { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.rpf-page .rpf-block h4 { margin: 16px 0 2px; font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.rpf-idle .rpf-row { opacity: .6; }
+.rpf-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-dark); }
+.rpf-row-label { flex: 1; min-width: 0; font-size: 15px; }
+.rpf-row-label span { display: block; margin-top: 2px; font-size: 13px; color: var(--text-secondary); }
+.rpf-row-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 15px; white-space: nowrap; }
+.rpf-note { margin: 8px 0; color: var(--text-secondary); font-size: 14px; }
+.rpf-offline { margin-bottom: 20px; }
+.rpf-table { overflow-x: auto; }
+.rpf-table table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.rpf-table th { padding: 8px 10px; font-size: 13px; font-weight: 500; color: var(--text-secondary); text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+.rpf-table td { padding: 12px 10px; text-align: right; white-space: nowrap; vertical-align: top; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 15px; border-bottom: 1px solid var(--border-dark); }
+.rpf-table th:nth-child(-n+4), .rpf-table td:nth-child(-n+4) { text-align: left; }
+.rpf-table thead tr:nth-child(2) th { text-align: right; }
+.rpf-table td:nth-child(-n+4) { font-family: var(--font-sans); }
+.rpf-strike-meta { display: block; margin-top: 3px; font-size: 12px; color: var(--text-secondary); }
+.rpf-delta { margin-left: 6px; font-size: 12px; color: var(--text-secondary); }
+.rpf-live { display: inline-block; width: 6px; height: 6px; margin-left: 6px; border-radius: 50%; background: var(--green); vertical-align: middle; }
+.performance-panel button.instance-state { cursor: pointer; background: none; color: var(--text-primary); border: 1px solid var(--border); border-radius: 20px; padding: 5px 10px; font: 14px var(--font-sans); }
+.performance-panel button.instance-state:disabled { cursor: default; }
+@media (max-width: 900px) { .rpf-axes { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
+.rpf-row > svg:first-child { flex: 0 0 16px; }
