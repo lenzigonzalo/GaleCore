@@ -299,7 +299,7 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
     met = watch._met(kb)
     watches = [{"id": r.id, "symbol": r.symbol, "metric": r.metric.value, "condition": r.condition.value,
                 "threshold": r.threshold, "words": r.words, "created_at": r.created_at.isoformat(),
-                "label": watch.describe(r)}
+                "label": watch.describe(r, scan.get("names"))}
                for r in watch.rules(kb) if watch.status(kb, r, now, met=met) == "active"]   # newest first
     content = {
         "id": SUPERVISOR_KEY, "capability": "supervisor", "status": "active", "schedule": "cada 5 minutos",

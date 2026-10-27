@@ -249,16 +249,19 @@ def view(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
 # ── the pass ─────────────────────────────────────────────────────
 
 
-def describe(rule: WatchRule) -> str:
+def describe(rule: WatchRule, names: dict[str, str] | None = None) -> str:
+    """The rule in the owner's words; ``names`` (instance id -> strategy name) puts the strategy instead of the id."""
+    name = (names or {}).get(rule.instance_id)
     if rule.metric == WatchMetric.DATE:
         t = int(rule.threshold)
         if t > TIMED:
             return f"el {date(t // 100000000, t // 1000000 % 100, t // 10000 % 100):%d/%m/%Y} a las {t // 100 % 100:02d}:{t % 100:02d} NY"
         return f"fecha ≥ {date(t // 10000, t // 100 % 100, t % 100):%d/%m/%Y}"
     if rule.metric == WatchMetric.EVALUATION:
-        return f"cada evaluación de la instancia {rule.instance_id[:8]}"
+        return f"cada evaluación de {name}" if name else f"cada evaluación de la instancia {rule.instance_id[:8]}"
     if rule.metric == WatchMetric.OPEN_POSITIONS:
-        return f"sin posiciones abiertas en la instancia {rule.instance_id[:8]}"
+        return (f"sin posiciones abiertas en {name}" if name
+                else f"sin posiciones abiertas en la instancia {rule.instance_id[:8]}")
     sign = "≤" if rule.condition == WatchCondition.BELOW else "≥"
     return f"{METRIC_LABELS[rule.metric]} de {rule.symbol} {sign} {_fmt_ar(rule.threshold)}"
 

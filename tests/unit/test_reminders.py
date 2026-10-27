@@ -119,6 +119,7 @@ def test_an_evaluation_rule_alerts_once_per_new_evaluation_and_stays_active(kb):
     assert second[0].motivo == "cruce_de_emas evaluó y no entró: EMA20 > EMA50 8.16 vs 0."
     assert watch.status(kb, rule, t + timedelta(minutes=10)) == "active"
     assert watch.describe(rule).startswith("cada evaluación")
+    assert watch.describe(rule, {rule.instance_id: "cruce_de_emas"}) == "cada evaluación de cruce_de_emas"
 
 
 def test_an_entered_evaluation_says_what_was_opened(kb):  # noqa: F811

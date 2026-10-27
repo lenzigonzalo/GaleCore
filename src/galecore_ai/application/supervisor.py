@@ -406,7 +406,9 @@ def scan(kb: KnowledgeBase, read: Reader, now: datetime | None = None) -> dict:
                 known.add(alert.key)
                 new.append(alert)
     return {"at": now.isoformat(), "new": [a.id for a in new], "checked": checked, "watched": watched,
-            "problems": problems}
+            "problems": problems,
+            "names": {i["instanceId"]: i["specName"] for i in instances if isinstance(i, dict) and i.get("instanceId")
+                      and i.get("specName")}}
 
 
 def event_exposure(kb: KnowledgeBase, read: Reader, now: datetime | None = None, symbol: str | None = None,
