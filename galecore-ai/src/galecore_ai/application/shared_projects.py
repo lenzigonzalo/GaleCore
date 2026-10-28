@@ -317,6 +317,11 @@ def sync_project(client: SpaceClient, project_dir: Path, *, today: date | None =
             run.pull()
             if not run.push():
                 break
+    except SpaceError as exc:
+        if exc.status == 404:   # GaleCore answers 404 to a non-member: the owner unshared it (or it was deleted)
+            raise SharedProjectError(f"ya no tenés acceso a {project_dir.name}: el dueño dejó de compartirlo o lo borró. "
+                                     "Tu copia local queda como está (sin sincronizar).") from exc
+        raise
     finally:
         save_state(project_dir, state)
     return {"pulled": len(run.pulled), "pushed": len(run.pushed), "conflicts": run.conflicts, "skipped": run.skipped}

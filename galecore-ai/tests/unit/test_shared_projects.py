@@ -331,3 +331,15 @@ def test_unshare_removes_the_member_and_list_shows_it(world):
     assert listing["projects"][0]["mine"] is True and listing["projects"][0]["local"] == "idea"
     out = sp.unshare(ca, a, "idea", "gonza")
     assert [m["username"] for m in out["members"]] == ["demo"]
+
+
+def test_sync_after_being_unshared_says_so_and_keeps_the_local_copy(world):
+    fake, a, b, ca, cb = world
+    _, pa, pb, ca, cb = shared_pair(world)
+    sp.unshare(ca, a, "idea", "gonza")
+    write(b, "workspaces/idea/README.md", "mi cambio")
+    with pytest.raises(sp.SharedProjectError, match="ya no tenés acceso"):
+        sp.sync_project(cb, pb)
+    assert read(b, "workspaces/idea/README.md") == "mi cambio"
+    out = sp.sync_all(cb, b)
+    assert out["projects"] == {} and out["errors"] == {}
