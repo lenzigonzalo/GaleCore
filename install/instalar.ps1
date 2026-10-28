@@ -206,6 +206,7 @@ if ($DryRun) {
     Sim 'pediria tu usuario y contrasena de GaleCore Dev y los guardaria como variables de usuario (GALECORE_USERNAME / GALECORE_PASSWORD)'
     Sim 'fijaria Claude Code como motor predeterminado del Lab (variable de usuario GALECORE_LAB_PROVIDER=claude)'
     Sim 'generaria una ApiKey local (user-secrets de la API + variable de usuario GALECORE_API_KEY) y fijaria GALECORE_BASE_URL=http://localhost:7001'
+    Sim 'generaria la clave para vincular tu cuenta del broker (user-secrets Security:TokenProtectionKey; una sola vez)'
     Sim 'dejaria SHADOW prendido y solo tuyo (runtime_owner_username = tu usuario en env.json; sin runtime_persistence=false; platform_services_switch_state.json runtime.enabled=true) y RPF apagado (Files/Rpf/rpf_switch_state.json enabled=false)'
 } else {
     $cfg = [ordered]@{}
@@ -256,6 +257,15 @@ if ($DryRun) {
         $key = $null
         Ok 'ApiKey local generada (solo vive en esta PC)'
     } else { Ok 'ApiKey local ya existe' }
+
+    # Clave con la que tu API cifra el token de tu cuenta del broker al vincularla en Configuracion. Se genera una
+    # sola vez y nunca se reemplaza (ni con -Reconfigurar): otra clave dejaria ilegible la cuenta ya vinculada.
+    if ($listado -notmatch '(?m)^Security:TokenProtectionKey\s*=') {
+        $bytes = New-Object byte[] 32
+        [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+        & dotnet user-secrets set 'Security:TokenProtectionKey' ([Convert]::ToBase64String($bytes)) --project $apiCsproj | Out-Null
+        Ok 'clave para vincular tu cuenta del broker generada (solo vive en esta PC)'
+    } else { Ok 'clave para vincular tu cuenta del broker ya existe' }
     [Environment]::SetEnvironmentVariable('GALECORE_BASE_URL', 'http://localhost:7001', 'User')
     # Motor predeterminado del Lab en esta PC: Claude Code (el default del codigo no cambia; se elige con esta variable).
     [Environment]::SetEnvironmentVariable('GALECORE_LAB_PROVIDER', 'claude', 'User')

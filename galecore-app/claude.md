@@ -7,9 +7,8 @@ pone datos y cálculos; no interpreta ni recomienda (eso es `galecore-ai/`). Est
 
 ## Producción y git (lo primero)
 
-- GaleCore **corre en producción y lo usa otra persona.** Se trabaja sólo en local, en la línea `local/integracion`
-  (una rama por tema, integrada ahí). **Sin push ni PR**, salvo el PR de un fix de algo que hoy está mal en producción,
-  con ok del owner: rama desde `master` con sólo ese fix.
+- GaleCore **corre en producción y lo usa otra persona.** El código vive en el monorepo (`lenzigonzalo/GaleCore`,
+  rama `main`, push permitido); el deploy a producción es aparte y sólo con ok del owner.
 - No se toca la base, el VPS ni la configuración de producción. Nada mueve capital real.
 - Trabajo local es trabajo commiteado (nada de archivos sueltos sin versionar).
 
@@ -51,8 +50,7 @@ cd source/galecore-monitor && CI=true npm run build                       # el b
 - **Primero el JSON, después el código:** ante un cambio de lógica o parámetro de una estrategia, se actualiza su JSON
   y luego el backend o el front. El front renderiza lo que el JSON declara, sin lógica de negocio hardcodeada.
 - Un secreto nunca va en `appsettings.*.json`, en docs ni en logs.
-- Interfaz: skill `.agents/skills/galecore-frontend/` (tema carbón, jerarquía legible); mirar en el navegador antes
-  de entregar.
+- Interfaz: tema carbón y jerarquía legible; mirar en el navegador antes de entregar.
 
 ## Dónde está el detalle (`docs/REFERENCIA-DESARROLLO.md`)
 

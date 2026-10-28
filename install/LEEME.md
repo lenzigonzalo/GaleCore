@@ -36,9 +36,13 @@ El instalador te los pide uno por uno; lo que es secreto no se muestra al escrib
 | Tu usuario y contraseña de GaleCore Dev | entrar al monitor, al Lab y al harness como vos |
 
 Y vos traés tus **credenciales de Tastytrade** (de tu propia aplicación OAuth en Tastytrade):
-`refresh token` y `client secret`. Sirven sólo para los datos de mercado; tu cuenta de bróker **no** está cargada en Dev.
+`refresh token` y `client secret`. Sirven para los datos de mercado; tu cuenta real se vincula aparte, desde el monitor (abajo).
 
-La `ApiKey` local la genera el instalador y sólo vive en tu PC.
+La `ApiKey` local la genera el instalador y sólo vive en tu PC, igual que la clave con la que se cifra tu cuenta del
+broker.
+
+**Tu cuenta real:** después de instalar, en el monitor → **Configuración** → cuenta de bróker, pegá el refresh token de
+tu cuenta de Tastytrade y vinculala. Desde ahí el Lab y el monitor leen tu cuenta (sólo lectura).
 
 ## Iniciar y detener
 
@@ -70,4 +74,4 @@ dependencias sólo si cambiaron. Conserva lo ya cargado; con `-Reconfigurar` te 
   las de Gonzalo corren en la suya; no se mezclan. RPF queda apagado.
   (El instalador guarda tu usuario como `runtime_owner_username` en tu `env.json`, y deja
   `Files\Rpf\rpf_switch_state.json` con `enabled: false`; ambos están ignorados por Git.)
-- No carga tu cuenta de bróker ni opera: los datos de mercado vienen de tus credenciales de Tastytrade.
+- No opera: la cuenta que vincules se lee, nunca se envían órdenes.
