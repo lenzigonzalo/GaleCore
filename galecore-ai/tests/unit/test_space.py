@@ -480,3 +480,92 @@ def test_a_cancelled_agent_leaves_the_space(env, galecore):  # noqa: F811
     client.put("agent", "vieja", title="x", fmt="json", content=json.dumps({"id": "vieja", "status": "cancelled"}))
     space.publish_agents(client, kb_, sch)                      # one already published as cancelled goes too
     assert ("agent", "vieja") not in fake.rows
+
+
+# -- session token cache (the API allows 10 logins per 5 minutes)
+
+def _jwt(exp: float) -> str:
+    import base64
+    body = base64.urlsafe_b64encode(json.dumps({"exp": exp}).encode()).decode().rstrip("=")
+    return f"h.{body}.s"
+
+
+class CountingGaleCore:
+    def __init__(self, token: str):
+        self.logins, self.token, self.valid = 0, token, True
+
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/App/GaleCore/Auth/Login":
+            self.logins += 1
+            return httpx.Response(200, json={"accessToken": self.token})
+        if not self.valid or request.headers.get("Authorization") != f"Bearer {self.token}":
+            return httpx.Response(401)
+        return httpx.Response(200, json={"items": [], "shared": []})
+
+
+def _client(fake, monkeypatch, base="http://galecore.test"):
+    monkeypatch.setenv("GALECORE_USERNAME", "demo")
+    monkeypatch.setenv("GALECORE_PASSWORD", "secreto")
+    return SpaceClient(base, "k", transport=httpx.MockTransport(fake))
+
+
+def test_the_token_is_reused_across_clients_until_it_expires(monkeypatch):
+    import time
+    fake = CountingGaleCore(_jwt(time.time() + 3600))
+    for _ in range(3):                      # three "CLI calls" = three clients
+        _client(fake, monkeypatch).items()
+    assert fake.logins == 1
+    from galecore_ai.adapters.galecore_space import session_file
+    assert "secreto" not in session_file().read_text(encoding="utf-8")
+
+
+def test_a_token_about_to_expire_is_not_reused(monkeypatch):
+    import time
+    fake = CountingGaleCore(_jwt(time.time() + 30))   # inside the 60 s margin
+    _client(fake, monkeypatch).items()
+    _client(fake, monkeypatch).items()
+    assert fake.logins == 2
+
+
+def test_expires_in_is_used_when_the_token_has_no_exp(monkeypatch):
+    from galecore_ai.adapters import galecore_space as gs
+    assert gs._token_expiry("opaque", 120) - __import__("time").time() == pytest.approx(120, abs=2)
+    assert gs._token_expiry("opaque") - __import__("time").time() == pytest.approx(gs.SESSION_FALLBACK_TTL, abs=2)
+
+
+def test_the_cache_is_per_user_and_base_url(monkeypatch):
+    import time
+    fake = CountingGaleCore(_jwt(time.time() + 3600))
+    _client(fake, monkeypatch).items()
+    _client(fake, monkeypatch, base="http://otro.test").items()
+    assert fake.logins == 2
+    _client(fake, monkeypatch).items()
+    _client(fake, monkeypatch, base="http://otro.test").items()
+    assert fake.logins == 2
+
+
+def test_a_401_with_a_cached_token_logs_in_once_more(monkeypatch):
+    import time
+    fake = CountingGaleCore(_jwt(time.time() + 3600))
+    _client(fake, monkeypatch).items()
+    fake.token = _jwt(time.time() + 7200)           # the server revoked the old one
+    _client(fake, monkeypatch).items()
+    assert fake.logins == 2
+
+
+def test_a_persistent_401_raises_after_a_single_retry(monkeypatch):
+    import time
+    fake = CountingGaleCore(_jwt(time.time() + 3600))
+    fake.valid = False
+    with pytest.raises(SpaceError) as err:
+        _client(fake, monkeypatch).items()
+    assert err.value.status == 401 and fake.logins == 2
+
+
+def test_an_unwritable_cache_does_not_break_the_call(monkeypatch, tmp_path):
+    import time
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    monkeypatch.setenv("LOCALAPPDATA", str(blocker))    # a file where a folder is needed
+    fake = CountingGaleCore(_jwt(time.time() + 3600))
+    assert _client(fake, monkeypatch).items() == {"items": [], "shared": []}

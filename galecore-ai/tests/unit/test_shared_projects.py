@@ -56,6 +56,9 @@ class FakeGaleCore:
         proj = self.projects[parts[0]]
         if not any(m["username"] == me for m in proj["members"]):
             return httpx.Response(404)
+        if len(parts) == 1 and method == "DELETE":
+            self.projects.pop(parts[0])
+            return httpx.Response(204)
         if parts[1] == "members" and method == "POST":
             if body["username"] not in self.users:
                 return httpx.Response(404, json={"error": f"no existe el usuario '{body['username']}'"})
@@ -140,6 +143,25 @@ def test_share_with_an_unknown_user_says_so(world):
     write(a, "strategies/spy_ic/README.md", "x")
     with pytest.raises(sp.SharedProjectError, match="no existe el usuario"):
         sp.share(ca, a, "spy_ic", "nadie")
+
+
+def test_a_failed_first_share_leaves_nothing_behind(world):
+    fake, a, _, ca, _ = world
+    write(a, "strategies/spy_ic/README.md", "x")
+    with pytest.raises(sp.SharedProjectError):
+        sp.share(ca, a, "spy_ic", "nadie")
+    assert fake.projects == {} and not (a / "strategies/spy_ic/.sync.json").exists()
+    sp.share(ca, a, "spy_ic", "gonza")    # and the retry with a valid user works from scratch
+    assert [m["username"] for m in fake.projects["p1"]["members"]] == ["demo", "gonza"]
+
+
+def test_a_failed_share_of_an_already_shared_project_keeps_it(world):
+    fake, a, _, ca, _ = world
+    write(a, "workspaces/idea/README.md", "x")
+    sp.share(ca, a, "idea", "gonza")
+    with pytest.raises(sp.SharedProjectError):
+        sp.share(ca, a, "idea", "nadie")
+    assert "p1" in fake.projects and (a / "workspaces/idea/.sync.json").exists()
 
 
 def test_sync_all_creates_the_folder_of_a_project_shared_with_me(world):

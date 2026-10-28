@@ -51,3 +51,30 @@ test('el aviso de conflicto dice quién y qué quedó', () => {
   expect(noticeText({ at, conflicts: [{ path: 'README.md', with: 'gonza', copy: 'x', kind: 'editado-en-ambos' }] })).toBe('Gonza y vos editaron README.md: quedaron las dos versiones');
   expect(noticeText({ at, conflicts: [{ path: 'a.md', with: 'gonza', copy: null, kind: 'borrado-allá' }, { path: 'b.md', with: 'gonza', copy: null, kind: 'borrado-allá' }] })).toContain('(y 1 más)');
 });
+
+test('«Sincronizar ahora» muestra traídos, enviados y conflictos; si falla, el motivo', async () => {
+  let fail = false;
+  request.mockImplementation((url: string) => {
+    if (url.endsWith('/sharing')) return Promise.resolve({ shared: true, mine: true, members });
+    if (url.endsWith('/sync')) return fail ? Promise.reject(new Error('GaleCore did not answer')) : Promise.resolve({ pulled: 2, pushed: 1, conflicts: [{}], skipped: [] });
+    return Promise.resolve({});
+  });
+  render(<LabShare project={project} onClose={jest.fn()} onChanged={jest.fn()}/>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Sincronizar ahora' }));
+  expect(await screen.findByText('Traídos 2 · enviados 1 · conflictos 1')).toBeInTheDocument();
+  expect(request).toHaveBeenCalledWith('/workspaces/idea/sync', {}, expect.any(Number));
+  fail = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Sincronizar ahora' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('GaleCore did not answer');
+});
+
+test('el aviso de un sync fallido es una línea con el motivo', () => {
+  expect(noticeText({ at: 'x', conflicts: [], error: 'sin conexión con GaleCore' })).toBe('No se pudo sincronizar: sin conexión con GaleCore');
+});
+
+test('sin proyecto compartido no hay «Sincronizar ahora»', async () => {
+  request.mockResolvedValue({ shared: false, members: [] });
+  render(<LabShare project={project} onClose={jest.fn()} onChanged={jest.fn()}/>);
+  await screen.findByLabelText('Usuario de GaleCore');
+  expect(screen.queryByRole('button', { name: 'Sincronizar ahora' })).toBeNull();
+});

@@ -29,9 +29,25 @@ function createSharing({ root, kb, environment, execute }) {
       }));
   }
 
+  // Un sync que salió bien limpia el error anterior (el aviso de conflictos, si lo hay, queda hasta que se cierra).
   function remember(p, summary) {
     const conflicts = summary?.conflicts || [];
+    const old = notices.get(p.id);
     if (conflicts.length) notices.set(p.id, { at: new Date().toISOString(), conflicts });
+    else if (old?.error) { if (old.conflicts.length) notices.set(p.id, { at: old.at, conflicts: old.conflicts }); else notices.delete(p.id); }
+  }
+
+  // El último error de sync de un proyecto, en el mismo aviso de una línea que usa la UI para los conflictos.
+  function reason(message) {
+    const m = String(message || '');
+    if (/no credentials/i.test(m)) return 'faltan las credenciales de GaleCore';
+    if (/did not answer|timed out|ENOTFOUND|ECONN/i.test(m)) return 'sin conexión con GaleCore';
+    if (/HTTP 429/.test(m)) return 'GaleCore pidió esperar unos minutos';
+    if (/HTTP 401|HTTP 403/.test(m)) return 'GaleCore no aceptó la sesión';
+    return 'GaleCore no respondió';
+  }
+  function failed(p, message) {
+    notices.set(p.id, { at: new Date().toISOString(), conflicts: notices.get(p.id)?.conflicts || [], error: reason(message) });
   }
 
   // `busy(p)`: hay un turno del motor escribiendo en el proyecto; traer cambios ajenos en ese momento los pisaría.
@@ -43,7 +59,8 @@ function createSharing({ root, kb, environment, execute }) {
     if (minInterval && Date.now() - (lastRun.get(p.id) || 0) < minInterval) return Promise.resolve({ recent: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });
     lastRun.set(p.id, Date.now());
     if (busy(p)) return Promise.resolve({ busy: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });
-    const job = cli(['project', 'sync', p.id]).then(summary => { remember(p, summary); return summary; })
+    const job = cli(['project', 'sync', p.id]).then(summary => { remember(p, summary); return summary; },
+      err => { failed(p, err.message); throw err; })
       .finally(() => running.delete(p.id));
     running.set(p.id, job);
     return job;
@@ -51,8 +68,13 @@ function createSharing({ root, kb, environment, execute }) {
 
   // Al arrancar: trae también los proyectos que otros compartieron conmigo y todavía no tengo.
   async function syncAll(projectsOf) {
-    const out = await cli(['project', 'sync', '--all']);
-    for (const p of projectsOf()) if (out.projects?.[p.id]) remember(p, out.projects[p.id]);
+    let out;
+    try { out = await cli(['project', 'sync', '--all']); }
+    catch (err) { for (const p of projectsOf()) if (isShared(p)) failed(p, err.message); throw err; }
+    for (const p of projectsOf()) {
+      if (out.projects?.[p.id]) remember(p, out.projects[p.id]);
+      else if (out.errors?.[p.id]) failed(p, out.errors[p.id]);
+    }
     return out;
   }
 

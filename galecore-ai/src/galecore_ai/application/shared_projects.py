@@ -334,13 +334,21 @@ def share(client: SpaceClient, kb_base: Path, key: str, username: str) -> dict:
     if client.user is None:
         client.login()
     state = load_state(project_dir)
-    if state is None:
+    fresh = state is None
+    if fresh:
         created = client.shared_create(_label_of(project_dir), _kind_of(project_dir), key)
         state = {"sharedProjectId": created["id"], "lastSeq": 0, "files": {}}
         save_state(project_dir, state)
     try:
         client.shared_add_member(state["sharedProjectId"], username)
     except SpaceError as exc:
+        if fresh:    # a failed first share leaves nothing behind: no remote project with only the owner, no local state
+            try:
+                client.shared_delete(state["sharedProjectId"])
+            except SpaceError:
+                pass
+            else:
+                (project_dir / SYNC_FILE).unlink(missing_ok=True)
         if exc.status in (403, 404):
             raise SharedProjectError(str(exc.body.get("error") or "no se pudo sumar al miembro")) from exc
         raise
