@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import httpx
 import pytest
@@ -569,3 +570,53 @@ def test_an_unwritable_cache_does_not_break_the_call(monkeypatch, tmp_path):
     monkeypatch.setenv("LOCALAPPDATA", str(blocker))    # a file where a folder is needed
     fake = CountingGaleCore(_jwt(time.time() + 3600))
     assert _client(fake, monkeypatch).items() == {"items": [], "shared": []}
+
+
+# ── Ideas, faltantes y feedback compartidos (owner 28/10) ─────────
+
+
+def test_ideas_are_published_shared_and_not_rewritten_when_unchanged(kb, galecore):  # noqa: F811
+    from galecore_ai.application import gap_log, inbox
+    from tests.unit.test_feedback import comment
+    from tests.unit.test_knowledge import save
+    fake, client = galecore
+    inbox.add(kb=kb, words="Mostrar el IV rank junto a cada candidato " + "x" * 80, prompt="anotá")
+    gap_log.add(kb.base, need="Próximo balance de NVDA", kind="data")
+    save(kb)
+    comment(kb)
+    pieces = [p for p in space.local_pieces(kb) if p["kind"] == "idea"]
+    assert {json.loads(p["content"])["source"] for p in pieces} == {"inbox", "gap", "feedback"}
+    for p in pieces:
+        assert p["visibility"] == "shared" and p["format"] == "json" and len(p["title"]) <= 80
+        assert re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}", p["key"])
+    assert sorted(p["key"].split("-")[0] for p in pieces) == ["feedback", "gap", "inbox"]
+    first = space.sync(client, pieces)
+    assert len(first["created"]) == 3 and fake.puts == 3
+    assert space.sync(client, pieces)["unchanged"] and fake.puts == 3
+
+
+def test_ideas_lists_everyones_with_author(kb, galecore):  # noqa: F811
+    fake, client = galecore
+    mk = lambda key, who, own, status, created: fake.rows.__setitem__(("idea", key), {
+        "kind": "idea", "key": key, "title": key, "format": "json", "visibility": "shared", "version": 1,
+        "isOwn": own, "owner": who, "content": json.dumps({"source": "inbox", "text": key, "status": status,
+                                                           "created_at": created})})
+    mk("inbox-a", "demo", True, "pending", "2026-10-01")
+    mk("inbox-b", "elenzi", False, "pending", "2026-10-02")
+    mk("inbox-c", "elenzi", False, "roadmap", "2026-10-03")
+    client.login()
+    out = space.ideas(client, status="pending")
+    assert [(i["author"], i["key"]) for i in out["ideas"]] == [("elenzi", "inbox-b"), ("demo", "inbox-a")]
+    assert out["by_author"] == {"elenzi": 1, "demo": 1}
+    assert [i["key"] for i in space.ideas(client, mine=True)["ideas"]] == ["inbox-a"]
+    assert space.ideas(client, source="gap")["count"] == 0
+
+
+def test_publish_agents_also_publishes_ideas(env, galecore):  # noqa: F811
+    from galecore_ai.application import inbox
+    kb_, sch, _ = env
+    _, client = galecore
+    inbox.add(kb=kb_, words="una idea", prompt="anotá")
+    out = space.publish_agents(client, kb_, sch)
+    assert any(x.startswith("idea/inbox-") for x in out["created"])
+    assert space.publish_agents(client, kb_, sch)["created"] == []

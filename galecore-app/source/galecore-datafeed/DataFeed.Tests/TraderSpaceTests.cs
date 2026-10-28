@@ -28,7 +28,7 @@ namespace DataFeed.Tests
         [Fact]
         public void LosTiposSonLosQueAcordamos()
         {
-            Assert.Equal(new[] { "profile", "objective", "convention", "memory", "skill", "agent", "data", "preference" }, TraderSpaceItem.Kinds);
+            Assert.Equal(new[] { "profile", "objective", "convention", "memory", "skill", "agent", "data", "preference", "idea" }, TraderSpaceItem.Kinds);
         }
     }
 }

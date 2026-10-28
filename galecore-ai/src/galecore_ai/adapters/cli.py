@@ -830,6 +830,19 @@ async def _cmd_space(args: argparse.Namespace) -> None:
         _error_out(str(exc), exit_code=1)
 
 
+async def _cmd_ideas(args: argparse.Namespace) -> None:
+    """Ideas, gaps and feedback of everyone using this GaleCore, read from the shared space with their author."""
+    from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+    from galecore_ai.application import space
+
+    try:
+        client = SpaceClient()
+        client.login()
+        _json_out(space.ideas(client, args.source, args.status, args.mine))
+    except SpaceError as exc:
+        _error_out(str(exc), exit_code=1)
+
+
 def _cmd_clock(args: argparse.Namespace) -> None:
     from galecore_ai.application import market_clock
     at = datetime.fromisoformat(args.at) if args.at else None
@@ -1560,6 +1573,13 @@ def build_parser() -> _JsonArgumentParser:
     p_sp_agents.add_argument("--install", action="store_true",
                              help="Register the Windows task that does it every 5 minutes")
 
+    p_ideas = sub.add_parser("ideas", help="Ideas, gaps and feedback of all users, from the shared space")
+    ideas_sub = p_ideas.add_subparsers(dest="ideas_command", required=True)
+    p_ideas_list = ideas_sub.add_parser("list", help="Each with its author (JSON)")
+    p_ideas_list.add_argument("--source", choices=["inbox", "gap", "feedback"])
+    p_ideas_list.add_argument("--status", help="e.g. pending")
+    p_ideas_list.add_argument("--mine", action="store_true", help="Only yours")
+
     p_users = sub.add_parser("users", help="Other GaleCore users (to pick who to share a project with)")
     us_sub = p_users.add_subparsers(dest="users_command", required=True)
     us_sub.add_parser("search", help="Suggest users by username or name (2+ letters; JSON)").add_argument("query")
@@ -1886,6 +1906,8 @@ def main() -> None:
             asyncio.run(_cmd_galecore(args))
         elif args.command == "space":
             asyncio.run(_cmd_space(args))
+        elif args.command == "ideas":
+            asyncio.run(_cmd_ideas(args))
         elif args.command == "users":
             _cmd_users(args)
         elif args.command == "accept":

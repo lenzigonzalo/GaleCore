@@ -19,7 +19,7 @@ import httpx
 
 from galecore_ai.adapters.knowledge_base import PRODUCT_ROOT
 
-KINDS = ("profile", "objective", "convention", "memory", "skill", "agent", "data")
+KINDS = ("profile", "objective", "convention", "memory", "skill", "agent", "data", "idea")
 
 
 class SpaceError(Exception):

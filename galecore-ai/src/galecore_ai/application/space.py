@@ -11,6 +11,7 @@ resume through the scheduler, recorded in the task's events) before the pieces a
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from datetime import UTC, date, datetime, timedelta
@@ -110,8 +111,46 @@ def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) ->
     }
 
 
+def _idea_key(prefix: str, ref: str) -> str:
+    """Stable, valid key (`^[a-z0-9][a-z0-9._-]{0,63}$`) from an id; a long id keeps a short hash so two never collide."""
+    slug = _slug(ref, 200)
+    room = 64 - len(prefix) - 1
+    if len(slug) > room:
+        slug = f"{slug[:room - 7].rstrip('-')}-{hashlib.sha1(ref.encode('utf-8')).hexdigest()[:6]}"
+    return f"{prefix}-{slug}"
+
+
+def _idea_piece(source: str, key: str, text: str, created_at: str, **rest) -> dict:
+    text = " ".join(str(text).split())
+    title = text if len(text) <= 80 else text[:79].rstrip() + "…"
+    content = {"source": source, "text": text, "created_at": created_at, **{k: v for k, v in rest.items() if v is not None}}
+    return {"kind": "idea", "key": key, "title": title or source, "content": json.dumps(content, ensure_ascii=False),
+            "format": "json", "visibility": "shared"}
+
+
+def idea_pieces(kb: KnowledgeBase) -> list[dict]:
+    """Inbox ideas, gaps and feedback of this PC as shared `idea` pieces, so both users see them (owner 28/10)."""
+    from galecore_ai.application import gap_log, inbox
+    from galecore_ai.application.knowledge import feedback_status
+
+    pieces: list[dict] = []
+    found, _ = inbox.items(kb)
+    for i in found:
+        pieces.append(_idea_piece("inbox", _idea_key("inbox", i.id), i.words, i.recorded_at.isoformat(),
+                                  id=i.id, status=i.status, context=i.context or None))
+    for g in gap_log.items(kb.base, include_closed=True):
+        pieces.append(_idea_piece("gap", _idea_key("gap", g["id"]), g["need"], g.get("first_seen", ""), id=g["id"],
+                                  gap_kind=g.get("kind"), count=g.get("count"),
+                                  status="closed" if "closed_at" in g else "pending"))
+    for f in feedback_status(kb)["feedback"]:
+        pieces.append(_idea_piece("feedback", _idea_key("feedback", f["ref"].removeprefix("feedback:")), f["words"],
+                                  f["recorded_at"], ref=f["ref"], status=f["status"],
+                                  classification=f["classification"], about=f["about"]))
+    return pieces
+
+
 def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
-    """Every piece the local sources hold today (agents and skills; no profile since WS-0058), as {kind, key, title, content, format, visibility}."""
+    """Every piece the local sources hold today (agents, skills and ideas; no profile since WS-0058), as {kind, key, title, content, format, visibility}."""
     from galecore_ai.application import tasks as t  # lazy: tasks imports the CLI side lazily too
 
     pieces: list[dict] = []
@@ -131,6 +170,7 @@ def local_pieces(kb: KnowledgeBase, now: datetime | None = None) -> list[dict]:
             content, title = "\n".join(lines), entry.id
         pieces.append({"kind": "skill", "key": _slug(entry.id.replace("_", "-")), "title": title,
                        "content": content, "format": "markdown", "visibility": "shared"})
+    pieces += idea_pieces(kb)
     return pieces
 
 
@@ -416,7 +456,34 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
                            "visibility": item.get("visibility", "private"),
                            "content": json.dumps({**gone, "status": "cancelled", "state": "CANCELLED",
                                                   "request_error": refused.get(item["key"])}, ensure_ascii=False)})
-    return {"requests": requests, "responses": responses, **sync(client, pieces, seen)}
+    result = sync(client, pieces, seen)
+    try:                                         # ideas: published as they are, never deleted from the space
+        ideas = sync(client, idea_pieces(kb))
+        result = {k: result[k] + ideas[k] for k in result}
+    except (KnowledgeError, OSError, ValueError):   # a damaged local record must not stop the agents
+        pass
+    return {"requests": requests, "responses": responses, **result}
+
+
+def ideas(client: SpaceClient, source: str | None = None, status: str | None = None, mine: bool = False) -> dict:
+    """The `idea` pieces of everyone (own and shared by others), each with its author, newest first."""
+    space = client.items("idea")
+    rows = [(i, True) for i in space["items"]] + ([] if mine else [(i, False) for i in space["shared"]])
+    out = []
+    for item, own in rows:
+        try:
+            c = json.loads(item["content"])
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if not isinstance(c, dict) or (source and c.get("source") != source) or (status and c.get("status") != status):
+            continue
+        out.append({"author": item.get("owner") or (client.user if own else None), "own": own, "key": item["key"],
+                    "title": item["title"], **c, "updated_at": item.get("updatedAt")})
+    out.sort(key=lambda x: str(x.get("created_at", "")), reverse=True)
+    by_author: dict[str, int] = {}
+    for x in out:
+        by_author[str(x["author"])] = by_author.get(str(x["author"]), 0) + 1
+    return {"count": len(out), "by_author": by_author, "ideas": out}
 
 
 def context(client: SpaceClient) -> str:
