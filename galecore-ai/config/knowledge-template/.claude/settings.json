@@ -13,6 +13,18 @@
       "WebFetch"
     ],
     "deny": [
+      "Read(~/GaleCore/galecore-app/**)",
+      "Edit(~/GaleCore/galecore-app/**)",
+      "Read(~/GaleCore/galecore-ai/src/**)",
+      "Edit(~/GaleCore/galecore-ai/src/**)",
+      "Read(~/GaleCore/galecore-ai/tests/**)",
+      "Edit(~/GaleCore/galecore-ai/tests/**)",
+      "Read(~/GaleCore/galecore-ai/docs/**)",
+      "Edit(~/GaleCore/galecore-ai/docs/**)",
+      "Read(~/GaleCore/galecore-lab/*.js)",
+      "Edit(~/GaleCore/galecore-lab/*.js)",
+      "Edit(~/GaleCore/galecore-ai/config/**)",
+      "Edit(~/GaleCore/install/**)",
       "CronCreate",
       "CronDelete",
       "CronList",

@@ -73,23 +73,8 @@ function binary(provider) {
   } catch { return null; }
 }
 const binaries = { codex: binary('codex'), claude: binary('claude') };
-function instructions(project) {
-  return [
-    'Esta sesión pertenece a GaleCore Lab: trabajo real del trader, no desarrollo del software ni continuación del ACTIVE_WORK_ITEM.',
-    'Proyecto seleccionado: ' + project.id + '. Workspace del producto: ' + ROOT + '.',
-    'Al recibir el primer pedido, leé ' + path.join(ROOT, 'galecore-ai', 'CLAUDE.md') + ' y consultá antecedentes con las herramientas del harness (galecore-ai/).',
-    'Usá python -B -m galecore_ai.adapters.cli catalog --match con el pedido y kb search para recuperar contexto. Para estrategias existentes, project show strategy:' + project.id + '; para cartera, project show portfolio. Un borrador nuevo todavía no tiene registro canónico.',
-    'PYTHONPATH y GALECORE_KNOWLEDGE_DIR ya están definidos. Las capacidades y su contrato están en galecore-ai/docs/HOST-REFERENCE.md.',
-    'Guardá investigaciones, decisiones y pendientes mediante research/project/feedback u otras herramientas canónicas; no edites registros con hashes a mano.',
-    'Para pasar contenido por stdin, escribí el JSON en un archivo de este proyecto (files/) y corré el comando con `< files/<archivo>.json`; sin cd, heredocs ni pipes.',
-    'Después de un hito útil, guardá su evidencia y próximos pasos con las herramientas del harness (galecore-ai/). No hagas commit: el guardado alcanza (el commit de ' + KB + ' lo hace el mantenimiento).',
-    'No uses git add . ni incluyas cambios ajenos. No pushees. No guardes secretos ni transcripciones completas en Git. No inventes evidencia ni aprobación.',
-    'Corto y sin códigos internos. Si guardaste algo, una sola línea al final («Guardado: …»); si no, nada.',
-    'Los datos y cálculos financieros provienen de GaleCore. Nunca uses los mocks del front. No hagas órdenes LIVE ni cambios en producción.',
-    'El usuario mantiene autoridad sobre reglas, mandato y aprobaciones. Conservá permisos, sandbox y confirmaciones del CLI.',
-    'No lances trabajo autónomo al arrancar: esperá el pedido del usuario.',
-  ].join('\n');
-}
+// Shell: igual para los dos motores, sólo el proyecto; el entorno lo leen solos de knowledge/AGENTS.md (WS-0028).
+const instructions = project => 'Proyecto: ' + project.id + '.';
 function environment() {
   const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor',
     PYTHONPATH: path.join(ROOT, 'galecore-ai', 'src'), GALECORE_KNOWLEDGE_DIR: KB };

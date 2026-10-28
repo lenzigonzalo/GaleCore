@@ -18,7 +18,8 @@ turno, igual para cualquier motor. Orden de las capas y qué gana cuando chocan:
 - Datos y cálculos de GaleCore (`galecore-app/`), por el CLI de `galecore-ai/` (`PYTHONPATH`, `GALECORE_KNOWLEDGE_DIR` y la ApiKey ya
   están en el entorno). GaleCore es siempre la primera fuente; la web, sólo si el trader la pide o para un faltante
   puntual, con fuente y fecha (`PRODUCT.md`).
-- No edites el código del producto (`galecore-app/`, `galecore-ai/`, `galecore-lab/`); no hagas push.
+- No leas ni edites el código del producto (`galecore-app/`, `galecore-ai/src`, `galecore-lab/`): si algo del producto
+  falla, decilo con el error. No hagas push.
 - Lo que cambie en esta carpeta se commitea y se respalda solo al terminar cada turno. No hagas `git commit` a mano.
 - Para pasar contenido por stdin al CLI, escribilo en `.scratch/` del proyecto y usá `< .scratch/<archivo>.json` (no se
   versiona ni se ve en Files). `files/` es para lo que el trader lee.
