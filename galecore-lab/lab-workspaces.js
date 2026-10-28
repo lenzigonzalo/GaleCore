@@ -5,6 +5,7 @@ const os = require('os');
 const { spawn, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
+const { createSharing } = require('./lab-sharing');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -180,7 +181,7 @@ function parseMapa(text){
   }
   return {title,intro,sections};
 }
-function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn }) {
+function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
   const overridesFile=path.join(local,'lab-project-overrides.json');
@@ -282,7 +283,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   // Un workspace personal explícito y separado del conocimiento financiero compartido.
   if(!listProjects().some(p=>p.id==='personal'))createProject({label:'Personal',type:'personal'});
-  const publicProject=({dir,...p})=>p;
+  // Proyectos compartidos (WS-0064): el CLI del harness sincroniza; acá sólo se dispara y se avisa si hubo conflictos.
+  const sharing=createSharing({root,kb,environment,execute});
+  const busy=p=>[...jobs.values()].some(j=>j.project===p.id);
+  const publicProject=({dir,...p})=>sharing.isShared({dir})?{...p,shared:true,syncNotice:sharing.notice(p)}:p;
   // Las conversaciones de prueba (origin «prueba») no se listan: el trader ve sólo las suyas.
   function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.origin!=='prueba').map(({messages,...c})=>({...c,messageCount:messages.length}));}
   // Al abrir una conversación nueva en un proyecto, el final de la anterior del mismo proyecto (ya guardada por el Lab):
@@ -361,7 +365,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       ?' Antes de responder, reescribí el mapa del proyecto ('+(existingMapa?'el que ya existe es '+path.join(p.dir,existingMapa)+' (ruta exacta, no la adivines)':'todavía no hay: creá '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md'))+') con el formato de «Mapa de la idea» (en el método de ideas y estrategias del contexto), aunque nada haya cambiado: pasá lo que ya estaba a sus 8 partes.'
       :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea», '+path.join(root,'galecore-ai','config','skills','strategy-design','method.md')+') en '+path.join(p.dir,existingMapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});sharing.sync(p,{busy}).catch(()=>null).then(()=>script('commit_knowledge.py',{cwd:p.dir}));}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide el arnés de pruebas, sea cual sea el motor
@@ -390,6 +394,17 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const parts=url.pathname.split('/').filter(Boolean);
     if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
+    if(req.method==='POST' && url.pathname==='/workspaces/sync'){json(res,200,await sharing.syncAll(listProjects));return true;}
+    if(parts[0]==='workspaces'&&parts[1]&&['sharing','share','unshare','sync','notice'].includes(parts[2])&&parts.length===3){
+      const p=project(parts[1]);
+      if(req.method==='GET'&&parts[2]==='sharing'){json(res,200,{...(await sharing.status(p)),notice:sharing.notice(p)});return true;}
+      if(req.method!=='POST')return false;
+      if(parts[2]==='share'){json(res,200,await sharing.share(p,await readBody(req)));return true;}
+      if(parts[2]==='unshare'){json(res,200,await sharing.unshare(p,await readBody(req)));return true;}
+      if(parts[2]==='notice'){sharing.clearNotice(p);json(res,200,{cleared:true});return true;}
+      if(!sharing.isShared(p))throw fail('Este proyecto no está compartido.',409);
+      const summary=await sharing.sync(p,{busy});json(res,200,{...summary,notice:sharing.notice(p)});return true;
+    }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[1]&&(parts[2]==='rename'||parts[2]==='archive')&&parts.length===3){
       const p=project(parts[1]);
       if(parts[2]==='rename'){const label=String((await readBody(req)).label||'').trim();if(!label||label.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');setOverride(p.id,{label});json(res,200,{...publicProject(p),label});return true;}
@@ -485,6 +500,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     return false;
   }
+  if(autoSync)sharing.syncAll(listProjects).catch(()=>{});   // al arrancar: trae también lo que otros compartieron conmigo
   return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
 module.exports={createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep};

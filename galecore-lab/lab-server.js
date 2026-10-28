@@ -18,7 +18,7 @@ const KB = ensureKnowledgeDir();
 const PORT = Number(process.env.GALECORE_LAB_PORT || 8771);
 const LOCAL = path.join(__dirname, '.local');
 const STORE = path.join(LOCAL, 'lab-sessions.json');
-const ORIGINS = new Set(['http://localhost:3039', 'http://127.0.0.1:3039']);
+const ORIGINS = new Set((process.env.GALECORE_LAB_ORIGINS || 'http://localhost:3039,http://127.0.0.1:3039').split(',').map(s => s.trim()).filter(Boolean));
 const TOKEN = crypto.randomBytes(32).toString('hex');
 const sessions = new Map();
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -179,7 +179,7 @@ function readBody(req) {
     req.on('error', reject);
   });
 }
-const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()] });
+const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()], autoSync:true });
 const server = http.createServer(async (req, res) => {
   if (!validHost(req) || !validOrigin(req)) return json(res, 403, { error: 'Sólo se admite el monitor local de esta PC.' });
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
