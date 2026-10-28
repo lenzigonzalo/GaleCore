@@ -66,6 +66,5 @@ dependencias sólo si cambiaron. Conserva lo ya cargado; con `-Reconfigurar` te 
 - **SHADOW es tuyo, RPF queda apagado.** Tus estrategias SHADOW corren en tu PC mientras GaleCore está iniciado;
   las de Gonzalo corren en la suya; no se mezclan. RPF queda apagado.
   (El instalador guarda tu usuario como `runtime_owner_username` en tu `env.json`, y deja
-  `Files\Rpf
-pf_switch_state.json` con `enabled: false`; ambos están ignorados por Git.)
+  `Files\Rpf\rpf_switch_state.json` con `enabled: false`; ambos están ignorados por Git.)
 - No carga tu cuenta de bróker ni opera: los datos de mercado vienen de tus credenciales de Tastytrade.
