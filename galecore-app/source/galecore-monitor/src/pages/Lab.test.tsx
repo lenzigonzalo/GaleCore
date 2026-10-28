@@ -47,3 +47,25 @@ test('nuevo proyecto pide sólo el nombre; la estrategia llega después, por int
  fireEvent.submit(dialog.querySelector('form')!);
  await waitFor(()=>expect(labRequest).toHaveBeenCalledWith('/workspaces',{label:'Idea QQQ'}));
 });
+test('Mapa sólo aparece en proyectos que trabajan una estrategia (owner 27/10)',async()=>{
+ render(<Lab onMonitor={()=>{}}/>);await screen.findByRole('button',{name:'Personal'});
+ expect(screen.queryByRole('button',{name:'Mapa'})).not.toBeInTheDocument();      // Personal
+ fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));
+ expect(await screen.findByRole('button',{name:'Mapa'})).toBeInTheDocument();     // estrategia
+});
+test('un análisis sin estrategia no muestra Mapa, y uno con strategyName sí; el panel guardado no se abre sin botón',async()=>{
+ const base=(labRequest as jest.Mock).getMockImplementation()!;
+ const idea={id:'idea',label:'Idea QQQ',type:'analysis',relative:'workspaces/idea',strategyName:null};
+ const seen=(p:any)=>async(path:string,body?:any)=>path==='/workspaces'?{...(await base(path,body)),projects:[p]}:base(path,body);
+ localStorage.setItem('galecore:lab:mapa','1');
+ (labRequest as jest.Mock).mockImplementation(seen(idea));
+ const first=render(<Lab onMonitor={()=>{}}/>);fireEvent.click(await screen.findByRole('button',{name:'Idea QQQ'}));await screen.findByRole('button',{name:'Compartir'});
+ expect(screen.queryByRole('button',{name:'Mapa'})).not.toBeInTheDocument();
+ expect(document.querySelector('.lab-mapa')).not.toBeInTheDocument();
+ first.unmount();
+ (labRequest as jest.Mock).mockImplementation(seen({...idea,strategyName:'qqq_spec'}));
+ render(<Lab onMonitor={()=>{}}/>);
+ fireEvent.click(await screen.findByRole('button',{name:'Idea QQQ'}));
+ expect(await screen.findByRole('button',{name:'Mapa'})).toBeInTheDocument();
+ localStorage.removeItem('galecore:lab:mapa');
+});

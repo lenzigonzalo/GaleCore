@@ -909,6 +909,23 @@ def _cmd_project_shared(args: argparse.Namespace) -> None:
         _error_out(str(exc), exit_code=1)
 
 
+def _cmd_users(args: argparse.Namespace) -> None:
+    """`users search <q>`: who can I share with (username and name only; WS-0064)."""
+    from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+
+    query = args.query.strip()
+    if len(query) < 2:
+        _json_out({"users": []})
+        return
+    try:
+        client = SpaceClient()
+        if client.user is None:
+            client.login()
+        _json_out({"users": client.users_search(query)})
+    except SpaceError as exc:
+        _error_out(str(exc), exit_code=1)
+
+
 async def _cmd_project(args: argparse.Namespace) -> None:
     if args.project_command in ("share", "unshare", "shared", "sync"):
         return _cmd_project_shared(args)
@@ -1543,6 +1560,10 @@ def build_parser() -> _JsonArgumentParser:
     p_sp_agents.add_argument("--install", action="store_true",
                              help="Register the Windows task that does it every 5 minutes")
 
+    p_users = sub.add_parser("users", help="Other GaleCore users (to pick who to share a project with)")
+    us_sub = p_users.add_subparsers(dest="users_command", required=True)
+    us_sub.add_parser("search", help="Suggest users by username or name (2+ letters; JSON)").add_argument("query")
+
     p_project = sub.add_parser("project", help="A strategy or the portfolio as a project: everything in one view "
                                                "and the owner's log (GC-AI-0026)")
     pj_sub = p_project.add_subparsers(dest="project_command", required=True)
@@ -1865,6 +1886,8 @@ def main() -> None:
             asyncio.run(_cmd_galecore(args))
         elif args.command == "space":
             asyncio.run(_cmd_space(args))
+        elif args.command == "users":
+            _cmd_users(args)
         elif args.command == "accept":
             asyncio.run(_cmd_accept(args))
         elif args.command == "record" and args.record_command == "outcome":

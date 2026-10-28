@@ -24,6 +24,41 @@ namespace DataFeed.Tests
             Assert.Equal(DeleteBehavior.Cascade, fks.Single(f => f.PrincipalEntityType.ClrType == typeof(SharedProject)).DeleteBehavior);
         }
 
+
+        // ── Sugerencias de usuarios ──
+        private static IQueryable<User> Usuarios(Guid yo) => new List<User>
+        {
+            new() { Id = yo, Username = "gonza", DisplayName = "Gonzalo L", Email = "g@x.com" },
+            new() { Id = Guid.NewGuid(), Username = "elenzi", DisplayName = "Eric Lenzi", Email = "e@x.com" },
+            new() { Id = Guid.NewGuid(), Username = "marta", DisplayName = "Marta Lenzi", Email = "m@x.com" },
+            new() { Id = Guid.NewGuid(), Username = "pablo", DisplayName = null, Email = "p@x.com" },
+        }.AsQueryable();
+
+        [Fact]
+        public void BuscarUsuariosPorPrefijoOContenidoSinMayusculasYSinElQueConsulta()
+        {
+            var yo = Guid.NewGuid();
+            var users = Usuarios(yo);
+            Assert.Equal(new[] { "elenzi" }, UserSearch.Find(users, "elen", yo).Select(u => u.Username));
+            Assert.Equal("Eric Lenzi", UserSearch.Find(users, "elen", yo).Single().DisplayName);
+            // por nombre, contiene; el que empieza con el texto va primero; yo (gonza) no aparece
+            Assert.Equal(new[] { "elenzi", "marta" }, UserSearch.Find(users, "lenzi", yo).Select(u => u.Username));
+            Assert.Empty(UserSearch.Find(users, "gonz", yo));
+            Assert.Equal(new[] { "pablo" }, UserSearch.Find(users, UserSearch.Normalize("  PAB ")!, yo).Select(u => u.Username));
+        }
+
+        [Fact]
+        public void BuscarUsuariosExigeDosCaracteresYTopeDeDiez()
+        {
+            Assert.Null(UserSearch.Normalize("e"));
+            Assert.Null(UserSearch.Normalize(" "));
+            Assert.Null(UserSearch.Normalize(null));
+            Assert.Equal("el", UserSearch.Normalize("El"));
+            var yo = Guid.NewGuid();
+            var muchos = Enumerable.Range(0, 25).Select(i => new User { Id = Guid.NewGuid(), Username = $"user{i:00}", Email = $"u{i}@x.com" }).AsQueryable();
+            Assert.Equal(UserSearch.MaxResults, UserSearch.Find(muchos, "user", yo).Count);
+        }
+
         // ── Proyecto ──
         [Fact]
         public void UnProyectoValidoSeAcepta()

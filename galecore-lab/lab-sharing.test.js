@@ -152,3 +152,16 @@ test('el motor predeterminado sale de GALECORE_LAB_PROVIDER (claude) y sin la va
   process.env.GALECORE_LAB_PROVIDER = 'claude'; assert.equal((await route(service, 'GET', '/workspaces')).value.defaultProvider, 'claude');
   process.env.GALECORE_LAB_PROVIDER = 'otro'; assert.equal((await route(service, 'GET', '/workspaces')).value.defaultProvider, 'codex');
 });
+
+test('las sugerencias de usuarios salen del CLI, sólo con 2+ letras y sin más campos que usuario y nombre', async t => {
+  const { service, calls } = world(t, { answers: { 'users search': { users: [{ username: 'elenzi', displayName: 'Eric Lenzi', email: 'x@y.com' }] } } });
+  assert.deepEqual((await route(service, 'GET', '/workspaces/users?q=e')).value, { users: [] }); assert.equal(calls.length, 0);
+  const out = await route(service, 'GET', '/workspaces/users?q=%20elen%20');
+  assert.deepEqual(out.value, { users: [{ username: 'elenzi', displayName: 'Eric Lenzi' }] });
+  assert.deepEqual(calls.at(-1), ['users', 'search', 'elen']);
+});
+
+test('si la búsqueda de usuarios falla, el error llega al modal', async t => {
+  const { service } = world(t, { answers: { 'users search': { error: 'sin conexión' } } });
+  await assert.rejects(route(service, 'GET', '/workspaces/users?q=elen'), /sin conexión/);
+});

@@ -179,6 +179,10 @@ class SpaceClient:
 
     # -- Shared projects (WS-0064): the API only exchanges changes between members; the files live on each PC.
 
+    def users_search(self, q: str) -> list[dict]:
+        """Suggestions to share with: [{'username', 'displayName'}], at most 10, never the caller or an email."""
+        return self._call("GET", "/App/GaleCore/Users/Search", params={"q": q})["users"]
+
     def shared_projects(self) -> list[dict]:
         return self._call("GET", "/App/GaleCore/SharedProjects")["projects"]
 

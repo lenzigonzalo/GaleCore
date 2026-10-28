@@ -41,6 +41,10 @@ class FakeGaleCore:
         if path == "/App/GaleCore/Auth/Login":
             return httpx.Response(200, json={"accessToken": "tok-" + json.loads(request.content)["username"]})
         me = self._user(request)
+        if path == "/App/GaleCore/Users/Search":
+            q = request.url.params["q"].lower()
+            return httpx.Response(200, json={"users": [{"username": u, "displayName": None} for u in sorted(self.users)
+                                                       if u != me and q in u]})
         root = "/App/GaleCore/SharedProjects"
         body = json.loads(request.content) if request.content else {}
         if path == root and method == "POST":
@@ -343,3 +347,26 @@ def test_sync_after_being_unshared_says_so_and_keeps_the_local_copy(world):
     assert read(b, "workspaces/idea/README.md") == "mi cambio"
     out = sp.sync_all(cb, b)
     assert out["projects"] == {} and out["errors"] == {}
+
+
+def test_users_search_suggests_other_users_and_never_the_caller(world):
+    fake, _, _, ca, _ = world
+    fake.users |= {"elenzi", "elena"}
+    assert [u["username"] for u in ca.users_search("elen")] == ["elena", "elenzi"]
+    assert ca.users_search("demo") == []
+
+
+def test_cli_users_search_prints_json_and_skips_short_queries(world, monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    from galecore_ai.adapters import cli
+    fake, _, _, ca, _ = world
+    fake.users.add("elenzi")
+    monkeypatch.setattr("galecore_ai.adapters.galecore_space.SpaceClient", lambda: ca)
+    with pytest.raises(SystemExit) as done:
+        cli._cmd_users(SimpleNamespace(query=" elen "))
+    assert done.value.code == 0
+    assert json.loads(capsys.readouterr().out) == {"users": [{"username": "elenzi", "displayName": None}]}
+    with pytest.raises(SystemExit):
+        cli._cmd_users(SimpleNamespace(query="e"))
+    assert json.loads(capsys.readouterr().out) == {"users": []}

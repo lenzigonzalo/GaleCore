@@ -10,3 +10,8 @@
 .lab-share .lab-share-sync [role=status] { margin-top:12px; }
 .lab-sync-notice { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0; padding:8px 28px; border-bottom:1px solid var(--border-dark); background:var(--bg-secondary); font-size:var(--font-label); color:var(--text-primary); }
 .lab-shared-badge { flex-shrink:0; color:var(--text-secondary); }
+.lab-share-field { position:relative; }
+.lab-share .lab-share-options { position:absolute; left:0; right:0; top:100%; z-index:5; margin:4px 0 0; max-height:260px; overflow-y:auto; background:var(--bg-secondary); box-shadow:0 8px 24px rgba(0,0,0,.45); }
+.lab-share .lab-share-options li { justify-content:flex-start; gap:10px; cursor:pointer; }
+.lab-share .lab-share-options li[aria-selected=true] { background:var(--bg-hover, rgba(255,255,255,.08)); }
+.lab-share .lab-share-options li span { color:var(--text-secondary); }

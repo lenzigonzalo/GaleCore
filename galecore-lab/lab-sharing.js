@@ -106,10 +106,18 @@ function createSharing({ root, kb, environment, execute }) {
     return { shared: true, members: result.members, mine: true };
   }
 
+  // Sugerencias de usuarios para el modal de compartir: el CLI consulta a GaleCore (usuario y nombre, nunca el mail).
+  async function searchUsers(q) {
+    const text = String(q || '').trim().slice(0, 64);
+    if (text.length < 2) return { users: [] };
+    const out = await cli(['users', 'search', text]);
+    return { users: (out.users || []).map(u => ({ username: u.username, displayName: u.displayName || null })).slice(0, 10) };
+  }
+
   const notice = p => notices.get(p.id) || null;
   const clearNotice = p => { notices.delete(p.id); };
 
-  return { isShared, sync, syncAll, status, share, unshare, notice, clearNotice };
+  return { isShared, sync, syncAll, status, share, unshare, searchUsers, notice, clearNotice };
 }
 
 module.exports = { createSharing, SYNC_FILE };
