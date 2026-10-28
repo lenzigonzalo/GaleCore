@@ -149,3 +149,31 @@ describe('dictado con el espacio apretado', () => {
     expect(rec.start).not.toHaveBeenCalled();
   });
 });
+
+test('cada mensaje en cola muestra qué se puede hacer: Editar, Mandar ya y Quitar', async () => {
+  serve('running', [user('hola')]);
+  render(<Lab active onMonitor={() => {}} />);
+  const input = await box();
+  for (const text of ['uno', 'dos']) { fireEvent.change(input, { target: { value: text } }); fireEvent.keyDown(input, { key: 'Enter' }); }
+  const queue = await screen.findByLabelText('Mensajes en cola');
+  expect(queue).toHaveTextContent('salen solos cuando termine la respuesta');
+  fireEvent.click(screen.getByRole('button', { name: /^Editar en cola: uno/ }));
+  expect(input).toHaveValue('uno');
+  fireEvent.click(screen.getByRole('button', { name: /^Mandar ya: dos/ }));
+  await waitFor(() => expect(posted('/stop')).toHaveLength(1));
+  fireEvent.click(screen.getByRole('button', { name: /^Quitar de la cola: dos/ }));
+  expect(screen.queryByLabelText('Mensajes en cola')).not.toBeInTheDocument();
+});
+
+test('Preguntar sobre esto aparece aunque la selección termine fuera del texto de la respuesta', async () => {
+  serve('idle', [user('hola'), reply('un texto largo para citar')]);
+  render(<Lab active onMonitor={() => {}} />);
+  const text = (await screen.findByText('un texto largo para citar')).firstChild as Text;
+  const range = document.createRange(); range.setStart(text, 3); range.setEnd(document.body, document.body.childNodes.length);   // termina fuera de la respuesta
+  const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+  range.getBoundingClientRect = () => ({ top: 300, bottom: 320, left: 50, right: 90, width: 40, height: 20, x: 50, y: 300, toJSON() {} });
+  jest.spyOn(selection, 'toString').mockReturnValue('texto largo');
+  fireEvent.mouseUp(document.body);
+  fireEvent.click(await screen.findByRole('button', { name: 'Preguntar sobre esto' }));
+  expect(await box()).toHaveValue('> texto largo\n\n');
+});

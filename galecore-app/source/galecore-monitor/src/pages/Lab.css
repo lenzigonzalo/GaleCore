@@ -447,3 +447,11 @@
 .lab-table-tools { position:absolute; top:-6px; right:6px; display:flex; gap:6px; opacity:0; transition:opacity .12s; }
 .lab-table-box:hover .lab-table-tools, .lab-table-tools:focus-within { opacity:1; }
 .lab-table-tools button { padding:3px 10px; border:1px solid var(--border-light); border-radius:6px; background:var(--bg-secondary); color:var(--text-secondary); font:13px var(--font-sans); cursor:pointer; }
+.lab-queue strong { font-weight:500; color:var(--text-secondary); }
+.lab-queue > div { align-items:center; }
+.lab-queue > div > span:first-child { flex:1; min-width:0; }
+.lab-queue-actions { display:flex; gap:14px; flex-shrink:0; }
+.lab-queue-actions button { color:var(--text-primary); text-decoration:none; padding:2px 0; }
+.lab-queue-actions button:hover { text-decoration:underline; }
+.lab-quote-button { z-index:200; }
+.lab-queue-actions { overflow:visible; white-space:nowrap; }
