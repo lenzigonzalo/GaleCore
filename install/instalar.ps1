@@ -292,6 +292,20 @@ if ($DryRun) {
     Ok 'SHADOW prendido (solo tus estrategias) y RPF apagado en tu API'
 }
 
+# ---------- agentes y avisos ----------
+# La tarea 'espacio-agentes' (cada 5 minutos) aplica lo que hagas en Agentes del monitor y corre el supervisor:
+# avisos del watch y de SHADOW. Sin ella nada de eso llega a esta PC. Usa el Python del proyecto (.venv).
+Titulo 'Agentes y avisos'
+Ejecutar 'registrar la tarea espacio-agentes (Agentes del monitor y avisos, cada 5 minutos)' {
+    Push-Location $ai
+    try {
+        $env:PYTHONPATH = Join-Path $ai 'src'
+        $out = & (Join-Path $venv 'Scripts\python.exe') -B -m galecore_ai.adapters.cli space agents --install
+        if ($LASTEXITCODE -eq 0) { Ok 'agentes y avisos activos' }
+        else { Aviso "no pude registrar espacio-agentes: $out" }
+    } finally { Pop-Location }
+}
+
 # ---------- accesos directos ----------
 Titulo 'Accesos directos'
 $iniciar = Join-Path $Carpeta 'install\iniciar.ps1'

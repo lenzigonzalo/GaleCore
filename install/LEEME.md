@@ -46,6 +46,9 @@ La `ApiKey` local la genera el instalador y sólo vive en tu PC.
   responda y abre el monitor en el navegador. La primera vez tarda unos minutos.
 - Detener: **Detener GaleCore** en el menú Inicio (o `install\detener.ps1`). Sólo corta lo que inició GaleCore.
 - Si algo no arranca, los registros están en `%LOCALAPPDATA%\GaleCore\logs`.
+- Agentes y avisos: el instalador deja la tarea de Windows `GaleCore-AI\espacio-agentes`, que cada 5 minutos aplica lo
+  que hagas en **Agentes** del monitor y revisa tus avisos (watch y SHADOW). Corre aunque GaleCore esté detenido;
+  sus errores van a `%LOCALAPPDATA%\GaleCore-AI\space_sync.log`.
 
 ## Dónde quedan tus datos
 
