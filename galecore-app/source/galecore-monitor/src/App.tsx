@@ -18,7 +18,7 @@ import { fetchSpace } from './api/space';
 import { fetchProviderAuth } from './api/terminal';
 import { Admin } from './pages/Admin';
 import { Rpf } from './pages/Rpf';
-import { Gex } from './pages/Gex';
+import { Gex, MarketIndicator } from './pages/Gex';
 import { Shadow } from './pages/Shadow';
 import { Agentes } from './pages/Agentes';
 import { useMarketSocket, ConnectionStatus } from './socket/useMarketSocket';
@@ -43,6 +43,7 @@ function Dashboard({ onLogout }: DashboardProps) {
   const [labVisited, setLabVisited] = useState(false);
   const [selectedSpec, setSelectedSpec] = useState<string | null>(null);
   const [projectRequest, setProjectRequest] = useState<{ id: string; sequence: number }>();
+  const [marketIndicator, setMarketIndicator] = useState<MarketIndicator>('gamma');
   const setTab = (next: Tab) => {
     if (next === 'config') { setSetup(false); setSettingsOpen(true); return; }
     if (next === 'rpf') { setSelectedSpec('rpf'); next = 'estrategias'; }
@@ -51,6 +52,7 @@ function Dashboard({ onLogout }: DashboardProps) {
     if (next === 'operativa' || next === 'monitor') next = 'inicio';
     if (next === 'estrategias') setStrategiesVisited(true);
     if (next === 'lab') setLabVisited(true);
+    if (next !== 'gex') setMarketIndicator('gamma');
     setCurrentTab(next);
   };
   const openProject = (id: string) => { setProjectRequest(previous => ({ id, sequence: (previous?.sequence || 0) + 1 })); setTab('lab'); };
@@ -146,7 +148,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {tab === 'admin' && <Admin />}
           {/* GEX se monta recién al entrar: el barrido de la cadena completa es caro y no tiene
               sentido dispararlo si el operador nunca abre la pestaña. */}
-          {tab === 'gex' && <Gex externalWatchlist subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
+          {tab === 'gex' && <Gex externalWatchlist indicator={marketIndicator} onIndicatorChange={setMarketIndicator} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol} socketStatus={socketStatus} />}
           {/* SHADOW (GC-0004) se monta al entrar y se refresca solo mientras está abierta. */}
           {tab === 'macro' && <Macro />}
           {tab === 'biblioteca' && <Biblioteca />}
@@ -157,7 +159,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {labVisited && <div className="lab-page-host" hidden={!isLabWorkspace}><Lab active={isLabWorkspace} projectRequest={projectRequest} onFollowStrategy={followStrategy} onMonitor={() => setTab('estrategias')} onNavigate={setTab}/></div>}
         </main>
       </div>
-      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
+      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setMarketIndicator('price'); setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
       </div>
       {settingsOpen && <SettingsModal wizard={setup} onClose={() => setSettingsOpen(false)} />}
     </div>

@@ -99,15 +99,19 @@ function globalToChartData(symbol: string, spot: number, global: GexScopeApi): G
  * cards del universo, cuadro Details (checks + diagnóstico, sin microestructura) con el GEX GLOBAL,
  * y el cuadro Graph con la cadena por vencimiento. No calcula ni muestra setup candidato.
  */
+export type MarketIndicator = 'price' | 'gamma' | 'iv';
+
 interface GexProps {
   subscribeSymbol: (symbol: string) => void;
   unsubscribeSymbol: (symbol: string) => void;
   socketStatus: ConnectionStatus;
   externalWatchlist?: boolean;
   compact?: boolean;
+  indicator?: MarketIndicator;
+  onIndicatorChange?: (indicator: MarketIndicator) => void;
 }
 
-export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, externalWatchlist = false, compact = false }: GexProps) {
+export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, externalWatchlist = false, compact = false, indicator: controlledIndicator, onIndicatorChange }: GexProps) {
   const {
     tickers, display, rulesLoading, rulesError, loadRules,
     cache, loading, error, errorCode, selectedExpiry, fetchGex, selectExpiry,
@@ -124,7 +128,9 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   useEffect(() => { readSwitch(switchEndpoint); }, [readSwitch, switchEndpoint]);
 
   const [refOpen, setRefOpen] = useState(false);
-  const [indicator, setIndicator] = useState<'price' | 'gamma' | 'iv'>('gamma');
+  const [localIndicator, setLocalIndicator] = useState<MarketIndicator>('gamma');
+  const indicator = controlledIndicator ?? localIndicator;
+  const setIndicator = onIndicatorChange ?? setLocalIndicator;
 
   // El universo del JSON más lo que el operador pineó con el buscador. Los ad-hoc van al final y no
   // se mezclan con los declarados: son de esta sesión y de esta persona.

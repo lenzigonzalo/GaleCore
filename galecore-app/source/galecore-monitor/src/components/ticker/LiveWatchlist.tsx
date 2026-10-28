@@ -97,7 +97,9 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
     // La lista de cotizaciones no limita su tamaño por max_pinned del barrido GEX.
     edit(old => addSymbol(old, normalized, group)); setMessage('');
   };
-  const select = (symbol:string|null) => {
+  const select = (selection:string|null) => {
+    // En el dock, volver a pulsar el activo tambien abre su grafico de precio.
+    const symbol = selection ?? selectedSymbol;
     if (!symbol) return;
     if (!tickers.includes(symbol) && !adHocSearch?.enabled) {setMessage('La búsqueda GEX no está habilitada para este símbolo.');return;}
     const pinned=pinAdHoc(symbol);

@@ -68,3 +68,14 @@ test('la variación y el volumen del día salen de la API; sin ellos no se inven
   expect(screen.getByText('43,3 M')).toBeInTheDocument();
   expect(screen.getByText('769.60')).toBeInTheDocument();
 });
+
+test('el indicador controlado cambia la vista con el mismo simbolo', () => {
+  const change = jest.fn();
+  const {rerender} = render(<Gex {...props} indicator="gamma" onIndicatorChange={change}/>);
+  expect(screen.getByTestId('chart')).toHaveTextContent('Gamma combinado');
+  fireEvent.click(screen.getByRole('button',{name:'Precio'}));
+  expect(change).toHaveBeenCalledWith('price');
+  rerender(<Gex {...props} indicator="price" onIndicatorChange={change}/>);
+  expect(screen.getByTestId('chart')).toHaveTextContent('SPY \u00b7 Velas de precio');
+  expect(useGexStore.getState().selectedSymbol).toBe('SPY');
+});

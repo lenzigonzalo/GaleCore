@@ -218,3 +218,27 @@ test('mover un ticker de grupo y renombrar un grupo',async()=>{
   await waitFor(()=>expect(saveSpaceItem).toHaveBeenCalled());
   expect(JSON.parse((saveSpaceItem as jest.Mock).mock.calls.at(-1)[2].content).groups[0]).toEqual({name:'Principales',symbols:['SPY','AAPL']});
 });
+
+test('volver a pulsar el simbolo seleccionado vuelve a abrir Mercado', async () => {
+  useGexStore.setState({selectedSymbol:'SPY'});
+  render(<LiveWatchlist {...props}/>);
+  const symbol = screen.getByRole('button',{name:'SPY'});
+  fireEvent.click(symbol);
+  expect(useGexStore.getState().selectedSymbol).toBe('SPY');
+  expect(props.onSelect).toHaveBeenCalledTimes(1);
+  fireEvent.click(symbol);
+  expect(useGexStore.getState().selectedSymbol).toBe('SPY');
+  expect(props.onSelect).toHaveBeenCalledTimes(2);
+  await waitFor(()=>expect(screen.getAllByText('101.00')).toHaveLength(2));
+});
+
+test('un simbolo rechazado por las reglas existentes no cambia seleccion ni navega', async () => {
+  useGexStore.setState({tickers:['SPY'],selectedSymbol:'SPY',adHocSearch:null});
+  useAppConfigStore.setState({tickers:['SPY','AAPL']});
+  render(<LiveWatchlist {...props}/>);
+  fireEvent.click(screen.getByRole('button',{name:'AAPL'}));
+  expect(useGexStore.getState().selectedSymbol).toBe('SPY');
+  expect(props.onSelect).not.toHaveBeenCalled();
+  expect(screen.getByRole('status')).toHaveTextContent('no');
+  await waitFor(()=>expect(screen.getAllByText('101.00')).toHaveLength(2));
+});
