@@ -1752,7 +1752,7 @@ namespace DataFeed.Controllers
                 VersionHash = spec.ContentHash ?? "",
                 Mode = "SHADOW",
                 DeployedAt = now,
-                DeployedBy = _currentUser.UserId?.ToString() ?? "SYSTEM",
+                DeployedBy = DataFeed.Application.App.Runtime.ShadowRuntimeOwner.DeployedByOf(_runtimeOwner.Attribute(_currentUser.UserId)),
                 SpecName = body.SpecName,
                 SpecVersion = spec.Identity.Version,
             };
@@ -1872,7 +1872,7 @@ namespace DataFeed.Controllers
                 EventType = "INSTANCE_STOPPED",
                 Payload = new Dictionary<string, object?>
                 {
-                    ["stopped_by"] = _currentUser.UserId?.ToString() ?? "SYSTEM",
+                    ["stopped_by"] = DataFeed.Application.App.Runtime.ShadowRuntimeOwner.DeployedByOf(_runtimeOwner.Attribute(_currentUser.UserId)),
                     ["open_positions"] = _runtimeStore.OpenPositionCount(id),
                 },
                 Timestamp = now

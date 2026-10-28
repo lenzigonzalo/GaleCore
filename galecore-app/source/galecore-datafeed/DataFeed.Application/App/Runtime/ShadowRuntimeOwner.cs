@@ -18,8 +18,14 @@ namespace DataFeed.Application.App.Runtime
         /// <summary>Lo que se guarda en StrategyDeployment.DeployedBy para ese usuario.</summary>
         public static string DeployedByOf(Guid? userId) => userId?.ToString() ?? "SYSTEM";
 
-        /// <summary>¿Puede este usuario desplegar o parar en esta API?</summary>
-        public bool Allows(Guid? userId) => UserId == null || userId == UserId;
+        /// <summary>
+        /// ¿Puede este usuario desplegar o parar en esta API? Sin usuario autenticado (sólo la ApiKey local: el operador
+        /// de esta API, p. ej. el Lab) se permite; con usuario, tiene que ser el dueño.
+        /// </summary>
+        public bool Allows(Guid? userId) => UserId == null || userId == null || userId == UserId;
+
+        /// <summary>A quién se le atribuye el deploy/stop: con dueño y sin usuario autenticado, al dueño.</summary>
+        public Guid? Attribute(Guid? userId) => userId ?? UserId;
 
         public const string DeniedMessage =
             "Este GaleCore corre las estrategias SHADOW de otro usuario: con tu cuenta no podés desplegar ni parar acá.";

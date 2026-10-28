@@ -21,8 +21,19 @@ public class ShadowRuntimeOwnerTests
         Assert.True(owner.IsScoped);
         Assert.True(owner.Allows(me));
         Assert.False(owner.Allows(Guid.NewGuid()));
-        Assert.False(owner.Allows(null));
         Assert.Equal(me.ToString(), ShadowRuntimeOwner.DeployedByOf(me));
+    }
+
+    [Fact]
+    public void WithOwner_ApiKeyOnlyRequest_IsAllowedAndAttributedToTheOwner()
+    {
+        var me = Guid.NewGuid();
+        var owner = new ShadowRuntimeOwner(me);
+        Assert.True(owner.Allows(null));
+        Assert.Equal(me, owner.Attribute(null));
+        Assert.Equal(me, owner.Attribute(me));
+        Assert.False(owner.Allows(Guid.NewGuid()));   // otro usuario autenticado: 403
+        Assert.Null(new ShadowRuntimeOwner(null).Attribute(null));   // sin dueño: como siempre ("SYSTEM")
     }
 
     [Fact]
