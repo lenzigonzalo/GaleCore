@@ -65,7 +65,7 @@ if ($DryRun) { Write-Host '(modo simulacro: no se instala ni se cambia nada)' -F
 # ---------- carpeta de destino ----------
 Titulo 'Carpeta'
 $aquiRaiz = Split-Path -Parent $PSScriptRoot
-$esClon = (Test-Path (Join-Path $aquiRaiz '.git')) -and (Test-Path (Join-Path $aquiRaiz 'app')) -and (Test-Path (Join-Path $aquiRaiz 'lab'))
+$esClon = (Test-Path (Join-Path $aquiRaiz '.git')) -and (Test-Path (Join-Path $aquiRaiz 'galecore-app')) -and (Test-Path (Join-Path $aquiRaiz 'galecore-lab'))
 if (-not $Carpeta) {
     if ($esClon) { $Carpeta = $aquiRaiz } else { $Carpeta = Join-Path $env:USERPROFILE 'GaleCore' }
 }
@@ -153,9 +153,9 @@ if (Test-Path (Join-Path $Carpeta '.git')) {
     }
 }
 
-$ai   = Join-Path $Carpeta 'ai'
-$lab  = Join-Path $Carpeta 'lab'
-$app  = Join-Path $Carpeta 'app'
+$ai   = Join-Path $Carpeta 'galecore-ai'
+$lab  = Join-Path $Carpeta 'galecore-lab'
+$app  = Join-Path $Carpeta 'galecore-app'
 $mon  = Join-Path $app 'source\galecore-monitor'
 $feed = Join-Path $app 'source\galecore-datafeed'
 $apiCsproj = Join-Path $feed 'DataFeed.Api\DataFeed.Api.csproj'
@@ -164,7 +164,7 @@ $envJson = Join-Path $app 'dev\.local\env.json'
 
 # ---------- dependencias ----------
 Titulo 'Dependencias'
-Ejecutar 'Python: entorno virtual (.venv) y paquetes de ai/' {
+Ejecutar 'Python: entorno virtual (.venv) y paquetes de galecore-ai/' {
     if (-not (Test-Path (Join-Path $venv 'Scripts\python.exe'))) { & python -m venv $venv }
     & (Join-Path $venv 'Scripts\python.exe') -m pip install --quiet --disable-pip-version-check -e $ai
     if ($LASTEXITCODE -ne 0) { Falla 'Fallo la instalacion de los paquetes de Python.' }

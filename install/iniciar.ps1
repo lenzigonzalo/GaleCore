@@ -13,8 +13,8 @@ function Sim($t)   { Write-Host "  [simulacro] $t" -ForegroundColor DarkGray }
 function Falla($t) { Write-Host "ERROR: $t" -ForegroundColor Red; exit 1 }
 
 $raiz = Split-Path -Parent $PSScriptRoot
-$app = Join-Path $raiz 'app'
-$lab = Join-Path $raiz 'lab'
+$app = Join-Path $raiz 'galecore-app'
+$lab = Join-Path $raiz 'galecore-lab'
 $venvScripts = Join-Path $raiz '.venv\Scripts'
 $py = Join-Path $venvScripts 'python.exe'
 $devPy = Join-Path $app 'dev\galecore_dev.py'
