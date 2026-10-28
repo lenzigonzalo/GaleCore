@@ -29,7 +29,5 @@ namespace DataFeed.Application.App.Runtime
 
         public const string DeniedMessage =
             "Este GaleCore corre las estrategias SHADOW de otro usuario: con tu cuenta no podés desplegar ni parar acá.";
-        public const string SameVersionElsewhereMessage =
-            "Otra cuenta ya corre esta misma versión de la estrategia en la base compartida: no se desplegó nada. Cambiá la estrategia para tener tu propia versión.";
     }
 }

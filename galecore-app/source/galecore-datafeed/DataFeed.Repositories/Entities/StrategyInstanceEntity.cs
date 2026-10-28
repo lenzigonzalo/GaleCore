@@ -15,6 +15,8 @@ namespace DataFeed.Repositories.Entities
         public string SchedulerState { get; set; } = "IDLE";
         public string SpecName { get; set; } = "";
         public string Mode { get; set; } = "SHADOW";
+        /// <summary>Copia del dueño del deployment (DeployedBy), para el índice único por dueño.</summary>
+        public string DeployedBy { get; set; } = "SYSTEM";
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }

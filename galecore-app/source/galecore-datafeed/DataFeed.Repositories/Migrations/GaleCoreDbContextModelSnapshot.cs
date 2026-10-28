@@ -538,6 +538,14 @@ namespace DataFeed.Repositories.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("now()");
 
+                    b.Property<string>("DeployedBy")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasDefaultValue("SYSTEM")
+                        .HasColumnName("deployed_by");
+
                     b.Property<Guid>("DeploymentId")
                         .HasColumnType("uuid")
                         .HasColumnName("deployment_id");
@@ -584,7 +592,7 @@ namespace DataFeed.Repositories.Migrations
                     b.HasIndex("DeploymentId")
                         .HasDatabaseName("ix_strategy_instances_deployment_id");
 
-                    b.HasIndex("VersionHash")
+                    b.HasIndex("VersionHash", "DeployedBy")
                         .IsUnique()
                         .HasDatabaseName("ix_strategy_instances_running_version")
                         .HasFilter("lifecycle_state = 'RUNNING'");

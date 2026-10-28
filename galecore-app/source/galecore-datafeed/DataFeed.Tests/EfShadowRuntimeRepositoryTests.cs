@@ -271,17 +271,39 @@ public class EfShadowRuntimeRepositoryTests
     }
 
     [PostgresFact]
-    public void TwoOwners_SameVersion_SecondDeployIsRejected_NotAdopted()
+    public void TwoOwners_SameVersion_BothRunTheirOwnInstance()
     {
         FreshRepository();
         var ana = Guid.NewGuid();
         var beto = Guid.NewGuid();
-        DeployAs(BootAs(ana, out _), ana, "shadow_runtime_test_v1");
+        var a = DeployAs(BootAs(ana, out _), ana, "shadow_runtime_test_v1");
         var betoStore = BootAs(beto, out _);
 
-        var ex = Assert.Throws<ShadowRuntimeConflictException>(() => DeployAs(betoStore, beto, "shadow_runtime_test_v1"));
-        Assert.Contains("Otra cuenta", ex.Message);
-        Assert.Empty(betoStore.AllInstances());           // no adoptó la instancia de Ana
+        var b = DeployAs(betoStore, beto, "shadow_runtime_test_v1");
+
+        Assert.NotEqual(a.InstanceId, b.InstanceId);
+        using var check = new GaleCoreDbContext(Options());
+        var running = check.StrategyInstances.Where(i => i.LifecycleState == "RUNNING").ToList();
+        Assert.Equal(2, running.Count);
+        Assert.Equal(ana.ToString(), running.Single(i => i.Id == Guid.Parse(a.InstanceId)).DeployedBy);
+        Assert.Equal(beto.ToString(), running.Single(i => i.Id == Guid.Parse(b.InstanceId)).DeployedBy);
+        Assert.Equal(new[] { b.InstanceId }, BootAs(beto, out _).RunningInstances().Select(i => i.InstanceId));
+    }
+
+    [PostgresFact]
+    public void SameOwner_SameVersionTwice_AdoptsTheExistingInstance()
+    {
+        FreshRepository();
+        var ana = Guid.NewGuid();
+        var store = BootAs(ana, out _);
+        var a = DeployAs(store, ana, "shadow_runtime_test_v1");
+
+        var again = DeployAs(BootAs(ana, out _), ana, "shadow_runtime_test_v1");
+
+        using var check = new GaleCoreDbContext(Options());
+        Assert.Equal(1, check.StrategyInstances.Count(i => i.LifecycleState == "RUNNING"));
+        Assert.Equal(a.InstanceId, Assert.Single(BootAs(ana, out _).RunningInstances()).InstanceId);
+        Assert.NotEqual(a.InstanceId, again.InstanceId);   // DeployAs devuelve la que se intentó; la guardada es la primera
     }
 
     [PostgresFact]

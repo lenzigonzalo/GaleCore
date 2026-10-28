@@ -145,10 +145,11 @@ namespace DataFeed.Repositories
                 e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
                 e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
                 e.HasOne(x => x.Deployment).WithMany().HasForeignKey(x => x.DeploymentId).OnDelete(DeleteBehavior.Cascade);
-                // Varias instancias RUNNING, como máximo UNA por versión (P1-07; antes una sola, GC-0004): dos
-                // de la misma versión evaluarían dos veces. Lo garantiza la base —igual que la cuenta de
-                // sistema— porque un lock en memoria no alcanza con dos procesos.
-                e.HasIndex(x => x.VersionHash)
+                e.Property(x => x.DeployedBy).HasMaxLength(80).IsRequired().HasDefaultValue("SYSTEM");
+                // Varias instancias RUNNING, como máximo UNA por versión y por dueño (P1-07): dos de la misma versión
+                // del mismo dueño evaluarían dos veces; dos dueños pueden correr la misma versión porque cada API
+                // evalúa sólo lo suyo. Lo garantiza la base porque un lock en memoria no alcanza con dos procesos.
+                e.HasIndex(x => new { x.VersionHash, x.DeployedBy })
                  .IsUnique()
                  .HasFilter("lifecycle_state = 'RUNNING'")
                  .HasDatabaseName("ix_strategy_instances_running_version");

@@ -98,6 +98,7 @@ namespace DataFeed.Application.App.Runtime
                     SchedulerState = instance.SchedulerState,
                     SpecName = instance.SpecName,
                     Mode = instance.Mode,
+                    DeployedBy = deployment.DeployedBy,
                     CreatedAt = Utc(instance.CreatedAt),
                     UpdatedAt = Utc(instance.UpdatedAt),
                 });
@@ -109,18 +110,14 @@ namespace DataFeed.Application.App.Runtime
                 }
                 catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505", ConstraintName: "ix_strategy_instances_running_version" })
                 {
-                    // Otro proceso ganó: no queda nada de este intento; se devuelve la suya.
+                    // Otro proceso del mismo dueño ganó: no queda nada de este intento; se devuelve la suya.
                 }
             }
             using var read = _newContext();
             var running = read.StrategyInstances.AsNoTracking()
-                .FirstOrDefault(i => i.VersionHash == instance.VersionHash && i.LifecycleState == "RUNNING");
+                .FirstOrDefault(i => i.VersionHash == instance.VersionHash && i.LifecycleState == "RUNNING" && i.DeployedBy == deployment.DeployedBy);
             if (running == null)
                 throw new InvalidOperationException($"la base rechazó la instancia de {instance.VersionHash} pero no hay otra RUNNING");
-            // Con dueño fijado, la RUNNING de esa versión tiene que ser suya: si es de otra cuenta no se la adopta
-            // (la evaluarían dos APIs); el índice único es por versión, no por usuario.
-            if (_owner.IsScoped && !OwnedInstances(read).Any(i => i.Id == running.Id))
-                throw new ShadowRuntimeConflictException(ShadowRuntimeOwner.SameVersionElsewhereMessage, new InvalidOperationException(instance.VersionHash));
             return ToContract(running);
         }
 
@@ -131,7 +128,9 @@ namespace DataFeed.Application.App.Runtime
             var row = db.StrategyInstances.Find(id);
             if (row == null)
             {
-                row = new StrategyInstanceEntity { Id = id, CreatedAt = Utc(instance.CreatedAt) };
+                var deploymentId = Guid.Parse(instance.DeploymentId);
+                var deployedBy = db.StrategyDeployments.Where(d => d.Id == deploymentId).Select(d => d.DeployedBy).FirstOrDefault();
+                row = new StrategyInstanceEntity { Id = id, CreatedAt = Utc(instance.CreatedAt), DeployedBy = deployedBy ?? "SYSTEM" };
                 db.StrategyInstances.Add(row);
             }
             row.DeploymentId = Guid.Parse(instance.DeploymentId);
