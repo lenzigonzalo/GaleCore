@@ -315,6 +315,12 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
     Es el único endpoint de `/App/GaleCore/*`: `MacroRegime`, `ValidationLayer`, `PositionBuilder` y
     `Rules/{Live,Paper}` se eliminaron con la estrategia v1.4.0 (2026-08-06). Lo que hacía
     `ValidationLayer` en vivo hoy lo hace el loop de RPF; los `structureInputs` los expone `/App/Gex/Analysis`.
+  * Proyectos compartidos (WS-0064 Fase 2a), `/App/GaleCore/SharedProjects` (JWT; tag `App.GaleCore`). Cada usuario guarda sus proyectos en su PC; la API sólo intercambia cambios entre miembros. Quien no es miembro recibe 404.
+    - `POST` `{name, kind: workspace|strategy, localKey}` → 201 (quien crea queda owner). `GET` → mis proyectos con `members` y `lastSeq`. `DELETE /{id}` → owner (borra miembros y cambios).
+    - `POST /{id}/members` `{username}` / `DELETE /{id}/members/{username}` → sólo owner (403 si no); 404 usuario inexistente; idempotente; el owner no se saca a sí mismo.
+    - `GET /{id}/changes?after={seq}` → cambios con `seq` mayor, en orden, hasta 500 + `hasMore`. `seq` es global y creciente: es el cursor de sync.
+    - `POST /{id}/changes` `{path, op: put|delete, encoding: utf8|base64, content, baseHash}` → 201 `{seq, contentHash}`; el hash lo calcula el servidor (sha256 hex de los bytes decodificados, tope 2 MB). `path` relativo POSIX (sin `/` inicial, sin `..`, sin `\`, hasta 400). Conflicto: el último cambio de esa ruta es put y `baseHash` no es su hash (o es null) → 409 `{latest}`; sin último o último delete, `baseHash` debe ser null. Un put con el mismo hash que el último → 200 con el `seq` existente (no-op).
+    - Tablas `shared_projects`, `shared_project_members`, `shared_project_changes` (migración `AddSharedProjects`).
   * WebSocket `/hubs/marketdata`:
     - `Subscribe(symbol, includeGreeks)` → `ReceiveTrade`, `ReceiveQuote` (precio); con `includeGreeks=true` también `ReceiveGreeks` (delta/gamma/theta/vega/IV por opción). Los legs del Monitor se suscriben con `includeGreeks=true`.
     **Se eliminó `SubscribeFlow`/`ReceiveFlow` el 2026-08-12** junto con todo el pipeline de flow

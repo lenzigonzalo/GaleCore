@@ -33,6 +33,9 @@ namespace DataFeed.Repositories
         public DbSet<User> Users => Set<User>();
         public DbSet<Account> Accounts => Set<Account>();
         public DbSet<TraderSpaceItem> TraderSpaceItems => Set<TraderSpaceItem>();
+        public DbSet<SharedProject> SharedProjects => Set<SharedProject>();
+        public DbSet<SharedProjectMember> SharedProjectMembers => Set<SharedProjectMember>();
+        public DbSet<SharedProjectChange> SharedProjectChanges => Set<SharedProjectChange>();
         public DbSet<StrategySettingEntity> StrategySettings => Set<StrategySettingEntity>();
 
         // ── Runtime (Trading Runtime SHADOW) ──
@@ -237,6 +240,58 @@ namespace DataFeed.Repositories
                 e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
                 e.HasIndex(x => new { x.OwnerId, x.Kind, x.Key }).IsUnique();
                 e.HasIndex(x => x.Visibility);
+            });
+            // Proyectos compartidos (WS-0064 Fase 2a): sólo un intercambio de cambios entre miembros; el proyecto vive en la
+            // PC de cada uno. Los CHECK están también en la base porque una escritura a mano no pasa por la app.
+            b.Entity<SharedProject>(e =>
+            {
+                e.ToTable("shared_projects", t =>
+                {
+                    t.HasCheckConstraint("ck_shared_projects_kind", "kind IN ('" + string.Join("','", SharedProject.Kinds) + "')");
+                });
+                e.HasKey(x => x.Id);
+                e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
+                e.Property(x => x.Name).HasMaxLength(SharedProject.MaxNameLength).IsRequired();
+                e.Property(x => x.Kind).HasMaxLength(20).IsRequired();
+                e.Property(x => x.LocalKey).HasMaxLength(SharedProject.MaxLocalKeyLength).IsRequired();
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+                e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);
+                e.HasIndex(x => x.OwnerId);
+            });
+            b.Entity<SharedProjectMember>(e =>
+            {
+                e.ToTable("shared_project_members", t =>
+                {
+                    t.HasCheckConstraint("ck_shared_project_members_role", "role IN ('" + string.Join("','", SharedProjectMember.Roles) + "')");
+                });
+                e.HasKey(x => new { x.ProjectId, x.UserId });
+                e.Property(x => x.Role).HasMaxLength(10).IsRequired();
+                e.Property(x => x.AddedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Project).WithMany(p => p.Members).HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
+                e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+                e.HasIndex(x => x.UserId);
+            });
+            b.Entity<SharedProjectChange>(e =>
+            {
+                e.ToTable("shared_project_changes", t =>
+                {
+                    t.HasCheckConstraint("ck_shared_project_changes_op", "op IN ('" + string.Join("','", SharedProjectChange.Ops) + "')");
+                    t.HasCheckConstraint("ck_shared_project_changes_encoding", "encoding IN ('" + string.Join("','", SharedProjectChange.Encodings) + "')");
+                    t.HasCheckConstraint("ck_shared_project_changes_path", "path !~ '^/' AND position(chr(92) in path) = 0 AND path !~ '(^|/)[.][.](/|$)' AND length(path) <= " + SharedProjectChange.MaxPathLength);
+                });
+                e.HasKey(x => x.Seq);
+                e.Property(x => x.Seq).UseIdentityAlwaysColumn();
+                e.Property(x => x.Path).HasMaxLength(SharedProjectChange.MaxPathLength).IsRequired();
+                e.Property(x => x.Op).HasMaxLength(10).IsRequired();
+                e.Property(x => x.Encoding).HasMaxLength(10).IsRequired();
+                e.Property(x => x.ContentHash).HasMaxLength(64);
+                e.Property(x => x.BaseHash).HasMaxLength(64);
+                e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
+                e.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
+                e.HasOne(x => x.Author).WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.Cascade);
+                e.HasIndex(x => new { x.ProjectId, x.Seq });
+                e.HasIndex(x => new { x.ProjectId, x.Path, x.Seq });
             });
 
         }
