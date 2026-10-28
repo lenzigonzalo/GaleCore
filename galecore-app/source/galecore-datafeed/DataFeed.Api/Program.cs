@@ -221,6 +221,22 @@ namespace DataFeed
             // Trading Runtime SHADOW (Phase 1) — store in-memory + loops. Arranca INERTE (switch OFF).
             // Namespace separado (App.Runtime), switches independientes, sin FK a users/accounts.
             builder.Services.AddSingleton<DataFeed.Application.App.Runtime.ShadowRuntimeStore>();
+            // Runtime:OwnerUserId (opcional): esta API sólo corre las estrategias SHADOW de ese usuario (dos APIs, una base).
+            // Runtime:OwnerUsername es lo mismo dicho con el username (lo usa el script de desarrollo y el instalador, que no
+            // conocen el id): se resuelve contra la tabla de usuarios. Si no se puede resolver la API NO arranca: sin
+            // dueño correría todas las instancias y duplicaría las del otro.
+            var runtimeOwnerId = builder.Configuration.GetValue<Guid?>(DataFeed.Application.App.Runtime.ShadowRuntimeOwner.ConfigKey);
+            var runtimeOwnerName = builder.Configuration["Runtime:OwnerUsername"];
+            if (runtimeOwnerId == null && !string.IsNullOrWhiteSpace(runtimeOwnerName))
+            {
+                if (!dbConfigured) throw new InvalidOperationException("Runtime:OwnerUsername requiere ConnectionStrings:GaleCore");
+                using var ownerDb = new GaleCoreDbContext(new DbContextOptionsBuilder<GaleCoreDbContext>()
+                    .UseNpgsql(galeCoreDb).UseSnakeCaseNamingConvention().Options);
+                var wanted = runtimeOwnerName.Trim().ToLower();
+                runtimeOwnerId = ownerDb.Users.AsNoTracking().Where(u => u.Username.ToLower() == wanted).Select(u => (Guid?)u.Id).FirstOrDefault()
+                    ?? throw new InvalidOperationException($"Runtime:OwnerUsername: no existe el usuario '{runtimeOwnerName}' en la base");
+            }
+            builder.Services.AddSingleton(new DataFeed.Application.App.Runtime.ShadowRuntimeOwner(runtimeOwnerId));
             builder.Services.AddSingleton<RuntimeStrategySwitch>();
             builder.Services.AddSingleton<ShadowRuntimePersistenceStatus>();
             builder.Services.AddHostedService<ShadowEntryLoopService>();
@@ -380,7 +396,10 @@ namespace DataFeed
                         var dbOptions = new DbContextOptionsBuilder<GaleCoreDbContext>()
                             .UseNpgsql(galeCoreDb).UseSnakeCaseNamingConvention().Options;
                         var repository = new DataFeed.Application.App.Runtime.EfShadowRuntimeRepository(
-                            () => new GaleCoreDbContext(dbOptions));
+                            () => new GaleCoreDbContext(dbOptions),
+                            app.Services.GetRequiredService<DataFeed.Application.App.Runtime.ShadowRuntimeOwner>());
+                        if (app.Services.GetRequiredService<DataFeed.Application.App.Runtime.ShadowRuntimeOwner>().IsScoped)
+                            runtimeLog.LogInformation("Runtime SHADOW de un solo usuario ({Key}): sólo se recuperan y corren sus estrategias", DataFeed.Application.App.Runtime.ShadowRuntimeOwner.ConfigKey);
                         var report = DataFeed.Application.App.Runtime.ShadowRuntimeRecovery.Recover(runtimeStore, repository, specResults);
                         persistence.MarkAvailable(report, repository);
                         runtimeLog.LogInformation(

@@ -64,3 +64,11 @@ class RuntimePersistenceFlagTests(unittest.TestCase):
     def test_second_operator_turns_it_off(self):
         env = dev.api_env({**self.BASE, "runtime_persistence": False})
         self.assertEqual(env["Runtime__Persistence__Enabled"], "false")
+
+    def test_owner_username_is_passed_to_the_api(self):
+        env = dev.api_env({**self.BASE, "runtime_owner_username": "ana"})
+        self.assertEqual(env["Runtime__OwnerUsername"], "ana")
+        self.assertEqual(env["Runtime__Persistence__Enabled"], "true")
+
+    def test_no_owner_username_no_key(self):
+        self.assertNotIn("Runtime__OwnerUsername", dev.api_env(dict(self.BASE)))

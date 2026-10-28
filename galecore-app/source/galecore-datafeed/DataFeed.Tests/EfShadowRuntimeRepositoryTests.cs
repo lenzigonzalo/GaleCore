@@ -215,6 +215,89 @@ public class EfShadowRuntimeRepositoryTests
         Assert.False(check.OperationalEvents.Any(e => e.InstanceId == Guid.Parse(other.InstanceId)));
     }
 
+    private static StrategyInstance DeployAs(ShadowRuntimeStore store, Guid user, string specName)
+    {
+        var spec = store.GetSpec(specName)!;
+        var instance = new StrategyInstance
+        {
+            InstanceId = Guid.NewGuid().ToString(), DeploymentId = Guid.NewGuid().ToString(), VersionHash = spec.ContentHash!,
+            SpecName = specName, LifecycleState = "RUNNING", SchedulerState = "IDLE", Mode = "SHADOW", CreatedAt = Now, UpdatedAt = Now,
+        };
+        _ = store.DeployOrGetRunning(
+            new StrategyDeployment { DeploymentId = instance.DeploymentId, VersionHash = instance.VersionHash, DeployedAt = Now, DeployedBy = user.ToString() },
+            instance,
+            new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = instance.InstanceId, EventType = "INSTANCE_CREATED", Timestamp = Now,
+                Payload = new() { ["spec_name"] = specName, ["version_hash"] = instance.VersionHash } });
+        return instance;
+    }
+
+    private static ShadowRuntimeStore BootAs(Guid? owner, out EfShadowRuntimeRepository repo)
+    {
+        repo = new EfShadowRuntimeRepository(() => new GaleCoreDbContext(Options()), new ShadowRuntimeOwner(owner));
+        var files = new Dictionary<string, SpecLoadResult>
+        {
+            ["shadow_runtime_test_v1"] = SpecFile(), ["shadow_runtime_test_v2"] = SpecFile("shadow_runtime_test_v2"),
+        };
+        var store = new ShadowRuntimeStore();
+        foreach (var (name, r) in files) store.RegisterSpec(name, r.Spec!);
+        ShadowRuntimeRecovery.Recover(store, repo, files);
+        return store;
+    }
+
+    [PostgresFact]
+    public void TwoOwners_OneDatabase_EachRecoversOnlyItsOwn_AndNeverWritesTheOthers()
+    {
+        FreshRepository();
+        var ana = Guid.NewGuid();
+        var beto = Guid.NewGuid();
+        var anaStore = BootAs(ana, out _);
+        var a = DeployAs(anaStore, ana, "shadow_runtime_test_v1");
+        var betoStore = BootAs(beto, out _);
+        Assert.Empty(betoStore.AllInstances());          // no ve la de Ana
+        var b = DeployAs(betoStore, beto, "shadow_runtime_test_v2");
+
+        // "Reinicio" de ambas: cada una retoma sólo lo suyo; el runtime sin dueño (producción) ve todo.
+        Assert.Equal(new[] { a.InstanceId }, BootAs(ana, out _).AllInstances().Select(i => i.InstanceId));
+        Assert.Equal(new[] { b.InstanceId }, BootAs(beto, out _).RunningInstances().Select(i => i.InstanceId));
+        Assert.Equal(2, BootAs(null, out _).AllInstances().Count);
+
+        // Parar la suya no toca la del otro.
+        var betoAgain = BootAs(beto, out _);
+        betoAgain.Stop(b.InstanceId, new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = b.InstanceId, EventType = "INSTANCE_STOPPED", Timestamp = Now });
+        Assert.Equal(StopResult.KindNotFound, betoAgain.Stop(a.InstanceId, new OperationalEvent { EventId = Guid.NewGuid().ToString(), InstanceId = a.InstanceId, EventType = "INSTANCE_STOPPED", Timestamp = Now }).Kind);
+        using var check = new GaleCoreDbContext(Options());
+        Assert.Equal("RUNNING", check.StrategyInstances.Single(i => i.Id == Guid.Parse(a.InstanceId)).LifecycleState);
+        Assert.Equal("STOPPED", check.StrategyInstances.Single(i => i.Id == Guid.Parse(b.InstanceId)).LifecycleState);
+    }
+
+    [PostgresFact]
+    public void TwoOwners_SameVersion_SecondDeployIsRejected_NotAdopted()
+    {
+        FreshRepository();
+        var ana = Guid.NewGuid();
+        var beto = Guid.NewGuid();
+        DeployAs(BootAs(ana, out _), ana, "shadow_runtime_test_v1");
+        var betoStore = BootAs(beto, out _);
+
+        var ex = Assert.Throws<ShadowRuntimeConflictException>(() => DeployAs(betoStore, beto, "shadow_runtime_test_v1"));
+        Assert.Contains("Otra cuenta", ex.Message);
+        Assert.Empty(betoStore.AllInstances());           // no adoptó la instancia de Ana
+    }
+
+    [PostgresFact]
+    public void ScopedMetricsInputs_ListOnlyTheOwnersInstances()
+    {
+        FreshRepository();
+        var ana = Guid.NewGuid();
+        var beto = Guid.NewGuid();
+        DeployAs(BootAs(ana, out _), ana, "shadow_runtime_test_v1");
+        DeployAs(BootAs(beto, out var betoRepo), beto, "shadow_runtime_test_v2");
+
+        Assert.Equal("shadow_runtime_test_v2", Assert.Single(betoRepo.LoadMetricsInputs()).SpecName);
+        BootAs(null, out var all);
+        Assert.Equal(2, all.LoadMetricsInputs().Count);
+    }
+
     [PostgresFact]
     public void TwoVersions_RunAtTheSameTime_AndBothComeBackAfterRestart()
     {

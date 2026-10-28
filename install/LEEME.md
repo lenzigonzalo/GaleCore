@@ -63,9 +63,9 @@ dependencias sólo si cambiaron. Conserva lo ya cargado; con `-Reconfigurar` te 
 ## Qué no hace
 
 - No sube nada a la nube salvo los proyectos que vos compartas.
-- **SHADOW y RPF quedan apagados en tu API.** Sólo la API de Gonzalo corre las estrategias SHADOW contra Dev.
-  El instalador lo deja así de tres formas, todas locales: `runtime_persistence: false` en tu `env.json`
-  (tu API no recupera ni valúa las posiciones de Gonzalo y no puede desplegar estrategias), y los archivos de
-  estado `Files\Rpf\rpf_switch_state.json` y `Files\platform_services_switch_state.json` con `enabled: false`
-  (están ignorados por Git). No los prendas desde el monitor.
+- **SHADOW es tuyo, RPF queda apagado.** Tus estrategias SHADOW corren en tu PC mientras GaleCore está iniciado;
+  las de Gonzalo corren en la suya; no se mezclan. RPF queda apagado.
+  (El instalador guarda tu usuario como `runtime_owner_username` en tu `env.json`, y deja
+  `Files\Rpf
+pf_switch_state.json` con `enabled: false`; ambos están ignorados por Git.)
 - No carga tu cuenta de bróker ni opera: los datos de mercado vienen de tus credenciales de Tastytrade.
