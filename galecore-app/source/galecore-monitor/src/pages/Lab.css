@@ -477,3 +477,14 @@
 .lab-note-saved { display:inline-block; margin-top:6px; font-size:13px; color:var(--text-muted); }
 .lab-note-saved a { color:var(--text-primary); }
 .lab-chat-error-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin-top:8px; }
+/* WS-0067: segundo plano */
+.lab-tasks { display:grid; gap:6px; margin:10px 0 0; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--bg-secondary); }
+.lab-task { display:grid; grid-template-columns:14px minmax(0,1fr) auto; gap:4px 10px; align-items:baseline; font-size:14px; }
+.lab-task > i { width:8px; height:8px; border-radius:50%; background:var(--text-muted); align-self:center; }
+.lab-task.running > i { background:var(--green); animation:lab-pulse 1.2s ease-in-out infinite; }
+.lab-task.completed > i { background:var(--green); }
+.lab-task.failed > i, .lab-task.killed > i, .lab-task.stopped > i { background:var(--red, #ef4444); }
+.lab-task b { font-weight:500; color:var(--text-primary); } .lab-task small { color:var(--text-muted); font-size:13px; }
+.lab-task > span { color:var(--text-muted); font-size:13px; white-space:nowrap; }
+.lab-task code { grid-column:2 / 4; font-size:12.5px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@keyframes lab-pulse { 50% { opacity:.35; } }

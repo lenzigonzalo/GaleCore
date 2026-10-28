@@ -315,3 +315,16 @@ test('/skill y @agente: el Lab le indica al motor leer la pieza con space show, 
   assert.equal((await route(service,'GET','/chats/'+chat.id)).value.messages[0].text,'/valuar-empresa de AAPL con @oportunidades');   // el chat conserva lo que escribió
  }
 });
+test('segundo plano: subagentes y comandos en segundo plano salen de los eventos reales y los pasos del subagente no se mezclan (WS-0067)',()=>{
+ const events=fs.readFileSync(path.join(__dirname,'fixtures','eventos-reales-segundo-plano.jsonl'),'utf8').trim().split('\n').map(l=>JSON.parse(l));
+ const chat={messages:[],steps:[],tasks:[],turnStartedAt:1};const seen=[];
+ for(const e of events){consumeEvent(chat,e,'claude');seen.push(chat.tasks.map(t=>t.id.slice(0,4)+':'+t.status).join(','));}
+ const agent=chat.tasks.find(t=>t.kind==='agent'),cmd=chat.tasks.find(t=>t.kind==='command');
+ assert.equal(chat.tasks.length,2);                                   // la tarea interna del subagente (owned_by_subagent) no se muestra
+ assert.deepEqual([agent.label,agent.agentType,agent.status],['Contar archivos del directorio','Explore','completed']);
+ assert.equal(cmd.label,'Sleep 4 seconds in background');assert.equal(cmd.status,'completed');
+ assert.ok(agent.tools>=3&&agent.tokens>20000&&agent.last);            // progreso del subagente
+ assert.match(agent.summary,/720/);
+ assert.ok(seen.some(s=>/ab4e:running/.test(s)&&/bpmv:running/.test(s)));   // los dos corrieron a la vez
+ assert.ok(!(chat.steps||[]).some(s=>/find |PowerShell|Measure-Object/.test(s.detail||'')));   // los pasos internos del subagente no van a los pasos del chat
+});

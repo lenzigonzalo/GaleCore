@@ -14,6 +14,7 @@ import { LabFiles } from '../components/lab/LabFiles';
 import { Mention, filterMentions, findTrigger, mentionsFromSpace, mentionsIn, Trigger } from '../components/lab/labMentions';
 import { fetchSpace } from '../api/space';
 import { saveNote } from '../components/lab/labNotes';
+import { LabTasks } from '../components/lab/LabTasks';
 import { LabUsage } from '../components/lab/LabUsage';
 import { LabFilePanel } from '../components/lab/LabFilePanel';
 import { LabShell } from '../components/lab/LabShell';
@@ -456,6 +457,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
               : <span key={i} className={i === last ? 'lab-step-now' : 'lab-step-done'}>{i === last ? <i/> : <b>●</b>}<span>{st.label}{i === last ? '…' : ''}</span>{st.detail && <code>{st.detail}</code>}</span>)}
               {(last < 0 || steps[last].kind === 'note') && <span className="lab-step-now"><i/><span>{chat.activity && chat.activity !== 'Trabajando' ? chat.activity : 'Pensando'}…</span></span>}</>; })()}
         </div>}
+        {chat?.state==='running' && <LabTasks tasks={chat.tasks}/>}
         {chat?.state==='running' && chat.permission && <div className="lab-permission" role="alertdialog" aria-label="Pedido de permiso"><p>Necesita tu permiso: <strong>{chat.permission.label === 'Trabajando' ? chat.permission.tool : chat.permission.label}</strong></p>{chat.permission.detail && <code>{chat.permission.detail}</code>}<div><button type="button" className="primary" disabled={answering} onClick={() => void answerPermission('allow')}>Permitir</button>{chat.permission.always && <button type="button" disabled={answering} onClick={() => void answerPermission('always')}>Permitir y no volver a preguntar</button>}<button type="button" disabled={answering} onClick={() => void answerPermission('deny')}>No permitir</button></div></div>}
         {chat?.state!=='running' && chat?.notice && !chat?.error && <div className="lab-chat-notice" role="status">{chat.notice}</div>}
         {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}{error && <button onClick={refresh}>Reintentar conexión</button>}{!error && chat?.state==='failed' && <span className="lab-chat-error-actions"><button type="button" onClick={retryLast}>Reintentar</button>{limitAt > Date.now() && (resume?.chatId === chat.id ? <><span>Se reenvía solo a las {clock(resume.at)}, mientras esta pestaña esté abierta.</span><button type="button" onClick={() => setResume(null)}>Cancelar</button></> : <button type="button" onClick={() => setResume({ chatId: chat.id, at: limitAt })}>Reanudar a las {clock(limitAt)}</button>)}</span>}</div>}

@@ -138,6 +138,21 @@ function mentionLine(list){
   if(!items.length)return '';
   return '[El trader indicó: '+items.map(m=>(m.kind==='skill'?'aplicá la skill «':'trabajá con el agente «')+m.title+'» (leela con `space show '+m.kind+'/'+m.key+'` y seguila)').join('; ')+'.]';
 }
+// Segundo plano (WS-0067). Claude informa los subagentes y los comandos en segundo plano con eventos `system`
+// (`task_started`, `task_progress`, `task_updated`, `task_notification`; los pasos del subagente traen `parent_tool_use_id`).
+// Las tareas internas de un subagente (`owned_by_subagent`) no se muestran. Codex no informa nada parecido.
+function consumeTask(chat,event){
+  const tasks=chat.tasks||(chat.tasks=[]);
+  const find=id=>tasks.find(t=>t.id===id);
+  if(event.subtype==='task_started'&&!event.owned_by_subagent&&event.task_id){
+    if(!find(event.task_id))tasks.push({id:event.task_id,kind:event.task_type==='local_agent'?'agent':'command',label:String(event.description||'').slice(0,120),...(event.subagent_type?{agentType:String(event.subagent_type)}:{}),status:'running'});
+    if(tasks.length>12)tasks.splice(0,tasks.length-12);
+  }
+  const t=find(event.task_id);if(!t)return;
+  if(event.subtype==='task_progress'){t.last=String(event.description||'').slice(0,110);if(num(event.usage?.total_tokens)!==undefined)t.tokens=event.usage.total_tokens;if(num(event.usage?.tool_uses)!==undefined)t.tools=event.usage.tool_uses;}
+  if(event.subtype==='task_updated'&&event.patch?.status)t.status=String(event.patch.status);
+  if(event.subtype==='task_notification'){t.status=String(event.status||'completed');if(event.summary)t.summary=String(event.summary).slice(0,200);}
+}
 function consumeEvent(chat, event, provider) {
   if(provider === 'codex') {
     if(event.type === 'thread.started') chat.nativeId = event.thread_id;
@@ -155,7 +170,8 @@ function consumeEvent(chat, event, provider) {
     if(event.type === 'turn.failed' || event.type === 'error') chat.error = event.error?.message || event.message || 'El motor no pudo completar el pedido.';
   } else {
     if(event.session_id) chat.nativeId = event.session_id;
-    if(event.type === 'assistant') {
+    if(event.type === 'system' && /^task_/.test(event.subtype||'')) consumeTask(chat,event);
+    if(event.type === 'assistant' && !event.parent_tool_use_id) {
       // WS-0027: los textos intermedios son narración interna («Now try the CLI…»), llegan en eventos propios y no
       // van al chat. En el chat queda sólo la respuesta final del turno (evento `result`).
       // Owner 19/10: la narración intermedia no va al chat como mensaje, pero sí a los pasos, como en Claude Code.
@@ -379,7 +395,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(chat.model === undefined || chat.effort === undefined){Object.assign(chat,normalize(chat.provider,chat),{selectionSource:'legacy-fallback'});saveChat(chat);}
     const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()};chat.messages.push(ask);
     if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
-    chat.state='running';chat.error=null;chat.notice=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
+    chat.state='running';chat.error=null;chat.notice=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];chat.tasks=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'galecore-lab','skills','lab-strategy-bootstrap','SKILL.md');
     // El método de diseño es una sola copia, en galecore-ai/config/skills.
     const designSkill=path.join(root,'galecore-ai','config','skills','strategy-design','SKILL.md');
@@ -396,7 +412,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       ?' Antes de responder, reescribí el mapa del proyecto ('+(existingMapa?'el que ya existe es '+path.join(p.dir,existingMapa)+' (ruta exacta, no la adivines)':'todavía no hay: creá '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md'))+') con el formato de «Mapa de la idea» (en el método de ideas y estrategias del contexto), aunque nada haya cambiado: pasá lo que ya estaba a sus 8 partes.'
       :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea», '+path.join(root,'galecore-ai','config','skills','strategy-design','method.md')+') en '+path.join(p.dir,existingMapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});sharing.sync(p,{busy}).catch(()=>null).then(()=>script('commit_knowledge.py',{cwd:p.dir}));}
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});sharing.sync(p,{busy}).catch(()=>null).then(()=>script('commit_knowledge.py',{cwd:p.dir}));}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide el arnés de pruebas, sea cual sea el motor
