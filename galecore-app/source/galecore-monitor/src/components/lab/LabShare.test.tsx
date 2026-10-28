@@ -78,3 +78,58 @@ test('sin proyecto compartido no hay «Sincronizar ahora»', async () => {
   await screen.findByLabelText('Usuario de GaleCore');
   expect(screen.queryByRole('button', { name: 'Sincronizar ahora' })).toBeNull();
 });
+
+describe('sugerencias de usuarios', () => {
+  const users = [{ username: 'elenzi', displayName: 'Eric Lenzi' }, { username: 'elena', displayName: null }, { username: 'demo', displayName: 'Demo' }];
+  const setup = (search: () => Promise<unknown>) => {
+    request.mockImplementation((url: string) => url.endsWith('/sharing') ? Promise.resolve({ shared: false, members: [] })
+      : url.startsWith('/workspaces/users') ? search() : Promise.resolve({ shared: true, mine: true, members }));
+    render(<LabShare project={project} onClose={jest.fn()} onChanged={jest.fn()}/>);
+    return screen.findByLabelText('Usuario de GaleCore');
+  };
+  const type = (input: HTMLElement, value: string) => fireEvent.change(input, { target: { value } });
+
+  test('al escribir ofrece usuarios (con espera) y elegir con clic completa el usuario', async () => {
+    const input = await setup(() => Promise.resolve({ users }));
+    type(input, 'elen');
+    expect(request).not.toHaveBeenCalledWith(expect.stringContaining('/workspaces/users'), undefined, expect.anything());   // antes de la pausa
+    expect(await screen.findByRole('option', { name: /elenzi/ })).toHaveTextContent('Eric Lenzi');
+    expect(request).toHaveBeenCalledWith('/workspaces/users?q=elen', undefined, expect.any(Number));
+    fireEvent.mouseDown(screen.getByRole('option', { name: /elenzi/ }));
+    expect(input).toHaveValue('elenzi');
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  test('con el teclado: flechas y Enter eligen; sin opción activa, Enter comparte lo escrito', async () => {
+    const input = await setup(() => Promise.resolve({ users }));
+    type(input, 'ele');
+    await screen.findByRole('listbox');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getByRole('option', { name: /elena/ })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(input).toHaveValue('elenzi');
+    expect(request).not.toHaveBeenCalledWith('/workspaces/idea/share', expect.anything(), expect.anything());
+  });
+
+  test('no ofrece a quien ya es miembro y, si la búsqueda falla, queda el texto libre', async () => {
+    request.mockImplementation((url: string) => url.endsWith('/sharing') ? Promise.resolve({ shared: true, mine: true, members: [{ username: 'demo', role: 'owner' }] })
+      : Promise.resolve({ users }));
+    render(<LabShare project={project} onClose={jest.fn()} onChanged={jest.fn()}/>);
+    await screen.findByText('Demo');
+    type(screen.getByLabelText('Usuario de GaleCore'), 'e');
+    type(screen.getByLabelText('Usuario de GaleCore'), 'el');
+    await screen.findByRole('listbox');
+    expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['elenziEric Lenzi', 'elena']);
+  });
+
+  test('si la búsqueda falla se puede escribir el usuario completo igual', async () => {
+    const input = await setup(() => Promise.reject(new Error('sin conexión')));
+    type(input, 'gonza');
+    await waitFor(() => expect(request).toHaveBeenCalledWith('/workspaces/users?q=gonza', undefined, expect.any(Number)));
+    expect(screen.queryByRole('listbox')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Compartir' }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith('/workspaces/idea/share', { username: 'gonza' }, expect.any(Number)));
+  });
+});

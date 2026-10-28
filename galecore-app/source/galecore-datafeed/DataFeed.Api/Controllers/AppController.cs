@@ -589,6 +589,26 @@ namespace DataFeed.Controllers
             c.Seq, c.Path, c.Op, c.Encoding, c.Content, c.ContentHash, c.BaseHash, author, c.CreatedAt,
         };
 
+        /// <summary>Sugerencias de usuarios para compartir un proyecto: usuario y nombre, nunca el mail. Cualquier usuario autenticado.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/Users/Search")]
+        public async Task<IActionResult> SearchUsersAsync(
+            [FromQuery] string? q,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            var text = DataFeed.Repositories.Entities.UserSearch.Normalize(q);
+            if (text == null) return Ok(new { users = Array.Empty<object>() });
+            var found = await Task.Run(() => DataFeed.Repositories.Entities.UserSearch.Find(db.Users.AsNoTracking(), text, userId.Value), ct);
+            return Ok(new { users = found.Select(u => new { username = u.Username, displayName = u.DisplayName }) });
+        }
+
         /// <summary>Crea un proyecto compartido; quien lo crea queda como owner.</summary>
         [Microsoft.AspNetCore.Authorization.Authorize]
         [Tags("App.GaleCore")]
