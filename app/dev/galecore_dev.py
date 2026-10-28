@@ -191,7 +191,9 @@ def api_env(env: dict) -> dict:
         "ConnectionStrings__GaleCore": cs(env, "galecore_api", "api_password", port=6543),
         "Supabase__Issuer": env["supabase_url"] + "/auth/v1",
         "Supabase__AnonKey": env["anon_key"],
-        "Runtime__Persistence__Enabled": "true",
+        # Un segundo operador contra la misma base Dev pone "runtime_persistence": false en su env.json: su API no
+        # recupera ni valúa las instancias SHADOW del owner ni puede desplegar (sólo la API del owner corre SHADOW).
+        "Runtime__Persistence__Enabled": "false" if env.get("runtime_persistence") is False else "true",
         **({"Security__TokenProtectionKey": env["token_protection_key"]}
            if env.get("token_protection_key") else {}),
         # Cuenta que usan los procesos sin usuario (loop de RPF) para leer posiciones y saldos; en env.json, fuera de git (WS-0036).

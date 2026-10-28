@@ -52,3 +52,15 @@ class BrokerEncryptionConfigTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RuntimePersistenceFlagTests(unittest.TestCase):
+    BASE = {"supabase_url": "https://x.supabase.co", "project_ref": "x", "anon_key": "a",
+            "pooler_host": "h", "api_password": "p"}
+
+    def test_persistence_on_by_default(self):
+        self.assertEqual(dev.api_env(dict(self.BASE))["Runtime__Persistence__Enabled"], "true")
+
+    def test_second_operator_turns_it_off(self):
+        env = dev.api_env({**self.BASE, "runtime_persistence": False})
+        self.assertEqual(env["Runtime__Persistence__Enabled"], "false")
