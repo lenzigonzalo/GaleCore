@@ -13,6 +13,7 @@ const fail = (message, status = 400) => Object.assign(new Error(message), { stat
 function createSharing({ root, kb, environment, execute }) {
   const running = new Map();   // proyecto -> promesa de su sync en curso (nunca dos a la vez sobre la misma carpeta)
   const notices = new Map();   // proyecto -> { at, conflicts } hasta que el usuario lo cierra
+  const lastRun = new Map();   // proyecto -> hora de su última sincronización
 
   const isShared = p => !!p.dir && fs.existsSync(path.join(p.dir, SYNC_FILE));
   const state = p => { try { return JSON.parse(fs.readFileSync(path.join(p.dir, SYNC_FILE), 'utf8')); } catch { return null; } };
@@ -34,9 +35,13 @@ function createSharing({ root, kb, environment, execute }) {
   }
 
   // `busy(p)`: hay un turno del motor escribiendo en el proyecto; traer cambios ajenos en ese momento los pisaría.
-  function sync(p, { busy = () => false } = {}) {
+  // `minInterval`: las sincronizaciones «de cortesía» (al abrir el proyecto) no se repiten antes de ese tiempo: cada una
+  // inicia sesión en GaleCore y el login tiene límite (10 cada 5 minutos). La de fin de turno y la manual no lo usan.
+  function sync(p, { busy = () => false, minInterval = 0 } = {}) {
     if (!isShared(p)) return Promise.resolve(null);
     if (running.has(p.id)) return running.get(p.id);
+    if (minInterval && Date.now() - (lastRun.get(p.id) || 0) < minInterval) return Promise.resolve({ recent: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });
+    lastRun.set(p.id, Date.now());
     if (busy(p)) return Promise.resolve({ busy: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });
     const job = cli(['project', 'sync', p.id]).then(summary => { remember(p, summary); return summary; })
       .finally(() => running.delete(p.id));

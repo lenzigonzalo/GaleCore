@@ -231,3 +231,9 @@ test('failed account read keeps favorites local and never overwrites remote pref
   expect(screen.getAllByRole('status')).toHaveLength(1);
   expect(screen.getByRole('status')).toHaveTextContent(/sincronizar/);
 });
+
+test('marca como compartido el proyecto que lo está y sólo ese', () => {
+  const shared: WorkspaceState = { ...state, projects: state.projects.map(p => p.id === 'spy' ? { ...p, shared: true } : p) };
+  render(<LabProjectList {...props} state={shared}/>);
+  expect(screen.getAllByLabelText('Compartido')).toHaveLength(1);
+});

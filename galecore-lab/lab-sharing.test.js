@@ -102,3 +102,12 @@ test('el archivo de estado no aparece en Archivos', async t => {
   const names = (await route(service, 'GET', '/workspaces/' + p.id + '/files')).value.tree.map(n => n.name);
   assert.ok(names.includes('README.md') && !names.some(n => n.startsWith('.')));
 });
+
+test('abrir el proyecto no repite la sincronización de hace menos de 20 segundos; la manual sí', async t => {
+  const { kb, service, calls } = world(t, { answers: { 'project sync': { pulled: 0, pushed: 0, conflicts: [], skipped: [] } } });
+  const p = await create(service, 'Idea'); share(kb, p.id);
+  const sync = body => route(service, 'POST', '/workspaces/' + p.id + '/sync', body);
+  await sync({ auto: true }); const again = await sync({ auto: true });
+  assert.equal(again.value.recent, true); assert.equal(calls.length, 1);
+  await sync({}); assert.equal(calls.length, 2);
+});

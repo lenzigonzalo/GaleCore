@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, ChevronRight, Folder, MessageSquare, MoreHorizontal, Plus, Search, Star, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, Folder, MessageSquare, MoreHorizontal, Plus, Search, Star, Users, X } from 'lucide-react';
 import type { WorkspaceProject, WorkspaceState } from '../../api/lab';
 import { fetchSpace, saveSpaceItem } from '../../api/space';
 import './LabProjectList.css';
@@ -186,7 +186,7 @@ export function LabProjectList(props: Props) {
     const key = 'p:' + p.id, label = name(p.id, p.label);
     const color = organization.colors[key] || groupColor;
     return <div className="lab-project-group" key={key} style={color ? { '--group-color': COLORS[color][1] } as React.CSSProperties : undefined}>
-      <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}>{favoriteButton(key, label)}<button className="lab-project-select lab-draggable" {...dragProps(key)} onClick={() => onProject(p)} onDoubleClick={() => onRename(p.id, p.label)}><Folder size={18} style={{ color: 'var(--group-color, currentColor)' }}/>{editing === p.id ? renameInput(p.id, p.label) : <span>{label}</span>}</button>{optionsButton(key, label)}<button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={() => onToggle(p.id)}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
+      <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}>{favoriteButton(key, label)}<button className="lab-project-select lab-draggable" {...dragProps(key)} onClick={() => onProject(p)} onDoubleClick={() => onRename(p.id, p.label)}><Folder size={18} style={{ color: 'var(--group-color, currentColor)' }}/>{editing === p.id ? renameInput(p.id, p.label) : <span>{label}</span>}{p.shared && <Users size={14} className="lab-shared-badge" aria-label="Compartido"/>}</button>{optionsButton(key, label)}<button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={() => onToggle(p.id)}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
       {itemOptions(key, label)}
       {expanded[p.id] && <div className="lab-project-chats">{chats.filter(c => c.project === p.id && !organization.members['c:' + c.id]).map(c => renderChat(c))}<button className="lab-project-new" onClick={() => onNewChat(p)}><Plus size={14}/>Nuevo chat</button></div>}
     </div>;

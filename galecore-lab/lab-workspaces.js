@@ -403,7 +403,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       if(parts[2]==='unshare'){json(res,200,await sharing.unshare(p,await readBody(req)));return true;}
       if(parts[2]==='notice'){sharing.clearNotice(p);json(res,200,{cleared:true});return true;}
       if(!sharing.isShared(p))throw fail('Este proyecto no está compartido.',409);
-      const summary=await sharing.sync(p,{busy});json(res,200,{...summary,notice:sharing.notice(p)});return true;
+      const opts=(await readBody(req))||{};const summary=await sharing.sync(p,{busy,minInterval:opts.auto?20000:0});json(res,200,{...summary,notice:sharing.notice(p)});return true;
     }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[1]&&(parts[2]==='rename'||parts[2]==='archive')&&parts.length===3){
       const p=project(parts[1]);
