@@ -289,7 +289,7 @@ namespace DataFeed.Repositories
                 e.Property(x => x.BaseHash).HasMaxLength(64);
                 e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
                 e.HasOne(x => x.Project).WithMany().HasForeignKey(x => x.ProjectId).OnDelete(DeleteBehavior.Cascade);
-                e.HasOne(x => x.Author).WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.Cascade);
+                e.HasOne(x => x.Author).WithMany().HasForeignKey(x => x.AuthorId).OnDelete(DeleteBehavior.NoAction);
                 e.HasIndex(x => new { x.ProjectId, x.Seq });
                 e.HasIndex(x => new { x.ProjectId, x.Path, x.Seq });
             });

@@ -903,7 +903,7 @@ namespace DataFeed.Repositories.Migrations
                     b.HasOne("DataFeed.Repositories.Entities.User", "Author")
                         .WithMany()
                         .HasForeignKey("AuthorId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired()
                         .HasConstraintName("fk_shared_project_changes_users_author_id");
 

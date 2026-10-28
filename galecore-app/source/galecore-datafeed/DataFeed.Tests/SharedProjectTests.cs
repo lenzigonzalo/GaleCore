@@ -1,4 +1,4 @@
-using DataFeed.Repositories;
+﻿using DataFeed.Repositories;
 using DataFeed.Repositories.Entities;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
@@ -11,6 +11,18 @@ namespace DataFeed.Tests
     {
         private static SharedProjectChange Put(string hash, long seq = 1) => new() { Seq = seq, Op = "put", ContentHash = hash };
         private static SharedProjectChange Del(long seq = 2) => new() { Seq = seq, Op = "delete" };
+
+        [Fact]
+        public void BorrarUnUsuarioNoBorraSusCambiosEnProyectosAjenos()
+        {
+            // El FK del autor no es CASCADE: la base frena borrar a quien editó (los cambios de un proyecto ajeno no se pierden).
+            // Borrar al dueño sí arrastra el proyecto y, por él, sus cambios (FK del proyecto).
+            var options = new DbContextOptionsBuilder<GaleCoreDbContext>().UseNpgsql("Host=localhost;Database=model_only").UseSnakeCaseNamingConvention().Options;
+            using var db = new GaleCoreDbContext(options);
+            var fks = db.Model.FindEntityType(typeof(SharedProjectChange))!.GetForeignKeys().ToList();
+            Assert.Equal(DeleteBehavior.NoAction, fks.Single(f => f.PrincipalEntityType.ClrType == typeof(User)).DeleteBehavior);
+            Assert.Equal(DeleteBehavior.Cascade, fks.Single(f => f.PrincipalEntityType.ClrType == typeof(SharedProject)).DeleteBehavior);
+        }
 
         // ── Proyecto ──
         [Fact]
@@ -278,6 +290,25 @@ namespace DataFeed.Tests
             using var db2 = NewDb();
             db2.SharedProjectMembers.Add(new SharedProjectMember { ProjectId = p.Id, UserId = u.Id, Role = "member", AddedAt = DateTime.UtcNow });
             await Assert.ThrowsAsync<DbUpdateException>(() => db2.SaveChangesAsync());
+        }
+
+        [PostgresFact]
+        public async Task NoSeBorraAQuienEditoUnProyectoAjeno()
+        {
+            using var db = NewDb();
+            var owner = NewUser("o"); var author = NewUser("w"); var p = NewProject(owner);
+            db.Users.AddRange(owner, author); db.SharedProjects.Add(p);
+            await db.SaveChangesAsync();
+            db.SharedProjectChanges.Add(NewChange(p, author));
+            await db.SaveChangesAsync();
+
+            db.Users.Remove(author);
+            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+
+            using var db2 = NewDb();
+            db2.Users.Remove(await db2.Users.FirstAsync(x => x.Id == owner.Id)); // el dueño sí se lleva el proyecto y sus cambios
+            await db2.SaveChangesAsync();
+            Assert.False(await db2.SharedProjectChanges.AnyAsync(c => c.ProjectId == p.Id));
         }
     }
 }
