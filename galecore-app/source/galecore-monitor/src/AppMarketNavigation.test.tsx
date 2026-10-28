@@ -1,6 +1,7 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
+import { useGexStore as mockUseGexStore } from './store/useGexStore';
 
 jest.mock('./auth/supabase', () => ({getSession:async()=>({user:{id:'test'}}),supabase:{auth:{onAuthStateChange:()=>({data:{subscription:{unsubscribe:()=>{}}}})}}}));
 jest.mock('./api/rules', () => ({fetchAppConfig:async()=>({})}));
@@ -12,7 +13,7 @@ jest.mock('./store/useAppConfigStore', () => ({useAppConfigStore:()=>({setConfig
 jest.mock('./socket/useMarketSocket', () => ({useMarketSocket:()=>({status:'disconnected'})}));
 jest.mock('./components/settings/SettingsModal', () => ({SettingsModal:()=>null,needsSetup:()=>false}));
 jest.mock('./components/layout/StatusBar', () => ({StatusBar:()=>null}));
-jest.mock('./components/layout/WorkspaceHeader', () => ({WorkspaceHeader:()=>null}));
+jest.mock('./components/layout/WorkspaceHeader', () => ({WorkspaceHeader:({onSymbol}:any)=><button onClick={()=>onSymbol('QQQ')}>QQQ en buscador</button>}));
 jest.mock('./components/layout/WorkspaceNav', () => ({WorkspaceNav:({onChange}:any)=><nav>
   {['inicio','gex','lab'].map(tab=><button key={tab} onClick={()=>onChange(tab)}>{tab}</button>)}
 </nav>}));
@@ -25,20 +26,25 @@ jest.mock('./pages/Rpf', () => ({Rpf:()=>null}));
 jest.mock('./pages/Shadow', () => ({Shadow:()=>null}));
 jest.mock('./pages/Agentes', () => ({Agentes:()=>null}));
 // Las interacciones internas reales se prueban en LiveWatchlist.test y Gex.test.
-jest.mock('./components/ticker/LiveWatchlist', () => ({LiveWatchlist:({onSelect}:any)=><button onClick={onSelect}>SPY en watchlist</button>}));
+jest.mock('./components/ticker/LiveWatchlist', () => ({LiveWatchlist:({onSelect}:any)=><>
+  {['SPY','AAPL'].map(symbol=><button key={symbol} onClick={()=>{mockUseGexStore.getState().setSelectedSymbol(symbol);onSelect();}}>{symbol} en watchlist</button>)}
+</>}));
 jest.mock('./pages/Gex', () => ({Gex:({indicator,onIndicatorChange}:any)=><section aria-label="Mercado activo">
-  {indicator}<button onClick={()=>onIndicatorChange('gamma')}>Gamma</button><button onClick={()=>onIndicatorChange('iv')}>IV</button>
+  {mockUseGexStore(s=>s.selectedSymbol)} {indicator}<button onClick={()=>onIndicatorChange('price')}>Precio</button><button onClick={()=>onIndicatorChange('gamma')}>Gamma</button><button onClick={()=>onIndicatorChange('iv')}>IV</button>
 </section>}));
 
-test('watchlist abre Precio desde Inicio y Lab y vuelve a Precio desde Gamma o IV', async () => {
+test('watchlist abre Precio desde Inicio y Lab y conserva el indicador al cambiar ticker dentro de Mercado', async () => {
+  mockUseGexStore.setState({selectedSymbol:null,tickers:['SPY','AAPL','QQQ'],rules:{} as any,rulesError:null});
   render(<App/>);
   await screen.findByText('Inicio del usuario');
   fireEvent.click(screen.getByRole('button',{name:'SPY en watchlist'}));
   expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('price');
-  for (const indicator of ['Gamma','IV']) {
-    fireEvent.click(screen.getByRole('button',{name:indicator}));
+  for (const [label,indicator] of [['Gamma','gamma'],['IV','iv'],['Precio','price']]) {
+    fireEvent.click(screen.getByRole('button',{name:label}));
+    fireEvent.click(screen.getByRole('button',{name:'AAPL en watchlist'}));
+    expect(screen.getByLabelText('Mercado activo')).toHaveTextContent(`AAPL ${indicator}`);
     fireEvent.click(screen.getByRole('button',{name:'SPY en watchlist'}));
-    expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('price');
+    expect(screen.getByLabelText('Mercado activo')).toHaveTextContent(`SPY ${indicator}`);
   }
   fireEvent.click(screen.getByRole('button',{name:'lab'}));
   expect(screen.getByText('Chat del usuario')).toBeVisible();
@@ -47,4 +53,21 @@ test('watchlist abre Precio desde Inicio y Lab y vuelve a Precio desde Gamma o I
   fireEvent.click(screen.getByRole('button',{name:'inicio'}));
   fireEvent.click(screen.getByRole('button',{name:'gex'}));
   expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('gamma');
+});
+
+test('el buscador conserva Gamma e IV dentro de Mercado y abre Precio desde otra pantalla', async () => {
+  mockUseGexStore.setState({selectedSymbol:'SPY',tickers:['SPY','QQQ'],rules:{} as any,rulesError:null});
+  render(<App/>);
+  await screen.findByText('Inicio del usuario');
+  fireEvent.click(screen.getByRole('button',{name:'QQQ en buscador'}));
+  await waitFor(()=>expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('QQQ price'));
+  for (const [label,indicator] of [['Gamma','gamma'],['IV','iv'],['Precio','price']]) {
+    fireEvent.click(screen.getByRole('button',{name:label}));
+    fireEvent.click(screen.getByRole('button',{name:'SPY en watchlist'}));
+    fireEvent.click(screen.getByRole('button',{name:'QQQ en buscador'}));
+    await waitFor(()=>expect(screen.getByLabelText('Mercado activo')).toHaveTextContent(`QQQ ${indicator}`));
+  }
+  fireEvent.click(screen.getByRole('button',{name:'lab'}));
+  fireEvent.click(screen.getByRole('button',{name:'QQQ en buscador'}));
+  await waitFor(()=>expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('QQQ price'));
 });

@@ -130,7 +130,9 @@ function Dashboard({ onLogout }: DashboardProps) {
             if (!store.tickers.includes(symbol) && !store.adHocSearch?.enabled) throw new Error('La búsqueda de nuevos símbolos no está habilitada.');
             const selected = store.pinAdHoc(symbol);
             if (!selected) throw new Error('No se pudo abrir el símbolo.');
-            store.setSelectedSymbol(selected); setTab('gex');
+            store.setSelectedSymbol(selected);
+            if (tab !== 'gex') setMarketIndicator('price');
+            setTab('gex');
           }} navHidden={navHidden} onNavToggle={() => setNavHidden(v => !v)} />
       <div className="workspace-body flex flex-1">
       {!navHidden && <WorkspaceNav active={tab} onChange={setTab} onLogout={onLogout} width={navWidth} onResize={setNavWidth} />}
@@ -159,7 +161,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {labVisited && <div className="lab-page-host" hidden={!isLabWorkspace}><Lab active={isLabWorkspace} projectRequest={projectRequest} onFollowStrategy={followStrategy} onMonitor={() => setTab('estrategias')} onNavigate={setTab}/></div>}
         </main>
       </div>
-      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { setMarketIndicator('price'); setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
+      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { if (tab !== 'gex') setMarketIndicator('price'); setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
       </div>
       {settingsOpen && <SettingsModal wizard={setup} onClose={() => setSettingsOpen(false)} />}
     </div>

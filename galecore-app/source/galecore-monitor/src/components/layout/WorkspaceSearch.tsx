@@ -9,7 +9,7 @@ import { DESTINATIONS } from './navigation';
 const SECTIONS: Array<[Tab, string]> = [...DESTINATIONS.map(({ id, label }) => [id, label] as [Tab, string]), ['config', 'Configuración']];
 
 /** Busca sólo colecciones existentes: destinos locales y símbolos de GaleCore. */
-export function WorkspaceSearch({ onNavigate, onSymbol }: { onNavigate: (tab: Tab) => void; onSymbol: (symbol: string) => Promise<void> }) {
+export function WorkspaceSearch({ onNavigate, onSymbol, expanded = false }: { onNavigate: (tab: Tab) => void; onSymbol: (symbol: string) => Promise<void>; expanded?: boolean }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [results, setResults] = useState<SymbolSearchResult[]>([]);
@@ -57,8 +57,8 @@ export function WorkspaceSearch({ onNavigate, onSymbol }: { onNavigate: (tab: Ta
     return () => document.removeEventListener('mousedown', close);
   }, []);
   const sections = SECTIONS.filter(([, label]) => label.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  return <div className="workspace-search-launcher" ref={wrap}>
-    <button ref={launcher} className="workspace-icon-button" aria-label="Buscar en GaleCore" title="Buscar · Ctrl K" onClick={() => setOpen(true)}><Search size={20} /></button>
+  return <div className={'workspace-search-launcher' + (expanded ? ' workspace-search-expanded' : '')} ref={wrap}>
+    <button ref={launcher} className={expanded ? 'workspace-search-box' : 'workspace-icon-button'} aria-label="Buscar en GaleCore" title="Buscar · Ctrl K" onClick={() => setOpen(true)}><Search size={20} />{expanded && <span>Buscar ticker</span>}</button>
     {open && <div className="workspace-search-overlay" onMouseDown={e => { if (e.target === e.currentTarget) setOpen(false); }}><section className="workspace-command" role="dialog" aria-modal="true" aria-label="Buscar en GaleCore"
       onKeyDown={e => { if (e.key !== 'Tab') return; const controls = e.currentTarget.querySelectorAll<HTMLElement>('input,button'); const first = controls[0], last = controls[controls.length - 1]; if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); } }}>
     <div className="workspace-command-input"><Search size={20} /><input ref={input} aria-label="Buscar símbolo o sección" placeholder="Buscar símbolo o sección" value={query}

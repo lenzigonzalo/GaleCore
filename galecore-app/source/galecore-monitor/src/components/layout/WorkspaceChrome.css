@@ -2,6 +2,14 @@
 
 .calendar-dock-scope{padding:14px 16px 0;font-size:15px;color:var(--text-secondary)}.calendar-dock-detail details{margin-top:16px}.calendar-dock-detail summary{cursor:pointer;font-weight:500}
 
+.workspace-market-header{display:grid;grid-template-columns:minmax(0,1fr) minmax(240px,420px) minmax(0,1fr)}
+.workspace-market-header .workspace-header-right{justify-self:end}
+.workspace-search-expanded{width:100%}
+.workspace-search-box{display:flex;align-items:center;gap:12px;width:100%;padding:10px 14px;border:1px solid var(--border);border-radius:9px;background:var(--bg-tertiary);color:var(--text-secondary);font-size:14px;text-align:left}
+.workspace-search-box:hover{background:var(--bg-hover);color:var(--text-primary)}
+.workspace-search-box svg{flex-shrink:0}
+@media(max-width:760px){.workspace-market-header{grid-template-columns:1fr 1fr;height:auto;min-height:64px;padding:12px;gap:12px}.workspace-market-header .workspace-header-right{grid-column:2;grid-row:1}.workspace-market-header .workspace-header-slot{grid-column:1/-1;grid-row:2;width:min(420px,100%);justify-self:center}}
+
 /* Una lateral por espacio, con la superficie y filas del Lab. */
 .workspace-body>.workspace-navigation{width:310px;background:var(--bg-secondary);padding:18px 12px;font:16px var(--font-sans)}
 .workspace-navigation .workspace-nav-group{margin:0 0 24px}.workspace-navigation .workspace-group-label{display:block;padding:0 10px 8px;color:var(--text-secondary);font-size:14px;font-weight:500;text-transform:none;letter-spacing:0}

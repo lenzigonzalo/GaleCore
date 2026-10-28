@@ -15,7 +15,8 @@ test('busca una sección local y no promete documentos', () => {
 test('busca símbolos reales y no oculta el error al abrirlos', async () => {
   (searchSymbols as jest.Mock).mockResolvedValue([{ symbol: 'SPY', description: 'ETF' }]);
   const symbol = jest.fn().mockRejectedValue(new Error('Mercado no disponible'));
-  render(<WorkspaceSearch onNavigate={() => {}} onSymbol={symbol} />);
+  render(<WorkspaceSearch expanded onNavigate={() => {}} onSymbol={symbol} />);
+  expect(screen.getByRole('button', { name: 'Buscar en GaleCore' })).toHaveTextContent('Buscar ticker');
   fireEvent.click(screen.getByRole('button', { name: 'Buscar en GaleCore' }));
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'SPY' } });
   fireEvent.click(await screen.findByRole('button', { name: 'SPY ETF' }));
