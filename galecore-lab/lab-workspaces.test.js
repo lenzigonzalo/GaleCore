@@ -264,3 +264,28 @@ test('investigaciones del proyecto: carpeta de sólo lectura con las anotadas co
  assert.equal(fs.existsSync(path.join(research,'2026-10-27-mia.md')),false);assert.equal(fs.existsSync(path.join(research,'2026-10-27-crlf.md')),false);
  assert.ok(fs.existsSync(path.join(research,'2026-10-27-ajena.md')));assert.ok(fs.existsSync(path.join(research,'2026-10-27-comun.md')));
 });
+test('editar el último mensaje saca el pedido y su respuesta y le avisa al motor (WS-0067)',async t=>{
+ const {EventEmitter}=require('events');const {base,kb,local}=setup(t);fs.mkdirSync(path.join(base,'galecore-ai'),{recursive:true});fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo');
+ const sent=[];const spawnProcess=()=>{const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(v){sent.push(String(v));},end(v){if(v)sent.push(String(v));}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
+ const service=createWorkspaces({root:base,kb,local,binaries:{claude:'claude',codex:'codex'},environment:()=>({}),instructions:()=>'',legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
+ const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ await route(service,'POST','/chats/'+chat.id+'/messages',{text:'primero'});await new Promise(r=>setTimeout(r,100));
+ const before=(await route(service,'GET','/chats/'+chat.id)).value.messages.length;
+ await route(service,'POST','/chats/'+chat.id+'/messages',{text:'segundo mejor',replace:true});
+ const after=(await route(service,'GET','/chats/'+chat.id)).value.messages;
+ assert.equal(before,1);assert.deepEqual(after.map(m=>m.text),['segundo mejor']);   // sólo el texto nuevo queda a la vista
+ assert.ok(sent.some(s=>s.includes('reemplaza al pedido anterior')&&s.includes('primero')&&s.includes('segundo mejor')));
+ await new Promise(r=>setTimeout(r,300));
+});
+test('mandar ya: tras cortar el turno, el envío siguiente espera a que cierre el proceso y no da 409 (WS-0067)',async t=>{
+ const {EventEmitter}=require('events');const {base,kb,local}=setup(t);fs.mkdirSync(path.join(base,'galecore-ai'),{recursive:true});fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo');
+ const procs=[];const spawnProcess=()=>{const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(){},end(){}};
+  proc.kill=()=>setTimeout(()=>proc.emit('close',1),150);procs.push(proc);if(procs.length>1)setImmediate(()=>proc.emit('close',0));return proc;};   // el primero sólo cierra al cortarlo
+ const service=createWorkspaces({root:base,kb,local,binaries:{claude:'claude',codex:'codex'},environment:()=>({}),instructions:()=>'',legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
+ const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ await route(service,'POST','/chats/'+chat.id+'/messages',{text:'largo'});await new Promise(r=>setTimeout(r,100));
+ await route(service,'POST','/chats/'+chat.id+'/stop',{});
+ await route(service,'POST','/chats/'+chat.id+'/messages',{text:'ya'});   // sin esperar: antes daba 409
+ await new Promise(r=>setTimeout(r,300));
+ assert.equal(procs.length,2);
+});

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, BookOpen, KeyRound, Plug, Wallet, Power, User, UserCog, Users } from 'lucide-react';
+import { Bell, BookOpen, MessageSquare, KeyRound, Plug, Wallet, Power, User, UserCog, Users } from 'lucide-react';
 import { Connections } from '../components/settings/Connections';
 import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
@@ -15,6 +15,7 @@ import { ApiConnections } from '../components/settings/ApiConnections';
 import { useAccountStore } from '../store/useAccountStore';
 import { AccountSettings } from '../components/settings/AccountSettings';
 import { ChatFontSetting } from '../components/settings/ChatFontSetting';
+import { ChatBehaviorSettings } from '../components/settings/ChatBehaviorSettings';
 import { Markdown } from '../components/settings/Markdown';
 import { useCurrentUserStore } from '../store/useCurrentUserStore';
 import {
@@ -34,10 +35,10 @@ import {
  * guardan solas. El estado vive en esta pantalla (no en un store de módulo): muere con la sesión.
  */
 export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'cuenta' | 'broker' | 'skills'
-  | 'apis' | 'compartido' | 'avisos' | 'servicios';
+  | 'apis' | 'compartido' | 'avisos' | 'servicios' | 'chat';
 
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
-  { group: 'General', items: [{ id: 'usuario', label: 'Perfil', Icon: User }, { id: 'cuenta', label: 'Cuenta', Icon: UserCog }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
+  { group: 'General', items: [{ id: 'usuario', label: 'Perfil', Icon: User }, { id: 'cuenta', label: 'Cuenta', Icon: UserCog }, { id: 'chat', label: 'Chat', Icon: MessageSquare }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Proveedores de IA', items: [{ id: 'conexiones', label: 'Proveedores de IA', Icon: Plug }] },
   { group: 'API y claves', items: [{ id: 'apis', label: 'API y claves', Icon: KeyRound }] },
   { group: 'Cuenta de bróker', items: [{ id: 'broker', label: 'Cuenta de bróker', Icon: Wallet }] },
@@ -155,6 +156,8 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
         suggestions={suggestionsEnabled(items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY))}
         onSuggestions={next => { void saveSuggestionsEnabled(next).then(reload).catch(() => setError('No se pudo guardar la preferencia.')); }} />
     );
+  } else if (section === 'chat') {
+    body = <ChatBehaviorSettings />;
   } else if (section === 'servicios') {
     body = <PlatformServices />;
   } else if (section === 'broker') {

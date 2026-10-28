@@ -386,7 +386,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       };
       proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{const e=JSON.parse(line);if(claude&&e.type==='control_request'){control(e);continue;}if(claude&&e.type==='control_response')continue;consumeEvent(chat,e,chat.provider);if(claude&&e.type==='result')proc.stdin.end();saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
       proc.stderr.on('data',()=>{});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});
-      if(claude){job.write({type:'control_request',request_id:'init-'+chat.id,request:{subtype:'initialize'}});job.write({type:'user',message:{role:'user',content:words},parent_tool_use_id:null,session_id:''});}
+      if(claude){job.write({type:'control_request',request_id:'init-'+chat.id,request:{subtype:'initialize'}});job.write({type:'user',message:{role:'user',content:options.prompt||words},parent_tool_use_id:null,session_id:''});}
       else proc.stdin.end(words+'\n');
     }).catch(()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});
     return chat;
@@ -476,12 +476,16 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         const p=project(c.project), dir=p.dir, live=c.state==='running'&&c.turnStartedAt?latestMapa(dir,c.turnStartedAt):null, rel=live||c.mapa||(p.type==='strategy'?latestMapa(dir,0):null);
         if(!rel){json(res,200,{mapa:null});return true;}
         json(res,200,{mapa:readMapa(dir,rel)});return true;}
-      if(req.method==='POST'&&parts[2]==='messages'){const b=await readBody(req);const words=String(b.text||'').trim();if(!words||words.length>12000)throw fail('El mensaje debe tener entre 1 y 12000 caracteres.');
+      if(req.method==='POST'&&parts[2]==='messages'){const b=await readBody(req);
+        // Ctrl+S del chat: se corta el turno y se manda el siguiente enseguida; el proceso tarda un instante en cerrar.
+        if(c.state==='cancelled')for(let i=0;i<100&&jobs.has(c.id);i++)await new Promise(r=>setTimeout(r,50));const words=String(b.text||'').trim();if(!words||words.length>12000)throw fail('El mensaje debe tener entre 1 y 12000 caracteres.');
         // Adjuntos subidos antes a /workspaces/<id>/attachments: sólo rutas de adjuntos/ del proyecto, que existan.
         const dir=project(c.project).dir, files=(Array.isArray(b.attachments)?b.attachments:[]).slice(0,10).map(String);
         for(const rel of files){if(!/^adjuntos\/[\w.\- ]+$/.test(rel)||!fs.existsSync(path.join(dir,rel)))throw fail('Adjunto no encontrado: '+rel,404);}
         const text=files.length?words+'\n\nArchivos adjuntos (en la carpeta del proyecto): '+files.join(', '):words;
-        json(res,202,send(c,text,{mode:b.mode==='auto'?'auto':'manual'}));return true;}
+        // Editar el último mensaje (WS-0067): el motor no rebobina; el Lab saca del transcript ese pedido y su respuesta y le avisa que el texto nuevo lo reemplaza.
+        let prompt;if(b.replace===true){if(jobs.has(c.id))throw fail('La conversación está respondiendo.',409);const at=c.messages.map(m=>m.role).lastIndexOf('user');if(at<0)throw fail('No hay un mensaje para reemplazar.',409);const old=c.messages[at].text;c.messages.splice(at);saveChat(c);prompt='[Este mensaje reemplaza al pedido anterior ("'+old.replace(/\s+/g,' ').slice(0,300)+'"): ignorá ese pedido y tu respuesta; lo que ya hiciste en archivos sigue ahí.]\n\n'+text;}
+        json(res,202,send(c,text,{mode:b.mode==='auto'?'auto':'manual',...(prompt&&{prompt})}));return true;}
       if(req.method==='POST'&&parts[2]==='rename'){const title=String((await readBody(req)).title||'').trim();if(!title||title.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');c.title=title;c.titleLocked=true;saveChat(c);json(res,200,{id:c.id,title});return true;}
       // Eliminar saca la conversación del historial; el archivo pasa a chats-borradas/ (local, no se muestra).
       if(req.method==='POST'&&parts[2]==='delete'){if(jobs.has(c.id))throw fail('La conversación está respondiendo. Detenela antes de eliminarla.',409);fs.mkdirSync(removedDir,{recursive:true});fs.renameSync(path.join(chatDir,c.id+'.json'),path.join(removedDir,c.id+'.json'));json(res,200,{deleted:c.id});return true;}

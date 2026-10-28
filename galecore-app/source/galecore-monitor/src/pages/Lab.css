@@ -429,3 +429,21 @@
 .lab-markdown td.lab-pos { color: var(--green); }
 .lab-markdown td.lab-neg { color: var(--red-gc); }
 .lab-markdown td.lab-pos strong, .lab-markdown td.lab-neg strong { color: inherit; }
+
+/* WS-0067: cola, edición, miniaturas, dictado interino, cita y tablas */
+.lab-queue { display:grid; gap:4px; margin:0 0 10px; padding:8px 10px; border-radius:10px; background:var(--bg-tertiary); color:var(--text-muted); font-size:14px; }
+.lab-queue > div { display:flex; gap:12px; align-items:baseline; justify-content:space-between; }
+.lab-queue > div > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lab-queue button, .lab-editing button, .lab-message-edit { border:0; background:transparent; color:var(--text-secondary); font:inherit; cursor:pointer; text-decoration:underline; padding:0; }
+.lab-queue p { margin:4px 0 0; color:var(--text-primary); }
+.lab-editing { display:flex; align-items:center; gap:8px; margin:0 0 8px; font-size:14px; color:var(--text-secondary); }
+.lab-editing button { margin-left:auto; }
+.lab-message-edit { display:inline-flex; align-items:center; gap:5px; margin-top:6px; font-size:13px; text-decoration:none; opacity:0; }
+.lab-message.user:hover .lab-message-edit, .lab-message-edit:focus-visible { opacity:1; }
+.lab-attachments img { width:28px; height:28px; object-fit:cover; border-radius:5px; }
+.lab-interim { margin:4px 0 0; color:var(--text-muted); font:var(--lab-chat-font-size,16px)/1.5 var(--font-sans); }
+.lab-quote-button { position:fixed; z-index:60; padding:6px 12px; border:1px solid var(--border-light); border-radius:8px; background:var(--bg-secondary); color:var(--text-primary); font:14px var(--font-sans); cursor:pointer; box-shadow:0 4px 14px rgba(0,0,0,.35); }
+.lab-table-box { position:relative; }
+.lab-table-tools { position:absolute; top:-6px; right:6px; display:flex; gap:6px; opacity:0; transition:opacity .12s; }
+.lab-table-box:hover .lab-table-tools, .lab-table-tools:focus-within { opacity:1; }
+.lab-table-tools button { padding:3px 10px; border:1px solid var(--border-light); border-radius:6px; background:var(--bg-secondary); color:var(--text-secondary); font:13px var(--font-sans); cursor:pointer; }

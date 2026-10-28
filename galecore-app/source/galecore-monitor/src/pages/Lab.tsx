@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, MessageSquare, Files, X, ArrowUp, Square, PanelLeftClose, PanelLeftOpen, Mic, Paperclip, Map as MapIcon, SquareTerminal, Users } from 'lucide-react';
+import { Plus, MessageSquare, Files, X, ArrowUp, Square, PanelLeftClose, PanelLeftOpen, Mic, Paperclip, Map as MapIcon, SquareTerminal, Users, Pencil } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
 import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, labUpload } from '../api/lab';
 import { LabShadow } from './LabShadow';
@@ -13,6 +13,7 @@ import { LabSuggestions } from '../components/lab/LabSuggestions';
 import { LabFiles } from '../components/lab/LabFiles';
 import { LabShell } from '../components/lab/LabShell';
 import { LabShare, noticeText } from '../components/lab/LabShare';
+import { notifyChat, playChatSound, readChatPrefs } from '../components/lab/labChatPrefs';
 import './Lab.css';
 import { useChatFontSize } from '../components/settings/ChatFontSetting';
 const KIND = { personal: 'Personal', analysis: 'Análisis', strategy: 'Estrategia' };
@@ -163,6 +164,9 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     if (messages.current) messages.current.scrollTop = messages.current.scrollHeight;
   };
   useEffect(() => { const close = (e: KeyboardEvent) => { if(e.key === 'Escape') setCreating(false); }; window.addEventListener('keydown',close); return () => window.removeEventListener('keydown',close); }, []);
+  // WS-0067: Esc corta la respuesta en curso (como ■), salvo con un diálogo abierto; con la caja vacía y sin respuesta no hace nada.
+  const escape = useRef<(e: KeyboardEvent) => void>(() => {});
+  useEffect(() => { const on = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) escape.current(e); }; window.addEventListener('keydown', on); return () => window.removeEventListener('keydown', on); }, []);
 
   useEffect(() => {
     if(!creating) return;
@@ -200,13 +204,20 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   };
   // Caja de texto estilo Claude (WS-0036): adjuntos, dictado y modo de permisos por mensaje.
   const [mode, setMode] = useState<'manual' | 'auto'>('manual');
-  const [attachments, setAttachments] = useState<{ path: string; name: string }[]>([]);
+  const [attachments, setAttachments] = useState<{ path: string; name: string; preview?: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [listening, setListening] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const recognition = useRef<{ stop: () => void } | null>(null);
   const Speech = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : undefined;
-  useEffect(() => { setMode('manual'); setAttachments([]); }, [chatId, projectId]);
+  // WS-0067: editar el último mensaje, cola por chat (sólo en memoria), dictado con el espacio y cita de lo seleccionado.
+  const [replacing, setReplacing] = useState(false);
+  const [queues, setQueues] = useState<Record<string, { text: string; files: string[] }[]>>({});
+  const [paused, setPaused] = useState<Record<string, string>>({});
+  const [interim, setInterim] = useState('');
+  const [quote, setQuote] = useState<{ text: string; x: number; y: number } | null>(null);
+  const goOn = useRef(false);
+  useEffect(() => { setMode('manual'); setAttachments([]); setReplacing(false); setInterim(''); }, [chatId, projectId]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- sólo al cambiar de conversación; seguir chat.mode pisaría el cambio local mientras responde
   useEffect(() => { if (chat?.mode) setMode(chat.mode); }, [chat?.id]);   // cada conversación recuerda su modo
   // Owner 24/10: permisos en el chat como en el CLI; el modo se puede cambiar mientras responde.
@@ -215,37 +226,143 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const answerPermission = async (decision: 'allow' | 'always' | 'deny') => { if (!chat?.permission) return; setAnswering(true);
     try { await labRequest('/chats/' + chat.id + '/permission', { id: chat.permission.id, decision }); setChat(c => c ? { ...c, permission: null, activity: 'Trabajando' } : c); }
     catch (e) { setError(e instanceof Error ? e.message : 'No se pudo responder el permiso.'); } finally { setAnswering(false); } };
-  const attach = async (files: FileList | null) => {
+  const attach = async (files: FileList | File[] | null) => {
     if (!files?.length) return; setUploading(true); setError('');
-    try { for (const file of Array.from(files)) { const up = await labUpload(projectId, file); setAttachments(list => [...list, { path: up.path, name: up.name }]); } }
+    try { for (const file of Array.from(files)) { const up = await labUpload(projectId, file); setAttachments(list => [...list, { path: up.path, name: up.name, ...(file.type.startsWith('image/') ? { preview: URL.createObjectURL(file) } : {}) }]); } }
     catch (e) { setError(e instanceof Error ? e.message : 'No se pudo adjuntar el archivo.'); }
     finally { setUploading(false); if (fileInput.current) fileInput.current.value = ''; }
   };
-  const toggleDictation = () => {
-    if (listening) { recognition.current?.stop(); return; }
-    if (!Speech) return;
-    const rec = new Speech(); rec.lang = 'es-AR'; rec.continuous = true; rec.interimResults = false;
-    rec.onresult = (event: any) => { const said = Array.from(event.results as ArrayLike<any>).slice(event.resultIndex).filter((r: any) => r.isFinal).map((r: any) => r[0].transcript).join(' ').trim();
-      if (said) setDrafts(v => ({ ...v, [draftKey]: ((v[draftKey] || '') + ' ' + said).trim() })); };
-    rec.onend = () => { setListening(false); recognition.current = null; };
-    rec.onerror = () => { setListening(false); recognition.current = null; };
+  const draftKeyRef = useRef(draftKey); draftKeyRef.current = draftKey;
+  const heldSpace = useRef(false);
+  const startDictation = () => {
+    if (!Speech || recognition.current) return;
+    const rec = new Speech(); rec.lang = 'es-AR'; rec.continuous = true; rec.interimResults = true;
+    // Lo firme se suma a la caja; lo que se va diciendo se ve en gris hasta confirmarse.
+    rec.onresult = (event: any) => {
+      const heard = Array.from(event.results as ArrayLike<any>).slice(event.resultIndex) as any[];
+      const said = heard.filter(r => r.isFinal).map(r => r[0].transcript).join(' ').trim();
+      setInterim(heard.filter(r => !r.isFinal).map(r => r[0].transcript).join(' ').trim());
+      if (said) setDrafts(v => ({ ...v, [draftKeyRef.current]: ((v[draftKeyRef.current] || '') + ' ' + said).trim() })); };
+    const end = () => { setListening(false); setInterim(''); recognition.current = null; };
+    rec.onend = end; rec.onerror = end;
     recognition.current = rec; rec.start(); setListening(true);
   };
+  const toggleDictation = () => { if (listening) recognition.current?.stop(); else startDictation(); };
   const send = (e: React.FormEvent) => { e.preventDefault(); void submit(draft, true); };
   // Lo que escribió el trader o lo que eligió en una tarjeta de opciones (WS-0039): el mismo envío.
   // Devuelve si se envió: la tarjeta de opciones vuelve a habilitarse si no salió.
-  const submit = async (text: string, fromDraft: boolean): Promise<boolean> => {
+  const submit = async (text: string, fromDraft: boolean, files?: string[]): Promise<boolean> => {
     if(!text.trim() || busy || (chatId && !chat) || chat?.state === 'running' || !project) return false; setBusy(true); setError(''); const sendingSelection = selection.current;
+    setPaused(v => { if (!chat || !v[chat.id]) return v; const { [chat.id]: _gone, ...rest } = v; return rest; });
     try {
       const target = chat || await labRequest<WorkspaceChat>('/chats',{project:projectId,provider,...(state?.chatOptions?.[provider] ? chatSettings : {})});
-      const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text,mode,attachments:fromDraft?attachments.map(a => a.path):[]}); if(fromDraft) setAttachments([]);
+      const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text,mode,attachments:fromDraft?attachments.map(a => a.path):files||[],...(fromDraft&&replacing?{replace:true}:{})}); if(fromDraft) { setAttachments([]); setReplacing(false); }
       if(sendingSelection === selection.current) { followBottom.current = true; setAwayFromBottom(false); setChatId(target.id); setChat(next); } if(fromDraft) setDrafts(v=>({...v,[draftKey]:''})); setExpanded(v=>({...v,[projectId]:true})); await refresh();
       return true;
     } catch(e) { setError(e instanceof Error ? e.message : 'No se pudo enviar el mensaje.'); return false; }
     finally { setBusy(false); }
   };
   const stop = async () => { if(!chat) return; try { await labRequest('/chats/' + chat.id + '/stop',{}); } catch { setError('No se pudo detener la respuesta.'); } };
-  const composerForm = <form className="lab-chat-composer" onSubmit={send}>{attachments.length > 0 && <div className="lab-attachments">{attachments.map(a => <span key={a.path}><Paperclip size={13}/>{a.name}<button type="button" aria-label={'Quitar ' + a.name} onClick={() => setAttachments(list => list.filter(x => x.path !== a.path))}><X size={13}/></button></span>)}</div>}<textarea ref={composer} rows={1} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" title="Enter para enviar · Shift + Enter para otra línea" value={draft} onChange={e=>setDrafts(v=>({...v,[draftKey]:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy&&chat?.state!=='running')e.currentTarget.form?.requestSubmit();}}}/><div className="lab-composer-bar"><div className="lab-composer-side"><button type="button" className="lab-tool" aria-label="Adjuntar archivo" title="Adjuntar archivo" disabled={busy || uploading || !project} onClick={() => fileInput.current?.click()}><Plus size={18}/></button><input ref={fileInput} type="file" multiple hidden onChange={e => void attach(e.target.files)}/>{Speech && <button type="button" className={'lab-tool' + (listening ? ' active' : '')} aria-label={listening ? 'Detener dictado' : 'Dictar'} title={listening ? 'Detener dictado' : 'Dictar'} onClick={toggleDictation}><Mic size={17}/></button>}{uploading && <span className="lab-uploading" role="status">Adjuntando…</span>}</div><div className="lab-composer-side"><LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><button type="button" className={'lab-mode ' + mode} aria-label={'Permisos: ' + (mode === 'auto' ? 'Auto' : 'Manual')} title={mode === 'auto' ? 'Auto: decide solo lo seguro y te pregunta lo demás' : 'Manual: te pregunta antes de lo que necesita permiso'} onClick={toggleMode}>{mode === 'auto' ? 'Auto' : 'Manual'}</button>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div></div></form>;
+  // ── WS-0067 ─────────────────────────────────────────────────────────────────────────────────────────────────
+  const queue = chat ? queues[chat.id] || [] : [];
+  const lastUserId = chat ? [...chat.messages].reverse().find(m => m.role === 'user')?.id : undefined;
+  const dropAttachments = () => { attachments.forEach(a => a.preview && URL.revokeObjectURL(a.preview)); setAttachments([]); };
+  const removeAttachment = (path: string) => setAttachments(list => { const gone = list.find(a => a.path === path); if (gone?.preview) URL.revokeObjectURL(gone.preview); return list.filter(x => x.path !== path); });
+  // Mientras responde, Enter encola; al terminar el turno sale el primero (la cola es por chat y no se guarda).
+  const enqueue = () => {
+    if (!chat || !draft.trim()) return;
+    const item = { text: draft.trim(), files: attachments.map(a => a.path) };
+    setQueues(v => ({ ...v, [chat.id]: [...(v[chat.id] || []), item] }));
+    setDrafts(v => ({ ...v, [draftKey]: '' })); dropAttachments();
+  };
+  const removeQueued = (index: number) => { if (chat) setQueues(v => ({ ...v, [chat.id]: (v[chat.id] || []).filter((_, i) => i !== index) })); };
+  // Ctrl+X: el último encolado vuelve a la caja para editarlo.
+  const unqueueLast = () => {
+    if (!chat || !queue.length) return;
+    const item = queue[queue.length - 1]; removeQueued(queue.length - 1);
+    setDrafts(v => ({ ...v, [draftKey]: item.text + (draft ? '\n' + draft : '') }));
+    if (item.files.length) setAttachments(list => [...list, ...item.files.map(path => ({ path, name: path.replace(/^adjuntos\/\d+-/, '') }))]);
+  };
+  // Ctrl+S: manda ya. Corta la respuesta en curso y lo escrito sale primero de la cola.
+  const sendNow = () => {
+    if (!draft.trim()) return;
+    if (chat?.state !== 'running') { void submit(draft, true); return; }
+    goOn.current = true;
+    setQueues(v => ({ ...v, [chat.id]: [{ text: draft.trim(), files: attachments.map(a => a.path) }, ...(v[chat.id] || [])] }));
+    setDrafts(v => ({ ...v, [draftKey]: '' })); dropAttachments(); void stop();
+  };
+  // Sin dependencias a propósito: corre en cada render y se corta sola (la cola se achica antes de enviar).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!chat || chat.state === 'running' || busy || paused[chat.id]) return;
+    // Un turno con error o cortado a mano frena la cola hasta que la persona diga «Seguir» (o mande con Ctrl+S).
+    if (chat.state !== 'idle' && !goOn.current) return;
+    const next = queues[chat.id]?.[0]; if (!next) return;
+    goOn.current = false;
+    setQueues(v => ({ ...v, [chat.id]: (v[chat.id] || []).slice(1) }));
+    void submit(next.text, false, next.files).then(ok => { if (!ok) { setQueues(v => ({ ...v, [chat.id]: [next, ...(v[chat.id] || [])] })); setPaused(v => ({ ...v, [chat.id]: 'no se pudo enviar' })); } });
+  });
+  const queueBlock = !chat || !queue.length ? '' : paused[chat.id] || (chat.state === 'failed' ? 'el turno terminó con error' : chat.state === 'cancelled' && !goOn.current ? 'cortaste la respuesta' : '');
+  const resumeQueue = () => { goOn.current = true; setPaused(v => { if (!chat) return v; const { [chat.id]: _gone, ...rest } = v; return rest; }); };
+  // Esc corta (como ■); con la edición abierta, la cancela. Nada si hay un diálogo o un campo propio (renombrar, menús).
+  escape.current = (e: KeyboardEvent) => {
+    if (view !== 'chat' || (!active && !embedded) || creating || sharingOpen) return;
+    if ((e.target as HTMLElement | null)?.closest?.('.lab-rename, [role="dialog"], [role="listbox"], [role="combobox"]')) return;
+    if (chat?.state === 'running') void stop();
+    else if (replacing) { setReplacing(false); setDrafts(v => ({ ...v, [draftKey]: '' })); }
+  };
+  const focusEnd = () => window.setTimeout(() => { const box = composer.current; if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length); } }, 0);
+  const editLast = (text: string) => { setReplacing(true); setDrafts(v => ({ ...v, [draftKey]: text })); focusEnd(); };
+  // Sonido y aviso del navegador al terminar o pedir permiso. Dos fuentes (el chat abierto cada 1 s y la lista cada 4 s), sin pisarse.
+  const seen = useRef(new Map<string, { state: string; permission?: string }>());
+  const openChat = useRef<(id: string) => void>(() => {});
+  openChat.current = id => { const c = state?.chats.find(x => x.id === id), p = c && state?.projects.find(x => x.id === c.project); if (c && p) selectChat(p, c); };
+  const observe = useCallback((source: string, id: string, title: string, st: string, permission?: string) => {
+    const before = seen.current.get(source + id); seen.current.set(source + id, { state: st, permission });
+    if (!before) return;
+    const prefs = readChatPrefs();
+    if (before.state === 'running' && st !== 'running' && st !== 'cancelled') { if (prefs.finishSound) playChatSound('done'); notifyChat(title, 'Terminó de responder', () => openChat.current(id)); }
+    if (permission && permission !== before.permission) { if (prefs.permissionSound) playChatSound('permission'); notifyChat(title, 'Necesita tu permiso', () => openChat.current(id)); }
+  }, []);
+  useEffect(() => { state?.chats.forEach(c => { if (c.id === chatId) seen.current.delete('l:' + c.id); else observe('l:', c.id, c.title, c.state, c.permission?.id); }); }, [state, chatId, observe]);
+  useEffect(() => { if (chat) observe('c:', chat.id, chat.title, chat.state, chat.permission?.id); }, [chat, observe]);
+  // Dictado con el espacio apretado: con la caja vacía o fuera de un campo; con texto escrito, el espacio es un espacio.
+  const dictate = useRef(startDictation); dictate.current = startDictation;
+  useEffect(() => {
+    const textField = (el: EventTarget | null) => el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON|A|SUMMARY)$/.test(el.tagName));
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !Speech || view !== 'chat' || (!active && !embedded) || creating || sharingOpen) return;
+      if (textField(e.target) && !(e.target === composer.current && !composer.current?.value.trim())) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      if (e.repeat && !heldSpace.current && !recognition.current) { heldSpace.current = true; dictate.current(); }
+    };
+    const up = (e: KeyboardEvent) => { if (e.code === 'Space' && heldSpace.current) { heldSpace.current = false; recognition.current?.stop(); } };
+    window.addEventListener('keydown', down); window.addEventListener('keyup', up);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+  }, [Speech, view, active, embedded, creating, sharingOpen]);
+  // «Preguntar sobre esto»: al seleccionar texto de una respuesta aparece un botón que pone la cita en la caja.
+  useEffect(() => {
+    const check = () => {
+      const sel = window.getSelection(), text = sel?.toString().trim() || '';
+      const inAnswer = (n: Node | null) => !!(n instanceof Element ? n : n?.parentElement)?.closest('.lab-message.assistant');
+      if (!sel || sel.isCollapsed || !text || !inAnswer(sel.anchorNode) || !inAnswer(sel.focusNode)) { setQuote(null); return; }
+      const box = sel.getRangeAt(0).getBoundingClientRect();
+      setQuote({ text, x: Math.max(8, box.left), y: Math.max(8, box.top - 40) });
+    };
+    const later = () => window.setTimeout(check, 0);
+    document.addEventListener('mouseup', later); document.addEventListener('keyup', later);
+    return () => { document.removeEventListener('mouseup', later); document.removeEventListener('keyup', later); };
+  }, []);
+  const askAboutQuote = () => {
+    if (!quote) return;
+    const cited = quote.text.split(/\r?\n/).map(l => '> ' + l).join('\n') + '\n\n';
+    setDrafts(v => ({ ...v, [draftKey]: cited + (v[draftKey] || '') })); setQuote(null); window.getSelection()?.removeAllRanges(); focusEnd();
+  };
+  const composerForm = <form className="lab-chat-composer" onSubmit={send}>{queue.length > 0 && <div className="lab-queue" role="status" aria-label="Mensajes en cola">{queue.map((q, i) => <div key={i}><span>{q.text}</span><button type="button" aria-label={'Quitar de la cola: ' + q.text.slice(0, 40)} onClick={() => removeQueued(i)}>quitar</button></div>)}{queueBlock && <p>La cola está frenada: {queueBlock}. <button type="button" onClick={resumeQueue}>Seguir</button></p>}</div>}{replacing && <div className="lab-editing" role="status"><Pencil size={13}/>Editando tu último mensaje: reemplaza al anterior y a su respuesta<button type="button" onClick={() => { setReplacing(false); setDrafts(v => ({ ...v, [draftKey]: '' })); }}>Cancelar</button></div>}{attachments.length > 0 && <div className="lab-attachments">{attachments.map(a => <span key={a.path}>{a.preview ? <img src={a.preview} alt=""/> : <Paperclip size={13}/>}{a.name}<button type="button" aria-label={'Quitar ' + a.name} onClick={() => removeAttachment(a.path)}><X size={13}/></button></span>)}</div>}<textarea ref={composer} rows={1} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" title="Enter para enviar (encola si está respondiendo) · Shift + Enter para otra línea · Ctrl + S manda ya · Ctrl + X recupera el último encolado" value={draft} onChange={e=>setDrafts(v=>({...v,[draftKey]:e.target.value}))} onPaste={e => { const files = Array.from(e.clipboardData.files); if (files.length) { e.preventDefault(); void attach(files); } }} onKeyDown={e=>{
+  if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy){if(chat?.state==='running')enqueue();else e.currentTarget.form?.requestSubmit();}}
+  else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='s'){e.preventDefault();if(!busy)sendNow();}
+  else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='x'&&queue.length&&e.currentTarget.selectionStart===e.currentTarget.selectionEnd){e.preventDefault();unqueueLast();}}}/>{interim&&<p className="lab-interim" aria-live="polite">{interim}</p>}<div className="lab-composer-bar"><div className="lab-composer-side"><button type="button" className="lab-tool" aria-label="Adjuntar archivo" title="Adjuntar archivo" disabled={busy || uploading || !project} onClick={() => fileInput.current?.click()}><Plus size={18}/></button><input ref={fileInput} type="file" multiple hidden onChange={e => void attach(e.target.files)}/>{Speech && <button type="button" className={'lab-tool' + (listening ? ' active' : '')} aria-label={listening ? 'Detener dictado' : 'Dictar'} title={listening ? 'Detener dictado' : 'Dictar'} onClick={toggleDictation}><Mic size={17}/></button>}{uploading && <span className="lab-uploading" role="status">Adjuntando…</span>}</div><div className="lab-composer-side"><LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><button type="button" className={'lab-mode ' + mode} aria-label={'Permisos: ' + (mode === 'auto' ? 'Auto' : 'Manual')} title={mode === 'auto' ? 'Auto: decide solo lo seguro y te pregunta lo demás' : 'Manual: te pregunta antes de lo que necesita permiso'} onClick={toggleMode}>{mode === 'auto' ? 'Auto' : 'Manual'}</button>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div></div></form>;
   const chatHeader = <header className={"lab-chat-header" + (headerHost ? " in-global-header" : "")}><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && KIND[project.type] !== name(project.id, project.label) && <span>{KIND[project.type]}</span>}</div><div className="lab-header-actions">{project && project.id !== 'personal' && <button className="lab-files-button" onClick={()=>setSharingOpen(true)}><Users size={17}/>Compartir</button>}{view==='chat' && mapaShown && <button className="lab-files-button" aria-pressed={mapaOpen} onClick={()=>setMapaOpen(v=>!v)}><MapIcon size={17}/>Mapa</button>}<div className="lab-view-switch" role="group" aria-label="Vista del proyecto"><button aria-pressed={view==='chat' || view==='design' || view==='shadow'} onClick={()=>setView('chat')}><MessageSquare size={16}/>Chat</button><button aria-pressed={view==='files'} onClick={()=>{setFileToOpen(undefined);setView('files');}}><Files size={16}/>Archivos</button><button aria-pressed={view==='shell'} onClick={()=>{setShellOpened(true);setView('shell');}}><SquareTerminal size={16}/>Shell</button></div></div></header>;
   const projectSidebar = <aside className="lab-chat-sidebar" id="lab-project-sidebar">
       <div className="lab-sidebar-heading"><button className="lab-new-chat" onClick={newChat}><MessageSquare size={19}/><span>Nuevo chat</span></button>{!embedded && !onSidebarToggle && <button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>}</div>
@@ -273,14 +390,14 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       {headerHost ? createPortal(chatHeader, headerHost) : chatHeader}
       {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></p>}
       {shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
-      {view==='files' ? <LabFiles key={projectId} projectId={projectId} folder={project?.relative} openPath={fileToOpen}/> : view==='shell' ? null : view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (mapaOpen ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column">
+      {view==='files' ? <LabFiles key={projectId} projectId={projectId} folder={project?.relative} openPath={fileToOpen}/> : view==='shell' ? null : view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (mapaOpen ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column" onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); void attach(Array.from(e.dataTransfer.files)); } }}>
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;
         const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
         followBottom.current = nearBottom; setAwayFromBottom(!nearBottom);
       }}>
         {!chat?.messages.length && <div className="lab-chat-welcome"><h1>{project?.type==='strategy' ? '¿Qué estrategia querés construir?' : project?.type==='personal' ? 'Tu espacio personal' : '¿Qué querés investigar?'}</h1>{project?.type==='strategy' && <p>De la idea a una estrategia lista para probar en Shadow.</p>}</div>}
-        {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>submit(text,false)} files={project ? { folder: project.relative, open: p => { setFileToOpen(p); setView('files'); } } : undefined}/> : <div>{m.text}</div>}</article>)}
+        {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>submit(text,false)} files={project ? { folder: project.relative, open: p => { setFileToOpen(p); setView('files'); } } : undefined}/> : <div>{m.text}</div>}{m.role==='user' && m.id===lastUserId && chat.state!=='running' && !busy && <button type="button" className="lab-message-edit" onClick={() => editLast(m.text)}><Pencil size={13}/>Editar</button>}</article>)}
         {chat?.state==='running' && <div className="lab-chat-activity" role="status">
           {(() => { const steps = chat.steps || [], last = steps.length - 1;   // como Claude Code: qué hizo, con qué, y qué hace ahora
             return <>{steps.map((st, i) => st.kind === 'note'
@@ -306,6 +423,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       {mapaOpen && mapaShown && <LabMapa chatId={chatId} projectId={projectId} running={chat?.state === 'running'} onResults={project?.strategyName ? () => onFollowStrategy?.(project.strategyName!) : undefined}/>}
       </div>}
     </section>
+    {quote && createPortal(<button type="button" className="lab-quote-button" style={{ left: quote.x, top: quote.y }} onMouseDown={e => e.preventDefault()} onClick={askAboutQuote}>Preguntar sobre esto</button>, document.body)}
     {sharingOpen && project && <LabShare project={project} onClose={() => setSharingOpen(false)} onChanged={refresh}/>}
     {creating && <div className="lab-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="lab-create-title" className="lab-create-project"><header><h2 id="lab-create-title">Nuevo proyecto</h2><button className="lab-icon" aria-label="Cerrar" onClick={()=>setCreating(false)}><X size={19}/></button></header><form onSubmit={createProject}><label>Nombre<input autoFocus required maxLength={100} value={projectLabel} onChange={e=>setProjectLabel(e.target.value)} placeholder="Prima en SPY"/></label><p>Una idea, un activo o un tema. Si en la conversación arman una estrategia, el proyecto la sigue desde ahí.</p>{error && <p role="alert">{error}</p>}<button className="btn" disabled={busy||!projectLabel.trim()}>Crear proyecto</button></form></section></div>}
   </div>;
