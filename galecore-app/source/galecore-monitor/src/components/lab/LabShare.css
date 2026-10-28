@@ -1,0 +1,10 @@
+.lab-share ul { list-style:none; margin:22px 0 0; padding:0; border:1px solid var(--border); border-radius:8px; }
+.lab-share li { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; font-size:14px; }
+.lab-share li + li { border-top:1px solid var(--border); }
+.lab-share li small { display:block; margin-top:2px; font-size:var(--font-label); color:var(--text-muted); }
+.lab-share form { margin-top:4px; }
+.lab-share form .btn { margin-top:16px; }
+.lab-share [role=alert] { color:var(--red); margin:16px 0 0; }
+.lab-share [role=status] { margin:16px 0 0; }
+.lab-sync-notice { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:0; padding:8px 28px; border-bottom:1px solid var(--border-dark); background:var(--bg-secondary); font-size:var(--font-label); color:var(--text-primary); }
+.lab-shared-badge { flex-shrink:0; color:var(--text-secondary); }
