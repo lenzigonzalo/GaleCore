@@ -20,8 +20,22 @@ namespace DataFeed.Application.App.Runtime
     public class EfShadowRuntimeRepository : IShadowRuntimeRepository
     {
         private readonly Func<GaleCoreDbContext> _newContext;
+        private readonly ShadowRuntimeOwner _owner;
 
-        public EfShadowRuntimeRepository(Func<GaleCoreDbContext> newContext) => _newContext = newContext;
+        /// <summary>Con `owner` fijado, todo lo que se lee es sólo de las instancias desplegadas por ese usuario.</summary>
+        public EfShadowRuntimeRepository(Func<GaleCoreDbContext> newContext, ShadowRuntimeOwner? owner = null)
+        {
+            _newContext = newContext;
+            _owner = owner ?? new ShadowRuntimeOwner(null);
+        }
+
+        /// <summary>Las instancias de este runtime: todas, o sólo las del dueño (por DeployedBy de su deployment).</summary>
+        private IQueryable<StrategyInstanceEntity> OwnedInstances(GaleCoreDbContext db)
+        {
+            if (!_owner.IsScoped) return db.StrategyInstances;
+            var by = ShadowRuntimeOwner.DeployedByOf(_owner.UserId);
+            return db.StrategyInstances.Where(i => db.StrategyDeployments.Any(d => d.Id == i.DeploymentId && d.DeployedBy == by));
+        }
 
         // ── Escritura ──────────────────────────────────────────────
 
@@ -101,9 +115,13 @@ namespace DataFeed.Application.App.Runtime
             using var read = _newContext();
             var running = read.StrategyInstances.AsNoTracking()
                 .FirstOrDefault(i => i.VersionHash == instance.VersionHash && i.LifecycleState == "RUNNING");
-            return running == null
-                ? throw new InvalidOperationException($"la base rechazó la instancia de {instance.VersionHash} pero no hay otra RUNNING")
-                : ToContract(running);
+            if (running == null)
+                throw new InvalidOperationException($"la base rechazó la instancia de {instance.VersionHash} pero no hay otra RUNNING");
+            // Con dueño fijado, la RUNNING de esa versión tiene que ser suya: si es de otra cuenta no se la adopta
+            // (la evaluarían dos APIs); el índice único es por versión, no por usuario.
+            if (_owner.IsScoped && !OwnedInstances(read).Any(i => i.Id == running.Id))
+                throw new ShadowRuntimeConflictException(ShadowRuntimeOwner.SameVersionElsewhereMessage, new InvalidOperationException(instance.VersionHash));
+            return ToContract(running);
         }
 
         public void SaveInstance(StrategyInstance instance)
@@ -216,11 +234,14 @@ namespace DataFeed.Application.App.Runtime
         public ShadowRuntimeSnapshot Load(int maxEvaluationsPerInstance, int maxEventsPerInstance)
         {
             using var db = _newContext();
-            var instances = db.StrategyInstances.AsNoTracking().OrderBy(i => i.CreatedAt).ToList();
+            var instances = OwnedInstances(db).AsNoTracking().OrderBy(i => i.CreatedAt).ToList();
+            var ownedIds = instances.Select(i => i.Id).ToList();
+            var positions = db.ShadowPositions.AsNoTracking();
+            if (_owner.IsScoped) positions = positions.Where(p => ownedIds.Contains(p.InstanceId));
             var snapshot = new ShadowRuntimeSnapshot
             {
                 Instances = instances.Select(ToContract).ToList(),
-                Positions = db.ShadowPositions.AsNoTracking().OrderBy(p => p.EntryAt).AsEnumerable().Select(ToContract).ToList(),
+                Positions = positions.OrderBy(p => p.EntryAt).AsEnumerable().Select(ToContract).ToList(),
             };
             foreach (var i in instances)
             {
@@ -248,7 +269,7 @@ namespace DataFeed.Application.App.Runtime
         {
             using var db = _newContext();
             // Cinco viajes a la base en total, no varios por versión: contra Supabase Dev cada viaje cuesta (WS-0036).
-            var instances = db.StrategyInstances.AsNoTracking().Where(i => specName == null || i.SpecName == specName).ToList();
+            var instances = OwnedInstances(db).AsNoTracking().Where(i => specName == null || i.SpecName == specName).ToList();
             if (instances.Count == 0) return new List<SpecVersionRecord>();
             var ids = instances.Select(i => i.Id).ToList();
             var hashes = instances.Select(i => i.VersionHash).Distinct().ToList();

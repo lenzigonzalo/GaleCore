@@ -28,6 +28,7 @@ namespace DataFeed.Controllers
         private readonly DataFeed.Application.App.Runtime.ShadowRuntimeStore _runtimeStore;
         private readonly DataFeed.Api.Infrastructure.RuntimeStrategySwitch _runtimeSwitch;
         private readonly DataFeed.Api.Infrastructure.ShadowRuntimePersistenceStatus _runtimePersistence;
+        private readonly DataFeed.Application.App.Runtime.ShadowRuntimeOwner _runtimeOwner;
         private readonly ILogger<AppController> _logger;
 
         public AppController(IMediator mediator, IWebHostEnvironment env,
@@ -41,6 +42,7 @@ namespace DataFeed.Controllers
             DataFeed.Application.App.Runtime.ShadowRuntimeStore runtimeStore,
             DataFeed.Api.Infrastructure.RuntimeStrategySwitch runtimeSwitch,
             DataFeed.Api.Infrastructure.ShadowRuntimePersistenceStatus runtimePersistence,
+            DataFeed.Application.App.Runtime.ShadowRuntimeOwner runtimeOwner,
             ILogger<AppController> logger)
             : base(mediator)
         {
@@ -55,6 +57,7 @@ namespace DataFeed.Controllers
             _runtimeStore = runtimeStore;
             _runtimeSwitch = runtimeSwitch;
             _runtimePersistence = runtimePersistence;
+            _runtimeOwner = runtimeOwner;
             _logger = logger;
         }
 
@@ -1706,6 +1709,9 @@ namespace DataFeed.Controllers
         [HttpPost("Runtime/Deploy")]
         public async Task<IActionResult> RuntimeDeploy([FromBody] RuntimeDeployRequest body, CancellationToken ct)
         {
+            // Esta API corre las estrategias de un solo usuario (Runtime:OwnerUserId): otro no despliega acá.
+            if (!_runtimeOwner.Allows(_currentUser.UserId))
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = DataFeed.Application.App.Runtime.ShadowRuntimeOwner.DeniedMessage });
             // Con expectedHash la spec se resuelve por ese hash (la versión aprobada), no por nombre; el store confirma bajo su lock
             // que sigue siendo la vigente. Sin expectedHash, como siempre: la vigente por nombre.
             var spec = string.IsNullOrEmpty(body.ExpectedHash) ? _runtimeStore.GetSpec(body.SpecName) : _runtimeStore.GetSpecByHash(body.ExpectedHash);
@@ -1751,7 +1757,10 @@ namespace DataFeed.Controllers
                 SpecVersion = spec.Identity.Version,
             };
 
-            var result = _runtimeStore.DeployOrGetRunning(deployment, instance, new DataFeed.Application.App.Runtime.Contracts.OperationalEvent
+            DataFeed.Application.App.Runtime.DeployResult result;
+            try
+            {
+            result = _runtimeStore.DeployOrGetRunning(deployment, instance, new DataFeed.Application.App.Runtime.Contracts.OperationalEvent
             {
                 EventId = Guid.NewGuid().ToString(),
                 InstanceId = instanceId,
@@ -1764,6 +1773,11 @@ namespace DataFeed.Controllers
                 },
                 Timestamp = now
             }, string.IsNullOrEmpty(body.ExpectedHash) ? null : body.ExpectedHash);
+            }
+            catch (DataFeed.Application.App.Runtime.ShadowRuntimeConflictException ex)
+            {
+                return StatusCode(StatusCodes.Status409Conflict, new { error = ex.Message });
+            }
 
             if (result.Kind == DataFeed.Application.App.Runtime.DeployResult.KindHashMismatch)
                 return StatusCode(StatusCodes.Status409Conflict, new { error = $"La spec vigente de '{body.SpecName}' ya no es la versión {body.ExpectedHash}: no se desplegó nada.", expected_hash = body.ExpectedHash, current_hash = result.CurrentHash });
@@ -1841,6 +1855,8 @@ namespace DataFeed.Controllers
         [HttpPost("Runtime/Instances/{id}/Stop")]
         public IActionResult RuntimeStop(string id)
         {
+            if (!_runtimeOwner.Allows(_currentUser.UserId))
+                return StatusCode(StatusCodes.Status403Forbidden, new { error = DataFeed.Application.App.Runtime.ShadowRuntimeOwner.DeniedMessage });
             if (!_runtimePersistence.Available || !_runtimeStore.IsDurable)
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, new
                 {
