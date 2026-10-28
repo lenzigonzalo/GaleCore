@@ -4,7 +4,8 @@
 
 Instala lo necesario (Git, .NET 8, Node, Python 3.12 y Claude Code) y deja GaleCore andando en tu PC:
 tu propia API (`:7001`), el monitor (`:3039`) y el Lab (`:8771`), conectados a la base **GaleCore Dev** en la nube.
-Claude Code es el motor del Lab. Un solo comando; si lo volvés a correr, actualiza.
+Claude Code es el motor del Lab y queda como el predeterminado en tu PC (el instalador fija la variable de usuario
+`GALECORE_LAB_PROVIDER=claude`; podés elegir otro motor desde el selector del chat). Un solo comando; si lo volvés a correr, actualiza.
 
 ## Antes de empezar
 
@@ -51,7 +52,7 @@ La `ApiKey` local la genera el instalador y sólo vive en tu PC.
 - Tus proyectos, memoria y chats del Lab: `%USERPROFILE%\GaleCore-datos\knowledge` (se crea la primera vez que arranca el Lab).
 - El código: `%USERPROFILE%\GaleCore` (no guardes tus cosas ahí).
 - Tu configuración local: `galecore-app\dev\.local\env.json` y los *user-secrets* de la API; las variables
-  `GALECORE_API_KEY`, `GALECORE_BASE_URL`, `GALECORE_USERNAME` y `GALECORE_PASSWORD` quedan en tus variables de usuario de Windows.
+  `GALECORE_API_KEY`, `GALECORE_BASE_URL`, `GALECORE_LAB_PROVIDER`, `GALECORE_USERNAME` y `GALECORE_PASSWORD` quedan en tus variables de usuario de Windows.
   Nada de eso se sube a Git.
 
 ## Actualizar

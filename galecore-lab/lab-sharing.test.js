@@ -111,3 +111,44 @@ test('abrir el proyecto no repite la sincronización de hace menos de 20 segundo
   assert.equal(again.value.recent, true); assert.equal(calls.length, 1);
   await sync({}); assert.equal(calls.length, 2);
 });
+
+test('un sync que falla deja un aviso de una línea con el motivo y el siguiente que sale bien lo limpia', async t => {
+  let fail = 'GaleCore did not answer at http://x: ConnectError';
+  const { kb, service } = world(t, { answers: { 'project sync': () => fail ? { error: fail } : { pulled: 0, pushed: 0, conflicts: [], skipped: [] } } });
+  const p = await create(service, 'Idea'); share(kb, p.id);
+  const noticeOf = async () => (await route(service, 'GET', '/workspaces')).value.projects.find(x => x.id === p.id).syncNotice;
+  await assert.rejects(route(service, 'POST', '/workspaces/' + p.id + '/sync'), /did not answer/);
+  assert.equal((await noticeOf()).error, 'sin conexión con GaleCore');
+  fail = 'no credentials: set GALECORE_USERNAME and GALECORE_PASSWORD';
+  await assert.rejects(route(service, 'POST', '/workspaces/' + p.id + '/sync'));
+  assert.equal((await noticeOf()).error, 'faltan las credenciales de GaleCore');
+  fail = null;
+  await route(service, 'POST', '/workspaces/' + p.id + '/sync');
+  assert.equal(await noticeOf(), null);
+});
+
+test('si falla el sync de arranque, cada proyecto compartido muestra el motivo; los errores por proyecto también', async t => {
+  const { createSharing } = require('./lab-sharing');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-lab-test-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, '.sync.json'), '{}');
+  const projects = [{ id: 'a', dir }, { id: 'b', dir: path.join(dir, 'nada') }];
+  let answer = { error: 'no credentials: set GALECORE_USERNAME' };
+  const execute = (c, a, o, cb) => setImmediate(() => cb(null, JSON.stringify(answer)));
+  const sharing = createSharing({ root: dir, kb: dir, environment: () => ({}), execute });
+  await assert.rejects(sharing.syncAll(() => projects));
+  assert.equal(sharing.notice(projects[0]).error, 'faltan las credenciales de GaleCore'); assert.equal(sharing.notice(projects[1]), null);
+  answer = { projects: {}, errors: { a: 'GaleCore did not answer at x: ConnectError' } };
+  await sharing.syncAll(() => projects);
+  assert.equal(sharing.notice(projects[0]).error, 'sin conexión con GaleCore');
+  answer = { projects: { a: { pulled: 0, pushed: 0, conflicts: [] } }, errors: {} };
+  await sharing.syncAll(() => projects);
+  assert.equal(sharing.notice(projects[0]), null);
+});
+
+test('el motor predeterminado sale de GALECORE_LAB_PROVIDER (claude) y sin la variable sigue siendo codex', async t => {
+  const original = process.env.GALECORE_LAB_PROVIDER; t.after(() => { if (original === undefined) delete process.env.GALECORE_LAB_PROVIDER; else process.env.GALECORE_LAB_PROVIDER = original; });
+  const { service } = world(t);
+  delete process.env.GALECORE_LAB_PROVIDER; assert.equal((await route(service, 'GET', '/workspaces')).value.defaultProvider, 'codex');
+  process.env.GALECORE_LAB_PROVIDER = 'claude'; assert.equal((await route(service, 'GET', '/workspaces')).value.defaultProvider, 'claude');
+  process.env.GALECORE_LAB_PROVIDER = 'otro'; assert.equal((await route(service, 'GET', '/workspaces')).value.defaultProvider, 'codex');
+});

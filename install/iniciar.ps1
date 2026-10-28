@@ -69,7 +69,7 @@ foreach ($s in $servicios) {
 }
 
 # Entorno: variables de usuario de Windows (las crea instalar.ps1) y el Python del proyecto primero en PATH.
-foreach ($n in 'GALECORE_API_KEY', 'GALECORE_BASE_URL', 'GALECORE_USERNAME', 'GALECORE_PASSWORD', 'GALECORE_TIMEOUT_SECONDS', 'ALLOW_UNKNOWN_FRESHNESS', 'MAX_STALENESS_SECONDS') {
+foreach ($n in 'GALECORE_API_KEY', 'GALECORE_BASE_URL', 'GALECORE_USERNAME', 'GALECORE_PASSWORD', 'GALECORE_LAB_PROVIDER', 'GALECORE_TIMEOUT_SECONDS', 'ALLOW_UNKNOWN_FRESHNESS', 'MAX_STALENESS_SECONDS') {
     $v = [Environment]::GetEnvironmentVariable($n, 'User')
     if ($v) { [Environment]::SetEnvironmentVariable($n, $v, 'Process') }
 }

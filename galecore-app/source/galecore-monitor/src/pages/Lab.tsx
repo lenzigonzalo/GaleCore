@@ -116,6 +116,13 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     try { localStorage.setItem('galecore:lab:sidebar-width', String(sidebarWidth)); } catch { /* disponible hasta recargar */ }
   }, [sidebarWidth]);
   const resizeSidebar = (width: number) => setSidebarWidth(limitSidebarWidth(width, workspace.current?.clientWidth || window.innerWidth));
+  // Motor por defecto de esta PC (GALECORE_LAB_PROVIDER en el Lab): se aplica una sola vez, al cargar; después manda lo que elija la persona.
+  const defaultApplied = useRef(false);
+  useEffect(() => {
+    if (!state || defaultApplied.current) return;
+    defaultApplied.current = true;
+    if (state.defaultProvider && state.defaultProvider !== provider && state.providers.find(x => x.id === state.defaultProvider)?.installed) setProvider(state.defaultProvider);
+  }, [state, provider]);
   useEffect(() => { const ok = state?.providers.find(x => x.installed); if (ok && !state?.providers.find(x => x.id === provider)?.installed) { setProvider(ok.id); setChatSettings({model:'',effort:''}); } }, [state, provider]);
   useEffect(() => { sessionStorage.setItem('galecore:lab:project', projectId); }, [projectId]);
   useEffect(() => { if(chatId) sessionStorage.setItem('galecore:lab:chat',chatId); else sessionStorage.removeItem('galecore:lab:chat'); },[chatId]);

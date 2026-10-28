@@ -204,6 +204,7 @@ if ($DryRun) {
     Sim "$(if ($existe) { 'conservaria' } else { 'crearia' }) $envJson (pediria: anon key, host del pooler, contrasena de la base galecore_api)"
     Sim 'pediria tus credenciales de Tastytrade (refresh token y client secret) y las guardaria con dotnet user-secrets'
     Sim 'pediria tu usuario y contrasena de GaleCore Dev y los guardaria como variables de usuario (GALECORE_USERNAME / GALECORE_PASSWORD)'
+    Sim 'fijaria Claude Code como motor predeterminado del Lab (variable de usuario GALECORE_LAB_PROVIDER=claude)'
     Sim 'generaria una ApiKey local (user-secrets de la API + variable de usuario GALECORE_API_KEY) y fijaria GALECORE_BASE_URL=http://localhost:7001'
     Sim 'dejaria SHADOW y RPF apagados: runtime_persistence=false en env.json + Files/Rpf/rpf_switch_state.json y Files/platform_services_switch_state.json con enabled=false'
 } else {
@@ -255,6 +256,8 @@ if ($DryRun) {
         Ok 'ApiKey local generada (solo vive en esta PC)'
     } else { Ok 'ApiKey local ya existe' }
     [Environment]::SetEnvironmentVariable('GALECORE_BASE_URL', 'http://localhost:7001', 'User')
+    # Motor predeterminado del Lab en esta PC: Claude Code (el default del codigo no cambia; se elige con esta variable).
+    [Environment]::SetEnvironmentVariable('GALECORE_LAB_PROVIDER', 'claude', 'User')
 
     # Usuario de GaleCore Dev: lo usan el Lab y el harness para entrar como vos.
     $tieneUsr = [bool][Environment]::GetEnvironmentVariable('GALECORE_USERNAME', 'User') -and [bool][Environment]::GetEnvironmentVariable('GALECORE_PASSWORD', 'User')

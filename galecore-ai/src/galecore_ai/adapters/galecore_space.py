@@ -185,6 +185,9 @@ class SpaceClient:
     def shared_create(self, name: str, kind: str, local_key: str) -> dict:
         return self._call("POST", "/App/GaleCore/SharedProjects", json={"name": name, "kind": kind, "localKey": local_key})
 
+    def shared_delete(self, project_id: str) -> None:
+        self._call("DELETE", f"/App/GaleCore/SharedProjects/{project_id}")
+
     def shared_add_member(self, project_id: str, username: str) -> dict:
         return self._call("POST", f"/App/GaleCore/SharedProjects/{project_id}/members", json={"username": username})
 

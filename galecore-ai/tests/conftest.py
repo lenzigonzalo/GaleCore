@@ -12,7 +12,7 @@ sys.path.insert(0, SRC)
 os.environ["PYTHONPATH"] = os.pathsep.join([SRC, *filter(None, [os.environ.get("PYTHONPATH")])])
 
 
-import pytest  # noqa: E402
+import pytest
 
 
 @pytest.fixture(autouse=True)
