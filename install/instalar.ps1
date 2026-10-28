@@ -206,7 +206,7 @@ if ($DryRun) {
     Sim 'pediria tu usuario y contrasena de GaleCore Dev y los guardaria como variables de usuario (GALECORE_USERNAME / GALECORE_PASSWORD)'
     Sim 'fijaria Claude Code como motor predeterminado del Lab (variable de usuario GALECORE_LAB_PROVIDER=claude)'
     Sim 'generaria una ApiKey local (user-secrets de la API + variable de usuario GALECORE_API_KEY) y fijaria GALECORE_BASE_URL=http://localhost:7001'
-    Sim 'dejaria SHADOW y RPF apagados: runtime_persistence=false en env.json + Files/Rpf/rpf_switch_state.json y Files/platform_services_switch_state.json con enabled=false'
+    Sim 'dejaria SHADOW prendido y solo tuyo (runtime_owner_username = tu usuario en env.json; sin runtime_persistence=false; platform_services_switch_state.json runtime.enabled=true) y RPF apagado (Files/Rpf/rpf_switch_state.json enabled=false)'
 } else {
     $cfg = [ordered]@{}
     if (Test-Path $envJson) {
@@ -224,8 +224,9 @@ if ($DryRun) {
         $cfg['pooler_host'] = $pooler
         $cfg['api_password'] = Leer-Secreto 'Contrasena de la base (rol galecore_api)'
     } else { Ok 'conexion a Dev ya configurada (usa -Reconfigurar para cambiarla)' }
-    # SHADOW apagado en esta API: no recupera ni valua las instancias del owner y no puede desplegar.
-    $cfg['runtime_persistence'] = $false
+    # SHADOW prendido y solo tuyo: runtime_owner_username se completa mas abajo, cuando ya se sabe tu usuario.
+    # Se quita la marca vieja runtime_persistence=false (era el apagado total de las versiones anteriores).
+    if ($cfg.Contains('runtime_persistence')) { $cfg.Remove('runtime_persistence') }
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $envJson) | Out-Null
     Escribir-Utf8 $envJson (($cfg | ConvertTo-Json -Depth 4))
     Ok "guardado $envJson (queda fuera de git)"
@@ -268,7 +269,15 @@ if ($DryRun) {
         Ok 'usuario guardado como variable de usuario de Windows'
     } else { Ok 'usuario de Dev ya configurado' }
 
-    # SHADOW y RPF apagados (archivos de estado locales, ignorados por git).
+    # Tu API corre solo tus estrategias SHADOW: la API las filtra por este usuario (Runtime:OwnerUsername).
+    $miUsuario = [Environment]::GetEnvironmentVariable('GALECORE_USERNAME', 'User')
+    if ($miUsuario) {
+        $cfg['runtime_owner_username'] = $miUsuario
+        Escribir-Utf8 $envJson (($cfg | ConvertTo-Json -Depth 4))
+        Ok "SHADOW queda asociado a tu usuario ($miUsuario)"
+    } else { Falla 'no se pudo leer GALECORE_USERNAME: sin eso SHADOW correria las estrategias de todos' }
+
+    # SHADOW prendido (solo el tuyo) y RPF apagado (archivos de estado locales, ignorados por git).
     $files = Join-Path $feed 'DataFeed.Api\Files'
     $ahora = (Get-Date).ToUniversalTime().ToString('o')
     New-Item -ItemType Directory -Force -Path (Join-Path $files 'Rpf') | Out-Null
@@ -278,9 +287,9 @@ if ($DryRun) {
     if (Test-Path $plataforma) {
         try { foreach ($p in (Get-Content $plataforma -Raw | ConvertFrom-Json).PSObject.Properties) { $estado[$p.Name] = $p.Value } } catch { $estado = [ordered]@{} }
     }
-    $estado['runtime'] = [ordered]@{ enabled = $false; updatedAt = $ahora }
+    $estado['runtime'] = [ordered]@{ enabled = $true; updatedAt = $ahora }
     Escribir-Utf8 $plataforma ($estado | ConvertTo-Json -Depth 4)
-    Ok 'SHADOW y RPF quedan apagados en tu API'
+    Ok 'SHADOW prendido (solo tus estrategias) y RPF apagado en tu API'
 }
 
 # ---------- accesos directos ----------
