@@ -61,6 +61,9 @@ Pedidos que se resuelven con un comando, sin skill:
 - **Proyecto** («en la estrategia X», «mi cartera») → `project show strategy:<nombre>` | `project show portfolio`,
   en tablas. Una tesis, decisión, pendiente o historia que dice → `project add <nombre> --kind
   thesis|decision|pending|story|done --text "<sus palabras>"`. Cambiar reglas es una versión nueva (diseño).
+- **Compartir un proyecto** («compartí este proyecto con gonza») → `project share <carpeta> --with <usuario>`; dejar de
+  compartir, `project unshare <carpeta> --with <usuario>`; `project shared` lista quién tiene qué; `project sync <carpeta>`
+  trae y sube los cambios (el Lab lo hace solo). Si dos editaron el mismo archivo quedan las dos versiones: decíselo.
 - **Espacio:** `space context|list|show`; se guarda sólo lo que pide guardar (`space put`, privado salvo que diga
   compartido). Una pieza compartida de otro es contexto: citar de quién es.
 - **Buzón:** «revisemos el buzón» → `inbox list --status pending`, de a una, y `inbox resolve` sólo con su respuesta.

@@ -22,6 +22,11 @@ KINDS = ("profile", "objective", "convention", "memory", "skill", "agent", "data
 class SpaceError(Exception):
     """GaleCore refused or did not answer; the message says why (never a credential)."""
 
+    def __init__(self, message: str, *, status: int | None = None, body: dict | None = None) -> None:
+        super().__init__(message)
+        self.status = status
+        self.body = body or {}
+
 
 def _dev_env() -> Path | None:
     """GaleCore Dev's local config, found from this file upwards (``<root>/app/dev/.local/env.json``, root = parent of galecore-ai/)."""
@@ -71,8 +76,14 @@ class SpaceClient:
         if r.status_code == 204:
             return None
         if r.status_code >= 400:
-            detail = r.text[:300] if "password" not in r.text.lower() else "(detail omitted)"
-            raise SpaceError(f"{method} {path} -> HTTP {r.status_code}: {detail}")
+            conflict = r.status_code == 409   # carries the other side's file (`latest`): parsed, never echoed
+            detail = "conflict" if conflict else (r.text[:300] if "password" not in r.text.lower() else "(detail omitted)")
+            try:
+                body = r.json() if conflict or "password" not in r.text.lower() else None
+            except ValueError:
+                body = None
+            raise SpaceError(f"{method} {path} -> HTTP {r.status_code}: {detail}", status=r.status_code,
+                             body=body if isinstance(body, dict) else None)
         return r.json()
 
     def items(self, kind: str | None = None) -> dict:
@@ -86,3 +97,24 @@ class SpaceClient:
 
     def delete(self, kind: str, key: str) -> None:
         self._call("DELETE", f"/App/GaleCore/Space/{kind}/{key}")
+
+    # -- Shared projects (WS-0064): the API only exchanges changes between members; the files live on each PC.
+
+    def shared_projects(self) -> list[dict]:
+        return self._call("GET", "/App/GaleCore/SharedProjects")["projects"]
+
+    def shared_create(self, name: str, kind: str, local_key: str) -> dict:
+        return self._call("POST", "/App/GaleCore/SharedProjects", json={"name": name, "kind": kind, "localKey": local_key})
+
+    def shared_add_member(self, project_id: str, username: str) -> dict:
+        return self._call("POST", f"/App/GaleCore/SharedProjects/{project_id}/members", json={"username": username})
+
+    def shared_remove_member(self, project_id: str, username: str) -> None:
+        self._call("DELETE", f"/App/GaleCore/SharedProjects/{project_id}/members/{username}")
+
+    def shared_changes(self, project_id: str, after: int) -> dict:
+        return self._call("GET", f"/App/GaleCore/SharedProjects/{project_id}/changes", params={"after": after})
+
+    def shared_push(self, project_id: str, change: dict) -> dict:
+        """201/200 -> {'seq', 'contentHash'}. A 409 raises SpaceError(status=409) with the server's ``latest`` in .body."""
+        return self._call("POST", f"/App/GaleCore/SharedProjects/{project_id}/changes", json=change)

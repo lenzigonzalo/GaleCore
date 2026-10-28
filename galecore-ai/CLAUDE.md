@@ -2,11 +2,11 @@
 
 Harness de IA financiera sobre GaleCore: métodos (skills), agentes, perfil del trader, memoria con fuente,
 validaciones y catálogo. No calcula hechos financieros ni consulta APIs externas por su cuenta: los datos vienen de
-GaleCore (`../app/`). Este archivo sólo dice cómo se usa y se prueba `galecore-ai/`.
+GaleCore (`../galecore-app/`). Este archivo sólo dice cómo se usa y se prueba `galecore-ai/`.
 
 ```
-app          = datos, cálculos, riesgo, SHADOW, monitor (verdad operativa)
-ai           = método, criterio, memoria y validación determinística
+galecore-app = datos, cálculos, riesgo, SHADOW, monitor (verdad operativa)
+galecore-ai  = método, criterio, memoria y validación determinística
 Host         = ejecuta el modelo (hoy Claude Code)
 ```
 
@@ -18,7 +18,7 @@ Las secciones de uso (contexto, herramientas, datos, cuenta, memoria, límites) 
 
 ## Entorno
 
-La API Dev de GaleCore corre desde `../app` (`python dev/galecore_dev.py api`, `:7001`). La ApiKey nunca se
+La API Dev de GaleCore corre desde `../galecore-app` (`python dev/galecore_dev.py api`, `:7001`). La ApiKey nunca se
 escribe en archivos.
 
 ```bash

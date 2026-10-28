@@ -41,6 +41,7 @@ Usage:
     python -m galecore_ai.adapters.cli clock [--at ISO]
     python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list [--bugfix]
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
+    python -m galecore_ai.adapters.cli project share KEY --with USER | unshare KEY --with USER | shared | sync KEY|--all
     python -m galecore_ai.adapters.cli project add NAME|portfolio --kind thesis|story|decision|pending|done --text "..." [--ref REF] [--closes HASH] --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|days|every_minutes [--days mon,wed] [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
@@ -881,7 +882,36 @@ async def _cmd_inbox(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+def _cmd_project_shared(args: argparse.Namespace) -> None:
+    """Shared projects (WS-0064): the folder stays on each PC; GaleCore relays the changes between the members."""
+    from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+    from galecore_ai.application import shared_projects as sp
+
+    c = args.project_command
+    try:
+        base = knowledge_dir()
+        client = SpaceClient()
+        if c == "share":
+            _json_out(sp.share(client, base, args.key, args.with_user))
+        elif c == "unshare":
+            _json_out(sp.unshare(client, base, args.key, args.with_user))
+        elif c == "shared":
+            _json_out(sp.list_shared(client, base))
+        elif args.all:
+            _json_out({"status": "SYNCED", **sp.sync_all(client, base)})
+        elif args.key:
+            _json_out({"status": "SYNCED", "project": args.key, **sp.sync_project(client, sp.find_project(base, args.key))})
+        else:
+            _error_out("project sync needs a project key or --all", exit_code=_EXIT_VALIDATION_ERROR)
+    except (sp.SharedProjectError, KnowledgeBaseError) as exc:
+        _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
+    except SpaceError as exc:
+        _error_out(str(exc), exit_code=1)
+
+
 async def _cmd_project(args: argparse.Namespace) -> None:
+    if args.project_command in ("share", "unshare", "shared", "sync"):
+        return _cmd_project_shared(args)
     from galecore_ai.application import project
     kb = _build_knowledge_base()
     try:
@@ -1518,6 +1548,17 @@ def build_parser() -> _JsonArgumentParser:
     pj_sub = p_project.add_subparsers(dest="project_command", required=True)
     pj_sub.add_parser("show", help="strategy:<name> or portfolio").add_argument("target")
     pj_sub.add_parser("design", help="Verified local design only, without research or market queries").add_argument("target")
+    p_pj_share = pj_sub.add_parser("share", help="Share a project folder with another trader (uploads its files)")
+    p_pj_share.add_argument("key", help="Project folder name in workspaces/ or strategies/")
+    p_pj_share.add_argument("--with", dest="with_user", required=True, help="Their GaleCore username")
+    p_pj_unshare = pj_sub.add_parser("unshare", help="Stop sharing a project with a member (owner only)")
+    p_pj_unshare.add_argument("key")
+    p_pj_unshare.add_argument("--with", dest="with_user", required=True)
+    pj_sub.add_parser("shared", help="The projects shared by you or with you, with their members")
+    p_pj_sync = pj_sub.add_parser("sync", help="Pull the others' changes and push yours; --all also brings the projects "
+                                               "shared with you that you do not have yet")
+    p_pj_sync.add_argument("key", nargs="?", help="A project that is already shared")
+    p_pj_sync.add_argument("--all", action="store_true")
     p_pj_add = pj_sub.add_parser("add", help="Append the owner's words: thesis, story, decision, pending or done")
     p_pj_add.add_argument("name", help="Strategy name or portfolio")
     p_pj_add.add_argument("--kind", required=True, choices=["thesis", "story", "decision", "pending", "done"])
