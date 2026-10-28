@@ -289,3 +289,29 @@ test('mandar ya: tras cortar el turno, el envío siguiente espera a que cierre e
  await new Promise(r=>setTimeout(r,300));
  assert.equal(procs.length,2);
 });
+test('uso: se guarda lo que informan Claude y Codex en eventos reales, sin estimar (WS-0067)',()=>{
+ const read=f=>fs.readFileSync(path.join(__dirname,'fixtures',f),'utf8').trim().split('\n').map(l=>JSON.parse(l));
+ const claude={messages:[],turnStartedAt:1};read('eventos-reales-claude.jsonl').forEach(e=>consumeEvent(claude,e,'claude'));
+ assert.equal(claude.usage.turns.length,1);
+ const t=claude.usage.turns[0];assert.ok(t.input>=14763&&t.output===4&&t.cached===13813);assert.equal(typeof t.costUsd,'number');
+ assert.ok(claude.usage.context.window>=200000&&claude.usage.context.used>0);
+ assert.equal(claude.usage.limit.status,'allowed_warning');assert.equal(typeof claude.usage.limit.windows.five_hour.utilization,'number');
+ const codex={messages:[],turnStartedAt:1};read('eventos-reales-codex.jsonl').forEach(e=>consumeEvent(codex,e,'codex'));
+ assert.deepEqual(codex.usage.turns.map(({at,...x})=>x),[{input:17340,cached:13440,output:5}]);
+ assert.equal(codex.usage.context,undefined);assert.equal(codex.usage.limit,undefined);   // no lo informa: no se inventa
+});
+test('/skill y @agente: el Lab le indica al motor leer la pieza con space show, igual en Claude y Codex (WS-0067)',async t=>{
+ const {EventEmitter}=require('events');const {base,kb,local}=setup(t);fs.mkdirSync(path.join(base,'galecore-ai'),{recursive:true});fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo');
+ const sent=[];const spawnProcess=()=>{const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(v){sent.push(String(v));},end(v){if(v)sent.push(String(v));}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
+ const service=createWorkspaces({root:base,kb,local,binaries:{claude:'claude',codex:'codex'},environment:()=>({}),instructions:()=>'',legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
+ const mentions=[{kind:'skill',key:'valuar-empresa',title:'Valuar empresa'},{kind:'agent',key:'oportunidades',title:'Oportunidades'},{kind:'skill',key:'../malo',title:'x'},{kind:'data',key:'otro',title:'y'}];
+ for(const provider of ['claude','codex']){
+  sent.length=0;const chat=(await route(service,'POST','/chats',{project:'personal',provider})).value;
+  await route(service,'POST','/chats/'+chat.id+'/messages',{text:'/valuar-empresa de AAPL con @oportunidades',mentions});await new Promise(r=>setTimeout(r,100));
+  const prompt=sent.join('\n');
+  assert.match(prompt,/aplicá la skill «Valuar empresa» \(leela con `space show skill\/valuar-empresa`/);
+  assert.match(prompt,/trabajá con el agente «Oportunidades» \(leela con `space show agent\/oportunidades`/);
+  assert.ok(!prompt.includes('malo')&&!prompt.includes('otro'));                       // sólo skills y agentes, con clave válida
+  assert.equal((await route(service,'GET','/chats/'+chat.id)).value.messages[0].text,'/valuar-empresa de AAPL con @oportunidades');   // el chat conserva lo que escribió
+ }
+});

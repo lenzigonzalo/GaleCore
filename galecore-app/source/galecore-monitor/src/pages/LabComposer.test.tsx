@@ -177,3 +177,86 @@ test('Preguntar sobre esto aparece aunque la selección termine fuera del texto 
   fireEvent.click(await screen.findByRole('button', { name: 'Preguntar sobre esto' }));
   expect(await box()).toHaveValue('> texto largo\n\n');
 });
+
+test('un archivo de la respuesta se abre a la derecha, sin salir del chat, y se puede pasar a Archivos', async () => {
+  serve('idle', [user('hola'), reply('Mirá [la nota](notas/idea.md) del proyecto')]);
+  const base = (labRequest as jest.Mock).getMockImplementation()!;
+  (labRequest as jest.Mock).mockImplementation(async (path: string, body?: object) => path.includes('/files?path=') ? { text: '# Idea\n\nComprar volatilidad' } : path.endsWith('/files') ? { tree: [] } : base(path, body));
+  render(<Lab onMonitor={() => {}} />);
+  fireEvent.click(await screen.findByRole('link', { name: 'la nota' }));
+  const panel = await screen.findByRole('complementary', { name: 'Archivo idea.md' });
+  expect(await screen.findByText('Comprar volatilidad')).toBeInTheDocument();
+  expect(await box()).toBeInTheDocument();                                   // el chat sigue ahí
+  fireEvent.click(screen.getByRole('button', { name: 'Abrir en Archivos' }));
+  expect(panel).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('textbox', { name: 'Mensaje al proyecto' })).not.toBeInTheDocument());
+});
+
+test('«/» abre las skills del espacio, se elige con el teclado y al enviar viaja como mención', async () => {
+  const space = require('../api/space');
+  const spy = jest.spyOn(space, 'fetchSpace').mockResolvedValue({ items: [{ kind: 'skill', key: 'valuar-empresa', title: 'Valuar empresa' }, { kind: 'agent', key: 'oportunidades', title: 'Oportunidades' }], shared: [] });
+  serve('idle', [user('hola'), reply('listo')]);
+  render(<Lab onMonitor={() => {}} />);
+  const input = await box();
+  fireEvent.change(input, { target: { value: '/val', selectionStart: 4 } });
+  const list = await screen.findByRole('listbox', { name: 'Skills' });
+  expect(list).toHaveTextContent('Valuar empresa');
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(input).toHaveValue('/valuar-empresa ');
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  await new Promise(r => setTimeout(r, 20));   // el cursor se acomoda un instante después de elegir
+  const text = '/valuar-empresa de AAPL con @op';
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(input, text); (input as HTMLTextAreaElement).setSelectionRange(text.length, text.length); fireEvent.input(input);
+  fireEvent.mouseDown(await screen.findByRole('option', { name: /oportunidades/ }));
+  expect(input).toHaveValue('/valuar-empresa de AAPL con @oportunidades ');
+  fireEvent.click(screen.getByRole('button', { name: 'Enviar mensaje' }));
+  await waitFor(() => expect(posted('/messages')).toHaveLength(1));
+  expect(posted('/messages')[0][1].mentions.map((m: any) => m.key)).toEqual(['valuar-empresa', 'oportunidades']);
+  spy.mockRestore();
+});
+
+test('Guardar como nota escribe en notas/ con la API de archivos y deja el enlace al panel', async () => {
+  serve('idle', [user('hola'), reply('# Idea de SPY\n\nComprar volatilidad')]);
+  const base = (labRequest as jest.Mock).getMockImplementation()!;
+  (labRequest as jest.Mock).mockImplementation(async (path: string, body?: any) => path.endsWith('/files/mkdir') ? (() => { throw new Error('Ya existe.'); })() : path.endsWith('/files/write') ? { path: body.path } : path.includes('/files?path=') ? { text: 'contenido' } : base(path, body));
+  render(<Lab onMonitor={() => {}} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Guardar como nota' }));
+  const link = await screen.findByRole('link', { name: /notas\/\d{4}-\d{2}-\d{2}-idea-de-spy\.md/ });
+  const write = (labRequest as jest.Mock).mock.calls.find(([path]) => String(path).endsWith('/files/write'))!;
+  expect(write[1]).toMatchObject({ create: true, text: '# Idea de SPY\n\nComprar volatilidad' });
+  fireEvent.click(link);
+  expect(await screen.findByRole('complementary', { name: /Archivo .*idea-de-spy\.md/ })).toBeInTheDocument();
+});
+
+describe('reintentar y reanudar', () => {
+  const failed = (extra = {}) => {
+    serve('failed', [user('pedido que falló')]);
+    const base = (labRequest as jest.Mock).getMockImplementation()!;
+    (labRequest as jest.Mock).mockImplementation(async (path: string, body?: object) => path === '/chats/chat-1' ? { ...(await base(path, body)), error: 'No pudo completar', ...extra } : base(path, body));
+  };
+
+  test('Reintentar reenvía el mismo mensaje', async () => {
+    failed();
+    render(<Lab onMonitor={() => {}} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(posted('/messages')).toHaveLength(1));
+    expect(posted('/messages')[0][1]).toMatchObject({ text: 'pedido que falló', replace: true, retry: true });
+  });
+
+  test('con el límite de Claude y su hora, Reanudar lo reenvía solo a esa hora y se puede cancelar', async () => {
+    jest.useFakeTimers('modern');
+    try {
+      const at = Math.floor(Date.now() / 1000) + 600;
+      failed({ limitResetsAt: at });
+      render(<Lab onMonitor={() => {}} />);
+      fireEvent.click(await screen.findByRole('button', { name: /^Reanudar a las/ }));
+      expect(screen.getByText(/Se reenvía solo a las/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+      jest.advanceTimersByTime(700_000);
+      expect(posted('/messages')).toHaveLength(0);                 // cancelado: no se manda
+      fireEvent.click(screen.getByRole('button', { name: /^Reanudar a las/ }));
+      await React.act(async () => { jest.advanceTimersByTime(601_000); });
+      await waitFor(() => expect(posted('/messages')).toHaveLength(1));
+    } finally { jest.useRealTimers(); }
+  });
+});

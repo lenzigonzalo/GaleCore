@@ -113,6 +113,31 @@ function limitText(resetsAt){
   const hour = at.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
   return 'Se terminó tu límite de uso de Claude. Vuelve ' + (today ? 'a las ' + hour : 'el ' + at.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' }) + ' a las ' + hour) + '; hasta entonces podés seguir con Codex.';
 }
+// Uso (WS-0067): sólo lo que el motor informa, por turno y sin estimar. Claude: `result.usage`, `modelUsage.<modelo>.contextWindow`,
+// `total_cost_usd` y `rate_limit_event`; Codex: `turn.completed.usage` (no informa ventana de contexto ni costo).
+function recordUsage(chat,turn,extra={}){
+  const u=chat.usage||(chat.usage={turns:[]});
+  u.turns.push({at:new Date().toISOString(),...turn});if(u.turns.length>500)u.turns.splice(0,u.turns.length-500);
+  Object.assign(u,extra);
+}
+const num=v=>typeof v==='number'&&Number.isFinite(v)?v:undefined;
+function claudeUsage(chat,event){
+  const u=event.usage;if(!u)return;
+  const it=(Array.isArray(u.iterations)&&u.iterations.at(-1))||u;   // el contexto es el de la última vuelta, no la suma del turno
+  const input=(num(u.input_tokens)||0)+(num(u.cache_read_input_tokens)||0)+(num(u.cache_creation_input_tokens)||0);
+  const used=(num(it.input_tokens)||0)+(num(it.cache_read_input_tokens)||0)+(num(it.cache_creation_input_tokens)||0);
+  const windows=Object.values(event.modelUsage||{}).map(m=>num(m?.contextWindow)).filter(Boolean);
+  recordUsage(chat,{input,cached:num(u.cache_read_input_tokens)||0,output:num(u.output_tokens)||0,...(num(event.total_cost_usd)!==undefined?{costUsd:event.total_cost_usd}:{})},
+    windows.length?{context:{used,window:Math.max(...windows)}}:{});
+}
+// «/skill» y «@agente» del chat (WS-0067): el trader elige una pieza de su espacio (o compartida con él) y el Lab se la indica al
+// motor con el mismo mecanismo de siempre: leerla con `space show <tipo>/<clave>`. Igual para Claude y Codex (D-0014).
+function mentionLine(list){
+  const items=(Array.isArray(list)?list:[]).slice(0,8).filter(m=>m&&(m.kind==='skill'||m.kind==='agent')&&/^[\w.-]{1,80}$/.test(String(m.key||'')))
+    .map(m=>({kind:m.kind,key:String(m.key),title:String(m.title||m.key).replace(/\s+/g,' ').slice(0,80)}));
+  if(!items.length)return '';
+  return '[El trader indicó: '+items.map(m=>(m.kind==='skill'?'aplicá la skill «':'trabajá con el agente «')+m.title+'» (leela con `space show '+m.kind+'/'+m.key+'` y seguila)').join('; ')+'.]';
+}
 function consumeEvent(chat, event, provider) {
   if(provider === 'codex') {
     if(event.type === 'thread.started') chat.nativeId = event.thread_id;
@@ -126,6 +151,7 @@ function consumeEvent(chat, event, provider) {
     if(event.type === 'item.started') { const input=event.item?.type === 'command_execution' ? {command:event.item.command} : event.item?.type === 'file_change' ? {file_path:(event.item.changes||[])[0]?.path} : null;
       setActivity(chat, input ? describeStep(input.command ? 'Bash' : 'Write', input) : 'Pensando', input ? stepDetail('Bash', input) : ''); }
     if(event.type === 'item.completed' && event.item?.type === 'reasoning') setNote(chat, event.item.text);
+    if(event.type === 'turn.completed' && event.usage) recordUsage(chat,{input:num(event.usage.input_tokens)||0,cached:num(event.usage.cached_input_tokens)||0,output:num(event.usage.output_tokens)||0});
     if(event.type === 'turn.failed' || event.type === 'error') chat.error = event.error?.message || event.message || 'El motor no pudo completar el pedido.';
   } else {
     if(event.session_id) chat.nativeId = event.session_id;
@@ -140,6 +166,10 @@ function consumeEvent(chat, event, provider) {
     }
     // Owner 24/10: si se terminó el límite de la suscripción, decirlo y cuándo vuelve (no «revisá permisos»).
     if(event.type === 'rate_limit_event' && event.rate_limit_info?.status === 'rejected') chat.limitResetsAt = event.rate_limit_info.resetsAt || true;
+    if(event.type === 'rate_limit_event' && event.rate_limit_info){const i=event.rate_limit_info,w=i.unifiedWindows||{};
+      (chat.usage||(chat.usage={turns:[]})).limit={status:i.status,resetsAt:num(i.resetsAt),utilization:num(i.utilization),type:i.rateLimitType,
+        windows:Object.fromEntries(Object.entries(w).map(([k,v])=>[k,{utilization:num(v?.utilization),resetsAt:num(v?.resetsAt)}]))};}
+    if(event.type === 'result') claudeUsage(chat,event);
     const limited = chat.limitResetsAt || (event.type === 'result' && event.is_error && /hit your .*limit|usage limit|rate.?limit/i.test(String(event.result || '')));
     if(event.type === 'result' && !event.is_error && event.result) chat.messages.push({id:crypto.randomUUID(),role:'assistant',text:event.result,at:new Date().toISOString()});
     if(event.type === 'result' && event.is_error) chat.error = limited ? limitText(chat.limitResetsAt) : 'Claude no pudo completar el pedido. Revisá acceso y permisos en el CLI.';
@@ -288,7 +318,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   const busy=p=>[...jobs.values()].some(j=>j.project===p.id);
   const publicProject=({dir,...p})=>sharing.isShared({dir})?{...p,shared:true,syncNotice:sharing.notice(p)}:p;
   // Las conversaciones de prueba (origin «prueba») no se listan: el trader ve sólo las suyas.
-  function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.origin!=='prueba').map(({messages,...c})=>({...c,messageCount:messages.length}));}
+  function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.origin!=='prueba').map(({messages,usage,...c})=>({...c,messageCount:messages.length}));}
   // Al abrir una conversación nueva en un proyecto, el final de la anterior del mismo proyecto (ya guardada por el Lab):
   // retomar sin depender de que el modelo haya guardado (WS-0029 H8). No genera datos nuevos.
   function previousTail(chat){
@@ -387,7 +417,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{const e=JSON.parse(line);if(claude&&e.type==='control_request'){control(e);continue;}if(claude&&e.type==='control_response')continue;consumeEvent(chat,e,chat.provider);if(claude&&e.type==='result')proc.stdin.end();saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
       proc.stderr.on('data',()=>{});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});
       if(claude){job.write({type:'control_request',request_id:'init-'+chat.id,request:{subtype:'initialize'}});job.write({type:'user',message:{role:'user',content:options.prompt||words},parent_tool_use_id:null,session_id:''});}
-      else proc.stdin.end(words+'\n');
+      else proc.stdin.end((options.prompt||words)+'\n');
     }).catch(()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});
     return chat;
   }
@@ -484,7 +514,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         for(const rel of files){if(!/^adjuntos\/[\w.\- ]+$/.test(rel)||!fs.existsSync(path.join(dir,rel)))throw fail('Adjunto no encontrado: '+rel,404);}
         const text=files.length?words+'\n\nArchivos adjuntos (en la carpeta del proyecto): '+files.join(', '):words;
         // Editar el último mensaje (WS-0067): el motor no rebobina; el Lab saca del transcript ese pedido y su respuesta y le avisa que el texto nuevo lo reemplaza.
-        let prompt;if(b.replace===true){if(jobs.has(c.id))throw fail('La conversación está respondiendo.',409);const at=c.messages.map(m=>m.role).lastIndexOf('user');if(at<0)throw fail('No hay un mensaje para reemplazar.',409);const old=c.messages[at].text;c.messages.splice(at);saveChat(c);prompt='[Este mensaje reemplaza al pedido anterior ("'+old.replace(/\s+/g,' ').slice(0,300)+'"): ignorá ese pedido y tu respuesta; lo que ya hiciste en archivos sigue ahí.]\n\n'+text;}
+        let prompt;if(b.replace===true){if(jobs.has(c.id))throw fail('La conversación está respondiendo.',409);const at=c.messages.map(m=>m.role).lastIndexOf('user');if(at<0)throw fail('No hay un mensaje para reemplazar.',409);const old=c.messages[at].text;c.messages.splice(at);saveChat(c);if(b.retry!==true)prompt='[Este mensaje reemplaza al pedido anterior ("'+old.replace(/\s+/g,' ').slice(0,300)+'"): ignorá ese pedido y tu respuesta; lo que ya hiciste en archivos sigue ahí.]\n\n'+text;}
+        const mentions=mentionLine(b.mentions);if(mentions)prompt=mentions+'\n\n'+(prompt||text);
         json(res,202,send(c,text,{mode:b.mode==='auto'?'auto':'manual',...(prompt&&{prompt})}));return true;}
       if(req.method==='POST'&&parts[2]==='rename'){const title=String((await readBody(req)).title||'').trim();if(!title||title.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');c.title=title;c.titleLocked=true;saveChat(c);json(res,200,{id:c.id,title});return true;}
       // Eliminar saca la conversación del historial; el archivo pasa a chats-borradas/ (local, no se muestra).
@@ -509,4 +540,4 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   if(autoSync)sharing.syncAll(listProjects).catch(()=>{});   // al arrancar: trae también lo que otros compartieron conmigo
   return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
-module.exports={createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep};
+module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep};

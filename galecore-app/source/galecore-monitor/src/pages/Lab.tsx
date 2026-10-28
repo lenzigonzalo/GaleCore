@@ -11,6 +11,11 @@ import { LabProjectList } from '../components/lab/LabProjectList';
 import { LabMapa } from '../components/lab/LabMapa';
 import { LabSuggestions } from '../components/lab/LabSuggestions';
 import { LabFiles } from '../components/lab/LabFiles';
+import { Mention, filterMentions, findTrigger, mentionsFromSpace, mentionsIn, Trigger } from '../components/lab/labMentions';
+import { fetchSpace } from '../api/space';
+import { saveNote } from '../components/lab/labNotes';
+import { LabUsage } from '../components/lab/LabUsage';
+import { LabFilePanel } from '../components/lab/LabFilePanel';
 import { LabShell } from '../components/lab/LabShell';
 import { LabShare, noticeText } from '../components/lab/LabShare';
 import { notifyChat, playChatSound, readChatPrefs } from '../components/lab/labChatPrefs';
@@ -40,6 +45,8 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [view, setView] = useState<'chat' | 'design' | 'shadow' | 'files' | 'shell'>('chat');
   const [shellOpened, setShellOpened] = useState(false);
   const [fileToOpen, setFileToOpen] = useState<string | undefined>();
+  // WS-0067: el archivo de una respuesta se lee a la derecha del chat (reemplaza al Mapa mientras está abierto).
+  const [filePanel, setFilePanel] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
@@ -96,6 +103,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const project = state?.projects.find(p => p.id === projectId);
   // Mapa sólo en proyectos que trabajan una estrategia (tipo estrategia o con strategyName); en Análisis y Personal no hay botón ni panel.
   const mapaShown = project?.type === 'strategy' || !!project?.strategyName;
+  const side: 'file' | 'mapa' | null = filePanel ? 'file' : mapaOpen && mapaShown ? 'mapa' : null;
   const activeChoice = chat || state?.chats.find(c => c.id === chatId);
   const draftKey = projectId + '/' + (chatId || 'new');
   const draft = drafts[draftKey] || '';
@@ -127,7 +135,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     if (state.defaultProvider && state.defaultProvider !== provider && state.providers.find(x => x.id === state.defaultProvider)?.installed) setProvider(state.defaultProvider);
   }, [state, provider]);
   useEffect(() => { const ok = state?.providers.find(x => x.installed); if (ok && !state?.providers.find(x => x.id === provider)?.installed) { setProvider(ok.id); setChatSettings({model:'',effort:''}); } }, [state, provider]);
-  useEffect(() => { sessionStorage.setItem('galecore:lab:project', projectId); }, [projectId]);
+  useEffect(() => { sessionStorage.setItem('galecore:lab:project', projectId); setFilePanel(null); }, [projectId]);
   useEffect(() => { if(chatId) sessionStorage.setItem('galecore:lab:chat',chatId); else sessionStorage.removeItem('galecore:lab:chat'); },[chatId]);
   useEffect(() => {
     if(!chatId) { setChat(null); return; }
@@ -217,7 +225,15 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [interim, setInterim] = useState('');
   const [quote, setQuote] = useState<{ text: string; x: number; y: number } | null>(null);
   const goOn = useRef(false);
-  useEffect(() => { setMode('manual'); setAttachments([]); setReplacing(false); setInterim(''); }, [chatId, projectId]);
+  // Reanudar al liberarse el límite: reenvía solo a esa hora mientras esta pestaña esté abierta.
+  const [resume, setResume] = useState<{ chatId: string; at: number } | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+  // «/» skills y «@» agentes del espacio (propios y compartidos): menú filtrable bajo la caja.
+  const [pieces, setPieces] = useState<Mention[]>([]);
+  const [menu, setMenu] = useState<(Trigger & { index: number }) | null>(null);
+  useEffect(() => { let live = true; fetchSpace().then(d => { if (live) setPieces(mentionsFromSpace([...d.items, ...d.shared])); }).catch(() => { /* sin espacio: no hay menú */ }); return () => { live = false; }; }, []);
+  const menuItems = menu ? filterMentions(pieces, menu) : [];
+  useEffect(() => { setMode('manual'); setAttachments([]); setReplacing(false); setInterim(''); setResume(null); }, [chatId, projectId]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- sólo al cambiar de conversación; seguir chat.mode pisaría el cambio local mientras responde
   useEffect(() => { if (chat?.mode) setMode(chat.mode); }, [chat?.id]);   // cada conversación recuerda su modo
   // Owner 24/10: permisos en el chat como en el CLI; el modo se puede cambiar mientras responde.
@@ -251,12 +267,13 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const send = (e: React.FormEvent) => { e.preventDefault(); void submit(draft, true); };
   // Lo que escribió el trader o lo que eligió en una tarjeta de opciones (WS-0039): el mismo envío.
   // Devuelve si se envió: la tarjeta de opciones vuelve a habilitarse si no salió.
-  const submit = async (text: string, fromDraft: boolean, files?: string[]): Promise<boolean> => {
+  const submit = async (text: string, fromDraft: boolean, files?: string[], retry = false): Promise<boolean> => {
+    const mentions = mentionsIn(text, pieces);
     if(!text.trim() || busy || (chatId && !chat) || chat?.state === 'running' || !project) return false; setBusy(true); setError(''); const sendingSelection = selection.current;
     setPaused(v => { if (!chat || !v[chat.id]) return v; const { [chat.id]: _gone, ...rest } = v; return rest; });
     try {
       const target = chat || await labRequest<WorkspaceChat>('/chats',{project:projectId,provider,...(state?.chatOptions?.[provider] ? chatSettings : {})});
-      const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text,mode,attachments:fromDraft?attachments.map(a => a.path):files||[],...(fromDraft&&replacing?{replace:true}:{})}); if(fromDraft) { setAttachments([]); setReplacing(false); }
+      const next = await labRequest<WorkspaceChat>('/chats/' + target.id + '/messages',{text,mode,attachments:fromDraft?attachments.map(a => a.path):files||[],...(fromDraft&&replacing?{replace:true}:retry?{replace:true,retry:true}:{}),...(mentions.length?{mentions}:{})}); if(fromDraft) { setAttachments([]); setReplacing(false); }
       if(sendingSelection === selection.current) { followBottom.current = true; setAwayFromBottom(false); setChatId(target.id); setChat(next); } if(fromDraft) setDrafts(v=>({...v,[draftKey]:''})); setExpanded(v=>({...v,[projectId]:true})); await refresh();
       return true;
     } catch(e) { setError(e instanceof Error ? e.message : 'No se pudo enviar el mensaje.'); return false; }
@@ -365,16 +382,39 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     document.addEventListener('mouseup', later); document.addEventListener('keyup', later);
     return () => { document.removeEventListener('mouseup', later); document.removeEventListener('keyup', later); };
   }, []);
+  const pick = (piece: Mention) => {
+    if (!menu) return;
+    const caret = composer.current?.selectionStart ?? draft.length, tag = (menu.char) + piece.key + ' ';
+    const next = draft.slice(0, menu.start) + tag + draft.slice(caret);
+    setDrafts(v => ({ ...v, [draftKey]: next })); setMenu(null);
+    window.setTimeout(() => { const box = composer.current; if (box) { box.focus(); const at = menu.start + tag.length; box.setSelectionRange(at, at); } }, 0);
+  };
+  const keepAsNote = async (id: string, text: string) => {
+    try { const path = await saveNote(projectId, text); setNotes(v => ({ ...v, [id]: path })); }
+    catch (e) { setError(e instanceof Error ? e.message : 'No se pudo guardar la nota.'); }
+  };
+  // Reintentar: el mismo mensaje otra vez (el Lab saca el pedido que falló y su resto, sin avisarle nada raro al motor).
+  const retryLast = () => { const last = chat && [...chat.messages].reverse().find(m => m.role === 'user'); if (last) void submit(last.text, false, [], true); };
+  const retryRef = useRef(retryLast); retryRef.current = retryLast;
+  useEffect(() => {
+    if (!resume) return;
+    const timer = window.setTimeout(() => { setResume(null); retryRef.current(); }, Math.max(0, resume.at - Date.now()));
+    return () => window.clearTimeout(timer);
+  }, [resume]);
+  const limitAt = chat && typeof chat.limitResetsAt === 'number' ? chat.limitResetsAt * 1000 : 0;
+  const clock = (at: number) => new Date(at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
   const askAboutQuote = () => {
     if (!quote) return;
     const cited = quote.text.split(/\r?\n/).map(l => '> ' + l).join('\n') + '\n\n';
     setDrafts(v => ({ ...v, [draftKey]: cited + (v[draftKey] || '') })); setQuote(null); window.getSelection()?.removeAllRanges(); focusEnd();
   };
-  const composerForm = <form className="lab-chat-composer" onSubmit={send}>{queue.length > 0 && <div className="lab-queue" role="status" aria-label="Mensajes en cola"><strong>En cola: salen solos cuando termine la respuesta</strong>{queue.map((q, i) => <div key={i}><span>{q.text}</span><span className="lab-queue-actions"><button type="button" title="Cargarlo en la caja para cambiarlo (Ctrl + X con el último)" aria-label={'Editar en cola: ' + q.text.slice(0, 40)} onClick={() => editQueued(i)}>Editar</button><button type="button" title="Corta la respuesta y lo manda ya (Ctrl + S)" aria-label={'Mandar ya: ' + q.text.slice(0, 40)} onClick={() => sendQueuedNow(i)}>Mandar ya</button><button type="button" aria-label={'Quitar de la cola: ' + q.text.slice(0, 40)} onClick={() => removeQueued(i)}>Quitar</button></span></div>)}{queueBlock && <p>La cola está frenada: {queueBlock}. <button type="button" onClick={resumeQueue}>Seguir</button></p>}</div>}{replacing && <div className="lab-editing" role="status"><Pencil size={13}/>Editando tu último mensaje: reemplaza al anterior y a su respuesta<button type="button" onClick={() => { setReplacing(false); setDrafts(v => ({ ...v, [draftKey]: '' })); }}>Cancelar</button></div>}{attachments.length > 0 && <div className="lab-attachments">{attachments.map(a => <span key={a.path}>{a.preview ? <img src={a.preview} alt=""/> : <Paperclip size={13}/>}{a.name}<button type="button" aria-label={'Quitar ' + a.name} onClick={() => removeAttachment(a.path)}><X size={13}/></button></span>)}</div>}<textarea ref={composer} rows={1} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" title="Enter para enviar (encola si está respondiendo) · Shift + Enter para otra línea · Ctrl + S manda ya · Ctrl + X recupera el último encolado" value={draft} onChange={e=>setDrafts(v=>({...v,[draftKey]:e.target.value}))} onPaste={e => { const files = Array.from(e.clipboardData.files); if (files.length) { e.preventDefault(); void attach(files); } }} onKeyDown={e=>{
+  const composerForm = <form className="lab-chat-composer" onSubmit={send}>{queue.length > 0 && <div className="lab-queue" role="status" aria-label="Mensajes en cola"><strong>En cola: salen solos cuando termine la respuesta</strong>{queue.map((q, i) => <div key={i}><span>{q.text}</span><span className="lab-queue-actions"><button type="button" title="Cargarlo en la caja para cambiarlo (Ctrl + X con el último)" aria-label={'Editar en cola: ' + q.text.slice(0, 40)} onClick={() => editQueued(i)}>Editar</button><button type="button" title="Corta la respuesta y lo manda ya (Ctrl + S)" aria-label={'Mandar ya: ' + q.text.slice(0, 40)} onClick={() => sendQueuedNow(i)}>Mandar ya</button><button type="button" aria-label={'Quitar de la cola: ' + q.text.slice(0, 40)} onClick={() => removeQueued(i)}>Quitar</button></span></div>)}{queueBlock && <p>La cola está frenada: {queueBlock}. <button type="button" onClick={resumeQueue}>Seguir</button></p>}</div>}{replacing && <div className="lab-editing" role="status"><Pencil size={13}/>Editando tu último mensaje: reemplaza al anterior y a su respuesta<button type="button" onClick={() => { setReplacing(false); setDrafts(v => ({ ...v, [draftKey]: '' })); }}>Cancelar</button></div>}{attachments.length > 0 && <div className="lab-attachments">{attachments.map(a => <span key={a.path}>{a.preview ? <img src={a.preview} alt=""/> : <Paperclip size={13}/>}{a.name}<button type="button" aria-label={'Quitar ' + a.name} onClick={() => removeAttachment(a.path)}><X size={13}/></button></span>)}</div>}{menu&&<ul className="lab-mention-menu" id="lab-mention-menu" role="listbox" aria-label={menu.char==='/'?'Skills':'Agentes'}>{menuItems.length?menuItems.map((m,i)=><li key={m.kind+m.key} id={'lab-mention-'+i} role="option" aria-selected={i===menu.index} onMouseDown={e=>{e.preventDefault();pick(m);}} onMouseEnter={()=>setMenu({...menu,index:i})}><b>{menu.char}{m.key}</b><span>{m.title}</span></li>):<li role="presentation" className="empty">{menu.char==='/'?'No hay skills que coincidan':'No hay agentes que coincidan'}</li>}</ul>}<textarea ref={composer} aria-controls={menu?'lab-mention-menu':undefined} aria-activedescendant={menu&&menuItems.length?'lab-mention-'+menu.index:undefined} rows={1} maxLength={12000} disabled={busy} aria-label="Mensaje al proyecto" title="Enter para enviar (encola si está respondiendo) · Shift + Enter para otra línea · Ctrl + S manda ya · Ctrl + X recupera el último encolado" value={draft} onChange={e=>{setDrafts(v=>({...v,[draftKey]:e.target.value}));const t=findTrigger(e.target.value,e.target.selectionStart);setMenu(t?{...t,index:0}:null);}} onPaste={e => { const files = Array.from(e.clipboardData.files); if (files.length) { e.preventDefault(); void attach(files); } }} onKeyDown={e=>{
+  if(menu&&menuItems.length&&['ArrowDown','ArrowUp','Enter','Tab'].includes(e.key)&&!e.nativeEvent.isComposing){e.preventDefault();if(e.key==='ArrowDown')setMenu({...menu,index:(menu.index+1)%menuItems.length});else if(e.key==='ArrowUp')setMenu({...menu,index:(menu.index+menuItems.length-1)%menuItems.length});else pick(menuItems[Math.min(menu.index,menuItems.length-1)]);return;}
+  if(menu&&e.key==='Escape'){e.preventDefault();setMenu(null);return;}
   if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy){if(chat?.state==='running')enqueue();else e.currentTarget.form?.requestSubmit();}}
   else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='s'){e.preventDefault();if(!busy)sendNow();}
   else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='x'&&queue.length&&e.currentTarget.selectionStart===e.currentTarget.selectionEnd){e.preventDefault();unqueueLast();}}}/>{listening&&<p className="lab-interim" aria-live="polite">{interim||'Escuchando…'}</p>}<div className="lab-composer-bar"><div className="lab-composer-side"><button type="button" className="lab-tool" aria-label="Adjuntar archivo" title="Adjuntar archivo" disabled={busy || uploading || !project} onClick={() => fileInput.current?.click()}><Plus size={18}/></button><input ref={fileInput} type="file" multiple hidden onChange={e => void attach(e.target.files)}/>{Speech && <button type="button" className={'lab-tool' + (listening ? ' active' : '')} aria-label={listening ? 'Detener dictado' : 'Dictar'} title={listening ? 'Detener dictado' : 'Dictar'} onClick={toggleDictation}><Mic size={17}/></button>}{uploading && <span className="lab-uploading" role="status">Adjuntando…</span>}</div><div className="lab-composer-side"><LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><button type="button" className={'lab-mode ' + mode} aria-label={'Permisos: ' + (mode === 'auto' ? 'Auto' : 'Manual')} title={mode === 'auto' ? 'Auto: decide solo lo seguro y te pregunta lo demás' : 'Manual: te pregunta antes de lo que necesita permiso'} onClick={toggleMode}>{mode === 'auto' ? 'Auto' : 'Manual'}</button>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div></div></form>;
-  const chatHeader = <header className={"lab-chat-header" + (headerHost ? " in-global-header" : "")}><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && KIND[project.type] !== name(project.id, project.label) && <span>{KIND[project.type]}</span>}</div><div className="lab-header-actions">{project && project.id !== 'personal' && <button className="lab-files-button" onClick={()=>setSharingOpen(true)}><Users size={17}/>Compartir</button>}{view==='chat' && mapaShown && <button className="lab-files-button" aria-pressed={mapaOpen} onClick={()=>setMapaOpen(v=>!v)}><MapIcon size={17}/>Mapa</button>}<div className="lab-view-switch" role="group" aria-label="Vista del proyecto"><button aria-pressed={view==='chat' || view==='design' || view==='shadow'} onClick={()=>setView('chat')}><MessageSquare size={16}/>Chat</button><button aria-pressed={view==='files'} onClick={()=>{setFileToOpen(undefined);setView('files');}}><Files size={16}/>Archivos</button><button aria-pressed={view==='shell'} onClick={()=>{setShellOpened(true);setView('shell');}}><SquareTerminal size={16}/>Shell</button></div></div></header>;
+  const chatHeader = <header className={"lab-chat-header" + (headerHost ? " in-global-header" : "")}><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && KIND[project.type] !== name(project.id, project.label) && <span>{KIND[project.type]}</span>}</div><div className="lab-header-actions"><LabUsage usage={chat?.usage}/>{project && project.id !== 'personal' && <button className="lab-files-button" onClick={()=>setSharingOpen(true)}><Users size={17}/>Compartir</button>}{view==='chat' && mapaShown && <button className="lab-files-button" aria-pressed={side==='mapa'} onClick={()=>{ if (filePanel) { setFilePanel(null); setMapaOpen(true); } else setMapaOpen(v=>!v); }}><MapIcon size={17}/>Mapa</button>}<div className="lab-view-switch" role="group" aria-label="Vista del proyecto"><button aria-pressed={view==='chat' || view==='design' || view==='shadow'} onClick={()=>setView('chat')}><MessageSquare size={16}/>Chat</button><button aria-pressed={view==='files'} onClick={()=>{setFileToOpen(undefined);setView('files');}}><Files size={16}/>Archivos</button><button aria-pressed={view==='shell'} onClick={()=>{setShellOpened(true);setView('shell');}}><SquareTerminal size={16}/>Shell</button></div></div></header>;
   const projectSidebar = <aside className="lab-chat-sidebar" id="lab-project-sidebar">
       <div className="lab-sidebar-heading"><button className="lab-new-chat" onClick={newChat}><MessageSquare size={19}/><span>Nuevo chat</span></button>{!embedded && !onSidebarToggle && <button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>}</div>
       {!collapsed && <LabProjectList state={state} projectId={projectId} chatId={chatId} expanded={expanded}
@@ -401,14 +441,14 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       {headerHost ? createPortal(chatHeader, headerHost) : chatHeader}
       {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></p>}
       {shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
-      {view==='files' ? <LabFiles key={projectId} projectId={projectId} folder={project?.relative} openPath={fileToOpen}/> : view==='shell' ? null : view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (mapaOpen ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column" onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); void attach(Array.from(e.dataTransfer.files)); } }}>
+      {view==='files' ? <LabFiles key={projectId} projectId={projectId} folder={project?.relative} openPath={fileToOpen}/> : view==='shell' ? null : view!=='chat' ? <LabShadow key={project?.id + view} mode={view} project={project} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (side ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column" onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); void attach(Array.from(e.dataTransfer.files)); } }}>
       <div className="lab-messages" ref={messages} onScroll={e => {
         const element = e.currentTarget;
         const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
         followBottom.current = nearBottom; setAwayFromBottom(!nearBottom);
       }}>
         {!chat?.messages.length && <div className="lab-chat-welcome"><h1>{project?.type==='strategy' ? '¿Qué estrategia querés construir?' : project?.type==='personal' ? 'Tu espacio personal' : '¿Qué querés investigar?'}</h1>{project?.type==='strategy' && <p>De la idea a una estrategia lista para probar en Shadow.</p>}</div>}
-        {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>submit(text,false)} files={project ? { folder: project.relative, open: p => { setFileToOpen(p); setView('files'); } } : undefined}/> : <div>{m.text}</div>}{m.role==='user' && m.id===lastUserId && chat.state!=='running' && !busy && <button type="button" className="lab-message-edit" onClick={() => editLast(m.text)}><Pencil size={13}/>Editar</button>}</article>)}
+        {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>submit(text,false)} files={project ? { folder: project.relative, open: p => setFilePanel(p) } : undefined}/> : <div>{m.text}</div>}{m.role==='assistant' && !(chat.state==='running' && m.id===chat.messages[chat.messages.length-1]?.id) && (notes[m.id] ? <span className="lab-note-saved">Guardada: <a href={'#'+notes[m.id]} onClick={e=>{e.preventDefault();setFilePanel(notes[m.id]);}}>{notes[m.id]}</a></span> : <button type="button" className="lab-message-edit lab-note-save" onClick={() => void keepAsNote(m.id, m.text)}>Guardar como nota</button>)}{m.role==='user' && m.id===lastUserId && chat.state!=='running' && !busy && <button type="button" className="lab-message-edit" onClick={() => editLast(m.text)}><Pencil size={13}/>Editar</button>}</article>)}
         {chat?.state==='running' && <div className="lab-chat-activity" role="status">
           {(() => { const steps = chat.steps || [], last = steps.length - 1;   // como Claude Code: qué hizo, con qué, y qué hace ahora
             return <>{steps.map((st, i) => st.kind === 'note'
@@ -418,20 +458,21 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         </div>}
         {chat?.state==='running' && chat.permission && <div className="lab-permission" role="alertdialog" aria-label="Pedido de permiso"><p>Necesita tu permiso: <strong>{chat.permission.label === 'Trabajando' ? chat.permission.tool : chat.permission.label}</strong></p>{chat.permission.detail && <code>{chat.permission.detail}</code>}<div><button type="button" className="primary" disabled={answering} onClick={() => void answerPermission('allow')}>Permitir</button>{chat.permission.always && <button type="button" disabled={answering} onClick={() => void answerPermission('always')}>Permitir y no volver a preguntar</button>}<button type="button" disabled={answering} onClick={() => void answerPermission('deny')}>No permitir</button></div></div>}
         {chat?.state!=='running' && chat?.notice && !chat?.error && <div className="lab-chat-notice" role="status">{chat.notice}</div>}
-        {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}{error && <button onClick={refresh}>Reintentar conexión</button>}</div>}
+        {(error || chat?.error) && <div className="lab-chat-error" role="alert">{error || chat?.error}{error && <button onClick={refresh}>Reintentar conexión</button>}{!error && chat?.state==='failed' && <span className="lab-chat-error-actions"><button type="button" onClick={retryLast}>Reintentar</button>{limitAt > Date.now() && (resume?.chatId === chat.id ? <><span>Se reenvía solo a las {clock(resume.at)}, mientras esta pestaña esté abierta.</span><button type="button" onClick={() => setResume(null)}>Cancelar</button></> : <button type="button" onClick={() => setResume({ chatId: chat.id, at: limitAt })}>Reanudar a las {clock(limitAt)}</button>)}</span>}</div>}
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
       {composerForm}
       {!chat?.messages.length && !busy && !(chatId && !chat) && <LabSuggestions disabled={chat?.state==='running'} onPick={question => void submit(question, false)}/>}
       </div>
-      {mapaOpen && mapaShown && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label="Ancho del mapa" aria-orientation="vertical" aria-valuemin={280} aria-valuemax={Math.max(280, (chatBody.current?.clientWidth || 1600) - 420)} aria-valuenow={mapaWidth}
+      {side && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label={side === 'file' ? 'Ancho del archivo' : 'Ancho del mapa'} aria-orientation="vertical" aria-valuemin={280} aria-valuemax={Math.max(280, (chatBody.current?.clientWidth || 1600) - 420)} aria-valuenow={mapaWidth}
         title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
         onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); }}
         onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) { const box = chatBody.current?.getBoundingClientRect(); setMapaWidth(limitMapaWidth((box?.right || 0) - e.clientX, box?.width)); } }}
         onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
         onDoubleClick={() => setMapaWidth(380)}
         onKeyDown={e => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); setMapaWidth(w => limitMapaWidth(w + (e.key === 'ArrowLeft' ? 1 : -1) * (e.shiftKey ? 40 : 10), chatBody.current?.clientWidth)); }}/>}
-      {mapaOpen && mapaShown && <LabMapa chatId={chatId} projectId={projectId} running={chat?.state === 'running'} onResults={project?.strategyName ? () => onFollowStrategy?.(project.strategyName!) : undefined}/>}
+      {side === 'file' && project && filePanel && <LabFilePanel projectId={projectId} folder={project.relative} path={filePanel} narrow={narrow} onOpen={setFilePanel} onClose={() => setFilePanel(null)} onOpenInFiles={path => { setFilePanel(null); setFileToOpen(path); setView('files'); }}/>}
+      {side === 'mapa' && <LabMapa chatId={chatId} projectId={projectId} running={chat?.state === 'running'} onResults={project?.strategyName ? () => onFollowStrategy?.(project.strategyName!) : undefined}/>}
       </div>}
     </section>
     {quote && createPortal(<button type="button" className="lab-quote-button" style={{ left: quote.x, top: quote.y }} onMouseDown={e => e.preventDefault()} onClick={askAboutQuote}>Preguntar sobre esto</button>, document.body)}

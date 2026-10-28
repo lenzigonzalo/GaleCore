@@ -455,3 +455,25 @@
 .lab-queue-actions button:hover { text-decoration:underline; }
 .lab-quote-button { z-index:200; }
 .lab-queue-actions { overflow:visible; white-space:nowrap; }
+/* WS-0067: archivo a la derecha */
+.lab-file-panel > header h2 { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:36ch; }
+.lab-file-panel-actions { display:flex !important; align-items:center; gap:6px; }
+.lab-file-panel-body { padding:16px 20px 28px; min-width:0; }
+.lab-file-panel-raw { margin:0; white-space:pre-wrap; word-break:break-word; font:13px/1.5 var(--font-mono, monospace); color:var(--text-primary); }
+.lab-usage { position:relative; }
+.lab-usage > button { border:0; background:transparent; color:var(--text-muted); font:13px var(--font-sans); cursor:pointer; padding:4px 6px; border-radius:6px; }
+.lab-usage > button:hover, .lab-usage > button[aria-expanded=true] { color:var(--text-primary); background:var(--bg-hover); }
+.lab-usage dl { position:absolute; right:0; top:calc(100% + 6px); z-index:80; min-width:300px; max-width:380px; margin:0; padding:12px 14px; display:grid; grid-template-columns:auto 1fr; gap:6px 14px; border:1px solid var(--border-light); border-radius:10px; background:var(--bg-secondary); box-shadow:0 8px 24px rgba(0,0,0,.4); font-size:13.5px; }
+.lab-usage dt { color:var(--text-muted); }
+.lab-usage dd { margin:0; color:var(--text-primary); }
+/* WS-0067: menú de / y @ */
+.lab-mention-menu { list-style:none; margin:0 0 8px; padding:4px; display:grid; border:1px solid var(--border-light); border-radius:10px; background:var(--bg-tertiary); max-height:240px; overflow-y:auto; }
+.lab-mention-menu li { display:flex; gap:12px; align-items:baseline; padding:7px 10px; border-radius:7px; cursor:pointer; font-size:14.5px; }
+.lab-mention-menu li b { font-weight:500; color:var(--text-primary); flex-shrink:0; }
+.lab-mention-menu li span { color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lab-mention-menu li[aria-selected=true] { background:var(--bg-hover); }
+.lab-mention-menu li.empty { cursor:default; color:var(--text-muted); }
+.lab-message.assistant:hover .lab-message-edit, .lab-message.assistant .lab-message-edit:focus-visible { opacity:1; }
+.lab-note-saved { display:inline-block; margin-top:6px; font-size:13px; color:var(--text-muted); }
+.lab-note-saved a { color:var(--text-primary); }
+.lab-chat-error-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin-top:8px; }
