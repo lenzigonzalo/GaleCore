@@ -314,6 +314,171 @@ namespace DataFeed.Repositories.Migrations
                     b.ToTable("shadow_positions", (string)null);
                 });
 
+            modelBuilder.Entity("DataFeed.Repositories.Entities.SharedProject", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("LocalKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("local_key");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("Id")
+                        .HasName("pk_shared_projects");
+
+                    b.HasIndex("OwnerId")
+                        .HasDatabaseName("ix_shared_projects_owner_id");
+
+                    b.ToTable("shared_projects", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_shared_projects_kind", "kind IN ('workspace','strategy')");
+                        });
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.SharedProjectChange", b =>
+                {
+                    b.Property<long>("Seq")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("seq");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Seq"));
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("author_id");
+
+                    b.Property<string>("BaseHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("base_hash");
+
+                    b.Property<string>("Content")
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<string>("ContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("content_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Encoding")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("encoding");
+
+                    b.Property<string>("Op")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("op");
+
+                    b.Property<string>("Path")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("path");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.HasKey("Seq")
+                        .HasName("pk_shared_project_changes");
+
+                    b.HasIndex("AuthorId")
+                        .HasDatabaseName("ix_shared_project_changes_author_id");
+
+                    b.HasIndex("ProjectId", "Seq")
+                        .HasDatabaseName("ix_shared_project_changes_project_id_seq");
+
+                    b.HasIndex("ProjectId", "Path", "Seq")
+                        .HasDatabaseName("ix_shared_project_changes_project_id_path_seq");
+
+                    b.ToTable("shared_project_changes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_shared_project_changes_encoding", "encoding IN ('utf8','base64')");
+
+                            t.HasCheckConstraint("ck_shared_project_changes_op", "op IN ('put','delete')");
+
+                            t.HasCheckConstraint("ck_shared_project_changes_path", "path !~ '^/' AND position(chr(92) in path) = 0 AND path !~ '(^|/)[.][.](/|$)' AND length(path) <= 400");
+                        });
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.SharedProjectMember", b =>
+                {
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("role");
+
+                    b.HasKey("ProjectId", "UserId")
+                        .HasName("pk_shared_project_members");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_shared_project_members_user_id");
+
+                    b.ToTable("shared_project_members", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_shared_project_members_role", "role IN ('owner','member')");
+                        });
+                });
+
             modelBuilder.Entity("DataFeed.Repositories.Entities.StrategyDeploymentEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -721,6 +886,60 @@ namespace DataFeed.Repositories.Migrations
                     b.Navigation("Instance");
                 });
 
+            modelBuilder.Entity("DataFeed.Repositories.Entities.SharedProject", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_shared_projects_users_owner_id");
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.SharedProjectChange", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.User", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_shared_project_changes_users_author_id");
+
+                    b.HasOne("DataFeed.Repositories.Entities.SharedProject", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_shared_project_changes_shared_projects_project_id");
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Project");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.SharedProjectMember", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.SharedProject", "Project")
+                        .WithMany("Members")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_shared_project_members_shared_projects_project_id");
+
+                    b.HasOne("DataFeed.Repositories.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_shared_project_members_users_user_id");
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("DataFeed.Repositories.Entities.StrategyDeploymentEntity", b =>
                 {
                     b.HasOne("DataFeed.Repositories.Entities.StrategySpecEntity", "Spec")
@@ -755,6 +974,11 @@ namespace DataFeed.Repositories.Migrations
                         .HasConstraintName("fk_trader_space_items_users_owner_id");
 
                     b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.SharedProject", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("DataFeed.Repositories.Entities.User", b =>

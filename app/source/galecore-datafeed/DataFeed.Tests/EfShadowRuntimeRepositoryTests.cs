@@ -29,6 +29,7 @@ public sealed class PostgresFactAttribute : FactAttribute
 /// guardar dos veces no duplica y el runtime retoma después de un "reinicio" (store nuevo, misma base).
 /// Cada test empieza con las tablas del runtime vacías en la base de prueba (no la de desarrollo).
 /// </summary>
+[Collection("PostgresTestDb")]
 public class EfShadowRuntimeRepositoryTests
 {
     private static readonly string? ConnectionString = Environment.GetEnvironmentVariable("GALECORE_TEST_DB");

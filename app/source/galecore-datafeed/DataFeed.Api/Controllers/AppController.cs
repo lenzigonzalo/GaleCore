@@ -576,6 +576,229 @@ namespace DataFeed.Controllers
 
         #endregion
 
+        #region Proyectos compartidos
+
+        // WS-0064 Fase 2a: cada usuario guarda sus proyectos en su PC; compartir es opt-in por proyecto y esta API sólo
+        // intercambia cambios entre miembros. Quien no es miembro recibe 404 (no se revela que el proyecto existe).
+
+        private static object ChangeDto(DataFeed.Repositories.Entities.SharedProjectChange c, string author) => new
+        {
+            c.Seq, c.Path, c.Op, c.Encoding, c.Content, c.ContentHash, c.BaseHash, author, c.CreatedAt,
+        };
+
+        /// <summary>Crea un proyecto compartido; quien lo crea queda como owner.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpPost("GaleCore/SharedProjects")]
+        public async Task<IActionResult> CreateSharedProjectAsync(
+            [FromBody] DataFeed.Api.Controllers.Dtos.SharedProjectRequest body,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            var problem = DataFeed.Repositories.Entities.SharedProject.Validate(body.Name, body.Kind, body.LocalKey);
+            if (problem != null) return BadRequest(new { error = problem });
+
+            await _users.EnsureUserAsync(userId.Value, currentUser.Email, ct);
+            var now = DateTime.UtcNow;
+            var project = new DataFeed.Repositories.Entities.SharedProject
+            {
+                Id = Guid.NewGuid(), OwnerId = userId.Value, Name = body.Name!.Trim(), Kind = body.Kind!, LocalKey = body.LocalKey!.Trim(),
+                CreatedAt = now, UpdatedAt = now,
+            };
+            project.Members.Add(new DataFeed.Repositories.Entities.SharedProjectMember { UserId = userId.Value, Role = "owner", AddedAt = now });
+            db.SharedProjects.Add(project);
+            await db.SaveChangesAsync(ct);
+            var me = await db.Users.AsNoTracking().Where(u => u.Id == userId.Value).Select(u => new { u.Username, u.DisplayName }).FirstAsync(ct);
+            return Created($"GaleCore/SharedProjects/{project.Id}", new
+            {
+                project.Id, project.Name, project.Kind, project.LocalKey, project.CreatedAt, lastSeq = 0L,
+                members = new[] { new { username = me.Username, displayName = me.DisplayName, role = "owner" } },
+            });
+        }
+
+        /// <summary>Los proyectos donde soy miembro, con sus miembros y el último cambio (`lastSeq`).</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/SharedProjects")]
+        public async Task<IActionResult> GetSharedProjectsAsync(
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            var rows = await db.SharedProjects.AsNoTracking()
+                .Where(p => p.Members.Any(m => m.UserId == userId.Value))
+                .OrderBy(p => p.Name)
+                .Select(p => new
+                {
+                    p.Id, p.Name, p.Kind, p.LocalKey, p.CreatedAt, owner = p.Owner.Username,
+                    lastSeq = db.SharedProjectChanges.Where(c => c.ProjectId == p.Id).Max(c => (long?)c.Seq) ?? 0L,
+                    members = p.Members.OrderBy(m => m.AddedAt)
+                        .Select(m => new { username = m.User.Username, displayName = m.User.DisplayName, role = m.Role }).ToList(),
+                })
+                .ToListAsync(ct);
+            return Ok(new { projects = rows });
+        }
+
+        /// <summary>Suma un miembro por su usuario. Sólo el owner; idempotente.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpPost("GaleCore/SharedProjects/{id:guid}/members")]
+        public async Task<IActionResult> AddSharedProjectMemberAsync(
+            Guid id,
+            [FromBody] DataFeed.Api.Controllers.Dtos.SharedProjectMemberRequest body,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            if (string.IsNullOrWhiteSpace(body.Username)) return BadRequest(new { error = "username es requerido" });
+
+            var members = await db.SharedProjectMembers.Where(m => m.ProjectId == id).ToListAsync(ct);
+            var mine = members.FirstOrDefault(m => m.UserId == userId.Value);
+            if (mine == null) return NotFound();
+            if (mine.Role != "owner") return StatusCode(403, new { error = "sólo el owner del proyecto puede sumar miembros" });
+            var username = body.Username.Trim().ToLowerInvariant();
+            var target = await db.Users.AsNoTracking().Where(u => u.Username == username).Select(u => new { u.Id, u.Username, u.DisplayName }).FirstOrDefaultAsync(ct);
+            if (target == null) return NotFound(new { error = $"no existe el usuario '{username}'" });
+            if (members.All(m => m.UserId != target.Id))
+            {
+                db.SharedProjectMembers.Add(new DataFeed.Repositories.Entities.SharedProjectMember
+                    { ProjectId = id, UserId = target.Id, Role = "member", AddedAt = DateTime.UtcNow });
+                await db.SaveChangesAsync(ct);
+            }
+            var role = members.FirstOrDefault(m => m.UserId == target.Id)?.Role ?? "member";
+            return Ok(new { username = target.Username, displayName = target.DisplayName, role });
+        }
+
+        /// <summary>Saca a un miembro. Sólo el owner, y no puede sacarse a sí mismo.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpDelete("GaleCore/SharedProjects/{id:guid}/members/{username}")]
+        public async Task<IActionResult> RemoveSharedProjectMemberAsync(
+            Guid id, string username,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            var members = await db.SharedProjectMembers.Include(m => m.User).Where(m => m.ProjectId == id).ToListAsync(ct);
+            var mine = members.FirstOrDefault(m => m.UserId == userId.Value);
+            if (mine == null) return NotFound();
+            if (mine.Role != "owner") return StatusCode(403, new { error = "sólo el owner del proyecto puede sacar miembros" });
+            var target = members.FirstOrDefault(m => m.User.Username == username.Trim().ToLowerInvariant());
+            if (target == null) return NotFound();
+            if (target.UserId == userId.Value) return BadRequest(new { error = "el owner no puede sacarse a sí mismo; borrá el proyecto" });
+            db.SharedProjectMembers.Remove(target);
+            await db.SaveChangesAsync(ct);
+            return NoContent();
+        }
+
+        /// <summary>Borra el proyecto con sus miembros y cambios. Sólo el owner.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpDelete("GaleCore/SharedProjects/{id:guid}")]
+        public async Task<IActionResult> DeleteSharedProjectAsync(
+            Guid id,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            var project = await db.SharedProjects.FirstOrDefaultAsync(p => p.Id == id && p.Members.Any(m => m.UserId == userId.Value), ct);
+            if (project == null) return NotFound();
+            if (project.OwnerId != userId.Value) return StatusCode(403, new { error = "sólo el owner del proyecto puede borrarlo" });
+            db.SharedProjects.Remove(project); // miembros y cambios caen en cascada
+            await db.SaveChangesAsync(ct);
+            return NoContent();
+        }
+
+        /// <summary>Cambios posteriores a `after` (el cursor), en orden, de a 500; `hasMore` avisa si quedan.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/SharedProjects/{id:guid}/changes")]
+        public async Task<IActionResult> GetSharedProjectChangesAsync(
+            Guid id, [FromQuery] long after,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            if (!await db.SharedProjectMembers.AnyAsync(m => m.ProjectId == id && m.UserId == userId.Value, ct)) return NotFound();
+            var page = DataFeed.Repositories.Entities.SharedProjectChange.PageSize;
+            var rows = await db.SharedProjectChanges.AsNoTracking()
+                .Where(c => c.ProjectId == id && c.Seq > after)
+                .OrderBy(c => c.Seq).Take(page + 1)
+                .Select(c => new { c.Seq, c.Path, c.Op, c.Encoding, c.Content, c.ContentHash, c.BaseHash, author = c.Author.Username, c.CreatedAt })
+                .ToListAsync(ct);
+            return Ok(new { changes = rows.Take(page), hasMore = rows.Count > page });
+        }
+
+        /// <summary>
+        /// Sube un cambio a un archivo. Conflicto (409 con `latest`) si la copia del autor no parte del último contenido.
+        /// El hash lo calcula el servidor. 201 si se guardó; 200 con el seq existente si el contenido ya era el último.
+        /// </summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpPost("GaleCore/SharedProjects/{id:guid}/changes")]
+        public async Task<IActionResult> PostSharedProjectChangeAsync(
+            Guid id,
+            [FromBody] DataFeed.Api.Controllers.Dtos.SharedProjectChangeRequest body,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            if (!await db.SharedProjectMembers.AnyAsync(m => m.ProjectId == id && m.UserId == userId.Value, ct)) return NotFound();
+
+            var (problem, hash) = DataFeed.Repositories.Entities.SharedProjectChange.ValidateAndHash(body.Path, body.Op, body.Encoding, body.Content);
+            if (problem != null) return BadRequest(new { error = problem });
+
+            var latest = await db.SharedProjectChanges.AsNoTracking().Include(c => c.Author)
+                .Where(c => c.ProjectId == id && c.Path == body.Path)
+                .OrderByDescending(c => c.Seq).FirstOrDefaultAsync(ct);
+            var outcome = DataFeed.Repositories.Entities.SharedProjectChange.Decide(latest, body.Op!, hash, body.BaseHash);
+            if (outcome == DataFeed.Repositories.Entities.SharedProjectChange.Outcome.Conflict)
+                return Conflict(new { error = "la copia no parte del último contenido de este archivo", latest = latest == null ? null : ChangeDto(latest, latest.Author.Username) });
+            if (outcome == DataFeed.Repositories.Entities.SharedProjectChange.Outcome.NoOp)
+                return Ok(new { seq = latest!.Seq, contentHash = latest.ContentHash });
+
+            var change = new DataFeed.Repositories.Entities.SharedProjectChange
+            {
+                ProjectId = id, AuthorId = userId.Value, Path = body.Path!, Op = body.Op!,
+                Encoding = body.Op == "put" ? body.Encoding! : "utf8", Content = body.Op == "put" ? body.Content : null,
+                ContentHash = hash, BaseHash = body.BaseHash, CreatedAt = DateTime.UtcNow,
+            };
+            db.SharedProjectChanges.Add(change);
+            await db.SaveChangesAsync(ct);
+            return Created($"GaleCore/SharedProjects/{id}/changes?after={change.Seq - 1}", new { seq = change.Seq, contentHash = change.ContentHash });
+        }
+
+        #endregion
+
         #region Autenticación
 
         /// <summary>
