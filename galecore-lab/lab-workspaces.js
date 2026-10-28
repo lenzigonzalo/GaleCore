@@ -325,7 +325,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const sandbox=['-c','web_search="live"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser','--disable','apps',
         '-c','sandbox_workspace_write.network_access=true','-c','sandbox_workspace_write.writable_roots='+JSON.stringify([kb])];
       const args=['--no-daemon','exec','--json','-p',name,...modelFlags(chat),...(auto?['--approve-for-me']:[]),...sandbox];
-      return {file,args:chat.nativeId?[...args,'resume',chat.nativeId,'-']:[...args,'--sandbox','workspace-write','-C',p.dir,'-']};
+      // --approve-for-me ya usa el sandbox workspace-write y Codex rechaza los dos juntos (0.164): en Auto no va --sandbox.
+      return {file,args:chat.nativeId?[...args,'resume',chat.nativeId,'-']:[...args,...(auto?[]:['--sandbox','workspace-write']),'-C',p.dir,'-']};
     }
     // Claude: sin la configuración del usuario ni conectores; los permisos (web después de GaleCore, sin tocar el código)
     // salen de knowledge/.claude/settings.json. Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).

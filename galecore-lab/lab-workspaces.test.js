@@ -38,6 +38,12 @@ test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el per
  const sameMap=t=>t.replace(/mapa-[0-9a-f]{8}\.md/g,'mapa-<chat>.md');  // la ruta del mapa es de cada conversación
  assert.equal(sameMap(contexts.at(-1)),'developer_instructions = '+JSON.stringify(sameMap(contexts.at(-2)))+'\n');
  assert.ok(!cargs.some(a=>a.includes('núcleo de test')));
+ // Codex 0.164 rechaza --approve-for-me junto con --sandbox: en Manual va el sandbox; en Auto, sólo --approve-for-me.
+ assert.ok(cargs.includes('--sandbox')&&!cargs.includes('--approve-for-me'));
+ await new Promise(r=>setTimeout(r,50));
+ const ca=(await route(service,'POST','/chats',{project:'personal',provider:'codex'})).value;
+ await route(service,'POST','/chats/'+ca.id+'/messages',{text:'hola',mode:'auto'});
+ const aargs=calls.at(-1);assert.ok(aargs.includes('--approve-for-me')&&!aargs.includes('--sandbox'));
  await new Promise(r=>setTimeout(r,50));
  assert.deepEqual(fs.readdirSync(codexHome),[]);  // el perfil del turno se borra al terminar
 });

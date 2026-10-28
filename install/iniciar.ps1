@@ -1,6 +1,7 @@
 <#
 .SYNOPSIS
-  Inicia GaleCore: API (:7001), monitor (:3039) y Lab (:8771), y abre el monitor en el navegador.
+  Inicia GaleCore: API (:7001), monitor (:3039), Lab (:8771) y el login de los motores (:8770, «Proveedores IA»),
+  y abre el monitor en el navegador.
   -DryRun  muestra lo que haria sin iniciar nada.
   -NoAbrir no abre el navegador.
 #>
@@ -24,6 +25,7 @@ $pidFile = Join-Path $env:LOCALAPPDATA 'GaleCore\pids.json'
 
 $servicios = @(
     @{ Nombre = 'Lab';     Puerto = 8771; Espera = 60 },
+    @{ Nombre = 'Motores'; Puerto = 8770; Espera = 60 },
     @{ Nombre = 'API';     Puerto = 7001; Espera = 240 },
     @{ Nombre = 'Monitor'; Puerto = 3039; Espera = 300 }
 )
@@ -91,6 +93,7 @@ if ($node) { $nodeExe = $node.Source }
 
 $comandos = @{
     'Lab'     = @{ Exe = $nodeExe; Args = 'lab-server.js'; Dir = $lab }
+    'Motores' = @{ Exe = $nodeExe; Args = 'server.js'; Dir = $lab }   # login de Claude/Codex desde Proveedores IA
     'API'     = @{ Exe = $py; Args = ('"' + $devPy + '" api'); Dir = $raiz }
     'Monitor' = @{ Exe = $py; Args = ('"' + $devPy + '" monitor'); Dir = $raiz }
 }
