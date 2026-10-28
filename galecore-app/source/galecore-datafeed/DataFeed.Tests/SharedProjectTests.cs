@@ -302,12 +302,11 @@ namespace DataFeed.Tests
             db.SharedProjectChanges.Add(NewChange(p, author));
             await db.SaveChangesAsync();
 
-            db.Users.Remove(author);
-            await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+            // SQL directo: el borrado lo decide la base, no el seguimiento de EF.
+            await Assert.ThrowsAnyAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("DELETE FROM users WHERE id = {0}", author.Id));
 
             using var db2 = NewDb();
-            db2.Users.Remove(await db2.Users.FirstAsync(x => x.Id == owner.Id)); // el dueño sí se lleva el proyecto y sus cambios
-            await db2.SaveChangesAsync();
+            await db2.Database.ExecuteSqlRawAsync("DELETE FROM users WHERE id = {0}", owner.Id); // el dueño sí se lleva el proyecto y sus cambios
             Assert.False(await db2.SharedProjectChanges.AnyAsync(c => c.ProjectId == p.Id));
         }
     }
