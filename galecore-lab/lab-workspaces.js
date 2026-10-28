@@ -181,7 +181,7 @@ function parseMapa(text){
   }
   return {title,intro,sections};
 }
-function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false }) {
+function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, request, sessionFile }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
   const overridesFile=path.join(local,'lab-project-overrides.json');
@@ -284,7 +284,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   // Un workspace personal explícito y separado del conocimiento financiero compartido.
   if(!listProjects().some(p=>p.id==='personal'))createProject({label:'Personal',type:'personal'});
   // Proyectos compartidos (WS-0064): el CLI del harness sincroniza; acá sólo se dispara y se avisa si hubo conflictos.
-  const sharing=createSharing({root,kb,environment,execute});
+  const sharing=createSharing({root,kb,environment,execute,...(request&&{request}),...(sessionFile&&{sessionFile})});
   const busy=p=>[...jobs.values()].some(j=>j.project===p.id);
   const publicProject=({dir,...p})=>sharing.isShared({dir})?{...p,shared:true,syncNotice:sharing.notice(p)}:p;
   // Las conversaciones de prueba (origin «prueba») no se listan: el trader ve sólo las suyas.

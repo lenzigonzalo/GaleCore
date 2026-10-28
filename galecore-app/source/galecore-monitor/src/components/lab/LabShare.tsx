@@ -36,7 +36,7 @@ export function LabShare({ project, onClose, onChanged }: { project: WorkspacePr
     labRequest<Sharing>(base + '/sharing', undefined, 30000).then(s => { if (alive) setSharing(s); }).catch(e => { if (alive) setError(e.message); });
     return () => { alive = false; };
   }, [base]);
-  // Sugerencias mientras escribe (2+ letras, ~250 ms de pausa); los que ya son miembros no se ofrecen. Si falla, queda el texto libre.
+  // Sugerencias mientras escribe (2+ letras, ~150 ms de pausa); los que ya son miembros no se ofrecen. Si falla, queda el texto libre.
   const memberNames = sharing?.members.map(m => m.username).join(',') || '';
   useEffect(() => {
     const q = username.trim();
@@ -47,7 +47,7 @@ export function LabShare({ project, onClose, onChanged }: { project: WorkspacePr
       labRequest<{ users?: Suggestion[] }>('/workspaces/users?q=' + encodeURIComponent(q), undefined, 15000)
         .then(r => { if (alive) setOptions((r?.users || []).filter(u => !memberNames.split(',').includes(u.username)).slice(0, 10)); })
         .catch(() => { if (alive) setOptions([]); });
-    }, 250);
+    }, 150);
     return () => { alive = false; clearTimeout(timer); };
   }, [username, memberNames]);
   const pick = (u: Suggestion) => { picked.current = u.username; setUsername(u.username); setOptions([]); setActive(-1); };

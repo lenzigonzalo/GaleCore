@@ -3,7 +3,7 @@ const fs = require('fs'); const path = require('path'); const os = require('os')
 const { createWorkspaces } = require('./lab-workspaces');
 
 // El CLI del harness se reemplaza por un doble que anota los argumentos y contesta lo que cada caso necesita.
-function world(t, { answers = {}, autoSync = false } = {}) {
+function world(t, { answers = {}, autoSync = false, session, request } = {}) {
   const base = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-lab-test-')); t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const kb = path.join(base, 'knowledge'), local = path.join(base, 'local'); fs.mkdirSync(kb); fs.mkdirSync(local);
   fs.mkdirSync(path.join(base, 'galecore-ai')); fs.writeFileSync(path.join(base, 'galecore-ai', 'PRODUCT.md'), 'núcleo');
@@ -14,7 +14,9 @@ function world(t, { answers = {}, autoSync = false } = {}) {
     setImmediate(() => answer === undefined ? cb(new Error('x'), JSON.stringify({ error: 'sin respuesta' })) : cb(null, JSON.stringify(answer)));
   };
   const spawnProcess = () => { const p = new EventEmitter(); p.stdout = new EventEmitter(); p.stderr = new EventEmitter(); p.stdin = { write() {}, end() {} }; p.kill = () => {}; procs.push(p); return p; };
-  const service = createWorkspaces({ root: base, kb, local, binaries: { claude: 'claude' }, environment: () => ({}), legacyProjects: () => [], legacySessions: () => [], execute, spawnProcess, autoSync });
+  const service = createWorkspaces({ root: base, kb, local, binaries: { claude: 'claude' }, environment: () => ({}), legacyProjects: () => [], legacySessions: () => [], execute, spawnProcess, autoSync,
+    sessionFile: () => path.join(base, 'session.json'), request: request || (() => { throw new Error('sin red en los tests'); }) });
+  if (session) fs.writeFileSync(path.join(base, 'session.json'), JSON.stringify(session));
   return { base, kb, service, calls, procs };
 }
 async function route(service, method, url, body) { let answer; await service.route({ method }, {}, new URL(url, 'http://localhost'), (res, status, value) => { answer = { status, value }; }, async () => body); return answer; }
@@ -164,4 +166,23 @@ test('las sugerencias de usuarios salen del CLI, sólo con 2+ letras y sin más 
 test('si la búsqueda de usuarios falla, el error llega al modal', async t => {
   const { service } = world(t, { answers: { 'users search': { error: 'sin conexión' } } });
   await assert.rejects(route(service, 'GET', '/workspaces/users?q=elen'), /sin conexión/);
+});
+
+test('con token vigente en la cache del CLI, las sugerencias van directo a la API y se recuerdan un minuto', async t => {
+  const asked = [];
+  const request = async (url, opts) => { asked.push([url, opts.headers.Authorization]); return { ok: true, json: async () => ({ users: [{ username: 'elenzi', displayName: 'Eric Lenzi', email: 'x@y.com' }] }) }; };
+  const session = { 'demo@http://localhost:7001': { token: 'tok', exp: Date.now() / 1000 + 3600 } };
+  const { service, calls } = world(t, { session, request });
+  const out = await route(service, 'GET', '/workspaces/users?q=elen');
+  assert.deepEqual(out.value, { users: [{ username: 'elenzi', displayName: 'Eric Lenzi' }] });
+  assert.deepEqual(asked, [['http://localhost:7001/App/GaleCore/Users/Search?q=elen', 'Bearer tok']]); assert.equal(calls.length, 0);
+  await route(service, 'GET', '/workspaces/users?q=elen'); assert.equal(asked.length, 1);
+});
+
+test('con el token vencido o si la API falla, las sugerencias vuelven al CLI', async t => {
+  const answers = { 'users search': { users: [{ username: 'demo2', displayName: null }] } };
+  const vencido = world(t, { answers, session: { 'demo@http://localhost:7001': { token: 'tok', exp: Date.now() / 1000 + 30 } } });
+  assert.deepEqual((await route(vencido.service, 'GET', '/workspaces/users?q=de')).value.users[0].username, 'demo2'); assert.equal(vencido.calls.length, 1);
+  const caida = world(t, { answers, session: { 'demo@http://localhost:7001': { token: 'tok', exp: Date.now() / 1000 + 3600 } }, request: async () => ({ ok: false, status: 401 }) });
+  assert.equal((await route(caida.service, 'GET', '/workspaces/users?q=de')).value.users[0].username, 'demo2'); assert.equal(caida.calls.length, 1);
 });

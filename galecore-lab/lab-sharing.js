@@ -10,7 +10,11 @@ const SYNC_FILE = '.sync.json';
 const USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 
-function createSharing({ root, kb, environment, execute }) {
+// La cache de sesión del CLI (galecore_space.session_file): %LOCALAPPDATA%/GaleCore/session.json.
+const defaultSessionFile = () => process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'GaleCore', 'session.json')
+  : path.join(require('os').homedir(), '.galecore', 'session.json');
+
+function createSharing({ root, kb, environment, execute, request = fetch, sessionFile = defaultSessionFile }) {
   const running = new Map();   // proyecto -> promesa de su sync en curso (nunca dos a la vez sobre la misma carpeta)
   const notices = new Map();   // proyecto -> { at, conflicts } hasta que el usuario lo cierra
   const lastRun = new Map();   // proyecto -> hora de su última sincronización
@@ -106,12 +110,38 @@ function createSharing({ root, kb, environment, execute }) {
     return { shared: true, members: result.members, mine: true };
   }
 
-  // Sugerencias de usuarios para el modal de compartir: el CLI consulta a GaleCore (usuario y nombre, nunca el mail).
+  // Sugerencias de usuarios para el modal de compartir (usuario y nombre, nunca el mail). Se escriben letra a letra:
+  // arrancar el CLI cada vez tarda ~1,5 s, así que se pide directo a la API con el token que el CLI ya dejó en su
+  // cache de sesión; sin token vigente (o si la llamada falla) va por el CLI, que lo renueva. Un minuto de memoria.
+  const found = new Map();   // texto -> { at, users }
+  function cachedToken() {
+    const env = environment();
+    const base = (env.GALECORE_BASE_URL || process.env.GALECORE_BASE_URL || 'http://localhost:7001').replace(/\/+$/, '');
+    const user = env.GALECORE_USERNAME || process.env.GALECORE_USERNAME || 'demo';   // mismo usuario que resuelve el CLI
+    try {
+      const entry = JSON.parse(fs.readFileSync(sessionFile(), 'utf8'))[user + '@' + base];
+      if (entry && entry.token && entry.exp - 60 > Date.now() / 1000) return { base, token: entry.token };
+    } catch { /* sin cache: va por el CLI */ }
+    return null;
+  }
+  async function direct(text) {
+    const session = cachedToken();
+    if (!session) return null;
+    try {
+      const r = await request(session.base + '/App/GaleCore/Users/Search?q=' + encodeURIComponent(text),
+        { headers: { Accept: 'application/json', Authorization: 'Bearer ' + session.token }, signal: AbortSignal.timeout(5000) });
+      return r.ok ? (await r.json()).users || [] : null;
+    } catch { return null; }
+  }
   async function searchUsers(q) {
     const text = String(q || '').trim().slice(0, 64);
     if (text.length < 2) return { users: [] };
-    const out = await cli(['users', 'search', text]);
-    return { users: (out.users || []).map(u => ({ username: u.username, displayName: u.displayName || null })).slice(0, 10) };
+    const hit = found.get(text);
+    if (hit && Date.now() - hit.at < 60000) return { users: hit.users };
+    const raw = (await direct(text)) || (await cli(['users', 'search', text])).users || [];
+    const users = raw.map(u => ({ username: u.username, displayName: u.displayName || null })).slice(0, 10);
+    found.set(text, { at: Date.now(), users });
+    return { users };
   }
 
   const notice = p => notices.get(p.id) || null;
