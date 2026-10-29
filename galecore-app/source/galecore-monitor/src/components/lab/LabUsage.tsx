@@ -27,9 +27,7 @@ export function LabUsage({ usage }: { usage?: ChatUsage }) {
   const cacheText = cache === undefined ? '' : expired ? 'vencida' : 'vence en ' + span(cache);
   return <div className="lab-usage">
     <button type="button" className={expired ? 'expired' : undefined} aria-expanded={open} aria-label="Uso del chat" onClick={() => setOpen(v => !v)}>
-      <span>{cache === undefined ? 'Uso' : 'caché ' + cacheText}</span>
-      {context !== undefined && <span> · Contexto {percent(context)}</span>}
-      {windows.map(([key]) => <span key={key}> · {key === 'five_hour' ? '5 h' : 'Semana'} {percent(usage.limit!.windows![key].utilization!)}</span>)}
+      {cache === undefined ? 'Uso' : 'caché ' + cacheText}
     </button>
     {open && <dl role="group" aria-label="Detalle del uso">
       {cache !== undefined && <><dt>Caché</dt><dd className={expired ? 'expired' : undefined}>{cacheText}</dd></>}

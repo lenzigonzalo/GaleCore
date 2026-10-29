@@ -9,6 +9,7 @@ const open = () => { fireEvent.click(screen.getByRole('button', { name: 'Uso del
 test('el botón dice cuánto falta para que venza la caché y el detalle trae sólo caché, contexto, sesión y semanal', () => {
   render(<LabUsage usage={{ turns: [{ at: minutesAgo(18), input: 28576, output: 4, cached: 13813, costUsd: 0.06 }], context: { used: 30000, window: 200000 }, limit }} />);
   expect(screen.getByRole('button', { name: 'Uso del chat' })).toHaveTextContent('caché vence en 42 min');
+  expect(screen.getByRole('button', { name: 'Uso del chat' }).textContent).toBe('caché vence en 42 min');
   const detail = open();
   expect(detail).toHaveTextContent('Cachévence en 42 min');
   expect(detail).toHaveTextContent('Contexto15 %');
@@ -47,11 +48,12 @@ test('sin datos del motor no muestra nada', () => {
 });
 
 
-test('Codex muestra contexto y cuotas en el encabezado al recuperar la telemetría, aun sin turnos guardados', () => {
+test('Codex conserva el formato de Claude: botón compacto y las mismas etiquetas en el detalle', () => {
   render(<LabUsage usage={{turns:[],context:{used:52912,window:475000},limit}}/>);
   const button=screen.getByRole('button',{name:'Uso del chat'});
-  expect(button).toHaveTextContent('Contexto 11 %');
-  expect(button).toHaveTextContent('5 h 7 %');
-  expect(button).toHaveTextContent('Semana 92 %');
-  expect(open()).toHaveTextContent('Contexto11 %');
+  expect(button.textContent).toBe('Uso');
+  const detail = open();
+  expect(detail).toHaveTextContent('Contexto11 %');
+  expect(detail).toHaveTextContent('Sesión actual7 % usado');
+  expect(detail).toHaveTextContent('Semanal92 % usado');
 });
