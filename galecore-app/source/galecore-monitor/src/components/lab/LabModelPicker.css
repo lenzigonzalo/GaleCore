@@ -15,3 +15,12 @@
 .lab-provider-effort { display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--border); margin-top:10px; padding-top:12px; font-size:13px; }
 .lab-provider-effort select { padding:6px 8px; border:1px solid var(--border); border-radius:6px; background:var(--bg-primary); color:var(--text-primary); font-size:13px; }
 .lab-provider-menu p { margin:12px 6px 0; font-size:13px; color:var(--text-secondary); line-height:1.5; }
+
+.lab-effort { position:relative; display:inline-flex; align-items:center; color:var(--text-secondary); }
+.lab-effort select { appearance:none; -webkit-appearance:none; border:0; background:transparent; color:inherit; font:13px var(--font-sans); padding:6px 18px 6px 6px; border-radius:8px; cursor:pointer; }
+.lab-effort select:hover:not(:disabled) { background:var(--bg-tertiary); color:var(--text-primary); }
+.lab-effort select:disabled { cursor:default; opacity:.55; }
+.lab-effort select option { background:var(--bg-secondary); color:var(--text-primary); }
+.lab-effort svg { position:absolute; right:4px; pointer-events:none; }
+
+.lab-chat-composer .lab-provider-trigger { padding:6px; gap:4px; }

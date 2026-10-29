@@ -128,3 +128,13 @@
 .settings-agent-card { padding:20px; border:1px solid var(--border); border-radius:10px; background:var(--bg-secondary); }
 .settings-agent-login { display:flex; align-items:center; justify-content:space-between; gap:16px; border-top:1px solid var(--border-dark); padding-top:18px; margin-top:18px; flex-wrap:wrap; }
 .settings-agent-note { margin-bottom:18px; }
+
+/* Selectores de «Al abrir un chat nuevo»: uno debajo de otro, con nombre y el mismo estilo oscuro */
+.prefs-fields { display: grid; grid-template-columns: auto 210px; align-items: center; gap: 10px 14px; flex-shrink: 0; }
+.prefs-fields > label { display: contents; color: var(--text-secondary); font-size: 14px; }
+.prefs-fields select { appearance: none; -webkit-appearance: none; color-scheme: dark; padding: 9px 34px 9px 12px; border: 1px solid var(--border); border-radius: 8px; font: 14px var(--font-sans); color: var(--text-primary); cursor: pointer;
+  background: var(--bg-primary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239a9a9a' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center; }
+.prefs-fields select:hover:not(:disabled) { border-color: var(--border-light); }
+.prefs-fields select:disabled { opacity: .5; cursor: default; }
+.prefs-fields select option { background: var(--bg-secondary); color: var(--text-primary); }
+@media (max-width: 700px) { .prefs-fields { width: 100%; grid-template-columns: auto 1fr; } }

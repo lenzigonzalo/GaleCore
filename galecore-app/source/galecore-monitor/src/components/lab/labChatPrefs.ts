@@ -1,9 +1,15 @@
 // Preferencias del chat del Lab que son de este navegador (WS-0067): sonido al terminar, sonido al pedir permiso,
 // volumen y aviso del navegador. Como el resto de las preferencias de pantalla: localStorage con try/catch.
-export interface ChatPrefs { finishSound: boolean; permissionSound: boolean; volume: number; notify: boolean }
+export interface ChatPrefs {
+  finishSound: boolean; permissionSound: boolean; volume: number; notify: boolean;
+  /** Proveedor, modelo y esfuerzo con los que abre un chat nuevo ('' = el predeterminado del Lab). */
+  provider: '' | 'codex' | 'claude'; model: string; effort: string;
+  /** Permisos con los que abre un chat: Manual (pregunta) o Auto (decide lo seguro). */
+  mode: 'manual' | 'auto';
+}
 const KEY = 'galecore:lab:chat-prefs';
 const EVENT = 'galecore:lab:chat-prefs';
-const DEFAULTS: ChatPrefs = { finishSound: true, permissionSound: true, volume: 0.5, notify: false };
+const DEFAULTS: ChatPrefs = { finishSound: true, permissionSound: true, volume: 0.5, notify: false, provider: '', model: '', effort: '', mode: 'manual' };
 
 export function readChatPrefs(): ChatPrefs {
   try {
@@ -13,6 +19,9 @@ export function readChatPrefs(): ChatPrefs {
       finishSound: raw.finishSound !== false, permissionSound: raw.permissionSound !== false,
       volume: Number.isFinite(volume) && raw.volume !== undefined ? Math.min(1, Math.max(0, volume)) : DEFAULTS.volume,
       notify: raw.notify === true,
+      provider: raw.provider === 'codex' || raw.provider === 'claude' ? raw.provider : '',
+      model: typeof raw.model === 'string' ? raw.model : '', effort: typeof raw.effort === 'string' ? raw.effort : '',
+      mode: raw.mode === 'auto' ? 'auto' : 'manual',
     };
   } catch { return { ...DEFAULTS }; }
 }

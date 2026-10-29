@@ -1,31 +1,36 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { ChatUsage } from '../../api/lab';
 
-const number = new Intl.NumberFormat('es-AR');
-const short = (n: number) => n >= 1000 ? number.format(Math.round(n / 100) / 10) + ' k' : number.format(n);
 const percent = (v: number) => Math.round(v * 100) + ' %';
-const WINDOWS: Record<string, string> = { five_hour: 'Límite de 5 horas', seven_day: 'Límite semanal' };
-const hour = (secs?: number) => secs ? new Date(secs * 1000).toLocaleString('es-AR', { weekday: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+const WINDOWS: [string, string][] = [['five_hour', 'Sesión actual'], ['seven_day', 'Semanal']];
+// La caché del prompt dura cerca de 1 h desde el último turno; pasado ese tiempo el próximo turno vuelve a pagar el contexto entero.
+const CACHE_MINUTES = 60;
+const span = (minutes: number) => minutes >= 60 ? Math.floor(minutes / 60) + ' h' + (minutes % 60 ? ' ' + (minutes % 60) + ' min' : '') : minutes + ' min';
+/** Minutos que quedan de caché (0 = vencida); undefined si el último turno no usó caché. */
+export function cacheLeft(last: { at: string; cached: number } | undefined, now = Date.now()): number | undefined {
+  const at = last ? Date.parse(last.at) : NaN;
+  if (!last || !(last.cached > 0) || !Number.isFinite(at)) return undefined;
+  return Math.max(0, Math.ceil((at + CACHE_MINUTES * 60000 - now) / 60000));
+}
 
-/** Uso del chat (WS-0067): sólo lo que informa el motor; lo que no informa no se muestra. */
+/** Uso del chat: caché (cuánto falta o vencida), contexto y los dos límites del proveedor. Sólo lo que el motor informa. */
 export function LabUsage({ usage }: { usage?: ChatUsage }) {
   const [open, setOpen] = useState(false);
-  const turns = usage?.turns || [];
-  const last = turns.at(-1);
+  const [now, setNow] = useState(() => Date.now());
+  const last = usage?.turns?.at(-1);
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer); }, []);
   if (!usage || (!last && !usage.limit)) return null;
-  const total = turns.reduce((s, t) => ({ input: s.input + t.input, output: s.output + t.output, cost: s.cost + (t.costUsd || 0) }), { input: 0, output: 0, cost: 0 });
   const context = usage.context && usage.context.window > 0 ? usage.context.used / usage.context.window : undefined;
-  const hasCost = turns.some(t => typeof t.costUsd === 'number');
-  const windows = Object.entries(usage.limit?.windows || {}).filter(([, w]) => typeof w.utilization === 'number');
-  const summary = [last && short(last.input + last.output) + ' tokens', context !== undefined && 'contexto ' + percent(context)].filter(Boolean).join(' · ');
+  const windows = WINDOWS.filter(([key]) => typeof usage.limit?.windows?.[key]?.utilization === 'number');
+  const cache = cacheLeft(last, now);
+  const expired = cache === 0;
+  const cacheText = cache === undefined ? '' : expired ? 'vencida' : 'vence en ' + span(cache);
   return <div className="lab-usage">
-    <button type="button" aria-expanded={open} aria-label="Uso del chat" onClick={() => setOpen(v => !v)}>{summary || 'Uso'}</button>
+    <button type="button" className={expired ? 'expired' : undefined} aria-expanded={open} aria-label="Uso del chat" onClick={() => setOpen(v => !v)}>{cache === undefined ? 'Uso' : 'caché ' + cacheText}</button>
     {open && <dl role="group" aria-label="Detalle del uso">
-      {last && <><dt>Último turno</dt><dd>{short(last.input)} entrada · {short(last.output)} salida{last.cached > 0 && ' · ' + short(last.cached) + ' de caché'}</dd></>}
-      {turns.length > 1 && <><dt>Todo el chat</dt><dd>{short(total.input)} entrada · {short(total.output)} salida ({turns.length} turnos)</dd></>}
-      {context !== undefined && <><dt>Contexto</dt><dd>{percent(context)} de {short(usage.context!.window)} tokens</dd></>}
-      {windows.map(([key, w]) => <React.Fragment key={key}><dt>{WINDOWS[key] || key}</dt><dd>{percent(w.utilization!)} usado{w.resetsAt ? ' · se renueva ' + hour(w.resetsAt) : ''}</dd></React.Fragment>)}
-      {hasCost && <><dt>Costo equivalente</dt><dd>US$ {total.cost.toFixed(2)} (con suscripción es una equivalencia, no un cobro)</dd></>}
+      {cache !== undefined && <><dt>Caché</dt><dd className={expired ? 'expired' : undefined}>{cacheText}</dd></>}
+      {context !== undefined && <><dt>Contexto</dt><dd>{percent(context)}</dd></>}
+      {windows.map(([key, label]) => <React.Fragment key={key}><dt>{label}</dt><dd>{percent(usage.limit!.windows![key].utilization!)} usado</dd></React.Fragment>)}
     </dl>}
   </div>;
 }

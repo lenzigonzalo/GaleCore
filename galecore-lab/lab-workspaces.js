@@ -121,6 +121,32 @@ function recordUsage(chat,turn,extra={}){
   Object.assign(u,extra);
 }
 const num=v=>typeof v==='number'&&Number.isFinite(v)?v:undefined;
+// Codex no manda sus límites por `exec --json`: los deja en el archivo de la sesión (`token_count.rate_limits`, % usado y hora
+// de renovación de la ventana de 5 h y la semanal). Se lee lo último que escribió el motor, sin estimar; sin archivo, no se muestra.
+function codexLimits(nativeId,home=process.env.CODEX_HOME||path.join(os.homedir(),'.codex')){
+  try{
+    if(!ID.test(String(nativeId||'')))return;
+    const base=path.join(home,'sessions'),desc=d=>fs.readdirSync(d).sort().reverse();
+    let file;
+    for(const y of desc(base).slice(0,2)){for(const m of desc(path.join(base,y)).slice(0,2)){for(const d of desc(path.join(base,y,m)).slice(0,3)){
+      const hit=fs.readdirSync(path.join(base,y,m,d)).find(f=>f.endsWith(nativeId+'.jsonl'));if(hit){file=path.join(base,y,m,d,hit);break;}}
+      if(file)break;}if(file)break;}
+    if(!file)return;
+    const size=fs.statSync(file).size,fd=fs.openSync(file,'r'),len=Math.min(size,262144),buf=Buffer.alloc(len);
+    try{fs.readSync(fd,buf,0,len,size-len);}finally{fs.closeSync(fd);}
+    const lines=buf.toString('utf8').split('\n').filter(l=>l.includes('"rate_limits"'));
+    for(let i=lines.length-1;i>=0;i--){
+      let rl;try{rl=JSON.parse(lines[i])?.payload?.rate_limits;}catch{continue;}
+      if(!rl)continue;
+      const windows={};
+      for(const w of [rl.primary,rl.secondary]){
+        if(!w||num(w.used_percent)===undefined)continue;
+        windows[num(w.window_minutes)>=1440?'seven_day':'five_hour']={utilization:w.used_percent/100,resetsAt:num(w.resets_at)};
+      }
+      if(Object.keys(windows).length)return{windows};
+    }
+  }catch{/* sin límites de Codex: el resto del uso se muestra igual */}
+}
 function claudeUsage(chat,event){
   const u=event.usage;if(!u)return;
   const it=(Array.isArray(u.iterations)&&u.iterations.at(-1))||u;   // el contexto es el de la última vuelta, no la suma del turno
@@ -167,6 +193,7 @@ function consumeEvent(chat, event, provider) {
       setActivity(chat, input ? describeStep(input.command ? 'Bash' : 'Write', input) : 'Pensando', input ? stepDetail('Bash', input) : ''); }
     if(event.type === 'item.completed' && event.item?.type === 'reasoning') setNote(chat, event.item.text);
     if(event.type === 'turn.completed' && event.usage) recordUsage(chat,{input:num(event.usage.input_tokens)||0,cached:num(event.usage.cached_input_tokens)||0,output:num(event.usage.output_tokens)||0});
+    if(event.type === 'turn.completed'){const limit=codexLimits(chat.nativeId);if(limit)(chat.usage||(chat.usage={turns:[]})).limit=limit;}
     if(event.type === 'turn.failed' || event.type === 'error') chat.error = event.error?.message || event.message || 'El motor no pudo completar el pedido.';
   } else {
     if(event.session_id) chat.nativeId = event.session_id;
@@ -556,4 +583,4 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   if(autoSync)sharing.syncAll(listProjects).catch(()=>{});   // al arrancar: trae también lo que otros compartieron conmigo
   return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
-module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep};
+module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits};

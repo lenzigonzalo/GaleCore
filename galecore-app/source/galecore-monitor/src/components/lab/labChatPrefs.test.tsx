@@ -4,6 +4,8 @@ import { notifyChat, playChatSound, readChatPrefs } from './labChatPrefs';
 import { ChatBehaviorSettings } from '../settings/ChatBehaviorSettings';
 import { LabMarkdown, toCsv, toTabs } from './LabMarkdown';
 
+jest.mock('../../api/lab', () => ({ labRequest: () => Promise.resolve({ projects: [], chats: [], providers: [{ id: 'claude', label: 'Claude', installed: true }, { id: 'codex', label: 'Codex', installed: true }],
+  chatOptions: { claude: { models: ['sonnet', 'opus', 'haiku'], efforts: ['low', 'medium', 'high'], modelEfforts: { haiku: [] }, defaultModel: 'sonnet' }, codex: { models: ['gpt-x'], efforts: ['high'] } } }) }));
 beforeEach(() => { localStorage.clear(); });
 
 test('por defecto suenan al terminar y al pedir permiso; el aviso del navegador está apagado', () => {
@@ -49,4 +51,24 @@ test('una tabla de la respuesta se copia con tabulaciones y se exporta como CSV'
   render(<LabMarkdown text={'| Sym | Delta |\n|---|---|\n| SPY | +0,5 |'} />);
   expect(screen.getByRole('button', { name: 'Copiar' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'CSV' })).toBeInTheDocument();
+});
+
+test('Configuración → Chat guarda con qué proveedor, modelo y esfuerzo abre un chat nuevo', async () => {
+  render(<ChatBehaviorSettings />);
+  expect(readChatPrefs()).toMatchObject({ provider: '', model: '', effort: '' });
+  await screen.findByRole('option', { name: 'Claude' });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Proveedor inicial' }), { target: { value: 'claude' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Modelo inicial' }), { target: { value: 'opus' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Esfuerzo inicial' }), { target: { value: 'high' } });
+  expect(readChatPrefs()).toMatchObject({ provider: 'claude', model: 'opus', effort: 'high' });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Modelo inicial' }), { target: { value: 'haiku' } });
+  expect(readChatPrefs().effort).toBe('');
+  expect(screen.getByRole('combobox', { name: 'Esfuerzo inicial' })).toBeDisabled();
+});
+
+test('Configuración → Chat guarda si los chats nuevos abren en Manual o Auto', () => {
+  render(<ChatBehaviorSettings />);
+  expect(readChatPrefs().mode).toBe('manual');
+  fireEvent.change(screen.getByRole('combobox', { name: 'Permisos iniciales' }), { target: { value: 'auto' } });
+  expect(readChatPrefs().mode).toBe('auto');
 });

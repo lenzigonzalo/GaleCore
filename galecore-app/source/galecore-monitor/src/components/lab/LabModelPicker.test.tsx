@@ -47,3 +47,15 @@ test('unavailable providers cannot be selected and Haiku clears effort', () => {
   fireEvent.click(screen.getByRole('option', { name:'Claude — Haiku' }));
   expect(onChange).toHaveBeenCalledWith({provider:'claude',model:'haiku',effort:''});
 });
+test('effort is its own control next to the model, disabled for Haiku and when locked', () => {
+  const onChange = jest.fn();
+  const { rerender } = render(<LabModelPicker provider="claude" model="opus" effort="high" providers={providers} options={options} locked={false} onChange={onChange}/>);
+  const select = screen.getByRole('combobox', { name: 'Esfuerzo de la conversación' });
+  expect(select).toHaveValue('high');
+  fireEvent.change(select, { target: { value: 'medium' } });
+  expect(onChange).toHaveBeenCalledWith({ provider: 'claude', model: 'opus', effort: 'medium' });
+  rerender(<LabModelPicker provider="claude" model="haiku" effort="" providers={providers} options={options} locked={false} onChange={onChange}/>);
+  expect(screen.getByRole('combobox', { name: 'Esfuerzo de la conversación' })).toBeDisabled();
+  rerender(<LabModelPicker provider="claude" model="opus" effort="high" providers={providers} options={options} locked onChange={onChange}/>);
+  expect(screen.getByRole('combobox', { name: 'Esfuerzo de la conversación' })).toBeDisabled();
+});

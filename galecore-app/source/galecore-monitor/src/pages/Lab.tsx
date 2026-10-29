@@ -40,8 +40,9 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [projectId, setProjectId] = useState(() => sessionStorage.getItem('galecore:lab:project') || 'personal');
   const [chatId, setChatId] = useState<string | null>(() => sessionStorage.getItem('galecore:lab:chat'));
   const [chat, setChat] = useState<WorkspaceChat | null>(null);
-  const [provider, setProvider] = useState<'codex' | 'claude'>('codex');
-  const [chatSettings, setChatSettings] = useState({ model: '', effort: '' });
+  // Proveedor, modelo y esfuerzo con que abre un chat nuevo: lo que eligió la persona en Configuración → Chat.
+  const [provider, setProvider] = useState<'codex' | 'claude'>(() => readChatPrefs().provider || 'codex');
+  const [chatSettings, setChatSettings] = useState(() => { const p = readChatPrefs(); return { model: p.model, effort: p.effort }; });
   // Chat, Archivos (explorador) y Shell (terminal) del proyecto, en el mismo lugar (owner 17/10).
   const [view, setView] = useState<'chat' | 'design' | 'shadow' | 'files' | 'shell'>('chat');
   const [shellOpened, setShellOpened] = useState(false);
@@ -133,8 +134,16 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   useEffect(() => {
     if (!state || defaultApplied.current) return;
     defaultApplied.current = true;
-    if (state.defaultProvider && state.defaultProvider !== provider && state.providers.find(x => x.id === state.defaultProvider)?.installed) setProvider(state.defaultProvider);
+    if (!readChatPrefs().provider && state.defaultProvider && state.defaultProvider !== provider && state.providers.find(x => x.id === state.defaultProvider)?.installed) setProvider(state.defaultProvider);
   }, [state, provider]);
+  useEffect(() => {
+    const o = state?.chatOptions?.[provider];
+    if (!o || (!chatSettings.model && !chatSettings.effort)) return;
+    const model = !chatSettings.model || o.models.includes(chatSettings.model) ? chatSettings.model : '';
+    const supported = o.modelEfforts?.[model || o.defaultModel || ''] || o.efforts;
+    const effort = model === chatSettings.model && supported.includes(chatSettings.effort) ? chatSettings.effort : '';
+    if (model !== chatSettings.model || effort !== chatSettings.effort) setChatSettings({ model, effort });
+  }, [state, provider, chatSettings]);
   useEffect(() => { const ok = state?.providers.find(x => x.installed); if (ok && !state?.providers.find(x => x.id === provider)?.installed) { setProvider(ok.id); setChatSettings({model:'',effort:''}); } }, [state, provider]);
   useEffect(() => { sessionStorage.setItem('galecore:lab:project', projectId); setFilePanel(null); }, [projectId]);
   useEffect(() => { if(chatId) sessionStorage.setItem('galecore:lab:chat',chatId); else sessionStorage.removeItem('galecore:lab:chat'); },[chatId]);
@@ -204,7 +213,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     handledRequest.current = projectRequest.sequence; selectProject(target);
   }, [projectRequest, state]);
   const selectChat = (p: WorkspaceProject, c: WorkspaceState['chats'][number]) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(c.id); setChat(null); setView('chat'); setError(''); };
-  const newChat = () => { selection.current++; setChatId(null); setChat(null); setView('chat'); setError(''); };
+  const newChat = () => { const d = readChatPrefs(); if (d.provider) { setProvider(d.provider); setChatSettings({ model: d.model, effort: d.effort }); } setMode(d.mode); selection.current++; setChatId(null); setChat(null); setView('chat'); setError(''); };
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true);
     try { const p = await labRequest<WorkspaceProject>('/workspaces',{ label:projectLabel }); await refresh(); selectProject(p); setProjectLabel(''); setCreating(false); }
@@ -212,7 +221,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     finally { setBusy(false); }
   };
   // Caja de texto estilo Claude (WS-0036): adjuntos, dictado y modo de permisos por mensaje.
-  const [mode, setMode] = useState<'manual' | 'auto'>('manual');
+  const [mode, setMode] = useState<'manual' | 'auto'>(() => readChatPrefs().mode);
   const [attachments, setAttachments] = useState<{ path: string; name: string; preview?: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [listening, setListening] = useState(false);
@@ -234,7 +243,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [menu, setMenu] = useState<(Trigger & { index: number }) | null>(null);
   useEffect(() => { let live = true; fetchSpace().then(d => { if (live) setPieces(mentionsFromSpace([...d.items, ...d.shared])); }).catch(() => { /* sin espacio: no hay menú */ }); return () => { live = false; }; }, []);
   const menuItems = menu ? filterMentions(pieces, menu) : [];
-  useEffect(() => { setMode('manual'); setAttachments([]); setReplacing(false); setInterim(''); setResume(null); }, [chatId, projectId]);
+  useEffect(() => { setMode(readChatPrefs().mode); setAttachments([]); setReplacing(false); setInterim(''); setResume(null); }, [chatId, projectId]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- sólo al cambiar de conversación; seguir chat.mode pisaría el cambio local mientras responde
   useEffect(() => { if (chat?.mode) setMode(chat.mode); }, [chat?.id]);   // cada conversación recuerda su modo
   // Owner 24/10: permisos en el chat como en el CLI; el modo se puede cambiar mientras responde.
@@ -414,10 +423,10 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   if(menu&&e.key==='Escape'){e.preventDefault();setMenu(null);return;}
   if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if(draft.trim()&&!busy){if(chat?.state==='running')enqueue();else e.currentTarget.form?.requestSubmit();}}
   else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='s'){e.preventDefault();if(!busy)sendNow();}
-  else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='x'&&queue.length&&e.currentTarget.selectionStart===e.currentTarget.selectionEnd){e.preventDefault();unqueueLast();}}}/>{listening&&<p className="lab-interim" aria-live="polite">{interim||'Escuchando…'}</p>}<div className="lab-composer-bar"><div className="lab-composer-side"><button type="button" className="lab-tool" aria-label="Adjuntar archivo" title="Adjuntar archivo" disabled={busy || uploading || !project} onClick={() => fileInput.current?.click()}><Plus size={18}/></button><input ref={fileInput} type="file" multiple hidden onChange={e => void attach(e.target.files)}/>{Speech && <button type="button" className={'lab-tool' + (listening ? ' active' : '')} aria-label={listening ? 'Detener dictado' : 'Dictar'} title={listening ? 'Detener dictado' : 'Dictar'} onClick={toggleDictation}><Mic size={17}/></button>}{uploading && <span className="lab-uploading" role="status">Adjuntando…</span>}</div><div className="lab-composer-side"><LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><button type="button" className={'lab-mode ' + mode} aria-label={'Permisos: ' + (mode === 'auto' ? 'Auto' : 'Manual')} title={mode === 'auto' ? 'Auto: decide solo lo seguro y te pregunta lo demás' : 'Manual: te pregunta antes de lo que necesita permiso'} onClick={toggleMode}>{mode === 'auto' ? 'Auto' : 'Manual'}</button>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div></div></form>;
+  else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='x'&&queue.length&&e.currentTarget.selectionStart===e.currentTarget.selectionEnd){e.preventDefault();unqueueLast();}}}/>{listening&&<p className="lab-interim" aria-live="polite">{interim||'Escuchando…'}</p>}<div className="lab-composer-bar"><div className="lab-composer-side"><button type="button" className="lab-tool" aria-label="Adjuntar archivo" title="Adjuntar archivo" disabled={busy || uploading || !project} onClick={() => fileInput.current?.click()}><Plus size={18}/></button><input ref={fileInput} type="file" multiple hidden onChange={e => void attach(e.target.files)}/>{Speech && <button type="button" className={'lab-tool' + (listening ? ' active' : '')} aria-label={listening ? 'Detener dictado' : 'Dictar'} title={listening ? 'Detener dictado' : 'Dictar'} onClick={toggleDictation}><Mic size={17}/></button>}{uploading && <span className="lab-uploading" role="status">Adjuntando…</span>}</div><div className="lab-composer-side">{chat?.state==='running'&&draft.trim()&&<><button type="button" className="lab-queue-add" aria-label="Encolar mensaje" title="Sale solo cuando termine la respuesta (Enter)" disabled={busy} onClick={()=>enqueue()}>Encolar</button><button type="button" className="lab-send-now" aria-label="Mandar ya el mensaje escrito" title="Corta la respuesta y lo manda ya (Ctrl + S)" disabled={busy} onClick={()=>sendNow()}>Mandar ya</button></>}<LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><button type="button" className={'lab-mode ' + mode} aria-label={'Permisos: ' + (mode === 'auto' ? 'Auto' : 'Manual')} title={mode === 'auto' ? 'Auto: decide solo lo seguro y te pregunta lo demás' : 'Manual: te pregunta antes de lo que necesita permiso'} onClick={toggleMode}>{mode === 'auto' ? 'Auto' : 'Manual'}</button>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={!draft.trim()||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div></div></form>;
   const chatHeader = <header className={"lab-chat-header" + (headerHost ? " in-global-header" : "")}><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong>{project && KIND[project.type] !== name(project.id, project.label) && <span>{KIND[project.type]}</span>}</div><div className="lab-header-actions"><LabUsage usage={chat?.usage}/>{project && project.id !== 'personal' && <button className="lab-files-button" onClick={()=>setSharingOpen(true)}><Users size={17}/>Compartir</button>}{view==='chat' && mapaShown && <button className="lab-files-button" aria-pressed={side==='mapa'} onClick={()=>{ if (filePanel) { setFilePanel(null); setMapaOpen(true); } else setMapaOpen(v=>!v); }}><MapIcon size={17}/>Mapa</button>}<div className="lab-view-switch" role="group" aria-label="Vista del proyecto"><button aria-pressed={view==='chat' || view==='design' || view==='shadow'} onClick={()=>setView('chat')}><MessageSquare size={16}/>Chat</button><button aria-pressed={view==='files'} onClick={()=>{setFileToOpen(undefined);setView('files');}}><Files size={16}/>Archivos</button><button aria-pressed={view==='shell'} onClick={()=>{setShellOpened(true);setView('shell');}}><SquareTerminal size={16}/>Shell</button></div></div></header>;
   const projectSidebar = <aside className="lab-chat-sidebar" id="lab-project-sidebar">
-      <div className="lab-sidebar-heading"><button className="lab-new-chat" onClick={newChat}><MessageSquare size={19}/><span>Nuevo chat</span></button>{!embedded && !onSidebarToggle && <button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>}</div>
+      <div className="lab-sidebar-heading">{!embedded && !onSidebarToggle && <button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>}</div>
       {!collapsed && <LabProjectList state={state} projectId={projectId} chatId={chatId} expanded={expanded}
         onToggle={id => setExpanded(v => ({ ...v, [id]: !v[id] }))} onProject={selectProject} onChat={selectChat}
         onNewChat={p => { selectProject(p); newChat(); }} onCreateProject={() => setCreating(true)}

@@ -488,3 +488,41 @@
 .lab-task > span { color:var(--text-muted); font-size:13px; white-space:nowrap; }
 .lab-task code { grid-column:2 / 4; font-size:12.5px; color:var(--text-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 @keyframes lab-pulse { 50% { opacity:.35; } }
+
+/* Abajo, a la derecha, en una sola fila: logo, esfuerzo, modo y flecha (owner 28/10) */
+.lab-composer-bar .lab-composer-side:last-child { margin-left:auto; gap:2px; }
+.lab-composer-bar .lab-send { margin-left:6px; width:36px; height:36px; }
+.lab-composer-bar .lab-mode { font-size:13px; }
+.lab-queue-add,.lab-send-now { height:30px; padding:0 12px; margin-right:4px; border-radius:15px; font:600 13px var(--font-sans); cursor:pointer; }
+.lab-queue-add { border:1px solid var(--border-light); background:transparent; color:var(--text-primary); }
+.lab-send-now { border:0; background:var(--yellow-gc,#e0b04a); color:#111; }
+.lab-queue-add:disabled,.lab-send-now:disabled { opacity:.35; cursor:default; }
+/* Chats de la barra lateral un poco más grandes */
+.lab-project-list .lab-project-select { font-size:18px; padding:11px 6px; }
+.lab-project-list .lab-chat-row > .lab-chat-select { font-size:17px; padding:11px 6px; }
+.lab-project-list .lab-chat-provider { font-size:13px; }
+/* El esfuerzo no se achica con las reglas generales de select del compositor */
+.lab-chat-composer .lab-effort { flex:0 0 auto; }
+.lab-chat-composer .lab-effort select { width:auto; min-width:84px; max-width:none; padding:6px 20px 6px 8px; font-size:13px; background:transparent; color:inherit; }
+
+/* «Nuevo chat» y las etiquetas salieron (owner 28/10): el botón de ocultar la barra queda sobre la fila de pestañas */
+.lab-chat-sidebar { position:relative; }
+.lab-sidebar-heading { position:absolute; top:18px; right:12px; z-index:3; margin:0; }
+.lab-chat-sidebar .lab-list-tabs { margin-right:40px; }
+.lab-project-heading { justify-content:flex-end; }
+.sidebar-collapsed .lab-sidebar-heading { position:static; }
+.lab-chat-sidebar .lab-list-tabs button { min-width:0; padding-inline:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Conversación abierta: el cuadro es de una sola línea (+ y micrófono, texto, controles); el chat nuevo queda alto (owner 28/10) */
+.lab-chat-main:not(.empty) .lab-chat-composer { display:flex; flex-wrap:wrap; align-items:center; gap:0 8px; padding:8px 12px; border-radius:20px; }
+.lab-chat-main:not(.empty) .lab-chat-composer > * { flex:0 0 100%; }
+.lab-chat-main:not(.empty) .lab-chat-composer > textarea { order:2; flex:1 1 0; min-width:0; padding:8px 0; }
+.lab-chat-main:not(.empty) .lab-composer-bar { display:contents; }
+.lab-chat-main:not(.empty) .lab-composer-bar > .lab-composer-side:first-child { order:1; flex:0 0 auto; }
+.lab-chat-main:not(.empty) .lab-composer-bar > .lab-composer-side:last-child { order:3; flex:0 0 auto; margin-left:0; }
+.lab-chat-main:not(.empty) .lab-chat-composer > .lab-interim { order:4; }
+
+.lab-chat-main:not(.empty) .lab-composer-bar .lab-composer-side { align-items:center; }
+.lab-chat-main:not(.empty) .lab-chat-composer > textarea { align-self:center; }
+
+.lab-usage > button.expired, .lab-usage dd.expired { color:var(--orange-gc,#f59e0b); }

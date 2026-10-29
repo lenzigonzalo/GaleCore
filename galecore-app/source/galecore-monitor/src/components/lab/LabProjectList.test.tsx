@@ -73,7 +73,7 @@ test('sacar proyecto y elegir color propio no altera su selección ni sus chats'
   expect(screen.getByRole('button', { name: 'SPY' }).parentElement?.parentElement?.style.getPropertyValue('--group-color')).toBe('#eda1bb');
   fireEvent.click(screen.getByRole('button', { name: 'Sacar del grupo' }));
   expect(within(screen.getByRole('region', { name: 'Grupo' })).queryByRole('button', { name: 'SPY' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'SPY' })); expect(props.onProject).toHaveBeenCalledWith(state.projects[0]);
+  fireEvent.click(screen.getByRole('button', { name: 'SPY' })); expect(props.onToggle).toHaveBeenCalledWith('spy');
   expect(screen.getByRole('button', { name: 'Investigación' })).toBeInTheDocument();
 });
 test.each(['{broken', '{"groups":[null,{"id":"x","label":"Bad","color":"unknown"}],"members":{"p:spy":"missing"}}'])('storage inválido no oculta proyectos: %s', stored => {
@@ -186,24 +186,24 @@ test('buscador por pestaña: Proyectos busca proyectos y Conversaciones busca co
   expect(screen.queryByRole('textbox', { name: 'Buscar conversaciones' })).not.toBeInTheDocument();
 });
 
-test('favoritos se guardan en el espacio, sobreviven recarga y conservan grupos y proveedor', async () => {
+test('favoritos se guardan en el espacio, sobreviven recarga y conservan grupos y proveedor; los chats no tienen estrella', async () => {
   const { unmount } = render(<LabProjectList {...props}/>);
   await act(async () => {});
-  fireEvent.click(screen.getByRole('button', { name: 'Favorito: Investigación' }));
+  expect(screen.queryByRole('button', { name: 'Favorito: Investigación' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Favorito: SPY' }));
-  expect(screen.getByRole('button', { name: 'Favorito: Investigación' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'Favorito: SPY' })).toHaveAttribute('aria-pressed', 'true');
   expect(screen.getByText('Codex')).toBeInTheDocument();
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 650)); });
   expect(saved[saved.length - 1][0]).toBe('preference');
-  expect(JSON.parse(saved[saved.length - 1][2].content).favorites).toEqual(['c:research', 'p:spy']);
+  expect(JSON.parse(saved[saved.length - 1][2].content).favorites).toEqual(['p:spy']);
   unmount(); render(<LabProjectList {...props}/>);
-  expect(screen.getByRole('button', { name: 'Favorito: Investigación' })).toHaveAttribute('aria-pressed', 'true');
-  fireEvent.click(screen.getByRole('button', { name: 'Favorito: Investigación' }));
-  expect(screen.getByRole('button', { name: 'Favorito: Investigación' })).toHaveAttribute('aria-pressed', 'false');
+  expect(screen.getByRole('button', { name: 'Favorito: SPY' })).toHaveAttribute('aria-pressed', 'true');
+  fireEvent.click(screen.getByRole('button', { name: 'Favorito: SPY' }));
+  expect(screen.getByRole('button', { name: 'Favorito: SPY' })).toHaveAttribute('aria-pressed', 'false');
   fireEvent.click(screen.getByRole('tab', { name: 'Conversaciones' }));
   expect(screen.getByText('Codex · SPY')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /^Favorito: Investigación/ })).toBeNull();
 });
-
 test('favorite clicked before account loads merges with canonical groups before saving', async () => {
   let resolveSpace: (value: any) => void = () => {};
   (fetchSpace as jest.Mock).mockReturnValue(new Promise(resolve => { resolveSpace = resolve; }));
@@ -236,4 +236,12 @@ test('marca como compartido el proyecto que lo está y sólo ese', () => {
   const shared: WorkspaceState = { ...state, projects: state.projects.map(p => p.id === 'spy' ? { ...p, shared: true } : p) };
   render(<LabProjectList {...props} state={shared}/>);
   expect(screen.getAllByLabelText('Compartido')).toHaveLength(1);
+});
+
+test('clic en un proyecto no seleccionado lo abre; en el seleccionado lo despliega o repliega', () => {
+  render(<LabProjectList {...props}/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Personal' }));
+  expect(props.onProject).toHaveBeenCalledWith(state.projects[1]); expect(props.onToggle).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'SPY' }));
+  expect(props.onToggle).toHaveBeenCalledWith('spy');
 });

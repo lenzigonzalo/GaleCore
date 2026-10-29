@@ -1,4 +1,4 @@
-const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('fs');const path=require('path');const os=require('os');const {createWorkspaces,safeFile,consumeEvent}=require('./lab-workspaces');
+const {test}=require('node:test');const assert=require('node:assert/strict');const fs=require('fs');const path=require('path');const os=require('os');const {createWorkspaces,safeFile,consumeEvent,codexLimits}=require('./lab-workspaces');
 function setup(t){const base=fs.mkdtempSync(path.join(os.tmpdir(),'gc-lab-test-'));t.after(()=>{assert.ok(path.resolve(base).startsWith(path.resolve(os.tmpdir())+path.sep+'gc-lab-test-'));fs.rmSync(base,{recursive:true,force:true});});const kb=path.join(base,'knowledge'),local=path.join(base,'local');fs.mkdirSync(kb);fs.mkdirSync(local);const service=createWorkspaces({root:base,kb,local,binaries:{codex:null,claude:null},environment:()=>({}),instructions:()=>'',legacyProjects:()=>[],legacySessions:()=>[]});return{base,kb,local,service};}
 async function route(service,method,url,body){let answer;await service.route({method},{},new URL(url,'http://localhost'),(res,status,value)=>{answer={status,value};},async()=>body);return answer;}
 test('proyectos personales tienen archivos propios; no crea propuesta ni aprobación',async t=>{const {kb,service}=setup(t);const state=await route(service,'GET','/workspaces');assert.equal(state.value.projects[0].type,'personal');assert.ok(fs.existsSync(path.join(kb,'workspaces/personal/AGENTS.md')));const p=await route(service,'POST','/workspaces',{label:'Estrategia SPY',type:'strategy'});assert.equal(p.value.strategyName,'estrategia_spy');assert.ok(fs.existsSync(path.join(kb,'strategies/estrategia_spy/README.md')));assert.equal(fs.existsSync(path.join(kb,'strategies/estrategia_spy/approval.json')),false);await assert.rejects(()=>route(service,'POST','/workspaces',{label:'Estrategia SPY',type:'strategy'}));});
@@ -296,7 +296,9 @@ test('uso: se guarda lo que informan Claude y Codex en eventos reales, sin estim
  const t=claude.usage.turns[0];assert.ok(t.input>=14763&&t.output===4&&t.cached===13813);assert.equal(typeof t.costUsd,'number');
  assert.ok(claude.usage.context.window>=200000&&claude.usage.context.used>0);
  assert.equal(claude.usage.limit.status,'allowed_warning');assert.equal(typeof claude.usage.limit.windows.five_hour.utilization,'number');
+ const previousHome=process.env.CODEX_HOME;process.env.CODEX_HOME=fs.mkdtempSync(path.join(os.tmpdir(),'codex-empty-'));   // sin sesiones: el test no depende del ~/.codex de quien lo corre
  const codex={messages:[],turnStartedAt:1};read('eventos-reales-codex.jsonl').forEach(e=>consumeEvent(codex,e,'codex'));
+ if(previousHome===undefined)delete process.env.CODEX_HOME;else process.env.CODEX_HOME=previousHome;
  assert.deepEqual(codex.usage.turns.map(({at,...x})=>x),[{input:17340,cached:13440,output:5}]);
  assert.equal(codex.usage.context,undefined);assert.equal(codex.usage.limit,undefined);   // no lo informa: no se inventa
 });
@@ -327,4 +329,14 @@ test('segundo plano: subagentes y comandos en segundo plano salen de los eventos
  assert.match(agent.summary,/720/);
  assert.ok(seen.some(s=>/ab4e:running/.test(s)&&/bpmv:running/.test(s)));   // los dos corrieron a la vez
  assert.ok(!(chat.steps||[]).some(s=>/find |PowerShell|Measure-Object/.test(s.detail||'')));   // los pasos internos del subagente no van a los pasos del chat
+});
+test('Codex: los límites de 5 h y semanal salen del archivo de su sesión (lo último que escribió el motor)',()=>{
+ const home=fs.mkdtempSync(path.join(os.tmpdir(),'codex-home-')),id='01a18486-73cd-7261-9074-8400c2ef0a40',dir=path.join(home,'sessions','2026','10','28');
+ fs.mkdirSync(dir,{recursive:true});
+ const line=(p,s)=>JSON.stringify({type:'event_msg',payload:{type:'token_count',rate_limits:{primary:{used_percent:p,window_minutes:300,resets_at:1793242588},secondary:{used_percent:s,window_minutes:10080,resets_at:1793801859}}}});
+ fs.writeFileSync(path.join(dir,'rollout-2026-10-28T18-59-26-'+id+'.jsonl'),[line(3,5),JSON.stringify({type:'x'}),line(7,6)].join('\n')+'\n');
+ const l=codexLimits(id,home);
+ assert.deepEqual(l,{windows:{five_hour:{utilization:0.07,resetsAt:1793242588},seven_day:{utilization:0.06,resetsAt:1793801859}}});
+ assert.equal(codexLimits('no-existe',home),undefined);assert.equal(codexLimits('../x',home),undefined);
+ fs.rmSync(home,{recursive:true,force:true});
 });

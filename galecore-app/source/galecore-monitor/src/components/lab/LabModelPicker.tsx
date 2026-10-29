@@ -58,13 +58,17 @@ export function LabModelPicker({ provider, model, effort, providers, options, lo
     onChange({ provider: nextProvider, model: nextModel, effort: nextEffort });
     setOpen(false); trigger.current?.focus();
   }
-  return <div className="lab-provider-picker" ref={root}>
+  const effortSelect = options?.[provider] && <label className="lab-effort">
+    <select aria-label="Esfuerzo de la conversación" value={effort} disabled={locked || displayed.includes('haiku')}
+      onChange={event => onChange({ provider, model, effort: event.target.value })}>
+      <option value="">Esfuerzo</option>{availableEfforts.map(value => <option key={value} value={value}>{effortLabels[value] || value}</option>)}
+    </select><ChevronDown size={13} aria-hidden="true"/>
+  </label>;
+  return <><div className="lab-provider-picker" ref={root}>
     <button className="lab-provider-trigger" type="button" ref={trigger} aria-haspopup="dialog" aria-expanded={open}
       aria-label={'Proveedor y modelo: ' + label(provider) + ' - ' + (displayed ? modelLabel(displayed) : 'Predeterminado')}
       onClick={() => setOpen(value => !value)}>
       <img src={'/providers/' + provider + '.png'} alt=""/>
-      <span>{label(provider)} <span className="lab-provider-separator">—</span> {displayed ? modelLabel(displayed) : 'Predeterminado'}</span>
-      <ChevronDown size={15}/>
     </button>
     {open && createPortal(<div ref={menu} style={position} className="lab-provider-menu" role="dialog" aria-label="Elegir proveedor y modelo">
       <header><strong>Proveedor y modelo</strong><button type="button" aria-label="Cerrar selector" onClick={() => { setOpen(false); trigger.current?.focus(); }}><X size={16}/></button></header>
@@ -93,13 +97,7 @@ export function LabModelPicker({ provider, model, effort, providers, options, lo
           </section>;
         })}
       </div>
-      {options?.[provider] && <label className="lab-provider-effort">Esfuerzo
-        <select aria-label="Esfuerzo de la conversación" value={effort} disabled={locked || displayed.includes('haiku')}
-          onChange={event => onChange({ provider, model, effort: event.target.value })}>
-          <option value="">Predeterminado</option>{availableEfforts.map(value => <option key={value} value={value}>{effortLabels[value] || value}</option>)}
-        </select>
-      </label>}
       {locked && <p>Esta conversación conserva su selección. Abrí un nuevo chat para cambiarla.</p>}
     </div>, document.body)}
-  </div>;
+  </div>{effortSelect}</>;
 }
