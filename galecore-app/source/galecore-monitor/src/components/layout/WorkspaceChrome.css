@@ -18,3 +18,5 @@
 .workspace-navigation .workspace-nav-bottom{margin-top:auto;padding:24px 8px 0}.workspace-navigation .workspace-nav-bottom .workspace-nav-entry{color:var(--text-secondary);padding:10px 0}
 @media(max-width:1000px){.workspace-body>.workspace-navigation{width:220px}}@media(max-width:700px){.workspace-body>.workspace-navigation{width:140px;padding:18px 8px}.workspace-navigation .workspace-nav-entry{font-size:14px;padding:12px 6px}.workspace-navigation .workspace-group-label{display:block;font-size:13px;padding-left:6px}}
 @media(max-width:480px){.workspace-body{flex-direction:column}.workspace-body>.workspace-navigation{width:100%;max-height:180px;border-right:0;border-bottom:1px solid var(--border-dark)}.workspace-navigation nav{display:flex;gap:16px}.workspace-navigation .workspace-nav-bottom{padding-top:8px}}
+
+.workspace-logo{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}.workspace-logo .workspace-brand-name{color:inherit}.workspace-brand-mark{display:block;flex-shrink:0;object-fit:contain}
