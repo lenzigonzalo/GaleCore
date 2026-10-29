@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Lab } from './Lab';
 jest.mock('../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: [], shared: [] }), saveSpaceItem: () => Promise.resolve() }));
 // Sin red en el test: las sugerencias del chat pedían /Lab/Suggestions de verdad (y Node 20.9 se cae al cerrar el socket).
@@ -45,4 +45,48 @@ test('Lab mantiene proyectos y borrador, sin logo ni segundo control de barra', 
   rerender(<Lab {...props} sidebarHidden={false} />);
   expect(screen.getByRole('separator', { name: 'Ancho de proyectos' })).toBeInTheDocument();
   expect(composer).toHaveValue('Mi borrador');
+});
+
+test('cambiar conversaciones con carga demorada conserva el layout y descarta respuestas de otra selección', async () => {
+  const first = { id: 'first', project: 'personal', provider: 'codex', title: 'Primera', state: 'idle', messages: [{ id: 'm1', role: 'user', text: 'Historial primero' }] };
+  const second = { ...first, id: 'second', title: 'Segunda', messages: [{ id: 'm2', role: 'user', text: 'Historial segundo' }] };
+  let resolveSecond!: (value: typeof second) => void;
+  const pending = new Promise(resolve => { resolveSecond = resolve; });
+  const metadata = { projects: [{ id: 'personal', label: 'Personal', type: 'personal' }], chats: [first, second], providers: [{ id: 'codex', installed: true }] };
+  (labRequest as jest.Mock).mockImplementation((path: string) => path === '/chats/second' ? pending : Promise.resolve(path === '/workspaces' ? metadata : first));
+  const { container } = render(<Lab onMonitor={() => {}} />);
+  await screen.findByRole('button', { name: 'Personal' });
+  fireEvent.click(screen.getByRole('tab', { name: 'Conversaciones' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Primera/ }));
+  await screen.findByText('Historial primero');
+  fireEvent.click(screen.getByRole('button', { name: /^Segunda/ }));
+  expect(screen.getByText('Cargando conversación…')).toBeInTheDocument();
+  expect(container.querySelector('.lab-chat-main')).not.toHaveClass('empty');
+  expect(screen.queryByRole('heading', { name: 'Tu espacio personal' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Historial primero')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Enviar mensaje' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: /^Primera/ }));
+  await screen.findByText('Historial primero');
+  await act(async () => { resolveSecond(second); await pending; });
+  expect(screen.queryByText('Historial segundo')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /^Segunda/ }));
+  await screen.findByText('Historial segundo');
+  expect(container.querySelector('.lab-chat-main')).not.toHaveClass('empty');
+  fireEvent.click(screen.getByRole('tab', { name: 'Proyectos' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Personal' }));
+  fireEvent.click(screen.getAllByRole('button', { name: /^Nuevo chat$/ })[0]);
+  expect(screen.getByRole('heading', { name: 'Tu espacio personal' })).toBeInTheDocument();
+  expect(container.querySelector('.lab-chat-main')).toHaveClass('empty');
+});
+
+test('una conversación que falla al cargar muestra el error sin bienvenida de chat nuevo', async () => {
+  sessionStorage.setItem('galecore:lab:chat', 'missing');
+  const base = (labRequest as jest.Mock).getMockImplementation()!;
+  (labRequest as jest.Mock).mockImplementation((path: string) => path === '/chats/missing' ? Promise.reject(new Error('offline')) : base(path));
+  const { container } = render(<Lab onMonitor={() => {}} />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo recuperar esta conversación.');
+  expect(screen.queryByText('Cargando conversación…')).not.toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'Tu espacio personal' })).not.toBeInTheDocument();
+  expect(container.querySelector('.lab-chat-main')).not.toHaveClass('empty');
+  expect(screen.getByRole('button', { name: 'Enviar mensaje' })).toBeDisabled();
 });
