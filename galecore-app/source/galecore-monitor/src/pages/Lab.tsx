@@ -40,6 +40,8 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [projectId, setProjectId] = useState(() => sessionStorage.getItem('galecore:lab:project') || 'personal');
   const [chatId, setChatId] = useState<string | null>(() => sessionStorage.getItem('galecore:lab:chat'));
   const [chat, setChat] = useState<WorkspaceChat | null>(null);
+  const chatLoading = !!chatId && !chat;
+  const chatEmpty = !chatLoading && !chat?.messages.length;
   // Proveedor, modelo y esfuerzo con que abre un chat nuevo: lo que eligió la persona en Configuración → Chat.
   const [provider, setProvider] = useState<'codex' | 'claude'>(() => readChatPrefs().provider || 'codex');
   const [chatSettings, setChatSettings] = useState(() => { const p = readChatPrefs(); return { model: p.model, effort: p.effort }; });
@@ -447,7 +449,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         e.preventDefault();
         resizeSidebar(e.key === 'Home' ? 200 : e.key === 'End' ? 480 : sidebarWidth + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 40 : 10));
       }}/>}
-    <section className={'lab-chat-main' + (!chat?.messages.length && view === 'chat' ? ' empty' : '')}>
+    <section className={'lab-chat-main' + (chatEmpty && view === 'chat' ? ' empty' : '')}>
       {headerHost ? createPortal(chatHeader, headerHost) : chatHeader}
       {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></p>}
       {shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
@@ -457,7 +459,8 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         const nearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 80;
         followBottom.current = nearBottom; setAwayFromBottom(!nearBottom);
       }}>
-        {!chat?.messages.length && <div className="lab-chat-welcome"><h1>{project?.type==='strategy' ? '¿Qué estrategia querés construir?' : project?.type==='personal' ? 'Tu espacio personal' : '¿Qué querés investigar?'}</h1>{project?.type==='strategy' && <p>De la idea a una estrategia lista para probar en Shadow.</p>}</div>}
+        {chatLoading && !error && <div className="lab-chat-notice" role="status">Cargando conversación…</div>}
+        {chatEmpty && <div className="lab-chat-welcome"><h1>{project?.type==='strategy' ? '¿Qué estrategia querés construir?' : project?.type==='personal' ? 'Tu espacio personal' : '¿Qué querés investigar?'}</h1>{project?.type==='strategy' && <p>De la idea a una estrategia lista para probar en Shadow.</p>}</div>}
         {chat?.messages.map(m=><article className={'lab-message '+m.role} key={m.id}><span>{m.role==='user'?'Vos':chat.provider==='codex'?'Codex':'Claude'}</span>{m.role==='assistant' ? <LabMarkdown text={m.text} active={m.id===chat.messages[chat.messages.length-1]?.id && chat.state!=='running' && !busy} onAnswer={text=>submit(text,false)} files={project ? { folder: project.relative, open: p => setFilePanel(p) } : undefined}/> : <div>{m.text}</div>}{m.role==='assistant' && !(chat.state==='running' && m.id===chat.messages[chat.messages.length-1]?.id) && (notes[m.id] ? <span className="lab-note-saved">Guardada: <a href={'#'+notes[m.id]} onClick={e=>{e.preventDefault();setFilePanel(notes[m.id]);}}>{notes[m.id]}</a></span> : <button type="button" className="lab-message-edit lab-note-save" onClick={() => void keepAsNote(m.id, m.text)}>Guardar como nota</button>)}{m.role==='user' && m.id===lastUserId && chat.state!=='running' && !busy && <button type="button" className="lab-message-edit" onClick={() => editLast(m.text)}><Pencil size={13}/>Editar</button>}</article>)}
         {chat?.state==='running' && <div className="lab-chat-activity" role="status">
           {(() => { const steps = chat.steps || [], last = steps.length - 1;   // como Claude Code: qué hizo, con qué, y qué hace ahora
@@ -473,7 +476,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       </div>
       {awayFromBottom && <button type="button" className="lab-jump-latest" onClick={jumpToLatest}>Ir al último mensaje</button>}
       {composerForm}
-      {!chat?.messages.length && !busy && !(chatId && !chat) && <LabSuggestions disabled={chat?.state==='running'} onPick={question => void submit(question, false)}/>}
+      {chatEmpty && !busy && <LabSuggestions disabled={chat?.state==='running'} onPick={question => void submit(question, false)}/>}
       </div>
       {side && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label={side === 'file' ? 'Ancho del archivo' : 'Ancho del mapa'} aria-orientation="vertical" aria-valuemin={280} aria-valuemax={Math.max(280, (chatBody.current?.clientWidth || 1600) - 420)} aria-valuenow={mapaWidth}
         title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
