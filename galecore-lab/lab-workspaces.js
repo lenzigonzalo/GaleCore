@@ -121,6 +121,37 @@ function recordUsage(chat,turn,extra={}){
   Object.assign(u,extra);
 }
 const num=v=>typeof v==='number'&&Number.isFinite(v)?v:undefined;
+function sessionTail(file){
+  const size=fs.statSync(file).size,fd=fs.openSync(file,'r'),len=Math.min(size,262144),buf=Buffer.alloc(len);
+  try{fs.readSync(fd,buf,0,len,size-len);}finally{fs.closeSync(fd);}
+  return buf.toString('utf8').split('\n');
+}
+// Los chats anteriores al registro de uso no tienen `usage`. Recuperar sólo la última llamada real de Claude:
+// su fecha no cambia al abrir el chat, y no se deducen ventana de contexto ni cuotas del nombre del modelo.
+function claudeLastUsage(nativeId,home=process.env.CLAUDE_CONFIG_DIR||path.join(os.homedir(),'.claude')){
+  try{
+    if(!UUID.test(String(nativeId||'')))return;
+    const base=path.join(home,'projects');
+    for(const dir of fs.readdirSync(base,{withFileTypes:true})){
+      if(!dir.isDirectory())continue;
+      const file=path.join(base,dir.name,nativeId+'.jsonl');if(!fs.existsSync(file))continue;
+      const lines=sessionTail(file);
+      for(let i=lines.length-1;i>=0;i--){
+        let e;try{e=JSON.parse(lines[i]);}catch{continue;}
+        const u=e.message?.usage,at=Date.parse(e.timestamp);
+        if(e.type!=='assistant'||e.isSidechain||e.sessionId!==nativeId||!Number.isFinite(at)||!u)continue;
+        if(num(u.input_tokens)===undefined||u.input_tokens<0||num(u.cache_read_input_tokens)===undefined||u.cache_read_input_tokens<0)continue;
+        return{at:new Date(at).toISOString(),input:u.input_tokens+Math.max(0,num(u.cache_creation_input_tokens)||0)+u.cache_read_input_tokens,
+          cached:u.cache_read_input_tokens,output:Math.max(0,num(u.output_tokens)||0)};
+      }
+    }
+  }catch{/* Sin sesión legible: no fabricar uso ni modificar el chat. */}
+}
+function refreshClaudeUsage(chat){
+  if(chat.provider!=='claude'||chat.usage?.turns?.length)return;
+  const turn=claudeLastUsage(chat.nativeId);
+  if(turn)(chat.usage||(chat.usage={turns:[]})).turns=[turn];
+}
 // Codex no manda sus límites por `exec --json`: los deja en el archivo de la sesión (`token_count.rate_limits`, % usado y hora
 // de renovación de la ventana de 5 h y la semanal). Se lee lo último que escribió el motor, sin estimar; sin archivo, no se muestra.
 function codexTelemetry(nativeId,home=process.env.CODEX_HOME||path.join(os.homedir(),'.codex')){
@@ -132,9 +163,7 @@ function codexTelemetry(nativeId,home=process.env.CODEX_HOME||path.join(os.homed
       const hit=fs.readdirSync(path.join(base,y,m,d)).find(f=>f.endsWith(nativeId+'.jsonl'));if(hit){file=path.join(base,y,m,d,hit);break;}}
       if(file)break;}if(file)break;}
     if(!file)return;
-    const size=fs.statSync(file).size,fd=fs.openSync(file,'r'),len=Math.min(size,262144),buf=Buffer.alloc(len);
-    try{fs.readSync(fd,buf,0,len,size-len);}finally{fs.closeSync(fd);}
-    const lines=buf.toString('utf8').split('\n').filter(l=>l.includes('"token_count"'));
+    const lines=sessionTail(file).filter(l=>l.includes('"token_count"'));
     const telemetry={};
     for(let i=lines.length-1;i>=0;i--){
       let payload;try{payload=JSON.parse(lines[i])?.payload;}catch{continue;}
@@ -555,7 +584,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,...(b.origin==='prueba'?{origin:'prueba'}:{}),title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);
-      if(req.method==='GET'&&parts.length===2){refreshCodexUsage(c);json(res,200,c);return true;}
+      if(req.method==='GET'&&parts.length===2){refreshCodexUsage(c);refreshClaudeUsage(c);json(res,200,c);return true;}
       if(req.method==='GET'&&parts[2]==='mapa'){
         // Mientras responde, el mapa que se escribió en este turno ya se muestra (no espera al final).
         // WS-0044: en un proyecto de estrategia (una idea), una conversación que todavía no tocó el mapa ve el último del proyecto.
@@ -596,4 +625,4 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   if(autoSync)sharing.syncAll(listProjects).catch(()=>{});   // al arrancar: trae también lo que otros compartieron conmigo
   return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
-module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry};
+module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage};

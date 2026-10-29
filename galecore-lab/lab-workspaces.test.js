@@ -367,3 +367,29 @@ test('Codex: abrir un chat existente recupera contexto y cuotas de su sesión, s
  fs.writeFileSync(file,token({info:{last_token_usage:{total_tokens:100},model_context_window:0},rate_limits:{primary:{used_percent:10,window_minutes:60}}}));
  assert.equal(codexTelemetry(id,home),undefined);
 });
+
+test('Claude: chats anteriores recuperan caché con su fecha original y no pisan métricas ya guardadas',async t=>{
+ const {base,local,service}=setup(t),home=path.join(base,'claude'),nativeId='2a0b42dd-5afa-4872-835a-8fb3d7974ddb';
+ const previous=process.env.CLAUDE_CONFIG_DIR;process.env.CLAUDE_CONFIG_DIR=home;
+ t.after(()=>{if(previous===undefined)delete process.env.CLAUDE_CONFIG_DIR;else process.env.CLAUDE_CONFIG_DIR=previous;});
+ const dir=path.join(home,'projects','project');fs.mkdirSync(dir,{recursive:true});
+ const file=path.join(dir,nativeId+'.jsonl'),at='2026-10-27T17:57:05.962Z';
+ const event={type:'assistant',sessionId:nativeId,timestamp:at,message:{usage:{input_tokens:2,cache_creation_input_tokens:2318,cache_read_input_tokens:45137,output_tokens:1091}}};
+ fs.writeFileSync(file,[JSON.stringify(event),JSON.stringify({...event,isSidechain:true,message:{usage:{input_tokens:999,cache_read_input_tokens:999}}}),'partial'].join('\n'));
+ const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ chat.nativeId=nativeId;
+ const saved=path.join(local,'chats',chat.id+'.json');fs.writeFileSync(saved,JSON.stringify(chat));
+ const loaded=(await route(service,'GET','/chats/'+chat.id)).value;
+ assert.deepEqual(loaded.usage.turns,[{at,input:47457,cached:45137,output:1091}]);
+ assert.equal(loaded.usage.context,undefined);assert.equal(loaded.usage.limit,undefined);
+ assert.equal(JSON.parse(fs.readFileSync(saved,'utf8')).usage,undefined); // GET no migra ni duplica turnos.
+ assert.deepEqual((await route(service,'GET','/chats/'+chat.id)).value.usage,loaded.usage);
+ chat.usage={turns:[{at:'2026-10-28T20:00:00Z',input:200,cached:100,output:10}],context:{used:200,window:1000},limit:{windows:{}}};
+ fs.writeFileSync(saved,JSON.stringify(chat));
+ assert.deepEqual((await route(service,'GET','/chats/'+chat.id)).value.usage,chat.usage);
+ const {claudeLastUsage}=require('./lab-workspaces');
+ assert.equal(claudeLastUsage('../outside',home),undefined);
+ fs.writeFileSync(file,JSON.stringify({...event,timestamp:'bad'}));assert.equal(claudeLastUsage(nativeId,home),undefined);
+ fs.writeFileSync(file,JSON.stringify({...event,sessionId:'another-session'}));assert.equal(claudeLastUsage(nativeId,home),undefined);
+ fs.unlinkSync(file);assert.equal(claudeLastUsage(nativeId,home),undefined);
+});
