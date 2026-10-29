@@ -64,20 +64,53 @@ function binary(provider) {
     ]) if (fs.existsSync(bin)) return bin;
   }
   if (provider === 'codex' && process.platform === 'win32') {
-    const bin = path.join(os.homedir(), 'AppData', 'Roaming', 'npm', 'node_modules', '@openai', 'codex', 'node_modules', '@openai', 'codex-win32-x64', 'vendor', 'x86_64-pc-windows-msvc', 'bin', 'codex.exe');
-    if (fs.existsSync(bin)) return bin;
+    const arch = process.arch;
+    const triple = arch === 'x64' ? 'x86_64-pc-windows-msvc' : arch === 'arm64' ? 'aarch64-pc-windows-msvc' : null;
+    if (triple) {
+      // Raíces de npm conocidas: estándar + nvm4w (NVM_SYMLINK apunta al directorio activo de Node)
+      const npmRoots = [
+        path.join(os.homedir(), 'AppData', 'Roaming', 'npm'),
+        process.env.NVM_SYMLINK,
+      ].filter(Boolean);
+      for (const root of npmRoots) {
+        for (const bin of [
+          path.join(root, 'node_modules', '@openai', 'codex', 'node_modules', '@openai', `codex-win32-${arch}`, 'vendor', triple, 'bin', 'codex.exe'),
+          path.join(root, 'node_modules', '@openai', `codex-win32-${arch}`, 'vendor', triple, 'bin', 'codex.exe'),
+        ]) if (fs.existsSync(bin)) return bin;
+      }
+    }
   }
   try {
     const found = execFileSync(process.platform === 'win32' ? 'where.exe' : 'which', [provider], { encoding: 'utf8', windowsHide: true, timeout: 3000 });
-    return found.trim().split(/\r?\n/).find(p => process.platform !== 'win32' || p.toLowerCase().endsWith('.exe')) || null;
+    const paths = found.trim().split(/\r?\n/);
+    const exe = paths.find(p => process.platform !== 'win32' || p.toLowerCase().endsWith('.exe'));
+    if (exe) return exe;
+    // Codex en Windows: where.exe puede encontrar sólo el wrapper .js del paquete npm; buscar el binario nativo junto a él.
+    if (provider === 'codex' && process.platform === 'win32') {
+      const arch = process.arch;
+      const triple = arch === 'x64' ? 'x86_64-pc-windows-msvc' : arch === 'arm64' ? 'aarch64-pc-windows-msvc' : null;
+      if (triple) for (const wrapper of paths) {
+        const root = path.join(path.dirname(wrapper), 'node_modules', '@openai', 'codex');
+        const target = path.join('vendor', triple, 'bin', 'codex.exe');
+        const candidate = [
+          path.join(root, 'node_modules', '@openai', `codex-win32-${arch}`, target),
+          path.join(root, '..', `codex-win32-${arch}`, target),
+          path.join(root, target),
+        ].find(p => fs.existsSync(p));
+        if (candidate) return candidate;
+      }
+    }
+    return null;
   } catch { return null; }
 }
 const binaries = { codex: binary('codex'), claude: binary('claude') };
 // Shell: igual para los dos motores, sólo el proyecto; el entorno lo leen solos de knowledge/AGENTS.md (WS-0028).
 const instructions = project => 'Proyecto: ' + project.id + '.';
 function environment() {
+  const venvScripts = path.join(ROOT, '.venv', 'Scripts');
   const env = { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor',
     PYTHONPATH: path.join(ROOT, 'galecore-ai', 'src'), GALECORE_KNOWLEDGE_DIR: KB };
+  if (fs.existsSync(venvScripts)) env.PATH = venvScripts + path.delimiter + (env.PATH || '');
   for (const k of Object.keys(env)) {
     if (['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'ANTHROPIC_BASE_URL', 'CLAUDECODE'].includes(k)) delete env[k];
     if (k.startsWith('CLAUDE_CODE_') && k !== 'CLAUDE_CODE_OAUTH_TOKEN') delete env[k];
