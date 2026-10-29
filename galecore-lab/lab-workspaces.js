@@ -439,17 +439,15 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       // escribe en el proyecto y en knowledge/.
       const sandbox=['-c','web_search="live"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser','--disable','apps',
         '-c','sandbox_workspace_write.network_access=true','-c','sandbox_workspace_write.writable_roots='+JSON.stringify([kb])];
-      const args=['--no-daemon','exec','--json','-p',name,...modelFlags(chat),...(auto?['--approve-for-me']:[]),...sandbox];
+      const args=['--no-daemon','exec','--json','--skip-git-repo-check','-p',name,...modelFlags(chat),...(auto?['--approve-for-me']:[]),...sandbox];
       // --approve-for-me ya usa el sandbox workspace-write y Codex rechaza los dos juntos (0.164): en Auto no va --sandbox.
       return {file,args:chat.nativeId?[...args,'resume',chat.nativeId,'-']:[...args,...(auto?[]:['--sandbox','workspace-write']),'-C',p.dir,'-']};
     }
     // Claude: sin la configuración del usuario ni conectores; los permisos (web después de GaleCore, sin tocar el código)
     // salen de knowledge/.claude/settings.json. Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
     const file=path.join(local,'contexts',chat.id+'.md');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,context);
-    // Owner 24/10: los permisos se responden en el chat como en el CLI. El Lab es el host (--permission-prompt-tool stdio):
-    // lo que necesita permiso llega como control_request y espera la respuesta del trader, en Manual y en Auto.
     const args=['-p',...modelFlags(chat),'--input-format','stream-json','--output-format','stream-json','--verbose','--append-system-prompt-file',file,
-      '--permission-prompts','host','--permission-prompt-tool','stdio',...(auto?['--permission-mode','auto']:[]),'--strict-mcp-config',
+      '--permission-mode',(auto?'auto':'bypassPermissions'),'--strict-mcp-config',
       '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
     return {file,args:chat.nativeId?[...args,'--resume',chat.nativeId]:args};
   }
@@ -500,7 +498,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         chat.activity='Esperando tu permiso';saveChat(chat);
       };
       proc.stdout.on('data',chunk=>{pending+=decoder.write(chunk);if(pending.length>2*1024*1024){proc.kill();chat.error='La salida superó el límite del chat.';return;}let end;while((end=pending.indexOf('\n'))>=0){const line=pending.slice(0,end);pending=pending.slice(end+1);try{const e=JSON.parse(line);if(claude&&e.type==='control_request'){control(e);continue;}if(claude&&e.type==='control_response')continue;consumeEvent(chat,e,chat.provider);if(claude&&e.type==='result')proc.stdin.end();saveChat(chat);}catch{ /* Sólo eventos JSON, sin mostrar transcripciones internas. */ }}});
-      proc.stderr.on('data',()=>{});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});
+      let stderrBuf='';proc.stderr.on('data',d=>{stderrBuf+=String(d);});proc.on('error',()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});proc.on('close',code=>{if(stderrBuf.trim())console.error('[lab] stderr de '+chat.provider+':\n'+stderrBuf.slice(0,2000));if(pending.trim()){try{consumeEvent(chat,JSON.parse(pending),chat.provider);}catch{}}finish(code);});
       if(claude){job.write({type:'control_request',request_id:'init-'+chat.id,request:{subtype:'initialize'}});job.write({type:'user',message:{role:'user',content:options.prompt||words},parent_tool_use_id:null,session_id:''});}
       else proc.stdin.end((options.prompt||words)+'\n');
     }).catch(()=>{chat.error='No se pudo iniciar el motor local.';finish(1);});
