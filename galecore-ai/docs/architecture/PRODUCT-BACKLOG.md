@@ -2677,6 +2677,27 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 
 ---
 
+## BL-035 — Panel vivo junto al chat: varias estrategias por proyecto (repensar el «Mapa»)
+
+**Estado:** pendiente, para más adelante; primero análisis de casos de uso, sin implementación ni cambio del orden del plan.
+**Origen:** owner, 28/10/2026: «hoy 1 proyecto tiene lugar para 1 estrategia, ¿qué pasa si tenés varias? [...] el Mapa como está hay que rediseñarlo [...] dejate un BL [...] le daría una vuelta de rosca primero analizando casos de uso y qué queremos que sea ese panel vivo a la derecha, con qué fin y qué valor aporta al lado del chat».
+**Target:** host del Lab (`galecore-lab/lab-workspaces.js`: `latestMapa`/`readMapa`/`parseMapa` y la instrucción de reescritura del turno), front del monitor (`components/lab/LabMapa.tsx`, `LabFilePanel.tsx`, `pages/Lab.tsx`) y método de ideas y estrategias (`galecore-ai/config/skills/strategy-design/method.md`, «Mapa de la idea»).
+**Hoy:** cada proyecto tiene un solo mapa (`memory/mapa-<tema>.md`, 8 partes) que el agente reescribe en cada turno; el Lab toma el último y lo muestra a la derecha; desde el 28/10 el «Mapa» sólo aparece en proyectos de estrategia. Un proyecto de investigación con varias estrategias ligadas no tiene dónde ponerlas: se pisan en el mismo mapa o se pierde cuál es cuál.
+**Preguntas a responder antes de diseñar:**
+
+| Pregunta | Opciones a evaluar |
+|---|---|
+| ¿Qué tipos de proyecto hay? | De una estrategia · de investigación con varias estrategias ligadas · otros (seguimiento de cartera, estudio de un evento) |
+| ¿Dónde vive cada estrategia? | Como archivo propio dentro del proyecto (una por archivo), con el proyecto como índice |
+| ¿Qué es el panel de la derecha? | Mapa fijo que se reescribe · panel que se abre al clickear (como los archivos y vistas ya hechos) · índice del proyecto con acceso a cada estrategia |
+| ¿Para qué está al lado del chat? | Estado vivo de la idea mientras se conversa · referencia rápida · lugar de decisión (pasar a SHADOW, comparar) |
+| ¿Qué se reescribe en cada turno? | Sólo la estrategia que el turno trabaja, no todo el proyecto (costo y riesgo de pisar) |
+
+**Entry gate:** cuando el owner priorice el rediseño; antes, repasar con él casos reales de los proyectos que ya existen (uno de estrategia y uno de investigación).
+**Aceptación del análisis:** una tabla de casos de uso con qué muestra el panel en cada uno y para qué, aprobada por el owner; recién después el diseño (dónde viven las estrategias, cómo se abren y qué escribe el agente por turno), sin romper los mapas existentes.
+
+---
+
 ## BL-034 — Configuración de avisos en el monitor: frecuencia y umbrales del supervisor
 
 **Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.
