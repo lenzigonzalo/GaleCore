@@ -121,7 +121,7 @@ function Dashboard({ onLogout }: DashboardProps) {
   useEffect(() => { setSocketStatus(status); }, [status]);
 
   return (
-    <div className={'workspace-shell flex flex-col has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
+    <div className={'workspace-shell flex flex-col has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '') + (isLabWorkspace ? ' watchlist-autohide' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
         <WorkspaceHeader status={<StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/>} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();
@@ -161,7 +161,7 @@ function Dashboard({ onLogout }: DashboardProps) {
           {labVisited && <div className="lab-page-host" hidden={!isLabWorkspace}><Lab active={isLabWorkspace} projectRequest={projectRequest} onFollowStrategy={followStrategy} onMonitor={() => setTab('estrategias')} onNavigate={setTab}/></div>}
         </main>
       </div>
-      <LiveWatchlist open={watchlistOpen} enabled width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { if (tab !== 'gex') setMarketIndicator('price'); setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
+      <LiveWatchlist open={watchlistOpen} enabled autoHide={isLabWorkspace} width={watchlistWidth} onWidthChange={setWatchlistWidth} onClose={() => setWatchlistOpen(false)} onToggle={() => setWatchlistOpen(v => !v)} onSelect={() => { if (tab !== 'gex') setMarketIndicator('price'); setTab('gex'); }} socketStatus={socketStatus} subscribeSymbol={subscribeSymbol} unsubscribeSymbol={unsubscribeSymbol}/>
       </div>
       {settingsOpen && <SettingsModal wizard={setup} onClose={() => setSettingsOpen(false)} />}
     </div>

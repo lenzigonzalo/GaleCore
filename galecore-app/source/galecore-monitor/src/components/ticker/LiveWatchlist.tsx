@@ -17,11 +17,11 @@ const readCache = (): Watchlist | null => { try { return parseWatchlist(JSON.par
 
 /** Watchlist de la cuenta (preferencia `watchlist`): grupos, agregados y quitados sobreviven a recargar. Quitar un
  *  ticker de la plataforma no toca su universo: sólo lo saca de esta lista. */
-export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, socketStatus, subscribeSymbol, unsubscribeSymbol, onOpenSettings, onLogout, accountActive, width = 420, onWidthChange }: {
+export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, socketStatus, subscribeSymbol, unsubscribeSymbol, onOpenSettings, onLogout, accountActive, width = 420, onWidthChange, autoHide = false }: {
   open:boolean; enabled:boolean; onClose:()=>void; onToggle?:()=>void; onSelect:()=>void; socketStatus:ConnectionStatus;
   subscribeSymbol:(symbol:string)=>void; unsubscribeSymbol:(symbol:string)=>void;
   onOpenSettings?:()=>void; onLogout?:()=>void; accountActive?:boolean;
-  width?:number; onWidthChange?:(width:number)=>void;
+  width?:number; onWidthChange?:(width:number)=>void; autoHide?:boolean;
 }) {
   const { tickers, rules, rulesLoading, rulesError, loadRules, adHocSearch, adHocSymbols, pinAdHoc, unpinAdHoc, selectedSymbol, setSelectedSymbol } = useGexStore();
   const { tickers: platformTickers, loading: platformLoading, error: platformError } = useAppConfigStore();
@@ -32,6 +32,9 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   const [message,setMessage] = useState('');
   const [refreshKey,setRefreshKey] = useState(0);
   const [panelMode, setPanelMode] = useState<'watchlist' | 'calendar' | 'alerts'>('watchlist');
+  const [revealed, setRevealed] = useState(false);
+  const revealEdge = useRef<HTMLButtonElement>(null);
+  useEffect(() => { setRevealed(false); }, [autoHide]);
   const calendarMode = panelMode === 'calendar';
   const alertsMode = panelMode === 'alerts';
   const togglePanel = (next: typeof panelMode) => { setPanelMode(next); if (!open || panelMode === next) (onToggle ?? onClose)(); };
@@ -83,14 +86,14 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   useEffect(() => {
     if (!open || !enabled) return;
     const previous = document.activeElement as HTMLElement | null;
-    panel.current?.querySelector<HTMLButtonElement>('[data-close]')?.focus();
+    if (!autoHide || previous?.matches(':focus-visible')) panel.current?.querySelector<HTMLButtonElement>('[data-close]')?.focus();
     const keys = (e:KeyboardEvent) => {
       if (e.key === 'Escape') { e.preventDefault(); onCloseRef.current(); }
 
     };
     document.addEventListener('keydown',keys);
-    return () => { document.removeEventListener('keydown',keys); previous?.focus(); };
-  },[open,enabled]);
+    return () => { document.removeEventListener('keydown',keys); if (!autoHide) previous?.focus(); };
+  },[open,enabled,autoHide]);
   const pick = (symbol:string, group:string) => {
     const normalized=symbol.trim().toUpperCase();
     if (!normalized) return;
@@ -105,8 +108,21 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
     const pinned=pinAdHoc(symbol);
     if (pinned) {setSelectedSymbol(pinned);setMessage('');onSelect();}
   };
-  return <>
-    {enabled && <nav className="lw-tools" aria-label="Paneles de mercado"><button aria-label="Abrir watchlist" aria-expanded={open && panelMode === 'watchlist'} aria-controls="lw-panel" className={open && panelMode === 'watchlist' ? "active" : ""} onClick={() => togglePanel('watchlist')}><Bookmark size={23}/></button>
+  return <div className={autoHide && enabled ? 'lw-reveal' + (revealed || open ? ' is-open' : '') : undefined}
+    onPointerEnter={event => { if (autoHide && event.pointerType !== 'touch') setRevealed(true); }}
+    onPointerLeave={event => {
+      if (!autoHide || drag.current || event.currentTarget.querySelector('.lw-tools :focus-visible, .lw-drawer :focus-visible')) return;
+      setRevealed(false); if (open) onClose();
+    }}
+    onFocusCapture={event => { if (autoHide && event.target.matches(':focus-visible')) setRevealed(true); }}
+    onBlurCapture={event => {
+      if (autoHide && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) { setRevealed(false); if (open) onClose(); }
+    }}
+    onKeyDown={event => {
+      if (autoHide && event.key === 'Escape') { revealEdge.current?.focus(); setRevealed(false); }
+    }}>
+    {autoHide && enabled && <button ref={revealEdge} type="button" className="lw-reveal-edge" aria-label="Mostrar paneles de mercado" aria-controls="lw-tools" aria-expanded={revealed || open} onClick={() => setRevealed(value => !value)} />}
+    {enabled && <nav id="lw-tools" className="lw-tools" aria-label="Paneles de mercado"><button aria-label="Abrir watchlist" aria-expanded={open && panelMode === 'watchlist'} aria-controls="lw-panel" className={open && panelMode === 'watchlist' ? "active" : ""} onClick={() => togglePanel('watchlist')}><Bookmark size={23}/></button>
       <button aria-label="Abrir calendario" aria-expanded={open && calendarMode} aria-controls="lw-panel" className={open && calendarMode ? 'active' : ''} onClick={() => togglePanel('calendar')}><CalendarDays size={23}/></button>
       <button aria-label="Abrir avisos" aria-expanded={open && alertsMode} aria-controls="lw-panel" className={open && alertsMode ? 'active' : ''} onClick={() => togglePanel('alerts')}><Bell size={23}/>{(strike.length > 0 || strikeNotice) && <i className="lw-badge" aria-label={`${strike.length} cerca del strike`} />}</button>
       {onOpenSettings&&<div className="lw-account"><AccountMenu docked onOpenSettings={onOpenSettings} onLogout={onLogout} active={accountActive}/></div>}</nav>}
@@ -119,7 +135,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
         onPointerCancel={() => { drag.current=null; }} onLostPointerCapture={() => { drag.current=null; }}
         onDoubleClick={() => resize(420)}
         onKeyDown={e => { if (['ArrowLeft','ArrowRight','Home','End'].includes(e.key)) { e.preventDefault(); resize(e.key==='Home' ? 360 : e.key==='End' ? 720 : width + (e.key==='ArrowLeft' ? 20 : -20)); } }}/>
-      <header><h2 id="lw-title">{alertsMode ? 'Avisos' : calendarMode ? 'Calendario' : 'Watchlist'}</h2><div>{panelMode === 'watchlist' && <><button className="lw-close" aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones" onClick={() => setRefreshKey(v => v + 1)}><RefreshCw size={18}/></button><button className="lw-close" aria-label="Agregar símbolo a la watchlist" aria-expanded={searchOpen} onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button></>}<button className="lw-close" data-close aria-label={alertsMode ? 'Cerrar avisos' : calendarMode ? 'Cerrar calendario' : 'Cerrar panel de watchlist'} onClick={onClose}><X size={21}/></button></div></header>
+      <header><h2 id="lw-title">{alertsMode ? 'Avisos' : calendarMode ? 'Calendario' : 'Watchlist'}</h2><div>{panelMode === 'watchlist' && <><button className="lw-close" aria-label="Actualizar cotizaciones" title="Actualizar cotizaciones" onClick={() => setRefreshKey(v => v + 1)}><RefreshCw size={18}/></button><button className="lw-close" aria-label="Agregar símbolo a la watchlist" aria-expanded={searchOpen} onClick={() => setSearchOpen(v => !v)}><Plus size={21}/></button></>}<button className="lw-close" data-close aria-label={alertsMode ? 'Cerrar avisos' : calendarMode ? 'Cerrar calendario' : 'Cerrar panel de watchlist'} onClick={() => { if (autoHide) { revealEdge.current?.focus(); setRevealed(false); } onClose(); }}><X size={21}/></button></div></header>
       <div className="lw-content">
         {enabled && open && calendarMode && <CalendarDock symbols={symbols} />}
         {enabled && alertsMode && <SupervisorAlerts embedded strike={strike} strikeNotice={strikeNotice} />}
@@ -143,5 +159,5 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
       </div>
 
     </aside>
-  </>;
+  </div>;
 }

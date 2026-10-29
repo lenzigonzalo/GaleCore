@@ -73,3 +73,13 @@
 .lw-new-group { display:flex; align-items:center; gap:7px; margin:14px 4px 0; background:none; border:0; color:var(--text-secondary); font:inherit; font-size:14px; cursor:pointer; padding:4px 0; }
 .lw-new-group:hover { color:var(--text-primary); }
 .lw-add-row input:focus,.lw-add-row input:focus-visible { outline:none!important; box-shadow:none!important; border:0!important; }
+.workspace-shell.has-watchlist-dock.watchlist-autohide { padding-right:0; }
+.lw-reveal { position:fixed; inset:0 0 0 auto; width:10px; z-index:100; }
+.lw-reveal-edge { position:absolute; inset:0 0 0 auto; width:10px; border:0; background:transparent; cursor:pointer; }
+.lw-reveal-edge::after { content:''; position:absolute; right:2px; top:45%; width:3px; height:36px; border-radius:3px; background:var(--border-light); }
+.lw-reveal-edge:focus-visible { outline:2px solid var(--focus-ring); outline-offset:-2px; }
+.lw-reveal>.lw-tools { visibility:hidden; transform:translateX(100%); transition:transform 140ms ease,visibility 140ms; box-shadow:-8px 0 24px #0004; }
+.lw-reveal.is-open>.lw-tools { visibility:visible; transform:translateX(0); }
+.lw-reveal.is-open { width:48px; }
+.lw-reveal.is-open>.lw-reveal-edge { right:48px; }
+@media(prefers-reduced-motion:reduce) { .lw-reveal>.lw-tools { transition:none; } }
