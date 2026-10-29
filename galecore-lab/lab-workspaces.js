@@ -114,7 +114,7 @@ function limitText(resetsAt){
   return 'Se terminó tu límite de uso de Claude. Vuelve ' + (today ? 'a las ' + hour : 'el ' + at.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric' }) + ' a las ' + hour) + '; hasta entonces podés seguir con Codex.';
 }
 // Uso (WS-0067): sólo lo que el motor informa, por turno y sin estimar. Claude: `result.usage`, `modelUsage.<modelo>.contextWindow`,
-// `total_cost_usd` y `rate_limit_event`; Codex: `turn.completed.usage` (no informa ventana de contexto ni costo).
+// `total_cost_usd` y `rate_limit_event`; Codex: `turn.completed.usage` y telemetría de su sesión local.
 function recordUsage(chat,turn,extra={}){
   const u=chat.usage||(chat.usage={turns:[]});
   u.turns.push({at:new Date().toISOString(),...turn});if(u.turns.length>500)u.turns.splice(0,u.turns.length-500);
@@ -123,29 +123,42 @@ function recordUsage(chat,turn,extra={}){
 const num=v=>typeof v==='number'&&Number.isFinite(v)?v:undefined;
 // Codex no manda sus límites por `exec --json`: los deja en el archivo de la sesión (`token_count.rate_limits`, % usado y hora
 // de renovación de la ventana de 5 h y la semanal). Se lee lo último que escribió el motor, sin estimar; sin archivo, no se muestra.
-function codexLimits(nativeId,home=process.env.CODEX_HOME||path.join(os.homedir(),'.codex')){
+function codexTelemetry(nativeId,home=process.env.CODEX_HOME||path.join(os.homedir(),'.codex')){
   try{
     if(!ID.test(String(nativeId||'')))return;
     const base=path.join(home,'sessions'),desc=d=>fs.readdirSync(d).sort().reverse();
     let file;
-    for(const y of desc(base).slice(0,2)){for(const m of desc(path.join(base,y)).slice(0,2)){for(const d of desc(path.join(base,y,m)).slice(0,3)){
+    for(const y of desc(base)){for(const m of desc(path.join(base,y))){for(const d of desc(path.join(base,y,m))){
       const hit=fs.readdirSync(path.join(base,y,m,d)).find(f=>f.endsWith(nativeId+'.jsonl'));if(hit){file=path.join(base,y,m,d,hit);break;}}
       if(file)break;}if(file)break;}
     if(!file)return;
     const size=fs.statSync(file).size,fd=fs.openSync(file,'r'),len=Math.min(size,262144),buf=Buffer.alloc(len);
     try{fs.readSync(fd,buf,0,len,size-len);}finally{fs.closeSync(fd);}
-    const lines=buf.toString('utf8').split('\n').filter(l=>l.includes('"rate_limits"'));
+    const lines=buf.toString('utf8').split('\n').filter(l=>l.includes('"token_count"'));
+    const telemetry={};
     for(let i=lines.length-1;i>=0;i--){
-      let rl;try{rl=JSON.parse(lines[i])?.payload?.rate_limits;}catch{continue;}
-      if(!rl)continue;
+      let payload;try{payload=JSON.parse(lines[i])?.payload;}catch{continue;}
+      if(payload?.type!=='token_count')continue;
+      const info=payload.info,used=num(info?.last_token_usage?.total_tokens),window=num(info?.model_context_window);
+      if(!telemetry.context&&used!==undefined&&used>=0&&window>0)telemetry.context={used,window};
+      const rl=payload.rate_limits;
+      if(!rl||telemetry.limit)continue;
       const windows={};
       for(const w of [rl.primary,rl.secondary]){
-        if(!w||num(w.used_percent)===undefined)continue;
-        windows[num(w.window_minutes)>=1440?'seven_day':'five_hour']={utilization:w.used_percent/100,resetsAt:num(w.resets_at)};
+        if(!w||num(w.used_percent)===undefined||w.used_percent<0||![300,10080].includes(w.window_minutes))continue;
+        windows[w.window_minutes===10080?'seven_day':'five_hour']={utilization:w.used_percent/100,resetsAt:num(w.resets_at)};
       }
-      if(Object.keys(windows).length)return{windows};
+      if(Object.keys(windows).length)telemetry.limit={windows};
+      if(telemetry.context&&telemetry.limit)break;
     }
+    if(Object.keys(telemetry).length)return telemetry;
   }catch{/* sin límites de Codex: el resto del uso se muestra igual */}
+}
+function codexLimits(nativeId,home){return codexTelemetry(nativeId,home)?.limit;}
+function refreshCodexUsage(chat){
+  if(chat.provider!=='codex')return;
+  const telemetry=codexTelemetry(chat.nativeId);
+  if(telemetry)Object.assign(chat.usage||(chat.usage={turns:[]}),telemetry);
 }
 function claudeUsage(chat,event){
   const u=event.usage;if(!u)return;
@@ -193,7 +206,7 @@ function consumeEvent(chat, event, provider) {
       setActivity(chat, input ? describeStep(input.command ? 'Bash' : 'Write', input) : 'Pensando', input ? stepDetail('Bash', input) : ''); }
     if(event.type === 'item.completed' && event.item?.type === 'reasoning') setNote(chat, event.item.text);
     if(event.type === 'turn.completed' && event.usage) recordUsage(chat,{input:num(event.usage.input_tokens)||0,cached:num(event.usage.cached_input_tokens)||0,output:num(event.usage.output_tokens)||0});
-    if(event.type === 'turn.completed'){const limit=codexLimits(chat.nativeId);if(limit)(chat.usage||(chat.usage={turns:[]})).limit=limit;}
+    if(event.type === 'turn.completed')refreshCodexUsage(chat);
     if(event.type === 'turn.failed' || event.type === 'error') chat.error = event.error?.message || event.message || 'El motor no pudo completar el pedido.';
   } else {
     if(event.session_id) chat.nativeId = event.session_id;
@@ -542,7 +555,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     if(req.method==='POST'&&url.pathname==='/chats'){const b=await readBody(req);project(b.project);if(!['codex','claude'].includes(b.provider))throw fail('Motor desconocido.');let chosen;try{chosen=selection(b.provider,b);}catch(e){throw fail(e.message);}const c={id:crypto.randomUUID(),project:b.project,provider:b.provider,...chosen,...(b.origin==='prueba'?{origin:'prueba'}:{}),title:'Nueva conversación',createdAt:new Date().toISOString(),nativeId:null,state:'idle',activity:'',error:null,messages:[]};saveChat(c);json(res,201,c);return true;}
     if(parts[0]==='chats'&&parts[1]){const c=loadChat(parts[1]);
-      if(req.method==='GET'&&parts.length===2){json(res,200,c);return true;}
+      if(req.method==='GET'&&parts.length===2){refreshCodexUsage(c);json(res,200,c);return true;}
       if(req.method==='GET'&&parts[2]==='mapa'){
         // Mientras responde, el mapa que se escribió en este turno ya se muestra (no espera al final).
         // WS-0044: en un proyecto de estrategia (una idea), una conversación que todavía no tocó el mapa ve el último del proyecto.
@@ -583,4 +596,4 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   if(autoSync)sharing.syncAll(listProjects).catch(()=>{});   // al arrancar: trae también lo que otros compartieron conmigo
   return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
-module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits};
+module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry};

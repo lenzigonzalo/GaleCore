@@ -340,3 +340,30 @@ test('Codex: los límites de 5 h y semanal salen del archivo de su sesión (lo �
  assert.equal(codexLimits('no-existe',home),undefined);assert.equal(codexLimits('../x',home),undefined);
  fs.rmSync(home,{recursive:true,force:true});
 });
+
+
+test('Codex: abrir un chat existente recupera contexto y cuotas de su sesión, sin sumar tokens de todo el turno',async t=>{
+ const {base,local,service}=setup(t),home=path.join(base,'codex'),id='01a18486-73cd-7261-9074-8400c2ef0a40';
+ const previous=process.env.CODEX_HOME;process.env.CODEX_HOME=home;
+ t.after(()=>{if(previous===undefined)delete process.env.CODEX_HOME;else process.env.CODEX_HOME=previous;});
+ const dir=path.join(home,'sessions','2025','01','01');fs.mkdirSync(dir,{recursive:true});
+ const file=path.join(dir,'rollout-'+id+'.jsonl');
+ const token=payload=>JSON.stringify({type:'event_msg',payload:{type:'token_count',...payload}});
+ const limits={primary:{used_percent:9,window_minutes:300},secondary:{used_percent:7,window_minutes:10080}};
+ fs.writeFileSync(file,[token({rate_limits:limits}),token({info:{last_token_usage:{total_tokens:52912},total_token_usage:{total_tokens:226710},model_context_window:475000},rate_limits:null}),'partial'].join('\n'));
+ const created=await route(service,'POST','/chats',{project:'personal',provider:'codex'});
+ const chat={...created.value,nativeId:id,usage:{turns:[{at:'2026-10-28T19:00:00Z',input:1,cached:1,output:1}]}};
+ fs.writeFileSync(path.join(local,'chats',chat.id+'.json'),JSON.stringify(chat));
+ const loaded=(await route(service,'GET','/chats/'+chat.id)).value;
+ assert.deepEqual(loaded.usage.context,{used:52912,window:475000});
+ assert.equal(loaded.usage.limit.windows.five_hour.utilization,.09);
+ assert.equal(loaded.usage.limit.windows.seven_day.utilization,.07);
+ assert.equal(loaded.usage.turns.length,1);
+ const {codexTelemetry}=require('./lab-workspaces');
+ fs.appendFileSync(file,'\n'+token({info:{last_token_usage:{total_tokens:0},model_context_window:475000},rate_limits:{primary:{used_percent:0,window_minutes:300}}}));
+ assert.deepEqual(codexTelemetry(id,home).context,{used:0,window:475000});
+ assert.equal(codexLimits(id,home).windows.five_hour.utilization,0);
+ assert.equal(codexTelemetry('../outside',home),undefined);
+ fs.writeFileSync(file,token({info:{last_token_usage:{total_tokens:100},model_context_window:0},rate_limits:{primary:{used_percent:10,window_minutes:60}}}));
+ assert.equal(codexTelemetry(id,home),undefined);
+});

@@ -19,14 +19,18 @@ export function LabUsage({ usage }: { usage?: ChatUsage }) {
   const [now, setNow] = useState(() => Date.now());
   const last = usage?.turns?.at(-1);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(timer); }, []);
-  if (!usage || (!last && !usage.limit)) return null;
+  if (!usage || (!last && !usage.limit && !usage.context)) return null;
   const context = usage.context && usage.context.window > 0 ? usage.context.used / usage.context.window : undefined;
   const windows = WINDOWS.filter(([key]) => typeof usage.limit?.windows?.[key]?.utilization === 'number');
   const cache = cacheLeft(last, now);
   const expired = cache === 0;
   const cacheText = cache === undefined ? '' : expired ? 'vencida' : 'vence en ' + span(cache);
   return <div className="lab-usage">
-    <button type="button" className={expired ? 'expired' : undefined} aria-expanded={open} aria-label="Uso del chat" onClick={() => setOpen(v => !v)}>{cache === undefined ? 'Uso' : 'caché ' + cacheText}</button>
+    <button type="button" className={expired ? 'expired' : undefined} aria-expanded={open} aria-label="Uso del chat" onClick={() => setOpen(v => !v)}>
+      <span>{cache === undefined ? 'Uso' : 'caché ' + cacheText}</span>
+      {context !== undefined && <span> · Contexto {percent(context)}</span>}
+      {windows.map(([key]) => <span key={key}> · {key === 'five_hour' ? '5 h' : 'Semana'} {percent(usage.limit!.windows![key].utilization!)}</span>)}
+    </button>
     {open && <dl role="group" aria-label="Detalle del uso">
       {cache !== undefined && <><dt>Caché</dt><dd className={expired ? 'expired' : undefined}>{cacheText}</dd></>}
       {context !== undefined && <><dt>Contexto</dt><dd>{percent(context)}</dd></>}

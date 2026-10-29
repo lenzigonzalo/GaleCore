@@ -45,3 +45,13 @@ test('sin datos del motor no muestra nada', () => {
   const { container } = render(<LabUsage />);
   expect(container).toBeEmptyDOMElement();
 });
+
+
+test('Codex muestra contexto y cuotas en el encabezado al recuperar la telemetría, aun sin turnos guardados', () => {
+  render(<LabUsage usage={{turns:[],context:{used:52912,window:475000},limit}}/>);
+  const button=screen.getByRole('button',{name:'Uso del chat'});
+  expect(button).toHaveTextContent('Contexto 11 %');
+  expect(button).toHaveTextContent('5 h 7 %');
+  expect(button).toHaveTextContent('Semana 92 %');
+  expect(open()).toHaveTextContent('Contexto11 %');
+});

@@ -8,6 +8,7 @@ interface Props { active: Tab; mode?: WorkspaceMode; onChange: (tab: Tab) => voi
 export function WorkspaceNav({ active, onChange, onLogout, width, onResize }: Props) {
   const user = useCurrentUserStore(s => s.user);
   const [menu, setMenu] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const account = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!menu) return;
@@ -23,7 +24,7 @@ export function WorkspaceNav({ active, onChange, onLogout, width, onResize }: Pr
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   };
-  return <aside className={'workspace-navigation' + (compact ? ' compact' : '')} style={!compact && width ? { width } : undefined}>
+  const navigation = <aside id="workspace-navigation" className={'workspace-navigation' + (compact ? ' compact' : '')} style={!compact && width ? { width } : undefined}>
     <nav aria-label="Navegación del espacio">{NAVIGATION.map(group => <div className="workspace-nav-group" key={group.group}>
       <span className="workspace-group-label">{group.group}</span>{group.entries.map(({ id, label, Icon }) => <button key={id} className="workspace-nav-entry" title={label} aria-label={label} aria-current={active === id ? 'page' : undefined} onClick={() => onChange(id)}><Icon size={19}/><span>{label}</span></button>)}
     </div>)}</nav>
@@ -34,4 +35,15 @@ export function WorkspaceNav({ active, onChange, onLogout, width, onResize }: Pr
     </div>
     {!compact && onResize && <div className="workspace-nav-resize" role="separator" aria-orientation="vertical" aria-label="Ancho de la barra lateral" onPointerDown={drag} />}
   </aside>;
+  if (!compact) return navigation;
+  const open = revealed || menu;
+  return <div className={'workspace-nav-reveal' + (open ? ' is-open' : '')}
+    onPointerEnter={event => { if (event.pointerType !== 'touch') setRevealed(true); }}
+    onPointerLeave={event => { if (!event.currentTarget.querySelector('.workspace-navigation :focus-visible')) setRevealed(false); }}
+    onFocusCapture={event => { if (event.target.matches(':focus-visible')) setRevealed(true); }}
+    onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setRevealed(false); }}
+    onKeyDown={event => { if (event.key === 'Escape') { setMenu(false); event.currentTarget.querySelector<HTMLButtonElement>('.workspace-nav-edge')?.focus(); setRevealed(false); } }}>
+    <button type="button" className="workspace-nav-edge" aria-label="Mostrar navegación" aria-controls="workspace-navigation" aria-expanded={open} onClick={() => setRevealed(value => !value)} />
+    {navigation}
+  </div>;
 }

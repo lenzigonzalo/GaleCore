@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { WorkspaceNav } from './WorkspaceNav';
 let mockAdmin = false;
 jest.mock('../../store/useCurrentUserStore', () => ({ useCurrentUserStore: (select: any) => select({ user: { username: 'demo', isAdmin: mockAdmin } }) }));
@@ -29,4 +29,29 @@ test('Macro tiene su propia entrada (owner, 14/10)',()=>{
  render(<WorkspaceNav active="macro" onChange={()=>{}}/>);
  expect(screen.getByRole('button',{name:'Macro'})).toHaveAttribute('aria-current','page');
  expect(screen.getByRole('button',{name:'Mercado'})).not.toHaveAttribute('aria-current');
+});
+
+
+test('Chat libera la columna y revela la navegación desde el borde, teclado o toque; conserva el menú de cuenta', () => {
+  const change=jest.fn();
+  const {container,rerender}=render(<WorkspaceNav active="lab" onChange={change}/>);
+  const edge=screen.getByRole('button',{name:'Mostrar navegación'}),area=container.querySelector('.workspace-nav-reveal')!;
+  expect(area).not.toHaveClass('is-open');
+  fireEvent.pointerEnter(area,{pointerType:'mouse'});
+  expect(area).toHaveClass('is-open');
+  fireEvent.click(screen.getByRole('button',{name:'Mercado'}));expect(change).toHaveBeenCalledWith('gex');
+  fireEvent.pointerLeave(area);expect(area).not.toHaveClass('is-open');
+  fireEvent.click(edge);expect(edge).toHaveAttribute('aria-expanded','true');
+  fireEvent.click(screen.getByRole('button',{name:'Menú de usuario'}));
+  fireEvent.pointerLeave(area);expect(area).toHaveClass('is-open');
+  fireEvent.keyDown(area,{key:'Escape'});expect(area).not.toHaveClass('is-open');
+  expect(edge).toHaveFocus();
+  act(()=>screen.getByRole('button',{name:'Mercado'}).focus());
+  fireEvent.pointerEnter(area,{pointerType:'mouse'});fireEvent.pointerLeave(area);
+  expect(area).toHaveClass('is-open');
+  expect(screen.getByRole('button',{name:'Mercado'})).toHaveFocus();
+  fireEvent.keyDown(area,{key:'Escape'});expect(area).not.toHaveClass('is-open');
+  fireEvent.click(edge);fireEvent.blur(area,{relatedTarget:document.body});expect(area).not.toHaveClass('is-open');
+  rerender(<WorkspaceNav active="gex" onChange={change}/>);
+  expect(container.querySelector('.workspace-nav-reveal')).toBeNull();
 });
