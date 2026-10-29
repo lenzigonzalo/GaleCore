@@ -27,7 +27,7 @@ test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el per
  const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
  await assert.rejects(route(service,'POST','/chats/'+chat.id+'/messages',{text:'mirá',attachments:['../secreto.txt']}),/Adjunto no encontrado/);
  await route(service,'POST','/chats/'+chat.id+'/messages',{text:'mirá esto',attachments:[up.value.path],mode:'auto'});
- const args=calls.at(-1);assert.deepEqual(args.slice(args.indexOf('--permission-mode'),args.indexOf('--permission-mode')+2),['--permission-mode','auto']);assert.deepEqual(args.slice(args.indexOf('--permission-prompts'),args.indexOf('--permission-prompts')+4),['--permission-prompts','host','--permission-prompt-tool','stdio']);
+ const args=calls.at(-1);assert.deepEqual(args.slice(args.indexOf('--permission-mode'),args.indexOf('--permission-mode')+2),['--permission-mode','auto']);assert.deepEqual(args.slice(args.indexOf('--permission-prompt-tool'),args.indexOf('--permission-prompt-tool')+2),['--permission-prompt-tool','stdio']);assert.ok(!args.includes('--permission-prompts'));
  // WS-0037: Personal también lleva el núcleo del producto, con Claude y con Codex.
  assert.match(contexts.at(-1),/núcleo de test/);
  await new Promise(r=>setTimeout(r,50));
@@ -191,11 +191,15 @@ test('WS-0059: el contexto común conserva bloques útiles y avisa fallos sin co
 test('permisos en el chat como en el CLI: el pedido queda a la vista, el trader responde y puede pasar a Auto en medio (owner 24/10)',async t=>{
  const {base,kb,local}=setup(t);const {EventEmitter}=require('events');let proc;const sent=[];
  fs.mkdirSync(path.join(base,'galecore-ai'));fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo de test');
- const spawnProcess=()=>{proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(l){sent.push(JSON.parse(l));},end(){this.writableEnded=true;}};proc.kill=()=>{};return proc;};
+ let engineArgs;
+ const spawnProcess=(_,args)=>{engineArgs=args;proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(l){sent.push(JSON.parse(l));},end(){this.writableEnded=true;}};proc.kill=()=>{};return proc;};
  const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude'},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
  const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
  await route(service,'POST','/chats/'+chat.id+'/messages',{text:'guardá la investigación'});
  await new Promise(r=>setTimeout(r,300));
+ assert.deepEqual(engineArgs.slice(engineArgs.indexOf('--permission-mode'),engineArgs.indexOf('--permission-mode')+2),['--permission-mode','default']);
+ assert.deepEqual(engineArgs.slice(engineArgs.indexOf('--permission-prompt-tool'),engineArgs.indexOf('--permission-prompt-tool')+2),['--permission-prompt-tool','stdio']);
+ assert.ok(!engineArgs.includes('bypassPermissions')&&!engineArgs.includes('--permission-prompts'));
  assert.equal(sent[0].request.subtype,'initialize');assert.equal(sent[1].message.content,'guardá la investigación');
  const ask=(id,file)=>proc.stdout.emit('data',Buffer.from(JSON.stringify({type:'control_request',request_id:id,request:{subtype:'can_use_tool',tool_name:'Write',input:{file_path:file,content:'x'},permission_suggestions:[{type:'setMode',mode:'acceptEdits',destination:'session'}],tool_use_id:'u-'+id}})+'\n'));
  ask('r1','C:/k/files/research.json');
@@ -209,6 +213,8 @@ test('permisos en el chat como en el CLI: el pedido queda a la vista, el trader 
  assert.equal(sent.at(-1).response.response.behavior,'deny');
  // Auto en medio de la respuesta: el motor recibe el modo nuevo.
  await route(service,'POST','/chats/'+chat.id+'/mode',{mode:'auto'});assert.deepEqual(sent.at(-1).request,{subtype:'set_permission_mode',mode:'auto'});
+ await route(service,'POST','/chats/'+chat.id+'/mode',{mode:'manual'});assert.deepEqual(sent.at(-1).request,{subtype:'set_permission_mode',mode:'default'});
+ await route(service,'POST','/chats/'+chat.id+'/mode',{mode:'auto'});
  // Lo que el trader negó no se muestra como error; al terminar el turno se cierra la entrada del motor.
  proc.stdout.emit('data',Buffer.from(JSON.stringify({type:'result',is_error:false,result:'Listo sin guardar otra.json',permission_denials:[{tool_name:'Write',tool_use_id:'u-r2'}]})+'\n'));
  assert.ok(proc.stdin.writableEnded);proc.emit('close',0);

@@ -446,8 +446,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // Claude: sin la configuración del usuario ni conectores; los permisos (web después de GaleCore, sin tocar el código)
     // salen de knowledge/.claude/settings.json. Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
     const file=path.join(local,'contexts',chat.id+'.md');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,context);
+    // stdio mantiene los permisos en el chat también en CLI anteriores a --permission-prompts.
+    // Manual usa default, igual que al cambiar el modo durante un turno: nunca bypassPermissions.
     const args=['-p',...modelFlags(chat),'--input-format','stream-json','--output-format','stream-json','--verbose','--append-system-prompt-file',file,
-      '--permission-mode',(auto?'auto':'bypassPermissions'),'--strict-mcp-config',
+      '--permission-prompt-tool','stdio','--permission-mode',(auto?'auto':'default'),'--strict-mcp-config',
       '--setting-sources','project,local','--settings',path.join(kb,'.claude','settings.json')];
     return {file,args:chat.nativeId?[...args,'--resume',chat.nativeId]:args};
   }
