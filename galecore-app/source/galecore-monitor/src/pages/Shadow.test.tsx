@@ -259,3 +259,24 @@ test('Archivar oculta una estrategia detenida y sin abiertas; se guarda y se pue
   fireEvent.click(within(row).getByRole('button', { name: 'Desarchivar' }));
   await waitFor(() => expect(saveSpaceItem).toHaveBeenLastCalledWith('preference', 'shadow-estrategias-archivadas', expect.objectContaining({ content: '[]' })));
 });
+
+
+test.each(['summary', 'status', 'settings'])('un fallo de %s no afirma que la etapa esté vacía', async failure => {
+  mocked.fetchPerformanceSummary.mockResolvedValue([]);
+  mocked.fetchShadowStatus.mockResolvedValue(status({}, []));
+  const unavailable = new Error('Network Error');
+  if (failure === 'summary') mocked.fetchPerformanceSummary.mockRejectedValue(unavailable);
+  if (failure === 'status') mocked.fetchShadowStatus.mockRejectedValue(unavailable);
+  if (failure === 'settings') mocked.fetchStrategySettings.mockRejectedValue(unavailable);
+  render(<Shadow />);
+  await screen.findByText('No se pudo comprobar qué estrategias hay en esta etapa.');
+  expect(screen.queryByText('Ninguna estrategia en esta etapa.')).not.toBeInTheDocument();
+});
+
+test('lecturas correctas sin estrategias mantienen el vacío real', async () => {
+  mocked.fetchPerformanceSummary.mockResolvedValue([]);
+  mocked.fetchShadowStatus.mockResolvedValue(status({}, []));
+  render(<Shadow />);
+  await screen.findByText('Ninguna estrategia en esta etapa.');
+  expect(screen.queryByText('No se pudo comprobar qué estrategias hay en esta etapa.')).not.toBeInTheDocument();
+});
