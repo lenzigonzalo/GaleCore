@@ -133,6 +133,15 @@ namespace DataFeed.Controllers
         public async Task<IActionResult> MarketSummaryAsync([FromQuery] string symbol)
             => await Handle(new DataFeed.Application.App.Market.MarketSummaryRequest { Symbol = symbol });
 
+        /// <summary>Premarket separado del precio regular; sin trade ETH en premarket o cierre fechado no se inventa variaci?n.</summary>
+        [Tags("App.GaleCore")]
+        [HttpGet("GaleCore/Market/Premarket")]
+        public async Task<IActionResult> PremarketAsync([FromQuery] string symbols)
+        {
+            try { return await Handle(new DataFeed.Application.App.Market.PremarketRequest { Symbols = symbols }); }
+            catch (DataFeed.Application.Shared.ValidationException ex) { return BadRequest(new { error = ex.Message }); }
+        }
+
         /// <summary>Sugerencias del chat nuevo (WS-0039): hasta cuatro temas del momento con su número, grafiquito y pregunta.</summary>
         [Tags("App.GaleCore")]
         [HttpGet("GaleCore/Lab/Suggestions")]

@@ -1,8 +1,8 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { TickerCard } from './TickerCard';
 import { TickerWatchlist } from './TickerWatchlist';
 import { useMarketStore } from '../../store/useMarketStore';
-import { fetchMarketDataBatch } from '../../api/marketdata';
+import { fetchMarketDataBatch, fetchPremarketBatch, PremarketQuote } from '../../api/marketdata';
 
 interface Props {
   active?: boolean;
@@ -52,6 +52,35 @@ export function TickerGrid({
   const loadedRef   = useRef<Set<string>>(new Set());
   const refreshRef = useRef(refreshKey);
   const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [premarket, setPremarket] = useState<Record<string, PremarketQuote>>({});
+  const [premarketLoading, setPremarketLoading] = useState(false);
+  const [premarketError, setPremarketError] = useState(false);
+
+  // Premarket tiene su propia fuente, sesión y frescura, incluso cuando Trade regular sigue conectado.
+  useEffect(() => {
+    if (!active || layout !== 'list' || !symbols.length) return;
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      setPremarketLoading(true);
+      try {
+        const results = await fetchPremarketBatch(symbols);
+        if (alive) {
+          setPremarket(Object.fromEntries(results.map(quote => [quote.symbol, quote])));
+          setPremarketError(false);
+        }
+      } catch {
+        if (alive) setPremarketError(true);
+      } finally {
+        if (alive) {
+          setPremarketLoading(false);
+          timer = setTimeout(refresh, 30000);
+        }
+      }
+    };
+    refresh();
+    return () => { alive = false; clearTimeout(timer); };
+  }, [symbols.join(','), active, layout, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Carga inicial por lote, solo del delta ────────────────────────────────
   // El guard era `loadedRef.current` booleano: con la primera lista cargada, cualquier universo
@@ -149,7 +178,7 @@ export function TickerGrid({
   }
 
   if (layout === 'list') return <>
-    <TickerWatchlist sections={sections} tickers={symbols.map(symbol => tickers[symbol] ?? {
+    <TickerWatchlist sections={sections} premarket={premarket} premarketLoading={premarketLoading} premarketError={premarketError} tickers={symbols.map(symbol => tickers[symbol] ?? {
       symbol, price: 0, open: 0, bid: 0, ask: 0, lastUpdate: null, isStreaming: false,
       loading: { price: true, ivRank: true, iv: true, gex: false }, error: {},
     })} selectedSymbol={selectedSymbol} onSelect={onSelect}

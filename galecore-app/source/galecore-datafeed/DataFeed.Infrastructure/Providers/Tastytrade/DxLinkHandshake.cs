@@ -30,7 +30,11 @@ namespace DataFeed.Infrastructure.Providers.Tastytrade
             type = "FEED_SETUP",
             channel = 3,
             acceptDataFormat = "FULL",
-            acceptEventFields = new Dictionary<string, string[]> { ["Quote"] = QuoteFields },
+            acceptEventFields = new Dictionary<string, string[]>
+            {
+                ["Quote"] = QuoteFields,
+                ["Summary"] = new[] { "eventType", "eventSymbol", "dayId", "prevDayId", "prevDayClosePrice" },
+            },
             parameters = new { },
         };
 

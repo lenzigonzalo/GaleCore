@@ -2,9 +2,14 @@ import React, { useState } from 'react';
 import { X, ChevronDown, ChevronRight, ArrowRightLeft, Pencil, Trash2 } from 'lucide-react';
 import { TickerState } from '../../types/market';
 import { calcChange, fmtPct, fmtPrice, fmtTime, isStale } from '../../utils/formatters';
+import { PremarketQuote } from '../../api/marketdata';
+import { PremarketCell } from './PremarketCell';
 
 interface Props {
   tickers: TickerState[];
+  premarket?: Record<string, PremarketQuote>;
+  premarketLoading?: boolean;
+  premarketError?: boolean;
   sections?: {label:string; symbols:string[]}[];
   selectedSymbol: string | null;
   onSelect: (symbol: string | null) => void;
@@ -22,7 +27,7 @@ function TickerLogo({ symbol }: { symbol: string }) {
 }
 
 /** Presentación compacta del mismo store de las tarjetas; no consulta ni suscribe datos. */
-export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSymbols, onRemoveSymbol, sections, groupActions }: Props) {
+export function TickerWatchlist({ tickers, premarket, premarketLoading, premarketError, selectedSymbol, onSelect, removableSymbols, onRemoveSymbol, sections, groupActions }: Props) {
   const [collapsed,setCollapsed] = useState<string[]>([]);
   const [moving,setMoving] = useState<string | null>(null);
   const [renaming,setRenaming] = useState<string | null>(null);
@@ -60,6 +65,7 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
                 {change ? (change.abs > 0 ? '+' : '') + fmtPrice(change.abs) : '—'}
               </td>
               <td className="numeric tabular-nums" style={{ color }}>{change ? fmtPct(change.pct) : '—'}</td>
+              <PremarketCell quote={premarket?.[ticker.symbol]} loading={premarketLoading} error={premarketError} />
               <td className="numeric tabular-nums watchlist-received"
                 style={{ color: ticker.lastUpdate && isStale(ticker.lastUpdate) ? 'var(--yellow-gc)' : undefined }}
                 title="Hora de recepción en el monitor; no acredita la hora de origen del precio">
@@ -72,7 +78,7 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
                   onClick={() => onRemoveSymbol?.(ticker.symbol)}><X size={16} /></button>}
               </td>
             </tr>
-            {moving === ticker.symbol && groupActions && <tr className="watchlist-move"><td colSpan={6}>
+            {moving === ticker.symbol && groupActions && <tr className="watchlist-move"><td colSpan={7}>
               <span>Mover a</span>{names.filter(n => n !== groupOf(ticker.symbol)).map(n => <button key={n} onClick={() => { groupActions.onMove(ticker.symbol, n); setMoving(null); }}>{n}</button>)}
             </td></tr>}
             </React.Fragment>
@@ -81,8 +87,8 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
   const header = (label:string) => {
     const open = !collapsed.includes(label);
     const toggle = <button aria-expanded={open} onClick={() => setCollapsed(v => v.includes(label) ? v.filter(s => s !== label) : [...v,label])}>{open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}{label}</button>;
-    if (!groupActions) return <tr className="watchlist-group"><td colSpan={6}>{toggle}</td></tr>;
-    return <tr className={'watchlist-group' + (dropOn === label ? ' drop' : '')} {...drop(label)}><td colSpan={6}>
+    if (!groupActions) return <tr className="watchlist-group"><td colSpan={7}>{toggle}</td></tr>;
+    return <tr className={'watchlist-group' + (dropOn === label ? ' drop' : '')} {...drop(label)}><td colSpan={7}>
       {renaming === label
         ? <input className="watchlist-rename" aria-label={'Nombre del grupo ' + label} defaultValue={label} autoFocus
             onBlur={e => { groupActions.onRename(label, e.target.value); setRenaming(null); }}
@@ -102,12 +108,13 @@ export function TickerWatchlist({ tickers, selectedSymbol, onSelect, removableSy
           <th scope="col" className="numeric">Last</th>
           <th scope="col" className="numeric">Chg</th>
           <th scope="col" className="numeric">Chg%</th>
+          <th scope="col" className="numeric" title="Variación premarket contra el cierre regular anterior">Premarket</th>
           <th scope="col" className="numeric watchlist-received">Recepción (ET)</th>
           <th scope="col"><span className="sr-only">Acciones</span></th>
         </tr></thead>
-        <tbody>{sections ? sections.map(section => <React.Fragment key={section.label}>{header(section.label)}{!collapsed.includes(section.label) && section.symbols.map(symbol => tickers.find(t => t.symbol === symbol)).filter((t): t is TickerState => !!t).map(renderTicker)}{groupActions && !section.symbols.length && <tr className="watchlist-empty"><td colSpan={6}>Vacío · arrastrá un ticker acá o agregalo con el buscador</td></tr>}</React.Fragment>) : tickers.map(renderTicker)}</tbody>
+        <tbody>{sections ? sections.map(section => <React.Fragment key={section.label}>{header(section.label)}{!collapsed.includes(section.label) && section.symbols.map(symbol => tickers.find(t => t.symbol === symbol)).filter((t): t is TickerState => !!t).map(renderTicker)}{groupActions && !section.symbols.length && <tr className="watchlist-empty"><td colSpan={7}>Vacío · arrastrá un ticker acá o agregalo con el buscador</td></tr>}</React.Fragment>) : tickers.map(renderTicker)}</tbody>
       </table>
-      <details className="watchlist-note"><summary>Datos</summary>GaleCore · Cambio contra cierre previo · La hora indica recepción, no origen del precio (ET).</details>
+      <details className="watchlist-note"><summary>Datos</summary>GaleCore · Cambio contra cierre previo · La hora indica recepción, no origen del precio regular (ET). Premarket usa hora de origen y cierre regular fechado; sin dato no equivale a 0%.</details>
     </div>
   );
 }
