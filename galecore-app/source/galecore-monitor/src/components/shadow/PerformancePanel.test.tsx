@@ -1,18 +1,19 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PerformancePanel } from './PerformancePanel';
-import { fetchPerformancePanel } from '../../api/shadow';
+import { fetchPerformancePanel, fetchShadowDiscards, fetchShadowEvaluations } from '../../api/shadow';
 import { fetchQuote } from '../../api/marketdata';
 import { labRequest } from '../../api/lab';
 import { tradeCsv } from './TradeLog';
 import plainFixture from './__fixtures__/panel_sin_parametros.json';
 import illustrativeFixture from './__fixtures__/panel_con_parametros_ilustrativos.json';
-import { PerformancePanelResponse } from '../../types/shadow';
+import { PerformancePanelResponse, ShadowInstance } from '../../types/shadow';
+import entryFixture from './__fixtures__/entry_sandwich_2026_10_30.json';
 import apiClient from '../../api/client';
 import { createChart } from 'lightweight-charts';
 
 jest.mock('../../api/client', () => ({ __esModule: true, default: { get: jest.fn() } }));
-jest.mock('../../api/shadow', () => ({ fetchPerformancePanel: jest.fn() }));
+jest.mock('../../api/shadow', () => ({ fetchPerformancePanel: jest.fn(), fetchShadowDiscards: jest.fn(), fetchShadowEvaluations: jest.fn() }));
 jest.mock('../../api/marketdata', () => ({ fetchQuote: jest.fn() }));
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
 jest.mock('lightweight-charts', () => ({ ColorType: { Solid: 'solid' }, LineSeries: {}, AreaSeries: {},
@@ -28,7 +29,23 @@ const labApi = labRequest as jest.Mock;
 beforeEach(() => {
   (fetchQuote as jest.Mock).mockImplementation(async symbol => ({ data: [{ eventSymbol: symbol, bidPrice: 725, askPrice: 726, midPrice: 725.5 }] }));
   jest.clearAllMocks(); panelApi.mockResolvedValue(plain); labApi.mockResolvedValue({ projects: [] });
+  (fetchShadowDiscards as jest.Mock).mockResolvedValue(entryFixture.discards);
+  (fetchShadowEvaluations as jest.Mock).mockResolvedValue(entryFixture.evaluations);
   (createChart as jest.Mock).mockImplementation(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() }));
+});
+
+test('el motivo es visible desde Resumen y Operaciones, sin atribuirlo al filtro histórico', async () => {
+  const instance = { instanceId: 'sandwich', versionHash: 'sha256:bc1ec2d9952c8d5', lifecycleState: 'RUNNING' } as ShadowInstance;
+  render(<PerformancePanel spec={plain.spec} instance={instance} />);
+  await screen.findByText('Ganancia total');
+  expect(await screen.findByText('VIX < 24: sin dato')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
+  expect(screen.getByText('Sin operaciones')).toBeInTheDocument();
+  expect(screen.getAllByText('Tope por apuesta')).toHaveLength(3);
+  expect(fetchShadowEvaluations).toHaveBeenCalledTimes(1);
+  fireEvent.change(screen.getByLabelText('Versión'), { target: { value: '1.0.3' } });
+  expect(screen.queryByLabelText('Evaluación de entradas')).not.toBeInTheDocument();
+  expect(screen.getByText(/seleccioná Todas las versiones/)).toBeInTheDocument();
 });
 test('one metric panel has four groups and four headlines, with reasons only in tooltips', async () => {
   render(<PerformancePanel spec={plain.spec} />);
