@@ -4,6 +4,7 @@ import { TickerWatchlist } from './TickerWatchlist';
 import { useMarketStore } from '../../store/useMarketStore';
 import { fetchMarketDataBatch, fetchPremarketBatch, PremarketQuote } from '../../api/marketdata';
 import { etDateParts } from '../../utils/formatters';
+import { regularSessionLabel } from '../../utils/marketSession';
 
 interface Props {
   active?: boolean;
@@ -56,10 +57,19 @@ export function TickerGrid({
   const [premarket, setPremarket] = useState<Record<string, PremarketQuote>>({});
   const [premarketLoading, setPremarketLoading] = useState(false);
   const [premarketError, setPremarketError] = useState(false);
+  const [, setClock] = useState(0);
+  useEffect(() => {
+    if (!active || layout !== 'list') return;
+    const timer = setInterval(() => setClock(value => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, [active, layout]);
+  const sessionTicker = tickers.SPY ?? symbols.map(symbol => tickers[symbol]).find(ticker => ticker?.marketStatusSourceAt);
+  const session = regularSessionLabel(new Date(), sessionTicker, !!sessionTicker?.isStreaming);
+  const showPremarket = session === 'Rueda regular cerrada' || session === 'Fuera de rueda regular';
 
   // Premarket tiene su propia fuente, sesión y frescura, incluso cuando Trade regular sigue conectado.
   useEffect(() => {
-    if (!active || layout !== 'list' || !symbols.length) return;
+    if (!active || layout !== 'list' || !symbols.length || !showPremarket) return;
     let alive = true;
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
@@ -88,7 +98,7 @@ export function TickerGrid({
     };
     refresh();
     return () => { alive = false; clearTimeout(timer); };
-  }, [symbols.join(','), active, layout, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [symbols.join(','), active, layout, refreshKey, showPremarket]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Carga inicial por lote, solo del delta ────────────────────────────────
   // El guard era `loadedRef.current` booleano: con la primera lista cargada, cualquier universo
@@ -186,7 +196,7 @@ export function TickerGrid({
   }
 
   if (layout === 'list') return <>
-    <TickerWatchlist sections={sections} premarket={premarket} premarketLoading={premarketLoading} premarketError={premarketError} tickers={symbols.map(symbol => tickers[symbol] ?? {
+    <TickerWatchlist sections={sections} showPremarket={showPremarket} premarket={premarket} premarketLoading={premarketLoading} premarketError={premarketError} tickers={symbols.map(symbol => tickers[symbol] ?? {
       symbol, price: 0, open: 0, bid: 0, ask: 0, lastUpdate: null, isStreaming: false,
       loading: { price: true, ivRank: true, iv: true, gex: false }, error: {},
     })} selectedSymbol={selectedSymbol} onSelect={onSelect}
