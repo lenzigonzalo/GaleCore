@@ -3,6 +3,7 @@ import { TickerCard } from './TickerCard';
 import { TickerWatchlist } from './TickerWatchlist';
 import { useMarketStore } from '../../store/useMarketStore';
 import { fetchMarketDataBatch, fetchPremarketBatch, PremarketQuote } from '../../api/marketdata';
+import { etDateParts } from '../../utils/formatters';
 
 interface Props {
   active?: boolean;
@@ -66,7 +67,14 @@ export function TickerGrid({
       try {
         const results = await fetchPremarketBatch(symbols);
         if (alive) {
-          setPremarket(Object.fromEntries(results.map(quote => [quote.symbol, quote])));
+          const [year, month, day] = etDateParts();
+          const today = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+          setPremarket(previous => Object.fromEntries(results.map(quote => {
+            const last = previous[quote.symbol];
+            const keep = quote.session === 'unavailable' && quote.reason === 'missing_extended_hours' &&
+              last?.session === 'premarket' && last.sessionDate === today;
+            return [quote.symbol, keep ? { ...last, freshness: 'stale', reason: 'no_new_execution' } : quote];
+          })));
           setPremarketError(false);
         }
       } catch {

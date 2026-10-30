@@ -57,25 +57,26 @@ const premarket: PremarketQuote = {
   source: 'DXLink TradeETH/Summary', freshness: 'fresh', reason: null,
 };
 
-test('premarket conserva cambio regular y muestra origen, hora ET y signo', () => {
+test('premarket compacto conserva cambio regular y guarda origen y hora en el tooltip', () => {
   render(<TickerWatchlist tickers={[ticker]} premarket={{ SPY: premarket }} selectedSymbol={null} onSelect={() => {}} />);
   expect(screen.getByRole('columnheader', { name: 'Premarket' })).toBeInTheDocument();
   expect(screen.getByText('+1.00%')).toBeInTheDocument();
   expect(screen.getByText('-2.00%')).toBeInTheDocument();
   const cell = screen.getByText('-2.00%').closest('td')!;
   expect(cell).toHaveAttribute('title', expect.stringContaining('contra cierre regular anterior 100'));
-  expect(within(cell).getByText(/ ET$/)).toHaveAttribute('datetime', premarket.timestamp);
-  expect(within(cell).getByText('DXLink')).toBeInTheDocument();
+  expect(cell).toHaveAttribute('title', expect.stringContaining(premarket.timestamp!));
+  expect(cell).toHaveTextContent(/^-2.00%$/);
+  expect(cell.querySelector('small, time')).toBeNull();
 });
 
-test('sin premarket o sin timestamp no inventa 0%; cero real sí se muestra', () => {
+test('sin computar queda vacío; cero real se muestra como guion', () => {
   const { rerender } = render(<TickerWatchlist tickers={[ticker]} selectedSymbol={null} onSelect={() => {}} />);
-  expect(screen.getByText('Sin dato')).toBeInTheDocument();
+  expect(screen.getByLabelText('Premarket no computado')).toBeEmptyDOMElement();
   expect(screen.queryByText('+0.00%')).not.toBeInTheDocument();
   rerender(<TickerWatchlist tickers={[ticker]} premarket={{ SPY: { ...premarket, timestamp: null } }} selectedSymbol={null} onSelect={() => {}} />);
-  expect(screen.getByText('Sin dato')).toBeInTheDocument();
+  expect(screen.getByLabelText('Premarket no computado')).toBeEmptyDOMElement();
   rerender(<TickerWatchlist tickers={[ticker]} premarket={{ SPY: { ...premarket, changePercent: 0 } }} selectedSymbol={null} onSelect={() => {}} />);
-  expect(screen.getByText('+0.00%')).toBeInTheDocument();
+  expect(screen.getByText('-')).toBeInTheDocument();
 });
 
 test.each([
@@ -84,26 +85,26 @@ test.each([
 ])('premarket viejo conserva el valor con estado explícito', quote => {
   render(<TickerWatchlist tickers={[ticker]} premarket={{ SPY: quote }} selectedSymbol={null} onSelect={() => {}} />);
   expect(screen.getByText('-2.00%')).toBeInTheDocument();
-  expect(screen.getByText('DXLink · Viejo')).toBeInTheDocument();
+  expect(screen.getByText('-2.00%').closest('td')).toHaveAttribute('title', expect.stringContaining('Dato viejo'));
 });
 
 test('fallo posterior marca viejo el premarket conservado', () => {
   render(<TickerWatchlist tickers={[ticker]} premarket={{ SPY: premarket }} premarketError selectedSymbol={null} onSelect={() => {}} />);
-  expect(screen.getByText('DXLink · Viejo')).toBeInTheDocument();
+  expect(screen.getByText('-2.00%').closest('td')).toHaveAttribute('title', expect.stringContaining('Falló la actualización'));
 });
 
 test('precio premarket sin cierre conserva hora y explica por qué no hay porcentaje', () => {
   render(<TickerWatchlist tickers={[ticker]} premarket={{ SPY: { ...premarket, previousClose: null, changePercent: null,
     reason: 'missing_previous_regular_close' } }} selectedSymbol={null} onSelect={() => {}} />);
-  expect(screen.getByText('98.00')).toBeInTheDocument();
-  expect(screen.getByText('Sin cierre de referencia')).toBeInTheDocument();
+  expect(screen.getByText('-')).toHaveAttribute('title', expect.stringContaining('cierre regular anterior no disponible'));
+  expect(screen.queryByText('98.00')).toBeNull();
   expect(screen.queryByText('-2.00%')).toBeNull();
 });
 
 test('sin operación premarket explica el estado sin sustituir por el precio regular', () => {
   render(<TickerWatchlist tickers={[ticker]} premarket={{ SPY: { ...premarket, session: 'unavailable',
     price: null, changePercent: null, reason: 'not_premarket_trade' } }} selectedSymbol={null} onSelect={() => {}} />);
-  expect(screen.getByText('Sin dato')).toBeInTheDocument();
-  expect(screen.getByText('Último trade fuera de premarket')).toBeInTheDocument();
+  expect(screen.getByLabelText('Último trade fuera de premarket')).toBeEmptyDOMElement();
+  expect(screen.queryByText('Sin dato')).toBeNull();
   expect(screen.getByText('+1.00%')).toBeInTheDocument();
 });

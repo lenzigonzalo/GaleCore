@@ -315,9 +315,7 @@ summary:focus-visible, [role="button"]:focus-visible {
 .ticker-watchlist thead th { color: var(--text-muted); font-size: 13px; font-weight: 400; }
 .ticker-watchlist .numeric { text-align: right; }
 .ticker-watchlist .watchlist-received { display: none; }
-.ticker-watchlist .watchlist-premarket { min-width: 112px; }
-.watchlist-premarket time, .watchlist-premarket small { display: block; font-size: 12px; font-weight: 400; line-height: 1.5; color: var(--text-secondary); }
-.watchlist-premarket small { color: inherit; }
+.ticker-watchlist .watchlist-premarket { white-space: nowrap; }
 .ticker-watchlist tr.selected { background: var(--bg-tertiary); box-shadow: inset 2px 0 var(--accent); }
 .watchlist-symbol, .watchlist-remove { background: transparent; color: var(--text-primary); border: 0; cursor: pointer; padding: 4px 0; }
 .watchlist-symbol { font-weight: 600; }

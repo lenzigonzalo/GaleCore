@@ -35,7 +35,7 @@ test('premarket consulta sólo la lista activa, espera el pedido y conserva dato
   expect(fetchPremarketBatch).not.toHaveBeenCalled();
   await act(async () => { rerender(<TickerGrid {...props} layout="list" />); });
   expect(fetchPremarketBatch).toHaveBeenCalledTimes(1);
-  expect(screen.getByText('Cargando…')).toBeInTheDocument();
+  expect(screen.getByLabelText('Premarket no computado')).toBeEmptyDOMElement();
   await act(async () => { jest.advanceTimersByTime(90_000); });
   expect(fetchPremarketBatch).toHaveBeenCalledTimes(1);
   await act(async () => { resolveFirst([quote]); });
@@ -46,7 +46,7 @@ test('premarket consulta sólo la lista activa, espera el pedido y conserva dato
   await act(async () => { jest.advanceTimersByTime(1); });
   expect(fetchPremarketBatch).toHaveBeenCalledTimes(2);
   expect(screen.getByText('-2.00%')).toBeInTheDocument();
-  expect(screen.getByText('DXLink · Viejo')).toBeInTheDocument();
+  expect(screen.getByText('-2.00%').closest('td')).toHaveAttribute('title', expect.stringContaining('Dato viejo'));
   expect(screen.getByText('-2.00%').closest('td')).toHaveAttribute('title', expect.stringContaining('Falló la actualización'));
   await act(async () => { rerender(<TickerGrid {...props} active={false} layout="list" />); });
   await act(async () => { jest.advanceTimersByTime(60_000); });
@@ -62,4 +62,24 @@ test('una respuesta posterior al desmontaje no reactiva el polling premarket', a
   unmount();
   await act(async () => { resolveRequest([quote]); jest.advanceTimersByTime(120_000); });
   expect(fetchPremarketBatch).toHaveBeenCalledTimes(1);
+});
+
+test.each(['missing_extended_hours', 'execution_revised'])('sin tick nuevo conserva sólo el cálculo del día; revisión lo invalida: %s', async reason => {
+  const unavailable: PremarketQuote = { ...quote, price: null, changePercent: null, timestamp: null,
+    sessionDate: null, session: 'unavailable', freshness: 'unavailable', reason };
+  (fetchPremarketBatch as jest.Mock).mockResolvedValueOnce([quote]).mockResolvedValue([unavailable]);
+  await act(async () => { render(<TickerGrid {...props} layout="list" />); });
+  expect(screen.getByText('-2.00%')).toBeInTheDocument();
+  await act(async () => { jest.advanceTimersByTime(30_000); });
+  if (reason === 'missing_extended_hours') {
+    const cell = screen.getByText('-2.00%').closest('td')!;
+    expect(cell).toHaveAttribute('title', expect.stringContaining('Dato viejo'));
+    expect(cell).toHaveAttribute('title', expect.stringContaining(quote.timestamp!));
+  } else {
+    expect(screen.queryByText('-2.00%')).toBeNull();
+    expect(screen.getByLabelText('Operación corregida o cancelada; esperando un nuevo dato')).toBeEmptyDOMElement();
+  }
+  jest.setSystemTime(new Date('2026-10-31T12:00:00Z'));
+  await act(async () => { jest.advanceTimersByTime(30_000); });
+  expect(screen.queryByText('-2.00%')).toBeNull();
 });
