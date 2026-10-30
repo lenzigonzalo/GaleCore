@@ -37,7 +37,14 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
   useEffect(() => { setRevealed(false); }, [autoHide]);
   const calendarMode = panelMode === 'calendar';
   const alertsMode = panelMode === 'alerts';
-  const togglePanel = (next: typeof panelMode) => { setPanelMode(next); if (!open || panelMode === next) (onToggle ?? onClose)(); };
+  const togglePanel = (next: typeof panelMode) => {
+    setPanelMode(next);
+    if (open && panelMode === next) {
+      if (autoHide) revealEdge.current?.focus();
+      setRevealed(false);
+    }
+    if (!open || panelMode === next) (onToggle ?? onClose)();
+  };
   const openRef = useRef(open);
   openRef.current = open;
   // El aviso del strike pide decidir ya: suena y abre la campana, esté donde esté el usuario.
@@ -112,11 +119,11 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
     onPointerEnter={event => { if (autoHide && event.pointerType !== 'touch') setRevealed(true); }}
     onPointerLeave={event => {
       if (!autoHide || drag.current || event.currentTarget.querySelector('.lw-tools :focus-visible, .lw-drawer :focus-visible')) return;
-      setRevealed(false); if (open) onClose();
+      setRevealed(false);
     }}
     onFocusCapture={event => { if (autoHide && event.target.matches(':focus-visible')) setRevealed(true); }}
     onBlurCapture={event => {
-      if (autoHide && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) { setRevealed(false); if (open) onClose(); }
+      if (autoHide && event.relatedTarget && !event.currentTarget.contains(event.relatedTarget as Node)) setRevealed(false);
     }}
     onKeyDown={event => {
       if (autoHide && event.key === 'Escape') { revealEdge.current?.focus(); setRevealed(false); }

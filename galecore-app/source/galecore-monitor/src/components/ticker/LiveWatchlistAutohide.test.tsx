@@ -21,26 +21,59 @@ function Dock({ autoHide = true }: { autoHide?: boolean }) {
 }
 beforeEach(() => { useGexStore.setState({ rules: {} as any, rulesError: null, tickers: [] }); });
 
-test('el borde revela los iconos; paneles se usan superpuestos y se cierran al retirar el mouse', async () => {
+test.each([
+  ['watchlist', 'Cerrar panel de watchlist'],
+  ['calendario', 'Cerrar calendario'],
+  ['avisos', 'Cerrar avisos'],
+])('el clic fija %s al salir al chat; cerrar devuelve la barra al hover', async (mode, closeLabel) => {
   const { container } = render(<Dock/>);
   const area = container.querySelector('.lw-reveal')!;
   const edge = screen.getByRole('button', { name: 'Mostrar paneles de mercado' });
   expect(area).not.toHaveClass('is-open');
   fireEvent.pointerEnter(area, { pointerType: 'mouse' });
   expect(edge).toHaveAttribute('aria-expanded', 'true');
-  fireEvent.click(screen.getByRole('button', { name: 'Abrir watchlist' }));
+  fireEvent.pointerLeave(area);
+  expect(area).not.toHaveClass('is-open');
+  fireEvent.pointerEnter(area, { pointerType: 'mouse' });
+  fireEvent.click(screen.getByRole('button', { name: 'Abrir ' + mode }));
   expect(screen.getByRole('complementary')).toBeVisible();
   // Un clic en texto no enfocable del panel produce blur sin destino: sigue dentro del dock.
-  fireEvent.blur(screen.getByRole('button', { name: 'Cerrar panel de watchlist' }), { relatedTarget: null });
+  fireEvent.blur(screen.getByRole('button', { name: closeLabel }), { relatedTarget: null });
   expect(screen.getByRole('complementary')).toBeVisible();
   fireEvent.pointerLeave(area);
+  const chat = screen.getByRole('textbox', { name: 'Mensaje' });
+  fireEvent.blur(screen.getByRole('button', { name: closeLabel }), { relatedTarget: chat });
+  act(() => chat.focus());
+  fireEvent.change(chat, { target: { value: 'Seguir con el chat' } });
+  expect(area).toHaveClass('is-open');
+  expect(screen.getByRole('complementary')).toBeVisible();
+  expect(chat).toHaveFocus();
+  expect(chat).toHaveValue('Seguir con el chat');
+  fireEvent.click(screen.getByRole('button', { name: closeLabel }));
   expect(area).not.toHaveClass('is-open');
   expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
   fireEvent.pointerEnter(area, { pointerType: 'mouse' });
-  fireEvent.click(screen.getByRole('button', { name: 'Abrir calendario' }));
-  expect(screen.getByText('Eventos del calendario')).toBeVisible();
+  expect(area).toHaveClass('is-open');
+  expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
   fireEvent.pointerLeave(area);
   expect(area).not.toHaveClass('is-open');
+  await act(async () => {});
+});
+
+test('cambiar de panel lo mantiene abierto y repetir el icono activo vuelve al modo oculto', async () => {
+  const { container } = render(<Dock/>);
+  const area = container.querySelector('.lw-reveal')!;
+  fireEvent.pointerEnter(area, { pointerType: 'mouse' });
+  fireEvent.click(screen.getByRole('button', { name: 'Abrir watchlist' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Abrir calendario' }));
+  fireEvent.pointerLeave(area);
+  expect(screen.getByText('Eventos del calendario')).toBeVisible();
+  expect(area).toHaveClass('is-open');
+  act(() => screen.getByRole('button', { name: 'Abrir calendario' }).focus());
+  fireEvent.click(screen.getByRole('button', { name: 'Abrir calendario' }));
+  expect(area).not.toHaveClass('is-open');
+  expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Mostrar paneles de mercado' })).toHaveFocus();
   await act(async () => {});
 });
 
