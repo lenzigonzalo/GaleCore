@@ -391,7 +391,6 @@ entries:
       - need: noticias del mercado
         missing: ninguna fuente registrada cubre noticias en una corrida programada; en sesión, Alpha Vantage NEWS_SENTIMENT sin probar (inventory)
     flow:
-      - galecore get macro.board --out <archivo> --keep "<pedido>"   # resumen abierto en sesión; reutilizar si ya disponible
       - story pack --symbol <SYMBOL> --prompt "<pedido>"   # historia profunda; programado usa pack del runner
       - kb search --kind research --text "historia del mercado"   # si se compara con una lectura anterior
       - kb show <ref>

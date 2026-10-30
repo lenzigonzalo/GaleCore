@@ -25,6 +25,16 @@ from tests.unit.test_tasks import DAILY, FakeScheduler, env, make  # noqa: F401 
 LATER = NOW + timedelta(hours=1)
 
 
+def test_market_story_schedule_keeps_pack_only_read_permissions():
+    entry = load_catalog().get("market_story")
+    rules = mr.allowed_tools(entry, cli_commands(build_parser()))
+    assert set(rules) == {
+        "Read",
+        f"Bash({mr.CLI} kb search:*)",
+        f"Bash({mr.CLI} kb show:*)",
+    }
+
+
 class FakeModel:
     """Returns a canned reply and remembers what it was asked."""
 
