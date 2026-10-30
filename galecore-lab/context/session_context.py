@@ -85,6 +85,9 @@ def galecore_map():
     lines = ["[mapa de GaleCore] Lo que GaleCore sirve (`galecore get <área.nombre> --param k=v`; "
              "el detalle: `galecore list`):"]
     lines += [f"- {a}: {', '.join(n)}" for a, n in areas.items()]
+    board = next((c for c in caps if c["id"] == "macro.board"), None)
+    if board and board.get("what"):
+        lines.append(f"- macro.board: {board['what']}")
     lines.append("Próximo balance, hora y consenso de EPS, sector e industria, ex-dividendo: "
                  "`market_data.volatility_metrics`; balances pasados: `market_data.earnings_history`. "
                  "No lo sirve (no está abordado por GaleCore): noticias, objetivos de precio, consenso fuera del EPS. "

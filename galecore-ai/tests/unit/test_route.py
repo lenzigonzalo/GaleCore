@@ -8,6 +8,20 @@ from galecore_ai.application.route import match
 from galecore_ai.harness.catalog import load_catalog
 
 
+@pytest.mark.parametrize("request_text", [
+    "Qué pasó hoy en el mercado interesante?",
+    "¿Qué pasó hoy en el mercado?",
+    "¿Qué movimientos interesantes hubo hoy en el mercado?",
+    "Resumime el mercado de hoy",
+    "¿Qué sectores se destacaron hoy?",
+])
+def test_open_market_requests_find_existing_coverage(request_text):
+    out = match(request_text, load_catalog())
+    assert out["confident"]
+    assert out["matches"][0]["capability"] == "market_story"
+    assert "macro.board" in load_catalog().get("market_story").galecore_capabilities
+
+
 @pytest.mark.parametrize("request_text,expected", [
     ("¿Hay algo para vender prima esta semana en SPY o QQQ sin meterme en el CPI?", "market_watch"),
     ("¿Qué merece mi atención hoy?", "daily_attention"),

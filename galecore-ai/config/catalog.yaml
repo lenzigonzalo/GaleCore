@@ -359,12 +359,20 @@ entries:
   - id: market_story
     kind: investigation
     serves: >-
+      Resumir qué pasó hoy en el mercado y qué movimientos interesantes hubo, con acciones, sectores y otras clases
+      de activos dentro de la cobertura disponible, su fecha y sus límites.
       La historia que está priceando el mercado y si cambió: qué activo lidera y cuál queda atrás, si tasas, dólar y
       crédito confirman o contradicen a las acciones, si la volatilidad pricea calma o estrés, qué cobran las opciones
       por protegerse y qué pagan por venderlas, qué eventos del calendario pueden moverla, la historia competidora y
-      qué la decidiría. Junta los datos el código (sin modelo) y los interpreta el modelo; cada lectura queda como
-      revisión de una investigación por símbolo y se compara con la anterior. Corre sola después del cierre o a pedido.
+      qué la decidiría. Junta los datos el código (sin modelo) y los interpreta el modelo; la historia profunda
+      guardada queda como revisión de una investigación por símbolo y se compara con la anterior. Corre sola después
+      del cierre o a pedido; el resumen breve en sesión no exige guardar ni el pack profundo.
     example_requests:
+      - Qué pasó hoy en el mercado interesante?
+      - ¿Qué pasó hoy en el mercado?
+      - ¿Qué movimientos interesantes hubo hoy en el mercado?
+      - Resumime el mercado de hoy
+      - ¿Qué sectores se destacaron hoy?
       - ¿Qué historia está priceando el mercado?
       - ¿Cambió la historia del mercado?
       - ¿Qué está descontando hoy el mercado?
@@ -372,7 +380,7 @@ entries:
       - ¿El mercado está priceando calma o miedo?
     skill: skills/market-story/SKILL.md
     output_contract: galecore_ai.contracts.research.ResearchContent
-    galecore_capabilities: [market_data.candles, compute.put_skew, compute.implied_volatility, compute.iv_rank, market_data.volatility_metrics, compute.gex_analysis, calendar.macro_releases, calendar.fomc_meetings]
+    galecore_capabilities: [macro.board, market_data.candles, compute.put_skew, compute.implied_volatility, compute.iv_rank, market_data.volatility_metrics, compute.gex_analysis, calendar.macro_releases, calendar.fomc_meetings]
     data_needs:
       - need: velas de SPY
       - need: velas de TLT
@@ -383,8 +391,9 @@ entries:
       - need: noticias del mercado
         missing: ninguna fuente registrada cubre noticias en una corrida programada; en sesión, Alpha Vantage NEWS_SENTIMENT sin probar (inventory)
     flow:
-      - story pack --symbol <SYMBOL> --prompt "<pedido>"
-      - kb search --kind research --text "historia del mercado"
+      - galecore get macro.board --out <archivo> --keep "<pedido>"   # resumen abierto en sesión; reutilizar si ya disponible
+      - story pack --symbol <SYMBOL> --prompt "<pedido>"   # historia profunda; programado usa pack del runner
+      - kb search --kind research --text "historia del mercado"   # si se compara con una lectura anterior
       - kb show <ref>
       - research save --capability market_story --slug historia-del-mercado-<symbol> --prompt "<pedido>" < {content, host_provider, host_model}
       - research revise --capability market_story --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
@@ -392,7 +401,8 @@ entries:
     controls:
       - "The pack is gathered by code from GaleCore (no model): one call per capability, changes and term ratios computed here, a failed call declared in missing, never estimated"
       - The pack is kept as one evidence item and compared with the previous pack of the symbol (moves and sign flips)
-      - The research controls; every reported number cites the pack
+      - "The research controls; every reported number cites its evidence: the pack or a kept GaleCore response"
+      - "An open market summary in session uses available context and board rows; a deep story uses the pack. Row dates, units and the partial universe limit the reading; missing=[] is not complete market coverage. Scheduled runs keep their existing pack flow."
       - "A scheduled run: the runner gathers the pack, then the model (sonnet; what the code flags — a sign flip, a big SPY/VIX move, a macro release near today — goes in the run event) reads it with only read commands and a turn cap; the runner validates and saves"
       - "Read-only: describes, never advises (the runner refuses advice addressed to the reader); no orders"
       - "Not checked - that the story is right or anticipates anything; the next readings and the owner's feedback exist to judge that"

@@ -313,10 +313,12 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
     CapabilityDefinition(
         capability_id="macro.board",
         semantic_class=SemanticClass.PURE_QUERY,
-        description="The Macro board of the monitor: futures strip (ES, NQ, gold, oil…), rates, breakevens, currencies "
-        "and commodities with day/week/month changes (~140 KB: use --out)",
+        description="Market overview: large-cap stocks, sectors and thematic baskets (fixed, partial universe), "
+        "futures, rates, credit spreads, breakevens, currencies and commodities; day/week/month changes. "
+        "Use each row's date and change unit; group ordering can be monthly (~140 KB: use --out).",
         parameters=[],
-        returns="asOf, strip[id, name, symbol, unit, last, changeDay, changeWeek, changeMonth, asOf], sections[…]",
+        returns="asOf (generation time), strip[rows], tabs[id, sections[groups[rows[id, name, symbol, unit, "
+        "changeUnit, last, changeDay, changeWeek, changeMonth, asOf (data date), source]]]], missing",
     ),
     CapabilityDefinition(
         capability_id="macro.catalog",

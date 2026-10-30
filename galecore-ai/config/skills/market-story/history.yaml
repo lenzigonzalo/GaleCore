@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de market_story y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: market_story
 versions:
+  - version: "1.1.0"
+    date: 2026-10-30
+    changes: >
+      WS-0069: resumen abierto en sesión desde cobertura existente de macro.board, con cambios diarios,
+      fechas por fila, universo parcial y evidencia citable. Reutiliza datos sin exigir pack profundo;
+      aclara ambigüedad material y no extiende el flujo programado.
+    feedback: []
   - version: "1.0.0"
     date: 2026-10-21
     changes: >

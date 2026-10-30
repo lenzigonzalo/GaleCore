@@ -1,8 +1,10 @@
 ---
 name: market-story
-version: 1.0.0
+version: 1.1.0
 display_name: Historia del mercado
 description: >
+  Resume qué pasó en el mercado con acciones, sectores y otras clases de activos de GaleCore, con cobertura y fecha
+  explícitas; en sesión usa los datos disponibles y macro.board según necesidad, sin exigir el análisis profundo.
   Lee qué historia está priceando hoy el mercado y si cambió desde la lectura anterior. Juntar es código (`story pack`:
   precios y variaciones de SPY y de los activos que cuentan la historia, la familia VIX y su estructura, las opciones
   de SPY y el calendario macro y FOMC, comparado con el pack anterior). Interpretar es el modelo: la historia en una
@@ -14,16 +16,42 @@ output_contract: galecore_ai.contracts.research.ResearchContent
 ## Cuándo se usa
 «¿Qué historia está priceando el mercado?», «¿Cambió la historia?», «¿Qué mueve hoy a SPY?». También la corre el
 agente programado de historia del mercado (el runner le da el pack ya juntado, con su ref).
+También «¿Qué pasó hoy en el mercado interesante?» y resúmenes de movimientos o sectores. Un pedido abierto no es
+ambiguo por ser amplio: si contexto resuelve fecha y mercado, responder con alcance explícito; si falta una precisión
+que cambia materialmente la respuesta, preguntar antes de elegir por el trader.
+
+## Resumen abierto en sesión
+1. Reutilizar el contexto y respuestas ya disponibles para la fecha del pedido. Para descubrir movimientos individuales
+   y sectores, `galecore get macro.board --out .scratch/mercado.json --keep "<pedido>"` una vez si no está ya disponible.
+   Leer localmente las filas pertinentes de `tabs → sections → groups → rows` (en particular liderazgo), sin volcar el
+   JSON completo ni `spark` al contexto. Conservar el ref de evidencia y `missing`; no volver a consultar cada símbolo.
+2. Mirar `symbol`, `name`, `last`, `changeDay`, `changeUnit`, `asOf` y `source` por fila; evitar contar varias veces el
+   mismo símbolo. Inspeccionar los movimientos diarios, no las primeras filas: el resumen y algunos grupos están
+   ordenados por cambio o valor agregado MENSUAL. No mezclar % con puntos o puntos básicos.
+3. `asOf` global es generación, no fecha del dato. Usar la fecha de cada fila: si no coincide con la rueda pedida,
+   decirlo y no presentarla como movimiento de ese día. Es una selección fija y parcial de acciones, sectores y
+   canastas, no todo el mercado. Distinguir cobertura no investigada, datos ausentes y consultas fallidas;
+   `missing=[]` sólo dice que las consultas del tablero no declararon fallas, no que no falte nada relevante.
+4. Contar lo destacado con cifras, fecha y enlace a la evidencia conservada (usar el ref/ruta devuelto por `--keep`),
+   sin concluir calma general desde ETFs. Mantener el significado y período de cada cifra: una variación de cinco
+   ruedas no es distancia al máximo ni variación diaria. Si se busca una
+   causa o resultados, consultar sólo el dato adicional pertinente disponible en GaleCore (`galecore list`); un precio
+   no prueba causa ni un evento previsto prueba que se publicó un resultado: la agenda sólo acredita programación.
+   Si no hay evidencia, decir que la causa o la publicación no está verificada.
+5. Síntesis primero y tabla breve cuando ayude. No exigir pack profundo, opciones ni revisión anterior para responder
+   el resumen. Ampliar con el método de historia de abajo sólo si el pedido lo necesita. No guardar investigación por
+   defecto: rige Memoria de PRODUCT.md. Este recorrido en sesión no cambia el flujo de las corridas programadas.
 
 ## Qué necesita
-- El pack del día: en sesión, `story pack --symbol SPY --prompt "<pedido>"` una vez (~2 min) y usar el ref que
+- Para la historia profunda, el pack del día: en sesión, `story pack --symbol SPY --prompt "<pedido>"` una vez (~2 min) y usar el ref que
   imprime; en una corrida programada viene del runner. No volver a pedir sus datos con otros comandos.
 - La revisión anterior: `kb search --kind research --text "historia del mercado"` y `kb show research:<id>` (hace falta
   su historia para decir si cambió). Un pack se lee con `kb show evidence:<id>`.
 
 ## Pasos
-1. Todo número sale del pack y cita su ref (un hecho sin fuente se rechaza), copiado tal cual; un cociente o
-   diferencia propia es interpretación y nombra sus insumos. Fechas del pack: los cierres son de la última rueda (un
+Estos pasos son para la historia profunda y las corridas programadas; el resumen en sesión usa el recorrido anterior.
+1. Todo número sale del pack o de otra respuesta de GaleCore conservada como evidencia y cita su ref, copiado tal cual;
+   un cociente o diferencia propia es interpretación y nombra sus insumos. Fechas del pack: los cierres son de la última rueda (un
    fin de semana es el mercado del viernes: decirlo).
 2. **La historia** (`hypothesis`): una o dos frases en castellano simple: qué lidera y qué queda atrás, si tasas, dólar
    y crédito confirman o contradicen a las acciones, si la volatilidad pricea calma o estrés. Es una lectura de
@@ -34,7 +62,7 @@ agente programado de historia del mercado (el runner le da el pack ya juntado, c
    estrés), VVIX; [opciones] skew de puts 25-delta contra su umbral, IV contra volatilidad realizada (a quién le pagan),
    IV rank (con la historia corta de GaleCore: decirlo), régimen de GEX y spot contra gamma cero si está; [calendario]
    datos macro y FOMC dentro de la ventana y qué pilar puede mover cada uno (`recent_releases` son los de la última
-   semana, ya reaccionados). Un evento se nombra sólo si está en el calendario del pack. Por pilar, un `fact` con los
+   semana, ya reaccionados). Un evento se nombra sólo con evidencia del calendario consultado. Por pilar, un `fact` con los
    números y una `interpretation` con lo que agrega. Si los pilares no coinciden, decirlo: la divergencia suele ser
    la historia.
 4. **Qué la mueve hoy** (`drivers`): un `fact` y una `interpretation` por ítem, cada texto empieza con [qué lo
@@ -58,9 +86,9 @@ agente programado de historia del mercado (el runner le da el pack ya juntado, c
    primera vez: «Cambio de historia: no — primera lectura, sin anterior».
 7. **La historia rival y qué la decidiría** (`test_plan`): dos o tres pasos con el dato a mirar, qué apoya la historia
    actual y qué la debilita. `next_steps`: qué tiene que chequear la próxima lectura. `status`: open.
-8. `missing`: todo lo que el pack declaró faltante y lo que la historia necesitaría y ninguna fuente trae (noticias,
-   posicionamiento por participante, tasas como rendimientos y no vía TLT, spreads de crédito, amplitud por acción).
-   Nunca una estimación en un hueco.
+8. `missing`: fallas del pack y límites de cobertura de la lectura. Si otra respuesta consultada cubre un faltante
+   (por ejemplo tasas o spreads de crédito del tablero), citarla y distinguirlo de la falla original. Lo no consultado
+   no equivale a inexistente; lo que ninguna fuente trae no se rellena con una estimación.
 9. Guardar: `research save --capability market_story --slug historia-del-mercado-spy`; después `research revise
    --capability market_story --id <id> --reason continuation --note "<qué cambia>"`.
 
@@ -78,13 +106,24 @@ Historia: el mercado pricea calma con liderazgo de tecnología; tasas y crédito
 Después: qué la mueve hoy, la historia rival y qué la decidiría, faltantes.
 
 ## Errores a evitar
-- Nombrar un evento que no está en el calendario del pack (lo que uno recuerda de las noticias no es evidencia).
+- Nombrar un evento sin evidencia consultada (lo que uno recuerda de las noticias no es evidencia).
 - Atribuir el movimiento de un día con varios datos a uno solo.
 - Leer la IV de la vela como el straddle del día del dato sin decirlo.
 - Aconsejar («comprá», «vendé», «conviene», «deberías»): la historia es contexto, no decisión.
 - Volver a pedir con otros comandos los datos que ya trae el pack.
 
 ## Cómo responder
-Primero `story pack --symbol SPY`, una vez (~2 min); la revisión anterior con `kb search --kind research --text "historia del mercado"`.
-La historia en una línea y si cambió, después una tabla corta de pilares con sus números y fecha, y líneas breves de
-qué la mueve hoy y la historia rival. Cada número del pack con su ref. Nada de consejos de operar.
+Para «qué pasó hoy en el mercado» o sectores: reutilizar contexto y datos; si falta cobertura de acciones/sectores,
+`galecore get macro.board --out .scratch/mercado.json --keep "<pedido>"` una vez. Leer localmente filas de liderazgo
+en `tabs/sections/groups/rows`, sin `spark` ni JSON completo al contexto. Mirar `changeDay`, `changeUnit`, `asOf` y
+`source` por fila, sin duplicar símbolos; el orden de grupos/resumen puede ser mensual, no es ranking del día.
+Fecha global es generación; no usar otra rueda como hoy. Conservar significado y período de cifras del contexto:
+variación de cinco ruedas no es distancia al máximo ni variación diaria. Síntesis y cifras destacadas con enlace a la
+evidencia conservada (`--keep` devuelve ref/ruta), fecha y alcance parcial:
+no es todo el mercado y `missing=[]` no prueba cobertura completa. Causas/resultados sólo con evidencia adicional
+pertinente de GaleCore; agenda prevista no acredita publicación de resultados. Si no hay evidencia, causa/publicación
+sin verificar. Sin repetir consultas por símbolo ni inferir calma general de ETFs.
+Una consulta abierta no exige aclaración si contexto resuelve fecha/mercado; si falta una precisión material, preguntar.
+Para historia profunda, `story pack --symbol SPY` una vez (~2 min), revisión anterior si se compara y pasos de la skill:
+historia, pilares, cambio y rival. El resumen breve no exige pack, opciones ni investigación guardada. Las corridas
+programadas mantienen el pack del runner. Cada número cita el pack u otra respuesta conservada. Nada de consejos de operar.
