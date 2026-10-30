@@ -1,6 +1,7 @@
 .lab-project-list { display:flex; flex-direction:column; flex:1; min-height:0; font:var(--font-label) var(--font-sans); }
 .lab-project-list > nav { flex:1; min-height:0; overflow-y:auto; }
 .lab-project-list .lab-project-heading > div { display:flex; }
+.lab-project-list .lab-list-action { width:42px; height:42px; color:var(--text-secondary); }
 .lab-sidebar-group { margin-bottom:14px; }
 .lab-sidebar-group-heading { display:flex; align-items:center; }
 .lab-group-toggle { display:flex; align-items:center; gap:10px; flex:1; min-width:0; padding:9px 10px; background:transparent; border:0; border-radius:7px; color:var(--text-primary); font:500 var(--font-label) var(--font-sans); text-align:left; cursor:pointer; }

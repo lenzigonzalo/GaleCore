@@ -58,7 +58,6 @@ export function LabProjectList(props: Props) {
   useEffect(() => { try { localStorage.setItem('galecore:lab:list', tab); } catch { /* preferencia de vista */ } }, [tab]);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [organization, setOrganization] = useState(readOrganization);
-  const [storageError, setStorageError] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
   useEffect(() => { setConfirmDelete(null); }, [menu]);
   const [editor, setEditor] = useState<{ id?: string; label: string; color: Color } | null>(null);
@@ -98,10 +97,10 @@ export function LabProjectList(props: Props) {
         try {
           const canonical = parseOrganization(JSON.parse(item.content));
           setOrganization(pendingUpdates.current.reduce((value, update) => update(value), canonical));
-        } catch { setStorageError(true); return; }
+        } catch { return; }
       }
       pendingUpdates.current = []; hydrated.current = true; setSyncReady(true);
-    }).catch(() => { if (alive) setStorageError(true); });
+    }).catch(() => { /* conserva la organización local */ });
     return () => { alive = false; };
   }, []);
   useEffect(() => {
@@ -109,7 +108,7 @@ export function LabProjectList(props: Props) {
     if (!changed.current || !syncReady) return;
     const timer = setTimeout(() => {
       saveSpaceItem('preference', PREFERENCE_KEY, { title: 'Grupos del chat', content: JSON.stringify(organization), format: 'json', visibility: 'private' })
-        .then(() => setStorageError(false)).catch(() => setStorageError(true));
+        .catch(() => { /* conserva la organización local */ });
     }, 600);
     return () => clearTimeout(timer);
   }, [organization, syncReady]);
@@ -198,16 +197,15 @@ export function LabProjectList(props: Props) {
     setEditor(null); lastTrigger.current?.focus();
   };
   const what = tab === 'chats' ? 'conversaciones' : 'proyectos';
-  const searchButton = <button className="lab-icon" aria-label={'Buscar ' + what} title={'Buscar ' + what} aria-pressed={query !== null} onClick={() => setQuery(q => q === null ? '' : null)}><Search size={16}/></button>;
+  const searchButton = <button className="lab-icon lab-list-action" aria-label={'Buscar ' + what} title={'Buscar ' + what} aria-pressed={query !== null} onClick={() => setQuery(q => q === null ? '' : null)}><Search size={21}/></button>;
   const searchBox = query !== null && <label className="lab-search"><Search size={15} aria-hidden="true"/><input autoFocus aria-label={'Buscar ' + what} placeholder={'Buscar ' + what} value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === 'Escape') setQuery(null); }}/>{query && <button type="button" aria-label="Limpiar búsqueda" onClick={() => setQuery('')}><X size={14}/></button>}</label>;
   return <div className="lab-project-list" ref={root}>
     <div className="lab-list-tabs" role="tablist" aria-label="Lista"><button role="tab" aria-selected={tab === 'projects'} onClick={() => { setTab('projects'); setQuery(null); }}>Proyectos</button><button role="tab" aria-selected={tab === 'chats'} onClick={() => { setTab('chats'); setQuery(null); }}>Conversaciones</button></div>
-    {storageError && <p className="lab-group-empty" role="status">No se pudo sincronizar la organización con tu cuenta; queda en este navegador.</p>}
     {tab === 'chats' ? <>
     <div className="lab-project-heading"><div>{searchButton}</div></div>
     {searchBox}
     <nav aria-label="Conversaciones" className="lab-project-chats lab-all-chats">{chats.filter(c => hit(c.title)).map(c => renderChat(c, true))}{!chats.some(c => hit(c.title)) && <p className="lab-group-empty">{terms.length ? 'Ninguna conversación con «' + query + '».' : 'Todavía no hay conversaciones.'}</p>}</nav></> : <>
-    <div className="lab-project-heading"><div>{searchButton}<button className="lab-icon" aria-label="Crear grupo" title="Crear grupo" onClick={e => { lastTrigger.current = e.currentTarget; setEditor({ label: '', color: 'neutral' }); setMenu(null); }}><Folder size={17}/><Plus size={11}/></button><button className="lab-icon" aria-label="Crear proyecto" onClick={onCreateProject}><Plus size={18}/></button></div></div>
+    <div className="lab-project-heading"><div>{searchButton}<button className="lab-icon lab-list-action" aria-label="Crear grupo" title="Crear grupo" onClick={e => { lastTrigger.current = e.currentTarget; setEditor({ label: '', color: 'neutral' }); setMenu(null); }}><Folder size={22}/><Plus size={13}/></button><button className="lab-icon lab-list-action" aria-label="Crear proyecto" title="Buscar o crear un proyecto" onClick={onCreateProject}><Plus size={23}/></button></div></div>
     {editor && <form className="lab-group-editor" aria-label={editor.id ? 'Editar grupo' : 'Nuevo grupo'} onSubmit={saveGroup}><header><strong>{editor.id ? 'Editar grupo' : 'Nuevo grupo'}</strong><button type="button" className="lab-icon" aria-label="Cancelar grupo" onClick={() => { setEditor(null); lastTrigger.current?.focus(); }}><X size={16}/></button></header><label>Nombre del grupo<input autoFocus required maxLength={100} value={editor.label} onChange={e => setEditor({ ...editor, label: e.target.value })}/></label><Palette value={editor.color} onChange={color => setEditor({ ...editor, color })}/><button className="lab-group-save" disabled={!editor.label.trim()}>{editor.id ? 'Guardar grupo' : 'Crear grupo'}</button></form>}
     {searchBox}
     {terms.length ? <nav aria-label="Resultados de la búsqueda">

@@ -800,23 +800,19 @@ namespace DataFeed.Controllers
             var (problem, hash) = DataFeed.Repositories.Entities.SharedProjectChange.ValidateAndHash(body.Path, body.Op, body.Encoding, body.Content);
             if (problem != null) return BadRequest(new { error = problem });
 
-            var latest = await db.SharedProjectChanges.AsNoTracking().Include(c => c.Author)
-                .Where(c => c.ProjectId == id && c.Path == body.Path)
-                .OrderByDescending(c => c.Seq).FirstOrDefaultAsync(ct);
-            var outcome = DataFeed.Repositories.Entities.SharedProjectChange.Decide(latest, body.Op!, hash, body.BaseHash);
-            if (outcome == DataFeed.Repositories.Entities.SharedProjectChange.Outcome.Conflict)
-                return Conflict(new { error = "la copia no parte del último contenido de este archivo", latest = latest == null ? null : ChangeDto(latest, latest.Author.Username) });
-            if (outcome == DataFeed.Repositories.Entities.SharedProjectChange.Outcome.NoOp)
-                return Ok(new { seq = latest!.Seq, contentHash = latest.ContentHash });
-
             var change = new DataFeed.Repositories.Entities.SharedProjectChange
             {
                 ProjectId = id, AuthorId = userId.Value, Path = body.Path!, Op = body.Op!,
                 Encoding = body.Op == "put" ? body.Encoding! : "utf8", Content = body.Op == "put" ? body.Content : null,
                 ContentHash = hash, BaseHash = body.BaseHash, CreatedAt = DateTime.UtcNow,
             };
-            db.SharedProjectChanges.Add(change);
-            await db.SaveChangesAsync(ct);
+            var result = await DataFeed.Repositories.SharedProjectWriter.AppendAsync(db, change, ct);
+            if (!result.Authorized) return NotFound();
+            var latest = result.Change;
+            if (result.Outcome == DataFeed.Repositories.Entities.SharedProjectChange.Outcome.Conflict)
+                return Conflict(new { error = "la copia no parte del último contenido de este archivo", latest = latest == null ? null : ChangeDto(latest, latest.Author.Username) });
+            if (result.Outcome == DataFeed.Repositories.Entities.SharedProjectChange.Outcome.NoOp)
+                return Ok(new { seq = latest!.Seq, contentHash = latest.ContentHash });
             return Created($"GaleCore/SharedProjects/{id}/changes?after={change.Seq - 1}", new { seq = change.Seq, contentHash = change.ContentHash });
         }
 

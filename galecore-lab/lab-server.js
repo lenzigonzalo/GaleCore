@@ -233,6 +233,7 @@ const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
 let shells = 0;
 function openShell(ws) {
   let term = null;
+  let release = () => {};
   const timer = setTimeout(() => ws.close(4001, 'autenticación requerida'), 5000);
   ws.on('error', () => {});
   ws.on('message', raw => {
@@ -242,13 +243,14 @@ function openShell(ws) {
       const project = m.type === 'open' && m.token === TOKEN && workspaces.listProjects().find(p => p.id === m.project);
       if (!project) { ws.close(4003, 'proyecto no autorizado'); return; }
       if (shells >= 4) { ws.close(4029, 'hay cuatro terminales abiertas'); return; }
+      try { release = workspaces.reserveShell(project); } catch { ws.close(4009, 'proyecto sincronizando'); return; }
       clearTimeout(timer); shells++;
-      term = pty.spawn(process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || 'bash'), process.platform === 'win32' ? ['-NoLogo'] : [], {
+      try { term = pty.spawn(process.platform === 'win32' ? 'powershell.exe' : (process.env.SHELL || 'bash'), process.platform === 'win32' ? ['-NoLogo'] : [], {
         cwd: project.dir, env: environment(), name: 'xterm-256color',
         cols: dimension(m.cols, 20, 400, 100), rows: dimension(m.rows, 5, 200, 30),
-      });
+      }); } catch { release(); shells--; ws.close(4009, 'no se pudo abrir la terminal'); return; }
       term.onData(data => { if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'output', data })); });
-      term.onExit(() => { term = null; shells--; if (ws.readyState === 1) ws.close(1000, 'terminal cerrada'); });
+      term.onExit(() => { release(); term = null; shells--; if (ws.readyState === 1) ws.close(1000, 'terminal cerrada'); });
       return;
     }
     try {

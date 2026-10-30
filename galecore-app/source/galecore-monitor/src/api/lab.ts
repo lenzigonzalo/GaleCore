@@ -34,8 +34,8 @@ export async function labRequest<T>(url: string, body?: object, timeout = 12000)
 
 export type LabProjectKind = 'personal' | 'analysis' | 'strategy';
 /** Aviso de una sincronización de proyecto compartido: archivos que se editaron en las dos PCs (quedaron las dos versiones). */
-export interface SyncNotice { at: string; error?: string; conflicts: { path: string; with: string; copy: string | null; kind: 'editado-en-ambos' | 'borrado-aquí' | 'borrado-allá' }[] }
-export interface WorkspaceProject { id: string; label: string; type: LabProjectKind; relative: string; strategyName: string | null; shared?: boolean; syncNotice?: SyncNotice | null }
+export interface SyncNotice { at: string; error?: string; skipped?: { path: string; reason: string }[]; conflicts: { path: string; with: string; copy: string | null; kind: 'editado-en-ambos' | 'borrado-aquí' | 'borrado-allá' }[] }
+export interface WorkspaceProject { id: string; label: string; type: LabProjectKind; relative: string; strategyName: string | null; shared?: boolean; following?: boolean; syncNotice?: SyncNotice | null }
 export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; at: string }
 export interface WorkspaceChat { id: string; project: string; provider: 'codex' | 'claude'; model?: string; effort?: string; title: string; createdAt?: string; turnStartedAt?: number; state: 'idle' | 'running' | 'interrupted' | 'failed' | 'cancelled'; activity: string; steps?: { label: string; detail?: string; kind?: 'note'; at: string }[]; error: string | null; notice?: string | null; mode?: 'manual' | 'auto'; usage?: ChatUsage; tasks?: ChatTask[]; limitResetsAt?: number | true; permission?: { id: string; tool: string; label: string; detail?: string; always?: boolean } | null; messages: ChatMessage[] }
 export interface ChatTask { id: string; kind: 'agent' | 'command'; label: string; agentType?: string; status: string; last?: string; tools?: number; tokens?: number; summary?: string }

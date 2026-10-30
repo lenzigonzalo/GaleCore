@@ -17,6 +17,7 @@ import hashlib
 import json
 import os
 import re
+from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path, PurePosixPath
 
@@ -28,6 +29,7 @@ SKIP_DIRS = {".git", ".scratch", "node_modules", "__pycache__"}
 MAX_BYTES = 2 * 1024 * 1024
 MAX_PATH = 400
 MAX_ROUNDS = 3
+LOCK_FILE = ".sync.lock"
 _KEY_RE = re.compile(r"^[a-zA-Z0-9_-]{1,80}$")
 
 
@@ -57,6 +59,39 @@ def save_state(project_dir: Path, state: dict) -> None:
     os.replace(tmp, project_dir / SYNC_FILE)
 
 
+def _context(client: SpaceClient) -> dict:
+    if client.user is None:
+        client.login()
+    return {"user": client.user, "api": client.base_url.rstrip("/")}
+
+
+@contextmanager
+def project_lock(project_dir: Path):
+    """OS lock, released even if the CLI crashes; shared by CLI entry points."""
+    with (project_dir / LOCK_FILE).open("a+b") as handle:
+        try:
+            if os.fstat(handle.fileno()).st_size == 0:
+                handle.write(b"0")
+                handle.flush()
+            handle.seek(0)
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise SharedProjectError("El proyecto está sincronizando; volvé a intentar.") from exc
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(handle, fcntl.LOCK_UN)
+
+
 def _exclude_from_git(project_dir: Path) -> None:
     """Keep ``.sync.json`` out of the knowledge base's git (idempotent, local to this PC)."""
     for parent in (project_dir, *project_dir.parents):
@@ -66,8 +101,8 @@ def _exclude_from_git(project_dir: Path) -> None:
                 info.mkdir(exist_ok=True)
                 exclude = info / "exclude"
                 lines = exclude.read_text(encoding="utf-8").splitlines() if exclude.exists() else []
-                if "**/" + SYNC_FILE not in lines:
-                    exclude.write_text("\n".join([*lines, "**/" + SYNC_FILE]) + "\n", encoding="utf-8")
+                patterns = ["**/" + SYNC_FILE, "**/" + LOCK_FILE, "**/.sync-write-*"]
+                exclude.write_text("\n".join([*lines, *(p for p in patterns if p not in lines)]) + "\n", encoding="utf-8")
             except OSError:
                 pass
             return
@@ -133,7 +168,10 @@ def _decode(change: dict) -> bytes:
 
 
 def _valid_path(rel: str) -> bool:
-    return 0 < len(rel) <= MAX_PATH and not any(ord(c) < 32 for c in rel)
+    return (0 < len(rel) <= MAX_PATH and not any(ord(c) < 32 for c in rel)
+            and "\\" not in rel and ":" not in rel and not PurePosixPath(rel).is_absolute()
+            and not any(p in ("..", SYNC_FILE, SYNC_FILE + ".tmp", LOCK_FILE, *SKIP_DIRS)
+                        or p.startswith(".sync-write-") for p in PurePosixPath(rel).parts))
 
 
 def _scan(project_dir: Path) -> dict[str, Path]:
@@ -143,7 +181,7 @@ def _scan(project_dir: Path) -> dict[str, Path]:
         dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not (Path(root) / d).is_symlink()]
         for name in names:
             full = Path(root) / name
-            if name in (SYNC_FILE, SYNC_FILE + ".tmp") or full.is_symlink():
+            if name in (SYNC_FILE, SYNC_FILE + ".tmp", LOCK_FILE) or name.startswith(".sync-write-") or full.is_symlink():
                 continue
             out[full.relative_to(project_dir).as_posix()] = full
     return out
@@ -185,8 +223,24 @@ class _Run:
 
     def write(self, path: str, data: bytes) -> None:
         target = self.dir / path
+        if not target.resolve().is_relative_to(self.dir.resolve()):
+            raise ValueError("El archivo apunta fuera del proyecto")
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(data)
+        import tempfile
+        with tempfile.NamedTemporaryFile(dir=target.parent, prefix=".sync-write-", delete=False) as handle:
+            tmp = Path(handle.name)
+            try:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            except BaseException:
+                handle.close()
+                tmp.unlink(missing_ok=True)
+                raise
+        try:
+            os.replace(tmp, target)
+        finally:
+            tmp.unlink(missing_ok=True)
 
     # A change that comes from the other side (pulled, or the `latest` of a 409).
     def apply(self, ch: dict) -> None:
@@ -214,7 +268,7 @@ class _Run:
                 self.conflicts.append({"path": path, "with": author, "copy": None, "kind": "borrado-aquí"})
                 return
             copy = _conflict_name(path, author, self.today, lambda c: (self.dir / c).exists())
-            (self.dir / copy).write_bytes(target.read_bytes())   # edited on both sides: both versions stay
+            self.write(copy, target.read_bytes())              # edited on both sides: both versions stay
             self.write(path, data)
             self.files[path] = new
             self.pulled.add(path)
@@ -241,7 +295,7 @@ class _Run:
                     try:
                         self.apply(ch)
                     except (OSError, ValueError) as exc:
-                        self.skip(ch["path"], f"no se pudo aplicar: {type(exc).__name__}")
+                        raise SharedProjectError(f"No se pudo aplicar {ch['path']}; queda pendiente para reintentar.") from exc
                 self.state["lastSeq"] = ch["seq"]
             self.state["pushedSeqs"] = [s for s in self.state.get("pushedSeqs", []) if s > self.state["lastSeq"]]
             if not page.get("hasMore") or not page["changes"]:
@@ -286,7 +340,7 @@ class _Run:
                         try:
                             self.apply(latest)
                         except (OSError, ValueError) as err:
-                            self.skip(path, f"no se pudo aplicar: {type(err).__name__}")
+                            raise SharedProjectError(f"No se pudo aplicar el conflicto de {path}; queda pendiente.") from err
                     else:
                         self.files.pop(path, None)
                     continue
@@ -305,11 +359,19 @@ class _Run:
 
 def sync_project(client: SpaceClient, project_dir: Path, *, today: date | None = None) -> dict:
     """Pull what others changed, then push what changed here. Returns {pulled, pushed, conflicts, skipped}."""
+    with project_lock(project_dir):
+        return _sync_project(client, project_dir, today=today)
+
+
+def _sync_project(client: SpaceClient, project_dir: Path, *, today: date | None = None) -> dict:
     state = load_state(project_dir)
     if state is None:
         raise SharedProjectError(f"{project_dir.name} is not shared (no {SYNC_FILE})")
-    if client.user is None:
-        client.login()
+    context = _context(client)
+    if state.get("context") != context:
+        raise SharedProjectError("Confirmá Agregar a esta PC en Proyectos compartidos para este usuario y entorno.")
+    if state.get("subscribed") is not True:
+        return {"paused": True, "pulled": 0, "pushed": 0, "conflicts": [], "skipped": []}
     _exclude_from_git(project_dir)
     run = _Run(client, project_dir, state, today or datetime.now().astimezone().date())
     try:
@@ -318,12 +380,23 @@ def sync_project(client: SpaceClient, project_dir: Path, *, today: date | None =
             if not run.push():
                 break
     except SpaceError as exc:
+        state["lastError"] = str(exc)
         if exc.status == 404:   # GaleCore answers 404 to a non-member: the owner unshared it (or it was deleted)
+            state["revoked"] = True
             raise SharedProjectError(f"ya no tenés acceso a {project_dir.name}: el dueño dejó de compartirlo o lo borró. "
                                      "Tu copia local queda como está (sin sincronizar).") from exc
         raise
+    except SharedProjectError as exc:
+        state["lastError"] = str(exc)
+        raise
     finally:
+        state["lastAttempt"] = datetime.now().astimezone().isoformat()
         save_state(project_dir, state)
+    state["lastSuccess"] = state["lastAttempt"]
+    state.pop("lastError", None)
+    state.pop("revoked", None)
+    state["skipped"] = run.skipped
+    save_state(project_dir, state)
     return {"pulled": len(run.pulled), "pushed": len(run.pushed), "conflicts": run.conflicts, "skipped": run.skipped}
 
 
@@ -336,13 +409,21 @@ def _members(client: SpaceClient, project_id: str) -> list[dict]:
 
 def share(client: SpaceClient, kb_base: Path, key: str, username: str) -> dict:
     project_dir = find_project(kb_base, key)
+    with project_lock(project_dir):
+        return _share(client, project_dir, key, username)
+
+
+def _share(client: SpaceClient, project_dir: Path, key: str, username: str) -> dict:
     if client.user is None:
         client.login()
     state = load_state(project_dir)
     fresh = state is None
+    if state is not None and state.get("context") != _context(client):
+        raise SharedProjectError("Confirmá esta copia en Proyectos compartidos antes de compartirla.")
     if fresh:
         created = client.shared_create(_label_of(project_dir), _kind_of(project_dir), key)
-        state = {"sharedProjectId": created["id"], "lastSeq": 0, "files": {}}
+        state = {"sharedProjectId": created["id"], "lastSeq": 0, "files": {}, "context": _context(client), "subscribed": True,
+                 "owner": client.user}
         save_state(project_dir, state)
     try:
         client.shared_add_member(state["sharedProjectId"], username)
@@ -357,7 +438,7 @@ def share(client: SpaceClient, kb_base: Path, key: str, username: str) -> dict:
         if exc.status in (403, 404):
             raise SharedProjectError(str(exc.body.get("error") or "no se pudo sumar al miembro")) from exc
         raise
-    result = sync_project(client, project_dir)
+    result = _sync_project(client, project_dir)
     return {"status": "SHARED", "project": key, "shared_project_id": state["sharedProjectId"],
             "members": _members(client, state["sharedProjectId"]), "sync": result}
 
@@ -395,14 +476,54 @@ def _local_index(kb_base: Path) -> dict[str, Path]:
 
 
 def list_shared(client: SpaceClient, kb_base: Path) -> dict:
-    if client.user is None:
-        client.login()
+    context = _context(client)
     index = _local_index(kb_base)
     projects = []
     for p in client.shared_projects():
         local = index.get(p["id"])
-        projects.append({**p, "mine": p.get("owner") == client.user, "local": local.name if local else None})
-    return {"user": client.user, "projects": projects}
+        state = load_state(local) if local else {}
+        verified = state.get("context") == context
+        projects.append({**p, "mine": p.get("owner") == client.user, "local": local.name if local else None,
+                         "subscribed": verified and state.get("subscribed") is True,
+                         "needsConfirmation": bool(local) and not verified,
+                         "lastSuccess": state.get("lastSuccess") if verified else None,
+                         "lastError": state.get("lastError") if verified else None,
+                         "skipped": state.get("skipped", []) if verified else []})
+    accessible = {p["id"] for p in projects}
+    for pid, local in index.items():
+        state = load_state(local)
+        if pid not in accessible and state.get("context") == context:
+            projects.append({"id": pid, "name": state.get("projectName", local.name), "owner": "",
+                             "local": local.name, "subscribed": False, "removed": True, "members": []})
+    return {"user": client.user, "api": context["api"], "projects": projects}
+
+
+def subscribe(client: SpaceClient, kb_base: Path, project_id: str, *, enabled: bool = True) -> dict:
+    """Explicit per-PC choice; never changes membership or deletes a local file."""
+    context = _context(client)
+    folder = _local_index(kb_base).get(project_id)
+    remote = next((p for p in client.shared_projects() if p["id"] == project_id), None)
+    if remote is None:
+        if not enabled and folder and load_state(folder).get("context") == context:
+            with project_lock(folder):
+                state = load_state(folder)
+                state["subscribed"] = False
+                save_state(folder, state)
+            return {"project": folder.name, "subscribed": False}
+        raise SharedProjectError("El proyecto no está disponible para este usuario y entorno.")
+    if folder is None:
+        if not enabled:
+            return {"project": None, "subscribed": False}
+        folder = _create_local(kb_base, remote)
+        if folder is None:
+            raise SharedProjectError("No se pudo reservar una carpeta local para este proyecto.")
+    with project_lock(folder):
+        state = load_state(folder)
+        if state.get("context") not in (None, context):
+            raise SharedProjectError("Esta copia pertenece a otro usuario o entorno; no se modificó.")
+        state.update(context=context, subscribed=enabled, projectName=remote["name"], kind=remote["kind"], owner=remote["owner"])
+        save_state(folder, state)
+    return {"project": folder.name, "subscribed": enabled}
 
 
 def _create_local(kb_base: Path, remote: dict) -> Path | None:
@@ -410,44 +531,34 @@ def _create_local(kb_base: Path, remote: dict) -> Path | None:
     if remote.get("kind") not in KIND_FOLDERS or not _KEY_RE.match(key):
         return None
     folder = kb_base / KIND_FOLDERS[remote["kind"]] / key
-    if folder.exists():
-        return None
+    def taken(name: str) -> bool:
+        return any((kb_base / base / name).exists() for base in KIND_FOLDERS.values())
+
+    if taken(key):
+        # Names are labels, not identity. Never adopt/overwrite an unrelated local folder.
+        suffix = hashlib.sha256(remote["id"].encode()).hexdigest()[:10]
+        folder = folder.with_name(key[:68] + "_" + suffix)
+        if taken(folder.name):
+            return None
     folder.mkdir(parents=True)
     save_state(folder, {"sharedProjectId": remote["id"], "lastSeq": 0, "files": {}})
     return folder
 
 
-def _ensure_descriptor(project_dir: Path, remote: dict) -> None:
-    """The Lab lists a folder as a project by its workspace.json; the owner's own one arrives with the files."""
-    if (project_dir / "workspace.json").exists():
-        return
-    strategy = _kind_of(project_dir) == "strategy"
-    meta = {"id": project_dir.name, "label": remote.get("name") or project_dir.name,
-            "type": "strategy" if strategy else "analysis",
-            "relative": f"{project_dir.parent.name}/{project_dir.name}",
-            "strategyName": project_dir.name if strategy else None}
-    (project_dir / "workspace.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
-
-
 def sync_all(client: SpaceClient, kb_base: Path) -> dict:
-    """Sync every shared project; the ones shared with me that I do not have yet get their folder first."""
-    if client.user is None:
-        client.login()
+    """Sync only explicitly subscribed copies; discovering a project never downloads it."""
+    context = _context(client)
     index = _local_index(kb_base)
     out: dict = {"projects": {}, "created": [], "skipped": [], "errors": {}}
     for remote in client.shared_projects():
-        folder, fresh = index.get(remote["id"]), False
+        folder = index.get(remote["id"])
         if folder is None:
-            folder = _create_local(kb_base, remote)
-            if folder is None:
-                out["skipped"].append({"project": remote["name"], "reason": f"ya existe una carpeta local «{remote.get('localKey')}» o su nombre no es válido"})
-                continue
-            fresh = True
+            continue
+        state = load_state(folder)
+        if state.get("context") != context or state.get("subscribed") is not True:
+            continue
         try:
             out["projects"][folder.name] = sync_project(client, folder)
-            if fresh:
-                _ensure_descriptor(folder, remote)
-                out["created"].append(folder.name)
         except (SpaceError, SharedProjectError) as exc:
             out["errors"][folder.name] = str(exc)
     return out
