@@ -1,6 +1,6 @@
 ---
 name: market-story
-version: 1.1.1
+version: 1.1.2
 display_name: Historia del mercado
 description: >
   Resume qué pasó en el mercado con acciones, sectores y otras clases de activos de GaleCore, con cobertura y fecha
@@ -32,16 +32,15 @@ que cambia materialmente la respuesta, preguntar antes de elegir por el trader.
    decirlo y no presentarla como movimiento de ese día. Es una selección fija y parcial de acciones, sectores y
    canastas, no todo el mercado. Distinguir cobertura no investigada, datos ausentes y consultas fallidas;
    `missing=[]` sólo dice que las consultas del tablero no declararon fallas, no que no falte nada relevante.
-4. Contar lo destacado con cifras, fecha y enlace a la evidencia conservada (usar el ref/ruta devuelto por `--keep`),
+4. Contar lo destacado con cifras, fecha y fuente de los datos consultados,
    sin concluir calma general desde ETFs. Mantener el significado y período de cada cifra: una variación de cinco
    ruedas no es distancia al máximo ni variación diaria. Si se busca una
    causa o resultados, consultar sólo el dato adicional pertinente disponible en GaleCore (`galecore list`); un precio
    no prueba causa ni un evento previsto prueba que se publicó un resultado: la agenda sólo acredita programación.
    Si no hay evidencia, decir que la causa o la publicación no está verificada.
-   Para un ref `evidence:<id>`, conservar una copia literal con `kb show evidence:<id>` redirigido a
-   `files/fuentes/<id>.json` (crear el directorio) y enlazar `[datos de GaleCore](files/fuentes/<id>.json)`.
-   Es el respaldo de las cifras, no una investigación nueva. No volcar el archivo al contexto; no usar `../../evidence/`,
-   que el monitor no abre, ni sólo «fuente GaleCore». Mantener el significado de cada medida: `valueAddedMonth` es cambio de valor de mercado
+   `--keep` conserva la evidencia canónica para comprobar las cifras. En el chat indicar GaleCore, la fuente de cada
+   dato y su fecha; no copiar JSON a Archivos ni generar informes o enlaces a evidencia cruda para un resumen puntual.
+   Mantener el significado de cada medida: `valueAddedMonth` es cambio de valor de mercado
    de esa empresa, no contribución al índice (faltan pesos/composición); SKEW en puntos no mide el precio relativo
    de puts contra calls. Si ese análisis no es necesario para el resumen ni está acreditado, omitirlo.
 5. Síntesis primero y tabla breve cuando ayude. No exigir pack profundo, opciones ni revisión anterior para responder
@@ -124,15 +123,14 @@ Para «qué pasó hoy en el mercado» o sectores: reutilizar contexto y datos; s
 en `tabs/sections/groups/rows`, sin `spark` ni JSON completo al contexto. Mirar `changeDay`, `changeUnit`, `asOf` y
 `source` por fila, sin duplicar símbolos; el orden de grupos/resumen puede ser mensual, no es ranking del día.
 Fecha global es generación; no usar otra rueda como hoy. Conservar significado y período de cifras del contexto:
-variación de cinco ruedas no es distancia al máximo ni variación diaria. Síntesis y cifras destacadas con enlace a la
-evidencia conservada (`--keep` devuelve ref/ruta), fecha y alcance parcial:
-para `evidence:<id>`, crear `files/fuentes/` y redirigir `kb show evidence:<id>` a `files/fuentes/<id>.json` sin
-volcarlo al contexto. Enlazar `[datos de GaleCore](files/fuentes/<id>.json)`; el monitor no abre `../../evidence/`.
-no es todo el mercado y `missing=[]` no prueba cobertura completa. Causas/resultados sólo con evidencia adicional
+variación de cinco ruedas no es distancia al máximo ni variación diaria. Síntesis y cifras destacadas con fuente y
+fecha en texto (GaleCore y origen por fila). `--keep` conserva la evidencia canónica; no copiar JSON a Archivos ni
+crear informes o enlaces a evidencia cruda para un resumen puntual. Cobertura parcial: no es todo el mercado y
+`missing=[]` no prueba cobertura completa. Causas/resultados sólo con evidencia adicional
 pertinente de GaleCore; agenda prevista no acredita publicación de resultados. Si no hay evidencia, causa/publicación
 sin verificar. Sin repetir consultas por símbolo ni inferir calma general de ETFs.
 No convertir `valueAddedMonth` en contribución al índice sin pesos/composición ni SKEW en precio relativo de puts/calls.
-Antes de enviar, comprobar enlace y que cada conclusión conserve el significado de sus datos; omitir lo no acreditado.
+Antes de enviar, comprobar fuente/fecha y que cada conclusión conserve el significado de sus datos; omitir lo no acreditado.
 Una consulta abierta no exige aclaración si contexto resuelve fecha/mercado; si falta una precisión material, preguntar.
 Para historia profunda, `story pack --symbol SPY` una vez (~2 min), revisión anterior si se compara y pasos de la skill:
 historia, pilares, cambio y rival. El resumen breve no exige pack, opciones ni investigación guardada. Las corridas

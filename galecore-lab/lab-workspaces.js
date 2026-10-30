@@ -17,6 +17,11 @@ const BAD_NAME = /[<>:"|?*\x00-\x1f]|(^|[\/\\])\.\.?($|[\/\\])/;
 const PRIVATE = /(^|[\/\\])(?:\.|node_modules|auth|credentials|secrets|tokens|env\.json)/i;
 function atomic(file, value) { const tmp = file + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(value, null, 2), { mode: 0o600 }); fs.renameSync(tmp, file); }
 function read(file, fallback) { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch(e) { if (e.code === 'ENOENT') return fallback; throw fail('No se pudo leer el registro local; no se sobrescribió.', 500); } }
+// PowerShell puede guardar texto en UTF-16 LE; leerlo como UTF-8 duplica el contenido con caracteres nulos.
+function readProjectText(file) {
+  const bytes = fs.readFileSync(file);
+  return bytes.toString(bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf16le' : 'utf8').replace(/^\uFEFF/, '');
+}
 function safeFile(dir, relative) {
   if (!relative || path.isAbsolute(relative) || PRIVATE.test(relative) || !TEXT.test(relative)) throw fail('Archivo no disponible.', 404);
   const base = fs.realpathSync(dir), target = path.resolve(base, relative);
@@ -593,7 +598,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='files'){
       const p=project(parts[1]), rel=url.searchParams.get('path');
       if(rel&&rel.startsWith(RESEARCH_DIR+'/')){json(res,200,{path:rel,text:readResearch(kb,p.id,rel)});return true;}
-      if(rel){json(res,200,{path:rel,text:fs.readFileSync(safeFile(p.dir,rel),'utf8')});return true;}
+      if(rel){json(res,200,{path:rel,text:readProjectText(safeFile(p.dir,rel))});return true;}
       const mine=projectResearch(kb,p.id),nodes=tree(p.dir).filter(n=>n.name!==RESEARCH_DIR);
       if(mine.length)nodes.push({path:RESEARCH_DIR,name:RESEARCH_DIR,kind:'folder',children:mine.map(f=>({path:RESEARCH_DIR+'/'+f,name:f,kind:'file'}))});
       json(res,200,{tree:nodes,folder:p.relative});return true;
