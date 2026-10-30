@@ -187,7 +187,7 @@ export function LabProjectList(props: Props) {
     return <div className="lab-project-group" key={key} style={color ? { '--group-color': COLORS[color][1] } as React.CSSProperties : undefined}>
       <div className={'lab-project-row' + (projectId === p.id ? ' selected' : '')}>{favoriteButton(key, label)}<button className="lab-project-select lab-draggable" {...dragProps(key)} onClick={() => projectId === p.id ? onToggle(p.id) : onProject(p)}><Folder size={18} style={{ color: 'var(--group-color, currentColor)' }}/>{editing === p.id ? renameInput(p.id, p.label) : <span>{label}</span>}{p.shared && <Users size={14} className="lab-shared-badge" aria-label="Compartido"/>}</button>{optionsButton(key, label)}<button className="lab-icon" aria-label={(expanded[p.id] ? 'Contraer ' : 'Expandir ') + p.label} aria-expanded={!!expanded[p.id]} onClick={() => onToggle(p.id)}>{expanded[p.id] ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button></div>
       {itemOptions(key, label)}
-      {expanded[p.id] && <div className="lab-project-chats">{chats.filter(c => c.project === p.id && !organization.members['c:' + c.id]).map(c => renderChat(c))}<button className="lab-project-new" onClick={() => onNewChat(p)}><Plus size={14}/>Nuevo chat</button></div>}
+      {expanded[p.id] && <div className="lab-project-chats"><button className="lab-project-new" onClick={() => onNewChat(p)}><Plus size={14}/>Nuevo chat</button>{chats.filter(c => c.project === p.id && !organization.members['c:' + c.id]).map(c => renderChat(c))}</div>}
     </div>;
   };
   const saveGroup = (event: React.FormEvent) => {
