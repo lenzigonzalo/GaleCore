@@ -19,6 +19,7 @@ import { LabUsage } from '../components/lab/LabUsage';
 import { LabFilePanel } from '../components/lab/LabFilePanel';
 import { LabShell } from '../components/lab/LabShell';
 import { LabShare, noticeText } from '../components/lab/LabShare';
+import { LabSharedProjects } from '../components/lab/LabSharedProjects';
 import { notifyChat, playChatSound, readChatPrefs } from '../components/lab/labChatPrefs';
 import './Lab.css';
 import { useChatFontSize } from '../components/settings/ChatFontSetting';
@@ -37,6 +38,8 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   useEffect(() => { setHeaderHost(active && !embedded ? document.getElementById('workspace-header-slot') : null); }, [active, embedded]);
   const handledRequest = useRef<number | undefined>(undefined);
   const [state, setState] = useState<WorkspaceState | null>(null);
+  const [sharedOpen, setSharedOpen] = useState(false);
+  const [sharedError, setSharedError] = useState('');
   const [projectId, setProjectId] = useState(() => sessionStorage.getItem('galecore:lab:project') || 'personal');
   const [chatId, setChatId] = useState<string | null>(() => sessionStorage.getItem('galecore:lab:chat'));
   const [chat, setChat] = useState<WorkspaceChat | null>(null);
@@ -70,8 +73,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [busy, setBusy] = useState(false);
   const [awayFromBottom, setAwayFromBottom] = useState(false);
   const [error, setError] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [projectLabel, setProjectLabel] = useState('');
   const [aliases, setAliases] = useState<Record<string, string>>(() => { try { return JSON.parse(localStorage.getItem('galecore:lab:aliases') || '{}'); } catch { return {}; } });
   const [editing, setEditing] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -112,10 +113,28 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const draftKey = projectId + '/' + (chatId || 'new');
   const draft = drafts[draftKey] || '';
   const refresh = useCallback(async () => {
-    try { setState(await labRequest<WorkspaceState>('/workspaces')); setError(''); }
+    try { setState(await labRequest<WorkspaceState>('/workspaces')); setError(old => old === 'No se pudo conectar con el Lab local.' ? '' : old); }
     catch { setError('No se pudo conectar con el Lab local.'); }
   }, []);
   useEffect(() => { refresh(); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, [refresh]);
+  useEffect(() => {
+    if (!active && !embedded) return;
+    let live = true, pending = false, last = 0;
+    const reconcile = async () => {
+      if (document.hidden || pending || Date.now() - last < 10000) return;
+      pending = true; last = Date.now();
+      try {
+        const result = await labRequest<{ errors?: Record<string, string> }>('/workspaces/sync', {}, 180000);
+        if (live) { setSharedError(Object.keys(result.errors || {}).length ? 'Hay proyectos pendientes de sincronizar. Revisá Proyectos compartidos.' : ''); await refresh(); }
+      } catch { if (live) setSharedError('No se pudo actualizar lo compartido. Se reintentará al recuperar conexión.'); }
+      finally { pending = false; }
+    };
+    void reconcile();
+    const timer = window.setInterval(reconcile, 30000);
+    window.addEventListener('focus', reconcile); window.addEventListener('online', reconcile);
+    document.addEventListener('visibilitychange', reconcile);
+    return () => { live = false; window.clearInterval(timer); window.removeEventListener('focus', reconcile); window.removeEventListener('online', reconcile); document.removeEventListener('visibilitychange', reconcile); };
+  }, [active, embedded, refresh]);
   useEffect(() => {
     const element = workspace.current;
     // Embebido, la lista de proyectos vive en la barra lateral: ajustar su ancho acá cambia el tamaño del propio
@@ -183,29 +202,13 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     followBottom.current = true; setAwayFromBottom(false);
     if (messages.current) messages.current.scrollTop = messages.current.scrollHeight;
   };
-  useEffect(() => { const close = (e: KeyboardEvent) => { if(e.key === 'Escape') setCreating(false); }; window.addEventListener('keydown',close); return () => window.removeEventListener('keydown',close); }, []);
   // WS-0067: Esc corta la respuesta en curso (como ■), salvo con un diálogo abierto; con la caja vacía y sin respuesta no hace nada.
   const escape = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => { const on = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) escape.current(e); }; window.addEventListener('keydown', on); return () => window.removeEventListener('keydown', on); }, []);
 
-  useEffect(() => {
-    if(!creating) return;
-    const previous = document.activeElement as HTMLElement | null;
-    const trap = (e: KeyboardEvent) => {
-      if(e.key !== 'Tab') return;
-      const dialog = document.querySelector('[role="dialog"]');
-      const elements = Array.from(dialog?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, [tabindex="0"]') || []);
-      const first = elements[0], last = elements[elements.length - 1];
-      if(!first) return;
-      if(e.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) { e.preventDefault(); last.focus(); }
-      else if(!e.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) { e.preventDefault(); first.focus(); }
-    };
-    window.addEventListener('keydown',trap);
-    return () => { window.removeEventListener('keydown',trap); previous?.focus(); };
-  },[creating]);
   const [sharingOpen, setSharingOpen] = useState(false);
   // Proyecto compartido: al abrirlo se traen los cambios de los demás (el Lab no repite una sincronización reciente).
-  const openedShared = state?.projects.find(p => p.id === projectId)?.shared === true;
+  const openedShared = state?.projects.find(p => p.id === projectId)?.following === true;
   useEffect(() => { if (openedShared) labRequest('/workspaces/' + encodeURIComponent(projectId) + '/sync', { auto: true }, 180000).then(refresh).catch(() => { /* sin red: se sincroniza en el próximo turno */ }); }, [projectId, openedShared, refresh]);
   const selectProject = (p: WorkspaceProject) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(null); setChat(null); setView(v => v === 'files' || v === 'shell' ? v : 'chat'); setExpanded(v=>({...v,[p.id]:true})); setError(''); };
   useEffect(() => {
@@ -216,12 +219,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   }, [projectRequest, state]);
   const selectChat = (p: WorkspaceProject, c: WorkspaceState['chats'][number]) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(c.id); setChat(null); setView('chat'); setError(''); };
   const newChat = () => { const d = readChatPrefs(); if (d.provider) { setProvider(d.provider); setChatSettings({ model: d.model, effort: d.effort }); } setMode(d.mode); selection.current++; setChatId(null); setChat(null); setView('chat'); setError(''); };
-  const createProject = async (e: React.FormEvent) => {
-    e.preventDefault(); setBusy(true);
-    try { const p = await labRequest<WorkspaceProject>('/workspaces',{ label:projectLabel }); await refresh(); selectProject(p); setProjectLabel(''); setCreating(false); }
-    catch(e) { setError(e instanceof Error ? e.message : 'No se pudo crear el proyecto.'); }
-    finally { setBusy(false); }
-  };
   // Caja de texto estilo Claude (WS-0036): adjuntos, dictado y modo de permisos por mensaje.
   const [mode, setMode] = useState<'manual' | 'auto'>(() => readChatPrefs().mode);
   const [attachments, setAttachments] = useState<{ path: string; name: string; preview?: string }[]>([]);
@@ -344,7 +341,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const resumeQueue = () => { goOn.current = true; setPaused(v => { if (!chat) return v; const { [chat.id]: _gone, ...rest } = v; return rest; }); };
   // Esc corta (como ■); con la edición abierta, la cancela. Nada si hay un diálogo o un campo propio (renombrar, menús).
   escape.current = (e: KeyboardEvent) => {
-    if (view !== 'chat' || (!active && !embedded) || creating || sharingOpen) return;
+    if (view !== 'chat' || (!active && !embedded) || sharingOpen || sharedOpen) return;
     if ((e.target as HTMLElement | null)?.closest?.('.lab-rename, [role="dialog"], [role="listbox"], [role="combobox"]')) return;
     if (chat?.state === 'running') void stop();
     else if (replacing) { setReplacing(false); setDrafts(v => ({ ...v, [draftKey]: '' })); }
@@ -369,7 +366,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   useEffect(() => {
     const textField = (el: EventTarget | null) => el instanceof HTMLElement && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON|A|SUMMARY)$/.test(el.tagName));
     const down = (e: KeyboardEvent) => {
-      if (e.code !== 'Space' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !Speech || view !== 'chat' || (!active && !embedded) || creating || sharingOpen) return;
+      if (e.code !== 'Space' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || !Speech || view !== 'chat' || (!active && !embedded) || sharingOpen || sharedOpen) return;
       if (textField(e.target) && !(e.target === composer.current && !composer.current?.value.trim())) return;
       if (document.querySelector('[role="dialog"]')) return;
       e.preventDefault();
@@ -378,7 +375,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     const up = (e: KeyboardEvent) => { if (e.code === 'Space' && heldSpace.current) { heldSpace.current = false; recognition.current?.stop(); } };
     window.addEventListener('keydown', down); window.addEventListener('keyup', up);
     return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-  }, [Speech, view, active, embedded, creating, sharingOpen]);
+  }, [Speech, view, active, embedded, sharingOpen, sharedOpen]);
   // «Preguntar sobre esto»: al seleccionar texto de una respuesta aparece un botón que pone la cita en la caja.
   useEffect(() => {
     const check = () => {
@@ -431,7 +428,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       <div className="lab-sidebar-heading">{!embedded && !onSidebarToggle && <button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>}</div>
       {!collapsed && <LabProjectList state={state} projectId={projectId} chatId={chatId} expanded={expanded}
         onToggle={id => setExpanded(v => ({ ...v, [id]: !v[id] }))} onProject={selectProject} onChat={selectChat}
-        onNewChat={p => { selectProject(p); newChat(); }} onCreateProject={() => setCreating(true)}
+        onNewChat={p => { selectProject(p); newChat(); }} onCreateProject={() => setSharedOpen(true)}
         name={name} onRename={startEdit} editing={editing} renameInput={renameInput} onDelete={remove}/> }
     </aside>;
   return <div ref={workspace} className={'lab-chat-workspace' + (embedded ? ' embedded' : '') + (sidebarHidden ? ' sidebar-hidden' : collapsed ? ' sidebar-collapsed' : '')} style={{ '--lab-sidebar-width': sidebarWidth + 'px', '--lab-chat-font-size': chatFontSize } as React.CSSProperties}>
@@ -450,6 +447,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         resizeSidebar(e.key === 'Home' ? 200 : e.key === 'End' ? 480 : sidebarWidth + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 40 : 10));
       }}/>}
     <section className={'lab-chat-main' + (chatEmpty && view === 'chat' ? ' empty' : '')}>
+      {sharedError && <p className="lab-sync-notice" role="status">{sharedError}</p>}
       {headerHost ? createPortal(chatHeader, headerHost) : chatHeader}
       {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></p>}
       {shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
@@ -491,6 +489,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     </section>
     {quote && createPortal(<button type="button" className="lab-quote-button" style={{ left: quote.x, top: quote.y }} onMouseDown={e => e.preventDefault()} onClick={askAboutQuote}>Preguntar sobre esto</button>, document.body)}
     {sharingOpen && project && <LabShare project={project} onClose={() => setSharingOpen(false)} onChanged={refresh}/>}
-    {creating && <div className="lab-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="lab-create-title" className="lab-create-project"><header><h2 id="lab-create-title">Nuevo proyecto</h2><button className="lab-icon" aria-label="Cerrar" onClick={()=>setCreating(false)}><X size={19}/></button></header><form onSubmit={createProject}><label>Nombre<input autoFocus required maxLength={100} value={projectLabel} onChange={e=>setProjectLabel(e.target.value)} placeholder="Prima en SPY"/></label><p>Una idea, un activo o un tema. Si en la conversación arman una estrategia, el proyecto la sigue desde ahí.</p>{error && <p role="alert">{error}</p>}<button className="btn" disabled={busy||!projectLabel.trim()}>Crear proyecto</button></form></section></div>}
+    {sharedOpen && <LabSharedProjects localProjects={state?.projects} onClose={() => setSharedOpen(false)} onChanged={refresh} onOpen={async id => { const data = await labRequest<WorkspaceState>('/workspaces'); setState(data); const p = data.projects.find(p => p.id === id); if (p) { selectProject(p); setSharedOpen(false); } }}/>}
   </div>;
 }

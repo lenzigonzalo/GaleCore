@@ -12,6 +12,7 @@ export function LabShell({ projectId, folder, visible }: { projectId: string; fo
   const host = useRef<HTMLDivElement>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const termRef = useRef<Terminal | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
   const [run, setRun] = useState(0);
   const [ended, setEnded] = useState('');
   useEffect(() => {
@@ -29,9 +30,10 @@ export function LabShell({ projectId, folder, visible }: { projectId: string; fo
     labToken().then(token => {
       if (!alive) return;
       ws = new WebSocket(labShellUrl());
+      socketRef.current = ws;
       ws.onopen = () => send({ type: 'open', token, project: projectId, cols: term.cols, rows: term.rows });
       ws.onmessage = e => { try { const m = JSON.parse(String(e.data)); if (m.type === 'output') term.write(m.data); } catch { /* sólo mensajes del Lab */ } };
-      ws.onclose = e => { if (alive) setEnded(e.code === 4029 ? 'Hay cuatro terminales abiertas.' : e.code === 1000 ? 'La terminal se cerró.' : 'Sin conexión con el Lab local.'); };
+      ws.onclose = e => { if (alive) setEnded(e.code === 4029 ? 'Hay cuatro terminales abiertas.' : e.code === 4009 ? 'El proyecto está sincronizando. Volvé a abrir la terminal al terminar.' : e.code === 1000 ? 'La terminal se cerró.' : 'Sin conexión con el Lab local.'); };
     }).catch(() => { if (alive) setEnded('Sin conexión con el Lab local.'); });
     const input = term.onData(data => send({ type: 'input', data }));
     const resize = term.onResize(({ cols, rows }) => send({ type: 'resize', cols, rows }));
@@ -41,7 +43,7 @@ export function LabShell({ projectId, folder, visible }: { projectId: string; fo
   }, [projectId, run]);
   useEffect(() => { if (visible) { try { fitRef.current?.fit(); } catch { /* sin terminal */ } termRef.current?.focus(); } }, [visible]);
   return <div className="lab-shell" hidden={!visible}>
-    <header><span>PowerShell{folder ? ' · ' + folder : ''}</span>{ended && <em>{ended}</em>}<button type="button" onClick={() => setRun(v => v + 1)}>Nueva terminal</button></header>
+    <header><span>PowerShell{folder ? ' · ' + folder : ''}</span>{ended && <em>{ended}</em>}{!ended && <button type="button" onClick={() => socketRef.current?.close(1000)}>Cerrar terminal</button>}<button type="button" onClick={() => setRun(v => v + 1)}>Nueva terminal</button></header>
     <div ref={host} className="lab-shell-screen"/>
   </div>;
 }

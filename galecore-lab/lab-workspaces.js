@@ -303,6 +303,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   fs.mkdirSync(chatDir,{recursive:true});
   let registry=read(metadata,[]);
   const jobs=new Map();
+  const shellProjects=new Map();
   const designReads=new Map();
   function designFingerprint(name) {
     const dir=path.join(kb,'strategies',name), digest=crypto.createHash('sha256');
@@ -312,6 +313,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     return digest.digest('hex');
   }
   async function readStrategy(p, design) {
+    if(p.externalStrategy)return {missing:true,reason:'El diseño referenciado no está incluido en esta copia compartida.'};
     const fingerprint=design?designFingerprint(p.strategyName):null;
     const cached=designReads.get(p.strategyName);
     if(design&&cached?.fingerprint===fingerprint)return cached.promise;
@@ -336,8 +338,13 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       for(const entry of fs.readdirSync(base,{withFileTypes:true})){
         if(!entry.isDirectory()||!ID.test(entry.name))continue;
         const dir=path.join(base,entry.name);if(!fs.realpathSync(dir).startsWith(fs.realpathSync(kb)+path.sep))continue;
-        const meta=read(path.join(dir,'workspace.json'),null);
-        if(meta&&meta.id===entry.name&&typeof meta.label==='string'&&meta.label.length<=100&&TYPES.includes(meta.type)&&(folder!=='strategies'||meta.type==='strategy'))descriptors.push({id:entry.name,label:meta.label,type:meta.type,relative:folder+'/'+entry.name,strategyName:meta.type==='strategy'?(typeof meta.strategyName==='string'&&ID.test(meta.strategyName)?meta.strategyName:entry.name):null,dir});
+        const syncState=read(path.join(dir,'.sync.json'),null);
+        const received=!!syncState;
+        const meta=read(path.join(dir,'workspace.json'),null)||(syncState?.projectName?{id:entry.name,label:syncState.projectName,type:syncState.kind==='strategy'?'strategy':'analysis'}:null);
+        if(received&&meta?.strategyName===meta?.id&&meta.id!==entry.name)meta.strategyName=entry.name;
+        if(received&&folder==='strategies'&&meta)meta.strategyName=entry.name;
+        const externalStrategy=received&&(!syncState.owner||syncState.owner!==syncState.context?.user)&&folder==='workspaces'&&meta?.type==='strategy'&&meta.strategyName&&meta.strategyName!==entry.name;
+        if(meta&&(meta.id===entry.name||received)&&typeof meta.label==='string'&&meta.label.length<=100&&TYPES.includes(meta.type)&&(folder!=='strategies'||meta.type==='strategy'))descriptors.push({id:entry.name,label:meta.label,type:meta.type,relative:folder+'/'+entry.name,strategyName:externalStrategy?null:meta.type==='strategy'?(typeof meta.strategyName==='string'&&ID.test(meta.strategyName)?meta.strategyName:entry.name):null,...(externalStrategy?{externalStrategy:true}:{}),dir});
       }
     }
     const all=old.map(p=>({...p,...registry.find(r=>r.id===p.id),...descriptors.find(d=>d.id===p.id)}));
@@ -400,8 +407,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   if(!listProjects().some(p=>p.id==='personal'))createProject({label:'Personal',type:'personal'});
   // Proyectos compartidos (WS-0064): el CLI del harness sincroniza; acá sólo se dispara y se avisa si hubo conflictos.
   const sharing=createSharing({root,kb,environment,execute,...(request&&{request}),...(sessionFile&&{sessionFile})});
-  const busy=p=>[...jobs.values()].some(j=>j.project===p.id);
-  const publicProject=({dir,...p})=>sharing.isShared({dir})?{...p,shared:true,syncNotice:sharing.notice(p)}:p;
+  const busy=p=>[...jobs.values()].some(j=>j.project===p.id)||shellProjects.has(p.id);
+  const publicProject=({dir,...p})=>sharing.isShared({dir})?{...p,shared:true,following:sharing.isFollowing({dir}),syncNotice:sharing.notice(p)}:p;
   // Las conversaciones de prueba (origin «prueba») no se listan: el trader ve sólo las suyas.
   function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.origin!=='prueba').map(({messages,usage,...c})=>({...c,messageCount:messages.length}));}
   // Al abrir una conversación nueva en un proyecto, el final de la anterior del mismo proyecto (ya guardada por el Lab):
@@ -456,6 +463,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   function send(chat, words, options={}){
     const auto=options.mode==='auto';
     const p=project(chat.project);
+    if(sharing.isRunning(p))throw fail('El proyecto está sincronizando. Esperá a que termine para enviar.',409);
     if(jobs.has(chat.id))throw fail('La conversación está respondiendo.',409);
     if(jobs.size>=4)throw fail('Hay cuatro conversaciones trabajando.',409);
     if(!binaries[chat.provider])throw fail('El motor no está instalado.',409);
@@ -511,12 +519,16 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/users'){json(res,200,await sharing.searchUsers(url.searchParams.get('q')));return true;}
-    if(req.method==='POST' && url.pathname==='/workspaces/sync'){json(res,200,await sharing.syncAll(listProjects));return true;}
+    if(req.method==='GET' && url.pathname==='/workspaces/shared'){json(res,200,await sharing.catalog({busy}));return true;}
+    if(req.method==='POST' && url.pathname==='/workspaces/sync'){json(res,200,await sharing.syncAll(listProjects,{busy}));return true;}
+    if(req.method==='POST' && parts[0]==='shared-projects'&&parts.length===3&&['subscribe','pause'].includes(parts[2])){
+      json(res,200,await sharing.subscribe(parts[1],parts[2]==='subscribe',listProjects,{busy}));return true;
+    }
     if(parts[0]==='workspaces'&&parts[1]&&['sharing','share','unshare','sync','notice'].includes(parts[2])&&parts.length===3){
       const p=project(parts[1]);
       if(req.method==='GET'&&parts[2]==='sharing'){json(res,200,{...(await sharing.status(p)),notice:sharing.notice(p)});return true;}
       if(req.method!=='POST')return false;
-      if(parts[2]==='share'){json(res,200,await sharing.share(p,await readBody(req)));return true;}
+      if(parts[2]==='share'){json(res,200,await sharing.share(p,await readBody(req),{busy}));return true;}
       if(parts[2]==='unshare'){json(res,200,await sharing.unshare(p,await readBody(req)));return true;}
       if(parts[2]==='notice'){sharing.clearNotice(p);json(res,200,{cleared:true});return true;}
       if(!sharing.isShared(p))throw fail('Este proyecto no está compartido.',409);
@@ -524,6 +536,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[1]&&(parts[2]==='rename'||parts[2]==='archive')&&parts.length===3){
       const p=project(parts[1]);
+      if(sharing.isRunning(p)||busy(p))throw fail('El proyecto está trabajando; volvé a intentar al terminar.',409);
       if(parts[2]==='rename'){const label=String((await readBody(req)).label||'').trim();if(!label||label.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');setOverride(p.id,{label});json(res,200,{...publicProject(p),label});return true;}
       // Eliminar un proyecto lo borra de verdad con lo que cuelga de él (WS-0063); queda un commit en knowledge/ para deshacerlo.
       if(p.id==='personal')throw fail('El espacio personal no se elimina.');
@@ -533,6 +546,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='files'&&parts[3]&&parts.length===4){
       const p=project(parts[1]), b=await readBody(req), op=parts[3];
+      if(sharing.isRunning(p)||busy(p))throw fail('El proyecto está trabajando; volvé a intentar al terminar.',409);
       if(op==='write'){
         const target=projectPath(p.dir,b.path,{editable:true});const text=String(b.text??'');
         if(!TEXT.test(target))throw fail('Sólo se editan archivos de texto (md, txt, csv, yaml, py).');
@@ -565,9 +579,11 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='attachments'){
       // Un adjunto del chat (WS-0036): cuerpo crudo, nombre en X-File-Name, hasta 15 MB, a adjuntos/ del proyecto.
       const p=project(parts[1]), raw=decodeURIComponent(String(req.headers['x-file-name']||'archivo'));
+      if(sharing.isRunning(p))throw fail('El proyecto está sincronizando; volvé a intentar al terminar.',409);
       const safe=raw.replace(/[^\w.\- ]+/g,'_').replace(/^[.\s]+/,'').slice(-80)||'archivo';
       const chunks=[];let size=0;
       await new Promise((ok,ko)=>{req.on('data',d=>{size+=d.length;if(size>15*1024*1024){ko(fail('El archivo supera 15 MB.',413));req.destroy();}else chunks.push(d);});req.on('end',ok);req.on('error',ko);});
+      if(sharing.isRunning(p))throw fail('El proyecto está sincronizando; volvé a intentar al terminar.',409);
       // Desde Archivos («Subir») va a la carpeta elegida, con su nombre; desde el chat, a adjuntos/.
       const folder=url.searchParams.get('dir');
       if(folder!==null){const rel=(folder?folder.replace(/\/+$/,'')+'/':'')+safe;const target=projectPath(p.dir,rel,{editable:true});if(fs.existsSync(target))throw fail('Ya existe un archivo con ese nombre.',409);fs.writeFileSync(target,Buffer.concat(chunks));json(res,201,{path:rel,name:safe,size});return true;}
@@ -595,7 +611,9 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         // Ctrl+S del chat: se corta el turno y se manda el siguiente enseguida; el proceso tarda un instante en cerrar.
         if(c.state==='cancelled')for(let i=0;i<100&&jobs.has(c.id);i++)await new Promise(r=>setTimeout(r,50));const words=String(b.text||'').trim();if(!words||words.length>12000)throw fail('El mensaje debe tener entre 1 y 12000 caracteres.');
         // Adjuntos subidos antes a /workspaces/<id>/attachments: sólo rutas de adjuntos/ del proyecto, que existan.
-        const dir=project(c.project).dir, files=(Array.isArray(b.attachments)?b.attachments:[]).slice(0,10).map(String);
+        const targetProject=project(c.project);
+        if(sharing.isRunning(targetProject))throw fail('El proyecto está sincronizando. Esperá a que termine para enviar.',409);
+        const dir=targetProject.dir, files=(Array.isArray(b.attachments)?b.attachments:[]).slice(0,10).map(String);
         for(const rel of files){if(!/^adjuntos\/[\w.\- ]+$/.test(rel)||!fs.existsSync(path.join(dir,rel)))throw fail('Adjunto no encontrado: '+rel,404);}
         const text=files.length?words+'\n\nArchivos adjuntos (en la carpeta del proyecto): '+files.join(', '):words;
         // Editar el último mensaje (WS-0067): el motor no rebobina; el Lab saca del transcript ese pedido y su respuesta y le avisa que el texto nuevo lo reemplaza.
@@ -622,7 +640,13 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     return false;
   }
-  if(autoSync)sharing.syncAll(listProjects).catch(()=>{});   // al arrancar: trae también lo que otros compartieron conmigo
-  return {route,listProjects,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
+  if(autoSync)sharing.catalog().catch(()=>{});   // discover only; following requires an explicit choice
+  function reserveShell(p){
+    if(sharing.isRunning(p))throw fail('El proyecto está sincronizando; volvé a abrir la terminal al terminar.',409);
+    shellProjects.set(p.id,(shellProjects.get(p.id)||0)+1);
+    let released=false;
+    return ()=>{if(released)return;released=true;const n=shellProjects.get(p.id)-1;if(n)shellProjects.set(p.id,n);else shellProjects.delete(p.id);};
+  }
+  return {route,listProjects,reserveShell,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
 module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage};

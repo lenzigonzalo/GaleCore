@@ -13,6 +13,7 @@ export const person = (username: string) => username.charAt(0).toUpperCase() + u
 /** Una línea por aviso de sincronización: quién editó qué y qué quedó. */
 export function noticeText(notice: SyncNotice): string {
   if (notice.error) return `No se pudo sincronizar: ${notice.error}`;
+  if (!notice.conflicts.length) return notice.skipped?.length ? 'Sincronización parcial: ' + notice.skipped.map(s => s.path + ' (' + s.reason + ')').join(' · ') : 'Sincronización pendiente';
   const [first, ...rest] = notice.conflicts;
   const who = person(first.with);
   const line = first.kind === 'borrado-allá' ? `${who} borró ${first.path} y vos lo editaste: quedó tu versión`

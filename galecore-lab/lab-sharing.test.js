@@ -11,7 +11,7 @@ function world(t, { answers = {}, autoSync = false, session, request } = {}) {
   const execute = (cmd, args, opts, cb) => {
     const sub = args.slice(3); calls.push(sub);
     const key = sub.slice(0, 2).join(' '); const answer = typeof answers[key] === 'function' ? answers[key](sub) : answers[key];
-    setImmediate(() => answer === undefined ? cb(new Error('x'), JSON.stringify({ error: 'sin respuesta' })) : cb(null, JSON.stringify(answer)));
+    setImmediate(() => answer === undefined ? cb(new Error('x'), JSON.stringify({ error: 'sin respuesta' })) : Promise.resolve(answer).then(a=>cb(null, JSON.stringify(a))));
   };
   const spawnProcess = () => { const p = new EventEmitter(); p.stdout = new EventEmitter(); p.stderr = new EventEmitter(); p.stdin = { write() {}, end() {} }; p.kill = () => {}; procs.push(p); return p; };
   const service = createWorkspaces({ root: base, kb, local, binaries: { claude: 'claude' }, environment: () => ({}), legacyProjects: () => [], legacySessions: () => [], execute, spawnProcess, autoSync,
@@ -20,7 +20,7 @@ function world(t, { answers = {}, autoSync = false, session, request } = {}) {
   return { base, kb, service, calls, procs };
 }
 async function route(service, method, url, body) { let answer; await service.route({ method }, {}, new URL(url, 'http://localhost'), (res, status, value) => { answer = { status, value }; }, async () => body); return answer; }
-const share = (kb, id, extra = {}) => fs.writeFileSync(path.join(kb, 'workspaces', id, '.sync.json'), JSON.stringify({ sharedProjectId: 'p1', lastSeq: 0, files: {}, ...extra }));
+const share = (kb, id, extra = {}) => fs.writeFileSync(path.join(kb, 'workspaces', id, '.sync.json'), JSON.stringify({ sharedProjectId: 'p1', lastSeq: 0, files: {}, subscribed: true, ...extra }));
 const members = [{ username: 'demo', role: 'owner' }, { username: 'gonza', role: 'member' }];
 const create = async (service, label) => (await route(service, 'POST', '/workspaces', { label, type: 'analysis' })).value;
 
@@ -77,6 +77,66 @@ test('dos sincronizaciones del mismo proyecto comparten una sola corrida del CLI
   assert.equal(calls.filter(c => c[1] === 'sync').length, 1);
 });
 
+test('la pausa y el estado heredado nunca disparan sincronización', async t => {
+  const {kb,service,calls}=world(t);
+  const p=await create(service,'Pausado'); share(kb,p.id,{subscribed:false});
+  assert.equal((await route(service,'POST','/workspaces/'+p.id+'/sync',{})).value.paused,true);
+  share(kb,p.id,{subscribed:undefined});
+  assert.equal((await route(service,'POST','/workspaces/'+p.id+'/sync',{})).value.paused,true);
+  assert.equal(calls.length,0);
+});
+
+test('una sincronización en curso bloquea motor, archivos y apertura de Shell', async t => {
+  let finish;
+  const pending=new Promise(resolve=>{finish=resolve;});
+  const {kb,service,calls}=world(t,{answers:{'project sync':pending}});
+  const p=await create(service,'En uso'); share(kb,p.id);
+  const run=route(service,'POST','/workspaces/'+p.id+'/sync',{});
+  const chat=(await route(service,'POST','/chats',{project:p.id,provider:'claude'})).value;
+  await assert.rejects(route(service,'POST','/chats/'+chat.id+'/messages',{text:'hola'}),/sincronizando/);
+  await assert.rejects(route(service,'POST','/workspaces/'+p.id+'/files/write',{path:'README.md',text:'no'}),/trabajando/);
+  assert.throws(()=>service.reserveShell(p),/sincronizando/);
+  finish({pulled:0,conflicts:[],skipped:[]}); await run;
+  assert.equal(calls.length,1);
+  const release=service.reserveShell(p);
+  assert.equal((await route(service,'POST','/workspaces/'+p.id+'/sync',{})).value.busy,true);
+  release();release();
+});
+
+test('el catálogo y la suscripción son rutas distintas; rechaza IDs no autorizados',async t=>{
+  const {service,calls}=world(t,{answers:{'project shared':{user:'demo',projects:[{id:'p1',name:'Banco',owner:'eric',local:null,subscribed:false}]}}});
+  assert.equal((await route(service,'GET','/workspaces/shared')).value.projects[0].owner,'eric');
+  await assert.rejects(route(service,'POST','/shared-projects/p2/subscribe',{}),/no está disponible/);
+  assert.equal(calls.some(c=>c[1]==='sync'||c[1]==='subscribe'),false);
+});
+
+test('editar/reintentar durante sync conserva todo el transcript',async t=>{
+  let finish;
+  const {base,kb,service}=world(t,{answers:{'project sync':new Promise(resolve=>{finish=resolve;})}});
+  const p=await create(service,'Con historia'); share(kb,p.id);
+  const chat=(await route(service,'POST','/chats',{project:p.id,provider:'claude'})).value;
+  const file=path.join(base,'local','chats',chat.id+'.json');
+  const saved=JSON.parse(fs.readFileSync(file,'utf8'));
+  saved.messages=[{role:'user',text:'original'},{role:'assistant',text:'respuesta'}];fs.writeFileSync(file,JSON.stringify(saved));
+  const before=fs.readFileSync(file,'utf8');
+  const run=route(service,'POST','/workspaces/'+p.id+'/sync',{});
+  await assert.rejects(route(service,'POST','/chats/'+chat.id+'/messages',{text:'nuevo',replace:true,retry:true}),/sincronizando/);
+  assert.equal(fs.readFileSync(file,'utf8'),before);
+  finish({pulled:0,conflicts:[],skipped:[]});await run;
+});
+
+test('un descriptor compartido no lee una estrategia externa con el mismo nombre',async t=>{
+  const {kb,service,calls}=world(t);
+  const p=await create(service,'Tesis');
+  share(kb,p.id,{context:{user:'demo'},owner:'eric'});
+  const descriptor=path.join(kb,'workspaces',p.id,'workspace.json');
+  const meta=JSON.parse(fs.readFileSync(descriptor,'utf8'));meta.type='strategy';meta.strategyName='spy';fs.writeFileSync(descriptor,JSON.stringify(meta));
+  const listed=(await route(service,'GET','/workspaces')).value.projects.find(x=>x.id===p.id);
+  assert.equal(listed.strategyName,null);
+  assert.equal((await route(service,'GET','/workspaces/'+p.id+'/strategy?view=design')).value.missing,true);
+  assert.equal(calls.length,0);
+});
+
 test('al terminar un turno se sincroniza sólo si el proyecto está compartido', async t => {
   const { kb, service, calls, procs } = world(t, { answers: { 'project sync': { pulled: 0, pushed: 1, conflicts: [], skipped: [] } } });
   const mine = await create(service, 'Solo mío');
@@ -91,9 +151,9 @@ test('al terminar un turno se sincroniza sólo si el proyecto está compartido',
   assert.deepEqual(calls.map(c => c.join(' ')), ['project sync ' + shared.id]);
 });
 
-test('al arrancar trae lo compartido conmigo; sin autoSync no llama al CLI', async t => {
-  const on = world(t, { autoSync: true, answers: { 'project sync': { status: 'SYNCED', projects: {}, created: [], skipped: [], errors: {} } } });
-  await new Promise(r => setTimeout(r, 30)); assert.deepEqual(on.calls, [['project', 'sync', '--all']]);
+test('al arrancar consulta el catálogo sin descargar; sin autoSync no llama al CLI', async t => {
+  const on = world(t, { autoSync: true, answers: { 'project shared': { projects: [] } } });
+  await new Promise(r => setTimeout(r, 30)); assert.deepEqual(on.calls, [['project', 'shared']]);
   const off = world(t); await new Promise(r => setTimeout(r, 30)); assert.deepEqual(off.calls, []);
 });
 
@@ -129,22 +189,21 @@ test('un sync que falla deja un aviso de una línea con el motivo y el siguiente
   assert.equal(await noticeOf(), null);
 });
 
-test('si falla el sync de arranque, cada proyecto compartido muestra el motivo; los errores por proyecto también', async t => {
+test('el coordinador sólo sincroniza los suscritos y conserva errores de descubrimiento', async t => {
   const { createSharing } = require('./lab-sharing');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-lab-test-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  fs.writeFileSync(path.join(dir, '.sync.json'), '{}');
+  fs.writeFileSync(path.join(dir, '.sync.json'), JSON.stringify({sharedProjectId:'p1',subscribed:true}));
   const projects = [{ id: 'a', dir }, { id: 'b', dir: path.join(dir, 'nada') }];
   let answer = { error: 'no credentials: set GALECORE_USERNAME' };
-  const execute = (c, a, o, cb) => setImmediate(() => cb(null, JSON.stringify(answer)));
+  const calls=[];
+  const execute = (c, a, o, cb) => { calls.push(a.slice(3)); setImmediate(() => cb(null, JSON.stringify(a.includes('shared') ? answer : {pulled:1,conflicts:[],skipped:[]}))); };
   const sharing = createSharing({ root: dir, kb: dir, environment: () => ({}), execute });
   await assert.rejects(sharing.syncAll(() => projects));
   assert.equal(sharing.notice(projects[0]).error, 'faltan las credenciales de GaleCore'); assert.equal(sharing.notice(projects[1]), null);
-  answer = { projects: {}, errors: { a: 'GaleCore did not answer at x: ConnectError' } };
-  await sharing.syncAll(() => projects);
-  assert.equal(sharing.notice(projects[0]).error, 'sin conexión con GaleCore');
-  answer = { projects: { a: { pulled: 0, pushed: 0, conflicts: [] } }, errors: {} };
+  answer = { projects: [{id:'p1',local:'a',subscribed:true},{id:'p2',local:'b',subscribed:false}] };
   await sharing.syncAll(() => projects);
   assert.equal(sharing.notice(projects[0]), null);
+  assert.deepEqual(calls.filter(c=>c[1]==='sync'),[['project','sync','a']]);
 });
 
 test('el motor predeterminado sale de GALECORE_LAB_PROVIDER (claude) y sin la variable sigue siendo codex', async t => {

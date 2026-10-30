@@ -910,6 +910,8 @@ def _cmd_project_shared(args: argparse.Namespace) -> None:
             _json_out(sp.unshare(client, base, args.key, args.with_user))
         elif c == "shared":
             _json_out(sp.list_shared(client, base))
+        elif c in ("subscribe", "pause"):
+            _json_out(sp.subscribe(client, base, args.id, enabled=c == "subscribe"))
         elif args.all:
             _json_out({"status": "SYNCED", **sp.sync_all(client, base)})
         elif args.key:
@@ -940,7 +942,7 @@ def _cmd_users(args: argparse.Namespace) -> None:
 
 
 async def _cmd_project(args: argparse.Namespace) -> None:
-    if args.project_command in ("share", "unshare", "shared", "sync"):
+    if args.project_command in ("share", "unshare", "shared", "sync", "subscribe", "pause"):
         return _cmd_project_shared(args)
     from galecore_ai.application import project
     kb = _build_knowledge_base()
@@ -1596,8 +1598,9 @@ def build_parser() -> _JsonArgumentParser:
     p_pj_unshare.add_argument("key")
     p_pj_unshare.add_argument("--with", dest="with_user", required=True)
     pj_sub.add_parser("shared", help="The projects shared by you or with you, with their members")
-    p_pj_sync = pj_sub.add_parser("sync", help="Pull the others' changes and push yours; --all also brings the projects "
-                                               "shared with you that you do not have yet")
+    for command in ("subscribe", "pause"):
+        pj_sub.add_parser(command, help="Follow or pause a shared project on this PC; keeps all local files").add_argument("id")
+    p_pj_sync = pj_sub.add_parser("sync", help="Pull and push changes of subscribed projects only")
     p_pj_sync.add_argument("key", nargs="?", help="A project that is already shared")
     p_pj_sync.add_argument("--all", action="store_true")
     p_pj_add = pj_sub.add_parser("add", help="Append the owner's words: thesis, story, decision, pending or done")

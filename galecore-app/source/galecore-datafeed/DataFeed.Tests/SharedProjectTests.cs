@@ -279,6 +279,37 @@ namespace DataFeed.Tests
         }
 
         [PostgresFact]
+        public async Task DosEscriturasConcurrentesDesdeLaMismaBaseConservanUnConflicto()
+        {
+            using var db = NewDb();
+            var u = NewUser("race"); var p = NewProject(u);
+            db.Users.Add(u); db.SharedProjects.Add(p); await db.SaveChangesAsync();
+            try
+            {
+                async Task<SharedProjectChange.Outcome> Append(string text, string? basis)
+                {
+                    using var connection = NewDb();
+                    var (_, hash) = SharedProjectChange.ValidateAndHash("README.md", "put", "utf8", text);
+                    var change = NewChange(p, u); change.Content = text; change.ContentHash = hash; change.BaseHash = basis;
+                    return (await SharedProjectWriter.AppendAsync(connection, change)).Outcome;
+                }
+                var first = await Task.WhenAll(Append("primera A", null), Append("primera B", null));
+                Assert.Single(first.Where(o => o == SharedProjectChange.Outcome.Accept));
+                Assert.Single(first.Where(o => o == SharedProjectChange.Outcome.Conflict));
+                var basis = await db.SharedProjectChanges.Where(c => c.ProjectId == p.Id).Select(c => c.ContentHash).SingleAsync();
+                var edits = await Task.WhenAll(Append("edición A", basis), Append("edición B", basis));
+                Assert.Single(edits.Where(o => o == SharedProjectChange.Outcome.Accept));
+                Assert.Single(edits.Where(o => o == SharedProjectChange.Outcome.Conflict));
+                Assert.Equal(2, await db.SharedProjectChanges.CountAsync(c => c.ProjectId == p.Id));
+            }
+            finally
+            {
+                db.SharedProjects.Remove(p); await db.SaveChangesAsync();
+                db.Users.Remove(u); await db.SaveChangesAsync();
+            }
+        }
+
+        [PostgresFact]
         public async Task LaBaseRechazaRutasYValoresInvalidos()
         {
             using var db = NewDb();

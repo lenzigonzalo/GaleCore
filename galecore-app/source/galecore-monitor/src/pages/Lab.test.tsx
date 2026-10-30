@@ -43,6 +43,7 @@ test('nuevo proyecto pide sólo el nombre; la estrategia llega después, por int
  fireEvent.click(screen.getByRole('button',{name:'Crear proyecto'}));
  const dialog=await screen.findByRole('dialog');
  expect(dialog.querySelector('select')).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'Crear nuevo'}));
  fireEvent.change(screen.getByRole('textbox',{name:'Nombre'}),{target:{value:'Idea QQQ'}});
  fireEvent.submit(dialog.querySelector('form')!);
  await waitFor(()=>expect(labRequest).toHaveBeenCalledWith('/workspaces',{label:'Idea QQQ'}));

@@ -168,24 +168,30 @@ def test_a_failed_share_of_an_already_shared_project_keeps_it(world):
     assert "p1" in fake.projects and (a / "workspaces/idea/.sync.json").exists()
 
 
-def test_sync_all_creates_the_folder_of_a_project_shared_with_me(world):
+def test_discovery_does_not_download_until_explicit_subscription(world):
     _fake, a, b, ca, cb = world
     write(a, "strategies/spy_ic/README.md", "estrategia")
     write(a, "strategies/spy_ic/workspace.json", json.dumps({"id": "spy_ic", "label": "SPY IC", "type": "strategy"}))
     sp.share(ca, a, "spy_ic", "gonza")
+    assert sp.list_shared(cb, b)["projects"][0]["local"] is None
+    assert sp.sync_all(cb, b)["projects"] == {}
+    assert not (b / "strategies/spy_ic").exists()
+    assert sp.subscribe(cb, b, "p1")["project"] == "spy_ic"
     out = sp.sync_all(cb, b)
-    assert out["created"] == ["spy_ic"] and out["errors"] == {} and out["projects"]["spy_ic"]["pulled"] == 2
+    assert out["errors"] == {} and out["projects"]["spy_ic"]["pulled"] == 2
     assert read(b, "strategies/spy_ic/README.md") == "estrategia"
     assert (b / "strategies/spy_ic/.sync.json").is_file()
 
 
-def test_sync_all_gives_the_descriptor_when_the_owner_had_none(world):
+def test_subscription_keeps_local_metadata_out_of_remote_files(world):
     _, a, b, ca, cb = world
     write(a, "workspaces/idea/README.md", "x")
     sp.share(ca, a, "idea", "gonza")
+    sp.subscribe(cb, b, "p1")
     sp.sync_all(cb, b)
-    meta = json.loads(read(b, "workspaces/idea/workspace.json"))
-    assert meta["id"] == "idea" and meta["type"] == "analysis" and meta["relative"] == "workspaces/idea"
+    state = sp.load_state(b / "workspaces/idea")
+    assert state["projectName"] == "idea" and state["kind"] == "workspace"
+    assert not (b / "workspaces/idea/workspace.json").exists()
 
 
 def test_sync_all_does_not_touch_a_local_folder_with_the_same_name(world):
@@ -193,8 +199,10 @@ def test_sync_all_does_not_touch_a_local_folder_with_the_same_name(world):
     write(a, "workspaces/idea/README.md", "de A")
     sp.share(ca, a, "idea", "gonza")
     write(b, "workspaces/idea/README.md", "mío")
-    out = sp.sync_all(cb, b)
-    assert out["created"] == [] and "ya existe" in out["skipped"][0]["reason"]
+    out = sp.subscribe(cb, b, "p1")
+    assert out["project"].startswith("idea_")
+    sp.sync_all(cb, b)
+    assert read(b, "workspaces/" + out["project"] + "/README.md") == "de A"
     assert read(b, "workspaces/idea/README.md") == "mío" and not (b / "workspaces/idea/.sync.json").exists()
 
 
@@ -204,6 +212,7 @@ def shared_pair(world, files=None):
     for rel, text in (files or {"README.md": "uno", "memory/n.md": "nota", "workspace.json": meta}).items():
         write(a, "workspaces/idea/" + rel, text)
     sp.share(ca, a, "idea", "gonza")
+    sp.subscribe(cb, b, "p1")
     sp.sync_all(cb, b)
     return fake, a / "workspaces/idea", b / "workspaces/idea", ca, cb
 
@@ -370,3 +379,101 @@ def test_cli_users_search_prints_json_and_skips_short_queries(world, monkeypatch
     with pytest.raises(SystemExit):
         cli._cmd_users(SimpleNamespace(query="e"))
     assert json.loads(capsys.readouterr().out) == {"users": []}
+
+
+def test_pause_is_durable_preserves_pending_edits_and_membership(world):
+    fake, da, db, ca, cb = shared_pair(world)
+    kb = db.parent.parent
+    cursor = sp.load_state(db)["lastSeq"]
+    sp.subscribe(cb, kb, "p1", enabled=False)
+    write(db, "README.md", "mi edición pendiente")
+    write(da, "README.md", "edición remota")
+    sp.sync_project(ca, da)
+    assert sp.sync_all(cb, kb)["projects"] == {}
+    assert sp.sync_project(cb, db)["paused"] is True
+    assert sp.load_state(db)["lastSeq"] == cursor
+    assert len(fake.projects["p1"]["members"]) == 2
+    assert sp.subscribe(cb, kb, "p1")["project"] == "idea"
+    assert sp.subscribe(cb, kb, "p1")["project"] == "idea"
+    result = sp.sync_project(cb, db)
+    assert result["conflicts"] and read(db, result["conflicts"][0]["copy"]) == "mi edición pendiente"
+
+
+def test_failed_apply_does_not_advance_cursor_or_push_and_can_resume(world, monkeypatch):
+    fake, da, db, ca, cb = shared_pair(world)
+    cursor = sp.load_state(db)["lastSeq"]
+    write(da, "README.md", "dos")
+    sp.sync_project(ca, da)
+    before = len(fake.changes["p1"])
+    original = sp._Run.write
+
+    def fail_write(self, path, data):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(sp._Run, "write", fail_write)
+    with pytest.raises(sp.SharedProjectError, match="queda pendiente"):
+        sp.sync_project(cb, db)
+    assert sp.load_state(db)["lastSeq"] == cursor
+    assert sp.load_state(db)["lastError"]
+    assert read(db, "README.md") == "uno"
+    assert len(fake.changes["p1"]) == before
+    monkeypatch.setattr(sp._Run, "write", original)
+    assert sp.sync_project(cb, db)["pulled"] == 1
+    assert read(db, "README.md") == "dos"
+    assert "lastError" not in sp.load_state(db)
+
+
+def test_other_user_or_api_cannot_rebind_or_sync_a_local_copy(world):
+    _, _, db, ca, cb = shared_pair(world)
+    before = (db / sp.SYNC_FILE).read_bytes()
+    with pytest.raises(sp.SharedProjectError, match="Confirmá Agregar"):
+        sp.sync_project(ca, db)
+    with pytest.raises(sp.SharedProjectError, match="otro usuario o entorno"):
+        sp.subscribe(ca, db.parent.parent, "p1")
+    cb.base_url = "http://other-environment.test"
+    with pytest.raises(sp.SharedProjectError, match="Confirmá Agregar"):
+        sp.sync_project(cb, db)
+    assert (db / sp.SYNC_FILE).read_bytes() == before
+
+
+def test_legacy_copy_requires_confirmation_and_keeps_its_cursor(world):
+    _, _, db, _, cb = shared_pair(world)
+    state = sp.load_state(db)
+    state.pop("context")
+    sp.save_state(db, state)
+    listing = sp.list_shared(cb, db.parent.parent)["projects"][0]
+    assert listing["needsConfirmation"] and not listing["subscribed"]
+    assert sp.sync_all(cb, db.parent.parent)["projects"] == {}
+    sp.subscribe(cb, db.parent.parent, "p1")
+    assert sp.load_state(db)["lastSeq"] == state["lastSeq"]
+
+
+def test_os_lock_prevents_simultaneous_cli_writes(world):
+    _, _, db, _, cb = shared_pair(world)
+    with sp.project_lock(db), pytest.raises(sp.SharedProjectError, match="sincronizando"):
+        sp.sync_project(cb, db)
+    assert sp.sync_project(cb, db)["pulled"] == 0
+
+
+def test_revoked_copy_is_visible_and_can_be_paused_without_deleting_it(world):
+    _, a, b, ca, cb = world
+    _, _, db, _, _ = shared_pair(world)
+    sp.unshare(ca, a, "idea", "gonza")
+    row = sp.list_shared(cb, b)["projects"][0]
+    assert row["removed"] and row["local"] == "idea"
+    sp.subscribe(cb, b, "p1", enabled=False)
+    assert read(db, "README.md") == "uno" and not sp.load_state(db)["subscribed"]
+
+
+def test_local_ids_are_unique_across_workspaces_and_strategies(world):
+    _, a, b, ca, cb = world
+    write(a, "strategies/idea/README.md", "remoto")
+    sp.share(ca, a, "idea", "gonza")
+    write(b, "workspaces/idea/README.md", "local")
+    row = sp.subscribe(cb, b, "p1")
+    assert row["project"].startswith("idea_")
+    target = sp.find_project(b, row["project"])
+    assert target.parent.name == "strategies"
+    sp.sync_project(cb, target)
+    assert read(target, "README.md") == "remoto"
+    assert read(b, "workspaces/idea/README.md") == "local"
