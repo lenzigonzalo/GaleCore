@@ -1,6 +1,12 @@
 # Qué cambió en cada versión de market_story y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: market_story
 versions:
+  - version: "1.1.1"
+    date: 2026-10-30
+    changes: >
+      WS-0069, vuelta Sol autorizada: copia literal de evidencia enlazada desde Archivos y límites de las
+      interpretaciones de valor agregado mensual y SKEW observadas en la regresión. Sin nuevas consultas ni capas.
+    feedback: []
   - version: "1.1.0"
     date: 2026-10-30
     changes: >
