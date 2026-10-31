@@ -281,6 +281,8 @@ test.each([false, true])('adjunto persistido o histórico se muestra al abrir y 
   serve('idle', [{ ...user(legacy ? 'mirá\n\nArchivos adjuntos (en la carpeta del proyecto): ' + path : 'mirá'), ...(legacy ? {} : { attachments: [path] }) }]);
   const view = render(<Lab onMonitor={() => {}} />);
   expect(await screen.findByRole('img', { name: 'captura.png' })).toHaveAttribute('src', 'blob:miniatura');
+  expect(screen.getByRole('link', { name: 'Abrir imagen original: captura.png' })).toHaveAttribute('href', 'blob:miniatura');
+  expect(screen.getByRole('link', { name: 'Abrir imagen original: captura.png' })).toHaveAttribute('target', '_blank');
   expect(screen.queryByText(/Archivos adjuntos/)).not.toBeInTheDocument();
   expect(labAttachment).toHaveBeenCalledWith('personal', path);
   fireEvent.click(screen.getByRole('button', { name: 'Editar' }));

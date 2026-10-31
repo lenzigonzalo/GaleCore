@@ -23,7 +23,7 @@ jest.mock('./pages/Biblioteca', () => ({Biblioteca:()=>null}));
 jest.mock('./pages/Lab', () => ({Lab:()=> <h1>Chat del usuario</h1>}));
 jest.mock('./pages/Admin', () => ({Admin:()=>null}));
 jest.mock('./pages/Rpf', () => ({Rpf:()=>null}));
-jest.mock('./pages/Shadow', () => ({Shadow:()=>null}));
+jest.mock('./pages/Shadow', () => ({Shadow:()=> <h1>Estrategias del usuario</h1>}));
 jest.mock('./pages/Agentes', () => ({Agentes:()=>null}));
 // Las interacciones internas reales se prueban en LiveWatchlist.test y Gex.test.
 jest.mock('./components/ticker/LiveWatchlist', () => ({LiveWatchlist:({onSelect}:any)=><>
@@ -32,6 +32,8 @@ jest.mock('./components/ticker/LiveWatchlist', () => ({LiveWatchlist:({onSelect}
 jest.mock('./pages/Gex', () => ({Gex:({indicator,onIndicatorChange}:any)=><section aria-label="Mercado activo">
   {mockUseGexStore(s=>s.selectedSymbol)} {indicator}<button onClick={()=>onIndicatorChange('price')}>Precio</button><button onClick={()=>onIndicatorChange('gamma')}>Gamma</button><button onClick={()=>onIndicatorChange('iv')}>IV</button>
 </section>}));
+
+beforeEach(() => sessionStorage.clear());
 
 test('watchlist abre Precio desde Inicio y Lab y conserva el indicador al cambiar ticker dentro de Mercado', async () => {
   mockUseGexStore.setState({selectedSymbol:null,tickers:['SPY','AAPL','QQQ'],rules:{} as any,rulesError:null});
@@ -53,6 +55,37 @@ test('watchlist abre Precio desde Inicio y Lab y conserva el indicador al cambia
   fireEvent.click(screen.getByRole('button',{name:'inicio'}));
   fireEvent.click(screen.getByRole('button',{name:'gex'}));
   expect(screen.getByLabelText('Mercado activo')).toHaveTextContent('gamma');
+});
+
+test('recargar conserva Chat y monta su contenido sin pasar por Inicio', async () => {
+  const first = render(<App/>);
+  await screen.findByText('Inicio del usuario');
+  fireEvent.click(screen.getByRole('button', { name: 'lab' }));
+  expect(screen.getByText('Chat del usuario')).toBeVisible();
+  first.unmount();
+  render(<App/>);
+  expect(await screen.findByText('Chat del usuario')).toBeVisible();
+  expect(screen.queryByText('Inicio del usuario')).not.toBeInTheDocument();
+});
+
+test('recargar Estrategias monta la pantalla restaurada', async () => {
+  sessionStorage.setItem('galecore:screen:test', 'estrategias');
+  render(<App/>);
+  expect(await screen.findByText('Estrategias del usuario')).toBeVisible();
+  expect(screen.queryByText('Inicio del usuario')).not.toBeInTheDocument();
+});
+
+test.each(['pantalla-inexistente', 'config'])('una pantalla guardada inválida (%s) vuelve a Inicio', async saved => {
+  sessionStorage.setItem('galecore:screen:test', saved);
+  render(<App/>);
+  expect(await screen.findByText('Inicio del usuario')).toBeVisible();
+});
+
+test('no restaura la pantalla guardada de otra persona', async () => {
+  sessionStorage.setItem('galecore:screen:other-user', 'lab');
+  render(<App/>);
+  expect(await screen.findByText('Inicio del usuario')).toBeVisible();
+  expect(screen.queryByText('Chat del usuario')).not.toBeInTheDocument();
 });
 
 test('el buscador conserva Gamma e IV dentro de Mercado y abre Precio desde otra pantalla', async () => {

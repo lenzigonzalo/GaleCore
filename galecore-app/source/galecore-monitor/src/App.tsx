@@ -5,6 +5,7 @@ import { supabase, getSession, signOut } from './auth/supabase';
 import { LiveWatchlist } from './components/ticker/LiveWatchlist';
 import { StatusBar } from './components/layout/StatusBar';
 import type { Tab } from './components/layout/TabNav';
+import { DESTINATIONS } from './components/layout/navigation';
 import { Resumen } from './pages/Resumen';
 import { Macro } from './pages/Macro';
 import { Biblioteca } from './pages/Biblioteca';
@@ -31,16 +32,22 @@ import { fetchBalances, fetchPositions, describeAccountError } from './api/accou
 
 interface DashboardProps {
   onLogout: () => void;
+  userId: string;
 }
 
-function Dashboard({ onLogout }: DashboardProps) {
-  // Siempre arranca en Inicio (owner 17/10): la dirección no guarda en qué pantalla quedaste.
-  const [tab, setCurrentTab] = useState<Tab>('inicio');
+function Dashboard({ onLogout, userId }: DashboardProps) {
+  // F5 conserva la pantalla en esta pestaña y para esta persona (owner 31/10).
+  const screenKey = 'galecore:screen:' + userId;
+  const [tab, setCurrentTab] = useState<Tab>(() => {
+    try { const saved = sessionStorage.getItem(screenKey); return saved === 'admin' ? 'admin' : DESTINATIONS.find(item => item.id === saved)?.id || 'inicio'; }
+    catch { return 'inicio'; }
+  });
+  useEffect(() => { try { sessionStorage.setItem(screenKey, tab); } catch { /* sin almacenamiento */ } }, [screenKey, tab]);
   useEffect(() => { if (window.location.search) window.history.replaceState(null, '', window.location.pathname); }, []);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [setup, setSetup] = useState(false);
-  const [strategiesVisited, setStrategiesVisited] = useState(false);
-  const [labVisited, setLabVisited] = useState(false);
+  const [strategiesVisited, setStrategiesVisited] = useState(tab === 'estrategias');
+  const [labVisited, setLabVisited] = useState(tab === 'lab');
   const [selectedSpec, setSelectedSpec] = useState<string | null>(null);
   const [projectRequest, setProjectRequest] = useState<{ id: string; sequence: number }>();
   const [marketIndicator, setMarketIndicator] = useState<MarketIndicator>('gamma');
@@ -246,7 +253,7 @@ function App() {
   // La `key` es la persona: si cambia, el tablero se remonta entero y se vuelve a preguntar todo
   // con la sesión nueva. No es una optimización — es lo que garantiza que nada del anterior quede
   // en pantalla y que lo del nuevo llegue.
-  return <Dashboard key={sessionUserId ?? 'anon'} onLogout={handleLogout} />;
+  return <Dashboard key={sessionUserId ?? 'anon'} userId={sessionUserId ?? 'anon'} onLogout={handleLogout} />;
 }
 
 

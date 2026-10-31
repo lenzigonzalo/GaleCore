@@ -26,9 +26,13 @@ function Attachment({ project, path }: { project: string; path: string }) {
   }, [project, path]);
   if (error) return <span role="status">No se pudo abrir {name}.</span>;
   if (!url) return <span>Cargando {name}…</span>;
-  return <a href={url} target="_blank" rel="noreferrer" {...(!image ? { download: name } : {})}>
-    {image ? <img src={url} alt={name} onError={() => setError(true)}/> : name}
-  </a>;
+  if (!image) return <a href={url} download={name}>{name}</a>;
+  return <div className="lab-message-image">
+    <a className="lab-image-preview" href={url} target="_blank" rel="noreferrer" title="Abrir imagen original">
+      <img src={url} alt={name} onError={() => setError(true)}/>
+    </a>
+    <a className="lab-image-open" href={url} target="_blank" rel="noreferrer" aria-label={'Abrir imagen original: ' + name}>Abrir tamaño original ↗</a>
+  </div>;
 }
 
 export function LabMessageAttachments({ message, project }: { message: ChatMessage; project: string }) {
