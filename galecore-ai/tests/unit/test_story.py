@@ -93,6 +93,12 @@ def test_the_calendar_asks_for_the_releases_that_matter_in_the_window():
     assert fomc == [{"Years": "2025,2026,2027"}]
 
 
+def test_recent_fomc_survives_after_meeting_without_becoming_a_verified_result():
+    pack = asyncio.run(story.gather(FakeDispatcher(), today=date(2026, 10, 30)))
+    assert pack["calendar"]["recent_fomc"] == [{"start": "2026-10-27", "end": "2026-10-28"}]
+    assert pack["calendar"]["next_fomc"] == []
+
+
 def test_what_fails_is_declared_missing_never_filled():
     pack = gather(fail={"compute.gex_analysis", "HYG"})
     assert "gex" not in pack["options"] and "HYG" not in pack["prices"]

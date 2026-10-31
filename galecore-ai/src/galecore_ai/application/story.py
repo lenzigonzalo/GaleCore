@@ -192,6 +192,9 @@ async def gather(dispatcher, *, symbol: str = "SPY", today: date | None = None) 
     if fomc is not None:
         upcoming = [m for m in fomc.get("data") or [] if (m.get("end") or "") >= today.isoformat()]
         calendar["next_fomc"] = upcoming[:2]
+        calendar["recent_fomc"] = [m for m in fomc.get("data") or []
+                                   if (today - timedelta(days=RECENT_DAYS)).isoformat()
+                                   <= (m.get("end") or "") < today.isoformat()]
     pack = {"symbol": symbol, "gathered_at": datetime.now(UTC).isoformat(), "prices": prices,
             "volatility": {**vol, **({"term": term} if term else {})}, "options": options, "calendar": calendar,
             "missing": missing}

@@ -66,8 +66,9 @@ Estos pasos son para la historia profunda y las corridas programadas; el resumen
    variación del VIX, su estructura (VIX9D/VIX y VIX3M/VIX: debajo de 1 y arriba de 1 es la forma calma, al revés es
    estrés), VVIX; [opciones] skew de puts 25-delta contra su umbral, IV contra volatilidad realizada (a quién le pagan),
    IV rank (con la historia corta de GaleCore: decirlo), régimen de GEX y spot contra gamma cero si está; [calendario]
-   datos macro y FOMC dentro de la ventana y qué pilar puede mover cada uno (`recent_releases` son los de la última
-   semana, ya reaccionados). Un evento se nombra sólo con evidencia del calendario consultado. Por pilar, un `fact` con los
+   datos macro y FOMC dentro de la ventana y qué pilar puede mover cada uno (`recent_releases` y `recent_fomc` son las
+   fechas de la última semana, ya reaccionadas; el calendario no verifica publicación, resultado ni causa). Un evento se
+   nombra sólo con evidencia del calendario consultado. Por pilar, un `fact` con los
    números y una `interpretation` con lo que agrega. Si los pilares no coinciden, decirlo: la divergencia suele ser
    la historia.
 4. **Qué la mueve hoy** (`drivers`): un `fact` y una `interpretation` por ítem, cada texto empieza con [qué lo
