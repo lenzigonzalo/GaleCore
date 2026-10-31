@@ -1,6 +1,16 @@
 import apiClient from './client';
-import { fetchEquityCandles, fetchMarketDataBatch } from './marketdata';
+import { fetchEquityCandles, fetchMarketDataBatch, fetchPremarketBatch } from './marketdata';
 jest.mock('./client', () => ({ __esModule: true, default: { get: jest.fn() } }));
+
+test('premarket usa endpoint propio y divide el universo por límite de 30', async () => {
+  (apiClient.get as jest.Mock).mockClear();
+  (apiClient.get as jest.Mock).mockResolvedValue({ data: [] });
+  const symbols = Array.from({ length: 31 }, (_, i) => 'S' + i);
+  expect(await fetchPremarketBatch(symbols)).toEqual([]);
+  expect(apiClient.get).toHaveBeenCalledTimes(2);
+  expect(apiClient.get).toHaveBeenNthCalledWith(1, '/App/GaleCore/Market/Premarket', { params: { symbols: symbols.slice(0, 30).join(',') } });
+  expect(apiClient.get).toHaveBeenNthCalledWith(2, '/App/GaleCore/Market/Premarket', { params: { symbols: 'S30' } });
+});
 
 test('normaliza el campo prev-close publicado por GaleCore para calcular Chg', async () => {
   (apiClient.get as jest.Mock).mockResolvedValue({ data: { data: { items: [

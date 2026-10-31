@@ -4,6 +4,30 @@ import {
   SymbolSearchApiResponse, SymbolSearchResult,
 } from '../types/api';
 
+export interface PremarketQuote {
+  symbol: string;
+  price: number | null;
+  previousClose: number | null;
+  previousCloseDate?: string | null;
+  changePercent: number | null;
+  timestamp: string | null;
+  session: 'premarket' | 'unavailable';
+  sessionDate: string | null;
+  source: string;
+  freshness: 'fresh' | 'stale' | 'unavailable';
+  reason: string | null;
+}
+
+export async function fetchPremarketBatch(symbols: string[]): Promise<PremarketQuote[]> {
+  const batches: Promise<PremarketQuote[]>[] = [];
+  for (let start = 0; start < symbols.length; start += 30) {
+    batches.push(apiClient.get<PremarketQuote[]>('/App/GaleCore/Market/Premarket', {
+      params: { symbols: symbols.slice(start, start + 30).join(',') },
+    }).then(({ data }) => data));
+  }
+  return (await Promise.all(batches)).flat();
+}
+
 /**
  * Busca símbolos por texto contra el catálogo de Tastytrade.
  *

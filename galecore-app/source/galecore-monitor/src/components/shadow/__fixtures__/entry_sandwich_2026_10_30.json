@@ -1,0 +1,173 @@
+{
+  "source": "GET Dev7001 2026-10-30, WS-0069-shadow-recovery evidence",
+  "evaluations": [
+    {
+      "evaluationId": "9cd9b6b8-fc4c-4cf5-a996-565e93d5ce05",
+      "instanceId": "8868018d-bb2f-45d0-835d-e76af0033023",
+      "symbol": "SPX",
+      "overallPass": true,
+      "gateResults": [
+        {
+          "gateId": "vix_below_24",
+          "label": "VIX < 24",
+          "status": "PASS",
+          "value": 21.27,
+          "threshold": 24.0,
+          "operator": "LT",
+          "onFail": "NO_TRADE"
+        },
+        {
+          "gateId": "sin_fomc_hoy",
+          "label": "FOMC no existe (hoy)",
+          "status": "PASS",
+          "value": 0.0,
+          "threshold": null,
+          "operator": "EVENT_NOT_EXISTS",
+          "onFail": "NO_TRADE"
+        }
+      ],
+      "evaluatedAt": "2026-10-30T17:46:01.9577934Z"
+    },
+    {
+      "evaluationId": "cc4b996d-0fde-4d4e-9fd4-4a1dd57f8967",
+      "instanceId": "8868018d-bb2f-45d0-835d-e76af0033023",
+      "symbol": "SPX",
+      "overallPass": true,
+      "gateResults": [
+        {
+          "gateId": "vix_below_24",
+          "label": "VIX < 24",
+          "status": "PASS",
+          "value": 21.39,
+          "threshold": 24.0,
+          "operator": "LT",
+          "onFail": "NO_TRADE"
+        },
+        {
+          "gateId": "sin_fomc_hoy",
+          "label": "FOMC no existe (hoy)",
+          "status": "PASS",
+          "value": 0.0,
+          "threshold": null,
+          "operator": "EVENT_NOT_EXISTS",
+          "onFail": "NO_TRADE"
+        }
+      ],
+      "evaluatedAt": "2026-10-30T17:47:10.0787704Z"
+    },
+    {
+      "evaluationId": "238a0565-8e60-42bf-8156-e69bc813b6e1",
+      "instanceId": "8868018d-bb2f-45d0-835d-e76af0033023",
+      "symbol": "SPX",
+      "overallPass": true,
+      "gateResults": [
+        {
+          "gateId": "vix_below_24",
+          "label": "VIX < 24",
+          "status": "PASS",
+          "value": 21.4,
+          "threshold": 24.0,
+          "operator": "LT",
+          "onFail": "NO_TRADE"
+        },
+        {
+          "gateId": "sin_fomc_hoy",
+          "label": "FOMC no existe (hoy)",
+          "status": "PASS",
+          "value": 0.0,
+          "threshold": null,
+          "operator": "EVENT_NOT_EXISTS",
+          "onFail": "NO_TRADE"
+        }
+      ],
+      "evaluatedAt": "2026-10-30T17:48:17.5178091Z"
+    },
+    {
+      "evaluationId": "46a891ac-57c5-4dad-a0fd-8b25dc5c77e4",
+      "instanceId": "8868018d-bb2f-45d0-835d-e76af0033023",
+      "symbol": "SPX",
+      "overallPass": false,
+      "gateResults": [
+        {
+          "gateId": "vix_below_24",
+          "label": "VIX < 24",
+          "status": "NO_DATA",
+          "value": null,
+          "threshold": 24.0,
+          "operator": "LT",
+          "onFail": "NO_TRADE"
+        },
+        {
+          "gateId": "sin_fomc_hoy",
+          "label": "FOMC no existe (hoy)",
+          "status": "PASS",
+          "value": 0.0,
+          "threshold": null,
+          "operator": "EVENT_NOT_EXISTS",
+          "onFail": "NO_TRADE"
+        }
+      ],
+      "evaluatedAt": "2026-10-30T17:49:24.9925779Z"
+    }
+  ],
+  "discards": [
+    {
+      "eventId": "0e5eba71-59e8-4380-811e-3d329d28c046",
+      "instanceId": "8868018d-bb2f-45d0-835d-e76af0033023",
+      "eventType": "ENTRY_SKIPPED",
+      "symbol": "SPX",
+      "payload": {
+        "reason": "tope por apuesta (SPX unknown 2026-W44): abierto 0.00 + nueva 130.00 USD supera el tope de 9.00 USD",
+        "limit": "max_bet",
+        "candidate_id": "54828655-52ea-4f3b-bb17-e07d56d4202a",
+        "max_risk": 130.0
+      },
+      "timestamp": "2026-10-30T17:46:01.9577934Z"
+    },
+    {
+      "eventId": "57825c47-aad3-496f-adc5-7e568e416a18",
+      "instanceId": "8868018d-bb2f-45d0-835d-e76af0033023",
+      "eventType": "ENTRY_SKIPPED",
+      "symbol": "SPX",
+      "payload": {
+        "reason": "tope por apuesta (SPX unknown 2026-W44): abierto 0.00 + nueva 130.00 USD supera el tope de 9.00 USD",
+        "limit": "max_bet",
+        "candidate_id": "daa4f717-f76a-471e-8c1c-7f30f7800223",
+        "max_risk": 130.0
+      },
+      "timestamp": "2026-10-30T17:47:10.0787704Z"
+    },
+    {
+      "eventId": "adbef037-0c63-4c9d-ac22-8d348d557d85",
+      "instanceId": "8868018d-bb2f-45d0-835d-e76af0033023",
+      "eventType": "ENTRY_SKIPPED",
+      "symbol": "SPX",
+      "payload": {
+        "reason": "tope por apuesta (SPX unknown 2026-W44): abierto 0.00 + nueva 130.00 USD supera el tope de 9.00 USD",
+        "limit": "max_bet",
+        "candidate_id": "cfd17e55-c86d-4186-bd31-1a2e868a67b9",
+        "max_risk": 130.0
+      },
+      "timestamp": "2026-10-30T17:48:17.5178091Z"
+    },
+    {
+      "eventId": "66790663-1d71-438f-8c8e-f8b727763a3d",
+      "instanceId": "8868018d-bb2f-45d0-835d-e76af0033023",
+      "eventType": "GATES_NOT_PASSED",
+      "symbol": "SPX",
+      "payload": {
+        "evaluation_id": "46a891ac-57c5-4dad-a0fd-8b25dc5c77e4",
+        "gates": [
+          {
+            "gate_id": "vix_below_24",
+            "status": "NO_DATA",
+            "value": null,
+            "operator": "LT",
+            "threshold": 24.0
+          }
+        ]
+      },
+      "timestamp": "2026-10-30T17:49:24.9925779Z"
+    }
+  ]
+}

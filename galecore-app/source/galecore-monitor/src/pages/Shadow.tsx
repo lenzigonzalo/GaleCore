@@ -1,3 +1,4 @@
+import { discardLabel, discardReason } from '../components/shadow/discardPresentation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { labRequest, WorkspaceProject, WorkspaceState } from '../api/lab';
 import { useAppConfigStore } from '../store/useAppConfigStore';
@@ -16,7 +17,7 @@ import {
 } from '../api/shadow';
 import type { StrategySetting } from '../api/shadow';
 import {
-  PerformanceSummary, Metric, DISCARD_LABELS, LIMIT_LABELS, ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics,
+  PerformanceSummary, Metric, DISCARD_LABELS, ShadowEvaluation, ShadowEvent, ShadowInstance, ShadowPosition, ShadowStatus, SpecVersionMetrics,
 } from '../types/shadow';
 
 /**
@@ -54,24 +55,7 @@ export function pickInstance(instances: ShadowInstance[]): ShadowInstance | null
   return instances.find((i) => i.lifecycleState === 'RUNNING') ?? instances[instances.length - 1] ?? null;
 }
 
-/** Por qué se descartó, tal como lo dejó el runtime en el evento. */
-/** Motivo de un descarte: si el evento dice qué límite frenó la entrada, ese; si no, el tipo de evento. */
-export function discardLabel(evt: ShadowEvent): string {
-  const limit = evt.payload?.limit;
-  return typeof limit === 'string' && LIMIT_LABELS[limit] ? LIMIT_LABELS[limit] : DISCARD_LABELS[evt.eventType] ?? evt.eventType;
-}
-
-export function discardReason(evt: ShadowEvent): string {
-  const p = evt.payload ?? {};
-  if (Array.isArray(p.gates)) {
-    return (p.gates as Array<Record<string, unknown>>)
-      .map((g) => `${g.gate_id}: ${g.status}${g.value !== null && g.value !== undefined ? ` (${g.value} ${g.operator} ${g.threshold})` : ''}`)
-      .join(' · ');
-  }
-  if (typeof p.reason === 'string') return p.reason;
-  if (Array.isArray(p.errors)) return (p.errors as unknown[]).join(' · ');
-  return 'sin motivo registrado';
-}
+export { discardLabel, discardReason } from '../components/shadow/discardPresentation';
 
 interface Loaded {
   status: ShadowStatus;
@@ -243,7 +227,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
               {cell(row.realizedPnl, panelUsd, true)}{cell(row.winRate, rate)}<td className="numeric">{row.tradesClosed || ''}</td>{cell(row.maxDrawdown, amount)}
               <td className="strategy-actions" onClick={event => event.stopPropagation()}>{rowAction(row)}</td>
             </tr>)}
-            {countIn(currentStage) === 0 && <tr><td colSpan={9} className="strategy-empty">Ninguna estrategia en esta etapa.</td></tr>}
+            {countIn(currentStage) === 0 && <tr><td colSpan={9} className="strategy-empty">{error || statusError || settingsError ? 'No se pudo comprobar qué estrategias hay en esta etapa.' : 'Ninguna estrategia en esta etapa.'}</td></tr>}
           </tbody>
           {currentStage === 'SHADOW' && designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={9}>En diseño</th></tr>
             {designOnly.map(project => <tr key={project.id} className="strategy-row" tabIndex={0} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.key === 'Enter') setSpec(project.strategyName); }}>

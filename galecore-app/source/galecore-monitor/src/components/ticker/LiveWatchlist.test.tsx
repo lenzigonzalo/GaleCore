@@ -8,6 +8,7 @@ import { fetchMarketDataBatch, searchSymbols } from '../../api/marketdata';
 jest.mock('../../api/gex',()=>({fetchGexRules:jest.fn(),fetchGexAnalysis:jest.fn()}));
 jest.mock('../../api/marketdata',()=>({fetchMarketDataBatch:jest.fn(),searchSymbols:jest.fn()}));
 jest.mock('../../api/space',()=>({fetchSpace:jest.fn(async()=>({items:[],shared:[]})),saveSpaceItem:jest.fn(async()=>undefined)}));
+jest.mock('../../api/account',()=>({fetchStrikeAlerts:async()=>({alerts:[],unevaluated:[]})}));
 import { fetchSpace, saveSpaceItem } from '../../api/space';
 const batch=fetchMarketDataBatch as jest.Mock;
 const props={open:true,enabled:true,onClose:jest.fn(),onSelect:jest.fn(),socketStatus:'connected' as const,subscribeSymbol:jest.fn(),unsubscribeSymbol:jest.fn()};

@@ -4,6 +4,8 @@ import { LiveWatchlist } from './LiveWatchlist';
 import { useGexStore } from '../../store/useGexStore';
 jest.mock('../../api/gex', () => ({ fetchGexRules: jest.fn(), fetchGexAnalysis: jest.fn() }));
 jest.mock('./TickerGrid', () => ({ TickerGrid: () => <div>Cotizaciones</div> }));
+jest.mock('../../api/space', () => ({ fetchSpace: async () => ({ items: [] }), saveSpaceItem: jest.fn() }));
+jest.mock('../../api/account', () => ({ fetchStrikeAlerts: async () => ({ alerts: [], unevaluated: [] }) }));
 
 test('ajusta el panel con límites y conserva su ancho al contraer y volver a abrir', () => {
   useGexStore.setState({ rules: {} as any, rulesError: null, tickers: [] });
