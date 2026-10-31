@@ -51,6 +51,8 @@ def _existing(kb: Path, need: str, kind: str) -> Path | None:
     exact = gap_dir(kb) / f"{_slug(need)}.json"
     if exact.exists():
         return exact
+    if kind == "api_error":                 # one gap per capability: «option_greeks» is not «option_chains» reworded
+        return None
     for f in sorted(gap_dir(kb).glob("*.json")) if gap_dir(kb).exists() else []:
         try:
             other = json.loads(f.read_text(encoding="utf-8"))

@@ -52,6 +52,13 @@ def test_gap_log_merges_same_need_worded_differently(tmp_path):
     assert other["count"] == 1 and len(gap_log.items(tmp_path)) == 2
 
 
+def test_api_errors_of_different_capabilities_are_not_merged(tmp_path):
+    chains = gap_log.add(tmp_path, need="Error de API en market_data.option_chains", kind="api_error")
+    greeks = gap_log.add(tmp_path, need="Error de API en market_data.option_greeks", kind="api_error")
+    again = gap_log.add(tmp_path, need="Error de API en market_data.option_greeks", kind="api_error")
+    assert chains["count"] == 1 and greeks["id"] != chains["id"] and again["count"] == 2
+
+
 def test_gap_log_rejects_unknown_kind(tmp_path):
     try:
         gap_log.add(tmp_path, need="x", kind="web")
