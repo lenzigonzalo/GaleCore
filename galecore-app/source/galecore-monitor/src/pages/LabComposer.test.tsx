@@ -265,7 +265,7 @@ describe('reintentar y reanudar', () => {
 });
 
 
-test('imagen sola se env?a, sin texto obligatorio', async () => {
+test('imagen sola se envía, sin texto obligatorio', async () => {
   serve('idle', [user('hola')]);
   render(<Lab onMonitor={() => {}} />);
   const input = await box();
@@ -276,17 +276,17 @@ test('imagen sola se env?a, sin texto obligatorio', async () => {
   await waitFor(() => expect(posted('/messages')[0][1]).toMatchObject({ text: '', attachments: ['adjuntos/1-captura.png'] }));
 });
 
-test.each([false, true])('adjunto persistido o hist?rico se muestra al abrir y se conserva al editar (%s)', async legacy => {
+test.each([false, true])('adjunto persistido o histórico se muestra al abrir y se conserva al editar (%s)', async legacy => {
   const path = 'adjuntos/1-captura.png';
-  serve('idle', [{ ...user(legacy ? 'mir?\n\nArchivos adjuntos (en la carpeta del proyecto): ' + path : 'mir?'), ...(legacy ? {} : { attachments: [path] }) }]);
+  serve('idle', [{ ...user(legacy ? 'mirá\n\nArchivos adjuntos (en la carpeta del proyecto): ' + path : 'mirá'), ...(legacy ? {} : { attachments: [path] }) }]);
   const view = render(<Lab onMonitor={() => {}} />);
   expect(await screen.findByRole('img', { name: 'captura.png' })).toHaveAttribute('src', 'blob:miniatura');
   expect(screen.queryByText(/Archivos adjuntos/)).not.toBeInTheDocument();
   expect(labAttachment).toHaveBeenCalledWith('personal', path);
   fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
-  expect(await box()).toHaveValue('mir?');
+  expect(await box()).toHaveValue('mirá');
   fireEvent.click(screen.getByRole('button', { name: 'Enviar mensaje' }));
-  await waitFor(() => expect(posted('/messages')[0][1]).toMatchObject({ text: 'mir?', attachments: [path], replace: true }));
+  await waitFor(() => expect(posted('/messages')[0][1]).toMatchObject({ text: 'mirá', attachments: [path], replace: true }));
   view.unmount();
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:miniatura');
 });
@@ -309,7 +309,7 @@ test('reintentar conserva la imagen sola', async () => {
   serve('failed', [{ ...user(''), attachments: [path] }]);
   (labRequest as jest.Mock).mockImplementation(async (url: string, body?: object) => {
     if (url === '/workspaces') return { projects, chats: [{ id: 'chat-1', project: 'personal', provider: 'claude', title: 'Imagen', state: 'failed' }], providers: [{ id: 'claude', label: 'Claude', installed: true }] };
-    return { id: 'chat-1', project: 'personal', provider: 'claude', state: 'failed', activity: '', error: 'Fall? el motor', messages: [{ ...user(''), attachments: [path] }] };
+    return { id: 'chat-1', project: 'personal', provider: 'claude', state: 'failed', activity: '', error: 'Falló el motor', messages: [{ ...user(''), attachments: [path] }] };
   });
   render(<Lab onMonitor={() => {}} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
@@ -317,15 +317,15 @@ test('reintentar conserva la imagen sola', async () => {
 });
 
 test('adjunto ausente deja un estado visible', async () => {
-  serve('idle', [{ ...user('mir?'), attachments: ['adjuntos/1-ausente.png'] }]);
+  serve('idle', [{ ...user('mirá'), attachments: ['adjuntos/1-ausente.png'] }]);
   (labAttachment as jest.Mock).mockRejectedValue(new Error('No existe'));
   render(<Lab onMonitor={() => {}} />);
   expect(await screen.findByText('No se pudo abrir ausente.png.')).toBeInTheDocument();
 });
 
 
-test.each(['bot?n', 'Escape'])('cancelar edici?n limpia adjuntos mediante %s', async how => {
-  serve('idle', [{ ...user('mir?'), attachments: ['adjuntos/1-captura.png'] }]);
+test.each(['botón', 'Escape'])('cancelar edición limpia adjuntos mediante %s', async how => {
+  serve('idle', [{ ...user('mirá'), attachments: ['adjuntos/1-captura.png'] }]);
   render(<Lab active onMonitor={() => {}} />);
   fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
   expect(screen.getByText('captura.png')).toBeInTheDocument();
@@ -333,4 +333,19 @@ test.each(['bot?n', 'Escape'])('cancelar edici?n limpia adjuntos mediante %s', a
   else fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
   expect(screen.queryByText('captura.png')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Enviar mensaje' })).toBeDisabled();
+});
+
+
+test('tras un corte del Lab, recuperar el chat elimina el error de conexión', async () => {
+  serve('idle', [user('conversación conservada')]);
+  const normal = (labRequest as jest.Mock).getMockImplementation()!;
+  let failRead = true;
+  (labRequest as jest.Mock).mockImplementation(async (path: string, body?: object) => {
+    if (path === '/chats/chat-1' && failRead) { failRead = false; throw new Error('Servicio reiniciando'); }
+    return normal(path, body);
+  });
+  render(<Lab onMonitor={() => {}} />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo recuperar esta conversación.');
+  expect(await screen.findByText('conversación conservada', {}, { timeout: 5000 })).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
 });

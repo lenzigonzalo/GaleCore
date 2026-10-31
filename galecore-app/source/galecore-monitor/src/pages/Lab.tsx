@@ -172,7 +172,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   useEffect(() => {
     if(!chatId) { setChat(null); return; }
     let active = true;
-    const poll = async () => { try { const c = await labRequest<WorkspaceChat>('/chats/' + chatId); if(active) setChat(c); } catch { if(active) setError('No se pudo recuperar esta conversación.'); } };
+    const poll = async () => { try { const c = await labRequest<WorkspaceChat>('/chats/' + chatId); if(active) { setChat(c); setError(old => old === 'No se pudo recuperar esta conversación.' ? '' : old); } } catch { if(active) setError('No se pudo recuperar esta conversación.'); } };
     poll(); const timer = window.setInterval(poll, 1000);
     return () => { active = false; window.clearInterval(timer); };
   }, [chatId]);
