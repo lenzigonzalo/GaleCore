@@ -647,8 +647,19 @@ def _commit_knowledge(kb: KnowledgeBase, paths: list[Path], message: str) -> str
     add = subprocess.run(["git", "-C", str(kb.base), "add", "--", *rel], capture_output=True, check=False)
     com = subprocess.run(["git", "-C", str(kb.base), "commit", "-q", "-m", message, "--", *rel],
                          capture_output=True, check=False)
-    return "committed" if add.returncode == 0 and com.returncode == 0 else \
-        f"commit failed: {(com.stderr or add.stderr).decode(errors='replace').strip()[:200]}"
+    if add.returncode != 0 or com.returncode != 0:
+        return f"commit failed: {(com.stderr or add.stderr).decode(errors='replace').strip()[:200]}"
+    if subprocess.run(["git", "-C", str(kb.base), "remote", "get-url", "origin"],
+                      capture_output=True, check=False).returncode != 0:
+        return "committed"
+    try:
+        pushed = subprocess.run(["git", "-C", str(kb.base), "push", "-q", "origin", "main"],
+                                capture_output=True, check=False, timeout=50)
+    except subprocess.TimeoutExpired:
+        return "committed; push failed: timeout after 50 s"
+    if pushed.returncode != 0:
+        return f"committed; push failed: {pushed.stderr.decode(errors='replace').strip()[:200]}"
+    return "committed and pushed"
 
 
 def _append_tidy(kb: KnowledgeBase, latest: Path) -> None:
