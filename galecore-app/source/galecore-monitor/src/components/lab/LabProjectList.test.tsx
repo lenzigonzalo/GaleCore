@@ -228,8 +228,7 @@ test('failed account read keeps favorites local and never overwrites remote pref
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 650)); });
   expect(saved).toHaveLength(0);
   expect(JSON.parse(localStorage.getItem(storage)!).favorites).toContain('p:spy');
-  expect(screen.getAllByRole('status')).toHaveLength(1);
-  expect(screen.getByRole('status')).toHaveTextContent(/sincronizar/);
+  expect(screen.queryByRole('status')).toBeNull();
 });
 
 test('marca como compartido el proyecto que lo está y sólo ese', () => {
