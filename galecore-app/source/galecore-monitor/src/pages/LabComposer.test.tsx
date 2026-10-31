@@ -1,12 +1,14 @@
+jest.mock('../api/client', () => ({ __esModule: true, default: { get: jest.fn().mockResolvedValue({ data: { items: [] } }) } }));
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Lab } from './Lab';
-import { labRequest, labUpload } from '../api/lab';
+import { labRequest, labUpload, labAttachment } from '../api/lab';
 
 jest.mock('../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: [], shared: [] }), saveSpaceItem: () => Promise.resolve() }));
 jest.mock('../api/lab', () => ({
   labRequest: jest.fn(),
   labUpload: jest.fn(),
+  labAttachment: jest.fn(),
 }));
 jest.mock('./LabShadow', () => ({ LabShadow: () => <div>Seguimiento</div> }));
 jest.mock('../components/lab/LabShell', () => ({ LabShell: () => <div>Terminal</div> }));
@@ -29,6 +31,7 @@ beforeEach(() => {
   global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver;
   sessionStorage.clear(); sessionStorage.setItem('galecore:lab:chat', 'chat-1'); jest.clearAllMocks();
   Element.prototype.scrollIntoView = jest.fn();
+  (labAttachment as jest.Mock).mockResolvedValue(new Blob(['image'], { type: 'image/png' }));
   (labUpload as jest.Mock).mockImplementation(async (_project: string, file: File) => ({ path: 'adjuntos/1-' + file.name, name: file.name, size: 1 }));
   (URL as any).createObjectURL = jest.fn(() => 'blob:miniatura'); (URL as any).revokeObjectURL = jest.fn();
 });
@@ -259,4 +262,75 @@ describe('reintentar y reanudar', () => {
       await waitFor(() => expect(posted('/messages')).toHaveLength(1));
     } finally { jest.useRealTimers(); }
   });
+});
+
+
+test('imagen sola se env?a, sin texto obligatorio', async () => {
+  serve('idle', [user('hola')]);
+  render(<Lab onMonitor={() => {}} />);
+  const input = await box();
+  expect(screen.getByRole('button', { name: 'Enviar mensaje' })).toBeDisabled();
+  fireEvent.paste(input, { clipboardData: { files: [new File(['x'], 'captura.png', { type: 'image/png' })] } });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Enviar mensaje' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: 'Enviar mensaje' }));
+  await waitFor(() => expect(posted('/messages')[0][1]).toMatchObject({ text: '', attachments: ['adjuntos/1-captura.png'] }));
+});
+
+test.each([false, true])('adjunto persistido o hist?rico se muestra al abrir y se conserva al editar (%s)', async legacy => {
+  const path = 'adjuntos/1-captura.png';
+  serve('idle', [{ ...user(legacy ? 'mir?\n\nArchivos adjuntos (en la carpeta del proyecto): ' + path : 'mir?'), ...(legacy ? {} : { attachments: [path] }) }]);
+  const view = render(<Lab onMonitor={() => {}} />);
+  expect(await screen.findByRole('img', { name: 'captura.png' })).toHaveAttribute('src', 'blob:miniatura');
+  expect(screen.queryByText(/Archivos adjuntos/)).not.toBeInTheDocument();
+  expect(labAttachment).toHaveBeenCalledWith('personal', path);
+  fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+  expect(await box()).toHaveValue('mir?');
+  fireEvent.click(screen.getByRole('button', { name: 'Enviar mensaje' }));
+  await waitFor(() => expect(posted('/messages')[0][1]).toMatchObject({ text: 'mir?', attachments: [path], replace: true }));
+  view.unmount();
+  expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:miniatura');
+});
+
+test('cola acepta imagen sola', async () => {
+  serve('running', [user('hola')]);
+  render(<Lab onMonitor={() => {}} />);
+  const input = await box();
+  fireEvent.paste(input, { clipboardData: { files: [new File(['x'], 'captura.png', { type: 'image/png' })] } });
+  await screen.findByText('captura.png');
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(await screen.findByLabelText('Mensajes en cola')).toBeInTheDocument();
+  fireEvent.keyDown(input, { key: 'x', ctrlKey: true });
+  expect(await screen.findByText('captura.png')).toBeInTheDocument();
+});
+
+
+test('reintentar conserva la imagen sola', async () => {
+  const path = 'adjuntos/1-captura.png';
+  serve('failed', [{ ...user(''), attachments: [path] }]);
+  (labRequest as jest.Mock).mockImplementation(async (url: string, body?: object) => {
+    if (url === '/workspaces') return { projects, chats: [{ id: 'chat-1', project: 'personal', provider: 'claude', title: 'Imagen', state: 'failed' }], providers: [{ id: 'claude', label: 'Claude', installed: true }] };
+    return { id: 'chat-1', project: 'personal', provider: 'claude', state: 'failed', activity: '', error: 'Fall? el motor', messages: [{ ...user(''), attachments: [path] }] };
+  });
+  render(<Lab onMonitor={() => {}} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Reintentar' }));
+  await waitFor(() => expect(posted('/messages')[0][1]).toMatchObject({ text: '', attachments: [path], replace: true, retry: true }));
+});
+
+test('adjunto ausente deja un estado visible', async () => {
+  serve('idle', [{ ...user('mir?'), attachments: ['adjuntos/1-ausente.png'] }]);
+  (labAttachment as jest.Mock).mockRejectedValue(new Error('No existe'));
+  render(<Lab onMonitor={() => {}} />);
+  expect(await screen.findByText('No se pudo abrir ausente.png.')).toBeInTheDocument();
+});
+
+
+test.each(['bot?n', 'Escape'])('cancelar edici?n limpia adjuntos mediante %s', async how => {
+  serve('idle', [{ ...user('mir?'), attachments: ['adjuntos/1-captura.png'] }]);
+  render(<Lab active onMonitor={() => {}} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Editar' }));
+  expect(screen.getByText('captura.png')).toBeInTheDocument();
+  if (how === 'Escape') fireEvent.keyDown(window, { key: 'Escape' });
+  else fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+  expect(screen.queryByText('captura.png')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Enviar mensaje' })).toBeDisabled();
 });

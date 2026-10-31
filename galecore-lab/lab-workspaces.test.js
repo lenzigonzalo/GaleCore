@@ -24,17 +24,27 @@ test('workspace se recupera desde su descriptor versionable aunque falte el índ
 test('claude: la narración junto a una consulta no entra al chat; la respuesta sí',()=>{const chat={messages:[]};consumeEvent(chat,{type:'assistant',message:{content:[{type:'text',text:'Now try the CLI'},{type:'tool_use',name:'Bash'}]}},'claude');assert.equal(chat.messages.length,0);assert.equal(chat.activity,'Trabajando');consumeEvent(chat,{type:'assistant',message:{content:[{type:'text',text:'Mi recomendación: esperá.'}]}},'claude');assert.equal(chat.messages.length,0);consumeEvent(chat,{type:'result',is_error:false,result:'Mi recomendación: esperá.'},'claude');assert.deepEqual(chat.messages.map(m=>m.text),['Mi recomendación: esperá.']);});
 
 test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el permiso al motor',async t=>{
- const {base,kb,local}=setup(t);const calls=[];const {EventEmitter}=require('events');
+ const {base,kb,local}=setup(t);const calls=[];const inputs=[];const {EventEmitter}=require('events');
  fs.mkdirSync(path.join(base,'galecore-ai'));fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo de test');
  // El contexto va por archivo (D-0014): se lee al lanzar el motor, porque se borra al terminar el turno.
  const codexHome=path.join(base,'codex');fs.mkdirSync(codexHome);const contexts=[];
- const spawnProcess=(bin,args)=>{calls.push(args);const f=args.includes('-p')&&bin==='codex'?path.join(codexHome,args[args.indexOf('-p')+1]+'.config.toml'):args[args.indexOf('--append-system-prompt-file')+1];contexts.push(fs.readFileSync(f,'utf8'));const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(){},end(){}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
+ const spawnProcess=(bin,args)=>{calls.push(args);const f=args.includes('-p')&&bin==='codex'?path.join(codexHome,args[args.indexOf('-p')+1]+'.config.toml'):args[args.indexOf('--append-system-prompt-file')+1];contexts.push(fs.readFileSync(f,'utf8'));const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(value){inputs.push(value);},end(value){if(value)inputs.push(value);}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
  const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude',codex:'codex'},environment:()=>({CODEX_HOME:codexHome}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
  const req=Object.assign(new EventEmitter(),{method:'POST',headers:{'x-file-name':encodeURIComponent('nota ñ.txt')}});
  let up;const pending=service.route(req,{},new URL('http://localhost/workspaces/personal/attachments'),(res,status,value)=>{up={status,value};},async()=>({}));
  setImmediate(()=>{req.emit('data',Buffer.from('hola'));req.emit('end');});await pending;
  assert.equal(up.status,201);assert.match(up.value.path,/^adjuntos\/\d+-nota _\.txt$/);
  assert.equal(fs.readFileSync(path.join(kb,'workspaces/personal',up.value.path),'utf8'),'hola');
+ const binaryRes={writeHead(status,headers){this.status=status;this.headers=headers;},end(value){this.bytes=value;}};
+ await service.route({method:'GET'},binaryRes,new URL('http://localhost/workspaces/personal/attachments?path='+encodeURIComponent(up.value.path)),()=>{},async()=>({}));
+ assert.equal(binaryRes.status,200);assert.equal(binaryRes.bytes.toString(),'hola');
+ assert.equal(binaryRes.headers['Content-Disposition'].startsWith('attachment'),true);
+ await assert.rejects(route(service,'GET','/workspaces/personal/attachments?path=../secreto.txt'),/Adjunto no encontrado/);
+ await assert.rejects(route(service,'GET','/workspaces/personal/attachments?path=adjuntos/ausente.png'),/Adjunto no encontrado/);
+ const png='adjuntos/1-captura.png';fs.writeFileSync(path.join(kb,'workspaces/personal',png),Buffer.from([137,80,78,71]));
+ await service.route({method:'GET'},binaryRes,new URL('http://localhost/workspaces/personal/attachments?path='+png),()=>{},async()=>({}));
+ assert.equal(binaryRes.headers['Content-Type'],'image/png');assert.deepEqual(binaryRes.bytes,Buffer.from([137,80,78,71]));
+
  const chat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
  await assert.rejects(route(service,'POST','/chats/'+chat.id+'/messages',{text:'mirá',attachments:['../secreto.txt']}),/Adjunto no encontrado/);
  await route(service,'POST','/chats/'+chat.id+'/messages',{text:'mirá esto',attachments:[up.value.path],mode:'auto'});
@@ -56,6 +66,14 @@ test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el per
  await route(service,'POST','/chats/'+ca.id+'/messages',{text:'hola',mode:'auto'});
  const aargs=calls.at(-1);assert.ok(aargs.includes('--approve-for-me')&&!aargs.includes('--sandbox'));
  await new Promise(r=>setTimeout(r,50));
+
+ const imageChat=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ await route(service,'POST','/chats/'+imageChat.id+'/messages',{text:'',attachments:[png]});
+ await new Promise(r=>setTimeout(r,50));
+ const restarted=createWorkspaces({root:base,kb,local,binaries:{},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[]});
+ const saved=(await route(restarted,'GET','/chats/'+imageChat.id)).value;
+ assert.equal(saved.messages[0].text,'');assert.deepEqual(saved.messages[0].attachments,[png]);assert.equal(saved.title,'captura.png');
+ assert.ok(inputs.some(value=>value.includes(png)));
  assert.deepEqual(fs.readdirSync(codexHome),[]);  // el perfil del turno se borra al terminar
 });
 test('mapa de la idea: el Lab anota la página que tocó el turno y la sirve por secciones (WS-0039)',async t=>{

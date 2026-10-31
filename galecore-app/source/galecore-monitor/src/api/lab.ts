@@ -36,7 +36,7 @@ export type LabProjectKind = 'personal' | 'analysis' | 'strategy';
 /** Aviso de una sincronización de proyecto compartido: archivos que se editaron en las dos PCs (quedaron las dos versiones). */
 export interface SyncNotice { at: string; error?: string; skipped?: { path: string; reason: string }[]; conflicts: { path: string; with: string; copy: string | null; kind: 'editado-en-ambos' | 'borrado-aquí' | 'borrado-allá' }[] }
 export interface WorkspaceProject { id: string; label: string; type: LabProjectKind; relative: string; strategyName: string | null; shared?: boolean; following?: boolean; syncNotice?: SyncNotice | null }
-export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; at: string }
+export interface ChatMessage { id: string; role: 'user' | 'assistant'; text: string; at: string; attachments?: string[] }
 export interface WorkspaceChat { id: string; project: string; provider: 'codex' | 'claude'; model?: string; effort?: string; title: string; createdAt?: string; turnStartedAt?: number; state: 'idle' | 'running' | 'interrupted' | 'failed' | 'cancelled'; activity: string; steps?: { label: string; detail?: string; kind?: 'note'; at: string }[]; error: string | null; notice?: string | null; mode?: 'manual' | 'auto'; usage?: ChatUsage; tasks?: ChatTask[]; limitResetsAt?: number | true; permission?: { id: string; tool: string; label: string; detail?: string; always?: boolean } | null; messages: ChatMessage[] }
 export interface ChatTask { id: string; kind: 'agent' | 'command'; label: string; agentType?: string; status: string; last?: string; tools?: number; tokens?: number; summary?: string }
 export interface ChatUsage { turns: { at: string; input: number; output: number; cached: number; costUsd?: number }[]; context?: { used: number; window: number }; limit?: { status?: string; resetsAt?: number; windows?: Record<string, { utilization?: number; resetsAt?: number }> } }
@@ -54,6 +54,17 @@ export async function labUpload(projectId: string, file: File, dir?: string): Pr
   const value = await r.json();
   if (!r.ok) throw new Error(value.error || 'No se pudo adjuntar el archivo.');
   return value;
+}
+
+/** Lee el adjunto con la misma autenticación local del chat, sin tokens en URLs. */
+export async function labAttachment(projectId: string, path: string): Promise<Blob> {
+  const send = async () => request('/workspaces/' + encodeURIComponent(projectId) + '/attachments?path=' + encodeURIComponent(path), {
+    headers: { Authorization: 'Bearer ' + await labToken() },
+  }, 120000);
+  let r = await send();
+  if (r.status === 401) { token = null; r = await send(); }
+  if (!r.ok) throw new Error('No se pudo abrir el adjunto.');
+  return r.blob();
 }
 
 /** Shell del proyecto (owner 17/10): PowerShell en la carpeta del proyecto, por WebSocket con el token del Lab. */

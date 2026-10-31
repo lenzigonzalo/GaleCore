@@ -11,6 +11,15 @@ const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
 const TYPES = ['personal', 'analysis', 'strategy'];
 const TEXT = /\.(md|txt|json|yaml|yml|csv|tsv|py|log)$/i;
+const IMAGE_TYPES = {'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp'};
+function attachmentFile(dir, rel) {
+  if(!/^adjuntos\/[\w.\- ]+$/.test(rel))throw fail('Adjunto no encontrado: '+rel,404);
+  const base=fs.realpathSync(dir);let file;
+  try{file=fs.realpathSync(path.join(base,rel));}catch{throw fail('Adjunto no encontrado: '+rel,404);}
+  if(!file.startsWith(base+path.sep)||!fs.statSync(file).isFile())throw fail('Adjunto fuera del proyecto.',403);
+  if(fs.statSync(file).size>15*1024*1024)throw fail('El archivo supera 15 MB.',413);
+  return file;
+}
 // Desde Archivos no se tocan los registros: JSON (con hash, los escribe el harness) ni el descriptor del proyecto.
 const LOCKED = /\.json$/i;
 const BAD_NAME = /[<>:"|?*\x00-\x1f]|(^|[\/\\])\.\.?($|[\/\\])/;
@@ -475,8 +484,8 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     // Legacy chats have no recoverable original model metadata. Freeze the fallback once,
     // before the next send; subsequent environment changes cannot alter this selection.
     if(chat.model === undefined || chat.effort === undefined){Object.assign(chat,normalize(chat.provider,chat),{selectionSource:'legacy-fallback'});saveChat(chat);}
-    const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString()};chat.messages.push(ask);
-    if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=words.replace(/\s+/g,' ').slice(0,65);
+    const ask={id:crypto.randomUUID(),role:'user',text:words,at:new Date().toISOString(),...(options.attachments?.length?{attachments:options.attachments}:{})};chat.messages.push(ask);
+    if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=(words||options.attachments?.[0]?.replace(/^adjuntos\/\d+-/,'')||'Adjunto').replace(/\s+/g,' ').slice(0,65);
     chat.state='running';chat.error=null;chat.notice=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];chat.tasks=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'galecore-lab','skills','lab-strategy-bootstrap','SKILL.md');
     // El método de diseño es una sola copia, en galecore-ai/config/skills.
@@ -581,6 +590,12 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const p=project(parts[1]); if(p.type!=='strategy')throw fail('Este proyecto no es una estrategia.');
       const value=await readStrategy(p,url.searchParams.get('view')==='design');json(res,200,value);return true;
     }
+    if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='attachments'&&parts.length===3){
+      const p=project(parts[1]), rel=url.searchParams.get('path')||'', file=attachmentFile(p.dir,rel);
+      const type=IMAGE_TYPES[path.extname(rel).toLowerCase()];
+      res.writeHead(200,{'Content-Type':type||'application/octet-stream','Content-Disposition':(type?'inline':'attachment')+'; filename="'+path.basename(rel)+'"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+      res.end(fs.readFileSync(file));return true;
+    }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='attachments'){
       // Un adjunto del chat (WS-0036): cuerpo crudo, nombre en X-File-Name, hasta 15 MB, a adjuntos/ del proyecto.
       const p=project(parts[1]), raw=decodeURIComponent(String(req.headers['x-file-name']||'archivo'));
@@ -614,17 +629,18 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         json(res,200,{mapa:readMapa(dir,rel)});return true;}
       if(req.method==='POST'&&parts[2]==='messages'){const b=await readBody(req);
         // Ctrl+S del chat: se corta el turno y se manda el siguiente enseguida; el proceso tarda un instante en cerrar.
-        if(c.state==='cancelled')for(let i=0;i<100&&jobs.has(c.id);i++)await new Promise(r=>setTimeout(r,50));const words=String(b.text||'').trim();if(!words||words.length>12000)throw fail('El mensaje debe tener entre 1 y 12000 caracteres.');
+        if(c.state==='cancelled')for(let i=0;i<100&&jobs.has(c.id);i++)await new Promise(r=>setTimeout(r,50));const words=String(b.text||'').trim();if(words.length>12000)throw fail('El mensaje debe tener hasta 12000 caracteres.');
         // Adjuntos subidos antes a /workspaces/<id>/attachments: sólo rutas de adjuntos/ del proyecto, que existan.
         const targetProject=project(c.project);
         if(sharing.isRunning(targetProject))throw fail('El proyecto está sincronizando. Esperá a que termine para enviar.',409);
         const dir=targetProject.dir, files=(Array.isArray(b.attachments)?b.attachments:[]).slice(0,10).map(String);
-        for(const rel of files){if(!/^adjuntos\/[\w.\- ]+$/.test(rel)||!fs.existsSync(path.join(dir,rel)))throw fail('Adjunto no encontrado: '+rel,404);}
+        if(!words&&!files.length)throw fail('Escribí un mensaje o adjuntá un archivo.');
+        for(const rel of files)attachmentFile(dir,rel);
         const text=files.length?words+'\n\nArchivos adjuntos (en la carpeta del proyecto): '+files.join(', '):words;
         // Editar el último mensaje (WS-0067): el motor no rebobina; el Lab saca del transcript ese pedido y su respuesta y le avisa que el texto nuevo lo reemplaza.
         let prompt;if(b.replace===true){if(jobs.has(c.id))throw fail('La conversación está respondiendo.',409);const at=c.messages.map(m=>m.role).lastIndexOf('user');if(at<0)throw fail('No hay un mensaje para reemplazar.',409);const old=c.messages[at].text;c.messages.splice(at);saveChat(c);if(b.retry!==true)prompt='[Este mensaje reemplaza al pedido anterior ("'+old.replace(/\s+/g,' ').slice(0,300)+'"): ignorá ese pedido y tu respuesta; lo que ya hiciste en archivos sigue ahí.]\n\n'+text;}
         const mentions=mentionLine(b.mentions);if(mentions)prompt=mentions+'\n\n'+(prompt||text);
-        json(res,202,send(c,text,{mode:b.mode==='auto'?'auto':'manual',...(prompt&&{prompt})}));return true;}
+        json(res,202,send(c,words,{mode:b.mode==='auto'?'auto':'manual',attachments:files,prompt:prompt||text}));return true;}
       if(req.method==='POST'&&parts[2]==='rename'){const title=String((await readBody(req)).title||'').trim();if(!title||title.length>100)throw fail('Indicá un nombre de hasta 100 caracteres.');c.title=title;c.titleLocked=true;saveChat(c);json(res,200,{id:c.id,title});return true;}
       // Eliminar saca la conversación del historial; el archivo pasa a chats-borradas/ (local, no se muestra).
       if(req.method==='POST'&&parts[2]==='delete'){if(jobs.has(c.id))throw fail('La conversación está respondiendo. Detenela antes de eliminarla.',409);fs.mkdirSync(removedDir,{recursive:true});fs.renameSync(path.join(chatDir,c.id+'.json'),path.join(removedDir,c.id+'.json'));json(res,200,{deleted:c.id});return true;}

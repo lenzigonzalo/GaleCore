@@ -526,3 +526,7 @@
 .lab-chat-main:not(.empty) .lab-chat-composer > textarea { align-self:center; }
 
 .lab-usage > button.expired, .lab-usage dd.expired { color:var(--orange-gc,#f59e0b); }
+
+.lab-message-attachments { display:flex; flex-wrap:wrap; gap:10px; margin-top:8px; }
+.lab-message-attachments img { display:block; max-width:min(360px, 100%); max-height:280px; object-fit:contain; border-radius:8px; }
+.lab-message-attachments a { max-width:100%; }
