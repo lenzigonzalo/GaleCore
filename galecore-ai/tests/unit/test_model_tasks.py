@@ -25,6 +25,26 @@ from tests.unit.test_tasks import DAILY, FakeScheduler, env, make  # noqa: F401 
 LATER = NOW + timedelta(hours=1)
 
 
+def test_task_commit_pushes_pending_knowledge_to_private_remote(tmp_path):
+    repo, remote = tmp_path / "knowledge", tmp_path / "backup.git"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(repo)], check=True)
+    subprocess.run(["git", "init", "-q", "--bare", str(remote)], check=True)
+    for key, value in (("user.name", "Test"), ("user.email", "test@example.com")):
+        subprocess.run(["git", "-C", str(repo), "config", key, value], check=True)
+    subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", str(remote)], check=True)
+    pending = repo / "previous.md"
+    pending.write_text("earlier scheduled run", encoding="utf-8")
+    subprocess.run(["git", "-C", str(repo), "add", pending.name], check=True)
+    subprocess.run(["git", "-C", str(repo), "commit", "-qm", "earlier run"], check=True)
+    current = repo / "current.md"
+    current.write_text("new scheduled run", encoding="utf-8")
+    assert t._commit_knowledge(type("KB", (), {"base": repo})(), [current], "task: OK") == "committed and pushed"
+    local = subprocess.check_output(["git", "-C", str(repo), "rev-parse", "main"]).strip()
+    backed_up = subprocess.check_output(["git", "--git-dir", str(remote), "rev-parse", "main"]).strip()
+    assert local == backed_up
+
+
 def test_market_story_schedule_keeps_pack_only_read_permissions():
     entry = load_catalog().get("market_story")
     rules = mr.allowed_tools(entry, cli_commands(build_parser()))
