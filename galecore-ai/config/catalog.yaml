@@ -679,3 +679,34 @@ entries:
       - Each proposal is one of prender | mantener | esperar | apagar | sin datos and says «qué la cambiaría» (refused otherwise)
       - Proposals only; nothing is deployed, paused or changed here; the owner's decision is kept in the strategy's project
       - "Not checked - that the proposal is right; that the story read is still the market's"
+
+  - id: revisar_swing_etfs
+    kind: investigation
+    serves: >-
+      La revisión del swing de ETFs del proyecto swing_de_etfs: SPY, IEF y GLD con cierres completos, tendencia,
+      retroceso y confirmación según las reglas propuestas del proyecto. El cálculo es un script de la skill que trae
+      los datos de GaleCore y devuelve JSON; el modelo lo ejecuta y arma hasta tres fichas, sin recalcular a mano.
+      Sólo lectura: no pone órdenes ni dice que opere.
+    example_requests:
+      - Revisá los ETFs al mediodía
+      - ¿Hay señal de swing en SPY, IEF o GLD?
+      - Hagamos la revisión semanal del swing de ETFs
+    skill: skills/revisar-swing-etfs/SKILL.md
+    output_contract: galecore_ai.contracts.research.ResearchContent
+    galecore_capabilities: [market_data.candles, market_data.quote, calendar.macro_releases, calendar.fomc_meetings, market_data.volatility_metrics]
+    data_needs:
+      - need: velas de SPY
+      - need: calendario macro
+    flow:
+      - skill run revisar-swing-etfs revision_swing.py --cutoff <AAAA-MM-DD>
+      - galecore get <capability> --symbol <símbolo> [--param clave=valor] [--out <archivo>]
+      - kb search --kind research --text "<swing etfs>"
+      - research save --capability revisar_swing_etfs --slug swing-etfs --prompt "<pedido>" < {content, host_provider, host_model}
+      - research revise --capability revisar_swing_etfs --id <id> --reason continuation --note "<qué cambia>" --prompt "<pedido>" < {content, host_provider, host_model}
+    stored_as: research
+    controls:
+      - The research controls apply; every reported number comes from the script's JSON or a stored GaleCore response
+      - "The calculation runs as a script of the skill (`skill run`): the model gets its JSON, not its code; every run is recorded with the script's sha256"
+      - "Read-only: a candidate is described, never advised; no orders; a signal is never shown as executable without size and dated quote"
+      - "Not checked - that the proposed rules are good to trade; the owner has not approved them for operating"
+    schedulable: {runs: model, work: reading, max_turns: 25, timeout_minutes: 12}

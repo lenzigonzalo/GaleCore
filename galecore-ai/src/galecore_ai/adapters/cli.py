@@ -564,14 +564,19 @@ async def _cmd_inventory(args: argparse.Namespace) -> None:
 
 
 def _cmd_skill(args: argparse.Namespace) -> None:
-    from galecore_ai.application.skill_run import SkillRunError, run_script, skill_dir
+    from galecore_ai.application.skill_run import SkillRunError, record_run, run_script, skill_dir
     try:
         result = run_script(skill_dir(args.skill), args.script, args.script_args, args.timeout)
     except (SkillRunError, CatalogError) as exc:
-        _json_out({"ok": False, "skill": args.skill, "script": args.script, "error": str(exc)},
-                  exit_code=_EXIT_VALIDATION_ERROR)
-        return
-    _json_out(result, exit_code=_EXIT_SUCCESS if result["ok"] else _EXIT_INTERNAL_ERROR)
+        result = {"ok": False, "skill": args.skill, "script": args.script, "error": str(exc)}
+        exit_code = _EXIT_VALIDATION_ERROR
+    else:
+        exit_code = _EXIT_SUCCESS if result["ok"] else _EXIT_INTERNAL_ERROR
+    try:   # the record never changes the run's outcome
+        record_run(knowledge_dir(), result, args.script_args)
+    except (OSError, KnowledgeBaseError):
+        pass
+    _json_out(result, exit_code=exit_code)
 
 
 async def _cmd_catalog(args: argparse.Namespace) -> None:

@@ -147,7 +147,7 @@ def test_code_runs_exist_only_for_the_followup(tmp_path):
 def test_the_real_catalog_declares_the_briefing_and_the_followup_schedulable():
     declared = {e.id: e.schedulable.runs for e in load_catalog().entries if e.schedulable}
     assert declared == {"strategy_followup": "code", "daily_attention": "model", "market_watch": "model", "scheduled_report": "model",
-                        "market_story": "model", "knowledge_curator": "model"}
+                        "market_story": "model", "knowledge_curator": "model", "revisar_swing_etfs": "model"}
 
 
 

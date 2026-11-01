@@ -18,7 +18,7 @@ from itertools import pairwise
 from pathlib import Path
 
 from galecore_ai.adapters.source_status_store import FileSourceStatusStore
-from galecore_ai.application.skill_run import SCRIPT_SUFFIXES
+from galecore_ai.application.skill_run import SCRIPT_SUFFIXES, SkillRunError, script_path
 from galecore_ai.application.source_query import query_sources
 from galecore_ai.contracts.sources import SourceRegistry
 from galecore_ai.harness.assets import asset_root
@@ -80,7 +80,23 @@ SCHEDULED_READS = {("catalog", None), ("kb", "search"), ("kb", "show"),
 SCHEDULED_RESULT_WRITES = {("followup", "run"), ("evidence", "add"), ("research", "save"), ("research", "revise"),
                            ("story", "pack")}   # the runner gathers the market pack before the model (GC-AI-0024)
 SCHEDULED_SCRIPTS: set[str] = set()  # read-only scripts a run may call; none since WS-0014 (FRED and Fed by GaleCore)
+SCHEDULED_SKILL_RUN = ("skill", "run")   # WS-0073: only a script of the capability's own skill (see own_script)
 CODE_RUNNERS = ("strategy_followup",)   # capabilities a task runs without the model (application/tasks.py)
+
+
+def own_script(entry: CatalogEntry, tokens: list[str]) -> str | None:
+    """The script a flow line ``skill run <skill> <script> ...`` names, when it is a script of the capability's own
+    skill folder (the only ``skill run`` a scheduled run may use); else None."""
+    if len(tokens) < 4 or tokens[:2] != list(SCHEDULED_SKILL_RUN):
+        return None
+    skill = Path(entry.skill).parent.name
+    if tokens[2] not in (skill, entry.id, skill.replace("-", "_")):
+        return None
+    try:
+        script_path((asset_root() / entry.skill).parent, tokens[3])
+    except SkillRunError:
+        return None
+    return tokens[3]
 
 
 def flow_key(tokens: list[str], commands: dict[str, set[str]]) -> tuple[str, str | None]:
@@ -107,6 +123,10 @@ def _schedule_problems(entry: CatalogEntry, commands: dict[str, set[str]]) -> li
             continue
         key = flow_key(tokens, commands)
         if key in SCHEDULED_READS:
+            continue
+        if key == SCHEDULED_SKILL_RUN:
+            if own_script(entry, tokens) is None:
+                problems.append(f"schedulable: {line!r} must run a script of this capability's own skill folder")
             continue
         if key not in SCHEDULED_RESULT_WRITES:
             problems.append(f"schedulable: {' '.join(tokens[:2])!r} writes beyond the capability's own result")

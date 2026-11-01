@@ -1,0 +1,9 @@
+# Qué cambió en cada versión de revisar_swing_etfs y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: revisar_swing_etfs
+versions:
+  - version: "1.0.0"
+    date: 2026-11-01
+    changes: >
+      WS-0073: el método del proyecto swing_de_etfs pasa a skill con carpeta; el cálculo (revision_swing.py, sin cambios
+      de reglas) corre con `skill run`, trae solo los datos de GaleCore e imprime JSON.
+    feedback: []

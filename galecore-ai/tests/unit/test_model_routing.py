@@ -33,7 +33,7 @@ def test_a_code_run_calls_no_model():
 def test_the_real_catalog_routes_all_readings_to_sonnet():
     models = {e.id: e.schedulable.model for e in load_catalog().entries if e.schedulable}
     assert models == {"strategy_followup": None, "daily_attention": "sonnet", "market_watch": "sonnet", "scheduled_report": "sonnet", "knowledge_curator": "sonnet",
-                      "market_story": "sonnet"}
+                      "market_story": "sonnet", "revisar_swing_etfs": "sonnet"}
 
 
 def test_the_runner_never_gets_a_fallback_model():
