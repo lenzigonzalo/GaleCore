@@ -31,6 +31,9 @@ class SkillDefinition(BaseModel):
     system_prompt: str = ""
     instructions: str = ""
     answer: str = ""  # «cómo responder»: what the Lab pastes into the turn
+    files: dict[str, list[str]] = Field(default_factory=dict)  # references/scripts/assets of a skill folder (WS-0073)
+    allowed_tools: list[str] = Field(default_factory=list)     # frontmatter `allowed-tools`; the engine adapter translates
+    model: str | None = None                                   # frontmatter `model`: tier the skill asks for
     examples: list[SkillExample] = Field(default_factory=list)
 
 

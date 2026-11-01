@@ -43,7 +43,8 @@ def test_an_empty_answer_keeps_the_hash_of_older_skills():
     assert definition_hash(SkillDefinition.model_validate(base)) != definition_hash(
         SkillDefinition.model_validate({**base, "answer": "algo"}))
     dumped = SkillDefinition.model_validate(base).model_dump(mode="json")
-    del dumped["answer"]
+    for key in ("answer", "files", "allowed_tools", "model"):  # the fields added after the first hashes
+        del dumped[key]
     content = json.dumps(dumped, sort_keys=True, separators=(",", ":"))
     assert definition_hash(SkillDefinition.model_validate(base)) == "sha256:" + hashlib.sha256(
         content.encode("utf-8")).hexdigest()

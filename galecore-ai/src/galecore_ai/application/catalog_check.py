@@ -12,13 +12,16 @@ fails is listed per entry; nothing is fixed here.
 from __future__ import annotations
 
 import argparse
+import re
 from collections.abc import Callable
 from itertools import pairwise
 from pathlib import Path
 
 from galecore_ai.adapters.source_status_store import FileSourceStatusStore
+from galecore_ai.application.skill_run import SCRIPT_SUFFIXES
 from galecore_ai.application.source_query import query_sources
 from galecore_ai.contracts.sources import SourceRegistry
+from galecore_ai.harness.assets import asset_root
 from galecore_ai.harness.catalog import Catalog, CatalogEntry, describe
 from galecore_ai.harness.skill_history import SkillHistoryError, load_skill_history
 
@@ -148,11 +151,30 @@ def _history_problems(entry: CatalogEntry, described: dict, feedback_check: Feed
     return problems
 
 
+def _folder_problems(entry: CatalogEntry) -> list[str]:
+    """A skill folder (WS-0073): scripts/ holds only supported scripts, and what SKILL.md points at exists."""
+    skill_file = asset_root() / entry.skill
+    folder = skill_file.parent
+    problems = []
+    scripts = folder / "scripts"
+    if scripts.is_dir():
+        problems += [f"folder: scripts/{f.name} is not a supported script ({', '.join(SCRIPT_SUFFIXES)})"
+                     for f in sorted(scripts.iterdir()) if f.name != "__pycache__" and
+                     (not f.is_file() or f.suffix not in SCRIPT_SUFFIXES)]
+    if skill_file.is_file():
+        text = skill_file.read_text(encoding="utf-8")
+        for ref in sorted(set(re.findall(r"`((?:references|scripts|assets)/[\w.\-/]+\.\w+)`", text))):
+            if not (folder / ref).is_file():
+                problems.append(f"folder: SKILL.md cites {ref} and it does not exist")
+    return problems
+
+
 def check_entry(entry: CatalogEntry, described: dict, *, commands: dict[str, set[str]], workspace: Path,
                 registry: SourceRegistry, status_store: FileSourceStatusStore,
                 feedback_check: FeedbackCheck | None = None) -> list[str]:
     problems = [] if described.get("available") else [f"skill or contract: {described.get('error')}"]
     problems += _flow_problems(entry, commands, workspace)
+    problems += _folder_problems(entry)
     problems += _data_problems(entry, registry, status_store)
     if not any(c.lower().startswith("not checked") and c[len("not checked"):].strip(" -–:") for c in entry.controls):
         problems.append("controls: none says what is NOT checked")
