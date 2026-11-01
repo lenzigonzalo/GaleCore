@@ -31,7 +31,7 @@ def strategies_of(meta: dict, fallback: str) -> list:
 
 
 def owner_of(name: str, here: Path) -> str:
-    """Id del otro proyecto que ya declara la estrategia, o "". Una carpeta que sólo se llama como la estrategia no cuenta."""
+    """Id del otro proyecto que ya declara la estrategia, o "". Cuenta también el formato viejo (carpeta = estrategia)."""
     for folder in ("workspaces", "strategies"):
         for other in (here.parent.parent / folder).glob("*/workspace.json"):
             if other.parent == here:
@@ -40,7 +40,7 @@ def owner_of(name: str, here: Path) -> str:
                 meta = json.loads(other.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 continue
-            if name in strategies_of(meta, other.parent.name) and other.parent.name != name:
+            if name in strategies_of(meta, other.parent.name):
                 return other.parent.name
     return ""
 

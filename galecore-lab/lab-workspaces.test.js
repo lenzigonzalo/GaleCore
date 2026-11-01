@@ -438,3 +438,8 @@ test('WS-0071 AC-2: mark_strategy agrega varias estrategias al mismo proyecto, e
  assert.equal(run('argentina','bonos_ar').ok,true);assert.equal(run('argentina','evento_ar').ok,true);assert.equal(run('argentina','bonos_ar').changed,false);
  const rejected=run('brasil','bonos_ar');assert.equal(rejected.ok,false);assert.match(rejected.error,/argentina/);
  const list=(await route(service,'GET','/workspaces')).value.projects;assert.deepEqual(list.find(x=>x.id==='argentina').strategies,['bonos_ar','evento_ar']);assert.deepEqual(list.find(x=>x.id==='brasil').strategies,[]);});
+test('WS-0071 AC-2: mark_strategy rechaza la estrategia de un proyecto viejo cuya carpeta se llama igual',async t=>{const {kb,service}=setup(t);await route(service,'POST','/workspaces',{label:'Argentina'});
+ const old=path.join(kb,'workspaces','bonos_ar');fs.mkdirSync(old,{recursive:true});fs.writeFileSync(path.join(old,'workspace.json'),JSON.stringify({id:'bonos_ar',label:'bonos_ar',type:'strategy',strategyName:'bonos_ar'}));
+ let r;try{r=JSON.parse(require('child_process').execFileSync('python',[path.join(__dirname,'mark_strategy.py'),'bonos_ar'],{cwd:path.join(kb,'workspaces','argentina'),encoding:'utf8'}));}catch(e){r=JSON.parse(e.stdout);}
+ assert.equal(r.ok,false);assert.match(r.error,/bonos_ar/);
+ assert.deepEqual((await route(service,'GET','/workspaces')).value.projects.find(x=>x.id==='argentina').strategies,[]);});
