@@ -266,7 +266,12 @@ def allowed_tools(entry: CatalogEntry, commands: dict[str, set[str]]) -> list[st
             continue
         key = flow_key(tokens, commands)
         if script := own_script(entry, tokens):   # that exact script of its own skill, no other skill, no shell
-            rules.append(f"Bash({CLI} skill run {tokens[2]} {script}:*)")
+            fixed = []   # the flow's own flags stay in the rule; an agent cannot add --output/--input
+            for tok in tokens[4:]:
+                if tok.startswith("<"):
+                    break
+                fixed.append(tok)
+            rules.append(f"Bash({CLI} skill run {tokens[2]} {' '.join([script, *fixed])}:*)")
         elif key in SCHEDULED_READS:   # never a write: the runner runs the follow-up and saves the result
             rules.append(f"Bash({CLI} {' '.join(k for k in key if k)}:*)")
     return list(dict.fromkeys(rules))

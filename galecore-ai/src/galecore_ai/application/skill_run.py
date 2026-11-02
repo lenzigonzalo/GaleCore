@@ -18,7 +18,7 @@ from pathlib import Path
 from galecore_ai.harness.assets import asset_root
 from galecore_ai.harness.catalog import load_catalog
 
-DEFAULT_TIMEOUT_S = 60
+DEFAULT_TIMEOUT_S = 180
 SCRIPT_SUFFIXES = (".py",)
 STDERR_MAX = 2000
 RUNS_FILE = "skill_runs.jsonl"   # in the knowledge base: one line per `skill run` (WS-0073)

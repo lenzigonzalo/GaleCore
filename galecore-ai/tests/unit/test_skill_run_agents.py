@@ -20,7 +20,7 @@ from tests.unit.test_tasks import env, make  # noqa: F401  (env is a fixture)
 
 DEMO = Path(__file__).resolve().parents[1] / "fixtures" / "skills" / "demo-folder"
 SWING = "revisar_swing_etfs"
-RULE = f"Bash({mr.CLI} skill run revisar-swing-etfs revision_swing.py:*)"
+RULE = f"Bash({mr.CLI} skill run revisar-swing-etfs revision_swing.py --cutoff:*)"
 
 
 def _tools(capability: str) -> list[str]:

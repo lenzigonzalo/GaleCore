@@ -1503,7 +1503,7 @@ def build_parser() -> _JsonArgumentParser:
     p_sk_run = sk_sub.add_parser("run", help="Run one script of the skill's scripts/ folder; JSON on stdout")
     p_sk_run.add_argument("skill", help="skill id or name, e.g. revisar-swing-etfs")
     p_sk_run.add_argument("script", help="file name inside scripts/, e.g. revision_swing.py")
-    p_sk_run.add_argument("--timeout", type=float, default=60, help="seconds before it is stopped (default 60); goes before the skill name")
+    p_sk_run.add_argument("--timeout", type=float, default=180, help="seconds before it is stopped (default 180); goes before the skill name")
     p_sk_run.add_argument("script_args", nargs=argparse.REMAINDER, help="arguments passed to the script")
 
     p_an = sub.add_parser("analyze", help="On-demand analysis: macro, technical, fundamental or flow (P1-05)")
