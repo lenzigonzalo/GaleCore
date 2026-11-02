@@ -364,7 +364,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         if(received&&folder==='strategies')meta.strategyName=entry.name;
         const strategies=strategiesOf(meta,entry.name);
         const externalStrategy=received&&(!syncState.owner||syncState.owner!==syncState.context?.user)&&folder==='workspaces'&&strategies.length>0&&!strategies.includes(entry.name);
-        if((meta.id===entry.name||received)&&typeof meta.label==='string'&&meta.label.length<=100&&(folder!=='strategies'||strategies.length))descriptors.push({id:entry.name,label:meta.label,relative:folder+'/'+entry.name,...(externalStrategy?{...derived(entry.name,[]),externalStrategy:true}:derived(entry.name,strategies)),dir});
+        if((meta.id===entry.name||received)&&typeof meta.label==='string'&&meta.label.length<=100&&(folder!=='strategies'||strategies.length))descriptors.push({id:entry.name,label:meta.label,relative:folder+'/'+entry.name,...(externalStrategy?{...derived(entry.name,strategies),externalStrategy:true}:derived(entry.name,strategies)),dir});
       }
     }
     const all=old.map(p=>({...p,...registry.find(r=>r.id===p.id),...descriptors.find(d=>d.id===p.id)}));

@@ -203,6 +203,13 @@ test('un proyecto con varias estrategias las lista todas, cada una con su proyec
  const bonos=(await screen.findByRole('button',{name:'Bonos ar'})).closest('tr')!,evento=screen.getByRole('button',{name:'Evento ar'}).closest('tr')!;
  expect(bonos).toHaveTextContent('Argentina');expect(evento).toHaveTextContent('Argentina');expect(bonos).not.toBe(evento);
 });
+test('una copia compartida sin el diseño no aparece en Estrategias (WS-0071)',async()=>{
+ (labRequest as jest.Mock).mockResolvedValue({projects:[{id:'tesis',label:'Tesis',strategies:['spy_ajena'],externalStrategy:true},{id:'mia',label:'Mia',strategies:['idea']}],chats:[],providers:[]});
+ mocked.fetchPerformanceSummary.mockResolvedValue([]);
+ render(<Shadow/>);
+ await screen.findByRole('button',{name:'Idea'});
+ expect(screen.queryByRole('button',{name:'Spy ajena'})).not.toBeInTheDocument();
+});
 test('si el Lab estaba apagado, reintenta al volver a la pestaña y muestra las estrategias en diseño',async()=>{
  (labRequest as jest.Mock).mockRejectedValueOnce(new Error('Lab apagado')).mockResolvedValue({projects:[{id:'draft',strategies: ['idea']}],chats:[],providers:[]});
  render(<Shadow/>);

@@ -144,7 +144,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   useEffect(() => {
     let active = true;
     const request = projectsRequest.current ??= labRequest<WorkspaceState>('/workspaces');
-    request.then(state => { if (active) { setProjects(state.projects.filter(p => strategiesOf(p).length > 0)); setProjectsError(''); } })
+    request.then(state => { if (active) { setProjects(state.projects.filter(p => !p.externalStrategy && strategiesOf(p).length > 0)); setProjectsError(''); } })
       .catch(() => { if (projectsRequest.current === request) projectsRequest.current = undefined; if (active) setProjectsError('No se pudieron leer las estrategias en diseño.'); });
     return () => { active = false; };
   }, [projectsRetry]);
