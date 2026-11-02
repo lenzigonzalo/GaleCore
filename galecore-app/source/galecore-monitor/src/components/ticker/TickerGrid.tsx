@@ -187,7 +187,7 @@ export function TickerGrid({
 
   // Sin universo, la grilla igual se dibuja si hay card extra: el buscador es justamente lo que
   // permite salir de un universo vacío.
-  if (!symbols.length && !trailing) {
+  if (!symbols.length && !trailing && !sections?.length) {
     return (
       <div className="p-4 text-xs" style={{ color: 'var(--text-muted)' }}>
         No hay tickers configurados

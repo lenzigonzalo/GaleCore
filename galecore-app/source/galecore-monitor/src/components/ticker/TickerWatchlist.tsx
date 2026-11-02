@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { X, ChevronDown, ChevronRight, ArrowRightLeft, Pencil, Trash2 } from 'lucide-react';
 import { TickerState } from '../../types/market';
 import { calcChange, fmtPct, fmtPrice, fmtTime, isStale } from '../../utils/formatters';
@@ -17,14 +17,14 @@ interface Props {
   removableSymbols?: string[];
   onRemoveSymbol?: (symbol: string) => void;
   /** Grupos editables (watchlist guardada): mover tickers, renombrar y borrar grupos. */
-  groupActions?: { onMove: (symbol: string, group: string) => void; onRename: (from: string, to: string) => void; onDelete: (name: string) => void };
+  groupActions?: { onMove: (symbol: string, group: string, target?: string, after?: boolean) => void; onMoveGroup?: (name: string, target: string, after: boolean) => void; onRename: (from: string, to: string) => void; onDelete: (name: string) => void };
 }
 
 /** Logo del instrumento, como en TradingView (owner 17/10); si la imagen no está, la inicial. */
 function TickerLogo({ symbol }: { symbol: string }) {
   const [failed, setFailed] = useState(false);
   return <span className="watchlist-ticker-icon" aria-hidden="true">{failed ? symbol.slice(0, 1)
-    : <img src={'https://financialmodelingprep.com/image-stock/' + encodeURIComponent(symbol.split(/[ /]/)[0]) + '.png'} alt="" loading="lazy" onError={() => setFailed(true)}/>}</span>;
+    : <img src={'https://financialmodelingprep.com/image-stock/' + encodeURIComponent(symbol.split(/[ /]/)[0]) + '.png'} alt="" draggable={false} loading="lazy" onError={() => setFailed(true)}/>}</span>;
 }
 
 /** Presentación compacta del mismo store de las tarjetas; no consulta ni suscribe datos. */
@@ -33,13 +33,37 @@ export function TickerWatchlist({ tickers, showPremarket = true, premarket, prem
   const [collapsed,setCollapsed] = useState<string[]>([]);
   const [moving,setMoving] = useState<string | null>(null);
   const [renaming,setRenaming] = useState<string | null>(null);
-  const [dropOn,setDropOn] = useState<string | null>(null);
+  const dragged = useRef<{kind:'ticker' | 'group'; name:string} | null>(null);
+  const [dropOn,setDropOn] = useState<{key:string; after:boolean} | null>(null);
   const names = sections?.map(s => s.label) ?? [];
   const groupOf = (symbol:string) => sections?.find(s => s.symbols.includes(symbol))?.label;
-  const drop = (group:string) => ({
-    onDragOver: (e:React.DragEvent) => { if (groupActions && e.dataTransfer.types.includes('text/x-ticker')) { e.preventDefault(); setDropOn(group); } },
-    onDragLeave: () => setDropOn(null),
-    onDrop: (e:React.DragEvent) => { const symbol = e.dataTransfer.getData('text/x-ticker'); setDropOn(null); if (symbol && groupActions && groupOf(symbol) !== group) groupActions.onMove(symbol, group); },
+  const endDrag = () => { dragged.current = null; setDropOn(null); };
+  const startDrag = (e:React.DragEvent, kind:'ticker' | 'group', name:string) => {
+    if ((e.target as HTMLElement).closest('input, .watchlist-group-tools')) { e.preventDefault(); return; }
+    dragged.current = {kind,name};
+    e.dataTransfer.setData(kind === 'ticker' ? 'text/x-ticker' : 'text/x-watchlist-group', name);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const position = (e:React.DragEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return e.clientY >= rect.top + rect.height / 2;
+  };
+  const dropClass = (key:string) => dropOn?.key === key ? (dropOn.after ? ' watchlist-drop-after' : ' watchlist-drop-before') : '';
+  const drop = (group:string, symbol?:string) => ({
+    onDragOver: (e:React.DragEvent) => {
+      if (!groupActions || !dragged.current || (dragged.current.kind === 'group' && (!groupActions.onMoveGroup || symbol))) return;
+      e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+      setDropOn({key:symbol ? 'ticker:' + symbol : 'group:' + group, after:!symbol && dragged.current.kind === 'ticker' ? true : position(e)});
+    },
+    onDragLeave: (e:React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropOn(null); },
+    onDrop: (e:React.DragEvent) => {
+      const source = dragged.current;
+      if (!groupActions || !source || (source.kind === 'group' && symbol)) return;
+      e.preventDefault(); e.stopPropagation();
+      if (source.kind === 'group') groupActions.onMoveGroup?.(source.name, group, position(e));
+      else groupActions.onMove(source.name, group, symbol ?? sections?.find(s => s.label === group)?.symbols[0], symbol ? position(e) : false);
+      endDrag();
+    },
   });
   const renderTicker = (ticker:TickerState) => {
           const hasPrice = Number.isFinite(ticker.price) && ticker.price > 0;
@@ -51,9 +75,9 @@ export function TickerWatchlist({ tickers, showPremarket = true, premarket, prem
           const removable = removableSymbols?.includes(ticker.symbol) && onRemoveSymbol;
           return (
             <React.Fragment key={ticker.symbol}>
-            <tr className={selected ? 'selected' : undefined} draggable={!!groupActions || undefined}
-              onDragStart={groupActions ? e => { e.dataTransfer.setData('text/x-ticker', ticker.symbol); e.dataTransfer.effectAllowed = 'move'; } : undefined}
-              {...(groupActions && groupOf(ticker.symbol) ? drop(groupOf(ticker.symbol)!) : {})}
+            <tr className={(selected ? 'selected' : '') + dropClass('ticker:' + ticker.symbol)} draggable={!!groupActions || undefined}
+              onDragStart={groupActions ? e => startDrag(e, 'ticker', ticker.symbol) : undefined} onDragEnd={endDrag}
+              {...(groupActions && groupOf(ticker.symbol) ? drop(groupOf(ticker.symbol)!, ticker.symbol) : {})}
               title={ticker.lastUpdate ? 'Recepción ' + fmtTime(ticker.lastUpdate) + ' ET' + (isStale(ticker.lastUpdate) ? ' · lectura anterior' : '') : 'Sin fecha de recepción'}>
               <th scope="row">
                 <button className="watchlist-symbol" aria-label={ticker.symbol} aria-pressed={selected}
@@ -90,7 +114,9 @@ export function TickerWatchlist({ tickers, showPremarket = true, premarket, prem
     const open = !collapsed.includes(label);
     const toggle = <button aria-expanded={open} onClick={() => setCollapsed(v => v.includes(label) ? v.filter(s => s !== label) : [...v,label])}>{open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}{label}</button>;
     if (!groupActions) return <tr className="watchlist-group"><td colSpan={columnCount}>{toggle}</td></tr>;
-    return <tr className={'watchlist-group' + (dropOn === label ? ' drop' : '')} {...drop(label)}><td colSpan={columnCount}>
+    return <tr className={'watchlist-group' + dropClass('group:' + label)} {...drop(label)}
+      draggable={!!groupActions.onMoveGroup && renaming !== label} onDragStart={e => startDrag(e, 'group', label)} onDragEnd={endDrag}
+      title="Arrastrá el encabezado para ordenar los grupos"><td colSpan={columnCount}>
       {renaming === label
         ? <input className="watchlist-rename" aria-label={'Nombre del grupo ' + label} defaultValue={label} autoFocus
             onBlur={e => { groupActions.onRename(label, e.target.value); setRenaming(null); }}
@@ -114,7 +140,7 @@ export function TickerWatchlist({ tickers, showPremarket = true, premarket, prem
           <th scope="col" className="numeric watchlist-received">Recepción (ET)</th>
           <th scope="col"><span className="sr-only">Acciones</span></th>
         </tr></thead>
-        <tbody>{sections ? sections.map(section => <React.Fragment key={section.label}>{header(section.label)}{!collapsed.includes(section.label) && section.symbols.map(symbol => tickers.find(t => t.symbol === symbol)).filter((t): t is TickerState => !!t).map(renderTicker)}{groupActions && !section.symbols.length && <tr className="watchlist-empty"><td colSpan={columnCount}>Vacío · arrastrá un ticker acá o agregalo con el buscador</td></tr>}</React.Fragment>) : tickers.map(renderTicker)}</tbody>
+        <tbody>{sections ? sections.map(section => <React.Fragment key={section.label}>{header(section.label)}{!collapsed.includes(section.label) && section.symbols.map(symbol => tickers.find(t => t.symbol === symbol)).filter((t): t is TickerState => !!t).map(renderTicker)}{groupActions && !section.symbols.length && <tr className={'watchlist-empty' + dropClass('group:' + section.label)} {...drop(section.label)}><td colSpan={columnCount}>Vacío · arrastrá un ticker acá o agregalo con el buscador</td></tr>}</React.Fragment>) : tickers.map(renderTicker)}</tbody>
       </table>
       <details className="watchlist-note"><summary>Datos</summary>GaleCore · Cambio contra cierre previo · La hora indica recepción, no origen del precio regular (ET). Premarket usa hora de origen y cierre regular fechado; sin dato no equivale a 0%.</details>
     </div>
