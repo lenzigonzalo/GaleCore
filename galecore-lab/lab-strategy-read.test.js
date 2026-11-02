@@ -43,3 +43,18 @@ test('different projects do not share cached results; SHADOW uses original proje
   assert.notEqual((await get('/workspaces/'+a.id+'/strategy?view=design')).current.ref,(await get('/workspaces/'+b.id+'/strategy?view=design')).current.ref);
   await get('/workspaces/'+a.id+'/strategy');assert.equal(argsSeen[2][4],'show');
 });
+test('WS-0071 AC-3: /strategy lee la estrategia pedida del proyecto y rechaza una ajena; /informes lista memory y files, lo nuevo primero',async t=>{
+  const seen=[];
+  const {kb,get}=setup(t,(bin,args,opts,cb)=>{seen.push(args.at(-1));cb(null,JSON.stringify({current:{ref:args.at(-1)},integrity_failed:[]}));});
+  const base=path.join(kb,'workspaces','argentina');fs.mkdirSync(path.join(base,'memory'),{recursive:true});fs.mkdirSync(path.join(base,'files'));
+  fs.writeFileSync(path.join(base,'workspace.json'),JSON.stringify({id:'argentina',label:'Argentina',strategies:['bonos_ar','evento_ar']}));
+  fs.writeFileSync(path.join(base,'memory','vieja.md'),'a');fs.utimesSync(path.join(base,'memory','vieja.md'),new Date(2026,0,1),new Date(2026,0,1));
+  fs.writeFileSync(path.join(base,'files','nueva.md'),'b');fs.writeFileSync(path.join(base,'memory','README.md'),'indice');
+  assert.equal((await get('/workspaces/argentina/strategy?name=evento_ar')).current.ref,'strategy:evento_ar');
+  assert.equal((await get('/workspaces/argentina/strategy')).current.ref,'strategy:bonos_ar');
+  await assert.rejects(()=>get('/workspaces/argentina/strategy?name=otra'),/no es de este proyecto/);
+  fs.mkdirSync(path.join(kb,'research'));fs.writeFileSync(path.join(kb,'research','2026-11-01-contexto.md'),'---\nproject: argentina\n---\ntexto');
+  fs.writeFileSync(path.join(kb,'research','2026-11-01-ajena.md'),'---\nproject: brasil\n---\ntexto');
+  assert.deepEqual((await get('/workspaces/argentina/informes')).informes.map(i=>i.path).sort(),['files/nueva.md','investigaciones/2026-11-01-contexto.md','memory/vieja.md']);
+  assert.equal((await get('/workspaces/argentina/informes')).informes.at(-1).path,'memory/vieja.md');
+});

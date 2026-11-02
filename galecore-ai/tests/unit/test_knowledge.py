@@ -143,7 +143,7 @@ class TestCatalog:
         entries = describe(load_catalog())
         assert {e["id"] for e in entries} == {"gex_interpretation", "regime_interpretation", "capability_builder", "research", "context_research", "strategy_design", "strategy_followup",
                                               "daily_attention", "alert_analysis", "market_watch", "market_story",
-                                              "knowledge_curator", "daily_contrast", "performance_review", "capital_risk", "on_demand_analysis", "company_research", "scheduled_report"}
+                                              "knowledge_curator", "daily_contrast", "performance_review", "capital_risk", "on_demand_analysis", "company_research", "scheduled_report", "revisar_swing_etfs"}
         assert all(e["available"] for e in entries), entries
 
     def test_prepare_skills_have_code_behind_them(self):
@@ -334,7 +334,7 @@ class TestCli:
         assert code == 0 and data["knowledge_base"]["available"]
         assert [e["id"] for e in data["entries"]] == ["gex_interpretation", "regime_interpretation", "capability_builder", "research",
                                                     "context_research", "strategy_design", "strategy_followup",
-                                                    "daily_attention", "market_watch", "market_story", "on_demand_analysis", "company_research", "scheduled_report", "performance_review", "capital_risk", "alert_analysis", "knowledge_curator", "daily_contrast"]
+                                                    "daily_attention", "market_watch", "market_story", "on_demand_analysis", "company_research", "scheduled_report", "performance_review", "capital_risk", "alert_analysis", "knowledge_curator", "daily_contrast", "revisar_swing_etfs"]
 
     def test_save_search_show_revise(self, kb):
         env = {KNOWLEDGE_DIR_ENV: str(kb.base)}

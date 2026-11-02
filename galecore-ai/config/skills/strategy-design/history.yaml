@@ -1,6 +1,13 @@
 # Qué cambió en cada versión de strategy_design y qué feedback lo originó (GC-AI-0016). La más nueva primero.
 skill_id: strategy_design
 versions:
+  - version: "2.4.0"
+    date: 2026-11-01
+    changes: >
+      Antes de entregar la tabla de estructuras (A-1) se corre `check_propuesta.py`, que confirma strikes, vencimiento,
+      crédito, riesgo y hora contra GaleCore; si un número no coincide se corrige con el valor de GaleCore y se dice
+      (WS-0073, owner 01/11).
+    feedback: []
   - version: "2.3.0"
     date: 2026-10-26
     changes: >

@@ -54,7 +54,25 @@ export function restoreSymbol(list: Watchlist, symbol: string): Watchlist {
   return { ...list, hidden: list.hidden.filter(s => s !== symbol) };
 }
 
-export const moveSymbol = (list: Watchlist, symbol: string, group: string): Watchlist => addSymbol(list, symbol, group);
+export function moveSymbol(list: Watchlist, symbol: string, group: string, target?: string, after = false): Watchlist {
+  if (!list.groups.some(g => g.symbols.includes(symbol)) || !list.groups.some(g => g.name === group) || symbol === target) return list;
+  const groups = without(list, symbol).map(g => {
+    if (g.name !== group) return g;
+    const symbols = [...g.symbols];
+    const index = target ? symbols.indexOf(target) : -1;
+    symbols.splice(index < 0 ? symbols.length : index + Number(after), 0, symbol);
+    return { ...g, symbols };
+  });
+  return { ...list, groups };
+}
+
+export function moveGroup(list: Watchlist, name: string, target: string, after = false): Watchlist {
+  const group = list.groups.find(g => g.name === name);
+  if (!group || name === target || !list.groups.some(g => g.name === target)) return list;
+  const groups = list.groups.filter(g => g.name !== name);
+  groups.splice(groups.findIndex(g => g.name === target) + Number(after), 0, group);
+  return { ...list, groups };
+}
 
 /** Nombre libre: «Grupo», «Grupo 2»… */
 export function createGroup(list: Watchlist, name = 'Grupo'): Watchlist {

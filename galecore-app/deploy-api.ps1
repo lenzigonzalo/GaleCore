@@ -30,6 +30,9 @@
     .\deploy-api.ps1 -SkipPublish
     Despues de darle "Publicar" en Visual Studio.
 
+.PARAMETER Port
+    Puerto SSH del VPS (DonWeb usa el 5061).
+
 .NOTES
     Pide la contrasena de sudo dos veces (ssh -t abre TTY para que sudo pueda preguntar). Para
     evitarlo hace falta una regla de sudoers acotada a los systemctl de este servicio -- es una
@@ -38,10 +41,12 @@
 [CmdletBinding()]
 param(
     [string] $Server     = 'elenzi@149.50.154.221',
+    [int]    $Port       = 5061,
     [string] $RemoteApp  = '/srv/galecore/app',
     [string] $Service    = 'galecore-datafeed',
     [string] $HealthUrl  = 'https://vps-6285555-x.dattaweb.com/swagger/v1/swagger.json',
-    [switch] $SkipPublish
+    [switch] $SkipPublish,
+    [switch] $AllowNonMain
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,6 +58,17 @@ $remoteTar  = '~/galecore-publish.tar.gz'
 
 function Step { param([string] $Text) Write-Host "`n==> $Text" -ForegroundColor Cyan }
 function Fail { param([string] $Text) Write-Host "`nFALLO: $Text" -ForegroundColor Red; exit 1 }
+
+# ── 0. Solo se despliega main ─────────────────────────────────────────────────
+# main es produccion (D-0016): lo que corre en el VPS tiene que ser un commit de main, sin cambios
+# locales encima. -AllowNonMain es para la vuelta atras desde un commit anterior.
+$branch = (git -C $PSScriptRoot rev-parse --abbrev-ref HEAD).Trim()
+$dirty  = git -C $PSScriptRoot status --porcelain
+if (-not $AllowNonMain) {
+    if ($branch -ne 'main') { Fail "El checkout esta en '$branch'. Se despliega desde main (o -AllowNonMain para una vuelta atras)." }
+    if ($dirty)             { Fail 'Hay cambios sin commitear: lo desplegado no seria un commit de main.' }
+}
+Write-Host "    commit: $(git -C $PSScriptRoot log -1 --format='%h %s')"
 
 # ── 1. Publish ────────────────────────────────────────────────────────────────
 if ($SkipPublish) {
@@ -95,7 +111,7 @@ Write-Host '    Files incluidos:'
 
 # ── 4. Transferir ─────────────────────────────────────────────────────────────
 Step "Subiendo a $Server"
-scp $tarball "${Server}:$remoteTar"
+scp -P $Port $tarball "${Server}:$remoteTar"
 if ($LASTEXITCODE -ne 0) { Fail 'scp devolvio error. Revisa la clave SSH y el firewall del panel.' }
 
 # ── 5. Reemplazar y reiniciar ─────────────────────────────────────────────────
@@ -105,7 +121,7 @@ $remote = "sudo systemctl stop $Service" +
           " && sudo tar -xzf $remoteTar -C $RemoteApp" +
           " && sudo chown -R galecore:galecore $RemoteApp" +
           " && sudo systemctl start $Service"
-ssh -t $Server $remote
+ssh -t -p $Port $Server $remote
 if ($LASTEXITCODE -ne 0) { Fail 'El comando remoto devolvio error. La API puede haber quedado abajo.' }
 
 # ── 6. Verificar ──────────────────────────────────────────────────────────────
@@ -122,11 +138,11 @@ for ($i = 1; $i -le 8; $i++) {
 }
 if (-not $ok) {
     Write-Host "`nNo respondio 200 despues de 8 intentos. Mira los logs:" -ForegroundColor Yellow
-    Write-Host "  ssh $Server 'sudo journalctl -u $Service -n 60 --no-pager'"
+    Write-Host "  ssh -p $Port $Server 'sudo journalctl -u $Service -n 60 --no-pager'"
     exit 1
 }
 
 Step 'Estado de runtime en el servidor (las fechas tienen que ser ANTERIORES a este deploy)'
-ssh $Server "ls -l $RemoteApp/Files/Gex/gex_switch_state.json $RemoteApp/Files/skew25_history.json"
+ssh -p $Port $Server "ls -l $RemoteApp/Files/Gex/gex_switch_state.json $RemoteApp/Files/skew25_history.json"
 
 Write-Host "`nDeploy OK. $HealthUrl responde 200." -ForegroundColor Green

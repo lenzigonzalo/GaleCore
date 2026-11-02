@@ -181,3 +181,17 @@ test('guardar sin cambiar nada cierra el editor y no escribe ningún pedido', as
   expect(await screen.findByRole('button', { name: 'Editar' })).toBeEnabled();
   expect(saveSpaceItem).not.toHaveBeenCalled();
 });
+
+test('muestra el método del agente y la última corrida de cada script, o que no hubo', async () => {
+  const skill_scripts = { skill: 'revisar-swing-etfs', scripts: [
+    { script: 'revision_swing.py', last_run: { at: '2026-11-01T13:00:00Z', ok: false, error: 'Traceback\nTimeout tras 180 s' } },
+    { script: 'otro.py', last_run: null },
+  ] };
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...item, content: JSON.stringify({ ...task, skill_scripts }) }], shared: [] });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: /Mi vigilancia de SPY/ }));
+  expect(screen.getByText(/Método:/)).toHaveTextContent('Revisar');
+  expect(screen.getByText(/revision_swing\.py/)).toHaveTextContent(/Falló.*Timeout tras 180 s/);
+  expect(screen.queryByText(/Traceback/)).not.toBeInTheDocument();
+  expect(screen.getByText(/otro\.py/)).toHaveTextContent('Sin corridas');
+});

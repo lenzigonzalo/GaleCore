@@ -27,7 +27,12 @@ from typing import Protocol
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
-from galecore_ai.application.catalog_check import SCHEDULED_READS, SCHEDULED_SCRIPTS, flow_key
+from galecore_ai.application.catalog_check import (
+    SCHEDULED_READS,
+    SCHEDULED_SCRIPTS,
+    flow_key,
+    own_script,
+)
 from galecore_ai.application.knowledge import (
     KnowledgeBase,
     KnowledgeError,
@@ -35,6 +40,9 @@ from galecore_ai.application.knowledge import (
     revise_research,
     save_evidence,
     save_research,
+)
+from galecore_ai.application.skill_run import (
+    RUN_DIR_ENV,  # a scheduled script must not write outside it
 )
 from galecore_ai.contracts.evidence import EvidenceContent
 from galecore_ai.contracts.regime_record import RecordHost
@@ -69,7 +77,6 @@ RECOMMENDATION = [re.compile(p, re.IGNORECASE) for p in (
     r"\byou\s+(?:should|must|need\s+to)\s+" + _ACT_EN + r"\b",
     r"\b" + _ACT_EN + r"\s+(?:now|today|immediately)\b",
 )]
-RUN_DIR_ENV = "GALECORE_AI_RUN_DIR"   # a scheduled script must not write outside it (SCHEDULED_SCRIPTS)
 
 
 class ModelEvidence(BaseModel):
@@ -258,7 +265,14 @@ def allowed_tools(entry: CatalogEntry, commands: dict[str, set[str]]) -> list[st
                 rules.append(f"Bash(python -B {tokens[1].partition('/')[2]}:*)")
             continue
         key = flow_key(tokens, commands)
-        if key in SCHEDULED_READS:   # never a write: the runner runs the follow-up and saves the result
+        if script := own_script(entry, tokens):   # that exact script of its own skill, no other skill, no shell
+            fixed = []   # the flow's own flags stay in the rule; the rule is a prefix, so the script itself drops --input/--output in a scheduled run
+            for tok in tokens[4:]:
+                if tok.startswith("<"):
+                    break
+                fixed.append(tok)
+            rules.append(f"Bash({CLI} skill run {tokens[2]} {' '.join([script, *fixed])}:*)")
+        elif key in SCHEDULED_READS:   # never a write: the runner runs the follow-up and saves the result
             rules.append(f"Bash({CLI} {' '.join(k for k in key if k)}:*)")
     return list(dict.fromkeys(rules))
 

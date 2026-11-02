@@ -5,7 +5,7 @@ import { CalendarDock } from '../macro/CalendarDock';
 import { TickerGrid } from './TickerGrid';
 import { WatchlistSearch } from './WatchlistSearch';
 import { fetchSpace, saveSpaceItem } from '../../api/space';
-import { Watchlist, WATCHLIST_KEY, parseWatchlist, resolveWatchlist, addSymbol, removeSymbol, restoreSymbol, moveSymbol, createGroup, renameGroup, deleteGroup } from './watchlistPrefs';
+import { Watchlist, WATCHLIST_KEY, parseWatchlist, resolveWatchlist, addSymbol, removeSymbol, restoreSymbol, moveSymbol, moveGroup, createGroup, renameGroup, deleteGroup } from './watchlistPrefs';
 import { useGexStore } from '../../store/useGexStore';
 import { useAppConfigStore } from '../../store/useAppConfigStore';
 import type { ConnectionStatus } from '../../socket/useMarketSocket';
@@ -157,7 +157,7 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
             sections={list.groups.map(g => ({label:g.name,symbols:g.symbols}))}
             removableSymbols={symbols}
             onRemoveSymbol={symbol => { edit(old => removeSymbol(old, symbol, baseSymbols)); if (adHocSymbols.includes(symbol)) unpinAdHoc(symbol); if (selectedSymbol === symbol) setSelectedSymbol(null); }}
-            groupActions={{ onMove: (symbol, group) => edit(old => moveSymbol(old, symbol, group)), onRename: (from, to) => edit(old => renameGroup(old, from, to)), onDelete: name => edit(old => deleteGroup(old, name)) }}
+            groupActions={{ onMove: (symbol, group, target, after) => edit(old => moveSymbol(old, symbol, group, target, after)), onMoveGroup: (name, target, after) => edit(old => moveGroup(old, name, target, after)), onRename: (from, to) => edit(old => renameGroup(old, from, to)), onDelete: name => edit(old => deleteGroup(old, name)) }}
           />
           <button className="lw-new-group" onClick={() => edit(old => createGroup(old))}><FolderPlus size={15}/>Nuevo grupo</button>
           {list.hidden.length > 0 && <div className="lw-hidden"><span>Quitados de esta lista</span>{list.hidden.map(s => <button key={s} onClick={() => edit(old => restoreSymbol(old, s))}><RotateCcw size={14}/>{s}</button>)}</div>}

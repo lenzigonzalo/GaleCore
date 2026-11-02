@@ -72,9 +72,9 @@ public class UsernamesTests
     /// quedaría invisible para el admin, sin forma de darle permisos.
     /// </summary>
     [Theory]
-    [InlineData("ericlenzi@gmail.com", "ericlenzi")]
-    [InlineData("Eric.Lenzi@Gmail.com", "eric.lenzi")]
-    [InlineData("eric+trading@gmail.com", "eric-trading")]
+    [InlineData("jperez@gmail.com", "jperez")]
+    [InlineData("Juan.Perez@Gmail.com", "juan.perez")]
+    [InlineData("juan+trading@gmail.com", "juan-trading")]
     [InlineData("ab@gmail.com", "abu")]                          // corto: se rellena
     [InlineData("@gmail.com", "use")]                            // sin parte local
     [InlineData("", "use")]

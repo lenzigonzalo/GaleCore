@@ -62,7 +62,8 @@
 .watchlist-group-tools { display:flex; gap:2px; opacity:0; }
 .watchlist-group:hover .watchlist-group-tools,.watchlist-group:focus-within .watchlist-group-tools { opacity:1; }
 .watchlist-group-tools button { padding:3px 5px; text-transform:none; }
-.watchlist-group.drop td { background:var(--bg-hover); }
+.ticker-watchlist .watchlist-drop-before > * { box-shadow:inset 0 2px var(--accent); }
+.ticker-watchlist .watchlist-drop-after > * { box-shadow:inset 0 -2px var(--accent); }
 .watchlist-rename { width:100%; background:var(--bg-secondary); border:1px solid var(--accent); border-radius:4px; color:var(--text-primary); font:inherit; font-size:13px; padding:3px 6px; }
 .lw-drawer .watchlist-action { width:auto; white-space:nowrap; }
 .lw-drawer .watchlist-move td { padding:6px 8px 10px!important; background:var(--bg-secondary); }

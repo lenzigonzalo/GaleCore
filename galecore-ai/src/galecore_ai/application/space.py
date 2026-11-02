@@ -19,7 +19,7 @@ from datetime import UTC, date, datetime, timedelta
 from galecore_ai.adapters.galecore_space import SpaceClient
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.task import Schedule
-from galecore_ai.harness.assets import load_asset
+from galecore_ai.harness.assets import asset_root, load_asset
 from galecore_ai.harness.catalog import load_catalog
 from galecore_ai.harness.definitions import SkillDefinition
 
@@ -73,6 +73,23 @@ def _agent_history(kb: KnowledgeBase, task, outcomes: list[dict]) -> list[dict]:
     return rows
 
 
+def _skill_scripts(kb: KnowledgeBase, task) -> dict:
+    """WS-0073: the scripts of the agent's own skill folder and the last run of each (``skill run``, by this agent)."""
+    from galecore_ai.application import tasks as t
+    from galecore_ai.application.skill_run import last_runs
+
+    if task.kind in t.CODE_RUNNERS:
+        return {"skill_scripts": None}
+    entry = t.schedulable_entry(task.kind)
+    folder = (asset_root() / entry.skill).parent
+    scripts = sorted(p.name for p in (folder / "scripts").glob("*.py")) if (folder / "scripts").is_dir() else []
+    if not scripts:
+        return {"skill_scripts": None}
+    runs = last_runs(kb.base, f"agent:{task.id}")
+    return {"skill_scripts": {"skill": folder.name, "scripts": [
+        {"script": n, "last_run": next((r for k, r in runs.items() if k.endswith(f"/{n}")), None)} for n in scripts]}}
+
+
 def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) -> dict:
     """What the Agentes screen shows of one agent: definition, freshness, last run and its findings."""
     from galecore_ai.application import tasks as t  # lazy: tasks imports the CLI side lazily too
@@ -92,7 +109,7 @@ def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) ->
     if findings and len(findings) > FINDINGS_LIMIT:
         findings = findings[:FINDINGS_LIMIT].rstrip() + "\n\n… (recortado: el resultado completo queda en GaleCore-AI)"
     return {
-        "capability": task.kind, "status": task.status, "schedule": task.schedule.describe(),
+        "capability": task.kind, "status": task.status, **_skill_scripts(kb, task), "schedule": task.schedule.describe(),
         "strategy": task.strategy, "objective": task.objective,
         "model": task.model, "model_default": (t.schedulable_entry(task.kind).schedulable.model
                                                 if task.kind not in t.CODE_RUNNERS else None),

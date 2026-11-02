@@ -1,18 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import type { IChartApi, Time } from 'lightweight-charts';
-import { ArrowUpRight } from 'lucide-react';
-import { labRequest } from '../../api/lab';
 import './LabMapa.css';
 import '../shadow/PerformancePanel.css';
 
-// Mapa de la idea (WS-0039): lo escribe el agente en memory/mapa-<tema>.md y el Lab lo sirve por secciones.
-// El panel sólo lee; se relee al abrir la conversación y al terminar cada respuesta.
-export interface MapaLine { mark: 'ok' | 'missing' | null; text: string }
+// Gráfico y fuente de un informe (WS-0039, WS-0071): los usa LabMarkdown para los bloques ```grafico de los mapas.
 export interface MapaChart { fuente?: string; unidad?: string; corte?: string; calculo?: string; series: { nombre: string; puntos: [string, number][] }[] }
-export interface MapaSection { heading: string; lines: MapaLine[]; chart?: MapaChart; table?: { head: string[]; rows: string[][] } }
-export interface Mapa { path: string; updatedAt: string; title: string; intro?: string[]; sections: MapaSection[] }
 
-const time = (iso: string) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
 const day = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + d.slice(0, 4) : d;
 const COLORS = ['--accent', '--yellow-gc', '--green', '--red'];
 
@@ -75,63 +68,4 @@ export function MapaChartView({ chart, label }: { chart: MapaChart; label: strin
 // Owner 18/10: las fuentes no ocupan lugar; quedan detrás de un «?» que se abre al pasar o tocar.
 export function SourceHint({ text }: { text: string }) {
   return <details className="lab-source-hint"><summary aria-label="Fuente" title={text}>?</summary><span>{text}</span></details>;
-}
-
-function Numeros({ lines }: { lines: MapaLine[] }) {
-  return <div className="lab-mapa-numbers">{lines.map((l, i) => {
-    const [value, ...what] = l.text.split('·');
-    return <div key={i}><strong>{value.trim()}</strong>{what.length > 0 && <span>{what.join('·').trim()}</span>}</div>;
-  })}</div>;
-}
-
-// Las secciones en el orden en que las escribe el agente (PRODUCT.md «Mapa de la idea», owner 18/10): cada una con su
-// texto, su tabla y su gráfico. Un mapa viejo (Hipótesis, Entrada…) se ve igual de bien.
-// «valor · qué es» con un valor corto que lleva cifras = número grande de la evidencia.
-const isNumber = (t: string) => { const [v, ...rest] = t.split('·'); return rest.length > 0 && /\d/.test(v) && v.trim().length <= 24; };
-
-function Section({ sec }: { sec: MapaSection }) {
-  const numbers = sec.lines.filter(l => isNumber(l.text)), text = sec.lines.filter(l => !isNumber(l.text));
-  const empty = !sec.lines.length && !sec.table?.rows.length && !sec.chart;
-  return <section className="lab-mapa-block"><h3>{sec.heading}</h3>
-    {text.map((l, k) => <p key={k}>{l.text}</p>)}
-    {numbers.length > 0 && <Numeros lines={numbers}/>}
-    {sec.table && sec.table.rows.length > 0 && <div className="lab-mapa-table"><table><thead><tr>{sec.table.head.map(c => <th key={c}>{c}</th>)}</tr></thead>
-      <tbody>{sec.table.rows.map((r, k) => <tr key={k}>{sec.table!.head.map((_, m) => <td key={m}>{r[m] || '—'}</td>)}</tr>)}</tbody></table></div>}
-    {sec.chart && <MapaChartView chart={sec.chart} label={sec.heading}/>}
-    {empty && <p className="lab-mapa-blank">Todavía no se habló</p>}
-  </section>;
-}
-
-export function LabMapa({ chatId, projectId = null, running, onResults }: { chatId: string | null; projectId?: string | null; running: boolean; onResults?: () => void }) {
-  // Sin conversación elegida (clic en el proyecto), se muestra el último mapa del proyecto.
-  const source = chatId ? '/chats/' + chatId + '/mapa' : projectId ? '/workspaces/' + encodeURIComponent(projectId) + '/mapa' : null;
-  const [mapa, setMapa] = useState<Mapa | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'error'>(() => (source ? 'loading' : 'ready'));
-  const shown = useRef<string | null>(null);
-  useEffect(() => {
-    // Otra conversación: no mostrar el mapa de la anterior mientras se lee el suyo.
-    if (shown.current !== source) { shown.current = source; setMapa(null); setState(source ? 'loading' : 'ready'); }
-    if (!source) return;
-    let active = true;
-    const read = () => labRequest<{ mapa: Mapa | null }>(source)
-      .then(v => { if (active) { setMapa(m => v.mapa || m); setState('ready'); } })
-      .catch(() => { if (active) setState('error'); });
-    read();
-    // Mientras responde, el mapa aparece apenas el agente lo escribe; al terminar se relee una vez más.
-    const timer = running ? window.setInterval(read, 4000) : undefined;
-    return () => { active = false; if (timer) window.clearInterval(timer); };
-  }, [source, running]);
-
-  const results = onResults && <button type="button" className="lab-mapa-results" title="Resultados de esta estrategia en Estrategias" onClick={onResults}>Ver resultados<ArrowUpRight size={15}/></button>;
-  return <aside className="lab-mapa" aria-label="Mapa de la idea">
-    {!mapa && results && <header>{results}</header>}
-    {state === 'error' && !mapa ? <p className="lab-mapa-empty" role="alert">No se pudo leer el mapa. Se vuelve a intentar al terminar la próxima respuesta.</p>
-      : state === 'loading' && !mapa ? <p className="lab-mapa-empty" role="status">Leyendo el mapa…</p>
-      : !mapa ? <p className="lab-mapa-empty">El mapa aparece cuando la conversación arma una idea.</p>
-      : <>
-        <header><div><h2>{mapa.title || 'Idea'}</h2><span>{running ? 'Actualizando…' : 'Actualizado ' + time(mapa.updatedAt)}{state === 'error' ? ' · no se pudo releer' : ''}</span></div>
-          {results}</header>
-        <div className="lab-mapa-design">{mapa.sections.map((sec, i) => <Section key={sec.heading + i} sec={sec}/>)}</div>
-      </>}
-  </aside>;
 }

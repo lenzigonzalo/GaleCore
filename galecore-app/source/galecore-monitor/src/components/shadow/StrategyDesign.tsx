@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { strategiesOf } from '../../api/labProjects';
 import { labRequest, WorkspaceState } from '../../api/lab';
 import type { StrategyView } from '../../pages/LabStrategySheet';
 import { CompactStrategyDesign } from './CompactStrategyDesign';
@@ -16,9 +17,9 @@ export function useStrategyDesign(spec: string) {
     setLoading(true); setError('');
     const key = JSON.stringify([spec, retry]);
     if (request.current?.key !== key) request.current = { key, promise: labRequest<WorkspaceState>('/workspaces').then(async workspace => {
-      const project = workspace.projects.find(item => item.strategyName === spec);
+      const project = workspace.projects.find(item => !item.externalStrategy && strategiesOf(item).includes(spec));
       if (!project) return null;
-      const data = await labRequest<StrategyView>(`/workspaces/${encodeURIComponent(project.id)}/strategy?view=design`, undefined, 65000);
+      const data = await labRequest<StrategyView>(`/workspaces/${encodeURIComponent(project.id)}/strategy?name=${encodeURIComponent(spec)}&view=design`, undefined, 65000);
       if (data.integrity_failed?.length) throw new Error('El harness detectó un problema de integridad en este proyecto.');
       return { strategy: data, projectId: project.id };
     }) };

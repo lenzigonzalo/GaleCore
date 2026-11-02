@@ -12,6 +12,55 @@ jest.mock('../../api/account',()=>({fetchStrikeAlerts:async()=>({alerts:[],uneva
 import { fetchSpace, saveSpaceItem } from '../../api/space';
 const batch=fetchMarketDataBatch as jest.Mock;
 const props={open:true,enabled:true,onClose:jest.fn(),onSelect:jest.fn(),socketStatus:'connected' as const,subscribeSymbol:jest.fn(),unsubscribeSymbol:jest.fn()};
+
+test('arrastrar ordena tickers y grupos, acepta grupos vacíos y persiste al recargar', async () => {
+  const {unmount} = render(<LiveWatchlist {...props}/>);
+  await waitFor(()=>expect(screen.getAllByText('101.00')).toHaveLength(2));
+  const transfer = {setData:jest.fn(), effectAllowed:'', dropEffect:''};
+  const row = (name:string) => screen.getByRole('button',{name}).closest('tr')!;
+  const dragTo = (from:string, to:string, after = false) => {
+    const source = row(from); const target = row(to);
+    jest.spyOn(target, 'getBoundingClientRect').mockReturnValue({top:10,height:20} as DOMRect);
+    const event = (type:string) => {
+      const e = new Event(type, {bubbles:true,cancelable:true});
+      Object.defineProperties(e, {dataTransfer:{value:transfer}, clientY:{value:after ? 29 : 11}});
+      return e;
+    };
+    fireEvent(source,event('dragstart'));
+    fireEvent(target,event('dragover'));
+    const headerTarget = target.classList.contains('watchlist-group');
+    const tickerSource = !source.classList.contains('watchlist-group');
+    expect(target.className).toContain((after || (headerTarget && tickerSource)) ? 'watchlist-drop-after' : 'watchlist-drop-before');
+    fireEvent(target,event('drop'));
+    fireEvent(source,event('dragend'));
+  };
+  dragTo('AAPL','SPY');
+  expect(screen.getAllByRole('rowheader').map(el=>el.textContent)).toEqual(['AAPL','SPY']);
+  dragTo('AAPL','SPY',true);
+  expect(screen.getAllByRole('rowheader').map(el=>el.textContent)).toEqual(['SPY','AAPL']);
+  dragTo('AAPL','SPY');
+  dragTo('SPY','Instrumentos');
+  fireEvent.click(screen.getByRole('button',{name:'Nuevo grupo'}));
+  const empty = screen.getByText(/Vacío · arrastrá/).closest('tr')!;
+  fireEvent.dragStart(row('SPY'),{dataTransfer:transfer});
+  fireEvent.dragOver(empty,{dataTransfer:transfer});
+  fireEvent.drop(empty,{dataTransfer:transfer});
+  fireEvent.click(screen.getByRole('button',{name:'ETF'}));
+  dragTo('SPY','ETF'); // Un grupo contraído también recibe tickers.
+  dragTo('Grupo','ETF');
+  dragTo('Grupo','Instrumentos',true);
+  expect(props.onSelect).not.toHaveBeenCalled();
+  await waitFor(()=>expect(saveSpaceItem).toHaveBeenCalled());
+  const body = (saveSpaceItem as jest.Mock).mock.calls.at(-1)[2];
+  expect(JSON.parse(body.content).groups).toEqual([
+    {name:'ETF',symbols:['SPY','AAPL']}, {name:'Instrumentos',symbols:[]}, {name:'Grupo',symbols:[]},
+  ]);
+  unmount(); localStorage.clear();
+  (fetchSpace as jest.Mock).mockResolvedValue({items:[{kind:'preference',key:'watchlist',isOwn:true,content:body.content}],shared:[]});
+  render(<LiveWatchlist {...props}/>);
+  await waitFor(()=>expect(screen.getAllByRole('rowheader').map(el=>el.textContent)).toEqual(['SPY','AAPL']));
+  expect(Array.from(document.querySelectorAll('.watchlist-group')).map(el=>el.textContent)).toEqual(['ETF','Instrumentos','Grupo']);
+}, 20000);
 beforeEach(()=>{
   jest.clearAllMocks();
   localStorage.clear();

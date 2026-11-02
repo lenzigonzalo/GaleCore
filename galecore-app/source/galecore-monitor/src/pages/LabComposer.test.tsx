@@ -13,7 +13,7 @@ jest.mock('../api/lab', () => ({
 jest.mock('./LabShadow', () => ({ LabShadow: () => <div>Seguimiento</div> }));
 jest.mock('../components/lab/LabShell', () => ({ LabShell: () => <div>Terminal</div> }));
 
-const projects = [{ id: 'personal', label: 'Personal', type: 'personal', relative: 'workspaces/personal' }];
+const projects = [{ id: 'personal', label: 'Personal', relative: 'workspaces/personal' }];
 const user = (text: string) => ({ id: 'u1', role: 'user', text, at: '2026-10-28T10:00:00Z' });
 const reply = (text: string, id = 'a1') => ({ id, role: 'assistant', text, at: '2026-10-28T10:00:05Z' });
 

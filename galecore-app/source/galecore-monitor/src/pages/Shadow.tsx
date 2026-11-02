@@ -1,6 +1,7 @@
 import { discardLabel, discardReason } from '../components/shadow/discardPresentation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { labRequest, WorkspaceProject, WorkspaceState } from '../api/lab';
+import { strategiesOf } from '../api/labProjects';
 import { useAppConfigStore } from '../store/useAppConfigStore';
 import { useStrategySwitchStore, useSwitchEnabled, useSwitchEntry } from '../store/useStrategySwitchStore';
 import { useCanManagePlatform } from '../store/useCurrentUserStore';
@@ -143,7 +144,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   useEffect(() => {
     let active = true;
     const request = projectsRequest.current ??= labRequest<WorkspaceState>('/workspaces');
-    request.then(state => { if (active) { setProjects(state.projects.filter(p => p.type === 'strategy' && p.strategyName)); setProjectsError(''); } })
+    request.then(state => { if (active) { setProjects(state.projects.filter(p => !p.externalStrategy && strategiesOf(p).length > 0)); setProjectsError(''); } })
       .catch(() => { if (projectsRequest.current === request) projectsRequest.current = undefined; if (active) setProjectsError('No se pudieron leer las estrategias en diseño.'); });
     return () => { active = false; };
   }, [projectsRetry]);
@@ -186,8 +187,11 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   };
   const isRunning = (name: string) => latestInstance(instances, name)?.lifecycleState === 'RUNNING';
   const sortByState = (list: PerformanceSummary[]) => [...list].sort((a, b) => Number(isRunning(b.spec)) - Number(isRunning(a.spec)) || strategyName(a.spec).localeCompare(strategyName(b.spec)));
-  const designOnly = projects.filter(project => project.strategyName && project.strategyName !== 'rpf' && !rows.some(row => row.spec === project.strategyName))
-    .sort((a, b) => strategyName(a.strategyName!).localeCompare(strategyName(b.strategyName!)));
+  // WS-0071: un proyecto puede tener varias estrategias; cada una es una fila y dice de qué proyecto es.
+  const designed = projects.flatMap(project => strategiesOf(project).map(name => ({ project, name })));
+  const projectOf = (spec: string) => designed.find(d => d.name === spec)?.project.label;
+  const designOnly = designed.filter(d => d.name !== 'rpf' && !rows.some(row => row.spec === d.name))
+    .sort((a, b) => strategyName(a.name).localeCompare(strategyName(b.name)));
   const countIn = (id: Stage) => rows.filter(r => stageOf(r.spec) === id && !archived.includes(r.spec)).length + (showRpf && stageOf('rpf') === id ? 1 : 0);
   const currentStage: Stage = stage ?? (countIn('LIVE') ? 'LIVE' : 'SHADOW');
   const archivedHere = rows.filter(r => stageOf(r.spec) === currentStage && archived.includes(r.spec)).length;
@@ -204,7 +208,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
   const back = () => { setSpec(null); setRuntimeOpen(false); };
   return <div className="shadow-page">
     {spec ? <>
-      {spec === 'rpf' && rpf ? <div className="performance-panel"><StrategyHeader title={rpfName} onBack={back} chips={<><RpfStateSwitch endpoint={rpfEntry?.switch_endpoint || '/App/Rpf/Switch'} /><StageModeChip stage={stageOf('rpf')} mode={modeOf('rpf')} /></>} /><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} onBack={back} stage={stageOf(spec)} mode={modeOf(spec)} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && projects.some(project => project.strategyName === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Detalle técnico del motor</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
+      {spec === 'rpf' && rpf ? <div className="performance-panel"><StrategyHeader title={rpfName} onBack={back} chips={<><RpfStateSwitch endpoint={rpfEntry?.switch_endpoint || '/App/Rpf/Switch'} /><StageModeChip stage={stageOf('rpf')} mode={modeOf('rpf')} /></>} /><div className="performance-tabs" role="tablist" aria-label="Seguimiento de RPF"><button role="tab" id="rpf-hoy" aria-selected="true" aria-controls="rpf-hoy-panel">Hoy</button></div><div role="tabpanel" id="rpf-hoy-panel" aria-labelledby="rpf-hoy">{rpf}</div></div> : <PerformancePanel key={spec} spec={spec} onOpenChat={onOpenChat} onBack={back} stage={stageOf(spec)} mode={modeOf(spec)} inDesign={!rows.some(row => row.spec === spec) && !latestInstance(instances, spec) && designed.some(d => d.name === spec)} instance={latestInstance(instances, spec)} referenceCapital={capital} runtime={<details className="performance-block shadow-runtime" open={runtimeOpen} onToggle={event => setRuntimeOpen(event.currentTarget.open)}><summary>Detalle técnico del motor</summary>{runtimeOpen && <RuntimeDetails spec={spec} />}</details>} />}
     </> : <div className="performance-panel">
       <div className="strategy-list-heading"><h2 className="strategy-list-title">Estrategias</h2>
         <div className="stage-switch" role="tablist" aria-label="Etapa">{stages.map(x => <button key={x.id} role="tab" aria-selected={currentStage === x.id} onClick={() => setStage(x.id)}>{x.label}<span className="stage-count">{countIn(x.id) || ''}</span></button>)}</div></div>
@@ -220,7 +224,7 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
               <td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" /><td className="numeric" /><td />
             </tr>}
             {sortByState(rows.filter(row => stageOf(row.spec) === currentStage && (showArchived || !archived.includes(row.spec)))).map(row => <tr key={row.spec} className="strategy-row" tabIndex={0} onClick={() => setSpec(row.spec)} onKeyDown={event => { if (event.key === 'Enter') setSpec(row.spec); }}>
-              <td className="strategy-name"><button title={row.spec} onClick={event => { event.stopPropagation(); setSpec(row.spec); }}>{strategyName(row.spec)}</button></td>
+              <td className="strategy-name"><button title={row.spec} onClick={event => { event.stopPropagation(); setSpec(row.spec); }}>{strategyName(row.spec)}</button>{projectOf(row.spec) && <span className="strategy-project">{projectOf(row.spec)}</span>}</td>
               <td><StageState active={isRunning(row.spec)} /></td>
               <td><ModeSwitch mode={modeOf(row.spec)} busy={savingMode === row.spec} autoBlocked={stageOf(row.spec) === 'LIVE' ? 'En Live, Auto mandaría órdenes solas: bloqueado hasta que exista la ejecución.' : undefined} manualBlocked={stageOf(row.spec) === 'SHADOW' ? 'SHADOW corre siempre en automático.' : undefined} onChange={mode => void changeMode(row.spec, mode)} /></td>
               <td className="numeric">{row.tradesOpen || ''}</td>
@@ -230,8 +234,8 @@ export function Shadow({ selectedSpec, onSelectSpec, onOpenChat, rpf }: { select
             {countIn(currentStage) === 0 && <tr><td colSpan={9} className="strategy-empty">{error || statusError || settingsError ? 'No se pudo comprobar qué estrategias hay en esta etapa.' : 'Ninguna estrategia en esta etapa.'}</td></tr>}
           </tbody>
           {currentStage === 'SHADOW' && designOnly.length > 0 && <tbody><tr className="strategy-stage"><th colSpan={9}>En diseño</th></tr>
-            {designOnly.map(project => <tr key={project.id} className="strategy-row" tabIndex={0} onClick={() => setSpec(project.strategyName)} onKeyDown={event => { if (event.key === 'Enter') setSpec(project.strategyName); }}>
-              <td className="strategy-name"><button title={project.strategyName!} onClick={event => { event.stopPropagation(); setSpec(project.strategyName); }}>{strategyName(project.strategyName!)}</button></td><td /><td /><td colSpan={6} />
+            {designOnly.map(({ project, name }) => <tr key={project.id + '/' + name} className="strategy-row" tabIndex={0} onClick={() => setSpec(name)} onKeyDown={event => { if (event.key === 'Enter') setSpec(name); }}>
+              <td className="strategy-name"><button title={name} onClick={event => { event.stopPropagation(); setSpec(name); }}>{strategyName(name)}</button><span className="strategy-project">{project.label}</span></td><td /><td /><td colSpan={6} />
             </tr>)}</tbody>}
         </>}
       </table></div>

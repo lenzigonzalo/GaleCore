@@ -2698,6 +2698,41 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 
 ---
 
+## BL-036 — APIs de Argentina: qué fuentes tiene GaleCore y cuáles faltan (A3, por ejemplo)
+
+**Estado:** pendiente; primero relevamiento, sin implementar ni cambiar el orden del plan.
+**Origen:** owner, 01/11/2026, al preparar el caso «Argentina» de WS-0071: «tendríamos que ver de sumar las APIs de Argentina, nos faltan la de A3 por ej». Anotado como BL al cerrar WS-0071 (el caso «Argentina» lo recorre el owner aparte).
+**Target:** datos de GaleCore (fuentes externas se implementan en GaleCore; el harness no consulta APIs) para los proyectos sobre Argentina: bonos soberanos en dólares, eventos con fecha (licitaciones, elecciones) y ADRs.
+**Hoy:** el caso «Argentina» declara como faltante lo que GaleCore no tiene, sin ir a la web. No está relevado qué datos argentinos hay ya conectados.
+**Preguntas a responder antes de diseñar:**
+
+| Pregunta | Opciones a evaluar |
+|---|---|
+| ¿Qué datos argentinos ya hay en GaleCore? | Relevar endpoints y fuentes actuales (calendario, macro, ADRs vía mercado de EE. UU.) |
+| ¿Qué falta para bonos, eventos y empresas? | Precios y curvas de bonos locales, mercado de capitales (A3), cauciones, dólar financiero, calendario de licitaciones |
+| ¿Cómo se accede a cada fuente? | API con clave o contrato (se le pide al owner), feed público, sólo datos diarios o intradía |
+| ¿Qué se necesita primero? | Lo que habilita una estrategia concreta del proyecto, no todas las fuentes juntas |
+
+**Entry gate:** cuando el owner priorice la pieza; antes, el relevamiento de lo que ya hay y la lista de gaps que dejó el caso «Argentina».
+**Aceptación del relevamiento:** una tabla de fuentes (tiene / falta / cómo se consulta / si pide clave) aprobada por el owner; recién después, la pieza de integración en GaleCore.
+
+**Addendum 02/11/2026 (owner):** alcance ampliado: cotizaciones, futuros de dólar y agro, expectativas de inflación, dólar blue/MEP/brecha, curva de bonos, REM e información oficial; mapearlo en GaleCore-AI como información disponible y un proyecto «Argentina» en el Lab que hable en pesos. Prioridad: APIs robustas antes que web. Del repo `macro-dashboard` sólo sirve DolarAPI (los proxies FRED y los datos a mano no). GaleCore hoy sólo tiene ARGT (ETF en EE. UU.).
+
+**Relevamiento (probado en vivo el 02/11/2026):**
+
+| Dato | Fuente | Clave | Estado |
+|---|---|---|---|
+| Dólar oficial, blue, MEP, CCL, cripto, tarjeta (brecha = cálculo) | DolarAPI `dolarapi.com/v1/dolares` | no | OK, en vivo |
+| Históricos de dólares, riesgo país, inflación mensual, UVA, letras (TNA/TEM), plazo fijo, FCI | ArgentinaDatos `api.argentinadatos.com/v1/...` | no | OK (comunitaria; riesgo país al día hábil anterior) |
+| Reservas, base monetaria, BADLAR, TAMAR, pases, inflación mensual/interanual, **REM: mediana de inflación a 12 meses** (id 29) | BCRA `api.bcra.gob.ar/estadisticas/v4.0/monetarias` (1.610 series) | no | OK (v3 deprecada) |
+| Tipo de cambio oficial A3500 y monedas | BCRA `estadisticascambiarias/v1.0/Cotizaciones` | no | OK |
+| IPC, EMAE, cuentas nacionales (INDEC) | `apis.datos.gob.ar/series/api` | no | OK |
+| Bonos soberanos, letras, ON, CEDEARs, panel líder, opciones, índices (20 min de demora) | BYMA open data `open.bymadata.com.ar/.../bymadata/free/*` (POST) | no | OK; sin documentación oficial, puede cambiar |
+| Renta fija OTC (AL30, GD, LECAP, BONCAP, duales), forex, cauciones, REPO, derivados MAE | A3/MAE `api.mae.com.ar/MarketData/v1/mercado/cotizaciones/{rentafija,forex,cauciones,repo,derivados}` | sí (`x-api-key`, `A3_API_KEY` en HKCU; UAT en `A3_API_KEY_UAT`) | OK; `derivados` vino vacío |
+| **Futuros de dólar y agro (ex Matba Rofex)** | BYMA `free/rofex` da 401; la clave A3 no abre futuros | — | **falta**: pedir a A3 el acceso a futuros (Primary API) o confirmar si `derivados` los trae |
+
+---
+
 ## BL-034 — Configuración de avisos en el monitor: frecuencia y umbrales del supervisor
 
 **Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.

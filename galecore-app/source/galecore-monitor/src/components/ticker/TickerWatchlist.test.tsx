@@ -11,6 +11,26 @@ const ticker: TickerState = {
   loading: { price: false, ivRank: false, iv: false, gex: false }, error: {},
 };
 
+test('cancelar limpia la marca y un arrastre externo no edita la watchlist', () => {
+  const actions = {onMove:jest.fn(), onMoveGroup:jest.fn(), onRename:jest.fn(), onDelete:jest.fn()};
+  render(<TickerWatchlist tickers={[ticker]} selectedSymbol={null} onSelect={jest.fn()}
+    sections={[{label:'ETF',symbols:['SPY']},{label:'Vacío',symbols:[]}]} groupActions={actions}/>);
+  const source = screen.getByRole('button',{name:'SPY'}).closest('tr')!;
+  const target = screen.getByRole('button',{name:'Vacío'}).closest('tr')!;
+  const dataTransfer = {setData:jest.fn(), getData:()=> 'AJENO'};
+  fireEvent.dragOver(target,{dataTransfer});
+  fireEvent.drop(target,{dataTransfer});
+  expect(actions.onMove).not.toHaveBeenCalled();
+  fireEvent.dragStart(source,{dataTransfer});
+  fireEvent.dragOver(target,{dataTransfer});
+  expect(target).toHaveClass('watchlist-drop-after');
+  fireEvent.dragEnd(source,{dataTransfer});
+  expect(target).not.toHaveClass('watchlist-drop-after');
+  fireEvent.drop(target,{dataTransfer});
+  expect(actions.onMove).not.toHaveBeenCalled();
+  expect(actions.onMoveGroup).not.toHaveBeenCalled();
+});
+
 test('no sustituye cierre previo por apertura ni inventa cambio sin precio', () => {
   const { rerender } = render(<TickerWatchlist tickers={[{ ...ticker, prevClose: undefined }]}
     selectedSymbol={null} onSelect={() => {}} />);

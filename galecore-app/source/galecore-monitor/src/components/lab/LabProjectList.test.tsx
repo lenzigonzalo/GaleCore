@@ -10,7 +10,7 @@ import type { WorkspaceState } from '../../api/lab';
 
 const storage = 'galecore:lab:groups:v1';
 const state: WorkspaceState = {
-  projects: [{ id: 'spy', label: 'SPY', type: 'strategy', relative: '', strategyName: 'spy' }, { id: 'personal', label: 'Personal', type: 'personal', relative: '', strategyName: null }],
+  projects: [{ id: 'spy', label: 'SPY', relative: '', strategies: ['spy'] }, { id: 'personal', label: 'Personal', relative: '', strategies: [] }],
   chats: [{ id: 'research', project: 'spy', title: 'Investigación', provider: 'codex', state: 'idle', activity: '', error: null }], providers: [],
 };
 const props = { state, projectId: 'spy', chatId: null, expanded: { spy: true }, onToggle: jest.fn(), onProject: jest.fn(), onChat: jest.fn(), onNewChat: jest.fn(), onCreateProject: jest.fn(), name: (_: string, label: string) => label, onRename: jest.fn(), editing: null, renameInput: () => null };

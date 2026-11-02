@@ -11,7 +11,7 @@ namespace DataFeed.Api.Controllers.Dtos
     /// </summary>
     public class LinkBrokerAccountRequest
     {
-        /// <summary>Número de cuenta en Tastytrade (ej. 5WZ50196).</summary>
+        /// <summary>Número de cuenta en Tastytrade (ej. 5WT00001).</summary>
         public string AccountNumber { get; set; } = "";
 
         /// <summary>Refresh token OAuth del usuario. Se cifra antes de tocar la base.</summary>
