@@ -44,7 +44,9 @@ param(
     [int]    $Port       = 5061,
     [string] $RemoteApp  = '/srv/galecore/app',
     [string] $Service    = 'galecore-datafeed',
-    [string] $HealthUrl  = 'https://vps-6285555-x.dattaweb.com/swagger/v1/swagger.json',
+    # Swagger solo existe en Development (WS-0048). El login es anonimo y solo acepta POST: un GET
+    # devuelve 405 desde la app; si Kestrel esta caido, Nginx contesta 502.
+    [string] $HealthUrl  = 'https://vps-6285555-x.dattaweb.com/App/GaleCore/Auth/Login',
     [switch] $SkipPublish,
     [switch] $AllowNonMain
 )
@@ -128,16 +130,18 @@ if ($LASTEXITCODE -ne 0) { Fail 'El comando remoto devolvio error. La API puede 
 Step 'Verificando que responda'
 $ok = $false
 for ($i = 1; $i -le 8; $i++) {
+    $code = $null
     try {
-        $r = Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 10
-        if ($r.StatusCode -eq 200) { $ok = $true; break }
+        $code = [int](Invoke-WebRequest -Uri $HealthUrl -UseBasicParsing -TimeoutSec 10).StatusCode
     } catch {
-        Write-Host "    intento $i sin respuesta todavia..."
+        if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode }
     }
+    if ($code -eq 200 -or $code -eq 405) { $ok = $true; break }
+    Write-Host "    intento $i sin respuesta de la app todavia ($code)..."
     Start-Sleep -Seconds 5
 }
 if (-not $ok) {
-    Write-Host "`nNo respondio 200 despues de 8 intentos. Mira los logs:" -ForegroundColor Yellow
+    Write-Host "`nLa app no respondio despues de 8 intentos. Mira los logs:" -ForegroundColor Yellow
     Write-Host "  ssh -p $Port $Server 'sudo journalctl -u $Service -n 60 --no-pager'"
     exit 1
 }
@@ -145,4 +149,4 @@ if (-not $ok) {
 Step 'Estado de runtime en el servidor (las fechas tienen que ser ANTERIORES a este deploy)'
 ssh -p $Port $Server "ls -l $RemoteApp/Files/Gex/gex_switch_state.json $RemoteApp/Files/skew25_history.json"
 
-Write-Host "`nDeploy OK. $HealthUrl responde 200." -ForegroundColor Green
+Write-Host "`nDeploy OK. La app responde en $HealthUrl." -ForegroundColor Green
