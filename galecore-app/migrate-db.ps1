@@ -74,7 +74,11 @@ $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
 $sqlFile = Join-Path $env:TEMP "galecore-migration-$stamp.sql"
 
 function Step { param([string] $Text) Write-Host "`n==> $Text" -ForegroundColor Cyan }
-function Fail { param([string] $Text) Write-Host "`nFALLO: $Text" -ForegroundColor Red; exit 1 }
+# Con -Production el script carga GALECORE_DB para dotnet ef. Corrido con .\ comparte la sesion:
+# hay que devolverla como estaba al salir, o lo siguiente que corras en esa ventana iria a produccion.
+$script:prevGaleCoreDb = $env:GALECORE_DB
+function Restore-Env { if ($Production) { $env:GALECORE_DB = $script:prevGaleCoreDb } }
+function Fail { param([string] $Text) Write-Host "`nFALLO: $Text" -ForegroundColor Red; Restore-Env; exit 1 }
 function Note { param([string] $Text) Write-Host "    $Text" }
 
 function Get-CsPart {
@@ -191,6 +195,9 @@ if ($LASTEXITCODE -ne 0) {
 Step 'Consultando el estado de las migraciones en la base'
 $listOut = Invoke-Ef @('migrations', 'list', '--project', $project, '--startup-project', $project)
 if ($listOut | Where-Object { $_ -match 'Pending status not shown' }) {
+    # El motivo (contrasena, permiso, red) viene en la salida de dotnet ef; las cadenas no se imprimen.
+    $listOut | Where-Object { $_ -match '(?i)error|fail|exception|denied|password|timeout|refused|does not exist|permission' } |
+        Select-Object -First 8 | ForEach-Object { Write-Host ('    ' + $_) -ForegroundColor Red }
     Fail 'No se pudo leer __EFMigrationsHistory. Revisa la credencial y el acceso a la base.'
 }
 
@@ -212,7 +219,7 @@ foreach ($m in $migrations) {
 
 if (-not $pending -and -not $Target) {
     Write-Host "`nNo hay migraciones pendientes. La base ya esta al dia." -ForegroundColor Green
-    exit 0
+    Restore-Env; exit 0
 }
 
 $from = if ($applied) { $applied[-1].Id } else { '0' }
@@ -255,7 +262,7 @@ if ($creaTablas) {
 
 if ($DryRun) {
     Write-Host "`n-DryRun: no se aplico nada. El SQL quedo en $sqlFile" -ForegroundColor Green
-    exit 0
+    Restore-Env; exit 0
 }
 
 # -- 6. Confirmacion ----------------------------------------------------------
@@ -266,7 +273,7 @@ if (-not $Yes) {
     $answer = Read-Host '   >'
     if ($answer -ne 'aplicar') {
         Write-Host "`nCancelado. No se aplico nada. El SQL quedo en $sqlFile"
-        exit 0
+        Restore-Env; exit 0
     }
 }
 
@@ -312,3 +319,4 @@ Write-Host "Migracion OK. El SQL aplicado quedo en $sqlFile" -ForegroundColor Gr
 if (-not $destructivas) {
     Write-Host 'Siguiente paso: .\deploy-api.ps1' -ForegroundColor Green
 }
+Restore-Env
