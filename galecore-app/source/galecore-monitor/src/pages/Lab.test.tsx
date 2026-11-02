@@ -8,7 +8,7 @@ jest.mock('../api/lab',()=>({labRequest:jest.fn()}));
 jest.mock('./LabShadow',()=>({LabShadow:({strategy,mode}:{strategy?:string|null;mode?:string})=> <div data-strategy={strategy} data-mode={mode}>Seguimiento del proyecto</div>}));
 jest.mock('../components/lab/LabShell',()=>({LabShell:()=> <div>Terminal del proyecto</div>}));
 beforeEach(() => { global.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as unknown as typeof ResizeObserver; });
-const projects=[{id:'personal',label:'Personal',type:'personal',relative:'workspaces/personal'},{id:'spy',label:'Estrategia SPY',type:'strategy',relative:'strategies/spy',strategyName:'spy_spec'}];
+const projects=[{id:'personal',label:'Personal',relative:'workspaces/personal'},{id:'spy',label:'Estrategia SPY',relative:'strategies/spy',strategies: ['spy_spec']}];
 beforeEach(()=>{sessionStorage.clear();jest.clearAllMocks();Element.prototype.scrollIntoView=jest.fn();(labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>{if(path==='/workspaces')return {projects,chats:[],providers:[{id:'codex',label:'Codex',installed:true}]};if(path.endsWith('/files'))return {tree:[{name:'memory',path:'memory',kind:'folder',children:[{name:'nota.md',path:'memory/nota.md',kind:'file'}]}]};if(path.includes('/files?'))return {text:'Memoria del proyecto seleccionado'};if(path==='/chats')return {id:'chat-1',project:body.project,provider:body.provider,title:'Nueva',state:'idle',messages:[]};if(path.endsWith('/messages'))return {id:'chat-1',project:'spy',provider:'codex',state:'running',messages:[{id:'m',role:'user',text:body.text}]};return {id:'chat-1',project:'spy',provider:'codex',state:'idle',messages:[]};});});
 test('Archivos y Shell son vistas del proyecto seleccionado, al lado del chat; sin vistas duplicadas de Estrategias',async()=>{render(<Lab onMonitor={()=>{}}/>);await screen.findByRole('button',{name:'Personal'});expect(screen.queryByRole('navigation',{name:'Archivos del proyecto'})).not.toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));fireEvent.click(screen.getByRole('button',{name:'Archivos'}));fireEvent.click(await screen.findByRole('button',{name:'memory'}));fireEvent.click(await screen.findByRole('button',{name:'nota.md'}));expect(await screen.findByText('Memoria del proyecto seleccionado')).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Editar'}));expect(screen.getByDisplayValue('Memoria del proyecto seleccionado')).toBeInTheDocument();expect(labRequest).toHaveBeenCalledWith('/workspaces/spy/files?path=memory%2Fnota.md');fireEvent.click(screen.getByRole('button',{name:'Shell'}));expect(screen.getByText('Terminal del proyecto')).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Chat'}));expect(screen.getByRole('textbox',{name:'Mensaje al proyecto'})).toBeInTheDocument();expect(screen.queryByRole('button',{name:'Shadow'})).not.toBeInTheDocument();});
 test('borradores separados por proyecto y envío usa el chat real con el proyecto exacto',async()=>{render(<Lab onMonitor={()=>{}}/>);await screen.findByRole('button',{name:'Personal'});fireEvent.change(screen.getByRole('textbox',{name:'Mensaje al proyecto'}),{target:{value:'Pedido personal'}});fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));expect(screen.getByRole('textbox',{name:'Mensaje al proyecto'})).toHaveValue('');fireEvent.change(screen.getByRole('textbox',{name:'Mensaje al proyecto'}),{target:{value:'Trabajemos una estrategia en SPY'}});fireEvent.click(screen.getByRole('button',{name:'Personal'}));expect(screen.getByRole('textbox',{name:'Mensaje al proyecto'})).toHaveValue('Pedido personal');fireEvent.click(screen.getByRole('button',{name:'Estrategia SPY'}));fireEvent.click(screen.getByRole('button',{name:'Enviar mensaje'}));await waitFor(()=>expect(labRequest).toHaveBeenCalledWith('/chats',{project:'spy',provider:'codex'}));expect(labRequest).toHaveBeenCalledWith('/chats/chat-1/messages',{text:'Trabajemos una estrategia en SPY',mode:'manual',attachments:[]});});
@@ -39,7 +39,7 @@ test('mientras responde muestra los pasos ya hechos y el actual (owner 18/10)',a
 
 test('nuevo proyecto pide sólo el nombre; la estrategia llega después, por intención (owner 19/10)',async()=>{
  const base=(labRequest as jest.Mock).getMockImplementation()!;
- (labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>path==='/workspaces'&&body?{id:'idea_qqq',label:'Idea QQQ',type:'analysis',relative:'workspaces/idea_qqq',strategyName:null}:base(path,body));
+ (labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>path==='/workspaces'&&body?{id:'idea_qqq',label:'Idea QQQ',relative:'workspaces/idea_qqq',strategies: []}:base(path,body));
  render(<Lab onMonitor={()=>{}}/>);await screen.findByRole('button',{name:'Personal'});
  fireEvent.click(screen.getByRole('button',{name:'Crear proyecto'}));
  const dialog=await screen.findByRole('dialog');
@@ -57,7 +57,7 @@ test('Proyecto aparece en todos los proyectos, sin tipos (WS-0071)',async()=>{
 });
 test('el panel Proyecto lista sus estrategias e informes, y cada clic abre lo suyo (WS-0071 AC-3)',async()=>{
  const base=(labRequest as jest.Mock).getMockImplementation()!;
- const argentina={id:'argentina',label:'Argentina',type:'strategy',relative:'workspaces/argentina',strategyName:'bonos_ar',strategies:['bonos_ar','evento_ar']};
+ const argentina={id:'argentina',label:'Argentina',relative:'workspaces/argentina',strategies:['bonos_ar','evento_ar']};
  (labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>{
   if(path==='/workspaces')return {...(await base(path,body)),projects:[argentina]};
   if(path.endsWith('/informes'))return {informes:[{path:'memory/contexto.md',name:'contexto.md',updatedAt:'2026-11-01T10:00:00Z'}]};
@@ -77,7 +77,7 @@ test('el panel Proyecto lista sus estrategias e informes, y cada clic abre lo su
 });
 test('un proyecto sin estrategias ni informes dice cómo empezar',async()=>{
  const base=(labRequest as jest.Mock).getMockImplementation()!;
- const idea={id:'idea',label:'Idea QQQ',type:'analysis',relative:'workspaces/idea',strategyName:null,strategies:[]};
+ const idea={id:'idea',label:'Idea QQQ',relative:'workspaces/idea',strategies:[]};
  (labRequest as jest.Mock).mockImplementation(async(path:string,body?:any)=>path==='/workspaces'?{...(await base(path,body)),projects:[idea]}:path.endsWith('/informes')?{informes:[]}:base(path,body));
  localStorage.setItem('galecore:lab:mapa','1');
  render(<Lab onMonitor={()=>{}}/>);

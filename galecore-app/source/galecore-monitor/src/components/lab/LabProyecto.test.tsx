@@ -6,7 +6,7 @@ import { fetchShadowStatus } from '../../api/shadow';
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
 jest.mock('../../api/shadow', () => ({ fetchShadowStatus: jest.fn() }));
 
-const project = { id: 'argentina', label: 'Argentina', type: 'strategy' as const, relative: 'workspaces/argentina', strategyName: 'bonos_ar', strategies: ['bonos_ar', 'evento_ar'] };
+const project = { id: 'argentina', label: 'Argentina', relative: 'workspaces/argentina', strategies: ['bonos_ar', 'evento_ar'] };
 const view = (hash: string, approved = true) => ({ current: { ref: 'strategy:x/1.0.0', approved, purpose: 'x', spec_hash: hash, recorded_at: '2026-10-30T10:00:00Z' }, integrity_failed: [] });
 
 beforeEach(() => {

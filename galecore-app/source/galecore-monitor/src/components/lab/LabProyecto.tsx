@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, FileText } from 'lucide-react';
 import { labRequest, WorkspaceProject } from '../../api/lab';
+import { strategiesOf } from '../../api/labProjects';
 import { fetchShadowStatus } from '../../api/shadow';
 import type { StrategyView } from '../../pages/LabStrategySheet';
 import { strategyName as prettyName } from '../shadow/panelPresentation';
@@ -12,7 +13,6 @@ interface Informe { path: string; name: string; updatedAt: string }
 type Stage = { label: string; date?: string } | 'loading' | 'error';
 
 // Estrategias de un proyecto (WS-0071): la lista que declara el Lab; sin ella, la única que traían los proyectos viejos.
-const strategiesOf = (p?: Pick<WorkspaceProject, 'strategies' | 'strategyName'> | null): string[] => p?.strategies ?? (p?.strategyName ? [p.strategyName] : []);
 const day = (iso?: string) => iso && !Number.isNaN(Date.parse(iso)) ? new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
 const hash = (h?: string) => h?.replace(/^sha256:/, '') || '';
 

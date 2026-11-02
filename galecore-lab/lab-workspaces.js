@@ -311,10 +311,9 @@ function parseMapa(text){
   return {title,intro,sections};
 }
 // Proyecto sin tipo (WS-0071): workspace.json lleva strategies:[nombres]. Al leer se migra el formato viejo
-// (type:'strategy' + strategyName → strategies:[strategyName]; el resto → []). type y strategyName quedan derivados
-// para el monitor hasta que el panel «Proyecto» (AC-3) los deje de usar.
+// (type:'strategy' + strategyName → strategies:[strategyName]; el resto → []). La API sólo devuelve strategies.
 const strategiesOf=(meta,fallback)=>Array.isArray(meta?.strategies)?[...new Set(meta.strategies.filter(n=>typeof n==='string'&&ID.test(n)))]:meta?.type==='strategy'?[typeof meta.strategyName==='string'&&ID.test(meta.strategyName)?meta.strategyName:fallback]:[];
-const derived=(id,strategies)=>({type:id==='personal'?'personal':strategies.length?'strategy':'analysis',strategies,strategyName:strategies[0]||null});
+const derived=(id,strategies)=>({strategies});
 function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, request, sessionFile }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
@@ -331,7 +330,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const log=path.join(kb,'projects',name+'.json');if(fs.existsSync(log))digest.update(fs.readFileSync(log));
     return digest.digest('hex');
   }
-  async function readStrategy(p, design, strategy=strategy) {
+  async function readStrategy(p, design, strategy) {
     if(p.externalStrategy)return {missing:true,reason:'El diseño referenciado no está incluido en esta copia compartida.'};
     const fingerprint=design?designFingerprint(strategy):null;
     const cached=designReads.get(strategy);
@@ -591,10 +590,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const dir=project(parts[1]).dir, rel=latestMapa(dir,0);
       json(res,200,{mapa:rel?readMapa(dir,rel):null});return true;}
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='strategy'){
-      const p=project(parts[1]); if(!p.strategyName&&!p.externalStrategy)throw fail('Este proyecto no tiene estrategias.');
+      const p=project(parts[1]); if(!p.strategies?.length&&!p.externalStrategy)throw fail('Este proyecto no tiene estrategias.');
       const asked=url.searchParams.get('name');
       if(asked&&!(p.strategies||[]).includes(asked)&&!p.externalStrategy)throw fail('Esa estrategia no es de este proyecto.',404);
-      const value=await readStrategy(p,url.searchParams.get('view')==='design',asked||p.strategyName);json(res,200,value);return true;
+      const value=await readStrategy(p,url.searchParams.get('view')==='design',asked||p.strategies?.[0]);json(res,200,value);return true;
     }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='attachments'&&parts.length===3){
       const p=project(parts[1]), rel=url.searchParams.get('path')||'', file=attachmentFile(p.dir,rel);

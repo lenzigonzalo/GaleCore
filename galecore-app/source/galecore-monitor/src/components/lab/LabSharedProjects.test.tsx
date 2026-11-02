@@ -83,7 +83,7 @@ test('el catálogo abierto descubre novedades automáticamente sin descargar', a
 
 test('la ventana del + permite buscar locales y compartidos, y crear sin salir', async () => {
   request.mockImplementation((url: string) => Promise.resolve(url === '/workspaces' ? {id:'nuevo',label:'Nueva idea'} : catalog()));
-  render(<LabSharedProjects onClose={() => {}} onChanged={changed} onOpen={open} localProjects={[{id:'local',label:'Mi investigación',type:'analysis',relative:'workspaces/local',strategyName:null}]}/>);
+  render(<LabSharedProjects onClose={() => {}} onChanged={changed} onOpen={open} localProjects={[{id:'local',label:'Mi investigación',relative:'workspaces/local',strategies: []}]}/>);
   await screen.findByText('Bancos ARG 2027');
   expect(screen.getByText('Mi investigación')).toBeInTheDocument();
   fireEvent.change(screen.getByRole('textbox',{name:'Buscar proyectos por nombre o dueño'}),{target:{value:'elenzi'}});

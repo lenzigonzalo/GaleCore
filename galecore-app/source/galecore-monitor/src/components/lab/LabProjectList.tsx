@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronRight, Folder, MessageSquare, MoreHorizontal, Plus, Search, Star, Users, X } from 'lucide-react';
 import type { WorkspaceProject, WorkspaceState } from '../../api/lab';
 import { fetchSpace, saveSpaceItem } from '../../api/space';
+import { strategiesOf } from '../../api/labProjects';
 import './LabProjectList.css';
 
 const STORAGE = 'galecore:lab:groups:v1';
@@ -126,7 +127,7 @@ export function LabProjectList(props: Props) {
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); window.removeEventListener('resize', dismiss); window.removeEventListener('scroll', dismiss, true); };
   }, []);
   const favoriteOrder = (a: string, b: string) => Number(organization.favorites.includes(b)) - Number(organization.favorites.includes(a));
-  const projects = state?.projects.filter(p => !p.strategyName?.startsWith('shadow_runtime_test_')).sort((a, b) => favoriteOrder('p:' + a.id, 'p:' + b.id)) || [];
+  const projects = state?.projects.filter(p => !strategiesOf(p).some(n => n.startsWith('shadow_runtime_test_'))).sort((a, b) => favoriteOrder('p:' + a.id, 'p:' + b.id)) || [];
   // WS-0044: la más reciente arriba (último turno, o creación si todavía no respondió).
   const recent = (c: { createdAt?: string; turnStartedAt?: number }) => Math.max(c.turnStartedAt || 0, Date.parse(c.createdAt || '') || 0);
   const chats = (state?.chats.filter(c => !/^test[_ -]/i.test(c.title) && projects.some(p => p.id === c.project)) || []).sort((a, b) => favoriteOrder('c:' + a.id, 'c:' + b.id) || recent(b) - recent(a));
