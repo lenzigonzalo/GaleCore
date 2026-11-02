@@ -38,6 +38,11 @@
 .PARAMETER Yes
     No pregunta antes de aplicar. Para cuando ya miraste el SQL con -DryRun.
 
+.PARAMETER Production
+    Migra la base de produccion (Supabase vsbnukptdvsyhujgtook) con la credencial
+    ConnectionStrings:GaleCoreDdlProduction de los user-secrets de DataFeed.Repositories.
+    Sin este switch el script se niega a tocar produccion: la credencial de todos los dias es la de Dev.
+
 .EXAMPLE
     .\migrate-db.ps1 -DryRun
     Que hay pendiente y que SQL correria, sin tocar nada.
@@ -56,8 +61,11 @@
 param(
     [string] $Target,
     [switch] $DryRun,
-    [switch] $Yes
+    [switch] $Yes,
+    [switch] $Production
 )
+
+$ProductionRef = 'vsbnukptdvsyhujgtook'
 
 $ErrorActionPreference = 'Stop'
 
@@ -101,7 +109,21 @@ Step 'Resolviendo la cadena de conexion (mismo orden que GaleCoreDbContextFactor
 $cs = $null; $csSource = $null
 
 $fromEnv = $env:GALECORE_DB
-if (-not [string]::IsNullOrWhiteSpace($fromEnv)) {
+if ($Production) {
+    # Produccion tiene su propia credencial: nunca la de Dev ni una GALECORE_DB que quedo cargada.
+    $secrets = & dotnet user-secrets list --project $project
+    $prodLine = $secrets | Where-Object { $_ -match '^ConnectionStrings:GaleCoreDdlProduction\s*=' } | Select-Object -First 1
+    if (-not $prodLine) {
+        Fail @"
+Falta la credencial de DDL de produccion en esta maquina. Cargala una sola vez:
+  dotnet user-secrets set "ConnectionStrings:GaleCoreDdlProduction" "<cadena de galecore_ddl.$ProductionRef>" --project DataFeed.Repositories
+"@
+    }
+    $cs = ($prodLine -split '=', 2)[1].Trim()
+    $csSource = 'user-secrets de DataFeed.Repositories (ConnectionStrings:GaleCoreDdlProduction)'
+    # dotnet ef resuelve la cadena por su cuenta: GALECORE_DB le gana a los user-secrets.
+    $env:GALECORE_DB = $cs
+} elseif (-not [string]::IsNullOrWhiteSpace($fromEnv)) {
     $cs = $fromEnv
     $csSource = 'variable de entorno GALECORE_DB'
 } else {
@@ -125,6 +147,15 @@ Cargala una sola vez (la contrasena de galecore_ddl esta en el gestor de contras
 Ver docs/GaleCore-arquitectura-datos.md seccion 10.
 "@
 }
+
+if ($Production -and $cs -notmatch $ProductionRef) {
+    Fail "-Production pero la cadena no es del proyecto $ProductionRef."
+}
+if (-not $Production -and $cs -match $ProductionRef) {
+    Fail "La cadena apunta a produccion ($ProductionRef). Para migrar produccion usa -Production."
+}
+$destino = if ($Production) { "PRODUCCION ($ProductionRef)" } else { 'desarrollo' }
+Note "destino: $destino"
 
 $csHost = Get-CsPart $cs 'Host'
 $csPort = Get-CsPart $cs 'Port'
@@ -230,7 +261,7 @@ if ($DryRun) {
 # -- 6. Confirmacion ----------------------------------------------------------
 if (-not $Yes) {
     Write-Host ''
-    Write-Host 'Esto se aplica sobre la base productiva y NO tiene rollback.' -ForegroundColor Yellow
+    Write-Host "Esto se aplica sobre la base de $destino y NO tiene rollback." -ForegroundColor Yellow
     Write-Host 'Escribi  aplicar  para seguir; cualquier otra cosa cancela.' -ForegroundColor Yellow
     $answer = Read-Host '   >'
     if ($answer -ne 'aplicar') {
