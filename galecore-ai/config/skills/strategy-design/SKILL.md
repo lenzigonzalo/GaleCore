@@ -44,6 +44,10 @@ El orden para entender una idea antes de armarla («Ideas y estrategias», «Map
   decide. Comparar 2-3 estructuras en una tabla con la cadena de hoy (no la de una investigación guardada): crédito,
   riesgo máximo contra el tope y qué le pide a la tesis; riesgo abierto y el tope de las otras posiciones en una
   línea, no como filas. Nunca desplegar ni guardar una versión en una consulta; la pregunta de cierre ofrece diseñarla.
+  Antes de entregar la tabla, correr `galecore-ai skill run strategy-design check_propuesta.py` con la propuesta en
+  JSON por stdin (subyacente; por estructura patas, crédito o débito, llenado y riesgo; ver el encabezado del script). Si
+  un número no coincide, corregir con el valor de GaleCore y decirlo en una línea; una estructura sin cotización usable
+  sale de la tabla con el motivo. El script no cubre ex-dividendo ni asignación anticipada.
 - **Diseño guiado: entender antes de armar** (owner 18/10, orden en method.md): qué se captura y por qué existe,
   qué universo y qué lo mueve hoy (tasas, balances, flujos, GEX), régimen de hoy y eventos dentro del plazo con 2-3
   escenarios, evidencia en la historia y la crítica (cuándo falla, qué la rompe, si tiene sentido ahora), cruzando lo

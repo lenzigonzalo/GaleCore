@@ -202,6 +202,7 @@ entries:
       - kb search --text "<idea>" [--kind research|evidence|strategy]
       - research save --slug <slug> --prompt "<pedido>" < {content, host_provider, host_model}   # si la estrategia no tiene investigación propia
       - story pack --symbol <SYM>   # qué mueve hoy al instrumento (P1-05), sin que lo pidan; se cita en la hipótesis
+      - skill run strategy-design check_propuesta.py < {propuesta}   # antes de entregar una tabla de estructuras (A-1)
       - strategy check --spec .scratch/<name>.json   # el archivo de la spec, en el proyecto
       - strategy save --spec <file> --prompt "<pedido>" < {content, host_provider, host_model}
       - strategy critique --ref strategy:<name>/<version> < {content, host_provider, host_model}   # el crítico, antes de pedir la aprobación
