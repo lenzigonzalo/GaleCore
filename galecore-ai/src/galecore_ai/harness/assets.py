@@ -41,7 +41,7 @@ def folders_note(files: dict[str, list[str]]) -> str:
     if files.get("references"):
         lines.append("Referencias (leer sólo si hace falta): " + ", ".join(f"`{f}`" for f in files["references"]))
     if files.get("scripts"):
-        lines.append("Scripts (no los leas: ejecutalos con `galecore-ai skill run <skill> <script> [args]`): "
+        lines.append("Scripts (no los leas: ejecutalos con `python -B -m galecore_ai.adapters.cli skill run <skill> <script> [args]`): "
                      + ", ".join(f"`{f.partition('/')[2]}`" for f in files["scripts"]))
     if files.get("assets"):
         lines.append("Plantillas: " + ", ".join(f"`{f}`" for f in files["assets"]))

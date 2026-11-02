@@ -63,3 +63,20 @@ def test_strike_inexistente():
 def test_mercado_cerrado_el_domingo():
     out = cp.run(spread(), CHAIN, QUOTES.get, datetime(2026, 11, 1, 15, 0, tzinfo=UTC))
     assert out["ok"] and not out["mercado_abierto"]
+
+
+def test_patas_invertidas_marcan_el_tipo_y_no_inventan_un_credito():
+    payload = spread(price=0.30, risk=470)
+    legs = payload["structures"][0]["legs"]
+    legs[0]["side"], legs[1]["side"] = "buy", "sell"   # comprado el 700 y vendido el 695: es un débito
+    s = check(payload)["estructuras"][0]
+    assert not s["ok"] and s["corregidos"]["tipo"] == "debit" and "credit" not in s["corregidos"]
+    assert s["corregidos"]["debit"] == 0.31   # compra el 700 al ask 1,91 y vende el 695 al bid 1,60
+    assert s["corregidos"]["riesgo"] < 100   # un débito arriesga lo que paga, no el ancho
+
+
+def test_cantidades_distintas_no_se_verifican_como_vertical():
+    payload = spread()
+    payload["structures"][0]["legs"][1]["qty"] = 2
+    filas = check(payload)["estructuras"][0]["filas"]
+    assert "no verificable" in filas[-1]["estado"]

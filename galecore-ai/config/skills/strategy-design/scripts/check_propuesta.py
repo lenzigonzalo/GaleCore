@@ -107,13 +107,17 @@ def check_structure(s, chain, get_quote):
     net = s['price'] if s['kind'] == 'credit' else -s['price']
     lo, hi = sorted((natural, mid))
     expected = natural if s.get('fill', 'natural') == 'natural' else mid
-    credit_ok = lo - PRICE_TOL <= net <= hi + PRICE_TOL
-    out['filas'].append(row(f"{s['kind']} ({s.get('fill', 'natural')})", s['price'], round(abs(expected), 2), credit_ok))
-    out['corregidos'] = {} if credit_ok else {s['kind']: round(abs(expected), 2)}
-    risk = max_risk(s, abs(net) if credit_ok else abs(expected))   # el riesgo sigue al precio declarado si es válido
+    real_kind = 'credit' if expected >= 0 else 'debit'
+    kind_ok = real_kind == s['kind']
+    credit_ok = kind_ok and lo - PRICE_TOL <= net <= hi + PRICE_TOL
+    out['filas'].append(row(f"{s['kind']} ({s.get('fill', 'natural')})", s['price'], f'{real_kind} {abs(expected):.2f}', credit_ok))
+    out['corregidos'] = {} if credit_ok else {real_kind: round(abs(expected), 2)}
+    if not kind_ok:
+        out['corregidos']['tipo'] = real_kind   # las patas dadas cobran o pagan al revés de lo declarado
+    risk = max_risk(s, real_kind, abs(net) if credit_ok else abs(expected))   # el riesgo sigue al precio declarado si es válido
     if risk is None:
         out['filas'].append({'campo': 'riesgo máximo', 'declarado': s.get('max_risk_usd'), 'galecore': None,
-                             'estado': 'no verificable (sólo verticales de dos patas)'})
+                             'estado': 'no verificable (sólo verticales de dos patas con la misma cantidad)'})
         risk_ok = True
     else:
         risk_ok = abs(s['max_risk_usd'] - risk) <= RISK_TOL
@@ -127,16 +131,15 @@ def check_structure(s, chain, get_quote):
     return out
 
 
-def max_risk(s, expected_net):
+def max_risk(s, kind, price):
     legs = s['legs']
-    if len(legs) != 2 or legs[0]['right'] != legs[1]['right'] or legs[0]['expiration'] != legs[1]['expiration'] \
-            or {legs[0]['side'], legs[1]['side']} != {'sell', 'buy'}:
+    if len(legs) != 2 or legs[0]['right'] != legs[1]['right'] or legs[0]['expiration'] != legs[1]['expiration']             or {legs[0]['side'], legs[1]['side']} != {'sell', 'buy'} or legs[0].get('qty', 1) != legs[1].get('qty', 1):
         return None
     qty = legs[0].get('qty', 1)
-    if s['kind'] == 'debit':
-        return abs(expected_net) * 100 * qty
+    if kind == 'debit':
+        return price * 100 * qty
     width = abs(float(legs[0]['strike']) - float(legs[1]['strike']))
-    return (width - expected_net) * 100 * qty
+    return (width - price) * 100 * qty
 
 
 def run(payload, chain, get_quote, now):
