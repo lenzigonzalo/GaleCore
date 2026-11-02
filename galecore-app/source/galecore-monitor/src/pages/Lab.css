@@ -474,8 +474,13 @@
 .lab-mention-menu li[aria-selected=true] { background:var(--bg-hover); }
 .lab-mention-menu li.empty { cursor:default; color:var(--text-muted); }
 .lab-message.assistant:hover .lab-message-edit, .lab-message.assistant .lab-message-edit:focus-visible { opacity:1; }
-.lab-note-saved { display:inline-block; margin-top:6px; font-size:13px; color:var(--text-muted); }
-.lab-note-saved a { color:var(--text-primary); }
+.lab-message-actions { display:flex; align-items:center; gap:4px; margin-top:10px; }
+.lab-message-actions button, .lab-message-actions a, .lab-message-time { display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; padding:0; border:0; border-radius:6px; background:transparent; color:var(--text-muted); }
+.lab-message-actions button, .lab-message-actions a { cursor:pointer; }
+.lab-message-actions button:hover, .lab-message-actions a:hover, .lab-message-time:hover { color:var(--text-primary); background:var(--bg-tertiary); }
+.lab-message-actions :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.lab-message-actions button:disabled { opacity:.5; cursor:wait; }
+.lab-message-time { cursor:default; }
 .lab-chat-error-actions { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin-top:8px; }
 /* WS-0067: segundo plano */
 .lab-tasks { display:grid; gap:6px; margin:10px 0 0; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--bg-secondary); }
