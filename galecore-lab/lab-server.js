@@ -18,7 +18,7 @@ const KB = ensureKnowledgeDir();
 const PORT = Number(process.env.GALECORE_LAB_PORT || 8771);
 const LOCAL = path.join(__dirname, '.local');
 const STORE = path.join(LOCAL, 'lab-sessions.json');
-const ORIGINS = new Set((process.env.GALECORE_LAB_ORIGINS || 'http://localhost:3039,http://127.0.0.1:3039').split(',').map(s => s.trim()).filter(Boolean));
+const ORIGINS = new Set((process.env.GALECORE_LAB_ORIGINS || 'http://localhost:3039,http://127.0.0.1:3039,https://galecore.vercel.app').split(',').map(s => s.trim()).filter(Boolean));
 const TOKEN = crypto.randomBytes(32).toString('hex');
 const sessions = new Map();
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -199,12 +199,15 @@ function readBody(req) {
 }
 const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()], autoSync:true });
 const server = http.createServer(async (req, res) => {
-  if (!validHost(req) || !validOrigin(req)) return json(res, 403, { error: 'Sólo se admite el monitor local de esta PC.' });
+  if (!validHost(req) || !validOrigin(req)) return json(res, 403, { error: 'Sólo se admite GaleCore: la plataforma o el monitor local de esta PC.' });
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
   res.setHeader('Vary', 'Origin');
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-File-Name');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS'); res.writeHead(204).end(); return;
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    // La plataforma (https) le habla a esta PC: Chrome pide permiso de red local en el preflight.
+    if (req.headers['access-control-request-private-network'] === 'true') res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    res.writeHead(204).end(); return;
   }
   const url = new URL(req.url, 'http://127.0.0.1');
   if (req.method === 'GET' && url.pathname === '/bootstrap') return json(res, 200, { token: TOKEN, scope: 'local-os-user' });

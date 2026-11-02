@@ -21,7 +21,7 @@ const { WebSocketServer } = require('ws');
 const { PROVIDERS, providerBinary, authCommand, authEnvironment, authStatus } = require('./provider-auth');
 
 const PORT = Number(process.env.GALECORE_TERMINAL_PORT || 8770);
-const ORIGINS = (process.env.GALECORE_TERMINAL_ORIGINS || 'http://localhost:3039,http://127.0.0.1:3039')
+const ORIGINS = (process.env.GALECORE_TERMINAL_ORIGINS || 'http://localhost:3039,http://127.0.0.1:3039,https://galecore.vercel.app')
   .split(',').map(s => s.trim()).filter(Boolean);
 const { knowledgeDir } = require('./knowledge-dir');
 const ROOT = path.resolve(__dirname, '..');
@@ -69,6 +69,14 @@ const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin;
   if (!localHost(req) || (origin && !allowed(origin))) { res.writeHead(403).end(); return; }
   if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
+  if (req.method === 'OPTIONS') {
+    if (!allowed(origin)) { res.writeHead(403).end(); return; }
+    // La plataforma (https) le habla a esta PC: Chrome pide permiso de red local en el preflight.
+    if (req.headers['access-control-request-private-network'] === 'true') res.setHeader('Access-Control-Allow-Private-Network', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.writeHead(204).end(); return;
+  }
   const url = new URL(req.url, 'http://127.0.0.1');
   if (req.method === 'GET' && url.pathname === '/auth/status') {
     if (!allowed(origin)) { res.writeHead(403).end(); return; }

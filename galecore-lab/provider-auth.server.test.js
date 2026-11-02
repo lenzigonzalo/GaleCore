@@ -10,6 +10,9 @@ test('HTTP and PTY enforce local origin and fixed authentication commands; simul
  const sockets=[];
  try{
   assert.equal((await get()).status,403);assert.equal((await get('https://other.invalid')).status,403);assert.equal((await get('http://localhost:3039','remote.invalid')).status,403);
+  assert.equal((await get('https://galecore.vercel.app')).status,200);
+  const pna=await new Promise((resolve,reject)=>{const req=http.request({method:'OPTIONS',hostname:'127.0.0.1',port,path:'/auth/status',headers:{Host:'127.0.0.1:18770',Origin:'https://galecore.vercel.app','Access-Control-Request-Private-Network':'true'}},res=>{res.resume();res.on('end',()=>resolve(res));});req.on('error',reject);req.end();});
+  assert.equal(pna.statusCode,204);assert.equal(pna.headers['access-control-allow-private-network'],'true');
   const status=await get('http://localhost:3039');assert.equal(status.status,200);assert.deepEqual(JSON.parse(status.body),{providers:[{id:'claude',status:'signed-out'},{id:'codex',status:'signed-out'}]});
   const connect=params=>{const socket=new WebSocket(`ws://127.0.0.1:${port}/pty?${params}`,{headers:{Host:'127.0.0.1:18770',Origin:'http://localhost:3039'}});sockets.push(socket);return socket;};
   const invalid=connect('auth=codex%3Bcmd');const [invalidCode]=await once(invalid,'close');assert.equal(invalidCode,4000);assert.equal(launches.length,0);

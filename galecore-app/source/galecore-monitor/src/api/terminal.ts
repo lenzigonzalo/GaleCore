@@ -3,12 +3,14 @@
  * producto), sólo en loopback. Abre `claude` en GaleCore (el harness, por defecto), o en la carpeta de una estrategia, y lo pasa por
  * WebSocket. Si no corre (otra PC, producción), el panel lo dice y nada más.
  */
+import { LOCAL_FETCH } from './lab';
+
 export const TERMINAL_URL = process.env.REACT_APP_TERMINAL_URL || 'http://127.0.0.1:8770';
 
 export interface TerminalFolder { key: string; label: string }
 
 export async function fetchTerminalFolders(): Promise<TerminalFolder[]> {
-  const r = await fetch(`${TERMINAL_URL}/folders`);
+  const r = await fetch(`${TERMINAL_URL}/folders`, LOCAL_FETCH);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
@@ -26,7 +28,7 @@ export async function fetchProviderAuth(): Promise<{ providers: ProviderAuth[] }
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), 15000);
   try {
-    const response = await fetch(`${TERMINAL_URL}/auth/status`, { signal: controller.signal, cache: 'no-store' });
+    const response = await fetch(`${TERMINAL_URL}/auth/status`, { ...LOCAL_FETCH, signal: controller.signal, cache: 'no-store' });
     if (!response.ok) throw new Error('No se pudo comprobar la conexión.');
     return response.json();
   } finally { window.clearTimeout(timer); }
