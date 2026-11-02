@@ -1865,7 +1865,7 @@ def build_parser() -> _JsonArgumentParser:
     p_st_deploy.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", default=None,
                              help="contentHash that App/Runtime/Specs/<name> reports (default: asked to GaleCore)")
-    p_st_dep = st_sub.add_parser("deploy", help="Deploy an approved version in SHADOW Dev (registers the spec, then "
+    p_st_dep = st_sub.add_parser("deploy", help="Deploy an approved version in SHADOW (registers the spec, then "
                                                 "deploys it; GaleCore is not called without an intact approval)")
     p_st_dep.add_argument("--ref", required=True, help="strategy:<name>/<version>")
 

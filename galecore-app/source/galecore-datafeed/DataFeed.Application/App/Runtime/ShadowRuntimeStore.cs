@@ -170,7 +170,7 @@ namespace DataFeed.Application.App.Runtime
         {
             lock (_deployGate)
             {
-                var running = RunningInstances().FirstOrDefault(i => i.VersionHash == instance.VersionHash);
+                var running = RunningInstances().FirstOrDefault(i => i.VersionHash == instance.VersionHash && i.DeployedBy == instance.DeployedBy);   // una por versión Y por usuario
                 if (running != null) return DeployResult.Existing(running);
                 if (expectedHash != null)
                 {

@@ -323,6 +323,7 @@ namespace DataFeed.Application.App.Runtime
             SchedulerState = i.SchedulerState,
             SpecName = i.SpecName,
             Mode = i.Mode,
+            DeployedBy = i.DeployedBy,
             CreatedAt = Utc(i.CreatedAt),
             UpdatedAt = Utc(i.UpdatedAt),
         };

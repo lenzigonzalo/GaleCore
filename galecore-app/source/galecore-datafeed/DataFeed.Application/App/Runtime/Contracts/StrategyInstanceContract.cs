@@ -19,5 +19,7 @@ namespace DataFeed.Application.App.Runtime.Contracts
         /// <summary>Nombre legible del spec (para logs/UI).</summary>
         public string SpecName { get; init; } = "";
         public string Mode { get; init; } = "SHADOW";
+        /// <summary>Quién la desplegó (userId, o "SYSTEM" si no tiene dueño). Es el mismo valor que el de su deployment.</summary>
+        public string DeployedBy { get; init; } = "SYSTEM";
     }
 }

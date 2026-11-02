@@ -139,6 +139,12 @@ class SpaceClient:
         self.user = username
         self._store_token(username, r["accessToken"], _token_expiry(r["accessToken"], r.get("expires_in", r.get("expiresIn"))))
 
+    def authorization(self) -> str:
+        """The ``Authorization`` header value of this user's session (logs in, or reuses the cached token)."""
+        if "Authorization" not in self._headers:
+            self.login()
+        return self._headers["Authorization"]
+
     def _call(self, method: str, path: str, *, auth: bool = True, **kw):
         if auth and "Authorization" not in self._headers:
             self.login()

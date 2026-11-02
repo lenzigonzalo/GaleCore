@@ -1734,9 +1734,9 @@ namespace DataFeed.Controllers
         [HttpPost("Runtime/Deploy")]
         public async Task<IActionResult> RuntimeDeploy([FromBody] RuntimeDeployRequest body, CancellationToken ct)
         {
-            // Esta API corre las estrategias de un solo usuario (Runtime:OwnerUserId): otro no despliega acá.
-            if (!_runtimeOwner.Allows(_currentUser.UserId))
-                return StatusCode(StatusCodes.Status403Forbidden, new { error = DataFeed.Application.App.Runtime.ShadowRuntimeOwner.DeniedMessage });
+            // Con dueño (Runtime:OwnerUserId) otro usuario no despliega acá; sin dueño hace falta usuario autenticado.
+            if (_runtimeOwner.CheckDeploy(_currentUser.UserId) is { } denied)
+                return StatusCode(denied.Status, new { error = denied.Error });
             // Con expectedHash la spec se resuelve por ese hash (la versión aprobada), no por nombre; el store confirma bajo su lock
             // que sigue siendo la vigente. Sin expectedHash, como siempre: la vigente por nombre.
             var spec = string.IsNullOrEmpty(body.ExpectedHash) ? _runtimeStore.GetSpec(body.SpecName) : _runtimeStore.GetSpecByHash(body.ExpectedHash);
@@ -1757,6 +1757,7 @@ namespace DataFeed.Controllers
             var deploymentId = Guid.NewGuid().ToString();
             var instanceId = Guid.NewGuid().ToString();
             var now = DateTime.UtcNow;
+            var deployedBy = DataFeed.Application.App.Runtime.ShadowRuntimeOwner.DeployedByOf(_runtimeOwner.Attribute(_currentUser.UserId));
 
             var instance = new DataFeed.Application.App.Runtime.Contracts.StrategyInstance
             {
@@ -1768,7 +1769,8 @@ namespace DataFeed.Controllers
                 CreatedAt = now,
                 UpdatedAt = now,
                 SpecName = body.SpecName,
-                Mode = "SHADOW"
+                Mode = "SHADOW",
+                DeployedBy = deployedBy
             };
 
             var deployment = new DataFeed.Application.App.Runtime.Contracts.StrategyDeployment
@@ -1777,7 +1779,7 @@ namespace DataFeed.Controllers
                 VersionHash = spec.ContentHash ?? "",
                 Mode = "SHADOW",
                 DeployedAt = now,
-                DeployedBy = DataFeed.Application.App.Runtime.ShadowRuntimeOwner.DeployedByOf(_runtimeOwner.Attribute(_currentUser.UserId)),
+                DeployedBy = deployedBy,
                 SpecName = body.SpecName,
                 SpecVersion = spec.Identity.Version,
             };
@@ -1878,10 +1880,14 @@ namespace DataFeed.Controllers
         /// </summary>
         [Tags("App.Runtime")]
         [HttpPost("Runtime/Instances/{id}/Stop")]
-        public IActionResult RuntimeStop(string id)
+        public async Task<IActionResult> RuntimeStop(string id, CancellationToken ct)
         {
-            if (!_runtimeOwner.Allows(_currentUser.UserId))
-                return StatusCode(StatusCodes.Status403Forbidden, new { error = DataFeed.Application.App.Runtime.ShadowRuntimeOwner.DeniedMessage });
+            // Con dueño: sólo él. Sin dueño: usuario autenticado, y sólo quien la desplegó o un admin (inexistente: 404 abajo).
+            var stopper = _currentUser.UserId;
+            var deployedBy = _runtimeStore.GetInstance(id)?.DeployedBy;
+            var isAdmin = !_runtimeOwner.IsScoped && stopper != null && deployedBy != null && await _users.IsAdminAsync(stopper.Value, ct);
+            if (_runtimeOwner.CheckStop(stopper, deployedBy, isAdmin) is { } denied)
+                return StatusCode(denied.Status, new { error = denied.Error });
             if (!_runtimePersistence.Available || !_runtimeStore.IsDurable)
                 return StatusCode(StatusCodes.Status503ServiceUnavailable, new
                 {

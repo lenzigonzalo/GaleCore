@@ -169,8 +169,8 @@ No uses la memoria automática del motor: la del trader vive en esta carpeta y e
 ## Límites
 
 - Nunca se inventan, reescalan ni redondean números de GaleCore; el payload aceptado es el límite del éxito.
-- Una estrategia llega a SHADOW sólo con la aprobación del owner sobre una versión exacta, y sólo en GaleCore Dev.
-  Nada envía órdenes reales ni toca producción.
+- Una estrategia llega a SHADOW sólo con la aprobación del owner sobre una versión exacta, y corre en GaleCore a nombre de quien la despliega.
+  Nada envía órdenes reales.
 - **SHADOW y real no se afectan entre sí.** Se puede consultar uno trabajando en el otro, pero sus decisiones y números
   no se cruzan: lo simulado no suma a la exposición, los topes ni el resultado real, y la cartera real no cambia el
   juicio sobre una estrategia en validación. Juntos, cada uno con su nombre y nunca sumados.

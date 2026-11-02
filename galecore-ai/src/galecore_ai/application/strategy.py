@@ -459,7 +459,7 @@ def deploy_check(*, kb: KnowledgeBase, key: str, galecore_hash: str, galecore_sp
             "scope": approval.scope}
 
 
-# ── deploy into SHADOW Dev ───────────────────────────────────────
+# ── deploy into SHADOW ───────────────────────────────────────
 
 SPECS_PATH = "/App/Runtime/Specs"
 DEPLOY_PATH = "/App/Runtime/Deploy"
@@ -467,29 +467,43 @@ Deployer = Callable[[str, str], tuple[dict, dict]]   # (spec name, spec text) ->
 
 _HTTP_PROBLEMS = {
     400: "GaleCore rechaza la spec o el despliegue",
+    401: "GaleCore no reconoce tu sesión: volvé a entrar en el Lab y probá de nuevo",
+    403: "GaleCore no te deja desplegar ni parar acá",
     404: "GaleCore no conoce esa spec",
     409: "GaleCore ya corre otra versión de esa estrategia: hay que frenar esa instancia antes de desplegar ésta",
     503: "SHADOW de GaleCore está sin persistencia: no se despliega algo que se perdería al reiniciar",
 }
 
 
-def _galecore_headers() -> dict[str, str]:
-    """The one place where calls that change GaleCore authenticate (same ApiKey as the reads and the Check)."""
-    headers = {"Accept": "application/json", "Content-Type": "application/json"}
+def _galecore_headers(authorization: str) -> dict[str, str]:
+    """The one place where calls that change GaleCore authenticate: the ApiKey (if any) plus the user's session."""
+    headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": authorization}
     if key := os.environ.get("GALECORE_API_KEY"):
         headers["X-Api-Key"] = key
     return headers
 
 
-def galecore_deployer(base_url: str | None = None, timeout: float = 60.0) -> Deployer:
-    """Register the spec text and deploy it in SHADOW Dev. No retries: any refusal or network error is reported."""
+def galecore_deployer(base_url: str | None = None, timeout: float = 60.0,
+                      session: Callable[[], str] | None = None) -> Deployer:
+    """Register the spec text and deploy it in SHADOW, in the name of the logged-in user. ``session`` returns the
+    ``Authorization`` value (default: the Lab's GaleCore login). No retries: any refusal or network error is reported."""
     import httpx
 
     base = (base_url or os.environ.get("GALECORE_BASE_URL", "http://localhost:7001")).rstrip("/")
 
+    def authorization() -> str:
+        from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+        try:
+            return session() if session else SpaceClient(base_url=base).authorization()
+        except SpaceError as exc:
+            raise KnowledgeError("Para desplegar hace falta tu sesión de GaleCore (usuario y contraseña del Lab): "
+                                 "no se desplegó nada", [str(exc)]) from exc
+
+    auth = ""
+
     def post(path: str, **kwargs) -> dict:
         try:
-            r = httpx.post(base + path, headers=_galecore_headers(), timeout=timeout, **kwargs)
+            r = httpx.post(base + path, headers=_galecore_headers(auth), timeout=timeout, **kwargs)
         except httpx.HTTPError as exc:
             raise KnowledgeError(f"GaleCore no respondió en {base} ({type(exc).__name__}); no se desplegó nada "
                                  "o no se sabe si quedó a medias: mirá Estrategias en la plataforma") from exc
@@ -513,6 +527,8 @@ def galecore_deployer(base_url: str | None = None, timeout: float = 60.0) -> Dep
         return body
 
     def deploy(name: str, spec_json: str) -> tuple[dict, dict]:
+        nonlocal auth
+        auth = authorization()   # before any POST: without a session nothing is sent
         registered = post(SPECS_PATH, content=spec_json.encode("utf-8"))
         if registered.get("content_hash") != galecore_spec_hash(spec_json):
             return registered, {}   # the caller refuses: nothing is deployed
@@ -523,13 +539,13 @@ def galecore_deployer(base_url: str | None = None, timeout: float = 60.0) -> Dep
 
 
 def deploy_strategy(*, kb: KnowledgeBase, key: str, deployer: Deployer | None = None) -> dict:
-    """Deploy an approved version in SHADOW Dev: GaleCore is only called with an intact approval of this exact spec,
+    """Deploy an approved version in SHADOW: GaleCore is only called with an intact approval of this exact spec,
     and only deploys what it hashes to the approved hash."""
     doc = load_proposal(kb, key)
     allowed = deploy_check(kb=kb, key=key, galecore_hash=doc.spec_hash)   # intact approval and critique, no GaleCore
     approval = kb.strategies.load_approval(key)
     if approval.strategy_ref != f"strategy:{key}" or approval.scope != "SHADOW:galecore-dev":
-        raise KnowledgeError(f"deploy of strategy:{key} refused", ["the approval is not of this version in SHADOW Dev"])
+        raise KnowledgeError(f"deploy of strategy:{key} refused", ["the approval is not of this version in SHADOW"])
     if galecore_spec_hash(doc.spec_json) != doc.spec_hash:
         raise KnowledgeError(f"strategy:{key}: the stored spec does not hash to its recorded hash")
     name = Path(doc.spec_file).stem
@@ -549,7 +565,7 @@ def deploy_strategy(*, kb: KnowledgeBase, key: str, deployer: Deployer | None = 
     from galecore_ai.application.project import add
     try:
         add(kb=kb, name=doc.name, kind="decision", prompt="strategy deploy", refs=[], now=None,
-            words=f"Registro del sistema, no son palabras del owner: se desplegó {key} en SHADOW Dev, instancia {instance_id}"
+            words=f"Registro del sistema, no son palabras del owner: se desplegó {key} en SHADOW, instancia {instance_id}"
                   + (" (ya corría)" if result["existing"] else ""))
         result["recorded"] = True
     except KnowledgeError as exc:   # the instance is real: a failed note must not hide it

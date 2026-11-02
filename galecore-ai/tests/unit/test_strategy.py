@@ -478,6 +478,39 @@ def test_sheet_shows_parameters_management_gaps_and_critique(kb, research_ref): 
     assert "**Por qué no:**" in md and "un gap de −5 %" in md
 
 
+def SESSION() -> str:
+    return "Bearer test-token"
+
+
+def test_deploy_without_a_session_posts_nothing(kb, research_ref, monkeypatch):  # noqa: F811
+    from galecore_ai.adapters.galecore_space import SpaceError
+
+    def no_session():
+        raise SpaceError("faltan GALECORE_USERNAME/GALECORE_PASSWORD")
+    doc, _ = stored(kb, research_ref)
+    approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    with galecore_deploy_server() as (base, calls), pytest.raises(KnowledgeError, match="hace falta tu sesión") as err:
+        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=no_session))
+    assert calls == [] and "GALECORE_USERNAME" in " ".join(err.value.problems)
+
+
+def test_deploy_sends_the_session_on_both_posts(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    seen: list = []
+    with galecore_deploy_server(headers_seen=seen) as (base, calls):
+        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
+    assert len(calls) == 2 and [h.get("Authorization") for h in seen] == ["Bearer test-token"] * 2
+
+
+def test_deploy_401_explains_the_session(kb, research_ref):  # noqa: F811
+    doc, _ = stored(kb, research_ref)
+    approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
+    with galecore_deploy_server(specs_status=401) as (base, calls), pytest.raises(KnowledgeError, match="no reconoce tu sesión"):
+        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
+    assert len(calls) == 1
+
+
 def test_deploy_is_refused_without_approval_or_with_another_hash(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
     with pytest.raises(KnowledgeError, match="no recorded approval"):
@@ -495,7 +528,7 @@ def test_deploy_uploads_the_approved_spec_and_returns_the_instance(kb, research_
     doc, _ = stored(kb, research_ref)
     approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
     with galecore_deploy_server(replaced_hash="sha256:" + "a" * 64) as (base, calls):
-        out = deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+        out = deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
     assert [p for p, _ in calls] == ["/App/Runtime/Specs", "/App/Runtime/Deploy"]
     assert calls[0][1] == doc.spec_json.encode("utf-8") and json.loads(calls[1][1]) == {"specName": NAME, "expectedHash": doc.spec_hash}
     assert out["status"] == "DEPLOYED" and out["instance_id"] == "i-1" and out["spec_hash"] == doc.spec_hash
@@ -508,14 +541,14 @@ def test_deploy_requires_the_instance_to_report_the_approved_hash(kb, research_r
     doc, _ = stored(kb, research_ref)
     approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
     with galecore_deploy_server(deploy_version_hash=version_hash) as (base, _), pytest.raises(KnowledgeError, match="frenala"):
-        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
 
 
 def test_deploy_explains_the_409_of_a_stale_expected_hash(kb, research_ref):  # noqa: F811
     doc, _ = stored(kb, research_ref)
     approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
     with galecore_deploy_server(deploy_status=409, stale_hash=True) as (base, _),             pytest.raises(KnowledgeError, match="otra versión de esa estrategia que la aprobada") as err:
-        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
     assert "sha256:vigente" in " ".join(err.value.problems)
 
 
@@ -523,13 +556,13 @@ def test_deploy_without_approval_or_with_another_hash_never_calls_galecore(kb, r
     doc, _ = stored(kb, research_ref)
     with galecore_deploy_server() as (base, calls):
         with pytest.raises(KnowledgeError, match="refused"):
-            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
         approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
         kb.strategies.load_approval(KEY)
         p = next(Path(kb.base).rglob("*.approval.json"))
         p.write_text(p.read_text(encoding="utf-8").replace("Apruebo", "Apruebo todo"), encoding="utf-8")
         with pytest.raises(KnowledgeError):
-            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
     assert calls == []
 
 
@@ -537,7 +570,7 @@ def test_deploy_stops_when_galecore_registers_another_hash(kb, research_ref):  #
     doc, _ = stored(kb, research_ref)
     approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
     with galecore_deploy_server(returned_hash="sha256:" + "b" * 64) as (base, calls),             pytest.raises(KnowledgeError, match="no se desplegó"):
-        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+        deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
     assert [p for p, _ in calls] == ["/App/Runtime/Specs"]
 
 
@@ -548,7 +581,7 @@ def test_deploy_reports_galecore_refusals_in_plain_words(kb, research_ref, specs
     approve(kb=kb, key=KEY, spec_hash=doc.spec_hash, owner_words="Apruebo", host=HOST, now=NOW)
     with galecore_deploy_server(specs_status=specs, deploy_status=deploy) as (base, calls):
         with pytest.raises(KnowledgeError, match=text):
-            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base))
+            deploy_strategy(kb=kb, key=KEY, deployer=galecore_deployer(base, session=SESSION))
         assert len(calls) == (1 if specs != 200 else 2)   # no retries
 
 
