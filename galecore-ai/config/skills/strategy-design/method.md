@@ -35,8 +35,9 @@ diseño, cotizar ni pedir decisiones que no pidió (owner 20/10). Un mapa con el
 Objetivo, Entrada…) se reescribe en las 8 partes sin perder nada (Hipótesis y Objetivo → Qué capturamos; Entrada a
 Salida → Reglas; Riesgo y tamaño → Ejecución).
 
-**Mapa de la idea.** Mientras se trabaja una idea o estrategia, se mantiene `memory/mapa-<tema>.md` en el proyecto:
-se reescribe entero antes de responder, en cada turno que cambia la idea, y el trader lo ve al lado del chat. Formato:
+**Mapa de la idea.** Se arma a pedido («armame el mapa de la estrategia X», skill `mapa` del Lab): una página
+`memory/mapa-<estrategia>.md` en el proyecto, atada a su estrategia, que queda como un informe más en el panel
+«Proyecto». No se reescribe en cada turno; si ya existe, se actualiza entero al pedirlo de nuevo. Formato:
 
 ~~~
 # <nombre corto>
@@ -77,6 +78,5 @@ Sólo lo que se habló; una sección sin conversar queda con su título. Valores
 «pendiente», «a definir») ni «falta»/«próxima decisión»: lo que no tiene valor queda vacío. Una idea que no es
 estrategia: sólo Qué capturamos, Mercado hoy y eventos, Evidencia y Datos. Evidencia: 2-4 cifras y el gráfico cuando
 una serie sostiene lo que se afirma (hasta ~300 puntos; en riesgo, los extremos, no sólo promedios); si la cuenta es
-propia, fuente «calculado sobre datos de GaleCore» y el script en `calculo`. El mapa no aprueba nada y no se nombra en
-la respuesta. Si la conversación va hacia una estrategia, se propone armarla en el mismo proyecto una sola vez por
+propia, fuente «calculado sobre datos de GaleCore» y el script en `calculo`. El mapa no aprueba nada. Si la conversación va hacia una estrategia, se propone armarla en el mismo proyecto una sola vez por
 conversación (el Lab dice cómo registrarla).

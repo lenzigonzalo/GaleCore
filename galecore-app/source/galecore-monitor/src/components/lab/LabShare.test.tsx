@@ -5,7 +5,7 @@ import { labRequest } from '../../api/lab';
 
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
 const request = labRequest as jest.Mock;
-const project = { id: 'idea', label: 'Idea SPY', type: 'analysis' as const, relative: 'workspaces/idea', strategyName: null };
+const project = { id: 'idea', label: 'Idea SPY', relative: 'workspaces/idea', strategies: [] };
 const members = [{ username: 'demo', role: 'owner' }, { username: 'gonza', role: 'member' }];
 
 beforeEach(() => request.mockReset());

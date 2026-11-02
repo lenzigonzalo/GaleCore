@@ -251,3 +251,5 @@
 .row-action.danger { color: var(--red-gc); border-color: var(--red-gc); }
 .row-confirm { font-size: 13px; color: var(--text-secondary); }
 .archived-toggle { margin-top: 12px; }
+
+.strategy-list .strategy-project { display: block; font-size: 13px; color: var(--text-secondary); }

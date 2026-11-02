@@ -310,6 +310,10 @@ function parseMapa(text){
   }
   return {title,intro,sections};
 }
+// Proyecto sin tipo (WS-0071): workspace.json lleva strategies:[nombres]. Al leer se migra el formato viejo
+// (type:'strategy' + strategyName → strategies:[strategyName]; el resto → []). La API sólo devuelve strategies.
+const strategiesOf=(meta,fallback)=>Array.isArray(meta?.strategies)?[...new Set(meta.strategies.filter(n=>typeof n==='string'&&ID.test(n)))]:meta?.type==='strategy'?[typeof meta.strategyName==='string'&&ID.test(meta.strategyName)?meta.strategyName:fallback]:[];
+const derived=(id,strategies)=>({strategies});
 function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, request, sessionFile }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
@@ -326,18 +330,18 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const log=path.join(kb,'projects',name+'.json');if(fs.existsSync(log))digest.update(fs.readFileSync(log));
     return digest.digest('hex');
   }
-  async function readStrategy(p, design) {
+  async function readStrategy(p, design, strategy) {
     if(p.externalStrategy)return {missing:true,reason:'El diseño referenciado no está incluido en esta copia compartida.'};
-    const fingerprint=design?designFingerprint(p.strategyName):null;
-    const cached=designReads.get(p.strategyName);
+    const fingerprint=design?designFingerprint(strategy):null;
+    const cached=designReads.get(strategy);
     if(design&&cached?.fingerprint===fingerprint)return cached.promise;
-    const promise=new Promise((resolve,reject)=>execute('python',['-B','-m','galecore_ai.adapters.cli','project',design?'design':'show','strategy:'+p.strategyName],{cwd:root,env:environment(),windowsHide:true,timeout:60000,maxBuffer:2*1024*1024},(e,out)=>{
+    const promise=new Promise((resolve,reject)=>execute('python',['-B','-m','galecore_ai.adapters.cli','project',design?'design':'show','strategy:'+strategy],{cwd:root,env:environment(),windowsHide:true,timeout:60000,maxBuffer:2*1024*1024},(e,out)=>{
       let data;try{data=JSON.parse(out);}catch{return reject(fail('No se pudo leer la estrategia desde el harness.',502));}
       if(e&&!data.current){if(String(data.error||'').includes('no strategy named'))return resolve({missing:true});if(!data.integrity_failed?.length)return reject(fail('No se pudo verificar la estrategia con el harness.',502));}
-      try{if(design&&designFingerprint(p.strategyName)!==fingerprint)return reject(fail('La estrategia cambió durante la lectura. Volvé a actualizar.',409));}catch{return reject(fail('Los archivos cambiaron durante la lectura. Volvé a actualizar.',409));}
+      try{if(design&&designFingerprint(strategy)!==fingerprint)return reject(fail('La estrategia cambió durante la lectura. Volvé a actualizar.',409));}catch{return reject(fail('Los archivos cambiaron durante la lectura. Volvé a actualizar.',409));}
       resolve(data);
     }));
-    if(design){const entry={fingerprint,promise};designReads.set(p.strategyName,entry);promise.catch(()=>{if(designReads.get(p.strategyName)===entry)designReads.delete(p.strategyName);});}
+    if(design){const entry={fingerprint,promise};designReads.set(strategy,entry);promise.catch(()=>{if(designReads.get(strategy)===entry)designReads.delete(strategy);});}
     return promise;
   }
   const chatFiles=()=>fs.readdirSync(chatDir).filter(f=>UUID.test(f.replace('.json','')) && f.endsWith('.json'));
@@ -345,7 +349,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   const saveChat=c=>atomic(path.join(chatDir,c.id+'.json'),c);
   for(const f of chatFiles()){const c=read(path.join(chatDir,f),null);if(c?.state==='running'){c.state='interrupted';c.activity='Servicio reiniciado';saveChat(c);}}
   function listProjects(){
-    const old=legacyProjects().map(p=>({...p,type:p.id==='portfolio'?'analysis':'strategy',strategyName:p.id==='portfolio'?null:p.id}));
+    const old=legacyProjects().map(p=>({...p,...derived(p.id,p.id==='portfolio'?[]:[p.id])}));
     const descriptors=[];
     for(const folder of ['workspaces','strategies']){
       const base=path.join(kb,folder);if(!fs.existsSync(base))continue;
@@ -354,17 +358,19 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         const dir=path.join(base,entry.name);if(!fs.realpathSync(dir).startsWith(fs.realpathSync(kb)+path.sep))continue;
         const syncState=read(path.join(dir,'.sync.json'),null);
         const received=!!syncState;
-        const meta=read(path.join(dir,'workspace.json'),null)||(syncState?.projectName?{id:entry.name,label:syncState.projectName,type:syncState.kind==='strategy'?'strategy':'analysis'}:null);
-        if(received&&meta?.strategyName===meta?.id&&meta.id!==entry.name)meta.strategyName=entry.name;
-        if(received&&folder==='strategies'&&meta)meta.strategyName=entry.name;
-        const externalStrategy=received&&(!syncState.owner||syncState.owner!==syncState.context?.user)&&folder==='workspaces'&&meta?.type==='strategy'&&meta.strategyName&&meta.strategyName!==entry.name;
-        if(meta&&(meta.id===entry.name||received)&&typeof meta.label==='string'&&meta.label.length<=100&&TYPES.includes(meta.type)&&(folder!=='strategies'||meta.type==='strategy'))descriptors.push({id:entry.name,label:meta.label,type:meta.type,relative:folder+'/'+entry.name,strategyName:externalStrategy?null:meta.type==='strategy'?(typeof meta.strategyName==='string'&&ID.test(meta.strategyName)?meta.strategyName:entry.name):null,...(externalStrategy?{externalStrategy:true}:{}),dir});
+        const meta=read(path.join(dir,'workspace.json'),null)||(syncState?.projectName?{id:entry.name,label:syncState.projectName,...(syncState.kind==='strategy'?{type:'strategy'}:{})}:null);
+        if(!meta)continue;
+        if(received&&meta.strategyName===meta.id&&meta.id!==entry.name)meta.strategyName=entry.name;
+        if(received&&folder==='strategies')meta.strategyName=entry.name;
+        const strategies=strategiesOf(meta,entry.name);
+        const externalStrategy=received&&(!syncState.owner||syncState.owner!==syncState.context?.user)&&folder==='workspaces'&&strategies.length>0&&!strategies.includes(entry.name);
+        if((meta.id===entry.name||received)&&typeof meta.label==='string'&&meta.label.length<=100&&(folder!=='strategies'||strategies.length))descriptors.push({id:entry.name,label:meta.label,relative:folder+'/'+entry.name,...(externalStrategy?{...derived(entry.name,strategies),externalStrategy:true}:derived(entry.name,strategies)),dir});
       }
     }
     const all=old.map(p=>({...p,...registry.find(r=>r.id===p.id),...descriptors.find(d=>d.id===p.id)}));
     for(const p of descriptors)if(!all.some(o=>o.id===p.id))all.push(p);
     // Una estrategia con carpeta propia no abre un proyecto aparte si otro proyecto ya la declara (strategyName en su workspace.json).
-    const declared=new Set(descriptors.filter(d=>d.strategyName&&d.strategyName!==d.id).map(d=>d.strategyName));
+    const declared=new Set(descriptors.flatMap(d=>d.strategies.filter(n=>n!==d.id)));
     for(let i=all.length-1;i>=0;i--)if(declared.has(all[i].id)&&!descriptors.some(d=>d.id===all[i].id))all.splice(i,1);
     for(const p of registry){if(all.some(o=>o.id===p.id)||!p.relative)continue;const dir=path.join(kb,p.relative);if(fs.existsSync(dir) && fs.realpathSync(dir).startsWith(fs.realpathSync(kb)+path.sep))all.push({...p,dir});}
     const overrides=read(overridesFile,{});
@@ -415,7 +421,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     fs.writeFileSync(path.join(dir,'README.md'),'# '+label+'\n\nWorkspace de '+(type==='strategy'?'estrategia':type==='personal'?'trabajo personal':'análisis')+'.\n\nLos resultados y memorias se guardan acá. Las conversaciones permanecen en el historial local del Lab.\n',{flag:'wx'});
     fs.writeFileSync(path.join(dir,'AGENTS.md'),'# Convenciones de '+label+'\n\nTrabajá en este proyecto. Leé README.md y memory/README.md (el criterio vigente, por tema) y recuperá antecedentes antes de preguntar.\nUsá galecore-ai/ para memoria canónica y GaleCore (galecore-app/) para datos/cálculos financieros.\n'+'No guardes secretos. No mezcles cambios de otros proyectos. Guardar no aprueba ni despliega.\n',{flag:'wx'});
     fs.mkdirSync(path.join(dir,'memory'),{recursive:true});if(type!=='personal')fs.writeFileSync(path.join(dir,'memory','README.md'),'# Memoria de '+label+'\n\nCriterio vigente del proyecto, una página por tema. Índice:\n\n',{flag:'wx'});fs.mkdirSync(path.join(dir,'files'),{recursive:true});
-    const p={id:slug,label,type,relative,strategyName:type==='strategy'?slug:null};fs.writeFileSync(path.join(dir,'workspace.json'),JSON.stringify(p,null,2)+'\n',{flag:'wx'});registry.push(p);atomic(metadata,registry);return p;
+    const strategies=type==='strategy'?[slug]:[], p={id:slug,label,relative,...derived(slug,strategies)};fs.writeFileSync(path.join(dir,'workspace.json'),JSON.stringify({id:slug,label,relative,strategies},null,2)+'\n',{flag:'wx'});registry.push(p);atomic(metadata,registry);return p;
   }
   // Un workspace personal explícito y separado del conocimiento financiero compartido.
   if(!listProjects().some(p=>p.id==='personal'))createProject({label:'Personal',type:'personal'});
@@ -488,20 +494,17 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(!chat.titleLocked&&chat.messages.filter(m=>m.role==='user').length===1)chat.title=(words||options.attachments?.[0]?.replace(/^adjuntos\/\d+-/,'')||'Adjunto').replace(/\s+/g,' ').slice(0,65);
     chat.state='running';chat.error=null;chat.notice=null;chat.activity='Pensando';chat.steps=[];chat.permission=null;chat.refused=[];chat.tasks=[];delete chat.limitResetsAt;chat.mode=auto?'auto':'manual';chat.turnStartedAt=Date.now()-1000;saveChat(chat);
     const skill=path.join(root,'galecore-lab','skills','lab-strategy-bootstrap','SKILL.md');
+    const mapaSkill=path.join(root,'galecore-lab','skills','mapa','SKILL.md');
     // El método de diseño es una sola copia, en galecore-ai/config/skills.
     const designSkill=path.join(root,'galecore-ai','config','skills','strategy-design','SKILL.md');
-    let existingMapa=chat.mapa||null;if(!existingMapa){try{existingMapa=latestMapa(p.dir,0);}catch{ existingMapa=null; }}
     // El contexto del turno, igual para cualquier motor y cualquier tipo de proyecto (owner 15/10: «no importa el
     // proveedor ni el modelo»; Personal sin filtro). Capas (D-0012, D-0014): final de la conversación anterior
     // (estrategia), núcleo PRODUCT.md, proyecto, hechos del momento y capacidad del pedido. Las reglas del entorno
     // (knowledge/AGENTS.md) y las del proyecto (su AGENTS.md) las lee cada motor solo desde la carpeta.
     const product=fs.readFileSync(path.join(root,'galecore-ai','PRODUCT.md'),'utf8');
-    const resume=p.type==='strategy'&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
-    const here='Proyecto: '+p.id+' ('+p.type+'), carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.type==='strategy'||p.type==='personal'?'':' Si la conversación va hacia una estrategia, proponé una sola vez «¿armamos esta estrategia acá?»; con el sí, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" desde esta carpeta (activa el mapa de estrategia y su seguimiento) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+(p.type==='strategy'
-      // Owner 17/10: el mapa es el diseño que se va armando; se reescribe en cada turno con el formato vigente (también
-      // si el de memory/ tiene otro formato) y la respuesta cierra proponiendo la próxima pieza del diseño.
-      ?' Antes de responder, reescribí el mapa del proyecto ('+(existingMapa?'el que ya existe es '+path.join(p.dir,existingMapa)+' (ruta exacta, no la adivines)':'todavía no hay: creá '+path.join(p.dir,'memory/mapa-'+chat.id.slice(0,8)+'.md'))+') con el formato de «Mapa de la idea» (en el método de ideas y estrategias del contexto), aunque nada haya cambiado: pasá lo que ya estaba a sus 8 partes.'
-      :' Si este turno trabaja una idea o una estrategia, antes de responder reescribí su mapa (formato en «Mapa de la idea», '+path.join(root,'galecore-ai','config','skills','strategy-design','method.md')+') en '+path.join(p.dir,existingMapa||('memory/mapa-'+chat.id.slice(0,8)+'.md'))+'; si la idea ya tiene un mapa en memory/, actualizá ése.');
+    const mine=p.strategies||[];
+    const resume=mine.length&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
+    const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, preguntá una sola vez «¿es una estrategia nueva de este proyecto'+(mine.length?' o una de las que ya tiene ('+mine.join(", ")+')':'')+'?»; con la respuesta, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.';
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
     function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});sharing.sync(p,{busy}).catch(()=>null).then(()=>script('commit_knowledge.py',{cwd:p.dir}));}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
@@ -587,8 +590,10 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const dir=project(parts[1]).dir, rel=latestMapa(dir,0);
       json(res,200,{mapa:rel?readMapa(dir,rel):null});return true;}
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='strategy'){
-      const p=project(parts[1]); if(p.type!=='strategy')throw fail('Este proyecto no es una estrategia.');
-      const value=await readStrategy(p,url.searchParams.get('view')==='design');json(res,200,value);return true;
+      const p=project(parts[1]); if(!p.strategies?.length&&!p.externalStrategy)throw fail('Este proyecto no tiene estrategias.');
+      const asked=url.searchParams.get('name');
+      if(asked&&!(p.strategies||[]).includes(asked)&&!p.externalStrategy)throw fail('Esa estrategia no es de este proyecto.',404);
+      const value=await readStrategy(p,url.searchParams.get('view')==='design',asked||p.strategies?.[0]);json(res,200,value);return true;
     }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='attachments'&&parts.length===3){
       const p=project(parts[1]), rel=url.searchParams.get('path')||'', file=attachmentFile(p.dir,rel);
@@ -610,6 +615,19 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const rel='adjuntos/'+Date.now()+'-'+safe;fs.mkdirSync(path.join(p.dir,'adjuntos'),{recursive:true});
       fs.writeFileSync(path.join(p.dir,rel),Buffer.concat(chunks));json(res,201,{path:rel,name:safe,size});return true;
     }
+    // Informes del proyecto (WS-0071 AC-3): lo de memory/ y files/ más las investigaciones guardadas desde el proyecto, más nuevo primero, para el panel «Proyecto».
+    if(req.method==='GET'&&parts[0]==='workspaces'&&parts[1]&&parts[2]==='informes'&&parts.length===3){
+      const p=project(parts[1]),items=[];
+      for(const folder of ['memory','files']){
+        const base=path.join(p.dir,folder);if(!fs.existsSync(base))continue;
+        for(const f of fs.readdirSync(base,{withFileTypes:true})){
+          if(!f.isFile()||f.name.startsWith('.')||/^README\.md$/i.test(f.name))continue;
+          try{const st=fs.statSync(safeFile(p.dir,folder+'/'+f.name));items.push({path:folder+'/'+f.name,name:f.name,updatedAt:st.mtime.toISOString()});}catch{ /* fuera del proyecto o ilegible */ }
+        }
+      }
+      for(const f of projectResearch(kb,p.id)){try{items.push({path:RESEARCH_DIR+'/'+f,name:f,updatedAt:fs.statSync(path.join(kb,'research',f)).mtime.toISOString()});}catch{ /* se borró mientras se leía */ }}
+      json(res,200,{informes:items.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))});return true;
+    }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='files'){
       const p=project(parts[1]), rel=url.searchParams.get('path');
       if(rel&&rel.startsWith(RESEARCH_DIR+'/')){json(res,200,{path:rel,text:readResearch(kb,p.id,rel)});return true;}
@@ -624,7 +642,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       if(req.method==='GET'&&parts[2]==='mapa'){
         // Mientras responde, el mapa que se escribió en este turno ya se muestra (no espera al final).
         // WS-0044: en un proyecto de estrategia (una idea), una conversación que todavía no tocó el mapa ve el último del proyecto.
-        const p=project(c.project), dir=p.dir, live=c.state==='running'&&c.turnStartedAt?latestMapa(dir,c.turnStartedAt):null, rel=live||c.mapa||(p.type==='strategy'?latestMapa(dir,0):null);
+        const p=project(c.project), dir=p.dir, live=c.state==='running'&&c.turnStartedAt?latestMapa(dir,c.turnStartedAt):null, rel=live||c.mapa||(p.strategies?.length?latestMapa(dir,0):null);
         if(!rel){json(res,200,{mapa:null});return true;}
         json(res,200,{mapa:readMapa(dir,rel)});return true;}
       if(req.method==='POST'&&parts[2]==='messages'){const b=await readBody(req);

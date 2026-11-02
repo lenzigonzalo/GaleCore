@@ -176,13 +176,13 @@ test('StrictMode does not duplicate the initial panel request', async () => {
   render(<React.StrictMode><PerformancePanel spec={plain.spec} /></React.StrictMode>);
   await screen.findByText('Ganancia total'); expect(panelApi).toHaveBeenCalledTimes(1);
 });
-test('design matches strategyName and supplies the header independently of the selected tab', async () => {
-  labApi.mockResolvedValueOnce({ projects: [{ id: plain.spec, strategyName: 'otra' }, { id: 'project-real', strategyName: plain.spec }] }).mockResolvedValueOnce({ current: { ref: 'v1', approved: true, purpose: 'Diseño asociado', spec_hash: 'hash', hypothesis: { mechanism: 'Mecanismo de prueba', expected_result: 'Objetivo de prueba', capture: '', failure_conditions: [] } } });
+test('design matches the project strategies and supplies the header independently of the selected tab', async () => {
+  labApi.mockResolvedValueOnce({ projects: [{ id: plain.spec, strategies: ['otra'] }, { id: 'project-real', strategies: [plain.spec] }] }).mockResolvedValueOnce({ current: { ref: 'v1', approved: true, purpose: 'Diseño asociado', spec_hash: 'hash', hypothesis: { mechanism: 'Mecanismo de prueba', expected_result: 'Objetivo de prueba', capture: '', failure_conditions: [] } } });
   render(<PerformancePanel spec={plain.spec} />); fireEvent.click(screen.getByRole('tab', { name: 'Diseño' }));
   await screen.findByText(/Mecanismo de prueba/);
   expect(screen.getByText(/Objetivo de prueba/)).toBeInTheDocument();
   expect(screen.queryByText('Diseño asociado')).not.toBeInTheDocument();
-  expect(labApi).toHaveBeenCalledWith('/workspaces/project-real/strategy?view=design', undefined, 65000);
+  expect(labApi).toHaveBeenCalledWith(`/workspaces/project-real/strategy?name=${plain.spec}&view=design`, undefined, 65000);
 });
 test('exports raw API trades as JSON and CSV with escaped text and nullable context', async () => {
   const trade = { ...context, positionId: 'closed', version: '1.0.3', structure: 'spread', legs: 'SELL, "PUT"\n720', entryAt: plain.asOf, exitAt: plain.asOf, daysHeld: 5.7, entryCredit: .44, exitDebit: .22, exitReason: 'TAKE_PROFIT', realizedPnl: 22 };
@@ -235,7 +235,7 @@ test('Datos sólo consulta su API al abrir la pestaña, incluso en una estrategi
  expect(get).toHaveBeenCalledTimes(1);expect(get).toHaveBeenCalledWith('/App/Runtime/Performance/Data',{params:{spec:plain.spec}});
 });
 test('Abrir en el chat usa el id del proyecto asociado, no el nombre de la spec',async()=>{
- labApi.mockResolvedValueOnce({projects:[{id:'real-project',strategyName:plain.spec}]}).mockResolvedValueOnce({current:{purpose:'Diseño'}});
+ labApi.mockResolvedValueOnce({projects:[{id:'real-project',strategies: [plain.spec]}]}).mockResolvedValueOnce({current:{purpose:'Diseño'}});
  const open=jest.fn();render(<PerformancePanel spec={plain.spec} onOpenChat={open}/>);
  fireEvent.click(await screen.findByRole('button',{name:'Abrir en el chat'}));expect(open).toHaveBeenCalledWith('real-project');
 });
