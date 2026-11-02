@@ -86,6 +86,9 @@ def row(field, declared, galecore_value, ok):
 
 def check_structure(s, chain, get_quote):
     out = {'id': s['id'], 'filas': [], 'ok': False, 'motivo': None}
+    if len({leg.get('qty', 1) for leg in s['legs']}) > 1:   # el precio por spread no se puede comparar con patas de distinta cantidad
+        out['motivo'] = 'sin propuesta: cantidades distintas entre patas, no se verifica'
+        return out
     quotes, times = [], []
     for leg in s['legs']:
         streamer, why = find_streamer(chain, leg)
@@ -133,7 +136,8 @@ def check_structure(s, chain, get_quote):
 
 def max_risk(s, kind, price):
     legs = s['legs']
-    if len(legs) != 2 or legs[0]['right'] != legs[1]['right'] or legs[0]['expiration'] != legs[1]['expiration']             or {legs[0]['side'], legs[1]['side']} != {'sell', 'buy'} or legs[0].get('qty', 1) != legs[1].get('qty', 1):
+    if len(legs) != 2 or legs[0]['right'] != legs[1]['right'] or legs[0]['expiration'] != legs[1]['expiration'] \
+            or {legs[0]['side'], legs[1]['side']} != {'sell', 'buy'}:
         return None
     qty = legs[0].get('qty', 1)
     if kind == 'debit':

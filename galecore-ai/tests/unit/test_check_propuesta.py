@@ -75,8 +75,8 @@ def test_patas_invertidas_marcan_el_tipo_y_no_inventan_un_credito():
     assert s["corregidos"]["riesgo"] < 100   # un débito arriesga lo que paga, no el ancho
 
 
-def test_cantidades_distintas_no_se_verifican_como_vertical():
+def test_cantidades_distintas_no_se_confirman():
     payload = spread()
-    payload["structures"][0]["legs"][1]["qty"] = 2
-    filas = check(payload)["estructuras"][0]["filas"]
-    assert "no verificable" in filas[-1]["estado"]
+    payload["structures"][0]["legs"][1]["qty"] = 2   # 1 vendido contra 2 comprados: el crédito declarado no se puede confirmar
+    out = check(payload)
+    assert not out["ok"] and "cantidades distintas" in out["faltantes"][0]["motivo"]
