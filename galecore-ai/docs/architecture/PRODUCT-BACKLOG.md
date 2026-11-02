@@ -2716,6 +2716,21 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 **Entry gate:** cuando el owner priorice la pieza; antes, el relevamiento de lo que ya hay y la lista de gaps que dejó el caso «Argentina».
 **Aceptación del relevamiento:** una tabla de fuentes (tiene / falta / cómo se consulta / si pide clave) aprobada por el owner; recién después, la pieza de integración en GaleCore.
 
+**Addendum 02/11/2026 (owner):** alcance ampliado: cotizaciones, futuros de dólar y agro, expectativas de inflación, dólar blue/MEP/brecha, curva de bonos, REM e información oficial; mapearlo en GaleCore-AI como información disponible y un proyecto «Argentina» en el Lab que hable en pesos. Prioridad: APIs robustas antes que web. Del repo `macro-dashboard` sólo sirve DolarAPI (los proxies FRED y los datos a mano no). GaleCore hoy sólo tiene ARGT (ETF en EE. UU.).
+
+**Relevamiento (probado en vivo el 02/11/2026):**
+
+| Dato | Fuente | Clave | Estado |
+|---|---|---|---|
+| Dólar oficial, blue, MEP, CCL, cripto, tarjeta (brecha = cálculo) | DolarAPI `dolarapi.com/v1/dolares` | no | OK, en vivo |
+| Históricos de dólares, riesgo país, inflación mensual, UVA, letras (TNA/TEM), plazo fijo, FCI | ArgentinaDatos `api.argentinadatos.com/v1/...` | no | OK (comunitaria; riesgo país al día hábil anterior) |
+| Reservas, base monetaria, BADLAR, TAMAR, pases, inflación mensual/interanual, **REM: mediana de inflación a 12 meses** (id 29) | BCRA `api.bcra.gob.ar/estadisticas/v4.0/monetarias` (1.610 series) | no | OK (v3 deprecada) |
+| Tipo de cambio oficial A3500 y monedas | BCRA `estadisticascambiarias/v1.0/Cotizaciones` | no | OK |
+| IPC, EMAE, cuentas nacionales (INDEC) | `apis.datos.gob.ar/series/api` | no | OK |
+| Bonos soberanos, letras, ON, CEDEARs, panel líder, opciones, índices (20 min de demora) | BYMA open data `open.bymadata.com.ar/.../bymadata/free/*` (POST) | no | OK; sin documentación oficial, puede cambiar |
+| Renta fija OTC (AL30, GD, LECAP, BONCAP, duales), forex, cauciones, REPO, derivados MAE | A3/MAE `api.mae.com.ar/MarketData/v1/mercado/cotizaciones/{rentafija,forex,cauciones,repo,derivados}` | sí (`x-api-key`, `A3_API_KEY` en HKCU; UAT en `A3_API_KEY_UAT`) | OK; `derivados` vino vacío |
+| **Futuros de dólar y agro (ex Matba Rofex)** | BYMA `free/rofex` da 401; la clave A3 no abre futuros | — | **falta**: pedir a A3 el acceso a futuros (Primary API) o confirmar si `derivados` los trae |
+
 ---
 
 ## BL-034 — Configuración de avisos en el monitor: frecuencia y umbrales del supervisor
