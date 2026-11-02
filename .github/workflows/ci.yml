@@ -1,0 +1,65 @@
+# CI de la rama de integración (WS-0074 F1): compila y prueba; no despliega nada.
+name: CI
+
+on:
+  push:
+    branches: [development]
+  pull_request:
+    branches: [development, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: galecore-app — build + tests .NET
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: galecore-app/source/galecore-datafeed
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet restore DataFeed.sln
+      - run: dotnet build DataFeed.sln --no-restore -c Release
+      - name: Tests (incluye validación de los JSON de reglas)
+        run: dotnet test DataFeed.Tests/DataFeed.Tests.csproj --no-build -c Release --verbosity normal
+
+  ai:
+    name: galecore-ai — ruff + pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: galecore-ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: pytest -q
+        env:
+          PYTHONPATH: src
+
+  monitor:
+    name: galecore-monitor — build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: galecore-app/source/galecore-monitor
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: galecore-app/source/galecore-monitor/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          CI: "true"
