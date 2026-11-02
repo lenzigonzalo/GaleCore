@@ -123,3 +123,18 @@ def test_the_swing_script_prints_json_from_files_without_touching_the_skill_fold
     assert r["ok"], r["stderr"]
     assert [x["symbol"] for x in r["result"]] == ["SPY", "IEF", "GLD"] and r["result"][0]["bars"] == 300
     assert sorted(p.name for p in folder.rglob("*") if p.is_file()) == before
+
+
+def test_swing_en_una_corrida_programada_ignora_input_y_output(monkeypatch, tmp_path):
+    import importlib.util
+
+    path = Path(__file__).resolve().parents[2] / "config" / "skills" / "revisar-swing-etfs" / "scripts" / "revision_swing.py"
+    spec = importlib.util.spec_from_file_location("revision_swing", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    args = argparse.Namespace(input=tmp_path, output=tmp_path / "x.json", cutoff="2026-10-30")
+    monkeypatch.setenv("GALECORE_AI_RUN_DIR", str(tmp_path))
+    assert (mod.scoped(args).input, args.output) == (None, None)
+    args = argparse.Namespace(input=tmp_path, output=tmp_path / "x.json", cutoff="2026-10-30")
+    monkeypatch.delenv("GALECORE_AI_RUN_DIR")
+    assert mod.scoped(args).input == tmp_path   # en el chat siguen valiendo

@@ -266,7 +266,7 @@ def allowed_tools(entry: CatalogEntry, commands: dict[str, set[str]]) -> list[st
             continue
         key = flow_key(tokens, commands)
         if script := own_script(entry, tokens):   # that exact script of its own skill, no other skill, no shell
-            fixed = []   # the flow's own flags stay in the rule; an agent cannot add --output/--input
+            fixed = []   # the flow's own flags stay in the rule; the rule is a prefix, so the script itself drops --input/--output in a scheduled run
             for tok in tokens[4:]:
                 if tok.startswith("<"):
                     break

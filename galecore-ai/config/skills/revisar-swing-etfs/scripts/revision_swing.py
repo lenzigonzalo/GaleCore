@@ -89,9 +89,15 @@ def analyze(symbol, folder, cutoff):
             'events':events}
     return result, set(by_date)
 
+def scoped(a):
+    """Una corrida programada (GALECORE_AI_RUN_DIR) no lee carpetas ni escribe archivos fuera de la suya: sin --input ni --output."""
+    if os.environ.get('GALECORE_AI_RUN_DIR'):
+        a.input = a.output = None
+    return a
+
 if __name__ == '__main__':
     p=argparse.ArgumentParser(); p.add_argument('--input',type=Path,help='carpeta con los JSON ya traídos; sin ella se traen de GaleCore'); p.add_argument('--cutoff',required=True)
-    p.add_argument('--output',type=Path,help='opcional: guarda también el estudio completo (con eventos)'); a=p.parse_args()
+    p.add_argument('--output',type=Path,help='opcional: guarda también el estudio completo (con eventos)'); a=scoped(p.parse_args())
     if a.input is None:
         a.input=Path(tempfile.mkdtemp(prefix='swing-',dir=os.environ.get('GALECORE_AI_RUN_DIR') or None))
         fetch(a.input,a.cutoff)
