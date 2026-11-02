@@ -21,6 +21,7 @@ using DataFeed.Application.Data.Cboe.IndexHistory;
 using DataFeed.Application.Data.Treasury;
 using DataFeed.Application.Data.Sec;
 using DataFeed.Application.Data.Bls.Series;
+using DataFeed.Application.Data.Argentina;
 using DataFeed.Api.Controllers.Dtos;
 
 namespace DataFeed.Controllers
@@ -79,6 +80,38 @@ namespace DataFeed.Controllers
         [Tags("Data.Sources")]
         [HttpGet("Bls/Series")]
         public async Task<IActionResult> BlsSeriesAsync([FromQuery] BlsSeriesRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Argentina/Dolares")]
+        public async Task<IActionResult> ArgentinaDolaresAsync([FromQuery] ArgentinaDolaresRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Argentina/Series")]
+        public async Task<IActionResult> ArgentinaSeriesAsync([FromQuery] ArgentinaSeriesRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Bcra/Variables")]
+        public async Task<IActionResult> BcraVariablesAsync([FromQuery] BcraVariablesRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Bcra/Series")]
+        public async Task<IActionResult> BcraSeriesAsync([FromQuery] BcraSeriesRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Bcra/Cambiarias")]
+        public async Task<IActionResult> BcraCambiariasAsync([FromQuery] BcraCambiariasRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Indec/Series")]
+        public async Task<IActionResult> IndecSeriesAsync([FromQuery] IndecSeriesRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("Byma/Panel")]
+        public async Task<IActionResult> ByMaPanelAsync([FromQuery] ByMaPanelRequest request) => await Handle(request);
+
+        [Tags("Data.Sources")]
+        [HttpGet("A3/Cotizaciones")]
+        public async Task<IActionResult> A3CotizacionesAsync([FromQuery] A3CotizacionesRequest request) => await Handle(request);
 
         [Tags("Data.Api")]
         [HttpGet("Tastytrade/MarketData/ByType")]
