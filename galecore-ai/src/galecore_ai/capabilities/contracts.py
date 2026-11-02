@@ -224,6 +224,101 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         ],
         returns="source=bls, asOf (year-period), notes, data[seriesId, observations[year, period, periodName, value, latest, footnotes]]",
     ),
+    # WS-0077 (BL-036): Argentina. Fuentes públicas servidas por GaleCore; los futuros de dólar y agro todavía faltan.
+    CapabilityDefinition(
+        capability_id="argentina.dolares",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Argentine dollar quotes (oficial, blue, MEP=bolsa, CCL=contadoconliqui, cripto, tarjeta) with the gap (brecha) vs the official rate computed by GaleCore",
+        parameters=[],
+        returns="source=dolarapi, asOf, notes, data[casa, nombre, compra, venta, fechaActualizacion, brechaPct (% of venta vs oficial; only blue, bolsa, contadoconliqui)]",
+    ),
+    CapabilityDefinition(
+        capability_id="argentina.series",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="ArgentinaDatos series: country risk (riesgo-pais, riesgo-pais-ultimo), monthly inflation, UVA, historical dollar by casa, "
+        "LECAP/BONCAP letras with TNA/TEA/TEM (the peso curve) and fixed-term deposit rates (plazo-fijo)",
+        parameters=[
+            CapabilityParameter(
+                name="Serie", type="string",
+                description="riesgo-pais | riesgo-pais-ultimo | inflacion | uva | dolar | letras | plazo-fijo",
+            ),
+            CapabilityParameter(
+                name="Casa", type="string", required=False,
+                description="Only Serie=dolar: oficial, blue, bolsa, contadoconliqui, mayorista, cripto, tarjeta",
+            ),
+            CapabilityParameter(
+                name="Desde", type="string", required=False,
+                description="YYYY-MM-DD for the historical series (riesgo-pais, inflacion, uva, dolar); default the last year",
+            ),
+        ],
+        returns="source=argentinadatos (community, not official), upstreamUrl, asOf, notes, data[fecha, valor] (compra/venta for dolar; "
+        "letras: {letras[ticker, precioArs, tnaPorcentaje, teaPorcentaje, temPorcentaje, fechaVencimiento...]}; plazo-fijo: banks with tasas)",
+    ),
+    CapabilityDefinition(
+        capability_id="argentina.bcra_variables",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="BCRA monetary variables list (v4.0, ~1600: reserves, monetary base, BADLAR, TAMAR, repo rates, inflation, REM) with last value and date",
+        parameters=[
+            CapabilityParameter(name="Texto", type="string", required=False, description="Filter by text in description or category (e.g. BADLAR, reservas)"),
+        ],
+        returns="source=bcra, asOf, notes, data[idVariable, descripcion, categoria, tipoSerie, periodicidad, unidadExpresion, moneda, primerFechaInformada, ultFechaInformada, ultValorInformado]",
+    ),
+    CapabilityDefinition(
+        capability_id="argentina.bcra_series",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="History of one BCRA monetary variable by id; idVariable 29 is the REM (median expected inflation at 12 months, %)",
+        parameters=[
+            CapabilityParameter(name="IdVariable", type="string", description="Variable id from argentina.bcra_variables (29 = REM inflation expectation 12m)"),
+            CapabilityParameter(name="Desde", type="string", required=False, description="YYYY-MM-DD; default one year ago"),
+            CapabilityParameter(name="Hasta", type="string", required=False, description="YYYY-MM-DD; default today"),
+        ],
+        returns="source=bcra, asOf, notes, data{idVariable, detalle[fecha, valor] ascending}",
+    ),
+    CapabilityDefinition(
+        capability_id="argentina.bcra_cambiarias",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Official BCRA exchange rates: all currencies of the latest day, or one currency over a range (USD is the Comunicacion A3500 reference)",
+        parameters=[
+            CapabilityParameter(name="Moneda", type="string", required=False, description="ISO code (USD, EUR, BRL); empty = all currencies, latest day"),
+            CapabilityParameter(name="Fecha", type="string", required=False, description="YYYY-MM-DD, without Moneda"),
+            CapabilityParameter(name="Desde", type="string", required=False, description="With Moneda: YYYY-MM-DD; default 30 days ago"),
+            CapabilityParameter(name="Hasta", type="string", required=False, description="With Moneda: YYYY-MM-DD; default today"),
+        ],
+        returns="source=bcra-cambiarias, asOf, notes, data{fecha, detalle[codigoMoneda, descripcion, tipoPase, tipoCotizacion]}; with Moneda, data[fecha, detalle[...]]",
+    ),
+    CapabilityDefinition(
+        capability_id="argentina.indec_series",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="Official time series from datos.gob.ar (INDEC: CPI, EMAE, national accounts) by series id (e.g. 148.3_INIVELNAL_DICI_M_26 = CPI national level)",
+        parameters=[
+            CapabilityParameter(name="Ids", type="string", description="Comma-separated series ids, up to 10"),
+            CapabilityParameter(name="Last", type="string", required=False, description="Last N values per series; default 12, at most 1000"),
+        ],
+        returns="source=indec, asOf, notes, data{fields[id, description, units, dataset, source], data[[date, value per series]]}",
+    ),
+    CapabilityDefinition(
+        capability_id="argentina.byma_panel",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="BYMA open-data panel normalized (sovereign bonds, letras, corporate bonds, CEDEARs, leading equities, options, indices); ~20 min delayed, undocumented source",
+        parameters=[
+            CapabilityParameter(
+                name="Panel", type="string",
+                description="public-bonds | lebacs | negociable-obligations | cedears | leading-equity | options | index-price",
+            ),
+            CapabilityParameter(name="Plazo", type="string", required=False, description="CI or 24hs; default 24hs"),
+        ],
+        returns="source=byma, asOf (Buenos Aires time), notes, data[symbol, description, last, changePct, volume, amount, bid, ask, plazo, maturity, daysToMaturity, currency, time, open, high, low, prevClose, underlying, optionType]; "
+        "large panels (cedears, public-bonds) weigh hundreds of KB: use `galecore get ... --out <file>`",
+    ),
+    CapabilityDefinition(
+        capability_id="argentina.a3_cotizaciones",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="A3/MAE quotes by segment: OTC fixed income (AL30, GD, LECAP, BONCAP), forex, cauciones, repo, derivatives (empty today); needs the A3 key in GaleCore",
+        parameters=[
+            CapabilityParameter(name="Segmento", type="string", description="rentafija | forex | cauciones | repo | derivados"),
+        ],
+        returns="source=a3, asOf, notes, data[fecha, ticker, descripcion, plazo, moneda, precioUltimo, ultimaTasa, volumenAcumulado, montoAcumulado, variacion...] (repo: rueda, tasaPP, cantidad, volumen)",
+    ),
     CapabilityDefinition(
         capability_id="filings.sec_company",
         semantic_class=SemanticClass.PURE_QUERY,

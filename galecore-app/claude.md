@@ -7,8 +7,9 @@ pone datos y cálculos; no interpreta ni recomienda (eso es `galecore-ai/`). Est
 
 ## Producción y git (lo primero)
 
-- GaleCore **corre en producción y lo usa otra persona.** El código vive en el monorepo (`lenzigonzalo/GaleCore`,
-  rama `main`, push permitido); el deploy a producción es aparte y sólo con ok del owner.
+- GaleCore **corre en producción y lo usa otra persona.** El código vive en el monorepo (`lenzigonzalo/GaleCore`):
+  se trabaja en `development`; `main` es producción y sólo entra por un PR que aprueba el owner (D-0016 del
+  workspace). El deploy a producción es aparte y sólo con ok del owner.
 - No se toca la base, el VPS ni la configuración de producción. Nada mueve capital real.
 - Trabajo local es trabajo commiteado (nada de archivos sueltos sin versionar).
 
