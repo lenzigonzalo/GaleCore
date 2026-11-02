@@ -111,8 +111,10 @@ def test_the_folder_check_flags_a_missing_reference_and_an_unsupported_script(tm
     assert not any("reglas.md" in p for p in problems)
 
 
-def test_the_cli_runs_a_script_and_exits_nonzero_on_failure(monkeypatch, capsys):
+def test_the_cli_runs_a_script_and_exits_nonzero_on_failure(monkeypatch, capsys, tmp_path):
     from galecore_ai.adapters import cli
+    from galecore_ai.adapters.knowledge_base import KNOWLEDGE_DIR_ENV
+    monkeypatch.setenv(KNOWLEDGE_DIR_ENV, str(tmp_path))   # the run record goes to a temp knowledge base, never the real one
     monkeypatch.setattr("galecore_ai.application.skill_run.skill_dir", lambda ref: DEMO)
     args = cli.build_parser().parse_args(["skill", "run", "--timeout", "30", "demo", "calc.py", "4", "5"])
     with pytest.raises(SystemExit) as ok:
