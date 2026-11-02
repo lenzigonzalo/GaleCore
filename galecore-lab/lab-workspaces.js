@@ -620,7 +620,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const rel='adjuntos/'+Date.now()+'-'+safe;fs.mkdirSync(path.join(p.dir,'adjuntos'),{recursive:true});
       fs.writeFileSync(path.join(p.dir,rel),Buffer.concat(chunks));json(res,201,{path:rel,name:safe,size});return true;
     }
-    // Informes del proyecto (WS-0071 AC-3): lo de memory/ y files/, más nuevo primero, para el panel «Proyecto».
+    // Informes del proyecto (WS-0071 AC-3): lo de memory/ y files/ más las investigaciones guardadas desde el proyecto, más nuevo primero, para el panel «Proyecto».
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[1]&&parts[2]==='informes'&&parts.length===3){
       const p=project(parts[1]),items=[];
       for(const folder of ['memory','files']){
@@ -630,6 +630,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
           try{const st=fs.statSync(safeFile(p.dir,folder+'/'+f.name));items.push({path:folder+'/'+f.name,name:f.name,updatedAt:st.mtime.toISOString()});}catch{ /* fuera del proyecto o ilegible */ }
         }
       }
+      for(const f of projectResearch(kb,p.id)){try{items.push({path:RESEARCH_DIR+'/'+f,name:f,updatedAt:fs.statSync(path.join(kb,'research',f)).mtime.toISOString()});}catch{ /* se borró mientras se leía */ }}
       json(res,200,{informes:items.sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt))});return true;
     }
     if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='files'){

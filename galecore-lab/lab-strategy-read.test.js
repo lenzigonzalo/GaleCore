@@ -53,5 +53,8 @@ test('WS-0071 AC-3: /strategy lee la estrategia pedida del proyecto y rechaza un
   assert.equal((await get('/workspaces/argentina/strategy?name=evento_ar')).current.ref,'strategy:evento_ar');
   assert.equal((await get('/workspaces/argentina/strategy')).current.ref,'strategy:bonos_ar');
   await assert.rejects(()=>get('/workspaces/argentina/strategy?name=otra'),/no es de este proyecto/);
-  assert.deepEqual((await get('/workspaces/argentina/informes')).informes.map(i=>i.path),['files/nueva.md','memory/vieja.md']);
+  fs.mkdirSync(path.join(kb,'research'));fs.writeFileSync(path.join(kb,'research','2026-11-01-contexto.md'),'---\nproject: argentina\n---\ntexto');
+  fs.writeFileSync(path.join(kb,'research','2026-11-01-ajena.md'),'---\nproject: brasil\n---\ntexto');
+  assert.deepEqual((await get('/workspaces/argentina/informes')).informes.map(i=>i.path).sort(),['files/nueva.md','investigaciones/2026-11-01-contexto.md','memory/vieja.md']);
+  assert.equal((await get('/workspaces/argentina/informes')).informes.at(-1).path,'memory/vieja.md');
 });
