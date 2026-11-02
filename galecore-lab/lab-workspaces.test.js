@@ -250,7 +250,7 @@ test('permisos en el chat como en el CLI: el pedido queda a la vista, el trader 
  c=(await route(service,'GET','/chats/'+chat.id)).value;assert.equal(c.error,null);assert.equal(c.state,'idle');assert.equal(c.mode,'auto');
 });
 
-test('el contexto pasa la ruta exacta del mapa existente y la skill de diseño de galecore-ai/config',async t=>{
+test('el contexto no lleva el mapa existente (es a pedido) y sí la skill de diseño y la del mapa de galecore-ai/config',async t=>{
  const {base,kb,local}=setup(t);const {EventEmitter}=require('events');
  fs.mkdirSync(path.join(base,'galecore-ai'));fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo');
  const p0=path.join(kb,'workspaces/personal');fs.mkdirSync(path.join(p0,'memory'),{recursive:true});
@@ -264,7 +264,7 @@ test('el contexto pasa la ruta exacta del mapa existente y la skill de diseño d
  await new Promise(r=>setTimeout(r,300));
  const ctx=contexts.at(-1);
  assert.ok(ctx.includes(path.join(base,'galecore-ai','config','skills','strategy-design','SKILL.md')));
- assert.ok(ctx.includes(path.join(p0,'memory','mapa-19cfc2d9.md')));
+ assert.ok(!ctx.includes('mapa-19cfc2d9.md'));assert.ok(ctx.includes(path.join(base,'galecore-lab','skills','mapa','SKILL.md')));   // WS-0071 AC-4: el mapa es a pedido, el turno no lleva su ruta
  assert.ok(!ctx.includes('.worktrees'));
 });
 
@@ -456,6 +456,7 @@ test('WS-0071 AC-3: el contexto del turno lista las estrategias del proyecto y p
  assert.match(withTwo,/Estrategias de este proyecto: bonos_ar, evento_ar\./);
  assert.match(withTwo,/«¿es una estrategia nueva de este proyecto o una de las que ya tiene \(bonos_ar, evento_ar\)\?»/);
  assert.match(withTwo,/mark_strategy\.py" <nombre>/);assert.doesNotMatch(withTwo,/\((analysis|strategy|personal)\)/);
+ assert.doesNotMatch(withTwo,/reescribí/);assert.match(withTwo,/armame el mapa de/);assert.ok(withTwo.includes(path.join(base,'galecore-lab','skills','mapa','SKILL.md')));   // AC-4: el mapa es a pedido, no por turno
  const none=await say('brasil');assert.match(none,/Estrategias de este proyecto: ninguna todavía\./);assert.doesNotMatch(none,/o una de las que ya tiene/);
  assert.doesNotMatch(await say('personal'),/Estrategias de este proyecto/);
 });
