@@ -443,3 +443,19 @@ test('WS-0071 AC-2: mark_strategy rechaza la estrategia de un proyecto viejo cuy
  let r;try{r=JSON.parse(require('child_process').execFileSync('python',[path.join(__dirname,'mark_strategy.py'),'bonos_ar'],{cwd:path.join(kb,'workspaces','argentina'),encoding:'utf8'}));}catch(e){r=JSON.parse(e.stdout);}
  assert.equal(r.ok,false);assert.match(r.error,/bonos_ar/);
  assert.deepEqual((await route(service,'GET','/workspaces')).value.projects.find(x=>x.id==='argentina').strategies,[]);});
+test('WS-0071 AC-3: el contexto del turno lista las estrategias del proyecto y pregunta «¿nueva o una de las que ya tiene?», sin tipos',async t=>{
+ const {base,kb,local}=setup(t);const {EventEmitter}=require('events');
+ fs.mkdirSync(path.join(base,'galecore-ai'));fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo de test');
+ const contexts=[];
+ const spawnProcess=(bin,args)=>{contexts.push(fs.readFileSync(args[args.indexOf('--append-system-prompt-file')+1],'utf8'));const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(){},end(){}};proc.kill=()=>{};setImmediate(()=>proc.emit('close',0));return proc;};
+ const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude'},environment:()=>({}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
+ const say=async project=>{const chat=(await route(service,'POST','/chats',{project,provider:'claude'})).value;await route(service,'POST','/chats/'+chat.id+'/messages',{text:'hola'});await new Promise(r=>setTimeout(r,50));return contexts.at(-1);};
+ await route(service,'POST','/workspaces',{label:'Argentina'});await route(service,'POST','/workspaces',{label:'Brasil'});
+ fs.writeFileSync(path.join(kb,'workspaces','argentina','workspace.json'),JSON.stringify({id:'argentina',label:'Argentina',strategies:['bonos_ar','evento_ar']}));
+ const withTwo=await say('argentina');
+ assert.match(withTwo,/Estrategias de este proyecto: bonos_ar, evento_ar\./);
+ assert.match(withTwo,/«¿es una estrategia nueva de este proyecto o una de las que ya tiene \(bonos_ar, evento_ar\)\?»/);
+ assert.match(withTwo,/mark_strategy\.py" <nombre>/);assert.doesNotMatch(withTwo,/\((analysis|strategy|personal)\)/);
+ const none=await say('brasil');assert.match(none,/Estrategias de este proyecto: ninguna todavía\./);assert.doesNotMatch(none,/o una de las que ya tiene/);
+ assert.doesNotMatch(await say('personal'),/Estrategias de este proyecto/);
+});
