@@ -13,7 +13,7 @@ jest.mock('../api/lab', () => ({
 jest.mock('./LabShadow', () => ({ LabShadow: () => <div>Seguimiento</div> }));
 jest.mock('../components/lab/LabShell', () => ({ LabShell: () => <div>Terminal</div> }));
 
-const projects = [{ id: 'personal', label: 'Personal', type: 'personal', relative: 'workspaces/personal' }];
+const projects = [{ id: 'personal', label: 'Personal', relative: 'workspaces/personal' }];
 const user = (text: string) => ({ id: 'u1', role: 'user', text, at: '2026-10-28T10:00:00Z' });
 const reply = (text: string, id = 'a1') => ({ id, role: 'assistant', text, at: '2026-10-28T10:00:05Z' });
 
@@ -216,6 +216,36 @@ test('«/» abre las skills del espacio, se elige con el teclado y al enviar via
   await waitFor(() => expect(posted('/messages')).toHaveLength(1));
   expect(posted('/messages')[0][1].mentions.map((m: any) => m.key)).toEqual(['valuar-empresa', 'oportunidades']);
   spy.mockRestore();
+});
+
+test('copiar entrega el texto completo y el reloj muestra la hora real del mensaje', async () => {
+  const writeText = jest.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  serve('idle', [user('hola'), reply('# Idea de SPY\n\nComprar volatilidad')]);
+  render(<Lab onMonitor={() => {}} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Copiar respuesta' }));
+  await screen.findByRole('button', { name: 'Copiado' });
+  expect(writeText).toHaveBeenCalledWith('# Idea de SPY\n\nComprar volatilidad');
+  const time = new Date('2026-10-28T10:00:05Z').toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  expect(screen.getByTitle(`Enviado a las ${time}`)).toHaveAttribute('tabindex', '0');
+});
+
+test('si el portapapeles falla permite reintentar sin anunciar éxito', async () => {
+  const writeText = jest.fn().mockRejectedValueOnce(new Error('denegado')).mockResolvedValue(undefined);
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+  serve('idle', [reply('respuesta')]);
+  render(<Lab onMonitor={() => {}} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Copiar respuesta' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'No se pudo copiar. Reintentar' }));
+  await screen.findByRole('button', { name: 'Copiado' });
+  expect(writeText).toHaveBeenCalledTimes(2);
+});
+
+test('los controles no aparecen mientras se genera la última respuesta', async () => {
+  serve('running', [user('hola'), reply('respuesta parcial')]);
+  render(<Lab onMonitor={() => {}} />);
+  await screen.findByText('respuesta parcial');
+  expect(screen.queryByLabelText('Acciones de la respuesta')).not.toBeInTheDocument();
 });
 
 test('Guardar como nota escribe en notas/ con la API de archivos y deja el enlace al panel', async () => {

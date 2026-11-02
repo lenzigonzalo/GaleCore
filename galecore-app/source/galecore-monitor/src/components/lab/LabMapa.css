@@ -51,3 +51,10 @@
 .lab-mapa-evidence table { width:100%; border-collapse:collapse; font-size:14px; }
 
 .lab-mapa-bars { width:100%; height:auto; display:block; background:var(--bg-secondary, #141414); }
+/* Panel «Proyecto» (WS-0071) */
+.lab-proyecto-list { margin:0; padding:0; list-style:none; display:grid; gap:8px; }
+.lab-proyecto-list li { display:flex; align-items:center; gap:8px; }
+.lab-proyecto-item { flex:1; min-width:0; display:grid; gap:2px; text-align:left; padding:10px 12px; border:1px solid var(--border-dark); border-radius:8px; background:var(--bg-secondary); color:var(--text-primary); cursor:pointer; }
+.lab-proyecto-item:hover { border-color:var(--accent); }
+.lab-proyecto-item strong { font-size:15px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lab-proyecto-item span { font-size:13px; color:var(--text-secondary); }

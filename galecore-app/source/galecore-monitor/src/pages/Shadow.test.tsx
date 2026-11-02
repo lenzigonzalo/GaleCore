@@ -189,15 +189,29 @@ test('motivo del descarte conserva razón y gates', () => {
 });
 
 test('incluye estrategias de prueba y proyectos en diseño',async()=>{
- (labRequest as jest.Mock).mockResolvedValue({projects:[{id:'draft',type:'strategy',strategyName:'idea'}, {id:'test',type:'strategy',strategyName:'shadow_runtime_test_hidden'}],chats:[],providers:[]});
+ (labRequest as jest.Mock).mockResolvedValue({projects:[{id:'draft',strategies: ['idea']}, {id:'test',strategies: ['shadow_runtime_test_hidden']}],chats:[],providers:[]});
  mocked.fetchPerformanceSummary.mockResolvedValue([summary('shadow_runtime_test_hidden')]);
  render(<Shadow/>);
  const row=(await screen.findByRole('button',{name:'Idea'})).closest('tr')!;
  expect(row.closest('tbody')!).toHaveTextContent('En diseño');expect(row).not.toHaveTextContent('$0');
  expect(screen.getByRole('button',{name:'Shadow runtime test hidden'})).toBeInTheDocument();
 });
+test('un proyecto con varias estrategias las lista todas, cada una con su proyecto (WS-0071)',async()=>{
+ (labRequest as jest.Mock).mockResolvedValue({projects:[{id:'argentina',label:'Argentina',strategies:['bonos_ar','evento_ar']}],chats:[],providers:[]});
+ mocked.fetchPerformanceSummary.mockResolvedValue([]);
+ render(<Shadow/>);
+ const bonos=(await screen.findByRole('button',{name:'Bonos ar'})).closest('tr')!,evento=screen.getByRole('button',{name:'Evento ar'}).closest('tr')!;
+ expect(bonos).toHaveTextContent('Argentina');expect(evento).toHaveTextContent('Argentina');expect(bonos).not.toBe(evento);
+});
+test('una copia compartida sin el diseño no aparece en Estrategias (WS-0071)',async()=>{
+ (labRequest as jest.Mock).mockResolvedValue({projects:[{id:'tesis',label:'Tesis',strategies:['spy_ajena'],externalStrategy:true},{id:'mia',label:'Mia',strategies:['idea']}],chats:[],providers:[]});
+ mocked.fetchPerformanceSummary.mockResolvedValue([]);
+ render(<Shadow/>);
+ await screen.findByRole('button',{name:'Idea'});
+ expect(screen.queryByRole('button',{name:'Spy ajena'})).not.toBeInTheDocument();
+});
 test('si el Lab estaba apagado, reintenta al volver a la pestaña y muestra las estrategias en diseño',async()=>{
- (labRequest as jest.Mock).mockRejectedValueOnce(new Error('Lab apagado')).mockResolvedValue({projects:[{id:'draft',type:'strategy',strategyName:'idea'}],chats:[],providers:[]});
+ (labRequest as jest.Mock).mockRejectedValueOnce(new Error('Lab apagado')).mockResolvedValue({projects:[{id:'draft',strategies: ['idea']}],chats:[],providers:[]});
  render(<Shadow/>);
  expect(await screen.findByText('No se pudieron leer las estrategias en diseño.')).toBeInTheDocument();
  fireEvent(document,new Event('visibilitychange'));

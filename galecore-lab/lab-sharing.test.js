@@ -130,9 +130,9 @@ test('un descriptor compartido no lee una estrategia externa con el mismo nombre
   const p=await create(service,'Tesis');
   share(kb,p.id,{context:{user:'demo'},owner:'eric'});
   const descriptor=path.join(kb,'workspaces',p.id,'workspace.json');
-  const meta=JSON.parse(fs.readFileSync(descriptor,'utf8'));meta.type='strategy';meta.strategyName='spy';fs.writeFileSync(descriptor,JSON.stringify(meta));
+  const meta=JSON.parse(fs.readFileSync(descriptor,'utf8'));delete meta.strategies;meta.type='strategy';meta.strategyName='spy';fs.writeFileSync(descriptor,JSON.stringify(meta));
   const listed=(await route(service,'GET','/workspaces')).value.projects.find(x=>x.id===p.id);
-  assert.equal(listed.strategyName,null);
+  assert.deepEqual(listed.strategies,['spy']);assert.equal(listed.externalStrategy,true);   // el panel Proyecto la muestra como «No incluida en esta copia»
   assert.equal((await route(service,'GET','/workspaces/'+p.id+'/strategy?view=design')).value.missing,true);
   assert.equal(calls.length,0);
 });

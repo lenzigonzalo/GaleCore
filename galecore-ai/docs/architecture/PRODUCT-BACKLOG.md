@@ -2698,6 +2698,26 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 
 ---
 
+## BL-036 — APIs de Argentina: qué fuentes tiene GaleCore y cuáles faltan (A3, por ejemplo)
+
+**Estado:** pendiente; primero relevamiento, sin implementar ni cambiar el orden del plan.
+**Origen:** owner, 01/11/2026, al preparar el caso «Argentina» de WS-0071: «tendríamos que ver de sumar las APIs de Argentina, nos faltan la de A3 por ej». Anotado como BL al cerrar WS-0071 (el caso «Argentina» lo recorre el owner aparte).
+**Target:** datos de GaleCore (fuentes externas se implementan en GaleCore; el harness no consulta APIs) para los proyectos sobre Argentina: bonos soberanos en dólares, eventos con fecha (licitaciones, elecciones) y ADRs.
+**Hoy:** el caso «Argentina» declara como faltante lo que GaleCore no tiene, sin ir a la web. No está relevado qué datos argentinos hay ya conectados.
+**Preguntas a responder antes de diseñar:**
+
+| Pregunta | Opciones a evaluar |
+|---|---|
+| ¿Qué datos argentinos ya hay en GaleCore? | Relevar endpoints y fuentes actuales (calendario, macro, ADRs vía mercado de EE. UU.) |
+| ¿Qué falta para bonos, eventos y empresas? | Precios y curvas de bonos locales, mercado de capitales (A3), cauciones, dólar financiero, calendario de licitaciones |
+| ¿Cómo se accede a cada fuente? | API con clave o contrato (se le pide al owner), feed público, sólo datos diarios o intradía |
+| ¿Qué se necesita primero? | Lo que habilita una estrategia concreta del proyecto, no todas las fuentes juntas |
+
+**Entry gate:** cuando el owner priorice la pieza; antes, el relevamiento de lo que ya hay y la lista de gaps que dejó el caso «Argentina».
+**Aceptación del relevamiento:** una tabla de fuentes (tiene / falta / cómo se consulta / si pide clave) aprobada por el owner; recién después, la pieza de integración en GaleCore.
+
+---
+
 ## BL-034 — Configuración de avisos en el monitor: frecuencia y umbrales del supervisor
 
 **Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.
