@@ -1,5 +1,7 @@
 /** Puente local del Lab. Token efímero sólo en memoria, nunca en URL o localStorage. */
 export const LAB_URL = 'http://127.0.0.1:8771';
+/** Desde la plataforma (https) Chrome sólo deja hablarle a esta PC si el pedido lo declara: así pide el permiso de red local. */
+export const LOCAL_FETCH = { targetAddressSpace: 'loopback' } as RequestInit;
 export interface LabProject { id: string; label: string }
 export interface LabProvider { id: 'codex' | 'claude'; label: string; installed: boolean }
 export interface LabSession { id: string; project: string; provider: 'codex' | 'claude'; title: string; createdAt: string; state: 'running' | 'ended' | 'interrupted'; nativeId: string | null; exitCode: number | null; resumeOf: string | null }
@@ -10,7 +12,7 @@ let pendingToken: Promise<string> | null = null;
 async function request(url: string, options: RequestInit = {}, timeout = 12000) {
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeout);
-  try { return await fetch(LAB_URL + url, { ...options, signal: controller.signal }); }
+  try { return await fetch(LAB_URL + url, { ...LOCAL_FETCH, ...options, signal: controller.signal }); }
   finally { window.clearTimeout(timer); }
 }
 export async function labToken(): Promise<string> {
