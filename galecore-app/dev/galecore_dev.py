@@ -15,7 +15,8 @@ Uso, desde la raíz del repo GaleCore:
     python dev/galecore_dev.py migrate            # aplica las migraciones EF como galecore_ddl
     python dev/galecore_dev.py set-demo-password  # la contraseña del usuario de prueba (se tipea, no se muestra)
     python dev/galecore_dev.py api                # API en :7001 contra GaleCore Dev (primer plano)
-    python dev/galecore_dev.py monitor            # monitor en :3039 contra GaleCore Dev (primer plano)
+    python dev/galecore_dev.py monitor            # monitor en :3039 contra GaleCore Dev y su Lab (primer plano)
+    python dev/galecore_dev.py lab                # Lab de Dev en :8781 contra :7001; datos en ~/GaleCore-datos/dev
     python dev/galecore_dev.py deploy [--switch-on]   # login del usuario de prueba + deploy de la spec de prueba
     python dev/galecore_dev.py deploy --spec <name> --approval <knowledge/strategies/<name>/<version>.approval.json>
         # una estrategia: sólo con una aprobación íntegra de esa propuesta y si GaleCore cargó el hash aprobado
@@ -52,6 +53,10 @@ DATAFEED = ROOT / "source" / "galecore-datafeed"
 API_CSPROJ = DATAFEED / "DataFeed.Api" / "DataFeed.Api.csproj"
 MONITOR = ROOT / "source" / "galecore-monitor"
 API_URL = "http://localhost:7001"
+# El Lab de producción usa :8771 y ~/GaleCore-datos (o GALECORE_KNOWLEDGE_DIR); el de Dev, otro puerto y otra carpeta.
+LAB = ROOT.parent / "galecore-lab"
+LAB_URL = "http://127.0.0.1:8781"
+LAB_DATA = Path.home() / "GaleCore-datos" / "dev"
 TEST_USERNAME = "demo"
 TEST_EMAIL = "demo@galecore-dev.test"
 TEST_DATABASE = "galecore_test"
@@ -228,8 +233,22 @@ def cmd_monitor(_: argparse.Namespace) -> int:
         "REACT_APP_SIGNALR_HUB_URL": API_URL + "/hubs/marketdata",
         "REACT_APP_SUPABASE_URL": env["supabase_url"],
         "REACT_APP_SUPABASE_ANON_KEY": env["anon_key"],
+        "REACT_APP_LAB_URL": LAB_URL,
     }
     return sh(["npm", "start"], cwd=MONITOR, env=run_env, check=False)
+
+
+def cmd_lab(_: argparse.Namespace) -> int:
+    # node directo, no start-lab.ps1: ése aplica GALECORE_LAB_* (producción) y se actualiza desde main.
+    run_env = {
+        **os.environ,
+        "GALECORE_BASE_URL": API_URL,
+        "GALECORE_LAB_PORT": LAB_URL.rsplit(":", 1)[1],
+        "GALECORE_LAB_ORIGINS": "http://localhost:3039,http://127.0.0.1:3039",
+        "GALECORE_LAB_LOCAL": str(LAB_DATA / "lab"),
+        "GALECORE_KNOWLEDGE_DIR": str(LAB_DATA / "knowledge"),
+    }
+    return sh(["node", "lab-server.js"], cwd=LAB, env=run_env, check=False)
 
 
 def login(env: dict) -> str:
@@ -353,6 +372,7 @@ def main() -> int:
         ("set-demo-password", cmd_set_demo_password),
         ("api", cmd_api),
         ("monitor", cmd_monitor),
+        ("lab", cmd_lab),
         ("test", cmd_test),
     ]:
         sub.add_parser(name).set_defaults(fn=fn)

@@ -16,7 +16,8 @@ const { ensureKnowledgeDir } = require('./knowledge-dir');
 const ROOT = path.resolve(__dirname, '..');
 const KB = ensureKnowledgeDir();
 const PORT = Number(process.env.GALECORE_LAB_PORT || 8771);
-const LOCAL = path.join(__dirname, '.local');
+// Estado del Lab (sesiones, chats). El Lab de desarrollo (galecore_dev.py lab) usa otra carpeta para no mezclarse con el de producción.
+const LOCAL = process.env.GALECORE_LAB_LOCAL ? path.resolve(process.env.GALECORE_LAB_LOCAL) : path.join(__dirname, '.local');
 const STORE = path.join(LOCAL, 'lab-sessions.json');
 const ORIGINS = new Set((process.env.GALECORE_LAB_ORIGINS || 'http://localhost:3039,http://127.0.0.1:3039,https://galecore.vercel.app').split(',').map(s => s.trim()).filter(Boolean));
 const TOKEN = crypto.randomBytes(32).toString('hex');
