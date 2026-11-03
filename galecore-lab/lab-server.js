@@ -197,7 +197,12 @@ function readBody(req) {
     req.on('error', reject);
   });
 }
-const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()], autoSync:true });
+const { createUpdater, gitIn, relaunch } = require('./lab-update');
+const updater = createUpdater({
+  git: gitIn(ROOT), busy: () => workspaces.isBusy(),
+  restart: () => { relaunch(__dirname); shutdown(); },
+});
+const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()], autoSync:true, update:() => updater.info() });
 const server = http.createServer(async (req, res) => {
   if (!validHost(req) || !validOrigin(req)) return json(res, 403, { error: 'Sólo se admite GaleCore: la plataforma o el monitor local de esta PC.' });
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
@@ -214,6 +219,7 @@ const server = http.createServer(async (req, res) => {
   if (req.headers.authorization !== 'Bearer ' + TOKEN) return json(res, 401, { error: 'Conexión local no autorizada. Reconectá el Lab.' });
   try {
     if (await workspaces.route(req,res,url,json,readBody)) return;
+    if (req.method === 'POST' && url.pathname === '/update') return json(res, 200, { status: await updater.request((await readBody(req)).commit) });
     if (req.method === 'GET' && url.pathname === '/state') return json(res, 200, {
       projects: projects().map(({ id, label }) => ({ id, label })),
       providers: ['codex', 'claude'].map(id => ({ id, label: id === 'codex' ? 'Codex' : 'Claude Code', installed: !!binaries[id] })),
@@ -298,4 +304,5 @@ function shutdown() {
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+updater.init().catch(() => {});   // WS-0082: commit del Lab y si es actualizable (main limpio); el front decide si pedir /update
 server.listen(PORT, '127.0.0.1', () => console.log('[lab] listo en loopback :' + PORT + ' · sesiones de este usuario local'));

@@ -6,6 +6,7 @@ const { spawn, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const { createSharing } = require('./lab-sharing');
+const { brokerQueries } = require('./lab-brokers');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -314,7 +315,7 @@ function parseMapa(text){
 // (type:'strategy' + strategyName → strategies:[strategyName]; el resto → []). La API sólo devuelve strategies.
 const strategiesOf=(meta,fallback)=>Array.isArray(meta?.strategies)?[...new Set(meta.strategies.filter(n=>typeof n==='string'&&ID.test(n)))]:meta?.type==='strategy'?[typeof meta.strategyName==='string'&&ID.test(meta.strategyName)?meta.strategyName:fallback]:[];
 const derived=(id,strategies)=>({strategies});
-function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, request, sessionFile }) {
+function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, request, sessionFile, update = () => null }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
   const overridesFile=path.join(local,'lab-project-overrides.json');
@@ -454,17 +455,20 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       proc.stdin.end(JSON.stringify(input));
     });
   }
-  // Lo único propio de cada motor: cómo recibe el contexto, cómo se le apagan navegador y conectores, y cómo retoma
+  // Lo único propio de cada motor: cómo recibe el contexto, cómo limita navegador y conectores, y cómo retoma
   // (D-0014). El resto (qué contexto, qué datos, qué se guarda) es igual para todos. El contexto va por archivo, no por
   // la línea de comando (Windows la corta en ~32.000 caracteres); el archivo se borra al terminar el turno.
   function engineArgs(chat,p,context,auto){
     if(chat.provider==='codex'){
+      const brokers=brokerQueries(local);
+      if(brokers)context+=brokers.instructions;
       // Codex no lee instrucciones de un archivo suelto: van como perfil (<CODEX_HOME>/<nombre>.config.toml, -p).
       const name='galecore-lab-'+chat.id, file=path.join(environment().CODEX_HOME||path.join(os.homedir(),'.codex'),name+'.config.toml');
       fs.writeFileSync(file,'developer_instructions = '+JSON.stringify(context)+'\n');
-      // Búsqueda web sí (GaleCore primero, PRODUCT.md); navegador y conectores no; red para la API local de GaleCore;
+      // Búsqueda web sí (GaleCore primero, PRODUCT.md); navegador no; brokers sólo con opt-in local de consulta;
+      // red para la API local de GaleCore;
       // escribe en el proyecto y en knowledge/.
-      const sandbox=['-c','web_search="live"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser','--disable','apps',
+      const sandbox=['-c','web_search="live"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser',...(brokers?brokers.args:['--disable','apps']),
         '-c','sandbox_workspace_write.network_access=true','-c','sandbox_workspace_write.writable_roots='+JSON.stringify([kb])];
       const args=['--no-daemon','exec','--json','--skip-git-repo-check','-p',name,...modelFlags(chat),...(auto?['--approve-for-me']:[]),...sandbox];
       // --approve-for-me ya usa el sandbox workspace-write y Codex rechaza los dos juntos (0.164): en Auto no va --sandbox.
@@ -533,7 +537,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
-    if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
+    if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),update:update(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/users'){json(res,200,await sharing.searchUsers(url.searchParams.get('q')));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/shared'){json(res,200,await sharing.catalog({busy}));return true;}
@@ -691,6 +695,6 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     let released=false;
     return ()=>{if(released)return;released=true;const n=shellProjects.get(p.id)-1;if(n)shellProjects.set(p.id,n);else shellProjects.delete(p.id);};
   }
-  return {route,listProjects,reserveShell,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
+  return {route,listProjects,reserveShell,isBusy:()=>jobs.size>0||listProjects().some(p=>sharing.isRunning(p)),shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
 module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage};

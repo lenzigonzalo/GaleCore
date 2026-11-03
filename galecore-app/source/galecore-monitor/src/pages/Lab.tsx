@@ -30,6 +30,9 @@ import { useChatFontSize } from '../components/settings/ChatFontSetting';
 const limitMapaWidth = (width: number, room = (typeof window !== 'undefined' ? window.innerWidth : 1600)) => Math.max(280, Math.min(width, room - 420));
 const NARROW = '(max-width: 1100px)';
 const limitSidebarWidth = (width: number, available: number) => Math.max(200, Math.min(width, 480, Math.max(200, available - 420)));
+// Commit con el que Vercel compiló esta web (vacío en local). Una sola petición de actualización del Lab por carga de página.
+const WEB_COMMIT = process.env.REACT_APP_COMMIT || '';
+let updateAsked = false;
 export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, onSidebarToggle, onLogout, embedded = false, active = false, projectRequest, onFollowStrategy }: { embedded?: boolean; active?: boolean; projectRequest?: { id: string; sequence: number }; onFollowStrategy?: (spec: string) => void; onMonitor: () => void; onNavigate?: (tab: Tab) => void; sidebarHidden?: boolean; onSidebarToggle?: () => void; onLogout?: () => void }) {
   const [projectHost, setProjectHost] = useState<HTMLElement | null>(null);
   const chatFontSize = useChatFontSize();
@@ -114,8 +117,16 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const draftKey = projectId + '/' + (chatId || 'new');
   const draft = drafts[draftKey] || '';
   const refresh = useCallback(async () => {
-    try { setState(await labRequest<WorkspaceState>('/workspaces')); setError(old => old === 'No se pudo conectar con el Lab local.' ? '' : old); }
-    catch { setError('No se pudo conectar con el Lab local.'); }
+    try {
+      const next = await labRequest<WorkspaceState>('/workspaces');
+      setState(next);
+      // WS-0082: el deploy compiló esta web con su commit; si el Lab está en otro, le pide actualizarse (una sola vez por carga).
+      if (WEB_COMMIT && next.update?.updatable && next.update.commit && next.update.commit !== WEB_COMMIT && !updateAsked) {
+        updateAsked = true;
+        labRequest('/update', { commit: WEB_COMMIT }).catch(() => {});
+      }
+      setError(old => old === 'No se pudo conectar con el Lab local.' ? '' : old);
+    } catch { setError('No se pudo conectar con el Lab local.'); }
   }, []);
   useEffect(() => { refresh(); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, [refresh]);
   useEffect(() => {
@@ -451,6 +462,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       }}/>}
     <section className={'lab-chat-main' + (chatEmpty && view === 'chat' ? ' empty' : '')}>
       {headerHost ? createPortal(chatHeader, headerHost) : chatHeader}
+      {state?.update?.notice && <p className="lab-sync-notice" role="status"><span>{state.update.notice}</span></p>}
       {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><span className="lab-sync-actions">{noticeAction && <button className="lab-files-button" onClick={noticeAction.run}>{noticeAction.label}</button>}<button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></span></p>}
       {shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
       {view==='files' ? <LabFiles key={projectId} projectId={projectId} folder={project?.relative} openPath={fileToOpen}/> : view==='shell' ? null : view!=='chat' ? <LabShadow key={project?.id + view + strategyOpen} mode={view} project={project} strategy={strategyOpen} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (side ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column" onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); void attach(Array.from(e.dataTransfer.files)); } }}>

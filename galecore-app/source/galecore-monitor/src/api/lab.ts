@@ -44,7 +44,7 @@ export interface WorkspaceChat { id: string; project: string; provider: 'codex' 
 export interface ChatTask { id: string; kind: 'agent' | 'command'; label: string; agentType?: string; status: string; last?: string; tools?: number; tokens?: number; summary?: string }
 export interface ChatUsage { turns: { at: string; input: number; output: number; cached: number; costUsd?: number }[]; context?: { used: number; window: number }; limit?: { status?: string; resetsAt?: number; windows?: Record<string, { utilization?: number; resetsAt?: number }> } }
 export interface ChatOptions { models: string[]; efforts: string[]; defaultModel?: string; modelEfforts?: Record<string, string[]> }
-export interface WorkspaceState { defaultProvider?: 'codex' | 'claude'; projects: WorkspaceProject[]; chats: Omit<WorkspaceChat, 'messages'>[]; providers: LabProvider[]; chatOptions?: Partial<Record<'codex' | 'claude', ChatOptions>> }
+export interface WorkspaceState { update?: { commit: string | null; updatable: boolean; notice: string | null }; defaultProvider?: 'codex' | 'claude'; projects: WorkspaceProject[]; chats: Omit<WorkspaceChat, 'messages'>[]; providers: LabProvider[]; chatOptions?: Partial<Record<'codex' | 'claude', ChatOptions>> }
 export interface WorkspaceFile { path: string; name: string; kind: 'folder' | 'file'; text?: false; children?: WorkspaceFile[] }
 
 /** Sube un adjunto del chat a adjuntos/ del proyecto (WS-0036); devuelve la ruta que se nombra en el mensaje. */
