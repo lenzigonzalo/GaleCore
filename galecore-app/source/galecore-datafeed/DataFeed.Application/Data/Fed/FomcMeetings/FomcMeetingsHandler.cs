@@ -52,7 +52,8 @@ namespace DataFeed.Application.Data.Fed.FomcMeetings
                 Notes = new()
                 {
                     "Sólo reuniones programadas; una reunión o decisión fuera de calendario aparece cuando la Fed la publica.",
-                    "Projections = la reunión trae proyecciones económicas (el * de la página); Scheduled = false es un notation vote.",
+                    "Projections = la reunión trae proyecciones económicas (el * de la página); Scheduled = false es un notation vote, una conference call o una reunión no programada.",
+                    "Los años que ya no están en la página del calendario salen de su página histórica (fomchistorical<año>.htm).",
                 },
                 Data = byYear.OrderBy(kv => kv.Key).SelectMany(kv => kv.Value).ToList(),
             };

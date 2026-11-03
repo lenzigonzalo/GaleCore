@@ -26,6 +26,18 @@ namespace DataFeed.Tests
             <div class="fomc-meeting__month"><strong>Dec/Jan</strong></div><div class="fomc-meeting__date">31-1</div>
             """;
 
+        private const string FedHistorical2019 = """
+            <h5 class="panel-heading panel-heading--shaded">March 19-20 Meeting - 2019</h5>
+            <div><a href="/monetarypolicy/fomcprojtabl20190320.htm">Projection Materials</a></div>
+            <h5 class="panel-heading panel-heading--shaded">April/May 30-1 Meeting - 2019</h5><div>Statement</div>
+            <h5 class="panel-heading panel-heading--shaded">July 31-August 1  Meeting - 2019</h5><div>Statement</div>
+            <h5 class="panel-heading panel-heading--shaded">August 1 Conference Call - 2019</h5><div>Minutes</div>
+            <h5 class="panel-heading panel-heading--shaded">October 4 (unscheduled) - 2019</h5><div>Minutes</div>
+            <h5 class="panel-heading panel-heading--shaded">March 17-18 (cancelled) Meeting - 2019</h5><div></div>
+            <h5 class="panel-heading panel-heading--shaded">December 10-11 Meeting - 2019</h5>
+            <div><a href="/x.htm">Projection Materials</a></div>
+            """;
+
         private sealed class Recorded : HttpMessageHandler
         {
             private readonly Func<HttpRequestMessage, HttpResponseMessage> _answer;
@@ -58,6 +70,40 @@ namespace DataFeed.Tests
             Assert.Equal(new DateOnly(2026, 5, 1), y26[2].End);
             Assert.False(y26[3].Scheduled);
             Assert.Equal(new DateOnly(2028, 1, 1), years[2027][0].End);
+        }
+
+        [Fact]
+        public void Fed_LeeLaPaginaHistoricaConCallsNoProgramadasYProyecciones()
+        {
+            var m = FedCalendarProvider.ParseHistorical(FedHistorical2019, 2019);
+            Assert.Equal(new[] { "19-20", "30-1", "31-1", "1 (conference call)", "4 (unscheduled)", "10-11" }, m.Select(x => x.Days));
+            Assert.Equal(new[] { true, false, false, false, false, true }, m.Select(x => x.Projections));
+            Assert.Equal(new[] { true, true, true, false, false, true }, m.Select(x => x.Scheduled));
+            Assert.Equal("July/August", m[2].Month);
+            Assert.Equal(new DateOnly(2019, 8, 1), m[2].End);
+            Assert.Equal(new DateOnly(2019, 4, 30), m[1].Start);
+            Assert.Equal(new DateOnly(2019, 5, 1), m[1].End);
+        }
+
+        [Fact]
+        public async Task Fed_UnAnioQueYaNoEstaEnElCalendarioSeLeeDeSuPaginaHistorica()
+        {
+            var handler = new Recorded(r => r.RequestUri!.ToString() == FedCalendarProvider.HistoricalUrl(2019)
+                ? Json(FedHistorical2019) : Json(FedHtml));
+            var (years, _) = await new FedCalendarProvider(new HttpClient(handler)).GetMeetingsAsync(new[] { 2019, 2026 }, default);
+            Assert.Equal(6, years[2019].Count);
+            Assert.Equal(4, years[2026].Count);
+            Assert.Equal(new[] { FedCalendarProvider.Url, FedCalendarProvider.HistoricalUrl(2019) }, handler.Urls);
+        }
+
+        [Fact]
+        public async Task Fed_PaginaHistoricaConOtraFormaEsError()
+        {
+            var handler = new Recorded(r => r.RequestUri!.ToString() == FedCalendarProvider.HistoricalUrl(2019)
+                ? Json("<h5>Algo raro - 2019</h5>") : Json(FedHtml));
+            var ex = await Assert.ThrowsAsync<UpstreamSourceException>(
+                () => new FedCalendarProvider(new HttpClient(handler)).GetMeetingsAsync(new[] { 2019 }, default));
+            Assert.Contains("Algo raro", ex.Message);
         }
 
         [Fact]
@@ -149,6 +195,9 @@ namespace DataFeed.Tests
             var (years, sha) = await new FedCalendarProvider(http).GetMeetingsAsync(new[] { 2026, 2027 }, default);
             Assert.NotEmpty(years[2026]);
             Assert.StartsWith("sha256:", sha);
+            var (old, _) = await new FedCalendarProvider(http).GetMeetingsAsync(Enumerable.Range(2000, 21).ToArray(), default);
+            Assert.All(old, kv => Assert.InRange(kv.Value.Count(m => m.Scheduled), 7, 9));
+            Console.WriteLine($"FOMC 2000-2020: {string.Join(" ", old.Select(kv => $"{kv.Key}:{kv.Value.Count}/{kv.Value.Count(m => m.Projections)}"))}");
             Console.WriteLine($"FRED filas={rows.Count} NFP={string.Join(",", rows.Where(r => r.ReleaseId == 50).Select(r => r.Date))} | FOMC 2026={string.Join(",", years[2026].Select(m => m.Start))}");
         }
 
