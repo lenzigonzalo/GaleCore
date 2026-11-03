@@ -35,8 +35,8 @@ namespace DataFeed.Application.App.Connections
                 null, null, "Tipos de cambio y variables monetarias del Banco Central. No necesita clave.", "Argentina"),
             new ConnectionDefinition("byma", "BYMA", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.None,
                 null, null, "Cotizaciones de la bolsa argentina. No necesita clave.", "Argentina"),
-            new ConnectionDefinition("mae", "MAE", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.None,
-                null, null, "Mercado Abierto Electrónico: renta fija y cambios. No necesita clave.", "Argentina"),
+            new ConnectionDefinition("a3", "A3 Mercados", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.Required,
+                "API key", "A3:ApiKey", "A3 Mercados (ex MAE): renta fija y cambios. Necesita API key.", "Argentina"),
             new ConnectionDefinition("datosgob", "datos.gob.ar", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.None,
                 null, null, "Series de tiempo del Estado argentino. No necesita clave.", "Argentina"),
             new ConnectionDefinition("dolarapi", "DolarAPI", ConnectionKind.Source, ConnectionOwner.Platform, KeyNeed.None,
@@ -56,7 +56,7 @@ namespace DataFeed.Application.App.Connections
         public static ConnectionDefinition? Find(string id) =>
             All.FirstOrDefault(c => string.Equals(c.Id, id, StringComparison.OrdinalIgnoreCase));
 
-        /// <summary>Las que se pueden cargar desde la plataforma (fred, bls, sec).</summary>
+        /// <summary>Las que se pueden cargar desde la plataforma (fred, bls, sec, a3).</summary>
         public static bool IsEditable(ConnectionDefinition c) => c.ConfigKey != null;
     }
 }

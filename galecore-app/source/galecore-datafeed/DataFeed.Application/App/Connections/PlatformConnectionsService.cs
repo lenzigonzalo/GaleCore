@@ -163,10 +163,17 @@ namespace DataFeed.Application.App.Connections
             return view;
         }
 
+        /// <summary>Valor vigente; A3 también acepta la variable de entorno A3_API_KEY, igual que su handler.</summary>
+        private string? EffectiveValue(ConnectionDefinition def)
+        {
+            var value = _config[def.ConfigKey!];
+            return string.IsNullOrWhiteSpace(value) && def.Id == "a3" ? _config["A3_API_KEY"] : value;
+        }
+
         private void FillPlatformSecret(ConnectionView item, ConnectionDefinition def, PlatformConnectionRow? row)
         {
             var fromDb = _provider.Has(def.ConfigKey!);
-            var value = _config[def.ConfigKey!];
+            var value = EffectiveValue(def);
             var hasValue = !string.IsNullOrWhiteSpace(value);
             if (hasValue)
             {
@@ -237,7 +244,7 @@ namespace DataFeed.Application.App.Connections
             if (!ConnectionCatalog.IsEditable(def))
                 return new ConnectionTestResult(false, $"{def.Name} no tiene una clave que probar.", DateTime.UtcNow);
 
-            var value = _config[def.ConfigKey!];
+            var value = EffectiveValue(def);
             var result = await ConnectionTester.RunAsync(def.Id, value, _http.CreateClient(), ct);
             if (_store != null && !string.IsNullOrWhiteSpace(value))
             {
