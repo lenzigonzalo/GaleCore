@@ -1,5 +1,6 @@
 /** Puente local del Lab. Token efímero sólo en memoria, nunca en URL o localStorage. */
-export const LAB_URL = 'http://127.0.0.1:8771';
+// Producción: el Lab de :8771. En desarrollo (.env.development / galecore_dev.py monitor) el Lab de Dev, :8781.
+export const LAB_URL = process.env.REACT_APP_LAB_URL || 'http://127.0.0.1:8771';
 /** Desde la plataforma (https) Chrome sólo deja hablarle a esta PC si el pedido lo declara: así pide el permiso de red local. */
 export const LOCAL_FETCH = { targetAddressSpace: 'loopback' } as RequestInit;
 export interface LabProject { id: string; label: string }
