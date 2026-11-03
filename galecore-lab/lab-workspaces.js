@@ -6,6 +6,7 @@ const { spawn, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const { createSharing } = require('./lab-sharing');
+const { brokerQueries } = require('./lab-brokers');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
@@ -454,17 +455,20 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       proc.stdin.end(JSON.stringify(input));
     });
   }
-  // Lo único propio de cada motor: cómo recibe el contexto, cómo se le apagan navegador y conectores, y cómo retoma
+  // Lo único propio de cada motor: cómo recibe el contexto, cómo limita navegador y conectores, y cómo retoma
   // (D-0014). El resto (qué contexto, qué datos, qué se guarda) es igual para todos. El contexto va por archivo, no por
   // la línea de comando (Windows la corta en ~32.000 caracteres); el archivo se borra al terminar el turno.
   function engineArgs(chat,p,context,auto){
     if(chat.provider==='codex'){
+      const brokers=brokerQueries(local);
+      if(brokers)context+=brokers.instructions;
       // Codex no lee instrucciones de un archivo suelto: van como perfil (<CODEX_HOME>/<nombre>.config.toml, -p).
       const name='galecore-lab-'+chat.id, file=path.join(environment().CODEX_HOME||path.join(os.homedir(),'.codex'),name+'.config.toml');
       fs.writeFileSync(file,'developer_instructions = '+JSON.stringify(context)+'\n');
-      // Búsqueda web sí (GaleCore primero, PRODUCT.md); navegador y conectores no; red para la API local de GaleCore;
+      // Búsqueda web sí (GaleCore primero, PRODUCT.md); navegador no; brokers sólo con opt-in local de consulta;
+      // red para la API local de GaleCore;
       // escribe en el proyecto y en knowledge/.
-      const sandbox=['-c','web_search="live"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser','--disable','apps',
+      const sandbox=['-c','web_search="live"','--disable','browser_use','--disable','computer_use','--disable','in_app_browser',...(brokers?brokers.args:['--disable','apps']),
         '-c','sandbox_workspace_write.network_access=true','-c','sandbox_workspace_write.writable_roots='+JSON.stringify([kb])];
       const args=['--no-daemon','exec','--json','--skip-git-repo-check','-p',name,...modelFlags(chat),...(auto?['--approve-for-me']:[]),...sandbox];
       // --approve-for-me ya usa el sandbox workspace-write y Codex rechaza los dos juntos (0.164): en Auto no va --sandbox.
