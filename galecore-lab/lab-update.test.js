@@ -5,7 +5,7 @@ const { createUpdater } = require('./lab-update');
 const H = 'a'.repeat(40), N = 'b'.repeat(40);   // commit del Lab y el nuevo (el de la web)
 
 // git simulado. `known`: commits que existen; `onMain`: los alcanzables desde origin/main; HEAD está detrás de N.
-function fake({ branch = 'main', status = '', head = H, headAfter = N, known = [H, N], onMain = [H, N], fetch = null, pull = null, changed = '', busyFor = 0 } = {}) {
+function fake({ branch = 'main', status = '', head = H, headAfter = N, known = [H, N], onMain = [H, N], fetch = null, pull = null, changed = '', busyFor = 0, ahead = false } = {}) {
   const calls = [];
   let pulled = false, busyLeft = busyFor, restarts = 0;
   const notices = [];
@@ -20,6 +20,7 @@ function fake({ branch = 'main', status = '', head = H, headAfter = N, known = [
     if (k === 'merge-base') {
       if (a3 === 'origin/main') { if (!onMain.includes(a2)) throw new Error('no'); return ''; }
       if (a2 === H && a3 === N) return '';   // HEAD detrás de N
+      if (ahead && a2 === N && a3 === head) return '';   // la web (N) detrás de HEAD
       throw new Error('no');
     }
     if (k === 'pull') { if (pull) throw pull; pulled = true; return ''; }
@@ -91,6 +92,22 @@ test('copia local divergida de main: avisa y no actualiza', async () => {
   assert.equal(await f.u.request(N), 'diverged');
   assert.match(f.u.notice(), /cambios propios/);
   assert.ok(!f.calls.some(c => c.startsWith('pull')));
+});
+
+test('Lab más adelante que la web (pull antes de que termine el deploy): no avisa ni actualiza', async () => {
+  const f = fake({ head: 'c'.repeat(40), ahead: true });
+  assert.equal(await f.u.request(N), 'ahead');
+  assert.equal(f.u.notice(), null);
+  assert.ok(!f.calls.some(c => c.startsWith('pull')));
+});
+
+test('el aviso de «cambios propios» se borra cuando la web alcanza al Lab', async () => {
+  const C = 'c'.repeat(40);
+  const f = fake({ head: C, known: [H, N, C], onMain: [H, N, C] });
+  assert.equal(await f.u.request(N), 'diverged');
+  assert.match(f.u.notice(), /cambios propios/);
+  assert.equal(await f.u.request(C), 'current');
+  assert.equal(f.u.notice(), null);
 });
 
 test('commit desconocido o que no está en main: no hace nada', async () => {
