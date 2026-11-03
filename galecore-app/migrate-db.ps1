@@ -43,6 +43,13 @@
     ConnectionStrings:GaleCoreDdlProduction de los user-secrets de DataFeed.Repositories.
     Sin este switch el script se niega a tocar produccion: la credencial de todos los dias es la de Dev.
 
+.PARAMETER CI
+    Modo no interactivo para el workflow de deploy (.github/workflows/deploy.yml, WS-0081). Exige
+    -Production. Toma la cadena de la variable de entorno PROD_DDL_CONNECTION (el secreto del entorno
+    `production` de GitHub) en vez de los user-secrets, no pregunta nunca y, si lo pendiente es
+    DESTRUCTIVO, sale con codigo 1 SIN aplicar nada (esas se corren a mano, con expand / contract).
+    No imprime host ni usuario: los logs de un repo publico son publicos.
+
 .EXAMPLE
     .\migrate-db.ps1 -DryRun
     Que hay pendiente y que SQL correria, sin tocar nada.
@@ -62,16 +69,17 @@ param(
     [string] $Target,
     [switch] $DryRun,
     [switch] $Yes,
-    [switch] $Production
+    [switch] $Production,
+    [switch] $CI
 )
 
 $ProductionRef = 'vsbnukptdvsyhujgtook'
 
 $ErrorActionPreference = 'Stop'
 
-$project = Join-Path $PSScriptRoot 'source\galecore-datafeed\DataFeed.Repositories'
+$project = Join-Path $PSScriptRoot 'source/galecore-datafeed/DataFeed.Repositories'
 $stamp   = Get-Date -Format 'yyyyMMdd-HHmmss'
-$sqlFile = Join-Path $env:TEMP "galecore-migration-$stamp.sql"
+$sqlFile = Join-Path ([System.IO.Path]::GetTempPath()) "galecore-migration-$stamp.sql"
 
 function Step { param([string] $Text) Write-Host "`n==> $Text" -ForegroundColor Cyan }
 # Con -Production el script carga GALECORE_DB para dotnet ef. Corrido con .\ comparte la sesion:
@@ -80,6 +88,8 @@ $script:prevGaleCoreDb = $env:GALECORE_DB
 function Restore-Env { if ($Production) { $env:GALECORE_DB = $script:prevGaleCoreDb } }
 function Fail { param([string] $Text) Write-Host "`nFALLO: $Text" -ForegroundColor Red; Restore-Env; exit 1 }
 function Note { param([string] $Text) Write-Host "    $Text" }
+
+if ($CI -and -not $Production) { Fail '-CI solo existe para produccion: usalo junto con -Production.' }
 
 function Get-CsPart {
     param([string] $Cs, [string] $Key)
@@ -115,6 +125,15 @@ $cs = $null; $csSource = $null
 $fromEnv = $env:GALECORE_DB
 if ($Production) {
     # Produccion tiene su propia credencial: nunca la de Dev ni una GALECORE_DB que quedo cargada.
+    if ($CI) {
+        # En CI no hay user-secrets: la cadena viene del secreto PROD_DDL_CONNECTION del entorno `production`.
+        if ([string]::IsNullOrWhiteSpace($env:PROD_DDL_CONNECTION)) {
+            Fail 'Falta el secreto PROD_DDL_CONNECTION en el entorno production de GitHub (ver WS-0081, Configuracion de una vez).'
+        }
+        $cs = $env:PROD_DDL_CONNECTION.Trim()
+        $csSource = 'secreto PROD_DDL_CONNECTION (CI)'
+        $env:GALECORE_DB = $cs
+    } else {
     $secrets = & dotnet user-secrets list --project $project
     $prodLine = $secrets | Where-Object { $_ -match '^ConnectionStrings:GaleCoreDdlProduction\s*=' } | Select-Object -First 1
     if (-not $prodLine) {
@@ -127,6 +146,7 @@ Falta la credencial de DDL de produccion en esta maquina. Cargala una sola vez:
     $csSource = 'user-secrets de DataFeed.Repositories (ConnectionStrings:GaleCoreDdlProduction)'
     # dotnet ef resuelve la cadena por su cuenta: GALECORE_DB le gana a los user-secrets.
     $env:GALECORE_DB = $cs
+    }
 } elseif (-not [string]::IsNullOrWhiteSpace($fromEnv)) {
     $cs = $fromEnv
     $csSource = 'variable de entorno GALECORE_DB'
@@ -167,9 +187,13 @@ $csUser = Get-CsPart $cs 'Username'
 $csDb   = Get-CsPart $cs 'Database'
 
 Note "origen:  $csSource"
-Note "host:    ${csHost}:${csPort}"
+if ($CI) {
+    Note "puerto:  $csPort (host y usuario no se imprimen en CI)"
+} else {
+    Note "host:    ${csHost}:${csPort}"
+    Note "usuario: $csUser"
+}
 Note "base:    $csDb"
-Note "usuario: $csUser"
 
 if ($csPort -eq '6543') {
     Fail 'El puerto es el 6543 (pooler de transaccion). Las migraciones van por el 5432 (sesion).'
@@ -256,6 +280,9 @@ if ($destructivas) {
 } else {
     Note 'Aditivo: no borra esquema ni datos. Va ANTES de deploy-api.ps1.'
 }
+if ($CI -and $destructivas) {
+    Fail 'Hay migraciones DESTRUCTIVAS pendientes: el deploy automatico se frena ANTES de tocar la base. Se corren a mano (expand / contract, ENGINEERING.md seccion 9): primero el binario que ya no usa lo que se borra, despues migrate-db.ps1 -Production.'
+}
 if ($creaTablas) {
     Note ('Crea ' + $creaTablas.Count + ' tabla(s): al final se recuerda la verificacion de permisos.')
 }
@@ -266,7 +293,7 @@ if ($DryRun) {
 }
 
 # -- 6. Confirmacion ----------------------------------------------------------
-if (-not $Yes) {
+if (-not $Yes -and -not $CI) {
     Write-Host ''
     Write-Host "Esto se aplica sobre la base de $destino y NO tiene rollback." -ForegroundColor Yellow
     Write-Host 'Escribi  aplicar  para seguir; cualquier otra cosa cancela.' -ForegroundColor Yellow
