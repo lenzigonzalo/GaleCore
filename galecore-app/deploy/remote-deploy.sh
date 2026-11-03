@@ -4,22 +4,24 @@
 #
 # Se instala una vez en el VPS, como root (ver "Configuracion de una vez" en WS-0081):
 #   sudo install -o root -g root -m 755 remote-deploy.sh /usr/local/bin/galecore-deploy
-# y se invoca como:  sudo /usr/local/bin/galecore-deploy <ruta del tar.gz>
+# y se invoca SIN argumentos:  sudo /usr/local/bin/galecore-deploy
+# El tarball tiene ruta fija (lo sube scp al home de elenzi): la regla de sudoers no acepta argumentos,
+# asi el NOPASSWD no sirve para extraer como root cualquier otro archivo.
 #
 # El tarball ya viene sin los archivos de estado de runtime (Files/*_switch_state.json,
 # skew25_history.json): extraer encima solo pisa lo que viaja, nunca esos.
 set -euo pipefail
 
-APP_DIR="${GALECORE_APP_DIR:-/srv/galecore/app}"
-SERVICE="${GALECORE_SERVICE:-galecore-datafeed}"
-TARBALL="${1:-}"
+APP_DIR=/srv/galecore/app
+SERVICE=galecore-datafeed
+TARBALL=/home/elenzi/galecore-publish.tar.gz
 
-if [[ -z "$TARBALL" || ! -f "$TARBALL" ]]; then
-  echo "FALLO: uso: galecore-deploy <ruta del tar.gz> (no existe: '${TARBALL}')" >&2
+if [[ $# -ne 0 ]]; then
+  echo "FALLO: galecore-deploy no recibe argumentos (despliega $TARBALL)" >&2
   exit 2
 fi
-if [[ "$TARBALL" != *.tar.gz ]]; then
-  echo "FALLO: se espera un .tar.gz" >&2
+if [[ ! -f "$TARBALL" ]]; then
+  echo "FALLO: no existe $TARBALL (subilo con scp antes)" >&2
   exit 2
 fi
 

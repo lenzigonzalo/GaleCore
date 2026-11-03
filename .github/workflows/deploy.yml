@@ -87,7 +87,7 @@ jobs:
           SSH_OPTS="-i $HOME/.ssh/deploy_key -p $SSH_PORT -o BatchMode=yes -o StrictHostKeyChecking=yes"
           scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
             "$RUNNER_TEMP/galecore-publish.tar.gz" "$SSH_USER@$SSH_HOST:galecore-publish.tar.gz"
-          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" "sudo /usr/local/bin/galecore-deploy /home/$SSH_USER/galecore-publish.tar.gz"
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" "sudo /usr/local/bin/galecore-deploy"
 
       - name: Verificar que la app responde
         run: |

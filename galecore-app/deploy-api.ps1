@@ -121,7 +121,7 @@ if ($LASTEXITCODE -ne 0) { Fail 'scp devolvio error. Revisa la clave SSH y el fi
 # El script remoto para el servicio, extrae, arranca y muestra el estado. -t abre TTY por si sudo
 # todavia pide contrasena (sin la regla de sudoers NOPASSWD).
 Step 'Parando el servicio, extrayendo y volviendo a arrancar (galecore-deploy)'
-ssh -t -p $Port $Server "sudo /usr/local/bin/galecore-deploy $remoteTar"
+ssh -t -p $Port $Server "sudo /usr/local/bin/galecore-deploy"
 if ($LASTEXITCODE -ne 0) { Fail 'El comando remoto devolvio error. La API puede haber quedado abajo.' }
 
 # ── 6. Verificar ──────────────────────────────────────────────────────────────
