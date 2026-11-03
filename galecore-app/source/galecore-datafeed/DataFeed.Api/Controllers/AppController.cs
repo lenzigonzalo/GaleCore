@@ -648,12 +648,12 @@ namespace DataFeed.Controllers
             var me = await db.Users.AsNoTracking().Where(u => u.Id == userId.Value).Select(u => new { u.Username, u.DisplayName }).FirstAsync(ct);
             return Created($"GaleCore/SharedProjects/{project.Id}", new
             {
-                project.Id, project.Name, project.Kind, project.LocalKey, project.CreatedAt, lastSeq = 0L,
+                project.Id, project.Name, project.Kind, project.LocalKey, project.CreatedAt, lastSeq = 0L, project.Access, member = true,
                 members = new[] { new { username = me.Username, displayName = me.DisplayName, role = "owner" } },
             });
         }
 
-        /// <summary>Los proyectos donde soy miembro, con sus miembros y el último cambio (`lastSeq`).</summary>
+        /// <summary>Mis proyectos más los de acceso `everyone` donde no soy miembro; cada fila lleva `access` y `member`.</summary>
         [Microsoft.AspNetCore.Authorization.Authorize]
         [Tags("App.GaleCore")]
         [HttpGet("GaleCore/SharedProjects")]
@@ -666,18 +666,53 @@ namespace DataFeed.Controllers
             if (userId == null) return Unauthorized();
             var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
             if (db == null) return DatabaseNotConfigured();
-            var rows = await db.SharedProjects.AsNoTracking()
-                .Where(p => p.Members.Any(m => m.UserId == userId.Value))
-                .OrderBy(p => p.Name)
-                .Select(p => new
-                {
-                    p.Id, p.Name, p.Kind, p.LocalKey, p.CreatedAt, owner = p.Owner.Username,
-                    lastSeq = db.SharedProjectChanges.Where(c => c.ProjectId == p.Id).Max(c => (long?)c.Seq) ?? 0L,
-                    members = p.Members.OrderBy(m => m.AddedAt)
-                        .Select(m => new { username = m.User.Username, displayName = m.User.DisplayName, role = m.Role }).ToList(),
-                })
-                .ToListAsync(ct);
+            var rows = await DataFeed.Repositories.SharedProjectAccess.ListAsync(db, userId.Value, null, ct);
             return Ok(new { projects = rows });
+        }
+
+        /// <summary>Cambia el acceso general (`restricted` o `everyone`). Sólo el owner; devuelve la fila.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpPatch("GaleCore/SharedProjects/{id:guid}")]
+        public async Task<IActionResult> SetSharedProjectAccessAsync(
+            Guid id,
+            [FromBody] DataFeed.Api.Controllers.Dtos.SharedProjectAccessRequest body,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            var (outcome, error) = await DataFeed.Repositories.SharedProjectAccess.SetAsync(db, id, userId.Value, body?.Access, ct);
+            switch (outcome)
+            {
+                case DataFeed.Repositories.SharedProjectAccess.Outcome.NotFound: return NotFound();
+                case DataFeed.Repositories.SharedProjectAccess.Outcome.Forbidden: return StatusCode(403, new { error });
+                case DataFeed.Repositories.SharedProjectAccess.Outcome.Invalid: return BadRequest(new { error });
+            }
+            return Ok((await DataFeed.Repositories.SharedProjectAccess.ListAsync(db, userId.Value, id, ct)).Single());
+        }
+
+        /// <summary>Me suma como member a un proyecto `everyone` (idempotente) y devuelve la fila. Restringido y no miembro: 404.</summary>
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        [Tags("App.GaleCore")]
+        [HttpPost("GaleCore/SharedProjects/{id:guid}/join")]
+        public async Task<IActionResult> JoinSharedProjectAsync(
+            Guid id,
+            [FromServices] IServiceProvider services,
+            [FromServices] DataFeed.Infrastructure.Providers.Tastytrade.ICurrentUser currentUser,
+            CancellationToken ct)
+        {
+            var userId = currentUser.UserId;
+            if (userId == null) return Unauthorized();
+            var db = services.GetService<DataFeed.Repositories.GaleCoreDbContext>();
+            if (db == null) return DatabaseNotConfigured();
+            await _users.EnsureUserAsync(userId.Value, currentUser.Email, ct);
+            if (await DataFeed.Repositories.SharedProjectAccess.JoinAsync(db, id, userId.Value, ct) != DataFeed.Repositories.SharedProjectAccess.Outcome.Ok)
+                return NotFound();
+            return Ok((await DataFeed.Repositories.SharedProjectAccess.ListAsync(db, userId.Value, id, ct)).Single());
         }
 
         /// <summary>Suma un miembro por su usuario. Sólo el owner; idempotente.</summary>

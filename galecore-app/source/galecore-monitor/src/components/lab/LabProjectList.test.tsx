@@ -244,3 +244,21 @@ test('clic en un proyecto no seleccionado lo abre; en el seleccionado lo desplie
   fireEvent.click(screen.getByRole('button', { name: 'SPY' }));
   expect(props.onToggle).toHaveBeenCalledWith('spy');
 });
+
+test('el menú «⋯» del proyecto trae Compartir (no en Personal) y Pausar/Reanudar si es compartido de otro', () => {
+  const onShare = jest.fn(), onToggleSync = jest.fn();
+  const shared: WorkspaceState = { ...state, projects: state.projects.map(p => p.id === 'spy' ? { ...p, shared: true, following: true } : p) };
+  const { rerender } = render(<LabProjectList {...props} state={shared} onShare={onShare} onToggleSync={onToggleSync}/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Opciones de Personal' }));
+  expect(screen.queryByRole('button', { name: 'Compartir' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Opciones de SPY' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Compartir' }));
+  expect(onShare).toHaveBeenCalledWith(shared.projects[0]);
+  fireEvent.click(screen.getByRole('button', { name: 'Opciones de SPY' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Pausar sincronización' }));
+  expect(onToggleSync).toHaveBeenCalledWith(shared.projects[0], false);
+  const paused: WorkspaceState = { ...state, projects: state.projects.map(p => p.id === 'spy' ? { ...p, shared: true, following: false } : p) };
+  rerender(<LabProjectList {...props} state={paused} onShare={onShare} onToggleSync={onToggleSync}/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Opciones de SPY' }));
+  expect(screen.getByRole('button', { name: 'Reanudar' })).toBeInTheDocument();
+});

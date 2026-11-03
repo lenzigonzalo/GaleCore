@@ -20,7 +20,7 @@ function world(t, { answers = {}, autoSync = false, session, request } = {}) {
   return { base, kb, service, calls, procs };
 }
 async function route(service, method, url, body) { let answer; await service.route({ method }, {}, new URL(url, 'http://localhost'), (res, status, value) => { answer = { status, value }; }, async () => body); return answer; }
-const share = (kb, id, extra = {}) => fs.writeFileSync(path.join(kb, 'workspaces', id, '.sync.json'), JSON.stringify({ sharedProjectId: 'p1', lastSeq: 0, files: {}, subscribed: true, ...extra }));
+const share = (kb, id, extra = {}) => fs.writeFileSync(path.join(kb, 'workspaces', id, '.sync.json'), JSON.stringify({ sharedProjectId: 'p1', lastSeq: 0, files: {}, subscribed: true, context: { user: 'demo', api: 'http://localhost:7001/' }, ...extra }));
 const members = [{ username: 'demo', role: 'owner' }, { username: 'gonza', role: 'member' }];
 const create = async (service, label) => (await route(service, 'POST', '/workspaces', { label, type: 'analysis' })).value;
 
@@ -49,7 +49,7 @@ test('un error del CLI llega al usuario con su mensaje', async t => {
 test('el estado de compartir sale del CLI, sólo del proyecto compartido de esta carpeta', async t => {
   const { kb, service, calls } = world(t, { answers: { 'project shared': { projects: [{ id: 'otro', members: [], mine: true }, { id: 'p1', members, owner: 'demo', mine: true }] } } });
   const p = await create(service, 'Idea');
-  assert.deepEqual((await route(service, 'GET', '/workspaces/' + p.id + '/sharing')).value, { shared: false, members: [], notice: null }); assert.equal(calls.length, 0);
+  assert.deepEqual((await route(service, 'GET', '/workspaces/' + p.id + '/sharing')).value, { shared: false, access: 'restricted', members: [], notice: null }); assert.equal(calls.length, 0);
   share(kb, p.id);
   const on = (await route(service, 'GET', '/workspaces/' + p.id + '/sharing')).value;
   assert.deepEqual([on.shared, on.owner, on.mine, on.members.length], [true, 'demo', true, 2]);
@@ -192,7 +192,7 @@ test('un sync que falla deja un aviso de una línea con el motivo y el siguiente
 test('el coordinador sólo sincroniza los suscritos y conserva errores de descubrimiento', async t => {
   const { createSharing } = require('./lab-sharing');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-lab-test-')); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  fs.writeFileSync(path.join(dir, '.sync.json'), JSON.stringify({sharedProjectId:'p1',subscribed:true}));
+  fs.writeFileSync(path.join(dir, '.sync.json'), JSON.stringify({sharedProjectId:'p1',subscribed:true,context:{user:'demo',api:'http://localhost:7001'}}));
   const projects = [{ id: 'a', dir }, { id: 'b', dir: path.join(dir, 'nada') }];
   let answer = { error: 'no credentials: set GALECORE_USERNAME' };
   const calls=[];
@@ -244,4 +244,77 @@ test('con el token vencido o si la API falla, las sugerencias vuelven al CLI', a
   assert.deepEqual((await route(vencido.service, 'GET', '/workspaces/users?q=de')).value.users[0].username, 'demo2'); assert.equal(vencido.calls.length, 1);
   const caida = world(t, { answers, session: { 'demo@http://localhost:7001': { token: 'tok', exp: Date.now() / 1000 + 3600 } }, request: async () => ({ ok: false, status: 401 }) });
   assert.equal((await route(caida.service, 'GET', '/workspaces/users?q=de')).value.users[0].username, 'demo2'); assert.equal(caida.calls.length, 1);
+});
+
+test('un .sync.json de otro entorno no se muestra compartido ni dispara el CLI', async t => {
+  const { kb, service, calls } = world(t);
+  const p = await create(service, 'Idea'); share(kb, p.id, { context: { user: 'demo', api: 'http://dev.test:7001' } });
+  assert.equal((await route(service, 'GET', '/workspaces')).value.projects.find(x => x.id === p.id).shared, undefined);
+  assert.equal((await route(service, 'GET', '/workspaces/' + p.id + '/sharing')).value.shared, false);
+  assert.equal((await route(service, 'POST', '/workspaces/' + p.id + '/sync')).value.otherEnvironment, true);
+  assert.equal(calls.length, 0);
+});
+
+test('acceso general: llama a project access, valida el valor y devuelve el acceso con los miembros', async t => {
+  const { service, calls } = world(t, { answers: { 'project access': { status: 'ACCESS', access: 'everyone', shared: true, members: [members[0]], sync: { pulled: 0, pushed: 2, conflicts: [], skipped: [] } } } });
+  const p = await create(service, 'Idea');
+  await assert.rejects(route(service, 'POST', '/workspaces/' + p.id + '/access', { access: 'todos' }), /restringido o para todos/);
+  await assert.rejects(route(service, 'POST', '/workspaces/personal/access', { access: 'everyone' }), /personal no se comparte/);
+  assert.equal(calls.length, 0);
+  const out = await route(service, 'POST', '/workspaces/' + p.id + '/access', { access: 'everyone' });
+  assert.deepEqual(calls.at(-1), ['project', 'access', p.id, 'everyone']);
+  assert.deepEqual(out.value, { shared: true, access: 'everyone', members: [members[0]], owner: 'demo', mine: true });
+});
+
+test('el estado de compartir trae el acceso', async t => {
+  const { kb, service } = world(t, { answers: { 'project shared': { projects: [{ id: 'p1', members, owner: 'demo', mine: true, access: 'everyone' }] } } });
+  const p = await create(service, 'Idea'); share(kb, p.id);
+  assert.equal((await route(service, 'GET', '/workspaces/' + p.id + '/sharing')).value.access, 'everyone');
+});
+
+test('Agregar a mi Lab: un solo pedido que se suma, sigue y sincroniza, y devuelve el proyecto local', async t => {
+  let local = null;
+  const { kb, service, calls } = world(t, { answers: {
+    'project shared': { projects: [{ id: 'p9', name: 'Argentina', owner: 'gonza', access: 'everyone', member: false, local: null, subscribed: false, members: [] }] },
+    'project subscribe': () => { local = 'argentina'; fs.mkdirSync(path.join(kb, 'workspaces', local), { recursive: true });
+      fs.writeFileSync(path.join(kb, 'workspaces', local, '.sync.json'), JSON.stringify({ sharedProjectId: 'p9', projectName: 'Argentina', kind: 'workspace', subscribed: true, context: { user: 'demo', api: 'http://localhost:7001' } }));
+      return { project: local, subscribed: true }; },
+    'project sync': { pulled: 4, pushed: 0, conflicts: [], skipped: [] } } });
+  const listed = (await route(service, 'GET', '/workspaces/shared')).value.projects[0];
+  assert.deepEqual([listed.access, listed.member, listed.syncState], ['everyone', false, null]);
+  const out = await route(service, 'POST', '/shared-projects/p9/add');
+  assert.equal(out.status, 200); assert.equal(out.value.project, 'argentina'); assert.equal(out.value.sync.pulled, 4);
+  assert.deepEqual(calls.filter(c => c[1] !== 'shared').map(c => c.slice(0, 3)), [['project', 'subscribe', 'p9'], ['project', 'sync', 'argentina']]);
+});
+
+test('estado por proyecto: conflicto, error con su acción (sin acceso, otro entorno, reintentar) y sin mensajes que manden a otra pantalla', async t => {
+  let answer;
+  const { kb, service } = world(t, { answers: { 'project sync': () => answer } });
+  const p = await create(service, 'Idea'); share(kb, p.id);
+  const row = async () => (await route(service, 'GET', '/workspaces')).value.projects.find(x => x.id === p.id);
+  assert.deepEqual([(await row()).syncState, (await row()).notice], ['ok', null]);
+  answer = { pulled: 1, pushed: 0, skipped: [], conflicts: [{ path: 'README.md', with: 'gonza', copy: 'x', kind: 'editado-en-ambos' }] };
+  await route(service, 'POST', '/workspaces/' + p.id + '/sync');
+  assert.deepEqual([(await row()).syncState, (await row()).notice], ['conflict', 'Conflicto en README.md']);
+  answer = { error: 'ya no tenés acceso a idea: el dueño dejó de compartirlo o lo borró. Tu copia local queda como está.' };
+  await assert.rejects(route(service, 'POST', '/workspaces/' + p.id + '/sync'));
+  assert.deepEqual([(await row()).syncState, (await row()).action], ['error', 'remove']);
+  answer = { error: 'Confirmá Agregar a esta PC en Proyectos compartidos para este usuario y entorno.' };
+  await assert.rejects(route(service, 'POST', '/workspaces/' + p.id + '/sync'));
+  const r = await row(); assert.equal(r.action, 'reshare'); assert.doesNotMatch(r.notice, /Proyectos compartidos/);
+  answer = { error: 'GaleCore did not answer at http://x' };
+  await assert.rejects(route(service, 'POST', '/workspaces/' + p.id + '/sync'));
+  assert.deepEqual([(await row()).action, (await row()).notice], ['retry', 'sin conexión con GaleCore']);
+  answer = { otherEnvironment: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] };
+  await route(service, 'POST', '/workspaces/' + p.id + '/sync');
+  assert.equal((await row()).action, 'reshare');
+});
+
+test('/workspaces/sync devuelve los errores por proyecto con un motivo legible', async t => {
+  const { kb, service } = world(t, { answers: {
+    'project shared': { projects: [{ id: 'p1', local: 'idea', subscribed: true }] },
+    'project sync': { error: 'Confirmá Agregar a esta PC en Proyectos compartidos para este usuario y entorno.' } } });
+  const p = await create(service, 'Idea'); share(kb, p.id);
+  const out = (await route(service, 'POST', '/workspaces/sync')).value;
+  assert.match(out.errors[p.id], /otro usuario o entorno/); assert.doesNotMatch(out.errors[p.id], /Proyectos compartidos/);
 });

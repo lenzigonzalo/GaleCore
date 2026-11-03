@@ -322,6 +322,14 @@ namespace DataFeed.Repositories.Migrations
                         .HasColumnName("id")
                         .HasDefaultValueSql("gen_random_uuid()");
 
+                    b.Property<string>("Access")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("restricted")
+                        .HasColumnName("access");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -364,6 +372,8 @@ namespace DataFeed.Repositories.Migrations
 
                     b.ToTable("shared_projects", null, t =>
                         {
+                            t.HasCheckConstraint("ck_shared_projects_access", "access IN ('restricted','everyone')");
+
                             t.HasCheckConstraint("ck_shared_projects_kind", "kind IN ('workspace','strategy')");
                         });
                 });

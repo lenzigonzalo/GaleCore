@@ -50,9 +50,13 @@ interface Props {
   editing: string | null;
   renameInput: (id: string, label: string) => React.ReactNode;
   onDelete?: (kind: 'project' | 'chat', id: string) => void;
+  /** «Compartir» del menú «⋯» del proyecto. */
+  onShare?: (project: WorkspaceProject) => void;
+  /** «Pausar sincronización» / «Reanudar» de un proyecto compartido que no es mío. */
+  onToggleSync?: (project: WorkspaceProject, follow: boolean) => void;
 }
 export function LabProjectList(props: Props) {
-  const { state, projectId, chatId, expanded, onToggle, onProject, onChat, onNewChat, onCreateProject, name, onRename, editing, renameInput, onDelete } = props;
+  const { state, projectId, chatId, expanded, onToggle, onProject, onChat, onNewChat, onCreateProject, name, onRename, editing, renameInput, onDelete, onShare, onToggleSync } = props;
   // Proyectos (carpetas con sus chats) o Conversaciones (todas, la más nueva arriba) — owner 17/10.
   const [query, setQuery] = useState<string | null>(null);   // owner 19/10: ya son muchos; buscar proyectos y conversaciones
   const [tab, setTab] = useState<'projects' | 'chats'>(() => { try { return localStorage.getItem('galecore:lab:list') === 'chats' ? 'chats' : 'projects'; } catch { return 'projects'; } });
@@ -165,6 +169,14 @@ export function LabProjectList(props: Props) {
   const optionsPanel = (label: string, children: React.ReactNode) => createPortal(<div ref={menuPanel} className="lab-group-options" style={menuPosition} id="lab-group-options" role="group" aria-label={label}>{children}</div>, document.body);
   const itemOptions = (key: string, label: string) => menu === key && optionsPanel('Organizar ' + label, <>
     <button type="button" onClick={() => { const id = key.slice(2); const original = key.startsWith('c:') ? state?.chats.find(c => c.id === id)?.title : state?.projects.find(p => p.id === id)?.label; lastTrigger.current = null; setMenu(null); onRename(id, original || label); }}>Renombrar</button>
+    {(() => {
+      const project = key.startsWith('p:') ? state?.projects.find(p => p.id === key.slice(2)) : undefined;
+      if (!project || project.id === 'personal') return null;
+      return <>
+        {onShare && <button type="button" onClick={() => { lastTrigger.current = null; setMenu(null); onShare(project); }}>Compartir</button>}
+        {onToggleSync && project.shared && project.mine !== true && project.following !== undefined && <button type="button" onClick={() => { lastTrigger.current = null; setMenu(null); onToggleSync(project, !project.following); }}>{project.following ? 'Pausar sincronización' : 'Reanudar'}</button>}
+      </>;
+    })()}
     {onDelete && key !== 'p:personal' && (confirmDelete === key
       ? <button type="button" className="lab-option-danger" onClick={() => { setMenu(null); onDelete(key.startsWith('c:') ? 'chat' : 'project', key.slice(2)); }}>{key.startsWith('c:') ? 'Sí, eliminar la conversación' : 'Sí, eliminar el proyecto y sus archivos'}</button>
       : <button type="button" className="lab-option-danger" onClick={() => setConfirmDelete(key)}>Eliminar</button>)}

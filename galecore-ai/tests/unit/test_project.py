@@ -111,3 +111,24 @@ def test_a_damaged_log_does_not_hide_the_rest_of_the_view(kb, research_ref):  # 
     pf = project.portfolio_project(kb)
     assert {f["ref"] for f in pf["integrity_failed"]} == {f"project:{NAME}", "project:portfolio"}
     assert pf["strategies"][0]["open_items"] is None
+
+
+def test_the_log_lives_inside_the_project_folder_and_the_old_file_moves_once(kb, research_ref):  # noqa: F811
+    stored(kb, research_ref)
+    old = kb.base / "projects" / f"{NAME}.json"
+    _, path = add(kb, "thesis", "Una tesis")
+    assert path == kb.base / "strategies" / NAME / "memory" / "registro.json" and path.is_file() and not old.exists()
+    # a log left in the old place is moved on first use and its hash chain still verifies
+    old.parent.mkdir(parents=True, exist_ok=True)
+    old.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    path.unlink()
+    assert project.load_log(kb, NAME).entries[0].words == "Una tesis"
+    assert path.is_file() and not old.exists()
+    add(kb, "pending", "Otra cosa")
+    assert [e.words for e in project.load_log(kb, NAME).entries] == ["Una tesis", "Otra cosa"]
+    assert any(i["ref"] == f"project:{NAME}" for i, _ in project.search_items(kb, []))
+
+
+def test_the_portfolio_log_stays_in_knowledge_projects(kb):  # noqa: F811
+    _, path = project.add(kb=kb, name="portfolio", kind="thesis", words="x", prompt="p", now=NOW)
+    assert path == kb.base / "projects" / "portfolio.json"

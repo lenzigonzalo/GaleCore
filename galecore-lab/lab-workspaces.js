@@ -428,7 +428,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   // Proyectos compartidos (WS-0064): el CLI del harness sincroniza; acá sólo se dispara y se avisa si hubo conflictos.
   const sharing=createSharing({root,kb,environment,execute,...(request&&{request}),...(sessionFile&&{sessionFile})});
   const busy=p=>[...jobs.values()].some(j=>j.project===p.id)||shellProjects.has(p.id);
-  const publicProject=({dir,...p})=>sharing.isShared({dir})?{...p,shared:true,following:sharing.isFollowing({dir}),syncNotice:sharing.notice(p)}:p;
+  const publicProject=({dir,...p})=>sharing.inThisEnvironment({dir})?{...p,shared:true,following:sharing.isFollowing({dir}),mine:sharing.isMine({dir}),syncNotice:sharing.notice(p),...sharing.health({dir,...p})}:p;
   // Las conversaciones de prueba (origin «prueba») no se listan: el trader ve sólo las suyas.
   function listChats(){return chatFiles().map(f=>read(path.join(chatDir,f),null)).filter(c=>c&&c.origin!=='prueba').map(({messages,usage,...c})=>({...c,messageCount:messages.length}));}
   // Al abrir una conversación nueva en un proyecto, el final de la anterior del mismo proyecto (ya guardada por el Lab):
@@ -538,14 +538,16 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(req.method==='GET' && url.pathname==='/workspaces/users'){json(res,200,await sharing.searchUsers(url.searchParams.get('q')));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/shared'){json(res,200,await sharing.catalog({busy}));return true;}
     if(req.method==='POST' && url.pathname==='/workspaces/sync'){json(res,200,await sharing.syncAll(listProjects,{busy}));return true;}
-    if(req.method==='POST' && parts[0]==='shared-projects'&&parts.length===3&&['subscribe','pause'].includes(parts[2])){
+    if(req.method==='POST' && parts[0]==='shared-projects'&&parts.length===3&&['subscribe','pause','add'].includes(parts[2])){
+      if(parts[2]==='add'){json(res,200,await sharing.add(parts[1],listProjects,{busy}));return true;}
       json(res,200,await sharing.subscribe(parts[1],parts[2]==='subscribe',listProjects,{busy}));return true;
     }
-    if(parts[0]==='workspaces'&&parts[1]&&['sharing','share','unshare','sync','notice'].includes(parts[2])&&parts.length===3){
+    if(parts[0]==='workspaces'&&parts[1]&&['sharing','share','access','unshare','sync','notice'].includes(parts[2])&&parts.length===3){
       const p=project(parts[1]);
       if(req.method==='GET'&&parts[2]==='sharing'){json(res,200,{...(await sharing.status(p)),notice:sharing.notice(p)});return true;}
       if(req.method!=='POST')return false;
       if(parts[2]==='share'){json(res,200,await sharing.share(p,await readBody(req),{busy}));return true;}
+      if(parts[2]==='access'){json(res,200,await sharing.setAccess(p,await readBody(req),{busy}));return true;}
       if(parts[2]==='unshare'){json(res,200,await sharing.unshare(p,await readBody(req)));return true;}
       if(parts[2]==='notice'){sharing.clearNotice(p);json(res,200,{cleared:true});return true;}
       if(!sharing.isShared(p))throw fail('Este proyecto no está compartido.',409);
