@@ -20,8 +20,8 @@ function savedFavorites(): string[] | null {
   } catch { return null; }
 }
 const favoriteId = (server: LocalMcpServer) => server.provider + ':' + server.name;
-const initialFavorite = (server: LocalMcpServer) => server.provider === 'codex' || server.origin === 'account'
-  && /alpha|fmp|google drive|google calendar|gmail|ibkr|iol/i.test(server.name);
+const initialFavorite = (server: LocalMcpServer) => server.provider === 'codex' || (server.origin === 'account'
+  && /alpha|fmp|google drive|google calendar|gmail|ibkr|iol/i.test(server.name));
 // Codex no tiene conectores de cuenta: lo que declara en su configuración se ve desde el principio.
 
 const engineName = (p: 'claude' | 'codex') => p === 'claude' ? 'Claude' : 'Codex';
