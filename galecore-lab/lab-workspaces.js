@@ -506,7 +506,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const resume=mine.length&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
     const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, preguntá una sola vez «¿es una estrategia nueva de este proyecto'+(mine.length?' o una de las que ya tiene ('+mine.join(", ")+')':'')+'?»; con la respuesta, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.';
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});sharing.sync(p,{busy}).catch(()=>null).then(()=>script('commit_knowledge.py',{cwd:p.dir}));}
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide el arnés de pruebas, sea cual sea el motor
@@ -551,7 +551,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       if(parts[2]==='unshare'){json(res,200,await sharing.unshare(p,await readBody(req)));return true;}
       if(parts[2]==='notice'){sharing.clearNotice(p);json(res,200,{cleared:true});return true;}
       if(!sharing.isShared(p))throw fail('Este proyecto no está compartido.',409);
-      const opts=(await readBody(req))||{};const summary=await sharing.sync(p,{busy,minInterval:opts.auto?20000:0});json(res,200,{...summary,notice:sharing.notice(p)});return true;
+      const summary=await sharing.sync(p,{busy});json(res,200,{...summary,notice:sharing.notice(p)});return true;
     }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[1]&&(parts[2]==='rename'||parts[2]==='archive')&&parts.length===3){
       const p=project(parts[1]);
@@ -606,10 +606,12 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='attachments'){
       // Un adjunto del chat (WS-0036): cuerpo crudo, nombre en X-File-Name, hasta 15 MB, a adjuntos/ del proyecto.
       const p=project(parts[1]), raw=decodeURIComponent(String(req.headers['x-file-name']||'archivo'));
+      await sharing.settle(p,60000);
       if(sharing.isRunning(p))throw fail('El proyecto está sincronizando; volvé a intentar al terminar.',409);
       const safe=raw.replace(/[^\w.\- ]+/g,'_').replace(/^[.\s]+/,'').slice(-80)||'archivo';
       const chunks=[];let size=0;
       await new Promise((ok,ko)=>{req.on('data',d=>{size+=d.length;if(size>15*1024*1024){ko(fail('El archivo supera 15 MB.',413));req.destroy();}else chunks.push(d);});req.on('end',ok);req.on('error',ko);});
+      await sharing.settle(p,60000);
       if(sharing.isRunning(p))throw fail('El proyecto está sincronizando; volvé a intentar al terminar.',409);
       // Desde Archivos («Subir») va a la carpeta elegida, con su nombre; desde el chat, a adjuntos/.
       const folder=url.searchParams.get('dir');
@@ -652,6 +654,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
         if(c.state==='cancelled')for(let i=0;i<100&&jobs.has(c.id);i++)await new Promise(r=>setTimeout(r,50));const words=String(b.text||'').trim();if(words.length>12000)throw fail('El mensaje debe tener hasta 12000 caracteres.');
         // Adjuntos subidos antes a /workspaces/<id>/attachments: sólo rutas de adjuntos/ del proyecto, que existan.
         const targetProject=project(c.project);
+        await sharing.settle(targetProject,60000);
         if(sharing.isRunning(targetProject))throw fail('El proyecto está sincronizando. Esperá a que termine para enviar.',409);
         const dir=targetProject.dir, files=(Array.isArray(b.attachments)?b.attachments:[]).slice(0,10).map(String);
         if(!words&&!files.length)throw fail('Escribí un mensaje o adjuntá un archivo.');
@@ -681,7 +684,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     }
     return false;
   }
-  if(autoSync)sharing.catalog().catch(()=>{});   // discover only; following requires an explicit choice
+  if(autoSync)sharing.syncAll(listProjects,{busy}).catch(()=>{});   // una vez al arrancar: sólo los proyectos seguidos; no descarga los nuevos
   function reserveShell(p){
     if(sharing.isRunning(p))throw fail('El proyecto está sincronizando; volvé a abrir la terminal al terminar.',409);
     shellProjects.set(p.id,(shellProjects.get(p.id)||0)+1);

@@ -1,7 +1,7 @@
 /**
  * Proyectos compartidos en el Lab (WS-0064 Fase 2b). La sincronización la hace el CLI del harness
- * (`project share|unshare|shared|sync`, galecore-ai); el Lab sólo lo invoca: al arrancar (`sync --all`), al abrir un
- * proyecto, al terminar cada turno y a pedido del usuario. Un proyecto sin `.sync.json` no se toca nunca.
+ * (`project share|unshare|shared|sync`, galecore-ai); el Lab sólo lo invoca: al arrancar el Lab (`sync --all`)
+ * y a pedido del usuario. Un proyecto sin `.sync.json` no se toca nunca.
  */
 const fs = require('fs');
 const path = require('path');
@@ -17,7 +17,6 @@ const defaultSessionFile = () => process.env.LOCALAPPDATA ? path.join(process.en
 function createSharing({ root, kb, environment, execute, request = fetch, sessionFile = defaultSessionFile }) {
   const running = new Map();   // proyecto -> promesa de su sync en curso (nunca dos a la vez sobre la misma carpeta)
   const notices = new Map();   // proyecto -> { at, conflicts } hasta que el usuario lo cierra
-  const lastRun = new Map();   // proyecto -> hora de su última sincronización
   let catalogRun = null;
 
   // La API de este entorno, normalizada: la misma base con la que se busca el token en la cache de sesión.
@@ -28,6 +27,8 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   // para este entorno la carpeta no está compartida.
   const inThisEnvironment = p => isShared(p) && String(state(p)?.context?.api || '').replace(/\/+$/, '') === apiBase();
   const isRunning = p => running.has(p.id);
+  // Si hay un sync corriendo en el proyecto, espera a que termine (hasta `ms`, ignorando su error): mandar un mensaje no da error.
+  const settle = async (p, ms) => { const job = running.get(p.id); if (job) await Promise.race([job.catch(() => null), new Promise(r => setTimeout(r, ms).unref?.())]); };
   const isFollowing = p => state(p)?.subscribed === true;
   const isMine = p => { const s = state(p); return !!s && !!s.owner && s.owner === s.context?.user; };
 
@@ -88,15 +89,12 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   }
 
   // `busy(p)`: hay un turno del motor escribiendo en el proyecto; traer cambios ajenos en ese momento los pisaría.
-  // `minInterval`: las sincronizaciones «de cortesía» (al abrir el proyecto) no se repiten antes de ese tiempo: cada una
-  // inicia sesión en GaleCore y el login tiene límite (10 cada 5 minutos). La de fin de turno y la manual no lo usan.
-  function sync(p, { busy = () => false, minInterval = 0 } = {}) {
+  // Cada sync inicia sesión en GaleCore (límite 10 cada 5 min): sólo corre al arrancar el Lab y a pedido del usuario.
+  function sync(p, { busy = () => false } = {}) {
     if (!isShared(p)) return Promise.resolve(null);
     if (!inThisEnvironment(p)) return Promise.resolve({ otherEnvironment: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });
     if (state(p)?.subscribed !== true) return Promise.resolve({ paused: true });
     if (running.has(p.id)) return running.get(p.id);
-    if (minInterval && Date.now() - (lastRun.get(p.id) || 0) < minInterval) return Promise.resolve({ recent: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });
-    lastRun.set(p.id, Date.now());
     if (busy(p)) return Promise.resolve({ busy: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });
     const job = cli(['project', 'sync', p.id]).then(summary => { remember(p, summary); return summary; },
       err => { failed(p, err.message); throw err; })
@@ -125,7 +123,7 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
       if (!remote.subscribed) continue;
       const p = projectsOf().find(p => p.id === remote.local);
       if (!p) continue;
-      try { out.projects[p.id] = await sync(p, { busy, minInterval: 20000 }); }
+      try { out.projects[p.id] = await sync(p, { busy }); }
       catch (err) { out.errors[p.id] = reason(err.message); }
     }
     return out;
@@ -239,7 +237,7 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   const notice = p => notices.get(p.id) || null;
   const clearNotice = p => { notices.delete(p.id); };
 
-  return { isShared, inThisEnvironment, isRunning, isFollowing, isMine, health: projectHealth, catalog, subscribe, add, sync, syncAll, status, share, setAccess, unshare, searchUsers, notice, clearNotice };
+  return { isShared, inThisEnvironment, isRunning, settle, isFollowing, isMine, health: projectHealth, catalog, subscribe, add, sync, syncAll, status, share, setAccess, unshare, searchUsers, notice, clearNotice };
 }
 
 module.exports = { createSharing, SYNC_FILE };

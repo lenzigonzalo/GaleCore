@@ -93,7 +93,6 @@ test('una sincronización en curso bloquea motor, archivos y apertura de Shell',
   const p=await create(service,'En uso'); share(kb,p.id);
   const run=route(service,'POST','/workspaces/'+p.id+'/sync',{});
   const chat=(await route(service,'POST','/chats',{project:p.id,provider:'claude'})).value;
-  await assert.rejects(route(service,'POST','/chats/'+chat.id+'/messages',{text:'hola'}),/sincronizando/);
   await assert.rejects(route(service,'POST','/workspaces/'+p.id+'/files/write',{path:'README.md',text:'no'}),/trabajando/);
   assert.throws(()=>service.reserveShell(p),/sincronizando/);
   finish({pulled:0,conflicts:[],skipped:[]}); await run;
@@ -101,6 +100,31 @@ test('una sincronización en curso bloquea motor, archivos y apertura de Shell',
   const release=service.reserveShell(p);
   assert.equal((await route(service,'POST','/workspaces/'+p.id+'/sync',{})).value.busy,true);
   release();release();
+});
+
+test('mandar un mensaje durante un sync espera a que termine y sale solo', async t => {
+  let finish; const pending = new Promise(resolve => { finish = resolve; });
+  const { kb, service, procs } = world(t, { answers: { 'project sync': pending } });
+  const p = await create(service, 'En uso'); share(kb, p.id);
+  const run = route(service, 'POST', '/workspaces/' + p.id + '/sync', {});
+  const chat = (await route(service, 'POST', '/chats', { project: p.id, provider: 'claude' })).value;
+  const sent = route(service, 'POST', '/chats/' + chat.id + '/messages', { text: 'hola' });
+  await new Promise(r => setTimeout(r, 30)); assert.equal(procs.length, 0);
+  finish({ pulled: 0, conflicts: [], skipped: [] }); await run;
+  assert.equal((await sent).status < 300, true);
+  await new Promise(r => setTimeout(r, 30)); assert.equal(procs.length >= 1, true);
+});
+
+test('al terminar un turno no sincroniza; la sincronización manual no tiene límite', async t => {
+  const { kb, service, calls, procs } = world(t, { answers: { 'project sync': { pulled: 0, pushed: 0, conflicts: [], skipped: [] } } });
+  const p = await create(service, 'Idea'); share(kb, p.id);
+  const chat = (await route(service, 'POST', '/chats', { project: p.id, provider: 'claude' })).value;
+  await route(service, 'POST', '/chats/' + chat.id + '/messages', { text: 'hola' });
+  while (!procs.length) await new Promise(r => setImmediate(r));
+  procs.pop().emit('close', 0); await new Promise(r => setTimeout(r, 30));
+  assert.equal(calls.filter(c => c[1] === 'sync').length, 0);
+  await route(service, 'POST', '/workspaces/' + p.id + '/sync', {}); await route(service, 'POST', '/workspaces/' + p.id + '/sync', {});
+  assert.equal(calls.filter(c => c[1] === 'sync').length, 2);
 });
 
 test('el catálogo y la suscripción son rutas distintas; rechaza IDs no autorizados',async t=>{
@@ -120,9 +144,9 @@ test('editar/reintentar durante sync conserva todo el transcript',async t=>{
   saved.messages=[{role:'user',text:'original'},{role:'assistant',text:'respuesta'}];fs.writeFileSync(file,JSON.stringify(saved));
   const before=fs.readFileSync(file,'utf8');
   const run=route(service,'POST','/workspaces/'+p.id+'/sync',{});
-  await assert.rejects(route(service,'POST','/chats/'+chat.id+'/messages',{text:'nuevo',replace:true,retry:true}),/sincronizando/);
-  assert.equal(fs.readFileSync(file,'utf8'),before);
-  finish({pulled:0,conflicts:[],skipped:[]});await run;
+  const sent=route(service,'POST','/chats/'+chat.id+'/messages',{text:'nuevo',replace:true,retry:true});   // espera al sync
+  await new Promise(r=>setTimeout(r,30));assert.equal(fs.readFileSync(file,'utf8'),before);
+  finish({pulled:0,conflicts:[],skipped:[]});await run;await sent;
 });
 
 test('un descriptor compartido no lee una estrategia externa con el mismo nombre',async t=>{
@@ -137,23 +161,13 @@ test('un descriptor compartido no lee una estrategia externa con el mismo nombre
   assert.equal(calls.length,0);
 });
 
-test('al terminar un turno se sincroniza sólo si el proyecto está compartido', async t => {
-  const { kb, service, calls, procs } = world(t, { answers: { 'project sync': { pulled: 0, pushed: 1, conflicts: [], skipped: [] } } });
-  const mine = await create(service, 'Solo mío');
-  const shared = await create(service, 'Con Gonza'); share(kb, shared.id);
-  for (const p of [mine, shared]) {
-    const chat = (await route(service, 'POST', '/chats', { project: p.id, provider: 'claude' })).value;
-    await route(service, 'POST', '/chats/' + chat.id + '/messages', { text: 'hola' });
-    while (!procs.length) await new Promise(r => setImmediate(r));
-    procs.pop().emit('close', 0);
-    await new Promise(r => setTimeout(r, 30));
-  }
-  assert.deepEqual(calls.map(c => c.join(' ')), ['project sync ' + shared.id]);
-});
-
-test('al arrancar consulta el catálogo sin descargar; sin autoSync no llama al CLI', async t => {
-  const on = world(t, { autoSync: true, answers: { 'project shared': { projects: [] } } });
-  await new Promise(r => setTimeout(r, 30)); assert.deepEqual(on.calls, [['project', 'shared']]);
+test('al arrancar sincroniza una vez los proyectos seguidos, sin descargar los nuevos; sin autoSync no llama al CLI', async t => {
+  let local;
+  const { kb, service, calls } = world(t, { autoSync: true, answers: { 'project shared': () => new Promise(r => setTimeout(() => r({ projects: [{ id: 'p1', name: 'A', owner: 'x', local, subscribed: true }, { id: 'p2', name: 'B', owner: 'x', local: null, subscribed: false }] }), 10)),
+    'project sync': { pulled: 0, pushed: 0, conflicts: [], skipped: [] } } });
+  const p = await create(service, 'Seguido'); share(kb, p.id); local = p.id;   // el catálogo contesta en el próximo tick
+  await new Promise(r => setTimeout(r, 50));
+  assert.deepEqual(calls.map(c => c.join(' ')), ['project shared', 'project sync ' + p.id]);
   const off = world(t); await new Promise(r => setTimeout(r, 30)); assert.deepEqual(off.calls, []);
 });
 
@@ -163,15 +177,6 @@ test('el archivo de estado no aparece en Archivos', async t => {
   fs.mkdirSync(path.join(kb, 'workspaces', p.id, '.scratch'));
   const names = (await route(service, 'GET', '/workspaces/' + p.id + '/files')).value.tree.map(n => n.name);
   assert.ok(names.includes('README.md') && !names.some(n => n.startsWith('.')));
-});
-
-test('abrir el proyecto no repite la sincronización de hace menos de 20 segundos; la manual sí', async t => {
-  const { kb, service, calls } = world(t, { answers: { 'project sync': { pulled: 0, pushed: 0, conflicts: [], skipped: [] } } });
-  const p = await create(service, 'Idea'); share(kb, p.id);
-  const sync = body => route(service, 'POST', '/workspaces/' + p.id + '/sync', body);
-  await sync({ auto: true }); const again = await sync({ auto: true });
-  assert.equal(again.value.recent, true); assert.equal(calls.length, 1);
-  await sync({}); assert.equal(calls.length, 2);
 });
 
 test('un sync que falla deja un aviso de una línea con el motivo y el siguiente que sale bien lo limpia', async t => {

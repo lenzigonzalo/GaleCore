@@ -40,7 +40,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const handledRequest = useRef<number | undefined>(undefined);
   const [state, setState] = useState<WorkspaceState | null>(null);
   const [sharedOpen, setSharedOpen] = useState(false);
-  const [sharedError, setSharedError] = useState('');
   const [projectId, setProjectId] = useState(() => sessionStorage.getItem('galecore:lab:project') || 'personal');
   const [chatId, setChatId] = useState<string | null>(() => sessionStorage.getItem('galecore:lab:chat'));
   const [chat, setChat] = useState<WorkspaceChat | null>(null);
@@ -120,24 +119,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   }, []);
   useEffect(() => { refresh(); const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, [refresh]);
   useEffect(() => {
-    if (!active && !embedded) return;
-    let live = true, pending = false, last = 0;
-    const reconcile = async () => {
-      if (document.hidden || pending || Date.now() - last < 10000) return;
-      pending = true; last = Date.now();
-      try {
-        await labRequest('/workspaces/sync', {}, 180000);
-        if (live) { setSharedError(''); await refresh(); }
-      } catch { if (live) setSharedError('No se pudo actualizar lo compartido. Se reintentará al recuperar conexión.'); }
-      finally { pending = false; }
-    };
-    void reconcile();
-    const timer = window.setInterval(reconcile, 30000);
-    window.addEventListener('focus', reconcile); window.addEventListener('online', reconcile);
-    document.addEventListener('visibilitychange', reconcile);
-    return () => { live = false; window.clearInterval(timer); window.removeEventListener('focus', reconcile); window.removeEventListener('online', reconcile); document.removeEventListener('visibilitychange', reconcile); };
-  }, [active, embedded, refresh]);
-  useEffect(() => {
     const element = workspace.current;
     // Embebido, la lista de proyectos vive en la barra lateral: ajustar su ancho acá cambia el tamaño del propio
     // espacio y el observador se vuelve a disparar sin fin (colgaba el navegador al abrir el Chat).
@@ -210,8 +191,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
 
   const [sharingOpen, setSharingOpen] = useState<WorkspaceProject | null>(null);
   // Proyecto compartido: al abrirlo se traen los cambios de los demás (el Lab no repite una sincronización reciente).
-  const openedShared = state?.projects.find(p => p.id === projectId)?.following === true;
-  useEffect(() => { if (openedShared) labRequest('/workspaces/' + encodeURIComponent(projectId) + '/sync', { auto: true }, 180000).then(refresh).catch(() => { /* sin red: se sincroniza en el próximo turno */ }); }, [projectId, openedShared, refresh]);
   const selectProject = (p: WorkspaceProject) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(null); setChat(null); setView(v => v === 'files' || v === 'shell' ? v : 'chat'); setExpanded(v=>({...v,[p.id]:true})); setError(''); };
   useEffect(() => {
     if (!projectRequest || handledRequest.current === projectRequest.sequence || !state) return;
@@ -472,7 +451,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
         resizeSidebar(e.key === 'Home' ? 200 : e.key === 'End' ? 480 : sidebarWidth + (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 40 : 10));
       }}/>}
     <section className={'lab-chat-main' + (chatEmpty && view === 'chat' ? ' empty' : '')}>
-      {sharedError && <p className="lab-sync-notice" role="status">{sharedError}</p>}
       {headerHost ? createPortal(chatHeader, headerHost) : chatHeader}
       {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><span className="lab-sync-actions">{noticeAction && <button className="lab-files-button" onClick={noticeAction.run}>{noticeAction.label}</button>}<button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></span></p>}
       {shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
