@@ -190,7 +190,6 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   useEffect(() => { const on = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) escape.current(e); }; window.addEventListener('keydown', on); return () => window.removeEventListener('keydown', on); }, []);
 
   const [sharingOpen, setSharingOpen] = useState<WorkspaceProject | null>(null);
-  // Proyecto compartido: al abrirlo se traen los cambios de los demás (el Lab no repite una sincronización reciente).
   const selectProject = (p: WorkspaceProject) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(null); setChat(null); setView(v => v === 'files' || v === 'shell' ? v : 'chat'); setExpanded(v=>({...v,[p.id]:true})); setError(''); };
   useEffect(() => {
     if (!projectRequest || handledRequest.current === projectRequest.sequence || !state) return;
