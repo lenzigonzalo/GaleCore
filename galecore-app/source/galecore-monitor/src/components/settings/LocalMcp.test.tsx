@@ -5,28 +5,32 @@ import { fetchLocalMcp, toggleLocalMcp } from '../../api/localMcp';
 jest.mock('../../api/localMcp', () => ({ fetchLocalMcp: jest.fn(), refreshLocalMcp: jest.fn(), toggleLocalMcp: jest.fn() }));
 const data = { workspace: 'test-project', status: 'configuration-only', servers: [{ id: 'a', name: 'sample', provider: 'codex', context: 'Todos los proyectos', scope: 'Usuario', enabled: true, transport: 'stdio', file: 'config.toml', revision: 'r' }] };
 beforeEach(() => { jest.resetAllMocks(); localStorage.clear(); (fetchLocalMcp as jest.Mock).mockResolvedValue(data); });
-test('provider separation and configuration status are explicit', async () => {
+test('one list shows both engines and each switch names the engine it acts on', async () => {
+  (fetchLocalMcp as jest.Mock).mockResolvedValue({ ...data, workspace: 'active', servers: [
+    data.servers[0],
+    { ...data.servers[0], id: 'c', provider: 'claude', name: 'claude.ai Alpha Vantage', displayName: 'Alpha Vantage', context: 'active', origin: 'account', runtimeStatus: 'connected' },
+  ] });
   render(<LocalMcp/>);
-  await screen.findByText('Sin MCP configurados');
-  expect(screen.queryByRole('switch')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
-  expect(screen.getByRole('switch', { name: 'Habilitar sample' })).toHaveAttribute('aria-checked', 'true');
-  expect(screen.getByText('Sin comprobar')).toBeInTheDocument();
+  await screen.findByRole('heading', { name: 'Alpha Vantage' });
+  expect(screen.queryByRole('group', { name: 'CLI de las conexiones' })).toBeNull();
+  expect(screen.getByRole('switch', { name: 'Habilitar sample en Codex' })).toHaveAttribute('aria-checked', 'true');
+  expect(screen.getByRole('switch', { name: 'Habilitar claude.ai Alpha Vantage en Claude' })).toBeInTheDocument();
+  expect(screen.getByText(/Claude · Usuario/)).toBeInTheDocument();
+  expect(screen.getByText(/Codex · Usuario/)).toBeInTheDocument();
 });
 test('toggle waits for actual save and shows new-session guidance', async () => {
   (toggleLocalMcp as jest.Mock).mockResolvedValue({ ...data, servers: [{ ...data.servers[0], enabled: false }] });
-  render(<LocalMcp/>); await screen.findByText('Sin MCP configurados');
-  fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
-  fireEvent.click(screen.getByRole('switch'));
+  render(<LocalMcp/>);
+  const control = await screen.findByRole('switch', { name: 'Habilitar sample en Codex' });
+  fireEvent.click(control);
   await waitFor(() => expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false'));
   expect(toggleLocalMcp).toHaveBeenCalledWith(data.servers[0], false);
   expect(screen.getByText(/Abrí una sesión nueva de Codex/)).toBeInTheDocument();
 });
 test('conflict does not falsely change the switch', async () => {
   (toggleLocalMcp as jest.Mock).mockRejectedValue(new Error('La configuración cambi?'));
-  render(<LocalMcp/>); await screen.findByText('Sin MCP configurados');
-  fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
-  fireEvent.click(screen.getByRole('switch'));
+  render(<LocalMcp/>);
+  fireEvent.click(await screen.findByRole('switch'));
   await screen.findByRole('alert');
   expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
 });
@@ -77,8 +81,14 @@ test('account connectors and plugins are shown in the active workspace rather th
   expect(screen.getByText(/Requiere autenticaci/)).toBeInTheDocument();
 });
 
-test('embedded inventory follows selected provider without a second provider selector', async () => {
-  render(<LocalMcp selectedProvider="codex"/>);
-  expect(await screen.findByRole('switch', { name: 'Habilitar sample' })).toHaveAttribute('aria-checked', 'true');
-  expect(screen.queryByRole('group', { name: 'CLI de las conexiones' })).not.toBeInTheDocument();
+test('needs-auth account connector of Claude links to claude.ai connectors; Codex has no button', async () => {
+  (fetchLocalMcp as jest.Mock).mockResolvedValue({ ...data, workspace: 'active', servers: [
+    { ...data.servers[0], id: 'broker', provider: 'claude', name: 'claude.ai IBKR', displayName: 'IBKR', context: 'active', origin: 'account', runtimeStatus: 'needs-auth' },
+    { ...data.servers[0], runtimeStatus: 'needs-auth' },
+  ] });
+  render(<LocalMcp/>);
+  const link = await screen.findByRole('link', { name: 'Conectar' });
+  expect(link).toHaveAttribute('href', 'https://claude.ai/settings/connectors');
+  expect(link).toHaveAttribute('target', '_blank');
+  expect(screen.getAllByRole('link', { name: 'Conectar' })).toHaveLength(1);
 });
