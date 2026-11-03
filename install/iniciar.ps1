@@ -1,11 +1,15 @@
 <#
 .SYNOPSIS
-  Inicia GaleCore: API (:7001), monitor (:3039), Lab (:8771) y el login de los motores (:8770, «Proveedores IA»),
-  y abre el monitor en el navegador.
+  Inicia GaleCore en uno de sus dos entornos (ENGINEERING.md §9, D-0016) y abre la web:
+  -Entorno prod (acceso «GaleCore»): Lab (:8771) y login de los motores (:8770) contra producción;
+           la web es galecore.vercel.app. Credenciales: GALECORE_LAB_USERNAME / _PASSWORD / _API_KEY.
+  -Entorno dev  (acceso «GaleCore Dev»): API (:7001), monitor (:3039), Lab de Dev (:8781) y login de los
+           motores, contra GaleCore Dev. Credenciales: GALECORE_USERNAME / _PASSWORD / _API_KEY.
+  Los dos pueden estar abiertos a la vez; el login de los motores es uno solo para la PC.
   -DryRun  muestra lo que haria sin iniciar nada.
   -NoAbrir no abre el navegador.
 #>
-param([switch]$DryRun, [switch]$NoAbrir)
+param([ValidateSet('prod', 'dev')][string]$Entorno = 'prod', [switch]$DryRun, [switch]$NoAbrir)
 $ErrorActionPreference = 'Stop'
 
 function Ok($t)    { Write-Host "  [ok] $t" -ForegroundColor Green }
@@ -21,14 +25,26 @@ $py = Join-Path $venvScripts 'python.exe'
 $devPy = Join-Path $app 'dev\galecore_dev.py'
 $envJson = Join-Path $app 'dev\.local\env.json'
 $logs = Join-Path $env:LOCALAPPDATA 'GaleCore\logs'
-$pidFile = Join-Path $env:LOCALAPPDATA 'GaleCore\pids.json'
+# prod conserva pids.json: start-lab.ps1 (la actualizacion sola del Lab) registra ahi el Lab nuevo.
+$pidFile = Join-Path $env:LOCALAPPDATA ('GaleCore\' + $(if ($Entorno -eq 'prod') { 'pids.json' } else { 'pids-dev.json' }))
+$prodUrl = 'https://vps-6285555-x.dattaweb.com'
 
-$servicios = @(
-    @{ Nombre = 'Lab';     Puerto = 8771; Espera = 60 },
-    @{ Nombre = 'Motores'; Puerto = 8770; Espera = 60 },
-    @{ Nombre = 'API';     Puerto = 7001; Espera = 240 },
-    @{ Nombre = 'Monitor'; Puerto = 3039; Espera = 300 }
-)
+# Compartido = el login de los motores: si ya lo levanto el otro entorno, se usa ese.
+if ($Entorno -eq 'prod') {
+    $servicios = @(
+        @{ Nombre = 'Lab';     Puerto = 8771; Espera = 60 },
+        @{ Nombre = 'Motores'; Puerto = 8770; Espera = 60; Compartido = $true }
+    )
+    $web = 'https://galecore.vercel.app'
+} else {
+    $servicios = @(
+        @{ Nombre = 'Lab';     Puerto = 8781; Espera = 60 },
+        @{ Nombre = 'Motores'; Puerto = 8770; Espera = 60; Compartido = $true },
+        @{ Nombre = 'API';     Puerto = 7001; Espera = 240 },
+        @{ Nombre = 'Monitor'; Puerto = 3039; Espera = 300 }
+    )
+    $web = 'http://localhost:3039'
+}
 
 function Puerto-Escuchando([int]$p) {
     return [bool](Get-NetTCPConnection -State Listen -LocalPort $p -ErrorAction SilentlyContinue)
@@ -43,10 +59,10 @@ function Esta-Vivo($r) {
 }
 
 Write-Host ''
-Write-Host 'Iniciando GaleCore' -ForegroundColor White
+Write-Host $(if ($Entorno -eq 'prod') { 'Iniciando GaleCore' } else { 'Iniciando GaleCore Dev' }) -ForegroundColor White
 if ($DryRun) { Write-Host '(modo simulacro: no se inicia nada)' -ForegroundColor Yellow }
 
-if (-not (Test-Path $envJson)) {
+if ($Entorno -eq 'dev' -and -not (Test-Path $envJson)) {
     if ($DryRun) { Aviso "Falta la configuracion ($envJson): en una instalacion real la crea install\instalar.ps1." }
     else { Falla "Falta la configuracion ($envJson). Corre primero install\instalar.ps1." }
 }
@@ -57,17 +73,20 @@ if (-not (Test-Path $py)) {
 
 $propios = @(Leer-Pids | Where-Object { Esta-Vivo $_ })
 if ($propios.Count -gt 0) {
-    Aviso 'GaleCore ya esta iniciado.'
-    if (-not $NoAbrir -and -not $DryRun) { Start-Process 'http://localhost:3039' }
+    Aviso 'Ya esta iniciado.'
+    if (-not $NoAbrir -and -not $DryRun) { Start-Process $web }
     exit 0
 }
 
-# Un puerto ocupado por otro programa: no se pisa.
+# Un puerto ocupado por otro programa: no se pisa (salvo el login de los motores, que se comparte).
+$aIniciar = @()
 foreach ($s in $servicios) {
     if (Puerto-Escuchando $s.Puerto) {
+        if ($s.Compartido) { Ok "$($s.Nombre) ya esta corriendo en :$($s.Puerto) (se usa ese)"; continue }
         $msg = "El puerto $($s.Puerto) ($($s.Nombre)) ya esta ocupado por otro programa. Cerralo y volve a intentar."
         if ($DryRun) { Aviso $msg } else { Falla $msg }
     }
+    $aIniciar += $s
 }
 
 # Entorno: variables de usuario de Windows (las crea instalar.ps1) y el Python del proyecto primero en PATH.
@@ -83,6 +102,27 @@ $env:Path = "$venvScripts;$env:Path"
 $claudeBin = Join-Path $env:USERPROFILE '.local\bin'
 if ((Test-Path $claudeBin) -and ($env:Path -notlike "*$claudeBin*")) { $env:Path += ";$claudeBin" }
 
+# Variables propias del Lab de cada entorno (sólo para ese proceso).
+if ($Entorno -eq 'prod') {
+    # Como start-lab.ps1: producción con las credenciales GALECORE_LAB_*; nunca las de Dev.
+    $labEnv = @{ GALECORE_BASE_URL = $prodUrl; GALECORE_API_KEY = $null; GALECORE_USERNAME = $null; GALECORE_PASSWORD = $null }
+    foreach ($n in 'BASE_URL', 'API_KEY', 'USERNAME', 'PASSWORD') {
+        $v = [Environment]::GetEnvironmentVariable("GALECORE_LAB_$n", 'User')
+        if ($v) { $labEnv["GALECORE_$n"] = $v }
+    }
+    if (-not $labEnv.GALECORE_USERNAME -or -not $labEnv.GALECORE_PASSWORD) {
+        Aviso 'Faltan tu usuario y contrasena de GaleCore (GALECORE_LAB_USERNAME / GALECORE_LAB_PASSWORD): el Lab no va a ver tus proyectos.'
+    }
+} else {
+    # Igual que `galecore_dev.py lab`: Lab de Dev en :8781 contra :7001, datos en ~/GaleCore-datos/dev.
+    $labDatos = Join-Path $env:USERPROFILE 'GaleCore-datos\dev'
+    $labEnv = @{
+        GALECORE_BASE_URL = 'http://localhost:7001'; GALECORE_LAB_PORT = '8781'
+        GALECORE_LAB_ORIGINS = 'http://localhost:3039,http://127.0.0.1:3039'
+        GALECORE_LAB_LOCAL = (Join-Path $labDatos 'lab'); GALECORE_KNOWLEDGE_DIR = (Join-Path $labDatos 'knowledge')
+    }
+}
+
 $node = Get-Command node -ErrorAction SilentlyContinue
 if (-not $node) {
     if ($DryRun) { Aviso 'No encuentro Node.js: en una instalacion real lo instala install\instalar.ps1.' }
@@ -92,18 +132,19 @@ $nodeExe = 'node'
 if ($node) { $nodeExe = $node.Source }
 
 $comandos = @{
-    'Lab'     = @{ Exe = $nodeExe; Args = 'lab-server.js'; Dir = $lab }
+    'Lab'     = @{ Exe = $nodeExe; Args = 'lab-server.js'; Dir = $lab; Env = $labEnv }
     'Motores' = @{ Exe = $nodeExe; Args = 'server.js'; Dir = $lab }   # login de Claude/Codex desde Proveedores IA
     'API'     = @{ Exe = $py; Args = ('"' + $devPy + '" api'); Dir = $raiz }
     'Monitor' = @{ Exe = $py; Args = ('"' + $devPy + '" monitor'); Dir = $raiz }
 }
 
 if ($DryRun) {
-    foreach ($s in $servicios) {
+    foreach ($s in $aIniciar) {
         $c = $comandos[$s.Nombre]
-        Sim "iniciaria $($s.Nombre) en :$($s.Puerto) (oculto): $($c.Exe) $($c.Args)  -> log en $logs\$($s.Nombre.ToLower()).log"
+        Sim "iniciaria $($s.Nombre) en :$($s.Puerto) (oculto): $($c.Exe) $($c.Args)  -> log en $logs\$($s.Nombre.ToLower())*.log"
+        if ($c.Env) { Sim "  con GALECORE_BASE_URL=$($c.Env.GALECORE_BASE_URL)" }
     }
-    Sim 'esperaria a que respondan los tres puertos y abriria http://localhost:3039'
+    Sim "esperaria a que respondan los puertos y abriria $web"
     Sim "guardaria los PID en $pidFile"
     exit 0
 }
@@ -111,20 +152,16 @@ if ($DryRun) {
 New-Item -ItemType Directory -Force -Path $logs | Out-Null
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $pidFile) | Out-Null
 $registro = @()
-foreach ($s in $servicios) {
+foreach ($s in $aIniciar) {
     $c = $comandos[$s.Nombre]
-    $base = Join-Path $logs $s.Nombre.ToLower()
-    # Como start-lab.ps1: GALECORE_LAB_* apunta sólo el Lab a otra API (producción); el resto sigue contra la local.
+    $base = Join-Path $logs ($s.Nombre.ToLower() + $(if ($Entorno -eq 'dev' -and $s.Nombre -eq 'Lab') { '-dev' } else { '' }))
     $previos = @{}
-    if ($s.Nombre -eq 'Lab') {
-        foreach ($n in 'BASE_URL', 'API_KEY', 'USERNAME', 'PASSWORD') {
-            $v = [Environment]::GetEnvironmentVariable("GALECORE_LAB_$n", 'User')
-            if ($v) { $previos[$n] = [Environment]::GetEnvironmentVariable("GALECORE_$n", 'Process'); [Environment]::SetEnvironmentVariable("GALECORE_$n", $v, 'Process') }
-        }
+    if ($c.Env) {
+        foreach ($k in @($c.Env.Keys)) { $previos[$k] = [Environment]::GetEnvironmentVariable($k, 'Process'); [Environment]::SetEnvironmentVariable($k, $c.Env[$k], 'Process') }
     }
     $p = Start-Process -FilePath $c.Exe -ArgumentList $c.Args -WorkingDirectory $c.Dir -WindowStyle Hidden `
         -RedirectStandardOutput "$base.log" -RedirectStandardError "$base.err.log" -PassThru
-    foreach ($n in $previos.Keys) { [Environment]::SetEnvironmentVariable("GALECORE_$n", $previos[$n], 'Process') }
+    foreach ($k in @($previos.Keys)) { [Environment]::SetEnvironmentVariable($k, $previos[$k], 'Process') }
     $registro += [pscustomobject]@{ Servicio = $s.Nombre; Pid = $p.Id; Inicio = $p.StartTime.ToUniversalTime().ToString('o') }
     ConvertTo-Json -InputObject @($registro) | Set-Content -Path $pidFile -Encoding UTF8
     Write-Host "  ... $($s.Nombre) arrancando (hasta $($s.Espera) s)"
@@ -138,5 +175,5 @@ foreach ($s in $servicios) {
 }
 
 Write-Host ''
-Write-Host '  GaleCore esta listo. Abriendo el monitor...' -ForegroundColor Green
-if (-not $NoAbrir) { Start-Process 'http://localhost:3039' }
+Write-Host "  Listo. Abriendo $web ..." -ForegroundColor Green
+if (-not $NoAbrir) { Start-Process $web }

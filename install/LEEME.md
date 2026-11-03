@@ -3,7 +3,8 @@
 ## Qué hace
 
 Instala lo necesario (Git, .NET 8, Node, Python 3.12 y Claude Code) y deja GaleCore andando en tu PC:
-tu propia API (`:7001`), el monitor (`:3039`) y el Lab (`:8771`), conectados a la base **GaleCore Dev** en la nube.
+el Lab contra producción (acceso **GaleCore**) y tu entorno de desarrollo (acceso **GaleCore Dev**: tu propia API,
+el monitor y un Lab de Dev, conectados a la base **GaleCore Dev** en la nube). Ver «Iniciar y detener».
 Claude Code es el motor del Lab y queda como el predeterminado en tu PC (el instalador fija la variable de usuario
 `GALECORE_LAB_PROVIDER=claude`; podés elegir otro motor desde el selector del chat). Un solo comando; si lo volvés a correr, actualiza.
 
@@ -46,9 +47,16 @@ tu cuenta de Tastytrade y vinculala. Desde ahí el Lab y el monitor leen tu cuen
 
 ## Iniciar y detener
 
-- Iniciar: acceso directo **GaleCore** del escritorio (o `install\iniciar.ps1`). Arranca todo oculto, espera a que
-  responda y abre el monitor en el navegador. La primera vez tarda unos minutos.
-- Detener: **Detener GaleCore** en el menú Inicio (o `install\detener.ps1`). Sólo corta lo que inició GaleCore.
+Hay dos accesos directos en el escritorio, uno por entorno; se pueden tener abiertos los dos a la vez:
+
+| Acceso | Qué arranca | Contra qué | Se usa desde |
+|---|---|---|---|
+| **GaleCore** (`iniciar.ps1`) | Lab (`:8771`) y login de los motores | producción, con `GALECORE_LAB_USERNAME` / `_PASSWORD` / `_API_KEY` | `galecore.vercel.app` |
+| **GaleCore Dev** (`iniciar.ps1 -Entorno dev`) | API (`:7001`), monitor (`:3039`), Lab de Dev (`:8781`) y login de los motores | GaleCore Dev, con `GALECORE_USERNAME` / `_PASSWORD` | `localhost:3039` |
+
+- Arrancan ocultos, esperan a que respondan y abren la web. La primera vez Dev tarda unos minutos.
+- Detener: **Detener GaleCore** / **Detener GaleCore Dev** en el menú Inicio (o `install\detener.ps1 [-Entorno dev]`).
+  Cada uno corta sólo lo que inició su acceso.
 - Si algo no arranca, los registros están en `%LOCALAPPDATA%\GaleCore\logs`.
 - Agentes y avisos: el instalador deja la tarea de Windows `GaleCore-AI\espacio-agentes`, que cada 5 minutos aplica lo
   que hagas en **Agentes** del monitor y revisa tus avisos (watch y SHADOW). Corre aunque GaleCore esté detenido;

@@ -1,14 +1,16 @@
 <#
 .SYNOPSIS
-  Detiene GaleCore: solo los procesos que inicio iniciar.ps1 (los registra en %LOCALAPPDATA%\GaleCore\pids.json).
+  Detiene GaleCore: solo los procesos que inicio iniciar.ps1 en ese entorno (los registra en
+  %LOCALAPPDATA%\GaleCore\pids.json para prod y pids-dev.json para dev).
+  -Entorno prod|dev  cual detener (prod por defecto).
   -DryRun  muestra lo que detendria sin tocar nada.
 #>
-param([switch]$DryRun)
+param([ValidateSet('prod', 'dev')][string]$Entorno = 'prod', [switch]$DryRun)
 $ErrorActionPreference = 'Stop'
-$pidFile = Join-Path $env:LOCALAPPDATA 'GaleCore\pids.json'
+$pidFile = Join-Path $env:LOCALAPPDATA ('GaleCore' + $(if ($Entorno -eq 'prod') { 'pids.json' } else { 'pids-dev.json' }))
 
 Write-Host ''
-Write-Host 'Deteniendo GaleCore' -ForegroundColor White
+Write-Host $(if ($Entorno -eq 'prod') { 'Deteniendo GaleCore' } else { 'Deteniendo GaleCore Dev' }) -ForegroundColor White
 if ($DryRun) { Write-Host '(modo simulacro: no se detiene nada)' -ForegroundColor Yellow }
 
 if (-not (Test-Path $pidFile)) { Write-Host '  No hay nada iniciado por GaleCore.'; exit 0 }
