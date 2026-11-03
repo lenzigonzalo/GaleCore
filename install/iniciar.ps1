@@ -114,8 +114,17 @@ $registro = @()
 foreach ($s in $servicios) {
     $c = $comandos[$s.Nombre]
     $base = Join-Path $logs $s.Nombre.ToLower()
+    # Como start-lab.ps1: GALECORE_LAB_* apunta sólo el Lab a otra API (producción); el resto sigue contra la local.
+    $previos = @{}
+    if ($s.Nombre -eq 'Lab') {
+        foreach ($n in 'BASE_URL', 'API_KEY', 'USERNAME', 'PASSWORD') {
+            $v = [Environment]::GetEnvironmentVariable("GALECORE_LAB_$n", 'User')
+            if ($v) { $previos[$n] = [Environment]::GetEnvironmentVariable("GALECORE_$n", 'Process'); [Environment]::SetEnvironmentVariable("GALECORE_$n", $v, 'Process') }
+        }
+    }
     $p = Start-Process -FilePath $c.Exe -ArgumentList $c.Args -WorkingDirectory $c.Dir -WindowStyle Hidden `
         -RedirectStandardOutput "$base.log" -RedirectStandardError "$base.err.log" -PassThru
+    foreach ($n in $previos.Keys) { [Environment]::SetEnvironmentVariable("GALECORE_$n", $previos[$n], 'Process') }
     $registro += [pscustomobject]@{ Servicio = $s.Nombre; Pid = $p.Id; Inicio = $p.StartTime.ToUniversalTime().ToString('o') }
     ConvertTo-Json -InputObject @($registro) | Set-Content -Path $pidFile -Encoding UTF8
     Write-Host "  ... $($s.Nombre) arrancando (hasta $($s.Espera) s)"
