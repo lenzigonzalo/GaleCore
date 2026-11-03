@@ -36,6 +36,7 @@ namespace DataFeed.Repositories
         public DbSet<SharedProject> SharedProjects => Set<SharedProject>();
         public DbSet<SharedProjectMember> SharedProjectMembers => Set<SharedProjectMember>();
         public DbSet<SharedProjectChange> SharedProjectChanges => Set<SharedProjectChange>();
+        public DbSet<PlatformConnection> PlatformConnections => Set<PlatformConnection>();
         public DbSet<StrategySettingEntity> StrategySettings => Set<StrategySettingEntity>();
 
         // ── Runtime (Trading Runtime SHADOW) ──
@@ -100,6 +101,17 @@ namespace DataFeed.Repositories
                  .IsUnique()
                  .HasFilter("is_system")
                  .HasDatabaseName("ix_accounts_single_system");
+            });
+
+            // Claves de conexión de la plataforma (WS-0080). Sin FK: el autor es un uuid informativo.
+            b.Entity<PlatformConnection>(e =>
+            {
+                e.ToTable("platform_connections");
+                e.HasKey(x => x.ConnectionId);
+                e.Property(x => x.ConnectionId).HasMaxLength(40);
+                e.Property(x => x.SecretCipher);
+                e.Property(x => x.SecretHint).HasMaxLength(16);
+                e.Property(x => x.LastTestMessage).HasMaxLength(500);
             });
 
             // ── Runtime tables (Trading Runtime SHADOW) ──

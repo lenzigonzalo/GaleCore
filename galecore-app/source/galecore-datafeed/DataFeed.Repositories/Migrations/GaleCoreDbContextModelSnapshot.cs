@@ -187,6 +187,49 @@ namespace DataFeed.Repositories.Migrations
                     b.ToTable("operational_events", (string)null);
                 });
 
+            modelBuilder.Entity("DataFeed.Repositories.Entities.PlatformConnection", b =>
+                {
+                    b.Property<string>("ConnectionId")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("connection_id");
+
+                    b.Property<DateTime?>("LastTestAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_test_at");
+
+                    b.Property<string>("LastTestMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_test_message");
+
+                    b.Property<bool?>("LastTestOk")
+                        .HasColumnType("boolean")
+                        .HasColumnName("last_test_ok");
+
+                    b.Property<string>("SecretCipher")
+                        .HasColumnType("text")
+                        .HasColumnName("secret_cipher");
+
+                    b.Property<string>("SecretHint")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("secret_hint");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by");
+
+                    b.HasKey("ConnectionId")
+                        .HasName("pk_platform_connections");
+
+                    b.ToTable("platform_connections", (string)null);
+                });
+
             modelBuilder.Entity("DataFeed.Repositories.Entities.ShadowPositionEntity", b =>
                 {
                     b.Property<Guid>("Id")

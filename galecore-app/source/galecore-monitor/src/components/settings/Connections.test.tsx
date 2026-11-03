@@ -38,7 +38,7 @@ test('no instalado y fallo de servicio no se muestran como cuenta conectada; rei
   expect(screen.getByRole('button', { name: 'Reautenticar Codex' })).toBeDisabled();
 });
 
-test('cada proveedor muestra cuenta, permisos y MCP sin duplicar skills', async () => {
+test('cada proveedor muestra cuenta y permisos sin duplicar skills ni MCP', async () => {
   render(<Connections/>);
   await screen.findByText('Cuenta conectada');
   fireEvent.click(screen.getByRole('button', { name: 'Permisos' }));
@@ -46,5 +46,5 @@ test('cada proveedor muestra cuenta, permisos y MCP sin duplicar skills', async 
   fireEvent.click(screen.getByRole('tab', { name: 'Codex' }));
   expect(screen.getByText('Permisos de Codex')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Skills' })).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Servidores MCP' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Servidores MCP' })).toBeNull();
 });
