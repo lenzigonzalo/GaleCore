@@ -121,6 +121,16 @@ def parse_ref(text: str) -> Ref:
     return Ref("file", str(posix))
 
 
+def project_log_path(base: Path, name: str) -> Path:
+    """Where a project's log lives: inside its folder (``workspaces|strategies/<name>/memory/registro.json``) when the
+    folder exists, else the old ``projects/<name>.json`` (the portfolio and names without a folder)."""
+    if name != "portfolio":
+        for sub in ("workspaces", "strategies"):
+            if (base / sub / name).is_dir():
+                return base / sub / name / "memory" / "registro.json"
+    return base / "projects" / f"{name}.json"
+
+
 def ref_path(ref: Ref, base: Path) -> Path:
     """Filesystem location a reference points to (it may not exist)."""
     if ref.kind == "regime":
@@ -138,5 +148,7 @@ def ref_path(ref: Ref, base: Path) -> Path:
     if ref.kind == "feedback":
         return base / "feedback" / f"{ref.key}.json"
     if ref.kind == "project":
-        return base / "projects" / f"{ref.key}.json"
+        new = project_log_path(base, ref.key)
+        old = base / "projects" / f"{ref.key}.json"
+        return old if not new.exists() and old.exists() else new
     return (base.parent / ref.key).resolve()

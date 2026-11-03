@@ -1,6 +1,6 @@
 import { createPortal } from 'react-dom';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Plus, MessageSquare, Files, X, ArrowUp, Square, PanelLeftClose, PanelLeftOpen, Mic, Paperclip, Map as MapIcon, SquareTerminal, Users, Pencil } from 'lucide-react';
+import { Plus, MessageSquare, Files, X, ArrowUp, Square, PanelLeftClose, PanelLeftOpen, Mic, Paperclip, Map as MapIcon, SquareTerminal, Pencil } from 'lucide-react';
 import type { Tab } from '../components/layout/TabNav';
 import { labRequest, WorkspaceProject, WorkspaceState, WorkspaceChat, labUpload } from '../api/lab';
 import { LabShadow } from './LabShadow';
@@ -126,8 +126,8 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       if (document.hidden || pending || Date.now() - last < 10000) return;
       pending = true; last = Date.now();
       try {
-        const result = await labRequest<{ errors?: Record<string, string> }>('/workspaces/sync', {}, 180000);
-        if (live) { setSharedError(Object.keys(result.errors || {}).length ? 'Hay proyectos pendientes de sincronizar. Revisá Proyectos compartidos.' : ''); await refresh(); }
+        await labRequest('/workspaces/sync', {}, 180000);
+        if (live) { setSharedError(''); await refresh(); }
       } catch { if (live) setSharedError('No se pudo actualizar lo compartido. Se reintentará al recuperar conexión.'); }
       finally { pending = false; }
     };
@@ -208,7 +208,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const escape = useRef<(e: KeyboardEvent) => void>(() => {});
   useEffect(() => { const on = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) escape.current(e); }; window.addEventListener('keydown', on); return () => window.removeEventListener('keydown', on); }, []);
 
-  const [sharingOpen, setSharingOpen] = useState(false);
+  const [sharingOpen, setSharingOpen] = useState<WorkspaceProject | null>(null);
   // Proyecto compartido: al abrirlo se traen los cambios de los demás (el Lab no repite una sincronización reciente).
   const openedShared = state?.projects.find(p => p.id === projectId)?.following === true;
   useEffect(() => { if (openedShared) labRequest('/workspaces/' + encodeURIComponent(projectId) + '/sync', { auto: true }, 180000).then(refresh).catch(() => { /* sin red: se sincroniza en el próximo turno */ }); }, [projectId, openedShared, refresh]);
@@ -219,6 +219,29 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     if (!target) return;
     handledRequest.current = projectRequest.sequence; selectProject(target);
   }, [projectRequest, state]);
+  // Pausar/Reanudar el seguimiento de un compartido (menú «⋯»): la ruta usa el id del compartido, no el local.
+  const toggleSync = async (p: WorkspaceProject, follow: boolean) => {
+    try {
+      const catalog = await labRequest<{ projects: { id: string; local: string | null }[] }>('/workspaces/shared', undefined, 180000);
+      const shared = catalog.projects.find(x => x.local === p.id);
+      if (!shared) throw new Error('No se encontró el proyecto compartido.');
+      await labRequest('/shared-projects/' + encodeURIComponent(shared.id) + '/' + (follow ? 'subscribe' : 'pause'), {}, 180000);
+      await refresh();
+    } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo cambiar la sincronización.'); }
+  };
+  // Conflicto «Ver»: abre en Archivos la copia en conflicto del proyecto.
+  const viewConflict = (id: string, path: string) => {
+    const p = state?.projects.find(x => x.id === id);
+    if (p) selectProject(p);
+    setSharedOpen(false); setFileToOpen(path); setView('files');
+  };
+  const [confirmRemove, setConfirmRemove] = useState(false);   // «Quitar de mi Lab» borra la copia: segundo clic
+  const noticeAction: { label: string; run: () => void } | null = !project?.syncNotice ? null
+    : project.syncState === 'error' && project.action === 'reshare' ? { label: 'Compartir acá', run: () => setSharingOpen(project) }
+    : project.syncState === 'error' && project.action === 'remove' ? { label: confirmRemove ? 'Sí, quitar la copia' : 'Quitar de mi Lab', run: () => { if (!confirmRemove) { setConfirmRemove(true); return; } setConfirmRemove(false); void remove('project', project.id); } }
+    : project.syncState === 'error' ? { label: 'Reintentar', run: () => { labRequest('/workspaces/' + encodeURIComponent(project.id) + '/sync', {}, 180000).then(refresh).catch(e => setError(e instanceof Error ? e.message : 'No se pudo sincronizar.')); } }
+    : project.syncNotice.conflicts.length ? { label: 'Ver', run: () => viewConflict(project.id, project.syncNotice!.conflicts[0].copy || project.syncNotice!.conflicts[0].path) }
+    : null;
   const selectChat = (p: WorkspaceProject, c: WorkspaceState['chats'][number]) => { selection.current++; setProjectId(p.id); setFileToOpen(undefined); setChatId(c.id); setChat(null); setView('chat'); setError(''); };
   const newChat = () => { const d = readChatPrefs(); if (d.provider) { setProvider(d.provider); setChatSettings({ model: d.model, effort: d.effort }); } setMode(d.mode); selection.current++; setChatId(null); setChat(null); setView('chat'); setError(''); };
   // Caja de texto estilo Claude (WS-0036): adjuntos, dictado y modo de permisos por mensaje.
@@ -425,13 +448,13 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   if(e.key==='Enter'&&!e.shiftKey&&!e.nativeEvent.isComposing){e.preventDefault();if((draft.trim()||attachments.length)&&!uploading&&!busy){if(chat?.state==='running')enqueue();else e.currentTarget.form?.requestSubmit();}}
   else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='s'){e.preventDefault();if(!busy)sendNow();}
   else if((e.ctrlKey||e.metaKey)&&!e.altKey&&e.key.toLowerCase()==='x'&&queue.length&&e.currentTarget.selectionStart===e.currentTarget.selectionEnd){e.preventDefault();unqueueLast();}}}/>{listening&&<p className="lab-interim" aria-live="polite">{interim||'Escuchando…'}</p>}<div className="lab-composer-bar"><div className="lab-composer-side"><button type="button" className="lab-tool" aria-label="Adjuntar archivo" title="Adjuntar archivo" disabled={busy || uploading || !project} onClick={() => fileInput.current?.click()}><Plus size={18}/></button><input ref={fileInput} type="file" multiple hidden onChange={e => void attach(e.target.files)}/>{Speech && <button type="button" className={'lab-tool' + (listening ? ' active' : '')} aria-label={listening ? 'Detener dictado' : 'Dictar'} title={listening ? 'Detener dictado' : 'Dictar'} onClick={toggleDictation}><Mic size={17}/></button>}{uploading && <span className="lab-uploading" role="status">Adjuntando…</span>}</div><div className="lab-composer-side">{chat?.state==='running'&&(draft.trim()||attachments.length>0)&&<><button type="button" className="lab-queue-add" aria-label="Encolar mensaje" title="Sale solo cuando termine la respuesta (Enter)" disabled={busy} onClick={()=>enqueue()}>Encolar</button><button type="button" className="lab-send-now" aria-label="Mandar ya el mensaje escrito" title="Corta la respuesta y lo manda ya (Ctrl + S)" disabled={busy} onClick={()=>sendNow()}>Mandar ya</button></>}<LabModelPicker provider={activeChoice?.provider || provider} model={chatId ? activeChoice?.model || '' : chatSettings.model} effort={chatId ? activeChoice?.effort || '' : chatSettings.effort} providers={state?.providers || []} options={state?.chatOptions} locked={!!chatId || busy} onChange={value=>{setProvider(value.provider);setChatSettings({model:value.model,effort:value.effort});}}/><button type="button" className={'lab-mode ' + mode} aria-label={'Permisos: ' + (mode === 'auto' ? 'Auto' : 'Manual')} title={mode === 'auto' ? 'Auto: decide solo lo seguro y te pregunta lo demás' : 'Manual: te pregunta antes de lo que necesita permiso'} onClick={toggleMode}>{mode === 'auto' ? 'Auto' : 'Manual'}</button>{chat?.state==='running'?<button type="button" className="lab-send" aria-label="Detener respuesta" onClick={stop}><Square size={15}/></button>:<button type="submit" className="lab-send" aria-label="Enviar mensaje" disabled={(!draft.trim()&&!attachments.length)||uploading||busy||!state||!!(chatId&&!chat)}><ArrowUp size={19}/></button>}</div></div></form>;
-  const chatHeader = <header className={"lab-chat-header" + (headerHost ? " in-global-header" : "")}><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong></div><div className="lab-header-actions"><LabUsage usage={chat?.usage}/>{project && project.id !== 'personal' && <button className="lab-files-button" onClick={()=>setSharingOpen(true)}><Users size={17}/>Compartir</button>}{view==='chat' && mapaShown && <button className="lab-files-button" aria-pressed={side==='mapa'} onClick={()=>{ if (filePanel) { setFilePanel(null); setMapaOpen(true); } else setMapaOpen(v=>!v); }}><MapIcon size={17}/>Proyecto</button>}<div className="lab-view-switch" role="group" aria-label="Vista del proyecto"><button aria-pressed={view==='chat' || view==='design' || view==='shadow'} onClick={()=>setView('chat')}><MessageSquare size={16}/>Chat</button><button aria-pressed={view==='files'} onClick={()=>{setFileToOpen(undefined);setView('files');}}><Files size={16}/>Archivos</button><button aria-pressed={view==='shell'} onClick={()=>{setShellOpened(true);setView('shell');}}><SquareTerminal size={16}/>Shell</button></div></div></header>;
+  const chatHeader = <header className={"lab-chat-header" + (headerHost ? " in-global-header" : "")}><div className="lab-project-title"><strong>{project ? name(project.id, project.label) : 'Lab'}</strong></div><div className="lab-header-actions"><LabUsage usage={chat?.usage}/>{view==='chat' && mapaShown && <button className="lab-files-button" aria-pressed={side==='mapa'} onClick={()=>{ if (filePanel) { setFilePanel(null); setMapaOpen(true); } else setMapaOpen(v=>!v); }}><MapIcon size={17}/>Proyecto</button>}<div className="lab-view-switch" role="group" aria-label="Vista del proyecto"><button aria-pressed={view==='chat' || view==='design' || view==='shadow'} onClick={()=>setView('chat')}><MessageSquare size={16}/>Chat</button><button aria-pressed={view==='files'} onClick={()=>{setFileToOpen(undefined);setView('files');}}><Files size={16}/>Archivos</button><button aria-pressed={view==='shell'} onClick={()=>{setShellOpened(true);setView('shell');}}><SquareTerminal size={16}/>Shell</button></div></div></header>;
   const projectSidebar = <aside className="lab-chat-sidebar" id="lab-project-sidebar">
       <div className="lab-sidebar-heading">{!embedded && !onSidebarToggle && <button className="lab-icon" aria-label={collapsed ? 'Mostrar proyectos' : 'Ocultar proyectos'} onClick={()=>setCollapsed(v=>!v)}>{collapsed ? <PanelLeftOpen size={18}/> : <PanelLeftClose size={18}/>}</button>}</div>
       {!collapsed && <LabProjectList state={state} projectId={projectId} chatId={chatId} expanded={expanded}
         onToggle={id => setExpanded(v => ({ ...v, [id]: !v[id] }))} onProject={selectProject} onChat={selectChat}
         onNewChat={p => { selectProject(p); newChat(); }} onCreateProject={() => setSharedOpen(true)}
-        name={name} onRename={startEdit} editing={editing} renameInput={renameInput} onDelete={remove}/> }
+        name={name} onRename={startEdit} editing={editing} renameInput={renameInput} onDelete={remove} onShare={p => setSharingOpen(p)} onToggleSync={toggleSync}/> }
     </aside>;
   return <div ref={workspace} className={'lab-chat-workspace' + (embedded ? ' embedded' : '') + (sidebarHidden ? ' sidebar-hidden' : collapsed ? ' sidebar-collapsed' : '')} style={{ '--lab-sidebar-width': sidebarWidth + 'px', '--lab-chat-font-size': chatFontSize } as React.CSSProperties}>
     {embedded ? (projectHost && createPortal(projectSidebar, projectHost)) : projectSidebar}
@@ -451,7 +474,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
     <section className={'lab-chat-main' + (chatEmpty && view === 'chat' ? ' empty' : '')}>
       {sharedError && <p className="lab-sync-notice" role="status">{sharedError}</p>}
       {headerHost ? createPortal(chatHeader, headerHost) : chatHeader}
-      {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></p>}
+      {project?.syncNotice && <p className="lab-sync-notice" role="status"><span>{noticeText(project.syncNotice)}</span><span className="lab-sync-actions">{noticeAction && <button className="lab-files-button" onClick={noticeAction.run}>{noticeAction.label}</button>}<button className="lab-icon" aria-label="Cerrar aviso" onClick={() => labRequest('/workspaces/' + project.id + '/notice', {}).then(refresh).catch(() => {})}><X size={16}/></button></span></p>}
       {shellOpened && <LabShell key={projectId} projectId={projectId} folder={project?.relative} visible={view==='shell'}/>}
       {view==='files' ? <LabFiles key={projectId} projectId={projectId} folder={project?.relative} openPath={fileToOpen}/> : view==='shell' ? null : view!=='chat' ? <LabShadow key={project?.id + view + strategyOpen} mode={view} project={project} strategy={strategyOpen} onChat={()=>setView('chat')} onMonitor={onMonitor}/> : <div ref={chatBody} className={'lab-chat-body' + (side ? (narrow ? ' mapa-only' : ' with-mapa') : '')} style={{ '--lab-mapa-width': mapaWidth + 'px' } as React.CSSProperties}><div className="lab-chat-column" onDragOver={e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }} onDrop={e => { if (e.dataTransfer.files.length) { e.preventDefault(); void attach(Array.from(e.dataTransfer.files)); } }}>
       <div className="lab-messages" ref={messages} onScroll={e => {
@@ -490,7 +513,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       </div>}
     </section>
     {quote && createPortal(<button type="button" className="lab-quote-button" style={{ left: quote.x, top: quote.y }} onMouseDown={e => e.preventDefault()} onClick={askAboutQuote}>Preguntar sobre esto</button>, document.body)}
-    {sharingOpen && project && <LabShare project={project} onClose={() => setSharingOpen(false)} onChanged={refresh}/>}
-    {sharedOpen && <LabSharedProjects localProjects={state?.projects} onClose={() => setSharedOpen(false)} onChanged={refresh} onOpen={async id => { const data = await labRequest<WorkspaceState>('/workspaces'); setState(data); const p = data.projects.find(p => p.id === id); if (p) { selectProject(p); setSharedOpen(false); } }}/>}
+    {sharingOpen && <LabShare project={sharingOpen} onClose={() => setSharingOpen(null)} onChanged={refresh}/>}
+    {sharedOpen && <LabSharedProjects localProjects={state?.projects} onClose={() => setSharedOpen(false)} onChanged={refresh} onView={viewConflict} onShare={id => { const p = state?.projects.find(x => x.id === id); if (p) { setSharedOpen(false); setSharingOpen(p); } }} onRemove={id => remove('project', id)} onOpen={async id => { const data = await labRequest<WorkspaceState>('/workspaces'); setState(data); const p = data.projects.find(p => p.id === id); if (p) { selectProject(p); setSharedOpen(false); } }}/>}
   </div>;
 }

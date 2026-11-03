@@ -20,10 +20,16 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   const lastRun = new Map();   // proyecto -> hora de su última sincronización
   let catalogRun = null;
 
+  // La API de este entorno, normalizada: la misma base con la que se busca el token en la cache de sesión.
+  const apiBase = () => (environment().GALECORE_BASE_URL || process.env.GALECORE_BASE_URL || 'http://localhost:7001').replace(/\/+$/, '');
   const isShared = p => !!p.dir && fs.existsSync(path.join(p.dir, SYNC_FILE));
   const state = p => { try { return JSON.parse(fs.readFileSync(path.join(p.dir, SYNC_FILE), 'utf8')); } catch { return null; } };
+  // Compartido *en este entorno*: el `.sync.json` fue escrito contra esta misma API. Si es de otro (Dev vs producción),
+  // para este entorno la carpeta no está compartida.
+  const inThisEnvironment = p => isShared(p) && String(state(p)?.context?.api || '').replace(/\/+$/, '') === apiBase();
   const isRunning = p => running.has(p.id);
   const isFollowing = p => state(p)?.subscribed === true;
+  const isMine = p => { const s = state(p); return !!s && !!s.owner && s.owner === s.context?.user; };
 
   function cli(args) {
     return new Promise((resolve, reject) => execute('python', ['-B', '-m', 'galecore_ai.adapters.cli', ...args],
@@ -40,6 +46,7 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   function remember(p, summary) {
     const conflicts = summary?.conflicts || [];
     const old = notices.get(p.id);
+    if (summary?.otherEnvironment) return failed(p, 'otro usuario o entorno');
     if (conflicts.length || summary?.skipped?.length) notices.set(p.id, { at: new Date().toISOString(), conflicts, skipped: summary.skipped || [] });
     else if (old?.conflicts.length) notices.set(p.id, { at: old.at, conflicts: old.conflicts });
     else notices.delete(p.id);
@@ -52,8 +59,30 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
     if (/did not answer|timed out|ENOTFOUND|ECONN/i.test(m)) return 'sin conexión con GaleCore';
     if (/HTTP 429/.test(m)) return 'GaleCore pidió esperar unos minutos';
     if (/HTTP 401|HTTP 403/.test(m)) return 'GaleCore no aceptó la sesión';
+    if (/ya no ten[ée]s acceso/i.test(m)) return 'ya no tenés acceso: el dueño dejó de compartirlo o lo borró';
+    if (/Confirm[áa]|otro usuario o entorno|otro entorno/i.test(m)) return 'esta copia se compartió desde otro usuario o entorno';
     return m || 'GaleCore no respondió';
   }
+  // Qué puede hacer el usuario con un error: quitar la copia sin acceso, compartir de nuevo acá, o reintentar.
+  const actionFor = text => /ya no tenés acceso/.test(text) ? 'remove' : /otro usuario o entorno/.test(text) ? 'reshare' : 'retry';
+
+  // Estado de un proyecto agregado: ok · syncing · conflict · error (+ action). `info` viene del `.sync.json` (lista) o de
+  // la fila del catálogo: { following, lastError, removed, needsConfirmation }.
+  function health(id, info = {}) {
+    const error = text => ({ syncState: 'error', notice: text, action: actionFor(text) });
+    if (info.removed) return error(reason('ya no tenés acceso'));
+    if (info.needsConfirmation) return error(reason('otro usuario o entorno'));
+    if (running.has(id)) return { syncState: 'syncing', notice: null };
+    const n = notices.get(id);
+    const text = n?.error || (info.following && info.lastError ? reason(info.lastError) : null);
+    if (text) return error(text);
+    if (n?.conflicts?.length) {
+      const more = n.conflicts.length > 1 ? ` y ${n.conflicts.length - 1} más` : '';
+      return { syncState: 'conflict', notice: `Conflicto en ${n.conflicts[0].path}${more}` };
+    }
+    return { syncState: 'ok', notice: null };
+  }
+  const projectHealth = p => { const s = state(p) || {}; return health(p.id, { following: s.subscribed === true, lastError: s.lastError }); };
   function failed(p, message) {
     notices.set(p.id, { at: new Date().toISOString(), conflicts: notices.get(p.id)?.conflicts || [], error: reason(message) });
   }
@@ -63,6 +92,7 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   // inicia sesión en GaleCore y el login tiene límite (10 cada 5 minutos). La de fin de turno y la manual no lo usan.
   function sync(p, { busy = () => false, minInterval = 0 } = {}) {
     if (!isShared(p)) return Promise.resolve(null);
+    if (!inThisEnvironment(p)) return Promise.resolve({ otherEnvironment: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });
     if (state(p)?.subscribed !== true) return Promise.resolve({ paused: true });
     if (running.has(p.id)) return running.get(p.id);
     if (minInterval && Date.now() - (lastRun.get(p.id) || 0) < minInterval) return Promise.resolve({ recent: true, pulled: 0, pushed: 0, conflicts: [], skipped: [] });
@@ -79,7 +109,10 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   async function catalog({ busy = () => false } = {}) {
     if (!catalogRun) catalogRun = cli(['project', 'shared']).finally(() => { catalogRun = null; });
     const out = await catalogRun;
-    return { ...out, projects: (out.projects || []).map(p => ({ ...p, notice: notices.get(p.local) || null,
+    return { ...out, projects: (out.projects || []).map(p => ({ ...p, access: p.access || 'restricted', member: p.member !== false,
+      syncNotice: notices.get(p.local) || null,
+      ...(p.local ? health(p.local, { following: p.subscribed, lastError: p.lastError, removed: p.removed, needsConfirmation: p.needsConfirmation })
+        : { syncState: null, notice: null }),
       working: !!p.local && busy({id:p.local}), syncing: running.has(p.local) || running.has('remote:' + p.id) })) };
   }
 
@@ -93,7 +126,7 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
       const p = projectsOf().find(p => p.id === remote.local);
       if (!p) continue;
       try { out.projects[p.id] = await sync(p, { busy, minInterval: 20000 }); }
-      catch (err) { out.errors[p.id] = err.message; }
+      catch (err) { out.errors[p.id] = reason(err.message); }
     }
     return out;
   }
@@ -118,13 +151,19 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
     return result;
   }
 
+  // «Agregar a mi Lab»: sumarse si el proyecto es de todos, seguirlo en esta PC y traerlo, en un solo pedido.
+  async function add(id, projectsOf, { busy = () => false } = {}) {
+    const result = await subscribe(id, true, projectsOf, { busy });
+    return { project: result.project, sync: result.sync || null, ...(result.error ? { error: reason(result.error) } : {}) };
+  }
+
   async function status(p) {
-    const own = state(p);
-    if (!own) return { shared: false, members: [] };
+    const own = inThisEnvironment(p) && state(p);
+    if (!own) return { shared: false, access: 'restricted', members: [] };
     const listing = await cli(['project', 'shared']);
     const remote = (listing.projects || []).find(r => r.id === own.sharedProjectId && !r.removed);
-    if (!remote) return { shared: true, members: [], owner: null, mine: false, removed: true };
-    return { shared: true, members: remote.members, owner: remote.owner, mine: !!remote.mine };
+    if (!remote) return { shared: true, access: 'restricted', members: [], owner: null, mine: false, removed: true };
+    return { shared: true, access: remote.access || 'restricted', members: remote.members, owner: remote.owner, mine: !!remote.mine };
   }
 
   function username(body) {
@@ -142,6 +181,20 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
     const result = await job;
     remember(p, result.sync);
     return { shared: true, members: result.members, owner: result.members.find(m => m.role === 'owner')?.username || null, mine: true };
+  }
+
+  // Acceso general (sólo el dueño; lo valida GaleCore). `everyone` comparte la carpeta si todavía no lo está.
+  async function setAccess(p, body, { busy = () => false } = {}) {
+    if (p.id === 'personal') throw fail('El espacio personal no se comparte.');
+    const access = String(body.access || '');
+    if (!['restricted', 'everyone'].includes(access)) throw fail('El acceso es restringido o para todos.');
+    if (busy(p) || isRunning(p)) throw fail('El proyecto está trabajando. Esperá a que termine para cambiar el acceso.', 409);
+    const job = cli(['project', 'access', p.id, access]).finally(() => running.delete(p.id));
+    running.set(p.id, job);
+    const result = await job;
+    if (result.shared === false) return { shared: false, access: 'restricted', members: [] };
+    remember(p, result.sync);
+    return { shared: true, access: result.access, members: result.members, owner: result.members.find(m => m.role === 'owner')?.username || null, mine: true };
   }
 
   async function unshare(p, body) {
@@ -186,7 +239,7 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   const notice = p => notices.get(p.id) || null;
   const clearNotice = p => { notices.delete(p.id); };
 
-  return { isShared, isRunning, isFollowing, catalog, subscribe, sync, syncAll, status, share, unshare, searchUsers, notice, clearNotice };
+  return { isShared, inThisEnvironment, isRunning, isFollowing, isMine, health: projectHealth, catalog, subscribe, add, sync, syncAll, status, share, setAccess, unshare, searchUsers, notice, clearNotice };
 }
 
 module.exports = { createSharing, SYNC_FILE };

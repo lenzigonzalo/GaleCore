@@ -261,12 +261,14 @@ namespace DataFeed.Repositories
                 e.ToTable("shared_projects", t =>
                 {
                     t.HasCheckConstraint("ck_shared_projects_kind", "kind IN ('" + string.Join("','", SharedProject.Kinds) + "')");
+                    t.HasCheckConstraint("ck_shared_projects_access", "access IN ('" + string.Join("','", SharedProject.Accesses) + "')");
                 });
                 e.HasKey(x => x.Id);
                 e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
                 e.Property(x => x.Name).HasMaxLength(SharedProject.MaxNameLength).IsRequired();
                 e.Property(x => x.Kind).HasMaxLength(20).IsRequired();
                 e.Property(x => x.LocalKey).HasMaxLength(SharedProject.MaxLocalKeyLength).IsRequired();
+                e.Property(x => x.Access).HasMaxLength(20).IsRequired().HasDefaultValue("restricted");
                 e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
                 e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
                 e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);

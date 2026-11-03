@@ -50,16 +50,29 @@ class FakeGaleCore:
         if path == root and method == "POST":
             pid = f"p{len(self.projects) + 1}"
             self.projects[pid] = {"id": pid, "name": body["name"], "kind": body["kind"], "localKey": body["localKey"],
-                                  "owner": me, "members": [{"username": me, "displayName": None, "role": "owner"}]}
+                                  "owner": me, "access": "restricted",
+                                  "members": [{"username": me, "displayName": None, "role": "owner"}]}
             self.changes[pid] = []
             return httpx.Response(201, json=self.projects[pid])
         if path == root and method == "GET":
-            mine = [{**p, "lastSeq": 0} for p in self.projects.values() if any(m["username"] == me for m in p["members"])]
-            return httpx.Response(200, json={"projects": mine})
+            rows = [{**p, "lastSeq": 0, "member": any(m["username"] == me for m in p["members"])}
+                    for p in self.projects.values()]
+            return httpx.Response(200, json={"projects": [r for r in rows if r["member"] or r["access"] == "everyone"]})
         parts = path.removeprefix(root + "/").split("/")
         proj = self.projects[parts[0]]
+        if len(parts) == 2 and parts[1] == "join" and method == "POST":
+            if proj["access"] != "everyone" and not any(m["username"] == me for m in proj["members"]):
+                return httpx.Response(404)
+            if all(m["username"] != me for m in proj["members"]):
+                proj["members"].append({"username": me, "displayName": None, "role": "member"})
+            return httpx.Response(200, json={**proj, "member": True})
         if not any(m["username"] == me for m in proj["members"]):
             return httpx.Response(404)
+        if len(parts) == 1 and method == "PATCH":
+            if proj["owner"] != me:
+                return httpx.Response(403, json={"error": "sólo el dueño"})
+            proj["access"] = body["access"]
+            return httpx.Response(200, json={**proj, "member": True})
         if len(parts) == 1 and method == "DELETE":
             self.projects.pop(parts[0])
             return httpx.Response(204)
@@ -423,17 +436,94 @@ def test_failed_apply_does_not_advance_cursor_or_push_and_can_resume(world, monk
     assert "lastError" not in sp.load_state(db)
 
 
-def test_other_user_or_api_cannot_rebind_or_sync_a_local_copy(world):
+def test_other_user_or_api_is_not_shared_here_and_nothing_is_touched(world):
     _, _, db, ca, cb = shared_pair(world)
     before = (db / sp.SYNC_FILE).read_bytes()
-    with pytest.raises(sp.SharedProjectError, match="Confirmá Agregar"):
-        sp.sync_project(ca, db)
+    out = sp.sync_project(ca, db)
+    assert out == {"otherEnvironment": True, "pulled": 0, "pushed": 0, "conflicts": [], "skipped": []}
     with pytest.raises(sp.SharedProjectError, match="otro usuario o entorno"):
         sp.subscribe(ca, db.parent.parent, "p1")
     cb.base_url = "http://other-environment.test"
-    with pytest.raises(sp.SharedProjectError, match="Confirmá Agregar"):
-        sp.sync_project(cb, db)
+    assert sp.sync_project(cb, db)["otherEnvironment"] is True
     assert (db / sp.SYNC_FILE).read_bytes() == before
+
+
+def test_share_from_another_environment_starts_from_zero(world):
+    _, a, _, ca, _ = world
+    write(a, "workspaces/idea/README.md", "x")
+    sp.share(ca, a, "idea", "gonza")
+    old_id = sp.load_state(a / "workspaces/idea")["sharedProjectId"]
+    state = sp.load_state(a / "workspaces/idea")
+    state["context"] = {"user": "demo", "api": "http://dev.test"}      # shared from Dev
+    sp.save_state(a / "workspaces/idea", state)
+    assert sp.sync_project(ca, a / "workspaces/idea")["otherEnvironment"] is True
+    out = sp.share(ca, a, "idea", "gonza")
+    new = sp.load_state(a / "workspaces/idea")
+    assert new["context"]["api"] == "http://galecore.test" and new["sharedProjectId"] == out["shared_project_id"] != old_id
+    assert out["sync"]["pushed"] == 1
+
+
+def test_a_failed_reshare_restores_the_old_state(world):
+    _, a, _, ca, _ = world
+    write(a, "workspaces/idea/README.md", "x")
+    sp.share(ca, a, "idea", "gonza")
+    state = sp.load_state(a / "workspaces/idea")
+    state["context"] = {"user": "demo", "api": "http://dev.test"}
+    sp.save_state(a / "workspaces/idea", state)
+    before = (a / "workspaces/idea" / sp.SYNC_FILE).read_bytes()
+    with pytest.raises(sp.SharedProjectError):
+        sp.share(ca, a, "idea", "nadie")
+    assert (a / "workspaces/idea" / sp.SYNC_FILE).read_bytes() == before
+
+
+def test_access_everyone_shares_the_folder_without_adding_anybody(world):
+    _, a, b, ca, cb = world
+    write(a, "workspaces/idea/README.md", "hola")
+    out = sp.set_access(ca, a, "idea", "everyone")
+    assert out["access"] == "everyone" and [m["username"] for m in out["members"]] == ["demo"] and out["sync"]["pushed"] == 1
+    row = sp.list_shared(cb, b)["projects"][0]
+    assert row["access"] == "everyone" and row["member"] is False and row["local"] is None
+
+
+def test_access_restricted_on_an_unshared_folder_creates_nothing(world):
+    fake, a, _, ca, _ = world
+    write(a, "workspaces/idea/README.md", "hola")
+    assert sp.set_access(ca, a, "idea", "restricted")["shared"] is False
+    assert fake.projects == {} and not (a / "workspaces/idea" / sp.SYNC_FILE).exists()
+
+
+def test_only_the_owner_can_change_access(world):
+    _, _, db, _, cb = shared_pair(world)
+    b = db.parent.parent
+    with pytest.raises(sp.SharedProjectError, match="dueño"):
+        sp.set_access(cb, b, "idea", "everyone")
+
+
+def test_subscribe_to_an_everyone_project_joins_first(world):
+    fake, a, b, ca, cb = world
+    write(a, "workspaces/idea/README.md", "hola")
+    sp.set_access(ca, a, "idea", "everyone")
+    assert sp.subscribe(cb, b, "p1")["project"] == "idea"
+    assert any(m["username"] == "gonza" for m in fake.projects["p1"]["members"])
+    assert sp.sync_project(cb, b / "workspaces/idea")["pulled"] == 1
+    assert sp.list_shared(cb, b)["projects"][0]["member"] is True
+
+
+def test_join_of_a_restricted_project_says_it_is_not_available(world):
+    fake, a, _, ca, cb = world
+    fake.users.add("ana")
+    write(a, "workspaces/idea/README.md", "hola")
+    sp.share(ca, a, "idea", "ana")
+    with pytest.raises(sp.SharedProjectError, match="no está disponible"):
+        sp.join(cb, "p1")
+
+
+def test_join_of_an_everyone_project_is_idempotent(world):
+    _, a, _, ca, cb = world
+    write(a, "workspaces/idea/README.md", "hola")
+    sp.set_access(ca, a, "idea", "everyone")
+    assert sp.join(cb, "p1")["project"]["member"] is True
+    assert sp.join(cb, "p1")["status"] == "JOINED"
 
 
 def test_legacy_copy_requires_confirmation_and_keeps_its_cursor(world):
