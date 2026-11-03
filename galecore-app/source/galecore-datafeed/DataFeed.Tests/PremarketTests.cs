@@ -107,6 +107,42 @@ public class PremarketTests
         Assert.All(response, q => Assert.Null(q.Price));
     }
 
+    [Fact]
+    public async Task Handler_uses_short_window_and_cache_avoids_repeating_the_wait()
+    {
+        var feed = new SnapshotFeed();
+        var cache = new PremarketCache();
+        var handler = new PremarketHandler(feed, cache);
+        await handler.Handle(new PremarketRequest { Symbols = "SPY,QQQ" }, default);
+        Assert.Equal(PremarketHandler.SnapshotTimeout, feed.LastTimeout);
+        Assert.True(PremarketHandler.SnapshotTimeout <= TimeSpan.FromSeconds(4));
+        Assert.Equal(1, feed.Calls);
+        await handler.Handle(new PremarketRequest { Symbols = "QQQ,SPY" }, default);
+        Assert.Equal(1, feed.Calls);
+        await handler.Handle(new PremarketRequest { Symbols = "SPY,IWM" }, default);
+        Assert.Equal(2, feed.Calls);
+        Assert.Equal(new[] { "IWM", "IWM" }, feed.Subscriptions.Select(s => s.Symbol));
+    }
+
+    [Fact]
+    public async Task Cache_expires_after_ttl_and_concurrent_requests_share_one_fetch()
+    {
+        var feed = new SnapshotFeed();
+        var time = new ManualTime();
+        var handler = new PremarketHandler(feed, new PremarketCache(TimeSpan.FromSeconds(30), time));
+        await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => handler.Handle(new PremarketRequest { Symbols = "SPY" }, default)));
+        Assert.Equal(1, feed.Calls);
+        time.Now = time.Now.AddSeconds(31);
+        await handler.Handle(new PremarketRequest { Symbols = "SPY" }, default);
+        Assert.Equal(2, feed.Calls);
+    }
+
+    private sealed class ManualTime : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; } = new(2026, 11, 3, 12, 0, 0, TimeSpan.Zero);
+        public override DateTimeOffset GetUtcNow() => Now;
+    }
+
     [Theory]
     [InlineData("")]
     [InlineData("SPY{=d}")]
@@ -192,10 +228,12 @@ public class PremarketTests
     private sealed class SnapshotFeed : IDxLinkStreamingService
     {
         public IReadOnlyList<(string Symbol, string EventType, long? FromTime)> Subscriptions { get; private set; } = [];
+        public TimeSpan LastTimeout { get; private set; }
+        public int Calls { get; private set; }
         public Task<IReadOnlyList<JObject>> RequestSnapshotAsync(IReadOnlyList<(string Symbol, string EventType, long? FromTime)> subs,
             Func<JObject, bool> isSymbolComplete, TimeSpan timeout, CancellationToken cancellationToken)
         {
-            Subscriptions = subs;
+            Subscriptions = subs; LastTimeout = timeout; Calls++;
             return Task.FromResult<IReadOnlyList<JObject>>([new JObject { ["eventSymbol"] = "SPY", ["eventType"] = "Trade", ["price"] = 500 }]);
         }
         public Task SubscribeAsync(string symbol, string[] eventTypes) => throw new NotSupportedException();

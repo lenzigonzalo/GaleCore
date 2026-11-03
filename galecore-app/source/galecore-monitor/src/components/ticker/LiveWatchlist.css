@@ -41,7 +41,7 @@
 .lw-hidden > span { flex-basis:100%; color:var(--text-secondary); font-size:12px; }
 .lw-hidden button { display:flex; gap:5px; align-items:center; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:5px; padding:5px 8px; color:var(--text-primary); cursor:pointer; }
 .lw-drawer button:focus-visible,.lw-tools button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-@media(max-width:1200px) { .workspace-shell.has-watchlist-dock.watchlist-expanded { padding-right:48px; } .lw-drawer { box-shadow:-15px 0 40px #0008; } }
+@media(max-width:1200px) { .workspace-shell.has-watchlist-dock.watchlist-expanded,.workspace-shell.has-watchlist-dock.watchlist-autohide.watchlist-expanded { padding-right:48px; } .lw-drawer { box-shadow:-15px 0 40px #0008; } }
 @media(max-width:480px) { .lw-resize { display:none; } .lw-drawer .ticker-watchlist table { font-size:14px; } .lw-drawer .ticker-watchlist th,.lw-drawer .ticker-watchlist td { padding:8px 4px; } .watchlist-ticker-icon { display:none; } }
 .lw-tools > button { position:relative; }
 .lw-badge { position:absolute; top:5px; right:4px; width:9px; height:9px; border-radius:50%; background:#f87171; box-shadow:0 0 0 2px var(--bg-secondary); }
@@ -75,6 +75,8 @@
 .lw-new-group:hover { color:var(--text-primary); }
 .lw-add-row input:focus,.lw-add-row input:focus-visible { outline:none!important; box-shadow:none!important; border:0!important; }
 .workspace-shell.has-watchlist-dock.watchlist-autohide { padding-right:0; }
+/* Con un panel abierto el espacio de trabajo (chat) se compacta en vez de quedar tapado. */
+.workspace-shell.has-watchlist-dock.watchlist-autohide.watchlist-expanded { padding-right:calc(var(--watchlist-width, 420px) + 48px); }
 .lw-reveal { position:fixed; inset:0 0 0 auto; width:10px; z-index:100; }
 .lw-reveal-edge { position:absolute; inset:0 0 0 auto; width:10px; border:0; background:transparent; cursor:pointer; }
 .lw-reveal-edge::after { content:''; position:absolute; right:2px; top:45%; width:3px; height:36px; border-radius:3px; background:var(--border-light); }
