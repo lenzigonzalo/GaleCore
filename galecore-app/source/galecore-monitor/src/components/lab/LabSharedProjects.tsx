@@ -13,7 +13,7 @@ interface Project {
   localOnly?: boolean;
 }
 interface Catalog { user: string; api: string; projects: Project[] }
-type RowAction = 'view' | 'retry' | 'reshare' | 'remove';
+type RowAction = 'view' | 'retry' | 'sync' | 'reshare' | 'remove';
 
 /** Estado visible de un proyecto ya agregado: texto y, si hace falta, el botón que lo resuelve. */
 function syncStatus(p: Project, busy: boolean): { text: string; kind: 'ok' | 'attention' | ''; action?: RowAction } {
@@ -25,9 +25,10 @@ function syncStatus(p: Project, busy: boolean): { text: string; kind: 'ok' | 'at
     const reason = p.notice || p.syncNotice?.error || p.lastError || (p.syncNotice ? noticeText(p.syncNotice) : 'sin detalle');
     return { text: 'No se pudo sincronizar: ' + reason, kind: 'attention', action: p.action || 'retry' };
   }
-  return { text: 'Al día', kind: 'ok' };
+  // Sólo se sincroniza solo al arrancar el Lab: el botón trae y sube lo nuevo en el momento.
+  return { text: 'Al día', kind: 'ok', action: 'sync' };
 }
-const ACTION_LABEL: Record<RowAction, string> = { view: 'Ver', retry: 'Reintentar', reshare: 'Compartir acá', remove: 'Quitar de mi Lab' };
+const ACTION_LABEL: Record<RowAction, string> = { view: 'Ver', retry: 'Reintentar', sync: 'Sincronizar', reshare: 'Compartir acá', remove: 'Quitar de mi Lab' };
 
 export function LabSharedProjects({ onClose, onChanged, onOpen, onView, onShare, onRemove, localProjects = [] }: {
   onClose: () => void; onChanged: () => Promise<void>; onOpen: (id: string) => void | Promise<void>; localProjects?: WorkspaceProject[];
