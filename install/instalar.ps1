@@ -320,22 +320,24 @@ Ejecutar 'registrar la tarea espacio-agentes (Agentes del monitor y avisos, cada
 Titulo 'Accesos directos'
 $iniciar = Join-Path $Carpeta 'install\iniciar.ps1'
 $detener = Join-Path $Carpeta 'install\detener.ps1'
-function Nuevo-Acceso([string]$ruta, [string]$script, [string]$estilo) {
+function Nuevo-Acceso([string]$ruta, [string]$script, [string]$estilo, [string]$entorno = 'prod') {
     $sh = New-Object -ComObject WScript.Shell
     $l = $sh.CreateShortcut($ruta)
     $l.TargetPath = (Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe')
-    $l.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle $estilo -File `"$script`""
+    $l.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle $estilo -File `"$script`" -Entorno $entorno"
     $l.WorkingDirectory = $Carpeta
     $l.Description = 'GaleCore'
     $l.Save()
 }
 $escritorio = [Environment]::GetFolderPath('Desktop')
 $menu = Join-Path ([Environment]::GetFolderPath('Programs')) 'GaleCore'
-Ejecutar "crear accesos 'GaleCore' (escritorio y menu Inicio) y 'Detener GaleCore' (menu Inicio)" {
+Ejecutar "crear accesos 'GaleCore' (produccion) y 'GaleCore Dev' (escritorio y menu Inicio) y sus 'Detener' (menu Inicio)" {
     New-Item -ItemType Directory -Force -Path $menu | Out-Null
-    Nuevo-Acceso (Join-Path $escritorio 'GaleCore.lnk') $iniciar 'Hidden'
-    Nuevo-Acceso (Join-Path $menu 'GaleCore.lnk') $iniciar 'Hidden'
-    Nuevo-Acceso (Join-Path $menu 'Detener GaleCore.lnk') $detener 'Hidden'
+    foreach ($e in @(@{ Nombre = 'GaleCore'; Entorno = 'prod' }, @{ Nombre = 'GaleCore Dev'; Entorno = 'dev' })) {
+        Nuevo-Acceso (Join-Path $escritorio "$($e.Nombre).lnk") $iniciar 'Hidden' $e.Entorno
+        Nuevo-Acceso (Join-Path $menu "$($e.Nombre).lnk") $iniciar 'Hidden' $e.Entorno
+        Nuevo-Acceso (Join-Path $menu "Detener $($e.Nombre).lnk") $detener 'Hidden' $e.Entorno
+    }
     Ok 'accesos creados'
 }
 
