@@ -1,0 +1,109 @@
+# Deploy de producción al mergear a main (WS-0081, H-25): migraciones aditivas y después la API.
+# El front lo publica Vercel solo. Los secretos viven sólo en el entorno `production` de GitHub.
+# Lo destructivo no se automatiza: migrate-db.ps1 -CI frena sin tocar la base (ENGINEERING.md §9).
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Un deploy a la vez; el que está corriendo no se cancela (los nuevos esperan).
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  SSH_HOST: 149.50.154.221
+  SSH_PORT: "5061"
+  SSH_USER: elenzi
+  # El login es anónimo y sólo acepta POST: un GET da 405 desde la app (502 si Kestrel está caído).
+  HEALTH_URL: https://vps-6285555-x.dattaweb.com/App/GaleCore/Auth/Login
+
+jobs:
+  migrate:
+    name: Migraciones (aditivas)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet tool install --global dotnet-ef --version 8.*
+      # La misma clasificación que a mano: sin pendientes sigue; aditivas se aplican; destructivas
+      # salen con error ANTES de tocar la base. Si nace una tabla, el log imprime la consulta de permisos.
+      - name: migrate-db.ps1 -Production -CI
+        shell: pwsh
+        working-directory: galecore-app
+        env:
+          PROD_DDL_CONNECTION: ${{ secrets.PROD_DDL_CONNECTION }}
+        run: ./migrate-db.ps1 -Production -CI
+
+  api:
+    name: API (publish + VPS)
+    needs: migrate
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Publish (Release, dependiente del framework)
+        run: dotnet publish galecore-app/source/galecore-datafeed/DataFeed.Api/DataFeed.Api.csproj -c Release -o publish
+
+      # Mismos excludes que deploy-api.ps1: Files/ tiene archivos que la API escribe en runtime
+      # y extraer encima los pisaría con los del repo.
+      - name: Empaquetar sin los archivos de estado de runtime
+        run: |
+          rm -f publish/web.config publish/appsettings.Development.json
+          tar -czf "$RUNNER_TEMP/galecore-publish.tar.gz" -C publish \
+            --exclude='./Files/*_switch_state.json' \
+            --exclude='./Files/*/*_switch_state.json' \
+            --exclude='./Files/skew25_history.json' \
+            .
+          if tar -tzf "$RUNNER_TEMP/galecore-publish.tar.gz" | grep -E 'switch_state\.json|skew25_history\.json'; then
+            echo "Los excludes no funcionaron: se colaron archivos de estado (arriba)." >&2
+            exit 1
+          fi
+          ls -lh "$RUNNER_TEMP/galecore-publish.tar.gz"
+
+      - name: Preparar SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Subir y desplegar (galecore-deploy)
+        run: |
+          SSH_OPTS="-i $HOME/.ssh/deploy_key -p $SSH_PORT -o BatchMode=yes -o StrictHostKeyChecking=yes"
+          scp -i ~/.ssh/deploy_key -P "$SSH_PORT" -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            "$RUNNER_TEMP/galecore-publish.tar.gz" "$SSH_USER@$SSH_HOST:galecore-publish.tar.gz"
+          ssh $SSH_OPTS "$SSH_USER@$SSH_HOST" "sudo /usr/local/bin/galecore-deploy"
+
+      - name: Verificar que la app responde
+        run: |
+          for i in 1 2 3 4 5 6 7 8; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$HEALTH_URL" || true)
+            if [ "$code" = "200" ] || [ "$code" = "405" ]; then
+              echo "La app responde ($code)."
+              exit 0
+            fi
+            echo "intento $i sin respuesta de la app todavía ($code)..."
+            sleep 5
+          done
+          echo "La app no respondió después de 8 intentos. Logs: ssh -p $SSH_PORT $SSH_USER@$SSH_HOST 'sudo journalctl -u galecore-datafeed -n 60 --no-pager'" >&2
+          exit 1
+
+      - name: Aviso si falló el deploy
+        if: failure()
+        run: |
+          echo "::error::El deploy de la API falló. Las migraciones de este push YA se aplicaron (son aditivas: la API vieja las tolera). Revisá el paso rojo de arriba."

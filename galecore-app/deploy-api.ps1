@@ -34,9 +34,10 @@
     Puerto SSH del VPS (DonWeb usa el 5061).
 
 .NOTES
-    Pide la contrasena de sudo dos veces (ssh -t abre TTY para que sudo pueda preguntar). Para
-    evitarlo hace falta una regla de sudoers acotada a los systemctl de este servicio -- es una
-    decision aparte, no la toma este script.
+    Los pasos remotos (parar, extraer, arrancar) viven en deploy/remote-deploy.sh, instalado en el
+    VPS como /usr/local/bin/galecore-deploy; es el mismo que usa el workflow de deploy al mergear a
+    main (WS-0081). Con la regla de sudoers NOPASSWD de ese comando no pide contrasena; sin ella,
+    ssh -t deja que sudo la pregunte. Este script queda como respaldo manual.
 #>
 [CmdletBinding()]
 param(
@@ -117,13 +118,10 @@ scp -P $Port $tarball "${Server}:$remoteTar"
 if ($LASTEXITCODE -ne 0) { Fail 'scp devolvio error. Revisa la clave SSH y el firewall del panel.' }
 
 # ── 5. Reemplazar y reiniciar ─────────────────────────────────────────────────
-# -t abre TTY para que sudo pueda pedir la contrasena. El orden importa: parar antes de extraer.
-Step 'Parando el servicio, extrayendo y volviendo a arrancar'
-$remote = "sudo systemctl stop $Service" +
-          " && sudo tar -xzf $remoteTar -C $RemoteApp" +
-          " && sudo chown -R galecore:galecore $RemoteApp" +
-          " && sudo systemctl start $Service"
-ssh -t -p $Port $Server $remote
+# El script remoto para el servicio, extrae, arranca y muestra el estado. -t abre TTY por si sudo
+# todavia pide contrasena (sin la regla de sudoers NOPASSWD).
+Step 'Parando el servicio, extrayendo y volviendo a arrancar (galecore-deploy)'
+ssh -t -p $Port $Server "sudo /usr/local/bin/galecore-deploy"
 if ($LASTEXITCODE -ne 0) { Fail 'El comando remoto devolvio error. La API puede haber quedado abajo.' }
 
 # ── 6. Verificar ──────────────────────────────────────────────────────────────
