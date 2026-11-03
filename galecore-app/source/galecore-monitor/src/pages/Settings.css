@@ -76,6 +76,7 @@
 .prefs { display: grid; gap: 32px; max-width: 860px; }
 .prefs-group { display: grid; }
 .prefs-group h2 { margin: 0 0 8px; font-size: 17px; font-weight: 600; color: var(--text-primary); }
+.prefs-subgroup { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--text-muted); }
 .prefs-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .prefs-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--border-dark); font-size: 16px; color: var(--text-primary); }
 .prefs-row > span { display: grid; gap: 4px; }

@@ -65,6 +65,11 @@ def _context(client: SpaceClient) -> dict:
     return {"user": client.user, "api": client.base_url.rstrip("/")}
 
 
+def other_environment(state: dict | None, context: dict) -> bool:
+    """True when the folder was shared from another user or API (Dev vs production, another user on this PC)."""
+    return bool(state) and state.get("context") not in (None, context)
+
+
 @contextmanager
 def project_lock(project_dir: Path):
     """OS lock, released even if the CLI crashes; shared by CLI entry points."""
@@ -368,6 +373,8 @@ def _sync_project(client: SpaceClient, project_dir: Path, *, today: date | None 
     if state is None:
         raise SharedProjectError(f"{project_dir.name} is not shared (no {SYNC_FILE})")
     context = _context(client)
+    if other_environment(state, context):    # not shared in this environment: nothing to sync, nothing wrong
+        return {"otherEnvironment": True, "pulled": 0, "pushed": 0, "conflicts": [], "skipped": []}
     if state.get("context") != context:
         raise SharedProjectError("Confirmá Agregar a esta PC en Proyectos compartidos para este usuario y entorno.")
     if state.get("subscribed") is not True:
@@ -404,7 +411,7 @@ def _sync_project(client: SpaceClient, project_dir: Path, *, today: date | None 
 
 def _members(client: SpaceClient, project_id: str) -> list[dict]:
     mine = next((p for p in client.shared_projects() if p["id"] == project_id), None)
-    return mine["members"] if mine else []
+    return mine.get("members", []) if mine else []
 
 
 def share(client: SpaceClient, kb_base: Path, key: str, username: str) -> dict:
@@ -413,34 +420,88 @@ def share(client: SpaceClient, kb_base: Path, key: str, username: str) -> dict:
         return _share(client, project_dir, key, username)
 
 
+def _ensure_shared(client: SpaceClient, project_dir: Path, key: str) -> tuple[dict, bool, bytes | None]:
+    """The folder's state in this environment. A missing one, or one from another environment, is shared from zero
+    (new state). Returns (state, fresh, previous .sync.json bytes to restore if the first step fails)."""
+    context = _context(client)
+    state = load_state(project_dir)
+    if state is not None and not other_environment(state, context):
+        if state.get("context") != context:
+            raise SharedProjectError("Confirmá esta copia en Proyectos compartidos antes de compartirla.")
+        return state, False, None
+    previous = (project_dir / SYNC_FILE).read_bytes() if state is not None else None
+    created = client.shared_create(_label_of(project_dir), _kind_of(project_dir), key)
+    state = {"sharedProjectId": created["id"], "lastSeq": 0, "files": {}, "context": context, "subscribed": True,
+             "owner": client.user}
+    save_state(project_dir, state)
+    return state, True, previous
+
+
+def _undo_fresh(client: SpaceClient, project_dir: Path, state: dict, previous: bytes | None) -> None:
+    """A failed first share leaves nothing behind: no remote project with only the owner, no local state."""
+    try:
+        client.shared_delete(state["sharedProjectId"])
+    except SpaceError:
+        return
+    if previous is None:
+        (project_dir / SYNC_FILE).unlink(missing_ok=True)
+    else:
+        (project_dir / SYNC_FILE).write_bytes(previous)
+
+
 def _share(client: SpaceClient, project_dir: Path, key: str, username: str) -> dict:
     if client.user is None:
         client.login()
-    state = load_state(project_dir)
-    fresh = state is None
-    if state is not None and state.get("context") != _context(client):
-        raise SharedProjectError("Confirmá esta copia en Proyectos compartidos antes de compartirla.")
-    if fresh:
-        created = client.shared_create(_label_of(project_dir), _kind_of(project_dir), key)
-        state = {"sharedProjectId": created["id"], "lastSeq": 0, "files": {}, "context": _context(client), "subscribed": True,
-                 "owner": client.user}
-        save_state(project_dir, state)
+    state, fresh, previous = _ensure_shared(client, project_dir, key)
     try:
         client.shared_add_member(state["sharedProjectId"], username)
     except SpaceError as exc:
-        if fresh:    # a failed first share leaves nothing behind: no remote project with only the owner, no local state
-            try:
-                client.shared_delete(state["sharedProjectId"])
-            except SpaceError:
-                pass
-            else:
-                (project_dir / SYNC_FILE).unlink(missing_ok=True)
+        if fresh:
+            _undo_fresh(client, project_dir, state, previous)
         if exc.status in (403, 404):
             raise SharedProjectError(str(exc.body.get("error") or "no se pudo sumar al miembro")) from exc
         raise
     result = _sync_project(client, project_dir)
     return {"status": "SHARED", "project": key, "shared_project_id": state["sharedProjectId"],
             "members": _members(client, state["sharedProjectId"]), "sync": result}
+
+
+def set_access(client: SpaceClient, kb_base: Path, key: str, access: str) -> dict:
+    """General access of a project I own: 'restricted' (only the people added) or 'everyone' (any GaleCore user can add
+    it). 'everyone' shares the folder first when it is not shared yet, without adding anybody."""
+    if access not in ("restricted", "everyone"):
+        raise SharedProjectError("access is restricted or everyone")
+    project_dir = find_project(kb_base, key)
+    with project_lock(project_dir):
+        if client.user is None:
+            client.login()
+        state = load_state(project_dir)
+        if access == "restricted" and (state is None or other_environment(state, _context(client))):
+            return {"status": "ACCESS", "project": key, "access": "restricted", "shared": False}
+        state, fresh, previous = _ensure_shared(client, project_dir, key)
+        try:
+            row = client.shared_set_access(state["sharedProjectId"], access)
+        except SpaceError as exc:
+            if fresh:
+                _undo_fresh(client, project_dir, state, previous)
+            if exc.status in (400, 403, 404):
+                raise SharedProjectError(str(exc.body.get("error") or "no se pudo cambiar el acceso")) from exc
+            raise
+        result = _sync_project(client, project_dir)
+        return {"status": "ACCESS", "project": key, "shared_project_id": state["sharedProjectId"],
+                "access": row.get("access", access), "shared": True,
+                "members": _members(client, state["sharedProjectId"]), "sync": result}
+
+
+def join(client: SpaceClient, project_id: str) -> dict:
+    """Add myself to an 'everyone' project. It does not download anything (subscribe does)."""
+    try:
+        row = client.shared_join(project_id)
+    except SpaceError as exc:
+        if exc.status in (403, 404):
+            raise SharedProjectError("El proyecto no está disponible para este usuario y entorno.") from exc
+        raise
+    return {"status": "JOINED", "project": row}
 
 
 def unshare(client: SpaceClient, kb_base: Path, key: str, username: str) -> dict:
@@ -483,7 +544,8 @@ def list_shared(client: SpaceClient, kb_base: Path) -> dict:
         local = index.get(p["id"])
         state = load_state(local) if local else {}
         verified = state.get("context") == context
-        projects.append({**p, "mine": p.get("owner") == client.user, "local": local.name if local else None,
+        projects.append({**p, "access": p.get("access", "restricted"), "member": p.get("member", True),
+                         "mine": p.get("owner") == client.user, "local": local.name if local else None,
                          "subscribed": verified and state.get("subscribed") is True,
                          "needsConfirmation": bool(local) and not verified,
                          "lastSuccess": state.get("lastSuccess") if verified else None,
@@ -503,6 +565,8 @@ def subscribe(client: SpaceClient, kb_base: Path, project_id: str, *, enabled: b
     context = _context(client)
     folder = _local_index(kb_base).get(project_id)
     remote = next((p for p in client.shared_projects() if p["id"] == project_id), None)
+    if remote is not None and remote.get("member") is False and enabled:    # an 'everyone' project I have not joined
+        remote = join(client, project_id)["project"]
     if remote is None:
         if not enabled and folder and load_state(folder).get("context") == context:
             with project_lock(folder):

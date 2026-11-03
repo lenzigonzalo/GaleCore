@@ -59,6 +59,33 @@ namespace DataFeed.Tests
             Assert.Equal(UserSearch.MaxResults, UserSearch.Find(muchos, "user", yo).Count);
         }
 
+        [Fact]
+        public void BuscarPorMailEsExactoSinMayusculasYNoDevuelveElMail()
+        {
+            var yo = Guid.NewGuid();
+            var users = Usuarios(yo);
+            var r = UserSearch.Find(users, UserSearch.Normalize(" E@X.com ")!, yo);
+            Assert.Equal(new[] { "elenzi" }, r.Select(u => u.Username));
+            Assert.Equal("Eric Lenzi", r.Single().DisplayName);
+            // un mail parcial no matchea (ni por mail ni por usuario/nombre)
+            Assert.Empty(UserSearch.Find(users, "e@x", yo));
+            Assert.Empty(UserSearch.Find(users, "@x.com", yo));
+            // el propio mail no se devuelve
+            Assert.Empty(UserSearch.Find(users, "g@x.com", yo));
+        }
+
+        [Fact]
+        public void ElAccesoSoloAceptaRestrictedOEveryone()
+        {
+            Assert.Null(SharedProject.ValidateAccess("restricted"));
+            Assert.Null(SharedProject.ValidateAccess("everyone"));
+            Assert.NotNull(SharedProject.ValidateAccess("public"));
+            Assert.NotNull(SharedProject.ValidateAccess("Everyone"));
+            Assert.NotNull(SharedProject.ValidateAccess(""));
+            Assert.NotNull(SharedProject.ValidateAccess(null));
+            Assert.Equal("restricted", new SharedProject().Access);
+        }
+
         // ── Proyecto ──
         [Fact]
         public void UnProyectoValidoSeAcepta()
@@ -374,6 +401,82 @@ namespace DataFeed.Tests
             using var db2 = NewDb();
             await db2.Database.ExecuteSqlRawAsync("DELETE FROM users WHERE id = {0}", owner.Id); // el dueño sí se lleva el proyecto y sus cambios
             Assert.False(await db2.SharedProjectChanges.AnyAsync(c => c.ProjectId == p.Id));
+        }
+
+        // ── Acceso general (WS-0056) ──
+        [PostgresFact]
+        public async Task ElAccesoPorDefectoEsRestrictedYLaBaseRechazaOtroValor()
+        {
+            using var db = NewDb();
+            var u = NewUser("acc"); var p = NewProject(u);
+            db.Users.Add(u); db.SharedProjects.Add(p);
+            await db.SaveChangesAsync();
+            Assert.Equal("restricted", await db.SharedProjects.Where(x => x.Id == p.Id).Select(x => x.Access).SingleAsync());
+            await Assert.ThrowsAnyAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("UPDATE shared_projects SET access = 'public' WHERE id = {0}", p.Id));
+        }
+
+        [PostgresFact]
+        public async Task ElListadoSumaLosEveryoneConMemberFalseYSinMiembros()
+        {
+            using var db = NewDb();
+            var owner = NewUser("lo"); var other = NewUser("lx");
+            var restringido = NewProject(owner); var abierto = NewProject(owner); abierto.Access = "everyone";
+            restringido.Name = "r-" + Guid.NewGuid().ToString("N"); abierto.Name = "a-" + Guid.NewGuid().ToString("N");
+            db.Users.AddRange(owner, other); db.SharedProjects.AddRange(restringido, abierto);
+            await db.SaveChangesAsync();
+
+            var mios = await SharedProjectAccess.ListAsync(db, owner.Id, null, default);
+            Assert.True(mios.Single(r => r.Id == abierto.Id).Member);
+            Assert.True(mios.Single(r => r.Id == restringido.Id).Member);
+            Assert.Equal("everyone", mios.Single(r => r.Id == abierto.Id).Access);
+
+            var ajenos = await SharedProjectAccess.ListAsync(db, other.Id, null, default);
+            var fila = ajenos.Single(r => r.Id == abierto.Id);
+            Assert.False(fila.Member);
+            Assert.Empty(fila.Members);
+            Assert.DoesNotContain(ajenos, r => r.Id == restringido.Id);
+        }
+
+        [PostgresFact]
+        public async Task SoloElOwnerCambiaElAccesoYElValorDebeValer()
+        {
+            using var db = NewDb();
+            var owner = NewUser("po"); var member = NewUser("pm"); var ajeno = NewUser("pa");
+            var p = NewProject(owner);
+            p.Members.Add(new SharedProjectMember { UserId = member.Id, Role = "member", AddedAt = DateTime.UtcNow });
+            db.Users.AddRange(owner, member, ajeno); db.SharedProjects.Add(p);
+            await db.SaveChangesAsync();
+
+            Assert.Equal(SharedProjectAccess.Outcome.NotFound, (await SharedProjectAccess.SetAsync(db, p.Id, ajeno.Id, "everyone", default)).Outcome);
+            Assert.Equal(SharedProjectAccess.Outcome.Forbidden, (await SharedProjectAccess.SetAsync(db, p.Id, member.Id, "everyone", default)).Outcome);
+            Assert.Equal(SharedProjectAccess.Outcome.Invalid, (await SharedProjectAccess.SetAsync(db, p.Id, owner.Id, "public", default)).Outcome);
+            Assert.Equal(SharedProjectAccess.Outcome.Ok, (await SharedProjectAccess.SetAsync(db, p.Id, owner.Id, "everyone", default)).Outcome);
+            using var db2 = NewDb();
+            Assert.Equal("everyone", await db2.SharedProjects.Where(x => x.Id == p.Id).Select(x => x.Access).SingleAsync());
+        }
+
+        [PostgresFact]
+        public async Task JoinSumaAlQueNoEsMiembroSoloSiEsEveryoneYEsIdempotente()
+        {
+            using var db = NewDb();
+            var owner = NewUser("jo"); var otro = NewUser("jx");
+            var abierto = NewProject(owner); abierto.Access = "everyone";
+            var cerrado = NewProject(owner);
+            db.Users.AddRange(owner, otro); db.SharedProjects.AddRange(abierto, cerrado);
+            await db.SaveChangesAsync();
+
+            Assert.Equal(SharedProjectAccess.Outcome.NotFound, await SharedProjectAccess.JoinAsync(db, cerrado.Id, otro.Id, default));
+            Assert.Equal(SharedProjectAccess.Outcome.NotFound, await SharedProjectAccess.JoinAsync(db, Guid.NewGuid(), otro.Id, default));
+            Assert.Equal(SharedProjectAccess.Outcome.Ok, await SharedProjectAccess.JoinAsync(db, abierto.Id, otro.Id, default));
+            Assert.Equal(SharedProjectAccess.Outcome.Ok, await SharedProjectAccess.JoinAsync(db, abierto.Id, otro.Id, default));
+            Assert.Equal(1, await db.SharedProjectMembers.CountAsync(m => m.ProjectId == abierto.Id && m.UserId == otro.Id && m.Role == "member"));
+
+            var fila = (await SharedProjectAccess.ListAsync(db, otro.Id, abierto.Id, default)).Single();
+            Assert.True(fila.Member);
+            Assert.Equal(2, fila.Members.Count);
+
+            // ya miembro de un restringido: 200 (por ejemplo, el owner)
+            Assert.Equal(SharedProjectAccess.Outcome.Ok, await SharedProjectAccess.JoinAsync(db, cerrado.Id, owner.Id, default));
         }
     }
 }

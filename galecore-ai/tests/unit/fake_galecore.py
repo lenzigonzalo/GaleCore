@@ -66,7 +66,7 @@ def galecore_server(response: dict | None = None, status: int = 200) -> Iterator
 @contextmanager
 def galecore_deploy_server(specs_status: int = 200, deploy_status: int = 200, returned_hash: str | None = None,
                            replaced_hash: str | None = None, deploy_version_hash: str | None = "",
-                           stale_hash: bool = False) -> Iterator[tuple[str, list[tuple[str, bytes]]]]:
+                           stale_hash: bool = False, headers_seen: list | None = None) -> Iterator[tuple[str, list[tuple[str, bytes]]]]:
     """A local HTTP GaleCore for ``POST /App/Runtime/Specs`` and ``/App/Runtime/Deploy``; yields (base URL, calls).
     Specs answers with the hash of what it was sent unless ``returned_hash`` says another. Deploy answers the instance's
     ``versionHash`` as the spec sent unless ``deploy_version_hash`` says another (None: leaves it out); ``stale_hash`` makes
@@ -77,6 +77,8 @@ def galecore_deploy_server(specs_status: int = 200, deploy_status: int = 200, re
         def do_POST(self):
             raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
             calls.append((self.path, raw))
+            if headers_seen is not None:
+                headers_seen.append(dict(self.headers))
             if self.path == "/App/Runtime/Specs":
                 status = specs_status
                 body = {"name": "x", "content_hash": returned_hash or galecore_spec_hash(raw.decode("utf-8")),

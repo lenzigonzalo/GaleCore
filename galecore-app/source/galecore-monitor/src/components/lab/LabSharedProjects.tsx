@@ -1,20 +1,42 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { X, RefreshCw, Folder, Search, Plus, Check } from 'lucide-react';
+import { X, RefreshCw, Folder, Search, Plus } from 'lucide-react';
 import { labRequest } from '../../api/lab';
-import type { SyncNotice, WorkspaceProject } from '../../api/lab';
+import type { SyncAction, SyncNotice, SyncState, WorkspaceProject } from '../../api/lab';
 import { noticeText } from './LabShare';
 import './LabSharedProjects.css';
 
 interface Project {
-  id: string; name: string; owner: string; local: string | null; subscribed: boolean;
+  id: string; name: string; owner: string; local: string | null; subscribed: boolean; mine?: boolean; member?: boolean; access?: 'restricted' | 'everyone';
   needsConfirmation?: boolean; lastSuccess?: string | null; lastError?: string | null; syncing?: boolean; working?: boolean; removed?: boolean;
-  skipped?: { path: string; reason: string }[]; notice?: SyncNotice | null;
+  syncState?: SyncState; action?: SyncAction;
+  skipped?: { path: string; reason: string }[]; syncNotice?: SyncNotice | null; notice?: string | null;
   localOnly?: boolean;
 }
 interface Catalog { user: string; api: string; projects: Project[] }
+type RowAction = 'view' | 'retry' | 'reshare' | 'remove';
 
-export function LabSharedProjects({ onClose, onChanged, onOpen, localProjects = [] }: {
+/** Estado visible de un proyecto ya agregado: texto y, si hace falta, el botón que lo resuelve. */
+function syncStatus(p: Project, busy: boolean): { text: string; kind: 'ok' | 'attention' | ''; action?: RowAction } {
+  if (p.removed) return { text: 'Acceso retirado', kind: 'attention', action: 'remove' };
+  if (p.syncing || p.syncState === 'syncing' || busy) return { text: 'Sincronizando…', kind: '' };
+  if (!p.subscribed) return { text: 'Pausado', kind: '' };
+  if (p.syncState === 'conflict' || (!p.syncState && p.syncNotice?.conflicts?.length)) return { text: p.notice || 'Conflicto en ' + (p.syncNotice?.conflicts[0]?.path || 'un archivo'), kind: 'attention', action: 'view' };
+  if (p.syncState === 'error' || (!p.syncState && (p.syncNotice?.error || p.lastError))) {
+    const reason = p.notice || p.syncNotice?.error || p.lastError || (p.syncNotice ? noticeText(p.syncNotice) : 'sin detalle');
+    return { text: 'No se pudo sincronizar: ' + reason, kind: 'attention', action: p.action || 'retry' };
+  }
+  return { text: 'Al día', kind: 'ok' };
+}
+const ACTION_LABEL: Record<RowAction, string> = { view: 'Ver', retry: 'Reintentar', reshare: 'Compartir acá', remove: 'Quitar de mi Lab' };
+
+export function LabSharedProjects({ onClose, onChanged, onOpen, onView, onShare, onRemove, localProjects = [] }: {
   onClose: () => void; onChanged: () => Promise<void>; onOpen: (id: string) => void | Promise<void>; localProjects?: WorkspaceProject[];
+  /** «Ver» un conflicto: abre el archivo (la copia en conflicto si existe) del proyecto local. */
+  onView?: (localId: string, path: string) => void;
+  /** «Compartir acá»: abre el diálogo de compartir del proyecto local. */
+  onShare?: (localId: string) => void;
+  /** «Quitar de mi Lab»: archiva la copia local. */
+  onRemove?: (localId: string) => void | Promise<void>;
 }) {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [loading, setLoading] = useState(false);
@@ -24,6 +46,7 @@ export function LabSharedProjects({ onClose, onChanged, onOpen, localProjects = 
   const [query, setQuery] = useState('');
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);   // «Quitar de mi Lab» borra la copia: se confirma con un segundo clic
   const dialog = useRef<HTMLElement>(null);
   const alive = useRef(true);
   const pending = useRef(false);
@@ -51,17 +74,28 @@ export function LabSharedProjects({ onClose, onChanged, onOpen, localProjects = 
     window.addEventListener('focus', update); window.addEventListener('online', update); document.addEventListener('visibilitychange', update);
     return () => { window.clearInterval(timer); window.removeEventListener('focus', update); window.removeEventListener('online', update); document.removeEventListener('visibilitychange', update); };
   }, [load, busy]);
-  const change = async (p: Project, enabled: boolean) => {
+  const add = async (p: Project) => {
     setBusy(p.id); setError(''); setMessage('');
     try {
-      const result = await labRequest<{ error?: string }>('/shared-projects/' + encodeURIComponent(p.id) + '/' + (enabled ? 'subscribe' : 'pause'), {}, 180000);
+      const result = await labRequest<{ error?: string }>('/shared-projects/' + encodeURIComponent(p.id) + '/add', {}, 180000);
       if (!alive.current) return;
       await onChanged();
       await load();
-      if (alive.current) {
-        if (result.error) setError(result.error);
-        else setMessage(enabled ? 'Proyecto agregado. Revisá su estado de sincronización.' : 'Seguimiento pausado. Tu copia y tus conversaciones se conservan en esta PC.');
-      }
+      if (alive.current) { if (result.error) setError(result.error); else setMessage('Proyecto agregado a tu Lab.'); }
+    } catch (e) { if (alive.current) { await load(); if (alive.current) setError((e as Error).message); } }
+    finally { if (alive.current) setBusy(null); }
+  };
+  const act = async (p: Project, action: RowAction) => {
+    const local = p.local; if (!local) return;
+    setError(''); setMessage('');
+    if (action === 'view') { const c = p.syncNotice?.conflicts[0]; if (c) onView?.(local, c.copy || c.path); return; }
+    if (action === 'reshare') { onShare?.(local); return; }
+    if (action === 'remove' && confirmRemove !== p.id) { setConfirmRemove(p.id); return; }
+    if (action === 'remove') { setConfirmRemove(null); await onRemove?.(local); if (alive.current) await load(); return; }
+    setBusy(p.id);
+    try {
+      await labRequest('/workspaces/' + encodeURIComponent(local) + '/sync', {}, 180000);
+      await onChanged(); await load();
     } catch (e) { if (alive.current) { await load(); if (alive.current) setError((e as Error).message); } }
     finally { if (alive.current) setBusy(null); }
   };
@@ -78,7 +112,20 @@ export function LabSharedProjects({ onClose, onChanged, onOpen, localProjects = 
   const remote = catalog?.projects || [];
   const local: Project[] = localProjects.filter(p => !remote.some(r => r.local === p.id)).map(p => ({id:'local:' + p.id, name:p.label, owner:'', local:p.id, subscribed:false, localOnly:true}));
   const words = query.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().split(/\s+/).filter(Boolean);
-  const projects = [...local, ...remote].filter(p => { const text=(p.name+' '+p.owner).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(); return words.every(w=>text.includes(w)); });
+  const matches = (p: Project) => { const text = (p.name + ' ' + p.owner).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase(); return words.every(w => text.includes(w)); };
+  const mine = [...local, ...remote.filter(p => p.mine)].filter(matches);
+  const others = remote.filter(p => !p.mine).filter(matches);
+  const row = (p: Project) => {
+    const added = !!p.local && !p.needsConfirmation;
+    const status = added && !p.localOnly ? syncStatus(p, busy === p.id) : null;
+    return <li key={p.id}><span className="lab-shared-folder"><Folder size={22}/></span><div className="lab-shared-description"><strong>{p.name}</strong><div className="lab-shared-meta">{!p.localOnly && <span>Dueño: {p.owner || 'No disponible'}</span>}{status && <span className={'lab-shared-state' + (status.kind === 'attention' ? ' attention' : status.kind === 'ok' ? ' following' : '')}>{status.text}</span>}</div></div>
+      <div className="lab-shared-actions">
+        {status?.action && <button className="btn lab-shared-secondary" disabled={busy === p.id} onClick={() => void act(p, status.action!)}>{status.action === 'remove' && confirmRemove === p.id ? 'Sí, quitar la copia' : ACTION_LABEL[status.action]}</button>}
+        {added && <button className="btn lab-shared-secondary" onClick={() => void onOpen(p.local!)}>Abrir</button>}
+        {!added && !p.removed && <button className="btn lab-shared-primary" disabled={!!busy} onClick={() => void add(p)}>{busy === p.id ? 'Agregando…' : 'Agregar a mi Lab'}</button>}
+      </div></li>;
+  };
+  const sections: [string, Project[]][] = [['Mis proyectos', mine], ['Compartidos conmigo', others]];
   return <div className="lab-modal-backdrop"><section ref={dialog} tabIndex={-1} className="lab-shared-projects" role="dialog" aria-modal="true" aria-labelledby="shared-projects-title"
     onKeyDown={e => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
@@ -94,17 +141,11 @@ export function LabSharedProjects({ onClose, onChanged, onOpen, localProjects = 
     {error && <p role="alert">{error}. La lista anterior puede estar desactualizada.</p>}
     {message && <p role="status">{message}</p>}
     {loading && <p role="status">Consultando catálogo…</p>}
-    <ul aria-label="Proyectos disponibles">{projects.map(p => {
-      const status = p.localOnly || p.needsConfirmation || !p.local ? '' : p.removed ? 'Acceso retirado' : p.syncing || busy === p.id ? 'Sincronizando…' : !p.subscribed ? 'Pausado' : p.working ? 'En uso' : p.notice?.error || p.lastError ? 'Pendiente' : p.skipped?.length || p.notice?.skipped?.length ? 'Incompleto' : p.notice?.conflicts?.length ? 'Revisar cambios' : '';
-      const attention=!!(p.removed||p.lastError||p.notice?.error||p.skipped?.length||p.notice?.conflicts?.length);
-      return <li key={p.id}><span className="lab-shared-folder"><Folder size={22}/></span><div className="lab-shared-description"><strong>{p.name}</strong><div className="lab-shared-meta">{!p.localOnly && <span>Dueño: {p.owner || 'No disponible'}</span>}{status && <span className={'lab-shared-state'+(attention?' attention':p.subscribed?' following':'')}>{status}</span>}</div>
-        {p.notice && <small>{noticeText(p.notice)}</small>}
-        {p.lastError && !p.notice?.error && <small>{p.lastError}</small>}
-        {!!p.skipped?.length && <small>{p.skipped.map(s => s.path + ': ' + s.reason).join(' · ')}</small>}
-      </div><div className="lab-shared-actions">
-        {p.local && <span className="lab-shared-added"><Check size={16}/>Agregado</span>}
-        {!p.localOnly && !p.removed && <button className={'btn'+(!p.local?' lab-shared-primary':' lab-shared-secondary')} disabled={!!busy || p.syncing} onClick={() => void change(p, !p.subscribed)}>{busy === p.id ? 'Procesando…' : !p.local ? 'Agregar' : p.subscribed ? 'Pausar' : p.needsConfirmation ? 'Sincronizar' : 'Reanudar'}</button>}
-      </div></li>;
-    })}{!projects.length && !loading && <li>{query ? 'No hay proyectos que coincidan con tu búsqueda.' : 'No hay proyectos disponibles.'}</li>}</ul>
+    <div className="lab-shared-lists">
+      {sections.map(([title, list], i) => (i === 0 || list.length > 0) && <section key={title} aria-label={title}>
+        <h3>{title}</h3>
+        <ul aria-label={title}>{list.map(row)}{!list.length && !loading && <li>{query ? 'No hay proyectos que coincidan con tu búsqueda.' : 'No hay proyectos todavía.'}</li>}</ul>
+      </section>)}
+    </div>
   </section></div>;
 }

@@ -1,7 +1,7 @@
 """Strategy and portfolio as a project (GC-AI-0026): everything about one strategy, or the portfolio, in one view.
 
 The view reads what already exists — versions and approvals, follow-ups, investigations, feedback, the profile — and
-adds the owner's own log (``<knowledge>/projects/<name>.json``: thesis, decisions, open items, the market story in
+adds the owner's own log (``<project folder>/memory/registro.json, or <knowledge>/projects/<name>.json``: thesis, decisions, open items, the market story in
 which it works). Nothing is copied: every item carries its reference so it can be opened and checked. What is not
 there is declared, never filled in.
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from galecore_ai.adapters.knowledge_base import parse_ref
+from galecore_ai.adapters.knowledge_base import parse_ref, project_log_path
 from galecore_ai.adapters.research_store import ResearchIntegrityError, ResearchStoreError
 from galecore_ai.adapters.strategy_store import StrategyIntegrityError, StrategyStoreError
 from galecore_ai.application import controls, followup
@@ -43,7 +43,17 @@ def _dir(kb: KnowledgeBase) -> Path:
 
 
 def _path(kb: KnowledgeBase, name: str) -> Path:
-    return _dir(kb) / f"{name}.json"
+    """The log file: inside the project folder when there is one (it travels with a shared project); the old
+    ``projects/<name>.json`` is moved there the first time it is touched."""
+    path = project_log_path(kb.base, name)
+    old = _dir(kb) / f"{name}.json"
+    if path != old and not path.exists() and old.is_file():
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(old, path)
+        except OSError:
+            return old
+    return path
 
 
 # ── the owner's log ──────────────────────────────────────────────
@@ -387,12 +397,19 @@ def portfolio_project(kb: KnowledgeBase) -> dict:
 def search_items(kb: KnowledgeBase, failed: list[dict]) -> list[tuple[dict, str]]:
     items = []
     base = _dir(kb)
-    for path in sorted(base.glob("*.json")) if base.is_dir() else []:
-        try:
-            log = load_log(kb, path.stem)
-        except KnowledgeError as exc:
-            failed.append({"ref": f"project:{path.stem}", "status": "INTEGRITY_FAILED", "problems": exc.problems})
+    names = {p.stem for p in base.glob("*.json")} if base.is_dir() else set()
+    for sub in ("workspaces", "strategies"):
+        folders = kb.base / sub
+        names |= {d.name for d in folders.iterdir() if (d / "memory" / "registro.json").is_file()}             if folders.is_dir() else set()
+    for name in sorted(names):
+        if not project_name_ok(name):
             continue
+        try:
+            log = load_log(kb, name)
+        except KnowledgeError as exc:
+            failed.append({"ref": f"project:{name}", "status": "INTEGRITY_FAILED", "problems": exc.problems})
+            continue
+        path = _path(kb, name)
         if not log.entries:
             continue
         summary = {"ref": f"project:{log.name}", "kind": "project", "title": f"Proyecto {log.name}",

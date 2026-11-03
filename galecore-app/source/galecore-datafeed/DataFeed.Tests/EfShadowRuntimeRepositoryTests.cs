@@ -222,6 +222,7 @@ public class EfShadowRuntimeRepositoryTests
         {
             InstanceId = Guid.NewGuid().ToString(), DeploymentId = Guid.NewGuid().ToString(), VersionHash = spec.ContentHash!,
             SpecName = specName, LifecycleState = "RUNNING", SchedulerState = "IDLE", Mode = "SHADOW", CreatedAt = Now, UpdatedAt = Now,
+            DeployedBy = user.ToString(),
         };
         _ = store.DeployOrGetRunning(
             new StrategyDeployment { DeploymentId = instance.DeploymentId, VersionHash = instance.VersionHash, DeployedAt = Now, DeployedBy = user.ToString() },
@@ -268,6 +269,18 @@ public class EfShadowRuntimeRepositoryTests
         using var check = new GaleCoreDbContext(Options());
         Assert.Equal("RUNNING", check.StrategyInstances.Single(i => i.Id == Guid.Parse(a.InstanceId)).LifecycleState);
         Assert.Equal("STOPPED", check.StrategyInstances.Single(i => i.Id == Guid.Parse(b.InstanceId)).LifecycleState);
+    }
+
+    [PostgresFact]
+    public void Recovery_KeepsDeployedByOnTheInstance_WithAndWithoutOwner()
+    {
+        FreshRepository();
+        var ana = Guid.NewGuid();
+        var a = DeployAs(BootAs(ana, out _), ana, "shadow_runtime_test_v1");
+
+        // Runtime sin dueño (producción) y con dueño: la instancia recuperada sabe quién la desplegó.
+        Assert.Equal(ana.ToString(), BootAs(null, out _).GetInstance(a.InstanceId)!.DeployedBy);
+        Assert.Equal(ana.ToString(), BootAs(ana, out _).GetInstance(a.InstanceId)!.DeployedBy);
     }
 
     [PostgresFact]

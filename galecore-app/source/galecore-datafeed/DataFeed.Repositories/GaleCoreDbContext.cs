@@ -36,6 +36,7 @@ namespace DataFeed.Repositories
         public DbSet<SharedProject> SharedProjects => Set<SharedProject>();
         public DbSet<SharedProjectMember> SharedProjectMembers => Set<SharedProjectMember>();
         public DbSet<SharedProjectChange> SharedProjectChanges => Set<SharedProjectChange>();
+        public DbSet<PlatformConnection> PlatformConnections => Set<PlatformConnection>();
         public DbSet<StrategySettingEntity> StrategySettings => Set<StrategySettingEntity>();
 
         // ── Runtime (Trading Runtime SHADOW) ──
@@ -100,6 +101,17 @@ namespace DataFeed.Repositories
                  .IsUnique()
                  .HasFilter("is_system")
                  .HasDatabaseName("ix_accounts_single_system");
+            });
+
+            // Claves de conexión de la plataforma (WS-0080). Sin FK: el autor es un uuid informativo.
+            b.Entity<PlatformConnection>(e =>
+            {
+                e.ToTable("platform_connections");
+                e.HasKey(x => x.ConnectionId);
+                e.Property(x => x.ConnectionId).HasMaxLength(40);
+                e.Property(x => x.SecretCipher);
+                e.Property(x => x.SecretHint).HasMaxLength(16);
+                e.Property(x => x.LastTestMessage).HasMaxLength(500);
             });
 
             // ── Runtime tables (Trading Runtime SHADOW) ──
@@ -249,12 +261,14 @@ namespace DataFeed.Repositories
                 e.ToTable("shared_projects", t =>
                 {
                     t.HasCheckConstraint("ck_shared_projects_kind", "kind IN ('" + string.Join("','", SharedProject.Kinds) + "')");
+                    t.HasCheckConstraint("ck_shared_projects_access", "access IN ('" + string.Join("','", SharedProject.Accesses) + "')");
                 });
                 e.HasKey(x => x.Id);
                 e.Property(x => x.Id).HasDefaultValueSql("gen_random_uuid()");
                 e.Property(x => x.Name).HasMaxLength(SharedProject.MaxNameLength).IsRequired();
                 e.Property(x => x.Kind).HasMaxLength(20).IsRequired();
                 e.Property(x => x.LocalKey).HasMaxLength(SharedProject.MaxLocalKeyLength).IsRequired();
+                e.Property(x => x.Access).HasMaxLength(20).IsRequired().HasDefaultValue("restricted");
                 e.Property(x => x.CreatedAt).HasDefaultValueSql("now()");
                 e.Property(x => x.UpdatedAt).HasDefaultValueSql("now()");
                 e.HasOne(x => x.Owner).WithMany().HasForeignKey(x => x.OwnerId).OnDelete(DeleteBehavior.Cascade);

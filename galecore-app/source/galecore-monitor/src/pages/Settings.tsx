@@ -5,6 +5,7 @@ import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
 import { SkillsView } from '../components/settings/SkillsView';
 import { LocalMcp } from '../components/settings/LocalMcp';
+import { localMcpAvailable } from '../api/localMcp';
 import { LanguageSetting } from '../components/settings/LanguageSetting';
 import { ProfileSettings } from '../components/settings/ProfileSettings';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
@@ -40,8 +41,7 @@ export type Section = 'mcp-local' | 'conexiones' | 'usuario' | 'cuenta' | 'broke
 const NAV: { group: string; items: { id: Section; label: string; Icon: React.ComponentType<{ size?: number }> }[] }[] = [
   { group: 'General', items: [{ id: 'usuario', label: 'Perfil', Icon: User }, { id: 'cuenta', label: 'Cuenta', Icon: UserCog }, { id: 'chat', label: 'Chat', Icon: MessageSquare }, { id: 'avisos', label: 'Avisos', Icon: Bell }] },
   { group: 'Proveedores de IA', items: [{ id: 'conexiones', label: 'Proveedores de IA', Icon: Plug }] },
-  { group: 'API y claves', items: [{ id: 'apis', label: 'API y claves', Icon: KeyRound }] },
-  { group: 'Cuenta de bróker', items: [{ id: 'broker', label: 'Cuenta de bróker', Icon: Wallet }] },
+  { group: 'Conexiones', items: [{ id: 'apis', label: 'Fuentes de GaleCore', Icon: KeyRound }, { id: 'mcp-local', label: 'Mis conectores', Icon: Plug }, { id: 'broker', label: 'Bróker', Icon: Wallet }] },
   { group: 'Skills', items: [{ id: 'skills', label: 'Skills', Icon: BookOpen }] },
   { group: 'Equipo', items: [{ id: 'compartido', label: 'Compartido conmigo', Icon: Users }] },
   { group: 'Plataforma', items: [{ id: 'servicios', label: 'Servicios', Icon: Power }] },
@@ -141,7 +141,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
 
   let body: React.ReactNode;
   if (section === 'mcp-local') {
-    body = <LocalMcp />;
+    body = localMcpAvailable() ? <LocalMcp /> : <p>Los servidores MCP se administran desde GaleCore en tu PC.</p>;
   } else if (section === 'conexiones') {
     body = <Connections />;
   } else if (section === 'usuario') {

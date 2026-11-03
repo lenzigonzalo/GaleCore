@@ -18,6 +18,11 @@ namespace DataFeed
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // Claves de conexión cargadas desde la plataforma (WS-0080): fuente en memoria agregada ÚLTIMA, así gana
+            // sobre datafeed.env cuando hay valor en la base y no cambia nada cuando no lo hay.
+            var platformSecrets = new DataFeed.Application.App.Connections.PlatformSecretsConfigurationSource();
+            ((Microsoft.Extensions.Configuration.IConfigurationBuilder)builder.Configuration).Add(platformSecrets);
+
             // Controllers + Newtonsoft
             builder.Services.AddControllers()
                 .AddNewtonsoftJson(options =>
@@ -248,6 +253,24 @@ namespace DataFeed
             // consultar y la API se comporta como antes de que la base existiera.
             builder.Services.AddSingleton<UserStore>();
 
+            // Claves de FRED/BLS/SEC cifradas en `platform_connections` (WS-0080). Sin base el servicio igual existe
+            // (store null) y la API sigue leyendo la configuración del servidor.
+            builder.Services.AddSingleton(platformSecrets);
+            builder.Services.AddSingleton<DataFeed.Application.App.Connections.PlatformConnectionsService>(sp =>
+            {
+                DataFeed.Application.App.Connections.IPlatformConnectionStore? store = null;
+                if (dbConfigured)
+                {
+                    var dbOptions = new DbContextOptionsBuilder<GaleCoreDbContext>()
+                        .UseNpgsql(galeCoreDb).UseSnakeCaseNamingConvention().Options;
+                    store = new DataFeed.Application.App.Connections.EfPlatformConnectionStore(() => new GaleCoreDbContext(dbOptions));
+                }
+                return new DataFeed.Application.App.Connections.PlatformConnectionsService(
+                    sp.GetRequiredService<IConfiguration>(), platformSecrets, store,
+                    sp.GetRequiredService<ITokenProtector>(), sp.GetRequiredService<IHttpClientFactory>(),
+                    sp.GetRequiredService<ILogger<DataFeed.Application.App.Connections.PlatformConnectionsService>>());
+            });
+
             // ABM de operadores desde Administrator: crea, edita y borra usuarios en Supabase Auth.
             // Se registra siempre; adentro comprueba si tiene la service_role key y, si no, los
             // endpoints contestan 503 con el motivo. Que falte un secreto no puede tumbar el feed.
@@ -303,6 +326,10 @@ namespace DataFeed
                 options.ValidateScopes = false);
 
             var app = builder.Build();
+
+            // Carga las claves guardadas en la base antes de atender pedidos; no tira si falta algo (WS-0080).
+            app.Services.GetRequiredService<DataFeed.Application.App.Connections.PlatformConnectionsService>()
+                .LoadAsync().GetAwaiter().GetResult();
 
             // Se loguea el estado de la base al arrancar: sin esto, "la base no está configurada"
             // y "la base está configurada pero no responde" se ven igual desde afuera.

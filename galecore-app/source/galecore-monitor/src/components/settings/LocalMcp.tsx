@@ -20,16 +20,19 @@ function savedFavorites(): string[] | null {
   } catch { return null; }
 }
 const favoriteId = (server: LocalMcpServer) => server.provider + ':' + server.name;
-const initialFavorite = (server: LocalMcpServer) => server.origin === 'account'
-  && /alpha|google drive|google calendar|gmail|ibkr|iol/i.test(server.name);
+const initialFavorite = (server: LocalMcpServer) => server.provider === 'codex' || (server.origin === 'account'
+  && /alpha|fmp|google drive|google calendar|gmail|ibkr|iol/i.test(server.name));
+// Codex no tiene conectores de cuenta: lo que declara en su configuración se ve desde el principio.
 
-export function LocalMcp({ selectedProvider }: { selectedProvider?: 'claude' | 'codex' }) {
+const engineName = (p: 'claude' | 'codex') => p === 'claude' ? 'Claude' : 'Codex';
+const CLAUDE_CONNECTORS = 'https://claude.ai/settings/connectors';
+
+export function LocalMcp() {
   const [inventory, setInventory] = useState<LocalMcpInventory | null>(null);
-  const [provider, setProvider] = useState<'claude' | 'codex'>(selectedProvider || 'claude');
   const [context, setContext] = useState('');
   const [query, setQuery] = useState('');
   const [enabledFilter, setEnabledFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
-  const [view, setView] = useState<'galecore' | 'all'>(selectedProvider === 'codex' ? 'all' : 'galecore');
+  const [view, setView] = useState<'galecore' | 'all'>('galecore');
   const [favorites, setFavorites] = useState<string[] | null>(savedFavorites);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -49,11 +52,11 @@ export function LocalMcp({ selectedProvider }: { selectedProvider?: 'claude' | '
       .catch(() => { if (active) setError('Se perdió la conexión con el servicio local.'); }), 1500);
     return () => { active = false; window.clearTimeout(timer); };
   }, [inventory, busy]);
-  const rows = inventory?.servers.filter(s => s.provider === provider) || [];
-  const contexts = Array.from(new Set(rows.map(s => s.context)));
+  const rows = inventory?.servers || [];
+  const contexts = Array.from(new Set(rows.filter(s => s.provider === 'claude').map(s => s.context)));
   const selectedContext = contexts.includes(context) ? context
     : contexts.includes(inventory?.workspace || '') ? inventory!.workspace : contexts[0] || '';
-  const visible = rows.filter(s => s.context === selectedContext);
+  const visible = rows.filter(s => s.provider === 'codex' || s.context === selectedContext);
   const isFavorite = (server: LocalMcpServer) => favorites === null ? initialFavorite(server) : favorites.includes(favoriteId(server));
   const matches = visible.filter(s => (s.displayName || s.name).toLowerCase().includes(query.trim().toLowerCase())
     && (enabledFilter === 'all' || s.enabled === (enabledFilter === 'enabled'))
@@ -67,7 +70,7 @@ export function LocalMcp({ selectedProvider }: { selectedProvider?: 'claude' | '
   }
   async function refresh() {
     setBusy(true); setError(''); setMessage('');
-    try { setInventory(await (provider === 'claude' ? refreshLocalMcp() : fetchLocalMcp())); }
+    try { setInventory(await refreshLocalMcp()); }
     catch (e: any) { setError(e.message || 'No se pudo actualizar el inventario.'); }
     finally { setBusy(false); }
   }
@@ -75,20 +78,16 @@ export function LocalMcp({ selectedProvider }: { selectedProvider?: 'claude' | '
     setBusy(true); setError(''); setMessage('');
     try {
       setInventory(await toggleLocalMcp(server, !server.enabled));
-      setMessage((server.displayName || server.name) + ': ' + (server.enabled ? 'deshabilitado' : 'habilitado') + '. Abrí una sesión nueva de ' + (provider === 'claude' ? 'Claude' : 'Codex') + ' para aplicar el cambio.');
+      setMessage((server.displayName || server.name) + ': ' + (server.enabled ? 'deshabilitado' : 'habilitado') + '. Abrí una sesión nueva de ' + engineName(server.provider) + ' para aplicar el cambio.');
     } catch (e: any) { setError(e.message || 'No se pudo guardar. Actualizá y volvé a intentar.'); }
     finally { setBusy(false); }
   }
   return <div className="local-mcp">
-    <p className="local-mcp-intro">Tus conexiones de Claude y Codex: cuenta, plugins y configuración local.</p>
+    <p className="local-mcp-intro">Tus conectores de Claude y Codex: cuenta, plugins y configuración local.</p>
     <div className="local-mcp-toolbar">
-      {!selectedProvider && <div className="local-mcp-tabs" role="group" aria-label="CLI de las conexiones">
-        {(['claude', 'codex'] as const).map(id => <button key={id} aria-pressed={provider === id} disabled={busy}
-          onClick={() => { setProvider(id); setContext(''); setQuery(''); setMessage(''); setView(id === 'claude' ? 'galecore' : 'all'); }}>{id === 'claude' ? 'Claude Code' : 'Codex'}</button>)}
-      </div>}
-      <button className="settings-action" disabled={busy || (provider === 'claude' && inventory?.refreshing)} onClick={refresh}><RefreshCw size={16}/>Actualizar</button>
+      <button className="settings-action" disabled={busy || inventory?.refreshing} onClick={refresh}><RefreshCw size={16}/>Actualizar</button>
     </div>
-    {provider === 'claude' && contexts.length > 0 && <label className="local-mcp-context">Proyecto donde se aplica el interruptor
+    {contexts.length > 0 && <label className="local-mcp-context">Proyecto de Claude donde se aplica el interruptor
       <select value={selectedContext} disabled={busy} onChange={e => { setContext(e.target.value); setMessage(''); }}>
         {contexts.map(c => <option key={c} value={c}>{c}</option>)}
       </select>
@@ -105,12 +104,12 @@ export function LocalMcp({ selectedProvider }: { selectedProvider?: 'claude' | '
     </div>
     </div>
     {busy && <p role="status">Leyendo o guardando configuración…</p>}
-    {provider === 'claude' && inventory?.refreshing && <p role="status">Comprobando conexiones con Claude Code…</p>}
-    {provider === 'claude' && inventory?.checkedAt && <p className="local-mcp-checked">Comprobado con Claude Code: {new Date(inventory.checkedAt).toLocaleTimeString('es-AR')}</p>}
+    {inventory?.refreshing && <p role="status">Comprobando conexiones con Claude Code…</p>}
+    {inventory?.checkedAt && <p className="local-mcp-checked">Comprobado con Claude Code: {new Date(inventory.checkedAt).toLocaleTimeString('es-AR')}</p>}
     {error && <div className="settings-error" role="alert">{error}</div>}
-    {provider === 'claude' && inventory?.discoveryError && <div className="settings-error" role="alert">{inventory.discoveryError}</div>}
+    {inventory?.discoveryError && <div className="settings-error" role="alert">{inventory.discoveryError}</div>}
     {message && <p className="local-mcp-notice" role="status">{message}</p>}
-    {inventory && !visible.length && <div className="local-mcp-empty"><Plug size={28}/><h2>Sin MCP configurados</h2><p>No hay conexiones detectadas para este CLI y proyecto.</p></div>}
+    {inventory && !visible.length && <div className="local-mcp-empty"><Plug size={28}/><h2>Sin MCP configurados</h2><p>No hay conectores detectados para este proyecto.</p></div>}
     {visible.length > 0 && !matches.length && <p>No hay conexiones que coincidan con los filtros. {view === 'galecore' && 'En Todas podés marcar las que querés ver con la estrella.'}</p>}
     {groups.map(group => {
       const entries = matches.filter(s => (s.origin || 'local') === group.id);
@@ -124,8 +123,9 @@ export function LocalMcp({ selectedProvider }: { selectedProvider?: 'claude' | '
               aria-label={'Mostrar en vista GaleCore: ' + (server.displayName || server.name)} aria-pressed={isFavorite(server)} onClick={() => favorite(server)}><Star size={16}/></button>
               <div className="local-mcp-card-info"><h3>{server.displayName || server.name}</h3>
               <span className={'local-mcp-runtime is-' + status}>{statusLabels[status] || 'Sin comprobar'}</span>
-              <span className="local-mcp-scope"> · {server.scope}</span></div>
-              <button className="local-mcp-switch" role="switch" aria-checked={server.enabled} aria-label={'Habilitar ' + server.name}
+              <span className="local-mcp-scope"> · {engineName(server.provider)} · {server.scope}</span></div>
+              {server.provider === 'claude' && server.origin === 'account' && status === 'needs-auth' && <a className="settings-action" href={CLAUDE_CONNECTORS} target="_blank" rel="noreferrer">Conectar</a>}
+              <button className="local-mcp-switch" role="switch" aria-checked={server.enabled} aria-label={'Habilitar ' + server.name + ' en ' + engineName(server.provider)}
                 disabled={busy || (server.provider === 'claude' && inventory?.refreshing) || server.approvalRequired || server.editable === false} onClick={() => toggle(server)}>
                 <span/>{server.approvalRequired ? 'Pendiente de aprobación en Claude' : server.editable === false ? 'Referencia sin comprobar' : server.enabled ? 'Habilitado' : 'Deshabilitado'}
               </button>
@@ -139,7 +139,7 @@ export function LocalMcp({ selectedProvider }: { selectedProvider?: 'claude' | '
       <p>La estrella sólo selecciona lo que ves en GaleCore; no habilita ni deshabilita herramientas.</p>
       <p>En Claude se aplica al proyecto elegido, incluso para conectores de cuenta y plugins. No desconecta tu cuenta de Google ni del broker.</p>
       <p>El estado de conexión proviene de la última comprobación del CLI. Una entrada local sin comprobar sólo acredita que existe una configuración.</p>
-      {provider === 'codex' && <p>Codex muestra los servidores MCP declarados en su configuración de usuario; sus integraciones de la aplicación quedan fuera de este listado.</p>}
+      <p>Codex muestra los servidores MCP declarados en su configuración de usuario; sus integraciones de la aplicación quedan fuera de este listado.</p>
     </div>
   </div>;
 }

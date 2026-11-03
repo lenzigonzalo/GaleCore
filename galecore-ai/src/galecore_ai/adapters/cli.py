@@ -41,7 +41,7 @@ Usage:
     python -m galecore_ai.adapters.cli clock [--at ISO]
     python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list [--bugfix]
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
-    python -m galecore_ai.adapters.cli project share KEY --with USER | unshare KEY --with USER | shared | sync KEY|--all
+    python -m galecore_ai.adapters.cli project share KEY --with USER | unshare KEY --with USER | access KEY restricted|everyone | join ID | shared | sync KEY|--all
     python -m galecore_ai.adapters.cli project add NAME|portfolio --kind thesis|story|decision|pending|done --text "..." [--ref REF] [--closes HASH] --prompt "..."
     python -m galecore_ai.adapters.cli task create --id ID [--capability ID] [--result-slug SLUG] --strategy NAME --objective "..." --expected "..."         --source "..." [--source ...] --frequency daily|weekdays|days|every_minutes [--days mon,wed] [--time HH:MM | --minutes N]         --timezone TZ --prompt "..."
     python -m galecore_ai.adapters.cli task list | status ID | history ID [--limit N] | run ID
@@ -924,6 +924,10 @@ def _cmd_project_shared(args: argparse.Namespace) -> None:
             _json_out(sp.share(client, base, args.key, args.with_user))
         elif c == "unshare":
             _json_out(sp.unshare(client, base, args.key, args.with_user))
+        elif c == "access":
+            _json_out(sp.set_access(client, base, args.key, args.access))
+        elif c == "join":
+            _json_out(sp.join(client, args.id))
         elif c == "shared":
             _json_out(sp.list_shared(client, base))
         elif c in ("subscribe", "pause"):
@@ -958,7 +962,7 @@ def _cmd_users(args: argparse.Namespace) -> None:
 
 
 async def _cmd_project(args: argparse.Namespace) -> None:
-    if args.project_command in ("share", "unshare", "shared", "sync", "subscribe", "pause"):
+    if args.project_command in ("share", "unshare", "access", "join", "shared", "sync", "subscribe", "pause"):
         return _cmd_project_shared(args)
     from galecore_ai.application import project
     kb = _build_knowledge_base()
@@ -1621,6 +1625,10 @@ def build_parser() -> _JsonArgumentParser:
     p_pj_unshare = pj_sub.add_parser("unshare", help="Stop sharing a project with a member (owner only)")
     p_pj_unshare.add_argument("key")
     p_pj_unshare.add_argument("--with", dest="with_user", required=True)
+    p_pj_access = pj_sub.add_parser("access", help="General access of a project you own (shares the folder if needed)")
+    p_pj_access.add_argument("key")
+    p_pj_access.add_argument("access", choices=["restricted", "everyone"])
+    pj_sub.add_parser("join", help="Add yourself to a project open to everyone (then subscribe to follow it)").add_argument("id")
     pj_sub.add_parser("shared", help="The projects shared by you or with you, with their members")
     for command in ("subscribe", "pause"):
         pj_sub.add_parser(command, help="Follow or pause a shared project on this PC; keeps all local files").add_argument("id")
@@ -1865,7 +1873,7 @@ def build_parser() -> _JsonArgumentParser:
     p_st_deploy.add_argument("--ref", required=True, help="strategy:<name>/<version>")
     p_st_deploy.add_argument("--galecore-hash", dest="galecore_hash", default=None,
                              help="contentHash that App/Runtime/Specs/<name> reports (default: asked to GaleCore)")
-    p_st_dep = st_sub.add_parser("deploy", help="Deploy an approved version in SHADOW Dev (registers the spec, then "
+    p_st_dep = st_sub.add_parser("deploy", help="Deploy an approved version in SHADOW (registers the spec, then "
                                                 "deploys it; GaleCore is not called without an intact approval)")
     p_st_dep.add_argument("--ref", required=True, help="strategy:<name>/<version>")
 

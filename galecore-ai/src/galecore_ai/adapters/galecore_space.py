@@ -139,6 +139,12 @@ class SpaceClient:
         self.user = username
         self._store_token(username, r["accessToken"], _token_expiry(r["accessToken"], r.get("expires_in", r.get("expiresIn"))))
 
+    def authorization(self) -> str:
+        """The ``Authorization`` header value of this user's session (logs in, or reuses the cached token)."""
+        if "Authorization" not in self._headers:
+            self.login()
+        return self._headers["Authorization"]
+
     def _call(self, method: str, path: str, *, auth: bool = True, **kw):
         if auth and "Authorization" not in self._headers:
             self.login()
@@ -188,6 +194,14 @@ class SpaceClient:
 
     def shared_create(self, name: str, kind: str, local_key: str) -> dict:
         return self._call("POST", "/App/GaleCore/SharedProjects", json={"name": name, "kind": kind, "localKey": local_key})
+
+    def shared_set_access(self, project_id: str, access: str) -> dict:
+        """Owner only. ``access`` is 'restricted' or 'everyone'; answers the project row."""
+        return self._call("PATCH", f"/App/GaleCore/SharedProjects/{project_id}", json={"access": access})
+
+    def shared_join(self, project_id: str) -> dict:
+        """Add myself as a member of an 'everyone' project (idempotent); 404 when it is restricted and I am not a member."""
+        return self._call("POST", f"/App/GaleCore/SharedProjects/{project_id}/join")
 
     def shared_delete(self, project_id: str) -> None:
         self._call("DELETE", f"/App/GaleCore/SharedProjects/{project_id}")

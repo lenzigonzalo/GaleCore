@@ -1,4 +1,4 @@
-namespace DataFeed.Api.Controllers.Dtos
+﻿namespace DataFeed.Api.Controllers.Dtos
 {
     /// <summary>Crea un proyecto compartido (WS-0064). El dueño sale del token.</summary>
     public class SharedProjectRequest
@@ -8,6 +8,13 @@ namespace DataFeed.Api.Controllers.Dtos
         public string? Kind { get; set; }
         /// <summary>Nombre de la carpeta del proyecto en la PC del dueño.</summary>
         public string? LocalKey { get; set; }
+    }
+
+    /// <summary>Cambia el acceso general de un proyecto (WS-0056). Sólo el owner.</summary>
+    public class SharedProjectAccessRequest
+    {
+        /// <summary><c>restricted</c> o <c>everyone</c>.</summary>
+        public string? Access { get; set; }
     }
 
     public class SharedProjectMemberRequest

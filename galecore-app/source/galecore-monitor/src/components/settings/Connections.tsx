@@ -2,8 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { RefreshCw, Shield } from 'lucide-react';
 import { fetchProviderAuth, ProviderAuth } from '../../api/terminal';
 import { AuthenticationTerminal } from './AuthenticationTerminal';
-import { LocalMcp } from './LocalMcp';
-import { localMcpAvailable } from '../../api/localMcp';
 
 const labels: Record<ProviderAuth['status'], string> = {
   authenticated: 'Cuenta conectada', 'signed-out': 'Sin autenticar',
@@ -31,7 +29,7 @@ export function Connections() {
   };
   return <div className="settings-connections">
     <div className="settings-agent-providers" role="tablist" aria-label="Proveedor de IA">{(['claude', 'codex'] as const).map(id => <button key={id} role="tab" aria-selected={selected === id} disabled={running} onClick={() => setSelected(id)}><img src={'/providers/' + id + '.png'} alt=""/>{id === 'claude' ? 'Claude Code' : 'Codex'}</button>)}</div>
-    <nav className="settings-agent-tabs" aria-label="Opciones del proveedor">{[['cuenta', 'Cuenta'], ['permisos', 'Permisos'], ['mcp', 'Servidores MCP']].map(([id, label]) => <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{label}</button>)}</nav>
+    <nav className="settings-agent-tabs" aria-label="Opciones del proveedor">{[['cuenta', 'Cuenta'], ['permisos', 'Permisos']].map(([id, label]) => <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{label}</button>)}</nav>
     {tab === 'cuenta' && (() => {
       const provider = providers.find(p => p.id === selected);
       const name = selected === 'claude' ? 'Claude Code' : 'Codex';
@@ -42,7 +40,6 @@ export function Connections() {
       </section>;
     })()}
     {tab === 'permisos' && <section className="settings-agent-account"><header><Shield size={21}/><h2>Permisos de {selected === 'claude' ? 'Claude Code' : 'Codex'}</h2></header><div className="settings-agent-card"><h3>Elegís los permisos en cada chat</h3><p><strong>Manual:</strong> las acciones que necesitan permiso se frenan y te avisan.</p><p><strong>Auto:</strong> permite editar archivos y ejecutar comandos dentro de la carpeta del proyecto.</p><p>Usá el selector Manual / Auto junto al botón de enviar.</p></div></section>}
-    {tab === 'mcp' && (localMcpAvailable() ? <LocalMcp key={selected} selectedProvider={selected}/> : <p>Los servidores MCP se administran desde GaleCore en tu PC.</p>)}
     {error && <p className="settings-error" role="alert">No se pudo conectar con la terminal local.</p>}
     {login && <AuthenticationTerminal key={login.id} provider={login.provider} onEnd={() => { setRunning(false); setRevision(v => v + 1); }} onClose={() => { setLogin(null); setRunning(false); setRevision(v => v + 1); }}/>}
   </div>;

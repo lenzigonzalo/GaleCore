@@ -6,7 +6,13 @@ import './LabShare.css';
 
 interface Member { username: string; displayName?: string | null; role: 'owner' | 'member' }
 interface Suggestion { username: string; displayName?: string | null }
-interface Sharing { shared: boolean; members: Member[]; owner?: string | null; mine?: boolean; removed?: boolean }
+type Access = 'restricted' | 'everyone';
+interface Sharing { shared: boolean; members: Member[]; owner?: string | null; mine?: boolean; removed?: boolean; access?: Access; notice?: string | SyncNotice | null }
+
+const ACCESS: Record<Access, { label: string; hint: string; done: string }> = {
+  restricted: { label: 'Restringido', hint: 'Sólo las personas agregadas pueden abrirlo.', done: 'sólo las personas agregadas tienen acceso' },
+  everyone: { label: 'Todos los usuarios de GaleCore', hint: 'Cualquiera lo puede agregar a su Lab.', done: 'cualquier usuario de GaleCore lo puede agregar a su Lab' },
+};
 
 export const person = (username: string) => username.charAt(0).toUpperCase() + username.slice(1);
 
@@ -37,7 +43,7 @@ export function LabShare({ project, onClose, onChanged }: { project: WorkspacePr
     labRequest<Sharing>(base + '/sharing', undefined, 30000).then(s => { if (alive) setSharing(s); }).catch(e => { if (alive) setError(e.message); });
     return () => { alive = false; };
   }, [base]);
-  // Sugerencias mientras escribe (2+ letras, ~150 ms de pausa); los que ya son miembros no se ofrecen. Si falla, queda el texto libre.
+  // Sugerencias mientras escribe (2+ letras, ~150 ms de pausa); los que ya tienen acceso no se ofrecen. Si falla, queda el texto libre.
   const memberNames = sharing?.members.map(m => m.username).join(',') || '';
   useEffect(() => {
     const q = username.trim();
@@ -51,7 +57,19 @@ export function LabShare({ project, onClose, onChanged }: { project: WorkspacePr
     }, 150);
     return () => { alive = false; clearTimeout(timer); };
   }, [username, memberNames]);
-  const pick = (u: Suggestion) => { picked.current = u.username; setUsername(u.username); setOptions([]); setActive(-1); };
+  // Cada cambio se aplica al instante y se confirma con «Listo: …».
+  const apply = async (path: string, body: object, done: string) => {
+    setBusy(true); setError(''); setResult('');
+    try { setSharing(await labRequest<Sharing>(base + path, body, 180000)); setResult('Listo: ' + done); onChanged(); return true; }
+    catch (e) { setError(e instanceof Error ? e.message : 'No se pudo completar el pedido.'); return false; }
+    finally { setBusy(false); }
+  };
+  const add = async (name: string) => {
+    const user = name.trim(); if (!user) return;
+    picked.current = user; setOptions([]);
+    if (await apply('/share', { username: user }, person(user) + ' ya tiene acceso')) setUsername('');
+  };
+  const pick = (u: Suggestion) => { setActive(-1); void add(u.username); };
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!options.length) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive(i => (i + 1) % options.length); }
@@ -59,44 +77,45 @@ export function LabShare({ project, onClose, onChanged }: { project: WorkspacePr
     else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(options[active]); }
     else if (e.key === 'Escape') { e.stopPropagation(); setOptions([]); setActive(-1); }
   };
-  const run = async (action: 'share' | 'unshare', name: string) => {
-    setBusy(true); setError('');
-    try { setSharing(await labRequest<Sharing>(base + '/' + action, { username: name }, 180000)); if (action === 'share') setUsername(''); onChanged(); }
-    catch (e) { setError(e instanceof Error ? e.message : 'No se pudo completar el pedido.'); }
-    finally { setBusy(false); }
-  };
-  const syncNow = async () => {
-    setBusy(true); setError(''); setResult('');
-    try {
-      const r = await labRequest<{ pulled?: number; pushed?: number; conflicts?: unknown[]; busy?: boolean }>(base + '/sync', {}, 180000);
-      setResult(r.busy ? 'Hay una respuesta en curso: se sincroniza al terminar.' : `Traídos ${r.pulled ?? 0} · enviados ${r.pushed ?? 0} · conflictos ${r.conflicts?.length ?? 0}`);
-      onChanged();
-    } catch (e) { setError(e instanceof Error ? e.message : 'No se pudo sincronizar.'); onChanged(); }
-    finally { setBusy(false); }
-  };
   const canEdit = !sharing?.shared || sharing.mine !== false;
+  const access: Access = sharing?.access === 'everyone' ? 'everyone' : 'restricted';
+  const members = sharing ? [...sharing.members].sort((a, b) => Number(b.role === 'owner') - Number(a.role === 'owner')) : [];
+  const notice = sharing?.notice && (typeof sharing.notice === 'string' ? sharing.notice : noticeText(sharing.notice));
   return <div className="lab-modal-backdrop"><section role="dialog" aria-modal="true" aria-labelledby="lab-share-title" className="lab-create-project lab-share">
     <header><h2 id="lab-share-title">Compartir «{project.label}»</h2><button className="lab-icon" aria-label="Cerrar" onClick={onClose}><X size={19}/></button></header>
     {sharing?.removed && <p role="status">Ya no sos parte de este proyecto: tu copia queda como está.</p>}
-    {sharing && sharing.members.length > 0 && <ul aria-label="Miembros">{sharing.members.map(m => <li key={m.username}>
-      <span>{m.displayName || person(m.username)}<small>{m.username}{m.role === 'owner' ? ' · dueño' : ''}</small></span>
-      {m.role !== 'owner' && canEdit && <button className="lab-icon" aria-label={'Quitar a ' + person(m.username)} disabled={busy} onClick={() => run('unshare', m.username)}><X size={16}/></button>}
-    </li>)}</ul>}
-    {canEdit && <form onSubmit={e => { e.preventDefault(); if (username.trim()) run('share', username.trim()); }}>
-      <div className="lab-share-field">
-        <label>Usuario de GaleCore<input autoFocus maxLength={32} value={username} onChange={e => setUsername(e.target.value)} onKeyDown={onKeyDown} placeholder="gonza" autoComplete="off"
-          role="combobox" aria-expanded={options.length > 0} aria-controls="lab-share-options" aria-autocomplete="list" aria-activedescendant={active >= 0 ? 'lab-share-option-' + active : undefined}/></label>
-        {options.length > 0 && <ul id="lab-share-options" role="listbox" aria-label="Usuarios sugeridos" className="lab-share-options">{options.map((u, i) =>
-          <li key={u.username} id={'lab-share-option-' + i} role="option" aria-selected={i === active} onMouseDown={e => { e.preventDefault(); pick(u); }} onMouseEnter={() => setActive(i)}>
-            <strong>{u.username}</strong>{u.displayName && <span>{u.displayName}</span>}
-          </li>)}</ul>}
-      </div>
-      <button className="btn" disabled={busy || !username.trim()}>{busy ? 'Compartiendo…' : 'Compartir'}</button>
-    </form>}
-    {sharing?.shared && !sharing.removed && <div className="lab-share-sync">
-      <button type="button" className="btn" disabled={busy} onClick={syncNow}>Sincronizar ahora</button>
-      {result && <p role="status">{result}</p>}
-    </div>}
+    {canEdit && <section>
+      <h3>Agregar personas</h3>
+      <form onSubmit={e => { e.preventDefault(); void add(username); }}>
+        <div className="lab-share-field">
+          <input autoFocus aria-label="Agregar personas por usuario o mail" maxLength={80} value={username} onChange={e => { picked.current = ''; setUsername(e.target.value); }} onKeyDown={onKeyDown} placeholder="Usuario o mail" autoComplete="off"
+            role="combobox" aria-expanded={options.length > 0} aria-controls="lab-share-options" aria-autocomplete="list" aria-activedescendant={active >= 0 ? 'lab-share-option-' + active : undefined}/>
+          {options.length > 0 && <ul id="lab-share-options" role="listbox" aria-label="Usuarios sugeridos" className="lab-share-options">{options.map((u, i) =>
+            <li key={u.username} id={'lab-share-option-' + i} role="option" aria-selected={i === active} onMouseDown={e => { e.preventDefault(); pick(u); }} onMouseEnter={() => setActive(i)}>
+              <strong>{u.username}</strong>{u.displayName && <span>{u.displayName}</span>}
+            </li>)}</ul>}
+        </div>
+        <button className="btn" disabled={busy || !username.trim()}>{busy ? 'Agregando…' : 'Agregar'}</button>
+      </form>
+    </section>}
+    {members.length > 0 && <section>
+      <h3>Personas con acceso</h3>
+      <ul aria-label="Personas con acceso">{members.map(m => <li key={m.username}>
+        <span>{m.displayName || person(m.username)}<small>{m.username}{m.role === 'owner' ? ' · dueño' : ''}</small></span>
+        {m.role !== 'owner' && canEdit && <button className="btn" aria-label={'Quitar a ' + person(m.username)} disabled={busy} onClick={() => void apply('/unshare', { username: m.username }, person(m.username) + ' ya no tiene acceso')}>Quitar</button>}
+      </li>)}</ul>
+    </section>}
+    {sharing && <section>
+      <h3>Acceso general</h3>
+      {canEdit
+        ? <select aria-label="Acceso general" value={access} disabled={busy} onChange={e => { const next = e.target.value as Access; void apply('/access', { access: next }, ACCESS[next].done); }}>
+            {(Object.keys(ACCESS) as Access[]).map(a => <option key={a} value={a}>{ACCESS[a].label}</option>)}
+          </select>
+        : <strong>{ACCESS[access].label}</strong>}
+      <p>{ACCESS[access].hint}</p>
+    </section>}
+    {notice && <p role="status">{notice}</p>}
+    {result && <p role="status">{result}</p>}
     {error && <p role="alert">{error}</p>}
   </section></div>;
 }

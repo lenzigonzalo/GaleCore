@@ -1,4 +1,4 @@
-namespace DataFeed.Repositories.Entities
+﻿namespace DataFeed.Repositories.Entities
 {
     /// <summary>
     /// Un proyecto compartido (WS-0064 Fase 2a). Cada usuario guarda sus proyectos en su PC; compartir es opt-in por
@@ -8,6 +8,8 @@ namespace DataFeed.Repositories.Entities
     public class SharedProject
     {
         public static readonly string[] Kinds = { "workspace", "strategy" };
+        /// <summary><c>restricted</c>: sólo los miembros; <c>everyone</c>: cualquier usuario lo ve y se puede sumar (WS-0056).</summary>
+        public static readonly string[] Accesses = { "restricted", "everyone" };
         public const int MaxNameLength = 200;
         public const int MaxLocalKeyLength = 200;
 
@@ -18,9 +20,14 @@ namespace DataFeed.Repositories.Entities
         public string Kind { get; set; } = "workspace";
         /// <summary>Nombre de la carpeta del proyecto en la PC de quien lo creó.</summary>
         public string LocalKey { get; set; } = "";
+        public string Access { get; set; } = "restricted";
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public List<SharedProjectMember> Members { get; set; } = new();
+
+        /// <summary>Por qué un valor de acceso no vale, o null si vale.</summary>
+        public static string? ValidateAccess(string? access)
+            => access != null && Accesses.Contains(access) ? null : $"access es uno de: {string.Join(", ", Accesses)}";
 
         /// <summary>Por qué un proyecto no se puede crear, o null si se puede. Las mismas reglas que los CHECK de la base.</summary>
         public static string? Validate(string? name, string? kind, string? localKey)
