@@ -25,22 +25,73 @@ public class PremarketQuote
     public string? Reason { get; set; }
 }
 
-public class PremarketHandler(IDxLinkStreamingService streaming) : IRequestHandler<PremarketRequest, IReadOnlyList<PremarketQuote>>
+/// <summary>
+/// Caché corta por símbolo del resultado de premarket. Sin trade ETH el snapshot de TimeAndSale nunca "completa"
+/// y cada pedido esperaba el timeout entero; con la caché el watchlist (y pedidos repetidos o simultáneos) no
+/// vuelve a esperar por símbolos ya consultados. Singleton en DI.
+/// </summary>
+public class PremarketCache(TimeSpan? ttl = null, TimeProvider? time = null)
 {
+    private readonly TimeSpan _ttl = ttl ?? TimeSpan.FromSeconds(30);
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
+    private readonly Dictionary<string, (DateTimeOffset At, PremarketQuote Quote)> _items = new();
+    private readonly object _lock = new();
+
+    /// <summary>Un solo pedido a la fuente a la vez: el segundo ya encuentra lo que trajo el primero.</summary>
+    public SemaphoreSlim Gate { get; } = new(1, 1);
+
+    public bool TryGet(string symbol, out PremarketQuote quote)
+    {
+        lock (_lock)
+        {
+            if (_items.TryGetValue(symbol, out var hit) && _time.GetUtcNow() - hit.At < _ttl) { quote = hit.Quote; return true; }
+            quote = null!;
+            return false;
+        }
+    }
+
+    public void Set(PremarketQuote quote)
+    {
+        lock (_lock)
+        {
+            var now = _time.GetUtcNow();
+            foreach (var old in _items.Where(i => now - i.Value.At >= _ttl).Select(i => i.Key).ToArray()) _items.Remove(old);
+            _items[quote.Symbol] = (now, quote);
+        }
+    }
+}
+
+public class PremarketHandler(IDxLinkStreamingService streaming, PremarketCache? cache = null) : IRequestHandler<PremarketRequest, IReadOnlyList<PremarketQuote>>
+{
+    // Ventana corta: Summary llega en cuanto se suscribe; TimeAndSale sólo completa si hubo un trade ETH.
+    public static readonly TimeSpan SnapshotTimeout = TimeSpan.FromSeconds(3);
+    private readonly PremarketCache _cache = cache ?? new PremarketCache();
+
     public async Task<IReadOnlyList<PremarketQuote>> Handle(PremarketRequest request, CancellationToken ct)
     {
         var symbols = (request.Symbols ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(s => s.ToUpperInvariant()).Distinct().ToArray();
         if (symbols.Length is 0 or > 30 || symbols.Any(s => s.Length > 24 || s.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '.' && c != '/' && c != '-')))
             throw new DataFeed.Application.Shared.ValidationException("Entre 1 y 30 símbolos válidos requeridos.");
-        var subscriptions = symbols.SelectMany(s => new[] { (s, "TimeAndSale", (long?)null), (s, "Summary", (long?)null) }).ToArray();
-        var events = await streaming.RequestSnapshotAsync(subscriptions,
-            e => (string?)e["eventType"] != "TimeAndSale" || PremarketMath.IsEligibleSale(e), TimeSpan.FromSeconds(8), ct);
-        ct.ThrowIfCancellationRequested();
-        var now = DateTimeOffset.UtcNow;
-        return symbols.Select(s => PremarketMath.FromSales(s,
-            events.Where(e => (string?)e["eventSymbol"] == s && (string?)e["eventType"] == "TimeAndSale"),
-            events.LastOrDefault(e => (string?)e["eventSymbol"] == s && (string?)e["eventType"] == "Summary"), now)).ToArray();
+        await _cache.Gate.WaitAsync(ct);
+        try
+        {
+            var missing = symbols.Where(s => !_cache.TryGet(s, out _)).ToArray();
+            if (missing.Length > 0)
+            {
+                var subscriptions = missing.SelectMany(s => new[] { (s, "TimeAndSale", (long?)null), (s, "Summary", (long?)null) }).ToArray();
+                var events = await streaming.RequestSnapshotAsync(subscriptions,
+                    e => (string?)e["eventType"] != "TimeAndSale" || PremarketMath.IsEligibleSale(e), SnapshotTimeout, ct);
+                ct.ThrowIfCancellationRequested();
+                var now = DateTimeOffset.UtcNow;
+                foreach (var s in missing)
+                    _cache.Set(PremarketMath.FromSales(s,
+                        events.Where(e => (string?)e["eventSymbol"] == s && (string?)e["eventType"] == "TimeAndSale"),
+                        events.LastOrDefault(e => (string?)e["eventSymbol"] == s && (string?)e["eventType"] == "Summary"), now));
+            }
+            return symbols.Select(s => _cache.TryGet(s, out var q) ? q : new PremarketQuote { Symbol = s, Reason = "missing_extended_hours" }).ToArray();
+        }
+        finally { _cache.Gate.Release(); }
     }
 }
 

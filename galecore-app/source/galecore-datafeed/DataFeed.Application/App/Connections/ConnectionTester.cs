@@ -6,7 +6,7 @@ namespace DataFeed.Application.App.Connections
     public sealed record ConnectionTestResult(bool Ok, string Message, DateTime At);
 
     /// <summary>
-    /// Llamada mínima real a FRED, BLS o SEC (WS-0080). El mensaje lo arma esta clase: nunca incluye la URL (FRED lleva la
+    /// Llamada mínima real a FRED, BLS, SEC o A3 (WS-0080). El mensaje lo arma esta clase: nunca incluye la URL (FRED lleva la
     /// clave en la query) ni el valor, y como red de seguridad cualquier aparición del valor se reemplaza por «••••».
     /// </summary>
     public static class ConnectionTester
@@ -27,6 +27,7 @@ namespace DataFeed.Application.App.Connections
                     "fred" => await TestFredAsync(value, http, cts.Token),
                     "bls" => await TestBlsAsync(value, http, cts.Token),
                     "sec" => await TestSecAsync(value, http, cts.Token),
+                    "a3" => await TestA3Async(value, http, cts.Token),
                     _ => (false, $"{name} no tiene una clave que probar."),
                 };
             }
@@ -105,6 +106,17 @@ namespace DataFeed.Application.App.Connections
             var code = (int)response.StatusCode;
             if (response.IsSuccessStatusCode) return (true, "SEC respondió bien.");
             return (false, code is 403 or 429 ? $"SEC respondió {code}: rechazó el contacto o hay demasiados pedidos." : $"SEC respondió {code}.");
+        }
+
+        private static async Task<(bool, string)> TestA3Async(string? key, HttpClient http, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(key)) return (false, "A3 Mercados: falta la clave.");
+            using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.mae.com.ar/MarketData/v1/mercado/cotizaciones/forex");
+            request.Headers.TryAddWithoutValidation("x-api-key", key);
+            using var response = await http.SendAsync(request, ct);
+            var code = (int)response.StatusCode;
+            if (response.IsSuccessStatusCode) return (true, "A3 Mercados respondió bien.");
+            return (false, code is 401 or 403 ? $"A3 Mercados respondió {code}: clave inválida." : $"A3 Mercados respondió {code}.");
         }
     }
 }

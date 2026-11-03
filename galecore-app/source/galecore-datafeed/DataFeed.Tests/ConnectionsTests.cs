@@ -131,6 +131,45 @@ public class ConnectionsTests
     }
 
     [Fact]
+    public async Task A3_es_editable_y_su_estado_considera_A3_ApiKey_y_A3_API_KEY()
+    {
+        var a3 = ConnectionCatalog.Find("a3")!;
+        Assert.True(ConnectionCatalog.IsEditable(a3));
+        Assert.Null(ConnectionCatalog.Find("mae"));
+
+        var sin = (await NewRig().Service.ListAsync(Admin, true, default)).Connections.Single(c => c.Id == "a3");
+        Assert.Equal("missing", sin.Status);
+        Assert.Equal("Argentina", sin.Group);
+
+        var env = (await NewRig(new() { ["A3_API_KEY"] = "env-key-12345678" }).Service.ListAsync(Admin, true, default)).Connections.Single(c => c.Id == "a3");
+        Assert.Equal("connected", env.Status);
+        Assert.Equal("server", env.Origin);
+
+        var rig = NewRig();
+        Assert.Equal(SetKeyOutcome.Ok, await rig.Service.SetKeyAsync("a3", "a3-secret-key-0001", Admin, default));
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(await rig.Service.ListAsync(Admin, true, default));
+        Assert.DoesNotContain("a3-secret-key-0001", json);
+        Assert.Equal("a3-secret-key-0001", rig.Config["A3:ApiKey"]);
+    }
+
+    [Fact]
+    public async Task Test_a3_manda_la_clave_en_header_y_el_mensaje_no_la_lleva()
+    {
+        var rig = NewRig();
+        await rig.Service.SetKeyAsync("a3", "a3-secret-key-0001", Admin, default);
+        var ok = await rig.Service.TestAsync("a3", default);
+        Assert.True(ok!.Ok);
+        Assert.Contains("api.mae.com.ar", rig.Handler.LastUrl);
+
+        rig.Handler.Status = HttpStatusCode.Unauthorized;
+        var bad = await rig.Service.TestAsync("a3", default);
+        Assert.False(bad!.Ok);
+        Assert.Contains("clave inválida", bad.Message);
+        Assert.DoesNotContain("a3-secret-key-0001", bad.Message);
+        Assert.DoesNotContain("http", bad.Message);
+    }
+
+    [Fact]
     public async Task Bls_opcional_sin_valor_queda_missing_y_aclara_limites_bajos()
     {
         var rig = NewRig();

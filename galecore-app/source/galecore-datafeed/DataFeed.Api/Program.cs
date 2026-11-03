@@ -208,6 +208,7 @@ namespace DataFeed
             builder.Services.AddSingleton<IMarketDataBroadcaster, MarketDataBroadcaster>();
             builder.Services.AddSingleton<DxLinkStreamingService>();
             builder.Services.AddSingleton<IDxLinkStreamingService>(sp => sp.GetRequiredService<DxLinkStreamingService>());
+            builder.Services.AddSingleton(_ => new DataFeed.Application.App.Market.PremarketCache());
             builder.Services.AddHostedService(sp => sp.GetRequiredService<DxLinkStreamingService>());
             builder.Services.AddHostedService<SkewSnapshotService>();
             builder.Services.AddHostedService<GexWarmService>();
