@@ -315,7 +315,7 @@ function parseMapa(text){
 // (type:'strategy' + strategyName → strategies:[strategyName]; el resto → []). La API sólo devuelve strategies.
 const strategiesOf=(meta,fallback)=>Array.isArray(meta?.strategies)?[...new Set(meta.strategies.filter(n=>typeof n==='string'&&ID.test(n)))]:meta?.type==='strategy'?[typeof meta.strategyName==='string'&&ID.test(meta.strategyName)?meta.strategyName:fallback]:[];
 const derived=(id,strategies)=>({strategies});
-function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, request, sessionFile }) {
+function createWorkspaces({ root, kb, local, binaries, environment, legacyProjects, legacySessions, execute = execFile, spawnProcess = spawn, autoSync = false, request, sessionFile, update = () => null }) {
   const metadata = path.join(local,'lab-projects.json'), chatDir=path.join(local,'chats'), removedDir=path.join(local,'chats-borradas');
   // Nombre y archivado de cada proyecto, elegidos por el usuario en la lista (no tocan su carpeta ni sus registros).
   const overridesFile=path.join(local,'lab-project-overrides.json');
@@ -537,7 +537,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
   }
   async function route(req,res,url,json,readBody){
     const parts=url.pathname.split('/').filter(Boolean);
-    if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
+    if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),update:update(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/users'){json(res,200,await sharing.searchUsers(url.searchParams.get('q')));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/shared'){json(res,200,await sharing.catalog({busy}));return true;}
@@ -695,6 +695,6 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     let released=false;
     return ()=>{if(released)return;released=true;const n=shellProjects.get(p.id)-1;if(n)shellProjects.set(p.id,n);else shellProjects.delete(p.id);};
   }
-  return {route,listProjects,reserveShell,shutdown(){for(const j of jobs.values())j.proc?.kill();}};
+  return {route,listProjects,reserveShell,isBusy:()=>jobs.size>0||listProjects().some(p=>sharing.isRunning(p)),shutdown(){for(const j of jobs.values())j.proc?.kill();}};
 }
 module.exports={mentionLine,createWorkspaces,safeFile,tree,consumeEvent,parseMapa,describeStep,codexLimits,codexTelemetry,claudeLastUsage};
