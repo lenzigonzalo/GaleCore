@@ -1451,6 +1451,12 @@ async def _cmd_task(args: argparse.Namespace) -> None:
             task = t.set_scan(kb=kb, task_id=args.id, rule=rule, prompt=args.prompt)
             _json_out({"status": "CHANGED", "task": args.id, "scan": task.scan.model_dump() if task.scan else None,
                        "task_status": task.status})
+        elif c == "move":
+            task = t.move(kb=kb, scheduler=sch, task_id=args.id, to=args.to, prompt=args.prompt)
+            _json_out({"status": "MOVED", "task": args.id, "runs_on": task.runs_on})
+        elif c == "serve":
+            from galecore_ai.application import task_service
+            _json_out({"status": "SERVED", "runs": task_service.serve(kb, once=args.once, interval=args.interval)})
         elif c == "rebind":
             task = t.rebind(kb=kb, scheduler=sch, task_id=args.id, code_path=Path(args.code_path), prompt=args.prompt)
             _json_out({"status": "REBOUND", "code_path": task.code_path, "scheduler": sch.query(task.scheduler_name)})
@@ -1833,6 +1839,13 @@ def build_parser() -> _JsonArgumentParser:
     p_tr.add_argument("id")
     p_tr.add_argument("--code-path", dest="code_path", required=True, help="galecore-ai/ checkout with tools/task_runner.py")
     p_tr.add_argument("--prompt", required=True)
+    p_tm = t_sub.add_parser("move", help="Change which side runs the task: the PC's Windows scheduler or the VPS runner")
+    p_tm.add_argument("id")
+    p_tm.add_argument("--to", required=True, choices=["pc", "vps"])
+    p_tm.add_argument("--prompt", required=True)
+    p_tv = t_sub.add_parser("serve", help="The VPS runner: every minute runs the tasks of this knowledge base that are due")
+    p_tv.add_argument("--once", action="store_true", help="One pass and exit")
+    p_tv.add_argument("--interval", type=int, default=60, help="Seconds between passes")
     for name in ("pause", "resume", "cancel"):
         p = t_sub.add_parser(name)
         p.add_argument("id")

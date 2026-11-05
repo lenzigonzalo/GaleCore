@@ -136,6 +136,7 @@ class TaskDefinition(BaseModel):
     model: Literal["haiku", "sonnet", "opus"] | None = None  # owner's override; None follows the catalog policy
     tools: list[str] | None = None          # owner's subset of the skill's read tools (WS-0055); None = all of them
     delivery: list[str] = Field(default_factory=lambda: ["historial"])   # history always; the library when chosen
+    runs_on: Literal["pc", "vps"] = "pc"    # who runs it: the owner's Windows scheduler or the VPS runner (WS-0079); never both
 
     @field_validator("id")
     @classmethod
