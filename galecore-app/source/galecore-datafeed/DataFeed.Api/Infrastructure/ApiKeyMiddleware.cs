@@ -1,4 +1,7 @@
-﻿namespace DataFeed.Infrastructure
+﻿using System.Security.Cryptography;
+using System.Text;
+
+namespace DataFeed.Infrastructure
 {
     public class ApiKeyMiddleware
     {
@@ -57,7 +60,9 @@
 
             var configuredKey = configuration.GetValue<string>("ApiKey");
 
-            if (string.IsNullOrEmpty(configuredKey) || !configuredKey.Equals(apiKeyHeader.ToString().Trim()))
+            // Tiempo constante (WS-0087): con Equals, cuánto tarda en fallar dice cuántos caracteres del principio acertaron.
+            if (string.IsNullOrEmpty(configuredKey) || !CryptographicOperations.FixedTimeEquals(
+                    Encoding.UTF8.GetBytes(configuredKey), Encoding.UTF8.GetBytes(apiKeyHeader.ToString().Trim())))
             {
                 context.Response.StatusCode = 401;
                 await context.Response.WriteAsync("Invalid API Key");

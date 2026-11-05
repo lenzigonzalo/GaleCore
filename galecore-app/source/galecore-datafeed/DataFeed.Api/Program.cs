@@ -346,6 +346,11 @@ namespace DataFeed
                     : "Supabase Auth: validando JWT contra {Issuer}", supabaseIssuer);
 
 
+            // WS-0087: la ApiKey de producción fue un valor de 4 dígitos. Fuera de Development la API no arranca con una
+            // clave corta: mejor un deploy rojo que una API pública con una clave adivinable. Generarla: openssl rand -base64 32.
+            if (!app.Environment.IsDevelopment() && (app.Configuration.GetValue<string>("ApiKey")?.Trim().Length ?? 0) < 32)
+                throw new InvalidOperationException("ApiKey: falta o tiene menos de 32 caracteres (openssl rand -base64 32)");
+
             // Pipeline (orden corregido)
             app.UseMiddleware<ExceptionHandlerMiddleware>();
 

@@ -184,6 +184,9 @@ Las estrategias son ciudadanos de primera, no parte del núcleo. Hoy hay dos: **
   **Los secretos van en `/etc/galecore/datafeed.env`** (modo 600, `EnvironmentFile` de la unidad de
   systemd), nunca en `appsettings.*.json`: las variables de entorno le ganan a cualquier JSON, y el
   archivo no viaja adentro del paquete desplegado. El `:` de la jerarquía se escribe `__`.
+  `ApiKey` va ahí y tiene que tener ≥32 caracteres (`openssl rand -base64 32`): fuera de Development la API no arranca
+  con una más corta (WS-0087). Al rotarla: editar el archivo, `sudo systemctl restart galecore-datafeed` (sin reinicio
+  sigue la vieja) y actualizar `GALECORE_LAB_API_KEY` en las PCs.
 
   Dos cosas del entorno que no se deducen del código:
   * **`Tastytrade__OAuth__refresh_token` no se configura.** Sale de la fila marcada `is_system` en
