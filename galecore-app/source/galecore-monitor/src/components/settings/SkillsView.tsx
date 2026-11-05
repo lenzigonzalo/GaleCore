@@ -132,7 +132,7 @@ export function SkillsView({ items, onChanged }: { items: SpaceItem[]; onChanged
         <button className="settings-action is-primary" onClick={() => { setCreating(true); setTitle(''); setDraft(SKILL_TEMPLATE); setError(''); }}><Plus size={19}/> Nueva skill</button></div>
       <label className="skills-search"><Search size={20}/><input aria-label="Buscar skills" placeholder="Buscar por nombre o contenido" value={query} onChange={e => setQuery(e.target.value)}/></label>
       <p className="skills-muted" role="status">{visible.length} {visible.length === 1 ? 'skill' : 'skills'}</p>
-      <ul className="skills-list">{visible.map(i => <li key={i.key}><button onClick={() => open(i)}><span className="skills-icon"><BookOpen size={23}/></span><span className="skills-row-body"><strong>{i.title.replace(/_/g, ' ')}</strong><span>{own(i) ? 'Tu skill' : 'De la plataforma'} · {description(i.content).replace(/[*#`]/g, '')}</span></span><span className="skills-version">v{i.version}</span><ChevronRight size={20}/></button></li>)}</ul>
+      <ul className="skills-list">{visible.map(i => <li key={i.key}><button onClick={() => open(i)}><span className="skills-icon"><BookOpen size={17}/></span><span className="skills-row-body"><strong>{i.title.replace(/_/g, ' ')}</strong><span>{own(i) ? 'Tu skill' : 'De la plataforma'} · {description(i.content).replace(/[*#`]/g, '')}</span></span><span className="skills-version">v{i.version}</span><ChevronRight size={17}/></button></li>)}</ul>
       {!visible.length && <div className="skills-empty"><BookOpen size={32}/><h3>{items.length ? 'No hay skills que coincidan' : 'Todavía no hay skills'}</h3><p>{items.length ? 'Probá otro nombre o cambiá el filtro.' : 'Creá la primera con «Nueva skill».'}</p></div>}
     </>}
   </div>;

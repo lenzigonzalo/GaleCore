@@ -262,3 +262,16 @@ test('el menú «⋯» del proyecto trae Compartir (no en Personal) y Pausar/Rea
   fireEvent.click(screen.getByRole('button', { name: 'Opciones de SPY' }));
   expect(screen.getByRole('button', { name: 'Reanudar' })).toBeInTheDocument();
 });
+
+test('«Sincronizar» del menú «⋯» sólo en compartidos, con «últ. sincro dd/mm hh:mm»', () => {
+  const onSync = jest.fn();
+  const shared: WorkspaceState = { ...state, projects: state.projects.map(p => p.id === 'spy' ? { ...p, shared: true, following: true, lastSync: new Date(2026, 10, 4, 18, 53).toISOString() } : p) };
+  render(<LabProjectList {...props} state={shared} onSync={onSync}/>);
+  fireEvent.click(screen.getByRole('button', { name: 'Opciones de SPY' }));
+  const button = screen.getByRole('button', { name: /^Sincronizar/ });
+  expect(button).toHaveTextContent('últ. sincro 04/11 18:53');
+  fireEvent.click(button);
+  expect(onSync).toHaveBeenCalledWith(shared.projects[0]);
+  fireEvent.click(screen.getByRole('button', { name: 'Opciones de Personal' }));
+  expect(screen.queryByRole('button', { name: /^Sincronizar/ })).toBeNull();
+});

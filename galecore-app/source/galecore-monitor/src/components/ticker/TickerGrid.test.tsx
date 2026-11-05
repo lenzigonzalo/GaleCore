@@ -6,6 +6,8 @@ import { useMarketStore } from '../../store/useMarketStore';
 
 jest.mock('../../api/marketdata', () => ({ fetchMarketDataBatch: jest.fn(), fetchPremarketBatch: jest.fn() }));
 jest.mock('./TickerCard', () => ({ TickerCard: () => <div>Tarjeta</div> }));
+// Premarket arranca oculta; estos tests la miran con la columna prendida.
+jest.mock('./watchlistColumns', () => ({ useWatchlistColumns: () => ({ hidden: [], toggle: jest.fn() }) }));
 
 // Cotizaciones sintéticas y reloj controlado: prueban el ciclo de refresco, no disponibilidad del proveedor.
 const quote: PremarketQuote = {

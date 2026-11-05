@@ -96,7 +96,6 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
       actions={<>{versions.length > 1 && <div className="performance-filters"><label>Versión<select value={version} onChange={e => setVersion(e.target.value)}><option value="">Todas</option>{versions.map(v => <option key={v}>{v}</option>)}</select></label></div>}</>} />
     <StrategyOverview strategy={design.strategy} />
     <div className="performance-tabs" role="tablist" aria-label="Seguimiento de la estrategia">{['Resumen', 'Operaciones', 'Diseño', 'Datos'].map(name => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`pane-${name}`} onClick={() => setTab(name)}>{name}</button>)}</div>
-    {!inDesign && (tab === 'Resumen' || tab === 'Operaciones') && (version ? <p>Para ver la evaluación de la instancia actual, seleccioná Todas las versiones.</p> : <EntryEvaluations key={instance?.instanceId} instance={instance} />)}
     {inDesign && (tab === 'Resumen' || tab === 'Operaciones') && <p>Esta estrategia está en diseño. Abrí su proyecto en el chat para prepararla para SHADOW.</p>}
     {(tab === 'Resumen' || tab === 'Operaciones') && loading && <div role="status" aria-label="Cargando rendimiento" className="performance-loading"><div className="performance-metrics">{Array.from({ length: 12 }, (_, i) => <div key={i} className="performance-skeleton metric-skeleton" />)}</div><div className="performance-skeleton chart-skeleton" /></div>}
     {(tab === 'Resumen' || tab === 'Operaciones') && error && <div role="alert"><p>{error}</p><button onClick={() => setRetry(n => n + 1)}>Reintentar</button></div>}
@@ -149,7 +148,7 @@ export function PerformancePanel({ spec, instance = null, referenceCapital, runt
       {/* WS-0057 C (owner 21/10): una sola tabla de operaciones; el detalle de cada una en el panel de la derecha. */}
       <TradeLog trades={panel.closedTrades} open={panel.openPositions} spec={spec} exits={panel.byExitRule} />
     </div>}
-    {tab === 'Datos' && <div role="tabpanel" id="pane-Datos" aria-labelledby="tab-Datos"><StrategyData spec={spec} quality={(design.strategy?.current?.spec as AlgorithmSpec | undefined)?.data_quality}/>{runtime}</div>}
+    {tab === 'Datos' && <div role="tabpanel" id="pane-Datos" aria-labelledby="tab-Datos"><StrategyData spec={spec} quality={(design.strategy?.current?.spec as AlgorithmSpec | undefined)?.data_quality}/>{!inDesign && (version ? <p>Para ver la evaluación de la instancia actual, seleccioná Todas las versiones.</p> : <EntryEvaluations key={instance?.instanceId} instance={instance} />)}{runtime}</div>}
     {tab === 'Diseño' && <div role="tabpanel" id="pane-Diseño" aria-labelledby="tab-Diseño"><StrategyDesign design={design} /></div>}
   </div>;
 }

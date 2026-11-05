@@ -25,6 +25,7 @@ function syncStatus(p: Project, busy: boolean): { text: string; kind: 'ok' | 'at
     const reason = p.notice || p.syncNotice?.error || p.lastError || (p.syncNotice ? noticeText(p.syncNotice) : 'sin detalle');
     return { text: 'No se pudo sincronizar: ' + reason, kind: 'attention', action: p.action || 'retry' };
   }
+  if (p.syncState === 'pending') return { text: p.notice || 'Cambios sin compartir', kind: 'attention', action: 'sync' };   // el Lab vio archivos locales distintos al último sync
   // Sólo se sincroniza solo al arrancar el Lab: el botón trae y sube lo nuevo en el momento.
   return { text: 'Al día', kind: 'ok', action: 'sync' };
 }

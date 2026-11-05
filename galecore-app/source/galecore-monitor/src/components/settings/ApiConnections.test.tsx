@@ -21,7 +21,8 @@ beforeEach(() => {
 test('renders the list from the API without any prefilled input', async () => {
   render(<ApiConnections />);
   await screen.findByText('FRED');
-  expect(screen.getByText(/termina en ••1a2b/)).toBeInTheDocument();
+  expect(screen.getByText('••••1a2b')).toBeInTheDocument();
+  expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(['Fuente', 'Descripción', 'Requiere API key', 'API key', 'Estado', 'Probar']);
   expect(screen.getByText('Cboe')).toBeInTheDocument();
   expect(screen.getByText('De la plataforma')).toBeInTheDocument();
   expect(screen.queryByText('Tastytrade')).toBeNull();
@@ -35,8 +36,8 @@ test('platform sources are grouped by country', async () => {
   (fetchConnections as jest.Mock).mockResolvedValue(make({}, [{ ...fred, group: 'Estados Unidos' }, { ...fmpSrc, id: 'bcra', name: 'BCRA', group: 'Argentina' }]));
   render(<ApiConnections />);
   await screen.findByText('BCRA');
-  expect(screen.getByRole('heading', { name: 'Estados Unidos' })).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: 'Argentina' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Estados Unidos' })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: 'Argentina' })).toBeInTheDocument();
 });
 
 test('non-admin sees no edit buttons', async () => {
@@ -44,7 +45,7 @@ test('non-admin sees no edit buttons', async () => {
   render(<ApiConnections />);
   await screen.findByText('FRED');
   expect(screen.queryByRole('button', { name: 'Cambiar' })).toBeNull();
-  expect(screen.getByText('Solo un admin puede cambiarlas')).toBeInTheDocument();
+  expect(screen.getByText('Solo un admin puede cambiar las claves.')).toBeInTheDocument();
 });
 
 test('storage not ready shows its message and no edit', async () => {
@@ -64,16 +65,31 @@ test('saving calls PUT with the value and clears the input', async () => {
   fireEvent.change(input, { target: { value: 'secreta-123' } });
   fireEvent.click(screen.getByRole('button', { name: 'Guardar' }));
   await waitFor(() => expect(saveConnectionKey).toHaveBeenCalledWith('fred', 'secreta-123'));
-  await screen.findByText(/termina en ••9z9z/);
+  await screen.findByText('••••9z9z');
   expect(screen.queryByLabelText('API key de FRED')).toBeNull();
   expect(document.body.innerHTML).not.toContain('secreta-123');
 });
 
-test('Probar shows the failure reason', async () => {
+test('Probar marca la fuente con ✗ y deja el motivo en el tooltip', async () => {
   (testConnection as jest.Mock).mockResolvedValue({ ok: false, message: 'FRED rechazó la clave (401)', at: '2026-11-02T12:00:00Z' });
   render(<ApiConnections />);
   await screen.findByText('FRED');
-  fireEvent.click(screen.getByRole('button', { name: 'Probar' }));
   const row = screen.getByLabelText('FRED');
-  await waitFor(() => expect(within(row).getAllByText('FRED rechazó la clave (401)').length).toBeGreaterThan(0));
+  expect(within(row).getByRole('status')).toHaveTextContent('✓ Conectado');
+  fireEvent.click(within(row).getByRole('button', { name: 'Probar' }));
+  await waitFor(() => expect(within(row).getByRole('status')).toHaveTextContent('✗ Con error'));
+  expect(within(row).getByRole('status')).toHaveAttribute('title', 'FRED rechazó la clave (401)');
+});
+
+test('sin clave cargada ofrece Agregar; una fuente sin clave muestra No, ✓ y no se prueba', async () => {
+  (fetchConnections as jest.Mock).mockResolvedValue(make({}, [{ ...fred, status: 'missing', origin: null, hint: undefined }, fmpSrc]));
+  render(<ApiConnections />);
+  await screen.findByText('FRED');
+  const row = screen.getByLabelText('FRED');
+  expect(within(row).getByRole('button', { name: 'Agregar' })).toBeInTheDocument();
+  expect(within(row).getByRole('status')).toHaveTextContent('✗ Sin clave');
+  const free = screen.getByLabelText('Cboe');
+  expect(within(free).getByText('No')).toBeInTheDocument();
+  expect(within(free).getByRole('status')).toHaveTextContent('✓ Conectado');
+  expect(within(free).getByRole('button', { name: 'Probar' })).toBeDisabled();
 });

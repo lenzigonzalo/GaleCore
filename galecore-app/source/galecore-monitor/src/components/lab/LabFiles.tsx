@@ -12,7 +12,8 @@ type Pending = { kind: 'file' | 'folder'; parent: string } | null;
 const parentOf = (p: string) => p.includes('/') ? p.slice(0, p.lastIndexOf('/')) : '';
 const readOnly = (p: string) => /\.json$/i.test(p);
 const isMarkdown = (p: string) => /\.md$/i.test(p);
-export function LabFiles({ projectId, folder, openPath }: { projectId: string; folder?: string; openPath?: string }) {
+// En un proyecto compartido «Actualizar» sincroniza (trae y sube, como «Sincronizar» de Proyectos) y relee el árbol (WS-0083).
+export function LabFiles({ projectId, folder, openPath, shared = false, unsynced = false, onSynced }: { projectId: string; folder?: string; openPath?: string; shared?: boolean; unsynced?: boolean; onSynced?: () => void | Promise<void> }) {
   const [tree, setTree] = useState<WorkspaceFile[]>([]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<{ path: string; kind: 'file' | 'folder'; text?: false } | null>(null);
@@ -24,6 +25,8 @@ export function LabFiles({ projectId, folder, openPath }: { projectId: string; f
   const [confirm, setConfirm] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncText, setSyncText] = useState('');
   const [editing, setEditing] = useState(false);   // WS-0045: los .md se abren para leer (tablas y gráficos)
   const upload = useRef<HTMLInputElement>(null);
   const base = '/workspaces/' + encodeURIComponent(projectId) + '/files';
@@ -31,7 +34,19 @@ export function LabFiles({ projectId, folder, openPath }: { projectId: string; f
     try { setTree((await labRequest<{ tree: WorkspaceFile[] }>(base)).tree); }
     catch { setError('No se pudieron leer los archivos.'); }
   }, [base]);
-  useEffect(() => { setTree([]); setSelected(null); setFile(null); setError(''); setOpen({}); reload(); }, [reload]);
+  useEffect(() => { setTree([]); setSelected(null); setFile(null); setError(''); setOpen({}); setSyncText(''); reload(); }, [reload]);
+  const update = async () => {
+    if (!shared) { await reload(); return; }
+    setSyncing(true); setError(''); setSyncText('Sincronizando…');
+    try {
+      const r = await labRequest<{ pulled?: number; pushed?: number; conflicts?: unknown[]; busy?: boolean; paused?: boolean; otherEnvironment?: boolean }>('/workspaces/' + encodeURIComponent(projectId) + '/sync', {}, 180000);
+      setSyncText(r.busy ? 'El proyecto está trabajando: probá de nuevo cuando termine.' : r.paused ? 'El proyecto está en pausa: seguilo desde Proyectos compartidos.' : r.otherEnvironment ? 'Esta copia se compartió desde otro usuario o entorno.'
+        : r.conflicts?.length ? 'Sincronizado con conflictos: quedaron las dos versiones.' : r.pulled || r.pushed ? `Sincronizado: ${r.pulled || 0} traídos, ${r.pushed || 0} subidos.` : 'Sincronizado: al día.');
+    } catch (e) { setSyncText(''); setError(e instanceof Error ? e.message : 'No se pudo sincronizar.'); }
+    finally { setSyncing(false); }
+    await reload();
+    try { await onSynced?.(); } catch { /* el estado del proyecto se actualiza en la próxima lectura */ }
+  };
   useEffect(() => { const close = () => setMenu(null); window.addEventListener('pointerdown', close); return () => window.removeEventListener('pointerdown', close); }, []);
   const act = async (op: string, body: object, done: string) => {
     setError(''); try { await labRequest(base + '/' + op, body); setStatus(done); await reload(); return true; }
@@ -109,13 +124,14 @@ export function LabFiles({ projectId, folder, openPath }: { projectId: string; f
         <button type="button" title="Nuevo archivo" aria-label="Nuevo archivo" onClick={() => startNew('file')}><FilePlus size={17}/></button>
         <button type="button" title="Nueva carpeta" aria-label="Nueva carpeta" onClick={() => startNew('folder')}><FolderPlus size={17}/></button>
         <button type="button" title="Subir archivos" aria-label="Subir archivos" onClick={() => upload.current?.click()}><Upload size={17}/></button>
-        <button type="button" title="Actualizar" aria-label="Actualizar" onClick={reload}><RefreshCw size={16}/></button>
+        <button type="button" title={shared ? 'Actualizar y sincronizar' : 'Actualizar'} aria-label="Actualizar" disabled={syncing} onClick={() => { void update(); }}><RefreshCw size={16}/></button>
         <input ref={upload} type="file" multiple hidden onChange={async e => {
           const files = Array.from(e.target.files || []); e.target.value = ''; setError('');
           try { for (const f of files) await labUpload(projectId, f, target); setStatus(files.length === 1 ? 'Archivo subido' : files.length + ' archivos subidos'); if (target) setOpen(v => ({ ...v, [target]: true })); await reload(); }
           catch (err) { setError(err instanceof Error ? err.message : 'No se pudo subir.'); }
         }}/>
       </div>
+      {(syncText || (unsynced && !syncing)) && <p className="lab-files-sync" role="status">{syncText || 'Cambios sin compartir: Actualizar los sincroniza.'}</p>}
       <div className="lab-files-where" title={folder}>{target ? target : folder || 'Carpeta del proyecto'}</div>
       <nav aria-label="Archivos del proyecto" className="lab-files-list" onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}>{rows(tree, '')}{!tree.length && !pending && <p className="lab-files-empty">Sin archivos todavía.</p>}</nav>
     </aside>

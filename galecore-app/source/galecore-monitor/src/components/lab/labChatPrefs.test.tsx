@@ -1,6 +1,6 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { notifyChat, playChatSound, readChatPrefs } from './labChatPrefs';
+import { notifyChat, playChatSound, readChatPrefs, saveChatPrefs } from './labChatPrefs';
 import { ChatBehaviorSettings } from '../settings/ChatBehaviorSettings';
 import { LabMarkdown, toCsv, toTabs } from './LabMarkdown';
 
@@ -66,9 +66,12 @@ test('Configuración → Chat guarda con qué proveedor, modelo y esfuerzo abre 
   expect(screen.getByRole('combobox', { name: 'Esfuerzo inicial' })).toBeDisabled();
 });
 
-test('Configuración → Chat guarda si los chats nuevos abren en Manual o Auto', () => {
-  render(<ChatBehaviorSettings />);
-  expect(readChatPrefs().mode).toBe('manual');
-  fireEvent.change(screen.getByRole('combobox', { name: 'Permisos iniciales' }), { target: { value: 'auto' } });
-  expect(readChatPrefs().mode).toBe('auto');
+test('los permisos iniciales de cada motor se guardan y migran el valor viejo', () => {
+  expect(readChatPrefs().modes).toEqual({ claude: 'default', codex: 'workspace-write' });
+  saveChatPrefs({ ...readChatPrefs(), modes: { claude: 'plan', codex: 'read-only' } });
+  expect(readChatPrefs().modes).toEqual({ claude: 'plan', codex: 'read-only' });
+  localStorage.setItem('galecore:lab:chat-prefs', JSON.stringify({ mode: 'auto' }));   // formato anterior: un solo Manual/Auto
+  expect(readChatPrefs().modes).toEqual({ claude: 'auto', codex: 'auto' });
+  localStorage.setItem('galecore:lab:chat-prefs', JSON.stringify({ mode: 'manual', modes: { claude: 'bypassPermissions', codex: 'danger-full-access' } }));
+  expect(readChatPrefs().modes).toEqual({ claude: 'default', codex: 'workspace-write' });
 });

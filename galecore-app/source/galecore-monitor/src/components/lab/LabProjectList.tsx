@@ -54,9 +54,13 @@ interface Props {
   onShare?: (project: WorkspaceProject) => void;
   /** «Pausar sincronización» / «Reanudar» de un proyecto compartido que no es mío. */
   onToggleSync?: (project: WorkspaceProject, follow: boolean) => void;
+  /** «Sincronizar» del menú «⋯» de un proyecto compartido (el mismo sync que «Actualizar» de Archivos). */
+  onSync?: (project: WorkspaceProject) => void;
 }
+/** «dd/mm hh:mm», como el resto del front. */
+const syncStamp = (iso?: string | null) => { const d = iso ? new Date(iso) : null; const t = (n: number) => String(n).padStart(2, '0'); return d && !Number.isNaN(d.getTime()) ? `${t(d.getDate())}/${t(d.getMonth() + 1)} ${t(d.getHours())}:${t(d.getMinutes())}` : ''; };
 export function LabProjectList(props: Props) {
-  const { state, projectId, chatId, expanded, onToggle, onProject, onChat, onNewChat, onCreateProject, name, onRename, editing, renameInput, onDelete, onShare, onToggleSync } = props;
+  const { state, projectId, chatId, expanded, onToggle, onProject, onChat, onNewChat, onCreateProject, name, onRename, editing, renameInput, onDelete, onShare, onToggleSync, onSync } = props;
   // Proyectos (carpetas con sus chats) o Conversaciones (todas, la más nueva arriba) — owner 17/10.
   const [query, setQuery] = useState<string | null>(null);   // owner 19/10: ya son muchos; buscar proyectos y conversaciones
   const [tab, setTab] = useState<'projects' | 'chats'>(() => { try { return localStorage.getItem('galecore:lab:list') === 'chats' ? 'chats' : 'projects'; } catch { return 'projects'; } });
@@ -174,6 +178,7 @@ export function LabProjectList(props: Props) {
       if (!project || project.id === 'personal') return null;
       return <>
         {onShare && <button type="button" onClick={() => { lastTrigger.current = null; setMenu(null); onShare(project); }}>Compartir</button>}
+        {onSync && project.shared && project.following !== false && <button type="button" className="lab-option-sync" onClick={() => { lastTrigger.current = null; setMenu(null); onSync(project); }}>Sincronizar{syncStamp(project.lastSync) && <small>últ. sincro {syncStamp(project.lastSync)}</small>}</button>}
         {onToggleSync && project.shared && project.mine !== true && project.following !== undefined && <button type="button" onClick={() => { lastTrigger.current = null; setMenu(null); onToggleSync(project, !project.following); }}>{project.following ? 'Pausar sincronización' : 'Reanudar'}</button>}
       </>;
     })()}
