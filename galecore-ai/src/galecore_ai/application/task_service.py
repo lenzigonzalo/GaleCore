@@ -88,7 +88,7 @@ def _wait_marker(kb: KnowledgeBase, task_id: str) -> Path:
 def tick(kb: KnowledgeBase, now: datetime | None = None, *, directory: Path | None = None, places: int | None = None,
          runner: Callable[..., dict] = t.run) -> list[dict]:
     """One pass: runs what is owed, one task at a time, and records what could not wait. Returns what it did."""
-    now = now or datetime.now(UTC)
+    fixed, now = now, now or datetime.now(UTC)
     directory = directory or slots_dir()
     places = places or max_parallel()
     base = kb.base / "tasks"
@@ -118,7 +118,8 @@ def tick(kb: KnowledgeBase, now: datetime | None = None, *, directory: Path | No
             continue
         try:
             marker.unlink(missing_ok=True)
-            result = runner(kb=kb, task_id=task_id, now=now, invoked_by="vps", slot=iso)
+            # the clock of its own start: the runs before it in this pass may have taken minutes
+            result = runner(kb=kb, task_id=task_id, now=fixed or datetime.now(UTC), invoked_by="vps", slot=iso)
         finally:
             place.unlink(missing_ok=True)
         done.append({"task": task_id, "slot": iso, "status": result["status"]})
