@@ -13,7 +13,9 @@ export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'er
 export function useMarketSocket(tickers: string[] = []) {
   const connectionRef = useRef<signalR.HubConnection | null>(null);
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const { updatePrice, updateQuote, updateGreeks, setStreaming } = useMarketStore();
+  // Sólo las acciones (estables): leer el store entero suscribía al Dashboard a cada Quote y
+  // re-renderizaba el tablero completo por tick (WS-0070).
+  const { updatePrice, updateQuote, updateGreeks, setStreaming } = useMarketStore.getState();
 
   const tickersKey = tickers.join(',');
 

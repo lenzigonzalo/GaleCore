@@ -133,3 +133,25 @@ test('reactivar después de la apertura usa la hora actual sin iniciar consultas
   expect(screen.queryByRole('columnheader', { name: 'Premarket' })).toBeNull();
   expect(fetchPremarketBatch).not.toHaveBeenCalled();
 });
+
+test('lista: un Quote actualiza su fila, el reloj marca lectura anterior y oculta no se re-dibuja', async () => {
+  (fetchPremarketBatch as jest.Mock).mockResolvedValue([]);
+  jest.setSystemTime(new Date('2026-10-30T15:00:00Z'));
+  const renders = jest.fn();
+  const listProps = { ...props, symbols: ['SPY', 'QQQ'], layout: 'list' as const };
+  const { rerender } = render(<React.Profiler id="grid" onRender={renders}><TickerGrid {...listProps} /></React.Profiler>);
+  await act(async () => { await Promise.resolve(); });
+  act(() => { useMarketStore.getState().updateQuote('QQQ', { bidPrice: 1, askPrice: 2, timestamp: '' }); });
+  const row = () => screen.getByRole('button', { name: 'QQQ' }).closest('tr')!;
+  expect(row().querySelector('.watchlist-received')!.textContent).not.toBe('—');
+  expect(row().title).not.toContain('lectura anterior');
+  // Sin datos nuevos: sólo el reloj de la lista hace que la fila pase a lectura anterior.
+  await act(async () => { jest.advanceTimersByTime(61_000); });
+  expect(row().title).toContain('lectura anterior');
+
+  rerender(<React.Profiler id="grid" onRender={renders}><TickerGrid {...listProps} active={false} /></React.Profiler>);
+  renders.mockClear();
+  act(() => { useMarketStore.getState().updateQuote('QQQ', { bidPrice: 3, askPrice: 4, timestamp: '' }); });
+  act(() => { useMarketStore.getState().updateQuote('IWM', { bidPrice: 3, askPrice: 4, timestamp: '' }); });
+  expect(renders).not.toHaveBeenCalled();
+});
