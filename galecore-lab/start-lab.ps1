@@ -12,6 +12,8 @@ foreach ($labName in @('BASE_URL','API_KEY','USERNAME','PASSWORD')) {
     $labValue = [Environment]::GetEnvironmentVariable("GALECORE_LAB_$labName", 'User')
     if ($labValue) { [Environment]::SetEnvironmentVariable("GALECORE_$labName", $labValue, 'Process') }
 }
+# BF-0002: el CLI sólo acepta localhost o este host exacto; cualquier otro sigue bloqueado.
+$env:GALECORE_ALLOWED_BASE_URL = [Environment]::GetEnvironmentVariable('GALECORE_LAB_BASE_URL', 'User')
 # WS-0082: en un checkout de main limpio trae lo ultimo antes de arrancar (si falla, arranca igual con lo que hay).
 try {
     $labRepo = Split-Path -Parent $labRoot

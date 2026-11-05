@@ -206,7 +206,9 @@ def _build_dispatcher() -> CapabilityDispatcher:
     if local_mode:
         from urllib.parse import urlparse
         host = urlparse(base_url).hostname or ""
-        if host not in ("localhost", "127.0.0.1", "::1"):
+        # BF-0002: además de localhost, sólo el host exacto que el Lab declara para producción.
+        allowed = urlparse(os.environ.get("GALECORE_ALLOWED_BASE_URL", "")).hostname
+        if host not in ("localhost", "127.0.0.1", "::1") and host != allowed:
             _error_out(f"LOCAL_VALIDATION=true but host is '{host}'")
 
     registry = CapabilityRegistry()
