@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { TickerCard } from './TickerCard';
 import { TickerWatchlist } from './TickerWatchlist';
+import { useShallow } from 'zustand/react/shallow';
 import { useMarketStore } from '../../store/useMarketStore';
+import { TickerState } from '../../types/market';
 import { fetchMarketDataBatch, fetchPremarketBatch, PremarketQuote } from '../../api/marketdata';
 import { etDateParts } from '../../utils/formatters';
 import { regularSessionLabel } from '../../utils/marketSession';
@@ -26,6 +28,8 @@ interface Props {
   groupActions?: React.ComponentProps<typeof TickerWatchlist>['groupActions'];
 }
 
+const NO_TICKERS: (TickerState | undefined)[] = [];
+
 function needsRestPrice(symbol: string) {
   const ticker = useMarketStore.getState().tickers[symbol];
   return !ticker?.isStreaming || !ticker.lastTradeReceivedAt || Date.now() - ticker.lastTradeReceivedAt.getTime() > 30000;
@@ -48,8 +52,14 @@ export function TickerGrid({
   // El estado de carga es el de quien pasa el universo — la grilla no lo deriva de ningún store.
   const rulesLoading = loading ?? false;
   const rulesError = error ?? null;
-  const marketStore = useMarketStore();
-  const { tickers, initTicker, setLoading, setError } = marketStore;
+  const { initTicker, setLoading, setError } = useMarketStore.getState();
+  // Sólo los símbolos mostrados (y SPY para la sesión): un tick de otro símbolo no re-renderiza la
+  // grilla, y oculta no escucha nada; al volver a activarse lee el estado vigente (WS-0070).
+  const shown = useMarketStore(useShallow((s) => active
+    ? [s.tickers.SPY, ...symbols.map((symbol) => s.tickers[symbol])]
+    : NO_TICKERS));
+  const tickers: Record<string, TickerState | undefined> = {};
+  if (active) { tickers.SPY = shown[0]; symbols.forEach((symbol, i) => { tickers[symbol] = shown[i + 1]; }); }
   /** Qué símbolos ya se pidieron. NO es un booleano de "ya cargué": el universo cambia. */
   const loadedRef   = useRef<Set<string>>(new Set());
   const refreshRef = useRef(refreshKey);

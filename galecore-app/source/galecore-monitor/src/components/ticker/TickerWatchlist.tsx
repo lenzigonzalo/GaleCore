@@ -27,6 +27,72 @@ function TickerLogo({ symbol }: { symbol: string }) {
     : <img src={'https://financialmodelingprep.com/image-stock/' + encodeURIComponent(symbol.split(/[ /]/)[0]) + '.png'} alt="" draggable={false} loading="lazy" onError={() => setFailed(true)}/>}</span>;
 }
 
+interface RowContext {
+  onSelect: Props['onSelect']; onRemoveSymbol?: Props['onRemoveSymbol']; groupActions?: Props['groupActions'];
+  setMoving: React.Dispatch<React.SetStateAction<string | null>>;
+  startDrag: (e:React.DragEvent, kind:'ticker' | 'group', name:string) => void; endDrag: () => void;
+  drop: (group:string, symbol?:string) => React.HTMLAttributes<HTMLTableRowElement>;
+}
+
+interface RowProps {
+  ticker: TickerState; ctx: React.MutableRefObject<RowContext>; stale: boolean; selected: boolean; removable: boolean;
+  editable: boolean; group?: string; namesKey: string; moving: boolean; dropClass: string; showPremarket: boolean;
+  columnCount: number; premarket?: PremarketQuote; premarketLoading?: boolean; premarketError?: boolean;
+}
+
+/** Una fila; se re-dibuja sólo si cambia su ticker, su vigencia o su estado de edición. */
+const WatchlistRow = React.memo(function WatchlistRow({ ticker, ctx, stale, selected, removable, editable, group, namesKey, moving, dropClass, showPremarket, columnCount, premarket, premarketLoading, premarketError }: RowProps) {
+  // Los callbacks se leen del ref al ocurrir el evento: la fila puede no re-dibujarse entre renders.
+  const c = () => ctx.current;
+  const dropHandlers = (group:string, symbol:string): React.HTMLAttributes<HTMLTableRowElement> => ({
+    onDragOver: e => c().drop(group, symbol).onDragOver?.(e as React.DragEvent<HTMLTableRowElement>),
+    onDragLeave: e => c().drop(group, symbol).onDragLeave?.(e as React.DragEvent<HTMLTableRowElement>),
+    onDrop: e => c().drop(group, symbol).onDrop?.(e as React.DragEvent<HTMLTableRowElement>),
+  });
+  const names: string[] = JSON.parse(namesKey);
+  const hasPrice = Number.isFinite(ticker.price) && ticker.price > 0;
+  const hasClose = ticker.prevClose != null && Number.isFinite(ticker.prevClose) && ticker.prevClose > 0;
+  const change = hasPrice && !ticker.error.price && hasClose ? calcChange(ticker.price, ticker.prevClose!) : null;
+  const color = change == null || change.abs === 0 ? 'var(--text-secondary)'
+    : change.abs > 0 ? 'var(--green)' : 'var(--red-gc)';
+  return (
+    <React.Fragment>
+    <tr className={(selected ? 'selected' : '') + dropClass} draggable={editable || undefined}
+      onDragStart={editable ? e => c().startDrag(e, 'ticker', ticker.symbol) : undefined} onDragEnd={() => c().endDrag()}
+      {...(editable && group ? dropHandlers(group, ticker.symbol) : {})}
+      title={ticker.lastUpdate ? 'Recepción ' + fmtTime(ticker.lastUpdate) + ' ET' + (stale ? ' · lectura anterior' : '') : 'Sin fecha de recepción'}>
+      <th scope="row">
+        <button className="watchlist-symbol" aria-label={ticker.symbol} aria-pressed={selected}
+          onClick={() => c().onSelect(selected ? null : ticker.symbol)}><TickerLogo symbol={ticker.symbol}/>{ticker.symbol}</button>
+        {hasPrice && ticker.error.price && <span className="watchlist-price-error" role="status" title={ticker.error.price}>Lectura anterior</span>}
+      </th>
+      <td className="numeric tabular-nums" title={ticker.error.price || undefined}>
+        {hasPrice ? fmtPrice(ticker.price) : ticker.error.price ? 'Sin datos' : ticker.loading.price ? 'Cargando…' : '—'}
+      </td>
+      <td className="numeric tabular-nums" style={{ color }} title={hasClose ? 'Contra cierre previo' : 'Sin cierre previo: no se calcula la variación'}>
+        {change ? (change.abs > 0 ? '+' : '') + fmtPrice(change.abs) : '—'}
+      </td>
+      <td className="numeric tabular-nums" style={{ color }}>{change ? fmtPct(change.pct) : '—'}</td>
+      {showPremarket && <PremarketCell quote={premarket} loading={premarketLoading} error={premarketError} />}
+      <td className="numeric tabular-nums watchlist-received"
+        style={{ color: stale ? 'var(--yellow-gc)' : undefined }}
+        title="Hora de recepción en el monitor; no acredita la hora de origen del precio">
+        {ticker.lastUpdate ? fmtTime(ticker.lastUpdate) : '—'}
+      </td>
+      <td className="watchlist-action">
+        {editable && names.length > 1 && <button className="watchlist-remove" aria-label={'Mover ' + ticker.symbol + ' a otro grupo'} aria-expanded={moving}
+          onClick={() => c().setMoving(m => m === ticker.symbol ? null : ticker.symbol)}><ArrowRightLeft size={15} /></button>}
+        {removable && <button className="watchlist-remove" aria-label={'Quitar ' + ticker.symbol + ' del seguimiento'}
+          onClick={() => c().onRemoveSymbol?.(ticker.symbol)}><X size={16} /></button>}
+      </td>
+    </tr>
+    {moving && editable && <tr className="watchlist-move"><td colSpan={columnCount}>
+      <span>Mover a</span>{names.filter(n => n !== group).map(n => <button key={n} onClick={() => { c().groupActions?.onMove(ticker.symbol, n); c().setMoving(null); }}>{n}</button>)}
+    </td></tr>}
+    </React.Fragment>
+  );
+});
+
 /** Presentación compacta del mismo store de las tarjetas; no consulta ni suscribe datos. */
 export function TickerWatchlist({ tickers, showPremarket = true, premarket, premarketLoading, premarketError, selectedSymbol, onSelect, removableSymbols, onRemoveSymbol, sections, groupActions }: Props) {
   const columnCount = showPremarket ? 7 : 6;
@@ -65,51 +131,16 @@ export function TickerWatchlist({ tickers, showPremarket = true, premarket, prem
       endDrag();
     },
   });
-  const renderTicker = (ticker:TickerState) => {
-          const hasPrice = Number.isFinite(ticker.price) && ticker.price > 0;
-          const hasClose = ticker.prevClose != null && Number.isFinite(ticker.prevClose) && ticker.prevClose > 0;
-          const change = hasPrice && !ticker.error.price && hasClose ? calcChange(ticker.price, ticker.prevClose!) : null;
-          const color = change == null || change.abs === 0 ? 'var(--text-secondary)'
-            : change.abs > 0 ? 'var(--green)' : 'var(--red-gc)';
-          const selected = selectedSymbol === ticker.symbol;
-          const removable = removableSymbols?.includes(ticker.symbol) && onRemoveSymbol;
-          return (
-            <React.Fragment key={ticker.symbol}>
-            <tr className={(selected ? 'selected' : '') + dropClass('ticker:' + ticker.symbol)} draggable={!!groupActions || undefined}
-              onDragStart={groupActions ? e => startDrag(e, 'ticker', ticker.symbol) : undefined} onDragEnd={endDrag}
-              {...(groupActions && groupOf(ticker.symbol) ? drop(groupOf(ticker.symbol)!, ticker.symbol) : {})}
-              title={ticker.lastUpdate ? 'Recepción ' + fmtTime(ticker.lastUpdate) + ' ET' + (isStale(ticker.lastUpdate) ? ' · lectura anterior' : '') : 'Sin fecha de recepción'}>
-              <th scope="row">
-                <button className="watchlist-symbol" aria-label={ticker.symbol} aria-pressed={selected}
-                  onClick={() => onSelect(selected ? null : ticker.symbol)}><TickerLogo symbol={ticker.symbol}/>{ticker.symbol}</button>
-                {hasPrice && ticker.error.price && <span className="watchlist-price-error" role="status" title={ticker.error.price}>Lectura anterior</span>}
-              </th>
-              <td className="numeric tabular-nums" title={ticker.error.price || undefined}>
-                {hasPrice ? fmtPrice(ticker.price) : ticker.error.price ? 'Sin datos' : ticker.loading.price ? 'Cargando…' : '—'}
-              </td>
-              <td className="numeric tabular-nums" style={{ color }} title={hasClose ? 'Contra cierre previo' : 'Sin cierre previo: no se calcula la variación'}>
-                {change ? (change.abs > 0 ? '+' : '') + fmtPrice(change.abs) : '—'}
-              </td>
-              <td className="numeric tabular-nums" style={{ color }}>{change ? fmtPct(change.pct) : '—'}</td>
-              {showPremarket && <PremarketCell quote={premarket?.[ticker.symbol]} loading={premarketLoading} error={premarketError} />}
-              <td className="numeric tabular-nums watchlist-received"
-                style={{ color: ticker.lastUpdate && isStale(ticker.lastUpdate) ? 'var(--yellow-gc)' : undefined }}
-                title="Hora de recepción en el monitor; no acredita la hora de origen del precio">
-                {ticker.lastUpdate ? fmtTime(ticker.lastUpdate) : '—'}
-              </td>
-              <td className="watchlist-action">
-                {groupActions && names.length > 1 && <button className="watchlist-remove" aria-label={'Mover ' + ticker.symbol + ' a otro grupo'} aria-expanded={moving === ticker.symbol}
-                  onClick={() => setMoving(m => m === ticker.symbol ? null : ticker.symbol)}><ArrowRightLeft size={15} /></button>}
-                {removable && <button className="watchlist-remove" aria-label={'Quitar ' + ticker.symbol + ' del seguimiento'}
-                  onClick={() => onRemoveSymbol?.(ticker.symbol)}><X size={16} /></button>}
-              </td>
-            </tr>
-            {moving === ticker.symbol && groupActions && <tr className="watchlist-move"><td colSpan={columnCount}>
-              <span>Mover a</span>{names.filter(n => n !== groupOf(ticker.symbol)).map(n => <button key={n} onClick={() => { groupActions.onMove(ticker.symbol, n); setMoving(null); }}>{n}</button>)}
-            </td></tr>}
-            </React.Fragment>
-          );
-  };
+  // Lo que la fila necesita del render vigente; por ref, para que la fila memoizada no dependa de
+  // la identidad de los callbacks y un Quote de un símbolo no re-dibuje todas las filas (WS-0070).
+  const ctx = useRef<RowContext>({ onSelect, onRemoveSymbol, groupActions, setMoving, startDrag, endDrag, drop });
+  ctx.current = { onSelect, onRemoveSymbol, groupActions, setMoving, startDrag, endDrag, drop };
+  const namesKey = JSON.stringify(names);
+  const renderTicker = (ticker:TickerState) => <WatchlistRow key={ticker.symbol} ticker={ticker} ctx={ctx}
+    stale={!!ticker.lastUpdate && isStale(ticker.lastUpdate)} selected={selectedSymbol === ticker.symbol}
+    removable={!!(removableSymbols?.includes(ticker.symbol) && onRemoveSymbol)} editable={!!groupActions}
+    group={groupOf(ticker.symbol)} namesKey={namesKey} moving={moving === ticker.symbol} dropClass={dropClass('ticker:' + ticker.symbol)}
+    showPremarket={showPremarket} columnCount={columnCount} premarket={premarket?.[ticker.symbol]} premarketLoading={premarketLoading} premarketError={premarketError} />;
   const header = (label:string) => {
     const open = !collapsed.includes(label);
     const toggle = <button aria-expanded={open} onClick={() => setCollapsed(v => v.includes(label) ? v.filter(s => s !== label) : [...v,label])}>{open ? <ChevronDown size={13}/> : <ChevronRight size={13}/>}{label}</button>;
