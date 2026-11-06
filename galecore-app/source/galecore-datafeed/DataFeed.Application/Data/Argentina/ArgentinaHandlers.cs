@@ -522,4 +522,122 @@ namespace DataFeed.Application.Data.Argentina
             return ArgentinaResponse.Build("a3", url, f, asOf, notes, rows);
         }
     }
+
+    // ───────────────────────── WS-0090 Futuros de A3 (web pública) ─────────────────────────
+
+    public class A3FuturosRequest : IRequest<SourcedResponse<A3Futuros>> { }
+
+    /// <summary>Referencias del dólar: A3500 (Com. A3500 del BCRA) y MTR (Matba Rofex), cada una con la fecha del día hábil que informa.</summary>
+    public record A3Referencia(decimal? A3500, string? A3500Fecha, decimal? Mtr, string? MtrFecha);
+
+    /// <summary>Un futuro de A3. Ceros de la fuente = null. Vencimiento, Dias y las tasas sólo en DLR/&lt;MES&gt;&lt;AA&gt; con cálculo posible.</summary>
+    public record A3Futuro(string Ticker, decimal? Compra, decimal? Venta, decimal? Ultimo, decimal? Ajuste, decimal? AjusteAnterior,
+        decimal? Contratos, decimal? InteresAbierto, decimal? VariacionPct,
+        string? Vencimiento = null, int? Dias = null, decimal? DevaluacionPct = null, decimal? TnaPct = null, decimal? TeaPct = null);
+
+    public record A3Futuros(A3Referencia Referencia, List<A3Futuro> Dolar, List<A3Futuro> Agro);
+
+    public class A3FuturosHandler : IRequestHandler<A3FuturosRequest, SourcedResponse<A3Futuros>>
+    {
+        public const string StreamUrl = "https://a3mercados.com.ar/api/market-data/stream?streams=dollar";
+        public const string RefsUrl = "https://a3mercados.com.ar/api/market-data/dollar-refs";
+        private const string Source = "a3-web";
+        private static readonly string[] Meses = { "ENE", "FEB", "MAR", "ABR", "MAY", "JUN", "JUL", "AGO", "SEP", "OCT", "NOV", "DIC" };
+        private static readonly Regex Curva = new(@"^DLR/([A-Z]{3})(\d{2})$", RegexOptions.Compiled);
+        private readonly IHttpClientFactory _client;
+        private readonly TimeProvider _clock;
+        private readonly TimeSpan? _timeout;
+
+        public A3FuturosHandler(IHttpClientFactory client, TimeProvider? clock = null, TimeSpan? timeout = null)
+        {
+            _client = client;
+            _clock = clock ?? TimeProvider.System;
+            _timeout = timeout;
+        }
+
+        public async Task<SourcedResponse<A3Futuros>> Handle(A3FuturosRequest request, CancellationToken cancellationToken)
+        {
+            var fetcher = new ArgentinaFetcher(_client.CreateClient());
+            var f = await fetcher.GetSseSnapshotAsync(Source, StreamUrl, TimeSpan.FromMinutes(1), cancellationToken, "snapshot", _timeout);
+            var data = f.Json["data"] as JObject;
+            var dollar = data?["dollar"] as JArray
+                ?? throw new UpstreamSourceException(Source, "la respuesta cambió de forma (falta data.dollar)");
+            var agro = data["agro"] as JArray ?? new JArray();
+
+            var notes = new List<string>
+            {
+                "Web pública de A3 (a3mercados.com.ar), no es una API documentada: puede cambiar sin aviso.",
+                "Ceros de la fuente = sin dato (null). DLR/PF0 es un pase, no un vencimiento: queda sin cálculo.",
+                "Devaluación implícita = precio / A3500 − 1; TNA = devaluación × 365 / días; TEA = (1 + devaluación)^(365 / días) − 1. Precio = ajuste si > 0, si no último; sin ninguno, sin cálculo.",
+                "Vencimiento = último día hábil del mes (lunes a viernes): no descuenta feriados. Días = vencimiento − hoy (hora Argentina); con días ≤ 0 no se calcula.",
+                "Las referencias A3500 y MTR son del día hábil de su fecha (a3500Fecha / mtrFecha), no de hoy.",
+            };
+
+            A3Referencia refs = new(null, null, null, null);
+            using var refsCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            refsCts.CancelAfter(_timeout ?? TimeSpan.FromSeconds(10));
+            try
+            {
+                var r = await fetcher.GetAsync(Source, RefsUrl, TimeSpan.FromMinutes(1), refsCts.Token);
+                refs = new A3Referencia(
+                    ArgentinaResponse.Dec(r.Json["bcra"]?["value"]), ArgentinaResponse.Str(r.Json["bcra"]?["date"]),
+                    ArgentinaResponse.Dec(r.Json["matba"]?["value"]), ArgentinaResponse.Str(r.Json["matba"]?["date"]));
+            }
+            catch (UpstreamSourceException ex)
+            {
+                notes.Add($"No se pudo leer el A3500 ({ex.Message}): los futuros van sin devaluación implícita ni tasas.");
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                notes.Add("No se pudo leer el A3500 (sin respuesta a tiempo): los futuros van sin devaluación implícita ni tasas.");
+            }
+            if (refs.A3500 is not > 0 && notes.All(n => !n.StartsWith("No se pudo leer el A3500")))
+                notes.Add("La referencia A3500 vino sin valor: los futuros van sin devaluación implícita ni tasas.");
+
+            var hoy = _clock.GetUtcNow().UtcDateTime.AddHours(-3).Date;
+            var dolar = dollar.OfType<JObject>().Select(r => Calcular(Fila(r), refs.A3500, hoy)).ToList();
+            var agroRows = agro.OfType<JObject>().Select(Fila).ToList();
+            return new SourcedResponse<A3Futuros>
+            {
+                Source = Source,
+                UpstreamUrl = StreamUrl,
+                RetrievedAt = f.RetrievedAt,
+                FromCache = f.FromCache,
+                AsOf = f.RetrievedAt.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture),
+                Sha256 = f.Sha256,
+                Notes = notes,
+                Data = new A3Futuros(refs, dolar, agroRows),
+            };
+        }
+
+        private static A3Futuro Fila(JObject r)
+        {
+            decimal? Nz(string k) => ArgentinaResponse.Dec(r[k]) is { } v && v != 0 ? v : null;
+            return new A3Futuro(ArgentinaResponse.Str(r["ticker"]) ?? "", Nz("bi"), Nz("of"), Nz("la"), Nz("se"), Nz("pse"), Nz("tv"), Nz("oi"), Nz("variation"));
+        }
+
+        private static A3Futuro Calcular(A3Futuro row, decimal? a3500, DateTime hoy)
+        {
+            var m = Curva.Match(row.Ticker);
+            if (!m.Success || a3500 is not > 0) return row;
+            var mes = Array.IndexOf(Meses, m.Groups[1].Value) + 1;
+            if (mes == 0) return row;
+            var precio = row.Ajuste is > 0 ? row.Ajuste : row.Ultimo;
+            if (precio is not > 0) return row;
+            var venc = new DateTime(2000 + int.Parse(m.Groups[2].Value), mes, DateTime.DaysInMonth(2000 + int.Parse(m.Groups[2].Value), mes));
+            while (venc.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday) venc = venc.AddDays(-1);
+            var dias = (venc - hoy).Days;
+            if (dias <= 0) return row;
+            var dev = precio.Value / a3500.Value - 1m;
+            var tea = Math.Pow(1d + (double)dev, 365d / dias) - 1d;
+            return row with
+            {
+                Vencimiento = venc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                Dias = dias,
+                DevaluacionPct = Math.Round(dev * 100m, 2),
+                TnaPct = Math.Round(dev * 365m / dias * 100m, 2),
+                TeaPct = Math.Round((decimal)tea * 100m, 2),
+            };
+        }
+    }
 }
