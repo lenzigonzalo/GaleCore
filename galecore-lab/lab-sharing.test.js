@@ -21,6 +21,15 @@ function world(t, { answers = {}, autoSync = false, session, request } = {}) {
 }
 async function route(service, method, url, body) { let answer; await service.route({ method }, {}, new URL(url, 'http://localhost'), (res, status, value) => { answer = { status, value }; }, async () => body); return answer; }
 const share = (kb, id, extra = {}) => fs.writeFileSync(path.join(kb, 'workspaces', id, '.sync.json'), JSON.stringify({ sharedProjectId: 'p1', lastSeq: 0, files: {}, subscribed: true, context: { user: 'demo', api: 'http://localhost:7001/' }, ...extra }));
+// Deja el manifest de `.sync.json` como después de un sync: el sha256 de cada archivo de la carpeta (como hace el CLI).
+const synced = (kb, id) => {
+  const dir = path.join(kb, 'workspaces', id), files = {};
+  (function walk(d, prefix) { for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+    if (e.isDirectory()) walk(path.join(d, e.name), prefix + e.name + '/');
+    else if (e.name !== '.sync.json') files[prefix + e.name] = require('crypto').createHash('sha256').update(fs.readFileSync(path.join(d, e.name))).digest('hex');
+  } })(dir, '');
+  const state = JSON.parse(fs.readFileSync(path.join(dir, '.sync.json'), 'utf8')); fs.writeFileSync(path.join(dir, '.sync.json'), JSON.stringify({ ...state, files }));
+};
 const members = [{ username: 'demo', role: 'owner' }, { username: 'gonza', role: 'member' }];
 const create = async (service, label) => (await route(service, 'POST', '/workspaces', { label, type: 'analysis' })).value;
 
@@ -295,7 +304,7 @@ test('Agregar a mi Lab: un solo pedido que se suma, sigue y sincroniza, y devuel
 test('estado por proyecto: conflicto, error con su acción (sin acceso, otro entorno, reintentar) y sin mensajes que manden a otra pantalla', async t => {
   let answer;
   const { kb, service } = world(t, { answers: { 'project sync': () => answer } });
-  const p = await create(service, 'Idea'); share(kb, p.id);
+  const p = await create(service, 'Idea'); share(kb, p.id); synced(kb, p.id);
   const row = async () => (await route(service, 'GET', '/workspaces')).value.projects.find(x => x.id === p.id);
   assert.deepEqual([(await row()).syncState, (await row()).notice], ['ok', null]);
   answer = { pulled: 1, pushed: 0, skipped: [], conflicts: [{ path: 'README.md', with: 'gonza', copy: 'x', kind: 'editado-en-ambos' }] };
@@ -322,4 +331,51 @@ test('/workspaces/sync devuelve los errores por proyecto con un motivo legible',
   const p = await create(service, 'Idea'); share(kb, p.id);
   const out = (await route(service, 'POST', '/workspaces/sync')).value;
   assert.match(out.errors[p.id], /otro usuario o entorno/); assert.doesNotMatch(out.errors[p.id], /Proyectos compartidos/);
+});
+
+test('«Cambios sin compartir»: el contenido local contra el manifest del último sync, sin pegarle a la API', async t => {
+  const { kb, service, calls } = world(t);
+  const p = await create(service, 'Idea'); share(kb, p.id);
+  const dir = path.join(kb, 'workspaces', p.id);
+  const row = async () => (await route(service, 'GET', '/workspaces')).value.projects.find(x => x.id === p.id);
+  const state = async () => { const r = await row(); return [r.syncState, r.notice, r.action]; };
+  assert.deepEqual(await state(), ['pending', 'Cambios sin compartir', 'sync']);   // el manifest vacío no conoce los archivos de la carpeta
+  synced(kb, p.id);
+  assert.deepEqual(await state(), ['ok', null, undefined]);
+  fs.writeFileSync(path.join(dir, 'nota.md'), 'a');                                // archivo nuevo
+  assert.equal((await row()).syncState, 'pending'); assert.equal((await row()).pending, 1);
+  synced(kb, p.id); assert.equal((await row()).syncState, 'ok');
+  await new Promise(r => setTimeout(r, 15)); fs.writeFileSync(path.join(dir, 'nota.md'), 'bb');   // editado (otro tamaño)
+  assert.equal((await row()).syncState, 'pending'); synced(kb, p.id);
+  fs.unlinkSync(path.join(dir, 'nota.md'));                                        // borrado
+  assert.equal((await row()).syncState, 'pending'); synced(kb, p.id); assert.equal((await row()).syncState, 'ok');
+  // Lo que el sync nunca toca no cuenta: .scratch, .git, node_modules, archivos de sync, y lo mayor a 2 MB
+  for (const d of ['.scratch', '.git', 'node_modules']) { fs.mkdirSync(path.join(dir, d), { recursive: true }); fs.writeFileSync(path.join(dir, d, 'x'), 'x'); }
+  fs.writeFileSync(path.join(dir, '.sync.lock'), 'x'); fs.writeFileSync(path.join(dir, 'grande.bin'), Buffer.alloc(2 * 1024 * 1024 + 1));
+  assert.equal((await row()).syncState, 'ok');
+  assert.equal(calls.filter(x => x[1] === 'sync').length, 0);                      // nada de esto llamó al sync del CLI
+});
+
+test('el catálogo marca «Cambios sin compartir» y un proyecto pausado no los muestra', async t => {
+  let remote;
+  const { kb, service } = world(t, { answers: { 'project shared': () => remote } });
+  const p = await create(service, 'Idea'); share(kb, p.id); synced(kb, p.id);
+  remote = { projects: [{ id: 'p1', name: 'Idea', owner: 'demo', local: p.id, subscribed: true }] };
+  const catalog = async () => (await route(service, 'GET', '/workspaces/shared')).value.projects[0];
+  assert.equal((await catalog()).syncState, 'ok');
+  fs.writeFileSync(path.join(kb, 'workspaces', p.id, 'nueva.md'), 'x');
+  const c = await catalog(); assert.deepEqual([c.syncState, c.notice, c.action], ['pending', 'Cambios sin compartir', 'sync']);
+  remote = { projects: [{ id: 'p1', name: 'Idea', owner: 'demo', local: p.id, subscribed: false }] };
+  assert.equal((await catalog()).syncState, 'ok');
+});
+
+test('un archivo que el último sync saltó no deja el proyecto en «Cambios sin compartir» para siempre', async t => {
+  const skipped = [{ path: 'rechazado.md', reason: 'GaleCore lo rechazó' }];
+  const { kb, service } = world(t, { answers: { 'project sync': { pulled: 0, pushed: 1, conflicts: [], skipped } } });
+  const p = await create(service, 'Idea'); share(kb, p.id); synced(kb, p.id);
+  fs.writeFileSync(path.join(kb, 'workspaces', p.id, 'rechazado.md'), 'x');
+  const row = async () => (await route(service, 'GET', '/workspaces')).value.projects.find(x => x.id === p.id);
+  assert.equal((await row()).syncState, 'pending');
+  await route(service, 'POST', '/workspaces/' + p.id + '/sync');
+  assert.equal((await row()).syncState, 'ok');
 });

@@ -40,4 +40,16 @@ function brokerQueries(local) {
   };
 }
 
-module.exports = { brokerQueries };
+// Interruptor de Configuración → Mis conectores (WS-0083): lee y escribe el mismo broker-queries.json. Un archivo ilegible cuenta como apagado.
+function brokerSetting(local) {
+  try { return JSON.parse(fs.readFileSync(path.join(local, 'broker-queries.json'), 'utf8')).enabled === true; } catch { return false; }
+}
+function setBrokerQueries(local, enabled) {
+  fs.mkdirSync(local, { recursive: true });
+  const file = path.join(local, 'broker-queries.json'), tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify({ enabled: enabled === true }, null, 2), { mode: 0o600 });
+  fs.renameSync(tmp, file);
+  return enabled === true;
+}
+
+module.exports = { brokerQueries, brokerSetting, setBrokerQueries };

@@ -24,7 +24,7 @@ test('workspace se recupera desde su descriptor versionable aunque falte el índ
 test('claude: la narración junto a una consulta no entra al chat; la respuesta sí',()=>{const chat={messages:[]};consumeEvent(chat,{type:'assistant',message:{content:[{type:'text',text:'Now try the CLI'},{type:'tool_use',name:'Bash'}]}},'claude');assert.equal(chat.messages.length,0);assert.equal(chat.activity,'Trabajando');consumeEvent(chat,{type:'assistant',message:{content:[{type:'text',text:'Mi recomendación: esperá.'}]}},'claude');assert.equal(chat.messages.length,0);consumeEvent(chat,{type:'result',is_error:false,result:'Mi recomendación: esperá.'},'claude');assert.deepEqual(chat.messages.map(m=>m.text),['Mi recomendación: esperá.']);});
 
 test('adjuntos y modo Auto: sube a adjuntos/, rechaza rutas ajenas y pasa el permiso al motor',async t=>{
- const {base,kb,local}=setup(t);const calls=[];const inputs=[];const {EventEmitter}=require('events');
+ const {base,kb,local}=setup(t);const calls=[];let hold=false;const inputs=[];const {EventEmitter}=require('events');
  fs.mkdirSync(path.join(base,'galecore-ai'));fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo de test');
  // El contexto va por archivo (D-0014): se lee al lanzar el motor, porque se borra al terminar el turno.
  const codexHome=path.join(base,'codex');fs.mkdirSync(codexHome);const contexts=[];
@@ -459,4 +459,74 @@ test('WS-0071 AC-3: el contexto del turno lista las estrategias del proyecto y p
  assert.doesNotMatch(withTwo,/reescribí/);assert.match(withTwo,/armame el mapa de/);assert.ok(withTwo.includes(path.join(base,'galecore-lab','skills','mapa','SKILL.md')));   // AC-4: el mapa es a pedido, no por turno
  const none=await say('brasil');assert.match(none,/Estrategias de este proyecto: ninguna todavía\./);assert.doesNotMatch(none,/o una de las que ya tiene/);
  assert.doesNotMatch(await say('personal'),/Estrategias de este proyecto/);
+});
+
+test('modos de permisos por motor (WS-0083): cada modo se traduce a su bandera; lo desconocido cae al seguro',async t=>{
+ const {permissionMode}=require('./lab-workspaces');
+ for(const m of ['default','acceptEdits','auto','plan'])assert.equal(permissionMode('claude',m),m);
+ for(const m of ['read-only','workspace-write','auto'])assert.equal(permissionMode('codex',m),m);
+ // compatibilidad ('manual') y nunca se saltea: lo ajeno al motor o inventado cae a default / workspace-write
+ for(const bad of ['manual',undefined,'bypassPermissions','danger-full-access','dontAsk','read-only','--x'])assert.equal(permissionMode('claude',bad),'default');
+ for(const bad of ['manual',undefined,'bypassPermissions','danger-full-access','plan','acceptEdits','default'])assert.equal(permissionMode('codex',bad),'workspace-write');
+ const {base,kb,local}=setup(t);const calls=[];let hold=false;
+ fs.mkdirSync(path.join(base,'galecore-ai'));fs.writeFileSync(path.join(base,'galecore-ai','PRODUCT.md'),'núcleo de test');
+ const {EventEmitter}=require('events');
+ const spawnProcess=(_,args)=>{calls.push(args);const proc=new EventEmitter();proc.stdout=new EventEmitter();proc.stderr=new EventEmitter();proc.stdin={write(){},end(){this.writableEnded=true;}};proc.kill=()=>{};if(!hold)setTimeout(()=>proc.emit('close',0),30);return proc;};
+ const service=createWorkspaces({root:path.dirname(kb),kb,local,binaries:{claude:'claude',codex:'codex'},environment:()=>({CODEX_HOME:path.join(base,'codex')}),legacyProjects:()=>[],legacySessions:()=>[],spawnProcess});
+ fs.mkdirSync(path.join(base,'codex'),{recursive:true});
+ const after=(a,flag)=>a[a.indexOf(flag)+1];
+ const turn=async(provider,mode,nativeId)=>{
+  const c=(await route(service,'POST','/chats',{project:'personal',provider})).value;
+  if(nativeId){const f=path.join(local,'chats',c.id+'.json');const j=JSON.parse(fs.readFileSync(f,'utf8'));j.nativeId=nativeId;fs.writeFileSync(f,JSON.stringify(j));}
+  await route(service,'POST','/chats/'+c.id+'/messages',{text:'hola',...(mode?{mode}:{})});
+  await new Promise(r=>setTimeout(r,100));
+  return {args:calls.at(-1),chat:(await route(service,'GET','/chats/'+c.id)).value};
+ };
+ for(const [sent,want] of [[undefined,'default'],['manual','default'],['acceptEdits','acceptEdits'],['auto','auto'],['plan','plan'],['bypassPermissions','default']]){
+  const {args,chat}=await turn('claude',sent);assert.equal(after(args,'--permission-mode'),want);assert.equal(chat.mode,want);assert.ok(!args.includes('bypassPermissions'));
+ }
+ // Codex nuevo: --sandbox <modo> (Auto: sólo --approve-for-me)
+ for(const [sent,want] of [[undefined,'workspace-write'],['manual','workspace-write'],['read-only','read-only'],['danger-full-access','workspace-write']]){
+  const {args}=await turn('codex',sent);assert.equal(after(args,'--sandbox'),want);assert.ok(!args.includes('--approve-for-me')&&!args.includes('danger-full-access'));
+ }
+ const auto=await turn('codex','auto');assert.ok(auto.args.includes('--approve-for-me')&&!auto.args.includes('--sandbox'));
+ // Codex retomando: `exec resume` no tiene --sandbox; read-only va como -c antes de `resume`
+ const resumed=await turn('codex','read-only','thread-1');
+ assert.ok(!resumed.args.includes('--sandbox'));assert.ok(resumed.args.includes('sandbox_mode="read-only"'));assert.ok(resumed.args.indexOf('sandbox_mode="read-only"')<resumed.args.indexOf('resume'));
+ const resumedAuto=await turn('codex','auto','thread-2');assert.ok(resumedAuto.args.includes('--approve-for-me')&&!resumedAuto.args.some(a=>a.startsWith('sandbox_mode')));
+ // El modo en medio del turno también se valida
+ hold=true;const live=(await route(service,'POST','/chats',{project:'personal',provider:'claude'})).value;
+ await route(service,'POST','/chats/'+live.id+'/messages',{text:'hola'});await new Promise(r=>setTimeout(r,100));
+ assert.equal((await route(service,'POST','/chats/'+live.id+'/mode',{mode:'bypassPermissions'})).value.mode,'default');
+ assert.equal((await route(service,'POST','/chats/'+live.id+'/mode',{mode:'plan'})).value.mode,'plan');
+});
+
+test('conectores del chat (WS-0083): GaleCore fijo, interruptor de brókers escribe broker-queries.json y rechaza lo que no es booleano',async t=>{
+ const {local,service}=setup(t);
+ let r=await route(service,'GET','/connectors');assert.deepEqual([r.value.galecore,r.value.brokers],[{enabled:true},{enabled:false,engines:['codex']}]);
+ r=await route(service,'POST','/connectors/brokers',{enabled:true});assert.equal(r.value.brokers.enabled,true);
+ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(local,'broker-queries.json'),'utf8')),{enabled:true});
+ assert.ok(require('./lab-brokers').brokerQueries(local));   // lo que lee el turno de Codex
+ assert.equal((await route(service,'GET','/connectors')).value.brokers.enabled,true);
+ for(const bad of ['true',1,undefined,null])await assert.rejects(route(service,'POST','/connectors/brokers',{enabled:bad}),/prender o apagar/);
+ assert.equal((await route(service,'POST','/connectors/brokers',{enabled:false})).value.brokers.enabled,false);
+ assert.equal(require('./lab-brokers').brokerQueries(local),null);
+ fs.writeFileSync(path.join(local,'broker-queries.json'),'{');assert.equal((await route(service,'GET','/connectors')).value.brokers.enabled,false);   // ilegible = apagado
+});
+
+test('permisos de Claude Code (WS-0083): reglas del producto fijas, las del usuario se validan y llegan al --settings del turno',async t=>{
+ const {kb,local,service}=setup(t);
+ fs.mkdirSync(path.join(kb,'.claude'));
+ fs.writeFileSync(path.join(kb,'.claude','settings.json'),JSON.stringify({permissions:{defaultMode:'acceptEdits',allow:['Read'],deny:['Bash(git push:*)']},autoMemoryEnabled:false}));
+ let r=await route(service,'GET','/permissions/claude');
+ assert.deepEqual(r.value,{product:{allow:['Read'],ask:[],deny:['Bash(git push:*)']},user:{allow:[],ask:[],deny:[]}});
+ r=await route(service,'POST','/permissions/claude',{allow:['Bash(git status:*)',' WebFetch(domain:cnn.com) ','Bash(git status:*)'],ask:['Write']});
+ assert.deepEqual(r.value.user,{allow:['Bash(git status:*)','WebFetch(domain:cnn.com)'],ask:['Write'],deny:[]});
+ assert.deepEqual(JSON.parse(fs.readFileSync(path.join(local,'claude-permissions.json'),'utf8')).ask,['Write']);
+ for(const bad of [{allow:['']},{allow:[3]},{allow:'Bash'},{deny:['hola mundo']},{ask:['Bash()']},{allow:['bypassPermissions']}])
+  await assert.rejects(route(service,'POST','/permissions/claude',bad),/inválida|lista/);
+ const merged=require('./lab-permissions').mergedSettings(kb,local);
+ assert.deepEqual(merged.permissions.allow,['Read','Bash(git status:*)','WebFetch(domain:cnn.com)']);
+ assert.equal(merged.permissions.defaultMode,'acceptEdits');assert.deepEqual(merged.permissions.deny,['Bash(git push:*)']);assert.equal(merged.autoMemoryEnabled,false);
+ assert.equal(JSON.stringify(merged).includes('bypassPermissions'),false);
 });

@@ -79,7 +79,7 @@
 .prefs-subgroup { margin: 12px 0 0; font-size: 13px; font-weight: 600; color: var(--text-muted); }
 .prefs-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .prefs-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--border-dark); font-size: 16px; color: var(--text-primary); }
-.prefs-row > span { display: grid; gap: 4px; }
+.prefs-row > span, .prefs-row > label { display: grid; gap: 4px; }
 .prefs-row small, .prefs-block small { font-size: 14px; color: var(--text-muted); }
 .prefs-row strong { font-weight: 500; }
 .prefs-block { display: grid; gap: 8px; padding: 16px 0; border-bottom: 1px solid var(--border-dark); font-size: 16px; color: var(--text-primary); }
@@ -93,6 +93,7 @@
 .prefs-segmented button[aria-pressed="true"] { background: var(--text-primary); color: var(--bg-primary); font-weight: 600; }
 .prefs .mem-body { font-size: 16px; }
 @media (max-width: 700px) { .prefs-row { flex-wrap: wrap; } .prefs-input { width: 100%; } }
+.prefs-input.prefs-number { width: 80px; text-align: right; }
 .platform-state { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; color: var(--text-primary); white-space: nowrap; }
 .platform-state i { width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
 .platform-state small { font-size: 13px; color: var(--text-muted); margin-left: 4px; }
@@ -139,3 +140,47 @@
 .prefs-fields select:disabled { opacity: .5; cursor: default; }
 .prefs-fields select option { background: var(--bg-secondary); color: var(--text-primary); }
 @media (max-width: 700px) { .prefs-fields { width: 100%; grid-template-columns: auto 1fr; } }
+/* Listas densas (Fuentes de GaleCore): una fuente ocupa pocas líneas. */
+.prefs-compact .prefs-block { gap: 2px; padding: 8px 0; font-size: 15px; }
+.prefs-compact .prefs-block small { font-size: 13px; line-height: 1.35; }
+.prefs-compact .prefs-actions { margin-top: 2px; }
+.prefs-compact .prefs-actions button { padding: 3px 10px; font-size: 13px; }
+.prefs-compact .prefs-subgroup { margin-top: 8px; }
+/* Tablas de Configuración (Mis conectores, Fuentes de GaleCore): encabezado claro, filas compactas. */
+.connector-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.connector-table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--text-muted); padding: 4px 10px 6px 0; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.connector-table td { padding: 6px 10px 6px 0; border-bottom: 1px solid var(--border-dark); vertical-align: middle; color: var(--text-secondary); }
+.connector-table td:first-child { color: var(--text-primary); font-weight: 500; white-space: nowrap; }
+.connector-table .is-yes, .conn-state.is-good { color: var(--green); }
+.conn-state.is-bad { color: var(--red-gc); }
+.conn-state { white-space: nowrap; cursor: help; }
+.conn-table .conn-group th { padding-top: 14px; color: var(--text-secondary); font-size: 13px; }
+.conn-edit { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.conn-edit code { font-size: 13px; color: var(--text-primary); }
+.conn-edit .prefs-input { width: 200px; padding: 4px 8px; font-size: 13px; }
+.conn-table button { padding: 2px 10px; font-size: 13px; }
+.conn-error { display: block; color: var(--red-gc); font-size: 12px; }
+/* Permisos: aspecto de terminal (/permissions de Claude Code y menú de Codex), compacto. */
+.perm-mode { display: flex; align-items: center; gap: 12px; font-size: 14px; color: var(--text-secondary); }
+.perm-mode select { padding: 5px 10px; font-size: 13px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); }
+.perm-rules { display: grid; gap: 8px; font-family: ui-monospace, Consolas, monospace; }
+.perm-tabs { display: flex; gap: 18px; border-bottom: 1px solid var(--border-dark); }
+.perm-tabs button { padding: 6px 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font: 13px var(--font-sans); cursor: pointer; }
+.perm-tabs button[aria-selected=true] { border-bottom-color: var(--accent); color: var(--text-primary); }
+.perm-list { margin: 0; padding: 0; list-style: none; display: grid; }
+.perm-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 3px 0; border-bottom: 1px solid var(--border-dark); font-size: 13px; }
+.perm-list code { color: var(--text-primary); overflow-wrap: anywhere; }
+.perm-list em { font: 12px var(--font-sans); color: var(--text-muted); }
+.perm-list button, .perm-add button { padding: 2px 10px; font-size: 12px; font-family: var(--font-sans); }
+.perm-add { display: flex; gap: 8px; }
+.perm-add input { flex: 1; max-width: 340px; padding: 4px 8px; font: 13px ui-monospace, Consolas, monospace; border-radius: 6px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); }
+.perm-menu { display: grid; font-family: ui-monospace, Consolas, monospace; }
+.perm-menu button { display: grid; grid-template-columns: 16px 130px 1fr; gap: 8px; align-items: baseline; padding: 4px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); font-size: 13px; text-align: left; cursor: pointer; }
+.perm-menu button:hover { background: var(--bg-hover); }
+.perm-menu button[aria-checked=true] { color: var(--text-primary); background: var(--bg-secondary); }
+.perm-menu strong { font-weight: 600; }
+.perm-menu span { font-family: var(--font-sans); }
+.conn-table button:disabled { opacity: .45; cursor: default; }
+.conn-table .conn-edit { flex-wrap: nowrap; white-space: nowrap; }
+.perm-menu span { font-weight: 400; }
+.settings-agent-account.perm > p { font-size: 14px; margin: 0; color: var(--text-secondary); }

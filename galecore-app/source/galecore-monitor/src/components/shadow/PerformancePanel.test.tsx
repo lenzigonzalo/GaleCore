@@ -34,18 +34,19 @@ beforeEach(() => {
   (createChart as jest.Mock).mockImplementation(() => ({ addSeries: () => ({ setData: jest.fn() }), timeScale: () => ({ fitContent: jest.fn() }), remove: jest.fn() }));
 });
 
-test('el motivo es visible desde Resumen y Operaciones, sin atribuirlo al filtro histórico', async () => {
+test('la evaluación de entradas va sólo en Datos', async () => {
   const instance = { instanceId: 'sandwich', versionHash: 'sha256:bc1ec2d9952c8d5', lifecycleState: 'RUNNING' } as ShadowInstance;
   render(<PerformancePanel spec={plain.spec} instance={instance} />);
   await screen.findByText('Ganancia total');
-  expect(await screen.findByText('VIX < 24: sin dato')).toBeInTheDocument();
+  expect(screen.queryByLabelText('Evaluación de entradas')).not.toBeInTheDocument();
+  expect(fetchShadowEvaluations).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('tab', { name: 'Operaciones' }));
   expect(screen.getByText('Sin operaciones')).toBeInTheDocument();
-  expect(screen.getAllByText('Tope por apuesta')).toHaveLength(3);
-  expect(fetchShadowEvaluations).toHaveBeenCalledTimes(1);
-  fireEvent.change(screen.getByLabelText('Versión'), { target: { value: '1.0.3' } });
-  expect(screen.queryByLabelText('Evaluación de entradas')).not.toBeInTheDocument();
-  expect(screen.getByText(/seleccioná Todas las versiones/)).toBeInTheDocument();
+  expect(screen.queryByText(/seleccioná Todas las versiones/)).not.toBeInTheDocument();
+  (apiClient.get as jest.Mock).mockResolvedValue({ data: { spec: plain.spec, storage: 'Sin historia', lastEvaluationAt: null, items: [] } });
+  fireEvent.click(screen.getByRole('tab', { name: 'Datos' }));
+  expect(await screen.findByLabelText('Evaluación de entradas')).toBeInTheDocument();
+  expect(fetchShadowEvaluations).toHaveBeenCalled();
 });
 test('one metric panel has four groups and four headlines, with reasons only in tooltips', async () => {
   render(<PerformancePanel spec={plain.spec} />);

@@ -6,7 +6,7 @@ jest.mock('../api/space', () => ({ fetchSpace: () => Promise.resolve({ items: []
 jest.mock('../components/settings/Connections', () => ({ Connections: () => <p>Cuenta, permisos y MCP del proveedor</p> }));
 jest.mock('../api/connections', () => ({ fetchConnections: () => Promise.resolve({ canEdit: false, storageReady: true, connections: [
   { id: 'fred', name: 'FRED', kind: 'source', owner: 'platform', needsKey: 'required', status: 'connected', origin: 'server', description: 'Series macro' }] }) }));
-jest.mock('../components/settings/LocalMcp', () => ({ LocalMcp: () => <p>Lista de conectores</p> }));
+jest.mock('../components/settings/MyConnectors', () => ({ MyConnectors: () => <p>Lista de conectores</p> }));
 jest.mock('../components/account/BrokerAccountCard', () => ({ BrokerAccountCard: () => <p>Formulario de Tastytrade</p> }));
 
 test('Conexiones tiene fuentes, conectores y bróker en pestañas y skills queda en una única sección general', async () => {

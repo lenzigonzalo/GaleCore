@@ -4,34 +4,25 @@ import {
 } from '../../api/connections';
 
 /** Fuentes de datos y acceso a GaleCore; las cuentas de IA se administran por separado. */
-const STATUS: Record<ConnectionEntry['status'], string> = {
-  connected: 'Conectada', missing: 'Falta la clave', 'not-needed': 'No necesita clave', error: 'Con error', local: 'En tu PC',
-};
-const fmtDate = (iso?: string) => {
-  if (!iso) return '';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
-};
 const errText = (e: any) => e?.response?.data?.error ?? e?.response?.data?.message ?? 'No se pudo completar el pedido.';
+const REQUIRES: Record<ConnectionEntry['needsKey'], string> = { required: 'Sí', optional: 'Opcional', none: 'No' };
 
-function detail(c: ConnectionEntry): string {
-  if (c.needsKey === 'none') return 'No necesita clave';
-  if (c.status === 'error') return c.lastTest?.message || 'La última prueba falló.';
-  if (c.status === 'missing') return c.needsKey === 'optional' ? 'Sin clave cargada (opcional)' : 'Sin clave cargada';
-  if (c.origin === 'server') return 'Desde la configuración del servidor';
-  const when = fmtDate(c.updatedAt);
-  return ['cargada', c.hint ? 'termina en ••' + c.hint.replace(/^[•*]+/, '') : '', when ? 'cambiada el ' + when : ''].filter(Boolean).join(' · ');
+// ✓ / ✗ con el motivo en el tooltip (la API ya trae el de la última prueba).
+function stateOf(c: ConnectionEntry): { ok: boolean; label: string; why: string } {
+  if (c.status === 'error') return { ok: false, label: 'Con error', why: c.lastTest?.message || 'La última prueba falló.' };
+  if (c.status === 'missing') return { ok: false, label: 'Sin clave', why: c.needsKey === 'optional' ? 'Sin clave cargada: anda con límites bajos.' : 'Falta cargar la API key.' };
+  return { ok: true, label: 'Conectado', why: c.lastTest?.ok ? 'Última prueba: ' + (c.lastTest.message || 'funciona') : c.needsKey === 'none' ? 'No necesita clave.' : c.origin === 'server' ? 'Clave de la configuración del servidor.' : 'Clave cargada.' };
 }
 
 function Row({ c, canEdit, onChange }: { c: ConnectionEntry; canEdit: boolean; onChange: (e: ConnectionEntry) => void }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [error, setError] = useState('');
   const keyed = c.owner === 'platform' && c.needsKey !== 'none';
   const run = async (fn: () => Promise<void>) => {
-    setBusy(true); setMsg(null);
-    try { await fn(); } catch (e) { setMsg({ ok: false, text: errText(e) }); } finally { setBusy(false); }
+    setBusy(true); setError('');
+    try { await fn(); } catch (e) { setError(errText(e)); } finally { setBusy(false); }
   };
   const save = () => run(async () => {
     const updated = await saveConnectionKey(c.id, value.trim());
@@ -40,32 +31,31 @@ function Row({ c, canEdit, onChange }: { c: ConnectionEntry; canEdit: boolean; o
   const reset = () => run(async () => { onChange(await resetConnectionKey(c.id)); });
   const test = () => run(async () => {
     const r = await testConnection(c.id);
-    setMsg({ ok: r.ok, text: r.ok ? 'Funciona' + (r.message ? ': ' + r.message : '') : r.message });
     onChange({ ...c, lastTest: r, status: r.ok ? (c.status === 'error' ? 'connected' : c.status) : 'error' });
   });
-  const good = c.status === 'connected' || c.status === 'not-needed';
-  const cancel = () => { setValue(''); setEditing(false); };
-  return <div className="prefs-block" aria-label={c.name}>
-    <div className="prefs-heading">
-      <span>{c.name}</span>
-      <span className={'settings-status' + (good ? ' is-good' : '')} role="status"><i/>{STATUS[c.status]}</span>
-    </div>
-    <small>{c.description}</small>
-    <small>{detail(c)}</small>
-    {msg && <small role={msg.ok ? 'status' : 'alert'}>{msg.text}</small>}
-    {editing && <div className="prefs-actions">
+  const cancel = () => { setValue(''); setEditing(false); setError(''); };
+  const st = stateOf(c);
+  const hint = c.hint ? '••••' + c.hint.replace(/^[•*]+/, '') : '••••••••';
+  const keyCell = !keyed ? '—' : editing
+    ? <span className="conn-edit">
       <input className="prefs-input" type="password" autoComplete="new-password" aria-label={c.keyLabel || 'Clave de ' + c.name}
         placeholder={c.keyLabel || 'Clave'} value={value} onChange={e => setValue(e.target.value)} />
       <button disabled={busy || !value.trim()} onClick={save}>Guardar</button>
       <button disabled={busy} onClick={cancel}>Cancelar</button>
-    </div>}
-    {!editing && <div className="prefs-actions">
-      {keyed && canEdit && <button disabled={busy} onClick={() => { setMsg(null); setEditing(true); }}>{c.status === 'missing' ? 'Cargar' : 'Cambiar'}</button>}
-      {keyed && canEdit && c.origin === 'database' && <button disabled={busy} onClick={reset}>Volver a la del servidor</button>}
-      {keyed && <button disabled={busy} onClick={test}>Probar</button>}
-      {keyed && !canEdit && <small>Solo un admin puede cambiarlas</small>}
-    </div>}
-  </div>;
+    </span>
+    : c.status === 'missing'
+      ? (canEdit ? <button disabled={busy} onClick={() => setEditing(true)}>Agregar</button> : '—')
+      : <span className="conn-edit"><code>{hint}</code>
+        {canEdit && <button disabled={busy} onClick={() => setEditing(true)}>Cambiar</button>}
+        {canEdit && c.origin === 'database' && <button disabled={busy} title="Descarta la clave cargada y usa la del servidor" onClick={reset}>Usar la del servidor</button>}</span>;
+  return <tr aria-label={c.name}>
+    <td className="conn-name">{c.name}</td>
+    <td>{c.description}</td>
+    <td>{REQUIRES[c.needsKey]}</td>
+    <td>{keyCell}{error && <span className="conn-error" role="alert">{error}</span>}</td>
+    <td><span className={'conn-state ' + (st.ok ? 'is-good' : 'is-bad')} role="status" title={st.why}>{st.ok ? '✓' : '✗'} {st.label}</span></td>
+    <td><button disabled={busy || !keyed} title={keyed ? undefined : 'No necesita clave: no hay nada que probar'} onClick={test}>Probar</button></td>
+  </tr>;
 }
 
 export function ApiConnections() {
@@ -86,7 +76,7 @@ export function ApiConnections() {
     if (found) found[1].push(c); else platformGroups.push([g, [c]]);
   });
   const canEdit = !!data?.canEdit && !!data?.storageReady;
-  return <div className="prefs">
+  return <div className="prefs prefs-compact">
     <section className="prefs-group">
       <h2>GaleCore</h2>
       <div className="prefs-block"><span>Acceso con tu cuenta</span><small>El monitor usa tu sesión de GaleCore. No necesitás ingresar una API key compartida.</small></div>
@@ -97,10 +87,14 @@ export function ApiConnections() {
     {data && <>
       <section className="prefs-group">
         <h2>De la plataforma</h2>
-        {platformGroups.map(([group, rows]) => <React.Fragment key={group || '_'}>
-          {group && <h3 className="prefs-subgroup">{group}</h3>}
-          {rows.map(c => <Row key={c.id} c={c} canEdit={canEdit} onChange={replace} />)}
-        </React.Fragment>)}
+        {!canEdit && <p>Solo un admin puede cambiar las claves.</p>}
+        <table className="connector-table conn-table" aria-label="Fuentes de datos">
+          <thead><tr><th>Fuente</th><th>Descripción</th><th>Requiere API key</th><th>API key</th><th>Estado</th><th>Probar</th></tr></thead>
+          {platformGroups.map(([group, rows]) => <tbody key={group || '_'}>
+            {group && <tr className="conn-group"><th colSpan={6}>{group}</th></tr>}
+            {rows.map(c => <Row key={c.id} c={c} canEdit={canEdit} onChange={replace} />)}
+          </tbody>)}
+        </table>
       </section>
     </>}
   </div>;

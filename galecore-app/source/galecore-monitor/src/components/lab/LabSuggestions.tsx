@@ -4,7 +4,7 @@ import { fetchSpace, saveSpaceItem, SpaceItem } from '../../api/space';
 import './LabSuggestions.css';
 
 // Sugerencias del chat nuevo (WS-0039): la API elige hasta cuatro temas del momento; un clic arranca el chat con su
-// pregunta. Se apagan desde Configuración → Usuario (`preference/sugerencias-chat`); sin la preferencia, prendidas.
+// pregunta. Se apagan desde Configuración → Usuario (`preference/sugerencias-chat`); sin la preferencia, apagadas.
 export interface ChatSuggestion {
   id: string; kind: 'move' | 'event'; title: string; value: string; tone: 'up' | 'down' | 'neutral';
   series: number[]; asOf: string; question: string;
@@ -12,7 +12,7 @@ export interface ChatSuggestion {
 export const SUGGESTIONS_KEY = 'sugerencias-chat';
 
 export function suggestionsEnabled(item?: SpaceItem): boolean {
-  try { return item ? JSON.parse(item.content).enabled !== false : true; } catch { return true; }
+  try { return item ? JSON.parse(item.content).enabled === true : false; } catch { return false; }
 }
 export async function saveSuggestionsEnabled(enabled: boolean): Promise<void> {
   cached = null;
@@ -38,7 +38,7 @@ function loadSuggestions(): Promise<ChatSuggestion[]> {
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.items;
   const items = fetchSpace()
     .then(space => suggestionsEnabled(space.items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY)))
-    .catch(() => true)
+    .catch(() => false)
     .then(enabled => enabled ? apiClient.get<{ items?: ChatSuggestion[] }>('/App/GaleCore/Lab/Suggestions', { timeout: 20_000 }) : null)
     .then(r => r?.data?.items ?? []);
   cached = { at: Date.now(), items };

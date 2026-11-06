@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Switch } from './LanguageSetting';
+import { Switch } from './Switch';
 import { ChatPrefs, playChatSound, readChatPrefs, saveChatPrefs } from '../lab/labChatPrefs';
 import { labRequest, WorkspaceState } from '../../api/lab';
 
@@ -52,13 +52,6 @@ export function ChatBehaviorSettings() {
             <select aria-label="Esfuerzo inicial" value={prefs.effort} disabled={!options || (prefs.model || options.defaultModel || '').includes('haiku')} onChange={e => change({ effort: e.target.value })}>
               <option value="">Predeterminado</option>
               {efforts.map(v => <option key={v} value={v}>{levels[v] || v}</option>)}
-            </select></label>
-        </div></div>
-      <div className="prefs-row"><span>Permisos al abrir un chat<small>Manual pregunta antes de lo que necesita permiso; Auto decide solo lo seguro</small></span>
-        <div className="prefs-fields">
-          <label><span>Permisos</span>
-            <select aria-label="Permisos iniciales" value={prefs.mode} onChange={e => change({ mode: e.target.value === 'auto' ? 'auto' : 'manual' })}>
-              <option value="manual">Manual</option><option value="auto">Auto</option>
             </select></label>
         </div></div>
     </section>

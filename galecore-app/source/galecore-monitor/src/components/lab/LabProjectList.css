@@ -77,3 +77,4 @@
 .lab-project-list .lab-favorite:hover { color:var(--text-primary); }
 .lab-project-list .lab-favorite:focus-visible { outline:2px solid var(--focus-ring); outline-offset:1px; }
 .lab-project-list .lab-list-tabs button,.lab-project-list .lab-group-toggle { font-size:14px; }
+.lab-group-options > .lab-option-sync small { display:block; margin-top:1px; font-size:11px; color:var(--text-muted); }

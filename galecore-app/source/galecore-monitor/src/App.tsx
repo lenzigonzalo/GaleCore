@@ -16,6 +16,7 @@ import { Lab } from './pages/Lab';
 import { useGexStore } from './store/useGexStore';
 import { SettingsModal, needsSetup } from './components/settings/SettingsModal';
 import { fetchSpace } from './api/space';
+import { useApplyTextSizes } from './components/settings/TextSizeSettings';
 import { fetchProviderAuth } from './api/terminal';
 import { Admin } from './pages/Admin';
 import { Rpf } from './pages/Rpf';
@@ -126,6 +127,7 @@ function Dashboard({ onLogout, userId }: DashboardProps) {
 
   const { status, subscribeSymbol, unsubscribeSymbol, subscribeLeg, unsubscribeLeg, acceptSuggestion, dismissSuggestion } = useMarketSocket(tickers);
   useEffect(() => { setSocketStatus(status); }, [status]);
+  useApplyTextSizes();
 
   return (
     <div className={'workspace-shell flex flex-col has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '') + (isLabWorkspace ? ' watchlist-autohide' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>

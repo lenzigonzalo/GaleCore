@@ -316,6 +316,11 @@ summary:focus-visible, [role="button"]:focus-visible {
 .ticker-watchlist .numeric { text-align: right; }
 .ticker-watchlist .watchlist-received { display: none; }
 .ticker-watchlist .watchlist-premarket { white-space: nowrap; }
+.watchlist-columns { position: relative; }
+.watchlist-columns > button[aria-expanded="true"] { background: var(--bg-hover); color: var(--text-primary); border-radius: 5px; }
+.watchlist-columns-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 5; display: grid; gap: 2px; min-width: 190px; padding: 6px; background: var(--bg-secondary); border: 1px solid var(--border-light); border-radius: 8px; box-shadow: 0 8px 24px #0008; }
+.watchlist-columns-menu label { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 5px; font-size: 14px; font-weight: 400; color: var(--text-primary); cursor: pointer; }
+.watchlist-columns-menu label:hover { background: var(--bg-hover); }
 .ticker-watchlist tr.selected { background: var(--bg-tertiary); box-shadow: inset 2px 0 var(--accent); }
 .watchlist-symbol, .watchlist-remove { background: transparent; color: var(--text-primary); border: 0; cursor: pointer; padding: 4px 0; }
 .watchlist-symbol { font-weight: 600; }

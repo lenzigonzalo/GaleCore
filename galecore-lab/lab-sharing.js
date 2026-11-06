@@ -8,6 +8,12 @@ const path = require('path');
 
 const SYNC_FILE = '.sync.json';
 const USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/;
+const crypto = require('crypto');
+// Lo que el sync del CLI no toca (galecore_ai/application/shared_projects.py: SKIP_DIRS, _scan, _valid_path, MAX_BYTES).
+const SKIP_DIRS = new Set(['.git', '.scratch', 'node_modules', '__pycache__']);
+const SKIP_FILES = new Set([SYNC_FILE, SYNC_FILE + '.tmp', '.sync.lock']);
+const MAX_BYTES = 2 * 1024 * 1024, MAX_PATH = 400;
+const syncable = rel => rel.length <= MAX_PATH && !/[\u0000-\u001f\\:]/.test(rel);
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 
 // La cache de sesión del CLI (galecore_space.session_file): %LOCALAPPDATA%/GaleCore/session.json.
@@ -26,6 +32,37 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   // Compartido *en este entorno*: el `.sync.json` fue escrito contra esta misma API. Si es de otro (Dev vs producción),
   // para este entorno la carpeta no está compartida.
   const inThisEnvironment = p => isShared(p) && String(state(p)?.context?.api || '').replace(/\/+$/, '') === apiBase();
+  // Archivos con cambios locales sin subir desde el último sync: el contenido de la carpeta contra `files` de `.sync.json`
+  // (path -> sha256 que ambos lados tenían). Sólo disco, sin API ni login; se vuelve a hashear únicamente si cambió algún
+  // tamaño o fecha (o el `.sync.json`). Lo que el último sync saltó (muy grande, rechazado) no cuenta: nunca se va a subir.
+  const unsyncedCache = new Map();   // carpeta -> { sig, paths }
+  function unsynced(p) {
+    const s = state(p), manifest = s && s.files;
+    if (!manifest || typeof manifest !== 'object') return [];
+    const local = new Map(), sig = [];
+    try { const st = fs.statSync(path.join(p.dir, SYNC_FILE)); sig.push(st.mtimeMs, st.size); } catch { return []; }
+    (function walk(dir, prefix) {
+      let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+      for (const e of entries) {
+        if (e.isSymbolicLink()) continue;
+        if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(path.join(dir, e.name), prefix + e.name + '/'); continue; }
+        if (!e.isFile() || SKIP_FILES.has(e.name) || e.name.startsWith('.sync-write-') || !syncable(prefix + e.name)) continue;
+        try { const st = fs.statSync(path.join(dir, e.name)); if (st.size > MAX_BYTES) continue; local.set(prefix + e.name, path.join(dir, e.name)); sig.push(prefix + e.name, st.mtimeMs, st.size); } catch { /* desapareció */ }
+      }
+    })(p.dir, '');
+    const skipped = new Set((notices.get(p.id)?.skipped || []).map(x => x.path));
+    const key = sig.join('|') + '#' + [...skipped].join(',');
+    const hit = unsyncedCache.get(p.dir);
+    if (hit && hit.sig === key) return hit.paths;
+    const paths = [];
+    for (const [rel, full] of local) {
+      let digest; try { digest = crypto.createHash('sha256').update(fs.readFileSync(full)).digest('hex'); } catch { continue; }
+      if (manifest[rel] !== digest && !skipped.has(rel)) paths.push(rel);
+    }
+    for (const rel of Object.keys(manifest)) if (!local.has(rel) && !fs.existsSync(path.join(p.dir, rel)) && !skipped.has(rel)) paths.push(rel);
+    unsyncedCache.set(p.dir, { sig: key, paths });
+    return paths;
+  }
   const isRunning = p => running.has(p.id);
   // Si hay un sync corriendo en el proyecto, espera a que termine (hasta `ms`, ignorando su error): mandar un mensaje no da error.
   const settle = async (p, ms) => { const job = running.get(p.id); if (job) await Promise.race([job.catch(() => null), new Promise(r => setTimeout(r, ms).unref?.())]); };
@@ -81,9 +118,11 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
       const more = n.conflicts.length > 1 ? ` y ${n.conflicts.length - 1} más` : '';
       return { syncState: 'conflict', notice: `Conflicto en ${n.conflicts[0].path}${more}` };
     }
+    if (info.pending > 0) return { syncState: 'pending', notice: 'Cambios sin compartir', action: 'sync', pending: info.pending };
     return { syncState: 'ok', notice: null };
   }
-  const projectHealth = p => { const s = state(p) || {}; return health(p.id, { following: s.subscribed === true, lastError: s.lastError }); };
+  const projectHealth = p => { const s = state(p) || {}; const following = s.subscribed === true;
+    return health(p.id, { following, lastError: s.lastError, pending: following ? unsynced(p).length : 0 }); };
   function failed(p, message) {
     notices.set(p.id, { at: new Date().toISOString(), conflicts: notices.get(p.id)?.conflicts || [], error: reason(message) });
   }
@@ -104,12 +143,14 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
   }
 
   // Discovery is read-only. It never downloads a newly shared project.
-  async function catalog({ busy = () => false } = {}) {
+  async function catalog({ busy = () => false, projectsOf = () => [] } = {}) {
+    const dirs = new Map(projectsOf().map(x => [x.id, x]));
     if (!catalogRun) catalogRun = cli(['project', 'shared']).finally(() => { catalogRun = null; });
     const out = await catalogRun;
     return { ...out, projects: (out.projects || []).map(p => ({ ...p, access: p.access || 'restricted', member: p.member !== false,
       syncNotice: notices.get(p.local) || null,
-      ...(p.local ? health(p.local, { following: p.subscribed, lastError: p.lastError, removed: p.removed, needsConfirmation: p.needsConfirmation })
+      ...(p.local ? health(p.local, { following: p.subscribed, lastError: p.lastError, removed: p.removed, needsConfirmation: p.needsConfirmation,
+        pending: p.subscribed && dirs.has(p.local) && inThisEnvironment(dirs.get(p.local)) ? unsynced(dirs.get(p.local)).length : 0 })
         : { syncState: null, notice: null }),
       working: !!p.local && busy({id:p.local}), syncing: running.has(p.local) || running.has('remote:' + p.id) })) };
   }
@@ -234,10 +275,12 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
     return { users };
   }
 
+  // Cuándo terminó bien el último sync (lo escribe el CLI en `.sync.json`); null si nunca.
+  const lastSync = p => state(p)?.lastSuccess || null;
   const notice = p => notices.get(p.id) || null;
   const clearNotice = p => { notices.delete(p.id); };
 
-  return { isShared, inThisEnvironment, isRunning, settle, isFollowing, isMine, health: projectHealth, catalog, subscribe, add, sync, syncAll, status, share, setAccess, unshare, searchUsers, notice, clearNotice };
+  return { isShared, inThisEnvironment, isRunning, settle, isFollowing, isMine, unsynced, health: projectHealth, catalog, subscribe, add, sync, syncAll, status, share, setAccess, unshare, searchUsers, notice, clearNotice, lastSync };
 }
 
 module.exports = { createSharing, SYNC_FILE };

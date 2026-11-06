@@ -1,20 +1,21 @@
 .skills-view { font-size: 16px; padding-top: 14px; }
 .skills-toolbar, .skills-actions, .skills-detail-header, .skills-filebar, .skills-delete { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .skills-toolbar, .skills-filebar { justify-content: space-between; }
-.skills-toolbar { margin-bottom: 24px; }
-.skills-search { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-muted); }
+.skills-toolbar { margin-bottom: 14px; }
+.skills-search { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; color: var(--text-muted); }
 .skills-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text-primary); font: 16px var(--font-sans); outline: none; }
 .skills-search:focus-within { outline: 2px solid var(--focus-ring); }
 .skills-muted { color: var(--text-muted); font-size: 15px; line-height: 1.6; }
 .skills-list { list-style: none; margin: 0; padding: 0; }
 .skills-list li { border-bottom: 1px solid var(--border-dark); }
-.skills-list li > button { display: flex; align-items: center; gap: 18px; width: 100%; padding: 22px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--text-secondary); text-align: left; cursor: pointer; }
+.skills-list li > button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--text-secondary); text-align: left; cursor: pointer; }
 .skills-list li > button:hover { background: var(--bg-secondary); }
-.skills-icon { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 13px; background: var(--bg-secondary); color: var(--text-secondary); }
-.skills-row-body { flex: 1; min-width: 0; display: grid; gap: 6px; }
-.skills-row-body strong { font-size: 18px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
-.skills-row-body > span { font-size: 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; }
-.skills-version { font-size: 14px; color: var(--text-muted); }
+.skills-icon { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 9px; background: var(--bg-secondary); color: var(--text-secondary); }
+.skills-detail-header .skills-icon { width: 52px; height: 52px; border-radius: 13px; }
+.skills-row-body { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.skills-row-body strong { font-size: 15px; font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.skills-row-body > span { font-size: 13px; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
+.skills-version { font-size: 12px; color: var(--text-muted); }
 .skills-back { display: inline-flex; align-items: center; gap: 9px; padding: 8px 0; background: transparent; border: 0; color: var(--text-secondary); font-size: 16px; cursor: pointer; }
 .skills-detail-header { margin: 26px 0 28px; }
 .skills-detail-header > div { flex: 1; min-width: 180px; }
@@ -40,4 +41,4 @@
 .skills-delete { border-top: 1px solid var(--border-dark); margin-top: 40px; padding-top: 16px; }
 .skills-empty { display: grid; justify-items: center; padding: 42px 20px; text-align: center; color: var(--text-muted); }
 @media (max-width: 1000px) { .skills-summary { grid-template-columns: 1fr; gap: 24px; } }
-@media (max-width: 700px) { .skills-toolbar { align-items: stretch; } .skills-toolbar .prefs-segmented { flex-wrap: wrap; } .skills-document { padding: 22px 18px; } .skills-filebar .prefs-segmented span { display: none; } .skills-list li > button { gap: 12px; padding: 18px 0; } .skills-version { display: none; } }
+@media (max-width: 700px) { .skills-toolbar { align-items: stretch; } .skills-toolbar .prefs-segmented { flex-wrap: wrap; } .skills-document { padding: 22px 18px; } .skills-filebar .prefs-segmented span { display: none; } .skills-list li > button { gap: 12px; padding: 8px 0; } .skills-version { display: none; } }

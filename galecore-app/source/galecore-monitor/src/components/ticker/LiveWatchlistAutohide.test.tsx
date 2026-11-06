@@ -22,7 +22,6 @@ function Dock({ autoHide = true }: { autoHide?: boolean }) {
 beforeEach(() => { useGexStore.setState({ rules: {} as any, rulesError: null, tickers: [] }); });
 
 test.each([
-  ['watchlist', 'Cerrar panel de watchlist'],
   ['calendario', 'Cerrar calendario'],
   ['avisos', 'Cerrar avisos'],
 ])('el clic fija %s al salir al chat; cerrar devuelve la barra al hover', async (mode, closeLabel) => {
@@ -85,7 +84,7 @@ test('teclado mantiene foco al salir el mouse y Escape devuelve al borde; toque 
   expect(area).toHaveClass('is-open');
   act(() => screen.getByRole('button', { name: 'Abrir watchlist' }).focus());
   fireEvent.click(screen.getByRole('button', { name: 'Abrir watchlist' }));
-  const close = screen.getByRole('button', { name: 'Cerrar panel de watchlist' });
+  const close = screen.getByRole('button', { name: 'Columnas' });
   expect(close).toHaveFocus();
   fireEvent.pointerLeave(area);
   expect(area).toHaveClass('is-open');

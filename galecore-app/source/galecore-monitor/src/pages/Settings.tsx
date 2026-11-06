@@ -4,9 +4,7 @@ import { Connections } from '../components/settings/Connections';
 import { PlatformServices } from '../components/settings/PlatformServices';
 import './Settings.css';
 import { SkillsView } from '../components/settings/SkillsView';
-import { LocalMcp } from '../components/settings/LocalMcp';
-import { localMcpAvailable } from '../api/localMcp';
-import { LanguageSetting } from '../components/settings/LanguageSetting';
+import { MyConnectors } from '../components/settings/MyConnectors';
 import { ProfileSettings } from '../components/settings/ProfileSettings';
 import { StrikeAlertForm } from '../components/settings/StrikeAlertForm';
 import { SUGGESTIONS_KEY, suggestionsEnabled, saveSuggestionsEnabled } from '../components/lab/LabSuggestions';
@@ -15,7 +13,7 @@ import { BrokerAccountCard } from '../components/account/BrokerAccountCard';
 import { ApiConnections } from '../components/settings/ApiConnections';
 import { useAccountStore } from '../store/useAccountStore';
 import { AccountSettings } from '../components/settings/AccountSettings';
-import { ChatFontSetting } from '../components/settings/ChatFontSetting';
+import { TextSizeSettings } from '../components/settings/TextSizeSettings';
 import { ChatBehaviorSettings } from '../components/settings/ChatBehaviorSettings';
 import { Markdown } from '../components/settings/Markdown';
 import { useCurrentUserStore } from '../store/useCurrentUserStore';
@@ -141,7 +139,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
 
   let body: React.ReactNode;
   if (section === 'mcp-local') {
-    body = localMcpAvailable() ? <LocalMcp /> : <p>Los servidores MCP se administran desde GaleCore en tu PC.</p>;
+    body = <MyConnectors />;
   } else if (section === 'conexiones') {
     body = <Connections />;
   } else if (section === 'usuario') {
@@ -151,8 +149,7 @@ export function Settings({ initial = 'usuario', wizard = false, onClose }: { ini
   } else if (section === 'cuenta') {
     body = (
       <AccountSettings user={user}
-        chatFont={<ChatFontSetting items={items} onChanged={reload} />}
-        language={<LanguageSetting item={items.find(i => i.kind === 'profile' && i.isOwn)} onChanged={reload} />}
+        textSize={<TextSizeSettings items={items} onChanged={reload} />}
         suggestions={suggestionsEnabled(items.find(i => i.kind === 'preference' && i.key === SUGGESTIONS_KEY))}
         onSuggestions={next => { void saveSuggestionsEnabled(next).then(reload).catch(() => setError('No se pudo guardar la preferencia.')); }} />
     );
