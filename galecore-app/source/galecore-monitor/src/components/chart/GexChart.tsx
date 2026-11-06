@@ -6,16 +6,15 @@ import {
   CandlestickSeries,
   LineSeries,
   LineStyle,
-  IPriceLine,
   ColorType,
   CrosshairMode,
   AutoscaleInfo,
 } from 'lightweight-charts';
 import { GexChartData, GexTabDisplayConfig } from '../../types/gex';
+import { CALL_COLOR, PUT_COLOR, sideColorAlpha } from '../../utils/optionSideColors';
 import { fetchEquityCandles } from '../../api/marketdata';
-import { etDateParts, etOffsetMinutes } from '../../utils/formatters';
-import { appZoom } from '../../utils/appZoom';
-import type { AlertLevel, AxisLabels, ChartLayer, LayerCtx } from './chartLayers';
+import { fmtPrice, fmtExpiry, etDateParts, etOffsetMinutes } from '../../utils/formatters';
+import { GexBarsPanel } from './GexBarsPanel';
 
 interface Props {
   readable?: boolean;
@@ -46,35 +45,8 @@ interface Props {
   alineado?: boolean;
   /** Lo llama el gráfico cuando el operador mueve la escala a mano: la alineación se apaga sola. */
   onDesalinear?: () => void;
-  /** Avisos de precio (WS-0064): los dibuja la capa «Avisos». */
-  alertLevels?: AlertLevel[];
-  /** Las capas disponibles y cuáles están prendidas (panel lateral de la pantalla). */
-  layers?: ChartLayer[];
-  layerOn?: Record<string, boolean>;
-}
-
-const EMPTY_REASON = 'Sin velas para este período: mercado cerrado o sin datos del bróker.';
-
-/**
- * El motivo legible de una falla al pedir velas, en una línea: lo que dice la API (`error`, con su
- * `code` estable) o, si no dijo nada, lo que se sabe del estado de la respuesta.
- */
-export function candleErrorReason(err: any): string {
-  const status: number | undefined = err?.response?.status;
-  const body = err?.response?.data;
-  const apiMessage: string | undefined = typeof body?.error === 'string' && body.error.trim() ? body.error.trim()
-    : typeof body?.message === 'string' && body.message.trim() ? body.message.trim() : undefined;
-  const code: string | undefined = body?.code;
-  if (code === 'broker_account_not_linked' || code === 'broker_credential_invalid') {
-    return `Sin datos del bróker: ${apiMessage ?? (code === 'broker_account_not_linked' ? 'no hay cuenta vinculada.' : 'la credencial fue rechazada.')}`;
-  }
-  if (apiMessage) return status ? `${apiMessage} (HTTP ${status})` : apiMessage;
-  if (status === 401 || status === 403) return 'Sin permiso para leer el precio: iniciá sesión de nuevo.';
-  if (status === 404) return 'La API no tiene velas para este símbolo.';
-  if (status && status >= 500) return `Error de la API al leer el precio (HTTP ${status}).`;
-  if (status) return `La API rechazó el pedido de velas (HTTP ${status}).`;
-  if (err?.code === 'ECONNABORTED') return 'La API tardó más de 45 s en responder las velas.';
-  return 'No se pudo conectar con la API para leer el precio.';
+  /** Avisos de precio (WS-0064): líneas grises punteadas, separadas de las del gex. */
+  alertLevels?: { id: string; price: number; label: string }[];
 }
 
 const DEFAULT_BUCKET = 5 * 60;
@@ -117,7 +89,7 @@ const ANCLAS_ABAJO: Record<string, (g: GexChartData, em: number) => number | nul
  * desaparecía como ancla y el marco se reducía al ancho de los muros —tres puntos— con las velas
  * de 30 días adentro. El agregado no tiene EM y ahí el cero es correcto: no hay vencimiento.
  */
-export function expectedMove(g: GexChartData, iv30?: number): number {
+function expectedMove(g: GexChartData, iv30?: number): number {
   if (g.expectedMove && g.expectedMove > 0) return g.expectedMove;
   return iv30 && iv30 > 0 && g.spot > 0 && g.dte > 0
     ? g.spot * (iv30 / 100) * Math.sqrt(g.dte / 365)
@@ -183,58 +155,6 @@ function marketOpenUnix(): number {
   return Math.floor((asIfUtc - etOffsetMinutes(new Date(asIfUtc)) * 60_000) / 1000);
 }
 
-/**
- * Etiquetas del eje de precio sin solaparse. Las líneas de precio (muros, ZGL, σ, avisos) y el
- * último precio compiten por el mismo borde: cuando dos etiquetas quedan a menos de `gap` píxeles,
- * se oculta la de menor prioridad (la línea sigue dibujada). El último precio manda siempre.
- */
-function createAxisLabels(onChange: () => void) {
-  const entries = new Map<IPriceLine, { priority: number; title: string }>();
-  const api: AxisLabels = {
-    add(line, priority, title) { entries.set(line, { priority, title }); onChange(); },
-    remove(line) { entries.delete(line); },
-  };
-  // Las marcas automáticas del eje no se pueden ocultar una por una, pero sí se formatean: `blank`
-  // devuelve true para una marca redonda que cae pegada a una etiqueta visible, y el formateador del
-  // eje la dibuja vacía. Los precios no redondos (el crosshair, las propias etiquetas) no se tocan.
-  let shown: number[] = [];
-  let shownSeries: ISeriesApi<any> | null = null;
-  let shownGap = 0;
-  const blank = (price: number) => {
-    if (!shownSeries || !shown.length) return false;
-    if (Math.abs(price * 4 - Math.round(price * 4)) > 1e-6) return false;
-    const y = shownSeries.priceToCoordinate(price);
-    if (y == null) return false;
-    return shown.some(p => {
-      if (Math.abs(p - price) < 1e-6) return false;
-      const yp = shownSeries!.priceToCoordinate(p);
-      return yp != null && Math.abs((yp as number) - (y as number)) < shownGap;
-    });
-  };
-  const reflow = (series: ISeriesApi<any> | null, lastPrice: number, gap: number, hideTitles: boolean, onShown?: () => void) => {
-    if (!series) return;
-    const prevShown = shown.join('|');
-    const taken: number[] = [];
-    const takenPrices: number[] = lastPrice > 0 ? [lastPrice] : [];
-    const last = lastPrice > 0 ? series.priceToCoordinate(lastPrice) : null;
-    if (last != null) taken.push(last as number);
-    const items = Array.from(entries).map(([line, e]) => ({ line, e, y: series.priceToCoordinate(line.options().price) }))
-      .sort((a, b) => b.e.priority - a.e.priority);
-    for (const { line, e, y } of items) {
-      const visible = y != null && taken.every(t => Math.abs(t - (y as number)) >= gap);
-      if (visible) { taken.push(y as number); takenPrices.push(line.options().price); }
-      const title = visible && !hideTitles ? e.title : '';
-      const o = line.options();
-      if (o.axisLabelVisible !== visible || o.title !== title) {
-        try { line.applyOptions({ axisLabelVisible: visible, title }); } catch { /* línea quitada */ }
-      }
-    }
-    shown = takenPrices; shownSeries = series; shownGap = gap;
-    if (shown.join('|') !== prevShown) onShown?.();
-  };
-  return { api, reflow, blank };
-}
-
 export function GexChart({
   symbol, currentPrice, openPrice, iv30, gexData, readable = false,
   candleInterval = '5m',
@@ -246,8 +166,6 @@ export function GexChart({
   alineado = false,
   onDesalinear,
   alertLevels,
-  layers = [],
-  layerOn = {},
 }: Props) {
   const [historyState, setHistoryState] = useState<'loading' | 'ready' | 'empty' | 'error'>('loading');
   const [historyError, setHistoryError] = useState('');
@@ -257,6 +175,8 @@ export function GexChart({
   const containerRef  = useRef<HTMLDivElement>(null);   // chart div
   const chartRef      = useRef<IChartApi | null>(null);
   const seriesRef     = useRef<ISeriesApi<'Candlestick' | 'Line', any> | null>(null);
+  const gexLinesRef   = useRef<any[]>([]);
+  const alertLinesRef = useRef<any[]>([]);
   const candlesRef    = useRef<{ time: number; open: number; high: number; low: number; close: number }[]>([]);
   const useCandlesRef = useRef(false);
 
@@ -284,7 +204,6 @@ export function GexChart({
   // renderTick: incremented on scroll/resize so GexBarsPanel re-renders
   const [renderTick, setRenderTick] = useState(0);
   const [chartH, setChartH] = useState(400);
-  const [chartW, setChartW] = useState(800);
 
   const bump = useCallback(() => setRenderTick(n => n + 1), []);
 
@@ -355,8 +274,6 @@ export function GexChart({
   // Encuadre del eje temporal. Con rightPadBars > 0 el rango visible se extiende N barras más allá
   // de la última vela: quedan esos slots vacíos a la derecha y las velas corridas a la izquierda.
   // fitContent() no sirve para eso — ajusta el rango exacto a los datos e ignora el offset.
-  const labelsRef = useRef<ReturnType<typeof createAxisLabels> | null>(null);
-  const priceFmt = useCallback((p: number) => (labelsRef.current?.blank(p) ? '' : p.toFixed(2)), []);
   const fitView = useCallback(() => {
     const chart = chartRef.current;
     if (!chart) return;
@@ -396,10 +313,9 @@ export function GexChart({
         background: { type: ColorType.Solid, color: '#090909' },
         textColor: readable ? '#e5e5df' : '#b6b6b0',
         fontFamily: getComputedStyle(el).getPropertyValue('--font-sans').trim(),
-        fontSize: (readable ? 15 : 13) * appZoom(),
+        fontSize: readable ? 15 : 13,
         attributionLogo: false,
       },
-      localization: { priceFormatter: priceFmt },
       grid: {
         vertLines: { color: 'rgba(30,48,74,0.5)', style: LineStyle.Dotted },
         horzLines: { color: 'rgba(30,48,74,0.5)', style: LineStyle.Dotted },
@@ -443,7 +359,6 @@ export function GexChart({
       if (el) {
         chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
         setChartH(el.clientHeight);
-        setChartW(el.clientWidth);
       }
       bump();
     });
@@ -527,7 +442,6 @@ export function GexChart({
     el.addEventListener('dblclick', onGesto);
 
     setChartH(el.clientHeight || 400);
-    setChartW(el.clientWidth);
 
     return () => {
       ro.disconnect();
@@ -550,6 +464,7 @@ export function GexChart({
       seriesRef.current = null;
       useCandlesRef.current = false;
       candlesRef.current = [];
+      gexLinesRef.current = [];
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -561,7 +476,7 @@ export function GexChart({
     setHistoryError('');
     fetchEquityCandles(symbol, candleInterval, { fromDays: candleFromDays, limit: maxCandles }).then(candles => {
       if (cancelled || !chartRef.current) return;
-      if (!candles.length) { setHistoryError(EMPTY_REASON); setHistoryState('empty'); return; }
+      if (!candles.length) { setHistoryState('empty'); return; }
       const chart = chartRef.current;
       if (seriesRef.current && !useCandlesRef.current) {
         chart.removeSeries(seriesRef.current);
@@ -575,6 +490,7 @@ export function GexChart({
         seriesRef.current    = cs;
         useCandlesRef.current = true;
         candlesRef.current   = candles;
+        gexLinesRef.current = [];
         setSeriesVersion(v => v + 1);
         // El encuadre vive en la SERIE (es su proveedor de autoescala), así que cambiarla lo borra:
         // la serie de velas nace sin él y el eje se va al rango de las velas — 30 días de recorrido
@@ -593,7 +509,9 @@ export function GexChart({
       setHistoryState('ready');
     }).catch((err) => {
       if (cancelled) return;
-      setHistoryError(candleErrorReason(err));
+      const status = err?.response?.status;
+      setHistoryError(status ? `API HTTP ${status}` : err?.code === 'ECONNABORTED'
+        ? 'La API tardó más de 45 s' : err?.message || 'Error al cargar velas');
       setHistoryState('error');
     });
     return () => { cancelled = true; };
@@ -622,17 +540,21 @@ export function GexChart({
     }
   }, [currentPrice, candleBucketSeconds]);
 
-  // ── Encuadre según la cadena GEX ──────────────────────────────────────────
-  // Las capas que dependen de la cadena (muros, barras) fijan el marco del eje de precio. Sin
-  // ninguna prendida el eje vuelve a la autoescala de las velas.
-  const gex = layers.some(l => l.needsGex && layerOn[l.id]) ? gexData : null;
-  const alertsKey = (alertLevels ?? []).map(a => `${a.id}:${a.price}`).join('|');
+  // ── Avisos de precio: línea gris punteada con su etiqueta (WS-0064) ───────
+  const alertsKey = (alertLevels ?? []).map(a => `${a.id}:${a.price}:${a.label}`).join('|');
   useEffect(() => {
     const series = seriesRef.current;
     if (!series) return;
-    if (!gex) {
-      // Las líneas de precio no entran en la autoescala de lightweight-charts. Sin cadena GEX,
-      // incluir los avisos para que un nivel fuera del recorrido de las velas siga visible (BF-0003).
+    alertLinesRef.current.forEach(l => { try { series.removePriceLine(l); } catch {} });
+    alertLinesRef.current = [];
+    for (const a of alertLevels ?? []) {
+      try {
+        alertLinesRef.current.push(series.createPriceLine({ price: a.price, color: '#92928b', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: a.label }));
+      } catch {}
+    }
+    if (!gexData) {
+      // Las líneas de precio no entran en la autoescala de lightweight-charts. En Precio,
+      // incluir los avisos para que un nivel fuera del recorrido de las velas siga visible.
       // No se reactiva autoScale: el zoom manual se conserva y Reset vuelve a este proveedor.
       const prices = (alertLevels ?? []).map(a => a.price).filter(p => Number.isFinite(p) && p > 0);
       series.applyOptions({ autoscaleInfoProvider: (original: () => AutoscaleInfo | null) => {
@@ -643,48 +565,66 @@ export function GexChart({
           maxValue: Math.max(base?.priceRange?.maxValue ?? prices[0], ...prices),
         } };
       } });
-      if (gexRef.current) {
-        gexRef.current = null;
-        expRef.current = null;
-        chartRef.current?.priceScale('right').applyOptions({ autoScale: true, scaleMargins: { top: SCALE_MARGIN, bottom: SCALE_MARGIN } });
-        bump();
-      }
-      return;
+    }
+  }, [alertsKey, seriesVersion, !!gexData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── GEX price lines + StdDev + autoscale ──────────────────────────────────
+  useEffect(() => {
+    const series = seriesRef.current;
+    if (!series || !gexData) return;
+
+    gexLinesRef.current.forEach(l => { try { series.removePriceLine(l); } catch {} });
+    gexLinesRef.current = [];
+
+    const add = (price: number, color: string, label: string, width: 1|2|3|4, style: LineStyle, axis = true) => {
+      if (!price) return;
+      gexLinesRef.current.push(series.createPriceLine({ price, color, lineWidth: width, lineStyle: style, axisLabelVisible: axis, title: label }));
+    };
+
+    // El MURO es el nivel con nombre y valor: una línea de puntos suave a lo ancho del gráfico, con su etiqueta
+    // en el eje. La franja de la banda ya no se sombrea acá: pisaba las velas y el propio muro (owner 21/10).
+    const SOFT = 0.32;
+    add(gexData.callWall,       sideColorAlpha(CALL_COLOR, SOFT), `Call Wall ${fmtPrice(gexData.callWall, 0)}`, 1, LineStyle.Dotted);
+    add(gexData.putWall,        sideColorAlpha(PUT_COLOR, SOFT),  `Put Wall ${fmtPrice(gexData.putWall, 0)}`,   1, LineStyle.Dotted);
+    add(gexData.zeroGammaLevel, 'rgba(148,163,184,0.32)',         `ZGL ${fmtPrice(gexData.zeroGammaLevel, 0)}`, 1, LineStyle.Dotted);
+    // Vencimientos comparados: sus muros y ZGL, más tenues y rotulados con su fecha.
+    for (const o of gexData.others ?? []) {
+      const tag = fmtExpiry(o.expiration);
+      add(o.callWall,       sideColorAlpha(CALL_COLOR, 0.18), `CW ${fmtPrice(o.callWall, 0)} · ${tag}`,       1, LineStyle.Dotted, false);
+      add(o.putWall,        sideColorAlpha(PUT_COLOR, 0.18),  `PW ${fmtPrice(o.putWall, 0)} · ${tag}`,        1, LineStyle.Dotted, false);
+      add(o.zeroGammaLevel, 'rgba(148,163,184,0.18)',         `ZGL ${fmtPrice(o.zeroGammaLevel, 0)} · ${tag}`, 1, LineStyle.Dotted, false);
+    }
+
+    const spot = gexData.spot;
+    const em   = expectedMove(gexData, iv30);
+    if (em > 0) {
+      add(spot + em,     'rgba(96,165,250,0.28)', `+1σ ${fmtPrice(spot+em, 0)}`,   1, LineStyle.Dotted);
+      add(spot - em,     'rgba(96,165,250,0.28)', `-1σ ${fmtPrice(spot-em, 0)}`,   1, LineStyle.Dotted);
+      add(spot + 2 * em, 'rgba(59,130,246,0.2)', `+2σ ${fmtPrice(spot+2*em, 0)}`, 1, LineStyle.Dotted, false);
+      add(spot - 2 * em, 'rgba(59,130,246,0.2)', `-2σ ${fmtPrice(spot-2*em, 0)}`, 1, LineStyle.Dotted, false);
     }
 
     // Datos vivos para el botón de encuadre, que corre fuera de este efecto.
-    gexRef.current = gex;
+    gexRef.current = gexData;
     ivRef.current  = iv30;
 
     // El encuadre se recalcula con cada barrido: si el modo es gamma, los muros y las bandas nuevas
-    // mueven el marco. Salvo que el operador haya movido el eje a mano: ahí el eje es suyo hasta
-    // que apriete el botón. Elegir OTRO vencimiento sí reencuadra: es pedir ver otra cosa.
-    const cambioDeExpiracion = expRef.current !== gex.expiration;
-    expRef.current = gex.expiration;
-    if (cambioDeExpiracion || !tocadoRef.current) aplicarEncuadre(series, gex, iv30);
+    // mueven el marco. Congelarlo en el click dejaría el encuadre de hace diez minutos.
+    //
+    // Salvo que el operador haya movido el eje a mano: ahí el eje es suyo hasta que apriete el
+    // botón. Un barrido que le devuelve la escala a su lugar diez minutos después es la misma
+    // molestia que el gráfico clavado, con la sorpresa de que pasa solo.
+    //
+    // Elegir OTRO vencimiento sí reencuadra aunque lo haya movido: eso no es un barrido que llega
+    // solo, es pedir ver otra cosa — y los muros del vencimiento nuevo pueden caer fuera del marco
+    // que quedó del anterior.
+    const cambioDeExpiracion = expRef.current !== gexData.expiration;
+    expRef.current = gexData.expiration;
+    if (cambioDeExpiracion || !tocadoRef.current) aplicarEncuadre(series, gexData, iv30);
 
     fitView();
     bump();
-  }, [gex, iv30, seriesVersion, alertsKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Etiquetas del eje sin solaparse ───────────────────────────────────────
-  const reflowRaf = useRef(0);
-  const hideTitlesRef = useRef(false);
-  hideTitlesRef.current = false;
-  const currentPriceRef = useRef(currentPrice);
-  currentPriceRef.current = currentPrice;
-  const reflowLabels = useCallback(() => {
-    cancelAnimationFrame(reflowRaf.current);
-    reflowRaf.current = requestAnimationFrame(() => {
-      // El obstáculo es la etiqueta del último valor de la serie, que es el cierre de la última vela.
-      const lastClose = candlesRef.current[candlesRef.current.length - 1]?.close;
-      labelsRef.current?.reflow(seriesRef.current, lastClose ?? currentPriceRef.current, 15 * appZoom() + 10, hideTitlesRef.current,
-        () => chartRef.current?.applyOptions({ localization: { priceFormatter: priceFmt } }));
-    });
-  }, [priceFmt]);
-  if (!labelsRef.current) labelsRef.current = createAxisLabels(reflowLabels);
-  useEffect(() => { reflowLabels(); }, [renderTick, seriesVersion, currentPrice, reflowLabels]);
-  useEffect(() => () => cancelAnimationFrame(reflowRaf.current), []);
+  }, [gexData, iv30, seriesVersion]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // priceToY: maps any price → canvas Y coordinate (reads seriesRef, refreshes on renderTick)
   const priceToY = useCallback((price: number): number | null => {
@@ -694,35 +634,34 @@ export function GexChart({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [renderTick]);
 
-  const historyMessage = historyError;
-  const axisWidth = chartRef.current ? chartRef.current.priceScale('right').width() : 0;
-  const timeH = chartRef.current ? chartRef.current.timeScale().height() : 0;
-  const paneHeight = Math.max(0, chartH - timeH);
-  const paneWidth = Math.max(0, chartW - axisWidth);
-  const ctx: LayerCtx = {
-    series: seriesRef.current, seriesVersion, gexData: gex, iv30, currentPrice,
-    alertLevels: alertLevels ?? [], axisLabels: labelsRef.current.api, priceToY,
-    paneWidth, paneHeight, axisWidth,
-  };
-
   return (
-    <div ref={outerRef} style={{ display: 'flex', width: '100%', height: "100%", minHeight: 'calc(320px * var(--app-zoom))', zoom: 'calc(1 / var(--app-zoom))' }}>
-      {/* El zoom global de la plataforma se anula acá: lightweight-charts calcula el mouse en píxeles de pantalla y
-          dibuja el canvas con devicePixelRatio, así que bajo zoom el crosshair se corría 10 % y la imagen salía
-          reescalada. Los textos propios (botón, avisos, fuente del gráfico) se reescalan aparte con --app-zoom.
-          El wrapper es `relative`: las capas con overlay (barras por strike) se posicionan sobre el canvas
-          con el mismo mapeo de precio que las velas (priceToCoordinate). */}
+    <div ref={outerRef} style={{ display: 'flex', width: '100%', height: "100%", minHeight: 320 }}>
+      {/* Candle chart — takes all available space. El wrapper es `relative` para que el sombreado
+          de la banda se posicione sobre el canvas; lightweight-charts no dibuja zonas entre dos
+          precios, así que va como overlay traducido con priceToCoordinate. */}
       <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-        {historyState !== 'ready' && <div role="status" className="chart-history-status">
-          <span>{historyState === 'loading' ? 'Cargando velas…' : historyMessage}</span>
+        {readable && historyState !== 'ready' && <div role="status" className="chart-history-status">
+          <span title={historyError}>{historyState === 'loading' ? 'Cargando velas…' : historyState === 'error' ? `No se pudo cargar el precio: ${historyError}` : 'Sin velas para este período'}</span>
           {historyState !== 'loading' && <button className="btn" onClick={() => setHistoryAttempt(v => v + 1)}>Reintentar</button>}
         </div>}
         <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-        <button type="button" onClick={resetChart} className="chart-reset">Reencuadrar</button>
-        {layers.filter(l => layerOn[l.id] && l.placement !== 'side').map(l => <React.Fragment key={l.id}>{l.render(ctx)}</React.Fragment>)}
+        <button type="button" onClick={resetChart} className="chart-reset" aria-label="Reset chart">Reset chart</button>
       </div>
-      {/* Capas laterales (barras por strike): columna a la derecha del eje, con el mismo mapeo de precio. */}
-      {layers.filter(l => layerOn[l.id] && l.placement === 'side').map(l => <React.Fragment key={l.id}>{l.render({ ...ctx, paneHeight: chartH })}</React.Fragment>)}
+
+      {/* GEX bars panel — fixed width, synchronized Y axis */}
+      {gexData && (
+        <GexBarsPanel
+          strikes={gexData.strikes}
+          spot={currentPrice || gexData.spot}
+          callBand={gexData.callBand}
+          putBand={gexData.putBand}
+          callWall={gexData.callWall}
+          putWall={gexData.putWall}
+          zgl={gexData.zeroGammaLevel}
+          priceToY={priceToY}
+          height={chartH}
+        />
+      )}
     </div>
   );
 }

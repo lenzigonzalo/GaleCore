@@ -5,8 +5,8 @@
 @tailwind utilities;
 
 :root {
-  /* Escala global de la plataforma: se ve como Chrome al 90 % con el navegador al 100 %. Único lugar del 0.9. */
-  --app-zoom: 0.9;
+  /* Escala global de la plataforma (único lugar): 1 = 100 %. El 0.9 de WS-0083 espera el ok del owner. */
+  --app-zoom: 1;
   /* Con zoom en <html>, vh/dvh/vw quedan al 90 %: estas unidades los compensan (usar calc(100 * var(--vh))). */
   --vh: calc(1vh / var(--app-zoom));
   --dvh: calc(1dvh / var(--app-zoom));
@@ -64,7 +64,7 @@
 }
 
 /* ── Base ── */
-html { zoom: var(--app-zoom); }
+
 .min-h-screen { min-height: calc(100 * var(--vh)); }
 body {
   margin: 0;

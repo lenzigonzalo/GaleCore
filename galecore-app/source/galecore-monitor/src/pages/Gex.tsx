@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshCw, Crosshair } from 'lucide-react';
+import { RefreshCw, Crosshair, HelpCircle } from 'lucide-react';
 import { MarketWatchlist } from '../components/ticker/MarketWatchlist';
 import { TickerGrid } from '../components/ticker/TickerGrid';
 import { SymbolSearchCard } from '../components/ticker/SymbolSearchCard';
@@ -10,7 +10,6 @@ import { VolSmile } from '../components/gex/VolSmile';
 import { ExpiryEngine } from '../components/gex/ExpiryEngine';
 import { fetchMarketSummary, MarketSummary } from '../api/marketdata';
 import { GexChart } from '../components/chart/GexChart';
-import { CHART_LAYERS, LayersMenu, useChartLayers } from '../components/chart/chartLayers';
 import { useWatches, watchLabel } from '../api/watches';
 import { StrategyOffPanel } from '../components/common/StrategyOffPanel';
 import { ReferencesModal } from '../components/common/ReferencesModal';
@@ -24,7 +23,7 @@ import { ConnectionStatus } from '../socket/useMarketSocket';
 import {
   GexChartData, GexExpiryApi, GexScopeApi, GexStrikeApi, GLOBAL_SCOPE,
 } from '../types/gex';
-import { fmtPct, fmtPrice, fmtTime, isStale } from '../utils/formatters';
+import { fmtPct, fmtPrice, fmtTime, isStale, tint } from '../utils/formatters';
 
 // Fallback si el JSON no declara refresh_seconds. Los barridos se serializan en el backend, así que
 // lo que manda es recorrer el universo entero (~383s medidos con 4 símbolos), no un barrido suelto.
@@ -100,7 +99,7 @@ function globalToChartData(symbol: string, spot: number, global: GexScopeApi): G
  * cards del universo, cuadro Details (checks + diagnóstico, sin microestructura) con el GEX GLOBAL,
  * y el cuadro Graph con la cadena por vencimiento. No calcula ni muestra setup candidato.
  */
-export type MarketIndicator = 'price' | 'iv';
+export type MarketIndicator = 'price' | 'gamma' | 'iv';
 
 interface GexProps {
   subscribeSymbol: (symbol: string) => void;
@@ -129,9 +128,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   useEffect(() => { readSwitch(switchEndpoint); }, [readSwitch, switchEndpoint]);
 
   const [refOpen, setRefOpen] = useState(false);
-  const [localIndicator, setLocalIndicator] = useState<MarketIndicator>('price');
-  const layers = useChartLayers(CHART_LAYERS);
-  const gexLayerOn = CHART_LAYERS.some(l => l.needsGex && layers.on[l.id]);
+  const [localIndicator, setLocalIndicator] = useState<MarketIndicator>('gamma');
   const indicator = controlledIndicator ?? localIndicator;
   const setIndicator = onIndicatorChange ?? setLocalIndicator;
 
@@ -272,19 +269,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
   }, [active]);
   const change = summary?.change != null && summary.changePct != null ? { abs: summary.change, pct: summary.changePct } : null;
   const volume = summary?.volume != null ? (summary.volume >= 1e6 ? `${(summary.volume / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 })} M` : summary.volume.toLocaleString('es-AR')) : '—';
-  // Las métricas siguen a las capas: los niveles de gamma (y CW/PW) sólo con Muros GEX prendida.
-  const detailGroupIds = indicator === 'price' ? ['price', ...(layers.on.walls ? ['gamma'] : [])] : ['market', 'volatility'];
-  const quoteTitle = [
-    summary?.high != null && `Máx. ${fmtPrice(summary.high)}`,
-    summary?.low != null && `Mín. ${fmtPrice(summary.low)}`,
-    summary?.prevClose != null && `Cierre anterior ${fmtPrice(summary.prevClose)}`,
-    ticker?.lastUpdate ? `Actualizado ${fmtTime(ticker.lastUpdate)} ET` : 'Sin cotización',
-  ].filter(Boolean).join(' · ');
-  const refreshTitle = frozen
-    ? 'Barrido detenido: prendé la estrategia para rebarrer'
-    : ['Rebarrer la cadena',
-      data && `${data.gex.global.expirationsIncluded} vtos${data.gex.config.maxDte != null ? ` ≤ ${data.gex.config.maxDte} DTE` : ''}`,
-      updated && `Último barrido ${fmtTime(updated)}`].filter(Boolean).join(' · ');
+  const detailGroupIds = indicator === 'price' ? ['price'] : indicator === 'gamma' ? ['gamma'] : ['market','volatility'];
 
   if (rulesLoading) {
     return <div className="p-4 text-xs" style={{ color: 'var(--text-muted)' }}>Cargando reglas de GEX…</div>;
@@ -293,78 +278,11 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
     return <div className="p-4 text-xs" style={{ color: 'var(--red-gc)' }}>Error cargando reglas de GEX: {rulesError}</div>;
   }
 
-  const metricsBar = active && (
-    <div className="market-metrics-bar">
-      {err ? (
-        /* El símbolo sin cadena no es una avería: se dice con el texto de la API y sin el rojo de error. */
-        <span className={chainMissing ? 'market-metrics-note' : 'market-metrics-error'}>
-          {chainMissing ? err : `No se pudo leer ${indicator === 'iv' ? 'volatilidad' : 'el contexto de precio'}: ${err}`}
-        </span>
-      ) : (
-        <div className="market-metrics-list" style={GEX_REF ? { cursor: 'help' } : undefined}
-          title={GEX_REF ? 'Clic en las métricas: qué es cada indicador' : undefined} onClick={GEX_REF ? () => setRefOpen(true) : undefined}>
-          <DetailsPanel compact data={data} groups={display?.details_panel?.groups} groupIds={detailGroupIds} subtitle={undefined} />
-          {indicator === 'price' && layers.on.walls && chartData && (<>
-            <span className="market-context-metric">CW <b className="tabular-nums" style={{ color: 'var(--green)' }}>{chartData.callWall ? fmtPrice(chartData.callWall, 0) : '—'}</b></span>
-            <span className="market-context-metric">PW <b className="tabular-nums" style={{ color: 'var(--red-gc)' }}>{chartData.putWall ? fmtPrice(chartData.putWall, 0) : '—'}</b></span>
-          </>)}
-        </div>
-      )}
-      <div className="market-metrics-actions">
-        {frozen && <span className="market-badge market-badge-red" title={updated ? `Último barrido: ${fmtTime(updated)}` : 'Sin barrido en esta sesión'}>Detenido{data ? ' · dato congelado' : ''}</span>}
-        {isAdHoc && !frozen && <span className="market-badge" title="Símbolo pineado con el buscador: no entra al auto-refresh del universo. Se rebarre con Actualizar.">Manual</span>}
-        {partialScan && <span className="market-badge market-badge-yellow tabular-nums" title={`Faltaron ${(data!.gex.global.expirationsRequested - data!.gex.global.expirationsIncluded)} vencimientos · cobertura ${data!.gex.global.coveragePct}% de los símbolos`}>Parcial {data!.gex.global.expirationsIncluded}/{data!.gex.global.expirationsRequested}</span>}
-        {indicator === 'price' && gexLayerOn && isLoading && !data && <span className="market-toolbar-note"><span className="spinner" /> Barriendo la cadena…</span>}
-        {indicator === 'price' && gexLayerOn && expiries.length > 0 && (
-          <ExpiryPicker expiries={expiries} selected={activeExpiration}
-            onSelect={(scope) => selectExpiry(active, scope)} compared={compare} onCompare={setCompare}
-            globalNetGex={data?.gex.global.netGex} maxDte={data?.gex.config.maxDte}
-            engine={<ExpiryEngine
-              scope={isGlobalScope && data
-                ? { kind: 'global', global: data.gex.global, maxDte: data.gex.config.maxDte ?? null }
-                : { kind: 'expiry', expiry: activeExpiry }}
-              label={display?.expiry_engine?.label}
-            />} />
-        )}
-        {/* La mira de siempre: ON encuadra el eje en la zona gamma y re-encuadra con cada barrido; OFF, encuadre por muros.
-            Es un toggle con estado a la vista (no el switch ON/OFF del proyecto) y se apaga solo cuando mueven la escala. */}
-        {indicator === 'price' && gexLayerOn && (
-          <button onClick={() => setAlineado(v => !v)} disabled={!chartData} className="btn market-frame-btn" aria-pressed={alineado}
-            title={alineado ? 'Alineación activa — clic para soltar la escala' : (display?.chart_scale?.label ?? 'Encuadrar la escala en la zona gamma')}>
-            <Crosshair size={13} /> Encuadrar zona gamma
-          </button>
-        )}
-        {indicator === 'price' && (
-          <LayersMenu defs={CHART_LAYERS} on={layers.on} onToggle={layers.toggle}
-            panel={{ alerts: watches.map(w => ({ id: w.id, label: watchLabel(w), onRemove: () => removeWatch(w.id) })) }} />
-        )}
-        <button onClick={() => fetchGex(active, true)} disabled={isLoading || frozen} className="btn" title={refreshTitle}
-          style={{ ...(frozen ? { opacity: 0.45, cursor: 'default' } : null), ...(stale ? { color: 'var(--yellow-gc)' } : null) }}>
-          <RefreshCw size={12} className={isLoading ? 'animate-spin' : ''} />
-          Actualizar
-        </button>
-      </div>
-    </div>
-  );
-
   return (
     <div className={'market-workspace' + (compact ? ' market-workspace-compact' : '')}><div className="market-analysis">
-      <header className="market-symbol-header">
-        <div className="market-symbol-price">
-          <span className="market-active-symbol">{active || 'Mercado'}</span>
-          <strong>{hasPrice ? fmtPrice(ticker!.price) : '—'}</strong>
-          <span className={change && change.abs !== 0 ? (change.abs > 0 ? 'market-up' : 'market-down') : 'market-neutral'}
-            title={change ? `${change.abs > 0 ? '+' : ''}${fmtPrice(change.abs)} en el día` : undefined}>{change ? fmtPct(change.pct) : ''}</span>
-        </div>
-        {/* Owner 17/10: el ON/OFF del barrido pasó a Configuración → Plataforma. */}
-        <nav className="market-indicator-tabs" aria-label="Indicadores de mercado">{([{ id: 'price', label: 'Precio' }, { id: 'iv', label: 'Volatilidad' }] as const).map(item => <button key={item.id} aria-pressed={indicator === item.id} onClick={() => setIndicator(item.id)}>{item.label}</button>)}</nav>
-        <div className="market-quote-detail" title={quoteTitle}>
-          <span>Bid <b>{ticker?.bid && ticker.bid > 0 ? fmtPrice(ticker.bid) : '—'}</b></span>
-          <span>Ask <b>{ticker?.ask && ticker.ask > 0 ? fmtPrice(ticker.ask) : '—'}</b></span>
-          <span>Vol <b>{volume}</b></span>
-        </div>
-        {ticker?.error.price && <p className="market-price-error" role="status">{ticker.error.price}</p>}
-      </header>
+<header className="market-symbol-header"><div className="market-symbol-price"><span className="market-active-symbol">{active || "Mercado"}</span><strong>{hasPrice ? fmtPrice(ticker!.price) : "—"}</strong><span className={change && change.abs !== 0 ? (change.abs > 0 ? "market-up" : "market-down") : "market-neutral"}>{change ? (change.abs > 0 ? "+" : "")+fmtPrice(change.abs)+" ("+fmtPct(change.pct)+")" : ""}</span></div><div className="market-quote-detail"><span>Bid <b>{ticker?.bid && ticker.bid > 0 ? fmtPrice(ticker.bid) : "—"}</b></span><span>Ask <b>{ticker?.ask && ticker.ask > 0 ? fmtPrice(ticker.ask) : "—"}</b></span><span>Volumen <b>{volume}</b></span><span>Máx. <b>{summary?.high != null ? fmtPrice(summary.high) : "—"}</b></span><span>Mín. <b>{summary?.low != null ? fmtPrice(summary.low) : "—"}</b></span><span>Cierre anterior <b>{summary?.prevClose != null ? fmtPrice(summary.prevClose) : "—"}</b></span><span>{ticker?.lastUpdate ? "Actualizado "+fmtTime(ticker.lastUpdate)+" ET" : "Sin cotización"}</span></div>{ticker?.error.price && <p className="market-price-error" role="status">{ticker.error.price}</p>}</header>
+{/* Owner 17/10: el ON/OFF del barrido pasó a Configuración → Plataforma; las definiciones, a un «?» junto a los indicadores. */}
+<nav className="market-indicator-tabs" aria-label="Indicadores de mercado">{([{id:"price",label:"Precio"},{id:"gamma",label:"Gamma"},{id:"iv",label:"IV y volatilidad"}] as const).map(item => <button key={item.id} aria-pressed={indicator===item.id} onClick={()=>setIndicator(item.id)}>{item.label}</button>)}{GEX_REF && <button className="market-indicator-help" aria-label="Qué es cada indicador" title="Qué es cada indicador" onClick={() => setRefOpen(true)}><HelpCircle size={17}/></button>}</nav>
 
       {GEX_REF && (
         <ReferencesModal
@@ -381,30 +299,270 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
           actividad real, no solo píxeles — TickerGrid hace su propio polling REST de respaldo y el
           gráfico mantiene series vivas. Mostrar el último barrido "congelado" era peor: un panel
           lleno de números se lee como vigente aunque diga que no lo está. */}
-      {switchEnabled === false && (!externalWatchlist || indicator !== 'price') ? (
+      {switchEnabled === false && (!externalWatchlist || indicator !== "price") ? (
         <div className="px-3">
           <StrategyOffPanel detail={externalWatchlist ? "Barrido GEX apagado. La watchlist mantiene sus cotizaciones; Gamma Exposure no se actualiza hasta activar el barrido." : "Apagada para TODA la plataforma: no se barre la cadena, no se toca DXLink ni a pedido, y no se suscribe ningun simbolo propio de la estrategia. El estado se guarda, asi que un reinicio no la vuelve a prender sola."} />
         </div>
       ) : (
       <>
+
+
       {active && (
         <>
-          {metricsBar}
+
+          {/* ── Cuadro Details — GEX global + contexto. Sin columna Microstructure. ── */}
+          <div className="market-context" style={{
+            margin: '0 12px 8px',
+            borderRadius: 10,
+            border: '1px solid var(--border)',
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: 'var(--shadow-sm)',
+            overflow: 'hidden',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 12px 8px',
+              borderBottom: '1px solid var(--border-dark)',
+            }}>
+              <span style={{
+                fontSize: 16, fontWeight: 600,
+                color: 'var(--text-muted)', fontFamily: 'var(--font-sans)',
+              }}>
+                {indicator === "gamma" ? "Estructura gamma · Global" : indicator === "iv" ? "Volatilidad" : "Contexto de precio"}
+              </span>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span className="tabular-nums" style={{
+                  fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
+                }}>
+                  {/* Solo la COBERTURA del barrido. El GEX global se fue de acá: es una métrica y
+                      vive en su celda del cuadro (grupo "Estructura gamma"), donde tiene su
+                      referencia al lado. Repetido en el encabezado, el mismo número aparecía dos
+                      veces en la misma pantalla con dos formatos distintos. */}
+                  {data?.gex.global.expirationsIncluded ?? 0} vtos
+                  {data?.gex.config.maxDte != null && ` ≤ ${data.gex.config.maxDte} DTE`}
+                </span>
+                {/* Barrido incompleto: sin este aviso, un GEX más chico por vencimientos faltantes
+                    se lee como una caída real del gamma. */}
+                {/* Barrido detenido: el dato es de antes y no se está actualizando. */}
+                {frozen && (
+                  <span
+                    title={updated ? `Último barrido: ${fmtTime(updated)}` : 'Sin barrido en esta sesión'}
+                    style={{
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
+                      padding: '2px 6px', borderRadius: 20,
+                      color: 'var(--red-gc)',
+                      backgroundColor: tint('var(--red-gc)', 10),
+                      border: `1px solid ${tint('var(--red-gc)', 30)}`,
+                      fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', cursor: 'help',
+                    }}
+                  >
+                    Detenido{data ? ' · dato congelado' : ''}
+                  </span>
+                )}
+                {/* Símbolo de paso: no lo refresca ningún intervalo, y la hora que está al lado no
+                    se va a mover sola. Sin decirlo, esa hora quieta se lee como un dato colgado. */}
+                {isAdHoc && !frozen && (
+                  <span
+                    title="Simbolo pineado con el buscador: no entra al auto-refresh del universo. Se rebarre con Actualizar."
+                    style={{
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
+                      padding: '2px 6px', borderRadius: 20,
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                      fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', cursor: 'help',
+                    }}
+                  >
+                    Manual
+                  </span>
+                )}
+                {partialScan && (
+                  <span
+                    title={`Faltaron ${(data!.gex.global.expirationsRequested - data!.gex.global.expirationsIncluded)} vencimientos · cobertura ${data!.gex.global.coveragePct}% de los símbolos`}
+                    className="tabular-nums"
+                    style={{
+                      fontSize: 13, fontWeight: 700, letterSpacing: '0.06em',
+                      padding: '2px 6px', borderRadius: 20,
+                      color: 'var(--yellow-gc)',
+                      backgroundColor: 'var(--yellow-muted)',
+                      border: '1px solid var(--yellow-border)',
+                      fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', cursor: 'help',
+                    }}
+                  >
+                    Parcial {data!.gex.global.expirationsIncluded}/{data!.gex.global.expirationsRequested}
+                  </span>
+                )}
+                {updated && (
+                  <span className="tabular-nums" style={{
+                    fontSize: 12, fontFamily: 'var(--font-mono)',
+                    color: stale ? 'var(--yellow-gc)' : 'var(--text-muted)',
+                  }}>
+                    {fmtTime(updated)}
+                  </span>
+                )}
+                <button
+                  onClick={() => fetchGex(active, true)}
+                  disabled={isLoading || frozen}
+                  className="btn"
+                  title={frozen ? 'Barrido detenido: prendé la estrategia para rebarrer' : 'Rebarrer la cadena'}
+                  style={frozen ? { opacity: 0.45, cursor: 'default' } : undefined}
+                >
+                  <RefreshCw size={10} className={isLoading ? 'animate-spin' : ''} />
+                  Actualizar
+                </button>
+              </div>
+            </div>
+
+            {err ? (
+              /* El símbolo sin cadena no es una avería: se dice con el texto de la API y sin el
+                 rojo de error, que acá mandaría el mensaje equivocado — no hay nada que arreglar,
+                 hay otro símbolo que elegir. */
+              <div style={{
+                padding: 16, fontSize: 14, lineHeight: 1.5,
+                color: chainMissing ? 'var(--text-secondary)' : 'var(--red-gc)',
+              }}>
+                {chainMissing ? err : `No se pudo leer ${indicator === "gamma" ? "GEX" : indicator === "iv" ? "volatilidad" : "el contexto de precio"}: ${err}`}
+                {chainMissing && (
+                  <div style={{ marginTop: 6, fontSize: 13, color: 'var(--text-muted)' }}>
+                    El buscador matchea tambien la descripcion, asi que devuelve ETFs sobre el
+                    simbolo que no tienen cadena propia. Elegi otro.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <DetailsPanel compact
+                data={data}
+                groups={display?.details_panel?.groups}
+                groupIds={detailGroupIds}
+                subtitle={undefined}
+              />
+            )}
+          </div>
 
           {indicator === 'price' && <section className="market-price-panel" aria-label="Gráfico de precio">
-            <div className="market-chart-body">
-              <div className="market-price-chart"><GexChart key={'price-' + active} readable symbol={active}
-                alertLevels={watches.map(w => ({ id: w.id, price: w.threshold, label: `Aviso ${watchLabel(w)}` }))}
-                currentPrice={hasPrice ? ticker!.price : (data?.spotPrice ?? 0)} openPrice={ticker?.open ?? 0}
-                iv30={iv30} gexData={chartData}
-                candleInterval={display?.candles?.interval ?? '1h'} candleBucketSeconds={3600}
-                maxCandles={display?.candles?.count ?? 100} candleFromDays={30}
-                rightPadBars={display?.candles?.right_pad_bars ?? 10}
-                scaleConfig={display?.chart_scale} alineado={alineado} onDesalinear={() => setAlineado(false)}
-                layers={CHART_LAYERS} layerOn={layers.on} /></div>
-            </div>
+            <header><h2>Precio</h2><span>{display?.candles?.interval ?? '1h'} · Velas</span></header>
+            {watches.length > 0 && <div className="market-watch-chips">
+              <span>Avisos:</span>
+              {watches.map(w => <button key={w.id} type="button" title={w.words} aria-label={`Borrar aviso ${watchLabel(w)}`} onClick={() => removeWatch(w.id)}>{watchLabel(w)} ×</button>)}
+            </div>}
+            <div className="market-price-chart"><GexChart key={'price-'+active} symbol={active}
+              alertLevels={watches.map(w => ({ id: w.id, price: w.threshold, label: `Aviso ${watchLabel(w)}` }))}
+              currentPrice={hasPrice ? ticker!.price : 0} openPrice={ticker?.open ?? 0} gexData={null}
+              candleInterval={display?.candles?.interval ?? '1h'} candleBucketSeconds={3600}
+              maxCandles={display?.candles?.count ?? 100} candleFromDays={30}
+              rightPadBars={display?.candles?.right_pad_bars ?? 10} readable /></div>
           </section>}
 
+          {indicator === "gamma" && <>
+          {/* ── Cuadro Graph — cadena por vencimiento ── */}
+          <div className="market-gamma-panel" style={{
+            margin: '0 12px 12px',
+            borderRadius: 10,
+            border: '1px solid var(--border)',
+            backgroundColor: 'var(--bg-secondary)',
+            boxShadow: 'var(--shadow-sm)',
+          }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '8px 14px',
+              borderBottom: '1px solid var(--border-dark)',
+              backgroundColor: 'var(--bg-tertiary)',
+            }}>
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 15,
+                color: 'var(--text-primary)', letterSpacing: '0.04em',
+              }}>
+                {active} · {isGlobalScope ? 'Toda la cadena' : 'Por vencimiento'}
+              </span>
+              <ExpiryPicker expiries={expiries} selected={activeExpiration}
+                onSelect={(scope) => selectExpiry(active, scope)} compared={compare} onCompare={setCompare}
+                globalNetGex={data?.gex.global.netGex} maxDte={data?.gex.config.maxDte} />
+              <details className="market-popover market-expiry-detail">
+                <summary>Vencimiento elegido</summary>
+                <div className="market-popover-content">
+                <ExpiryEngine
+                  scope={isGlobalScope && data
+                    ? { kind: 'global', global: data.gex.global, maxDte: data.gex.config.maxDte ?? null }
+                    : { kind: 'expiry', expiry: activeExpiry }}
+                  label={display?.expiry_engine?.label}
+                />
+                </div>
+              </details>
+              {/* A la derecha, y a la izquierda del spot: encuadrar la escala en la zona gamma.
+                  Es un toggle con estado a la vista —no el switch ON/OFF del proyecto, que significa
+                  otra cosa (kill switch de estrategia, global y de admin)— porque esto es una
+                  preferencia de quien mira el gráfico. Se apaga solo cuando mueven la escala. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button
+                  onClick={() => setAlineado(v => !v)}
+                  disabled={!chartData}
+                  className="btn"
+                  aria-pressed={alineado}
+                  title={alineado
+                    ? 'Alineación activa — clic para soltar la escala'
+                    : (display?.chart_scale?.label ?? 'Encuadrar la escala en la zona gamma')}
+                  style={{
+                    padding: '3px 6px',
+                    ...(alineado ? {
+                      color: 'var(--blue-gc)',
+                      backgroundColor: 'var(--blue-muted)',
+                      borderColor: 'var(--blue-border)',
+                    } : null),
+                  }}
+                  aria-label="Encuadrar la escala en la zona gamma"
+                >
+                  <Crosshair size={11} />
+                </button>
+                <span className="tabular-nums" style={{
+                  fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)',
+                }}>
+                  Spot {fmtPrice(ticker?.price || data?.spotPrice || 0)}
+                </span>
+              </div>
+            </div>
+
+            <div className="market-gamma-chart">
+              {/* Derecha: gráfico del vencimiento seleccionado */}
+              <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                {isLoading && !chartData ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    height: '100%', gap: 8, fontSize: 14, color: 'var(--text-muted)',
+                  }}>
+                    <span className="spinner" /> Barriendo la cadena…
+                  </div>
+                ) : !chartData ? (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    height: '100%', fontSize: 14, color: 'var(--text-muted)',
+                  }}>
+                    Sin datos GEX disponibles
+                  </div>
+                ) : (
+                  <GexChart
+                    // Key por símbolo, no por vencimiento: cambiar de vencimiento redibuja muros y
+                    // barras sin remontar el chart (remontarlo volvería a pedir las velas).
+                    readable
+                    key={active}
+                    symbol={active}
+                    currentPrice={ticker?.price ?? data?.spotPrice ?? 0}
+                    openPrice={ticker?.open ?? 0}
+                    iv30={iv30}
+                    gexData={chartData}
+                    candleInterval={display?.candles?.interval ?? '1h'}
+                    candleBucketSeconds={3600}
+                    maxCandles={display?.candles?.count ?? 100}
+                    candleFromDays={30}
+                    rightPadBars={display?.candles?.right_pad_bars ?? 10}
+                    scaleConfig={display?.chart_scale}
+                    alineado={alineado}
+                    onDesalinear={() => setAlineado(false)}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+          </>}
           {indicator === 'iv' && (() => {
             const smileMain = activeExpiry ?? expiries[0] ?? null;
             const smileOthers = expiries.filter((e) => compare.includes(e.expiration) && e.expiration !== smileMain?.expiration);
@@ -425,6 +583,7 @@ export function Gex({ subscribeSymbol, unsubscribeSymbol, socketStatus, external
               </section>
             );
           })()}
+
         </>
       )}
       </>

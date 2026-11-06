@@ -10,10 +10,10 @@ jest.mock('./GexBarsPanel', () => ({ GexBarsPanel: () => null }));
 test('Precio encuadra velas y avisos; actualizar avisos conserva zoom manual y Reset lo restaura', async () => {
   const applyOptions = jest.fn();
   const scaleOptions = jest.fn();
-  const series = { applyOptions, setData: jest.fn(), update: jest.fn(), createPriceLine: jest.fn(), removePriceLine: jest.fn(), coordinateToPrice: () => 750, priceToCoordinate: () => 100 };
+  const series = { applyOptions, setData: jest.fn(), update: jest.fn(), createPriceLine: jest.fn(), removePriceLine: jest.fn(), coordinateToPrice: () => 750 };
   (createChart as jest.Mock).mockReturnValue({ addSeries: () => series, removeSeries: jest.fn(), remove: jest.fn(),
-    timeScale: () => ({ subscribeVisibleLogicalRangeChange: jest.fn(), fitContent: jest.fn(), height: () => 20 }),
-    priceScale: () => ({ applyOptions: scaleOptions, width: () => 50 }),
+    timeScale: () => ({ subscribeVisibleLogicalRangeChange: jest.fn(), fitContent: jest.fn() }),
+    priceScale: () => ({ applyOptions: scaleOptions }),
   });
   (fetchEquityCandles as jest.Mock).mockResolvedValue([{ time: 1, open: 740, high: 760, low: 727, close: 745 }]);
   window.ResizeObserver = class { observe() {} disconnect() {} } as any;
@@ -30,7 +30,7 @@ test('Precio encuadra velas y avisos; actualizar avisos conserva zoom manual y R
   rerender(<GexChart {...props} alertLevels={[{ id: 'new', price: 680, label: 'Nuevo' }]}/>);
   expect(provider()(base).priceRange).toEqual({ minValue: 680, maxValue: 760 });
   expect(scaleOptions).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Reencuadrar' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Reset chart' }));
   expect(scaleOptions).toHaveBeenCalledWith(expect.objectContaining({ autoScale: true }));
   rerender(<GexChart {...props} alertLevels={[]}/>);
   expect(provider()(base)).toEqual(base());
