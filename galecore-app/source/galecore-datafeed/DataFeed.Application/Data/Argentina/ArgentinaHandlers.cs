@@ -574,9 +574,11 @@ namespace DataFeed.Application.Data.Argentina
             };
 
             A3Referencia refs = new(null, null, null, null);
+            using var refsCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            refsCts.CancelAfter(_timeout ?? TimeSpan.FromSeconds(10));
             try
             {
-                var r = await fetcher.GetAsync(Source, RefsUrl, TimeSpan.FromMinutes(1), cancellationToken);
+                var r = await fetcher.GetAsync(Source, RefsUrl, TimeSpan.FromMinutes(1), refsCts.Token);
                 refs = new A3Referencia(
                     ArgentinaResponse.Dec(r.Json["bcra"]?["value"]), ArgentinaResponse.Str(r.Json["bcra"]?["date"]),
                     ArgentinaResponse.Dec(r.Json["matba"]?["value"]), ArgentinaResponse.Str(r.Json["matba"]?["date"]));
@@ -584,6 +586,10 @@ namespace DataFeed.Application.Data.Argentina
             catch (UpstreamSourceException ex)
             {
                 notes.Add($"No se pudo leer el A3500 ({ex.Message}): los futuros van sin devaluación implícita ni tasas.");
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                notes.Add("No se pudo leer el A3500 (sin respuesta a tiempo): los futuros van sin devaluación implícita ni tasas.");
             }
             if (refs.A3500 is not > 0 && notes.All(n => !n.StartsWith("No se pudo leer el A3500")))
                 notes.Add("La referencia A3500 vino sin valor: los futuros van sin devaluación implícita ni tasas.");
