@@ -36,3 +36,19 @@ test('consulta permite ambos brokers y excluye operaciones, validaciones y conex
   assert.match(instructions, /GaleCore sigue siendo la primera fuente/);
   assert.match(instructions, /debe devolver read_only/);
 });
+
+test('Claude recibe sólo el servidor de IOL, con consultas permitidas y validaciones o cambios negados (WS-0091)', t => {
+  const { claudeBrokerQueries } = require('./lab-brokers');
+  const local = fs.mkdtempSync(path.join(os.tmpdir(), 'gc-brokers-'));
+  t.after(() => { assert.ok(path.resolve(local).startsWith(path.resolve(os.tmpdir()) + path.sep + 'gc-brokers-')); fs.rmSync(local, { recursive: true, force: true }); });
+  assert.equal(claudeBrokerQueries(local), null);
+  fs.writeFileSync(path.join(local, 'broker-queries.json'), '{"enabled":true}');
+  const { mcp, allow, deny, instructions } = claudeBrokerQueries(local);
+  assert.deepEqual(Object.keys(mcp.mcpServers), ['iol']);
+  assert.equal(mcp.mcpServers.iol.url, 'https://mcp.invertironline.com');
+  assert.ok(allow.includes('mcp__iol__get_portfolio') && allow.includes('mcp__iol__get_access_mode'));
+  assert.ok(allow.every(s => s.startsWith('mcp__iol__get_') || /mcp__iol__(show_|simulate_)/.test(s)));
+  assert.ok(['update_access_mode', 'validate_order', 'get_ddjj'].every(t => deny.includes('mcp__iol__' + t)));
+  assert.ok(!allow.some(s => deny.includes(s)));
+  assert.match(instructions, /debe devolver read_only/);
+});

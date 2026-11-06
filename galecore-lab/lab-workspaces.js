@@ -6,7 +6,7 @@ const { spawn, execFile } = require('child_process');
 const { StringDecoder } = require('string_decoder');
 const { modelOptions, selection, modelFlags, normalize } = require('./lab-models');
 const { createSharing } = require('./lab-sharing');
-const { brokerQueries, brokerSetting, setBrokerQueries } = require('./lab-brokers');
+const { brokerQueries, claudeBrokerQueries, brokerSetting, setBrokerQueries } = require('./lab-brokers');
 const { permissionRules, saveUserRules, mergedSettings } = require('./lab-permissions');
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
@@ -485,16 +485,23 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const box=mode==='auto'?[]:chat.nativeId?['-c','sandbox_mode='+JSON.stringify(mode)]:['--sandbox',mode];
       return {file,args:chat.nativeId?[...args,...box,'resume',chat.nativeId,'-']:[...args,...box,'-C',p.dir,'-']};
     }
-    // Claude: sin la configuración del usuario ni conectores; los permisos (web después de GaleCore, sin tocar el código)
-    // salen de knowledge/.claude/settings.json. Sonnet/medium por defecto (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
+    // Claude: sin la configuración del usuario ni conectores salvo IOL con el interruptor de brókers (WS-0091); los permisos
+    // (web después de GaleCore, sin tocar el código) salen de knowledge/.claude/settings.json. Sonnet/medium por defecto
+    // (GALECORE_LAB_MODEL / GALECORE_LAB_EFFORT).
+    const broker=claudeBrokerQueries(local);
+    if(broker)context+=broker.instructions;
     const file=path.join(local,'contexts',chat.id+'.md');fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,context);
-    // Un solo --settings: el del producto con las reglas del usuario (lab-permissions.js).
-    const settingsFile=path.join(local,'contexts',chat.id+'.settings.json');fs.writeFileSync(settingsFile,JSON.stringify(mergedSettings(kb,local)));
+    // Un solo --settings: el del producto con las reglas del usuario (lab-permissions.js) y las de IOL si va.
+    const settings=mergedSettings(kb,local);
+    if(broker)for(const k of ['allow','deny'])settings.permissions[k]=[...new Set([...(settings.permissions[k]||[]),...broker[k]])];
+    const settingsFile=path.join(local,'contexts',chat.id+'.settings.json');fs.writeFileSync(settingsFile,JSON.stringify(settings));
+    const mcpFile=path.join(local,'contexts',chat.id+'.mcp.json');
+    if(broker)fs.writeFileSync(mcpFile,JSON.stringify(broker.mcp));
     // stdio mantiene los permisos en el chat también en CLI anteriores a --permission-prompts.
     // Los modos son los de PERMISSION_MODES: nunca bypassPermissions.
     const args=['-p',...modelFlags(chat),'--input-format','stream-json','--output-format','stream-json','--verbose','--append-system-prompt-file',file,
       '--permission-prompt-tool','stdio','--permission-mode',mode,'--strict-mcp-config',
-      '--setting-sources','project,local','--settings',settingsFile];
+      '--setting-sources','project,local','--settings',settingsFile,...(broker?['--mcp-config',mcpFile]:[])];
     return {file,args:chat.nativeId?[...args,'--resume',chat.nativeId]:args};
   }
   function send(chat, words, options={}){
@@ -523,7 +530,7 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const resume=mine.length&&!chat.nativeId?previousTail(chat):'';  // sólo estrategia: en cartera los pedidos son sueltos
     const here='Proyecto: '+p.id+', carpeta '+p.dir+'.'+(fs.existsSync(path.join(p.dir,'AGENTS.md'))?' Leé AGENTS.md de este proyecto.':'')+' Si el usuario quiere construir una estrategia o trabajar una en un símbolo, aplicá la skill '+skill+' (el método de diseño, strategy_design, está en '+designSkill+': es la única copia; no busques otra).'+(p.id==='personal'?'':' Estrategias de este proyecto: '+(mine.length?mine.join(', '):'ninguna todavía')+'. Si la conversación va hacia una estrategia, preguntá una sola vez «¿es una estrategia nueva de este proyecto'+(mine.length?' o una de las que ya tiene ('+mine.join(", ")+')':'')+'?»; con la respuesta, corré python "'+path.join(root,'galecore-lab','mark_strategy.py')+'" <nombre> desde esta carpeta (nombre en minúsculas con guion bajo, p. ej. bonos_ar; una estrategia ya existente no se duplica y una que es de otro proyecto se rechaza) y seguí; no abras otro proyecto.')+' Registrarla no es estrategia aprobada; el bootstrap no despliega.'+' Si el trader pide el mapa de una estrategia («armame el mapa de …»), aplicá la skill '+mapaSkill+'; no armes ni reescribas mapas por tu cuenta en los demás turnos.';
     const job={proc:null,project:p.id,chat,asks:new Map()};jobs.set(chat.id,job);let done=false;const started=chat.turnStartedAt;
-    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});fs.rmSync(path.join(local,'contexts',chat.id+'.settings.json'),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
+    function finish(code){if(done)return;done=true;jobs.delete(chat.id);chat.permission=null;for(const t of chat.tasks||[])if(t.status==='running')t.status='ended';chat.state=chat.state==='cancelled'?'cancelled':code===0&&!chat.error?'idle':'failed';chat.activity='';if(code!==0&&!chat.error&&chat.state!=='cancelled')chat.error='El motor terminó sin completar el pedido. Revisá su autenticación/permisos en la terminal.';try{const m=latestMapa(p.dir,started);if(m)chat.mapa=m;}catch{ /* sin mapa, el chat sigue */ }saveChat(chat);if(job.file)fs.rmSync(job.file,{force:true});for(const x of ['.settings.json','.mcp.json'])fs.rmSync(path.join(local,'contexts',chat.id+x),{force:true});script('commit_knowledge.py',{cwd:p.dir});}
     Promise.all([script('session_context.py',{prompt:words,cwd:p.dir}),script('match_request.py',{prompt:words,cwd:p.dir})]).then(([facts,asked])=>{
       if(chat.state==='cancelled')return finish(1);
       ask.context={facts,asked};saveChat(chat);  // lo mide el arnés de pruebas, sea cual sea el motor
@@ -552,11 +559,11 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
     const parts=url.pathname.split('/').filter(Boolean);
     // Conectores que usa el chat, en sólo lectura salvo el interruptor de brókers (WS-0083): GaleCore va siempre; IBKR/IOL sólo
     // consultas y sólo en Codex (lab-brokers.js).
-    if(url.pathname==='/connectors'&&req.method==='GET'){json(res,200,{galecore:{enabled:true},brokers:{enabled:brokerSetting(local),engines:['codex']}});return true;}
+    if(url.pathname==='/connectors'&&req.method==='GET'){json(res,200,{galecore:{enabled:true},brokers:{enabled:brokerSetting(local),engines:['codex','claude']}});return true;}
     // Reglas de permisos de Claude Code: las del producto (fijas) y las del usuario (lab-permissions.js).
     if(url.pathname==='/permissions/claude'&&req.method==='GET'){json(res,200,permissionRules(kb,local));return true;}
     if(url.pathname==='/permissions/claude'&&req.method==='POST'){saveUserRules(local,await readBody(req),fail);json(res,200,permissionRules(kb,local));return true;}
-    if(url.pathname==='/connectors/brokers'&&req.method==='POST'){const b=await readBody(req);if(typeof b.enabled!=='boolean')throw fail('Indicá si querés prender o apagar las consultas a brókers.');json(res,200,{brokers:{enabled:setBrokerQueries(local,b.enabled),engines:['codex']}});return true;}
+    if(url.pathname==='/connectors/brokers'&&req.method==='POST'){const b=await readBody(req);if(typeof b.enabled!=='boolean')throw fail('Indicá si querés prender o apagar las consultas a brókers.');json(res,200,{brokers:{enabled:setBrokerQueries(local,b.enabled),engines:['codex','claude']}});return true;}
     if(req.method==='GET' && url.pathname==='/workspaces'){const shown=listProjects().filter(p=>!p.archived);json(res,200,{projects:shown.map(publicProject),chats:listChats().filter(c=>shown.some(p=>p.id===c.project)),chatOptions:modelOptions(),update:update(),defaultProvider:process.env.GALECORE_LAB_PROVIDER==='claude'?'claude':'codex',providers:['codex','claude'].map(id=>({id,label:id==='codex'?'Codex':'Claude Code',installed:!!binaries[id]}))});return true;}
     if(req.method==='POST' && url.pathname==='/workspaces'){json(res,201,createProject(await readBody(req)));return true;}
     if(req.method==='GET' && url.pathname==='/workspaces/users'){json(res,200,await sharing.searchUsers(url.searchParams.get('q')));return true;}

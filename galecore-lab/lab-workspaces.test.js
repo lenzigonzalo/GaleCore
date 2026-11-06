@@ -503,7 +503,7 @@ test('modos de permisos por motor (WS-0083): cada modo se traduce a su bandera; 
 
 test('conectores del chat (WS-0083): GaleCore fijo, interruptor de brókers escribe broker-queries.json y rechaza lo que no es booleano',async t=>{
  const {local,service}=setup(t);
- let r=await route(service,'GET','/connectors');assert.deepEqual([r.value.galecore,r.value.brokers],[{enabled:true},{enabled:false,engines:['codex']}]);
+ let r=await route(service,'GET','/connectors');assert.deepEqual([r.value.galecore,r.value.brokers],[{enabled:true},{enabled:false,engines:['codex','claude']}]);
  r=await route(service,'POST','/connectors/brokers',{enabled:true});assert.equal(r.value.brokers.enabled,true);
  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(local,'broker-queries.json'),'utf8')),{enabled:true});
  assert.ok(require('./lab-brokers').brokerQueries(local));   // lo que lee el turno de Codex

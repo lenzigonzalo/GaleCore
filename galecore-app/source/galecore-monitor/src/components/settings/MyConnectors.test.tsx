@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MyConnectors } from './MyConnectors';
 import { labRequest } from '../../api/lab';
 jest.mock('../../api/lab', () => ({ labRequest: jest.fn() }));
-const data = { galecore: { enabled: true }, brokers: { enabled: false, engines: ['codex'] } };
+const data = { galecore: { enabled: true }, brokers: { enabled: false, engines: ['codex', 'claude'] } };
 beforeEach(() => jest.resetAllMocks());
 
 test('tabla con encabezados: GaleCore siempre, IBKR e IOL en una sola fila y sin conectores ajenos al producto', async () => {
@@ -21,8 +21,8 @@ test('tabla con encabezados: GaleCore siempre, IBKR e IOL en una sola fila y sin
   expect(screen.queryByText(/Rome2Rio/)).toBeNull();
 });
 
-test('el interruptor de IBKR e IOL escribe en el Lab y marca Codex', async () => {
-  (labRequest as jest.Mock).mockImplementation((_: string, body?: any) => Promise.resolve(body ? { brokers: { enabled: body.enabled, engines: ['codex'] } } : data));
+test('el interruptor de IBKR e IOL escribe en el Lab y marca Codex y Claude Code (sólo IOL)', async () => {
+  (labRequest as jest.Mock).mockImplementation((_: string, body?: any) => Promise.resolve(body ? { brokers: { enabled: body.enabled, engines: ['codex', 'claude'] } } : data));
   render(<MyConnectors/>);
   const toggle = await screen.findByRole('switch');
   expect(toggle).toHaveAttribute('aria-checked', 'false');
@@ -30,6 +30,7 @@ test('el interruptor de IBKR e IOL escribe en el Lab y marca Codex', async () =>
   await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'));
   expect(labRequest).toHaveBeenCalledWith('/connectors/brokers', { enabled: true });
   expect(screen.getAllByText('✓')).toHaveLength(3);
+  expect(screen.getByText('✓ IOL')).toBeInTheDocument();
 });
 
 test('si el Lab rechaza el cambio, el interruptor no miente y se muestra el error', async () => {
