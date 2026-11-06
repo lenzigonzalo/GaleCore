@@ -10,13 +10,17 @@ export interface Watch {
 }
 
 const REFRESH_MS = 60_000;
+const PRICE_METRICS = ['price', 'gamma_zero', 'call_wall', 'put_wall'];
 
-/** Avisos de precio de un símbolo (sin distinguir mayúsculas); descarta lo mal formado. */
+/** Avisos con unidades de precio de un símbolo; excluye bajas pendientes y reglas inactivas. */
 export function priceWatchesFor(content: unknown, symbol: string): Watch[] {
-  const list = (content as { watches?: unknown } | null)?.watches;
+  const state = content as { watches?: unknown; unwatch?: Record<string, unknown>; unwatch_errors?: Record<string, unknown> } | null;
+  const list = state?.watches;
   if (!Array.isArray(list)) return [];
   const sym = symbol.trim().toUpperCase();
-  return list.filter((w): w is Watch => !!w && typeof w.id === 'string' && w.metric === 'price'
+  return list.filter((w): w is Watch => !!w && typeof w.id === 'string' && w.id !== '' && PRICE_METRICS.includes(w.metric)
+    && (w.status === undefined || w.status === 'active')
+    && (!state?.unwatch?.[w.id] || !!state?.unwatch_errors?.[w.id])
     && typeof w.symbol === 'string' && w.symbol.trim().toUpperCase() === sym
     && (w.condition === 'above' || w.condition === 'below')
     && typeof w.threshold === 'number' && Number.isFinite(w.threshold));
@@ -37,8 +41,10 @@ export function watchText(w: Watch): string {
 }
 
 export function watchLabel(w: Watch): string {
+  if (w.metric !== 'price' && typeof w.label === 'string' && w.label.trim()) return w.label.trim();
   const n = w.threshold.toLocaleString('es-AR', { maximumFractionDigits: 2 });
-  return `${w.condition === 'above' ? '≥' : '≤'} ${n}`;
+  const metric = { gamma_zero: 'Gamma cero', call_wall: 'Techo de calls', put_wall: 'Piso de puts' }[w.metric as 'gamma_zero' | 'call_wall' | 'put_wall'];
+  return `${metric ? metric + ' ' : ''}${w.condition === 'above' ? '≥' : '≤'} ${n}`;
 }
 
 function parse(item: SpaceItem | undefined): Record<string, any> {
@@ -57,7 +63,7 @@ export async function removeWatch(ruleId: string): Promise<void> {
   });
 }
 
-/** Avisos de precio del símbolo, refrescados cada 60 s; si falla, no hay líneas. `remove` los oculta al instante. */
+/** Niveles del símbolo, refrescados cada 60 s; si falla, no hay líneas. `remove` los oculta al instante. */
 export function useWatches(symbol: string | null | undefined): { watches: Watch[]; remove: (id: string) => void } {
   const [all, setAll] = useState<Watch[]>([]);
   const [removed, setRemoved] = useState<Set<string>>(new Set());
@@ -68,7 +74,11 @@ export function useWatches(symbol: string | null | undefined): { watches: Watch[
       try {
         const { items } = await fetchSpace();
         const it = items.find(i => i.kind === 'agent' && i.key === 'supervisor');
-        if (alive) setAll(priceWatchesFor(parse(it), symbol));
+        if (alive) {
+          const content = parse(it);
+          setAll(priceWatchesFor(content, symbol));
+          setRemoved(prev => new Set(Array.from(prev).filter(id => !content.unwatch_errors?.[id])));
+        }
       } catch { if (alive) setAll([]); }
     };
     load();

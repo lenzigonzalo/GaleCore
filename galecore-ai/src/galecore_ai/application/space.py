@@ -333,6 +333,49 @@ SUPERVISOR_KEY = "supervisor"
 ALERTS_SHOWN = 20
 
 
+def active_watches(kb: KnowledgeBase, now: datetime | None = None, names: dict[str, str] | None = None) -> list[dict]:
+    """The same active rules for a supervisor pass and an immediate chart refresh."""
+    from galecore_ai.application import watch
+
+    met = watch._met(kb)
+    return [{"id": r.id, "symbol": r.symbol, "metric": r.metric.value, "condition": r.condition.value,
+             "threshold": r.threshold, "words": r.words, "created_at": r.created_at.isoformat(),
+             "label": watch.describe(r, names)}
+            for r in watch.rules(kb) if watch.status(kb, r, now, met=met) == "active"]
+
+
+def _watch_piece(kb: KnowledgeBase, item: dict | None, now: datetime | None = None) -> dict:
+    content = json.loads(item["content"]) if item else {
+        "id": SUPERVISOR_KEY, "capability": "supervisor", "status": "active", "state": "PENDING",
+        "state_detail": "Sin pasada del supervisor publicada.", "last_run": None,
+    }
+    if not isinstance(content, dict):
+        raise KnowledgeError("supervisor content is not an object")
+    watches = active_watches(kb, now, content.get("names"))
+    if not content.get("names"):
+        previous = content.get("watches")
+        previous = previous if isinstance(previous, list) else []
+        labels = {w["id"]: w["label"] for w in previous
+                  if isinstance(w, dict) and isinstance(w.get("id"), str)
+                  and isinstance(w.get("label"), str) and w["label"].strip()}
+        for rule in watches:
+            if rule["id"] in labels:
+                rule["label"] = labels[rule["id"]]
+    content["watches"] = watches
+    return {"kind": "agent", "key": SUPERVISOR_KEY,
+            "title": item["title"] if item else "Avisos y supervisión de estrategias",
+            "content": json.dumps(content, ensure_ascii=False), "format": "json",
+            "visibility": item.get("visibility", "private") if item else "private"}
+
+
+def publish_watches(client: SpaceClient, kb: KnowledgeBase, now: datetime | None = None) -> dict:
+    """Refresh only the chart's rules, without scanning the market or consuming monitor requests."""
+    item = next((i for i in client.items("agent")["items"] if i["key"] == SUPERVISOR_KEY), None)
+    piece = _watch_piece(kb, item, now)
+    seen = {("agent", SUPERVISOR_KEY): item["version"]} if item else {}
+    return sync(client, [piece], seen)
+
+
 def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, str] | None = None,
                      now: datetime | None = None, unwatch_errors: dict[str, str] | None = None) -> dict:
     """The supervisor (WS-0007) as an agent piece: its last pass and the latest alerts with their decision.
@@ -344,7 +387,7 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
     ``watches`` lists the active price rules (a price alert is not an agent; the pass just evaluates it) so the monitor
     draws them; deleting one comes back in ``unwatch`` (rule id -> {at}) and `apply_unwatch` cancels it.
     """
-    from galecore_ai.application import alert_analysis, watch
+    from galecore_ai.application import alert_analysis
     from galecore_ai.application import supervisor as sv
 
     shown = sv.view(kb, ALERTS_SHOWN, today=(now or datetime.now(UTC)).astimezone(sv.NEW_YORK).date(), today_only=True)
@@ -353,11 +396,7 @@ def supervisor_piece(kb: KnowledgeBase, scan: dict, response_errors: dict[str, s
     failed = "error" in scan or bool(scan.get("problems"))
     lines = [f"**{len(pending)} aviso(s) para decidir.**" if pending else "Nada para decidir.", ""]
     lines += [f"- {a['motivo']} — {a['propuesta']}" for a in pending]
-    met = watch._met(kb)
-    watches = [{"id": r.id, "symbol": r.symbol, "metric": r.metric.value, "condition": r.condition.value,
-                "threshold": r.threshold, "words": r.words, "created_at": r.created_at.isoformat(),
-                "label": watch.describe(r, scan.get("names"))}
-               for r in watch.rules(kb) if watch.status(kb, r, now, met=met) == "active"]   # newest first
+    watches = active_watches(kb, now, scan.get("names"))
     content = {
         "id": SUPERVISOR_KEY, "capability": "supervisor", "status": "active", "schedule": "cada 5 minutos",
         "strategy": None,
@@ -456,13 +495,25 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
                                                   "state_detail": f"registro de avisos dañado: {str(exc)[:200]}",
                                                   "last_run": {"at": at, "result": "falló", "failed": True}},
                                                  ensure_ascii=False)})
+    else:                                       # a plain sync refreshes chart rules, never a supervisor pass
+        item = next((i for i, _ in items if i["key"] == SUPERVISOR_KEY), None)
+        if item is not None or ("agent", SUPERVISOR_KEY) not in seen:
+            try:
+                if item is not None:
+                    seen[("agent", SUPERVISOR_KEY)] = item["version"]
+                piece = _watch_piece(kb, item, now)
+                if item is not None or json.loads(piece["content"])["watches"]:
+                    pieces.append(piece)
+            except (KnowledgeError, ValueError, OSError):
+                responses = [{"result": "refused", "error": "No se pudieron actualizar los avisos; "
+                              "el supervisor publicado se conserva. Revisá sus registros locales."}]
     for p in pieces:
         error = refused.get(p["key"]) or kept.get(p["key"])
         if error:                                # the monitor shows why it did not happen
             p["content"] = json.dumps({**json.loads(p["content"]), "request_error": error}, ensure_ascii=False)
     live = {p["key"] for p in pieces}
     for item, content in items:
-        if item["key"] == SUPERVISOR_KEY:          # not a task: only a pass with `supervise` rewrites it
+        if item["key"] == SUPERVISOR_KEY:          # not a task: it is refreshed above, never deleted here
             continue
         if item["key"] not in live and not refused.get(item["key"]):
             client.delete("agent", item["key"])    # WS-0063: a cancelled or gone task is history, not a piece in the space
