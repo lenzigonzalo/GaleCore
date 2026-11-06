@@ -295,5 +295,131 @@ namespace DataFeed.Tests
             await Assert.ThrowsAsync<ValidationException>(() =>
                 new A3CotizacionesHandler(Config("K"), new Factory(Always("[]"))).Handle(new A3CotizacionesRequest { Segmento = "futuros" }, default));
         }
+
+        // ───── WS-0090: futuros de A3 (web pública, SSE) ─────
+
+        private const string Sse = "retry: 15000\n\nevent: status\ndata: {\"stream\":\"Dashboard\",\"status\":\"connected\"}\n\nevent: snapshot\ndata: " +
+            """{"stream":"Dashboard","data":{"agro":[{"ticker":"SOJ.ROS/NOV26","bi":349.3,"of":350,"la":349.3,"pse":350.2,"se":349.3,"tv":156,"nv":15600,"variation":-0.257,"oi":2353},{"ticker":"TRI.ROS/NOV26","bi":205,"of":210,"la":0,"pse":207,"se":207,"tv":0,"nv":0,"variation":0,"oi":412}],"dollar":[{"ticker":"DLR/PF0","bi":0,"of":28,"la":0,"pse":0,"se":0,"tv":0,"nv":0,"variation":0,"oi":0},{"ticker":"DLR/NOV26","bi":1572,"of":1573.5,"la":1573,"pse":1569,"se":1573,"tv":217138,"nv":217138000,"variation":0.2549,"oi":1746392},{"ticker":"DLR/DIC26","bi":1602,"of":1605,"la":1602,"pse":1598,"se":1601.5,"tv":28542,"nv":28542000,"variation":0.219,"oi":733353},{"ticker":"DLR/ENE27","bi":1630.5,"of":0,"la":1631,"pse":1626.5,"se":0,"tv":24394,"nv":24394000,"variation":0.2459,"oi":391456}],"totals":[]}}""" +
+            "\n\nevent: delta\ndata: {\"stream\":\"Dashboard\",\"data\":{}}\n\n";
+        private const string Refs = """{"bcra":{"value":1545.3974,"date":"2026-11-05T00:00:00"},"matba":{"value":1549,"date":"2026-11-05T00:00:00"}}""";
+
+        private sealed class FixedClock : TimeProvider
+        {
+            public override DateTimeOffset GetUtcNow() => new(2026, 11, 6, 15, 0, 0, TimeSpan.Zero);   // 12:00 en Argentina
+        }
+
+        private sealed class NeverEndingStream : Stream
+        {
+            public override bool CanRead => true;
+            public override bool CanSeek => false;
+            public override bool CanWrite => false;
+            public override long Length => throw new NotSupportedException();
+            public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+            public override void Flush() { }
+            public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+            public override void SetLength(long value) => throw new NotSupportedException();
+            public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct = default)
+            {
+                await Task.Delay(Timeout.Infinite, ct);
+                return 0;
+            }
+        }
+
+        private static Router Futuros(string sse, string? refs = Refs) => new((req, _) =>
+            req.RequestUri!.AbsolutePath.EndsWith("/stream")
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(sse, Encoding.UTF8, "text/event-stream") }
+                : refs is null ? Json("{}", HttpStatusCode.BadGateway) : Json(refs));
+
+        private static A3FuturosHandler FuturosHandler(Router http, TimeSpan? timeout = null) => new(new Factory(http), new FixedClock(), timeout);
+
+        [Fact]
+        public async Task Futuros_CalculaDevaluacionImplicitaTnaYTeaDeDic26()
+        {
+            var result = await FuturosHandler(Futuros(Sse)).Handle(new A3FuturosRequest(), default);
+
+            Assert.Equal("a3-web", result.Source);
+            Assert.StartsWith("sha256:", result.Sha256);
+            Assert.Equal(1545.3974m, result.Data.Referencia.A3500);
+            Assert.Equal(1549m, result.Data.Referencia.Mtr);
+            Assert.Equal("2026-11-05T00:00:00", result.Data.Referencia.A3500Fecha);
+            Assert.Contains(result.Notes, n => n.Contains("no es una API documentada"));
+            Assert.Contains(result.Notes, n => n.Contains("no descuenta feriados"));
+
+            var dic = result.Data.Dolar.Single(r => r.Ticker == "DLR/DIC26");
+            Assert.Equal("2026-12-31", dic.Vencimiento);
+            Assert.Equal(55, dic.Dias);
+            Assert.Equal(3.63m, dic.DevaluacionPct);   // 1601.5 (ajuste) / 1545.3974 − 1
+            Assert.Equal(24.09m, dic.TnaPct);          // 3.6303 × 365 / 55
+            Assert.Equal(26.7m, dic.TeaPct);           // (1.036303)^(365/55) − 1
+            Assert.Equal(1602m, dic.Compra);
+            Assert.Equal(733353m, dic.InteresAbierto);
+
+            var nov = result.Data.Dolar.Single(r => r.Ticker == "DLR/NOV26");
+            Assert.Equal("2026-11-30", nov.Vencimiento);
+            Assert.Equal(24, nov.Dias);
+
+            // sin ajuste usa el último
+            var ene = result.Data.Dolar.Single(r => r.Ticker == "DLR/ENE27");
+            Assert.Null(ene.Ajuste);
+            Assert.Null(ene.Venta);
+            Assert.Equal("2027-01-29", ene.Vencimiento);   // 31/01/2027 es domingo
+            Assert.Equal(Math.Round((1631m / 1545.3974m - 1m) * 100m, 2), ene.DevaluacionPct);
+        }
+
+        [Fact]
+        public async Task Futuros_Pf0SinCalculoYAgroPresenteConCerosEnNull()
+        {
+            var result = await FuturosHandler(Futuros(Sse)).Handle(new A3FuturosRequest(), default);
+
+            var pf0 = result.Data.Dolar.Single(r => r.Ticker == "DLR/PF0");
+            Assert.Null(pf0.Vencimiento);
+            Assert.Null(pf0.Dias);
+            Assert.Null(pf0.DevaluacionPct);
+            Assert.Null(pf0.TnaPct);
+            Assert.Null(pf0.TeaPct);
+            Assert.Equal(28m, pf0.Venta);
+            Assert.Null(pf0.Compra);
+
+            Assert.Equal(2, result.Data.Agro.Count);
+            var tri = result.Data.Agro.Single(r => r.Ticker == "TRI.ROS/NOV26");
+            Assert.Null(tri.Ultimo);
+            Assert.Null(tri.VariacionPct);
+            Assert.Null(tri.Dias);
+            Assert.Equal(207m, tri.Ajuste);
+        }
+
+        [Fact]
+        public async Task Futuros_SinA3500DevuelveLosFuturosSinCalculoYLoAvisa()
+        {
+            var result = await FuturosHandler(Futuros(Sse, refs: null)).Handle(new A3FuturosRequest(), default);
+
+            Assert.Null(result.Data.Referencia.A3500);
+            Assert.Contains(result.Notes, n => n.StartsWith("No se pudo leer el A3500"));
+            Assert.All(result.Data.Dolar, r => Assert.Null(r.DevaluacionPct));
+            Assert.Equal(1601.5m, result.Data.Dolar.Single(r => r.Ticker == "DLR/DIC26").Ajuste);
+        }
+
+        [Fact]
+        public async Task Futuros_StreamSinSnapshotOSinDollarEsErrorDeLaFuente()
+        {
+            var cerrado = await Assert.ThrowsAsync<UpstreamSourceException>(() =>
+                FuturosHandler(Futuros("event: status\ndata: {\"status\":\"connected\"}\n\n")).Handle(new A3FuturosRequest(), default));
+            Assert.Equal("a3-web", cerrado.Source);
+
+            ArgentinaFetcher.ClearCache();
+            await Assert.ThrowsAsync<UpstreamSourceException>(() =>
+                FuturosHandler(Futuros("event: snapshot\ndata: {\"stream\":\"Dashboard\",\"data\":{\"agro\":[]}}\n\n")).Handle(new A3FuturosRequest(), default));
+        }
+
+        [Fact]
+        public async Task Futuros_SnapshotQueNoLlegaEnElTiempoEsErrorDeLaFuente()
+        {
+            var colgado = new Router((_, _) => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new NeverEndingStream()) });
+            var ex = await Assert.ThrowsAsync<UpstreamSourceException>(() =>
+                FuturosHandler(colgado, TimeSpan.FromMilliseconds(200)).Handle(new A3FuturosRequest(), default));
+            Assert.Contains("snapshot", ex.Message);
+        }
     }
 }

@@ -224,7 +224,7 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
         ],
         returns="source=bls, asOf (year-period), notes, data[seriesId, observations[year, period, periodName, value, latest, footnotes]]",
     ),
-    # WS-0077 (BL-036): Argentina. Fuentes públicas servidas por GaleCore; los futuros de dólar y agro todavía faltan.
+    # WS-0077 (BL-036): Argentina. Fuentes públicas servidas por GaleCore; los futuros de dólar y agro salen de la web pública de A3 (WS-0090).
     CapabilityDefinition(
         capability_id="argentina.dolares",
         semantic_class=SemanticClass.PURE_QUERY,
@@ -318,6 +318,13 @@ KNOWN_CAPABILITIES: list[CapabilityDefinition] = [
             CapabilityParameter(name="Segmento", type="string", description="rentafija | forex | cauciones | repo | derivados"),
         ],
         returns="source=a3, asOf, notes, data[fecha, ticker, descripcion, plazo, moneda, precioUltimo, ultimaTasa, volumenAcumulado, montoAcumulado, variacion...] (repo: rueda, tasaPP, cantidad, volumen)",
+    ),
+    CapabilityDefinition(
+        capability_id="argentina.a3_futuros",
+        semantic_class=SemanticClass.PURE_QUERY,
+        description="A3 dollar and agro futures from A3's public web (no key, undocumented source that can change without notice): quotes per maturity and, for DLR/<MONTH><YY>, implicit devaluation vs the A3500, TNA and TEA computed by GaleCore (maturity = last weekday of the month, holidays not discounted)",
+        parameters=[],
+        returns="source=a3-web, asOf, notes, data[referencia[a3500, a3500Fecha, mtr, mtrFecha], dolar[ticker, compra, venta, ultimo, ajuste, ajusteAnterior, contratos, interesAbierto, variacionPct, vencimiento, dias, devaluacionPct, tnaPct, teaPct], agro[same without the calculation]]",
     ),
     CapabilityDefinition(
         capability_id="filings.sec_company",

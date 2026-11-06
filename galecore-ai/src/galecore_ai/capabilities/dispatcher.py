@@ -155,6 +155,7 @@ _ROUTE_TABLE: dict[str, dict[str, str]] = {
     "argentina.indec_series": {"method": "GET", "path": "/Data/Indec/Series", "param_key": "", "source_param": ""},
     "argentina.byma_panel": {"method": "GET", "path": "/Data/Byma/Panel", "param_key": "", "source_param": ""},
     "argentina.a3_cotizaciones": {"method": "GET", "path": "/Data/A3/Cotizaciones", "param_key": "", "source_param": ""},
+    "argentina.a3_futuros": {"method": "GET", "path": "/Data/A3/Futuros", "param_key": "", "source_param": ""},
     "filings.sec_company": {"method": "GET", "path": "/Data/Sec/Company", "param_key": "", "source_param": ""},
     "filings.sec_filings": {"method": "GET", "path": "/Data/Sec/Filings", "param_key": "", "source_param": ""},
     "filings.sec_facts": {"method": "GET", "path": "/Data/Sec/Facts", "param_key": "", "source_param": ""},
