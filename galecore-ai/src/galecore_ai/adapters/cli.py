@@ -1029,6 +1029,22 @@ async def _cmd_capital(args: argparse.Namespace) -> None:
         _knowledge_error_out(exc)
 
 
+def _publish_watches(kb) -> dict:
+    """Local writes remain successful when the monitor cannot be refreshed yet."""
+    from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+    from galecore_ai.application import space
+
+    try:
+        result = space.publish_watches(SpaceClient(), kb)
+    except (SpaceError, KnowledgeError, OSError, ValueError):
+        return {"status": "PENDING", "message": "Guardado localmente; no se pudo actualizar el monitor. "
+                "La publicación queda pendiente para la próxima sincronización del supervisor."}
+    if result["deferred"]:
+        return {"status": "PENDING", "message": "Guardado localmente; el espacio cambió durante la publicación. "
+                "El monitor se actualizará en la próxima sincronización del supervisor."}
+    return {"status": "PUBLISHED"}
+
+
 async def _cmd_supervise(args: argparse.Namespace) -> None:
     from datetime import date as _date
     from datetime import datetime as _dt
@@ -1061,6 +1077,7 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
                              prompt=args.prompt, until=until, host_model=args.host_model,
                              thesis=args.thesis or "", strategies=args.strategy)
             _json_out({"status": "WATCHING", "rule": rule.id, "watches": watch.describe(rule),
+                       "publication": _publish_watches(kb),
                        "note": "El supervisor la revisa cada 5 minutos en la sesión regular y avisa una vez en el monitor."})
         elif c == "remind":
             from galecore_ai.application import watch
@@ -1076,6 +1093,7 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
                                 instance_id=args.when_closed or args.instance or "",
                                 on_evaluation=args.on_evaluation, decision=args.decision, host_model=args.host_model)
             _json_out({"status": "REMINDING", "rule": rule.id, "watches": watch.describe(rule),
+                       "publication": _publish_watches(kb),
                        "note": "El supervisor la revisa cada 5 minutos en la sesión regular y avisa una vez en el monitor."})
         elif c == "watches":
             from galecore_ai.application import watch
@@ -1083,7 +1101,7 @@ async def _cmd_supervise(args: argparse.Namespace) -> None:
         elif c == "unwatch":
             from galecore_ai.application import watch
             mark = watch.cancel(kb, args.rule, words=args.text or "", prompt=args.prompt)
-            _json_out({"status": "CANCELLED", "rule": mark.rule})
+            _json_out({"status": "CANCELLED", "rule": mark.rule, "publication": _publish_watches(kb)})
         elif c == "analyze":
             from galecore_ai.application import alert_analysis, model_run
             requested = _dt.fromisoformat(args.requested_at) if args.requested_at else _dt.now(UTC)

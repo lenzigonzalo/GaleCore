@@ -8,6 +8,7 @@ import {
   LineStyle,
   ColorType,
   CrosshairMode,
+  AutoscaleInfo,
 } from 'lightweight-charts';
 import { GexChartData, GexTabDisplayConfig } from '../../types/gex';
 import { CALL_COLOR, PUT_COLOR, sideColorAlpha } from '../../utils/optionSideColors';
@@ -551,7 +552,21 @@ export function GexChart({
         alertLinesRef.current.push(series.createPriceLine({ price: a.price, color: '#92928b', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: a.label }));
       } catch {}
     }
-  }, [alertsKey, seriesVersion]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!gexData) {
+      // Las líneas de precio no entran en la autoescala de lightweight-charts. En Precio,
+      // incluir los avisos para que un nivel fuera del recorrido de las velas siga visible.
+      // No se reactiva autoScale: el zoom manual se conserva y Reset vuelve a este proveedor.
+      const prices = (alertLevels ?? []).map(a => a.price).filter(p => Number.isFinite(p) && p > 0);
+      series.applyOptions({ autoscaleInfoProvider: (original: () => AutoscaleInfo | null) => {
+        const base = original();
+        if (!prices.length) return base;
+        return { ...base, priceRange: {
+          minValue: Math.min(base?.priceRange?.minValue ?? prices[0], ...prices),
+          maxValue: Math.max(base?.priceRange?.maxValue ?? prices[0], ...prices),
+        } };
+      } });
+    }
+  }, [alertsKey, seriesVersion, !!gexData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── GEX price lines + StdDev + autoscale ──────────────────────────────────
   useEffect(() => {

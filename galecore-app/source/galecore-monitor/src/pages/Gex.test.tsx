@@ -4,15 +4,17 @@ import { Gex } from './Gex';
 import { useGexStore } from '../store/useGexStore';
 import { useMarketStore } from '../store/useMarketStore';
 import { fetchGexRules } from '../api/gex';
+import { fetchSpace } from '../api/space';
 
 let mockEnabled = true;
 jest.mock('../api/gex', () => ({ GEX_SWITCH_ENDPOINT:'/test/switch', fetchGexRules:jest.fn(), fetchGexAnalysis:jest.fn() }));
+jest.mock('../api/space', () => ({ fetchSpace:jest.fn(), saveSpaceItem:jest.fn() }));
 jest.mock('../api/marketdata', () => ({ ...jest.requireActual('../api/marketdata'), fetchMarketSummary: () => Promise.resolve({ symbol: 'SPY', last: 771.74, prevClose: 769.6, change: 2.14, changePct: 0.28, volume: 43300000, high: 772.87, low: 764.43, sessionDate: '2026-10-15' }) }));
 jest.mock('../store/useStrategySwitchStore', () => ({ useSwitchEnabled:()=>mockEnabled, useStrategySwitchStore:(select:any)=>select({read:()=>Promise.resolve()}) }));
 jest.mock('../store/useAppConfigStore', () => ({ useSwitchEndpoint:()=>'/test/switch', useAppConfigStore:(select:any)=>select({tickers:['SPY','QQQ']}) }));
 jest.mock('../components/common/StrategySwitch', () => ({ StrategySwitch:()=> <span>Barrido</span> }));
 jest.mock('../components/strategy/strategyReferences', () => ({ getStrategyReference:()=>null }));
-jest.mock('../components/chart/GexChart', () => ({ GexChart:({symbol,gexData}:any)=> <div data-testid="chart">{symbol} · {gexData ? 'Gamma combinado' : 'Velas de precio'}</div> }));
+jest.mock('../components/chart/GexChart', () => ({ GexChart:({symbol,gexData,alertLevels}:any)=> <div data-testid="chart" data-alert-levels={JSON.stringify(alertLevels ?? [])}>{symbol} · {gexData ? 'Gamma combinado' : 'Velas de precio'}</div> }));
 jest.mock('../components/gex/OptionsChainList', () => ({ OptionsChainList:({onSelect}:any)=> <button onClick={()=>onSelect('global')}>Toda la cadena</button> }));
 jest.mock('../components/gex/ExpiryEngine', () => ({ ExpiryEngine:()=> <div>Niveles del scope</div> }));
 
@@ -25,11 +27,27 @@ test('abrir Mercado lee las reglas aunque el dock de Watchlist nunca se haya abi
   expect(await screen.findByTestId('chart')).toBeInTheDocument();
 });
 beforeEach(() => {
+  (fetchSpace as jest.Mock).mockResolvedValue({items:[]});
   mockEnabled=true;
   useGexStore.setState({rules:{} as any,tickers:['SPY','QQQ'],rulesLoading:false,rulesError:null,display:null,selectedSymbol:'SPY',selectedExpiry:{},error:{},errorCode:{},loading:{},adHocSymbols:[],cache:{
     SPY:{updatedAt:new Date(),data:{spotPrice:100,frozen:false,macroRegime:null,structureInputs:null,gex:{config:{maxDte:60},global:{netGex:2,strikes:[],expirationsIncluded:1,expirationsRequested:1},byExpiry:[{expiration:'2026-10-12',dte:2,netGex:2,gammaZeroLevel:99,callWall:102,putWall:98,callBand:null,putBand:null,expectedMove:2,atmIv:.2,strikes:[]}]}} as any}
   },fetchGex:jest.fn() as any});
   useMarketStore.setState({tickers:{SPY:{symbol:'SPY',price:100,prevClose:98,bid:99.9,ask:100.1,open:99,lastUpdate:new Date(),isStreaming:true,loading:{},error:{}} as any}});
+});
+
+test('Precio envía al gráfico los avisos activos y distingue precio 700 de piso de puts 700', async () => {
+  const rule = (id: string, threshold: number, metric = 'price') => ({ id, symbol: 'SPY', metric, condition: 'below', threshold });
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ kind: 'agent', key: 'supervisor', content: JSON.stringify({
+    watches: [rule('750',750), rule('715',715), rule('700',700), rule('690',690), rule('puts',700,'put_wall'), rule('iv',70,'iv_rank')],
+    unwatch: { '750': { at: '2026-11-06' } },
+  }) }] });
+  render(<Gex {...props} indicator="price"/>);
+  expect(await screen.findByRole('button', { name: 'Borrar aviso Piso de puts ≤ 700' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Borrar aviso ≤ 700' })).toBeInTheDocument();
+  const levels = JSON.parse(screen.getByTestId('chart').getAttribute('data-alert-levels')!);
+  expect(levels.map((x: any) => [x.id, x.price])).toEqual([['715',715],['700',700],['690',690],['puts',700]]);
+  expect(levels.find((x: any) => x.id === 'puts').label).toBe('Aviso Piso de puts ≤ 700');
+  expect(screen.queryByRole('button', { name: 'Borrar aviso ≤ 750' })).not.toBeInTheDocument();
 });
 test('separa indicadores conservando símbolo y scope elegido', () => {
   render(<Gex {...props}/>);
