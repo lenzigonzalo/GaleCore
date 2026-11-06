@@ -13,15 +13,19 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from datetime import UTC, date, datetime, timedelta
 
 from galecore_ai.adapters.galecore_space import SpaceClient
+from galecore_ai.adapters.research_store import ResearchIntegrityError
 from galecore_ai.application.knowledge import KnowledgeBase, KnowledgeError
 from galecore_ai.contracts.task import Schedule
 from galecore_ai.harness.assets import asset_root, load_asset
 from galecore_ai.harness.catalog import load_catalog
 from galecore_ai.harness.definitions import SkillDefinition
+
+log = logging.getLogger(__name__)
 
 
 def _slug(text: str, limit: int = 48) -> str:
@@ -36,7 +40,11 @@ HISTORY_FINDINGS_LIMIT = 6000   # bounded publication, never grows with the life
 
 def _research_findings(kb: KnowledgeBase, ref: str, revision: int | None = None) -> str | None:
     """A research result as short markdown for the monitor: what was found, what is missing, what follows."""
-    doc = kb.research.load(ref.removeprefix("research:"))
+    try:
+        doc = kb.research.load(ref.removeprefix("research:"))
+    except ResearchIntegrityError as exc:  # BF-0004: one broken file must not stop the whole publication
+        log.warning("research %s skipped, integrity failed: %s", ref, exc)
+        return None
     if doc is None:
         return None
     rev = next((r for r in doc.revisions if r.revision == revision), None) if revision is not None else doc.current

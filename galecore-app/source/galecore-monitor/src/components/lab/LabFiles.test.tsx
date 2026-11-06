@@ -1,9 +1,9 @@
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { LabFiles } from './LabFiles';
-import { labRequest } from '../../api/lab';
+import { labRaw, labRequest } from '../../api/lab';
 
-jest.mock('../../api/lab', () => ({ labRequest: jest.fn(), labUpload: jest.fn() }));
+jest.mock('../../api/lab', () => ({ labRequest: jest.fn(), labUpload: jest.fn(), labRaw: jest.fn() }));
 const request = labRequest as jest.Mock;
 beforeEach(() => {
   jest.resetAllMocks();
@@ -38,4 +38,19 @@ test('si el sync falla, el error queda en el estado y el árbol igual se relee',
   fireEvent.click(screen.getByRole('button', { name: 'Actualizar' }));
   expect(await screen.findByRole('alert')).toHaveTextContent('GaleCore no respondió');
   await waitFor(() => expect(request.mock.calls.filter(c => c[0] === '/workspaces/bancos/files')).toHaveLength(2));
+});
+
+test('un html abre en Vista (iframe) y Código lleva al editor; una imagen abre su vista previa', async () => {
+  (global.URL as any).createObjectURL = jest.fn(() => 'blob:x'); (global.URL as any).revokeObjectURL = jest.fn();
+  (labRaw as jest.Mock).mockResolvedValue(new Blob(['x'], { type: 'image/png' }));
+  request.mockImplementation(async (url: string) => url.includes('?path=') ? { text: '<p>hola</p>' }
+    : { tree: [{ path: 't.html', name: 't.html', kind: 'file' }, { path: 'g.png', name: 'g.png', kind: 'file', text: false, image: true }] });
+  const { container } = render(<LabFiles projectId="spy"/>);
+  fireEvent.click(await screen.findByText('t.html'));
+  await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull());
+  expect(container.querySelector('textarea')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Código' }));
+  expect(container.querySelector('textarea')).not.toBeNull();
+  fireEvent.click(screen.getByText('g.png'));
+  expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:x');
 });

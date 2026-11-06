@@ -6,9 +6,9 @@
 .lw-account { position:absolute; bottom:12px; right:5px; }
 .lw-account > div > button { padding:0; }
 .lw-account [role="menu"] button { display:flex; width:100%; height:auto; justify-content:flex-start; }
-.lw-drawer { position:fixed; inset:0 48px 0 auto; z-index:60; width:420px; height:100dvh; display:flex; flex-direction:column; background:var(--bg-primary); color:var(--text-primary); border-left:1px solid var(--border); font-size:15px; }
+.lw-drawer { position:fixed; inset:0 48px 0 auto; z-index:60; width:420px; height:calc(100 * var(--dvh)); display:flex; flex-direction:column; background:var(--bg-primary); color:var(--text-primary); border-left:1px solid var(--border); font-size:15px; }
 .lw-drawer[hidden] { display:none; }
-.lw-drawer { max-width:calc(100vw - 48px); }
+.lw-drawer { max-width:calc(calc(100 * var(--vw)) - 48px); }
 .lw-resize { position:absolute; inset:0 auto 0 -5px; width:10px; z-index:3; cursor:col-resize; touch-action:none; }
 .lw-resize:hover,.lw-resize:focus-visible { background:var(--border-light); outline:none; }
 .lw-drawer > header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--border); flex-shrink:0; height:64px; }

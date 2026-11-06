@@ -155,6 +155,7 @@ se guarda. El JSON de cada guardado sale de `schema research|evidence|proposal|c
 un dato de GaleCore se cita con el `ref` de `galecore get … --keep "<pedido>"`, no con texto libre ni `.scratch/`.
 Lo que guardás para que el trader lo lea se enlaza con su ruta dentro del proyecto (`[informe](files/<tema>.md)`; el
 chat lo abre en Archivos), y se dice «guardé» sólo después de escribirlo.
+Un panel, tablero o informe visual se arma con la capacidad `html_board` y se abre renderizado a la derecha del chat.
 
 | Surge… | Va a… |
 |---|---|

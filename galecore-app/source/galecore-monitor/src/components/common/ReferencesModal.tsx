@@ -96,7 +96,7 @@ export function ReferencesModal({ open, onClose, title, accentColor = 'var(--blu
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: 'min(940px, 100%)', height: 'min(82vh, 760px)',
+          width: 'min(940px, 100%)', height: 'min(calc(82 * var(--vh)), 760px)',
           backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)',
           borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden',
           boxShadow: '0 20px 60px rgba(0,0,0,0.5)',

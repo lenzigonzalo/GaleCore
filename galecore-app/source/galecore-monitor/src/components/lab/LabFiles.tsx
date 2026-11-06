@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, MoreHorizontal, RefreshCw, Upload } from 'lucide-react';
 import { labRequest, labUpload, WorkspaceFile } from '../../api/lab';
 import { LabMarkdown } from './LabMarkdown';
+import { LabFilePreview, LabViewSwitch, isHtmlFile, isImageFile } from './LabFilePreview';
+import { cssPx, cssRect } from '../../utils/appZoom';
 
 /**
  * Archivos del proyecto como un explorador (owner 17/10): abrir y editar texto, crear archivo o carpeta, subir,
@@ -17,6 +19,8 @@ export function LabFiles({ projectId, folder, openPath, shared = false, unsynced
   const [tree, setTree] = useState<WorkspaceFile[]>([]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<{ path: string; kind: 'file' | 'folder'; text?: false } | null>(null);
+  const [image, setImage] = useState<string | null>(null);
+  const [htmlView, setHtmlView] = useState<'vista' | 'codigo'>('vista');
   const [file, setFile] = useState<{ path: string; saved: string; text: string } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending>(null);
@@ -55,9 +59,10 @@ export function LabFiles({ projectId, folder, openPath, shared = false, unsynced
   const dirty = !!file && file.text !== file.saved;
   const openFile = async (node: WorkspaceFile) => {
     setSelected({ path: node.path, kind: 'file', text: node.text }); setError(''); setStatus('');
-    if (node.text === false) { setFile(null); return; }
+    if (isImageFile(node.path)) { setFile(null); setImage(node.path); return; }
+    if (node.text === false) { setFile(null); setImage(null); return; }
     if (dirty && !window.confirm('Hay cambios sin guardar. ¿Descartarlos?')) return;
-    try { const f = await labRequest<{ text: string }>(base + '?path=' + encodeURIComponent(node.path)); setFile({ path: node.path, saved: f.text, text: f.text }); setEditing(!isMarkdown(node.path)); }
+    try { const f = await labRequest<{ text: string }>(base + '?path=' + encodeURIComponent(node.path)); setImage(null); setHtmlView('vista'); setFile({ path: node.path, saved: f.text, text: f.text }); setEditing(!isMarkdown(node.path)); }
     catch (e) { setFile(null); setError(e instanceof Error ? e.message : 'Archivo no disponible.'); }
   };
   // Un enlace a un archivo del proyecto (desde el chat o desde otro archivo) lo abre acá, con sus carpetas desplegadas.
@@ -75,7 +80,7 @@ export function LabFiles({ projectId, folder, openPath, shared = false, unsynced
     const p = (pending.parent ? pending.parent + '/' : '') + name.trim();
     const ok = pending.kind === 'file' ? await act('write', { path: p, text: '', create: true }, 'Archivo creado') : await act('mkdir', { path: p }, 'Carpeta creada');
     setPending(null);
-    if (ok && pending.kind === 'file') { setSelected({ path: p, kind: 'file' }); setFile({ path: p, saved: '', text: '' }); }
+    if (ok && pending.kind === 'file') { setSelected({ path: p, kind: 'file' }); setImage(null); setHtmlView('codigo'); setFile({ path: p, saved: '', text: '' }); }
   };
   const rename = async (from: string) => {
     const to = (parentOf(from) ? parentOf(from) + '/' : '') + name.trim(); setRenaming(null);
@@ -105,7 +110,7 @@ export function LabFiles({ projectId, folder, openPath, shared = false, unsynced
     const isOpen = !!open[n.path];
     return <li key={n.path}>
       <div className={'lab-files-row' + (selected?.path === n.path ? ' selected' : '')}
-        onContextMenu={e => { e.preventDefault(); setSelected({ path: n.path, kind: n.kind, text: n.text }); setMenu({ path: n.path, x: e.clientX, y: e.clientY }); }}>
+        onContextMenu={e => { e.preventDefault(); setSelected({ path: n.path, kind: n.kind, text: n.text }); setMenu({ path: n.path, x: cssPx(e.clientX), y: cssPx(e.clientY) }); }}>
         <button type="button" className="lab-files-item" aria-expanded={n.kind === 'folder' ? isOpen : undefined}
           onClick={() => n.kind === 'folder' ? (setSelected({ path: n.path, kind: 'folder' }), setOpen(v => ({ ...v, [n.path]: !isOpen }))) : openFile(n)}
           onDoubleClick={() => startRename(n.path)}>
@@ -113,7 +118,7 @@ export function LabFiles({ projectId, folder, openPath, shared = false, unsynced
           {renaming === n.path ? nameInput(() => rename(n.path), () => setRenaming(null)) : <span>{n.name}</span>}
         </button>
         <button type="button" className="lab-files-more" aria-label={'Opciones de ' + n.name} onPointerDown={e => e.stopPropagation()}
-          onClick={e => { const r = e.currentTarget.getBoundingClientRect(); setSelected({ path: n.path, kind: n.kind, text: n.text }); setMenu(menu?.path === n.path ? null : { path: n.path, x: r.right - 160, y: r.bottom + 4 }); }}><MoreHorizontal size={15}/></button>
+          onClick={e => { const r = cssRect(e.currentTarget); setSelected({ path: n.path, kind: n.kind, text: n.text }); setMenu(menu?.path === n.path ? null : { path: n.path, x: r.right - 160, y: r.bottom + 4 }); }}><MoreHorizontal size={15}/></button>
       </div>
       {n.kind === 'folder' && isOpen && rows(n.children || [], n.path)}
     </li>;
@@ -136,9 +141,12 @@ export function LabFiles({ projectId, folder, openPath, shared = false, unsynced
       <nav aria-label="Archivos del proyecto" className="lab-files-list" onClick={e => { if (e.target === e.currentTarget) setSelected(null); }}>{rows(tree, '')}{!tree.length && !pending && <p className="lab-files-empty">Sin archivos todavía.</p>}</nav>
     </aside>
     <section className="lab-files-main">
-      {file ? <>
-        <header><strong>{file.path}</strong>{readOnly(file.path) ? <span>Sólo lectura: lo escribe el harness</span> : <span>{dirty ? 'Sin guardar' : status === 'Guardado' ? 'Guardado' : ''}</span>}{isMarkdown(file.path) && <button type="button" className="lab-files-save" onClick={() => setEditing(!editing)}>{editing ? 'Leer' : 'Editar'}</button>}{!readOnly(file.path) && editing && <button type="button" className="lab-files-save" disabled={!dirty} onClick={save}>Guardar</button>}</header>
-        {isMarkdown(file.path) && !editing ? <div className="lab-files-read"><LabMarkdown text={file.text} files={{ folder: folder || '.', open: openByPath }} /></div> : <textarea className="lab-files-editor" spellCheck={false} readOnly={readOnly(file.path)} value={file.text} aria-label={'Contenido de ' + file.path}
+      {image ? <>
+        <header><strong>{image}</strong></header>
+        <div className="lab-files-read"><LabFilePreview projectId={projectId} path={image} /></div>
+      </> : file ? <>
+        <header><strong>{file.path}</strong>{readOnly(file.path) ? <span>Sólo lectura: lo escribe el harness</span> : <span>{dirty ? 'Sin guardar' : status === 'Guardado' ? 'Guardado' : ''}</span>}{isHtmlFile(file.path) && <LabViewSwitch view={htmlView} onView={setHtmlView} />}{isMarkdown(file.path) && <button type="button" className="lab-files-save" onClick={() => setEditing(!editing)}>{editing ? 'Leer' : 'Editar'}</button>}{!readOnly(file.path) && editing && !(isHtmlFile(file.path) && htmlView === 'vista') && <button type="button" className="lab-files-save" disabled={!dirty} onClick={save}>Guardar</button>}</header>
+        {isHtmlFile(file.path) && htmlView === 'vista' ? <div className="lab-files-html"><iframe className="lab-file-frame" title={'Vista de ' + file.path} sandbox="allow-scripts allow-popups" srcDoc={file.text} /></div> : isMarkdown(file.path) && !editing ? <div className="lab-files-read"><LabMarkdown text={file.text} files={{ folder: folder || '.', open: openByPath }} /></div> : <textarea className="lab-files-editor" spellCheck={false} readOnly={readOnly(file.path)} value={file.text} aria-label={'Contenido de ' + file.path}
           onChange={e => setFile({ ...file, text: e.target.value })}
           onKeyDown={e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(); } }}/>}
       </> : <div className="lab-files-blank"><Folder size={30}/><p>{selected?.text === false ? 'Este archivo no se puede ver acá. Podés renombrarlo o eliminarlo.' : 'Elegí un archivo para verlo y editarlo.'}</p><span>Clic derecho o ⋯ para renombrar o eliminar · F2 renombra · Supr elimina</span></div>}

@@ -46,7 +46,7 @@ export function Modal({ open, onClose, title, icon, width = 520, children }: Pro
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: `min(${width}px, 100%)`, maxHeight: 'min(86vh, 820px)',
+          width: `min(${width}px, 100%)`, maxHeight: 'min(calc(86 * var(--vh)), 820px)',
           backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border)',
           borderRadius: 12, display: 'flex', flexDirection: 'column', overflow: 'hidden',
           boxShadow: '0 20px 60px rgba(0,0,0,0.5)',

@@ -620,3 +620,50 @@ def test_publish_agents_also_publishes_ideas(env, galecore):  # noqa: F811
     out = space.publish_agents(client, kb_, sch)
     assert any(x.startswith("idea/inbox-") for x in out["created"])
     assert space.publish_agents(client, kb_, sch)["created"] == []
+
+
+def test_a_broken_research_file_is_skipped_and_the_rest_is_published(env, caplog):  # noqa: F811  # BF-0004
+    import logging
+
+    from galecore_ai.adapters.research_store import ResearchIntegrityError
+
+    kb_, _, _ = env
+
+    class Broken:
+        def load(self, ref):
+            raise ResearchIntegrityError(ref, ["markdown body disagrees with the frontmatter record"])
+
+    from types import SimpleNamespace
+    kb_ = SimpleNamespace(research=Broken())
+    with caplog.at_level(logging.WARNING, logger="galecore_ai.application.space"):
+        assert space._research_findings(kb_, "research:2026-10-26-curaduria") is None
+    assert "curaduria" in caplog.text and "skipped" in caplog.text
+
+
+def _load_space_sync():
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[2] / "tools" / "space_sync.py"
+    spec = importlib.util.spec_from_file_location("space_sync_tool", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_the_sync_uses_the_production_connection_of_the_lab():  # BF-0004
+    mod = _load_space_sync()
+    env_ = {"GALECORE_BASE_URL": "http://localhost:7001", "GALECORE_API_KEY": "dev-key",
+            "GALECORE_USERNAME": "dev", "GALECORE_PASSWORD": "dev-pw"}
+    user = {"GALECORE_LAB_BASE_URL": "https://prod.example", "GALECORE_LAB_API_KEY": "prod-key"}
+    assert mod.apply_lab_connection(env_, user_env=user.get) is True
+    assert env_ == {"GALECORE_BASE_URL": "https://prod.example", "GALECORE_API_KEY": "prod-key",
+                    "GALECORE_ALLOWED_BASE_URL": "https://prod.example"}  # no Dev login mixed with the prod URL
+
+
+def test_the_sync_keeps_dev_without_lab_base_url():  # BF-0004
+    mod = _load_space_sync()
+    env_ = {"GALECORE_BASE_URL": "http://localhost:7001", "GALECORE_API_KEY": "dev-key"}
+    before = dict(env_)
+    assert mod.apply_lab_connection(env_, user_env=lambda name: None) is False
+    assert env_ == before
