@@ -32,9 +32,10 @@ export function MyConnectors() {
       <thead><tr><th>Conector</th><th>Para qué</th><th>Claude Code</th><th>Codex</th><th>Activo</th></tr></thead>
       <tbody>
         <tr><td>GaleCore</td><td>Datos, riesgo y estrategias</td><td className="is-yes" aria-label="Sí">✓</td><td className="is-yes" aria-label="Sí">✓</td><td>Siempre</td></tr>
-        <tr><td>IBKR e IOL</td><td>Consultas a tus cuentas, sólo lectura</td><td aria-label="No">—</td>
+        <tr><td>IBKR e IOL</td><td>Consultas a tus cuentas, sólo lectura</td>
+          <td className={brokers ? 'is-yes' : ''} aria-label={brokers ? 'Sólo IOL' : 'No'}>{brokers ? '✓ IOL' : '—'}</td>
           <td className={brokers ? 'is-yes' : ''} aria-label={brokers ? 'Sí' : 'No'}>{brokers ? '✓' : '—'}</td>
-          <td><Switch on={brokers} label="Consultas a IBKR e IOL en Codex" onChange={next => { if (!saving) void toggle(next); }}/></td></tr>
+          <td><Switch on={brokers} label="Consultas a IBKR e IOL" onChange={next => { if (!saving) void toggle(next); }}/></td></tr>
       </tbody>
     </table>}
     {!data && !error && <small role="status">Cargando…</small>}

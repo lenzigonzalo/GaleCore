@@ -40,6 +40,27 @@ function brokerQueries(local) {
   };
 }
 
+// Claude (WS-0091): sólo el servidor de IOL por --mcp-config (el resto de los conectores sigue cortado con
+// --strict-mcp-config). El nombre «iol» y la URL deben coincidir con los de la autorización hecha una vez en el CLI.
+// Claude Code no filtra herramientas por servidor: se permiten las de consulta y se niegan las que validan o cambian algo.
+const IOL = BROKERS.find(b => b.prefix === 'iol_invertironline');
+const IOL_DENIED = ['update_access_mode', 'validate_order', 'validate_caucion', 'validate_fci_subscription',
+  'validate_fci_redemption', 'get_ddjj', 'get_caucion_guarantee_assets'];
+function claudeBrokerQueries(local) {
+  if (!brokerQueries(local)) return null;
+  return {
+    mcp: { mcpServers: { iol: { type: 'http', url: 'https://mcp.invertironline.com' } } },
+    allow: IOL.tools.map(t => 'mcp__iol__' + t),
+    deny: IOL_DENIED.map(t => 'mcp__iol__' + t),
+    instructions: '\nBroker externo habilitado sólo para consultas: IOL, mediante la conexión del usuario. ' +
+      'GaleCore sigue siendo la primera fuente. Para datos propios de IOL usá sus consultas y presentá fuente y fecha por separado. ' +
+      'No envíes, prepares, valides, modifiques ni canceles operaciones, ni cambies permisos o fondos. ' +
+      'Comprobá get_access_mode antes de consultar la cuenta; debe devolver read_only. ' +
+      'Si IOL pide autorización o no responde, decilo y seguí con GaleCore. ' +
+      'No uses shell, HTTP ni otro canal para evitar estas restricciones. Si falta una consulta, declará el faltante.\n',
+  };
+}
+
 // Interruptor de Configuración → Mis conectores (WS-0083): lee y escribe el mismo broker-queries.json. Un archivo ilegible cuenta como apagado.
 function brokerSetting(local) {
   try { return JSON.parse(fs.readFileSync(path.join(local, 'broker-queries.json'), 'utf8')).enabled === true; } catch { return false; }
@@ -52,4 +73,4 @@ function setBrokerQueries(local, enabled) {
   return enabled === true;
 }
 
-module.exports = { brokerQueries, brokerSetting, setBrokerQueries };
+module.exports = { brokerQueries, claudeBrokerQueries, brokerSetting, setBrokerQueries };
