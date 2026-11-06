@@ -13,6 +13,7 @@ import { useAppConfigStore } from '../../store/useAppConfigStore';
 import type { ConnectionStatus } from '../../socket/useMarketSocket';
 import './LiveWatchlist.css';
 import { AccountMenu } from '../layout/AccountMenu';
+import { cssPx } from '../../utils/appZoom';
 
 const CACHE = 'galecore.watchlist';
 const readCache = (): Watchlist | null => { try { return parseWatchlist(JSON.parse(localStorage.getItem(CACHE) || 'null')); } catch { return null; } };
@@ -139,8 +140,8 @@ export function LiveWatchlist({ open, enabled, onClose, onToggle, onSelect, sock
     <aside id="lw-panel" ref={panel} className="lw-drawer" style={{width}} aria-labelledby="lw-title" hidden={!open || !enabled}>
       <div className="lw-resize" role="separator" tabIndex={0} aria-label={alertsMode ? 'Ancho de avisos' : calendarMode ? 'Ancho de calendario' : 'Ancho de watchlist'} aria-orientation="vertical" aria-valuemin={360} aria-valuemax={720} aria-valuenow={width}
         title="Arrastrá para ajustar el ancho · doble clic para restablecer"
-        onPointerDown={e => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.focus(); drag.current={x:e.clientX,width}; e.currentTarget.setPointerCapture(e.pointerId); }}
-        onPointerMove={e => { if (drag.current) resize(drag.current.width + drag.current.x - e.clientX); }}
+        onPointerDown={e => { if (e.button !== 0) return; e.preventDefault(); e.currentTarget.focus(); drag.current={x:cssPx(e.clientX),width}; e.currentTarget.setPointerCapture(e.pointerId); }}
+        onPointerMove={e => { if (drag.current) resize(drag.current.width + drag.current.x - cssPx(e.clientX)); }}
         onPointerUp={e => { drag.current=null; if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
         onPointerCancel={() => { drag.current=null; }} onLostPointerCapture={() => { drag.current=null; }}
         onDoubleClick={() => resize(420)}

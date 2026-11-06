@@ -3,6 +3,7 @@ import { Settings, Shield, User, LogOut } from 'lucide-react';
 import type { Tab } from './TabNav';
 import { useCurrentUserStore } from '../../store/useCurrentUserStore';
 import { NAVIGATION } from './navigation';
+import { cssPx } from '../../utils/appZoom';
 export type WorkspaceMode = 'monitor' | 'operativa' | 'lab';
 interface Props { active: Tab; mode?: WorkspaceMode; onChange: (tab: Tab) => void; onLogout?: () => void; width?: number; onResize?: (width: number) => void }
 export function WorkspaceNav({ active, onChange, onLogout, width, onResize }: Props) {
@@ -20,7 +21,7 @@ export function WorkspaceNav({ active, onChange, onLogout, width, onResize }: Pr
   const compact = active === 'lab';
   const drag = (event: React.PointerEvent) => {
     if (!onResize) return; event.preventDefault();
-    const move = (e: PointerEvent) => onResize(Math.max(180, Math.min(360, e.clientX)));
+    const move = (e: PointerEvent) => onResize(Math.max(180, Math.min(360, cssPx(e.clientX))));
     const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   };

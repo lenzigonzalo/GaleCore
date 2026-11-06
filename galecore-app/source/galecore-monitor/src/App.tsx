@@ -51,7 +51,7 @@ function Dashboard({ onLogout, userId }: DashboardProps) {
   const [labVisited, setLabVisited] = useState(tab === 'lab');
   const [selectedSpec, setSelectedSpec] = useState<string | null>(null);
   const [projectRequest, setProjectRequest] = useState<{ id: string; sequence: number }>();
-  const [marketIndicator, setMarketIndicator] = useState<MarketIndicator>('gamma');
+  const [marketIndicator, setMarketIndicator] = useState<MarketIndicator>('price');
   const setTab = (next: Tab) => {
     if (next === 'config') { setSetup(false); setSettingsOpen(true); return; }
     if (next === 'rpf') { setSelectedSpec('rpf'); next = 'estrategias'; }
@@ -60,7 +60,7 @@ function Dashboard({ onLogout, userId }: DashboardProps) {
     if (next === 'operativa' || next === 'monitor') next = 'inicio';
     if (next === 'estrategias') setStrategiesVisited(true);
     if (next === 'lab') setLabVisited(true);
-    if (next !== 'gex') setMarketIndicator('gamma');
+    if (next !== 'gex') setMarketIndicator('price');
     setCurrentTab(next);
   };
   const openProject = (id: string) => { setProjectRequest(previous => ({ id, sequence: (previous?.sequence || 0) + 1 })); setTab('lab'); };
@@ -130,7 +130,7 @@ function Dashboard({ onLogout, userId }: DashboardProps) {
   useApplyTextSizes();
 
   return (
-    <div className={'workspace-shell flex flex-col has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '') + (isLabWorkspace ? ' watchlist-autohide' : '')} style={{ height: '100vh', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
+    <div className={'workspace-shell flex flex-col has-watchlist-dock' + (watchlistOpen ? ' watchlist-expanded' : '') + (isLabWorkspace ? ' watchlist-autohide' : '')} style={{ height: 'calc(100 * var(--vh))', backgroundColor: 'var(--bg-primary)', '--watchlist-width': `${watchlistWidth}px` } as React.CSSProperties}>
         <WorkspaceHeader status={<StatusBar connectionStatus={socketStatus} lastUpdate={lastUpdate}/>} active={tab} onChange={setTab} onLogout={onLogout}
           onSymbol={async symbol => {
             let store = useGexStore.getState();

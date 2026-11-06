@@ -5,6 +5,7 @@ import type { WorkspaceProject, WorkspaceState } from '../../api/lab';
 import { fetchSpace, saveSpaceItem } from '../../api/space';
 import { strategiesOf } from '../../api/labProjects';
 import './LabProjectList.css';
+import { cssRect, cssViewport } from '../../utils/appZoom';
 
 const STORAGE = 'galecore:lab:groups:v1';
 const DRAG_TYPE = 'application/x-galecore-lab-item';
@@ -79,9 +80,8 @@ export function LabProjectList(props: Props) {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   useLayoutEffect(() => {
     if (!menu || !lastTrigger.current || !menuPanel.current) return;
-    const anchor = lastTrigger.current.getBoundingClientRect();
-    const panel = menuPanel.current.getBoundingClientRect();
-    setMenuPosition({ left: Math.max(8, Math.min(anchor.right - panel.width, window.innerWidth - panel.width - 8)), top: Math.max(8, Math.min(anchor.bottom + 4, window.innerHeight - panel.height - 8)) });
+    const anchor = cssRect(lastTrigger.current), panel = cssRect(menuPanel.current), vp = cssViewport();
+    setMenuPosition({ left: Math.max(8, Math.min(anchor.right - panel.width, vp.width - panel.width - 8)), top: Math.max(8, Math.min(anchor.bottom + 4, vp.height - panel.height - 8)) });
   }, [menu, organization.colors]);
   useEffect(() => {
     if (menu) menuPanel.current?.querySelector<HTMLElement>('select, button')?.focus();

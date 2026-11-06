@@ -144,7 +144,10 @@ if top["score"] >= MIN_SCORE:
     answer = None
     try:  # el «cómo responder» corto de la skill (decisión del owner 13/10: la sesión casi nunca lee la skill)
         text = (SKILLS / top["skill"]).read_text(encoding="utf-8")
-        if top["skill"].endswith(".md"):  # SKILL.md (WS-0054): su sección «Cómo responder»
+        if top["capability"] == "html_board":
+            # Ambos motores reciben el método y el diseño canónicos, no sólo la línea de entrega.
+            answer = text
+        elif top["skill"].endswith(".md"):  # SKILL.md (WS-0054): su sección «Cómo responder»
             found = re.search(r"(?ms)^## +Cómo responder *\n(.*?)(?=^## |\Z)", text.replace("\r\n", "\n"))
             answer = found.group(1) if found else None
         elif yaml is not None:
@@ -152,7 +155,10 @@ if top["score"] >= MIN_SCORE:
     except (OSError, KeyError, TypeError, AttributeError, ValueError):
         answer = None
     if answer:
-        print("[cómo responder]\n" + answer.strip())
+        label = ("[método completo de Tablero HTML] Aplicá esta skill; sus criterios de generación y diseño "
+                 "tienen prioridad sobre skills genéricas del host." if top["capability"] == "html_board"
+                 else "[cómo responder]")
+        print(label + "\n" + answer.strip())
     if top["capability"] == "strategy_design":
         print(f"[método de diseño] Si necesitás la skill completa: {SKILLS / top['skill']} "
               "(única copia; no busques otra).")

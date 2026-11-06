@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Check, ChevronDown, X } from 'lucide-react';
 import type { ChatOptions, LabProvider } from '../../api/lab';
 import './LabModelPicker.css';
+import { cssRect, cssViewport } from '../../utils/appZoom';
 
 type Provider = 'codex' | 'claude';
 interface Choice { provider: Provider; model: string; effort: string }
@@ -24,15 +25,16 @@ export function LabModelPicker({ provider, model, effort, providers, options, lo
   useLayoutEffect(() => {
     if (!open) return;
     const place = () => {
-      const rect = trigger.current?.getBoundingClientRect();
+      const rect = trigger.current && cssRect(trigger.current);
       if (!rect) return;
-      const width = Math.min(390, window.innerWidth - 32);
-      const above = rect.top - 16, below = window.innerHeight - rect.bottom - 16;
+      const vp = cssViewport();
+      const width = Math.min(390, vp.width - 32);
+      const above = rect.top - 16, below = vp.height - rect.bottom - 16;
       const upward = above >= below;
-      setPosition({ width, left: Math.max(16, Math.min(rect.right - width, window.innerWidth - width - 16)),
+      setPosition({ width, left: Math.max(16, Math.min(rect.right - width, vp.width - width - 16)),
         maxHeight: Math.max(0, Math.min(470, upward ? above : below)),
         top: upward ? undefined : rect.bottom + 8,
-        bottom: upward ? window.innerHeight - rect.top + 8 : undefined });
+        bottom: upward ? vp.height - rect.top + 8 : undefined });
     };
     place();
     window.addEventListener('resize', place);

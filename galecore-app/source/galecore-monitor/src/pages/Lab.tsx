@@ -26,9 +26,10 @@ import { notifyChat, playChatSound, readChatPrefs, useChatModes } from '../compo
 import { Engine, normalizeMode, PERMISSION_MODES } from '../components/lab/chatPermissions';
 import './Lab.css';
 import { useTextSize } from '../components/settings/TextSizeSettings';
+import { cssPx, cssRect, cssViewport } from '../utils/appZoom';
 // Owner 18/10: el mapa se abre lo que se quiera; el chat conserva al menos 360 px.
 // El chat nunca queda por debajo de 420 px (revisión 19/10): el tope se mide sobre el contenedor del chat, no la ventana.
-const limitMapaWidth = (width: number, room = (typeof window !== 'undefined' ? window.innerWidth : 1600)) => Math.max(280, Math.min(width, room - 420));
+const limitMapaWidth = (width: number, room = (typeof window !== 'undefined' ? cssPx(window.innerWidth) : 1600)) => Math.max(280, Math.min(width, room - 420));
 const NARROW = '(max-width: 1100px)';
 const limitSidebarWidth = (width: number, available: number) => Math.max(200, Math.min(width, 480, Math.max(200, available - 420)));
 // Commit con el que Vercel compiló esta web (vacío en local). Una sola petición de actualización del Lab por carga de página.
@@ -64,7 +65,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     try {
       const stored = Number(localStorage.getItem('galecore:lab:sidebar-width'));
-      return limitSidebarWidth(stored >= 200 && Number.isFinite(stored) ? stored : 310, window.innerWidth);
+      return limitSidebarWidth(stored >= 200 && Number.isFinite(stored) ? stored : 310, cssPx(window.innerWidth));
     } catch { return 310; }
   });
   // Mapa de la idea (WS-0039): un solo botón; al lado del chat en escritorio, alternando con el chat si no caben.
@@ -145,7 +146,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   useEffect(() => {
     try { localStorage.setItem('galecore:lab:sidebar-width', String(sidebarWidth)); } catch { /* disponible hasta recargar */ }
   }, [sidebarWidth]);
-  const resizeSidebar = (width: number) => setSidebarWidth(limitSidebarWidth(width, workspace.current?.clientWidth || window.innerWidth));
+  const resizeSidebar = (width: number) => setSidebarWidth(limitSidebarWidth(width, workspace.current?.clientWidth || cssPx(window.innerWidth)));
   // Motor por defecto de esta PC (GALECORE_LAB_PROVIDER en el Lab): se aplica una sola vez, al cargar; después manda lo que elija la persona.
   const defaultApplied = useRef(false);
   useEffect(() => {
@@ -404,10 +405,10 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       const sel = window.getSelection(), text = sel?.toString().trim() || '';
       const inAnswer = (n: Node | null) => !!(n instanceof Element ? n : n?.parentElement)?.closest('.lab-message.assistant');
       if (!sel || sel.isCollapsed || !text || !(inAnswer(sel.anchorNode) || inAnswer(sel.focusNode))) { setQuote(null); return; }
-      const box = sel.getRangeAt(0).getBoundingClientRect();
+      const box = cssRect(sel.getRangeAt(0)), vp = cssViewport();
       // Debajo de la barra superior y dentro de la ventana; si no hay lugar arriba, va debajo de la selección.
       const above = box.top - 44;
-      setQuote({ text, x: Math.min(Math.max(8, box.left), window.innerWidth - 200), y: above > 72 ? above : Math.min(box.bottom + 8, window.innerHeight - 48) });
+      setQuote({ text, x: Math.min(Math.max(8, box.left), vp.width - 200), y: above > 72 ? above : Math.min(box.bottom + 8, vp.height - 48) });
     };
     const later = () => window.setTimeout(check, 0);
     document.addEventListener('mouseup', later); document.addEventListener('keyup', later);
@@ -456,10 +457,10 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
   return <div ref={workspace} className={'lab-chat-workspace' + (embedded ? ' embedded' : '') + (sidebarHidden ? ' sidebar-hidden' : collapsed ? ' sidebar-collapsed' : '')} style={{ '--lab-sidebar-width': sidebarWidth + 'px', '--lab-chat-font-size': chatFontSize } as React.CSSProperties}>
     {embedded ? (projectHost && createPortal(projectSidebar, projectHost)) : projectSidebar}
     {!embedded && !collapsed && !sidebarHidden && <div className="lab-sidebar-resize" role="separator" tabIndex={0} aria-label="Ancho de proyectos" aria-orientation="vertical" aria-controls="lab-project-sidebar"
-      aria-valuemin={200} aria-valuemax={limitSidebarWidth(480, workspace.current?.clientWidth || window.innerWidth)} aria-valuenow={sidebarWidth}
+      aria-valuemin={200} aria-valuemax={limitSidebarWidth(480, workspace.current?.clientWidth || cssPx(window.innerWidth))} aria-valuenow={sidebarWidth}
       title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
       onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.focus(); e.currentTarget.setPointerCapture(e.pointerId); }}
-      onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) resizeSidebar(e.clientX - (workspace.current?.getBoundingClientRect().left || 0)); }}
+      onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) resizeSidebar(cssPx(e.clientX - (workspace.current?.getBoundingClientRect().left || 0))); }}
       onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
       onPointerCancel={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
       onDoubleClick={() => resizeSidebar(310)}
@@ -501,7 +502,7 @@ export function Lab({ onMonitor, onNavigate = () => {}, sidebarHidden = false, o
       {side && !narrow && <div className="lab-sidebar-resize lab-mapa-resize" role="separator" tabIndex={0} aria-label={side === 'file' ? 'Ancho del archivo' : 'Ancho del panel Proyecto'} aria-orientation="vertical" aria-valuemin={280} aria-valuemax={Math.max(280, (chatBody.current?.clientWidth || 1600) - 420)} aria-valuenow={mapaWidth}
         title="Arrastrá para ajustar · flechas para cambiar ancho · doble clic para restablecer"
         onPointerDown={e => { if (e.button !== 0) return; e.currentTarget.setPointerCapture(e.pointerId); }}
-        onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) { const box = chatBody.current?.getBoundingClientRect(); setMapaWidth(limitMapaWidth((box?.right || 0) - e.clientX, box?.width)); } }}
+        onPointerMove={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) { const box = chatBody.current && cssRect(chatBody.current); setMapaWidth(limitMapaWidth((box?.right || 0) - cssPx(e.clientX), box?.width)); } }}
         onPointerUp={e => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
         onDoubleClick={() => setMapaWidth(380)}
         onKeyDown={e => { if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return; e.preventDefault(); setMapaWidth(w => limitMapaWidth(w + (e.key === 'ArrowLeft' ? 1 : -1) * (e.shiftKey ? 40 : 10), chatBody.current?.clientWidth)); }}/>}

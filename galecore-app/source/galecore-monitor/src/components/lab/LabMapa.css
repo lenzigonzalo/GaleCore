@@ -30,7 +30,7 @@
 .lab-source-hint summary { list-style:none; display:grid; place-items:center; width:20px; height:20px; border:1px solid var(--border); border-radius:50%; font-size:12px; color:var(--text-secondary); cursor:pointer; }
 .lab-source-hint summary::-webkit-details-marker { display:none; }
 .lab-source-hint[open] summary, .lab-source-hint summary:hover { border-color:var(--accent); color:var(--accent); }
-.lab-source-hint > span { position:absolute; right:0; top:26px; z-index:5; width:max-content; max-width:min(420px, 80vw); padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-primary); color:var(--text-secondary); font-size:12.5px; line-height:1.45; box-shadow:0 6px 18px rgba(0,0,0,.35); }
+.lab-source-hint > span { position:absolute; right:0; top:26px; z-index:5; width:max-content; max-width:min(420px, calc(80 * var(--vw))); padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-primary); color:var(--text-secondary); font-size:12.5px; line-height:1.45; box-shadow:0 6px 18px rgba(0,0,0,.35); }
 /* El mapa como la solapa Diseño (owner 17/10) */
 .lab-mapa-design { display:grid; gap:22px; padding:16px 20px 28px; }
 .lab-mapa-design h3 { margin:0 0 8px; font-size:15px; font-weight:600; color:var(--text-primary); }

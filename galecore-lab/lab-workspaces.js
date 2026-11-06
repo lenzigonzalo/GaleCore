@@ -12,8 +12,9 @@ const fail = (message, status = 400) => Object.assign(new Error(message), { stat
 const ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const UUID = /^[0-9a-f-]{36}$/i;
 const TYPES = ['personal', 'analysis', 'strategy'];
-const TEXT = /\.(md|txt|json|yaml|yml|csv|tsv|py|log)$/i;
-const IMAGE_TYPES = {'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp'};
+const TEXT = /\.(md|txt|json|yaml|yml|csv|tsv|py|log|html|htm)$/i;
+const IMAGE_TYPES = {'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.gif':'image/gif','.webp':'image/webp','.svg':'image/svg+xml'};
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg)$/i;
 function attachmentFile(dir, rel) {
   if(!/^adjuntos\/[\w.\- ]+$/.test(rel))throw fail('Adjunto no encontrado: '+rel,404);
   const base=fs.realpathSync(dir);let file;
@@ -33,13 +34,14 @@ function readProjectText(file) {
   const bytes = fs.readFileSync(file);
   return bytes.toString(bytes[0] === 0xff && bytes[1] === 0xfe ? 'utf16le' : 'utf8').replace(/^\uFEFF/, '');
 }
-function safeFile(dir, relative) {
-  if (!relative || path.isAbsolute(relative) || PRIVATE.test(relative) || !TEXT.test(relative)) throw fail('Archivo no disponible.', 404);
+// Los tableros HTML embeben datos; el resto del texto conserva el límite de 512 KB.
+function safeFile(dir, relative, allowed = TEXT, limit = /\.html?$/i.test(relative) ? 2 * 1024 * 1024 : 512 * 1024) {
+  if (!relative || path.isAbsolute(relative) || PRIVATE.test(relative) || !allowed.test(relative)) throw fail('Archivo no disponible.', 404);
   const base = fs.realpathSync(dir), target = path.resolve(base, relative);
   if (!target.startsWith(base + path.sep)) throw fail('Archivo fuera del proyecto.', 403);
   let actual; try { actual = fs.realpathSync(target); } catch { throw fail('Archivo no encontrado.', 404); }
   if (!actual.startsWith(base + path.sep) || !fs.statSync(actual).isFile()) throw fail('Archivo fuera del proyecto.', 403);
-  if (fs.statSync(actual).size > 512 * 1024) throw fail('Archivo demasiado grande para la vista previa.', 413);
+  if (fs.statSync(actual).size > limit) throw fail('Archivo demasiado grande para la vista previa.', 413);
   return actual;
 }
 // Investigaciones (WS-0066): viven en knowledge/research/ (comunes); la que se guardó desde un proyecto lleva `project: <id>`
@@ -65,7 +67,7 @@ function tree(dir, prefix = '', depth = 0) {
   return fs.readdirSync(dir, { withFileTypes: true }).filter(e => !e.isSymbolicLink() && !PRIVATE.test(e.name)).slice(0,200).flatMap(e => {
     const rel = prefix + e.name;
     if(e.isDirectory()) return [{ path:rel, name:e.name, kind:'folder', children:tree(path.join(dir,e.name),rel+'/',depth+1) }];
-    return [{path:rel,name:e.name,kind:'file',...(TEXT.test(e.name)?{}:{text:false})}];
+    return [{path:rel,name:e.name,kind:'file',...(TEXT.test(e.name)?{}:{text:false,...(IMAGE_FILE.test(e.name)?{image:true}:{})})}];
   });
 }
 // Una ruta del explorador de Archivos (owner 17/10: crear, editar, renombrar, eliminar como en el explorador): dentro
@@ -625,6 +627,13 @@ function createWorkspaces({ root, kb, local, binaries, environment, legacyProjec
       const p=project(parts[1]), rel=url.searchParams.get('path')||'', file=attachmentFile(p.dir,rel);
       const type=IMAGE_TYPES[path.extname(rel).toLowerCase()];
       res.writeHead(200,{'Content-Type':type||'application/octet-stream','Content-Disposition':(type?'inline':'attachment')+'; filename="'+path.basename(rel)+'"','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});
+      res.end(fs.readFileSync(file));return true;
+    }
+    if(req.method==='GET'&&parts[0]==='workspaces'&&parts[2]==='raw'&&parts.length===3){
+      // Imágenes de cualquier carpeta del proyecto para la vista previa (WS-0083 AC-10).
+      const p=project(parts[1]), rel=url.searchParams.get('path')||'', file=safeFile(p.dir,rel,IMAGE_FILE,15*1024*1024);
+      const type=IMAGE_TYPES[path.extname(rel).toLowerCase()];
+      res.writeHead(200,{'Content-Type':type,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff',...(type==='image/svg+xml'?{'Content-Security-Policy':"default-src 'none'; style-src 'unsafe-inline'"}:{})});
       res.end(fs.readFileSync(file));return true;
     }
     if(req.method==='POST'&&parts[0]==='workspaces'&&parts[2]==='attachments'){

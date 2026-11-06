@@ -1,0 +1,10 @@
+# Qué cambió en cada versión de html_board y qué feedback lo originó (GC-AI-0016). La más nueva primero.
+skill_id: html_board
+versions:
+  - version: "1.0.0"
+    date: 2026-11-06
+    changes: >
+      Primera versión (WS-0083, pedido del owner): tablero, panel o informe visual como un `.html` autocontenido con
+      datos de GaleCore embebidos, criterios de diseño del owner y enlace `files/<tema>.html`; reemplaza las líneas
+      sueltas de PRODUCT.md.
+    feedback: []

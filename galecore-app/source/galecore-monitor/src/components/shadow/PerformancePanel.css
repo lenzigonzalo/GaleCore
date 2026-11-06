@@ -225,7 +225,7 @@
 .op-row.is-selected td { background: var(--bg-tertiary); }
 .op-state { display: inline-block; font-size: 13px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
 .op-state.is-open { border-color: var(--green-border); color: var(--green); }
-.op-panel { position: fixed; top: 64px; right: 48px; bottom: 0; width: 480px; max-width: calc(100vw - 48px); z-index: 40; overflow: auto; padding: 20px 24px; border-left: 1px solid var(--border); background: var(--bg-secondary); box-shadow: -12px 0 32px rgba(0,0,0,.35); display: grid; align-content: start; gap: 20px; }
+.op-panel { position: fixed; top: 64px; right: 48px; bottom: 0; width: 480px; max-width: calc(calc(100 * var(--vw)) - 48px); z-index: 40; overflow: auto; padding: 20px 24px; border-left: 1px solid var(--border); background: var(--bg-secondary); box-shadow: -12px 0 32px rgba(0,0,0,.35); display: grid; align-content: start; gap: 20px; }
 .op-panel header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .op-panel h3 { margin: 0 0 6px; font-size: 18px; font-weight: 600; color: var(--text-primary); text-transform: capitalize; }
 .op-panel header button { background: transparent; border: 0; color: var(--text-secondary); cursor: pointer; padding: 4px; border-radius: 6px; }
