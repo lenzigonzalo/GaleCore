@@ -75,7 +75,7 @@ def _agent_history(kb: KnowledgeBase, task, outcomes: list[dict]) -> list[dict]:
                 lines += [f"## {title}", *(f"- {x}" for x in items), ""]
             findings = "\n".join(lines)
         trimmed = bool(findings and len(findings) > HISTORY_FINDINGS_LIMIT)
-        rows.append({**{k: e[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error")
+        rows.append({**{k: e[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error", "reason_code")
                         if e.get(k) is not None}, "failed": e["event"] == "run_failed",
                      "findings": findings[:HISTORY_FINDINGS_LIMIT] if findings else None, "truncated": trimmed})
     return rows
@@ -117,7 +117,7 @@ def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) ->
     if findings and len(findings) > FINDINGS_LIMIT:
         findings = findings[:FINDINGS_LIMIT].rstrip() + "\n\n… (recortado: el resultado completo queda en GaleCore-AI)"
     return {
-        "capability": task.kind, "status": task.status, **_skill_scripts(kb, task), "schedule": task.schedule.describe(),
+        "capability": task.kind, "status": task.status, "runs_on": task.runs_on, **_skill_scripts(kb, task), "schedule": task.schedule.describe(),
         "strategy": task.strategy, "objective": task.objective,
         "model": task.model, "model_default": (t.schedulable_entry(task.kind).schedulable.model
                                                 if task.kind not in t.CODE_RUNNERS else None),
@@ -128,8 +128,10 @@ def agent_state(kb: KnowledgeBase, task_id: str, now: datetime | None = None) ->
         "tools_available": t.available_tools(task.kind) if task.kind not in t.CODE_RUNNERS else None,
         "history": _agent_history(kb, task, outcomes), "history_total": len(outcomes),
         "state": fresh["state"], "state_detail": fresh.get("detail"), "next_expected_at": fresh.get("next_expected_at"),
-        "last_run": ({k: last[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error")
-                      if last.get(k) is not None} | {"failed": last["event"] == "run_failed"}) if last else None,
+        "last_run": ({k: last[k] for k in ("at", "result", "invoked_by", "duration_s", "model", "reason", "error",
+                                           "reason_code") if last.get(k) is not None}
+                     | {"failed": last["event"] == "run_failed"}
+                     | ({"reason_text": t.reason_text(last)} if t.reason_text(last) else {})) if last else None,
         "runs": sum(1 for e in log if e["event"] == "run_finished"),
         "findings": findings,
         "result_ref": ((last or {}).get("research") or (last or {}).get("followup")),
@@ -222,14 +224,19 @@ def sync(client: SpaceClient, pieces: list[dict], seen: dict[tuple, int] | None 
     return out
 
 
-def _agent_items(client: SpaceClient) -> list[tuple[dict, dict]]:
+def _agent_items(client: SpaceClient, cloud: bool = False) -> list[tuple[dict, dict]]:
+    """The readable agent pieces: the PC's own, or with `cloud` the ones that run in the cloud (WS-0079).
+
+    The PC publishes, applies requests to and deletes only its own: a `runs_on: "cloud"` piece belongs to the Lab's
+    routine flow (`agent_cloud`) and is never touched here.
+    """
     out = []
     for item in client.items("agent")["items"]:
         try:
             content = json.loads(item["content"])
         except (json.JSONDecodeError, TypeError):
             continue
-        if isinstance(content, dict):
+        if isinstance(content, dict) and (content.get("runs_on") == "cloud") == cloud:
             out.append((item, content))
     return out
 
@@ -478,7 +485,8 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     requests = apply_requests(client, kb, scheduler, now, items)
     refused = {r["agent"]: r["error"] for r in requests if r["result"] == "refused"}
     kept = {i["key"]: c["request_error"] for i, c in items if c.get("request_error") and not c.get("request")}
-    pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent"]
+    cloud_keys = {i["key"] for i, _ in _agent_items(client, cloud=True)}
+    pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent" and p["key"] not in cloud_keys]
     responses: list[dict] = []
     if supervise is not None:                    # WS-0007: answers first, then a pass, then the piece
         from galecore_ai.application import supervisor as sv

@@ -88,6 +88,171 @@ namespace DataFeed.Repositories.Migrations
                     b.ToTable("accounts", (string)null);
                 });
 
+            modelBuilder.Entity("DataFeed.Repositories.Entities.AgentFireToken", b =>
+                {
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<string>("AgentKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("agent_key");
+
+                    b.Property<DateTime?>("LastFiredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_fired_at");
+
+                    b.Property<string>("TokenCipher")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("token_cipher");
+
+                    b.Property<string>("TokenHint")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("token_hint");
+
+                    b.Property<string>("TriggerId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("trigger_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.HasKey("OwnerId", "AgentKey")
+                        .HasName("pk_agent_fire_tokens");
+
+                    b.ToTable("agent_fire_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.AgentKey", b =>
+                {
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<string>("KeyHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("key_hash");
+
+                    b.Property<string>("KeyHint")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("key_hint");
+
+                    b.HasKey("OwnerId")
+                        .HasName("pk_agent_keys");
+
+                    b.HasIndex("KeyHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_agent_keys_key_hash");
+
+                    b.ToTable("agent_keys", (string)null);
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.AgentRun", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("AgentKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("agent_key");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("now()");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("finished_at");
+
+                    b.Property<DateTime?>("FiredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fired_at");
+
+                    b.Property<string>("Origin")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("origin");
+
+                    b.Property<Guid>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("reason_code");
+
+                    b.Property<DateTime?>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<string>("SessionId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("SessionUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("session_url");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("summary");
+
+                    b.Property<string>("TriggerId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("trigger_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_agent_runs");
+
+                    b.HasIndex("OwnerId", "AgentKey", "CreatedAt")
+                        .HasDatabaseName("ix_agent_runs_owner_id_agent_key_created_at");
+
+                    b.ToTable("agent_runs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_agent_runs_origin", "origin IN ('schedule','manual')");
+
+                            t.HasCheckConstraint("ck_agent_runs_status", "status IN ('requested','ok','error','skipped')");
+                        });
+                });
+
             modelBuilder.Entity("DataFeed.Repositories.Entities.EvaluationLogEntity", b =>
                 {
                     b.Property<Guid>("Id")
@@ -909,6 +1074,42 @@ namespace DataFeed.Repositories.Migrations
                         .HasConstraintName("fk_accounts_users_user_id");
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.AgentFireToken", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_fire_tokens_users_owner_id");
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.AgentKey", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_keys_users_owner_id");
+
+                    b.Navigation("Owner");
+                });
+
+            modelBuilder.Entity("DataFeed.Repositories.Entities.AgentRun", b =>
+                {
+                    b.HasOne("DataFeed.Repositories.Entities.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_agent_runs_users_owner_id");
+
+                    b.Navigation("Owner");
                 });
 
             modelBuilder.Entity("DataFeed.Repositories.Entities.EvaluationLogEntity", b =>

@@ -64,12 +64,39 @@ _REPO = Path(__file__).resolve().parents[3]
 RUNNER_HOST = RecordHost(provider="windows-task-scheduler", model="deterministic-runner")
 # A run started by hand (`task run`) is the same code but must never pass for an automatic one (Codex C4 MAJOR).
 MANUAL_HOST = RecordHost(provider="manual-cli", model="deterministic-runner")
-INVOKERS = {"scheduler": RUNNER_HOST, "manual": MANUAL_HOST}
-MODEL_PROVIDERS = {"scheduler": "windows-task-scheduler+claude-code", "manual": "manual-cli+claude-code"}
+# WS-0079: the VPS runner (application/task_service.py) is the second automatic invoker, for tasks with runs_on="vps".
+VPS_HOST = RecordHost(provider="vps-runner", model="deterministic-runner")
+INVOKERS = {"scheduler": RUNNER_HOST, "vps": VPS_HOST, "manual": MANUAL_HOST}
+MODEL_PROVIDERS = {"scheduler": "windows-task-scheduler+claude-code", "vps": "vps-runner+claude-code",
+                   "manual": "manual-cli+claude-code"}
+AUTOMATIC = ("scheduler", "vps")     # what "an automatic run" means: skipped out of session, marked with its validity, counted by freshness
+SIDE_NAME = {"pc": "la PC", "vps": "el VPS"}
+# Why a run did not happen, in the owner's words (AC-6). The patterns are what the engine's CLI printed; to be checked
+# against real outputs on the VPS (WS-0079 step 0).
+AUTH_PATTERNS = ("Invalid API key", "Please run /login", "OAuth token has expired", "authentication_error", "not logged in")
+PLAN_LIMIT_PATTERNS = ("usage limit", "limit reached", "rate_limit", "hit your limit")
+REASON_TEXT = {"auth": "no corrió: el login del motor venció, hay que volver a cargarlo",
+               "plan_limit": "no corrió: se agotó el límite del plan del motor",
+               "vps_busy": "no corrió: VPS ocupado"}
+VPS_BUSY_MINUTES = 30        # a due slot that waited this long for a free place is not run late
 
 
 class TaskError(Exception):
     """A task operation was refused or the scheduler failed."""
+
+
+def failure_code(error: str | None) -> str | None:
+    """`auth` (expired login) or `plan_limit` (quota) from the engine's error text; None for anything else."""
+    low = (error or "").lower()
+    for code, patterns in (("auth", AUTH_PATTERNS), ("plan_limit", PLAN_LIMIT_PATTERNS)):
+        if any(p.lower() in low for p in patterns):
+            return code
+    return None
+
+
+def reason_text(ev: dict | None) -> str | None:
+    """The owner-facing reason of an event that carries a `reason_code`."""
+    return REASON_TEXT.get((ev or {}).get("reason_code"))
 
 
 # ── scheduler adapter (schtasks.exe) ─────────────────────────────
@@ -158,6 +185,8 @@ def _save(kb: KnowledgeBase, task: TaskDefinition) -> None:
     tmp = path.with_suffix(".tmp")
     # Absent optional fields stay out of the file: a checkout that predates them still reads the task.
     drop = {f for f in ("result_slug", "scan", "model", "tools") if getattr(task, f) is None}
+    if task.runs_on == "pc":
+        drop.add("runs_on")
     if task.delivery == ["historial"]:
         drop.add("delivery")
     data = task.model_dump(mode="json", exclude=drop or None)
@@ -336,13 +365,13 @@ def freshness(task: TaskDefinition, log: list[dict], now: datetime) -> dict:
     if task.status != "active":
         return {"state": task.status.upper(), "detail": f"task is {task.status}: no run is expected"}
     since = max((datetime.fromisoformat(e["at"]) for e in log
-                 if e["event"] in ("created", "resumed", "frequency_changed")), default=task.created_at)
+                 if e["event"] in ("created", "resumed", "frequency_changed", "moved")), default=task.created_at)
     if task.schedule.frequency == "every_minutes":
         # No wall-clock anchor: the last scheduler start (or when the schedule was set) plus one period is when the
         # next run was due (Codex C4 recheck: `now - period` never let an omission turn into MISSED).
         period = timedelta(minutes=task.schedule.minutes)
         starts = [datetime.fromisoformat(e["at"]) for e in log
-                  if e.get("invoked_by") == "scheduler" and e["event"] == "run_started"]
+                  if e.get("invoked_by") in AUTOMATIC and e["event"] == "run_started"]
         anchor = max([since, *starts])
         due = anchor + period if now >= anchor + period else (anchor if starts and anchor > since else None)
     else:
@@ -350,12 +379,18 @@ def freshness(task: TaskDefinition, log: list[dict], now: datetime) -> dict:
     out = {"expected_at": due.isoformat() if due else None, "next_expected_at": next_due(task.schedule, now).isoformat()}
     if due is None or due < since:
         return {**out, "state": "NOT_DUE_YET", "detail": "no scheduled time has passed since the schedule was set"}
-    runs = [i for i, e in enumerate(log) if e.get("invoked_by") == "scheduler" and e["event"] == "run_started"
+    runs = [i for i, e in enumerate(log) if e.get("invoked_by") in AUTOMATIC and e["event"] == "run_started"
             and datetime.fromisoformat(e["at"]) >= due - timedelta(minutes=1)]
     if not runs:
         late = now - due
         if late <= MISSED_GRACE:
             return {**out, "state": "DUE_NOW", "detail": f"due {int(late.total_seconds() // 60)} min ago; not started yet"}
+        if busy := [e for e in log if e["event"] == "run_skipped" and e.get("reason_code") == "vps_busy"
+                    and datetime.fromisoformat(e["at"]) >= due - timedelta(minutes=1)]:
+            return {**out, "state": "MISSED", "detail": reason_text(busy[-1])}
+        if task.runs_on == "vps":                     # the runner was down: no reason is invented
+            return {**out, "state": "MISSED", "detail": "el VPS no la corrió a la hora: el resultado más reciente es más "
+                                                        "viejo de lo que debería"}
         return {**out, "state": "MISSED",
                 "detail": "the scheduler did not run it at the expected time (PC off, user logged off or scheduler "
                           "error): the latest result is older than it should be"}
@@ -364,7 +399,9 @@ def freshness(task: TaskDefinition, log: list[dict], now: datetime) -> dict:
     if not after:
         return {**out, "state": "RUNNING", "detail": f"started {log[last]['at']}"}
     if after[0]["event"] == "run_failed":
-        return {**out, "state": "FAILED", "detail": after[0].get("error", "")[:300]}
+        return {**out, "state": "FAILED", "detail": reason_text(after[0]) or after[0].get("error", "")[:300]}
+    if reason := reason_text(after[0]):
+        return {**out, "state": "CURRENT", "detail": f"result {after[0].get('result')}: {reason}"}
     what = after[0].get("followup") or after[0].get("research")
     return {**out, "state": "CURRENT", "detail": f"result {after[0].get('result')} of {what}"}
 
@@ -452,18 +489,20 @@ def _scheduler_call(kb: KnowledgeBase, task_id: str, now: datetime, what: str, f
 def set_frequency(*, kb: KnowledgeBase, scheduler, task_id: str, schedule: Schedule, prompt: str,
                   now: datetime | None = None) -> TaskDefinition:
     now = now or datetime.now(UTC)
-    local = local_time_for(schedule, now)
     with _state_lock(kb, task_id):
         task = load(kb, task_id)
         if task.status == "cancelled":
             raise TaskError(f"task {task_id} is cancelled; create a new one")
+        on_pc = task.runs_on == "pc"             # a task of the VPS has no Windows entry (WS-0079)
+        local = local_time_for(schedule, now) if on_pc else None
         # `schtasks /create /f` replaces the task in place: if it fails, the previous schedule is still registered.
-        _scheduler_call(kb, task_id, now, "set_frequency", scheduler.create, task.scheduler_name,
-                        runner_command(Path(task.code_path), task_id), schedule, local)
+        if on_pc:
+            _scheduler_call(kb, task_id, now, "set_frequency", scheduler.create, task.scheduler_name,
+                            runner_command(Path(task.code_path), task_id), schedule, local)
         old = task.schedule.describe()
         task = task.model_copy(update={"schedule": schedule, "local_time": local, "updated_at": now})
         pause_error = None
-        if task.status == "paused":
+        if task.status == "paused" and on_pc:
             try:
                 _scheduler_call(kb, task_id, now, "keep_paused", scheduler.set_enabled, task.scheduler_name, False)
             except TaskError as exc:
@@ -543,10 +582,12 @@ def rebind(*, kb: KnowledgeBase, scheduler, task_id: str, code_path: Path, promp
         if task.status == "cancelled":
             raise TaskError(f"task {task_id} is cancelled; create a new one")
         before = task.code_path
-        _scheduler_call(kb, task_id, now, "rebind", scheduler.create, task.scheduler_name,
-                        runner_command(code_path, task_id), task.schedule, task.local_time)
+        on_pc = task.runs_on == "pc"
+        if on_pc:
+            _scheduler_call(kb, task_id, now, "rebind", scheduler.create, task.scheduler_name,
+                            runner_command(code_path, task_id), task.schedule, task.local_time)
         pause_error = None
-        if task.status == "paused":
+        if task.status == "paused" and on_pc:
             try:
                 _scheduler_call(kb, task_id, now, "keep_paused", scheduler.set_enabled, task.scheduler_name, False)
             except TaskError as exc:
@@ -568,7 +609,9 @@ def _set_status(kb: KnowledgeBase, scheduler, task_id: str, status: str, prompt:
         task = load(kb, task_id)
         if task.status == "cancelled":
             raise TaskError(f"task {task_id} is already cancelled")
-        if status == "cancelled":
+        if task.runs_on == "vps":                 # the runner reads the status at every tick: nothing to register
+            pass
+        elif status == "cancelled":
             _scheduler_call(kb, task_id, now, "cancel", scheduler.delete, task.scheduler_name)
         else:
             _scheduler_call(kb, task_id, now, status, scheduler.set_enabled, task.scheduler_name, status == "active")
@@ -589,6 +632,37 @@ def resume(*, kb, scheduler, task_id, prompt, now=None):
 
 def cancel(*, kb, scheduler, task_id, prompt, now=None):
     return _set_status(kb, scheduler, task_id, "cancelled", prompt, now)
+
+
+def move(*, kb: KnowledgeBase, scheduler, task_id: str, to: str, prompt: str,
+         now: datetime | None = None) -> TaskDefinition:
+    """Change which side runs the task (WS-0079): to the VPS the Windows entry is removed (missing is fine); back to the PC
+    it is registered again (disabled if the task is paused). Only one side ever runs it. Uploading the knowledge folder
+    to the VPS is not part of this."""
+    if to not in SIDE_NAME:
+        raise TaskError("to is pc or vps")
+    now = now or datetime.now(UTC)
+    with _state_lock(kb, task_id):
+        task = load(kb, task_id)
+        if task.status == "cancelled":
+            raise TaskError(f"task {task_id} is cancelled; create a new one")
+        if task.runs_on == to:
+            raise TaskError(f"task {task_id} already runs on {SIDE_NAME[to]}")
+        local = None
+        if to == "vps":
+            if scheduler.query(task.scheduler_name).get("registered"):
+                _scheduler_call(kb, task_id, now, "move", scheduler.delete, task.scheduler_name)
+        else:
+            local = local_time_for(task.schedule, now)
+            _scheduler_call(kb, task_id, now, "move", scheduler.create, task.scheduler_name,
+                            runner_command(Path(task.code_path), task_id), task.schedule, local)
+            if task.status == "paused":
+                _scheduler_call(kb, task_id, now, "keep_paused", scheduler.set_enabled, task.scheduler_name, False)
+        before = task.runs_on
+        task = task.model_copy(update={"runs_on": to, "local_time": local, "updated_at": now})
+        _save(kb, task)
+        _append(kb, task_id, "moved", now, before=before, after=to, prompt=prompt)
+    return task
 
 
 def runs(kb: KnowledgeBase, task: TaskDefinition, limit: int | None = None) -> list[FollowupRecord]:
@@ -613,11 +687,15 @@ def status(*, kb: KnowledgeBase, scheduler, task_id: str, now: datetime | None =
     return {
         "freshness": freshness(task, log, now or datetime.now(UTC)),
         "task": task.model_dump(mode="json"), "schedule": task.schedule.describe(),
-        "scheduler": scheduler.query(task.scheduler_name) if task.status != "cancelled" else {"registered": False},
+        "runs_on": task.runs_on,
+        "scheduler": ({"registered": False} if task.status == "cancelled" else
+                      {"registered": True, "runner": "vps"} if task.runs_on == "vps" else scheduler.query(task.scheduler_name)),
         "last_result": last_result,
-        "last_run": ({k: outcomes[-1].get(k) for k in ("at", "event", "result", "invoked_by", "duration_s", "turns",
-                                                       "max_turns", "model", "route", "tokens", "reason", "error")
-                      if k in outcomes[-1]}
+        "last_run": ({**{k: outcomes[-1].get(k) for k in ("at", "event", "result", "invoked_by", "duration_s", "turns",
+                                                          "max_turns", "model", "route", "tokens", "reason", "error",
+                                                          "reason_code")
+                         if k in outcomes[-1]},
+                      **({"reason_text": reason_text(outcomes[-1])} if reason_text(outcomes[-1]) else {})}
                      if outcomes else None),
         "runs": sum(1 for e in log if e["event"] == "run_finished"),
         "recent_problems": problems, "recent_events": log[-5:],
@@ -633,7 +711,7 @@ def list_tasks(kb: KnowledgeBase) -> list[dict]:
     for d in sorted(p for p in base.iterdir() if (p / "task.json").is_file()):
         t = load(kb, d.name)
         out.append({"id": t.id, "capability": t.kind, "status": t.status, "strategy": t.strategy, "schedule": t.schedule.describe(),
-                    "objective": t.objective})
+                    "runs_on": t.runs_on, "objective": t.objective})
     return out
 
 
@@ -748,6 +826,10 @@ def _repair_if_refused(kb: KnowledgeBase, task: TaskDefinition, target: str | No
 
 def _tokens(tokens: dict | None) -> dict:
     return {"tokens": tokens} if tokens else {}
+
+
+def _code(problem: str | None) -> dict:
+    return {"reason_code": c} if (c := failure_code(problem)) else {}
 
 
 def _story_pack(kb: KnowledgeBase, invoked_by: str, now: datetime) -> tuple[str, str, str | None]:
@@ -865,7 +947,7 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
                                  task_id=task.id, now=now)
             written += [path, path.parent / "LATEST.md",
                         *(kb.base / "evidence" / f"{s.split(':', 1)[1]}.json" for s in rec.sources)]
-            if entry.id == "daily_attention" and invoked_by == "scheduler" and not followup_news(rec):
+            if entry.id == "daily_attention" and invoked_by in AUTOMATIC and not followup_news(rec):
                 return {"invoked_by": invoked_by, "max_turns": caps.max_turns, "model": None, "result": "OK",
                         "followup": rec.id, "reason": "sin novedades en SHADOW (sin posición abierta, aviso ni "
                         "evento nuevo), sin modelo; los datos del día quedaron guardados",
@@ -925,34 +1007,41 @@ def _run_model(*, kb: KnowledgeBase, task: TaskDefinition, entry: CatalogEntry, 
                     "duration_s": round(time.monotonic() - t0, 1)}
     if limit := model_run.engine_limit(problem):   # the engine's quota, not the agent: said as such, never a fault
         return {**base, "result": "FAILED", "engine_limit": True, "duration_s": round(time.monotonic() - t0, 1),
-                "error": limit[:800]}
+                "error": limit[:800], **_code(problem)}
     if rec is None and kept is None:
-        return {**base, "result": "FAILED", "duration_s": round(time.monotonic() - t0, 1),
+        return {**base, "result": "FAILED", "duration_s": round(time.monotonic() - t0, 1), **_code(problem),
                 "error": (f"model: {problem}" + ("" if followup_error == NO_STRATEGY else f"; follow-up: {followup_error}"))[:800]}
-    return {**base, "result": "INCOMPLETE", "duration_s": round(time.monotonic() - t0, 1),
+    return {**base, "result": "INCOMPLETE", "duration_s": round(time.monotonic() - t0, 1), **_code(problem),
             "reason": f"sin resultado del modelo ({problem}); se guardaron los datos del día "
                       f"({rec.status if rec else kept})"[:800]}
 
 
 def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None = None,
         followup: Callable[..., tuple[FollowupRecord, Path]] = run_followup, commit: bool = True,
-        invoked_by: str = "manual", client: model_run.ModelClient | None = None) -> dict:
+        invoked_by: str = "manual", client: model_run.ModelClient | None = None, slot: str | None = None) -> dict:
     """What the scheduler invokes. Never raises for a failed run: the failure is the recorded result.
 
     `invoked_by` is "scheduler" only from tools/task_runner.py (the registered command); then the Scheduler's own
     view of the task (Last Run Time/Result) is stored in run_started, so an automatic run can be told from a manual one.
+    "vps" is the VPS runner, which passes the `slot` (ISO time) it covers so it knows which hour it already served.
+    A task runs on one side only: an automatic run from the other side is skipped; a manual one is valid anywhere.
     """
     if invoked_by not in INVOKERS:
         raise TaskError(f"invoked_by must be one of {sorted(INVOKERS)}")
     now = now or datetime.now(UTC)
     d = _dir(kb, task_id)
+    at_slot = {"slot": slot} if slot else {}
     with _state_lock(kb, task_id):
         task = load(kb, task_id)
         if task.status != "active":
-            ev = _append(kb, task_id, "run_skipped", now, reason=f"task is {task.status}")
+            ev = _append(kb, task_id, "run_skipped", now, reason=f"task is {task.status}", **at_slot)
             return {"status": "SKIPPED", **ev}
-        if invoked_by == "scheduler" and task.schedule.frequency == "market_hours" and not in_session(task.schedule, now):
-            ev = _append(kb, task_id, "run_skipped", now, reason="outside the US session (09:30-16:00 New York, Mon-Fri)")
+        if invoked_by in AUTOMATIC and (invoked_by == "vps") != (task.runs_on == "vps"):
+            ev = _append(kb, task_id, "run_skipped", now, reason=f"corre en {SIDE_NAME[task.runs_on]}", **at_slot)
+            return {"status": "SKIPPED", **ev}
+        if invoked_by in AUTOMATIC and task.schedule.frequency == "market_hours" and not in_session(task.schedule, now):
+            ev = _append(kb, task_id, "run_skipped", now, reason="outside the US session (09:30-16:00 New York, Mon-Fri)",
+                         **at_slot)
             return {"status": "SKIPPED", **ev}
     lock = d / "run.lock"
     note = None
@@ -961,7 +1050,7 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
     except FileExistsError:
         age = now - datetime.fromtimestamp(lock.stat().st_mtime, UTC)
         if age < timedelta(minutes=LOCK_STALE_MINUTES):
-            ev = _event(kb, task_id, "run_skipped", now, reason=f"another run is in progress ({age.seconds}s)")
+            ev = _event(kb, task_id, "run_skipped", now, reason=f"another run is in progress ({age.seconds}s)", **at_slot)
             return {"status": "SKIPPED", **ev}
         lock.unlink()
         note = f"stale lock of {int(age.total_seconds() // 60)} min broken"
@@ -974,7 +1063,7 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
             q = scheduler.query(task.scheduler_name)     # the Scheduler updates Last Run Time when it launches us
             seen = {k: q.get(k) for k in ("registered", "status", "last_run", "last_result", "next_run", "error")
                     if q.get(k) is not None}
-        _event(kb, task_id, "run_started", now, pid=os.getpid(), note=note, invoked_by=invoked_by,
+        _event(kb, task_id, "run_started", now, pid=os.getpid(), note=note, invoked_by=invoked_by, **at_slot,
                **({"scheduler_seen": seen} if seen is not None else {}))
         written = [d / "task.json", d / "events.jsonl"]
         if scheduler is not None and task.local_time is not None:
@@ -1006,7 +1095,7 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
             _write_latest(latest, task, outcome, now)
             if task.kind == "knowledge_curator":      # WS-0063: what looks abandoned, by code, proposed and not applied
                 _append_tidy(kb, latest)
-            if invoked_by == "scheduler":
+            if invoked_by in AUTOMATIC:
                 _mark_validity(latest, task, now)
             ev = _event(kb, task_id, "run_failed" if outcome["result"] == "FAILED" else "run_finished",
                         datetime.now(UTC), **outcome)
@@ -1028,7 +1117,7 @@ def run(*, kb: KnowledgeBase, task_id: str, scheduler=None, now: datetime | None
             return {"status": "FAILED", **ev}
         evidence = [kb.base / "evidence" / f"{s.split(':', 1)[1]}.json" for s in rec.sources]
         written += [path, path.parent / "LATEST.md", *evidence]
-        if invoked_by == "scheduler":
+        if invoked_by in AUTOMATIC:
             _mark_validity(path.parent / "LATEST.md", task, now)
         ev = _event(kb, task_id, "run_finished", datetime.now(UTC), followup=rec.id, result=rec.status,
                     strategy_ref=rec.strategy_ref, spec_hash=rec.spec_hash, attention=rec.attention[:5])
