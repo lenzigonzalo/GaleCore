@@ -104,7 +104,7 @@ export function TickerGrid({
       } finally {
         if (alive) {
           setPremarketLoading(false);
-          timer = setTimeout(refresh, 30000);
+          timer = setTimeout(refresh, 5000);
         }
       }
     };
