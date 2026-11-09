@@ -4,10 +4,7 @@ import '../components/shadow/PerformancePanel.css';
 import './Agentes.css';
 import { Markdown } from '../components/settings/Markdown';
 import { deleteSpaceItem, fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
-import {
-  AgentKeyStatus, AgentRun, FireTokenStatus, apiMessage, deleteFireToken, fetchAgentKey, fetchFireToken, fetchRuns, generateAgentKey,
-  revokeAgentKey, runAgent, saveFireToken,
-} from '../api/agents';
+import { AgentRun, apiMessage, fetchRuns } from '../api/agents';
 
 /**
  * Agentes (GC-0009): lo que corre solo con las instrucciones del trader — si está prendido, si su último
@@ -336,31 +333,10 @@ function CloudSettings({ a, busy, onSave }: { a: Agent; busy: boolean; onSave: (
   </section>;
 }
 
-function FireTokenSection({ agentKey, a, token, onChange }: { agentKey: string; a: Agent; token: FireTokenStatus | null; onChange: () => void }) {
-  const [value, setValue] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const act = async (work: () => Promise<unknown>) => {
-    setBusy(true); setError(null);
-    try { await work(); setValue(''); onChange(); } catch (e) { setError(apiMessage(e, 'No se pudo guardar el token.')); } finally { setBusy(false); }
-  };
-  return <section><h2>Ejecutar sin PC (opcional)</h2>
-    {a.routine_url && <p><ExternalLink size={16} /><a href={a.routine_url} target="_blank" rel="noreferrer">Abrir la rutina en claude.ai</a></p>}
-    {token?.exists
-      ? <p>Token cargado …{token.token_hint}<button className="agents-text-button" disabled={busy} onClick={() => act(() => deleteFireToken(agentKey))}><Trash2 size={14} />Quitar</button></p>
-      : a.trigger_id
-        ? <form className="agents-edit-form" onSubmit={e => { e.preventDefault(); void act(() => saveFireToken(agentKey, a.trigger_id!, value.trim())); }}>
-          <label htmlFor="agent-token">Token de la rutina</label>
-          <input id="agent-token" type="password" autoComplete="off" value={value} onChange={e => setValue(e.target.value)} />
-          <small>En claude.ai: editá la rutina, Trigger, API, Generate token.</small>
-          <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!value.trim() || busy}>Guardar token</button></div>
-        </form>
-        : <p>Disponible cuando se cree la rutina.</p>}
-    {error && <p className="agents-error" role="alert">{error}</p>}
-  </section>;
+function RoutineLink({ a }: { a: Agent }) {
+  return a.routine_url ? <section><p><ExternalLink size={16} /><a href={a.routine_url} target="_blank" rel="noreferrer">Abrir la rutina en claude.ai</a></p></section> : null;
 }
 
-/** Confirmación de borrado: un diálogo propio de la página (como «Nuevo agente»). */
 function ConfirmDelete({ title, onConfirm, onClose }: { title: string; onConfirm: () => Promise<void>; onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const cancelRef = React.useRef<HTMLButtonElement>(null);
@@ -378,14 +354,11 @@ function CloudDetail({ a, item, title, onChange, onDelete, busy, onBack }: {
   const [confirming, setConfirming] = useState(false);
   const [runs, setRuns] = useState<AgentRun[] | null>(null);
   const [runsError, setRunsError] = useState<string | null>(null);
-  const [token, setToken] = useState<FireTokenStatus | null>(null);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [starting, setStarting] = useState(false);
   const loadRuns = useCallback(async () => {
     try { setRuns(await fetchRuns(item.key)); setRunsError(null); } catch (e) { setRunsError(apiMessage(e, 'No se pudieron leer las corridas.')); }
   }, [item.key]);
-  const loadToken = useCallback(async () => { try { setToken(await fetchFireToken(item.key)); } catch { setToken(null); } }, [item.key]);
-  useEffect(() => { void loadToken(); }, [loadToken]);
   useEffect(() => {
     void loadRuns();
     const id = setInterval(loadRuns, REFRESH_MS);
@@ -394,13 +367,7 @@ function CloudDetail({ a, item, title, onChange, onDelete, busy, onBack }: {
   const run = async () => {
     setStarting(true); setNotice(null);
     try {
-      if (token?.exists) {
-        await runAgent(item.key);
-        setNotice({ text: 'Pedido enviado: la corrida aparece en la lista.' });
-        await loadRuns();
-      } else if (await onChange({ run: true })) {
-        setNotice({ text: 'Se ejecuta cuando el Lab esté abierto.' });
-      }
+      if (await onChange({ run: true })) setNotice({ text: 'Se ejecuta en cuanto el Lab esté abierto.' });
     } catch (e) {
       setNotice({ text: apiMessage(e, 'No se pudo ejecutar el agente.'), error: true });
     } finally { setStarting(false); }
@@ -415,13 +382,13 @@ function CloudDetail({ a, item, title, onChange, onDelete, busy, onBack }: {
     {notice && <p className={notice.error ? 'agents-error' : 'agents-notice'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
     <div className="agents-detail-grid"><CloudRuns runs={runs} error={runsError} /><aside className="agents-settings">
       <CloudSettings a={a} busy={busy} onSave={settings => onChange({ settings })} />
-      <FireTokenSection agentKey={item.key} a={a} token={token} onChange={loadToken} />
+      <RoutineLink a={a} />
     </aside></div>
     {confirming && <ConfirmDelete title={title} onConfirm={onDelete} onClose={() => setConfirming(false)} />}
   </>;
 }
 
-const API_HOST = (() => { try { return new URL(process.env.REACT_APP_API_BASE_URL ?? '').host; } catch { return ''; } })();
+const apiHost = () => { try { return new URL(process.env.REACT_APP_API_BASE_URL ?? '').host; } catch { return ''; } };
 
 /** Botón Copiar reutilizado: pasa a «Copiada» ~2 s; si el portapapeles falla, avisa. */
 function CopyButton({ text, label = 'Copiar' }: { text: string; label?: string }) {
@@ -442,65 +409,22 @@ function CopyButton({ text, label = 'Copiar' }: { text: string; label?: string }
   </span>;
 }
 
-const FIRST_TIME_VARS = ['GALECORE_BASE_URL', 'GALECORE_ALLOWED_BASE_URL', 'GALECORE_API_KEY'];
-
-/** La configuración de una sola vez: clave de agentes y variable en el entorno de claude.ai. */
+/** Qué es un agente, cómo se crea y la única configuración de la primera vez. */
 function Help() {
-  const [status, setStatus] = useState<AgentKeyStatus | null>(null);
-  const [fresh, setFresh] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { fetchAgentKey().then(setStatus).catch(() => setError('No se pudo leer el estado de tu clave.')); }, []);
-  const act = async (work: () => Promise<void>) => {
-    setBusy(true); setError(null);
-    try { await work(); } catch (e) { setError(apiMessage(e, 'No se pudo completar la operación.')); } finally { setBusy(false); }
-  };
-  const generate = () => act(async () => { const k = await generateAgentKey(); setFresh(k.key); setStatus({ exists: true, hint: k.hint }); });
-  const revoke = () => act(async () => { await revokeAgentKey(); setFresh(null); setStatus({ exists: false }); });
-  const [cfgOpen, setCfgOpen] = useState<boolean | null>(null);
-  const open = cfgOpen ?? (!status?.exists || !!fresh);
+  const API_HOST = apiHost();
   return <section className="agents-help" aria-label="Ayuda">
     <div className="agents-help-block"><h2>Qué es un agente</h2>
       <p>Hace una tarea tuya a su hora, por ejemplo un resumen del mercado de lunes a viernes a las 19:15. Corre en claude.ai con tu cuenta, sin tu PC prendida, y deja el resultado acá, en Corridas.</p>
     </div>
-    <details className="agents-help-block" open={open} onToggle={e => setCfgOpen(e.currentTarget.open)}>
-      <summary><h2>Configuración (una sola vez)</h2></summary>
-      <ol className="agents-help-steps">
-        <li><h3>Clave de agentes</h3>
-          <p>Identifica a tus agentes cuando reportan una corrida; no lee ni escribe nada más.</p>
-          <div className="agents-edit-actions">
-            <button className="agents-primary" onClick={generate} disabled={busy}>{status?.exists ? 'Regenerar clave' : 'Generar clave'}</button>
-            {status?.exists && <button className="agents-text-button" onClick={revoke} disabled={busy}>Revocar</button>}
-          </div>
-          {fresh && <div role="status" className="agents-help-fresh">
-            <div className="agents-help-key"><code>{fresh}</code><CopyButton text={fresh} /></div>
-            <p className="agents-help-once">Se ve una sola vez: copiala ahora.</p>
-          </div>}
-          {!fresh && status?.exists && <p className="agents-help-active"><Check size={15} />Clave activa …{status.hint}</p>}
-        </li>
-        <li><h3>Variable en el entorno de claude.ai</h3>
-          <ol className="agents-help-substeps">
-            <li>Abrí claude.ai/code. <a className="agents-primary agents-help-link" href="https://claude.ai/code" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} />Abrir claude.ai</a></li>
-            <li>En el selector de entorno junto al cuadro de texto (dice Default), entrá a la configuración del entorno.</li>
-            <li>En variables de entorno agregá un renglón con el nombre <code>GALECORE_AGENT_KEY</code><CopyButton text="GALECORE_AGENT_KEY" label="Copiar GALECORE_AGENT_KEY" /> y de valor la clave del paso 1, y guardá.</li>
-          </ol>
-          <details className="agents-help-first">
-            <summary>¿Primera vez?</summary>
-            <p>El entorno además necesita {API_HOST ? <>el dominio <code>{API_HOST}</code></> : 'el dominio de la API'} en los dominios permitidos y estas variables:</p>
-            <ul className="agents-help-vars">{FIRST_TIME_VARS.map(v => <li key={v}><code>{v}</code><CopyButton text={v} label={`Copiar ${v}`} /></li>)}</ul>
-          </details>
-        </li>
+    <div className="agents-help-block"><h2>Cómo crear uno</h2>
+      <p>Pedíselo al chat del Lab, por ejemplo «creame un agente que de lunes a viernes a las 9 me resuma el mercado», o tocá Nuevo agente y completá nombre, qué hace y cuándo. Con el Lab abierto, en menos de un minuto aparece acá.</p>
+    </div>
+    <details className="agents-help-block">
+      <summary><h2>Primera vez</h2></summary>
+      <ol className="agents-help-substeps">
+        <li>En claude.ai/code, en la configuración del entorno (el selector junto al cuadro de texto), permití {API_HOST ? <>el dominio <code>{API_HOST}</code></> : 'el dominio de la API'} en los dominios permitidos.{API_HOST && <CopyButton text={API_HOST} label={`Copiar ${API_HOST}`} />} <a className="agents-primary agents-help-link" href="https://claude.ai/code" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} />Abrir claude.ai</a></li>
       </ol>
     </details>
-    <div className="agents-help-block"><h2>Probalo</h2>
-      <ol className="agents-help-substeps">
-        <li>Tocá «Nuevo agente» y completá nombre, qué hace y cuándo.</li>
-        <li>Con el Lab abierto, en menos de un minuto aparece en claude.ai (Rutinas).</li>
-        <li>Entrá al agente y tocá Ejecutar.</li>
-        <li>En unos minutos ves la corrida con su resumen.</li>
-      </ol>
-    </div>
-    {error && <p className="agents-error" role="alert">{error}</p>}
   </section>;
 }
 

@@ -7,8 +7,7 @@ import * as agentsApi from '../api/agents';
 jest.mock('../api/space', () => ({ fetchSpace: jest.fn(), saveSpaceItem: jest.fn(), deleteSpaceItem: jest.fn() }));
 jest.mock('../api/agents', () => ({
   ...jest.requireActual('../api/agents'),
-  fetchRuns: jest.fn(), fetchFireToken: jest.fn(), saveFireToken: jest.fn(), deleteFireToken: jest.fn(), runAgent: jest.fn(),
-  fetchAgentKey: jest.fn(), generateAgentKey: jest.fn(), revokeAgentKey: jest.fn(),
+  fetchRuns: jest.fn(),
 }));
 const api = agentsApi as jest.Mocked<typeof agentsApi>;
 jest.mock('../components/settings/Markdown', () => ({ Markdown: ({ text }: { text: string }) => <div>{text}</div> }));
@@ -207,7 +206,6 @@ const run = { id: 'r1', agent_key: 'resumen-diario', origin: 'manual', status: '
 function openCloud(content: object = cloud) {
   (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...cloudItem, content: JSON.stringify(content) }], shared: [] });
   api.fetchRuns.mockResolvedValue([run as any]);
-  api.fetchFireToken.mockResolvedValue({ exists: false });
   render(<Agentes />);
   return screen.findByRole('button', { name: 'Resumen diario' }).then(b => fireEvent.click(b));
 }
@@ -258,42 +256,13 @@ test('una corrida pedida que no reportó se ve como «No reportó»', async () =
   expect(screen.getByText('La corrida no reportó su resultado.')).toBeInTheDocument();
 });
 
-test('Ejecutar con token llama a la API y avisa; sin token escribe request.run para el Lab', async () => {
-  await openCloud();
-  api.fetchFireToken.mockResolvedValue({ exists: true, trigger_id: 'trig_1', token_hint: 'abcd' });
-  api.runAgent.mockResolvedValue({ ...run, status: 'requested' } as any);
-  fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Resumen diario' }));
-  await screen.findByText(/Token cargado …abcd/);
-  fireEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
-  await waitFor(() => expect(api.runAgent).toHaveBeenCalledWith('resumen-diario'));
-  expect(await screen.findByText(/la corrida aparece en la lista/)).toBeInTheDocument();
-  expect(saveSpaceItem).not.toHaveBeenCalled();
-});
-
-test('Ejecutar sin token pide la corrida al Lab', async () => {
+test('Ejecutar siempre escribe request.run para el Lab', async () => {
   await openCloud();
   await screen.findByText('Completada');
   fireEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
   await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
-  expect(api.runAgent).not.toHaveBeenCalled();
   expect(JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content)).toMatchObject({ ...cloud, request: { run: true } });
-  expect(await screen.findByText('Se ejecuta cuando el Lab esté abierto.')).toBeInTheDocument();
-});
-
-test.each([
-  [409, 'La rutina está pausada: activala en claude.ai.'],
-  [502, 'El token de esta rutina no anda: generá otro en claude.ai.'],
-  [429, 'Esperá unos minutos antes de volver a ejecutarlo.'],
-])('los errores %s de Ejecutar salen con el mensaje de la API', async (status, error) => {
-  await openCloud();
-  api.fetchFireToken.mockResolvedValue({ exists: true, trigger_id: 'trig_1', token_hint: 'abcd' });
-  api.runAgent.mockRejectedValue({ response: { status, data: { error } } });
-  fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
-  fireEvent.click(await screen.findByRole('button', { name: 'Resumen diario' }));
-  await screen.findByText(/Token cargado/);
-  fireEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
-  expect(await screen.findByRole('alert')).toHaveTextContent(error);
+  expect(await screen.findByText('Se ejecuta en cuanto el Lab esté abierto.')).toBeInTheDocument();
 });
 
 test('editar instrucciones y horario escribe request.settings con sólo esos campos', async () => {
@@ -315,55 +284,49 @@ test('pausar un agente en la nube escribe request.status', async () => {
   expect(JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content).request).toMatchObject({ status: 'paused' });
 });
 
-test('el token de disparo se guarda sin volver a mostrarse: sólo los últimos 4; Quitar lo borra', async () => {
+test('el detalle muestra el link a la rutina y ya no ofrece token de disparo', async () => {
   await openCloud();
-  api.saveFireToken.mockResolvedValue({ exists: true, trigger_id: 'trig_1', token_hint: 'wxyz' });
-  fireEvent.change(await screen.findByLabelText('Token de la rutina'), { target: { value: 'secreto-wxyz' } });
-  api.fetchFireToken.mockResolvedValue({ exists: true, trigger_id: 'trig_1', token_hint: 'wxyz' });
-  fireEvent.click(screen.getByRole('button', { name: 'Guardar token' }));
-  await waitFor(() => expect(api.saveFireToken).toHaveBeenCalledWith('resumen-diario', 'trig_1', 'secreto-wxyz'));
-  expect(await screen.findByText(/Token cargado …wxyz/)).toBeInTheDocument();
-  expect(screen.queryByDisplayValue('secreto-wxyz')).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Abrir la rutina en claude.ai' })).toHaveAttribute('href', cloud.routine_url);
-  api.deleteFireToken.mockResolvedValue();
-  api.fetchFireToken.mockResolvedValue({ exists: false });
-  fireEvent.click(screen.getByRole('button', { name: 'Quitar' }));
-  await waitFor(() => expect(api.deleteFireToken).toHaveBeenCalledWith('resumen-diario'));
-  expect(await screen.findByLabelText('Token de la rutina')).toBeInTheDocument();
+  expect(screen.queryByText(/Ejecutar sin PC/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Token de la rutina')).not.toBeInTheDocument();
 });
 
-test('la ayuda genera la clave de agentes, la muestra una sola vez y explica el entorno', async () => {
+test('la ayuda explica qué es un agente, cómo crearlo y un solo paso de primera vez, sin claves ni variables', async () => {
   (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
-  api.fetchAgentKey.mockResolvedValue({ exists: false });
-  api.generateAgentKey.mockResolvedValue({ key: 'gca_secreta1234', hint: '1234' });
   render(<Agentes />);
   fireEvent.click(await screen.findByRole('button', { name: 'Ayuda' }));
-  for (const name of ['GALECORE_BASE_URL', 'GALECORE_ALLOWED_BASE_URL', 'GALECORE_API_KEY', 'GALECORE_AGENT_KEY']) expect(await screen.findByText(name)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Generar clave' }));
-  expect(await screen.findByText('gca_secreta1234')).toBeInTheDocument();
-  expect(screen.getByText(/Se ve una sola vez/)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Qué es un agente' })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Cómo crear uno' })).toBeInTheDocument();
+  expect(screen.getByText(/creame un agente que de lunes a viernes a las 9 me resuma el mercado/)).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: 'Primera vez' })).toBeInTheDocument();
+  expect(screen.getAllByRole('listitem')).toHaveLength(1);
   const link = screen.getByRole('link', { name: /Abrir claude.ai/ });
   expect(link).toHaveAttribute('href', 'https://claude.ai/code');
-  expect(link).toHaveAttribute('target', '_blank');
   expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  expect(screen.queryByText(/GALECORE_/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /clave/i })).not.toBeInTheDocument();
+});
+
+test('en la ayuda, Copiar copia el dominio de la API', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
+  process.env.REACT_APP_API_BASE_URL = 'https://api.galecore.test';
   const writeText = jest.fn().mockResolvedValue(undefined);
   Object.assign(navigator, { clipboard: { writeText } });
-  fireEvent.click(screen.getAllByRole('button', { name: 'Copiar' })[0]);
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Ayuda' }));
+  expect(screen.getByText('api.galecore.test')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Copiar/ }));
   expect(await screen.findByRole('button', { name: 'Copiada' })).toBeInTheDocument();
-  expect(writeText).toHaveBeenCalledWith('gca_secreta1234');
-  api.revokeAgentKey.mockResolvedValue();
-  fireEvent.click(screen.getByRole('button', { name: 'Revocar' }));
-  await waitFor(() => expect(api.revokeAgentKey).toHaveBeenCalled());
-  await waitFor(() => expect(screen.queryByText('gca_secreta1234')).not.toBeInTheDocument());
+  expect(writeText).toHaveBeenCalledWith('api.galecore.test');
 });
 
 test('si el portapapeles falla, Copiar pide copiar a mano', async () => {
   (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
-  api.fetchAgentKey.mockResolvedValue({ exists: false });
+  process.env.REACT_APP_API_BASE_URL = 'https://api.galecore.test';
   Object.assign(navigator, { clipboard: { writeText: jest.fn().mockRejectedValue(new Error('no')) } });
   render(<Agentes />);
   fireEvent.click(await screen.findByRole('button', { name: 'Ayuda' }));
-  fireEvent.click((await screen.findAllByRole('button', { name: /Copiar/ }))[0]);
+  fireEvent.click(screen.getByRole('button', { name: /Copiar/ }));
   expect(await screen.findByText('Seleccionala y copiala a mano')).toBeInTheDocument();
 });
 
