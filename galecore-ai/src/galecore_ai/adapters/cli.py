@@ -38,6 +38,7 @@ Usage:
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
+    python -m galecore_ai.adapters.cli agent report AGENT_KEY --status ok|error|skipped (--summary-file PATH|- | --summary "...")         [--reason-code X] [--trigger-id ID] [--fired-at ISO] [--finished-at ISO]
     python -m galecore_ai.adapters.cli clock [--at ISO]
     python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list [--bugfix]
     python -m galecore_ai.adapters.cli project show strategy:NAME|portfolio
@@ -198,10 +199,7 @@ class _JsonArgumentParser(argparse.ArgumentParser):
         _error_out(f"Argument error: {message}", exit_code=_EXIT_VALIDATION_ERROR)
 
 
-def _build_dispatcher() -> CapabilityDispatcher:
-    base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
-    api_key = os.environ.get("GALECORE_API_KEY")
-
+def _check_base_url(base_url: str) -> None:
     local_mode = os.environ.get("LOCAL_VALIDATION", "true").lower() == "true"
     if local_mode:
         from urllib.parse import urlparse
@@ -210,6 +208,13 @@ def _build_dispatcher() -> CapabilityDispatcher:
         allowed = urlparse(os.environ.get("GALECORE_ALLOWED_BASE_URL", "")).hostname
         if host not in ("localhost", "127.0.0.1", "::1") and host != allowed:
             _error_out(f"LOCAL_VALIDATION=true but host is '{host}'")
+
+
+def _build_dispatcher() -> CapabilityDispatcher:
+    base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
+    api_key = os.environ.get("GALECORE_API_KEY")
+
+    _check_base_url(base_url)
 
     registry = CapabilityRegistry()
     registry.register_many(KNOWN_CAPABILITIES)
@@ -946,6 +951,51 @@ def _cmd_project_shared(args: argparse.Namespace) -> None:
         _error_out(str(exc), exit_code=1)
 
 
+def _cmd_agent(args: argparse.Namespace) -> None:
+    """`agent report <agent_key> ...`: a cloud routine reports its run to GaleCore (WS-0079)."""
+    from galecore_ai.application import agent_report as ar
+
+    secret = os.environ.get("GALECORE_AGENT_KEY", "").strip()
+    if not secret:
+        _error_out("Falta GALECORE_AGENT_KEY (la clave de agentes, prefijo gca_) en el entorno: no se llamó a la API.",
+                   exit_code=_EXIT_VALIDATION_ERROR)
+    try:
+        if args.summary_file is not None:
+            if args.summary_file == "-":
+                summary = _read_stdin()
+            else:
+                summary = Path(args.summary_file).read_text(encoding="utf-8-sig")
+        else:
+            summary = args.summary
+        if not summary.strip():
+            _error_out("Argument error: el resumen está vacío", exit_code=_EXIT_VALIDATION_ERROR)
+        trigger_id = args.trigger_id or os.environ.get("GALECORE_TRIGGER_ID") or None
+        fired_at = args.fired_at or os.environ.get("GALECORE_FIRED_AT") or None
+        if fired_at:
+            ar.check_iso(fired_at, flag="--fired-at")
+        if args.finished_at:
+            ar.check_iso(args.finished_at, flag="--finished-at")
+    except (OSError, UnicodeDecodeError) as exc:
+        _error_out(f"No pude leer el resumen: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        return
+    except ValueError as exc:
+        _error_out(f"Argument error: {exc}", exit_code=_EXIT_VALIDATION_ERROR)
+        return
+
+    base_url = os.environ.get("GALECORE_BASE_URL", "http://localhost:5000")
+    _check_base_url(base_url)
+    body = ar.build_body(status=args.status, summary=summary, reason_code=args.reason_code,
+                         trigger_id=trigger_id, fired_at=fired_at, finished_at=args.finished_at)
+    try:
+        run = ar.post_run(base_url=base_url, api_key=os.environ.get("GALECORE_API_KEY"), agent_secret=secret,
+                          agent_key=args.agent_key, body=body,
+                          timeout=float(os.environ.get("GALECORE_TIMEOUT_SECONDS", "30")))
+    except ar.AgentReportError as exc:
+        _error_out(str(exc), exit_code=_EXIT_PREPARE_FAILED)
+        return
+    _json_out({"status": "REPORTED", "run": run})
+
+
 def _cmd_users(args: argparse.Namespace) -> None:
     """`users search <q>`: who can I share with (username and name only; WS-0064)."""
     from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
@@ -1636,6 +1686,19 @@ def build_parser() -> _JsonArgumentParser:
     p_ideas_list.add_argument("--status", help="e.g. pending")
     p_ideas_list.add_argument("--mine", action="store_true", help="Only yours")
 
+    p_agent = sub.add_parser("agent", help="A cloud routine reports its run to GaleCore (WS-0079)")
+    ag_sub = p_agent.add_subparsers(dest="agent_command", required=True)
+    p_ag_rep = ag_sub.add_parser("report", help="Report this run (needs GALECORE_AGENT_KEY in the environment)")
+    p_ag_rep.add_argument("agent_key", help="The agent's key, e.g. oportunidades")
+    p_ag_rep.add_argument("--status", required=True, choices=["ok", "error", "skipped"])
+    ag_sum = p_ag_rep.add_mutually_exclusive_group(required=True)
+    ag_sum.add_argument("--summary-file", help="File with the summary in markdown; - reads stdin")
+    ag_sum.add_argument("--summary", help="The summary in markdown (cut to 4000 characters)")
+    p_ag_rep.add_argument("--reason-code", help="Short reason code (max 64)")
+    p_ag_rep.add_argument("--trigger-id", help="Default: GALECORE_TRIGGER_ID")
+    p_ag_rep.add_argument("--fired-at", help="ISO-8601; default: GALECORE_FIRED_AT")
+    p_ag_rep.add_argument("--finished-at", help="ISO-8601; default: now (UTC)")
+
     p_users = sub.add_parser("users", help="Other GaleCore users (to pick who to share a project with)")
     us_sub = p_users.add_subparsers(dest="users_command", required=True)
     us_sub.add_parser("search", help="Suggest users by username or name (2+ letters; JSON)").add_argument("query")
@@ -1978,6 +2041,8 @@ def main() -> None:
             asyncio.run(_cmd_ideas(args))
         elif args.command == "users":
             _cmd_users(args)
+        elif args.command == "agent":
+            _cmd_agent(args)
         elif args.command == "accept":
             asyncio.run(_cmd_accept(args))
         elif args.command == "record" and args.record_command == "outcome":
