@@ -199,11 +199,13 @@ function readBody(req) {
   });
 }
 const { createUpdater, gitIn, relaunch } = require('./lab-update');
+const { createAgents } = require('./lab-agents');
 const updater = createUpdater({
   git: gitIn(ROOT), busy: () => workspaces.isBusy(),
   restart: () => { relaunch(__dirname); shutdown(); },
 });
 const workspaces = createWorkspaces({ root:ROOT, kb:KB, local:LOCAL, binaries, environment, legacyProjects:projects, legacySessions:()=>[...sessions.values()], autoSync:true, update:() => updater.info() });
+const agents = createAgents({ root: ROOT, environment, binary: binaries.claude });   // WS-0079: rutinas en la nube al instante
 const server = http.createServer(async (req, res) => {
   if (!validHost(req) || !validOrigin(req)) return json(res, 403, { error: 'Sólo se admite GaleCore: la plataforma o el monitor local de esta PC.' });
   res.setHeader('Access-Control-Allow-Origin', req.headers.origin);
@@ -299,11 +301,13 @@ server.on('upgrade', (req, socket, head) => {
   });
 });
 function shutdown() {
+  agents.stop();
   workspaces.shutdown();
   for (const s of sessions.values()) if (s.term) { s.state = 'interrupted'; try { s.term.kill(); } catch {} }
   persist(); server.close(); process.exit(0);
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
+agents.start();
 updater.init().catch(() => {});   // WS-0082: commit del Lab y si es actualizable (main limpio); el front decide si pedir /update
 server.listen(PORT, '127.0.0.1', () => console.log('[lab] listo en loopback :' + PORT + ' · sesiones de este usuario local'));
