@@ -38,6 +38,7 @@ Usage:
     python -m galecore_ai.adapters.cli inbox add --text "..." [--context "..."] [--ref REF] | list [--status S] | show ID
     python -m galecore_ai.adapters.cli inbox resolve ID --to roadmap|backlog:BL-NNN|work-item:ID|done|discarded --note "..." --prompt "..."
     python -m galecore_ai.adapters.cli contrast pack [--symbol SPY]
+    python -m galecore_ai.adapters.cli agent pending|body KEY|applied KEY|new|env   (cloud agents, WS-0079)
     python -m galecore_ai.adapters.cli agent report AGENT_KEY --status ok|error|skipped (--summary-file PATH|- | --summary "...")         [--reason-code X] [--trigger-id ID] [--fired-at ISO] [--finished-at ISO]
     python -m galecore_ai.adapters.cli clock [--at ISO]
     python -m galecore_ai.adapters.cli gap add --need "..." --kind data|calc|analysis|cross|action|api_error [--why "..."] [--instead "..."] [--project P] | list [--bugfix]
@@ -951,9 +952,48 @@ def _cmd_project_shared(args: argparse.Namespace) -> None:
         _error_out(str(exc), exit_code=1)
 
 
+def _cmd_agent_cloud(args: argparse.Namespace) -> None:
+    """`agent pending|body|applied|new|env`: the cloud agents the Lab turns into claude.ai routines (WS-0079)."""
+    from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
+    from galecore_ai.application import agent_cloud as ac
+
+    c = args.agent_command
+    try:
+        if c == "env":
+            if args.set:
+                _json_out({"status": "SAVED", "environment_id": ac.set_environment(args.set)})
+            else:
+                _json_out({"environment_id": ac.environment_id()})
+            return
+        client = SpaceClient()
+        client.login()
+        if c == "pending":
+            _json_out({"pending": ac.pending(client)})
+        elif c == "body":
+            _json_out(ac.body(client, args.agent_key))
+        elif c == "applied":
+            _json_out({"status": "APPLIED", **ac.applied(client, args.agent_key, args.trigger_id, args.url, args.error)})
+        else:
+            try:
+                when = json.loads(args.when)
+            except ValueError:
+                _error_out("Argument error: --when es un JSON con frequency (daily|weekdays|days), time, timezone "
+                           "y days si hace falta", exit_code=_EXIT_VALIDATION_ERROR)
+                return
+            _json_out({"status": "REQUESTED", **ac.new(client, args.name, args.what, when)})
+    except ac.AgentCloudError as exc:
+        _error_out(str(exc), exit_code=_EXIT_VALIDATION_ERROR)
+    except SpaceError as exc:
+        _error_out(str(exc), exit_code=1)
+
+
 def _cmd_agent(args: argparse.Namespace) -> None:
     """`agent report <agent_key> ...`: a cloud routine reports its run to GaleCore (WS-0079)."""
     from galecore_ai.application import agent_report as ar
+
+    if args.agent_command != "report":
+        _cmd_agent_cloud(args)
+        return
 
     secret = os.environ.get("GALECORE_AGENT_KEY", "").strip()
     if not secret:
@@ -1698,6 +1738,21 @@ def build_parser() -> _JsonArgumentParser:
     p_ag_rep.add_argument("--trigger-id", help="Default: GALECORE_TRIGGER_ID")
     p_ag_rep.add_argument("--fired-at", help="ISO-8601; default: GALECORE_FIRED_AT")
     p_ag_rep.add_argument("--finished-at", help="ISO-8601; default: now (UTC)")
+    ag_sub.add_parser("pending", help="Cloud agents with a request nobody applied yet (JSON)")
+    ag_sub.add_parser("body", help="What RemoteTrigger gets for a cloud agent: create, update or run (JSON)"
+                      ).add_argument("agent_key")
+    p_ag_app = ag_sub.add_parser("applied", help="The Lab applied (or failed) the request of a cloud agent")
+    p_ag_app.add_argument("agent_key")
+    p_ag_app.add_argument("--trigger-id", help="The routine's id")
+    p_ag_app.add_argument("--url", help="The routine's link in claude.ai")
+    p_ag_app.add_argument("--error", help="Why it could not be applied")
+    p_ag_new = ag_sub.add_parser("new", help="Ask for a cloud agent from the chat (the Lab creates its routine)")
+    p_ag_new.add_argument("--name", required=True)
+    p_ag_new.add_argument("--what", required=True, help="What the agent does")
+    p_ag_new.add_argument("--when", required=True, metavar="JSON",
+                          help='e.g. {"frequency":"daily","time":"08:00","timezone":"America/New_York"}')
+    p_ag_env = ag_sub.add_parser("env", help="The claude.ai environment the cloud agents run in (Lab config)")
+    p_ag_env.add_argument("--set", metavar="LINK_OR_ID", help="Save it (the env_… id or the claude.ai link)")
 
     p_users = sub.add_parser("users", help="Other GaleCore users (to pick who to share a project with)")
     us_sub = p_users.add_subparsers(dest="users_command", required=True)

@@ -224,14 +224,19 @@ def sync(client: SpaceClient, pieces: list[dict], seen: dict[tuple, int] | None 
     return out
 
 
-def _agent_items(client: SpaceClient) -> list[tuple[dict, dict]]:
+def _agent_items(client: SpaceClient, cloud: bool = False) -> list[tuple[dict, dict]]:
+    """The readable agent pieces: the PC's own, or with `cloud` the ones that run in the cloud (WS-0079).
+
+    The PC publishes, applies requests to and deletes only its own: a `runs_on: "cloud"` piece belongs to the Lab's
+    routine flow (`agent_cloud`) and is never touched here.
+    """
     out = []
     for item in client.items("agent")["items"]:
         try:
             content = json.loads(item["content"])
         except (json.JSONDecodeError, TypeError):
             continue
-        if isinstance(content, dict):
+        if isinstance(content, dict) and (content.get("runs_on") == "cloud") == cloud:
             out.append((item, content))
     return out
 
@@ -480,7 +485,8 @@ def publish_agents(client: SpaceClient, kb: KnowledgeBase, scheduler, now: datet
     requests = apply_requests(client, kb, scheduler, now, items)
     refused = {r["agent"]: r["error"] for r in requests if r["result"] == "refused"}
     kept = {i["key"]: c["request_error"] for i, c in items if c.get("request_error") and not c.get("request")}
-    pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent"]
+    cloud_keys = {i["key"] for i, _ in _agent_items(client, cloud=True)}
+    pieces = [p for p in local_pieces(kb, now) if p["kind"] == "agent" and p["key"] not in cloud_keys]
     responses: list[dict] = []
     if supervise is not None:                    # WS-0007: answers first, then a pass, then the piece
         from galecore_ai.application import supervisor as sv
