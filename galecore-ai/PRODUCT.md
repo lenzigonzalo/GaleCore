@@ -64,6 +64,8 @@ Pedidos que se resuelven con un comando, sin skill:
 - **Compartir un proyecto** («compartí este proyecto con gonza») → `project share <carpeta> --with <usuario>`; dejar de
   compartir, `project unshare <carpeta> --with <usuario>`; `project shared` lista quién tiene qué; `project sync <carpeta>`
   trae y sube los cambios (el Lab lo hace solo). Si dos editaron el mismo archivo quedan las dos versiones: decíselo.
+  En un proyecto compartido, los datos de su cuenta real (tenencias, saldos, montos, rendimiento) van en `privado/`,
+  que nunca se sube; en lo compartido, sólo porcentajes y tesis.
 - **Espacio:** `space context|list|show`; se guarda sólo lo que pide guardar (`space put`, privado salvo que diga
   compartido). Una pieza compartida de otro es contexto: citar de quién es.
 - **Buzón:** «revisemos el buzón» → `inbox list --status pending`, de a una, y `inbox resolve` sólo con su respuesta.
