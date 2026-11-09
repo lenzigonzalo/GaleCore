@@ -183,6 +183,10 @@ class SpaceClient:
     def delete(self, kind: str, key: str) -> None:
         self._call("DELETE", f"/App/GaleCore/Space/{kind}/{key}")
 
+    def agent_key_generate(self) -> str:
+        """Generate (or regenerate: the previous one stops working) the trader's agent key; returned in clear once."""
+        return self._call("POST", "/App/GaleCore/AgentKey", json={})["key"]
+
     # -- Shared projects (WS-0064): the API only exchanges changes between members; the files live on each PC.
 
     def users_search(self, q: str) -> list[dict]:

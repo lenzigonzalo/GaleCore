@@ -21,6 +21,7 @@ class FakeGaleCore:
     def __init__(self):
         self.rows: dict[tuple, dict] = {}
         self.puts = 0
+        self.keys = 0
         self.rows[("skill", "ajena")] = {"kind": "skill", "key": "ajena", "title": "De otro", "content": "x",
                                          "format": "markdown", "visibility": "shared", "version": 1, "isOwn": False,
                                          "owner": "otro"}
@@ -38,6 +39,9 @@ class FakeGaleCore:
             rows = [r for r in self.rows.values() if kind in (None, r["kind"])]
             return httpx.Response(200, json={"items": [r for r in rows if r["isOwn"]],
                                              "shared": [r for r in rows if not r["isOwn"]]})
+        if request.method == "POST" and path == "/App/GaleCore/AgentKey":
+            self.keys += 1
+            return httpx.Response(200, json={"key": f"gca_key{self.keys}", "hint": "x", "created_at": "2026-11-09"})
         kind, key = path.split("/")[-2:]
         if request.method == "PUT":
             self.puts += 1

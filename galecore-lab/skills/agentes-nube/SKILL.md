@@ -12,16 +12,15 @@ Todos los comandos son `python -m galecore_ai.adapters.cli agent …`.
 ## Entrada 1: el trader lo pide en el chat
 
 1. Pedí sólo lo que falte de tres cosas: nombre, qué hace, cuándo (una vez por día como máximo: todos los días, de lunes a viernes o días elegidos, con hora y zona).
-2. Decí en una línea dónde corre y por qué: en la nube, a su hora y con la PC apagada. Si necesita archivos de la PC o correr cada menos de 1 hora, no es de la nube: es una tarea de la PC y sigue el camino de siempre (`capability_builder`).
-3. Antes de crear, verificá el entorno con `agent env` (devuelve `environment_id`). Si falla con «Falta configurar el entorno», pedile al trader el link del entorno de claude.ai de sus agentes y guardalo con `agent env --set "<link>"`.
-4. `agent new --name "<nombre>" --what "<qué hace>" --when '{"frequency":"daily","time":"08:00","timezone":"America/New_York"}'` (`frequency`: `daily`, `weekdays` o `days` con `"days":["mon","wed"]`).
-5. Decí en una línea que el Lab crea la rutina en menos de un minuto y que aparece en Agentes. No la apliques vos: el Lab lo hace solo.
+2. Si necesita archivos de la PC o correr cada menos de 1 hora, no es de la nube: es una tarea de la PC y sigue el camino de siempre (`capability_builder`).
+3. `agent new --name "<nombre>" --what "<qué hace>" --when '{"frequency":"daily","time":"08:00","timezone":"America/New_York"}'` (`frequency`: `daily`, `weekdays` o `days` con `"days":["mon","wed"]`).
+4. Decí en una línea: «en menos de un minuto aparece en Agentes». No la apliques vos: el Lab lo hace solo. Si `agent env` dice que falta configurar el entorno, decilo en una línea y seguí.
 
 ## Entrada 2: aplicar pendientes (sólo el Lab, sin chat)
 
 Por cada elemento de `agent pending`:
 
-1. `agent body <clave>` devuelve `{action, trigger_id?, body?}`. Si falla con «Falta configurar el entorno», pedile al trader en el chat el link del entorno de claude.ai de sus agentes, guardalo con `agent env --set "<link>"` y repetí.
+1. `agent body <clave>` devuelve `{action, trigger_id?, body?}`. Si falla, el error ya dice qué falta: pasalo con `agent applied <clave> --error "<el mensaje>"` y seguí con el siguiente.
 2. Llamá a `RemoteTrigger` con esa acción y ese cuerpo tal cual, sin cambiarlo: `create`, `update` (con `trigger_id`) o `run` (con `trigger_id`). Pausar es `enabled: false` en el cuerpo.
 3. Conectores: `create` adjunta todos los conectores de la cuenta y una lista vacía se ignora. Pasá la lista mínima de conectores; si la rutina creada igual los tiene, hacé un `update` con un solo conector inocuo (p. ej. Claude_Docs).
 4. Avisá el resultado con `agent applied <clave> --trigger-id <id> --url <link de la rutina>` (el link es `https://claude.ai/code/routines/<id>`). Si `RemoteTrigger` falló: `agent applied <clave> --error "<qué pasó, en una línea>"`. Para `run` alcanza `agent applied <clave>`.
