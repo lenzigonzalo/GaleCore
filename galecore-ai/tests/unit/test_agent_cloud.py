@@ -100,7 +100,8 @@ def test_new_then_body_then_applied_registers_the_routine(galecore, lab):  # noq
     assert p["runs_on"] == "cloud" and p["capability"] == "routine" and p["status"] == "pending" and p["trigger_id"] is None
     assert "08:00" in p["schedule"]
     assert p["request"]["create"]["id"] == "Resumen diario"
-    assert ac.pending(client) == [{"key": "resumen-diario", "name": "Resumen diario", "requests": ["create"]}]
+    assert ac.pending(client) == [{"key": "resumen-diario", "name": "Resumen diario", "requests": ["create"],
+                                  "at": "2026-11-09T00:00:00+00:00"}]
     with pytest.raises(ac.AgentCloudError, match="Falta configurar el entorno de los agentes en la nube"):
         ac.body(client, "resumen-diario")
     configured(lab)
@@ -145,6 +146,20 @@ def test_settings_pause_and_run_requests(galecore, lab):  # noqa: F811
     assert "request" not in piece_of(fake)
 
 
+def test_a_run_asked_with_a_change_is_kept_for_the_next_pass(galecore, lab):  # noqa: F811
+    fake, client = galecore
+    configured(lab)
+    ac.new(client, "Resumen diario", "Resumí SPY", DAILY)
+    ac.applied(client, "resumen-diario", "trig_1", "https://x/trig_1")
+    at = _now()
+    client.put("agent", "resumen-diario", title="x", fmt="json", content=json.dumps(
+        {**piece_of(fake), "request": {"status": "paused", "run": True, "at": at}}))
+    ac.applied(client, "resumen-diario")
+    p = piece_of(fake)
+    assert p["status"] == "paused" and p["request"] == {"run": True, "at": at}
+    assert ac.body(client, "resumen-diario") == {"action": "run", "trigger_id": "trig_1"}
+
+
 def test_run_without_a_routine_and_failed_application(galecore, lab):  # noqa: F811
     fake, client = galecore
     configured(lab)
@@ -157,7 +172,7 @@ def test_run_without_a_routine_and_failed_application(galecore, lab):  # noqa: F
     ac.applied(client, "otro", error="la API de rutinas rechazó el cuerpo")
     o = piece_of(fake, "otro")
     assert o["status"] == "pending" and "request" not in o and o["request_error"] == "la API de rutinas rechazó el cuerpo"
-    assert ac.pending(client) == [{"key": "resumen-diario", "name": "Resumen diario", "requests": ["run"]}]
+    assert [(p["key"], p["requests"]) for p in ac.pending(client)] == [("resumen-diario", ["run"])]
 
 
 def test_a_piece_that_moved_while_applying_is_left_for_the_next_pass(galecore, monkeypatch):  # noqa: F811

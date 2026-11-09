@@ -144,7 +144,8 @@ def _find(client: SpaceClient, key: str) -> tuple[dict, dict]:
 
 def pending(client: SpaceClient) -> list[dict]:
     """The cloud pieces with a request nobody applied yet."""
-    return [{"key": item["key"], "name": c.get("id"), "requests": [k for k in REQUEST_KEYS if c["request"].get(k)]}
+    return [{"key": item["key"], "name": c.get("id"), "requests": [k for k in REQUEST_KEYS if c["request"].get(k)],
+             "at": c["request"].get("at")}
             for item, c in space._agent_items(client, cloud=True)
             if isinstance(c.get("request"), dict) and any(c["request"].get(k) for k in REQUEST_KEYS)]
 
@@ -185,6 +186,9 @@ def applied(client: SpaceClient, key: str, trigger_id: str | None = None, url: s
         for k, v in (("trigger_id", trigger_id), ("routine_url", url)):
             if v:
                 piece[k] = v
+        req = content.get("request") if isinstance(content.get("request"), dict) else {}
+        if req.get("run") and any(req.get(k) for k in ("create", "settings", "status")):
+            piece["request"] = {"run": True, "at": req.get("at")}     # the run was asked too: the next pass runs it
     out = space.sync(client, [{"kind": "agent", "key": key, "title": item["title"], "format": "json",
                                "visibility": item.get("visibility", "private"),
                                "content": json.dumps(piece, ensure_ascii=False)}], seen)
