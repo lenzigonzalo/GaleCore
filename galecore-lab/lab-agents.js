@@ -40,7 +40,7 @@ function createAgents({ root, environment, binary, execute = execFile, spawnProc
       const items = await pending();
       if (!items.length) return 'idle';
       const outcome = await new Promise(resolve => {
-        const proc = spawnProcess(binary, ['-p', prompt(items), '--model', 'haiku', '--allowedTools', 'RemoteTrigger', `Bash(${CLI}:*)`],
+        const proc = spawnProcess(binary, ['-p', prompt(items), '--model', 'haiku', '--allowedTools', 'RemoteTrigger', `Bash(${CLI}:*)`, `PowerShell(${CLI}:*)`],
           { cwd: root, env: environment(), windowsHide: true, stdio: ['ignore', 'ignore', 'ignore'] });
         const stop = setTimeout(() => { try { proc.kill(); } catch { /* ya terminó */ } resolve('failed'); }, timeoutMs);
         proc.on('error', () => { clearTimeout(stop); resolve('failed'); });
