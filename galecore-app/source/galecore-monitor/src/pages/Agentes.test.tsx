@@ -2,8 +2,15 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Agentes } from './Agentes';
 import { fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
+import * as agentsApi from '../api/agents';
 
 jest.mock('../api/space', () => ({ fetchSpace: jest.fn(), saveSpaceItem: jest.fn() }));
+jest.mock('../api/agents', () => ({
+  ...jest.requireActual('../api/agents'),
+  fetchRuns: jest.fn(), fetchFireToken: jest.fn(), saveFireToken: jest.fn(), deleteFireToken: jest.fn(), runAgent: jest.fn(),
+  fetchAgentKey: jest.fn(), generateAgentKey: jest.fn(), revokeAgentKey: jest.fn(),
+}));
+const api = agentsApi as jest.Mocked<typeof agentsApi>;
 jest.mock('../components/settings/Markdown', () => ({ Markdown: ({ text }: { text: string }) => <div>{text}</div> }));
 
 const task = {
@@ -28,7 +35,7 @@ test('abre la tarea, muestra el único resultado publicado y vuelve al listado',
   expect(screen.queryByText('Al día')).not.toBeInTheDocument();
   expect(screen.getByText('Días hábiles, 10:00')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
-  expect(screen.getByRole('button', { name: 'Nueva tarea' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Nuevo agente' })).toBeInTheDocument();
 });
 
 test('pausar conserva la tarea y escribe un pedido sin fingir que ya se aplicó', async () => {
@@ -44,15 +51,6 @@ test('pausar conserva la tarea y escribe un pedido sin fingir que ya se aplicó'
   expect(screen.queryByRole('switch')).not.toBeInTheDocument();
 });
 
-test('una plantilla completa la nueva tarea sin crearla hasta guardar', async () => {
-  render(<Agentes />);
-  fireEvent.click(await screen.findByRole('button', { name: 'Nueva tarea' }));
-  fireEvent.change(screen.getByLabelText('Partir de una plantilla'), { target: { value: 'Briefing diario' } });
-  expect(screen.getByLabelText('Nombre')).toHaveValue('Briefing diario');
-  expect((screen.getByLabelText('Qué debe hacer') as HTMLTextAreaElement).value).toMatch(/briefing antes de la apertura/);
-  expect(saveSpaceItem).not.toHaveBeenCalled();
-});
-
 test('el supervisor de SHADOW no aparece entre tus tareas', async () => {
   const sup = { ...item, key: 'supervisor', title: 'supervisor', content: JSON.stringify({ ...task, id: 'supervisor', capability: 'supervisor' }) };
   (fetchSpace as jest.Mock).mockResolvedValue({ items: [item, sup], shared: [] });
@@ -66,7 +64,7 @@ test('muestra el vacío y permite reintentar una lectura fallida', async () => {
   render(<Agentes />);
   expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo leer');
   fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
-  expect(await screen.findByText('Todavía no tenés tareas programadas')).toBeInTheDocument();
+  expect(await screen.findByText('Todavía no tenés agentes')).toBeInTheDocument();
 });
 
 test('un resultado viejo conserva el aviso de falta de publicación', async () => {
@@ -194,4 +192,165 @@ test('muestra el método del agente y la última corrida de cada script, o que n
   expect(screen.getByText(/revision_swing\.py/)).toHaveTextContent(/Falló.*Timeout tras 180 s/);
   expect(screen.queryByText(/Traceback/)).not.toBeInTheDocument();
   expect(screen.getByText(/otro\.py/)).toHaveTextContent('Sin corridas');
+});
+
+// ── WS-0079: agentes en la nube ─────────────────────────────────────────────
+
+const cloud = {
+  id: 'Resumen diario', runs_on: 'cloud', capability: 'routine', status: 'active', objective: 'Resumí SPY y VIX',
+  schedule: 'todos los días a las 08:00 (America/New_York)', schedule_spec: { frequency: 'daily', time: '08:00', timezone: 'America/New_York' },
+  trigger_id: 'trig_1', routine_url: 'https://claude.ai/code/routines/trig_1', model: 'claude-sonnet-5',
+};
+const cloudItem: SpaceItem = { ...item, key: 'resumen-diario', title: 'Resumen diario', content: JSON.stringify(cloud) };
+const run = { id: 'r1', agent_key: 'resumen-diario', origin: 'manual', status: 'ok', summary: 'SPY **sube**', session_url: 'https://claude.ai/code/session_1', created_at: '2026-11-09T13:00:00Z', finished_at: '2026-11-09T13:02:00Z' };
+
+function openCloud(content: object = cloud) {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...cloudItem, content: JSON.stringify(content) }], shared: [] });
+  api.fetchRuns.mockResolvedValue([run as any]);
+  api.fetchFireToken.mockResolvedValue({ exists: false });
+  render(<Agentes />);
+  return screen.findByRole('button', { name: 'Resumen diario' }).then(b => fireEvent.click(b));
+}
+
+test('Nuevo agente pide nombre, qué hace y cuándo, y escribe la pieza en la nube con su pedido de alta', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Nuevo agente' }));
+  expect(screen.queryByLabelText('Partir de una plantilla')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Modelo')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Crear' })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText('Nombre'), { target: { value: 'Resumen diario' } });
+  fireEvent.change(screen.getByLabelText('Qué hace'), { target: { value: 'Resumí SPY y VIX' } });
+  fireEvent.change(screen.getByLabelText('Hora'), { target: { value: '08:00' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Crear' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
+  const [kind, key, body] = (saveSpaceItem as jest.Mock).mock.calls[0];
+  expect([kind, key, body.title]).toEqual(['agent', 'resumen-diario', 'Resumen diario']);
+  const piece = JSON.parse(body.content);
+  expect(piece).toMatchObject({ id: 'Resumen diario', runs_on: 'cloud', capability: 'routine', status: 'pending', objective: 'Resumí SPY y VIX', trigger_id: null });
+  expect(piece.schedule_spec).toEqual({ frequency: 'daily', time: '08:00', timezone: 'America/New_York' });
+  expect(piece.request.create).toEqual({ id: 'Resumen diario', objective: 'Resumí SPY y VIX', schedule_spec: piece.schedule_spec });
+  expect(typeof piece.request.at).toBe('string');
+});
+
+test('un agente que se está creando se ve como «Creando…»', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ ...cloudItem, content: JSON.stringify({ ...cloud, status: 'pending', trigger_id: null, request: { create: {}, at: '2026-11-09T13:00:00Z' } }) }], shared: [] });
+  render(<Agentes />);
+  expect(await screen.findByRole('button', { name: 'Resumen diario' })).toBeInTheDocument();
+  expect(screen.getAllByText('Creando…').length).toBeGreaterThan(0);
+});
+
+test('el detalle de un agente en la nube muestra sus corridas del back, con resumen y link a la sesión', async () => {
+  await openCloud();
+  expect(await screen.findByText('Completada')).toBeInTheDocument();
+  expect(api.fetchRuns).toHaveBeenCalledWith('resumen-diario');
+  expect(screen.getByText('SPY **sube**')).not.toBeVisible();
+  expect(screen.getByRole('link', { name: /Ver la sesión/ })).toHaveAttribute('href', 'https://claude.ai/code/session_1');
+  expect(screen.getByText('Manual')).toBeInTheDocument();
+});
+
+test('una corrida pedida que no reportó se ve como «No reportó»', async () => {
+  await openCloud();
+  api.fetchRuns.mockResolvedValue([{ ...run, status: 'no_report', summary: null } as any]);
+  fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Resumen diario' }));
+  expect(await screen.findByText('No reportó')).toBeInTheDocument();
+  expect(screen.getByText('La corrida no reportó su resultado.')).toBeInTheDocument();
+});
+
+test('Ejecutar con token llama a la API y avisa; sin token escribe request.run para el Lab', async () => {
+  await openCloud();
+  api.fetchFireToken.mockResolvedValue({ exists: true, trigger_id: 'trig_1', token_hint: 'abcd' });
+  api.runAgent.mockResolvedValue({ ...run, status: 'requested' } as any);
+  fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Resumen diario' }));
+  await screen.findByText(/Token cargado …abcd/);
+  fireEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
+  await waitFor(() => expect(api.runAgent).toHaveBeenCalledWith('resumen-diario'));
+  expect(await screen.findByText(/la corrida aparece en la lista/)).toBeInTheDocument();
+  expect(saveSpaceItem).not.toHaveBeenCalled();
+});
+
+test('Ejecutar sin token pide la corrida al Lab', async () => {
+  await openCloud();
+  await screen.findByText('Completada');
+  fireEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
+  expect(api.runAgent).not.toHaveBeenCalled();
+  expect(JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content)).toMatchObject({ ...cloud, request: { run: true } });
+  expect(await screen.findByText('Se ejecuta cuando el Lab esté abierto.')).toBeInTheDocument();
+});
+
+test.each([
+  [409, 'La rutina está pausada: activala en claude.ai.'],
+  [502, 'El token de esta rutina no anda: generá otro en claude.ai.'],
+  [429, 'Esperá unos minutos antes de volver a ejecutarlo.'],
+])('los errores %s de Ejecutar salen con el mensaje de la API', async (status, error) => {
+  await openCloud();
+  api.fetchFireToken.mockResolvedValue({ exists: true, trigger_id: 'trig_1', token_hint: 'abcd' });
+  api.runAgent.mockRejectedValue({ response: { status, data: { error } } });
+  fireEvent.click(screen.getByRole('button', { name: 'Agentes' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Resumen diario' }));
+  await screen.findByText(/Token cargado/);
+  fireEvent.click(screen.getByRole('button', { name: 'Ejecutar' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent(error);
+});
+
+test('editar instrucciones y horario escribe request.settings con sólo esos campos', async () => {
+  await openCloud();
+  fireEvent.click(screen.getByRole('button', { name: 'Editar' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Qué hace' }), { target: { value: 'Resumí QQQ' } });
+  fireEvent.change(screen.getByRole('combobox', { name: 'Frecuencia' }), { target: { value: 'weekdays' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
+  const saved = JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content);
+  expect(saved.request.settings).toEqual({ objective: 'Resumí QQQ', schedule_spec: { frequency: 'weekdays', time: '08:00', timezone: 'America/New_York' } });
+  expect(saved.status).toBe('active');
+});
+
+test('pausar un agente en la nube escribe request.status', async () => {
+  await openCloud();
+  fireEvent.click(screen.getByRole('switch', { name: 'Pausar tarea' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
+  expect(JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content).request).toMatchObject({ status: 'paused' });
+});
+
+test('el token de disparo se guarda sin volver a mostrarse: sólo los últimos 4; Quitar lo borra', async () => {
+  await openCloud();
+  api.saveFireToken.mockResolvedValue({ exists: true, trigger_id: 'trig_1', token_hint: 'wxyz' });
+  fireEvent.change(await screen.findByLabelText('Token de la rutina'), { target: { value: 'secreto-wxyz' } });
+  api.fetchFireToken.mockResolvedValue({ exists: true, trigger_id: 'trig_1', token_hint: 'wxyz' });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar token' }));
+  await waitFor(() => expect(api.saveFireToken).toHaveBeenCalledWith('resumen-diario', 'trig_1', 'secreto-wxyz'));
+  expect(await screen.findByText(/Token cargado …wxyz/)).toBeInTheDocument();
+  expect(screen.queryByDisplayValue('secreto-wxyz')).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Abrir la rutina en claude.ai' })).toHaveAttribute('href', cloud.routine_url);
+  api.deleteFireToken.mockResolvedValue();
+  api.fetchFireToken.mockResolvedValue({ exists: false });
+  fireEvent.click(screen.getByRole('button', { name: 'Quitar' }));
+  await waitFor(() => expect(api.deleteFireToken).toHaveBeenCalledWith('resumen-diario'));
+  expect(await screen.findByLabelText('Token de la rutina')).toBeInTheDocument();
+});
+
+test('la ayuda genera la clave de agentes, la muestra una sola vez y explica el entorno', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [], shared: [] });
+  api.fetchAgentKey.mockResolvedValue({ exists: false });
+  api.generateAgentKey.mockResolvedValue({ key: 'gca_secreta1234', hint: '1234' });
+  render(<Agentes />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Ayuda' }));
+  for (const name of ['GALECORE_BASE_URL', 'GALECORE_ALLOWED_BASE_URL', 'GALECORE_API_KEY', 'GALECORE_AGENT_KEY']) expect(await screen.findByText(name)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Generar clave' }));
+  expect(await screen.findByText('gca_secreta1234')).toBeInTheDocument();
+  expect(screen.getByText(/Se ve una sola vez/)).toBeInTheDocument();
+  api.revokeAgentKey.mockResolvedValue();
+  fireEvent.click(screen.getByRole('button', { name: 'Revocar' }));
+  await waitFor(() => expect(api.revokeAgentKey).toHaveBeenCalled());
+  await waitFor(() => expect(screen.queryByText('gca_secreta1234')).not.toBeInTheDocument());
+});
+
+test('las tareas de la PC siguen en la lista junto a los agentes en la nube', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [item, cloudItem], shared: [] });
+  render(<Agentes />);
+  expect(await screen.findByRole('button', { name: /Mi vigilancia de SPY/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Resumen diario' })).toBeInTheDocument();
 });

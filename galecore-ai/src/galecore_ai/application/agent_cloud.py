@@ -79,7 +79,7 @@ def cron_utc(schedule: Schedule, today: date | None = None) -> str:
 
 
 def instruction(piece: dict) -> str:
-    key = space._slug(str(piece["id"]))
+    key = piece.get("key") or space._slug(str(piece["id"]))     # the piece's key is what the API validates
     data = ("con GaleCore como fuente de datos (`python3 -m galecore_ai.adapters.cli galecore list` dice qué hay y "
             "`galecore get <capacidad>` lo trae). No inventes ni redondees números: si un dato no está en GaleCore, decilo.")
     write = ("Al final, siempre, también si algo falló: escribí el resultado en markdown (corto, con las cifras y su "
@@ -159,7 +159,7 @@ def body(client: SpaceClient, key: str, today: date | None = None) -> dict:
         if not trigger_id:
             raise AgentCloudError("La rutina todavía no se creó: no hay nada para ejecutar.")
         return {"action": "run", "trigger_id": trigger_id}
-    piece = effective(content)
+    piece = effective(content) | {"key": key}
     try:
         routine = routine_body(piece, environment_id(), today)
     except ValueError as exc:

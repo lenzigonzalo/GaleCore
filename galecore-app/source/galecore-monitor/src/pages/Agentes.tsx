@@ -1,9 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pencil, Save, ArrowLeft, Bot, ChevronDown, ChevronRight, Clock3, Plus, X } from 'lucide-react';
+import { Pencil, Save, ArrowLeft, Bot, ChevronDown, ChevronRight, Clock3, Copy, ExternalLink, HelpCircle, Play, Plus, Trash2, X } from 'lucide-react';
 import '../components/shadow/PerformancePanel.css';
 import './Agentes.css';
 import { Markdown } from '../components/settings/Markdown';
 import { fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
+import {
+  AgentKeyStatus, AgentRun, FireTokenStatus, apiMessage, deleteFireToken, fetchAgentKey, fetchFireToken, fetchRuns, generateAgentKey,
+  revokeAgentKey, runAgent, saveFireToken,
+} from '../api/agents';
 
 /**
  * Agentes (GC-0009): lo que corre solo con las instrucciones del trader — si está prendido, si su último
@@ -19,7 +23,8 @@ interface LastRun {
   reason?: string; error?: string; failed: boolean; findings?: string | null; truncated?: boolean;
 }
 interface Agent {
-  id: string; capability: string; status: 'active' | 'paused' | 'cancelled'; schedule: string;
+  id: string; capability: string; status: 'active' | 'paused' | 'cancelled' | 'pending'; schedule: string;
+  runs_on?: string; trigger_id?: string | null; routine_url?: string | null;   // WS-0079: agente en la nube (rutina de claude.ai)
   strategy?: string | null; objective: string; state: string; state_detail?: string;
   next_expected_at?: string | null; last_run?: LastRun | null; runs: number; findings?: string | null;
   result_ref?: string | null; request?: AgentRequest; request_error?: string;
@@ -29,10 +34,10 @@ interface Agent {
 }
 
 interface ScheduleSpec { frequency: string; time?: string; days?: string[]; minutes?: number; timezone: string }
-interface NewAgent { id: string; kind: string; objective: string; schedule: ScheduleSpec; model?: string; delivery?: string[] }
+interface NewCloudAgentData { name: string; objective: string; schedule_spec: ScheduleSpec }
 
-interface AgentSettingsChange { objective?: string; model?: string | null; schedule?: ScheduleSpec; tools?: string[] | null; delivery?: string[] }
-interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: NewAgent; at?: string }
+interface AgentSettingsChange { objective?: string; model?: string | null; schedule?: ScheduleSpec; schedule_spec?: ScheduleSpec; tools?: string[] | null; delivery?: string[] }
+interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: { id: string; objective: string; schedule_spec: ScheduleSpec }; run?: boolean; at?: string }
 
 const REFRESH_MS = 60_000;
 
@@ -114,15 +119,6 @@ function Toggle({ a, onRequest, busy }: { a: Agent; onRequest: (status: 'active'
 
 const DAY_LABELS: [string, string][] = [['mon', 'Lun'], ['tue', 'Mar'], ['wed', 'Mié'], ['thu', 'Jue'], ['fri', 'Vie'], ['sat', 'Sáb'], ['sun', 'Dom']];
 const ZONES: [string, string][] = [['America/New_York', 'Nueva York'], ['America/Argentina/Buenos_Aires', 'Buenos Aires']];
-/** Las skills que corren con el modelo y se pueden programar (el seguimiento de una estrategia corre por código y se crea desde el chat). */
-const KINDS: [string, string][] = [['scheduled_report', 'Informe con tus palabras'], ['market_watch', 'Vigilancia del mercado'], ['market_story', 'Resumen del mercado'], ['daily_attention', 'Atención diaria'], ['knowledge_curator', 'Revisión de memoria']];
-
-const TEMPLATES = [
-  { name: 'Briefing diario', description: 'Un resumen de lo que necesita tu atención antes de empezar.', frequency: 'Lun a vie, 09:00 NY', kind: 'scheduled_report', objective: 'Armame un briefing antes de la apertura: cómo está mi cuenta, qué cambió desde ayer y qué requiere mi atención hoy, con números de GaleCore y su fecha.' },
-  { name: 'Vigilancia del mercado', description: 'Seguí los símbolos y las condiciones de mercado que te interesan.', frequency: 'Lun a vie, 10:00 NY', kind: 'market_watch', objective: 'Revisá SPY, QQQ e IWM: decime si alguno cumple las condiciones que me interesan, cuál queda cerca y qué condición falla, con los números y sus fuentes.' },
-  { name: 'Resumen del mercado', description: 'Qué historia está priceando hoy el mercado y si cambió.', frequency: 'Lun a vie, 17:15 NY', kind: 'market_story', objective: '¿Qué historia está priceando hoy el mercado y cambió frente a la lectura anterior?' },
-];
-
 function slug(text: string): string {
   return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').split('-').slice(0, 8).join('-').slice(0, 48).replace(/-+$/, '');
 }
@@ -163,6 +159,7 @@ function ToolFields({ available, value, onChange }: { available: string[]; value
 }
 
 function taskTitle(a: Agent, title: string): string {
+  if (a.runs_on === 'cloud') return a.id;
   if (title && title !== a.id && !title.startsWith(a.id + ' (') && !title.includes('_')) return title.replace(/\s*\([^)]*\)$/, '');
   return WHAT[a.capability] ? `${WHAT[a.capability]}${a.strategy ? ' · ' + a.strategy.split('_')[0].toUpperCase() : ''}` : humanize(a.id);
 }
@@ -259,39 +256,187 @@ function AgentDetail({ a, title, publishedAt, onRequest, onSave, busy, onBack }:
   </>;
 }
 
-function NewAgentForm({ initial, existing, onCreate, onClose }: { initial: { kind: string; objective: string }; existing: string[]; onCreate: (c: NewAgent) => Promise<boolean>; onClose: () => void }) {
+const isCloud = (a: Agent) => a.runs_on === 'cloud';
+
+/** La frecuencia de una especificación, para mostrarla mientras la rutina todavía no se creó. */
+function specText(sp: ScheduleSpec): string {
+  const days = (sp.days ?? []).map(d => DAY_LABELS.find(x => x[0] === d)?.[1] ?? d).join(', ');
+  const cadence = sp.frequency === 'weekdays' ? 'De lunes a viernes' : sp.frequency === 'days' ? days : 'Todos los días';
+  return `${cadence}, ${sp.time ?? '09:00'} ${ZONES.find(z => z[0] === sp.timezone)?.[1] ?? sp.timezone}`;
+}
+
+function NewCloudAgent({ existing, onCreate, onClose }: { existing: string[]; onCreate: (c: NewCloudAgentData) => Promise<boolean>; onClose: () => void }) {
   const [name, setName] = useState('');
-  const [kind, setKind] = useState(initial.kind);
-  const [objective, setObjective] = useState(initial.objective);
-  const [model, setModel] = useState('');
-  const [schedule, setSchedule] = useState<ScheduleSpec>({ frequency: 'weekdays', time: '09:00', timezone: 'America/New_York' });
-  const [delivery, setDelivery] = useState<string[]>(['historial']);
+  const [what, setWhat] = useState('');
+  const [schedule, setSchedule] = useState<ScheduleSpec>({ frequency: 'daily', time: '09:00', timezone: 'America/New_York' });
   const [saving, setSaving] = useState(false);
   const closeRef = React.useRef<HTMLButtonElement>(null);
   useEffect(() => { closeRef.current?.focus(); }, []);
   const id = slug(name);
   const taken = !!id && existing.includes(id);
-  const valid = !!id && !taken && !!objective.trim() && (schedule.frequency !== 'days' || !!schedule.days?.length);
+  const valid = !!id && !taken && !!what.trim() && (schedule.frequency !== 'days' || !!schedule.days?.length);
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
-    void onCreate({ id, kind, objective: objective.trim(), schedule, ...(model ? { model } : {}), delivery }).then(ok => { setSaving(false); if (ok) onClose(); });
+    void onCreate({ name: name.trim(), objective: what.trim(), schedule_spec: schedule }).then(ok => { setSaving(false); if (ok) onClose(); });
   };
   return <div className="agents-modal-backdrop" onClick={onClose}><div className="agents-modal" role="dialog" aria-modal="true" aria-labelledby="agent-new-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
-    <div className="agents-modal-title"><h2 id="agent-new-title">Nueva tarea</h2><button ref={closeRef} aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
+    <div className="agents-modal-title"><h2 id="agent-new-title">Nuevo agente</h2><button ref={closeRef} aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
     <form className="agents-edit-form" onSubmit={submit}>
-      <label htmlFor="agent-template">Partir de una plantilla</label><select id="agent-template" defaultValue="" onChange={e => { const t = TEMPLATES.find(x => x.name === e.target.value); if (t) { setKind(t.kind); setObjective(t.objective); if (!name.trim()) setName(t.name); } }}><option value="">Ninguna: la escribo yo</option>{TEMPLATES.map(t => <option key={t.name} value={t.name}>{t.name} — {t.description}</option>)}</select>
       <label htmlFor="agent-name">Nombre</label><input id="agent-name" value={name} onChange={e => setName(e.target.value)} maxLength={60} required />
-      {taken && <small className="agents-failed">Ya existe una tarea con ese nombre.</small>}
-      <label htmlFor="agent-kind">Qué tipo de tarea</label><select id="agent-kind" value={kind} onChange={e => setKind(e.target.value)}>{KINDS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
-      <label htmlFor="agent-new-objective">Qué debe hacer</label><textarea id="agent-new-objective" value={objective} onChange={e => setObjective(e.target.value)} rows={6} maxLength={12000} required />
+      {taken && <small className="agents-failed">Ya existe un agente con ese nombre.</small>}
+      <label htmlFor="agent-new-objective">Qué hace</label><textarea id="agent-new-objective" value={what} onChange={e => setWhat(e.target.value)} rows={6} maxLength={12000} required />
       <ScheduleFields value={schedule} onChange={setSchedule} />
-      <DeliveryFields value={delivery} onChange={setDelivery} />
-      <label htmlFor="agent-new-model">Modelo</label><select id="agent-new-model" value={model} onChange={e => setModel(e.target.value)}><option value="">Automático</option><option value="haiku">Haiku</option><option value="sonnet">Sonnet</option><option value="opus">Opus</option></select>
-      <small>Las herramientas de lectura de la skill quedan activas; las podés quitar después de crearla. Tu PC la crea en hasta 5 minutos y tiene que estar encendida.</small>
-      <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!valid || saving}><Save size={14} />Crear tarea</button><button className="agents-text-button" type="button" onClick={onClose}>Cancelar</button></div>
+      <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!valid || saving}><Save size={14} />Crear</button><button className="agents-text-button" type="button" onClick={onClose}>Cancelar</button></div>
     </form>
   </div></div>;
+}
+
+const RUN_LABELS: Record<string, string> = { ok: 'Completada', error: 'No se completó', skipped: 'Omitida', requested: 'Pedida', no_report: 'No reportó' };
+
+function CloudRuns({ runs, error }: { runs: AgentRun[] | null; error: string | null }) {
+  return <section className="agents-history"><h2>Corridas</h2>
+    {error && <p className="agents-error" role="alert">{error}</p>}
+    {runs && !runs.length && <p className="agents-empty">Este agente todavía no corrió.</p>}
+    {(runs ?? []).map(run => {
+      const at = run.finished_at ?? run.requested_at ?? run.created_at;
+      const tone = run.status === 'error' || run.status === 'no_report' ? 'agents-failed' : '';
+      return <details className="agents-run-group" key={run.id}>
+        <summary><span className="agents-run-time">{when(at)}</span><span className={`agents-run-copy ${tone}`}><strong>{RUN_LABELS[run.status] ?? run.status}</strong></span><ChevronDown size={17} /></summary>
+        <div className="agents-result">
+          {run.summary ? <Markdown text={run.summary} fontSize={15} /> : <p className="agents-secondary">{run.status === 'no_report' ? 'La corrida no reportó su resultado.' : run.status === 'requested' ? 'Esperando el reporte de la corrida.' : 'Sin resumen.'}</p>}
+          {run.session_url && <p><a href={run.session_url} target="_blank" rel="noreferrer"><ExternalLink size={14} /> Ver la sesión en claude.ai</a></p>}
+          <div className="agents-run-meta"><span>{run.origin === 'schedule' ? 'Programada' : 'Manual'}</span>{run.reason_code && <span>{run.reason_code}</span>}</div>
+        </div>
+      </details>;
+    })}
+  </section>;
+}
+
+function CloudSettings({ a, busy, onSave }: { a: Agent; busy: boolean; onSave: (settings: AgentSettingsChange) => Promise<boolean> }) {
+  const [editing, setEditing] = useState(false);
+  const [objective, setObjective] = useState(a.objective);
+  const [schedule, setSchedule] = useState<ScheduleSpec>(a.schedule_spec ?? { frequency: 'daily', time: '09:00', timezone: 'America/New_York' });
+  const pending = !!a.request;
+  const edit = () => { setObjective(a.objective); if (a.schedule_spec) setSchedule(a.schedule_spec); setEditing(true); };
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const change: AgentSettingsChange = {};
+    if (objective.trim() !== a.objective.trim()) change.objective = objective.trim();
+    if (JSON.stringify(schedule) !== JSON.stringify(a.schedule_spec)) change.schedule_spec = schedule;
+    if (!Object.keys(change).length) { setEditing(false); return; }
+    void onSave(change).then(saved => { if (saved) setEditing(false); });
+  };
+  return <section><div className="agents-section-heading"><h2>Instrucciones y horario</h2>{!editing && <button className="agents-text-button" onClick={edit} disabled={busy || pending}><Pencil size={14} />Editar</button>}</div>
+    {editing ? <form className="agents-edit-form" onSubmit={submit}>
+      <label htmlFor="agent-objective">Qué hace</label><textarea id="agent-objective" value={objective} onChange={e => setObjective(e.target.value)} rows={7} maxLength={12000} required />
+      <ScheduleFields value={schedule} onChange={setSchedule} />
+      <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!objective.trim() || (schedule.frequency === 'days' && !(schedule.days?.length)) || busy || pending}><Save size={14} />Guardar cambios</button><button className="agents-text-button" type="button" onClick={() => setEditing(false)}>Cancelar</button></div>
+    </form> : <p className="agents-objective">{a.objective || 'Sin instrucciones.'}</p>}
+  </section>;
+}
+
+function FireTokenSection({ agentKey, a, token, onChange }: { agentKey: string; a: Agent; token: FireTokenStatus | null; onChange: () => void }) {
+  const [value, setValue] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const act = async (work: () => Promise<unknown>) => {
+    setBusy(true); setError(null);
+    try { await work(); setValue(''); onChange(); } catch (e) { setError(apiMessage(e, 'No se pudo guardar el token.')); } finally { setBusy(false); }
+  };
+  return <section><h2>Ejecutar sin PC (opcional)</h2>
+    {a.routine_url && <p><ExternalLink size={16} /><a href={a.routine_url} target="_blank" rel="noreferrer">Abrir la rutina en claude.ai</a></p>}
+    {token?.exists
+      ? <p>Token cargado …{token.token_hint}<button className="agents-text-button" disabled={busy} onClick={() => act(() => deleteFireToken(agentKey))}><Trash2 size={14} />Quitar</button></p>
+      : a.trigger_id
+        ? <form className="agents-edit-form" onSubmit={e => { e.preventDefault(); void act(() => saveFireToken(agentKey, a.trigger_id!, value.trim())); }}>
+          <label htmlFor="agent-token">Token de la rutina</label>
+          <input id="agent-token" type="password" autoComplete="off" value={value} onChange={e => setValue(e.target.value)} />
+          <small>En claude.ai: editá la rutina, Trigger, API, Generate token.</small>
+          <div className="agents-edit-actions"><button className="agents-primary" type="submit" disabled={!value.trim() || busy}>Guardar token</button></div>
+        </form>
+        : <p>Disponible cuando se cree la rutina.</p>}
+    {error && <p className="agents-error" role="alert">{error}</p>}
+  </section>;
+}
+
+function CloudDetail({ a, item, title, onChange, busy, onBack }: {
+  a: Agent; item: SpaceItem; title: string; onChange: (r: AgentRequest) => Promise<boolean>; busy: boolean; onBack: () => void;
+}) {
+  const [runs, setRuns] = useState<AgentRun[] | null>(null);
+  const [runsError, setRunsError] = useState<string | null>(null);
+  const [token, setToken] = useState<FireTokenStatus | null>(null);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [starting, setStarting] = useState(false);
+  const loadRuns = useCallback(async () => {
+    try { setRuns(await fetchRuns(item.key)); setRunsError(null); } catch (e) { setRunsError(apiMessage(e, 'No se pudieron leer las corridas.')); }
+  }, [item.key]);
+  const loadToken = useCallback(async () => { try { setToken(await fetchFireToken(item.key)); } catch { setToken(null); } }, [item.key]);
+  useEffect(() => { void loadToken(); }, [loadToken]);
+  useEffect(() => {
+    void loadRuns();
+    const id = setInterval(loadRuns, REFRESH_MS);
+    return () => clearInterval(id);
+  }, [loadRuns]);
+  const run = async () => {
+    setStarting(true); setNotice(null);
+    try {
+      if (token?.exists) {
+        await runAgent(item.key);
+        setNotice({ text: 'Pedido enviado: la corrida aparece en la lista.' });
+        await loadRuns();
+      } else if (await onChange({ run: true })) {
+        setNotice({ text: 'Se ejecuta cuando el Lab esté abierto.' });
+      }
+    } catch (e) {
+      setNotice({ text: apiMessage(e, 'No se pudo ejecutar el agente.'), error: true });
+    } finally { setStarting(false); }
+  };
+  const ready = !!a.trigger_id && a.status !== 'pending';
+  return <>
+    <div className="agents-breadcrumb"><button onClick={onBack}><ArrowLeft size={15} />Agentes</button><span>/</span><span>{title}</span></div>
+    <header className="agents-detail-heading"><div><h1>{title}</h1><p>{scheduleText(a.schedule)}</p></div>
+      <div className="agents-actions"><button className="agents-primary" onClick={run} disabled={!ready || starting || busy}><Play size={14} />Ejecutar</button><Toggle a={a} busy={busy} onRequest={status => { void onChange({ status }); }} /></div></header>
+    {a.request && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
+    {a.request_error && <p className="agents-error" role="alert">No se pudo aplicar: {a.request_error}</p>}
+    {notice && <p className={notice.error ? 'agents-error' : 'agents-notice'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
+    <div className="agents-detail-grid"><CloudRuns runs={runs} error={runsError} /><aside className="agents-settings">
+      <CloudSettings a={a} busy={busy} onSave={settings => onChange({ settings })} />
+      <FireTokenSection agentKey={item.key} a={a} token={token} onChange={loadToken} />
+    </aside></div>
+  </>;
+}
+
+const API_HOST = (() => { try { return new URL(process.env.REACT_APP_API_BASE_URL ?? '').host; } catch { return ''; } })();
+
+/** La configuración de una sola vez: clave de agentes, entorno en claude.ai y el link para el Lab. */
+function Help() {
+  const [status, setStatus] = useState<AgentKeyStatus | null>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { fetchAgentKey().then(setStatus).catch(() => setError('No se pudo leer el estado de tu clave.')); }, []);
+  const act = async (work: () => Promise<void>) => {
+    setBusy(true); setError(null);
+    try { await work(); } catch (e) { setError(apiMessage(e, 'No se pudo completar la operación.')); } finally { setBusy(false); }
+  };
+  const generate = () => act(async () => { const k = await generateAgentKey(); setFresh(k.key); setStatus({ exists: true, hint: k.hint }); });
+  const revoke = () => act(async () => { await revokeAgentKey(); setFresh(null); setStatus({ exists: false }); });
+  return <section className="agents-help" aria-label="Ayuda"><h2>Configuración de una sola vez</h2>
+    <ol>
+      <li><strong>Clave de agentes.</strong> Identifica a tus agentes cuando reportan una corrida; no lee ni escribe nada más.
+        <div className="agents-edit-actions">
+          <button className="agents-primary" onClick={generate} disabled={busy}>{status?.exists ? 'Regenerar clave' : 'Generar clave'}</button>
+          {status?.exists && <button className="agents-text-button" onClick={revoke} disabled={busy}>Revocar</button>}
+        </div>
+        {fresh && <p role="status"><code>{fresh}</code><button className="agents-text-button" onClick={() => navigator.clipboard?.writeText(fresh)}><Copy size={14} />Copiar</button><small>Se ve una sola vez: copiala ahora.</small></p>}
+        {!fresh && status?.exists && <p>Clave activa …{status.hint}</p>}
+      </li>
+      <li><strong>Entorno en claude.ai.</strong> Creá un entorno propio con {API_HOST ? <code>{API_HOST}</code> : 'el dominio de la API'} entre los dominios permitidos y estas variables: <code>GALECORE_BASE_URL</code>, <code>GALECORE_ALLOWED_BASE_URL</code>, <code>GALECORE_API_KEY</code> y <code>GALECORE_AGENT_KEY</code> (la clave del paso 1).</li>
+      <li><strong>Link para el Lab.</strong> Pegale al Lab el link de ese entorno la primera vez que te lo pida.</li>
+    </ol>
+    {error && <p className="agents-error" role="alert">{error}</p>}
+  </section>;
 }
 
 export function Agentes() {
@@ -299,7 +444,8 @@ export function Agentes() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [draft, setDraft] = useState<{ kind: string; objective: string } | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [help, setHelp] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -324,10 +470,15 @@ export function Agentes() {
     .sort((x, y) => (x.a.status === y.a.status ? x.a.id.localeCompare(y.a.id) : x.a.status === 'active' ? -1 : 1));
   const current = agents.find((x) => x.item.key === selected);
 
-  const create = async (c: NewAgent) => {
+  const create = async (c: NewCloudAgentData) => {
     try {
-      const content = { id: c.id, capability: c.kind, status: 'paused', schedule: '', objective: c.objective, state: 'PENDING', runs: 0, request: { create: c, at: new Date().toISOString() } };
-      await saveSpaceItem('agent', c.id, { title: c.id, format: 'json', visibility: 'private', content: JSON.stringify(content) });
+      const at = new Date().toISOString();
+      const content = {
+        id: c.name, runs_on: 'cloud', capability: 'routine', status: 'pending', objective: c.objective, schedule_spec: c.schedule_spec,
+        schedule: specText(c.schedule_spec), model: 'claude-sonnet-5', trigger_id: null, routine_url: null, created_at: at,
+        request: { create: { id: c.name, objective: c.objective, schedule_spec: c.schedule_spec }, at },
+      };
+      await saveSpaceItem('agent', slug(c.name), { title: c.name, format: 'json', visibility: 'private', content: JSON.stringify(content) });
       await load();
       return true;
     } catch {
@@ -356,26 +507,30 @@ export function Agentes() {
 
   return <div className="agents-page">
     {error && <div className="agents-error" role="alert">{error}<button className="agents-text-button" onClick={load}>Reintentar</button></div>}
-    {current ? <AgentDetail key={current.item.key} a={current.a} title={taskTitle(current.a, current.item.title)}
+    {current && isCloud(current.a) ? <CloudDetail key={current.item.key} a={current.a} item={current.item} title={taskTitle(current.a, current.item.title)}
+      busy={busy === current.item.key} onChange={change => request(current.item, current.a, change)} onBack={() => setSelected(null)} />
+      : current ? <AgentDetail key={current.item.key} a={current.a} title={taskTitle(current.a, current.item.title)}
       publishedAt={current.item.updatedAt} busy={busy === current.item.key} onRequest={status => request(current.item, current.a, { status })} onSave={settings => request(current.item, current.a, { settings })} onBack={() => setSelected(null)} /> : <>
       <div className="strategy-list-heading"><h1 className="strategy-list-title">Agentes</h1>
-        <div className="agents-actions"><button className="agents-text-button agents-new" onClick={() => setDraft({ kind: 'scheduled_report', objective: '' })}><Plus size={16} />Nueva tarea</button>
+        <div className="agents-actions"><button className="agents-text-button" aria-expanded={help} onClick={() => setHelp(h => !h)}><HelpCircle size={16} />Ayuda</button>
+          <button className="agents-text-button agents-new" onClick={() => setCreating(true)}><Plus size={16} />Nuevo agente</button>
           </div></div>
+      {help && <Help />}
       <>
-        {items === null && !error && <p className="agents-empty" role="status">Cargando tareas…</p>}
-        {items !== null && agents.length === 0 && <div className="agents-empty-state"><h2>Todavía no tenés tareas programadas</h2><p>Creá una tarea con tus instrucciones; podés partir de una plantilla.</p><button className="agents-text-button" onClick={() => setDraft({ kind: 'scheduled_report', objective: '' })}>Nueva tarea <ChevronRight size={15} /></button></div>}
+        {items === null && !error && <p className="agents-empty" role="status">Cargando agentes…</p>}
+        {items !== null && agents.length === 0 && <div className="agents-empty-state"><h2>Todavía no tenés agentes</h2><p>Un agente hace una tarea tuya a su hora, sin que tengas nada abierto.</p><button className="agents-text-button" onClick={() => setCreating(true)}>Nuevo agente <ChevronRight size={15} /></button></div>}
         {agents.length > 0 && <div className="performance-table strategy-list agents-table"><table>
           <thead><tr><th>Agente</th><th>Qué hace</th><th>Cuándo</th><th>Última corrida</th><th>Estado</th></tr></thead>
           <tbody>{agents.map(({ item, a }) => <tr className="strategy-row" key={item.key} onClick={() => setSelected(item.key)}>
             <td className="strategy-name"><button onClick={e => { e.stopPropagation(); setSelected(item.key); }}>{taskTitle(a, item.title)}</button></td>
             <td title={a.objective || undefined}><span className="agents-clip agents-what">{a.objective || WHAT[a.capability] || ''}</span></td>
             <td title={scheduleText(a.schedule)}><span className="agents-clip">{scheduleText(a.schedule)}</span></td>
-            <td className={a.last_run?.failed ? 'agents-failed' : undefined}>{silent(a) ? 'Sin noticias de tu PC' : a.last_run ? `${when(a.last_run.at)}${a.last_run.failed ? ' · no se completó' : ''}` : 'Todavía no corrió'}{a.request_error && <span className="agents-failed"> · no se aplicó el cambio</span>}</td>
+            <td className={a.last_run?.failed ? 'agents-failed' : undefined}>{isCloud(a) ? (a.request?.create ? 'Creando…' : '—') : silent(a) ? 'Sin noticias de tu PC' : a.last_run ? `${when(a.last_run.at)}${a.last_run.failed ? ' · no se completó' : ''}` : 'Todavía no corrió'}{a.request_error && <span className="agents-failed"> · no se aplicó el cambio</span>}</td>
             <td onClick={e => e.stopPropagation()}><Toggle a={a} busy={busy === item.key} onRequest={status => request(item, a, { status })} /></td>
           </tr>)}</tbody>
         </table></div>}
       </>
     </>}
-    {draft !== null && <NewAgentForm initial={draft} existing={(items ?? []).map(i => i.key)} onCreate={create} onClose={() => setDraft(null)} />}
+    {creating && <NewCloudAgent existing={(items ?? []).map(i => i.key)} onCreate={create} onClose={() => setCreating(false)} />}
   </div>;
 }

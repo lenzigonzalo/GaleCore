@@ -107,6 +107,7 @@ def test_new_then_body_then_applied_registers_the_routine(galecore, lab):  # noq
     created = ac.body(client, "resumen-diario", NOV)
     assert created["action"] == "create" and "trigger_id" not in created
     assert created["body"]["job_config"]["ccr"]["environment_id"] == "env_019kKR4kEzW7JcDZJA7LHMAM"
+    assert "agent report resumen-diario --status" in created["body"]["job_config"]["ccr"]["events"][0]["data"]["message"]["content"]
     done = ac.applied(client, "resumen-diario", "trig_1", "https://claude.ai/code/routines/trig_1")
     assert done["status"] == "active"
     p = piece_of(fake)
