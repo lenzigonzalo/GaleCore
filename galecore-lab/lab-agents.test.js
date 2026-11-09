@@ -42,6 +42,7 @@ test('con pendientes lanza Claude sin chat con la skill y sólo RemoteTrigger y 
   assert.equal(args[0], '-p');
   assert.match(args[1], /SKILL agentes-nube/);
   assert.match(args[1], /resumen-diario/);
+  assert.equal(args[1][0] !== '-', true, 'el argumento que sigue a -p no debe empezar con -');
   assert.deepEqual(args.slice(2), ['--model', 'haiku', '--allowedTools', 'RemoteTrigger', 'Bash(python -m galecore_ai.adapters.cli agent:*)', 'PowerShell(python -m galecore_ai.adapters.cli agent:*)']);
 });
 

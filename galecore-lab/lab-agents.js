@@ -30,7 +30,7 @@ function createAgents({ root, environment, binary, execute = execFile, spawnProc
   }
   const prompt = items => {
     const skill = fs.readFileSync(path.join(root, 'galecore-lab', 'skills', 'agentes-nube', 'SKILL.md'), 'utf8');
-    return skill + '\n\nAplicá ahora la entrada 2 (aplicar pendientes) a estos agentes, uno por uno: ' + items.map(i => i.key).join(', ') + '.';
+    return 'Seguí esta skill para aplicar los agentes en la nube pendientes.\n\n' + skill + '\n\nAplicá ahora la entrada 2 (aplicar pendientes) a estos agentes, uno por uno: ' + items.map(i => i.key).join(', ') + '.';
   };
   // 'idle' (nada para aplicar), 'busy' (ya hay una aplicación o no hay motor Claude), 'done' o 'failed' (el proceso salió con error o se pasó de tiempo).
   async function applyOnce() {
