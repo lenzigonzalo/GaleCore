@@ -49,8 +49,19 @@ test('Precio envía al gráfico los avisos activos y distingue precio 700 de pis
   expect(levels.find((x: any) => x.id === 'puts').label).toBe('Aviso Piso de puts ≤ 700');
   expect(screen.queryByRole('button', { name: 'Borrar aviso ≤ 750' })).not.toBeInTheDocument();
 });
+test('Gamma también recibe los avisos (BF-0007)', async () => {
+  (fetchSpace as jest.Mock).mockResolvedValue({ items: [{ kind: 'agent', key: 'supervisor', content: JSON.stringify({
+    watches: [{ id: '715', symbol: 'SPY', metric: 'price', condition: 'below', threshold: 715 }],
+  }) }] });
+  render(<Gex {...props} indicator="gamma"/>);
+  expect(screen.getByTestId('chart')).toHaveTextContent('Gamma combinado');
+  await waitFor(() => expect(JSON.parse(screen.getByTestId('chart').getAttribute('data-alert-levels')!))
+    .toEqual([{ id: '715', price: 715, label: 'Aviso ≤ 715' }]));
+});
 test('separa indicadores conservando símbolo y scope elegido', () => {
   render(<Gex {...props}/>);
+  expect(screen.getByTestId('chart')).toHaveTextContent('SPY · Velas de precio');  // BF-0007: abre en Precio
+  fireEvent.click(screen.getByRole('button',{name:'Gamma'}));
   expect(screen.getByTestId('chart')).toHaveTextContent('SPY · Gamma combinado');
   fireEvent.click(screen.getByRole('button',{name:'Toda la cadena'}));
   fireEvent.click(screen.getByRole('button',{name:'Precio'}));
@@ -72,9 +83,9 @@ test('si el vencimiento elegido ya no está en la cadena pasa al más cercano', 
 test('Precio sigue disponible con barrido OFF y no inicia un barrido', () => {
   mockEnabled=false;
   render(<Gex {...props}/>);
-  expect(screen.queryByTestId('chart')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Precio'}));
   expect(screen.getByTestId('chart')).toHaveTextContent('Velas de precio');
+  fireEvent.click(screen.getByRole('button',{name:'Gamma'}));
+  expect(screen.queryByTestId('chart')).not.toBeInTheDocument();
   expect(useGexStore.getState().fetchGex).not.toHaveBeenCalled();
 });
 test('la variación y el volumen del día salen de la API; sin ellos no se inventan y el error se conserva', async () => {
