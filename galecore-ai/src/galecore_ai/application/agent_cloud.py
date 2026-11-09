@@ -11,11 +11,12 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 from datetime import UTC, date, datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from galecore_ai.adapters.galecore_space import SpaceClient
+from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
 from galecore_ai.adapters.knowledge_base import PRODUCT_ROOT
 from galecore_ai.application import space
 from galecore_ai.contracts.task import WEEKDAYS, Schedule
@@ -39,11 +40,27 @@ def lab_local() -> Path:
     return Path(var).resolve() if var else PRODUCT_ROOT / "galecore-lab" / ".local"
 
 
-def environment_id() -> str:
+def _config() -> dict:
     try:
-        env = json.loads((lab_local() / "agents.json").read_text(encoding="utf-8")).get("environment_id")
-    except (OSError, ValueError, AttributeError):
-        env = None
+        data = json.loads((lab_local() / "agents.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _save_config(data: dict) -> None:
+    folder = lab_local()
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / "agents.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+
+
+def environment_id() -> str:
+    env = _config().get("environment_id")
     if not isinstance(env, str) or not ENV_ID.fullmatch(env):
         raise AgentCloudError(NO_ENVIRONMENT)
     return env
@@ -54,10 +71,43 @@ def set_environment(text: str) -> str:
     found = ENV_ID.search(text or "")
     if not found:
         raise AgentCloudError("No encontré el id del entorno (empieza con env_) en lo que pegaste.")
-    folder = lab_local()
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / "agents.json").write_text(json.dumps({"environment_id": found.group(0)}), encoding="utf-8")
+    _save_config({**_config(), "environment_id": found.group(0)})
     return found.group(0)
+
+
+def routine_variables(client: SpaceClient, key: str | None = None) -> tuple[dict[str, str], bool]:
+    """The four variables the routine's instruction exports, and whether the agent key was just generated.
+
+    The first three come from the environment of this process (the Lab has them pointing at production); the agent
+    key is the one saved in the Lab's config, generated here if missing. Generating one invalidates the previous: the
+    other cloud routines get an update request so the Lab rewrites their instruction with the new key. Never printed."""
+    env = {n: os.environ.get(n, "").strip() for n in ("GALECORE_BASE_URL", "GALECORE_ALLOWED_BASE_URL", "GALECORE_API_KEY")}
+    for name, value in env.items():
+        if not value:
+            raise AgentCloudError(f"Falta {name} en el entorno del Lab: arrancalo con start-lab.ps1 (apunta a producción).")
+    config = _config()
+    secret = config.get("agent_key")
+    fresh = not isinstance(secret, str) or not secret.strip()
+    if fresh:
+        try:
+            secret = client.agent_key_generate()
+        except SpaceError as exc:
+            raise AgentCloudError(f"No pude generar la clave de los agentes: {str(exc)[:200]}") from exc
+        _save_config({**config, "agent_key": secret})
+        _ask_update(client, except_key=key)
+    return {**env, "GALECORE_AGENT_KEY": secret}, fresh
+
+
+def _ask_update(client: SpaceClient, except_key: str | None = None, only_key: str | None = None) -> None:
+    """Leave an (empty) settings request in the created cloud pieces so `body` rewrites their routine."""
+    for item, content in space._agent_items(client, cloud=True):
+        if item["key"] == except_key or (only_key and item["key"] != only_key) or not content.get("trigger_id"):
+            continue
+        req = content.get("request") if isinstance(content.get("request"), dict) else {}
+        piece = {**content, "request": {**req, "settings": req.get("settings") or {},
+                                        "at": req.get("at") or datetime.now(UTC).isoformat()}}
+        client.put("agent", item["key"], title=item["title"], content=json.dumps(piece, ensure_ascii=False), fmt="json",
+                   visibility=item.get("visibility", "private"))
 
 
 def cron_utc(schedule: Schedule, today: date | None = None) -> str:
@@ -78,7 +128,12 @@ def cron_utc(schedule: Schedule, today: date | None = None) -> str:
     return f"{utc.minute} {utc.hour} * * {dow}"
 
 
-def instruction(piece: dict) -> str:
+def _asked(req: dict, name: str) -> bool:
+    """A request key is asked when it is present, even as an empty `settings` ("rewrite the routine")."""
+    return req.get(name) not in (None, False)
+
+
+def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
     key = piece.get("key") or space._slug(str(piece["id"]))     # the piece's key is what the API validates
     data = ("con GaleCore como fuente de datos (`python3 -m galecore_ai.adapters.cli galecore list` dice qué hay y "
             "`galecore get <capacidad>` lo trae). No inventes ni redondees números: si un dato no está en GaleCore, decilo.")
@@ -86,10 +141,14 @@ def instruction(piece: dict) -> str:
              "fuente) en `resumen.md` con `cat > resumen.md <<'EOF'` y corré:")
     status = ("(`ok` si terminó, `error` si falló y por qué, `skipped` si no había nada para hacer). Si el mensaje de "
               "inicio trae el trigger_id y la hora del disparo, agregá `--trigger-id <id> --fired-at <hora ISO>`.")
+    exports = "".join(f"export {n}={shlex.quote(v)}; " for n, v in (variables or {}).items())
+    step1 = ("1. Instalá el harness: `" + exports + "cd galecore-ai && python3 -m pip install -q -e .` (desde la raíz del repo)."
+             + (" Esas variables valen para los pasos siguientes (consultas a GaleCore y `agent report`): si un comando "
+                "no las ve, volvé a exportarlas antes de correrlo." if variables else ""))
     return "\n".join([
         "Sos un agente de GaleCore que corre solo en la nube. Seguí estos pasos en orden.",
         "",
-        "1. Instalá el harness: `cd galecore-ai && python3 -m pip install -q -e .` (desde la raíz del repo).",
+        step1,
         f"2. Hacé esta tarea del usuario, {data}",
         "",
         f"Tarea: {str(piece.get('objective', '')).strip()}",
@@ -100,7 +159,8 @@ def instruction(piece: dict) -> str:
     ])
 
 
-def routine_body(piece: dict, environment_id: str, today: date | None = None) -> dict:
+def routine_body(piece: dict, environment_id: str, today: date | None = None,
+                 variables: dict[str, str] | None = None) -> dict:
     """The `body` of a RemoteTrigger create / update for this agent piece; deterministic."""
     schedule = Schedule.model_validate(piece.get("schedule_spec") or {})
     return {
@@ -109,7 +169,7 @@ def routine_body(piece: dict, environment_id: str, today: date | None = None) ->
         "enabled": piece.get("status") != "paused",
         "job_config": {"ccr": {
             "environment_id": environment_id,
-            "events": [{"data": {"type": "user", "role": "user", "message": {"role": "user", "content": instruction(piece)}}}],
+            "events": [{"data": {"type": "user", "role": "user", "message": {"role": "user", "content": instruction(piece, variables)}}}],
             "session_context": {
                 "allowed_tools": ALLOWED_TOOLS,
                 "model": piece.get("model") or DEFAULT_MODEL,
@@ -144,10 +204,10 @@ def _find(client: SpaceClient, key: str) -> tuple[dict, dict]:
 
 def pending(client: SpaceClient) -> list[dict]:
     """The cloud pieces with a request nobody applied yet."""
-    return [{"key": item["key"], "name": c.get("id"), "requests": [k for k in REQUEST_KEYS if c["request"].get(k)],
+    return [{"key": item["key"], "name": c.get("id"), "requests": [k for k in REQUEST_KEYS if _asked(c["request"], k)],
              "at": c["request"].get("at")}
             for item, c in space._agent_items(client, cloud=True)
-            if isinstance(c.get("request"), dict) and any(c["request"].get(k) for k in REQUEST_KEYS)]
+            if isinstance(c.get("request"), dict) and any(_asked(c["request"], k) for k in REQUEST_KEYS)]
 
 
 def body(client: SpaceClient, key: str, today: date | None = None) -> dict:
@@ -159,14 +219,20 @@ def body(client: SpaceClient, key: str, today: date | None = None) -> dict:
         if not trigger_id:
             raise AgentCloudError("La rutina todavía no se creó: no hay nada para pausar.")
         return {"action": "update", "trigger_id": trigger_id, "body": {"enabled": False}}
-    changes = any(req.get(k) for k in ("create", "settings", "status"))
+    changes = any(_asked(req, k) for k in ("create", "settings", "status"))
     if req.get("run") and not changes:
         if not trigger_id:
             raise AgentCloudError("La rutina todavía no se creó: no hay nada para ejecutar.")
-        return {"action": "run", "trigger_id": trigger_id}
+        _, fresh = routine_variables(client, key)
+        if not fresh:
+            return {"action": "run", "trigger_id": trigger_id}
+        _ask_update(client, only_key=key)        # a new key: this routine is rewritten first and runs on the next pass
+        return body(client, key, today)
+    env_id = environment_id()
+    variables, _ = routine_variables(client, key)
     piece = effective(content) | {"key": key}
     try:
-        routine = routine_body(piece, environment_id(), today)
+        routine = routine_body(piece, env_id, today, variables)
     except ValueError as exc:
         raise AgentCloudError(f"El agente tiene datos inválidos: {str(exc)[:200]}") from exc
     return {"action": "update", "trigger_id": trigger_id, "body": routine} if trigger_id else {"action": "create", "body": routine}
@@ -194,7 +260,7 @@ def applied(client: SpaceClient, key: str, trigger_id: str | None = None, url: s
         for k, v in (("trigger_id", trigger_id), ("routine_url", url)):
             if v:
                 piece[k] = v
-        if req.get("run") and any(req.get(k) for k in ("create", "settings", "status")):
+        if req.get("run") and any(_asked(req, k) for k in ("create", "settings", "status")):
             piece["request"] = {"run": True, "at": req.get("at")}     # the run was asked too: the next pass runs it
     out = space.sync(client, [{"kind": "agent", "key": key, "title": item["title"], "format": "json",
                                "visibility": item.get("visibility", "private"),

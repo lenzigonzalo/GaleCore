@@ -28,6 +28,9 @@ def piece_of(fake, key="resumen-diario"):
 @pytest.fixture
 def lab(monkeypatch, tmp_path):
     monkeypatch.setenv("GALECORE_LAB_LOCAL", str(tmp_path))
+    monkeypatch.setenv("GALECORE_BASE_URL", "https://api.galecore.test")
+    monkeypatch.setenv("GALECORE_ALLOWED_BASE_URL", "https://api.galecore.test")
+    monkeypatch.setenv("GALECORE_API_KEY", "svc-key")
     return tmp_path
 
 
@@ -173,6 +176,7 @@ def test_a_run_asked_with_a_change_is_kept_for_the_next_pass(galecore, lab):  # 
     client.put("agent", "resumen-diario", title="x", fmt="json", content=json.dumps(
         {**piece_of(fake), "request": {"status": "paused", "run": True, "at": at}}))
     ac.applied(client, "resumen-diario")
+    ac._save_config({**ac._config(), "agent_key": "gca_old"})
     p = piece_of(fake)
     assert p["status"] == "paused" and p["request"] == {"run": True, "at": at}
     assert ac.body(client, "resumen-diario") == {"action": "run", "trigger_id": "trig_1"}
@@ -227,3 +231,69 @@ def test_environment_is_read_from_the_lab_config(lab, monkeypatch, capsys):
     assert ac.environment_id() == "env_01ABC9" and (lab / "agents.json").is_file()
     with pytest.raises(ac.AgentCloudError, match="No encontré"):
         ac.set_environment("sin id")
+
+
+def routine_text(out):
+    return out["body"]["job_config"]["ccr"]["events"][0]["data"]["message"]["content"]
+
+
+def test_the_instruction_exports_the_four_variables_and_generates_the_agent_key_once(galecore, lab):  # noqa: F811
+    fake, client = galecore
+    configured(lab)
+    ac.new(client, "Resumen diario", "Resumí SPY", DAILY)
+    text = routine_text(ac.body(client, "resumen-diario", NOV))
+    step1 = text.splitlines()[2]
+    for line in ("export GALECORE_BASE_URL=https://api.galecore.test;", "export GALECORE_ALLOWED_BASE_URL=https://api.galecore.test;",
+                 "export GALECORE_API_KEY=svc-key;", "export GALECORE_AGENT_KEY=gca_key1;"):
+        assert line in step1
+    assert step1.index("export") < step1.index("cd galecore-ai") and text.index("export") < text.index("agent report")
+    cfg = json.loads((lab / "agents.json").read_text(encoding="utf-8"))
+    assert cfg == {"environment_id": "env_019kKR4kEzW7JcDZJA7LHMAM", "agent_key": "gca_key1"}
+    assert "gca_key1" in routine_text(ac.body(client, "resumen-diario", NOV)) and fake.keys == 1     # reused, not regenerated
+
+
+def test_a_new_agent_key_leaves_the_other_routines_an_update_request(galecore, lab):  # noqa: F811
+    fake, client = galecore
+    configured(lab)
+    for name in ("Uno", "Dos", "Tres"):
+        ac.new(client, name, "x", DAILY)
+    ac.applied(client, "uno", "trig_1", "https://x/1")
+    ac.applied(client, "dos", "trig_2", "https://x/2")          # "tres" was never created: no routine to rewrite
+    assert [p["key"] for p in ac.pending(client)] == ["tres"]
+    ac.body(client, "uno", NOV)                                 # first body: the key is generated
+    assert fake.keys == 1
+    assert [(p["key"], p["requests"]) for p in ac.pending(client)] == [("dos", ["settings"]), ("tres", ["create"])]
+    again = ac.body(client, "dos", NOV)
+    assert again["action"] == "update" and again["trigger_id"] == "trig_2" and "gca_key1" in routine_text(again)
+    ac.applied(client, "dos")
+    assert [p["key"] for p in ac.pending(client)] == ["tres"] and fake.keys == 1
+
+
+def test_a_run_with_a_new_key_rewrites_the_routine_first(galecore, lab):  # noqa: F811
+    fake, client = galecore
+    configured(lab)
+    ac.new(client, "Resumen diario", "x", DAILY)
+    ac.applied(client, "resumen-diario", "trig_1", "https://x/1")
+    client.put("agent", "resumen-diario", title="x", fmt="json", content=json.dumps(
+        {**piece_of(fake), "request": {"run": True, "at": _now()}}))
+    out = ac.body(client, "resumen-diario", NOV)
+    assert out["action"] == "update" and "gca_key1" in routine_text(out)
+    ac.applied(client, "resumen-diario")
+    assert piece_of(fake)["request"]["run"] is True
+    assert ac.body(client, "resumen-diario") == {"action": "run", "trigger_id": "trig_1"}
+
+
+def test_a_missing_variable_is_a_clear_error_and_the_key_is_never_printed(galecore, lab, monkeypatch, capsys):  # noqa: F811
+    fake, client = galecore
+    configured(lab)
+    ac.new(client, "Resumen diario", "x", DAILY)
+    monkeypatch.delenv("GALECORE_BASE_URL")
+    with pytest.raises(ac.AgentCloudError, match="Falta GALECORE_BASE_URL en el entorno del Lab"):
+        ac.body(client, "resumen-diario", NOV)
+    assert fake.keys == 0
+    monkeypatch.setenv("GALECORE_BASE_URL", "https://api.galecore.test")
+    ac.body(client, "resumen-diario", NOV)
+    assert "gca_key1" not in json.dumps(ac.pending(client)) and "gca_key1" not in json.dumps(piece_of(fake))
+    # saving the environment again keeps the key
+    ac.set_environment("env_ZZZ1")
+    assert json.loads((lab / "agents.json").read_text(encoding="utf-8"))["agent_key"] == "gca_key1"
