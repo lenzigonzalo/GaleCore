@@ -348,6 +348,22 @@ public class AgentsTests
     }
 
     [Fact]
+    public async Task UnaRutinaPausadaDaRoutinePausedYNoConsumeElLimite()
+    {
+        var r = NewRig();
+        await r.Svc.SetFireTokenAsync(Ana, Agent, Trigger, Token, default);
+        r.Fire.Result = new FireResult(FireOutcome.Paused);
+
+        var res = await r.Svc.RunAsync(Ana, Agent, null, default);
+
+        Assert.Equal(AgentOutcome.RoutinePaused, res.Outcome);
+        Assert.Equal("la rutina está pausada: activala en claude.ai", res.Error);
+        Assert.Empty(r.Store.Runs);
+        r.Fire.Result = new FireResult(FireOutcome.Ok, "s", "u");
+        Assert.Equal(AgentOutcome.Ok, (await r.Svc.RunAsync(Ana, Agent, null, default)).Outcome);
+    }
+
+    [Fact]
     public async Task OtroErrorDeAnthropicEsUpstreamFailedSinElToken()
     {
         var r = NewRig();
@@ -453,6 +469,32 @@ public class AgentsTests
         Assert.Equal("experimental-cc-routine-2026-04-01", h.Request.Headers.GetValues("anthropic-beta").Single());
         Assert.Equal("2023-06-01", h.Request.Headers.GetValues("anthropic-version").Single());
         Assert.Equal("{\"text\":\"hola\"}", h.RequestBody);
+    }
+
+    [Fact]
+    public async Task ElClienteLeeLaRespuestaRealDeFire()
+    {
+        var h = new CapturingHandler { Body = "{\"type\":\"routine_fire\",\"claude_code_session_id\":\"cse_01U9\",\"claude_code_session_url\":\"https://claude.ai/code/cse_01U9\"}" };
+        var res = await new AnthropicRoutineFireClient(new HandlerFactory(h)).FireAsync(Trigger, Token, null, default);
+        Assert.Equal(FireOutcome.Ok, res.Outcome);
+        Assert.Equal("cse_01U9", res.SessionId);
+        Assert.Equal("https://claude.ai/code/cse_01U9", res.SessionUrl);
+    }
+
+    [Fact]
+    public async Task ElClienteTraduceUn400DeRutinaPausada()
+    {
+        var h = new CapturingHandler { Status = HttpStatusCode.BadRequest, Body = "{\"error\":{\"message\":\"Routine is paused.\",\"reason\":\"routine_paused\",\"type\":\"invalid_request_error\"},\"request_id\":\"req_1\",\"type\":\"error\"}" };
+        var res = await new AnthropicRoutineFireClient(new HandlerFactory(h)).FireAsync(Trigger, Token, null, default);
+        Assert.Equal(FireOutcome.Paused, res.Outcome);
+    }
+
+    [Fact]
+    public async Task ElClienteTraduceElBearerInvalidoReal()
+    {
+        var h = new CapturingHandler { Status = HttpStatusCode.Unauthorized, Body = "{\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"Invalid bearer token\"}}" };
+        var res = await new AnthropicRoutineFireClient(new HandlerFactory(h)).FireAsync(Trigger, Token, null, default);
+        Assert.Equal(FireOutcome.Unauthorized, res.Outcome);
     }
 
     [Theory]

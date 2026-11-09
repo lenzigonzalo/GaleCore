@@ -4,7 +4,7 @@ using System.Text.Json;
 
 namespace DataFeed.Application.App.Agents
 {
-    public enum FireOutcome { Ok, Unauthorized, Failed }
+    public enum FireOutcome { Ok, Unauthorized, Paused, Failed }
 
     /// <summary>Resultado de disparar una rutina. <see cref="Error"/> es corto y nunca lleva el token.</summary>
     public sealed record FireResult(FireOutcome Outcome, string? SessionId = null, string? SessionUrl = null, string? Error = null);
@@ -37,6 +37,8 @@ namespace DataFeed.Application.App.Agents
                 client.Timeout = TimeSpan.FromSeconds(30);
                 using var res = await client.SendAsync(req, ct);
                 if (res.StatusCode == HttpStatusCode.Unauthorized) return new FireResult(FireOutcome.Unauthorized);
+                if (res.StatusCode == HttpStatusCode.BadRequest && IsPaused(await res.Content.ReadAsStringAsync(ct)))
+                    return new FireResult(FireOutcome.Paused);
                 if (!res.IsSuccessStatusCode) return new FireResult(FireOutcome.Failed, Error: $"Anthropic respondió {(int)res.StatusCode}");
 
                 var (id, url) = ParseSession(await res.Content.ReadAsStringAsync(ct));
@@ -52,7 +54,20 @@ namespace DataFeed.Application.App.Agents
             }
         }
 
-        /// <summary>Tolerante: acepta id/session_id y url/session_url, y sigue si el cuerpo no es JSON.</summary>
+        /// <summary>400 con error.reason == "routine_paused".</summary>
+        public static bool IsPaused(string body)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                return doc.RootElement.ValueKind == JsonValueKind.Object
+                    && doc.RootElement.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.Object
+                    && e.TryGetProperty("reason", out var r) && r.ValueKind == JsonValueKind.String && r.GetString() == "routine_paused";
+            }
+            catch (JsonException) { return false; }
+        }
+
+        /// <summary>Lee claude_code_session_id/url (respuesta real de /fire); respaldo: session_id/id y session_url/url, y sigue si el cuerpo no es JSON.</summary>
         public static (string? Id, string? Url) ParseSession(string body)
         {
             try
@@ -66,7 +81,7 @@ namespace DataFeed.Application.App.Agents
                             return v.GetString();
                     return null;
                 }
-                return (Pick("session_id", "id"), Pick("session_url", "url", "link"));
+                return (Pick("claude_code_session_id", "session_id", "id"), Pick("claude_code_session_url", "session_url", "url", "link"));
             }
             catch (JsonException) { return (null, null); }
         }

@@ -5,7 +5,7 @@ using DataFeed.Repositories.Entities;
 
 namespace DataFeed.Application.App.Agents
 {
-    public enum AgentOutcome { Ok, NotFound, Invalid, NoToken, RateLimited, TokenRejected, UpstreamFailed }
+    public enum AgentOutcome { Ok, NotFound, Invalid, NoToken, RateLimited, TokenRejected, RoutinePaused, UpstreamFailed }
 
     /// <summary>Corrida tal como la ve el usuario; <see cref="Status"/> ya trae el estado derivado (<c>no_report</c>).</summary>
     public sealed record AgentRunView(
@@ -217,6 +217,7 @@ namespace DataFeed.Application.App.Agents
 
             var res = await _fire.FireAsync(t.TriggerId, token, text, ct);
             if (res.Outcome == FireOutcome.Unauthorized) return new(AgentOutcome.TokenRejected, Error: TokenRejectedMessage);
+            if (res.Outcome == FireOutcome.Paused) return new(AgentOutcome.RoutinePaused, Error: "la rutina está pausada: activala en claude.ai");
             if (res.Outcome != FireOutcome.Ok)
                 return new(AgentOutcome.UpstreamFailed, Error: "no se pudo ejecutar la rutina: " + (res.Error ?? "Anthropic no respondió bien"));
 

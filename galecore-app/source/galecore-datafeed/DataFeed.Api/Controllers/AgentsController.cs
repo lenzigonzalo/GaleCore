@@ -77,6 +77,7 @@ namespace DataFeed.Controllers
             AgentOutcome.Invalid => BadRequest(new ApiErrorResponse { Error = r.Error ?? "Pedido inválido.", Code = "invalid_request" }),
             AgentOutcome.NoToken => Conflict(new ApiErrorResponse { Error = r.Error ?? "", Code = "no_fire_token" }),
             AgentOutcome.RateLimited => RateLimited(r),
+            AgentOutcome.RoutinePaused => Conflict(new ApiErrorResponse { Error = r.Error ?? "", Code = "routine_paused" }),
             AgentOutcome.TokenRejected => StatusCode(502, new ApiErrorResponse { Error = r.Error ?? "", Code = "fire_token_rejected" }),
             _ => StatusCode(502, new ApiErrorResponse { Error = r.Error ?? "", Code = "fire_failed" }),
         };
