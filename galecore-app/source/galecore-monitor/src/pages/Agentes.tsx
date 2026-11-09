@@ -3,7 +3,7 @@ import { Pencil, Save, ArrowLeft, Bot, Check, ChevronDown, ChevronRight, Clock3,
 import '../components/shadow/PerformancePanel.css';
 import './Agentes.css';
 import { Markdown } from '../components/settings/Markdown';
-import { fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
+import { deleteSpaceItem, fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
 import {
   AgentKeyStatus, AgentRun, FireTokenStatus, apiMessage, deleteFireToken, fetchAgentKey, fetchFireToken, fetchRuns, generateAgentKey,
   revokeAgentKey, runAgent, saveFireToken,
@@ -37,7 +37,7 @@ interface ScheduleSpec { frequency: string; time?: string; days?: string[]; minu
 interface NewCloudAgentData { name: string; objective: string; schedule_spec: ScheduleSpec }
 
 interface AgentSettingsChange { objective?: string; model?: string | null; schedule?: ScheduleSpec; schedule_spec?: ScheduleSpec; tools?: string[] | null; delivery?: string[] }
-interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: { id: string; objective: string; schedule_spec: ScheduleSpec }; run?: boolean; at?: string }
+interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: { id: string; objective: string; schedule_spec: ScheduleSpec }; run?: boolean; delete?: boolean; at?: string }
 
 const REFRESH_MS = 60_000;
 
@@ -360,9 +360,22 @@ function FireTokenSection({ agentKey, a, token, onChange }: { agentKey: string; 
   </section>;
 }
 
-function CloudDetail({ a, item, title, onChange, busy, onBack }: {
-  a: Agent; item: SpaceItem; title: string; onChange: (r: AgentRequest) => Promise<boolean>; busy: boolean; onBack: () => void;
+/** Confirmación de borrado: un diálogo propio de la página (como «Nuevo agente»). */
+function ConfirmDelete({ title, onConfirm, onClose }: { title: string; onConfirm: () => Promise<void>; onClose: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const cancelRef = React.useRef<HTMLButtonElement>(null);
+  useEffect(() => { cancelRef.current?.focus(); }, []);
+  return <div className="agents-modal-backdrop" onClick={onClose}><div className="agents-modal" role="dialog" aria-modal="true" aria-labelledby="agent-delete-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+    <div className="agents-modal-title"><h2 id="agent-delete-title">Borrar «{title}»</h2><button aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
+    <p>Se pausa la rutina en claude.ai y el agente sale de la lista. La rutina pausada se puede borrar desde claude.ai.</p>
+    <div className="agents-edit-actions"><button className="agents-primary" disabled={saving} onClick={() => { setSaving(true); void onConfirm().finally(() => { setSaving(false); onClose(); }); }}><Trash2 size={14} />Borrar</button><button ref={cancelRef} className="agents-text-button" onClick={onClose}>Cancelar</button></div>
+  </div></div>;
+}
+
+function CloudDetail({ a, item, title, onChange, onDelete, busy, onBack }: {
+  a: Agent; item: SpaceItem; title: string; onChange: (r: AgentRequest) => Promise<boolean>; onDelete: () => Promise<void>; busy: boolean; onBack: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
   const [runs, setRuns] = useState<AgentRun[] | null>(null);
   const [runsError, setRunsError] = useState<string | null>(null);
   const [token, setToken] = useState<FireTokenStatus | null>(null);
@@ -396,14 +409,15 @@ function CloudDetail({ a, item, title, onChange, busy, onBack }: {
   return <>
     <div className="agents-breadcrumb"><button onClick={onBack}><ArrowLeft size={15} />Agentes</button><span>/</span><span>{title}</span></div>
     <header className="agents-detail-heading"><div><h1>{title}</h1><p>{scheduleText(a.schedule)}</p></div>
-      <div className="agents-actions"><button className="agents-primary" onClick={run} disabled={!ready || starting || busy}><Play size={14} />Ejecutar</button><Toggle a={a} busy={busy} onRequest={status => { void onChange({ status }); }} /></div></header>
-    {a.request && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
+      <div className="agents-actions"><button className="agents-primary" onClick={run} disabled={!ready || starting || busy}><Play size={14} />Ejecutar</button><Toggle a={a} busy={busy} onRequest={status => { void onChange({ status }); }} />{!a.request?.delete && <button className="agents-text-button" disabled={busy} onClick={() => setConfirming(true)}><Trash2 size={14} />Borrar</button>}</div></header>
+    {a.request?.delete ? <p className="agents-notice" role="status">Borrando… (se aplica con el Lab abierto)</p> : a.request && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
     {a.request_error && <p className="agents-error" role="alert">No se pudo aplicar: {a.request_error}</p>}
     {notice && <p className={notice.error ? 'agents-error' : 'agents-notice'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
     <div className="agents-detail-grid"><CloudRuns runs={runs} error={runsError} /><aside className="agents-settings">
       <CloudSettings a={a} busy={busy} onSave={settings => onChange({ settings })} />
       <FireTokenSection agentKey={item.key} a={a} token={token} onChange={loadToken} />
     </aside></div>
+    {confirming && <ConfirmDelete title={title} onConfirm={onDelete} onClose={() => setConfirming(false)} />}
   </>;
 }
 
@@ -556,10 +570,22 @@ export function Agentes() {
     }
   };
 
+  const remove = async (item: SpaceItem, a: Agent) => {
+    if (a.trigger_id) { await request(item, a, { delete: true }); return; }
+    setBusy(item.key);
+    try {
+      await deleteSpaceItem('agent', item.key);
+      setSelected(null);
+      await load();
+    } catch {
+      setError('No se pudo borrar el agente. Probá de nuevo.');
+    } finally { setBusy(null); }
+  };
+
   return <div className="agents-page">
     {error && <div className="agents-error" role="alert">{error}<button className="agents-text-button" onClick={load}>Reintentar</button></div>}
     {current && isCloud(current.a) ? <CloudDetail key={current.item.key} a={current.a} item={current.item} title={taskTitle(current.a, current.item.title)}
-      busy={busy === current.item.key} onChange={change => request(current.item, current.a, change)} onBack={() => setSelected(null)} />
+      busy={busy === current.item.key} onChange={change => request(current.item, current.a, change)} onDelete={() => remove(current.item, current.a)} onBack={() => setSelected(null)} />
       : current ? <AgentDetail key={current.item.key} a={current.a} title={taskTitle(current.a, current.item.title)}
       publishedAt={current.item.updatedAt} busy={busy === current.item.key} onRequest={status => request(current.item, current.a, { status })} onSave={settings => request(current.item, current.a, { settings })} onBack={() => setSelected(null)} /> : <>
       <div className="strategy-list-heading"><h1 className="strategy-list-title">Agentes</h1>

@@ -146,6 +146,24 @@ def test_settings_pause_and_run_requests(galecore, lab):  # noqa: F811
     assert "request" not in piece_of(fake)
 
 
+def test_delete_pauses_the_routine_and_then_removes_the_piece(galecore, lab):  # noqa: F811
+    fake, client = galecore
+    configured(lab)
+    ac.new(client, "Resumen diario", "Resumí SPY", DAILY)
+    client.put("agent", "resumen-diario", title="Resumen diario", fmt="json",
+               content=json.dumps({**piece_of(fake), "request": {"delete": True, "at": _now()}}))
+    assert ac.pending(client)[0]["requests"] == ["delete"]
+    with pytest.raises(ac.AgentCloudError):                              # never created: nothing to pause
+        ac.body(client, "resumen-diario", NOV)
+    ac.applied(client, "resumen-diario", "trig_1", "https://x/trig_1", error="falló")
+    assert piece_of(fake)["request_error"] == "falló" and ("agent", "resumen-diario") in fake.rows
+    client.put("agent", "resumen-diario", title="Resumen diario", fmt="json",
+               content=json.dumps({**piece_of(fake), "trigger_id": "trig_1", "request": {"delete": True, "at": _now()}}))
+    assert ac.body(client, "resumen-diario", NOV) == {"action": "update", "trigger_id": "trig_1", "body": {"enabled": False}}
+    out = ac.applied(client, "resumen-diario")
+    assert out["deleted"] is True and ("agent", "resumen-diario") not in fake.rows
+
+
 def test_a_run_asked_with_a_change_is_kept_for_the_next_pass(galecore, lab):  # noqa: F811
     fake, client = galecore
     configured(lab)

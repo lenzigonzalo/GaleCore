@@ -1,10 +1,10 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Agentes } from './Agentes';
-import { fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
+import { deleteSpaceItem, fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
 import * as agentsApi from '../api/agents';
 
-jest.mock('../api/space', () => ({ fetchSpace: jest.fn(), saveSpaceItem: jest.fn() }));
+jest.mock('../api/space', () => ({ fetchSpace: jest.fn(), saveSpaceItem: jest.fn(), deleteSpaceItem: jest.fn() }));
 jest.mock('../api/agents', () => ({
   ...jest.requireActual('../api/agents'),
   fetchRuns: jest.fn(), fetchFireToken: jest.fn(), saveFireToken: jest.fn(), deleteFireToken: jest.fn(), runAgent: jest.fn(),
@@ -372,4 +372,29 @@ test('las tareas de la PC siguen en la lista junto a los agentes en la nube', as
   render(<Agentes />);
   expect(await screen.findByRole('button', { name: /Mi vigilancia de SPY/ })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Resumen diario' })).toBeInTheDocument();
+});
+
+test('borrar un agente con rutina pide confirmación y escribe request.delete', async () => {
+  await openCloud();
+  fireEvent.click(screen.getByRole('button', { name: 'Borrar' }));
+  expect(screen.getByRole('dialog')).toHaveTextContent('Se pausa la rutina en claude.ai y el agente sale de la lista.');
+  expect(saveSpaceItem).not.toHaveBeenCalled();
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Borrar' }));
+  await waitFor(() => expect(saveSpaceItem).toHaveBeenCalledTimes(1));
+  expect(JSON.parse((saveSpaceItem as jest.Mock).mock.calls[0][2].content).request).toMatchObject({ delete: true });
+  expect(deleteSpaceItem).not.toHaveBeenCalled();
+});
+
+test('borrar un agente sin rutina borra la pieza directo y con delete pedido muestra Borrando', async () => {
+  await openCloud({ ...cloud, status: 'pending', trigger_id: null, routine_url: null });
+  fireEvent.click(screen.getByRole('button', { name: 'Borrar' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Borrar' }));
+  await waitFor(() => expect(deleteSpaceItem).toHaveBeenCalledWith('agent', 'resumen-diario'));
+  expect(saveSpaceItem).not.toHaveBeenCalled();
+});
+
+test('con el borrado pedido se avisa y no se ofrece Borrar', async () => {
+  await openCloud({ ...cloud, request: { delete: true, at: '2026-11-09T13:00:00Z' } });
+  expect(screen.getByRole('status')).toHaveTextContent('Borrando… (se aplica con el Lab abierto)');
+  expect(screen.queryByRole('button', { name: 'Borrar' })).toBeNull();
 });
