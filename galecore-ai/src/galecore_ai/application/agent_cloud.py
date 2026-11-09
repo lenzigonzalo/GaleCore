@@ -135,16 +135,24 @@ def _asked(req: dict, name: str) -> bool:
 
 def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
     key = piece.get("key") or space._slug(str(piece["id"]))     # the piece's key is what the API validates
-    data = ("con GaleCore como fuente de datos (`python3 -m galecore_ai.adapters.cli galecore list` dice qué hay y "
-            "`galecore get <capacidad>` lo trae). No inventes ni redondees números: si un dato no está en GaleCore, decilo.")
+    src = "source ~/.galecore.env && " if variables else ""      # the shell does not persist between Bash calls
+    data = (f"con GaleCore como fuente de datos (`{src}python3 -m galecore_ai.adapters.cli galecore list` dice qué hay y "
+            f"`{src}python3 -m galecore_ai.adapters.cli galecore get <capacidad>` lo trae). No inventes ni redondees "
+            "números: si un dato no está en GaleCore, decilo.")
     write = ("Al final, siempre, también si algo falló: escribí el resultado en markdown (corto, con las cifras y su "
-             "fuente) en `resumen.md` con `cat > resumen.md <<'EOF'` y corré:")
+             "fuente) en `/tmp/resumen.md` con `cat > /tmp/resumen.md <<'EOF'` (nunca dentro del repo) y corré:")
     status = ("(`ok` si terminó, `error` si falló y por qué, `skipped` si no había nada para hacer). Si el mensaje de "
-              "inicio trae el trigger_id y la hora del disparo, agregá `--trigger-id <id> --fired-at <hora ISO>`.")
-    exports = "".join(f"export {n}={shlex.quote(v)}; " for n, v in (variables or {}).items())
-    step1 = ("1. Instalá el harness: `" + exports + "cd galecore-ai && python3 -m pip install -q -e .` (desde la raíz del repo)."
-             + (" Esas variables valen para los pasos siguientes (consultas a GaleCore y `agent report`): si un comando "
-                "no las ve, volvé a exportarlas antes de correrlo." if variables else ""))
+              "inicio trae el trigger_id y la hora del disparo, agregá `--trigger-id <id> --fired-at <hora ISO>`. "
+              "No hagas commits, ramas ni push en el repositorio: es sólo lectura; el resultado va con `agent report`. "
+              "No crees ni modifiques archivos en el repo.")
+    install = "cd galecore-ai && python3 -m pip install -q -e . && cd .."
+    if variables:
+        lines = "\n".join(f"export {n}={shlex.quote(v)}" for n, v in variables.items())
+        step1 = ("1. Guardá las variables en un archivo (cada comando que use GaleCore lo carga con `source`) e instalá el "
+                 f"harness, desde la raíz del repo:\n```\ncat > ~/.galecore.env <<'EOF'\n{lines}\nEOF\n"
+                 f"chmod 600 ~/.galecore.env\n{install}\n```")
+    else:
+        step1 = f"1. Instalá el harness: `{install}` (desde la raíz del repo)."
     return "\n".join([
         "Sos un agente de GaleCore que corre solo en la nube. Seguí estos pasos en orden.",
         "",
@@ -154,7 +162,7 @@ def instruction(piece: dict, variables: dict[str, str] | None = None) -> str:
         f"Tarea: {str(piece.get('objective', '')).strip()}",
         "",
         f"3. {write}",
-        f"`python3 -m galecore_ai.adapters.cli agent report {key} --status ok|error|skipped --summary-file resumen.md`",
+        f"`{src}python3 -m galecore_ai.adapters.cli agent report {key} --status ok|error|skipped --summary-file /tmp/resumen.md`",
         status,
     ])
 

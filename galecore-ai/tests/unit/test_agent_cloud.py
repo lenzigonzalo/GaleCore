@@ -63,7 +63,7 @@ def test_the_routine_body_has_the_test_routine_format_and_always_reports():
                                       "sources": [{"git_repository": {"url": "https://github.com/lenzigonzalo/GaleCore"}}]}
     text = ccr["events"][0]["data"]["message"]["content"]
     assert "cd galecore-ai && python3 -m pip install -q -e ." in text and "Tarea: Resumí SPY y VIX" in text
-    assert "agent report resumen-diario --status ok|error|skipped --summary-file resumen.md" in text
+    assert "agent report resumen-diario --status ok|error|skipped --summary-file /tmp/resumen.md" in text
     assert text.index("Tarea:") < text.index("agent report")
     assert ac.routine_body({**piece, "status": "paused", "model": "claude-haiku"}, "env_x1", NOV)["enabled"] is False
 
@@ -242,11 +242,14 @@ def test_the_instruction_exports_the_four_variables_and_generates_the_agent_key_
     configured(lab)
     ac.new(client, "Resumen diario", "Resumí SPY", DAILY)
     text = routine_text(ac.body(client, "resumen-diario", NOV))
-    step1 = text.splitlines()[2]
-    for line in ("export GALECORE_BASE_URL=https://api.galecore.test;", "export GALECORE_ALLOWED_BASE_URL=https://api.galecore.test;",
-                 "export GALECORE_API_KEY=svc-key;", "export GALECORE_AGENT_KEY=gca_key1;"):
-        assert line in step1
-    assert step1.index("export") < step1.index("cd galecore-ai") and text.index("export") < text.index("agent report")
+    for line in ("export GALECORE_BASE_URL=https://api.galecore.test\n", "export GALECORE_ALLOWED_BASE_URL=https://api.galecore.test\n",
+                 "export GALECORE_API_KEY=svc-key\n", "export GALECORE_AGENT_KEY=gca_key1\n"):
+        assert line in text
+    assert "cat > ~/.galecore.env" in text and "chmod 600 ~/.galecore.env" in text and "export" not in text.split("~/.galecore.env", 2)[0]
+    assert text.count("source ~/.galecore.env && python3 -m galecore_ai.adapters.cli") == 3      # list, get, agent report
+    assert "/tmp/resumen.md" in text and "resumen.md" not in text.replace("/tmp/resumen.md", "") and "volvé a exportarlas" not in text
+    assert "No hagas commits, ramas ni push en el repositorio: es sólo lectura; el resultado va con `agent report`." in text
+    assert text.index("cat > ~/.galecore.env") < text.index("Tarea:") < text.index("agent report")
     cfg = json.loads((lab / "agents.json").read_text(encoding="utf-8"))
     assert cfg == {"environment_id": "env_019kKR4kEzW7JcDZJA7LHMAM", "agent_key": "gca_key1"}
     assert "gca_key1" in routine_text(ac.body(client, "resumen-diario", NOV)) and fake.keys == 1     # reused, not regenerated
