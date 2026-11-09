@@ -81,7 +81,9 @@ public class PremarketHandler(IDxLinkStreamingService streaming, PremarketCache?
             if (missing.Length > 0)
             {
                 var today = TimeZoneInfo.ConvertTime(_cache.Now, PremarketMath.EasternZone);
-                var from = new DateTimeOffset(today.Date.AddHours(4), PremarketMath.EasternZone.GetUtcOffset(today.Date.AddHours(4))).ToUnixTimeMilliseconds();
+                // Últimos 30 min (no desde las 04:00): el snapshot completo crece con la mañana y no llegaba en el tope.
+                var from = Math.Max(new DateTimeOffset(today.Date.AddHours(4), PremarketMath.EasternZone.GetUtcOffset(today.Date.AddHours(4))).ToUnixTimeMilliseconds(),
+                    _cache.Now.AddMinutes(-30).ToUnixTimeMilliseconds());
                 // tho=false incluye horario extendido; el snapshot termina con el flag SNAPSHOT_END/SNIP en la vela.
                 var subscriptions = missing.SelectMany(s => new[] { (s + "{=1m,tho=false}", "Candle", (long?)from), (s, "Summary", (long?)null) }).ToArray();
                 var events = await streaming.RequestSnapshotAsync(subscriptions,
