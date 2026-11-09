@@ -272,6 +272,22 @@ namespace DataFeed
                     sp.GetRequiredService<ILogger<DataFeed.Application.App.Connections.PlatformConnectionsService>>());
             });
 
+            // Agentes que corren solos (WS-0079): clave de agentes, reporte de corridas, token de disparo y ejecución sin PC.
+            // Sin base no se registra y AgentsController contesta 503.
+            if (dbConfigured)
+            {
+                builder.Services.AddSingleton<DataFeed.Application.App.Agents.IRoutineFireClient, DataFeed.Application.App.Agents.AnthropicRoutineFireClient>();
+                builder.Services.AddSingleton<DataFeed.Application.App.Agents.AgentsService>(sp =>
+                {
+                    var dbOptions = new DbContextOptionsBuilder<GaleCoreDbContext>()
+                        .UseNpgsql(galeCoreDb).UseSnakeCaseNamingConvention().Options;
+                    return new DataFeed.Application.App.Agents.AgentsService(
+                        new DataFeed.Application.App.Agents.EfAgentStore(() => new GaleCoreDbContext(dbOptions)),
+                        sp.GetRequiredService<ITokenProtector>(),
+                        sp.GetRequiredService<DataFeed.Application.App.Agents.IRoutineFireClient>());
+                });
+            }
+
             // ABM de operadores desde Administrator: crea, edita y borra usuarios en Supabase Auth.
             // Se registra siempre; adentro comprueba si tiene la service_role key y, si no, los
             // endpoints contestan 503 con el motivo. Que falte un secreto no puede tumbar el feed.
