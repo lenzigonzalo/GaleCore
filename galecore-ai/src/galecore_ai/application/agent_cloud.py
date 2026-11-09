@@ -26,7 +26,7 @@ ALLOWED_TOOLS = ["Bash", "Read", "Glob", "Grep"]
 CLOUD_FREQUENCIES = ("daily", "weekdays", "days")      # the form offers once a day at most
 NO_ENVIRONMENT = "Falta configurar el entorno de los agentes en la nube (pasale al Lab el link del entorno de claude.ai)."
 ENV_ID = re.compile(r"env_[A-Za-z0-9]+")
-REQUEST_KEYS = ("create", "settings", "status", "run")
+REQUEST_KEYS = ("create", "settings", "status", "run", "delete")
 
 
 class AgentCloudError(Exception):
@@ -155,6 +155,10 @@ def body(client: SpaceClient, key: str, today: date | None = None) -> dict:
     _, content = _find(client, key)
     req = content.get("request") if isinstance(content.get("request"), dict) else {}
     trigger_id = content.get("trigger_id")
+    if req.get("delete"):
+        if not trigger_id:
+            raise AgentCloudError("La rutina todavía no se creó: no hay nada para pausar.")
+        return {"action": "update", "trigger_id": trigger_id, "body": {"enabled": False}}
     changes = any(req.get(k) for k in ("create", "settings", "status"))
     if req.get("run") and not changes:
         if not trigger_id:
@@ -177,6 +181,10 @@ def applied(client: SpaceClient, key: str, trigger_id: str | None = None, url: s
     """
     item, content = _find(client, key)
     seen = {("agent", key): item["version"]}
+    req = content.get("request") if isinstance(content.get("request"), dict) else {}
+    if req.get("delete") and not error:
+        client.delete("agent", key)
+        return {"agent": key, "deleted": True}
     if error:
         piece = {k: v for k, v in content.items() if k not in ("request", "request_error")} | {"request_error": error[:300]}
     else:
@@ -186,7 +194,6 @@ def applied(client: SpaceClient, key: str, trigger_id: str | None = None, url: s
         for k, v in (("trigger_id", trigger_id), ("routine_url", url)):
             if v:
                 piece[k] = v
-        req = content.get("request") if isinstance(content.get("request"), dict) else {}
         if req.get("run") and any(req.get(k) for k in ("create", "settings", "status")):
             piece["request"] = {"run": True, "at": req.get("at")}     # the run was asked too: the next pass runs it
     out = space.sync(client, [{"kind": "agent", "key": key, "title": item["title"], "format": "json",

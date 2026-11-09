@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Pencil, Save, ArrowLeft, Bot, ChevronDown, ChevronRight, Clock3, Copy, ExternalLink, HelpCircle, Play, Plus, Trash2, X } from 'lucide-react';
+import { Pencil, Save, ArrowLeft, Bot, Check, ChevronDown, ChevronRight, Clock3, Copy, ExternalLink, HelpCircle, Play, Plus, Trash2, X } from 'lucide-react';
 import '../components/shadow/PerformancePanel.css';
 import './Agentes.css';
 import { Markdown } from '../components/settings/Markdown';
-import { fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
+import { deleteSpaceItem, fetchSpace, saveSpaceItem, SpaceItem } from '../api/space';
 import {
   AgentKeyStatus, AgentRun, FireTokenStatus, apiMessage, deleteFireToken, fetchAgentKey, fetchFireToken, fetchRuns, generateAgentKey,
   revokeAgentKey, runAgent, saveFireToken,
@@ -37,7 +37,7 @@ interface ScheduleSpec { frequency: string; time?: string; days?: string[]; minu
 interface NewCloudAgentData { name: string; objective: string; schedule_spec: ScheduleSpec }
 
 interface AgentSettingsChange { objective?: string; model?: string | null; schedule?: ScheduleSpec; schedule_spec?: ScheduleSpec; tools?: string[] | null; delivery?: string[] }
-interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: { id: string; objective: string; schedule_spec: ScheduleSpec }; run?: boolean; at?: string }
+interface AgentRequest { status?: 'active' | 'paused'; settings?: AgentSettingsChange; create?: { id: string; objective: string; schedule_spec: ScheduleSpec }; run?: boolean; delete?: boolean; at?: string }
 
 const REFRESH_MS = 60_000;
 
@@ -360,9 +360,22 @@ function FireTokenSection({ agentKey, a, token, onChange }: { agentKey: string; 
   </section>;
 }
 
-function CloudDetail({ a, item, title, onChange, busy, onBack }: {
-  a: Agent; item: SpaceItem; title: string; onChange: (r: AgentRequest) => Promise<boolean>; busy: boolean; onBack: () => void;
+/** Confirmación de borrado: un diálogo propio de la página (como «Nuevo agente»). */
+function ConfirmDelete({ title, onConfirm, onClose }: { title: string; onConfirm: () => Promise<void>; onClose: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const cancelRef = React.useRef<HTMLButtonElement>(null);
+  useEffect(() => { cancelRef.current?.focus(); }, []);
+  return <div className="agents-modal-backdrop" onClick={onClose}><div className="agents-modal" role="dialog" aria-modal="true" aria-labelledby="agent-delete-title" onClick={e => e.stopPropagation()} onKeyDown={e => { if (e.key === 'Escape') onClose(); }}>
+    <div className="agents-modal-title"><h2 id="agent-delete-title">Borrar «{title}»</h2><button aria-label="Cerrar" onClick={onClose}><X size={20} /></button></div>
+    <p>Se pausa la rutina en claude.ai y el agente sale de la lista. La rutina pausada se puede borrar desde claude.ai.</p>
+    <div className="agents-edit-actions"><button className="agents-primary" disabled={saving} onClick={() => { setSaving(true); void onConfirm().finally(() => { setSaving(false); onClose(); }); }}><Trash2 size={14} />Borrar</button><button ref={cancelRef} className="agents-text-button" onClick={onClose}>Cancelar</button></div>
+  </div></div>;
+}
+
+function CloudDetail({ a, item, title, onChange, onDelete, busy, onBack }: {
+  a: Agent; item: SpaceItem; title: string; onChange: (r: AgentRequest) => Promise<boolean>; onDelete: () => Promise<void>; busy: boolean; onBack: () => void;
 }) {
+  const [confirming, setConfirming] = useState(false);
   const [runs, setRuns] = useState<AgentRun[] | null>(null);
   const [runsError, setRunsError] = useState<string | null>(null);
   const [token, setToken] = useState<FireTokenStatus | null>(null);
@@ -396,20 +409,42 @@ function CloudDetail({ a, item, title, onChange, busy, onBack }: {
   return <>
     <div className="agents-breadcrumb"><button onClick={onBack}><ArrowLeft size={15} />Agentes</button><span>/</span><span>{title}</span></div>
     <header className="agents-detail-heading"><div><h1>{title}</h1><p>{scheduleText(a.schedule)}</p></div>
-      <div className="agents-actions"><button className="agents-primary" onClick={run} disabled={!ready || starting || busy}><Play size={14} />Ejecutar</button><Toggle a={a} busy={busy} onRequest={status => { void onChange({ status }); }} /></div></header>
-    {a.request && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
+      <div className="agents-actions"><button className="agents-primary" onClick={run} disabled={!ready || starting || busy}><Play size={14} />Ejecutar</button><Toggle a={a} busy={busy} onRequest={status => { void onChange({ status }); }} />{!a.request?.delete && <button className="agents-text-button" disabled={busy} onClick={() => setConfirming(true)}><Trash2 size={14} />Borrar</button>}</div></header>
+    {a.request?.delete ? <p className="agents-notice" role="status">Borrando… (se aplica con el Lab abierto)</p> : a.request && <p className="agents-notice" role="status">{a.request.create ? 'Creando la rutina.' : a.request.run ? 'Ejecución pedida.' : 'Cambios enviados.'} Se aplica cuando el Lab esté abierto.</p>}
     {a.request_error && <p className="agents-error" role="alert">No se pudo aplicar: {a.request_error}</p>}
     {notice && <p className={notice.error ? 'agents-error' : 'agents-notice'} role={notice.error ? 'alert' : 'status'}>{notice.text}</p>}
     <div className="agents-detail-grid"><CloudRuns runs={runs} error={runsError} /><aside className="agents-settings">
       <CloudSettings a={a} busy={busy} onSave={settings => onChange({ settings })} />
       <FireTokenSection agentKey={item.key} a={a} token={token} onChange={loadToken} />
     </aside></div>
+    {confirming && <ConfirmDelete title={title} onConfirm={onDelete} onClose={() => setConfirming(false)} />}
   </>;
 }
 
 const API_HOST = (() => { try { return new URL(process.env.REACT_APP_API_BASE_URL ?? '').host; } catch { return ''; } })();
 
-/** La configuración de una sola vez: clave de agentes, entorno en claude.ai y el link para el Lab. */
+/** Botón Copiar reutilizado: pasa a «Copiada» ~2 s; si el portapapeles falla, avisa. */
+function CopyButton({ text, label = 'Copiar' }: { text: string; label?: string }) {
+  const [state, setState] = useState<'idle' | 'done' | 'fail'>('idle');
+  useEffect(() => {
+    if (state === 'idle') return;
+    const t = setTimeout(() => setState('idle'), state === 'done' ? 2000 : 4000);
+    return () => clearTimeout(t);
+  }, [state]);
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text); setState('done'); } catch { setState('fail'); }
+  };
+  return <span className="agents-copy">
+    <button type="button" className="agents-text-button" onClick={copy} aria-label={state === 'done' ? 'Copiada' : label}>
+      {state === 'done' ? <><Check size={14} />Copiada</> : <><Copy size={14} />Copiar</>}
+    </button>
+    {state === 'fail' && <span className="agents-copy-fail" role="status">Seleccionala y copiala a mano</span>}
+  </span>;
+}
+
+const FIRST_TIME_VARS = ['GALECORE_BASE_URL', 'GALECORE_ALLOWED_BASE_URL', 'GALECORE_API_KEY'];
+
+/** La configuración de una sola vez: clave de agentes y variable en el entorno de claude.ai. */
 function Help() {
   const [status, setStatus] = useState<AgentKeyStatus | null>(null);
   const [fresh, setFresh] = useState<string | null>(null);
@@ -422,19 +457,49 @@ function Help() {
   };
   const generate = () => act(async () => { const k = await generateAgentKey(); setFresh(k.key); setStatus({ exists: true, hint: k.hint }); });
   const revoke = () => act(async () => { await revokeAgentKey(); setFresh(null); setStatus({ exists: false }); });
-  return <section className="agents-help" aria-label="Ayuda"><h2>Configuración de una sola vez</h2>
-    <ol>
-      <li><strong>Clave de agentes.</strong> Identifica a tus agentes cuando reportan una corrida; no lee ni escribe nada más.
-        <div className="agents-edit-actions">
-          <button className="agents-primary" onClick={generate} disabled={busy}>{status?.exists ? 'Regenerar clave' : 'Generar clave'}</button>
-          {status?.exists && <button className="agents-text-button" onClick={revoke} disabled={busy}>Revocar</button>}
-        </div>
-        {fresh && <p role="status"><code>{fresh}</code><button className="agents-text-button" onClick={() => navigator.clipboard?.writeText(fresh)}><Copy size={14} />Copiar</button><small>Se ve una sola vez: copiala ahora.</small></p>}
-        {!fresh && status?.exists && <p>Clave activa …{status.hint}</p>}
-      </li>
-      <li><strong>Entorno en claude.ai.</strong> Creá un entorno propio con {API_HOST ? <code>{API_HOST}</code> : 'el dominio de la API'} entre los dominios permitidos y estas variables: <code>GALECORE_BASE_URL</code>, <code>GALECORE_ALLOWED_BASE_URL</code>, <code>GALECORE_API_KEY</code> y <code>GALECORE_AGENT_KEY</code> (la clave del paso 1).</li>
-      <li><strong>Link para el Lab.</strong> Pegale al Lab el link de ese entorno la primera vez que te lo pida.</li>
-    </ol>
+  const [cfgOpen, setCfgOpen] = useState<boolean | null>(null);
+  const open = cfgOpen ?? (!status?.exists || !!fresh);
+  return <section className="agents-help" aria-label="Ayuda">
+    <div className="agents-help-block"><h2>Qué es un agente</h2>
+      <p>Hace una tarea tuya a su hora, por ejemplo un resumen del mercado de lunes a viernes a las 19:15. Corre en claude.ai con tu cuenta, sin tu PC prendida, y deja el resultado acá, en Corridas.</p>
+    </div>
+    <details className="agents-help-block" open={open} onToggle={e => setCfgOpen(e.currentTarget.open)}>
+      <summary><h2>Configuración (una sola vez)</h2></summary>
+      <ol className="agents-help-steps">
+        <li><h3>Clave de agentes</h3>
+          <p>Identifica a tus agentes cuando reportan una corrida; no lee ni escribe nada más.</p>
+          <div className="agents-edit-actions">
+            <button className="agents-primary" onClick={generate} disabled={busy}>{status?.exists ? 'Regenerar clave' : 'Generar clave'}</button>
+            {status?.exists && <button className="agents-text-button" onClick={revoke} disabled={busy}>Revocar</button>}
+          </div>
+          {fresh && <div role="status" className="agents-help-fresh">
+            <div className="agents-help-key"><code>{fresh}</code><CopyButton text={fresh} /></div>
+            <p className="agents-help-once">Se ve una sola vez: copiala ahora.</p>
+          </div>}
+          {!fresh && status?.exists && <p className="agents-help-active"><Check size={15} />Clave activa …{status.hint}</p>}
+        </li>
+        <li><h3>Variable en el entorno de claude.ai</h3>
+          <ol className="agents-help-substeps">
+            <li>Abrí claude.ai/code. <a className="agents-primary agents-help-link" href="https://claude.ai/code" target="_blank" rel="noopener noreferrer"><ExternalLink size={14} />Abrir claude.ai</a></li>
+            <li>En el selector de entorno junto al cuadro de texto (dice Default), entrá a la configuración del entorno.</li>
+            <li>En variables de entorno agregá un renglón con el nombre <code>GALECORE_AGENT_KEY</code><CopyButton text="GALECORE_AGENT_KEY" label="Copiar GALECORE_AGENT_KEY" /> y de valor la clave del paso 1, y guardá.</li>
+          </ol>
+          <details className="agents-help-first">
+            <summary>¿Primera vez?</summary>
+            <p>El entorno además necesita {API_HOST ? <>el dominio <code>{API_HOST}</code></> : 'el dominio de la API'} en los dominios permitidos y estas variables:</p>
+            <ul className="agents-help-vars">{FIRST_TIME_VARS.map(v => <li key={v}><code>{v}</code><CopyButton text={v} label={`Copiar ${v}`} /></li>)}</ul>
+          </details>
+        </li>
+      </ol>
+    </details>
+    <div className="agents-help-block"><h2>Probalo</h2>
+      <ol className="agents-help-substeps">
+        <li>Tocá «Nuevo agente» y completá nombre, qué hace y cuándo.</li>
+        <li>Con el Lab abierto, en menos de un minuto aparece en claude.ai (Rutinas).</li>
+        <li>Entrá al agente y tocá Ejecutar.</li>
+        <li>En unos minutos ves la corrida con su resumen.</li>
+      </ol>
+    </div>
     {error && <p className="agents-error" role="alert">{error}</p>}
   </section>;
 }
@@ -505,10 +570,22 @@ export function Agentes() {
     }
   };
 
+  const remove = async (item: SpaceItem, a: Agent) => {
+    if (a.trigger_id) { await request(item, a, { delete: true }); return; }
+    setBusy(item.key);
+    try {
+      await deleteSpaceItem('agent', item.key);
+      setSelected(null);
+      await load();
+    } catch {
+      setError('No se pudo borrar el agente. Probá de nuevo.');
+    } finally { setBusy(null); }
+  };
+
   return <div className="agents-page">
     {error && <div className="agents-error" role="alert">{error}<button className="agents-text-button" onClick={load}>Reintentar</button></div>}
     {current && isCloud(current.a) ? <CloudDetail key={current.item.key} a={current.a} item={current.item} title={taskTitle(current.a, current.item.title)}
-      busy={busy === current.item.key} onChange={change => request(current.item, current.a, change)} onBack={() => setSelected(null)} />
+      busy={busy === current.item.key} onChange={change => request(current.item, current.a, change)} onDelete={() => remove(current.item, current.a)} onBack={() => setSelected(null)} />
       : current ? <AgentDetail key={current.item.key} a={current.a} title={taskTitle(current.a, current.item.title)}
       publishedAt={current.item.updatedAt} busy={busy === current.item.key} onRequest={status => request(current.item, current.a, { status })} onSave={settings => request(current.item, current.a, { settings })} onBack={() => setSelected(null)} /> : <>
       <div className="strategy-list-heading"><h1 className="strategy-list-title">Agentes</h1>

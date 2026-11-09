@@ -26,4 +26,6 @@ Por cada elemento de `agent pending`:
 3. Conectores: `create` adjunta todos los conectores de la cuenta y una lista vacía se ignora. Pasá la lista mínima de conectores; si la rutina creada igual los tiene, hacé un `update` con un solo conector inocuo (p. ej. Claude_Docs).
 4. Avisá el resultado con `agent applied <clave> --trigger-id <id> --url <link de la rutina>` (el link es `https://claude.ai/code/routines/<id>`). Si `RemoteTrigger` falló: `agent applied <clave> --error "<qué pasó, en una línea>"`. Para `run` alcanza `agent applied <clave>`.
 
+Borrar: `agent body` ya devuelve el `update` con `enabled: false`; mandalo y avisá con `agent applied <clave>`, que saca el agente de la lista.
+
 No cuentes el resultado en texto: lo que vale es lo que dejó `agent applied`. No borres rutinas (pausar alcanza; se borran en claude.ai). Una a la vez, sin tocar nada más.
