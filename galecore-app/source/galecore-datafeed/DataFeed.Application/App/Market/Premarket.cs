@@ -31,7 +31,7 @@ public class PremarketQuote
 /// </summary>
 public class PremarketCache(TimeSpan? ttl = null, TimeProvider? time = null)
 {
-    private readonly TimeSpan _ttl = ttl ?? TimeSpan.FromSeconds(5);
+    private readonly TimeSpan _ttl = ttl ?? TimeSpan.FromSeconds(30);
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private readonly Dictionary<string, (DateTimeOffset At, PremarketQuote Quote)> _items = new();
     private readonly object _lock = new();
