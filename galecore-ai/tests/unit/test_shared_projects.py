@@ -322,6 +322,21 @@ def test_text_keeps_its_exact_bytes_including_crlf_and_accents(world):
     assert (db / "README.md").read_bytes() == raw
 
 
+def test_privado_at_the_root_never_syncs_in_either_direction(world):
+    fake, da, db, ca, cb = shared_pair(world)
+    write(da, "privado/x.md", "cuenta")
+    write(da, "Privado/y.md", "cuenta")
+    write(da, "files/privado/z.md", "esto sí viaja")
+    out = sp.sync_project(ca, da)
+    assert out["pushed"] == 1
+    assert sorted(c["path"] for c in fake.changes["p1"] if c["path"].endswith(("x.md", "y.md", "z.md"))) == ["files/privado/z.md"]
+    fake.changes["p1"].append({"seq": next(fake.seq), "path": "privado/x.md", "op": "put", "encoding": "utf8", "content": "ajeno",
+                               "contentHash": sha(b"ajeno"), "baseHash": None, "author": "demo"})
+    out = sp.sync_project(cb, db)
+    assert {"path": "privado/x.md", "reason": "ruta no válida"} in out["skipped"]
+    assert not (db / "privado").exists()
+
+
 def test_files_over_2_mb_are_skipped_with_a_warning(world):
     fake, da, _, ca, _ = shared_pair(world)
     (da / "grande.csv").write_bytes(b"x" * (2 * 1024 * 1024 + 1))

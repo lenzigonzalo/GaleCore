@@ -20,14 +20,13 @@ public class PremarketQuote
     public DateTimeOffset? Timestamp { get; set; }
     public string? SessionDate { get; set; }
     public string Session { get; set; } = "unavailable";
-    public string Source { get; set; } = "DXLink TimeAndSale (ETH)/Summary";
+    public string Source { get; set; } = "DXLink Candle 1m ETH/Summary";
     public string Freshness { get; set; } = "unavailable";
     public string? Reason { get; set; }
 }
 
 /// <summary>
-/// Caché corta por símbolo del resultado de premarket. Sin trade ETH el snapshot de TimeAndSale nunca "completa"
-/// y cada pedido esperaba el timeout entero; con la caché el watchlist (y pedidos repetidos o simultáneos) no
+/// Caché corta por símbolo del resultado de premarket. Un símbolo sin dato puede esperar el timeout; con la caché el watchlist (y pedidos repetidos o simultáneos) no
 /// vuelve a esperar por símbolos ya consultados. Singleton en DI.
 /// </summary>
 public class PremarketCache(TimeSpan? ttl = null, TimeProvider? time = null)
@@ -36,6 +35,8 @@ public class PremarketCache(TimeSpan? ttl = null, TimeProvider? time = null)
     private readonly TimeProvider _time = time ?? TimeProvider.System;
     private readonly Dictionary<string, (DateTimeOffset At, PremarketQuote Quote)> _items = new();
     private readonly object _lock = new();
+
+    public DateTimeOffset Now => _time.GetUtcNow();
 
     /// <summary>Un solo pedido a la fuente a la vez: el segundo ya encuentra lo que trajo el primero.</summary>
     public SemaphoreSlim Gate { get; } = new(1, 1);
@@ -63,7 +64,7 @@ public class PremarketCache(TimeSpan? ttl = null, TimeProvider? time = null)
 
 public class PremarketHandler(IDxLinkStreamingService streaming, PremarketCache? cache = null) : IRequestHandler<PremarketRequest, IReadOnlyList<PremarketQuote>>
 {
-    // Ventana corta: Summary llega en cuanto se suscribe; TimeAndSale sólo completa si hubo un trade ETH.
+    // Tope: Candle 1m (con ETH) llega como snapshot histórico y Summary como último valor; el pedido termina apenas llegan todos.
     public static readonly TimeSpan SnapshotTimeout = TimeSpan.FromSeconds(3);
     private readonly PremarketCache _cache = cache ?? new PremarketCache();
 
@@ -79,14 +80,20 @@ public class PremarketHandler(IDxLinkStreamingService streaming, PremarketCache?
             var missing = symbols.Where(s => !_cache.TryGet(s, out _)).ToArray();
             if (missing.Length > 0)
             {
-                var subscriptions = missing.SelectMany(s => new[] { (s, "TimeAndSale", (long?)null), (s, "Summary", (long?)null) }).ToArray();
+                var today = TimeZoneInfo.ConvertTime(_cache.Now, PremarketMath.EasternZone);
+                // Últimos 30 min (no desde las 04:00): el snapshot completo crece con la mañana y no llegaba en el tope.
+                var from = Math.Max(new DateTimeOffset(today.Date.AddHours(4), PremarketMath.EasternZone.GetUtcOffset(today.Date.AddHours(4))).ToUnixTimeMilliseconds(),
+                    _cache.Now.AddMinutes(-30).ToUnixTimeMilliseconds());
+                // tho=false incluye horario extendido; el snapshot termina con el flag SNAPSHOT_END/SNIP en la vela.
+                var subscriptions = missing.SelectMany(s => new[] { (s + "{=1m,tho=false}", "Candle", (long?)from), (s, "Summary", (long?)null) }).ToArray();
                 var events = await streaming.RequestSnapshotAsync(subscriptions,
-                    e => (string?)e["eventType"] != "TimeAndSale" || PremarketMath.IsEligibleSale(e), SnapshotTimeout, ct);
+                    e => (string?)e["eventType"] == "Summary" || (((int?)e["eventFlags"] ?? 0) & 0x18) != 0, SnapshotTimeout, ct);
                 ct.ThrowIfCancellationRequested();
-                var now = DateTimeOffset.UtcNow;
+                var now = _cache.Now;
                 foreach (var s in missing)
-                    _cache.Set(PremarketMath.FromSales(s,
-                        events.Where(e => (string?)e["eventSymbol"] == s && (string?)e["eventType"] == "TimeAndSale"),
+                    _cache.Set(PremarketMath.Build(s,
+                        PremarketMath.LatestCandle(events.Where(e => (string?)e["eventType"] == "Candle" &&
+                            ((string?)e["eventSymbol"])?.StartsWith(s + "{=", StringComparison.Ordinal) == true), now),
                         events.LastOrDefault(e => (string?)e["eventSymbol"] == s && (string?)e["eventType"] == "Summary"), now));
             }
             return symbols.Select(s => _cache.TryGet(s, out var q) ? q : new PremarketQuote { Symbol = s, Reason = "missing_extended_hours" }).ToArray();
@@ -98,33 +105,29 @@ public class PremarketHandler(IDxLinkStreamingService streaming, PremarketCache?
 public static class PremarketMath
 {
     private static readonly TimeZoneInfo Eastern = TimeZoneInfo.FindSystemTimeZoneById("America/New_York");
+    public static TimeZoneInfo EasternZone => Eastern;
 
-    // Trade retains the regular-session last price even while ETH volume updates.
-    // TimeAndSale provides actual ETH executions; cancellations replace the same index.
-    public static bool IsEligibleSale(JObject sale) => (string?)sale["eventType"] == "TimeAndSale" &&
-        sale["index"]?.Type == JTokenType.Integer && (int?)sale["eventFlags"] == 0 &&
-        sale["extendedTradingHours"]?.Type == JTokenType.Boolean && sale.Value<bool>("extendedTradingHours") &&
-        sale["validTick"]?.Type == JTokenType.Boolean && sale.Value<bool>("validTick") &&
-        sale["spreadLeg"]?.Type == JTokenType.Boolean && !sale.Value<bool>("spreadLeg") &&
-        (string?)sale["type"] is "NEW" or "CORRECTION";
-
-    public static JObject? LatestSale(IEnumerable<JObject> sales) => sales
-        .GroupBy(e => (long?)e["index"]).Select(g => g.Last()).Where(IsEligibleSale)
-        .OrderByDescending(e => Number(e["time"]) ?? 0).FirstOrDefault();
-
-    public static PremarketQuote FromSales(string symbol, IEnumerable<JObject> sales, JObject? summary, DateTimeOffset now)
+    /// <summary>Última vela de 1m con operaciones dentro de 04:00–09:30 ET del día de <paramref name="now"/>; devuelve {price=close, time=inicio del minuto}.</summary>
+    public static JObject? LatestCandle(IEnumerable<JObject> candles, DateTimeOffset now)
     {
-        var items = sales.ToArray();
-        var quote = Build(symbol, LatestSale(items), summary, now);
-        if (quote.Price == null && items.Any(e => (string?)e["type"] is "CANCEL" or "CORRECTION" || (((int?)e["eventFlags"] ?? 0) & 2) != 0))
-            quote.Reason = "execution_revised";
-        return quote;
+        var today = TimeZoneInfo.ConvertTime(now, Eastern).Date;
+        JObject? best = null; double bestTime = 0;
+        foreach (var c in candles)
+        {
+            var time = Number(c["time"]); var close = Number(c["close"]);
+            if (time is not > 0 || close is not > 0 || time > DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()) continue;
+            if (c["volume"] != null && c["volume"]!.Type != JTokenType.Null && Number(c["volume"]) is not > 0) continue;
+            var local = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds((long)time.Value), Eastern);
+            if (local.Date != today || local.TimeOfDay < TimeSpan.FromHours(4) || local.TimeOfDay >= TimeSpan.FromHours(9.5)) continue;
+            if (time > bestTime) { bestTime = time.Value; best = new JObject { ["price"] = close, ["time"] = time }; }
+        }
+        return best;
     }
 
     public static PremarketQuote Build(string symbol, JObject? trade, JObject? summary, DateTimeOffset now)
     {
         var result = new PremarketQuote { Symbol = symbol, Reason = "missing_extended_hours" };
-        if (trade == null || !IsEligibleSale(trade)) return result;
+        if (trade == null) return result;
         var price = Number(trade?["price"]);
         var time = Number(trade?["time"]);
         if (price is not > 0 || time is not > 0 || time > DateTimeOffset.MaxValue.ToUnixTimeMilliseconds()) return result;

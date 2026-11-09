@@ -2698,6 +2698,33 @@ presupuesto y qué posición lo excede, con una sola fuente de topes; el chat y 
 
 ---
 
+## BL-037 — Cartera consolidada de los tres brokers en GaleCore (Tastytrade, IBKR, IOL)
+
+**Estado:** pendiente, para más adelante; sin implementación ni cambio del orden del plan.
+**Origen:** owner, 06/11/2026, al chocar con la autorización de IOL por MCP en WS-0091: opera opciones en Tastytrade,
+el largo plazo en dólares en IBKR y los pesos en IOL; quiere ver todo en un tablero consolidado de posiciones y que el
+Lab lo lea desde GaleCore, sin depender de los MCP («dejalo como backlog»).
+**Target:** GaleCore (fuentes externas y credenciales por usuario en el back; tablero en el monitor). El Lab y el
+harness leen de GaleCore.
+**Hoy:** Tastytrade ya está en GaleCore (posiciones y saldos por usuario, `/Data/Tastytrade/Account/*`, con «cuenta no
+vinculada» / «clave inválida» en Conexiones). IBKR e IOL figuran en el catálogo de conexiones sólo como MCP.
+
+| Broker | Cómo se conecta | Costo estimado |
+|---|---|---|
+| Tastytrade | Ya integrado | Sólo sumarlo al consolidado |
+| IOL | API REST oficial (`api.invertironline.com`): usuario/contraseña → bearer de 15 min + refresh; portafolio y estado de cuenta | Bajo; el usuario activa la API en su cuenta |
+| IBKR | Flex Web Service (token + query armada en el portal): posiciones, operaciones y saldos, sólo lectura, datos al cierre | Bajo; Client Portal API descartada (gateway corriendo y login diario con 2FA) |
+
+**Lo que hay que resolver:** un modelo único de posición (activo, cantidad, costo, valor, moneda); conversión de pesos a
+dólares (MEP o CCL: lo decide el owner); credenciales custodiadas en el servidor, por usuario.
+**Corte propuesto:** 1) IOL en GaleCore; 2) IBKR Flex en GaleCore; 3) tablero consolidado y lectura desde el Lab.
+**Entry gate:** cuando el owner priorice; antes, la cotización para pesos y las credenciales de cada broker.
+**Aceptación:** el tablero muestra las posiciones de los tres brokers con su fuente y hora, en dólares con la cotización
+elegida y cada broker identificable; el Lab responde «¿cómo está mi cartera?» con los tres sin usar MCP; sólo lectura,
+sin órdenes; un broker caído se dice sin tapar a los otros.
+
+---
+
 ## BL-036 — APIs de Argentina: qué fuentes tiene GaleCore y cuáles faltan (A3, por ejemplo)
 
 **Estado:** pendiente; primero relevamiento, sin implementar ni cambiar el orden del plan.

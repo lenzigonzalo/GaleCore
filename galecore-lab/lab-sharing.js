@@ -9,7 +9,7 @@ const path = require('path');
 const SYNC_FILE = '.sync.json';
 const USERNAME = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 const crypto = require('crypto');
-// Lo que el sync del CLI no toca (galecore_ai/application/shared_projects.py: SKIP_DIRS, _scan, _valid_path, MAX_BYTES).
+// Lo que el sync del CLI no toca (galecore_ai/application/shared_projects.py: SKIP_DIRS, PRIVATE_DIR, _scan, _valid_path, MAX_BYTES).
 const SKIP_DIRS = new Set(['.git', '.scratch', 'node_modules', '__pycache__']);
 const SKIP_FILES = new Set([SYNC_FILE, SYNC_FILE + '.tmp', '.sync.lock']);
 const MAX_BYTES = 2 * 1024 * 1024, MAX_PATH = 400;
@@ -45,7 +45,7 @@ function createSharing({ root, kb, environment, execute, request = fetch, sessio
       let entries; try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
       for (const e of entries) {
         if (e.isSymbolicLink()) continue;
-        if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name)) walk(path.join(dir, e.name), prefix + e.name + '/'); continue; }
+        if (e.isDirectory()) { if (!SKIP_DIRS.has(e.name) && !(prefix === '' && e.name.toLowerCase() === 'privado')) walk(path.join(dir, e.name), prefix + e.name + '/'); continue; }
         if (!e.isFile() || SKIP_FILES.has(e.name) || e.name.startsWith('.sync-write-') || !syncable(prefix + e.name)) continue;
         try { const st = fs.statSync(path.join(dir, e.name)); if (st.size > MAX_BYTES) continue; local.set(prefix + e.name, path.join(dir, e.name)); sig.push(prefix + e.name, st.mtimeMs, st.size); } catch { /* desapareció */ }
       }

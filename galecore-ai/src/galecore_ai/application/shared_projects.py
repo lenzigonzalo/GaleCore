@@ -26,6 +26,7 @@ from galecore_ai.adapters.galecore_space import SpaceClient, SpaceError
 SYNC_FILE = ".sync.json"
 KIND_FOLDERS = {"workspace": "workspaces", "strategy": "strategies"}
 SKIP_DIRS = {".git", ".scratch", "node_modules", "__pycache__"}
+PRIVATE_DIR = "privado"   # datos de la cuenta real del usuario: sólo en la raíz del proyecto, nunca sale de su PC
 MAX_BYTES = 2 * 1024 * 1024
 MAX_PATH = 400
 MAX_ROUNDS = 3
@@ -175,6 +176,7 @@ def _decode(change: dict) -> bytes:
 def _valid_path(rel: str) -> bool:
     return (0 < len(rel) <= MAX_PATH and not any(ord(c) < 32 for c in rel)
             and "\\" not in rel and ":" not in rel and not PurePosixPath(rel).is_absolute()
+            and PurePosixPath(rel).parts[0].lower() != PRIVATE_DIR
             and not any(p in ("..", SYNC_FILE, SYNC_FILE + ".tmp", LOCK_FILE, *SKIP_DIRS)
                         or p.startswith(".sync-write-") for p in PurePosixPath(rel).parts))
 
@@ -183,7 +185,9 @@ def _scan(project_dir: Path) -> dict[str, Path]:
     """Every syncable file: relative POSIX path -> absolute path."""
     out: dict[str, Path] = {}
     for root, dirs, names in os.walk(project_dir):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not (Path(root) / d).is_symlink()]
+        top = Path(root) == project_dir
+        dirs[:] = [d for d in dirs if d not in SKIP_DIRS and not (Path(root) / d).is_symlink()
+                   and not (top and d.lower() == PRIVATE_DIR)]
         for name in names:
             full = Path(root) / name
             if name in (SYNC_FILE, SYNC_FILE + ".tmp", LOCK_FILE) or name.startswith(".sync-write-") or full.is_symlink():

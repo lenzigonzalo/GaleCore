@@ -349,8 +349,8 @@ test('«Cambios sin compartir»: el contenido local contra el manifest del últi
   assert.equal((await row()).syncState, 'pending'); synced(kb, p.id);
   fs.unlinkSync(path.join(dir, 'nota.md'));                                        // borrado
   assert.equal((await row()).syncState, 'pending'); synced(kb, p.id); assert.equal((await row()).syncState, 'ok');
-  // Lo que el sync nunca toca no cuenta: .scratch, .git, node_modules, archivos de sync, y lo mayor a 2 MB
-  for (const d of ['.scratch', '.git', 'node_modules']) { fs.mkdirSync(path.join(dir, d), { recursive: true }); fs.writeFileSync(path.join(dir, d, 'x'), 'x'); }
+  // Lo que el sync nunca toca no cuenta: .scratch, .git, node_modules, privado/ (en la raíz), archivos de sync, y lo mayor a 2 MB
+  for (const d of ['.scratch', '.git', 'node_modules', 'privado', 'Privado']) { fs.mkdirSync(path.join(dir, d), { recursive: true }); fs.writeFileSync(path.join(dir, d, 'x'), 'x'); }
   fs.writeFileSync(path.join(dir, '.sync.lock'), 'x'); fs.writeFileSync(path.join(dir, 'grande.bin'), Buffer.alloc(2 * 1024 * 1024 + 1));
   assert.equal((await row()).syncState, 'ok');
   assert.equal(calls.filter(x => x[1] === 'sync').length, 0);                      // nada de esto llamó al sync del CLI
